@@ -14,6 +14,7 @@ import { i18n } from "./i18n";
 
 export class WikiController {
   private current: AbortController | null = null;
+  currentOp: { op: WikiOperation; args: string[] } | null = null;
   constructor(private app: App, private plugin: LlmWikiPlugin) {}
 
   isBusy(): boolean { return this.current !== null; }
@@ -93,7 +94,7 @@ export class WikiController {
     try {
       for await (const ev of runGen) {
         this.logEvent(sessionId, "chat", domainId, ev);
-        view.appendChatEvent(ev);
+        this.activeView()?.appendChatEvent(ev);
         if (ev.kind === "result") finalText = ev.text;
         if (ev.kind === "error") status = "error";
       }
@@ -103,6 +104,7 @@ export class WikiController {
       this.logEvent(sessionId, "chat", domainId, { kind: "error", message: finalText });
     } finally {
       this.current = null;
+      this.currentOp = null;
     }
 
     this.logEvent(sessionId, "chat", domainId, {
@@ -110,7 +112,7 @@ export class WikiController {
       message: `finish status=${status} durationMs=${Date.now() - startedAt}`,
     });
 
-    view.finishChat({ role: "assistant", content: finalText }, status !== "done");
+    this.activeView()?.finishChat({ role: "assistant", content: finalText }, status !== "done");
   }
 
   async init(domain: string, dryRun: boolean): Promise<void> {
@@ -220,6 +222,7 @@ export class WikiController {
 
     const ctrl = new AbortController();
     this.current = ctrl;
+    this.currentOp = { op, args };
 
     const startedAt = Date.now();
     const sessionId = String(startedAt);
@@ -237,7 +240,7 @@ export class WikiController {
     try {
       for await (const ev of runGen) {
         this.logEvent(sessionId, op, domainId, ev);
-        view.appendEvent(ev);
+        this.activeView()?.appendEvent(ev);
         if (ev.kind === "domain_created") {
           if (!this.plugin.settings.domains) this.plugin.settings.domains = [];
           this.plugin.settings.domains.push(ev.entry);
@@ -275,6 +278,7 @@ export class WikiController {
       this.logEvent(sessionId, op, domainId, { kind: "error", message: finalText });
     } finally {
       this.current = null;
+      this.currentOp = null;
     }
     this.logEvent(sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
 
@@ -293,7 +297,7 @@ export class WikiController {
       this.plugin.settings.history.shift();
     }
     await this.plugin.saveSettings();
-    await view.finish(entry);
+    await this.activeView()?.finish(entry);
 
     if (op === "query-save" && status === "done") {
       const m = finalText.match(/Создана\s+страница:\s*([^\s`'"]+)/i);

@@ -215,7 +215,11 @@ var en = {
     entityTypesError: "Invalid JSON array \u2014 must be an array of objects",
     sourcePathsLabel: "Source paths (one per line)",
     languageNotesLabel: "Language notes",
-    save: "Save"
+    save: "Save",
+    busyCloseTitle: "Operation in progress",
+    busyCloseBody: "Abort the operation or leave it running in the background?",
+    busyCloseAbort: "Abort operation",
+    busyCloseLeave: "Leave in background"
   }
 };
 var ru = {
@@ -355,7 +359,11 @@ var ru = {
     entityTypesError: "\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON-\u043C\u0430\u0441\u0441\u0438\u0432 \u2014 \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043C\u0430\u0441\u0441\u0438\u0432\u043E\u043C \u043E\u0431\u044A\u0435\u043A\u0442\u043E\u0432",
     sourcePathsLabel: "\u041F\u0443\u0442\u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432 (\u043F\u043E \u043E\u0434\u043D\u043E\u043C\u0443 \u043D\u0430 \u0441\u0442\u0440\u043E\u043A\u0443)",
     languageNotesLabel: "\u0417\u0430\u043C\u0435\u0442\u043A\u0438 \u043E \u044F\u0437\u044B\u043A\u0435",
-    save: "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C"
+    save: "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C",
+    busyCloseTitle: "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F",
+    busyCloseBody: "\u041F\u0440\u0435\u0440\u0432\u0430\u0442\u044C \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044E \u0438\u043B\u0438 \u043E\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0442\u044C\u0441\u044F \u0432 \u0444\u043E\u043D\u0435?",
+    busyCloseAbort: "\u041F\u0440\u0435\u0440\u0432\u0430\u0442\u044C \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044E",
+    busyCloseLeave: "\u041E\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u0432 \u0444\u043E\u043D\u0435"
   }
 };
 var es = {
@@ -495,7 +503,11 @@ var es = {
     entityTypesError: "Array JSON inv\xE1lido \u2014 debe ser un array de objetos",
     sourcePathsLabel: "Rutas de origen (una por l\xEDnea)",
     languageNotesLabel: "Notas de idioma",
-    save: "Guardar"
+    save: "Guardar",
+    busyCloseTitle: "Operaci\xF3n en curso",
+    busyCloseBody: "\xBFAbortar la operaci\xF3n o dejarla ejecutarse en segundo plano?",
+    busyCloseAbort: "Abortar operaci\xF3n",
+    busyCloseLeave: "Dejar en segundo plano"
   }
 };
 var locales = { ru, es };
@@ -505,6 +517,25 @@ function i18n() {
 }
 
 // src/modals.ts
+var BusyCloseModal = class extends import_obsidian2.Modal {
+  constructor(app, onAbort) {
+    super(app);
+    this.onAbort = onAbort;
+  }
+  onOpen() {
+    const T = i18n().modal;
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: T.busyCloseTitle });
+    contentEl.createEl("p", { text: T.busyCloseBody });
+    new import_obsidian2.Setting(contentEl).addButton((b) => b.setButtonText(T.busyCloseLeave).onClick(() => this.close())).addButton((b) => b.setButtonText(T.busyCloseAbort).setWarning().onClick(() => {
+      this.close();
+      this.onAbort();
+    }));
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
 var ConfirmModal = class extends import_obsidian2.Modal {
   constructor(app, title, lines, onConfirm) {
     super(app);
@@ -1139,12 +1170,19 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     historyHeader.addEventListener("click", () => this.toggleHistory());
     this.historyEl = this.historySection.createDiv("llm-wiki-history llm-wiki-hidden");
     this.renderHistory();
+    const ongoing = this.plugin.controller.currentOp;
+    if (ongoing) {
+      this.setRunning(ongoing.op, ongoing.args);
+    }
   }
   onClose() {
     if (this.tickHandle !== null)
       window.clearInterval(this.tickHandle);
     if (this.chatTickHandle !== null)
       window.clearInterval(this.chatTickHandle);
+    if (this.plugin.controller.isBusy()) {
+      new BusyCloseModal(this.app, () => this.plugin.controller.cancelCurrent()).open();
+    }
   }
   refreshDomains() {
     const domains = this.plugin.controller.loadDomains();
@@ -10342,6 +10380,7 @@ var WikiController = class {
     this.plugin = plugin;
   }
   current = null;
+  currentOp = null;
   isBusy() {
     return this.current !== null;
   }
@@ -10419,7 +10458,7 @@ var WikiController = class {
     try {
       for await (const ev of runGen) {
         this.logEvent(sessionId, "chat", domainId, ev);
-        view.appendChatEvent(ev);
+        this.activeView()?.appendChatEvent(ev);
         if (ev.kind === "result")
           finalText = ev.text;
         if (ev.kind === "error")
@@ -10431,12 +10470,13 @@ var WikiController = class {
       this.logEvent(sessionId, "chat", domainId, { kind: "error", message: finalText });
     } finally {
       this.current = null;
+      this.currentOp = null;
     }
     this.logEvent(sessionId, "chat", domainId, {
       kind: "system",
       message: `finish status=${status} durationMs=${Date.now() - startedAt}`
     });
-    view.finishChat({ role: "assistant", content: finalText }, status !== "done");
+    this.activeView()?.finishChat({ role: "assistant", content: finalText }, status !== "done");
   }
   async init(domain, dryRun) {
     const args = dryRun ? [domain, "--dry-run"] : [domain];
@@ -10534,6 +10574,7 @@ var WikiController = class {
     const agentRunner = this.buildAgentRunner(repoRoot);
     const ctrl = new AbortController();
     this.current = ctrl;
+    this.currentOp = { op, args };
     const startedAt = Date.now();
     const sessionId = String(startedAt);
     const steps = [];
@@ -10547,7 +10588,7 @@ var WikiController = class {
     try {
       for await (const ev of runGen) {
         this.logEvent(sessionId, op, domainId, ev);
-        view.appendEvent(ev);
+        this.activeView()?.appendEvent(ev);
         if (ev.kind === "domain_created") {
           if (!this.plugin.settings.domains)
             this.plugin.settings.domains = [];
@@ -10593,6 +10634,7 @@ var WikiController = class {
       this.logEvent(sessionId, op, domainId, { kind: "error", message: finalText });
     } finally {
       this.current = null;
+      this.currentOp = null;
     }
     this.logEvent(sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
     const entry = {
@@ -10610,7 +10652,7 @@ var WikiController = class {
       this.plugin.settings.history.shift();
     }
     await this.plugin.saveSettings();
-    await view.finish(entry);
+    await this.activeView()?.finish(entry);
     if (op === "query-save" && status === "done") {
       const m = finalText.match(/Создана\s+страница:\s*([^\s`'"]+)/i);
       if (m) {

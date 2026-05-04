@@ -2,6 +2,23 @@ import { App, Modal, Setting } from "obsidian";
 import type { AddDomainInput, DomainEntry, EntityType } from "./domain-map";
 import { i18n } from "./i18n";
 
+export class BusyCloseModal extends Modal {
+  constructor(app: App, private onAbort: () => void) { super(app); }
+  onOpen(): void {
+    const T = i18n().modal;
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: T.busyCloseTitle });
+    contentEl.createEl("p", { text: T.busyCloseBody });
+    new Setting(contentEl)
+      .addButton((b) => b.setButtonText(T.busyCloseLeave).onClick(() => this.close()))
+      .addButton((b) => b.setButtonText(T.busyCloseAbort).setWarning().onClick(() => {
+        this.close();
+        this.onAbort();
+      }));
+  }
+  onClose(): void { this.contentEl.empty(); }
+}
+
 export class ConfirmModal extends Modal {
   constructor(
     app: App,

@@ -138,6 +138,10 @@ const en = {
     sourcePathsLabel: "Source paths (one per line)",
     languageNotesLabel: "Language notes",
     save: "Save",
+    busyCloseTitle: "Operation in progress",
+    busyCloseBody: "Abort the operation or leave it running in the background?",
+    busyCloseAbort: "Abort operation",
+    busyCloseLeave: "Leave in background",
   },
 };
 
@@ -281,6 +285,10 @@ const ru: I18n = {
     sourcePathsLabel: "Пути источников (по одному на строку)",
     languageNotesLabel: "Заметки о языке",
     save: "Сохранить",
+    busyCloseTitle: "Операция выполняется",
+    busyCloseBody: "Прервать операцию или оставить выполняться в фоне?",
+    busyCloseAbort: "Прервать операцию",
+    busyCloseLeave: "Оставить в фоне",
   },
 };
 
@@ -422,6 +430,10 @@ const es: I18n = {
     sourcePathsLabel: "Rutas de origen (una por línea)",
     languageNotesLabel: "Notas de idioma",
     save: "Guardar",
+    busyCloseTitle: "Operación en curso",
+    busyCloseBody: "¿Abortar la operación o dejarla ejecutarse en segundo plano?",
+    busyCloseAbort: "Abortar operación",
+    busyCloseLeave: "Dejar en segundo plano",
   },
 };
 

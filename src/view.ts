@@ -1,5 +1,5 @@
 import { App, ItemView, Modal, WorkspaceLeaf, MarkdownRenderer, Component, Notice } from "obsidian";
-import { AddDomainModal, ConfirmModal } from "./modals";
+import { AddDomainModal, BusyCloseModal, ConfirmModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
 import { i18n } from "./i18n";
@@ -159,11 +159,19 @@ export class LlmWikiView extends ItemView {
     historyHeader.addEventListener("click", () => this.toggleHistory());
     this.historyEl = this.historySection.createDiv("llm-wiki-history llm-wiki-hidden");
     this.renderHistory();
+
+    const ongoing = this.plugin.controller.currentOp;
+    if (ongoing) {
+      this.setRunning(ongoing.op, ongoing.args);
+    }
   }
 
   onClose(): void {
     if (this.tickHandle !== null) window.clearInterval(this.tickHandle);
     if (this.chatTickHandle !== null) window.clearInterval(this.chatTickHandle);
+    if (this.plugin.controller.isBusy()) {
+      new BusyCloseModal(this.app, () => this.plugin.controller.cancelCurrent()).open();
+    }
   }
 
   private refreshDomains(): void {
