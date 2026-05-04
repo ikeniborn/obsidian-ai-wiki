@@ -3,7 +3,6 @@ main.js
 *.log
 .vitest-cache/
 !dist/main.js
-tmp/
 .playwright-mcp
 scripts/dspy/.venv/
 scripts/dspy/.env
