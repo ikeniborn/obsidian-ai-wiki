@@ -72,8 +72,15 @@ export class WikiController {
     this.current = ctrl;
 
     const startedAt = Date.now();
+    const sessionId = String(startedAt);
+    const lastMsg = chatMessages[chatMessages.length - 1]?.content ?? "";
     let finalText = "";
     let status: "done" | "error" | "cancelled" = "done";
+
+    this.logEvent(sessionId, "chat", domainId, {
+      kind: "system",
+      message: `start op=chat args=${JSON.stringify([lastMsg])} domainId=${domainId}`,
+    });
 
     view.setChatRunning();
 
@@ -85,6 +92,7 @@ export class WikiController {
 
     try {
       for await (const ev of runGen) {
+        this.logEvent(sessionId, "chat", domainId, ev);
         view.appendChatEvent(ev);
         if (ev.kind === "result") finalText = ev.text;
         if (ev.kind === "error") status = "error";
@@ -92,9 +100,15 @@ export class WikiController {
     } catch (err) {
       status = "error";
       finalText = i18n().ctrl.errorPrefix((err as Error).message);
+      this.logEvent(sessionId, "chat", domainId, { kind: "error", message: finalText });
     } finally {
       this.current = null;
     }
+
+    this.logEvent(sessionId, "chat", domainId, {
+      kind: "system",
+      message: `finish status=${status} durationMs=${Date.now() - startedAt}`,
+    });
 
     view.finishChat({ role: "assistant", content: finalText }, status !== "done");
   }
