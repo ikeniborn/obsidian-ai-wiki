@@ -42,6 +42,9 @@ export class LlmWikiView extends ItemView {
   private chatInputEl: HTMLTextAreaElement | null = null;
   private chatSendBtn: HTMLButtonElement | null = null;
   private chatHistory: ChatMessage[] = [];
+  private chatToggle: HTMLElement | null = null;
+  private chatOpen = true;
+  private chatBodyEl: HTMLElement | null = null;
   private currentChatBubble: HTMLElement | null = null;
   private currentChatBuffer = "";
   private chatTickHandle: number | null = null;
@@ -473,6 +476,12 @@ export class LlmWikiView extends ItemView {
       this.stepsEl.addClass("llm-wiki-hidden");
     }
     this.progressToggle.setText(this.stepsOpen ? "▼" : "▶");
+  }
+
+  private toggleChat(): void {
+    this.chatOpen = !this.chatOpen;
+    this.chatBodyEl?.toggleClass("llm-wiki-hidden", !this.chatOpen);
+    this.chatToggle?.setText(this.chatOpen ? "▼" : "▶");
   }
 
   private updateMetrics(): void {
