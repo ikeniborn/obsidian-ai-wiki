@@ -141,11 +141,21 @@ program = dspy.Predict(sig)
 
 ### Trainset
 
+Фактические ключи в JSONL-логе — camelCase (JSON.stringify TypeScript-объекта):
+
+| Ключ в JSONL | Значение |
+|---|---|
+| `operation` | тип операции: `ingest`, `query`, etc. |
+| `userMessage` | входное задание |
+| `systemPrompt` | финальный системный промт |
+| `result` | результат операции |
+| `eval.score` | оценка 0-10 от evaluator-фазы |
+
 ```python
 dspy.Example(
-    user_message=entry["user_message"],
+    user_message=entry["userMessage"],    # camelCase из лога
     result=entry["result"],
-    score=entry["eval"]["score"],   # 0-10, из evaluator-фазы плагина
+    score=entry["eval"]["score"],         # 0-10, из evaluator-фазы плагина
 ).with_inputs("user_message")
 ```
 
