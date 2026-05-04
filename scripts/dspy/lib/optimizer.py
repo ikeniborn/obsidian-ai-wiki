@@ -33,9 +33,9 @@ def call_evaluator(
         .replace("{{task_input}}", user_message)
         .replace("{{result}}", result)
     )
+    response = lm(prompt=prompt)
+    text = response[0] if response else ""
     try:
-        response = lm(prompt=prompt)
-        text = response[0] if response else ""
         match = re.search(r'"score"\s*:\s*(\d+(?:\.\d+)?)', text)
         if not match:
             return 0.0
@@ -56,7 +56,7 @@ def restore_placeholders(lm, original: str, optimized: str) -> str:
         placeholders=placeholder_list,
     )
     response = lm(prompt=prompt)
-    restored = response[0] if response else optimized
+    restored = response[0] if response and response[0] else optimized
 
     missing = [p for p in placeholders if f"{{{{{p}}}}}" not in restored]
     if missing:
