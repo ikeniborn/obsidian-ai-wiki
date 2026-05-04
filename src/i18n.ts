@@ -4,8 +4,8 @@ const en = {
   settings: {
     h3_general: "General settings",
     h3_backend: "Backend settings",
-    systemPrompt_name: "System prompt",
-    systemPrompt_desc: "System prompt for all operations. Used by both backends.",
+    systemPrompt_name: "User prompt",
+    systemPrompt_desc: "Appended to the system prompt of every operation as a '## Уточнение' section. Empty by default.",
     maxTokens_name: "Max tokens",
     maxTokens_desc: "Maximum tokens in the response. Recommended ≥ 4096.",
     domains_heading: "Domains",
@@ -147,8 +147,8 @@ const ru: I18n = {
   settings: {
     h3_general: "Общие настройки",
     h3_backend: "Настройки бэкенда",
-    systemPrompt_name: "System prompt",
-    systemPrompt_desc: "Системный промт для всех операций. Используется обоими бэкендами.",
+    systemPrompt_name: "User prompt",
+    systemPrompt_desc: "Добавляется в конец системного промта каждой операции разделом «## Уточнение». По умолчанию пуст.",
     maxTokens_name: "Max tokens",
     maxTokens_desc: "Максимум токенов в ответе. Рекомендуется ≥ 4096.",
     domains_heading: "Домены",
@@ -288,8 +288,8 @@ const es: I18n = {
   settings: {
     h3_general: "Configuración general",
     h3_backend: "Configuración del backend",
-    systemPrompt_name: "Prompt del sistema",
-    systemPrompt_desc: "Prompt del sistema para todas las operaciones. Usado por ambos backends.",
+    systemPrompt_name: "User prompt",
+    systemPrompt_desc: "Se añade al final del prompt del sistema de cada operación como sección '## Уточнение'. Vacío por defecto.",
     maxTokens_name: "Máx. tokens",
     maxTokens_desc: "Máximo de tokens en la respuesta. Recomendado ≥ 4096.",
     domains_heading: "Dominios",

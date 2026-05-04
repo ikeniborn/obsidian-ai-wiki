@@ -133,7 +133,7 @@ export interface LlmWikiPluginSettings {
 
 export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   backend: "claude-agent",
-  systemPrompt: "You are a wiki assistant for a technical knowledge base. Be precise, factual, and concise. Use only the provided sources.",
+  systemPrompt: "",
   domains: [],
   maxTokens: 4096,
   agentLogPath: "",

@@ -31,12 +31,14 @@ function injectSystemPrompt(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   systemPrompt: string,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
+  if (!systemPrompt) return messages;
+  const section = `## Уточнение\n${systemPrompt}`;
   const firstSystem = messages.findIndex((m) => m.role === "system");
   if (firstSystem >= 0) {
     const updated = [...messages];
     const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
-    updated[firstSystem] = { role: "system", content: `${systemPrompt}\n\n${existing}` };
+    updated[firstSystem] = { role: "system", content: `${existing}\n\n${section}` };
     return updated;
   }
-  return [{ role: "system", content: systemPrompt }, ...messages];
+  return [{ role: "system", content: section }, ...messages];
 }
