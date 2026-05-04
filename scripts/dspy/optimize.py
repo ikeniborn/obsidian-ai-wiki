@@ -31,11 +31,17 @@ def main() -> None:
     log_path    = _get(args.log, "DEV_LOG_PATH")
     ops_raw     = _get(args.operations, "OPERATIONS", "")
     min_ex      = args.min_examples or int(os.environ.get("MIN_EXAMPLES", "5"))
-    prompts_dir = _get(args.prompts_dir, "PROMPTS_DIR") or "../../prompts"
-    output_dir  = _get(args.output_dir,  "OUTPUT_DIR") or "../../prompts/optimized"
+    prompts_dir = _get(args.prompts_dir, "PROMPTS_DIR")
+    output_dir  = _get(args.output_dir,  "OUTPUT_DIR")
 
     if not log_path:
         print("ERROR: задайте DEV_LOG_PATH в .env или передайте --log", file=sys.stderr)
+        sys.exit(1)
+    if not prompts_dir:
+        print("ERROR: задайте PROMPTS_DIR в .env или передайте --prompts-dir", file=sys.stderr)
+        sys.exit(1)
+    if not output_dir:
+        print("ERROR: задайте OUTPUT_DIR в .env или передайте --output-dir", file=sys.stderr)
         sys.exit(1)
 
     operations = [o.strip() for o in ops_raw.split(",") if o.strip()] if ops_raw else None
