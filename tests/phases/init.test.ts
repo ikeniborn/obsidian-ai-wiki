@@ -145,3 +145,54 @@ describe("runInit", () => {
     expect(result.text).toContain("newdomain");
   });
 });
+
+describe("runInit — ensureRootFiles", () => {
+  it("создаёт _schema.md когда файл отсутствует", async () => {
+    const adapter = mockAdapter({ exists: vi.fn().mockResolvedValue(false) });
+    const vt = new VaultTools(adapter, "/vault");
+    await collect(
+      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "/vault", "TestVault", new AbortController().signal),
+    );
+    const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
+    const schemaCall = writeCalls.find(([path]) => path.endsWith("_schema.md"));
+    expect(schemaCall).toBeDefined();
+    expect(schemaCall![1]).toContain("# Wiki Schema");
+  });
+
+  it("создаёт _index.md когда файл отсутствует", async () => {
+    const adapter = mockAdapter({ exists: vi.fn().mockResolvedValue(false) });
+    const vt = new VaultTools(adapter, "/vault");
+    await collect(
+      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "/vault", "TestVault", new AbortController().signal),
+    );
+    const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
+    const indexCall = writeCalls.find(([path]) => path.endsWith("_index.md"));
+    expect(indexCall).toBeDefined();
+    expect(indexCall![1]).toContain("# Wiki Index");
+  });
+
+  it("создаёт _log.md когда файл отсутствует", async () => {
+    const adapter = mockAdapter({ exists: vi.fn().mockResolvedValue(false) });
+    const vt = new VaultTools(adapter, "/vault");
+    await collect(
+      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "/vault", "TestVault", new AbortController().signal),
+    );
+    const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
+    const logCall = writeCalls.find(([path]) => path.endsWith("_log.md"));
+    expect(logCall).toBeDefined();
+    expect(logCall![1]).toContain("# Wiki Log");
+  });
+
+  it("не перезаписывает существующие корневые файлы", async () => {
+    const adapter = mockAdapter({ exists: vi.fn().mockResolvedValue(true) });
+    const vt = new VaultTools(adapter, "/vault");
+    await collect(
+      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "/vault", "TestVault", new AbortController().signal),
+    );
+    const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
+    const schemaWrite = writeCalls.find(([path]) => path.endsWith("_schema.md"));
+    const indexWrite = writeCalls.find(([path]) => path.endsWith("_index.md"));
+    expect(schemaWrite).toBeUndefined();
+    expect(indexWrite).toBeUndefined();
+  });
+});

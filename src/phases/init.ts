@@ -3,6 +3,7 @@ import type { DomainEntry } from "../domain-map";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";
+import schemaTemplate from "../../templates/_schema.md";
 
 export async function* runInit(
   args: string[],
@@ -31,13 +32,15 @@ export async function* runInit(
 
   yield { kind: "assistant_text", delta: `Bootstrapping domain "${domainId}"...\n` };
 
+  const wikiRootGuess = `!Wiki`;
+
+  await ensureRootFiles(vaultTools, wikiRootGuess);
+
   const start = Date.now();
 
   const allFiles = await vaultTools.listFiles("");
   const sampleFiles = allFiles.slice(0, 5);
   const samples = await vaultTools.readAll(sampleFiles);
-
-  const wikiRootGuess = `!Wiki`;
   const [schemaContent, indexContent] = await Promise.all([
     tryRead(vaultTools, `${wikiRootGuess}/_schema.md`),
     tryRead(vaultTools, `${wikiRootGuess}/_index.md`),
@@ -144,4 +147,16 @@ async function appendLog(vaultTools: VaultTools, wikiRoot: string, domainId: str
 
 async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
   try { return await vaultTools.read(path); } catch { return ""; }
+}
+
+async function ensureRootFiles(vaultTools: VaultTools, wikiRoot: string): Promise<void> {
+  const schema = `${wikiRoot}/_schema.md`;
+  const index  = `${wikiRoot}/_index.md`;
+  const log    = `${wikiRoot}/_log.md`;
+
+  try {
+    if (!(await vaultTools.exists(schema))) await vaultTools.write(schema, schemaTemplate);
+    if (!(await vaultTools.exists(index)))  await vaultTools.write(index, "# Wiki Index\n");
+    if (!(await vaultTools.exists(log)))    await vaultTools.write(log, "# Wiki Log\n");
+  } catch { /* не блокируем init */ }
 }
