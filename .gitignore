@@ -7,3 +7,6 @@ tmp/
 .playwright-mcp
 scripts/dspy/.venv/
 scripts/dspy/.env
+scripts/dspy/.pytest_cache
+scripts/dspy/__pycache__
+scripts/dspy/*.egg-info/
