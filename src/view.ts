@@ -44,6 +44,8 @@ export class LlmWikiView extends ItemView {
   private chatHistory: ChatMessage[] = [];
   private currentChatBubble: HTMLElement | null = null;
   private currentChatBuffer = "";
+  private chatTickHandle: number | null = null;
+  private chatStartTs = 0;
   private lastUserMessage = "";
   private startTs = 0;
   private toolCount = 0;
@@ -388,13 +390,19 @@ export class LlmWikiView extends ItemView {
   setChatRunning(): void {
     if (this.chatSendBtn) this.chatSendBtn.disabled = true;
     if (this.chatInputEl) this.chatInputEl.disabled = true;
-    // Создаём пустой пузырь ассистента — будем стримить в него
     this.currentChatBuffer = "";
     if (this.chatMessagesEl) {
       this.currentChatBubble = this.chatMessagesEl.createDiv("llm-wiki-chat-msg llm-wiki-chat-msg--assistant llm-wiki-chat-msg--streaming");
       this.currentChatBubble.setText("…");
       this.currentChatBubble.scrollIntoView({ block: "end" });
     }
+    this.chatStartTs = Date.now();
+    this.chatTickHandle = window.setInterval(() => {
+      if (this.currentChatBubble) {
+        const s = ((Date.now() - this.chatStartTs) / 1000).toFixed(1);
+        this.currentChatBubble.setText(`⏳ ${s}s…`);
+      }
+    }, 500);
   }
 
   appendChatEvent(ev: RunEvent): void {
