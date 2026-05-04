@@ -1,3 +1,4 @@
+import type OpenAI from "openai";
 import type { LlmCallOptions, LlmClient, RunEvent } from "../types";
 import evaluatorTemplate from "../../prompts/evaluator.md";
 import { render } from "./template";
@@ -30,15 +31,13 @@ export async function* runEvaluator(
   signal: AbortSignal,
   opts: LlmCallOptions = {},
 ): AsyncGenerator<RunEvent> {
-  const systemContent = render(evaluatorTemplate, { operation, task_input: taskInput, result });
-  const messages = [{ role: "system" as const, content: systemContent }];
+  const userContent = render(evaluatorTemplate, { operation, task_input: taskInput, result });
+  const messages = [{ role: "user" as const, content: userContent }];
   const params = buildChatParams(model, messages, opts);
 
   try {
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false } as import("openai").Chat.ChatCompletionCreateParamsNonStreaming,
-      { signal },
-    );
+    const nonStreamParams = { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming;
+    const resp = await llm.chat.completions.create(nonStreamParams, { signal });
     const text = resp.choices[0]?.message?.content ?? "";
     const evalResult = parseEvalResponse(text);
     if (evalResult) {

@@ -223,7 +223,7 @@ var ru = {
     h3_general: "\u041E\u0431\u0449\u0438\u0435 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438",
     h3_backend: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u0431\u044D\u043A\u0435\u043D\u0434\u0430",
     systemPrompt_name: "User prompt",
-    systemPrompt_desc: "\u0414\u043E\u0431\u0430\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u0432 \u043A\u043E\u043D\u0435\u0446 \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u0433\u043E \u043F\u0440\u043E\u043C\u0442\u0430 \u043A\u0430\u0436\u0434\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438 \u0440\u0430\u0437\u0434\u0435\u043B\u043E\u043C \xAB## \u0423\u0442\u043E\u0447\u043D\u0435\u043D\u0438\u0435\xBB. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E \u043F\u0443\u0441\u0442.",
+    systemPrompt_desc: "\u0414\u043E\u0431\u0430\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u0432 \u043A\u043E\u043D\u0435\u0446 \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u0433\u043E \u043F\u0440\u043E\u043C\u0442\u0430 \u043A\u0430\u0436\u0434\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E \u043F\u0443\u0441\u0442.",
     maxTokens_name: "Max tokens",
     maxTokens_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u0432 \u043E\u0442\u0432\u0435\u0442\u0435. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u0435\u0442\u0441\u044F \u2265 4096.",
     domains_heading: "\u0414\u043E\u043C\u0435\u043D\u044B",
@@ -363,7 +363,7 @@ var es = {
     h3_general: "Configuraci\xF3n general",
     h3_backend: "Configuraci\xF3n del backend",
     systemPrompt_name: "User prompt",
-    systemPrompt_desc: "Se a\xF1ade al final del prompt del sistema de cada operaci\xF3n como secci\xF3n '## \u0423\u0442\u043E\u0447\u043D\u0435\u043D\u0438\u0435'. Vac\xEDo por defecto.",
+    systemPrompt_desc: "Se a\xF1ade al final del prompt del sistema de cada operaci\xF3n. Vac\xEDo por defecto.",
     maxTokens_name: "M\xE1x. tokens",
     maxTokens_desc: "M\xE1ximo de tokens en la respuesta. Recomendado \u2265 4096.",
     domains_heading: "Dominios",
@@ -2749,14 +2749,12 @@ function parseEvalResponse(text) {
   }
 }
 async function* runEvaluator(llm, model, operation, taskInput, result, signal, opts = {}) {
-  const systemContent = render(evaluator_default, { operation, task_input: taskInput, result });
-  const messages = [{ role: "system", content: systemContent }];
+  const userContent = render(evaluator_default, { operation, task_input: taskInput, result });
+  const messages = [{ role: "user", content: userContent }];
   const params = buildChatParams(model, messages, opts);
   try {
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false },
-      { signal }
-    );
+    const nonStreamParams = { ...params, stream: false };
+    const resp = await llm.chat.completions.create(nonStreamParams, { signal });
     const text = resp.choices[0]?.message?.content ?? "";
     const evalResult = parseEvalResponse(text);
     if (evalResult) {
