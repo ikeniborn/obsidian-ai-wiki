@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import dspy
-import pytest
 from lib.signature import make_signature
 
 
