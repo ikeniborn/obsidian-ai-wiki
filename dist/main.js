@@ -28,7 +28,7 @@ var import_obsidian6 = require("obsidian");
 // src/types.ts
 var DEFAULT_SETTINGS = {
   backend: "claude-agent",
-  systemPrompt: "You are a wiki assistant for a technical knowledge base. Be precise, factual, and concise. Use only the provided sources.",
+  systemPrompt: "",
   domains: [],
   maxTokens: 4096,
   agentLogPath: "",
@@ -62,6 +62,11 @@ var DEFAULT_SETTINGS = {
       lint: { model: "llama3.2", maxTokens: 8192, temperature: 0.2 },
       init: { model: "llama3.2", maxTokens: 8192, temperature: 0.2 }
     }
+  },
+  devMode: {
+    enabled: false,
+    logPath: "",
+    evaluatorModel: "sonnet"
   }
 };
 
@@ -77,8 +82,8 @@ var en = {
   settings: {
     h3_general: "General settings",
     h3_backend: "Backend settings",
-    systemPrompt_name: "System prompt",
-    systemPrompt_desc: "System prompt for all operations. Used by both backends.",
+    systemPrompt_name: "User prompt",
+    systemPrompt_desc: "Appended to the system prompt of every operation as a '## \u0423\u0442\u043E\u0447\u043D\u0435\u043D\u0438\u0435' section. Empty by default.",
     maxTokens_name: "Max tokens",
     maxTokens_desc: "Maximum tokens in the response. Recommended \u2265 4096.",
     domains_heading: "Domains",
@@ -127,7 +132,14 @@ var en = {
     opMaxTokens_name: "Max tokens",
     opMaxTokens_desc: "Max tokens for this operation.",
     opTemperature_name: "Temperature",
-    opTemperature_desc: "Temperature for this operation (0\u20132)."
+    opTemperature_desc: "Temperature for this operation (0\u20132).",
+    h3_devmode: "Developer",
+    devMode_enabled_name: "Dev mode",
+    devMode_enabled_desc: "Enable dev logger and evaluator after each operation.",
+    devMode_logPath_name: "Dev log path",
+    devMode_logPath_desc: "Path to JSONL file for dev logs.",
+    devMode_evaluatorModel_name: "Evaluator model",
+    devMode_evaluatorModel_desc: "Model name for the evaluator (same backend)."
   },
   view: {
     refreshTitle: "Refresh domains",
@@ -210,8 +222,8 @@ var ru = {
   settings: {
     h3_general: "\u041E\u0431\u0449\u0438\u0435 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438",
     h3_backend: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u0431\u044D\u043A\u0435\u043D\u0434\u0430",
-    systemPrompt_name: "System prompt",
-    systemPrompt_desc: "\u0421\u0438\u0441\u0442\u0435\u043C\u043D\u044B\u0439 \u043F\u0440\u043E\u043C\u0442 \u0434\u043B\u044F \u0432\u0441\u0435\u0445 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442\u0441\u044F \u043E\u0431\u043E\u0438\u043C\u0438 \u0431\u044D\u043A\u0435\u043D\u0434\u0430\u043C\u0438.",
+    systemPrompt_name: "User prompt",
+    systemPrompt_desc: "\u0414\u043E\u0431\u0430\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u0432 \u043A\u043E\u043D\u0435\u0446 \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u0433\u043E \u043F\u0440\u043E\u043C\u0442\u0430 \u043A\u0430\u0436\u0434\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438 \u0440\u0430\u0437\u0434\u0435\u043B\u043E\u043C \xAB## \u0423\u0442\u043E\u0447\u043D\u0435\u043D\u0438\u0435\xBB. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E \u043F\u0443\u0441\u0442.",
     maxTokens_name: "Max tokens",
     maxTokens_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u0432 \u043E\u0442\u0432\u0435\u0442\u0435. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u0435\u0442\u0441\u044F \u2265 4096.",
     domains_heading: "\u0414\u043E\u043C\u0435\u043D\u044B",
@@ -260,7 +272,14 @@ var ru = {
     opMaxTokens_name: "Max tokens",
     opMaxTokens_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u0434\u043B\u044F \u044D\u0442\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.",
     opTemperature_name: "Temperature",
-    opTemperature_desc: "Temperature \u0434\u043B\u044F \u044D\u0442\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438 (0\u20132)."
+    opTemperature_desc: "Temperature \u0434\u043B\u044F \u044D\u0442\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438 (0\u20132).",
+    h3_devmode: "\u0420\u0430\u0437\u0440\u0430\u0431\u043E\u0442\u043A\u0430",
+    devMode_enabled_name: "Dev \u0440\u0435\u0436\u0438\u043C",
+    devMode_enabled_desc: "\u0412\u043A\u043B\u044E\u0447\u0438\u0442\u044C dev-\u043B\u043E\u0433\u0433\u0435\u0440 \u0438 \u043E\u0446\u0435\u043D\u0449\u0438\u043A \u043F\u043E\u0441\u043B\u0435 \u043A\u0430\u0436\u0434\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.",
+    devMode_logPath_name: "\u041F\u0443\u0442\u044C \u043A dev-\u043B\u043E\u0433\u0443",
+    devMode_logPath_desc: "\u041F\u0443\u0442\u044C \u043A JSONL-\u0444\u0430\u0439\u043B\u0443 \u0434\u043B\u044F dev-\u043B\u043E\u0433\u043E\u0432.",
+    devMode_evaluatorModel_name: "\u041C\u043E\u0434\u0435\u043B\u044C \u043E\u0446\u0435\u043D\u0449\u0438\u043A\u0430",
+    devMode_evaluatorModel_desc: "\u0418\u043C\u044F \u043C\u043E\u0434\u0435\u043B\u0438 \u0434\u043B\u044F \u043E\u0446\u0435\u043D\u0449\u0438\u043A\u0430 (\u0442\u043E\u0442 \u0436\u0435 \u0431\u044D\u043A\u0435\u043D\u0434)."
   },
   view: {
     refreshTitle: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D\u044B",
@@ -343,8 +362,8 @@ var es = {
   settings: {
     h3_general: "Configuraci\xF3n general",
     h3_backend: "Configuraci\xF3n del backend",
-    systemPrompt_name: "Prompt del sistema",
-    systemPrompt_desc: "Prompt del sistema para todas las operaciones. Usado por ambos backends.",
+    systemPrompt_name: "User prompt",
+    systemPrompt_desc: "Se a\xF1ade al final del prompt del sistema de cada operaci\xF3n como secci\xF3n '## \u0423\u0442\u043E\u0447\u043D\u0435\u043D\u0438\u0435'. Vac\xEDo por defecto.",
     maxTokens_name: "M\xE1x. tokens",
     maxTokens_desc: "M\xE1ximo de tokens en la respuesta. Recomendado \u2265 4096.",
     domains_heading: "Dominios",
@@ -393,7 +412,14 @@ var es = {
     opMaxTokens_name: "M\xE1x. tokens",
     opMaxTokens_desc: "M\xE1ximo de tokens para esta operaci\xF3n.",
     opTemperature_name: "Temperatura",
-    opTemperature_desc: "Temperatura para esta operaci\xF3n (0\u20132)."
+    opTemperature_desc: "Temperatura para esta operaci\xF3n (0\u20132).",
+    h3_devmode: "Desarrollo",
+    devMode_enabled_name: "Modo dev",
+    devMode_enabled_desc: "Activar el registrador dev y el evaluador tras cada operaci\xF3n.",
+    devMode_logPath_name: "Ruta del log dev",
+    devMode_logPath_desc: "Ruta al archivo JSONL para logs dev.",
+    devMode_evaluatorModel_name: "Modelo evaluador",
+    devMode_evaluatorModel_desc: "Nombre del modelo para el evaluador (mismo backend)."
   },
   view: {
     refreshTitle: "Actualizar dominios",
@@ -944,6 +970,25 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         }
       }
     }
+    new import_obsidian3.Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
+    new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_enabled_name).setDesc(T.settings.devMode_enabled_desc).addToggle(
+      (t) => t.setValue(s.devMode.enabled).onChange(async (v) => {
+        s.devMode.enabled = v;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_logPath_name).setDesc(T.settings.devMode_logPath_desc).addText(
+      (t) => t.setPlaceholder("/tmp/llm-wiki-dev.jsonl").setValue(s.devMode.logPath).onChange(async (v) => {
+        s.devMode.logPath = v.trim();
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_evaluatorModel_name).setDesc(T.settings.devMode_evaluatorModel_desc).addText(
+      (t) => t.setPlaceholder("sonnet").setValue(s.devMode.evaluatorModel).onChange(async (v) => {
+        s.devMode.evaluatorModel = v.trim();
+        await this.plugin.saveSettings();
+      })
+    );
   }
 };
 
@@ -1266,6 +1311,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.scrollSteps();
     } else if (ev.kind === "result") {
       this.assistantBlock = null;
+    } else if (ev.kind === "eval_result") {
+      const el = this.stepsEl.createEl("div", { cls: "llm-wiki-eval-result" });
+      el.setText(`[eval: ${ev.score}/10] ${ev.reasoning}`);
     }
     this.updateMetrics();
   }
@@ -1593,7 +1641,7 @@ function translateSystemEvent(message) {
 
 // src/controller.ts
 var import_obsidian5 = require("obsidian");
-var import_node_fs = require("node:fs");
+var import_node_fs2 = require("node:fs");
 var import_node_path5 = require("node:path");
 
 // src/domain-map.ts
@@ -1604,6 +1652,9 @@ function validateDomainId(id) {
     return "ID \u0434\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u0442 \u0442\u043E\u043B\u044C\u043A\u043E \u0431\u0443\u043A\u0432\u044B/\u0446\u0438\u0444\u0440\u044B/_/-";
   return null;
 }
+
+// src/agent-runner.ts
+var import_node_fs = require("node:fs");
 
 // src/phases/ingest.ts
 var import_node_path = require("node:path");
@@ -1631,16 +1682,28 @@ function buildChatParams(model, messages, opts) {
   return params;
 }
 function injectSystemPrompt(messages, systemPrompt) {
+  if (!systemPrompt)
+    return messages;
+  const section = `## \u0423\u0442\u043E\u0447\u043D\u0435\u043D\u0438\u0435
+${systemPrompt}`;
   const firstSystem = messages.findIndex((m) => m.role === "system");
   if (firstSystem >= 0) {
     const updated = [...messages];
     const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
-    updated[firstSystem] = { role: "system", content: `${systemPrompt}
+    updated[firstSystem] = { role: "system", content: `${existing}
 
-${existing}` };
+${section}` };
     return updated;
   }
-  return [{ role: "system", content: systemPrompt }, ...messages];
+  return [{ role: "system", content: section }, ...messages];
+}
+
+// prompts/ingest.md
+var ingest_default = '\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0441\u0438\u043D\u0442\u0435\u0437\u0430 wiki-\u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0418\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439/\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n\n\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:\n{{entity_types_block}}\n{{lang_notes}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- CREATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 wiki, \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 >= min_mentions_for_page\n- UPDATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2192 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E, \u041D\u0415 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E\n- SKIP: \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u043E \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0435\u0441\u0442\u044C\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043A\u043E\u043D\u0444\u0438\u0433\u0438/SQL \u043C\u043E\u0436\u043D\u043E \u0446\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445.\n- \u041F\u0443\u0442\u044C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0434\u043E\u043B\u0436\u0435\u043D \u043D\u0430\u0447\u0438\u043D\u0430\u0442\u044C\u0441\u044F \u0441 "{{wiki_path}}/"\n- Frontmatter \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n{{schema_block}}\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432, \u0431\u0435\u0437 \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n[{"path":"{{wiki_path}}/EntityName.md","content":"---\\nwiki_sources: [{{source_path}}]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\n---\\n# EntityName\\n\\ncont\u0435\u043D\u0442..."}]\n';
+
+// src/phases/template.ts
+function render(template, vars) {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
 }
 
 // src/phases/ingest.ts
@@ -1850,30 +1913,17 @@ function buildIngestMessages(sourcePath, sourceContent, domain, wikiVaultPath, e
 ${c.slice(0, 400)}`).join("\n\n") : "\u041D\u0435\u0442.";
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const entityTypesBlock = buildEntityTypesBlock(domain);
-  const langNotes = domain.language_notes ? `
-\u042F\u0437\u044B\u043A\u043E\u0432\u044B\u0435 \u043F\u0440\u0430\u0432\u0438\u043B\u0430: ${domain.language_notes}` : "";
-  const systemContent = [
-    `\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0441\u0438\u043D\u0442\u0435\u0437\u0430 wiki-\u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${domain.name}\xBB.`,
-    `\u0418\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439/\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.`,
-    ``,
-    `\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:`,
-    entityTypesBlock || "(\u043D\u0435 \u0437\u0430\u0434\u0430\u043D\u044B)",
-    langNotes,
-    ``,
-    `\u041F\u0420\u0410\u0412\u0418\u041B\u0410:`,
-    `- CREATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 wiki, \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 >= min_mentions_for_page`,
-    `- UPDATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2192 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E, \u041D\u0415 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E`,
-    `- SKIP: \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u043E \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0435\u0441\u0442\u044C`,
-    `- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043A\u043E\u043D\u0444\u0438\u0433\u0438/SQL \u043C\u043E\u0436\u043D\u043E \u0446\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445.`,
-    `- \u041F\u0443\u0442\u044C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0434\u043E\u043B\u0436\u0435\u043D \u043D\u0430\u0447\u0438\u043D\u0430\u0442\u044C\u0441\u044F \u0441 "${wikiVaultPath}/"`,
-    `- Frontmatter \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D: wiki_sources, wiki_updated: ${today}, wiki_status: stub|developing|mature`,
-    schemaContent ? `
-\u041A\u041E\u041D\u0412\u0415\u041D\u0426\u0418\u0418 (_schema.md):
+  const langNotes = domain.language_notes ? `\u042F\u0437\u044B\u043A\u043E\u0432\u044B\u0435 \u043F\u0440\u0430\u0432\u0438\u043B\u0430: ${domain.language_notes}` : "";
+  const systemContent = render(ingest_default, {
+    domain_name: domain.name,
+    entity_types_block: entityTypesBlock || "(\u043D\u0435 \u0437\u0430\u0434\u0430\u043D\u044B)",
+    lang_notes: langNotes,
+    wiki_path: wikiVaultPath,
+    today,
+    schema_block: schemaContent ? `\u041A\u041E\u041D\u0412\u0415\u041D\u0426\u0418\u0418 (_schema.md):
 ${schemaContent.slice(0, 2e3)}` : "",
-    ``,
-    `\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432, \u0431\u0435\u0437 \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:`,
-    `[{"path":"${wikiVaultPath}/EntityName.md","content":"---\\nwiki_sources: [${sourcePath}]\\nwiki_updated: ${today}\\nwiki_status: stub\\ntags: []\\n---\\n# EntityName\\n\\ncont\u0435\u043D\u0442..."}]`
-  ].filter((s) => s !== null).join("\n");
+    source_path: sourcePath
+  });
   return [
     { role: "system", content: systemContent },
     {
@@ -1897,6 +1947,11 @@ ${indexContent.slice(0, 2e3)}` : ""
 
 // src/phases/query.ts
 var import_node_path2 = require("node:path");
+
+// prompts/query.md
+var query_default = "\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u043F\u043E wiki-\u0431\u0430\u0437\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u0411\u0443\u0434\u044C \u0442\u043E\u0447\u0435\u043D \u0438 \u043B\u0430\u043A\u043E\u043D\u0438\u0447\u0435\u043D.\n\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 WikiLinks [[\u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435]] \u043F\u0440\u0438 \u0441\u0441\u044B\u043B\u043A\u0430\u0445 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0437 \u0438\u043D\u0434\u0435\u043A\u0441\u0430.\n{{entity_types_block}}\n{{schema_block}}\n{{index_block}}\n";
+
+// src/phases/query.ts
 var MAX_CONTEXT_CHARS = 8e4;
 var META_FILES = ["_index.md", "_log.md", "_schema.md"];
 async function* runQuery(args, save, vaultTools, llm, model, domains, repoRoot, signal, opts = {}) {
@@ -1933,22 +1988,16 @@ ${c}`).join("\n\n");
     contextBlock = contextBlock.slice(0, MAX_CONTEXT_CHARS) + "\n[...truncated]";
   }
   const entityTypesBlock = buildEntityTypesBlock2(domain);
-  const indexBlock = indexContent ? `
-
-\u0412\u0438\u043A\u0438-\u0438\u043D\u0434\u0435\u043A\u0441 (_index.md):
-${indexContent.slice(0, 3e3)}` : "";
-  const schemaBlock = schemaContent ? `
-
+  const systemPrompt = render(query_default, {
+    domain_name: domain.name,
+    entity_types_block: entityTypesBlock,
+    schema_block: schemaContent ? `
 \u041A\u043E\u043D\u0432\u0435\u043D\u0446\u0438\u0438 (_schema.md):
-${schemaContent.slice(0, 2e3)}` : "";
-  const systemPrompt = [
-    `\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u043F\u043E wiki-\u0431\u0430\u0437\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${domain.name}\xBB.`,
-    `\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u0411\u0443\u0434\u044C \u0442\u043E\u0447\u0435\u043D \u0438 \u043B\u0430\u043A\u043E\u043D\u0438\u0447\u0435\u043D.`,
-    `\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 WikiLinks [[\u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435]] \u043F\u0440\u0438 \u0441\u0441\u044B\u043B\u043A\u0430\u0445 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0437 \u0438\u043D\u0434\u0435\u043A\u0441\u0430.`,
-    entityTypesBlock,
-    schemaBlock,
-    indexBlock
-  ].filter(Boolean).join("\n\n");
+${schemaContent.slice(0, 2e3)}` : "",
+    index_block: indexContent ? `
+\u0412\u0438\u043A\u0438-\u0438\u043D\u0434\u0435\u043A\u0441 (_index.md):
+${indexContent.slice(0, 3e3)}` : ""
+  });
   const messages = [
     { role: "system", content: systemPrompt },
     { role: "user", content: `\u0412\u043E\u043F\u0440\u043E\u0441: ${question}
@@ -2034,6 +2083,11 @@ ${types}${notes}`;
 
 // src/phases/lint.ts
 var import_node_path3 = require("node:path");
+
+// prompts/lint.md
+var lint_default = "\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0412\u044B\u044F\u0432\u043B\u044F\u0439: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442.\n\u0412\u0435\u0440\u043D\u0438 \u043A\u0440\u0430\u0442\u043A\u0438\u0439 \u043E\u0442\u0447\u0451\u0442 \u0432 markdown.\n{{entity_types_block}}\n";
+
+// src/phases/lint.ts
 var META_FILES2 = ["_index.md", "_log.md", "_schema.md"];
 async function* runLint(args, vaultTools, llm, model, domains, repoRoot, signal, opts = {}) {
   const domainId = args[0];
@@ -2063,18 +2117,14 @@ Wiki folder outside vault \u2014 skipped.`);
     const entityTypesBlock = buildEntityTypesBlock3(domain);
     yield { kind: "assistant_text", delta: `Evaluating domain "${domain.id}" quality...
 ` };
-    const messages = [
-      {
-        role: "system",
-        content: [
-          `\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${domain.name}\xBB.`,
-          `\u0412\u044B\u044F\u0432\u043B\u044F\u0439: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442.`,
-          `\u0412\u0435\u0440\u043D\u0438 \u043A\u0440\u0430\u0442\u043A\u0438\u0439 \u043E\u0442\u0447\u0451\u0442 \u0432 markdown.`,
-          entityTypesBlock ? `
+    const systemContent = render(lint_default, {
+      domain_name: domain.name,
+      entity_types_block: entityTypesBlock ? `
 \u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:
 ${entityTypesBlock}` : ""
-        ].filter(Boolean).join("\n")
-      },
+    });
+    const messages = [
+      { role: "system", content: systemContent },
       {
         role: "user",
         content: [
@@ -2322,6 +2372,11 @@ ${c.slice(0, 300)}`).join("\n\n");
 
 // src/phases/fix.ts
 var import_node_path4 = require("node:path");
+
+// prompts/fix.md
+var fix_default = '\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n{{fix_instruction}}\n\n{{entity_types_block}}\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432 \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 (\u0435\u0441\u043B\u0438 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0430\u0441\u044C \u2014 \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0430\u0439):\n[{"path":"{{wiki_path}}/EntityName.md","content":"\u043F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B"}]\n\u0414\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u044B\u0435 \u043F\u0443\u0442\u0438 wiki: {{wiki_path}}/\n\u0414\u0430\u0442\u0430: {{today}}\n';
+
+// src/phases/fix.ts
 var META_FILES3 = ["_index.md", "_log.md", "_schema.md"];
 async function* runFix(args, vaultTools, llm, model, domains, repoRoot, signal, opts = {}, lintReport, userInstruction) {
   const domainId = args[0];
@@ -2428,22 +2483,18 @@ function buildFixMessages2(domain, wikiVaultPath, pages, structuralIssues, entit
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const pagesBlock = [...pages.entries()].map(([p, c]) => `--- ${p} ---
 ${c}`).join("\n\n");
-  return [
-    {
-      role: "system",
-      content: [
-        `\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${domain.name}\xBB.`,
-        userInstruction ? `\u0412\u044B\u043F\u043E\u043B\u043D\u0438 \u0437\u0430\u0434\u0430\u0447\u0443 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F. \u0412\u0435\u0440\u043D\u0438 \u0442\u043E\u043B\u044C\u043A\u043E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.` : `\u0418\u0441\u043F\u0440\u0430\u0432\u044C \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B \u0432 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430\u0445 \u0438 \u0432\u0435\u0440\u043D\u0438 \u0442\u043E\u043B\u044C\u043A\u043E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.`,
-        ``,
-        entityTypesBlock ? `\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419:
+  const fixInstruction = userInstruction ? `\u0412\u044B\u043F\u043E\u043B\u043D\u0438 \u0437\u0430\u0434\u0430\u0447\u0443 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F. \u0412\u0435\u0440\u043D\u0438 \u0442\u043E\u043B\u044C\u043A\u043E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.` : `\u0418\u0441\u043F\u0440\u0430\u0432\u044C \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B \u0432 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430\u0445 \u0438 \u0432\u0435\u0440\u043D\u0438 \u0442\u043E\u043B\u044C\u043A\u043E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.`;
+  const systemContent = render(fix_default, {
+    domain_name: domain.name,
+    fix_instruction: fixInstruction,
+    entity_types_block: entityTypesBlock ? `\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419:
 ${entityTypesBlock}
 ` : "",
-        `\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432 \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 (\u0435\u0441\u043B\u0438 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0430\u0441\u044C \u2014 \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0430\u0439):`,
-        `[{"path":"${wikiVaultPath}/EntityName.md","content":"\u043F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B"}]`,
-        `\u0414\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u044B\u0435 \u043F\u0443\u0442\u0438 wiki: ${wikiVaultPath}/`,
-        `\u0414\u0430\u0442\u0430: ${today}`
-      ].filter(Boolean).join("\n")
-    },
+    wiki_path: wikiVaultPath,
+    today
+  });
+  return [
+    { role: "system", content: systemContent },
     {
       role: "user",
       content: [
@@ -2463,17 +2514,17 @@ ${pagesBlock}`
   ];
 }
 
+// prompts/chat.md
+var chat_default = "{{domain_header}}\n\u041F\u043E\u043C\u043E\u0433\u0430\u0439 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044E \u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0438 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u044F\u0442\u044C \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B, \u0432\u044B\u044F\u0432\u043B\u0435\u043D\u043D\u044B\u0435 lint-\u043F\u0440\u043E\u0432\u0435\u0440\u043A\u043E\u0439.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u043A\u043E\u043D\u043A\u0440\u0435\u0442\u043D\u043E, \u0441\u0441\u044B\u043B\u0430\u044F\u0441\u044C \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u043E\u0442\u0447\u0451\u0442\u0430.\n\n\u041E\u0422\u0427\u0401\u0422 LINT:\n{{lint_report}}\n";
+
 // src/phases/chat.ts
 async function* runLintChat(llm, model, domain, signal, opts, lintReport, history) {
   const start = Date.now();
-  const systemContent = [
-    domain ? `\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${domain.name || domain.id}\xBB.` : `\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439.`,
-    `\u041F\u043E\u043C\u043E\u0433\u0430\u0439 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044E \u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0438 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u044F\u0442\u044C \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B, \u0432\u044B\u044F\u0432\u043B\u0435\u043D\u043D\u044B\u0435 lint-\u043F\u0440\u043E\u0432\u0435\u0440\u043A\u043E\u0439.`,
-    `\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u043A\u043E\u043D\u043A\u0440\u0435\u0442\u043D\u043E, \u0441\u0441\u044B\u043B\u0430\u044F\u0441\u044C \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u043E\u0442\u0447\u0451\u0442\u0430.`,
-    ``,
-    `\u041E\u0422\u0427\u0401\u0422 LINT:
-${lintReport}`
-  ].join("\n");
+  const domainHeader = domain ? `\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${domain.name || domain.id}\xBB.` : `\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439.`;
+  const systemContent = render(chat_default, {
+    domain_header: domainHeader,
+    lint_report: lintReport
+  });
   const messages = [
     { role: "system", content: systemContent },
     ...history.map((m) => ({ role: m.role, content: m.content }))
@@ -2512,6 +2563,9 @@ ${lintReport}`
 // templates/_schema.md
 var schema_default = '# Wiki Schema\n\n## \u042F\u0437\u044B\u043A \u0438 \u0441\u0442\u0438\u043B\u044C\n- \u041E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u044F\u0437\u044B\u043A: \u0440\u0443\u0441\u0441\u043A\u0438\u0439\n- \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u043D\u0435 \u043F\u0435\u0440\u0435\u0432\u043E\u0434\u0438\u0442\u044C: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML\n- \u0418\u043C\u0435\u043D\u0430 \u0441\u0438\u0441\u0442\u0435\u043C \u2014 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 (RT.DataExporter, CRM B2C, \u0426\u0425\u0414)\n- \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B \u0440\u0430\u0441\u0448\u0438\u0444\u0440\u043E\u0432\u044B\u0432\u0430\u0442\u044C \u043F\u0440\u0438 \u043F\u0435\u0440\u0432\u043E\u043C \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0438 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435\n- \u0421\u0442\u0438\u043B\u044C: \u043D\u0435\u0439\u0442\u0440\u0430\u043B\u044C\u043D\u044B\u0439, \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0432\u043D\u044B\u0439, \u0431\u0435\u0437 \u043E\u0446\u0435\u043D\u043E\u0447\u043D\u044B\u0445 \u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: "\u041E\u0447\u0435\u0432\u0438\u0434\u043D\u043E, \u0447\u0442\u043E...", "\u041B\u0443\u0447\u0448\u0438\u0439 \u0441\u043F\u043E\u0441\u043E\u0431...", \u043C\u0435\u0441\u0442\u043E\u0438\u043C\u0435\u043D\u0438\u044F "\u044F", "\u043C\u044B", "\u043D\u0430\u0448"\n\n## \u0418\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u043E\u0432 \u0438 \u043F\u0430\u043F\u043E\u043A\n- \u0424\u0430\u0439\u043B\u044B: kebab-case, \u043A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u0430, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432 \u0438 \u0441\u043F\u0435\u0446\u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432 \u043A\u0440\u043E\u043C\u0435 \u0434\u0435\u0444\u0438\u0441\u0430\n  - \u041F\u0440\u0438\u043C\u0435\u0440\u044B: `\u0432\u0435\u0440\u0441\u0438\u043E\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435-scd.md`, `clickhouse-\u043E\u0431\u0437\u043E\u0440.md`\n- \u041F\u0430\u043F\u043A\u0438 \u0434\u043E\u043C\u0435\u043D\u043E\u0432: \u043D\u0438\u0436\u043D\u0438\u0439 \u0440\u0435\u0433\u0438\u0441\u0442\u0440, \u043B\u0430\u0442\u0438\u043D\u0438\u0446\u0430 (`\u0438\u0438/`, `\u0431\u0430\u0437\u044B-\u0434\u0430\u043D\u043D\u044B\u0445/`)\n- \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1: \u0440\u0443\u0441\u0441\u043A\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435; \u0442\u0435\u0445\u0442\u0435\u0440\u043C\u0438\u043D \u0432 \u0441\u043A\u043E\u0431\u043A\u0430\u0445 \u043F\u0440\u0438 \u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E\u0441\u0442\u0438\n\n## \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u043F\u043E\u0440\u044F\u0434\u043E\u043A)\n1. Frontmatter (YAML)\n2. \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1\n3. \u0412\u0432\u043E\u0434\u043D\u044B\u0439 \u0430\u0431\u0437\u0430\u0446 \u2014 1-3 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0431\u0435\u0437 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0430, \u0441\u0440\u0430\u0437\u0443 \u043F\u043E\u0441\u043B\u0435 H1\n4. `## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438` \u2014 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0438 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u044B\n5. `## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438` \u2014 WikiLinks \u043D\u0430 \u0434\u0440\u0443\u0433\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n\n## \u041E\u043F\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B\n- `## \u041F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435 [\u0414\u043E\u043C\u0435\u043D]`\n- `## \u041F\u0440\u0438\u043C\u0435\u0440\u044B`\n- `## \u041E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F`\n- `## Best Practices`\n- `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n\n## Frontmatter\n\n| \u041F\u043E\u043B\u0435 | \u041F\u0440\u0430\u0432\u0438\u043B\u043E |\n|------|---------|\n| `wiki_sources` | \u041C\u0430\u0441\u0441\u0438\u0432 \u0440\u0435\u0430\u043B\u044C\u043D\u044B\u0445 \u043F\u0443\u0442\u0435\u0439 \u043E\u0442 \u043A\u043E\u0440\u043D\u044F \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F. \u0422\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u043D\u044B\u0435 \u0444\u0430\u0439\u043B\u044B. \u041F\u0440\u0438 UPDATE \u2014 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0442\u044C, \u043D\u0435 \u0443\u0434\u0430\u043B\u044F\u0442\u044C |\n| `wiki_updated` | YYYY-MM-DD |\n| `wiki_status` | `stub` (<2 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432, <10 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439) / `developing` / `mature` (\u22654 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430, \u0432\u0441\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B) |\n| `tags` | \u0418\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 \u0438\u0437 tag-hierarchy.json |\n| `aliases` | \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B, \u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u0438\u0435 \u0432\u0430\u0440\u0438\u0430\u043D\u0442\u044B, \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B |\n\n## WikiLinks\n- \u0421\u0441\u044B\u043B\u0430\u0442\u044C\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0447\u0435\u0440\u0435\u0437 `[[\u0438\u043C\u044F-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B]]`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: \u043C\u0451\u0440\u0442\u0432\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438, \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0444\u0430\u0439\u043B\u044B \u0432\u043D\u0435 `!Wiki/`, \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438 \u0447\u0435\u0440\u0435\u0437 WikiLinks\n\n## \u041A\u043E\u043D\u0442\u0435\u043D\u0442\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u2014 \u043F\u0435\u0440\u0435\u0440\u0430\u0431\u043E\u0442\u0430\u0442\u044C \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432\n- \u0414\u043E\u0441\u043B\u043E\u0432\u043D\u044B\u0435 \u0446\u0438\u0442\u0430\u0442\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445 (SQL, \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438)\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u0434\u0430\u0442\u0443 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0432 `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: placeholder-\u0442\u0435\u043A\u0441\u0442 (TODO, "\u0441\u043C. \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A"), \u043F\u0443\u0441\u0442\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B, \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438\n';
 
+// prompts/init.md
+var init_default = '\u0422\u044B \u2014 \u0430\u0440\u0445\u0438\u0442\u0435\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439. \u0421\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0439 \u0437\u0430\u043F\u0438\u0441\u044C \u0434\u043E\u043C\u0435\u043D\u0430 \u0434\u043B\u044F domain-map.json.\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0435\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B:\n{\n  "id": "{{domain_id}}",\n  "name": "\u0427\u0435\u043B\u043E\u0432\u0435\u043A\u043E\u0447\u0438\u0442\u0430\u0435\u043C\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435",\n  "wiki_folder": "vaults/{{vault_name}}/!Wiki/{{domain_id}}",\n  "source_paths": [],\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"{{domain_id}}/..."}],\n  "language_notes": ""\n}\n{{schema_block}}\n{{index_block}}\n';
+
 // src/phases/init.ts
 async function* runInit(args, vaultTools, llm, model, domains, repoRoot, vaultName, signal, opts = {}) {
   const domainId = args[0];
@@ -2537,24 +2591,16 @@ async function* runInit(args, vaultTools, llm, model, domains, repoRoot, vaultNa
     tryRead3(vaultTools, `${wikiRootGuess}/_schema.md`),
     tryRead3(vaultTools, `${wikiRootGuess}/_index.md`)
   ]);
-  const systemContent = [
-    `\u0422\u044B \u2014 \u0430\u0440\u0445\u0438\u0442\u0435\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439. \u0421\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0439 \u0437\u0430\u043F\u0438\u0441\u044C \u0434\u043E\u043C\u0435\u043D\u0430 \u0434\u043B\u044F domain-map.json.`,
-    `\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0435\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B:`,
-    `{`,
-    `  "id": "${domainId}",`,
-    `  "name": "\u0427\u0435\u043B\u043E\u0432\u0435\u043A\u043E\u0447\u0438\u0442\u0430\u0435\u043C\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435",`,
-    `  "wiki_folder": "vaults/${vaultName}/!Wiki/${domainId}",`,
-    `  "source_paths": [],`,
-    `  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"${domainId}/..."}],`,
-    `  "language_notes": ""`,
-    `}`,
-    schemaContent ? `
+  const systemContent = render(init_default, {
+    domain_id: domainId,
+    vault_name: vaultName,
+    schema_block: schemaContent ? `
 \u041A\u043E\u043D\u0432\u0435\u043D\u0446\u0438\u0438 \u0432\u0438\u043A\u0438 (_schema.md):
 ${schemaContent.slice(0, 1500)}` : "",
-    indexContent ? `
+    index_block: indexContent ? `
 \u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0430\u044F \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 (_index.md):
 ${indexContent.slice(0, 1e3)}` : ""
-  ].filter(Boolean).join("\n");
+  });
   const messages = [
     { role: "system", content: systemContent },
     {
@@ -2669,6 +2715,41 @@ async function ensureRootFiles(vaultTools, wikiRoot) {
   }
 }
 
+// prompts/evaluator.md
+var evaluator_default = '\u0422\u044B \u2014 \u043E\u0446\u0435\u043D\u0449\u0438\u043A \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 \u0440\u0430\u0431\u043E\u0442\u044B wiki-\u0430\u0433\u0435\u043D\u0442\u0430. \u041E\u0446\u0435\u043D\u0438 \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.\n\n\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F: {{operation}}\n\n\u0412\u0445\u043E\u0434\u043D\u043E\u0435 \u0437\u0430\u0434\u0430\u043D\u0438\u0435:\n{{task_input}}\n\n\u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442:\n{{result}}\n\n\u0412\u0435\u0440\u043D\u0438 JSON \u0441\u0442\u0440\u043E\u0433\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435:\n{"score": <0-10>, "reasoning": "<\u043E\u0434\u043D\u043E \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435>"}\n\n\u041A\u0440\u0438\u0442\u0435\u0440\u0438\u0438 \u043E\u0446\u0435\u043D\u043A\u0438:\n- 9-10: \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u043F\u043E\u043B\u043D\u043E\u0441\u0442\u044C\u044E \u0441\u043E\u043E\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0437\u0430\u0434\u0430\u043D\u0438\u044E, \u0431\u0435\u0437 \u043E\u0448\u0438\u0431\u043E\u043A\n- 7-8: \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u0435\u043D, \u0435\u0441\u0442\u044C \u043D\u0435\u0437\u043D\u0430\u0447\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0435 \u043D\u0435\u0434\u043E\u0447\u0451\u0442\u044B\n- 5-6: \u0437\u0430\u0434\u0430\u043D\u0438\u0435 \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u043E \u0447\u0430\u0441\u0442\u0438\u0447\u043D\u043E\n- 0-4: \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u043D\u0435 \u0441\u043E\u043E\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0437\u0430\u0434\u0430\u043D\u0438\u044E \u0438\u043B\u0438 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u043E\u0448\u0438\u0431\u043A\u0438\n';
+
+// src/phases/evaluator.ts
+function parseEvalResponse(text) {
+  const match = text.match(/\{[^{}]*"score"[^{}]*"reasoning"[^{}]*\}/s) ?? text.match(/\{[^{}]*"reasoning"[^{}]*"score"[^{}]*\}/s);
+  if (!match)
+    return null;
+  try {
+    const parsed = JSON.parse(match[0]);
+    if (typeof parsed.score !== "number" || typeof parsed.reasoning !== "string")
+      return null;
+    return { score: Math.min(10, Math.max(0, parsed.score)), reasoning: parsed.reasoning };
+  } catch {
+    return null;
+  }
+}
+async function* runEvaluator(llm, model, operation, taskInput, result, signal, opts = {}) {
+  const systemContent = render(evaluator_default, { operation, task_input: taskInput, result });
+  const messages = [{ role: "system", content: systemContent }];
+  const params = buildChatParams(model, messages, opts);
+  try {
+    const resp = await llm.chat.completions.create(
+      { ...params, stream: false },
+      { signal }
+    );
+    const text = resp.choices[0]?.message?.content ?? "";
+    const evalResult = parseEvalResponse(text);
+    if (evalResult) {
+      yield { kind: "eval_result", score: evalResult.score, reasoning: evalResult.reasoning };
+    }
+  } catch {
+  }
+}
+
 // src/agent-runner.ts
 var AgentRunner = class {
   constructor(llm, settings, vaultTools, vaultName, domains) {
@@ -2693,13 +2774,17 @@ var AgentRunner = class {
       return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
     return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
   }
-  async *run(req) {
-    const { model, opts } = this.buildOptsFor(req.operation);
-    yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}` };
-    if (req.signal.aborted)
+  writeDevLog(entry) {
+    const logPath = this.settings.devMode?.logPath;
+    if (!logPath)
       return;
-    const repoRoot = req.cwd ?? "";
-    const domains = req.domainId ? this.domains.filter((d) => d.id === req.domainId) : this.domains;
+    try {
+      const line = JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), ...entry, eval: null }) + "\n";
+      (0, import_node_fs.appendFileSync)(logPath, line, "utf-8");
+    } catch {
+    }
+  }
+  async *runOperation(req, model, opts, repoRoot, domains) {
     switch (req.operation) {
       case "ingest":
         yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, repoRoot, req.signal, opts);
@@ -2729,6 +2814,57 @@ var AgentRunner = class {
         yield { kind: "error", message: `Unknown operation: ${req.operation}` };
         yield { kind: "result", durationMs: Date.now() - start, text: "" };
       }
+    }
+  }
+  async *run(req) {
+    const { model, opts } = this.buildOptsFor(req.operation);
+    yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}` };
+    if (req.signal.aborted)
+      return;
+    const repoRoot = req.cwd ?? "";
+    const domains = req.domainId ? this.domains.filter((d) => d.id === req.domainId) : this.domains;
+    const startMs = Date.now();
+    let finalResultText = "";
+    for await (const ev of this.runOperation(req, model, opts, repoRoot, domains)) {
+      if (ev.kind === "result")
+        finalResultText = ev.text;
+      yield ev;
+    }
+    if (this.settings.devMode?.enabled && finalResultText) {
+      const taskInput = req.args.join(" ") || req.operation;
+      this.writeDevLog({
+        operation: req.operation,
+        model,
+        systemPrompt: opts.systemPrompt ?? "",
+        userMessage: taskInput,
+        result: finalResultText,
+        durationMs: Date.now() - startMs
+      });
+      if (this.settings.devMode.evaluatorModel) {
+        const evalModel = this.settings.devMode.evaluatorModel;
+        for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal)) {
+          yield ev;
+          if (ev.kind === "eval_result") {
+            this.updateDevLogEval(ev.score, ev.reasoning);
+          }
+        }
+      }
+    }
+  }
+  updateDevLogEval(score, reasoning) {
+    const logPath = this.settings.devMode?.logPath;
+    if (!logPath)
+      return;
+    try {
+      const fs = require("node:fs");
+      const content = fs.readFileSync(logPath, "utf-8");
+      const lines = content.trimEnd().split("\n");
+      const lastIdx = lines.length - 1;
+      const last = JSON.parse(lines[lastIdx]);
+      last.eval = { score, reasoning };
+      lines[lastIdx] = JSON.stringify(last);
+      fs.writeFileSync(logPath, lines.join("\n") + "\n", "utf-8");
+    } catch {
     }
   }
 };
@@ -10330,7 +10466,7 @@ var WikiController = class {
   }
   requireClaudeAgent() {
     const p = this.plugin.settings.claudeAgent.iclaudePath;
-    if (!p || !(0, import_node_fs.existsSync)(p)) {
+    if (!p || !(0, import_node_fs2.existsSync)(p)) {
       new import_obsidian5.Notice(i18n().ctrl.setClaudeCodePath);
       return null;
     }
@@ -10357,12 +10493,12 @@ var WikiController = class {
     if (!logPath)
       return;
     try {
-      const stat = (0, import_node_fs.existsSync)(logPath) ? (0, import_node_fs.statSync)(logPath) : null;
+      const stat = (0, import_node_fs2.existsSync)(logPath) ? (0, import_node_fs2.statSync)(logPath) : null;
       if (stat?.isDirectory() || !logPath.includes(".") && !logPath.endsWith("/")) {
         logPath = (0, import_node_path5.join)(logPath, "agent.jsonl");
       }
       const line = JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), session: sessionId, op, domainId, event: ev }) + "\n";
-      (0, import_node_fs.appendFileSync)(logPath, line, "utf-8");
+      (0, import_node_fs2.appendFileSync)(logPath, line, "utf-8");
     } catch {
     }
   }

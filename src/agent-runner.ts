@@ -6,6 +6,7 @@ import { runLint } from "./phases/lint";
 import { runFix } from "./phases/fix";
 import { runLintChat } from "./phases/chat";
 import { runInit } from "./phases/init";
+import { runEvaluator } from "./phases/evaluator";
 import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, OpKey, RunEvent, RunRequest } from "./types";
 import type { VaultTools } from "./vault-tools";
 
@@ -118,6 +119,31 @@ export class AgentRunner {
         result: finalResultText,
         durationMs: Date.now() - startMs,
       });
+
+      if (this.settings.devMode.evaluatorModel) {
+        const evalModel = this.settings.devMode.evaluatorModel;
+        for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal)) {
+          yield ev;
+          if (ev.kind === "eval_result") {
+            this.updateDevLogEval(ev.score, ev.reasoning);
+          }
+        }
+      }
     }
+  }
+
+  private updateDevLogEval(score: number, reasoning: string): void {
+    const logPath = this.settings.devMode?.logPath;
+    if (!logPath) return;
+    try {
+      const fs = require("node:fs") as typeof import("node:fs");
+      const content = fs.readFileSync(logPath, "utf-8");
+      const lines = content.trimEnd().split("\n");
+      const lastIdx = lines.length - 1;
+      const last = JSON.parse(lines[lastIdx]);
+      last.eval = { score, reasoning };
+      lines[lastIdx] = JSON.stringify(last);
+      fs.writeFileSync(logPath, lines.join("\n") + "\n", "utf-8");
+    } catch { /* не блокируем */ }
   }
 }

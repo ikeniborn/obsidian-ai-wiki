@@ -40,7 +40,8 @@ export type RunEvent =
   | { kind: "ask_user"; question: string; options: string[]; toolUseId: string }
   | { kind: "domain_created"; entry: DomainEntry }
   | { kind: "source_path_added"; domainId: string; path: string }
-  | { kind: "domain_updated"; domainId: string; patch: { entity_types?: EntityType[]; language_notes?: string } };
+  | { kind: "domain_updated"; domainId: string; patch: { entity_types?: EntityType[]; language_notes?: string } }
+  | { kind: "eval_result"; score: number; reasoning: string };
 
 export interface RunHistoryEntry {
   id: string;

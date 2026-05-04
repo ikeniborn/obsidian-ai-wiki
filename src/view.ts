@@ -322,6 +322,9 @@ export class LlmWikiView extends ItemView {
     } else if (ev.kind === "result") {
       // финальный result рендерим в finishe(), здесь — отметка
       this.assistantBlock = null;
+    } else if (ev.kind === "eval_result") {
+      const el = this.stepsEl.createEl("div", { cls: "llm-wiki-eval-result" });
+      el.setText(`[eval: ${ev.score}/10] ${ev.reasoning}`);
     }
     this.updateMetrics();
   }
