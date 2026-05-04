@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 import argparse
 import os
 import sys
@@ -30,8 +31,8 @@ def main() -> None:
     log_path    = _get(args.log, "DEV_LOG_PATH")
     ops_raw     = _get(args.operations, "OPERATIONS", "")
     min_ex      = args.min_examples or int(os.environ.get("MIN_EXAMPLES", "5"))
-    prompts_dir = _get(args.prompts_dir, "PROMPTS_DIR", "../../prompts")
-    output_dir  = _get(args.output_dir,  "OUTPUT_DIR",  "../../prompts/optimized")
+    prompts_dir = _get(args.prompts_dir, "PROMPTS_DIR") or "../../prompts"
+    output_dir  = _get(args.output_dir,  "OUTPUT_DIR") or "../../prompts/optimized"
 
     if not log_path:
         print("ERROR: задайте DEV_LOG_PATH в .env или передайте --log", file=sys.stderr)
