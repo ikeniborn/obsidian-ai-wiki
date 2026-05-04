@@ -1,3 +1,4 @@
+import { appendFileSync } from "node:fs";
 import type { DomainEntry } from "./domain-map";
 import { runIngest } from "./phases/ingest";
 import { runQuery } from "./phases/query";
@@ -33,17 +34,29 @@ export class AgentRunner {
     return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
   }
 
-  async *run(req: RunRequest): AsyncGenerator<RunEvent, void, void> {
-    const { model, opts } = this.buildOptsFor(req.operation);
-    yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}` };
+  private writeDevLog(entry: {
+    operation: string;
+    model: string;
+    systemPrompt: string;
+    userMessage: string;
+    result: string;
+    durationMs: number;
+  }): void {
+    const logPath = this.settings.devMode?.logPath;
+    if (!logPath) return;
+    try {
+      const line = JSON.stringify({ ts: new Date().toISOString(), ...entry, eval: null }) + "\n";
+      appendFileSync(logPath, line, "utf-8");
+    } catch { /* не блокируем операцию */ }
+  }
 
-    if (req.signal.aborted) return;
-
-    const repoRoot = req.cwd ?? "";
-    const domains = req.domainId
-      ? this.domains.filter((d) => d.id === req.domainId)
-      : this.domains;
-
+  private async *runOperation(
+    req: RunRequest,
+    model: string,
+    opts: LlmCallOptions,
+    repoRoot: string,
+    domains: DomainEntry[],
+  ): AsyncGenerator<RunEvent, void, void> {
     switch (req.operation) {
       case "ingest":
         yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, repoRoot, req.signal, opts);
@@ -73,6 +86,38 @@ export class AgentRunner {
         yield { kind: "error", message: `Unknown operation: ${req.operation as string}` };
         yield { kind: "result", durationMs: Date.now() - start, text: "" };
       }
+    }
+  }
+
+  async *run(req: RunRequest): AsyncGenerator<RunEvent, void, void> {
+    const { model, opts } = this.buildOptsFor(req.operation);
+    yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}` };
+
+    if (req.signal.aborted) return;
+
+    const repoRoot = req.cwd ?? "";
+    const domains = req.domainId
+      ? this.domains.filter((d) => d.id === req.domainId)
+      : this.domains;
+
+    const startMs = Date.now();
+    let finalResultText = "";
+
+    for await (const ev of this.runOperation(req, model, opts, repoRoot, domains)) {
+      if (ev.kind === "result") finalResultText = ev.text;
+      yield ev;
+    }
+
+    if (this.settings.devMode?.enabled && finalResultText) {
+      const taskInput = req.args.join(" ") || req.operation;
+      this.writeDevLog({
+        operation: req.operation,
+        model,
+        systemPrompt: opts.systemPrompt ?? "",
+        userMessage: taskInput,
+        result: finalResultText,
+        durationMs: Date.now() - startMs,
+      });
     }
   }
 }
