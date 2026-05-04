@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import dspy
+from lib.signature import make_signature
 
 _RESTORE_PROMPT = """\
 Below is the ORIGINAL prompt template (contains {{placeholders}} that must be preserved) \
@@ -49,6 +51,10 @@ def restore_placeholders(lm, original: str, optimized: str) -> str:
     if not placeholders:
         return optimized
 
+    missing_before = [p for p in placeholders if f"{{{{{p}}}}}" not in optimized]
+    if not missing_before:
+        return optimized
+
     placeholder_list = ", ".join(f"{{{{{p}}}}}" for p in placeholders)
     prompt = _RESTORE_PROMPT.format(
         original=original,
@@ -63,3 +69,49 @@ def restore_placeholders(lm, original: str, optimized: str) -> str:
         raise ValueError(f"Placeholders not restored: {missing}")
 
     return restored
+
+
+def run_mipro(
+    lm,
+    operation: str,
+    trainset: list[dict],
+    template_content: str,
+    evaluator_template: str,
+) -> str:
+    dspy.configure(lm=lm)
+
+    sig = make_signature(template_content)
+    program = dspy.Predict(sig)
+
+    examples = [
+        dspy.Example(
+            user_message=entry["userMessage"],
+            result=entry["result"],
+            score=entry["eval"]["score"],
+        ).with_inputs("user_message")
+        for entry in trainset
+    ]
+
+    def metric(example, prediction, trace=None):
+        score = call_evaluator(
+            lm, operation,
+            example.user_message,
+            prediction.result,
+            evaluator_template,
+        )
+        return score / 10.0
+
+    optimizer = dspy.MIPROv2(
+        metric=metric,
+        auto="light",
+        num_threads=1,
+    )
+    compiled = optimizer.compile(
+        program,
+        trainset=examples,
+        max_bootstrapped_demos=0,
+        max_labeled_demos=0,
+    )
+    optimized_instruction = compiled.signature.instructions
+
+    return restore_placeholders(lm, template_content, optimized_instruction)

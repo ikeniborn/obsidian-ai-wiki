@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from lib.optimizer import call_evaluator, restore_placeholders
+from unittest.mock import MagicMock, patch
+from lib.optimizer import call_evaluator, restore_placeholders, run_mipro
 
 
 class MockLM:
@@ -68,3 +69,29 @@ def test_restore_placeholders_raises_if_missing():
     lm = MockLM("Улучшенный текст без плейсхолдера")
     with pytest.raises(ValueError, match="Placeholders not restored"):
         restore_placeholders(lm, original, optimized)
+
+
+def test_run_mipro_returns_string():
+    lm = MockLM('{"score": 8, "reasoning": "ok"}')
+
+    mock_compiled = MagicMock()
+    mock_compiled.signature.instructions = "optimized instruction {{domain_name}}"
+
+    with patch("lib.optimizer.dspy.MIPROv2") as mock_mipro_cls:
+        mock_optimizer = MagicMock()
+        mock_optimizer.compile.return_value = mock_compiled
+        mock_mipro_cls.return_value = mock_optimizer
+
+        result = run_mipro(
+            lm=lm,
+            operation="ingest",
+            trainset=[
+                {"userMessage": "a", "result": "b", "eval": {"score": 8}},
+                {"userMessage": "c", "result": "d", "eval": {"score": 7}},
+            ],
+            template_content="Системный промт для {{domain_name}}.",
+            evaluator_template=EVALUATOR_TEMPLATE,
+        )
+
+    assert isinstance(result, str)
+    assert "{{domain_name}}" in result
