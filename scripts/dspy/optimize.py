@@ -40,14 +40,14 @@ def main() -> None:
 
     operations = [o.strip() for o in ops_raw.split(",") if o.strip()] if ops_raw else None
 
-    evaluator_template = Path(prompts_dir, "evaluator.md").read_text(encoding="utf-8")
-
     print(f"Загрузка примеров из {log_path}...")
     grouped = load_examples(log_path, operations=operations, min_examples=min_ex)
 
     if not grouped:
         print("Нет операций с достаточным количеством примеров. Завершение.")
         sys.exit(0)
+
+    evaluator_template = Path(prompts_dir, "evaluator.md").read_text(encoding="utf-8")
 
     lm = make_lm()
 
