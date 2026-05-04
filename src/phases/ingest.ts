@@ -4,6 +4,8 @@ import type { DomainEntry } from "../domain-map";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";
+import ingestTemplate from "../../prompts/ingest.md";
+import { render } from "./template";
 
 export async function* runIngest(
   args: string[],
@@ -240,28 +242,17 @@ function buildIngestMessages(
 
   const today = new Date().toISOString().slice(0, 10);
   const entityTypesBlock = buildEntityTypesBlock(domain);
-  const langNotes = domain.language_notes ? `\nЯзыковые правила: ${domain.language_notes}` : "";
+  const langNotes = domain.language_notes ? `Языковые правила: ${domain.language_notes}` : "";
 
-  const systemContent = [
-    `Ты — ассистент синтеза wiki-знаний для домена «${domain.name}».`,
-    `Извлекай сущности из источника и создавай/обновляй wiki-страницы.`,
-    ``,
-    `ТИПЫ СУЩНОСТЕЙ ДОМЕНА:`,
-    entityTypesBlock || "(не заданы)",
-    langNotes,
-    ``,
-    `ПРАВИЛА:`,
-    `- CREATE: сущность не существует в wiki, упоминаний >= min_mentions_for_page`,
-    `- UPDATE: сущность существует → добавить новую информацию, НЕ удалять старую`,
-    `- SKIP: слишком мало упоминаний или информация уже есть`,
-    `- Синтез, не копирование. Технические конфиги/SQL можно цитировать в code-блоках.`,
-    `- Путь страницы должен начинаться с "${wikiVaultPath}/"`,
-    `- Frontmatter обязателен: wiki_sources, wiki_updated: ${today}, wiki_status: stub|developing|mature`,
-    schemaContent ? `\nКОНВЕНЦИИ (_schema.md):\n${schemaContent.slice(0, 2000)}` : "",
-    ``,
-    `Верни ТОЛЬКО JSON-массив, без другого текста:`,
-    `[{"path":"${wikiVaultPath}/EntityName.md","content":"---\\nwiki_sources: [${sourcePath}]\\nwiki_updated: ${today}\\nwiki_status: stub\\ntags: []\\n---\\n# EntityName\\n\\ncontент..."}]`,
-  ].filter((s) => s !== null).join("\n");
+  const systemContent = render(ingestTemplate, {
+    domain_name: domain.name,
+    entity_types_block: entityTypesBlock || "(не заданы)",
+    lang_notes: langNotes,
+    wiki_path: wikiVaultPath,
+    today,
+    schema_block: schemaContent ? `КОНВЕНЦИИ (_schema.md):\n${schemaContent.slice(0, 2000)}` : "",
+    source_path: sourcePath,
+  });
 
   return [
     { role: "system", content: systemContent },

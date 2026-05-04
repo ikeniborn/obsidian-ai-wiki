@@ -6,6 +6,8 @@ import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import { checkStructure } from "./lint";
 import { parseJsonPages } from "./ingest";
+import fixTemplate from "../../prompts/fix.md";
+import { render } from "./template";
 
 const META_FILES = ["_index.md", "_log.md", "_schema.md"];
 
@@ -151,22 +153,20 @@ function buildFixMessages(
     .map(([p, c]) => `--- ${p} ---\n${c}`)
     .join("\n\n");
 
+  const fixInstruction = userInstruction
+    ? `Выполни задачу пользователя. Верни только изменённые страницы.`
+    : `Исправь проблемы в wiki-страницах и верни только изменённые страницы.`;
+
+  const systemContent = render(fixTemplate, {
+    domain_name: domain.name,
+    fix_instruction: fixInstruction,
+    entity_types_block: entityTypesBlock ? `ТИПЫ СУЩНОСТЕЙ:\n${entityTypesBlock}\n` : "",
+    wiki_path: wikiVaultPath,
+    today,
+  });
+
   return [
-    {
-      role: "system",
-      content: [
-        `Ты — редактор wiki-базы знаний домена «${domain.name}».`,
-        userInstruction
-          ? `Выполни задачу пользователя. Верни только изменённые страницы.`
-          : `Исправь проблемы в wiki-страницах и верни только изменённые страницы.`,
-        ``,
-        entityTypesBlock ? `ТИПЫ СУЩНОСТЕЙ:\n${entityTypesBlock}\n` : "",
-        `Верни ТОЛЬКО JSON-массив изменённых страниц (если страница не изменилась — не включай):`,
-        `[{"path":"${wikiVaultPath}/EntityName.md","content":"полный контент страницы"}]`,
-        `Допустимые пути wiki: ${wikiVaultPath}/`,
-        `Дата: ${today}`,
-      ].filter(Boolean).join("\n"),
-    },
+    { role: "system", content: systemContent },
     {
       role: "user",
       content: [

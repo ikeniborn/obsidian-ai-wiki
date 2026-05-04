@@ -5,6 +5,8 @@ import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import { parseJsonPages } from "./ingest";
+import lintTemplate from "../../prompts/lint.md";
+import { render } from "./template";
 
 const META_FILES = ["_index.md", "_log.md", "_schema.md"];
 
@@ -53,16 +55,13 @@ export async function* runLint(
     const entityTypesBlock = buildEntityTypesBlock(domain);
 
     yield { kind: "assistant_text", delta: `Evaluating domain "${domain.id}" quality...\n` };
+    const systemContent = render(lintTemplate, {
+      domain_name: domain.name,
+      entity_types_block: entityTypesBlock ? `\nТИПЫ СУЩНОСТЕЙ ДОМЕНА:\n${entityTypesBlock}` : "",
+    });
+
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      {
-        role: "system",
-        content: [
-          `Ты — рецензент качества wiki-базы знаний домена «${domain.name}».`,
-          `Выявляй: дублирование, пробелы, размытые определения, устаревший контент.`,
-          `Верни краткий отчёт в markdown.`,
-          entityTypesBlock ? `\nТИПЫ СУЩНОСТЕЙ ДОМЕНА:\n${entityTypesBlock}` : "",
-        ].filter(Boolean).join("\n"),
-      },
+      { role: "system", content: systemContent },
       {
         role: "user",
         content: [

@@ -4,6 +4,8 @@ import type { DomainEntry } from "../domain-map";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";
+import queryTemplate from "../../prompts/query.md";
+import { render } from "./template";
 
 const MAX_CONTEXT_CHARS = 80_000;
 const META_FILES = ["_index.md", "_log.md", "_schema.md"];
@@ -63,17 +65,13 @@ export async function* runQuery(
   }
 
   const entityTypesBlock = buildEntityTypesBlock(domain);
-  const indexBlock = indexContent ? `\n\nВики-индекс (_index.md):\n${indexContent.slice(0, 3000)}` : "";
-  const schemaBlock = schemaContent ? `\n\nКонвенции (_schema.md):\n${schemaContent.slice(0, 2000)}` : "";
 
-  const systemPrompt = [
-    `Ты — ассистент по wiki-базе знаний домена «${domain.name}».`,
-    `Отвечай строго на основе предоставленных wiki-страниц. Будь точен и лаконичен.`,
-    `Используй WikiLinks [[название]] при ссылках на страницы из индекса.`,
-    entityTypesBlock,
-    schemaBlock,
-    indexBlock,
-  ].filter(Boolean).join("\n\n");
+  const systemPrompt = render(queryTemplate, {
+    domain_name: domain.name,
+    entity_types_block: entityTypesBlock,
+    schema_block: schemaContent ? `\nКонвенции (_schema.md):\n${schemaContent.slice(0, 2000)}` : "",
+    index_block: indexContent ? `\nВики-индекс (_index.md):\n${indexContent.slice(0, 3000)}` : "",
+  });
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },

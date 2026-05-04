@@ -4,6 +4,8 @@ import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import schemaTemplate from "../../templates/_schema.md";
+import initTemplate from "../../prompts/init.md";
+import { render } from "./template";
 
 export async function* runInit(
   args: string[],
@@ -46,20 +48,12 @@ export async function* runInit(
     tryRead(vaultTools, `${wikiRootGuess}/_index.md`),
   ]);
 
-  const systemContent = [
-    `Ты — архитектор wiki-базы знаний. Сгенерируй запись домена для domain-map.json.`,
-    `Верни ТОЛЬКО валидный JSON следующей структуры:`,
-    `{`,
-    `  "id": "${domainId}",`,
-    `  "name": "Человекочитаемое название",`,
-    `  "wiki_folder": "vaults/${vaultName}/!Wiki/${domainId}",`,
-    `  "source_paths": [],`,
-    `  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"${domainId}/..."}],`,
-    `  "language_notes": ""`,
-    `}`,
-    schemaContent ? `\nКонвенции вики (_schema.md):\n${schemaContent.slice(0, 1500)}` : "",
-    indexContent ? `\nСуществующая структура (_index.md):\n${indexContent.slice(0, 1000)}` : "",
-  ].filter(Boolean).join("\n");
+  const systemContent = render(initTemplate, {
+    domain_id: domainId,
+    vault_name: vaultName,
+    schema_block: schemaContent ? `\nКонвенции вики (_schema.md):\n${schemaContent.slice(0, 1500)}` : "",
+    index_block: indexContent ? `\nСуществующая структура (_index.md):\n${indexContent.slice(0, 1000)}` : "",
+  });
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemContent },

@@ -2,6 +2,8 @@ import type OpenAI from "openai";
 import type { DomainEntry } from "../domain-map";
 import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";
+import chatTemplate from "../../prompts/chat.md";
+import { render } from "./template";
 
 export async function* runLintChat(
   llm: LlmClient,
@@ -14,15 +16,14 @@ export async function* runLintChat(
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
 
-  const systemContent = [
-    domain
-      ? `Ты — редактор wiki-базы знаний домена «${domain.name || domain.id}».`
-      : `Ты — редактор wiki-базы знаний.`,
-    `Помогай пользователю анализировать и исправлять проблемы, выявленные lint-проверкой.`,
-    `Отвечай конкретно, ссылаясь на страницы и сущности из отчёта.`,
-    ``,
-    `ОТЧЁТ LINT:\n${lintReport}`,
-  ].join("\n");
+  const domainHeader = domain
+    ? `Ты — редактор wiki-базы знаний домена «${domain.name || domain.id}».`
+    : `Ты — редактор wiki-базы знаний.`;
+
+  const systemContent = render(chatTemplate, {
+    domain_header: domainHeader,
+    lint_report: lintReport,
+  });
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemContent },
