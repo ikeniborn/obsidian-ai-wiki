@@ -362,11 +362,19 @@ export class LlmWikiView extends ItemView {
 
   private showChatSection(): void {
     this.chatSection?.remove();
+    this.chatOpen = true;
     const T = i18n();
     this.chatSection = this.resultSection.createDiv("llm-wiki-chat-section");
-    this.chatSection.createDiv({ cls: "llm-wiki-section-label", text: T.view.chatLabel });
-    this.chatMessagesEl = this.chatSection.createDiv("llm-wiki-chat-messages");
-    const inputRow = this.chatSection.createDiv("llm-wiki-chat-input-row");
+
+    const chatHeader = this.chatSection.createDiv("llm-wiki-progress-header");
+    const chatH4 = chatHeader.createEl("h4", { cls: "llm-wiki-progress-title" });
+    this.chatToggle = chatH4.createSpan({ cls: "llm-wiki-progress-arrow", text: "▼" });
+    chatH4.appendText(` ${T.view.chatLabel}`);
+    chatHeader.addEventListener("click", () => this.toggleChat());
+
+    this.chatBodyEl = this.chatSection.createDiv("llm-wiki-chat-body");
+    this.chatMessagesEl = this.chatBodyEl.createDiv("llm-wiki-chat-messages");
+    const inputRow = this.chatBodyEl.createDiv("llm-wiki-chat-input-row");
     this.chatInputEl = inputRow.createEl("textarea", { cls: "llm-wiki-chat-input", attr: { rows: "2" } });
     this.chatSendBtn = inputRow.createEl("button", { text: T.view.chatSend, cls: "llm-wiki-chat-send" });
     const submit = () => {
