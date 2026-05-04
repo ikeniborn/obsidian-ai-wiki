@@ -83,7 +83,7 @@ var en = {
     h3_general: "General settings",
     h3_backend: "Backend settings",
     systemPrompt_name: "User prompt",
-    systemPrompt_desc: "Appended to the system prompt of every operation as a '## \u0423\u0442\u043E\u0447\u043D\u0435\u043D\u0438\u0435' section. Empty by default.",
+    systemPrompt_desc: "Appended to the system prompt of every operation. Empty by default.",
     maxTokens_name: "Max tokens",
     maxTokens_desc: "Maximum tokens in the response. Recommended \u2265 4096.",
     domains_heading: "Domains",
