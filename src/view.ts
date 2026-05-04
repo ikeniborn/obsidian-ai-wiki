@@ -160,6 +160,7 @@ export class LlmWikiView extends ItemView {
 
   onClose(): void {
     if (this.tickHandle !== null) window.clearInterval(this.tickHandle);
+    if (this.chatTickHandle !== null) window.clearInterval(this.chatTickHandle);
   }
 
   private refreshDomains(): void {
@@ -407,6 +408,11 @@ export class LlmWikiView extends ItemView {
 
   appendChatEvent(ev: RunEvent): void {
     if (ev.kind === "assistant_text" && !ev.isReasoning && this.currentChatBubble) {
+      if (this.chatTickHandle !== null) {
+        window.clearInterval(this.chatTickHandle);
+        this.chatTickHandle = null;
+        this.currentChatBubble.setText("");
+      }
       this.currentChatBuffer += ev.delta;
       this.currentChatBubble.setText(this.currentChatBuffer);
       this.currentChatBubble.scrollIntoView({ block: "end" });
@@ -414,6 +420,10 @@ export class LlmWikiView extends ItemView {
   }
 
   finishChat(msg: ChatMessage, isError: boolean): void {
+    if (this.chatTickHandle !== null) {
+      window.clearInterval(this.chatTickHandle);
+      this.chatTickHandle = null;
+    }
     if (this.chatSendBtn) this.chatSendBtn.disabled = false;
     if (this.chatInputEl) { this.chatInputEl.disabled = false; this.chatInputEl.focus(); }
     if (this.currentChatBubble) {
