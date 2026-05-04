@@ -11,8 +11,8 @@ def test_make_signature_sets_instructions():
 
 def test_make_signature_has_required_fields():
     sig = make_signature("test instruction")
-    assert "user_message" in sig.model_fields
-    assert "result" in sig.model_fields
+    assert "user_message" in sig.input_fields
+    assert "result" in sig.output_fields
 
 
 def test_make_signature_is_dspy_signature():
