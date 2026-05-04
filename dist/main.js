@@ -987,8 +987,13 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   chatInputEl = null;
   chatSendBtn = null;
   chatHistory = [];
+  chatToggle = null;
+  chatOpen = true;
+  chatBodyEl = null;
   currentChatBubble = null;
   currentChatBuffer = "";
+  chatTickHandle = null;
+  chatStartTs = 0;
   lastUserMessage = "";
   startTs = 0;
   toolCount = 0;
@@ -1093,6 +1098,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   onClose() {
     if (this.tickHandle !== null)
       window.clearInterval(this.tickHandle);
+    if (this.chatTickHandle !== null)
+      window.clearInterval(this.chatTickHandle);
   }
   refreshDomains() {
     const domains = this.plugin.controller.loadDomains();
@@ -1298,11 +1305,17 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   }
   showChatSection() {
     this.chatSection?.remove();
+    this.chatOpen = true;
     const T = i18n();
     this.chatSection = this.resultSection.createDiv("llm-wiki-chat-section");
-    this.chatSection.createDiv({ cls: "llm-wiki-section-label", text: T.view.chatLabel });
-    this.chatMessagesEl = this.chatSection.createDiv("llm-wiki-chat-messages");
-    const inputRow = this.chatSection.createDiv("llm-wiki-chat-input-row");
+    const chatHeader = this.chatSection.createDiv("llm-wiki-progress-header");
+    const chatH4 = chatHeader.createEl("h4", { cls: "llm-wiki-progress-title" });
+    this.chatToggle = chatH4.createSpan({ cls: "llm-wiki-progress-arrow", text: "\u25BC" });
+    chatH4.appendText(` ${T.view.chatLabel}`);
+    chatHeader.addEventListener("click", () => this.toggleChat());
+    this.chatBodyEl = this.chatSection.createDiv("llm-wiki-chat-body");
+    this.chatMessagesEl = this.chatBodyEl.createDiv("llm-wiki-chat-messages");
+    const inputRow = this.chatBodyEl.createDiv("llm-wiki-chat-input-row");
     this.chatInputEl = inputRow.createEl("textarea", { cls: "llm-wiki-chat-input", attr: { rows: "2" } });
     this.chatSendBtn = inputRow.createEl("button", { text: T.view.chatSend, cls: "llm-wiki-chat-send" });
     const submit = () => {
@@ -1337,15 +1350,31 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.currentChatBubble.setText("\u2026");
       this.currentChatBubble.scrollIntoView({ block: "end" });
     }
+    this.chatStartTs = Date.now();
+    this.chatTickHandle = window.setInterval(() => {
+      if (this.currentChatBubble) {
+        const s = ((Date.now() - this.chatStartTs) / 1e3).toFixed(1);
+        this.currentChatBubble.setText(`\u23F3 ${s}s\u2026`);
+      }
+    }, 500);
   }
   appendChatEvent(ev) {
     if (ev.kind === "assistant_text" && !ev.isReasoning && this.currentChatBubble) {
+      if (this.chatTickHandle !== null) {
+        window.clearInterval(this.chatTickHandle);
+        this.chatTickHandle = null;
+        this.currentChatBubble.setText("");
+      }
       this.currentChatBuffer += ev.delta;
       this.currentChatBubble.setText(this.currentChatBuffer);
       this.currentChatBubble.scrollIntoView({ block: "end" });
     }
   }
   finishChat(msg, isError) {
+    if (this.chatTickHandle !== null) {
+      window.clearInterval(this.chatTickHandle);
+      this.chatTickHandle = null;
+    }
     if (this.chatSendBtn)
       this.chatSendBtn.disabled = false;
     if (this.chatInputEl) {
@@ -1396,6 +1425,11 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.stepsEl.addClass("llm-wiki-hidden");
     }
     this.progressToggle.setText(this.stepsOpen ? "\u25BC" : "\u25B6");
+  }
+  toggleChat() {
+    this.chatOpen = !this.chatOpen;
+    this.chatBodyEl?.toggleClass("llm-wiki-hidden", !this.chatOpen);
+    this.chatToggle?.setText(this.chatOpen ? "\u25BC" : "\u25B6");
   }
   updateMetrics() {
     if (this.state !== "running") {
@@ -2846,7 +2880,7 @@ var ClaudeCliClient = class {
     const userText = typeof lastUser?.content === "string" ? lastUser.content : "";
     const model = params.model || this.cfg.model;
     const { requestTimeoutSec } = this.cfg;
-    const args = ["--no-proxy"];
+    const args = [];
     if (model)
       args.push("--model", model);
     args.push("--", "-p", userText, "--output-format", "stream-json", "--verbose");
@@ -10194,8 +10228,14 @@ var WikiController = class {
     const ctrl = new AbortController();
     this.current = ctrl;
     const startedAt = Date.now();
+    const sessionId = String(startedAt);
+    const lastMsg = chatMessages[chatMessages.length - 1]?.content ?? "";
     let finalText = "";
     let status = "done";
+    this.logEvent(sessionId, "chat", domainId, {
+      kind: "system",
+      message: `start op=chat args=${JSON.stringify([lastMsg])} domainId=${domainId}`
+    });
     view.setChatRunning();
     const timeoutMs = this.plugin.settings.timeouts.lint * 1e3;
     const runGen = agentRunner.run({
@@ -10210,6 +10250,7 @@ var WikiController = class {
     });
     try {
       for await (const ev of runGen) {
+        this.logEvent(sessionId, "chat", domainId, ev);
         view.appendChatEvent(ev);
         if (ev.kind === "result")
           finalText = ev.text;
@@ -10219,9 +10260,14 @@ var WikiController = class {
     } catch (err) {
       status = "error";
       finalText = i18n().ctrl.errorPrefix(err.message);
+      this.logEvent(sessionId, "chat", domainId, { kind: "error", message: finalText });
     } finally {
       this.current = null;
     }
+    this.logEvent(sessionId, "chat", domainId, {
+      kind: "system",
+      message: `finish status=${status} durationMs=${Date.now() - startedAt}`
+    });
     view.finishChat({ role: "assistant", content: finalText }, status !== "done");
   }
   async init(domain, dryRun) {

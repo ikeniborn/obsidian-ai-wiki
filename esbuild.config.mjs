@@ -14,6 +14,7 @@ const ctx = await esbuild.context({
   treeShaking: true,
   outfile: "dist/main.js",
   platform: "node",
+  loader: { ".md": "text" },
 });
 
 mkdirSync("dist", { recursive: true });
