@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import pytest
 from lib.optimizer import call_evaluator, restore_placeholders
 

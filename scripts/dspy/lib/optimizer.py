@@ -2,10 +2,6 @@ from __future__ import annotations
 
 import re
 
-import dspy
-
-from lib.signature import make_signature
-
 _RESTORE_PROMPT = """\
 Below is the ORIGINAL prompt template (contains {{placeholders}} that must be preserved) \
 and an OPTIMIZED version (placeholders may be missing).
