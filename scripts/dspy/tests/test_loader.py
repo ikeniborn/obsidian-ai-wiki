@@ -1,6 +1,5 @@
 import json
 import tempfile
-import pytest
 from lib.loader import load_examples
 
 
