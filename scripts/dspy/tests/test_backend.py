@@ -65,7 +65,8 @@ def test_make_lm_claude_code(monkeypatch):
     lm = make_lm()
     assert isinstance(lm, ClaudeCodeLM)
     assert lm.claude_path == "/usr/bin/claude"
-    assert lm.model == "claude-sonnet-4-6"
+    assert lm._claude_model == "claude-sonnet-4-6"
+    assert lm.model == "claude-code/claude-sonnet-4-6"
 
 
 def test_make_lm_raises_on_unknown_backend(monkeypatch):

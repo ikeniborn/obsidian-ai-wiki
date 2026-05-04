@@ -5,6 +5,7 @@ requires-python = ">=3.11"
 dependencies = [
     "dspy-ai>=2.5",
     "python-dotenv>=1.0",
+    "optuna>=4.0",
 ]
 
 [project.optional-dependencies]

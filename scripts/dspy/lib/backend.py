@@ -3,27 +3,28 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from types import SimpleNamespace
 
 import dspy
 
 
-class ClaudeCodeLM:
+class ClaudeCodeLM(dspy.BaseLM):
     """DSPy-совместимый LM через claude CLI. Не требует API-ключа."""
 
     def __init__(self, claude_path: str, model: str) -> None:
+        super().__init__(model=f"claude-code/{model}")
         self.claude_path = claude_path
-        self.model = model
-        self.history: list[dict] = []
+        self._claude_model = model
 
-    def __call__(self, prompt: str = "", messages: list[dict] | None = None, **kwargs) -> list[str]:
-        full_prompt = self._flatten(messages) if messages else prompt
+    def forward(self, prompt: str | None = None, messages: list[dict] | None = None, **kwargs) -> object:
+        full_prompt = self._flatten(messages) if messages else (prompt or "")
         proc = subprocess.run(
             [
                 self.claude_path,
                 "--print",
                 "--dangerously-skip-permissions",
                 "--tools", "",
-                "--model", self.model,
+                "--model", self._claude_model,
                 "--output-format", "json",
                 full_prompt,
             ],
@@ -31,9 +32,13 @@ class ClaudeCodeLM:
             text=True,
             timeout=120,
         )
-        result = json.loads(proc.stdout)["result"]
-        self.history.append({"prompt": full_prompt, "response": result})
-        return [result]
+        json_line = next(
+            (line for line in reversed(proc.stdout.splitlines()) if line.startswith("{")),
+            "",
+        )
+        result = json.loads(json_line)["result"]
+        choice = SimpleNamespace(message=SimpleNamespace(content=result))
+        return SimpleNamespace(choices=[choice], model=self.model)
 
     def _flatten(self, messages: list[dict]) -> str:
         return "\n\n".join(m["content"] for m in messages)
