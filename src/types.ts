@@ -124,6 +124,11 @@ export interface LlmWikiPluginSettings {
     perOperation: boolean;
     operations: OpMap<NativeOperationConfig>;
   };
+  devMode: {
+    enabled: boolean;
+    logPath: string;
+    evaluatorModel: string;
+  };
 }
 
 export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
@@ -162,5 +167,10 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
       lint:   { model: "llama3.2", maxTokens: 8192, temperature: 0.2 },
       init:   { model: "llama3.2", maxTokens: 8192, temperature: 0.2 },
     },
+  },
+  devMode: {
+    enabled: false,
+    logPath: "",
+    evaluatorModel: "sonnet",
   },
 };

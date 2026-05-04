@@ -304,5 +304,34 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       }
 
     }
+
+    // ── Dev mode ──────────────────────────────────────────────────────────────
+    new Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
+
+    new Setting(containerEl)
+      .setName(T.settings.devMode_enabled_name)
+      .setDesc(T.settings.devMode_enabled_desc)
+      .addToggle((t) =>
+        t.setValue(s.devMode.enabled)
+          .onChange(async (v) => { s.devMode.enabled = v; await this.plugin.saveSettings(); }),
+      );
+
+    new Setting(containerEl)
+      .setName(T.settings.devMode_logPath_name)
+      .setDesc(T.settings.devMode_logPath_desc)
+      .addText((t) =>
+        t.setPlaceholder("/tmp/llm-wiki-dev.jsonl")
+          .setValue(s.devMode.logPath)
+          .onChange(async (v) => { s.devMode.logPath = v.trim(); await this.plugin.saveSettings(); }),
+      );
+
+    new Setting(containerEl)
+      .setName(T.settings.devMode_evaluatorModel_name)
+      .setDesc(T.settings.devMode_evaluatorModel_desc)
+      .addText((t) =>
+        t.setPlaceholder("sonnet")
+          .setValue(s.devMode.evaluatorModel)
+          .onChange(async (v) => { s.devMode.evaluatorModel = v.trim(); await this.plugin.saveSettings(); }),
+      );
   }
 }
