@@ -4,7 +4,7 @@ import { relative, isAbsolute, join } from "node:path";
 import { LLM_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { validateDomainId, type DomainEntry, type AddDomainInput } from "./domain-map";
 import type LlmWikiPlugin from "./main";
-import type { RunEvent, RunHistoryEntry, WikiOperation } from "./types";
+import type { RunEvent, RunHistoryEntry, WikiOperation, OnFileError } from "./types";
 import { AgentRunner } from "./agent-runner";
 import type { ChatMessage } from "./types";
 import { VaultTools, type VaultAdapter } from "./vault-tools";
@@ -141,7 +141,7 @@ export class WikiController {
   async init(domain: string, dryRun: boolean, sourcePaths?: string[]): Promise<void> {
     const args = dryRun ? [domain, "--dry-run"] : [domain];
     if (sourcePaths?.length) args.push("--sources", ...sourcePaths);
-    const onFileError: import("./types").OnFileError | undefined = sourcePaths?.length
+    const onFileError: OnFileError | undefined = sourcePaths?.length
       ? (file, err, canRetry) => {
           const modal = new FileErrorModal(this.app, file, err, canRetry);
           modal.open();
@@ -239,7 +239,7 @@ export class WikiController {
     } catch { /* не блокируем операцию */ }
   }
 
-  private async dispatch(op: WikiOperation, args: string[], domainId?: string, context?: string, instruction?: string, onFileError?: import("./types").OnFileError): Promise<void> {
+  private async dispatch(op: WikiOperation, args: string[], domainId?: string, context?: string, instruction?: string, onFileError?: OnFileError): Promise<void> {
     if (this.isBusy()) {
       new Notice(i18n().ctrl.operationRunning);
       return;
