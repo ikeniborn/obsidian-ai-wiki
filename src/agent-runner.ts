@@ -78,7 +78,12 @@ export class AgentRunner {
         break;
       case "chat": {
         const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : undefined;
-        yield* runLintChat(this.llm, model, domain, req.signal, opts, req.context ?? "", req.chatMessages ?? []);
+        yield* runLintChat(
+          this.llm, model, domain, req.signal, opts,
+          req.context ?? "",
+          req.chatMessages ?? [],
+          req.operationHeader ?? "",
+        );
         break;
       }
       case "init":

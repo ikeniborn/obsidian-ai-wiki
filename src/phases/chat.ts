@@ -11,18 +11,16 @@ export async function* runLintChat(
   domain: DomainEntry | undefined,
   signal: AbortSignal,
   opts: LlmCallOptions,
-  lintReport: string,
+  context: string,
   history: ChatMessage[],
+  operationHeader: string,
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
-
-  const domainHeader = domain
-    ? `Ты — редактор wiki-базы знаний домена «${domain.name || domain.id}».`
-    : `Ты — редактор wiki-базы знаний.`;
+  void domain;
 
   const systemContent = render(chatTemplate, {
-    domain_header: domainHeader,
-    lint_report: lintReport,
+    operation_header: operationHeader,
+    context,
   });
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
