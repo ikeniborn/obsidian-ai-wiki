@@ -138,10 +138,10 @@ function buildIngestSummary(domainId: string, sourcePath: string, written: strin
   return lines.join("\n");
 }
 
-export function detectDomain(absFilePath: string, domains: DomainEntry[], repoRoot: string): DomainEntry | null {
+export function detectDomain(absFilePath: string, domains: DomainEntry[], vaultRoot: string): DomainEntry | null {
   for (const d of domains) {
     const matched = d.source_paths?.some((sp) => {
-      const abs = isAbsolute(sp) ? sp : join(repoRoot, sp);
+      const abs = isAbsolute(sp) ? sp : join(vaultRoot, sp);
       return absFilePath.startsWith(abs);
     });
     if (matched) return d;

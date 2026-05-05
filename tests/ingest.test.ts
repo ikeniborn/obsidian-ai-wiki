@@ -27,23 +27,24 @@ describe("extractParentSourcePath", () => {
 });
 
 describe("detectDomain", () => {
+  const VAULT = "/project";
   const makeD = (id: string, paths: string[]): DomainEntry => ({
     id, name: id, wiki_folder: `!Wiki/${id}`, source_paths: paths,
   });
 
   it("matches by source_paths prefix", () => {
     const domains = [makeD("d1", ["notes/"]), makeD("d2", ["docs/"])];
-    const result = detectDomain("/project/notes/sub/file.md", domains, "/project");
+    const result = detectDomain("/project/notes/sub/file.md", domains, VAULT);
     expect(result?.id).toBe("d1");
   });
 
   it("falls back to first domain if no match", () => {
     const domains = [makeD("fallback", []), makeD("other", ["docs/"])];
-    const result = detectDomain("/project/unknown/file.md", domains, "/project");
+    const result = detectDomain("/project/unknown/file.md", domains, VAULT);
     expect(result?.id).toBe("fallback");
   });
 
   it("returns null if domains empty", () => {
-    expect(detectDomain("/project/file.md", [], "/project")).toBeNull();
+    expect(detectDomain("/project/file.md", [], VAULT)).toBeNull();
   });
 });
