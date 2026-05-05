@@ -185,8 +185,10 @@ export class AddDomainModal extends Modal {
 export class EditDomainModal extends Modal {
   private nameVal: string;
   private wikiFolderVal: string;
-  private sourcePathsVal: string;
+  private entityTypesMode: "cards" | "json" = "cards";
+  private entityTypesList: EntityType[];
   private entityTypesVal: string;
+  private sourcePathsList: string[];
   private languageNotesVal: string;
   private errorEl: HTMLElement | null = null;
 
@@ -198,8 +200,9 @@ export class EditDomainModal extends Modal {
     super(app);
     this.nameVal = domain.name;
     this.wikiFolderVal = domain.wiki_folder;
-    this.sourcePathsVal = (domain.source_paths ?? []).join("\n");
+    this.entityTypesList = [...(domain.entity_types ?? [])];
     this.entityTypesVal = JSON.stringify(domain.entity_types ?? [], null, 2);
+    this.sourcePathsList = [...(domain.source_paths ?? [])];
     this.languageNotesVal = domain.language_notes ?? "";
   }
 
@@ -247,25 +250,29 @@ export class EditDomainModal extends Modal {
   private handleSave(): void {
     this.errorEl?.addClass("llm-wiki-hidden");
     let entityTypes: EntityType[];
-    try {
-      const parsed = JSON.parse(this.entityTypesVal.trim() || "[]");
-      if (!Array.isArray(parsed)) throw new Error("not an array");
-      if (!parsed.every((x: unknown) => typeof x === "object" && x !== null && !Array.isArray(x))) {
-        throw new Error("not an array of objects");
+    if (this.entityTypesMode === "cards") {
+      entityTypes = this.entityTypesList;
+    } else {
+      try {
+        const parsed = JSON.parse(this.entityTypesVal.trim() || "[]");
+        if (!Array.isArray(parsed)) throw new Error("not an array");
+        if (!parsed.every((x: unknown) => typeof x === "object" && x !== null && !Array.isArray(x))) {
+          throw new Error("not an array of objects");
+        }
+        entityTypes = parsed as EntityType[];
+      } catch {
+        if (this.errorEl) {
+          this.errorEl.textContent = i18n().modal.entityTypesError;
+          this.errorEl.removeClass("llm-wiki-hidden");
+        }
+        return;
       }
-      entityTypes = parsed as EntityType[];
-    } catch {
-      if (this.errorEl) {
-        this.errorEl.textContent = i18n().modal.entityTypesError;
-        this.errorEl.removeClass("llm-wiki-hidden");
-      }
-      return;
     }
     const updated: DomainEntry = {
       ...this.domain,
       name: this.nameVal.trim() || this.domain.name,
       wiki_folder: this.wikiFolderVal.trim() || this.domain.wiki_folder,
-      source_paths: this.sourcePathsVal.split("\n").map((s) => s.trim()).filter(Boolean),
+      source_paths: this.sourcePathsList.filter(Boolean),
       entity_types: entityTypes,
       language_notes: this.languageNotesVal.trim(),
     };
