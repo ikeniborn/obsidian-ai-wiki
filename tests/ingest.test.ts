@@ -43,6 +43,14 @@ describe("extractParentSourcePath", () => {
       "/project/vaults/MyVault",
     )).toBe("vaults/MyVault/");
   });
+
+  it("clamps to vault root when parent would be above vaultRoot", () => {
+    expect(extractParentSourcePath(
+      "/project/outside/file.md",
+      "/project",
+      "/project/vaults/MyVault",
+    )).toBe("vaults/MyVault/");
+  });
 });
 
 describe("detectDomain", () => {
