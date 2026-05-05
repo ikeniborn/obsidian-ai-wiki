@@ -5,9 +5,9 @@
 
 ## Контекст
 
-При добавлении домена сейчас создаётся пустой `DomainEntry` с `source_paths: []`, после чего запускается `init` (LLM сэмплирует vault и генерирует `entity_types`). Пользователь должен вручную добавлять пути к источникам и запускать `ingest` по одному файлу.
+При добавлении домена сейчас создаётся пустой `DomainEntry` с `source_paths: []`, после чего запускается `init` (LLM сэмплирует vault и генерирует `entity_types`). Source paths не указываются, wiki не наполняется.
 
-Цель: добавить в форму создания домена перечисление папок-источников и автоматически запускать наполнение (ingest всех файлов + lint) сразу после создания.
+Цель: добавить в форму создания домена список папок-источников и автоматически запускать правильную последовательность: **bootstrap → init**, где расширенный `init` использует `source_paths` для наполнения wiki.
 
 ---
 
@@ -15,19 +15,32 @@
 
 ### 1. Форма AddDomainModal (`src/modals.ts`)
 
-**Новые поля:**
-- Список полей для папок-источников с кнопкой «+ Добавить путь»
-- Каждое поле — `FolderSuggest` (autocomplete из `app.vault.getAllFolders()`)
-- Кнопка `[×]` удаляет поле
+**Поля формы:**
+- `id` — идентификатор домена (уже есть)
+- `name` — отображаемое имя (уже есть)
+- `wikiFolder` — vault-relative путь к wiki (уже есть, с фиксом ниже)
+- `sourcePaths` — список папок-источников (новое)
+
+**UI для sourcePaths:**
+```
+Source paths:
+[ Notes/AI/   ] [×]  ← FolderSuggest autocomplete
+[ Sources/    ] [×]
+[ + добавить  ] ← кнопка добавляет новое поле
+```
+
+Каждое поле использует `FolderSuggest` — новый класс `extends AbstractInputSuggest<TFolder>`, который вызывает `app.vault.getAllFolders()` и фильтрует по введённому тексту. Кнопка `[×]` удаляет поле.
 
 **Фикс wikiFolder:**
-- Плейсхолдер показывает `vaults/work/!Wiki/id` — нужно `!Wiki/id`
+- Плейсхолдер показывает `vaults/work/!Wiki/id` — должно быть `!Wiki/id`
 - `wikiRoot` вычисляется только из vault-relative пути первого домена или дефолта `!Wiki`, без `autodetectCwd()`
 
 **Расширение `AddDomainInput` в `src/types.ts`:**
 ```typescript
 sourcePaths: string[]  // vault-relative пути к папкам-источникам
 ```
+
+---
 
 ### 2. Флоу после создания (`src/view.ts → openAddDomain()`)
 
@@ -37,46 +50,66 @@ registerDomain(input)  // сохраняет домен с source_paths
   ├─ sourcePaths пустой → controller.init(domainId, false)  // как сейчас
   │
   └─ sourcePaths непустой:
-       glob .md файлов рекурсивно по всем папкам
+       подсчитать .md файлы рекурсивно во всех папках
        показать ConfirmModal:
-         "Найдено N файлов в M папках. Запустить наполнение домена '{id}'?"
-         [Запустить] → controller.populate(domainId, sourcePaths)
-         [Пропустить] → controller.init(domainId, false)
+         "Найдено N файлов в M папках. Запустить инициализацию домена '{id}'?"
+         [Запустить] → controller.bootstrap(domainId)
+                       controller.init(domainId, false)   // расширенный init
+         [Пропустить] → controller.init(domainId, false)  // как сейчас
 ```
 
 Подсчёт файлов: `app.vault.getFiles().filter(f => f.extension === 'md' && sourcePaths.some(p => f.path.startsWith(p)))`
 
-### 3. Новая фаза `runPopulate` (`src/phases/populate.ts`)
+Bootstrap создаёт структуру wiki-папки если её нет (`wiki_folder`, `_schema.md`, `_index.md`). Init уже умеет работать после bootstrap.
+
+---
+
+### 3. Расширение фазы `runInit` (`src/phases/init.ts`)
+
+Текущее поведение: сэмплирует случайные файлы из vault → LLM генерирует `entity_types` + `language_notes`.
+
+**Новое поведение при наличии `source_paths`:**
 
 ```
-runPopulate(req, vaultTools, llm, domains, onFileError)
+runInit(req, vaultTools, llm, domain)
   │
-  ├─ glob .md файлов из каждой папки рекурсивно
-  ├─ emit: populate_start { totalFiles: N }
+  ├─ source_paths пустой → текущее поведение (сэмплирование vault)
   │
-  ├─ for each file (index i of N):
-  │    ├─ emit: file_start { file, index: i, total: N }
-  │    ├─ try: runIngest(req с args[0]=file, ...)
-  │    ├─ on success: emit file_done { file }
-  │    └─ on error:
-  │         retried = false
-  │         loop:
-  │           choice = await onFileError(file, error, canRetry: !retried)
-  │           'skip'  → break
-  │           'retry' → retried=true, повторить runIngest; если снова ошибка → loop без retry
-  │           'stop'  → return
-  │
-  └─ runLint(req с domainId=req.args[0])
+  └─ source_paths непустой:
+       glob .md файлов рекурсивно из каждой папки в source_paths
+       emit: init_start { totalFiles: N }
+       │
+       for each file:
+         emit: file_start { file, index, total }
+         прочитать файл
+         LLM: извлечь сущности → записать wiki-страницы
+         emit: file_done { file }
+         on error:
+           choice = await onFileError(file, error, canRetry)
+           'skip'  → continue
+           'retry' → повторить (один раз); если снова ошибка → loop без retry
+           'stop'  → return
+       │
+       LLM: на основе обработанных файлов сформировать entity_types + language_notes
+       emit: domain_updated { patch }
 ```
 
-**Сигнатура `onFileError`:**
+**`onFileError` callback** передаётся через `RunRequest`:
 ```typescript
-type OnFileError = (file: string, err: Error, canRetry: boolean) => Promise<'skip' | 'retry' | 'stop'>
+onFileError?: (file: string, err: Error, canRetry: boolean) => Promise<'skip' | 'retry' | 'stop'>
 ```
 
-### 4. Диалог ошибки (`src/modals.ts → ConfirmModal`)
+Контроллер конструирует его при создании запроса на init:
+```typescript
+onFileError: async (file, err, canRetry) =>
+  new FileErrorModal(this.app, file, err, canRetry).waitForClose()
+```
 
-Новый Modal (Promise-based):
+---
+
+### 4. Диалог ошибки (`src/modals.ts → FileErrorModal`)
+
+Promise-based Modal:
 
 ```
 ┌─────────────────────────────────────────┐
@@ -91,47 +124,27 @@ type OnFileError = (file: string, err: Error, canRetry: boolean) => Promise<'ski
 
 При `canRetry: false` кнопка «Повторить» скрыта.
 
+---
+
 ### 5. Новые RunEvent типы (`src/types.ts`)
 
 ```typescript
-{ type: 'populate_start'; totalFiles: number }
+{ type: 'init_start'; totalFiles: number }
 { type: 'file_start'; file: string; index: number; total: number }
 { type: 'file_done'; file: string }
 ```
 
+---
+
 ### 6. Прогресс в LlmWikiView (`src/view.ts`)
 
-События `populate_start` / `file_start` / `file_done` рендерятся как прогресс:
+При расширенном init (с source_paths) рендерить прогресс-бар:
 
 ```
-Наполнение домена "ai"
+Инициализация домена "ai"
 ████████░░░░░░░░  17 / 47 файлов
 → Notes/AI/transformers.md
 ```
-
-После завершения всех файлов — lint отображается как обычно (существующий рендер).
-
-### 7. Dispatch в AgentRunner (`src/agent-runner.ts`)
-
-Добавить case `'populate'` в `run()`, передавая `onFileError` callback из контроллера.
-
-**Параметры RunRequest для populate:**
-- `operation: 'populate'`
-- `args: [domainId, ...folderPaths]`
-- `onFileError?: OnFileError` — добавляется как опциональное поле в тип `RunRequest`
-
-Контроллер конструирует callback при создании запроса:
-```typescript
-const req: RunRequest = {
-  operation: 'populate',
-  args: [domainId, ...folderPaths],
-  onFileError: async (file, err, canRetry) => {
-    return new FileErrorModal(this.app, file, err, canRetry).waitForClose();
-  }
-};
-```
-
-`runPopulate` вызывает `runIngest` с клонированным req: `{ ...req, args: [file] }`.
 
 ---
 
@@ -139,18 +152,17 @@ const req: RunRequest = {
 
 | Файл | Изменение |
 |------|-----------|
-| `src/types.ts` | `AddDomainInput.sourcePaths`, 3 новых RunEvent |
-| `src/modals.ts` | `FolderSuggest`, поля sourcePaths, `ConfirmModal`, фикс wikiFolder |
-| `src/view.ts` | `openAddDomain()` флоу, рендер populate событий |
-| `src/agent-runner.ts` | case `'populate'`, передача `onFileError` |
-| `src/phases/populate.ts` | **новый файл** — `runPopulate()` |
-| `src/controller.ts` | `populate()` метод, реализация `onFileError` callback |
+| `src/types.ts` | `AddDomainInput.sourcePaths`, `onFileError` в `RunRequest`, 3 новых RunEvent |
+| `src/modals.ts` | `FolderSuggest`, поля sourcePaths, `FileErrorModal`, фикс wikiFolder |
+| `src/view.ts` | `openAddDomain()` флоу, рендер init_start/file_start/file_done |
+| `src/phases/init.ts` | расширение `runInit()` для работы с source_paths |
+| `src/controller.ts` | реализация `onFileError` callback при запуске init |
 
 ---
 
 ## Что не меняется
 
 - Операция `ingest` (одиночная) — без изменений
-- Операция `lint` — без изменений, вызывается как функция из populate
-- Single-flight guard — не нарушается, populate — одна операция
-- `runInit()` — не вызывается при populate (init — для пустых доменов без источников)
+- Операция `lint` — не запускается при создании домена
+- Single-flight guard — не нарушается, bootstrap и init — отдельные последовательные операции
+- Новых фаз не добавляется
