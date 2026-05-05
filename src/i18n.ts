@@ -290,7 +290,7 @@ const ru: I18n = {
     sourcePathsLabel: "Пути источников",
     entityTypesEditJson: "Редактировать JSON",
     entityTypesBackToCards: "← Карточки",
-    entityTypesEmpty: "Типы сущностей не заданы. Нажмите «Редактировать JSON» чтобы добавить.",
+    entityTypesEmpty: "Типы сущностей не заданы. Нажмите «Редактировать JSON», чтобы добавить.",
     sourcePathsAdd: "Добавить",
     sourcePathsPlaceholder: "/путь/к/папке или файлу",
     languageNotesLabel: "Заметки о языке",
