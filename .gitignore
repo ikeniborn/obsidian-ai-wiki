@@ -13,4 +13,4 @@ scripts/dspy/.pytest_cache
 scripts/dspy/__pycache__
 scripts/dspy/*.egg-info/
 scripts/dspy/lib/__pycache__
-scripts/dspy/tests/__pycache__
+scripts/dspy/tests/__pycache__.worktrees/
