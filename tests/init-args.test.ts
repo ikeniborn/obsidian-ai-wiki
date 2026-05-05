@@ -22,3 +22,27 @@ describe("deriveWikiRoot", () => {
     expect(deriveWikiRoot("Notes/wiki/ai")).toBe("Notes/wiki");
   });
 });
+
+describe("parseSourcesFromArgs", () => {
+  function parseSourcesFromArgs(args: string[]): string[] {
+    const idx = args.indexOf("--sources");
+    return idx >= 0 ? args.slice(idx + 1) : [];
+  }
+
+  it("returns empty array when no --sources flag", () => {
+    expect(parseSourcesFromArgs(["domainId"])).toEqual([]);
+  });
+
+  it("returns paths after --sources flag", () => {
+    expect(parseSourcesFromArgs(["domainId", "--sources", "Notes/AI/", "Sources/"])).toEqual([
+      "Notes/AI/",
+      "Sources/",
+    ]);
+  });
+
+  it("handles --dry-run before --sources", () => {
+    expect(parseSourcesFromArgs(["domainId", "--dry-run", "--sources", "Notes/"])).toEqual([
+      "Notes/",
+    ]);
+  });
+});
