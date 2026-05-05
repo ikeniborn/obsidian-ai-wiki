@@ -317,8 +317,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName(T.settings.devMode_logPath_name)
-      .setDesc(T.settings.devMode_logPath_desc)
+      .setName(T.settings.devMode_logDir_name)
+      .setDesc(T.settings.devMode_logDir_desc)
       .addText((t) =>
         t.setPlaceholder("/tmp")
           .setValue(s.devMode.logDir)
