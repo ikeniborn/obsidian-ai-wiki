@@ -169,6 +169,11 @@ export class WikiController {
   private buildAgentRunner(repoRoot: string): AgentRunner {
     const adapter = this.app.vault.adapter as unknown as VaultAdapter;
     const base = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
+    const manifestDir = this.plugin.manifest.dir
+      ?? join(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
+    const pluginDir = (this.app.vault.adapter as { getFullPath: (p: string) => string })
+      .getFullPath(manifestDir);
+    const tmpDir = join(pluginDir, "tmp");
     const vaultTools = new VaultTools(adapter, base);
     const vaultName = this.app.vault.getName();
     const domains = this.plugin.settings.domains ?? [];
@@ -176,7 +181,7 @@ export class WikiController {
 
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     const llm = s.backend === "claude-agent"
-      ? new ClaudeCliClient({ ...s.claudeAgent, requestTimeoutSec: maxTimeoutSec, cwd: s.claudeAgent.spawnCwd || "/tmp" })
+      ? new ClaudeCliClient({ ...s.claudeAgent, requestTimeoutSec: maxTimeoutSec, cwd: s.claudeAgent.spawnCwd || "/tmp", tmpDir })
       : new OpenAI({
           baseURL: s.nativeAgent.baseUrl,
           apiKey: s.nativeAgent.apiKey,
