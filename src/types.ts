@@ -31,7 +31,7 @@ export interface RunRequest {
 }
 
 export type RunEvent =
-  | { kind: "system"; message: string }
+  | { kind: "system"; message: string; sessionId?: string }
   | { kind: "tool_use"; name: string; input: unknown }
   | { kind: "tool_result"; ok: boolean; preview?: string }
   | { kind: "assistant_text"; delta: string; isReasoning?: boolean }

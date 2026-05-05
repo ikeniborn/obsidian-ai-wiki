@@ -116,4 +116,24 @@ describe("parseStreamLine", () => {
       toolUseId: "aq2",
     });
   });
+
+  it("extracts session_id from system init event", () => {
+    const line = JSON.stringify({
+      type: "system",
+      subtype: "init",
+      session_id: "abc-123",
+      model: "claude-sonnet-4-6",
+      cwd: "/home/u",
+    });
+    const ev = parseStreamLine(line);
+    expect(ev?.kind).toBe("system");
+    expect((ev as Extract<RunEvent, { kind: "system" }>).sessionId).toBe("abc-123");
+  });
+
+  it("returns undefined sessionId when session_id is missing from system event", () => {
+    const line = JSON.stringify({ type: "system", subtype: "init", model: "claude-sonnet-4-6" });
+    const ev = parseStreamLine(line);
+    expect(ev?.kind).toBe("system");
+    expect((ev as Extract<RunEvent, { kind: "system" }>).sessionId).toBeUndefined();
+  });
 });
