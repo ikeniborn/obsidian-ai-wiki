@@ -35,7 +35,7 @@ export class LlmWikiView extends ItemView {
   private ingestBtn!: HTMLButtonElement;
   private lintBtn!: HTMLButtonElement;
   private fixChatEl: HTMLElement | null = null;
-  private lastLint: { domainId: string; report: string } | null = null;
+  private lastContext: { operation: WikiOperation; domainId: string | undefined; report: string } | null = null;
   // Chat state
   private chatSection: HTMLElement | null = null;
   private chatMessagesEl: HTMLElement | null = null;
@@ -231,6 +231,10 @@ export class LlmWikiView extends ItemView {
     this.lintBtn.disabled = true;
     this.fixChatEl?.remove();
     this.fixChatEl = null;
+    this.chatSection?.remove();
+    this.chatSection = null;
+    this.lastContext = null;
+    this.chatHistory = [];
 
     this.resultSection.addClass("llm-wiki-hidden");
     this.finalEl.empty();
@@ -360,10 +364,13 @@ export class LlmWikiView extends ItemView {
       this.resultOpen = true;
       this.resultToggle.setText("▼");
 
-      // Чат — только после lint на конкретном домене
-      const domainId = entry.args[0];
-      if (entry.operation === "lint" && entry.status === "done" && domainId) {
-        this.lastLint = { domainId, report: entry.finalText };
+      const CHAT_OPS: WikiOperation[] = ["lint", "ingest", "query", "query-save"];
+      if (CHAT_OPS.includes(entry.operation) && entry.status === "done" && entry.finalText) {
+        this.lastContext = {
+          operation: entry.operation,
+          domainId: entry.domainId,
+          report: entry.finalText,
+        };
         this.chatHistory = [];
         this.showChatSection();
       }
@@ -390,11 +397,17 @@ export class LlmWikiView extends ItemView {
     this.chatSendBtn = inputRow.createEl("button", { text: T.view.chatSend, cls: "llm-wiki-chat-send" });
     const submit = () => {
       const text = this.chatInputEl!.value.trim();
-      if (!text || !this.lastLint) return;
+      if (!text || !this.lastContext) return;
       this.chatInputEl!.value = "";
       this.addChatBubble("user", text);
       this.lastUserMessage = text;
-      void this.plugin.controller.lintChat(this.lastLint.domainId, this.lastLint.report, this.chatHistory, text);
+      void this.plugin.controller.chat(
+        this.lastContext.operation,
+        this.lastContext.domainId,
+        this.lastContext.report,
+        this.chatHistory,
+        text,
+      );
     };
     this.chatSendBtn.addEventListener("click", submit);
   }

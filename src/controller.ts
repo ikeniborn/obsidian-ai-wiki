@@ -49,12 +49,12 @@ export class WikiController {
     await this.dispatch("fix", [domainId], domainId, lintReport, instruction);
   }
 
-  async lintChat(domainId: string, lintReport: string, history: ChatMessage[], newMessage: string): Promise<void> {
+  async chat(operation: WikiOperation, domainId: string | undefined, context: string, history: ChatMessage[], newMessage: string): Promise<void> {
     const chatMessages: ChatMessage[] = [...history, { role: "user", content: newMessage }];
-    await this.dispatchChat(domainId, lintReport, chatMessages);
+    await this.dispatchChat(operation, domainId, context, chatMessages);
   }
 
-  private async dispatchChat(domainId: string, lintReport: string, chatMessages: ChatMessage[]): Promise<void> {
+  private async dispatchChat(operation: WikiOperation, domainId: string | undefined, context: string, chatMessages: ChatMessage[]): Promise<void> {
     if (this.isBusy()) { new Notice(i18n().ctrl.operationRunning); return; }
     if (this.plugin.settings.backend === "claude-agent" && !this.requireClaudeAgent()) return;
 
@@ -86,10 +86,18 @@ export class WikiController {
 
     view.setChatRunning();
 
+    const OPERATION_LABELS: Partial<Record<WikiOperation, string>> = {
+      lint: "Lint-проверка wiki",
+      ingest: "Извлечение знаний (ingest)",
+      query: "Ответ на запрос (query)",
+      "query-save": "Ответ на запрос с сохранением (query-save)",
+    };
+    const operationHeader = OPERATION_LABELS[operation] ?? operation;
+
     const timeoutMs = this.plugin.settings.timeouts.lint * 1000;
     const runGen = agentRunner.run({
       operation: "chat", args: [], cwd: repoRoot,
-      signal: ctrl.signal, timeoutMs, domainId, context: lintReport, chatMessages,
+      signal: ctrl.signal, timeoutMs, domainId, context, chatMessages, operationHeader,
     });
 
     try {
@@ -291,6 +299,7 @@ export class WikiController {
       id: `${startedAt}`,
       operation: op,
       args,
+      domainId,
       startedAt,
       finishedAt: Date.now(),
       status,
