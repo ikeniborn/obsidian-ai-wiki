@@ -209,6 +209,7 @@ export class EditDomainModal extends Modal {
   onOpen(): void {
     const T = i18n().modal;
     const { contentEl } = this;
+    contentEl.empty();
     contentEl.createEl("h3", { text: T.editDomainTitle(this.domain.id) });
 
     new Setting(contentEl)
@@ -219,26 +220,18 @@ export class EditDomainModal extends Modal {
       .setName(T.wikiFolder_name)
       .addText((t) => t.setValue(this.wikiFolderVal).onChange((v) => { this.wikiFolderVal = v; }));
 
-    new Setting(contentEl)
-      .setName(T.sourcePathsLabel)
-      .addTextArea((t) => {
-        t.inputEl.rows = 4;
-        t.inputEl.addClass("llm-wiki-settings-textarea");
-        t.setValue(this.sourcePathsVal).onChange((v) => { this.sourcePathsVal = v; });
-      });
+    const entityTypesContainer = contentEl.createDiv();
+    this.renderEntityTypes(entityTypesContainer);
 
-    new Setting(contentEl)
-      .setName(T.entityTypesLabel)
-      .addTextArea((t) => {
-        t.inputEl.rows = 10;
-        t.inputEl.addClass("llm-wiki-settings-textarea");
-        t.inputEl.addClass("llm-wiki-monospace");
-        t.setValue(this.entityTypesVal).onChange((v) => { this.entityTypesVal = v; });
-      });
+    const sourcePathsContainer = contentEl.createDiv();
+    this.renderSourcePaths(sourcePathsContainer);
 
     new Setting(contentEl)
       .setName(T.languageNotesLabel)
-      .addText((t) => t.setValue(this.languageNotesVal).onChange((v) => { this.languageNotesVal = v; }));
+      .addTextArea((t) => {
+        t.inputEl.rows = 4;
+        t.setValue(this.languageNotesVal).onChange((v) => { this.languageNotesVal = v; });
+      });
 
     this.errorEl = contentEl.createEl("p", { cls: "mod-warning llm-wiki-hidden" });
 
@@ -296,6 +289,51 @@ export class EditDomainModal extends Modal {
         }
       });
     }
+  }
+
+  private renderSourcePaths(container: HTMLElement): void {
+    container.empty();
+    const T = i18n().modal;
+
+    const header = container.createDiv({ cls: "llm-wiki-sp-header" });
+    header.createEl("span", { text: T.sourcePathsLabel, cls: "llm-wiki-sp-label" });
+
+    const listEl = container.createDiv({ cls: "llm-wiki-sp-list" });
+
+    const rerender = () => {
+      listEl.empty();
+      this.sourcePathsList.forEach((p, i) => {
+        const row = listEl.createDiv({ cls: "llm-wiki-sp-row" });
+        row.createEl("span", { text: p, cls: "llm-wiki-sp-path", attr: { title: p } });
+        const removeBtn = row.createEl("button", { text: "×", cls: "llm-wiki-sp-remove" });
+        removeBtn.addEventListener("click", () => {
+          this.sourcePathsList.splice(i, 1);
+          rerender();
+        });
+      });
+    };
+    rerender();
+
+    const addRow = container.createDiv({ cls: "llm-wiki-sp-add-row" });
+    const input = addRow.createEl("input", {
+      cls: "llm-wiki-sp-input",
+      attr: { type: "text", placeholder: T.sourcePathsPlaceholder },
+    }) as HTMLInputElement;
+
+    const addPath = () => {
+      const val = input.value.trim();
+      if (!val || this.sourcePathsList.includes(val)) return;
+      this.sourcePathsList.push(val);
+      input.value = "";
+      rerender();
+    };
+
+    input.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "Enter") { e.preventDefault(); addPath(); }
+    });
+
+    const addBtn = addRow.createEl("button", { text: T.sourcePathsAdd, cls: "mod-cta" });
+    addBtn.addEventListener("click", addPath);
   }
 
   private renderEntityTypeCard(container: HTMLElement, et: EntityType): void {

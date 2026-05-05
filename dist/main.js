@@ -23,7 +23,7 @@ __export(main_exports, {
   default: () => LlmWikiPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_node_path8 = require("node:path");
+var import_node_path9 = require("node:path");
 var import_obsidian6 = require("obsidian");
 
 // src/types.ts
@@ -212,9 +212,14 @@ var en = {
     addDomainNote: "The entry will be saved in plugin settings with empty entity_types. Edit the domain in Settings \u2192 Domains to add entity_types/extraction_cues.",
     add: "Add",
     editDomainTitle: (id) => `Edit domain: ${id}`,
-    entityTypesLabel: "Entity types (JSON array)",
+    entityTypesLabel: "Entity types",
     entityTypesError: "Invalid JSON array \u2014 must be an array of objects",
-    sourcePathsLabel: "Source paths (one per line)",
+    sourcePathsLabel: "Source paths",
+    entityTypesEditJson: "Edit JSON",
+    entityTypesBackToCards: "\u2190 Cards",
+    entityTypesEmpty: "No entity types defined. Click 'Edit JSON' to add.",
+    sourcePathsAdd: "Add",
+    sourcePathsPlaceholder: "/path/to/folder or file",
     languageNotesLabel: "Language notes",
     save: "Save",
     busyCloseTitle: "Operation in progress",
@@ -356,9 +361,14 @@ var ru = {
     addDomainNote: "\u0417\u0430\u043F\u0438\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u0441\u044F \u0432 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430\u0445 \u043F\u043B\u0430\u0433\u0438\u043D\u0430 \u0441 \u043F\u0443\u0441\u0442\u044B\u043C\u0438 entity_types. \u041E\u0442\u0440\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u0443\u0439\u0442\u0435 \u0434\u043E\u043C\u0435\u043D \u0432 \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u2192 \u0414\u043E\u043C\u0435\u043D\u044B \u0434\u043B\u044F \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F entity_types/extraction_cues.",
     add: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C",
     editDomainTitle: (id) => `\u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0434\u043E\u043C\u0435\u043D\u0430: ${id}`,
-    entityTypesLabel: "\u0422\u0438\u043F\u044B \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0435\u0439 (JSON-\u043C\u0430\u0441\u0441\u0438\u0432)",
+    entityTypesLabel: "\u0422\u0438\u043F\u044B \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0435\u0439",
     entityTypesError: "\u041D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON-\u043C\u0430\u0441\u0441\u0438\u0432 \u2014 \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043C\u0430\u0441\u0441\u0438\u0432\u043E\u043C \u043E\u0431\u044A\u0435\u043A\u0442\u043E\u0432",
-    sourcePathsLabel: "\u041F\u0443\u0442\u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432 (\u043F\u043E \u043E\u0434\u043D\u043E\u043C\u0443 \u043D\u0430 \u0441\u0442\u0440\u043E\u043A\u0443)",
+    sourcePathsLabel: "\u041F\u0443\u0442\u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432",
+    entityTypesEditJson: "\u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C JSON",
+    entityTypesBackToCards: "\u2190 \u041A\u0430\u0440\u0442\u043E\u0447\u043A\u0438",
+    entityTypesEmpty: "\u0422\u0438\u043F\u044B \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0435\u0439 \u043D\u0435 \u0437\u0430\u0434\u0430\u043D\u044B. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C JSON\xBB, \u0447\u0442\u043E\u0431\u044B \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C.",
+    sourcePathsAdd: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C",
+    sourcePathsPlaceholder: "/\u043F\u0443\u0442\u044C/\u043A/\u043F\u0430\u043F\u043A\u0435 \u0438\u043B\u0438 \u0444\u0430\u0439\u043B\u0443",
     languageNotesLabel: "\u0417\u0430\u043C\u0435\u0442\u043A\u0438 \u043E \u044F\u0437\u044B\u043A\u0435",
     save: "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C",
     busyCloseTitle: "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F",
@@ -500,9 +510,14 @@ var es = {
     addDomainNote: "La entrada se guardar\xE1 en la configuraci\xF3n del plugin con entity_types vac\xEDos. Edita el dominio en Ajustes \u2192 Dominios para a\xF1adir entity_types/extraction_cues.",
     add: "A\xF1adir",
     editDomainTitle: (id) => `Editar dominio: ${id}`,
-    entityTypesLabel: "Tipos de entidad (array JSON)",
+    entityTypesLabel: "Tipos de entidades",
     entityTypesError: "Array JSON inv\xE1lido \u2014 debe ser un array de objetos",
-    sourcePathsLabel: "Rutas de origen (una por l\xEDnea)",
+    sourcePathsLabel: "Rutas fuente",
+    entityTypesEditJson: "Editar JSON",
+    entityTypesBackToCards: "\u2190 Tarjetas",
+    entityTypesEmpty: "No hay tipos de entidades. Haz clic en 'Editar JSON' para a\xF1adir.",
+    sourcePathsAdd: "A\xF1adir",
+    sourcePathsPlaceholder: "/ruta/a/carpeta o archivo",
     languageNotesLabel: "Notas de idioma",
     save: "Guardar",
     busyCloseTitle: "Operaci\xF3n en curso",
@@ -692,19 +707,23 @@ var EditDomainModal = class extends import_obsidian2.Modal {
     this.onSave = onSave;
     this.nameVal = domain.name;
     this.wikiFolderVal = domain.wiki_folder;
-    this.sourcePathsVal = (domain.source_paths ?? []).join("\n");
+    this.entityTypesList = [...domain.entity_types ?? []];
     this.entityTypesVal = JSON.stringify(domain.entity_types ?? [], null, 2);
+    this.sourcePathsList = [...domain.source_paths ?? []];
     this.languageNotesVal = domain.language_notes ?? "";
   }
   nameVal;
   wikiFolderVal;
-  sourcePathsVal;
+  entityTypesMode = "cards";
+  entityTypesList;
   entityTypesVal;
+  sourcePathsList;
   languageNotesVal;
   errorEl = null;
   onOpen() {
     const T = i18n().modal;
     const { contentEl } = this;
+    contentEl.empty();
     contentEl.createEl("h3", { text: T.editDomainTitle(this.domain.id) });
     new import_obsidian2.Setting(contentEl).setName(T.displayName_name).addText((t) => t.setValue(this.nameVal).onChange((v) => {
       this.nameVal = v;
@@ -712,50 +731,157 @@ var EditDomainModal = class extends import_obsidian2.Modal {
     new import_obsidian2.Setting(contentEl).setName(T.wikiFolder_name).addText((t) => t.setValue(this.wikiFolderVal).onChange((v) => {
       this.wikiFolderVal = v;
     }));
-    new import_obsidian2.Setting(contentEl).setName(T.sourcePathsLabel).addTextArea((t) => {
+    const entityTypesContainer = contentEl.createDiv();
+    this.renderEntityTypes(entityTypesContainer);
+    const sourcePathsContainer = contentEl.createDiv();
+    this.renderSourcePaths(sourcePathsContainer);
+    new import_obsidian2.Setting(contentEl).setName(T.languageNotesLabel).addTextArea((t) => {
       t.inputEl.rows = 4;
-      t.inputEl.addClass("llm-wiki-settings-textarea");
-      t.setValue(this.sourcePathsVal).onChange((v) => {
-        this.sourcePathsVal = v;
+      t.setValue(this.languageNotesVal).onChange((v) => {
+        this.languageNotesVal = v;
       });
     });
-    new import_obsidian2.Setting(contentEl).setName(T.entityTypesLabel).addTextArea((t) => {
-      t.inputEl.rows = 10;
-      t.inputEl.addClass("llm-wiki-settings-textarea");
-      t.inputEl.addClass("llm-wiki-monospace");
-      t.setValue(this.entityTypesVal).onChange((v) => {
-        this.entityTypesVal = v;
-      });
-    });
-    new import_obsidian2.Setting(contentEl).setName(T.languageNotesLabel).addText((t) => t.setValue(this.languageNotesVal).onChange((v) => {
-      this.languageNotesVal = v;
-    }));
     this.errorEl = contentEl.createEl("p", { cls: "mod-warning llm-wiki-hidden" });
     new import_obsidian2.Setting(contentEl).addButton((b) => b.setButtonText(T.cancel).onClick(() => this.close())).addButton((b) => b.setButtonText(T.save).setCta().onClick(() => this.handleSave()));
+  }
+  renderEntityTypes(container) {
+    container.empty();
+    const T = i18n().modal;
+    const header = container.createDiv({ cls: "llm-wiki-et-header" });
+    header.createEl("span", { text: T.entityTypesLabel, cls: "llm-wiki-et-label" });
+    const toggleBtn = header.createEl("button", {
+      text: this.entityTypesMode === "cards" ? T.entityTypesEditJson : T.entityTypesBackToCards
+    });
+    if (this.entityTypesMode === "cards") {
+      toggleBtn.addEventListener("click", () => {
+        this.entityTypesVal = JSON.stringify(this.entityTypesList, null, 2);
+        this.entityTypesMode = "json";
+        this.renderEntityTypes(container);
+      });
+      if (this.entityTypesList.length === 0) {
+        container.createEl("p", { text: T.entityTypesEmpty, cls: "setting-item-description" });
+      } else {
+        for (const et of this.entityTypesList) {
+          this.renderEntityTypeCard(container, et);
+        }
+      }
+    } else {
+      const ta = container.createEl("textarea", {
+        cls: "llm-wiki-settings-textarea llm-wiki-monospace",
+        attr: { rows: "10" }
+      });
+      ta.value = this.entityTypesVal;
+      ta.addEventListener("input", () => {
+        this.entityTypesVal = ta.value;
+      });
+      const jsonErrorEl = container.createEl("p", { cls: "mod-warning llm-wiki-hidden" });
+      toggleBtn.addEventListener("click", () => {
+        try {
+          const parsed = JSON.parse(this.entityTypesVal.trim() || "[]");
+          if (!Array.isArray(parsed))
+            throw new Error();
+          if (!parsed.every((x) => typeof x === "object" && x !== null && !Array.isArray(x))) {
+            throw new Error();
+          }
+          this.entityTypesList = parsed;
+          this.entityTypesMode = "cards";
+          this.renderEntityTypes(container);
+        } catch {
+          jsonErrorEl.textContent = T.entityTypesError;
+          jsonErrorEl.removeClass("llm-wiki-hidden");
+        }
+      });
+    }
+  }
+  renderSourcePaths(container) {
+    container.empty();
+    const T = i18n().modal;
+    const header = container.createDiv({ cls: "llm-wiki-sp-header" });
+    header.createEl("span", { text: T.sourcePathsLabel, cls: "llm-wiki-sp-label" });
+    const listEl = container.createDiv({ cls: "llm-wiki-sp-list" });
+    const rerender = () => {
+      listEl.empty();
+      this.sourcePathsList.forEach((p, i) => {
+        const row = listEl.createDiv({ cls: "llm-wiki-sp-row" });
+        row.createEl("span", { text: p, cls: "llm-wiki-sp-path", attr: { title: p } });
+        const removeBtn = row.createEl("button", { text: "\xD7", cls: "llm-wiki-sp-remove" });
+        removeBtn.addEventListener("click", () => {
+          this.sourcePathsList.splice(i, 1);
+          rerender();
+        });
+      });
+    };
+    rerender();
+    const addRow = container.createDiv({ cls: "llm-wiki-sp-add-row" });
+    const input = addRow.createEl("input", {
+      cls: "llm-wiki-sp-input",
+      attr: { type: "text", placeholder: T.sourcePathsPlaceholder }
+    });
+    const addPath = () => {
+      const val = input.value.trim();
+      if (!val || this.sourcePathsList.includes(val))
+        return;
+      this.sourcePathsList.push(val);
+      input.value = "";
+      rerender();
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addPath();
+      }
+    });
+    const addBtn = addRow.createEl("button", { text: T.sourcePathsAdd, cls: "mod-cta" });
+    addBtn.addEventListener("click", addPath);
+  }
+  renderEntityTypeCard(container, et) {
+    const card = container.createDiv({ cls: "llm-wiki-et-card" });
+    const head = card.createDiv({ cls: "llm-wiki-et-card-head" });
+    head.createEl("span", { text: et.type, cls: "llm-wiki-et-card-type" });
+    if (et.wiki_subfolder) {
+      head.createEl("span", { text: et.wiki_subfolder + "/", cls: "llm-wiki-et-card-subfolder" });
+    }
+    const body = card.createDiv({ cls: "llm-wiki-et-card-body" });
+    if (et.description) {
+      body.createEl("p", { text: et.description, cls: "llm-wiki-et-card-desc" });
+    }
+    if (et.extraction_cues?.length) {
+      const tags = body.createDiv({ cls: "llm-wiki-et-card-tags" });
+      for (const cue of et.extraction_cues) {
+        tags.createEl("span", { text: cue, cls: "llm-wiki-et-card-tag" });
+      }
+    }
+    if (et.min_mentions_for_page != null) {
+      body.createEl("small", { text: `min_mentions: ${et.min_mentions_for_page}`, cls: "llm-wiki-et-card-meta" });
+    }
   }
   handleSave() {
     this.errorEl?.addClass("llm-wiki-hidden");
     let entityTypes;
-    try {
-      const parsed = JSON.parse(this.entityTypesVal.trim() || "[]");
-      if (!Array.isArray(parsed))
-        throw new Error("not an array");
-      if (!parsed.every((x) => typeof x === "object" && x !== null && !Array.isArray(x))) {
-        throw new Error("not an array of objects");
+    if (this.entityTypesMode === "cards") {
+      entityTypes = this.entityTypesList;
+    } else {
+      try {
+        const parsed = JSON.parse(this.entityTypesVal.trim() || "[]");
+        if (!Array.isArray(parsed))
+          throw new Error("not an array");
+        if (!parsed.every((x) => typeof x === "object" && x !== null && !Array.isArray(x))) {
+          throw new Error("not an array of objects");
+        }
+        entityTypes = parsed;
+      } catch {
+        if (this.errorEl) {
+          this.errorEl.textContent = i18n().modal.entityTypesError;
+          this.errorEl.removeClass("llm-wiki-hidden");
+        }
+        return;
       }
-      entityTypes = parsed;
-    } catch {
-      if (this.errorEl) {
-        this.errorEl.textContent = i18n().modal.entityTypesError;
-        this.errorEl.removeClass("llm-wiki-hidden");
-      }
-      return;
     }
     const updated = {
       ...this.domain,
       name: this.nameVal.trim() || this.domain.name,
       wiki_folder: this.wikiFolderVal.trim() || this.domain.wiki_folder,
-      source_paths: this.sourcePathsVal.split("\n").map((s) => s.trim()).filter(Boolean),
+      source_paths: this.sourcePathsList.filter(Boolean),
       entity_types: entityTypes,
       language_notes: this.languageNotesVal.trim()
     };
@@ -1680,8 +1806,8 @@ function translateSystemEvent(message) {
 
 // src/controller.ts
 var import_obsidian5 = require("obsidian");
-var import_node_fs2 = require("node:fs");
-var import_node_path7 = require("node:path");
+var import_node_fs3 = require("node:fs");
+var import_node_path8 = require("node:path");
 
 // src/domain-map.ts
 function validateDomainId(id) {
@@ -1755,7 +1881,7 @@ ${section}` };
 }
 
 // prompts/ingest.md
-var ingest_default = '\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0441\u0438\u043D\u0442\u0435\u0437\u0430 wiki-\u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0418\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439/\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n\n\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:\n{{entity_types_block}}\n{{lang_notes}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- CREATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 wiki, \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 >= min_mentions_for_page\n- UPDATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2192 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E, \u041D\u0415 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E\n- SKIP: \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u043E \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0435\u0441\u0442\u044C\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043A\u043E\u043D\u0444\u0438\u0433\u0438/SQL \u043C\u043E\u0436\u043D\u043E \u0446\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445.\n- \u041F\u0443\u0442\u044C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0434\u043E\u043B\u0436\u0435\u043D \u043D\u0430\u0447\u0438\u043D\u0430\u0442\u044C\u0441\u044F \u0441 "{{wiki_path}}/"\n- Frontmatter \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n{{schema_block}}\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432, \u0431\u0435\u0437 \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n[{"path":"{{wiki_path}}/EntityName.md","content":"---\\nwiki_sources: [{{source_path}}]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\n---\\n# EntityName\\n\\ncont\u0435\u043D\u0442..."}]\n';
+var ingest_default = '\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0441\u0438\u043D\u0442\u0435\u0437\u0430 wiki-\u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0418\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439/\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n\n\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:\n{{entity_types_block}}\n{{lang_notes}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- CREATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 wiki, \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 >= min_mentions_for_page\n- UPDATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2192 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E, \u041D\u0415 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E\n- SKIP: \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u043E \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0435\u0441\u0442\u044C\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043A\u043E\u043D\u0444\u0438\u0433\u0438/SQL \u043C\u043E\u0436\u043D\u043E \u0446\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445.\n- \u041F\u0443\u0442\u044C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0434\u043E\u043B\u0436\u0435\u043D \u043D\u0430\u0447\u0438\u043D\u0430\u0442\u044C\u0441\u044F \u0441 "{{wiki_path}}/"\n- Frontmatter \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n{{schema_block}}\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432, \u0431\u0435\u0437 \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n[{"path":"{{wiki_path}}/EntityName.md","content":"---\\nwiki_sources: [{{source_path}}]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\nlinks: []\\n---\\n# EntityName\\n\\ncont\u0435\u043D\u0442..."}]\n';
 
 // src/phases/template.ts
 function render(template, vars) {
@@ -2611,7 +2737,7 @@ async function* runLintChat(llm, model, domain, signal, opts, lintReport, histor
 }
 
 // templates/_schema.md
-var schema_default = '# Wiki Schema\n\n## \u042F\u0437\u044B\u043A \u0438 \u0441\u0442\u0438\u043B\u044C\n- \u041E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u044F\u0437\u044B\u043A: \u0440\u0443\u0441\u0441\u043A\u0438\u0439\n- \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u043D\u0435 \u043F\u0435\u0440\u0435\u0432\u043E\u0434\u0438\u0442\u044C: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML\n- \u0418\u043C\u0435\u043D\u0430 \u0441\u0438\u0441\u0442\u0435\u043C \u2014 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 (RT.DataExporter, CRM B2C, \u0426\u0425\u0414)\n- \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B \u0440\u0430\u0441\u0448\u0438\u0444\u0440\u043E\u0432\u044B\u0432\u0430\u0442\u044C \u043F\u0440\u0438 \u043F\u0435\u0440\u0432\u043E\u043C \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0438 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435\n- \u0421\u0442\u0438\u043B\u044C: \u043D\u0435\u0439\u0442\u0440\u0430\u043B\u044C\u043D\u044B\u0439, \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0432\u043D\u044B\u0439, \u0431\u0435\u0437 \u043E\u0446\u0435\u043D\u043E\u0447\u043D\u044B\u0445 \u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: "\u041E\u0447\u0435\u0432\u0438\u0434\u043D\u043E, \u0447\u0442\u043E...", "\u041B\u0443\u0447\u0448\u0438\u0439 \u0441\u043F\u043E\u0441\u043E\u0431...", \u043C\u0435\u0441\u0442\u043E\u0438\u043C\u0435\u043D\u0438\u044F "\u044F", "\u043C\u044B", "\u043D\u0430\u0448"\n\n## \u0418\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u043E\u0432 \u0438 \u043F\u0430\u043F\u043E\u043A\n- \u0424\u0430\u0439\u043B\u044B: kebab-case, \u043A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u0430, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432 \u0438 \u0441\u043F\u0435\u0446\u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432 \u043A\u0440\u043E\u043C\u0435 \u0434\u0435\u0444\u0438\u0441\u0430\n  - \u041F\u0440\u0438\u043C\u0435\u0440\u044B: `\u0432\u0435\u0440\u0441\u0438\u043E\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435-scd.md`, `clickhouse-\u043E\u0431\u0437\u043E\u0440.md`\n- \u041F\u0430\u043F\u043A\u0438 \u0434\u043E\u043C\u0435\u043D\u043E\u0432: \u043D\u0438\u0436\u043D\u0438\u0439 \u0440\u0435\u0433\u0438\u0441\u0442\u0440, \u043B\u0430\u0442\u0438\u043D\u0438\u0446\u0430 (`\u0438\u0438/`, `\u0431\u0430\u0437\u044B-\u0434\u0430\u043D\u043D\u044B\u0445/`)\n- \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1: \u0440\u0443\u0441\u0441\u043A\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435; \u0442\u0435\u0445\u0442\u0435\u0440\u043C\u0438\u043D \u0432 \u0441\u043A\u043E\u0431\u043A\u0430\u0445 \u043F\u0440\u0438 \u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E\u0441\u0442\u0438\n\n## \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u043F\u043E\u0440\u044F\u0434\u043E\u043A)\n1. Frontmatter (YAML)\n2. \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1\n3. \u0412\u0432\u043E\u0434\u043D\u044B\u0439 \u0430\u0431\u0437\u0430\u0446 \u2014 1-3 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0431\u0435\u0437 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0430, \u0441\u0440\u0430\u0437\u0443 \u043F\u043E\u0441\u043B\u0435 H1\n4. `## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438` \u2014 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0438 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u044B\n5. `## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438` \u2014 WikiLinks \u043D\u0430 \u0434\u0440\u0443\u0433\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n\n## \u041E\u043F\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B\n- `## \u041F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435 [\u0414\u043E\u043C\u0435\u043D]`\n- `## \u041F\u0440\u0438\u043C\u0435\u0440\u044B`\n- `## \u041E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F`\n- `## Best Practices`\n- `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n\n## Frontmatter\n\n| \u041F\u043E\u043B\u0435 | \u041F\u0440\u0430\u0432\u0438\u043B\u043E |\n|------|---------|\n| `wiki_sources` | \u041C\u0430\u0441\u0441\u0438\u0432 \u0440\u0435\u0430\u043B\u044C\u043D\u044B\u0445 \u043F\u0443\u0442\u0435\u0439 \u043E\u0442 \u043A\u043E\u0440\u043D\u044F \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F. \u0422\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u043D\u044B\u0435 \u0444\u0430\u0439\u043B\u044B. \u041F\u0440\u0438 UPDATE \u2014 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0442\u044C, \u043D\u0435 \u0443\u0434\u0430\u043B\u044F\u0442\u044C |\n| `wiki_updated` | YYYY-MM-DD |\n| `wiki_status` | `stub` (<2 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432, <10 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439) / `developing` / `mature` (\u22654 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430, \u0432\u0441\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B) |\n| `tags` | \u0418\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 \u0438\u0437 tag-hierarchy.json |\n| `aliases` | \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B, \u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u0438\u0435 \u0432\u0430\u0440\u0438\u0430\u043D\u0442\u044B, \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B |\n\n## WikiLinks\n- \u0421\u0441\u044B\u043B\u0430\u0442\u044C\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0447\u0435\u0440\u0435\u0437 `[[\u0438\u043C\u044F-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B]]`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: \u043C\u0451\u0440\u0442\u0432\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438, \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0444\u0430\u0439\u043B\u044B \u0432\u043D\u0435 `!Wiki/`, \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438 \u0447\u0435\u0440\u0435\u0437 WikiLinks\n\n## \u041A\u043E\u043D\u0442\u0435\u043D\u0442\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u2014 \u043F\u0435\u0440\u0435\u0440\u0430\u0431\u043E\u0442\u0430\u0442\u044C \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432\n- \u0414\u043E\u0441\u043B\u043E\u0432\u043D\u044B\u0435 \u0446\u0438\u0442\u0430\u0442\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445 (SQL, \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438)\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u0434\u0430\u0442\u0443 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0432 `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: placeholder-\u0442\u0435\u043A\u0441\u0442 (TODO, "\u0441\u043C. \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A"), \u043F\u0443\u0441\u0442\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B, \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438\n';
+var schema_default = '# Wiki Schema\n\n## \u042F\u0437\u044B\u043A \u0438 \u0441\u0442\u0438\u043B\u044C\n- \u041E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u044F\u0437\u044B\u043A: \u0440\u0443\u0441\u0441\u043A\u0438\u0439\n- \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u043D\u0435 \u043F\u0435\u0440\u0435\u0432\u043E\u0434\u0438\u0442\u044C: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML\n- \u0418\u043C\u0435\u043D\u0430 \u0441\u0438\u0441\u0442\u0435\u043C \u2014 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 (RT.DataExporter, CRM B2C, \u0426\u0425\u0414)\n- \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B \u0440\u0430\u0441\u0448\u0438\u0444\u0440\u043E\u0432\u044B\u0432\u0430\u0442\u044C \u043F\u0440\u0438 \u043F\u0435\u0440\u0432\u043E\u043C \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0438 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435\n- \u0421\u0442\u0438\u043B\u044C: \u043D\u0435\u0439\u0442\u0440\u0430\u043B\u044C\u043D\u044B\u0439, \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0432\u043D\u044B\u0439, \u0431\u0435\u0437 \u043E\u0446\u0435\u043D\u043E\u0447\u043D\u044B\u0445 \u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: "\u041E\u0447\u0435\u0432\u0438\u0434\u043D\u043E, \u0447\u0442\u043E...", "\u041B\u0443\u0447\u0448\u0438\u0439 \u0441\u043F\u043E\u0441\u043E\u0431...", \u043C\u0435\u0441\u0442\u043E\u0438\u043C\u0435\u043D\u0438\u044F "\u044F", "\u043C\u044B", "\u043D\u0430\u0448"\n\n## \u0418\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u043E\u0432 \u0438 \u043F\u0430\u043F\u043E\u043A\n- \u0424\u0430\u0439\u043B\u044B: kebab-case, \u043A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u0430, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432 \u0438 \u0441\u043F\u0435\u0446\u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432 \u043A\u0440\u043E\u043C\u0435 \u0434\u0435\u0444\u0438\u0441\u0430\n  - \u041F\u0440\u0438\u043C\u0435\u0440\u044B: `\u0432\u0435\u0440\u0441\u0438\u043E\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435-scd.md`, `clickhouse-\u043E\u0431\u0437\u043E\u0440.md`\n- \u041F\u0430\u043F\u043A\u0438 \u0434\u043E\u043C\u0435\u043D\u043E\u0432: \u043D\u0438\u0436\u043D\u0438\u0439 \u0440\u0435\u0433\u0438\u0441\u0442\u0440, \u043B\u0430\u0442\u0438\u043D\u0438\u0446\u0430 (`\u0438\u0438/`, `\u0431\u0430\u0437\u044B-\u0434\u0430\u043D\u043D\u044B\u0445/`)\n- \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1: \u0440\u0443\u0441\u0441\u043A\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435; \u0442\u0435\u0445\u0442\u0435\u0440\u043C\u0438\u043D \u0432 \u0441\u043A\u043E\u0431\u043A\u0430\u0445 \u043F\u0440\u0438 \u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E\u0441\u0442\u0438\n\n## \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u043F\u043E\u0440\u044F\u0434\u043E\u043A)\n1. Frontmatter (YAML)\n2. \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1\n3. \u0412\u0432\u043E\u0434\u043D\u044B\u0439 \u0430\u0431\u0437\u0430\u0446 \u2014 1-3 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0431\u0435\u0437 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0430, \u0441\u0440\u0430\u0437\u0443 \u043F\u043E\u0441\u043B\u0435 H1\n4. `## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438` \u2014 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0438 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u044B\n\n## \u041E\u043F\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B\n- `## \u041F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435 [\u0414\u043E\u043C\u0435\u043D]`\n- `## \u041F\u0440\u0438\u043C\u0435\u0440\u044B`\n- `## \u041E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F`\n- `## Best Practices`\n- `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n\n## Frontmatter\n\n| \u041F\u043E\u043B\u0435 | \u041F\u0440\u0430\u0432\u0438\u043B\u043E |\n|------|---------|\n| `wiki_sources` | \u041C\u0430\u0441\u0441\u0438\u0432 \u0440\u0435\u0430\u043B\u044C\u043D\u044B\u0445 \u043F\u0443\u0442\u0435\u0439 \u043E\u0442 \u043A\u043E\u0440\u043D\u044F \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F. \u0422\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u043D\u044B\u0435 \u0444\u0430\u0439\u043B\u044B. \u041F\u0440\u0438 UPDATE \u2014 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0442\u044C, \u043D\u0435 \u0443\u0434\u0430\u043B\u044F\u0442\u044C |\n| `wiki_updated` | YYYY-MM-DD |\n| `wiki_status` | `stub` (<2 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432, <10 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439) / `developing` / `mature` (\u22654 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430, \u0432\u0441\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B) |\n| `tags` | \u0418\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 \u0438\u0437 tag-hierarchy.json |\n| `aliases` | \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B, \u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u0438\u0435 \u0432\u0430\u0440\u0438\u0430\u043D\u0442\u044B, \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B |\n| `links` | \u041C\u0430\u0441\u0441\u0438\u0432 WikiLinks \u043D\u0430 \u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B: `["[[page-a]]", "[[page-b]]"]`. \u041F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C. |\n\n## WikiLinks\n- \u0421\u0441\u044B\u043B\u0430\u0442\u044C\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0447\u0435\u0440\u0435\u0437 `[[\u0438\u043C\u044F-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B]]`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: \u043C\u0451\u0440\u0442\u0432\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438, \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0444\u0430\u0439\u043B\u044B \u0432\u043D\u0435 `!Wiki/`, \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438 \u0447\u0435\u0440\u0435\u0437 WikiLinks\n\n## \u041A\u043E\u043D\u0442\u0435\u043D\u0442\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u2014 \u043F\u0435\u0440\u0435\u0440\u0430\u0431\u043E\u0442\u0430\u0442\u044C \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432\n- \u0414\u043E\u0441\u043B\u043E\u0432\u043D\u044B\u0435 \u0446\u0438\u0442\u0430\u0442\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445 (SQL, \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438)\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u0434\u0430\u0442\u0443 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0432 `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: placeholder-\u0442\u0435\u043A\u0441\u0442 (TODO, "\u0441\u043C. \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A"), \u043F\u0443\u0441\u0442\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B, \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438\n';
 
 // prompts/init.md
 var init_default = '\u0422\u044B \u2014 \u0430\u0440\u0445\u0438\u0442\u0435\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439. \u0421\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0439 \u0437\u0430\u043F\u0438\u0441\u044C \u0434\u043E\u043C\u0435\u043D\u0430 \u0434\u043B\u044F domain-map.json.\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0435\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B:\n{\n  "id": "{{domain_id}}",\n  "name": "\u0427\u0435\u043B\u043E\u0432\u0435\u043A\u043E\u0447\u0438\u0442\u0430\u0435\u043C\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435",\n  "wiki_folder": "vaults/{{vault_name}}/!Wiki/{{domain_id}}",\n  "source_paths": [],\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"{{domain_id}}/..."}],\n  "language_notes": ""\n}\n{{schema_block}}\n{{index_block}}\n';
@@ -2976,6 +3102,8 @@ var VaultTools = class {
 
 // src/claude-cli-client.ts
 var import_node_child_process = require("node:child_process");
+var import_node_fs2 = require("node:fs");
+var import_node_path6 = require("node:path");
 var import_node_readline = require("node:readline");
 
 // src/stream.ts
@@ -3087,25 +3215,58 @@ var ClaudeCliClient = class {
     const userText = typeof lastUser?.content === "string" ? lastUser.content : "";
     const model = params.model || this.cfg.model;
     const { requestTimeoutSec } = this.cfg;
+    const LARGE_THRESHOLD = 32768;
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const tmpFiles = [];
     const args = [];
     if (model)
       args.push("--model", model);
-    args.push("--", "-p", userText, "--output-format", "stream-json", "--verbose");
-    args.push("--disable-slash-commands");
-    args.push("--dangerously-skip-permissions");
-    if (this.cfg.allowedTools)
-      args.push("--tools", this.cfg.allowedTools);
-    if (systemContent)
-      args.push("--system-prompt", systemContent);
-    if (params.stream) {
-      return Promise.resolve(this._makeIterable(args, opts?.signal, requestTimeoutSec));
+    args.push("--");
+    try {
+      const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
+      if (isLargeUser) {
+        const tmpUsrFile = (0, import_node_path6.join)(this.cfg.tmpDir, `llm-wiki-usr-${id}.txt`);
+        (0, import_node_fs2.writeFileSync)(tmpUsrFile, userText, "utf-8");
+        tmpFiles.push(tmpUsrFile);
+        args.push("-p", ".");
+        args.push("--append-system-prompt-file", tmpUsrFile);
+      } else {
+        args.push("-p", userText);
+      }
+      args.push("--output-format", "stream-json", "--verbose");
+      args.push("--disable-slash-commands");
+      args.push("--dangerously-skip-permissions");
+      if (this.cfg.allowedTools)
+        args.push("--tools", this.cfg.allowedTools);
+      if (systemContent) {
+        const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
+        if (isLargeSys) {
+          const tmpSysFile = (0, import_node_path6.join)(this.cfg.tmpDir, `llm-wiki-sys-${id}.txt`);
+          (0, import_node_fs2.writeFileSync)(tmpSysFile, systemContent, "utf-8");
+          tmpFiles.push(tmpSysFile);
+          args.push("--system-prompt-file", tmpSysFile);
+        } else {
+          args.push("--system-prompt", systemContent);
+        }
+      }
+    } catch (err) {
+      for (const f of tmpFiles) {
+        try {
+          (0, import_node_fs2.unlinkSync)(f);
+        } catch {
+        }
+      }
+      throw err;
     }
-    return this._collect(args, opts?.signal, requestTimeoutSec);
+    if (params.stream) {
+      return Promise.resolve(this._makeIterable(args, opts?.signal, requestTimeoutSec, tmpFiles));
+    }
+    return this._collect(args, opts?.signal, requestTimeoutSec, tmpFiles);
   }
-  _makeIterable(args, signal, timeoutSec) {
-    return { [Symbol.asyncIterator]: () => this._generate(args, signal, timeoutSec) };
+  _makeIterable(args, signal, timeoutSec, tmpFiles) {
+    return { [Symbol.asyncIterator]: () => this._generate(args, signal, timeoutSec, tmpFiles) };
   }
-  async *_generate(args, signal, timeoutSec) {
+  async *_generate(args, signal, timeoutSec, tmpFiles) {
     const child = (0, import_node_child_process.spawn)(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
     if (!child.stdout || !child.stderr)
       throw new Error("spawn: missing stdio");
@@ -3183,6 +3344,8 @@ var ClaudeCliClient = class {
       if (spawnError)
         throw new Error(`claude spawn failed: ${spawnError.message}${stderr() ? `
 ${stderr()}` : ""}`);
+      if (signal?.aborted)
+        return;
       const ec = exitCode;
       if (ec !== null && ec !== 0)
         throw new Error(`claude exited with code ${ec}${stderr() ? `
@@ -3200,6 +3363,12 @@ ${stderr()}` : ""}`);
       clearTimeout(timeoutHandle);
       signal?.removeEventListener("abort", onAbort);
       rl.close();
+      for (const f of tmpFiles) {
+        try {
+          (0, import_node_fs2.unlinkSync)(f);
+        } catch {
+        }
+      }
       if (child.exitCode === null) {
         child.kill("SIGTERM");
         setTimeout(() => {
@@ -3209,9 +3378,9 @@ ${stderr()}` : ""}`);
       }
     }
   }
-  async _collect(args, signal, timeoutSec) {
+  async _collect(args, signal, timeoutSec, tmpFiles) {
     let text = "";
-    for await (const chunk of this._generate(args, signal, timeoutSec)) {
+    for await (const chunk of this._generate(args, signal, timeoutSec, tmpFiles)) {
       text += chunk.choices[0]?.delta?.content ?? "";
     }
     return {
@@ -10375,9 +10544,9 @@ OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
 // src/source-paths.ts
-var import_node_path6 = require("node:path");
+var import_node_path7 = require("node:path");
 function consolidateSourcePaths(existing, newPath, repoRoot) {
-  const toAbs = (p) => (0, import_node_path6.isAbsolute)(p) ? p : (0, import_node_path6.join)(repoRoot, p);
+  const toAbs = (p) => (0, import_node_path7.isAbsolute)(p) ? p : (0, import_node_path7.join)(repoRoot, p);
   const normed = (p) => {
     const a = toAbs(p);
     return a.endsWith("/") ? a : a + "/";
@@ -10537,7 +10706,7 @@ var WikiController = class {
   }
   requireClaudeAgent() {
     const p = this.plugin.settings.claudeAgent.iclaudePath;
-    if (!p || !(0, import_node_fs2.existsSync)(p)) {
+    if (!p || !(0, import_node_fs3.existsSync)(p)) {
       new import_obsidian5.Notice(i18n().ctrl.setClaudeCodePath);
       return null;
     }
@@ -10546,12 +10715,15 @@ var WikiController = class {
   buildAgentRunner(repoRoot) {
     const adapter = this.app.vault.adapter;
     const base = this.app.vault.adapter.getBasePath?.() ?? "";
+    const manifestDir = this.plugin.manifest.dir ?? (0, import_node_path8.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
+    const pluginDir = this.app.vault.adapter.getFullPath(manifestDir);
+    const tmpDir = (0, import_node_path8.join)(pluginDir, "tmp");
     const vaultTools = new VaultTools(adapter, base);
     const vaultName = this.app.vault.getName();
     const domains = this.plugin.settings.domains ?? [];
     const s = this.plugin.settings;
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
-    const llm = s.backend === "claude-agent" ? new ClaudeCliClient({ ...s.claudeAgent, requestTimeoutSec: maxTimeoutSec, cwd: s.claudeAgent.spawnCwd || "/tmp" }) : new OpenAI({
+    const llm = s.backend === "claude-agent" ? new ClaudeCliClient({ ...s.claudeAgent, requestTimeoutSec: maxTimeoutSec, cwd: s.claudeAgent.spawnCwd || "/tmp", tmpDir }) : new OpenAI({
       baseURL: s.nativeAgent.baseUrl,
       apiKey: s.nativeAgent.apiKey,
       timeout: maxTimeoutSec * 1e3,
@@ -10564,12 +10736,12 @@ var WikiController = class {
     if (!logPath)
       return;
     try {
-      const stat = (0, import_node_fs2.existsSync)(logPath) ? (0, import_node_fs2.statSync)(logPath) : null;
+      const stat = (0, import_node_fs3.existsSync)(logPath) ? (0, import_node_fs3.statSync)(logPath) : null;
       if (stat?.isDirectory() || !logPath.includes(".") && !logPath.endsWith("/")) {
-        logPath = (0, import_node_path7.join)(logPath, "agent.jsonl");
+        logPath = (0, import_node_path8.join)(logPath, "agent.jsonl");
       }
       const line = JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), session: sessionId, op, domainId, event: ev }) + "\n";
-      (0, import_node_fs2.appendFileSync)(logPath, line, "utf-8");
+      (0, import_node_fs3.appendFileSync)(logPath, line, "utf-8");
     } catch {
     }
   }
@@ -10702,9 +10874,9 @@ var WikiController = class {
     return view instanceof LlmWikiView ? view : null;
   }
   toVaultPath(vaultDir, savedPath) {
-    const abs = (0, import_node_path7.isAbsolute)(savedPath) ? savedPath : (0, import_node_path7.join)(vaultDir, savedPath);
-    const rel = (0, import_node_path7.relative)(vaultDir, abs);
-    if (rel.startsWith("..") || (0, import_node_path7.isAbsolute)(rel))
+    const abs = (0, import_node_path8.isAbsolute)(savedPath) ? savedPath : (0, import_node_path8.join)(vaultDir, savedPath);
+    const rel = (0, import_node_path8.relative)(vaultDir, abs);
+    if (rel.startsWith("..") || (0, import_node_path8.isAbsolute)(rel))
       return null;
     return rel;
   }
@@ -10843,7 +11015,7 @@ var LlmWikiPlugin = class extends import_obsidian6.Plugin {
     }
     const devData = data?.devMode;
     if (devData?.logPath !== void 0 && devData?.logDir === void 0) {
-      this.settings.devMode.logDir = devData.logPath ? (0, import_node_path8.dirname)(devData.logPath) : "";
+      this.settings.devMode.logDir = devData.logPath ? (0, import_node_path9.dirname)(devData.logPath) : "";
     }
   }
   async saveSettings() {
