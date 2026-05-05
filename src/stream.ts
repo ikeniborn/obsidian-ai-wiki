@@ -28,8 +28,9 @@ export function parseStreamLine(raw: string): RunEvent | null {
     case "system": {
       const subtype = typeof obj.subtype === "string" ? obj.subtype : "system";
       const model = typeof obj.model === "string" ? obj.model : "";
+      const sessionId = typeof obj.session_id === "string" ? obj.session_id : undefined;
       const msg = `${subtype}${model ? ` (${model})` : ""}`;
-      return { kind: "system", message: msg };
+      return { kind: "system", message: msg, sessionId };
     }
     case "assistant":
       return mapAssistant(obj);
