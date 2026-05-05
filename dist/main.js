@@ -1183,7 +1183,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   ingestBtn;
   lintBtn;
   fixChatEl = null;
-  lastLint = null;
+  lastContext = null;
   // Chat state
   chatSection = null;
   chatMessagesEl = null;
@@ -1372,6 +1372,10 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.lintBtn.disabled = true;
     this.fixChatEl?.remove();
     this.fixChatEl = null;
+    this.chatSection?.remove();
+    this.chatSection = null;
+    this.lastContext = null;
+    this.chatHistory = [];
     this.resultSection.addClass("llm-wiki-hidden");
     this.finalEl.empty();
     this.resultOpen = false;
@@ -1507,9 +1511,13 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.finalEl.removeClass("llm-wiki-hidden");
       this.resultOpen = true;
       this.resultToggle.setText("\u25BC");
-      const domainId = entry.args[0];
-      if (entry.operation === "lint" && entry.status === "done" && domainId) {
-        this.lastLint = { domainId, report: entry.finalText };
+      const CHAT_OPS = ["lint", "ingest", "query", "query-save"];
+      if (CHAT_OPS.includes(entry.operation) && entry.status === "done" && entry.finalText) {
+        this.lastContext = {
+          operation: entry.operation,
+          domainId: entry.domainId,
+          report: entry.finalText
+        };
         this.chatHistory = [];
         this.showChatSection();
       }
@@ -1533,12 +1541,18 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.chatSendBtn = inputRow.createEl("button", { text: T.view.chatSend, cls: "llm-wiki-chat-send" });
     const submit = () => {
       const text = this.chatInputEl.value.trim();
-      if (!text || !this.lastLint)
+      if (!text || !this.lastContext)
         return;
       this.chatInputEl.value = "";
       this.addChatBubble("user", text);
       this.lastUserMessage = text;
-      void this.plugin.controller.lintChat(this.lastLint.domainId, this.lastLint.report, this.chatHistory, text);
+      void this.plugin.controller.chat(
+        this.lastContext.operation,
+        this.lastContext.domainId,
+        this.lastContext.report,
+        this.chatHistory,
+        text
+      );
     };
     this.chatSendBtn.addEventListener("click", submit);
   }
@@ -2691,15 +2705,14 @@ ${pagesBlock}`
 }
 
 // prompts/chat.md
-var chat_default = "{{domain_header}}\n\u041F\u043E\u043C\u043E\u0433\u0430\u0439 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044E \u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0438 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u044F\u0442\u044C \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B, \u0432\u044B\u044F\u0432\u043B\u0435\u043D\u043D\u044B\u0435 lint-\u043F\u0440\u043E\u0432\u0435\u0440\u043A\u043E\u0439.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u043A\u043E\u043D\u043A\u0440\u0435\u0442\u043D\u043E, \u0441\u0441\u044B\u043B\u0430\u044F\u0441\u044C \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u043E\u0442\u0447\u0451\u0442\u0430.\n\n\u041E\u0422\u0427\u0401\u0422 LINT:\n{{lint_report}}\n";
+var chat_default = "{{operation_header}}\n\u041F\u043E\u043C\u043E\u0433\u0430\u0439 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044E \u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0438 \u043E\u0431\u0441\u0443\u0436\u0434\u0430\u0442\u044C \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u044B \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u043A\u043E\u043D\u043A\u0440\u0435\u0442\u043D\u043E, \u0441\u0441\u044B\u043B\u0430\u044F\u0441\u044C \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430.\n\n\u0420\u0415\u0417\u0423\u041B\u042C\u0422\u0410\u0422 \u041E\u041F\u0415\u0420\u0410\u0426\u0418\u0418:\n{{context}}\n";
 
 // src/phases/chat.ts
-async function* runLintChat(llm, model, domain, signal, opts, lintReport, history) {
+async function* runLintChat(llm, model, domain, signal, opts, context, history, operationHeader) {
   const start = Date.now();
-  const domainHeader = domain ? `\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${domain.name || domain.id}\xBB.` : `\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439.`;
   const systemContent = render(chat_default, {
-    domain_header: domainHeader,
-    lint_report: lintReport
+    operation_header: operationHeader,
+    context
   });
   const messages = [
     { role: "system", content: systemContent },
@@ -2978,7 +2991,16 @@ var AgentRunner = class {
         break;
       case "chat": {
         const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
-        yield* runLintChat(this.llm, model, domain, req.signal, opts, req.context ?? "", req.chatMessages ?? []);
+        yield* runLintChat(
+          this.llm,
+          model,
+          domain,
+          req.signal,
+          opts,
+          req.context ?? "",
+          req.chatMessages ?? [],
+          req.operationHeader ?? ""
+        );
         break;
       }
       case "init":
@@ -10598,11 +10620,11 @@ var WikiController = class {
   async fix(domainId, lintReport, instruction) {
     await this.dispatch("fix", [domainId], domainId, lintReport, instruction);
   }
-  async lintChat(domainId, lintReport, history, newMessage) {
+  async chat(operation, domainId, context, history, newMessage) {
     const chatMessages = [...history, { role: "user", content: newMessage }];
-    await this.dispatchChat(domainId, lintReport, chatMessages);
+    await this.dispatchChat(operation, domainId, context, chatMessages);
   }
-  async dispatchChat(domainId, lintReport, chatMessages) {
+  async dispatchChat(operation, domainId, context, chatMessages) {
     if (this.isBusy()) {
       new import_obsidian5.Notice(i18n().ctrl.operationRunning);
       return;
@@ -10630,6 +10652,13 @@ var WikiController = class {
       message: `start op=chat args=${JSON.stringify([lastMsg])} domainId=${domainId}`
     });
     view.setChatRunning();
+    const OPERATION_LABELS = {
+      lint: "Lint-\u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 wiki",
+      ingest: "\u0418\u0437\u0432\u043B\u0435\u0447\u0435\u043D\u0438\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 (ingest)",
+      query: "\u041E\u0442\u0432\u0435\u0442 \u043D\u0430 \u0437\u0430\u043F\u0440\u043E\u0441 (query)",
+      "query-save": "\u041E\u0442\u0432\u0435\u0442 \u043D\u0430 \u0437\u0430\u043F\u0440\u043E\u0441 \u0441 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435\u043C (query-save)"
+    };
+    const operationHeader = OPERATION_LABELS[operation] ?? operation;
     const timeoutMs = this.plugin.settings.timeouts.lint * 1e3;
     const runGen = agentRunner.run({
       operation: "chat",
@@ -10638,8 +10667,9 @@ var WikiController = class {
       signal: ctrl.signal,
       timeoutMs,
       domainId,
-      context: lintReport,
-      chatMessages
+      context,
+      chatMessages,
+      operationHeader
     });
     try {
       for await (const ev of runGen) {
@@ -10829,6 +10859,7 @@ var WikiController = class {
       id: `${startedAt}`,
       operation: op,
       args,
+      domainId,
       startedAt,
       finishedAt: Date.now(),
       status,
