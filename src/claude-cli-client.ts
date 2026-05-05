@@ -19,6 +19,9 @@ export interface ClaudeCliConfig {
 const SIGTERM_GRACE_MS = 3000;
 
 export class ClaudeCliClient implements LlmClient {
+  /** Session ID of the last completed turn, populated from the system init event. */
+  lastSessionId?: string;
+
   constructor(private cfg: ClaudeCliConfig) {}
 
   readonly chat = {
@@ -147,6 +150,9 @@ export class ClaudeCliClient implements LlmClient {
     const rl = createInterface({ input: child.stdout });
     rl.on("line", (line) => {
       const ev = parseStreamLine(line);
+      if (ev?.kind === "system" && ev.sessionId) {
+        this.lastSessionId = ev.sessionId;
+      }
       if (ev?.kind === "assistant_text") {
         const delta: Record<string, unknown> = ev.isReasoning
           ? { reasoning: ev.delta }

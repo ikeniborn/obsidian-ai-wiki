@@ -3227,6 +3227,8 @@ var ClaudeCliClient = class {
   constructor(cfg) {
     this.cfg = cfg;
   }
+  /** Session ID of the last completed turn, populated from the system init event. */
+  lastSessionId;
   chat = {
     completions: {
       create: (params, opts) => this._create(params, opts)
@@ -3333,6 +3335,9 @@ var ClaudeCliClient = class {
     const rl = (0, import_node_readline.createInterface)({ input: child.stdout });
     rl.on("line", (line) => {
       const ev = parseStreamLine(line);
+      if (ev?.kind === "system" && ev.sessionId) {
+        this.lastSessionId = ev.sessionId;
+      }
       if (ev?.kind === "assistant_text") {
         const delta = ev.isReasoning ? { reasoning: ev.delta } : { content: ev.delta };
         queue.push({
@@ -10596,6 +10601,7 @@ var WikiController = class {
   current = null;
   currentOp = null;
   _chatSessionId;
+  _currentClaudeClient = null;
   isBusy() {
     return this.current !== null;
   }
@@ -10684,8 +10690,10 @@ var WikiController = class {
         }
         if (ev.kind === "result")
           finalText = ev.text;
-        if (ev.kind === "error")
+        if (ev.kind === "error") {
           status = "error";
+          this._chatSessionId = void 0;
+        }
       }
     } catch (err) {
       status = "error";
@@ -10696,6 +10704,13 @@ var WikiController = class {
       this.current = null;
       this.currentOp = null;
     }
+    if (status === "done") {
+      const capturedId = this._currentClaudeClient?.lastSessionId;
+      if (capturedId)
+        this._chatSessionId = capturedId;
+    }
+    if (ctrl.signal.aborted)
+      this._chatSessionId = void 0;
     this.logEvent(sessionId, "chat", domainId, {
       kind: "system",
       message: `finish status=${status} durationMs=${Date.now() - startedAt}`
@@ -10759,12 +10774,20 @@ var WikiController = class {
     const domains = this.plugin.settings.domains ?? [];
     const s = this.plugin.settings;
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
-    const llm = s.backend === "claude-agent" ? new ClaudeCliClient({ ...s.claudeAgent, requestTimeoutSec: maxTimeoutSec, cwd: s.claudeAgent.spawnCwd || "/tmp", tmpDir, resumeSessionId }) : new OpenAI({
-      baseURL: s.nativeAgent.baseUrl,
-      apiKey: s.nativeAgent.apiKey,
-      timeout: maxTimeoutSec * 1e3,
-      dangerouslyAllowBrowser: true
-    });
+    let llm;
+    if (s.backend === "claude-agent") {
+      const client = new ClaudeCliClient({ ...s.claudeAgent, requestTimeoutSec: maxTimeoutSec, cwd: s.claudeAgent.spawnCwd || "/tmp", tmpDir, resumeSessionId });
+      this._currentClaudeClient = client;
+      llm = client;
+    } else {
+      this._currentClaudeClient = null;
+      llm = new OpenAI({
+        baseURL: s.nativeAgent.baseUrl,
+        apiKey: s.nativeAgent.apiKey,
+        timeout: maxTimeoutSec * 1e3,
+        dangerouslyAllowBrowser: true
+      });
+    }
     return new AgentRunner(llm, s, vaultTools, vaultName, domains);
   }
   logEvent(sessionId, op, domainId, ev) {
@@ -10879,7 +10902,7 @@ var WikiController = class {
     if (op === "query-save" && status === "done") {
       const m = finalText.match(/Создана\s+страница:\s*([^\s`'"]+)/i);
       if (m) {
-        const pathInVault = this.toVaultPath(vaultBasePath, m[1]);
+        const pathInVault = this.toVaultPath(vaultRoot, m[1]);
         if (pathInVault)
           await this.app.workspace.openLinkText(pathInVault, "");
       }

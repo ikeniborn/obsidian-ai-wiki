@@ -257,6 +257,41 @@ describe("ClaudeCliClient", () => {
     expect(args[pIdx + 1]).toBe("второй вопрос");
   });
 
+  it("populates lastSessionId from system init event in stream", async () => {
+    const lines = [
+      JSON.stringify({ type: "system", subtype: "init", session_id: "sess-abc-123", model: "claude-sonnet" }),
+      JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "hello" }] } }),
+      JSON.stringify({ type: "result", duration_ms: 100, total_cost_usd: 0, result: "hello", is_error: false }),
+    ];
+    (spawn as any).mockReturnValue(makeMockProcess(lines));
+
+    const client = new ClaudeCliClient(cfg);
+    const stream = await client.chat.completions.create(
+      { model: "sonnet", messages: [{ role: "user", content: "hi" }], stream: true } as any,
+      { signal: new AbortController().signal },
+    );
+    for await (const _ of stream) { /* drain */ }
+
+    expect(client.lastSessionId).toBe("sess-abc-123");
+  });
+
+  it("does not populate lastSessionId when no system init event present", async () => {
+    const lines = [
+      JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "hello" }] } }),
+      JSON.stringify({ type: "result", duration_ms: 100, total_cost_usd: 0, result: "hello", is_error: false }),
+    ];
+    (spawn as any).mockReturnValue(makeMockProcess(lines));
+
+    const client = new ClaudeCliClient(cfg);
+    const stream = await client.chat.completions.create(
+      { model: "sonnet", messages: [{ role: "user", content: "hi" }], stream: true } as any,
+      { signal: new AbortController().signal },
+    );
+    for await (const _ of stream) { /* drain */ }
+
+    expect(client.lastSessionId).toBeUndefined();
+  });
+
   it("does not pass --resume and does pass --system-prompt when resumeSessionId is absent", async () => {
     (spawn as any).mockReturnValue(makeMockProcess([]));
 

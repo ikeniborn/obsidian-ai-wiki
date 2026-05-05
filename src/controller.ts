@@ -17,6 +17,7 @@ export class WikiController {
   private current: AbortController | null = null;
   currentOp: { op: WikiOperation; args: string[] } | null = null;
   private _chatSessionId: string | undefined;
+  private _currentClaudeClient: ClaudeCliClient | null = null;
   constructor(private app: App, private plugin: LlmWikiPlugin) {}
 
   isBusy(): boolean { return this.current !== null; }
@@ -106,7 +107,7 @@ export class WikiController {
           this._chatSessionId = ev.sessionId;
         }
         if (ev.kind === "result") finalText = ev.text;
-        if (ev.kind === "error") status = "error";
+        if (ev.kind === "error") { status = "error"; this._chatSessionId = undefined; }
       }
     } catch (err) {
       status = "error";
@@ -118,6 +119,15 @@ export class WikiController {
       this.current = null;
       this.currentOp = null;
     }
+
+    // Capture session_id from claude-cli client after turn completes.
+    // _generate populates lastSessionId when it reads the system init line.
+    if (status === "done") {
+      const capturedId = this._currentClaudeClient?.lastSessionId;
+      if (capturedId) this._chatSessionId = capturedId;
+    }
+    // Aborted turn: session may be in indeterminate state — reset for safety.
+    if (ctrl.signal.aborted) this._chatSessionId = undefined;
 
     this.logEvent(sessionId, "chat", domainId, {
       kind: "system",
@@ -189,14 +199,20 @@ export class WikiController {
     const s = this.plugin.settings;
 
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
-    const llm = s.backend === "claude-agent"
-      ? new ClaudeCliClient({ ...s.claudeAgent, requestTimeoutSec: maxTimeoutSec, cwd: s.claudeAgent.spawnCwd || "/tmp", tmpDir, resumeSessionId })
-      : new OpenAI({
-          baseURL: s.nativeAgent.baseUrl,
-          apiKey: s.nativeAgent.apiKey,
-          timeout: maxTimeoutSec * 1000,
-          dangerouslyAllowBrowser: true,
-        });
+    let llm: import("./types").LlmClient;
+    if (s.backend === "claude-agent") {
+      const client = new ClaudeCliClient({ ...s.claudeAgent, requestTimeoutSec: maxTimeoutSec, cwd: s.claudeAgent.spawnCwd || "/tmp", tmpDir, resumeSessionId });
+      this._currentClaudeClient = client;
+      llm = client;
+    } else {
+      this._currentClaudeClient = null;
+      llm = new OpenAI({
+        baseURL: s.nativeAgent.baseUrl,
+        apiKey: s.nativeAgent.apiKey,
+        timeout: maxTimeoutSec * 1000,
+        dangerouslyAllowBrowser: true,
+      });
+    }
 
     return new AgentRunner(llm, s, vaultTools, vaultName, domains);
   }
@@ -315,7 +331,7 @@ export class WikiController {
     if (op === "query-save" && status === "done") {
       const m = finalText.match(/Создана\s+страница:\s*([^\s`'"]+)/i);
       if (m) {
-        const pathInVault = this.toVaultPath(vaultBasePath, m[1]);
+        const pathInVault = this.toVaultPath(vaultRoot, m[1]);
         if (pathInVault) await this.app.workspace.openLinkText(pathInVault, "");
       }
     }
