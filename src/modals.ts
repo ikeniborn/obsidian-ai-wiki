@@ -247,6 +247,79 @@ export class EditDomainModal extends Modal {
       .addButton((b) => b.setButtonText(T.save).setCta().onClick(() => this.handleSave()));
   }
 
+  private renderEntityTypes(container: HTMLElement): void {
+    container.empty();
+    const T = i18n().modal;
+
+    const header = container.createDiv({ cls: "llm-wiki-et-header" });
+    header.createEl("span", { text: T.entityTypesLabel, cls: "llm-wiki-et-label" });
+    const toggleBtn = header.createEl("button", {
+      text: this.entityTypesMode === "cards" ? T.entityTypesEditJson : T.entityTypesBackToCards,
+    });
+
+    if (this.entityTypesMode === "cards") {
+      toggleBtn.addEventListener("click", () => {
+        this.entityTypesVal = JSON.stringify(this.entityTypesList, null, 2);
+        this.entityTypesMode = "json";
+        this.renderEntityTypes(container);
+      });
+      if (this.entityTypesList.length === 0) {
+        container.createEl("p", { text: T.entityTypesEmpty, cls: "setting-item-description" });
+      } else {
+        for (const et of this.entityTypesList) {
+          this.renderEntityTypeCard(container, et);
+        }
+      }
+    } else {
+      const ta = container.createEl("textarea", {
+        cls: "llm-wiki-settings-textarea llm-wiki-monospace",
+        attr: { rows: "10" },
+      });
+      ta.value = this.entityTypesVal;
+      ta.addEventListener("input", () => { this.entityTypesVal = ta.value; });
+
+      const jsonErrorEl = container.createEl("p", { cls: "mod-warning llm-wiki-hidden" });
+
+      toggleBtn.addEventListener("click", () => {
+        try {
+          const parsed = JSON.parse(this.entityTypesVal.trim() || "[]");
+          if (!Array.isArray(parsed)) throw new Error();
+          if (!parsed.every((x: unknown) => typeof x === "object" && x !== null && !Array.isArray(x))) {
+            throw new Error();
+          }
+          this.entityTypesList = parsed as EntityType[];
+          this.entityTypesMode = "cards";
+          this.renderEntityTypes(container);
+        } catch {
+          jsonErrorEl.textContent = T.entityTypesError;
+          jsonErrorEl.removeClass("llm-wiki-hidden");
+        }
+      });
+    }
+  }
+
+  private renderEntityTypeCard(container: HTMLElement, et: EntityType): void {
+    const card = container.createDiv({ cls: "llm-wiki-et-card" });
+    const head = card.createDiv({ cls: "llm-wiki-et-card-head" });
+    head.createEl("span", { text: et.type, cls: "llm-wiki-et-card-type" });
+    if (et.wiki_subfolder) {
+      head.createEl("span", { text: et.wiki_subfolder + "/", cls: "llm-wiki-et-card-subfolder" });
+    }
+    const body = card.createDiv({ cls: "llm-wiki-et-card-body" });
+    if (et.description) {
+      body.createEl("p", { text: et.description, cls: "llm-wiki-et-card-desc" });
+    }
+    if (et.extraction_cues?.length) {
+      const tags = body.createDiv({ cls: "llm-wiki-et-card-tags" });
+      for (const cue of et.extraction_cues) {
+        tags.createEl("span", { text: cue, cls: "llm-wiki-et-card-tag" });
+      }
+    }
+    if (et.min_mentions_for_page != null) {
+      body.createEl("small", { text: `min_mentions: ${et.min_mentions_for_page}`, cls: "llm-wiki-et-card-meta" });
+    }
+  }
+
   private handleSave(): void {
     this.errorEl?.addClass("llm-wiki-hidden");
     let entityTypes: EntityType[];
