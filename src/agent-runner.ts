@@ -1,4 +1,5 @@
 import { appendFileSync } from "node:fs";
+import { join } from "node:path";
 import type { DomainEntry } from "./domain-map";
 import { runIngest } from "./phases/ingest";
 import { runQuery } from "./phases/query";
@@ -43,8 +44,9 @@ export class AgentRunner {
     result: string;
     durationMs: number;
   }): void {
-    const logPath = this.settings.devMode?.logPath;
-    if (!logPath) return;
+    const logDir = this.settings.devMode?.logDir;
+    if (!logDir) return;
+    const logPath = join(logDir, "dev.jsonl");
     try {
       const line = JSON.stringify({ ts: new Date().toISOString(), ...entry, eval: null }) + "\n";
       appendFileSync(logPath, line, "utf-8");
@@ -133,8 +135,9 @@ export class AgentRunner {
   }
 
   private updateDevLogEval(score: number, reasoning: string): void {
-    const logPath = this.settings.devMode?.logPath;
-    if (!logPath) return;
+    const logDir = this.settings.devMode?.logDir;
+    if (!logDir) return;
+    const logPath = join(logDir, "dev.jsonl");
     try {
       const fs = require("node:fs") as typeof import("node:fs");
       const content = fs.readFileSync(logPath, "utf-8");
