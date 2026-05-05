@@ -11,6 +11,7 @@ import { VaultTools, type VaultAdapter } from "./vault-tools";
 import { ClaudeCliClient } from "./claude-cli-client";
 import OpenAI from "openai";
 import { i18n } from "./i18n";
+import { consolidateSourcePaths } from "./source-paths";
 
 export class WikiController {
   private current: AbortController | null = null;
@@ -257,11 +258,12 @@ export class WikiController {
         if (ev.kind === "source_path_added") {
           const domain = this.plugin.settings.domains.find((d) => d.id === ev.domainId);
           if (domain) {
-            if (!domain.source_paths) domain.source_paths = [];
-            if (!domain.source_paths.includes(ev.path)) {
-              domain.source_paths.push(ev.path);
-              void this.plugin.saveSettings();
-            }
+            domain.source_paths = consolidateSourcePaths(
+              domain.source_paths ?? [],
+              ev.path,
+              repoRoot,
+            );
+            void this.plugin.saveSettings();
           }
         }
         this.collectStep(ev, steps);
