@@ -1331,11 +1331,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     }
     const domains = this.plugin.controller.loadDomains();
     const wikiRoot = (() => {
-      const vaultName = this.plugin.app.vault.getName();
-      const vaultPrefix = `vaults/${vaultName}/`;
-      const sample = domains[0]?.wiki_folder ?? `${vaultPrefix}!Wiki/x`;
-      const rel = sample.startsWith(vaultPrefix) ? sample.slice(vaultPrefix.length) : sample;
-      return rel.replace(/\/[^/]+$/, "") || "!Wiki";
+      const sample = domains[0]?.wiki_folder ?? `!Wiki/x`;
+      return sample.replace(/\/[^/]+$/, "") || "!Wiki";
     })();
     new AddDomainModal(this.app, wikiRoot, (input) => {
       const r = this.plugin.controller.registerDomain(input);
@@ -1903,13 +1900,13 @@ function render(template, vars) {
 }
 
 // src/phases/ingest.ts
-async function* runIngest(args, vaultTools, llm, model, domains, repoRoot, signal, opts = {}) {
+async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}) {
   const filePath = args[0];
   if (!filePath) {
     yield { kind: "error", message: "ingest: file path required" };
     return;
   }
-  const absSource = (0, import_node_path.isAbsolute)(filePath) ? filePath : (0, import_node_path.join)(repoRoot, filePath);
+  const absSource = (0, import_node_path.isAbsolute)(filePath) ? filePath : (0, import_node_path.join)(vaultRoot, filePath);
   const sourceVaultPath = vaultTools.toVaultPath(absSource);
   if (!sourceVaultPath) {
     yield { kind: "error", message: `Source file ${filePath} is outside the vault.` };
@@ -1924,12 +1921,12 @@ async function* runIngest(args, vaultTools, llm, model, domains, repoRoot, signa
     return;
   }
   yield { kind: "tool_result", ok: true, preview: sourceContent.slice(0, 100) };
-  const domain = detectDomain(absSource, domains, repoRoot);
+  const domain = detectDomain(absSource, domains, vaultRoot);
   if (!domain) {
     yield { kind: "error", message: "No domain found for this file. Configure domain-map." };
     return;
   }
-  const absWiki = (0, import_node_path.isAbsolute)(domain.wiki_folder) ? domain.wiki_folder : (0, import_node_path.join)(repoRoot, domain.wiki_folder);
+  const absWiki = (0, import_node_path.join)(vaultRoot, domain.wiki_folder);
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
     yield { kind: "error", message: `Wiki folder ${domain.wiki_folder} is outside the vault.` };
@@ -2000,7 +1997,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, repoRoot, signa
   if (written.length > 0) {
     await appendLog(vaultTools, wikiRoot, sourceVaultPath, domain.id, written);
     await updateIndex(vaultTools, wikiRoot, written);
-    const parentPath = extractParentSourcePath(absSource, repoRoot, vaultTools.vaultRoot);
+    const parentPath = extractParentSourcePath(absSource, vaultRoot);
     yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
   }
   yield { kind: "result", durationMs: Date.now() - start, text: resultText };
@@ -2017,10 +2014,10 @@ function buildIngestSummary(domainId, sourcePath, written, total) {
   }
   return lines.join("\n");
 }
-function detectDomain(absFilePath, domains, repoRoot) {
+function detectDomain(absFilePath, domains, vaultRoot) {
   for (const d of domains) {
     const matched = d.source_paths?.some((sp) => {
-      const abs = (0, import_node_path.isAbsolute)(sp) ? sp : (0, import_node_path.join)(repoRoot, sp);
+      const abs = (0, import_node_path.isAbsolute)(sp) ? sp : (0, import_node_path.join)(vaultRoot, sp);
       return absFilePath.startsWith(abs);
     });
     if (matched)
@@ -2080,11 +2077,11 @@ async function tryRead(vaultTools, path2) {
     return "";
   }
 }
-function extractParentSourcePath(absSource, repoRoot, vaultRoot) {
+function extractParentSourcePath(absSource, vaultRoot) {
   const parentAbs = (0, import_node_path.dirname)(absSource);
   const normedVault = vaultRoot.endsWith("/") ? vaultRoot : vaultRoot + "/";
   const clamped = (parentAbs + "/").startsWith(normedVault) ? parentAbs : vaultRoot;
-  const rel = (0, import_node_path.relative)(repoRoot, clamped);
+  const rel = (0, import_node_path.relative)(vaultRoot, clamped);
   return (rel || ".") + "/";
 }
 function buildEntityTypesBlock(domain) {
@@ -2144,7 +2141,7 @@ var query_default = "\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0
 // src/phases/query.ts
 var MAX_CONTEXT_CHARS = 8e4;
 var META_FILES = ["_index.md", "_log.md", "_schema.md"];
-async function* runQuery(args, save, vaultTools, llm, model, domains, repoRoot, signal, opts = {}) {
+async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}) {
   const question = args[0]?.trim();
   if (!question) {
     yield { kind: "error", message: "query: question required" };
@@ -2155,7 +2152,7 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, repoRoot, 
     yield { kind: "error", message: "No domain configured. Add a domain in settings." };
     return;
   }
-  const absWiki = (0, import_node_path2.isAbsolute)(domain.wiki_folder) ? domain.wiki_folder : (0, import_node_path2.join)(repoRoot, domain.wiki_folder);
+  const absWiki = (0, import_node_path2.join)(vaultRoot, domain.wiki_folder);
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
     yield { kind: "error", message: `Wiki folder ${domain.wiki_folder} is outside the vault.` };
@@ -2279,7 +2276,7 @@ var lint_default = "\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u04
 
 // src/phases/lint.ts
 var META_FILES2 = ["_index.md", "_log.md", "_schema.md"];
-async function* runLint(args, vaultTools, llm, model, domains, repoRoot, signal, opts = {}) {
+async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}) {
   const domainId = args[0];
   const targets = domainId ? domains.filter((d) => d.id === domainId) : domains;
   if (targets.length === 0) {
@@ -2291,7 +2288,7 @@ async function* runLint(args, vaultTools, llm, model, domains, repoRoot, signal,
   for (const domain of targets) {
     if (signal.aborted)
       return;
-    const absWiki = (0, import_node_path3.isAbsolute)(domain.wiki_folder) ? domain.wiki_folder : (0, import_node_path3.join)(repoRoot, domain.wiki_folder);
+    const absWiki = (0, import_node_path3.join)(vaultRoot, domain.wiki_folder);
     const wikiVaultPath = vaultTools.toVaultPath(absWiki);
     if (!wikiVaultPath) {
       reportParts.push(`## ${domain.id}
@@ -2568,14 +2565,14 @@ var fix_default = '\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043
 
 // src/phases/fix.ts
 var META_FILES3 = ["_index.md", "_log.md", "_schema.md"];
-async function* runFix(args, vaultTools, llm, model, domains, repoRoot, signal, opts = {}, lintReport, userInstruction) {
+async function* runFix(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}, lintReport, userInstruction) {
   const domainId = args[0];
   const domain = domainId ? domains.find((d) => d.id === domainId) : domains[0];
   if (!domain) {
     yield { kind: "error", message: domainId ? `Domain "${domainId}" not found.` : "No domains configured." };
     return;
   }
-  const absWiki = (0, import_node_path4.isAbsolute)(domain.wiki_folder) ? domain.wiki_folder : (0, import_node_path4.join)(repoRoot, domain.wiki_folder);
+  const absWiki = (0, import_node_path4.join)(vaultRoot, domain.wiki_folder);
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
     yield { kind: "error", message: `Wiki folder ${domain.wiki_folder} is outside the vault.` };
@@ -2756,7 +2753,7 @@ var schema_default = '# Wiki Schema\n\n## \u042F\u0437\u044B\u043A \u0438 \u0441
 var init_default = '\u0422\u044B \u2014 \u0430\u0440\u0445\u0438\u0442\u0435\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439. \u0421\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0439 \u0437\u0430\u043F\u0438\u0441\u044C \u0434\u043E\u043C\u0435\u043D\u0430 \u0434\u043B\u044F domain-map.json.\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0435\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B:\n{\n  "id": "{{domain_id}}",\n  "name": "\u0427\u0435\u043B\u043E\u0432\u0435\u043A\u043E\u0447\u0438\u0442\u0430\u0435\u043C\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435",\n  "wiki_folder": "vaults/{{vault_name}}/!Wiki/{{domain_id}}",\n  "source_paths": [],\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"{{domain_id}}/..."}],\n  "language_notes": ""\n}\n{{schema_block}}\n{{index_block}}\n';
 
 // src/phases/init.ts
-async function* runInit(args, vaultTools, llm, model, domains, repoRoot, vaultName, signal, opts = {}) {
+async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal, opts = {}) {
   const domainId = args[0];
   const dryRun = args.includes("--dry-run");
   if (!domainId) {
@@ -2838,6 +2835,10 @@ ${c.slice(0, 400)}`).join("\n\n")
     if (!match)
       throw new Error("No JSON object found in LLM response");
     entry = JSON.parse(match[0]);
+    const vaultPrefix = `vaults/${vaultName}/`;
+    if (entry.wiki_folder?.startsWith(vaultPrefix)) {
+      entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
+    }
     if (!entry.id || !entry.wiki_folder)
       throw new Error("Missing required fields");
   } catch (e) {
@@ -2972,22 +2973,22 @@ var AgentRunner = class {
     } catch {
     }
   }
-  async *runOperation(req, model, opts, repoRoot, domains) {
+  async *runOperation(req, model, opts, vaultRoot, domains) {
     switch (req.operation) {
       case "ingest":
-        yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, repoRoot, req.signal, opts);
+        yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
         break;
       case "query":
-        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, repoRoot, req.signal, opts);
+        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
         break;
       case "query-save":
-        yield* runQuery(req.args, true, this.vaultTools, this.llm, model, domains, repoRoot, req.signal, opts);
+        yield* runQuery(req.args, true, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
         break;
       case "lint":
-        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, repoRoot, req.signal, opts);
+        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
         break;
       case "fix":
-        yield* runFix(req.args, this.vaultTools, this.llm, model, domains, repoRoot, req.signal, opts, req.context, req.instruction);
+        yield* runFix(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, req.context, req.instruction);
         break;
       case "chat": {
         const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
@@ -3004,7 +3005,7 @@ var AgentRunner = class {
         break;
       }
       case "init":
-        yield* runInit(req.args, this.vaultTools, this.llm, model, domains, repoRoot, this.vaultName, req.signal, opts);
+        yield* runInit(req.args, this.vaultTools, this.llm, model, domains, this.vaultName, req.signal, opts);
         break;
       default: {
         const start = Date.now();
@@ -3018,11 +3019,11 @@ var AgentRunner = class {
     yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}` };
     if (req.signal.aborted)
       return;
-    const repoRoot = req.cwd ?? "";
+    const vaultRoot = req.cwd ?? "";
     const domains = req.domainId ? this.domains.filter((d) => d.id === req.domainId) : this.domains;
     const startMs = Date.now();
     let finalResultText = "";
-    for await (const ev of this.runOperation(req, model, opts, repoRoot, domains)) {
+    for await (const ev of this.runOperation(req, model, opts, vaultRoot, domains)) {
       if (ev.kind === "result")
         finalResultText = ev.text;
       yield ev;
@@ -10567,8 +10568,8 @@ OpenAI.Videos = Videos;
 
 // src/source-paths.ts
 var import_node_path7 = require("node:path");
-function consolidateSourcePaths(existing, newPath, repoRoot) {
-  const toAbs = (p) => (0, import_node_path7.isAbsolute)(p) ? p : (0, import_node_path7.join)(repoRoot, p);
+function consolidateSourcePaths(existing, newPath, vaultRoot) {
+  const toAbs = (p) => (0, import_node_path7.isAbsolute)(p) ? p : (0, import_node_path7.join)(vaultRoot, p);
   const normed = (p) => {
     const a = toAbs(p);
     return a.endsWith("/") ? a : a + "/";
@@ -10635,11 +10636,8 @@ var WikiController = class {
     const view = this.activeView();
     if (!view)
       return;
-    const vaultBasePath = this.app.vault.adapter.getBasePath?.() ?? "";
-    const vaultName = this.app.vault.getName();
-    const vaultSuffix = `/vaults/${vaultName}`;
-    const repoRoot = vaultBasePath.endsWith(vaultSuffix) ? vaultBasePath.slice(0, vaultBasePath.length - vaultSuffix.length) : vaultBasePath;
-    const agentRunner = this.buildAgentRunner(repoRoot);
+    const vaultRoot = this.app.vault.adapter.getBasePath?.() ?? "";
+    const agentRunner = this.buildAgentRunner(vaultRoot);
     const ctrl = new AbortController();
     this.current = ctrl;
     const startedAt = Date.now();
@@ -10663,7 +10661,7 @@ var WikiController = class {
     const runGen = agentRunner.run({
       operation: "chat",
       args: [],
-      cwd: repoRoot,
+      cwd: vaultRoot,
       signal: ctrl.signal,
       timeoutMs,
       domainId,
@@ -10719,13 +10717,11 @@ var WikiController = class {
       new import_obsidian5.Notice(i18n().ctrl.domainAddFailed(msg));
       return { ok: false, error: msg };
     }
-    const vaultName = this.app.vault.getName();
-    const vaultPrefix = `vaults/${vaultName}`;
     const wikiRelative = input.wikiFolder.trim() || `!Wiki/${id}`;
     s.domains.push({
       id,
       name: input.name.trim() || id,
-      wiki_folder: `${vaultPrefix}/${wikiRelative}`,
+      wiki_folder: wikiRelative,
       source_paths: [],
       entity_types: [],
       language_notes: ""
@@ -10742,7 +10738,7 @@ var WikiController = class {
     }
     return p;
   }
-  buildAgentRunner(repoRoot) {
+  buildAgentRunner(vaultRoot) {
     const adapter = this.app.vault.adapter;
     const base = this.app.vault.adapter.getBasePath?.() ?? "";
     const manifestDir = this.plugin.manifest.dir ?? (0, import_node_path8.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
@@ -10786,11 +10782,8 @@ var WikiController = class {
     const view = this.activeView();
     if (!view)
       return;
-    const vaultBasePath = this.app.vault.adapter.getBasePath?.() ?? "";
-    const vaultName = this.app.vault.getName();
-    const vaultSuffix = `/vaults/${vaultName}`;
-    const repoRoot = vaultBasePath.endsWith(vaultSuffix) ? vaultBasePath.slice(0, vaultBasePath.length - vaultSuffix.length) : vaultBasePath;
-    const agentRunner = this.buildAgentRunner(repoRoot);
+    const vaultRoot = this.app.vault.adapter.getBasePath?.() ?? "";
+    const agentRunner = this.buildAgentRunner(vaultRoot);
     const ctrl = new AbortController();
     this.current = ctrl;
     this.currentOp = { op, args };
@@ -10803,7 +10796,7 @@ var WikiController = class {
     view.setRunning(op, args);
     const opKey = op === "query-save" ? "query" : op;
     const timeoutMs = this.plugin.settings.timeouts[opKey] * 1e3;
-    const runGen = agentRunner.run({ operation: op, args, cwd: repoRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction });
+    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction });
     try {
       for await (const ev of runGen) {
         this.logEvent(sessionId, op, domainId, ev);
@@ -10828,7 +10821,7 @@ var WikiController = class {
           const domain = this.plugin.settings.domains.find((d) => d.id === ev.domainId);
           if (domain) {
             const existing = domain.source_paths ?? [];
-            const updated = consolidateSourcePaths(existing, ev.path, repoRoot);
+            const updated = consolidateSourcePaths(existing, ev.path, vaultRoot);
             domain.source_paths = updated;
             if (updated !== existing)
               void this.plugin.saveSettings();

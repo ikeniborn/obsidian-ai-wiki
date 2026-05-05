@@ -13,7 +13,7 @@ export async function* runIngest(
   llm: LlmClient,
   model: string,
   domains: DomainEntry[],
-  repoRoot: string,
+  vaultRoot: string,
   signal: AbortSignal,
   opts: LlmCallOptions = {},
 ): AsyncGenerator<RunEvent> {
@@ -23,7 +23,7 @@ export async function* runIngest(
     return;
   }
 
-  const absSource = isAbsolute(filePath) ? filePath : join(repoRoot, filePath);
+  const absSource = isAbsolute(filePath) ? filePath : join(vaultRoot, filePath);
   const sourceVaultPath = vaultTools.toVaultPath(absSource);
   if (!sourceVaultPath) {
     yield { kind: "error", message: `Source file ${filePath} is outside the vault.` };
@@ -40,13 +40,13 @@ export async function* runIngest(
   }
   yield { kind: "tool_result", ok: true, preview: sourceContent.slice(0, 100) };
 
-  const domain = detectDomain(absSource, domains, repoRoot);
+  const domain = detectDomain(absSource, domains, vaultRoot);
   if (!domain) {
     yield { kind: "error", message: "No domain found for this file. Configure domain-map." };
     return;
   }
 
-  const absWiki = isAbsolute(domain.wiki_folder) ? domain.wiki_folder : join(repoRoot, domain.wiki_folder);
+  const absWiki = join(vaultRoot, domain.wiki_folder);
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
     yield { kind: "error", message: `Wiki folder ${domain.wiki_folder} is outside the vault.` };
@@ -118,7 +118,7 @@ export async function* runIngest(
     await appendLog(vaultTools, wikiRoot, sourceVaultPath, domain.id, written);
     await updateIndex(vaultTools, wikiRoot, written);
 
-    const parentPath = extractParentSourcePath(absSource, repoRoot, vaultTools.vaultRoot);
+    const parentPath = extractParentSourcePath(absSource, vaultRoot);
     yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
   }
 
@@ -138,10 +138,10 @@ function buildIngestSummary(domainId: string, sourcePath: string, written: strin
   return lines.join("\n");
 }
 
-export function detectDomain(absFilePath: string, domains: DomainEntry[], repoRoot: string): DomainEntry | null {
+export function detectDomain(absFilePath: string, domains: DomainEntry[], vaultRoot: string): DomainEntry | null {
   for (const d of domains) {
     const matched = d.source_paths?.some((sp) => {
-      const abs = isAbsolute(sp) ? sp : join(repoRoot, sp);
+      const abs = isAbsolute(sp) ? sp : join(vaultRoot, sp);
       return absFilePath.startsWith(abs);
     });
     if (matched) return d;
@@ -204,14 +204,13 @@ async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
 
 export function extractParentSourcePath(
   absSource: string,
-  repoRoot: string,
   vaultRoot: string,
 ): string {
   const parentAbs = dirname(absSource);
   // Clamp: не выходить выше vault root
   const normedVault = vaultRoot.endsWith("/") ? vaultRoot : vaultRoot + "/";
   const clamped = (parentAbs + "/").startsWith(normedVault) ? parentAbs : vaultRoot;
-  const rel = relative(repoRoot, clamped);
+  const rel = relative(vaultRoot, clamped);
   return (rel || ".") + "/";
 }
 

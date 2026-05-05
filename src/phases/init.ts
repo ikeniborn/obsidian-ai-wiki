@@ -13,7 +13,6 @@ export async function* runInit(
   llm: LlmClient,
   model: string,
   domains: DomainEntry[],
-  repoRoot: string,
   vaultName: string,
   signal: AbortSignal,
   opts: LlmCallOptions = {},
@@ -97,6 +96,11 @@ export async function* runInit(
     const match = fullText.match(/\{[\s\S]*\}/);
     if (!match) throw new Error("No JSON object found in LLM response");
     entry = JSON.parse(match[0]) as DomainEntry;
+    // Normalize wiki_folder to vault-relative (strip vaults/<vaultName>/ prefix if LLM used old format)
+    const vaultPrefix = `vaults/${vaultName}/`;
+    if (entry.wiki_folder?.startsWith(vaultPrefix)) {
+      entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
+    }
     if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
   } catch (e) {
     yield { kind: "error", message: `Failed to parse domain entry: ${(e as Error).message}` };

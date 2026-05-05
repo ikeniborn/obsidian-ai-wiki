@@ -62,14 +62,9 @@ export class WikiController {
     const view = this.activeView();
     if (!view) return;
 
-    const vaultBasePath = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
-    const vaultName = this.app.vault.getName();
-    const vaultSuffix = `/vaults/${vaultName}`;
-    const repoRoot = vaultBasePath.endsWith(vaultSuffix)
-      ? vaultBasePath.slice(0, vaultBasePath.length - vaultSuffix.length)
-      : vaultBasePath;
+    const vaultRoot = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
 
-    const agentRunner = this.buildAgentRunner(repoRoot);
+    const agentRunner = this.buildAgentRunner(vaultRoot);
     const ctrl = new AbortController();
     this.current = ctrl;
 
@@ -96,7 +91,7 @@ export class WikiController {
 
     const timeoutMs = this.plugin.settings.timeouts.lint * 1000;
     const runGen = agentRunner.run({
-      operation: "chat", args: [], cwd: repoRoot,
+      operation: "chat", args: [], cwd: vaultRoot,
       signal: ctrl.signal, timeoutMs, domainId, context, chatMessages, operationHeader,
     });
 
@@ -149,13 +144,11 @@ export class WikiController {
       new Notice(i18n().ctrl.domainAddFailed(msg));
       return { ok: false, error: msg };
     }
-    const vaultName = this.app.vault.getName();
-    const vaultPrefix = `vaults/${vaultName}`;
     const wikiRelative = input.wikiFolder.trim() || `!Wiki/${id}`;
     s.domains.push({
       id,
       name: input.name.trim() || id,
-      wiki_folder: `${vaultPrefix}/${wikiRelative}`,
+      wiki_folder: wikiRelative,
       source_paths: [],
       entity_types: [],
       language_notes: "",
@@ -174,7 +167,7 @@ export class WikiController {
     return p;
   }
 
-  private buildAgentRunner(repoRoot: string): AgentRunner {
+  private buildAgentRunner(vaultRoot: string): AgentRunner {
     const adapter = this.app.vault.adapter as unknown as VaultAdapter;
     const base = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
     const manifestDir = this.plugin.manifest.dir
@@ -225,14 +218,9 @@ export class WikiController {
     const view = this.activeView();
     if (!view) return;
 
-    const vaultBasePath = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
-    const vaultName = this.app.vault.getName();
-    const vaultSuffix = `/vaults/${vaultName}`;
-    const repoRoot = vaultBasePath.endsWith(vaultSuffix)
-      ? vaultBasePath.slice(0, vaultBasePath.length - vaultSuffix.length)
-      : vaultBasePath;
+    const vaultRoot = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
 
-    const agentRunner = this.buildAgentRunner(repoRoot);
+    const agentRunner = this.buildAgentRunner(vaultRoot);
 
     const ctrl = new AbortController();
     this.current = ctrl;
@@ -249,7 +237,7 @@ export class WikiController {
 
     const opKey = op === "query-save" ? "query" : op;
     const timeoutMs = this.plugin.settings.timeouts[opKey as keyof typeof this.plugin.settings.timeouts] * 1000;
-    const runGen = agentRunner.run({ operation: op, args, cwd: repoRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction });
+    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction });
 
     try {
       for await (const ev of runGen) {
@@ -272,7 +260,7 @@ export class WikiController {
           const domain = this.plugin.settings.domains.find((d) => d.id === ev.domainId);
           if (domain) {
             const existing = domain.source_paths ?? [];
-            const updated = consolidateSourcePaths(existing, ev.path, repoRoot);
+            const updated = consolidateSourcePaths(existing, ev.path, vaultRoot);
             domain.source_paths = updated;
             if (updated !== existing) void this.plugin.saveSettings();
           }

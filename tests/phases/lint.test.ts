@@ -39,26 +39,28 @@ async function collect<T>(gen: AsyncGenerator<T>): Promise<T[]> {
   return out;
 }
 
+const VAULT_ROOT = "/vaults/Work";
+
 const domain: DomainEntry = {
   id: "work",
   name: "Work",
-  wiki_folder: "vaults/Work/!Wiki/work",
+  wiki_folder: "!Wiki/work",
   source_paths: [],
 };
 
 describe("runLint", () => {
   it("yields error when domains is empty", async () => {
-    const vt = new VaultTools(mockAdapter(), "/vault");
+    const vt = new VaultTools(mockAdapter(), VAULT_ROOT);
     const events = await collect(
-      runLint([], vt, makeLlm(""), "model", [], "/vault", new AbortController().signal),
+      runLint([], vt, makeLlm(""), "model", [], VAULT_ROOT, new AbortController().signal),
     );
     expect(events.some((e: any) => e.kind === "error")).toBe(true);
   });
 
   it("yields error when specified domain not found", async () => {
-    const vt = new VaultTools(mockAdapter(), "/vault");
+    const vt = new VaultTools(mockAdapter(), VAULT_ROOT);
     const events = await collect(
-      runLint(["unknown-domain"], vt, makeLlm(""), "model", [domain], "/vault", new AbortController().signal),
+      runLint(["unknown-domain"], vt, makeLlm(""), "model", [domain], VAULT_ROOT, new AbortController().signal),
     );
     expect(events.some((e: any) => e.kind === "error")).toBe(true);
   });
@@ -66,12 +68,12 @@ describe("runLint", () => {
   it("yields result with report for existing domain", async () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
-      list: vi.fn().mockResolvedValue({ files: ["vaults/Work/!Wiki/work/Page.md"], folders: [] }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
       read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
     });
-    const vt = new VaultTools(adapter, "/vault");
+    const vt = new VaultTools(adapter, VAULT_ROOT);
     const events = await collect(
-      runLint(["work"], vt, makeLlm("No issues found."), "model", [domain], "/vault", new AbortController().signal),
+      runLint(["work"], vt, makeLlm("No issues found."), "model", [domain], VAULT_ROOT, new AbortController().signal),
     );
     const result = events.find((e: any) => e.kind === "result") as any;
     expect(result).toBeDefined();
@@ -80,16 +82,16 @@ describe("runLint", () => {
 
   it("yields domain_updated with entity_types from second LLM call", async () => {
     const adapter = mockAdapter({
-      list: vi.fn().mockResolvedValue({ files: ["vaults/Work/!Wiki/work/Page.md"], folders: [] }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
       read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
     });
-    const vt = new VaultTools(adapter, "/vault");
+    const vt = new VaultTools(adapter, VAULT_ROOT);
     const configJson = JSON.stringify({
       entity_types: [{ type: "концепция", description: "updated", extraction_cues: ["тест"], min_mentions_for_page: 1, wiki_subfolder: "work/концепции" }],
       language_notes: "Updated notes.",
     });
     const events = await collect(
-      runLint(["work"], vt, makeLlm("Report.", configJson), "model", [domain], "/vault", new AbortController().signal),
+      runLint(["work"], vt, makeLlm("Report.", configJson), "model", [domain], VAULT_ROOT, new AbortController().signal),
     );
     const ev = events.find((e: any) => e.kind === "domain_updated") as any;
     expect(ev).toBeDefined();

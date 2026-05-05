@@ -191,14 +191,11 @@ export class LlmWikiView extends ItemView {
   private openAddDomain(): void {
     const cwd = this.plugin.controller.cwdOrEmpty();
     if (!cwd) { new Notice(i18n().view.cwdNotSet); return; }
-    // wiki_root возьмём из существующих записей или дефолт vaults/Work/!Wiki
+    // wiki_root возьмём из существующих записей или дефолт !Wiki
     const domains = this.plugin.controller.loadDomains();
     const wikiRoot = (() => {
-      const vaultName = this.plugin.app.vault.getName();
-      const vaultPrefix = `vaults/${vaultName}/`;
-      const sample = domains[0]?.wiki_folder ?? `${vaultPrefix}!Wiki/x`;
-      const rel = sample.startsWith(vaultPrefix) ? sample.slice(vaultPrefix.length) : sample;
-      return rel.replace(/\/[^/]+$/, "") || "!Wiki";
+      const sample = domains[0]?.wiki_folder ?? `!Wiki/x`;
+      return sample.replace(/\/[^/]+$/, "") || "!Wiki";
     })();
     new AddDomainModal(this.app, wikiRoot, (input) => {
       const r = this.plugin.controller.registerDomain(input);
