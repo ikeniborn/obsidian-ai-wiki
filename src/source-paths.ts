@@ -9,9 +9,9 @@ import { isAbsolute, join } from "node:path";
 export function consolidateSourcePaths(
   existing: string[],
   newPath: string,
-  repoRoot: string,
+  vaultRoot: string,
 ): string[] {
-  const toAbs = (p: string): string => (isAbsolute(p) ? p : join(repoRoot, p));
+  const toAbs = (p: string): string => (isAbsolute(p) ? p : join(vaultRoot, p));
   const normed = (p: string): string => {
     const a = toAbs(p);
     return a.endsWith("/") ? a : a + "/";
