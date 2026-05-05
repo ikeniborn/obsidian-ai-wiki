@@ -16,6 +16,7 @@ import { consolidateSourcePaths } from "./source-paths";
 export class WikiController {
   private current: AbortController | null = null;
   currentOp: { op: WikiOperation; args: string[] } | null = null;
+  private _chatSessionId: string | undefined;
   constructor(private app: App, private plugin: LlmWikiPlugin) {}
 
   isBusy(): boolean { return this.current !== null; }
@@ -64,7 +65,7 @@ export class WikiController {
 
     const vaultRoot = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
 
-    const agentRunner = this.buildAgentRunner(vaultRoot);
+    const agentRunner = this.buildAgentRunner(vaultRoot, this._chatSessionId);
     const ctrl = new AbortController();
     this.current = ctrl;
 
@@ -99,11 +100,18 @@ export class WikiController {
       for await (const ev of runGen) {
         this.logEvent(sessionId, "chat", domainId, ev);
         this.activeView()?.appendChatEvent(ev);
+        // Обновляем session_id при каждом init-событии (первый тур — получаем ID,
+        // последующие — подтверждаем что сессия жива или получаем новый ID при форке).
+        if (ev.kind === "system" && ev.sessionId) {
+          this._chatSessionId = ev.sessionId;
+        }
         if (ev.kind === "result") finalText = ev.text;
         if (ev.kind === "error") status = "error";
       }
     } catch (err) {
       status = "error";
+      // Сессия может быть невалидна (expired, --resume failed) — сбросить для следующего тура.
+      this._chatSessionId = undefined;
       finalText = i18n().ctrl.errorPrefix((err as Error).message);
       this.logEvent(sessionId, "chat", domainId, { kind: "error", message: finalText });
     } finally {
@@ -167,7 +175,7 @@ export class WikiController {
     return p;
   }
 
-  private buildAgentRunner(vaultRoot: string): AgentRunner {
+  private buildAgentRunner(vaultRoot: string, resumeSessionId?: string): AgentRunner {
     const adapter = this.app.vault.adapter as unknown as VaultAdapter;
     const base = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
     const manifestDir = this.plugin.manifest.dir
@@ -182,7 +190,7 @@ export class WikiController {
 
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     const llm = s.backend === "claude-agent"
-      ? new ClaudeCliClient({ ...s.claudeAgent, requestTimeoutSec: maxTimeoutSec, cwd: s.claudeAgent.spawnCwd || "/tmp", tmpDir })
+      ? new ClaudeCliClient({ ...s.claudeAgent, requestTimeoutSec: maxTimeoutSec, cwd: s.claudeAgent.spawnCwd || "/tmp", tmpDir, resumeSessionId })
       : new OpenAI({
           baseURL: s.nativeAgent.baseUrl,
           apiKey: s.nativeAgent.apiKey,
@@ -211,6 +219,9 @@ export class WikiController {
       new Notice(i18n().ctrl.operationRunning);
       return;
     }
+
+    // Новая операция делает предыдущий чат-контекст нерелевантным.
+    this._chatSessionId = undefined;
 
     if (this.plugin.settings.backend === "claude-agent" && !this.requireClaudeAgent()) return;
 

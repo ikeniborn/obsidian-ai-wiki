@@ -3152,8 +3152,9 @@ function parseStreamLine(raw) {
     case "system": {
       const subtype = typeof obj.subtype === "string" ? obj.subtype : "system";
       const model = typeof obj.model === "string" ? obj.model : "";
+      const sessionId = typeof obj.session_id === "string" ? obj.session_id : void 0;
       const msg = `${subtype}${model ? ` (${model})` : ""}`;
-      return { kind: "system", message: msg };
+      return { kind: "system", message: msg, sessionId };
     }
     case "assistant":
       return mapAssistant(obj);
@@ -3241,10 +3242,14 @@ var ClaudeCliClient = class {
     const LARGE_THRESHOLD = 32768;
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const tmpFiles = [];
+    const isResume = Boolean(this.cfg.resumeSessionId);
     const args = [];
     if (model)
       args.push("--model", model);
     args.push("--");
+    if (isResume) {
+      args.push("--resume", this.cfg.resumeSessionId);
+    }
     try {
       const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
       if (isLargeUser) {
@@ -3261,7 +3266,7 @@ var ClaudeCliClient = class {
       args.push("--dangerously-skip-permissions");
       if (this.cfg.allowedTools)
         args.push("--tools", this.cfg.allowedTools);
-      if (systemContent) {
+      if (!isResume && systemContent) {
         const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
         if (isLargeSys) {
           const tmpSysFile = (0, import_node_path6.join)(this.cfg.tmpDir, `llm-wiki-sys-${id}.txt`);
@@ -10590,6 +10595,7 @@ var WikiController = class {
   }
   current = null;
   currentOp = null;
+  _chatSessionId;
   isBusy() {
     return this.current !== null;
   }
@@ -10637,7 +10643,7 @@ var WikiController = class {
     if (!view)
       return;
     const vaultRoot = this.app.vault.adapter.getBasePath?.() ?? "";
-    const agentRunner = this.buildAgentRunner(vaultRoot);
+    const agentRunner = this.buildAgentRunner(vaultRoot, this._chatSessionId);
     const ctrl = new AbortController();
     this.current = ctrl;
     const startedAt = Date.now();
@@ -10673,6 +10679,9 @@ var WikiController = class {
       for await (const ev of runGen) {
         this.logEvent(sessionId, "chat", domainId, ev);
         this.activeView()?.appendChatEvent(ev);
+        if (ev.kind === "system" && ev.sessionId) {
+          this._chatSessionId = ev.sessionId;
+        }
         if (ev.kind === "result")
           finalText = ev.text;
         if (ev.kind === "error")
@@ -10680,6 +10689,7 @@ var WikiController = class {
       }
     } catch (err) {
       status = "error";
+      this._chatSessionId = void 0;
       finalText = i18n().ctrl.errorPrefix(err.message);
       this.logEvent(sessionId, "chat", domainId, { kind: "error", message: finalText });
     } finally {
@@ -10738,7 +10748,7 @@ var WikiController = class {
     }
     return p;
   }
-  buildAgentRunner(vaultRoot) {
+  buildAgentRunner(vaultRoot, resumeSessionId) {
     const adapter = this.app.vault.adapter;
     const base = this.app.vault.adapter.getBasePath?.() ?? "";
     const manifestDir = this.plugin.manifest.dir ?? (0, import_node_path8.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
@@ -10749,7 +10759,7 @@ var WikiController = class {
     const domains = this.plugin.settings.domains ?? [];
     const s = this.plugin.settings;
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
-    const llm = s.backend === "claude-agent" ? new ClaudeCliClient({ ...s.claudeAgent, requestTimeoutSec: maxTimeoutSec, cwd: s.claudeAgent.spawnCwd || "/tmp", tmpDir }) : new OpenAI({
+    const llm = s.backend === "claude-agent" ? new ClaudeCliClient({ ...s.claudeAgent, requestTimeoutSec: maxTimeoutSec, cwd: s.claudeAgent.spawnCwd || "/tmp", tmpDir, resumeSessionId }) : new OpenAI({
       baseURL: s.nativeAgent.baseUrl,
       apiKey: s.nativeAgent.apiKey,
       timeout: maxTimeoutSec * 1e3,
@@ -10776,6 +10786,7 @@ var WikiController = class {
       new import_obsidian5.Notice(i18n().ctrl.operationRunning);
       return;
     }
+    this._chatSessionId = void 0;
     if (this.plugin.settings.backend === "claude-agent" && !this.requireClaudeAgent())
       return;
     await this.ensureView();
