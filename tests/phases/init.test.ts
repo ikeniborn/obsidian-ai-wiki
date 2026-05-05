@@ -38,10 +38,11 @@ async function collect<T>(gen: AsyncGenerator<T>): Promise<T[]> {
 const existingDomain: DomainEntry = {
   id: "existing",
   name: "Existing",
-  wiki_folder: "vaults/Test/!Wiki/existing",
+  wiki_folder: "!Wiki/existing",
   source_paths: [],
 };
 
+// LLM may return old-format wiki_folder — normalization should strip prefix
 const validDomainJson = JSON.stringify({
   id: "newdomain",
   name: "New Domain",
@@ -55,7 +56,7 @@ describe("runInit", () => {
   it("yields error when domainId is empty", async () => {
     const vt = new VaultTools(mockAdapter(), "/vault");
     const events = await collect(
-      runInit([], vt, makeLlm("{}"), "model", [], "/vault", "TestVault", new AbortController().signal),
+      runInit([], vt, makeLlm("{}"), "model", [], "TestVault", new AbortController().signal),
     );
     expect(events.some((e: any) => e.kind === "error")).toBe(true);
   });
@@ -69,7 +70,6 @@ describe("runInit", () => {
         makeLlm("{}"),
         "model",
         [existingDomain],
-        "/vault",
         "TestVault",
         new AbortController().signal,
       ),
@@ -89,7 +89,6 @@ describe("runInit", () => {
         makeLlm(validDomainJson),
         "model",
         [],
-        "/vault",
         "TestVault",
         new AbortController().signal,
       ),
@@ -100,7 +99,7 @@ describe("runInit", () => {
     expect(events.some((e: any) => e.kind === "domain_created")).toBe(false);
   });
 
-  it("yields domain_created event with parsed entry on success", async () => {
+  it("yields domain_created with vault-relative wiki_folder (normalization applied)", async () => {
     const adapter = mockAdapter({
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
@@ -112,7 +111,6 @@ describe("runInit", () => {
         makeLlm(validDomainJson),
         "model",
         [],
-        "/vault",
         "TestVault",
         new AbortController().signal,
       ),
@@ -120,7 +118,7 @@ describe("runInit", () => {
     const domainCreated = events.find((e: any) => e.kind === "domain_created") as any;
     expect(domainCreated).toBeDefined();
     expect(domainCreated.entry.id).toBe("newdomain");
-    expect(domainCreated.entry.wiki_folder).toBe("vaults/TestVault/!Wiki/newdomain");
+    expect(domainCreated.entry.wiki_folder).toBe("!Wiki/newdomain");
   });
 
   it("yields result event after domain_created", async () => {
@@ -135,7 +133,6 @@ describe("runInit", () => {
         makeLlm(validDomainJson),
         "model",
         [],
-        "/vault",
         "TestVault",
         new AbortController().signal,
       ),
@@ -151,7 +148,7 @@ describe("runInit — ensureRootFiles", () => {
     const adapter = mockAdapter({ exists: vi.fn().mockResolvedValue(false) });
     const vt = new VaultTools(adapter, "/vault");
     await collect(
-      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "/vault", "TestVault", new AbortController().signal),
+      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "TestVault", new AbortController().signal),
     );
     const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
     const schemaCall = writeCalls.find(([path]) => path.endsWith("_schema.md"));
@@ -163,7 +160,7 @@ describe("runInit — ensureRootFiles", () => {
     const adapter = mockAdapter({ exists: vi.fn().mockResolvedValue(false) });
     const vt = new VaultTools(adapter, "/vault");
     await collect(
-      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "/vault", "TestVault", new AbortController().signal),
+      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "TestVault", new AbortController().signal),
     );
     const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
     const indexCall = writeCalls.find(([path]) => path.endsWith("_index.md"));
@@ -175,7 +172,7 @@ describe("runInit — ensureRootFiles", () => {
     const adapter = mockAdapter({ exists: vi.fn().mockResolvedValue(false) });
     const vt = new VaultTools(adapter, "/vault");
     await collect(
-      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "/vault", "TestVault", new AbortController().signal),
+      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "TestVault", new AbortController().signal),
     );
     const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
     const logCall = writeCalls.find(([path]) => path.endsWith("_log.md"));
@@ -187,7 +184,7 @@ describe("runInit — ensureRootFiles", () => {
     const adapter = mockAdapter({ exists: vi.fn().mockResolvedValue(true) });
     const vt = new VaultTools(adapter, "/vault");
     await collect(
-      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "/vault", "TestVault", new AbortController().signal),
+      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "TestVault", new AbortController().signal),
     );
     const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
     const schemaWrite = writeCalls.find(([path]) => path.endsWith("_schema.md"));

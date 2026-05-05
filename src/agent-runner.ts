@@ -82,7 +82,7 @@ export class AgentRunner {
         break;
       }
       case "init":
-        yield* runInit(req.args, this.vaultTools, this.llm, model, domains, repoRoot, this.vaultName, req.signal, opts);
+        yield* runInit(req.args, this.vaultTools, this.llm, model, domains, this.vaultName, req.signal, opts);
         break;
       default: {
         const start = Date.now();
