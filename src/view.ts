@@ -191,7 +191,6 @@ export class LlmWikiView extends ItemView {
   private openAddDomain(): void {
     const cwd = this.plugin.controller.cwdOrEmpty();
     if (!cwd) { new Notice(i18n().view.cwdNotSet); return; }
-    // wiki_root возьмём из существующих записей или дефолт !Wiki
     const domains = this.plugin.controller.loadDomains();
     const wikiRoot = (() => {
       const sample = domains[0]?.wiki_folder ?? `!Wiki/x`;
@@ -200,11 +199,33 @@ export class LlmWikiView extends ItemView {
     })();
     new AddDomainModal(this.app, wikiRoot, (input) => {
       const r = this.plugin.controller.registerDomain(input);
-      if (r.ok) {
-        this.refreshDomains();
-        this.domainSelect.value = input.id;
+      if (!r.ok) return;
+      this.refreshDomains();
+      this.domainSelect.value = input.id;
+
+      if (!input.sourcePaths.length) {
         void this.plugin.controller.init(input.id, false);
+        return;
       }
+
+      const T = i18n().modal;
+      const allFiles = this.app.vault.getFiles();
+      const mdFiles = allFiles.filter(
+        (f) => f.extension === "md" &&
+          input.sourcePaths.some((p) => f.path.startsWith(p)),
+      );
+
+      if (!mdFiles.length) {
+        void this.plugin.controller.init(input.id, false);
+        return;
+      }
+
+      new ConfirmModal(
+        this.app,
+        T.initConfirmTitle,
+        [T.initConfirmBody(mdFiles.length, input.sourcePaths.length)],
+        () => void this.plugin.controller.init(input.id, false, input.sourcePaths),
+      ).open();
     }).open();
   }
 

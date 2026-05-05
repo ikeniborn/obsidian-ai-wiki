@@ -12,6 +12,7 @@ import { ClaudeCliClient } from "./claude-cli-client";
 import OpenAI from "openai";
 import { i18n } from "./i18n";
 import { consolidateSourcePaths } from "./source-paths";
+import { FileErrorModal } from "./modals";
 
 export class WikiController {
   private current: AbortController | null = null;
@@ -137,9 +138,17 @@ export class WikiController {
     this.activeView()?.finishChat({ role: "assistant", content: finalText }, status !== "done");
   }
 
-  async init(domain: string, dryRun: boolean): Promise<void> {
+  async init(domain: string, dryRun: boolean, sourcePaths?: string[]): Promise<void> {
     const args = dryRun ? [domain, "--dry-run"] : [domain];
-    await this.dispatch("init", args);
+    if (sourcePaths?.length) args.push("--sources", ...sourcePaths);
+    const onFileError: import("./types").OnFileError | undefined = sourcePaths?.length
+      ? (file, err, canRetry) => {
+          const modal = new FileErrorModal(this.app, file, err, canRetry);
+          modal.open();
+          return modal.result;
+        }
+      : undefined;
+    await this.dispatch("init", args, undefined, undefined, undefined, onFileError);
   }
 
 
@@ -167,7 +176,7 @@ export class WikiController {
       id,
       name: input.name.trim() || id,
       wiki_folder: wikiRelative,
-      source_paths: [],
+      source_paths: input.sourcePaths ?? [],
       entity_types: [],
       language_notes: "",
     });
@@ -230,7 +239,7 @@ export class WikiController {
     } catch { /* не блокируем операцию */ }
   }
 
-  private async dispatch(op: WikiOperation, args: string[], domainId?: string, context?: string, instruction?: string): Promise<void> {
+  private async dispatch(op: WikiOperation, args: string[], domainId?: string, context?: string, instruction?: string, onFileError?: import("./types").OnFileError): Promise<void> {
     if (this.isBusy()) {
       new Notice(i18n().ctrl.operationRunning);
       return;
@@ -264,7 +273,7 @@ export class WikiController {
 
     const opKey = op === "query-save" ? "query" : op;
     const timeoutMs = this.plugin.settings.timeouts[opKey as keyof typeof this.plugin.settings.timeouts] * 1000;
-    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction });
+    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError });
 
     try {
       for await (const ev of runGen) {
