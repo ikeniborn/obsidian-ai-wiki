@@ -23,7 +23,7 @@ __export(main_exports, {
   default: () => LlmWikiPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_node_path7 = require("node:path");
+var import_node_path8 = require("node:path");
 var import_obsidian6 = require("obsidian");
 
 // src/types.ts
@@ -137,8 +137,8 @@ var en = {
     h3_devmode: "Developer",
     devMode_enabled_name: "Dev mode",
     devMode_enabled_desc: "Enable dev logger and evaluator after each operation.",
-    devMode_logPath_name: "Dev log directory",
-    devMode_logPath_desc: "Directory for dev logs. File name: dev.jsonl",
+    devMode_logDir_name: "Dev log directory",
+    devMode_logDir_desc: "Directory for dev logs. File name: dev.jsonl",
     devMode_evaluatorModel_name: "Evaluator model",
     devMode_evaluatorModel_desc: "Model name for the evaluator (same backend)."
   },
@@ -281,8 +281,8 @@ var ru = {
     h3_devmode: "\u0420\u0430\u0437\u0440\u0430\u0431\u043E\u0442\u043A\u0430",
     devMode_enabled_name: "Dev \u0440\u0435\u0436\u0438\u043C",
     devMode_enabled_desc: "\u0412\u043A\u043B\u044E\u0447\u0438\u0442\u044C dev-\u043B\u043E\u0433\u0433\u0435\u0440 \u0438 \u043E\u0446\u0435\u043D\u0449\u0438\u043A \u043F\u043E\u0441\u043B\u0435 \u043A\u0430\u0436\u0434\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.",
-    devMode_logPath_name: "\u0414\u0438\u0440\u0435\u043A\u0442\u043E\u0440\u0438\u044F dev-\u043B\u043E\u0433\u043E\u0432",
-    devMode_logPath_desc: "\u0414\u0438\u0440\u0435\u043A\u0442\u043E\u0440\u0438\u044F \u0434\u043B\u044F dev-\u043B\u043E\u0433\u043E\u0432. \u0418\u043C\u044F \u0444\u0430\u0439\u043B\u0430: dev.jsonl",
+    devMode_logDir_name: "\u0414\u0438\u0440\u0435\u043A\u0442\u043E\u0440\u0438\u044F dev-\u043B\u043E\u0433\u043E\u0432",
+    devMode_logDir_desc: "\u0414\u0438\u0440\u0435\u043A\u0442\u043E\u0440\u0438\u044F \u0434\u043B\u044F dev-\u043B\u043E\u0433\u043E\u0432. \u0418\u043C\u044F \u0444\u0430\u0439\u043B\u0430: dev.jsonl",
     devMode_evaluatorModel_name: "\u041C\u043E\u0434\u0435\u043B\u044C \u043E\u0446\u0435\u043D\u0449\u0438\u043A\u0430",
     devMode_evaluatorModel_desc: "\u0418\u043C\u044F \u043C\u043E\u0434\u0435\u043B\u0438 \u0434\u043B\u044F \u043E\u0446\u0435\u043D\u0449\u0438\u043A\u0430 (\u0442\u043E\u0442 \u0436\u0435 \u0431\u044D\u043A\u0435\u043D\u0434)."
   },
@@ -425,8 +425,8 @@ var es = {
     h3_devmode: "Desarrollo",
     devMode_enabled_name: "Modo dev",
     devMode_enabled_desc: "Activar el registrador dev y el evaluador tras cada operaci\xF3n.",
-    devMode_logPath_name: "Directorio de log dev",
-    devMode_logPath_desc: "Directorio para logs dev. Nombre del archivo: dev.jsonl",
+    devMode_logDir_name: "Directorio de log dev",
+    devMode_logDir_desc: "Directorio para logs dev. Nombre del archivo: dev.jsonl",
     devMode_evaluatorModel_name: "Modelo evaluador",
     devMode_evaluatorModel_desc: "Nombre del modelo para el evaluador (mismo backend)."
   },
@@ -1009,7 +1009,7 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_logPath_name).setDesc(T.settings.devMode_logPath_desc).addText(
+    new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_logDir_name).setDesc(T.settings.devMode_logDir_desc).addText(
       (t) => t.setPlaceholder("/tmp").setValue(s.devMode.logDir).onChange(async (v) => {
         s.devMode.logDir = v.trim();
         await this.plugin.saveSettings();
@@ -1681,7 +1681,7 @@ function translateSystemEvent(message) {
 // src/controller.ts
 var import_obsidian5 = require("obsidian");
 var import_node_fs2 = require("node:fs");
-var import_node_path6 = require("node:path");
+var import_node_path7 = require("node:path");
 
 // src/domain-map.ts
 function validateDomainId(id) {
@@ -1860,14 +1860,8 @@ async function* runIngest(args, vaultTools, llm, model, domains, repoRoot, signa
   if (written.length > 0) {
     await appendLog(vaultTools, wikiRoot, sourceVaultPath, domain.id, written);
     await updateIndex(vaultTools, wikiRoot, written);
-    const topPath = extractTopLevelSourcePath(absSource, repoRoot);
-    if (topPath) {
-      const norm = (p) => p.replace(/\/$/, "");
-      const alreadyCovered = (domain.source_paths ?? []).some((sp) => norm(sp) === norm(topPath));
-      if (!alreadyCovered) {
-        yield { kind: "source_path_added", domainId: domain.id, path: topPath };
-      }
-    }
+    const parentPath = extractParentSourcePath(absSource, repoRoot, vaultTools.vaultRoot);
+    yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
   }
   yield { kind: "result", durationMs: Date.now() - start, text: resultText };
 }
@@ -1946,12 +1940,12 @@ async function tryRead(vaultTools, path2) {
     return "";
   }
 }
-function extractTopLevelSourcePath(absSource, repoRoot) {
-  const rel = (0, import_node_path.relative)(repoRoot, absSource);
-  const parts = rel.split("/");
-  if (parts.length < 4)
-    return null;
-  return `${parts[0]}/${parts[1]}/${parts[2]}/`;
+function extractParentSourcePath(absSource, repoRoot, vaultRoot) {
+  const parentAbs = (0, import_node_path.dirname)(absSource);
+  const normedVault = vaultRoot.endsWith("/") ? vaultRoot : vaultRoot + "/";
+  const clamped = (parentAbs + "/").startsWith(normedVault) ? parentAbs : vaultRoot;
+  const rel = (0, import_node_path.relative)(repoRoot, clamped);
+  return (rel || ".") + "/";
 }
 function buildEntityTypesBlock(domain) {
   if (!domain.entity_types?.length)
@@ -2930,6 +2924,9 @@ var VaultTools = class {
   constructor(adapter, basePath) {
     this.adapter = adapter;
     this.basePath = basePath;
+  }
+  get vaultRoot() {
+    return this.basePath;
   }
   async read(vaultPath) {
     return this.adapter.read(vaultPath);
@@ -10377,6 +10374,22 @@ OpenAI.Containers = Containers;
 OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
+// src/source-paths.ts
+var import_node_path6 = require("node:path");
+function consolidateSourcePaths(existing, newPath, repoRoot) {
+  const toAbs = (p) => (0, import_node_path6.isAbsolute)(p) ? p : (0, import_node_path6.join)(repoRoot, p);
+  const normed = (p) => {
+    const a = toAbs(p);
+    return a.endsWith("/") ? a : a + "/";
+  };
+  const newNormed = normed(newPath);
+  if (existing.some((sp) => newNormed.startsWith(normed(sp)))) {
+    return existing;
+  }
+  const filtered = existing.filter((sp) => !normed(sp).startsWith(newNormed));
+  return [...filtered, newPath];
+}
+
 // src/controller.ts
 var WikiController = class {
   constructor(app, plugin) {
@@ -10553,7 +10566,7 @@ var WikiController = class {
     try {
       const stat = (0, import_node_fs2.existsSync)(logPath) ? (0, import_node_fs2.statSync)(logPath) : null;
       if (stat?.isDirectory() || !logPath.includes(".") && !logPath.endsWith("/")) {
-        logPath = (0, import_node_path6.join)(logPath, "agent.jsonl");
+        logPath = (0, import_node_path7.join)(logPath, "agent.jsonl");
       }
       const line = JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), session: sessionId, op, domainId, event: ev }) + "\n";
       (0, import_node_fs2.appendFileSync)(logPath, line, "utf-8");
@@ -10612,12 +10625,11 @@ var WikiController = class {
         if (ev.kind === "source_path_added") {
           const domain = this.plugin.settings.domains.find((d) => d.id === ev.domainId);
           if (domain) {
-            if (!domain.source_paths)
-              domain.source_paths = [];
-            if (!domain.source_paths.includes(ev.path)) {
-              domain.source_paths.push(ev.path);
+            const existing = domain.source_paths ?? [];
+            const updated = consolidateSourcePaths(existing, ev.path, repoRoot);
+            domain.source_paths = updated;
+            if (updated !== existing)
               void this.plugin.saveSettings();
-            }
           }
         }
         this.collectStep(ev, steps);
@@ -10690,9 +10702,9 @@ var WikiController = class {
     return view instanceof LlmWikiView ? view : null;
   }
   toVaultPath(vaultDir, savedPath) {
-    const abs = (0, import_node_path6.isAbsolute)(savedPath) ? savedPath : (0, import_node_path6.join)(vaultDir, savedPath);
-    const rel = (0, import_node_path6.relative)(vaultDir, abs);
-    if (rel.startsWith("..") || (0, import_node_path6.isAbsolute)(rel))
+    const abs = (0, import_node_path7.isAbsolute)(savedPath) ? savedPath : (0, import_node_path7.join)(vaultDir, savedPath);
+    const rel = (0, import_node_path7.relative)(vaultDir, abs);
+    if (rel.startsWith("..") || (0, import_node_path7.isAbsolute)(rel))
       return null;
     return rel;
   }
@@ -10831,7 +10843,7 @@ var LlmWikiPlugin = class extends import_obsidian6.Plugin {
     }
     const devData = data?.devMode;
     if (devData?.logPath !== void 0 && devData?.logDir === void 0) {
-      this.settings.devMode.logDir = devData.logPath ? (0, import_node_path7.dirname)(devData.logPath) : "";
+      this.settings.devMode.logDir = devData.logPath ? (0, import_node_path8.dirname)(devData.logPath) : "";
     }
   }
   async saveSettings() {
