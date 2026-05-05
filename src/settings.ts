@@ -320,9 +320,9 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       .setName(T.settings.devMode_logPath_name)
       .setDesc(T.settings.devMode_logPath_desc)
       .addText((t) =>
-        t.setPlaceholder("/tmp/llm-wiki-dev.jsonl")
-          .setValue(s.devMode.logPath)
-          .onChange(async (v) => { s.devMode.logPath = v.trim(); await this.plugin.saveSettings(); }),
+        t.setPlaceholder("/tmp")
+          .setValue(s.devMode.logDir)
+          .onChange(async (v) => { s.devMode.logDir = v.trim(); await this.plugin.saveSettings(); }),
       );
 
     new Setting(containerEl)
