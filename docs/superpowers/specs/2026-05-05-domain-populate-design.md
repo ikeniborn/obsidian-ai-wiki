@@ -7,7 +7,7 @@
 
 При добавлении домена сейчас создаётся пустой `DomainEntry` с `source_paths: []`, после чего запускается `init` (LLM сэмплирует vault и генерирует `entity_types`). Source paths не указываются, wiki не наполняется.
 
-Цель: добавить в форму создания домена список папок-источников и автоматически запускать правильную последовательность: **bootstrap → init**, где расширенный `init` использует `source_paths` для наполнения wiki.
+Цель: добавить в форму создания домена список папок-источников и автоматически запускать `init`, который сам изучает источники, формирует описание домена с сущностями и создаёт wiki-страницы — всё в одной операции.
 
 ---
 
@@ -53,14 +53,11 @@ registerDomain(input)  // сохраняет домен с source_paths
        подсчитать .md файлы рекурсивно во всех папках
        показать ConfirmModal:
          "Найдено N файлов в M папках. Запустить инициализацию домена '{id}'?"
-         [Запустить] → controller.bootstrap(domainId)
-                       controller.init(domainId, false)   // расширенный init
-         [Пропустить] → controller.init(domainId, false)  // как сейчас
+         [Запустить] → controller.init(domainId, false)   // расширенный init
+         [Пропустить] → controller.init(domainId, false)  // как сейчас (сэмплирование vault)
 ```
 
 Подсчёт файлов: `app.vault.getFiles().filter(f => f.extension === 'md' && sourcePaths.some(p => f.path.startsWith(p)))`
-
-Bootstrap создаёт структуру wiki-папки если её нет (`wiki_folder`, `_schema.md`, `_index.md`). Init уже умеет работать после bootstrap.
 
 ---
 
@@ -68,7 +65,7 @@ Bootstrap создаёт структуру wiki-папки если её нет
 
 Текущее поведение: сэмплирует случайные файлы из vault → LLM генерирует `entity_types` + `language_notes`.
 
-**Новое поведение при наличии `source_paths`:**
+**Новое поведение при наличии `source_paths`** — две фазы внутри одной операции:
 
 ```
 runInit(req, vaultTools, llm, domain)
@@ -79,19 +76,21 @@ runInit(req, vaultTools, llm, domain)
        glob .md файлов рекурсивно из каждой папки в source_paths
        emit: init_start { totalFiles: N }
        │
+       // Фаза 1: изучение источников
+       прочитать все файлы (или репрезентативную выборку при N > порога)
+       LLM: проанализировать содержимое → сформировать entity_types + language_notes
+       emit: domain_updated { patch }   // описание домена готово
+       │
+       // Фаза 2: создание wiki-страниц
        for each file:
          emit: file_start { file, index, total }
-         прочитать файл
-         LLM: извлечь сущности → записать wiki-страницы
+         LLM: извлечь сущности из файла → записать wiki-страницы
          emit: file_done { file }
          on error:
            choice = await onFileError(file, error, canRetry)
            'skip'  → continue
            'retry' → повторить (один раз); если снова ошибка → loop без retry
            'stop'  → return
-       │
-       LLM: на основе обработанных файлов сформировать entity_types + language_notes
-       emit: domain_updated { patch }
 ```
 
 **`onFileError` callback** передаётся через `RunRequest`:
@@ -164,5 +163,6 @@ Promise-based Modal:
 
 - Операция `ingest` (одиночная) — без изменений
 - Операция `lint` — не запускается при создании домена
-- Single-flight guard — не нарушается, bootstrap и init — отдельные последовательные операции
+- Single-flight guard — не нарушается, init — одна операция
 - Новых фаз не добавляется
+- Bootstrap как отдельный шаг отсутствует — init сам создаёт структуру wiki при необходимости
