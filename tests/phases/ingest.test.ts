@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runIngest, extractTopLevelSourcePath } from "../../src/phases/ingest";
+import { runIngest, extractParentSourcePath } from "../../src/phases/ingest";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain-map";
@@ -39,15 +39,15 @@ const domain: DomainEntry = {
   source_paths: ["vaults/Work/Sources"],
 };
 
-describe("extractTopLevelSourcePath", () => {
-  it("extracts vaults/<vault>/<folder>/ from deep path", () => {
-    expect(extractTopLevelSourcePath("/root/vaults/Work/ИИ/sub/file.md", "/root")).toBe("vaults/Work/ИИ/");
+describe("extractParentSourcePath", () => {
+  it("returns direct parent from deep path", () => {
+    expect(extractParentSourcePath("/root/vaults/Work/ИИ/sub/file.md", "/root", "/root")).toBe("vaults/Work/ИИ/sub/");
   });
-  it("extracts from one-level deep path", () => {
-    expect(extractTopLevelSourcePath("/root/vaults/Work/ИИ/file.md", "/root")).toBe("vaults/Work/ИИ/");
+  it("returns direct parent from one-level deep path", () => {
+    expect(extractParentSourcePath("/root/vaults/Work/ИИ/file.md", "/root", "/root")).toBe("vaults/Work/ИИ/");
   });
-  it("returns null for file directly in vault root", () => {
-    expect(extractTopLevelSourcePath("/root/vaults/Work/file.md", "/root")).toBeNull();
+  it("returns vault root when file is directly in vault", () => {
+    expect(extractParentSourcePath("/root/file.md", "/root", "/root")).toBe("./");
   });
 });
 
@@ -95,7 +95,7 @@ describe("runIngest", () => {
     );
   });
 
-  it("yields source_path_added when new top-level folder encountered", async () => {
+  it("yields source_path_added when new parent folder encountered", async () => {
     const domainWithoutPath: DomainEntry = { ...domain, source_paths: [] };
     const adapter = mockAdapter({
       read: vi.fn().mockResolvedValue("source text"),
@@ -118,11 +118,15 @@ describe("runIngest", () => {
     );
     const ev = events.find((e: any) => e.kind === "source_path_added") as any;
     expect(ev).toBeDefined();
-    expect(ev.path).toBe("vaults/Work/ИИ/");
+    expect(ev.path).toBe("vaults/Work/ИИ/subfolder/");
     expect(ev.domainId).toBe("work");
   });
 
-  it("does not yield source_path_added when path already in source_paths", async () => {
+  it("yields source_path_added with direct parent even if ancestor path exists", async () => {
+    // Domain has source_paths: ["vaults/Work/Sources"]
+    // File is at: /workspace/vault/vaults/Work/Sources/doc.md
+    // Direct parent: vaults/Work/Sources/
+    // Should yield with the direct parent path (consolidation happens in controller)
     const adapter = mockAdapter({
       read: vi.fn().mockResolvedValue("source text"),
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
@@ -142,7 +146,10 @@ describe("runIngest", () => {
         new AbortController().signal,
       ),
     );
-    expect(events.some((e: any) => e.kind === "source_path_added")).toBe(false);
+    const ev = events.find((e: any) => e.kind === "source_path_added") as any;
+    expect(ev).toBeDefined();
+    expect(ev.path).toBe("vaults/Work/Sources/");
+    expect(ev.domainId).toBe("work");
   });
 
   it("yields result with count=0 when LLM returns empty array", async () => {
