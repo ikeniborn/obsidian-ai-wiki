@@ -30,15 +30,16 @@ export async function* runInit(
   }
 
   const existing = domains.find((d) => d.id === domainId);
-  if (existing?.entity_types?.length) {
-    yield { kind: "error", message: `Domain "${domainId}" already initialised. Use Lint to update entity_types.` };
-    return;
-  }
 
   if (sourcePaths.length) {
     yield* runInitWithSources(
       domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError,
     );
+    return;
+  }
+
+  if (existing?.entity_types?.length) {
+    yield { kind: "error", message: `Domain "${domainId}" already initialised. Use Lint to update entity_types.` };
     return;
   }
 
@@ -255,14 +256,6 @@ async function* runInitWithSources(
     source_paths: sourcePaths,
   };
 
-  yield { kind: "tool_use", name: existing ? "UpdateDomain" : "SaveDomain", input: { id: domainId } };
-  if (existing) {
-    yield { kind: "domain_updated", domainId, patch: { entity_types: entry.entity_types, language_notes: entry.language_notes } };
-  } else {
-    yield { kind: "domain_created", entry: { ...entry, source_paths: sourcePaths } };
-  }
-  yield { kind: "tool_result", ok: true };
-
   if (dryRun) {
     yield {
       kind: "result",
@@ -271,6 +264,14 @@ async function* runInitWithSources(
     };
     return;
   }
+
+  yield { kind: "tool_use", name: existing ? "UpdateDomain" : "SaveDomain", input: { id: domainId } };
+  if (existing) {
+    yield { kind: "domain_updated", domainId, patch: { entity_types: entry.entity_types, language_notes: entry.language_notes } };
+  } else {
+    yield { kind: "domain_created", entry: { ...entry, source_paths: sourcePaths } };
+  }
+  yield { kind: "tool_result", ok: true };
 
   yield { kind: "assistant_text", delta: `\nCreating wiki pages from ${sourceFiles.length} source files...\n` };
 
