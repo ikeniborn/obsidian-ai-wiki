@@ -7,8 +7,14 @@ vi.mock("node:readline", async (importOriginal) => {
   const orig = await importOriginal<typeof import("node:readline")>();
   return orig;
 });
+vi.mock("node:fs", () => ({
+  mkdirSync: vi.fn(),
+  writeFileSync: vi.fn(),
+  unlinkSync: vi.fn(),
+}));
 
 import { spawn } from "node:child_process";
+import { mkdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { ClaudeCliClient } from "../src/claude-cli-client";
 
 function makeMockProcess(lines: string[]) {
@@ -30,7 +36,7 @@ function makeMockProcess(lines: string[]) {
   return proc;
 }
 
-const cfg = { iclaudePath: "/usr/bin/claude", model: "sonnet", maxTokens: 1024, requestTimeoutSec: 30 };
+const cfg = { iclaudePath: "/usr/bin/claude", model: "sonnet", maxTokens: 1024, requestTimeoutSec: 30, tmpDir: "/plugin/tmp" };
 
 describe("ClaudeCliClient", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -137,5 +143,88 @@ describe("ClaudeCliClient", () => {
 
     await createPromise;
     expect(proc.kill).toHaveBeenCalledWith("SIGTERM");
+  });
+
+  it("uses --append-system-prompt-file when userText exceeds 32KB", async () => {
+    (spawn as any).mockReturnValue(makeMockProcess([]));
+
+    const client = new ClaudeCliClient(cfg);
+    const largeText = "x".repeat(33_000); // > 32 768 bytes
+
+    await client.chat.completions.create(
+      { model: "sonnet", messages: [{ role: "user", content: largeText }], stream: false } as any,
+    );
+
+    const args: string[] = (spawn as any).mock.calls[0][1];
+    expect(args).toContain("--append-system-prompt-file");
+    const pIdx = args.indexOf("-p");
+    expect(args[pIdx + 1]).toBe(".");
+
+    expect(writeFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("llm-wiki-usr-"),
+      largeText,
+      "utf-8",
+    );
+
+    expect(unlinkSync).toHaveBeenCalledWith(
+      expect.stringContaining("llm-wiki-usr-"),
+    );
+  });
+
+  it("uses --system-prompt-file when systemContent exceeds 32KB", async () => {
+    (spawn as any).mockReturnValue(makeMockProcess([]));
+
+    const client = new ClaudeCliClient(cfg);
+    const largeSystem = "s".repeat(33_000);
+
+    await client.chat.completions.create(
+      {
+        model: "sonnet",
+        messages: [
+          { role: "system", content: largeSystem },
+          { role: "user", content: "hi" },
+        ],
+        stream: false,
+      } as any,
+    );
+
+    const args: string[] = (spawn as any).mock.calls[0][1];
+    expect(args).toContain("--system-prompt-file");
+    expect(args).not.toContain("--system-prompt");
+
+    expect(writeFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("llm-wiki-sys-"),
+      largeSystem,
+      "utf-8",
+    );
+
+    expect(unlinkSync).toHaveBeenCalledWith(
+      expect.stringContaining("llm-wiki-sys-"),
+    );
+  });
+
+  it("keeps small userText and systemContent inline in argv", async () => {
+    (spawn as any).mockReturnValue(makeMockProcess([]));
+
+    const client = new ClaudeCliClient(cfg);
+
+    await client.chat.completions.create(
+      {
+        model: "sonnet",
+        messages: [
+          { role: "system", content: "be helpful" },
+          { role: "user", content: "short question" },
+        ],
+        stream: false,
+      } as any,
+    );
+
+    const args: string[] = (spawn as any).mock.calls[0][1];
+    const pIdx = args.indexOf("-p");
+    expect(args[pIdx + 1]).toBe("short question");
+    expect(args).toContain("--system-prompt");
+    expect(args).not.toContain("--system-prompt-file");
+    expect(args).not.toContain("--append-system-prompt-file");
+    expect(writeFileSync).not.toHaveBeenCalled();
   });
 });
