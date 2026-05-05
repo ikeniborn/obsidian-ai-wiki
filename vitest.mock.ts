@@ -22,7 +22,30 @@ export const Platform = {
 
 export class Notice {}
 
-export class Modal {}
+function makeEl() {
+  const el: any = {
+    empty: () => {},
+    createEl: (_tag: string, opts?: any) => makeElWithText(opts?.text ?? ""),
+    createDiv: (_opts?: any) => makeEl(),
+    addClass: () => {},
+    removeClass: () => {},
+    textContent: "",
+    value: "",
+    rows: 0,
+    addEventListener: () => {},
+  };
+  return el;
+}
+function makeElWithText(text: string) {
+  const el = makeEl();
+  el.textContent = text;
+  return el;
+}
+
+export class Modal {
+  contentEl = makeEl();
+  close() {}
+}
 
 export class ItemView {}
 

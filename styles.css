@@ -99,3 +99,113 @@
 .llm-wiki-monospace {
   font-family: var(--font-monospace);
 }
+
+/* EditDomainModal — entity types cards */
+.llm-wiki-et-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 12px 0 6px;
+}
+.llm-wiki-et-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-normal);
+}
+.llm-wiki-et-card {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+.llm-wiki-et-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--background-secondary);
+}
+.llm-wiki-et-card-type {
+  font-weight: 600;
+  color: var(--text-accent);
+}
+.llm-wiki-et-card-subfolder {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-monospace);
+}
+.llm-wiki-et-card-body {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.llm-wiki-et-card-desc {
+  margin: 0 0 4px;
+  color: var(--text-normal);
+}
+.llm-wiki-et-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.llm-wiki-et-card-tag {
+  background: var(--background-modifier-form-field);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.llm-wiki-et-card-meta {
+  display: block;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+/* EditDomainModal — source paths list */
+.llm-wiki-sp-header {
+  margin: 12px 0 6px;
+}
+.llm-wiki-sp-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-normal);
+}
+.llm-wiki-sp-list {
+  margin-bottom: 4px;
+}
+.llm-wiki-sp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.llm-wiki-sp-path {
+  flex: 1;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-normal);
+}
+.llm-wiki-sp-remove {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.llm-wiki-sp-add-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.llm-wiki-sp-input {
+  flex: 1;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+}
