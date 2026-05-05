@@ -258,12 +258,10 @@ export class WikiController {
         if (ev.kind === "source_path_added") {
           const domain = this.plugin.settings.domains.find((d) => d.id === ev.domainId);
           if (domain) {
-            domain.source_paths = consolidateSourcePaths(
-              domain.source_paths ?? [],
-              ev.path,
-              repoRoot,
-            );
-            void this.plugin.saveSettings();
+            const existing = domain.source_paths ?? [];
+            const updated = consolidateSourcePaths(existing, ev.path, repoRoot);
+            domain.source_paths = updated;
+            if (updated !== existing) void this.plugin.saveSettings();
           }
         }
         this.collectStep(ev, steps);
