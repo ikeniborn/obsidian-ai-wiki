@@ -23,6 +23,7 @@ __export(main_exports, {
   default: () => LlmWikiPlugin
 });
 module.exports = __toCommonJS(main_exports);
+var import_node_path7 = require("node:path");
 var import_obsidian6 = require("obsidian");
 
 // src/types.ts
@@ -65,7 +66,7 @@ var DEFAULT_SETTINGS = {
   },
   devMode: {
     enabled: false,
-    logPath: "",
+    logDir: "",
     evaluatorModel: "sonnet"
   }
 };
@@ -136,8 +137,8 @@ var en = {
     h3_devmode: "Developer",
     devMode_enabled_name: "Dev mode",
     devMode_enabled_desc: "Enable dev logger and evaluator after each operation.",
-    devMode_logPath_name: "Dev log path",
-    devMode_logPath_desc: "Path to JSONL file for dev logs.",
+    devMode_logPath_name: "Dev log directory",
+    devMode_logPath_desc: "Directory for dev logs. File name: dev.jsonl",
     devMode_evaluatorModel_name: "Evaluator model",
     devMode_evaluatorModel_desc: "Model name for the evaluator (same backend)."
   },
@@ -280,8 +281,8 @@ var ru = {
     h3_devmode: "\u0420\u0430\u0437\u0440\u0430\u0431\u043E\u0442\u043A\u0430",
     devMode_enabled_name: "Dev \u0440\u0435\u0436\u0438\u043C",
     devMode_enabled_desc: "\u0412\u043A\u043B\u044E\u0447\u0438\u0442\u044C dev-\u043B\u043E\u0433\u0433\u0435\u0440 \u0438 \u043E\u0446\u0435\u043D\u0449\u0438\u043A \u043F\u043E\u0441\u043B\u0435 \u043A\u0430\u0436\u0434\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.",
-    devMode_logPath_name: "\u041F\u0443\u0442\u044C \u043A dev-\u043B\u043E\u0433\u0443",
-    devMode_logPath_desc: "\u041F\u0443\u0442\u044C \u043A JSONL-\u0444\u0430\u0439\u043B\u0443 \u0434\u043B\u044F dev-\u043B\u043E\u0433\u043E\u0432.",
+    devMode_logPath_name: "\u0414\u0438\u0440\u0435\u043A\u0442\u043E\u0440\u0438\u044F dev-\u043B\u043E\u0433\u043E\u0432",
+    devMode_logPath_desc: "\u0414\u0438\u0440\u0435\u043A\u0442\u043E\u0440\u0438\u044F \u0434\u043B\u044F dev-\u043B\u043E\u0433\u043E\u0432. \u0418\u043C\u044F \u0444\u0430\u0439\u043B\u0430: dev.jsonl",
     devMode_evaluatorModel_name: "\u041C\u043E\u0434\u0435\u043B\u044C \u043E\u0446\u0435\u043D\u0449\u0438\u043A\u0430",
     devMode_evaluatorModel_desc: "\u0418\u043C\u044F \u043C\u043E\u0434\u0435\u043B\u0438 \u0434\u043B\u044F \u043E\u0446\u0435\u043D\u0449\u0438\u043A\u0430 (\u0442\u043E\u0442 \u0436\u0435 \u0431\u044D\u043A\u0435\u043D\u0434)."
   },
@@ -424,8 +425,8 @@ var es = {
     h3_devmode: "Desarrollo",
     devMode_enabled_name: "Modo dev",
     devMode_enabled_desc: "Activar el registrador dev y el evaluador tras cada operaci\xF3n.",
-    devMode_logPath_name: "Ruta del log dev",
-    devMode_logPath_desc: "Ruta al archivo JSONL para logs dev.",
+    devMode_logPath_name: "Directorio de log dev",
+    devMode_logPath_desc: "Directorio para logs dev. Nombre del archivo: dev.jsonl",
     devMode_evaluatorModel_name: "Modelo evaluador",
     devMode_evaluatorModel_desc: "Nombre del modelo para el evaluador (mismo backend)."
   },
@@ -1009,8 +1010,8 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       })
     );
     new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_logPath_name).setDesc(T.settings.devMode_logPath_desc).addText(
-      (t) => t.setPlaceholder("/tmp/llm-wiki-dev.jsonl").setValue(s.devMode.logPath).onChange(async (v) => {
-        s.devMode.logPath = v.trim();
+      (t) => t.setPlaceholder("/tmp").setValue(s.devMode.logDir).onChange(async (v) => {
+        s.devMode.logDir = v.trim();
         await this.plugin.saveSettings();
       })
     );
@@ -1680,7 +1681,7 @@ function translateSystemEvent(message) {
 // src/controller.ts
 var import_obsidian5 = require("obsidian");
 var import_node_fs2 = require("node:fs");
-var import_node_path5 = require("node:path");
+var import_node_path6 = require("node:path");
 
 // src/domain-map.ts
 function validateDomainId(id) {
@@ -1693,6 +1694,7 @@ function validateDomainId(id) {
 
 // src/agent-runner.ts
 var import_node_fs = require("node:fs");
+var import_node_path5 = require("node:path");
 
 // src/phases/ingest.ts
 var import_node_path = require("node:path");
@@ -2827,9 +2829,10 @@ var AgentRunner = class {
     return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
   }
   writeDevLog(entry) {
-    const logPath = this.settings.devMode?.logPath;
-    if (!logPath)
+    const logDir = this.settings.devMode?.logDir;
+    if (!logDir)
       return;
+    const logPath = (0, import_node_path5.join)(logDir, "dev.jsonl");
     try {
       const line = JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), ...entry, eval: null }) + "\n";
       (0, import_node_fs.appendFileSync)(logPath, line, "utf-8");
@@ -2904,9 +2907,10 @@ var AgentRunner = class {
     }
   }
   updateDevLogEval(score, reasoning) {
-    const logPath = this.settings.devMode?.logPath;
-    if (!logPath)
+    const logDir = this.settings.devMode?.logDir;
+    if (!logDir)
       return;
+    const logPath = (0, import_node_path5.join)(logDir, "dev.jsonl");
     try {
       const fs = require("node:fs");
       const content = fs.readFileSync(logPath, "utf-8");
@@ -10549,7 +10553,7 @@ var WikiController = class {
     try {
       const stat = (0, import_node_fs2.existsSync)(logPath) ? (0, import_node_fs2.statSync)(logPath) : null;
       if (stat?.isDirectory() || !logPath.includes(".") && !logPath.endsWith("/")) {
-        logPath = (0, import_node_path5.join)(logPath, "agent.jsonl");
+        logPath = (0, import_node_path6.join)(logPath, "agent.jsonl");
       }
       const line = JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), session: sessionId, op, domainId, event: ev }) + "\n";
       (0, import_node_fs2.appendFileSync)(logPath, line, "utf-8");
@@ -10686,9 +10690,9 @@ var WikiController = class {
     return view instanceof LlmWikiView ? view : null;
   }
   toVaultPath(vaultDir, savedPath) {
-    const abs = (0, import_node_path5.isAbsolute)(savedPath) ? savedPath : (0, import_node_path5.join)(vaultDir, savedPath);
-    const rel = (0, import_node_path5.relative)(vaultDir, abs);
-    if (rel.startsWith("..") || (0, import_node_path5.isAbsolute)(rel))
+    const abs = (0, import_node_path6.isAbsolute)(savedPath) ? savedPath : (0, import_node_path6.join)(vaultDir, savedPath);
+    const rel = (0, import_node_path6.relative)(vaultDir, abs);
+    if (rel.startsWith("..") || (0, import_node_path6.isAbsolute)(rel))
       return null;
     return rel;
   }
@@ -10824,6 +10828,10 @@ var LlmWikiPlugin = class extends import_obsidian6.Plugin {
         this.settings.claudeAgent.iclaudePath = data.iclaudePath;
       if (data && data.model && !this.settings.claudeAgent.model)
         this.settings.claudeAgent.model = data.model;
+    }
+    const devData = data?.devMode;
+    if (devData?.logPath !== void 0 && devData?.logDir === void 0) {
+      this.settings.devMode.logDir = devData.logPath ? (0, import_node_path7.dirname)(devData.logPath) : "";
     }
   }
   async saveSettings() {
