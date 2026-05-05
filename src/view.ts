@@ -53,6 +53,9 @@ export class LlmWikiView extends ItemView {
   private startTs = 0;
   private toolCount = 0;
   private stepCount = 0;
+  private progressEl: HTMLElement | null = null;
+  private progressTotal = 0;
+  private progressDone = 0;
   private tickHandle: number | null = null;
   private currentToolStep: HTMLElement | null = null;
   private currentToolStartedAt = 0;
@@ -262,6 +265,9 @@ export class LlmWikiView extends ItemView {
     this.startTs = Date.now();
     this.toolCount = 0;
     this.stepCount = 0;
+    this.progressEl = null;
+    this.progressTotal = 0;
+    this.progressDone = 0;
     this.currentToolStep = null;
     this.assistantBlock = null;
     this.assistantBuffer = "";
@@ -276,6 +282,31 @@ export class LlmWikiView extends ItemView {
   }
 
   appendEvent(ev: RunEvent): void {
+    if (ev.kind === "init_start") {
+      this.progressTotal = ev.totalFiles;
+      this.progressDone = 0;
+      const step = this.stepsEl.createDiv("llm-wiki-step llm-wiki-progress");
+      step.createSpan({ cls: "llm-wiki-step-icon" }).setText("📂");
+      this.progressEl = step.createSpan({ cls: "llm-wiki-progress-text" });
+      this.progressEl.setText(`0 / ${ev.totalFiles} файлов`);
+      this.scrollSteps();
+      return;
+    }
+    if (ev.kind === "file_start") {
+      if (this.progressEl) {
+        this.progressEl.setText(`${ev.index} / ${ev.total} файлов → ${ev.file.split("/").pop()}`);
+      }
+      this.scrollSteps();
+      return;
+    }
+    if (ev.kind === "file_done") {
+      this.progressDone++;
+      if (this.progressEl) {
+        this.progressEl.setText(`${this.progressDone} / ${this.progressTotal} файлов`);
+      }
+      this.scrollSteps();
+      return;
+    }
     if (ev.kind === "domain_created") {
       this.refreshDomains();
       return;
