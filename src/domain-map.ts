@@ -9,7 +9,7 @@ export interface EntityType {
 export interface DomainEntry {
   id: string;
   name: string;
-  wiki_folder: string;
+  wiki_folder: string;  // vault-relative, e.g. "!Wiki/os"
   source_paths?: string[];
   entity_types?: EntityType[];
   language_notes?: string;
