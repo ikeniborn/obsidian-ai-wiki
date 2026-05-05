@@ -253,6 +253,55 @@ export class AddDomainModal extends Modal {
   onClose(): void { this.contentEl.empty(); }
 }
 
+export class FileErrorModal extends Modal {
+  private resolve!: (choice: "skip" | "retry" | "stop") => void;
+  readonly result: Promise<"skip" | "retry" | "stop">;
+  private resolved = false;
+
+  constructor(
+    app: App,
+    private file: string,
+    private err: Error,
+    private canRetry: boolean,
+  ) {
+    super(app);
+    this.result = new Promise((res) => { this.resolve = res; });
+  }
+
+  private pick(choice: "skip" | "retry" | "stop"): void {
+    if (this.resolved) return;
+    this.resolved = true;
+    this.close();
+    this.resolve(choice);
+  }
+
+  onOpen(): void {
+    const T = i18n().modal;
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: T.fileErrorTitle });
+    contentEl.createEl("p", { text: this.file, cls: "llm-wiki-file-error-path" });
+    contentEl.createEl("p", { text: this.err.message, cls: "llm-wiki-file-error-msg" });
+
+    const setting = new Setting(contentEl);
+    setting.addButton((b) =>
+      b.setButtonText(T.fileErrorSkip).onClick(() => this.pick("skip")),
+    );
+    if (this.canRetry) {
+      setting.addButton((b) =>
+        b.setButtonText(T.fileErrorRetry).onClick(() => this.pick("retry")),
+      );
+    }
+    setting.addButton((b) =>
+      b.setButtonText(T.fileErrorStop).setWarning().onClick(() => this.pick("stop")),
+    );
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+    if (!this.resolved) { this.resolved = true; this.resolve("skip"); }
+  }
+}
+
 export class EditDomainModal extends Modal {
   private nameVal: string;
   private wikiFolderVal: string;
