@@ -8,13 +8,12 @@ vi.mock("node:readline", async (importOriginal) => {
   return orig;
 });
 vi.mock("node:fs", () => ({
-  mkdirSync: vi.fn(),
   writeFileSync: vi.fn(),
   unlinkSync: vi.fn(),
 }));
 
 import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync, unlinkSync } from "node:fs";
+import { writeFileSync, unlinkSync } from "node:fs";
 import { ClaudeCliClient } from "../src/claude-cli-client";
 
 function makeMockProcess(lines: string[]) {
