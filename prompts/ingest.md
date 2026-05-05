@@ -15,4 +15,4 @@
 {{schema_block}}
 
 Верни ТОЛЬКО JSON-массив, без другого текста:
-[{"path":"{{wiki_path}}/EntityName.md","content":"---\nwiki_sources: [{{source_path}}]\nwiki_updated: {{today}}\nwiki_status: stub\ntags: []\n---\n# EntityName\n\ncontент..."}]
+[{"path":"{{wiki_path}}/EntityName.md","content":"---\nwiki_sources: [{{source_path}}]\nwiki_updated: {{today}}\nwiki_status: stub\ntags: []\nlinks: []\n---\n# EntityName\n\ncontент..."}]
