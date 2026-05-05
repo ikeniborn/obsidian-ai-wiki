@@ -195,7 +195,8 @@ export class LlmWikiView extends ItemView {
     const domains = this.plugin.controller.loadDomains();
     const wikiRoot = (() => {
       const sample = domains[0]?.wiki_folder ?? `!Wiki/x`;
-      return sample.replace(/\/[^/]+$/, "") || "!Wiki";
+      const raw = sample.replace(/\/[^/]+$/, "") || "!Wiki";
+      return raw.replace(/^vaults\/[^/]+\//, "");
     })();
     new AddDomainModal(this.app, wikiRoot, (input) => {
       const r = this.plugin.controller.registerDomain(input);
