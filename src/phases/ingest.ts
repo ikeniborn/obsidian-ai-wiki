@@ -13,7 +13,7 @@ export async function* runIngest(
   llm: LlmClient,
   model: string,
   domains: DomainEntry[],
-  repoRoot: string,
+  vaultRoot: string,
   signal: AbortSignal,
   opts: LlmCallOptions = {},
 ): AsyncGenerator<RunEvent> {
@@ -23,7 +23,7 @@ export async function* runIngest(
     return;
   }
 
-  const absSource = isAbsolute(filePath) ? filePath : join(repoRoot, filePath);
+  const absSource = isAbsolute(filePath) ? filePath : join(vaultRoot, filePath);
   const sourceVaultPath = vaultTools.toVaultPath(absSource);
   if (!sourceVaultPath) {
     yield { kind: "error", message: `Source file ${filePath} is outside the vault.` };
@@ -40,13 +40,13 @@ export async function* runIngest(
   }
   yield { kind: "tool_result", ok: true, preview: sourceContent.slice(0, 100) };
 
-  const domain = detectDomain(absSource, domains, repoRoot);
+  const domain = detectDomain(absSource, domains, vaultRoot);
   if (!domain) {
     yield { kind: "error", message: "No domain found for this file. Configure domain-map." };
     return;
   }
 
-  const absWiki = isAbsolute(domain.wiki_folder) ? domain.wiki_folder : join(repoRoot, domain.wiki_folder);
+  const absWiki = join(vaultRoot, domain.wiki_folder);
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
     yield { kind: "error", message: `Wiki folder ${domain.wiki_folder} is outside the vault.` };
@@ -118,7 +118,7 @@ export async function* runIngest(
     await appendLog(vaultTools, wikiRoot, sourceVaultPath, domain.id, written);
     await updateIndex(vaultTools, wikiRoot, written);
 
-    const parentPath = extractParentSourcePath(absSource, repoRoot, vaultTools.vaultRoot);
+    const parentPath = extractParentSourcePath(absSource, vaultRoot);
     yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
   }
 
