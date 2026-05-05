@@ -127,7 +127,7 @@ export interface LlmWikiPluginSettings {
   };
   devMode: {
     enabled: boolean;
-    logPath: string;
+    logDir: string;
     evaluatorModel: string;
   };
 }
@@ -171,7 +171,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   },
   devMode: {
     enabled: false,
-    logPath: "",
+    logDir: "",
     evaluatorModel: "sonnet",
   },
 };
