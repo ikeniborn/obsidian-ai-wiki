@@ -204,14 +204,13 @@ async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
 
 export function extractParentSourcePath(
   absSource: string,
-  repoRoot: string,
   vaultRoot: string,
 ): string {
   const parentAbs = dirname(absSource);
   // Clamp: не выходить выше vault root
   const normedVault = vaultRoot.endsWith("/") ? vaultRoot : vaultRoot + "/";
   const clamped = (parentAbs + "/").startsWith(normedVault) ? parentAbs : vaultRoot;
-  const rel = relative(repoRoot, clamped);
+  const rel = relative(vaultRoot, clamped);
   return (rel || ".") + "/";
 }
 

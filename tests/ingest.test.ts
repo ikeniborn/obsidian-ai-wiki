@@ -3,53 +3,26 @@ import { extractParentSourcePath, detectDomain } from "../src/phases/ingest";
 import type { DomainEntry } from "../src/domain-map";
 
 describe("extractParentSourcePath", () => {
-  it("returns direct parent relative to repoRoot", () => {
-    expect(extractParentSourcePath(
-      "/project/notes/sub/file.md",
-      "/project",
-      "/project",
-    )).toBe("notes/sub/");
+  const VAULT = "/vaults/Work";
+
+  it("returns vault-relative parent from deep path", () => {
+    expect(extractParentSourcePath("/vaults/Work/notes/ai/article.md", VAULT))
+      .toBe("notes/ai/");
   });
 
-  it("returns direct parent when file is one level deep", () => {
-    expect(extractParentSourcePath(
-      "/project/notes/file.md",
-      "/project",
-      "/project",
-    )).toBe("notes/");
+  it("returns vault-relative parent from one-level deep path", () => {
+    expect(extractParentSourcePath("/vaults/Work/notes/file.md", VAULT))
+      .toBe("notes/");
   });
 
-  it("returns vault root path when file is directly in vault", () => {
-    // родитель = vault root → "./"
-    expect(extractParentSourcePath(
-      "/project/file.md",
-      "/project",
-      "/project",
-    )).toBe("./");
+  it("clamps to vault root when file is directly in vault", () => {
+    expect(extractParentSourcePath("/vaults/Work/file.md", VAULT))
+      .toBe("./");
   });
 
-  it("works when repoRoot differs from vaultRoot (vaults/ structure)", () => {
-    expect(extractParentSourcePath(
-      "/project/vaults/MyVault/folder/file.md",
-      "/project",
-      "/project/vaults/MyVault",
-    )).toBe("vaults/MyVault/folder/");
-  });
-
-  it("returns vault root path when file is directly in vault (vaults/ structure)", () => {
-    expect(extractParentSourcePath(
-      "/project/vaults/MyVault/file.md",
-      "/project",
-      "/project/vaults/MyVault",
-    )).toBe("vaults/MyVault/");
-  });
-
-  it("clamps to vault root when parent would be above vaultRoot", () => {
-    expect(extractParentSourcePath(
-      "/project/outside/file.md",
-      "/project",
-      "/project/vaults/MyVault",
-    )).toBe("vaults/MyVault/");
+  it("clamps to vault root when parent is above vault", () => {
+    expect(extractParentSourcePath("/outside/file.md", VAULT))
+      .toBe("./");
   });
 });
 
