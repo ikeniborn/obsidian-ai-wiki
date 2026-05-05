@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { EditDomainModal } from "../src/modals";
+import { EditDomainModal, FileErrorModal } from "../src/modals";
 import type { DomainEntry } from "../src/domain-map";
 
 const domain: DomainEntry = {
@@ -16,6 +16,50 @@ const domain: DomainEntry = {
 function makeModal(onSave = vi.fn()) {
   return new EditDomainModal({} as any, domain, onSave);
 }
+
+describe("FileErrorModal", () => {
+  function makeFileErrorModal(canRetry = true) {
+    return new FileErrorModal({} as any, "/some/file.md", new Error("read error"), canRetry);
+  }
+
+  it("resolves result with 'skip' when pick('skip') is called", async () => {
+    const m = makeFileErrorModal();
+    (m as any).pick("skip");
+    expect(await m.result).toBe("skip");
+  });
+
+  it("resolves result with 'retry' when pick('retry') is called and canRetry is true", async () => {
+    const m = makeFileErrorModal(true);
+    (m as any).pick("retry");
+    expect(await m.result).toBe("retry");
+  });
+
+  it("resolves result with 'stop' when pick('stop') is called", async () => {
+    const m = makeFileErrorModal();
+    (m as any).pick("stop");
+    expect(await m.result).toBe("stop");
+  });
+
+  it("resolves result with 'skip' when onClose() is called without prior pick", async () => {
+    const m = makeFileErrorModal();
+    m.onClose();
+    expect(await m.result).toBe("skip");
+  });
+
+  it("does not resolve twice when onClose() is called after pick()", async () => {
+    const m = makeFileErrorModal();
+    (m as any).pick("stop");
+    m.onClose(); // second call — resolved flag prevents override
+    expect(await m.result).toBe("stop");
+  });
+
+  it("canRetry=false: pick('retry') is never triggered by the modal (retry path absent)", () => {
+    const m = makeFileErrorModal(false);
+    // When canRetry is false, the retry button is not added in onOpen().
+    // Verify the internal flag is correct so the conditional branch is skipped.
+    expect((m as any).canRetry).toBe(false);
+  });
+})
 
 describe("EditDomainModal", () => {
   it("is exported", () => {
