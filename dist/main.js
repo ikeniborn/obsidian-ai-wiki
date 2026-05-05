@@ -210,6 +210,15 @@ var en = {
     wikiFolder_desc: (root) => `Vault-relative path. Empty = ${root}/<id>. Source paths are populated automatically during ingest.`,
     wikiFolder_placeholder: (root) => `${root}/<id>`,
     addDomainNote: "The entry will be saved in plugin settings with empty entity_types. Edit the domain in Settings \u2192 Domains to add entity_types/extraction_cues.",
+    addDomainSourcePathsLabel: "Source paths",
+    addDomainSourcePathsPlaceholder: "Notes/AI/",
+    addDomainSourcePathsAdd: "+ Add path",
+    initConfirmTitle: "Start domain initialization?",
+    initConfirmBody: (files, folders) => `Found ${files} .md files in ${folders} folder(s). Run init to analyze sources and create wiki pages?`,
+    fileErrorTitle: "Error processing file",
+    fileErrorSkip: "Skip",
+    fileErrorRetry: "Retry",
+    fileErrorStop: "Stop",
     add: "Add",
     editDomainTitle: (id) => `Edit domain: ${id}`,
     entityTypesLabel: "Entity types",
@@ -359,6 +368,15 @@ var ru = {
     wikiFolder_desc: (root) => `\u041F\u0443\u0442\u044C \u043E\u0442\u043D\u043E\u0441\u0438\u0442\u0435\u043B\u044C\u043D\u043E \u043A\u043E\u0440\u043D\u044F \u0432\u043E\u043B\u0442\u0430. \u041F\u0443\u0441\u0442\u043E = ${root}/<id>. \u041F\u0443\u0442\u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432 \u0437\u0430\u043F\u043E\u043B\u043D\u044F\u044E\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u043F\u0440\u0438 ingest.`,
     wikiFolder_placeholder: (root) => `${root}/<id>`,
     addDomainNote: "\u0417\u0430\u043F\u0438\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u0441\u044F \u0432 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430\u0445 \u043F\u043B\u0430\u0433\u0438\u043D\u0430 \u0441 \u043F\u0443\u0441\u0442\u044B\u043C\u0438 entity_types. \u041E\u0442\u0440\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u0443\u0439\u0442\u0435 \u0434\u043E\u043C\u0435\u043D \u0432 \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u2192 \u0414\u043E\u043C\u0435\u043D\u044B \u0434\u043B\u044F \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F entity_types/extraction_cues.",
+    addDomainSourcePathsLabel: "\u041F\u0443\u0442\u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432",
+    addDomainSourcePathsPlaceholder: "Notes/AI/",
+    addDomainSourcePathsAdd: "+ \u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043F\u0443\u0442\u044C",
+    initConfirmTitle: "\u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C \u0438\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044E \u0434\u043E\u043C\u0435\u043D\u0430?",
+    initConfirmBody: (files, folders) => `\u041D\u0430\u0439\u0434\u0435\u043D\u043E ${files} .md \u0444\u0430\u0439\u043B\u043E\u0432 \u0432 ${folders} \u043F\u0430\u043F\u043A\u0430\u0445. \u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C init \u0434\u043B\u044F \u0430\u043D\u0430\u043B\u0438\u0437\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432 \u0438 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446?`,
+    fileErrorTitle: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u0438 \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u043A\u0435 \u0444\u0430\u0439\u043B\u0430",
+    fileErrorSkip: "\u041F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C",
+    fileErrorRetry: "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C",
+    fileErrorStop: "\u041E\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C",
     add: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C",
     editDomainTitle: (id) => `\u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0434\u043E\u043C\u0435\u043D\u0430: ${id}`,
     entityTypesLabel: "\u0422\u0438\u043F\u044B \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0435\u0439",
@@ -508,6 +526,15 @@ var es = {
     wikiFolder_desc: (root) => `Ruta relativa a la ra\xEDz del vault. Vac\xEDo = ${root}/<id>. Las rutas de fuentes se rellenan autom\xE1ticamente en ingest.`,
     wikiFolder_placeholder: (root) => `${root}/<id>`,
     addDomainNote: "La entrada se guardar\xE1 en la configuraci\xF3n del plugin con entity_types vac\xEDos. Edita el dominio en Ajustes \u2192 Dominios para a\xF1adir entity_types/extraction_cues.",
+    addDomainSourcePathsLabel: "Rutas de fuentes",
+    addDomainSourcePathsPlaceholder: "Notes/AI/",
+    addDomainSourcePathsAdd: "+ A\xF1adir ruta",
+    initConfirmTitle: "\xBFIniciar inicializaci\xF3n del dominio?",
+    initConfirmBody: (files, folders) => `Se encontraron ${files} archivos .md en ${folders} carpeta(s). \xBFEjecutar init para analizar fuentes y crear p\xE1ginas wiki?`,
+    fileErrorTitle: "Error al procesar archivo",
+    fileErrorSkip: "Saltar",
+    fileErrorRetry: "Reintentar",
+    fileErrorStop: "Detener",
     add: "A\xF1adir",
     editDomainTitle: (id) => `Editar dominio: ${id}`,
     entityTypesLabel: "Tipos de entidades",
@@ -657,14 +684,32 @@ var DomainModal = class extends import_obsidian2.Modal {
     this.contentEl.empty();
   }
 };
+var FolderSuggest = class extends import_obsidian2.AbstractInputSuggest {
+  constructor(app, inputEl) {
+    super(app, inputEl);
+  }
+  getSuggestions(inputStr) {
+    const lower = inputStr.toLowerCase();
+    return this.app.vault.getAllFolders(true).filter((f) => f.path.toLowerCase().includes(lower)).slice(0, 20);
+  }
+  renderSuggestion(folder, el) {
+    el.setText(folder.path + "/");
+  }
+  selectSuggestion(folder) {
+    this.inputEl.value = folder.path + "/";
+    this.inputEl.trigger("input");
+    this.close();
+  }
+};
 var AddDomainModal = class extends import_obsidian2.Modal {
   constructor(app, wikiRoot, onSubmit) {
     super(app);
     this.wikiRoot = wikiRoot;
     this.onSubmit = onSubmit;
   }
-  input = { id: "", name: "", wikiFolder: "" };
+  input = { id: "", name: "", wikiFolder: "", sourcePaths: [] };
   wikiFolderInput = null;
+  sourcePathsContainer = null;
   onOpen() {
     const T = i18n().modal;
     const { contentEl } = this;
@@ -686,7 +731,8 @@ var AddDomainModal = class extends import_obsidian2.Modal {
       });
       this.wikiFolderInput = t;
     });
-    contentEl.createEl("p", { text: T.addDomainNote, cls: "muted" });
+    this.sourcePathsContainer = contentEl.createDiv();
+    this.renderSourcePaths();
     new import_obsidian2.Setting(contentEl).addButton(
       (b) => b.setButtonText(T.add).setCta().onClick(() => {
         if (!this.input.id)
@@ -696,8 +742,98 @@ var AddDomainModal = class extends import_obsidian2.Modal {
       })
     );
   }
+  renderSourcePaths() {
+    if (!this.sourcePathsContainer)
+      return;
+    this.sourcePathsContainer.empty();
+    const T = i18n().modal;
+    const header = this.sourcePathsContainer.createDiv({ cls: "llm-wiki-sp-header" });
+    header.createEl("span", { text: T.addDomainSourcePathsLabel, cls: "llm-wiki-sp-label" });
+    const listEl = this.sourcePathsContainer.createDiv({ cls: "llm-wiki-sp-list" });
+    const rerender = () => {
+      listEl.empty();
+      this.input.sourcePaths.forEach((p, i) => {
+        const row = listEl.createDiv({ cls: "llm-wiki-sp-row" });
+        row.createEl("span", { text: p, cls: "llm-wiki-sp-path", attr: { title: p } });
+        const removeBtn = row.createEl("button", { text: "\xD7", cls: "llm-wiki-sp-remove" });
+        removeBtn.addEventListener("click", () => {
+          this.input.sourcePaths.splice(i, 1);
+          rerender();
+        });
+      });
+    };
+    rerender();
+    const addRow = this.sourcePathsContainer.createDiv({ cls: "llm-wiki-sp-add-row" });
+    const inputEl = addRow.createEl("input", {
+      cls: "llm-wiki-sp-input",
+      attr: { type: "text", placeholder: T.addDomainSourcePathsPlaceholder }
+    });
+    new FolderSuggest(this.app, inputEl);
+    const addPath = () => {
+      const val = inputEl.value.trim();
+      if (!val || this.input.sourcePaths.includes(val))
+        return;
+      this.input.sourcePaths.push(val);
+      inputEl.value = "";
+      rerender();
+    };
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addPath();
+      }
+    });
+    addRow.createEl("button", { text: T.addDomainSourcePathsAdd, cls: "mod-cta" }).addEventListener("click", addPath);
+  }
   onClose() {
     this.contentEl.empty();
+  }
+};
+var FileErrorModal = class extends import_obsidian2.Modal {
+  constructor(app, file, err, canRetry) {
+    super(app);
+    this.file = file;
+    this.err = err;
+    this.canRetry = canRetry;
+    this.result = new Promise((res) => {
+      this.resolve = res;
+    });
+  }
+  resolve;
+  result;
+  resolved = false;
+  pick(choice) {
+    if (this.resolved)
+      return;
+    this.resolved = true;
+    this.close();
+    this.resolve(choice);
+  }
+  onOpen() {
+    const T = i18n().modal;
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: T.fileErrorTitle });
+    contentEl.createEl("p", { text: this.file, cls: "llm-wiki-file-error-path" });
+    contentEl.createEl("p", { text: this.err.message, cls: "llm-wiki-file-error-msg" });
+    const setting = new import_obsidian2.Setting(contentEl);
+    setting.addButton(
+      (b) => b.setButtonText(T.fileErrorSkip).onClick(() => this.pick("skip"))
+    );
+    if (this.canRetry) {
+      setting.addButton(
+        (b) => b.setButtonText(T.fileErrorRetry).onClick(() => this.pick("retry"))
+      );
+    }
+    setting.addButton(
+      (b) => b.setButtonText(T.fileErrorStop).setWarning().onClick(() => this.pick("stop"))
+    );
+  }
+  onClose() {
+    this.contentEl.empty();
+    if (!this.resolved) {
+      this.resolved = true;
+      this.resolve("skip");
+    }
   }
 };
 var EditDomainModal = class extends import_obsidian2.Modal {
@@ -1201,6 +1337,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   startTs = 0;
   toolCount = 0;
   stepCount = 0;
+  progressEl = null;
+  progressTotal = 0;
+  progressDone = 0;
   tickHandle = null;
   currentToolStep = null;
   currentToolStartedAt = 0;
@@ -1332,15 +1471,34 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     const domains = this.plugin.controller.loadDomains();
     const wikiRoot = (() => {
       const sample = domains[0]?.wiki_folder ?? `!Wiki/x`;
-      return sample.replace(/\/[^/]+$/, "") || "!Wiki";
+      const raw = sample.replace(/\/[^/]+$/, "") || "!Wiki";
+      return raw.replace(/^vaults\/[^/]+\//, "");
     })();
     new AddDomainModal(this.app, wikiRoot, (input) => {
       const r = this.plugin.controller.registerDomain(input);
-      if (r.ok) {
-        this.refreshDomains();
-        this.domainSelect.value = input.id;
+      if (!r.ok)
+        return;
+      this.refreshDomains();
+      this.domainSelect.value = input.id;
+      if (!input.sourcePaths.length) {
         void this.plugin.controller.init(input.id, false);
+        return;
       }
+      const T = i18n().modal;
+      const allFiles = this.app.vault.getFiles();
+      const mdFiles = allFiles.filter(
+        (f) => f.extension === "md" && input.sourcePaths.some((p) => f.path.startsWith(p))
+      );
+      if (!mdFiles.length) {
+        void this.plugin.controller.init(input.id, false);
+        return;
+      }
+      new ConfirmModal(
+        this.app,
+        T.initConfirmTitle,
+        [T.initConfirmBody(mdFiles.length, input.sourcePaths.length)],
+        () => void this.plugin.controller.init(input.id, false, input.sourcePaths)
+      ).open();
     }).open();
   }
   submitQuery(save) {
@@ -1379,6 +1537,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.startTs = Date.now();
     this.toolCount = 0;
     this.stepCount = 0;
+    this.progressEl = null;
+    this.progressTotal = 0;
+    this.progressDone = 0;
     this.currentToolStep = null;
     this.assistantBlock = null;
     this.assistantBuffer = "";
@@ -1393,6 +1554,31 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.tickHandle = window.setInterval(() => this.updateMetrics(), 500);
   }
   appendEvent(ev) {
+    if (ev.kind === "init_start") {
+      this.progressTotal = ev.totalFiles;
+      this.progressDone = 0;
+      const step = this.stepsEl.createDiv("llm-wiki-step llm-wiki-progress");
+      step.createSpan({ cls: "llm-wiki-step-icon" }).setText("\u{1F4C2}");
+      this.progressEl = step.createSpan({ cls: "llm-wiki-progress-text" });
+      this.progressEl.setText(`0 / ${ev.totalFiles} \u0444\u0430\u0439\u043B\u043E\u0432`);
+      this.scrollSteps();
+      return;
+    }
+    if (ev.kind === "file_start") {
+      if (this.progressEl) {
+        this.progressEl.setText(`${ev.index} / ${ev.total} \u0444\u0430\u0439\u043B\u043E\u0432 \u2192 ${ev.file.split("/").pop()}`);
+      }
+      this.scrollSteps();
+      return;
+    }
+    if (ev.kind === "file_done") {
+      this.progressDone++;
+      if (this.progressEl) {
+        this.progressEl.setText(`${this.progressDone} / ${this.progressTotal} \u0444\u0430\u0439\u043B\u043E\u0432`);
+      }
+      this.scrollSteps();
+      return;
+    }
     if (ev.kind === "domain_created") {
       this.refreshDomains();
       return;
@@ -2753,9 +2939,11 @@ var schema_default = '# Wiki Schema\n\n## \u042F\u0437\u044B\u043A \u0438 \u0441
 var init_default = '\u0422\u044B \u2014 \u0430\u0440\u0445\u0438\u0442\u0435\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439. \u0421\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0439 \u0437\u0430\u043F\u0438\u0441\u044C \u0434\u043E\u043C\u0435\u043D\u0430 \u0434\u043B\u044F domain-map.json.\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0435\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B:\n{\n  "id": "{{domain_id}}",\n  "name": "\u0427\u0435\u043B\u043E\u0432\u0435\u043A\u043E\u0447\u0438\u0442\u0430\u0435\u043C\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435",\n  "wiki_folder": "vaults/{{vault_name}}/!Wiki/{{domain_id}}",\n  "source_paths": [],\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"{{domain_id}}/..."}],\n  "language_notes": ""\n}\n{{schema_block}}\n{{index_block}}\n';
 
 // src/phases/init.ts
-async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal, opts = {}) {
+async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal, opts = {}, onFileError) {
   const domainId = args[0];
   const dryRun = args.includes("--dry-run");
+  const sourcesIdx = args.indexOf("--sources");
+  const sourcePaths = sourcesIdx >= 0 ? args.slice(sourcesIdx + 1) : [];
   if (!domainId) {
     yield { kind: "error", message: "init: domain id required" };
     return;
@@ -2763,6 +2951,22 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
   const existing = domains.find((d) => d.id === domainId);
   if (existing?.entity_types?.length) {
     yield { kind: "error", message: `Domain "${domainId}" already initialised. Use Lint to update entity_types.` };
+    return;
+  }
+  if (sourcePaths.length) {
+    yield* runInitWithSources(
+      domainId,
+      sourcePaths,
+      dryRun,
+      vaultTools,
+      llm,
+      model,
+      domains,
+      vaultName,
+      signal,
+      opts,
+      onFileError
+    );
     return;
   }
   yield { kind: "assistant_text", delta: `Bootstrapping domain "${domainId}"...
@@ -2868,6 +3072,164 @@ ${JSON.stringify(entry, null, 2)}
     kind: "result",
     durationMs: Date.now() - start,
     text: `Domain "${domainId}" initialised. Edit entity_types in plugin settings to refine extraction.`
+  };
+}
+async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError) {
+  const start = Date.now();
+  const wikiRootGuess = `!Wiki`;
+  await ensureRootFiles(vaultTools, wikiRootGuess);
+  const allVaultFiles = await vaultTools.listFiles("");
+  const sourceFiles = allVaultFiles.filter(
+    (f) => f.endsWith(".md") && sourcePaths.some((sp) => f.startsWith(sp))
+  );
+  if (!sourceFiles.length) {
+    yield { kind: "error", message: `No .md files found in source paths: ${sourcePaths.join(", ")}` };
+    return;
+  }
+  yield { kind: "init_start", totalFiles: sourceFiles.length };
+  yield { kind: "assistant_text", delta: `Analysing ${sourceFiles.length} source files for domain "${domainId}"...
+` };
+  const sampleFiles = sourceFiles.slice(0, 10);
+  const samples = await vaultTools.readAll(sampleFiles);
+  const [schemaContent, indexContent] = await Promise.all([
+    tryRead3(vaultTools, `${wikiRootGuess}/_schema.md`),
+    tryRead3(vaultTools, `${wikiRootGuess}/_index.md`)
+  ]);
+  const existing = domains.find((d) => d.id === domainId);
+  const systemContent = render(init_default, {
+    domain_id: domainId,
+    vault_name: vaultName,
+    schema_block: schemaContent ? `
+\u041A\u043E\u043D\u0432\u0435\u043D\u0446\u0438\u0438 \u0432\u0438\u043A\u0438 (_schema.md):
+${schemaContent.slice(0, 1500)}` : "",
+    index_block: indexContent ? `
+\u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0430\u044F \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 (_index.md):
+${indexContent.slice(0, 1e3)}` : ""
+  });
+  const messages = [
+    { role: "system", content: systemContent },
+    {
+      role: "user",
+      content: [
+        `Domain ID: ${domainId}`,
+        `Vault name: ${vaultName}`,
+        `Source paths: ${sourcePaths.join(", ")}`,
+        "",
+        `\u041F\u0440\u0438\u043C\u0435\u0440\u044B \u0444\u0430\u0439\u043B\u043E\u0432 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432:`,
+        [...samples.entries()].map(([p, c]) => `${p}:
+${c.slice(0, 400)}`).join("\n\n")
+      ].join("\n")
+    }
+  ];
+  const params = buildChatParams(model, messages, opts);
+  let fullText = "";
+  try {
+    const stream = await llm.chat.completions.create(
+      { ...params, stream: true },
+      { signal }
+    );
+    for await (const chunk of stream) {
+      const { reasoning, content } = extractStreamDeltas(chunk);
+      if (reasoning)
+        yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
+      if (content) {
+        fullText += content;
+        yield { kind: "assistant_text", delta: content };
+      }
+    }
+  } catch (e) {
+    if (signal.aborted || e.name === "AbortError")
+      return;
+    const resp = await llm.chat.completions.create(
+      { ...params, stream: false }
+    );
+    fullText = resp.choices[0]?.message?.content ?? "";
+    if (fullText)
+      yield { kind: "assistant_text", delta: fullText };
+  }
+  if (signal.aborted)
+    return;
+  let entry;
+  try {
+    const match = fullText.match(/\{[\s\S]*\}/);
+    if (!match)
+      throw new Error("No JSON object found in LLM response");
+    entry = JSON.parse(match[0]);
+    const vaultPrefix = `vaults/${vaultName}/`;
+    if (entry.wiki_folder?.startsWith(vaultPrefix)) {
+      entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
+    }
+    if (!entry.id || !entry.wiki_folder)
+      throw new Error("Missing required fields");
+  } catch (e) {
+    yield { kind: "error", message: `Failed to parse domain entry: ${e.message}` };
+    return;
+  }
+  const updatedDomain = {
+    ...existing ?? { id: domainId, name: domainId, wiki_folder: entry.wiki_folder },
+    entity_types: entry.entity_types,
+    language_notes: entry.language_notes,
+    source_paths: sourcePaths
+  };
+  yield { kind: "tool_use", name: existing ? "UpdateDomain" : "SaveDomain", input: { id: domainId } };
+  if (existing) {
+    yield { kind: "domain_updated", domainId, patch: { entity_types: entry.entity_types, language_notes: entry.language_notes } };
+  } else {
+    yield { kind: "domain_created", entry: { ...entry, source_paths: sourcePaths } };
+  }
+  yield { kind: "tool_result", ok: true };
+  if (dryRun) {
+    yield {
+      kind: "result",
+      durationMs: Date.now() - start,
+      text: `Dry run \u2014 domain entry:
+\`\`\`json
+${JSON.stringify(entry, null, 2)}
+\`\`\``
+    };
+    return;
+  }
+  yield { kind: "assistant_text", delta: `
+Creating wiki pages from ${sourceFiles.length} source files...
+` };
+  for (let i = 0; i < sourceFiles.length; i++) {
+    if (signal.aborted)
+      return;
+    const file = sourceFiles[i];
+    yield { kind: "file_start", file, index: i, total: sourceFiles.length };
+    let retried = false;
+    let done = false;
+    while (!done) {
+      let hadError = false;
+      let caughtErr = null;
+      try {
+        for await (const ev of runIngest([file], vaultTools, llm, model, [updatedDomain], vaultTools.vaultRoot, signal, opts)) {
+          yield ev;
+        }
+        done = true;
+      } catch (e) {
+        hadError = true;
+        caughtErr = e;
+      }
+      if (hadError && caughtErr) {
+        const canRetry = !retried;
+        const choice = onFileError ? await onFileError(file, caughtErr, canRetry) : "skip";
+        if (choice === "stop")
+          return;
+        if (choice === "retry" && canRetry) {
+          retried = true;
+          continue;
+        }
+        done = true;
+      }
+    }
+    yield { kind: "file_done", file };
+  }
+  await appendLog2(vaultTools, wikiRootGuess, domainId);
+  yield {
+    kind: "result",
+    durationMs: Date.now() - start,
+    text: `Domain "${domainId}" initialised from ${sourceFiles.length} source files.`
   };
 }
 async function appendLog2(vaultTools, wikiRoot, domainId) {
@@ -3005,7 +3367,7 @@ var AgentRunner = class {
         break;
       }
       case "init":
-        yield* runInit(req.args, this.vaultTools, this.llm, model, domains, this.vaultName, req.signal, opts);
+        yield* runInit(req.args, this.vaultTools, this.llm, model, domains, this.vaultName, req.signal, opts, req.onFileError);
         break;
       default: {
         const start = Date.now();
@@ -10717,9 +11079,16 @@ var WikiController = class {
     });
     this.activeView()?.finishChat({ role: "assistant", content: finalText }, status !== "done");
   }
-  async init(domain, dryRun) {
+  async init(domain, dryRun, sourcePaths) {
     const args = dryRun ? [domain, "--dry-run"] : [domain];
-    await this.dispatch("init", args);
+    if (sourcePaths?.length)
+      args.push("--sources", ...sourcePaths);
+    const onFileError = sourcePaths?.length ? (file, err, canRetry) => {
+      const modal = new FileErrorModal(this.app, file, err, canRetry);
+      modal.open();
+      return modal.result;
+    } : void 0;
+    await this.dispatch("init", args, void 0, void 0, void 0, onFileError);
   }
   cwdOrEmpty() {
     return this.app.vault.adapter.getBasePath?.() ?? "";
@@ -10747,7 +11116,7 @@ var WikiController = class {
       id,
       name: input.name.trim() || id,
       wiki_folder: wikiRelative,
-      source_paths: [],
+      source_paths: input.sourcePaths ?? [],
       entity_types: [],
       language_notes: ""
     });
@@ -10804,7 +11173,7 @@ var WikiController = class {
     } catch {
     }
   }
-  async dispatch(op, args, domainId, context, instruction) {
+  async dispatch(op, args, domainId, context, instruction, onFileError) {
     if (this.isBusy()) {
       new import_obsidian5.Notice(i18n().ctrl.operationRunning);
       return;
@@ -10830,7 +11199,7 @@ var WikiController = class {
     view.setRunning(op, args);
     const opKey = op === "query-save" ? "query" : op;
     const timeoutMs = this.plugin.settings.timeouts[opKey] * 1e3;
-    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction });
+    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError });
     try {
       for await (const ev of runGen) {
         this.logEvent(sessionId, op, domainId, ev);
