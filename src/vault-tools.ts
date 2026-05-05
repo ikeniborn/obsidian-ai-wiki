@@ -12,6 +12,10 @@ export class VaultTools {
     private basePath: string,
   ) {}
 
+  get vaultRoot(): string {
+    return this.basePath;
+  }
+
   async read(vaultPath: string): Promise<string> {
     return this.adapter.read(vaultPath);
   }

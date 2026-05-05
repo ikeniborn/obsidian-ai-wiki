@@ -72,4 +72,9 @@ describe("VaultTools", () => {
     const vt = new VaultTools(mockAdapter(), "/home/user/vault");
     expect(vt.toVaultPath("/other/path")).toBeNull();
   });
+
+  it("vaultRoot returns the absolute vault base path", () => {
+    const vt = new VaultTools(mockAdapter(), "/home/user/vault");
+    expect(vt.vaultRoot).toBe("/home/user/vault");
+  });
 });
