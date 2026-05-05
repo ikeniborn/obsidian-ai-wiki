@@ -10,6 +10,12 @@ export type WikiOperation =
   | "chat"
   | "init";
 
+export type OnFileError = (
+  file: string,
+  err: Error,
+  canRetry: boolean,
+) => Promise<"skip" | "retry" | "stop">;
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
@@ -26,6 +32,7 @@ export interface RunRequest {
   domainId?: string;
   context?: string;
   instruction?: string;
+  onFileError?: OnFileError;
   chatMessages?: ChatMessage[];
   operationHeader?: string;
 }
@@ -42,7 +49,10 @@ export type RunEvent =
   | { kind: "domain_created"; entry: DomainEntry }
   | { kind: "source_path_added"; domainId: string; path: string }
   | { kind: "domain_updated"; domainId: string; patch: { entity_types?: EntityType[]; language_notes?: string } }
-  | { kind: "eval_result"; score: number; reasoning: string };
+  | { kind: "eval_result"; score: number; reasoning: string }
+  | { kind: "init_start"; totalFiles: number }
+  | { kind: "file_start"; file: string; index: number; total: number }
+  | { kind: "file_done"; file: string };
 
 export interface RunHistoryEntry {
   id: string;

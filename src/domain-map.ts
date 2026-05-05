@@ -19,6 +19,7 @@ export interface AddDomainInput {
   id: string;
   name: string;
   wikiFolder: string;  // vault-relative, e.g. "!Wiki/os"
+  sourcePaths: string[];
 }
 
 /** Returns null if id is valid, or an error message string. */
