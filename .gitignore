@@ -1,6 +1,7 @@
 node_modules/
 main.js
 *.log
+tpm/
 .vitest-cache/
 !dist/main.js
 .playwright-mcp
