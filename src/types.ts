@@ -27,6 +27,7 @@ export interface RunRequest {
   context?: string;
   instruction?: string;
   chatMessages?: ChatMessage[];
+  operationHeader?: string;
 }
 
 export type RunEvent =
@@ -47,6 +48,7 @@ export interface RunHistoryEntry {
   id: string;
   operation: WikiOperation;
   args: string[];
+  domainId?: string;
   startedAt: number;
   finishedAt: number;
   status: "done" | "error" | "cancelled";
