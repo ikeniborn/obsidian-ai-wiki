@@ -37,7 +37,7 @@ export async function* runInit(
 
   if (sourcePaths.length) {
     yield* runInitWithSources(
-      domainId, sourcePaths, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError,
+      domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError,
     );
     return;
   }
@@ -147,6 +147,7 @@ export async function* runInit(
 async function* runInitWithSources(
   domainId: string,
   sourcePaths: string[],
+  dryRun: boolean,
   vaultTools: VaultTools,
   llm: LlmClient,
   model: string,
@@ -261,6 +262,15 @@ async function* runInitWithSources(
     yield { kind: "domain_created", entry: { ...entry, source_paths: sourcePaths } };
   }
   yield { kind: "tool_result", ok: true };
+
+  if (dryRun) {
+    yield {
+      kind: "result",
+      durationMs: Date.now() - start,
+      text: `Dry run — domain entry:\n\`\`\`json\n${JSON.stringify(entry, null, 2)}\n\`\`\``,
+    };
+    return;
+  }
 
   yield { kind: "assistant_text", delta: `\nCreating wiki pages from ${sourceFiles.length} source files...\n` };
 
