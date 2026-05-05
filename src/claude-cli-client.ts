@@ -13,6 +13,7 @@ export interface ClaudeCliConfig {
   cwd?: string;
   allowedTools?: string;
   tmpDir: string;
+  resumeSessionId?: string;
 }
 
 const SIGTERM_GRACE_MS = 3000;
@@ -52,9 +53,15 @@ export class ClaudeCliClient implements LlmClient {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const tmpFiles: string[] = [];
 
+    const isResume = Boolean(this.cfg.resumeSessionId);
     const args: string[] = [];
     if (model) args.push("--model", model);
     args.push("--");
+
+    // --resume идёт после -- как claude-флаг
+    if (isResume) {
+      args.push("--resume", this.cfg.resumeSessionId!);
+    }
 
     try {
       const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
@@ -74,7 +81,9 @@ export class ClaudeCliClient implements LlmClient {
 
       if (this.cfg.allowedTools) args.push("--tools", this.cfg.allowedTools);
 
-      if (systemContent) {
+      // При resume системный промпт уже хранится в сессии claude —
+      // повторная передача может перезаписать исходный контекст операции.
+      if (!isResume && systemContent) {
         const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
         if (isLargeSys) {
           const tmpSysFile = join(this.cfg.tmpDir, `llm-wiki-sys-${id}.txt`);

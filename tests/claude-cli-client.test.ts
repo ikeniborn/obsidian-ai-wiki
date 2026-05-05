@@ -221,4 +221,61 @@ describe("ClaudeCliClient", () => {
     expect(args).not.toContain("--append-system-prompt-file");
     expect(writeFileSync).not.toHaveBeenCalled();
   });
+
+  it("passes --resume after -- and skips --system-prompt when resumeSessionId is set", async () => {
+    (spawn as any).mockReturnValue(makeMockProcess([]));
+
+    const client = new ClaudeCliClient({ ...cfg, resumeSessionId: "session-xyz" });
+    await client.chat.completions.create(
+      {
+        model: "sonnet",
+        messages: [
+          { role: "system", content: "operation context" },
+          { role: "user", content: "первый вопрос" },
+          { role: "assistant", content: "первый ответ" },
+          { role: "user", content: "второй вопрос" },
+        ],
+        stream: false,
+      } as any,
+    );
+
+    const args: string[] = (spawn as any).mock.calls[0][1];
+    const separatorIdx = args.indexOf("--");
+    expect(separatorIdx).toBeGreaterThan(-1);
+
+    // --resume должен идти после --
+    const resumeIdx = args.indexOf("--resume");
+    expect(resumeIdx).toBeGreaterThan(separatorIdx);
+    expect(args[resumeIdx + 1]).toBe("session-xyz");
+
+    // --system-prompt не должен присутствовать при resume
+    expect(args).not.toContain("--system-prompt");
+    expect(args).not.toContain("--system-prompt-file");
+
+    // -p содержит только последнее user-сообщение
+    const pIdx = args.indexOf("-p");
+    expect(args[pIdx + 1]).toBe("второй вопрос");
+  });
+
+  it("does not pass --resume and does pass --system-prompt when resumeSessionId is absent", async () => {
+    (spawn as any).mockReturnValue(makeMockProcess([]));
+
+    const client = new ClaudeCliClient(cfg); // resumeSessionId не задан
+    await client.chat.completions.create(
+      {
+        model: "sonnet",
+        messages: [
+          { role: "system", content: "operation context" },
+          { role: "user", content: "первый вопрос" },
+        ],
+        stream: false,
+      } as any,
+    );
+
+    const args: string[] = (spawn as any).mock.calls[0][1];
+    expect(args).not.toContain("--resume");
+    expect(args).toContain("--system-prompt");
+    const pIdx = args.indexOf("-p");
+    expect(args[pIdx + 1]).toBe("первый вопрос");
+  });
 });
