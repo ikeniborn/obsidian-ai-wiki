@@ -1,4 +1,4 @@
-import { App, Modal, Setting } from "obsidian";
+import { AbstractInputSuggest, App, Modal, Setting, TFolder } from "obsidian";
 import type { AddDomainInput, DomainEntry, EntityType } from "./domain-map";
 import { i18n } from "./i18n";
 
@@ -125,9 +125,33 @@ export class DomainModal extends Modal {
 }
 
 
+class FolderSuggest extends AbstractInputSuggest<TFolder> {
+  constructor(app: App, inputEl: HTMLInputElement) {
+    super(app, inputEl);
+  }
+
+  getSuggestions(inputStr: string): TFolder[] {
+    const lower = inputStr.toLowerCase();
+    return this.app.vault.getAllFolders(true)
+      .filter((f) => f.path.toLowerCase().includes(lower))
+      .slice(0, 20);
+  }
+
+  renderSuggestion(folder: TFolder, el: HTMLElement): void {
+    el.setText(folder.path + "/");
+  }
+
+  selectSuggestion(folder: TFolder): void {
+    this.inputEl.value = folder.path + "/";
+    this.inputEl.trigger("input");
+    this.close();
+  }
+}
+
 export class AddDomainModal extends Modal {
-  private input: AddDomainInput = { id: "", name: "", wikiFolder: "" };
+  private input: AddDomainInput = { id: "", name: "", wikiFolder: "", sourcePaths: [] };
   private wikiFolderInput: { setValue: (v: string) => void } | null = null;
+  private sourcePathsContainer: HTMLElement | null = null;
 
   constructor(
     app: App,
@@ -168,7 +192,8 @@ export class AddDomainModal extends Modal {
         this.wikiFolderInput = t;
       });
 
-    contentEl.createEl("p", { text: T.addDomainNote, cls: "muted" });
+    this.sourcePathsContainer = contentEl.createDiv();
+    this.renderSourcePaths();
 
     new Setting(contentEl).addButton((b) =>
       b.setButtonText(T.add).setCta().onClick(() => {
@@ -177,6 +202,52 @@ export class AddDomainModal extends Modal {
         this.onSubmit(this.input);
       }),
     );
+  }
+
+  private renderSourcePaths(): void {
+    if (!this.sourcePathsContainer) return;
+    this.sourcePathsContainer.empty();
+    const T = i18n().modal;
+
+    const header = this.sourcePathsContainer.createDiv({ cls: "llm-wiki-sp-header" });
+    header.createEl("span", { text: T.addDomainSourcePathsLabel, cls: "llm-wiki-sp-label" });
+
+    const listEl = this.sourcePathsContainer.createDiv({ cls: "llm-wiki-sp-list" });
+    const rerender = () => {
+      listEl.empty();
+      this.input.sourcePaths.forEach((p, i) => {
+        const row = listEl.createDiv({ cls: "llm-wiki-sp-row" });
+        row.createEl("span", { text: p, cls: "llm-wiki-sp-path", attr: { title: p } });
+        const removeBtn = row.createEl("button", { text: "×", cls: "llm-wiki-sp-remove" });
+        removeBtn.addEventListener("click", () => {
+          this.input.sourcePaths.splice(i, 1);
+          rerender();
+        });
+      });
+    };
+    rerender();
+
+    const addRow = this.sourcePathsContainer.createDiv({ cls: "llm-wiki-sp-add-row" });
+    const inputEl = addRow.createEl("input", {
+      cls: "llm-wiki-sp-input",
+      attr: { type: "text", placeholder: T.addDomainSourcePathsPlaceholder },
+    }) as HTMLInputElement;
+    new FolderSuggest(this.app, inputEl);
+
+    const addPath = () => {
+      const val = inputEl.value.trim();
+      if (!val || this.input.sourcePaths.includes(val)) return;
+      this.input.sourcePaths.push(val);
+      inputEl.value = "";
+      rerender();
+    };
+
+    inputEl.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "Enter") { e.preventDefault(); addPath(); }
+    });
+
+    addRow.createEl("button", { text: T.addDomainSourcePathsAdd, cls: "mod-cta" })
+      .addEventListener("click", addPath);
   }
 
   onClose(): void { this.contentEl.empty(); }

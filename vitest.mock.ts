@@ -42,6 +42,20 @@ function makeElWithText(text: string) {
   return el;
 }
 
+export class AbstractInputSuggest<T> {
+  app: any;
+  inputEl: HTMLInputElement;
+  constructor(app: any, inputEl: HTMLInputElement) {
+    this.app = app;
+    this.inputEl = inputEl;
+  }
+  close() {}
+}
+
+export class TFolder {
+  path: string = "";
+}
+
 export class Modal {
   contentEl = makeEl();
   close() {}
