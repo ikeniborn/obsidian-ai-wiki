@@ -63,13 +63,20 @@ Add to `RunRequest` interface (after `instruction?:`):
 
 - [ ] **Step 3: Add three new RunEvent kinds to `src/types.ts`**
 
-In the `RunEvent` union (after `| { kind: "eval_result"; ... }`), add:
+The current last line of the `RunEvent` union is:
+```typescript
+  | { kind: "eval_result"; score: number; reasoning: string };
+```
+The trailing `;` terminates the entire `type RunEvent = ...` statement. Replace that last line with:
 
 ```typescript
+  | { kind: "eval_result"; score: number; reasoning: string }
   | { kind: "init_start"; totalFiles: number }
   | { kind: "file_start"; file: string; index: number; total: number }
   | { kind: "file_done"; file: string };
 ```
+
+(The `;` moves to the new last member.)
 
 - [ ] **Step 4: Run tests to verify types compile**
 
@@ -125,13 +132,13 @@ describe("deriveWikiRoot", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Run test to verify it passes**
 
 ```bash
 npx vitest run tests/init-args.test.ts
 ```
 
-Expected: FAIL — `deriveWikiRoot` is not defined yet (it's inlined in view.ts)
+Expected: PASS — функция определена локально в тесте (документирует формулу), не импортируется из view.ts
 
 - [ ] **Step 3: Fix `openAddDomain()` in `src/view.ts`**
 
@@ -502,7 +509,15 @@ Replace line 170 (`source_paths: [],`):
       source_paths: input.sourcePaths ?? [],
 ```
 
-- [ ] **Step 2: Update `init()` method in `src/controller.ts` to accept sourcePaths and onFileError**
+- [ ] **Step 2: Add static import of `FileErrorModal` to `src/controller.ts`**
+
+В начале файла найти строку с `import { ... } from "./modals"` (если есть) и добавить `FileErrorModal`, или добавить новый импорт:
+
+```typescript
+import { FileErrorModal } from "./modals";
+```
+
+- [ ] **Step 3: Update `init()` method in `src/controller.ts` to accept sourcePaths**
 
 Replace lines 140-143:
 
@@ -512,7 +527,7 @@ Replace lines 140-143:
     if (sourcePaths?.length) args.push("--sources", ...sourcePaths);
     const onFileError: import("./types").OnFileError | undefined = sourcePaths?.length
       ? (file, err, canRetry) => {
-          const modal = new (require("./modals").FileErrorModal)(this.app, file, err, canRetry);
+          const modal = new FileErrorModal(this.app, file, err, canRetry);
           modal.open();
           return modal.result;
         }
@@ -521,7 +536,7 @@ Replace lines 140-143:
   }
 ```
 
-- [ ] **Step 3: Update `dispatch()` signature in `src/controller.ts` to accept onFileError**
+- [ ] **Step 4: Update `dispatch()` signature in `src/controller.ts` to accept onFileError**
 
 Replace line 233:
 ```typescript
@@ -533,7 +548,7 @@ And update RunRequest construction at line 267 to include onFileError:
     const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError });
 ```
 
-- [ ] **Step 4: Update `openAddDomain()` in `src/view.ts`**
+- [ ] **Step 5: Update `openAddDomain()` in `src/view.ts`**
 
 Import `FileErrorModal` is already in modals (used by controller). Update the `openAddDomain` method (lines 191-208):
 
@@ -580,7 +595,7 @@ Import `FileErrorModal` is already in modals (used by controller). Update the `o
   }
 ```
 
-- [ ] **Step 5: Run tests**
+- [ ] **Step 6: Run tests**
 
 ```bash
 npm test
@@ -588,7 +603,7 @@ npm test
 
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/view.ts src/controller.ts
@@ -673,7 +688,13 @@ npx vitest run tests/init-args.test.ts
 
 Expected: PASS
 
-- [ ] **Step 3: Update `runInit` signature in `src/phases/init.ts` to accept `onFileError`**
+- [ ] **Step 3: Update imports and `runInit` signature in `src/phases/init.ts`**
+
+Add `OnFileError` to the existing import from `"../types"`:
+
+```typescript
+import type { LlmCallOptions, RunEvent, LlmClient, OnFileError } from "../types";
+```
 
 Change signature:
 
@@ -687,7 +708,7 @@ export async function* runInit(
   vaultName: string,
   signal: AbortSignal,
   opts: LlmCallOptions = {},
-  onFileError?: import("../types").OnFileError,
+  onFileError?: OnFileError,
 ): AsyncGenerator<RunEvent> {
 ```
 
@@ -715,7 +736,7 @@ After the guard `if (!domainId) { ... }` block and before `yield { kind: "assist
 
 Add the new function after `runInit` (before `appendLog`). It also needs import of `runIngest`:
 
-Add at top of file:
+Add at top of file (after existing imports):
 ```typescript
 import { runIngest } from "./ingest";
 ```
@@ -733,7 +754,7 @@ async function* runInitWithSources(
   vaultName: string,
   signal: AbortSignal,
   opts: LlmCallOptions,
-  onFileError: import("../types").OnFileError | undefined,
+  onFileError: OnFileError | undefined,
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
   const wikiRootGuess = `!Wiki`;
@@ -855,7 +876,8 @@ async function* runInitWithSources(
       let caughtErr: Error | null = null;
 
       try {
-        for await (const ev of runIngest([file], vaultTools, llm, model, [updatedDomain], "", signal, opts)) {
+        // vaultTools.vaultRoot — абсолютный путь к vault, нужен runIngest для toVaultPath()
+        for await (const ev of runIngest([file], vaultTools, llm, model, [updatedDomain], vaultTools.vaultRoot, signal, opts)) {
           yield ev;
         }
         done = true;
@@ -1053,6 +1075,6 @@ git commit -m "chore: bump version and build"
 
 Нет TBD / TODO / заглушек.
 
-### Потенциальная проблема: runIngest с пустым vaultRoot
+### vaultRoot в runInitWithSources
 
-В Task 8 `runInitWithSources` вызывает `runIngest([file], ..., vaultRoot="", ...)`. Файлы из `vaultTools.listFiles("")` уже vault-relative, значит `vaultRoot=""` — корректно для vault-relative путей. `runIngest` использует `isAbsolute(filePath) ? filePath : join(vaultRoot, filePath)` → `join("", "Notes/AI/file.md") = "Notes/AI/file.md"` — правильно. `vaultTools.toVaultPath` конвертирует из abs-path, но если уже vault-relative это не проблема. Проверить при тестировании.
+`VaultTools.toVaultPath(abs)` проверяет `abs.startsWith(basePath)`. При `vaultRoot=""` → `join("","Notes/AI/f.md") = "Notes/AI/f.md"` (не абсолютный путь) → `toVaultPath` вернёт `null` → ошибка «outside the vault». Исправлено в Task 8: используем `vaultTools.vaultRoot` (геттер возвращает `this.basePath`).
