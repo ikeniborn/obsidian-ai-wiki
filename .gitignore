@@ -1,3 +1,5 @@
+.superpowers/
+.worktrees/
 node_modules/
 main.js
 *.log
