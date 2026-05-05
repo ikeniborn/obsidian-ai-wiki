@@ -59,10 +59,17 @@ if (systemContent) args.push("--system-prompt", systemContent)
 
 | Файл | Что меняется |
 |---|---|
-| `src/claude-cli-client.ts` | Логика temp-файлов, новое поле `tmpDir` в конфиге |
+| `src/claude-cli-client.ts` | Новые импорты `node:fs` + `node:path`, логика temp-файлов, новое поле `tmpDir` в конфиге |
 | `src/controller.ts` | Вычисление `tmpDir`, передача в `ClaudeCliClient` |
 
 ## Детали реализации
+
+### Новые импорты в `claude-cli-client.ts`
+
+```typescript
+import { mkdirSync, writeFileSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
+```
 
 ### `ClaudeCliConfig` (claude-cli-client.ts)
 
@@ -81,8 +88,10 @@ export interface ClaudeCliConfig {
 
 Temp-файлы создаются здесь и передаются в `_generate()` / `_collect()` для последующей очистки.
 
+Все операции с файлами обёрнуты в try/catch — если что-то упало на полпути, уже созданные файлы удаляются до выброса ошибки (иначе при частичном сбое первый файл оставался бы навсегда).
+
 ```typescript
-const LARGE_THRESHOLD = 32_768; // 32 KB
+const LARGE_THRESHOLD = 32_768; // 32 KB — консервативный порог; типичный lint > 100 KB
 const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const tmpFiles: string[] = [];  // пути temp-файлов → передаются в _generate для cleanup
 
@@ -91,37 +100,43 @@ if (model) args.push("--model", model);  // iclaude.sh флаги
 
 args.push("--");  // разделитель — всё после идёт в claude
 
-// userText: большой → temp + --append-system-prompt-file + dummy -p
-const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
-if (isLargeUser) {
-  mkdirSync(this.cfg.tmpDir, { recursive: true });
-  const tmpUsrFile = join(this.cfg.tmpDir, `llm-wiki-usr-${id}.txt`);
-  writeFileSync(tmpUsrFile, userText, "utf-8");
-  tmpFiles.push(tmpUsrFile);
-  args.push("-p", ".");
-  args.push("--append-system-prompt-file", tmpUsrFile);
-} else {
-  args.push("-p", userText);
-}
-
-args.push("--output-format", "stream-json", "--verbose");
-args.push("--disable-slash-commands");
-args.push("--dangerously-skip-permissions");
-
-if (this.cfg.allowedTools) args.push("--tools", this.cfg.allowedTools);
-
-// systemContent: большой → temp + --system-prompt-file
-if (systemContent) {
-  const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
-  if (isLargeSys) {
+try {
+  // userText: большой → temp + --append-system-prompt-file + dummy -p
+  const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
+  if (isLargeUser) {
     mkdirSync(this.cfg.tmpDir, { recursive: true });
-    const tmpSysFile = join(this.cfg.tmpDir, `llm-wiki-sys-${id}.txt`);
-    writeFileSync(tmpSysFile, systemContent, "utf-8");
-    tmpFiles.push(tmpSysFile);
-    args.push("--system-prompt-file", tmpSysFile);
+    const tmpUsrFile = join(this.cfg.tmpDir, `llm-wiki-usr-${id}.txt`);
+    writeFileSync(tmpUsrFile, userText, "utf-8");
+    tmpFiles.push(tmpUsrFile);
+    args.push("-p", ".");
+    args.push("--append-system-prompt-file", tmpUsrFile);
   } else {
-    args.push("--system-prompt", systemContent);
+    args.push("-p", userText);
   }
+
+  args.push("--output-format", "stream-json", "--verbose");
+  args.push("--disable-slash-commands");
+  args.push("--dangerously-skip-permissions");
+
+  if (this.cfg.allowedTools) args.push("--tools", this.cfg.allowedTools);
+
+  // systemContent: большой → temp + --system-prompt-file
+  if (systemContent) {
+    const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
+    if (isLargeSys) {
+      mkdirSync(this.cfg.tmpDir, { recursive: true });
+      const tmpSysFile = join(this.cfg.tmpDir, `llm-wiki-sys-${id}.txt`);
+      writeFileSync(tmpSysFile, systemContent, "utf-8");
+      tmpFiles.push(tmpSysFile);
+      args.push("--system-prompt-file", tmpSysFile);
+    } else {
+      args.push("--system-prompt", systemContent);
+    }
+  }
+} catch (err) {
+  // очищаем уже созданные файлы перед проброской ошибки
+  for (const f of tmpFiles) { try { unlinkSync(f); } catch { /* ignore */ } }
+  throw err;
 }
 
 // tmpFiles передаётся дальше для очистки в _generate / _collect
@@ -187,9 +202,10 @@ const llm = s.backend === "claude-agent"
 
 | Сценарий | Поведение |
 |---|---|
-| `mkdirSync` / `writeFileSync` падает (нет места) | Пробрасывается Error — spawn не вызывается, операция завершается `kind: "error"` |
+| `mkdirSync` / `writeFileSync` падает на первом файле | Ошибка пробрасывается, spawn не вызывается |
+| `writeFileSync` падает на втором файле (первый уже создан) | catch-блок в `_create()` удаляет первый файл, затем пробрасывает ошибку |
 | `unlinkSync` падает (файл уже удалён) | Игнорируется (try/catch) |
-| Процесс завершился аварийно до finally | finally гарантирует очистку |
+| Процесс завершился аварийно до `finally` | `finally` в `_generate()` гарантирует очистку оставшихся файлов |
 
 ## Тестирование
 
