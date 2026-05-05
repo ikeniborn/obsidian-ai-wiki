@@ -57,24 +57,24 @@ export class AgentRunner {
     req: RunRequest,
     model: string,
     opts: LlmCallOptions,
-    repoRoot: string,
+    vaultRoot: string,
     domains: DomainEntry[],
   ): AsyncGenerator<RunEvent, void, void> {
     switch (req.operation) {
       case "ingest":
-        yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, repoRoot, req.signal, opts);
+        yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
         break;
       case "query":
-        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, repoRoot, req.signal, opts);
+        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
         break;
       case "query-save":
-        yield* runQuery(req.args, true, this.vaultTools, this.llm, model, domains, repoRoot, req.signal, opts);
+        yield* runQuery(req.args, true, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
         break;
       case "lint":
-        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, repoRoot, req.signal, opts);
+        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
         break;
       case "fix":
-        yield* runFix(req.args, this.vaultTools, this.llm, model, domains, repoRoot, req.signal, opts, req.context, req.instruction);
+        yield* runFix(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, req.context, req.instruction);
         break;
       case "chat": {
         const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : undefined;
@@ -98,7 +98,7 @@ export class AgentRunner {
 
     if (req.signal.aborted) return;
 
-    const repoRoot = req.cwd ?? "";
+    const vaultRoot = req.cwd ?? "";
     const domains = req.domainId
       ? this.domains.filter((d) => d.id === req.domainId)
       : this.domains;
@@ -106,7 +106,7 @@ export class AgentRunner {
     const startMs = Date.now();
     let finalResultText = "";
 
-    for await (const ev of this.runOperation(req, model, opts, repoRoot, domains)) {
+    for await (const ev of this.runOperation(req, model, opts, vaultRoot, domains)) {
       if (ev.kind === "result") finalResultText = ev.text;
       yield ev;
     }
