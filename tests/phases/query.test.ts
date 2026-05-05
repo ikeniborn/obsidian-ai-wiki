@@ -35,18 +35,20 @@ async function collect<T>(gen: AsyncGenerator<T>): Promise<T[]> {
   return out;
 }
 
+const VAULT_ROOT = "/vaults/Work";
+
 const domain: DomainEntry = {
   id: "work",
   name: "Work",
-  wiki_folder: "vaults/Work/!Wiki/work",
+  wiki_folder: "!Wiki/work",
   source_paths: [],
 };
 
 describe("runQuery", () => {
   it("yields error when question is empty", async () => {
-    const vt = new VaultTools(mockAdapter(), "/vault");
+    const vt = new VaultTools(mockAdapter(), VAULT_ROOT);
     const events = await collect(
-      runQuery([], false, vt, makeLlm("answer"), "model", [domain], "/vault", new AbortController().signal),
+      runQuery([], false, vt, makeLlm("answer"), "model", [domain], VAULT_ROOT, new AbortController().signal),
     );
     expect(events.some((e: any) => e.kind === "error")).toBe(true);
   });
@@ -54,10 +56,10 @@ describe("runQuery", () => {
   it("yields result with LLM answer", async () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
-      list: vi.fn().mockResolvedValue({ files: ["vaults/Work/!Wiki/work/Page.md"], folders: [] }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
       read: vi.fn().mockResolvedValue("# Page\n\nSome fact."),
     });
-    const vt = new VaultTools(adapter, "/vault");
+    const vt = new VaultTools(adapter, VAULT_ROOT);
     const events = await collect(
       runQuery(
         ["What is the answer?"],
@@ -66,7 +68,7 @@ describe("runQuery", () => {
         makeLlm("The answer is 42."),
         "model",
         [domain],
-        "/vault",
+        VAULT_ROOT,
         new AbortController().signal,
       ),
     );
@@ -81,7 +83,7 @@ describe("runQuery", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
       read: vi.fn().mockResolvedValue(""),
     });
-    const vt = new VaultTools(adapter, "/vault");
+    const vt = new VaultTools(adapter, VAULT_ROOT);
     await collect(
       runQuery(
         ["What is X?"],
@@ -90,7 +92,7 @@ describe("runQuery", () => {
         makeLlm("X is Y."),
         "model",
         [domain],
-        "/vault",
+        VAULT_ROOT,
         new AbortController().signal,
       ),
     );
