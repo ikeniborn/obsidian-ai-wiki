@@ -75,7 +75,9 @@ const absWiki = join(vaultRoot, domain.wiki_folder);
 
 Проверка `isAbsolute` уходит — vault-relative пути никогда не абсолютны.
 
-Сигнатуры функций фаз, принимающие `repoRoot: string`, заменяются на `vaultRoot: string`.
+Сигнатуры всех фазовых функций, принимающих `repoRoot: string`, заменяются на `vaultRoot: string`. Включает `detectDomain()` в `ingest.ts` — она принимает `repoRoot` и разрешает source_paths через `join(repoRoot, sp)` → меняется на `join(vaultRoot, sp)`.
+
+В `runIngest`: `const absSource = isAbsolute(filePath) ? filePath : join(vaultRoot, filePath)` (было `join(repoRoot, ...)`). Контроллер передаёт абсолютный путь, поэтому ветка `isAbsolute` срабатывает всегда — проверку `isAbsolute` можно оставить для защиты от будущих вызовов с vault-relative путём.
 
 ### 3. `src/source-paths.ts` — `consolidateSourcePaths()`
 
@@ -102,7 +104,7 @@ export function consolidateSourcePaths(existing: string[], newPath: string, vaul
 После парсинга LLM-ответа (`entry = JSON.parse(...)`): нормализовать `entry.wiki_folder` к vault-relative — стрипнуть `vaults/${vaultName}/` если присутствует:
 
 ```typescript
-const vaultPrefix = `vaults/${this.vaultName}/`;
+const vaultPrefix = `vaults/${vaultName}/`;
 if (entry.wiki_folder.startsWith(vaultPrefix)) {
   entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
 }
@@ -167,7 +169,7 @@ vaultRoot = "/vault"
 absSource = "/vault/notes/ai/article.md"
 → "notes/ai/"
 
-absSource вне vault → "/" (clamped to vaultRoot)
+absSource вне vault → "./" (clamped to vaultRoot; relative("", "") = "", возвращается "." + "/")
 ```
 
 **`consolidateSourcePaths`:**
