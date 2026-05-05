@@ -156,18 +156,16 @@ describe("ClaudeCliClient", () => {
 
     const args: string[] = (spawn as any).mock.calls[0][1];
     expect(args).toContain("--append-system-prompt-file");
+    expect(args).toContain("-p");
     const pIdx = args.indexOf("-p");
     expect(args[pIdx + 1]).toBe(".");
 
-    expect(writeFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("llm-wiki-usr-"),
-      largeText,
-      "utf-8",
-    );
+    const writtenUsrPath = (writeFileSync as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(writtenUsrPath).toContain("llm-wiki-usr-");
+    expect(writtenUsrPath).toContain("/plugin/tmp");
+    expect(writeFileSync).toHaveBeenCalledWith(writtenUsrPath, largeText, "utf-8");
 
-    expect(unlinkSync).toHaveBeenCalledWith(
-      expect.stringContaining("llm-wiki-usr-"),
-    );
+    expect(unlinkSync).toHaveBeenCalledWith(writtenUsrPath);
   });
 
   it("uses --system-prompt-file when systemContent exceeds 32KB", async () => {
@@ -191,15 +189,12 @@ describe("ClaudeCliClient", () => {
     expect(args).toContain("--system-prompt-file");
     expect(args).not.toContain("--system-prompt");
 
-    expect(writeFileSync).toHaveBeenCalledWith(
-      expect.stringContaining("llm-wiki-sys-"),
-      largeSystem,
-      "utf-8",
-    );
+    const writtenSysPath = (writeFileSync as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(writtenSysPath).toContain("llm-wiki-sys-");
+    expect(writtenSysPath).toContain("/plugin/tmp");
+    expect(writeFileSync).toHaveBeenCalledWith(writtenSysPath, largeSystem, "utf-8");
 
-    expect(unlinkSync).toHaveBeenCalledWith(
-      expect.stringContaining("llm-wiki-sys-"),
-    );
+    expect(unlinkSync).toHaveBeenCalledWith(writtenSysPath);
   });
 
   it("keeps small userText and systemContent inline in argv", async () => {
