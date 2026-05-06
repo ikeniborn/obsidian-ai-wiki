@@ -113,7 +113,7 @@ export async function* runInit(
     if (entry.wiki_folder?.startsWith(vaultPrefix)) {
       entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
     }
-    // NEW: strip !Wiki/ prefix if LLM output full path
+    // Strip !Wiki/ prefix if LLM outputs the full path rather than the subfolder
     if (entry.wiki_folder?.startsWith("!Wiki/")) {
       entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
     }
@@ -246,7 +246,7 @@ async function* runInitWithSources(
     if (entry.wiki_folder?.startsWith(vaultPrefix)) {
       entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
     }
-    // NEW: strip !Wiki/ prefix if LLM output full path
+    // Strip !Wiki/ prefix if LLM outputs the full path rather than the subfolder
     if (entry.wiki_folder?.startsWith("!Wiki/")) {
       entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
     }
