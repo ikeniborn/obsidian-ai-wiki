@@ -16,7 +16,7 @@ npm run test:watch   # vitest watch
 ### Install
 
 ```bash
-ln -s $(pwd) ~/.config/obsidian/Plugins/obsidian-llm-wiki
+ln -s $(pwd)/dist ~/.config/obsidian/Plugins/obsidian-llm-wiki
 ```
 
 ### Run single test

@@ -3670,9 +3670,9 @@ var ClaudeCliClient = class {
     const tmpFiles = [];
     const isResume = Boolean(this.cfg.resumeSessionId);
     const args = [];
+    args.push("--");
     if (model)
       args.push("--model", model);
-    args.push("--");
     if (isResume) {
       args.push("--resume", this.cfg.resumeSessionId);
     }
@@ -11206,6 +11206,7 @@ var WikiController = class {
     const manifestDir = this.plugin.manifest.dir ?? (0, import_node_path8.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
     const pluginDir = this.app.vault.adapter.getFullPath(manifestDir);
     const tmpDir = (0, import_node_path8.join)(pluginDir, "tmp");
+    (0, import_node_fs3.mkdirSync)(tmpDir, { recursive: true });
     const vaultTools = new VaultTools(adapter, base);
     const vaultName = this.app.vault.getName();
     const domains = this.plugin.settings.domains ?? [];

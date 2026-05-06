@@ -1,5 +1,5 @@
 import { App, Notice } from "obsidian";
-import { existsSync, appendFileSync, statSync } from "node:fs";
+import { existsSync, appendFileSync, statSync, mkdirSync } from "node:fs";
 import { relative, isAbsolute, join } from "node:path";
 import { LLM_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { validateDomainId, type DomainEntry, type AddDomainInput } from "./domain-map";
@@ -208,6 +208,7 @@ export class WikiController {
     const pluginDir = (this.app.vault.adapter as { getFullPath: (p: string) => string })
       .getFullPath(manifestDir);
     const tmpDir = join(pluginDir, "tmp");
+    mkdirSync(tmpDir, { recursive: true });
     const vaultTools = new VaultTools(adapter, base);
     const vaultName = this.app.vault.getName();
     const domains = this.plugin.settings.domains ?? [];
