@@ -1,4 +1,4 @@
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DomainEntry } from "./domain-map";
 import { runIngest } from "./phases/ingest";
@@ -144,14 +144,13 @@ export class AgentRunner {
     if (!logDir) return;
     const logPath = join(logDir, "dev.jsonl");
     try {
-      const fs = require("node:fs") as typeof import("node:fs");
-      const content = fs.readFileSync(logPath, "utf-8");
+      const content = readFileSync(logPath, "utf-8");
       const lines = content.trimEnd().split("\n");
       const lastIdx = lines.length - 1;
       const last = JSON.parse(lines[lastIdx]);
       last.eval = { score, reasoning };
       lines[lastIdx] = JSON.stringify(last);
-      fs.writeFileSync(logPath, lines.join("\n") + "\n", "utf-8");
+      writeFileSync(logPath, lines.join("\n") + "\n", "utf-8");
     } catch { /* не блокируем */ }
   }
 }

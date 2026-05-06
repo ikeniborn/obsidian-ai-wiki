@@ -69,6 +69,7 @@ export class LlmWikiView extends ItemView {
   }
 
   getViewType(): string { return LLM_WIKI_VIEW_TYPE; }
+  // eslint-disable-next-line obsidianmd/ui/sentence-case
   getDisplayText(): string { return "LLM wiki"; }
   getIcon(): string { return "brain-circuit"; }
 
@@ -80,6 +81,7 @@ export class LlmWikiView extends ItemView {
     const T = i18n();
 
     const header = root.createDiv("llm-wiki-header");
+    // eslint-disable-next-line obsidianmd/ui/sentence-case
     header.createEl("h3", { text: "LLM wiki" });
     this.statusEl = header.createDiv("llm-wiki-status");
 
@@ -467,7 +469,9 @@ export class LlmWikiView extends ItemView {
     if (role === "user") {
       el.setText(text);
     } else {
-      void MarkdownRenderer.render(this.app, text, el, this.plugin.controller.cwdOrEmpty(), new Component());
+      const comp = new Component();
+      comp.load();
+      void MarkdownRenderer.render(this.app, text, el, this.plugin.controller.cwdOrEmpty(), comp);
     }
     el.scrollIntoView({ block: "end" });
     return el;
@@ -518,7 +522,9 @@ export class LlmWikiView extends ItemView {
         this.currentChatBubble.addClass("llm-wiki-chat-msg--error");
         this.currentChatBubble.setText(msg.content);
       } else {
-        void MarkdownRenderer.render(this.app, msg.content, this.currentChatBubble, this.plugin.controller.cwdOrEmpty(), new Component());
+        const comp = new Component();
+        comp.load();
+        void MarkdownRenderer.render(this.app, msg.content, this.currentChatBubble, this.plugin.controller.cwdOrEmpty(), comp);
       }
       this.currentChatBubble = null;
     }

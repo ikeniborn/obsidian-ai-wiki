@@ -184,7 +184,7 @@ export class ClaudeCliClient implements LlmClient {
       if (spawnError) throw new Error(`claude spawn failed: ${spawnError.message}${stderr() ? `\n${stderr()}` : ""}`);
       if (signal?.aborted) return;
       const ec = exitCode;
-      if (ec !== null && ec !== 0) throw new Error(`claude exited with code ${ec}${stderr() ? `\n${stderr()}` : ""}`);
+      if (ec !== null && ec !== 0) throw new Error(`claude exited with code ${String(ec)}${stderr() ? `\n${stderr()}` : ""}`);
       if (timedOut) throw new Error(`claude process timed out after ${timeoutSec}s`);
       yield {
         id: `cc-${++id}`,

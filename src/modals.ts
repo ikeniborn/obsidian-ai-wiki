@@ -231,7 +231,7 @@ export class AddDomainModal extends Modal {
     const inputEl = addRow.createEl("input", {
       cls: "llm-wiki-sp-input",
       attr: { type: "text", placeholder: T.addDomainSourcePathsPlaceholder },
-    }) as HTMLInputElement;
+    });
     new FolderSuggest(this.app, inputEl);
 
     const addPath = () => {
@@ -438,7 +438,7 @@ export class EditDomainModal extends Modal {
     const input = addRow.createEl("input", {
       cls: "llm-wiki-sp-input",
       attr: { type: "text", placeholder: T.sourcePathsPlaceholder },
-    }) as HTMLInputElement;
+    });
 
     const addPath = () => {
       const val = input.value.trim();
