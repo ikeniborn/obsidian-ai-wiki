@@ -126,7 +126,7 @@ export class DomainModal extends Modal {
 
 
 class FolderSuggest extends AbstractInputSuggest<TFolder> {
-  constructor(app: App, inputEl: HTMLInputElement) {
+  constructor(app: App, inputEl: HTMLInputElement, private onSelect: (path: string) => void) {
     super(app, inputEl);
   }
 
@@ -142,9 +142,9 @@ class FolderSuggest extends AbstractInputSuggest<TFolder> {
   }
 
   selectSuggestion(folder: TFolder): void {
-    this.inputEl.value = folder.path + "/";
-    this.inputEl.trigger("input");
+    this.inputEl.value = "";
     this.close();
+    this.onSelect(folder.path + "/");
   }
 }
 
@@ -231,15 +231,14 @@ export class AddDomainModal extends Modal {
       cls: "llm-wiki-sp-input",
       attr: { type: "text", placeholder: T.addDomainSourcePathsPlaceholder },
     });
-    new FolderSuggest(this.app, inputEl);
-
-    const addPath = () => {
-      const val = inputEl.value.trim();
+    const addPath = (val = inputEl.value.trim()) => {
       if (!val || this.input.sourcePaths.includes(val)) return;
       this.input.sourcePaths.push(val);
       inputEl.value = "";
       rerender();
     };
+
+    new FolderSuggest(this.app, inputEl, addPath);
 
     inputEl.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "Enter") { e.preventDefault(); addPath(); }
@@ -440,13 +439,14 @@ export class EditDomainModal extends Modal {
       attr: { type: "text", placeholder: T.sourcePathsPlaceholder },
     });
 
-    const addPath = () => {
-      const val = input.value.trim();
+    const addPath = (val = input.value.trim()) => {
       if (!val || this.sourcePathsList.includes(val)) return;
       this.sourcePathsList.push(val);
       input.value = "";
       rerender();
     };
+
+    new FolderSuggest(this.app, input, addPath);
 
     input.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "Enter") { e.preventDefault(); addPath(); }
