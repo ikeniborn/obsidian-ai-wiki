@@ -159,7 +159,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .setName(T.settings.model_name)
           .setDesc(T.settings.model_desc_claude)
           .addText((t) =>
-            t.setPlaceholder("Sonnet")
+            // eslint-disable-next-line obsidianmd/ui/sentence-case
+            t.setPlaceholder("sonnet")
               .setValue(s.claudeAgent.model)
               .onChange(async (v) => { s.claudeAgent.model = v.trim(); await this.plugin.saveSettings(); }),
           );
@@ -216,7 +217,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .setName(T.settings.apiKey_name)
         .setDesc(T.settings.apiKey_desc)
         .addText((t) =>
-          t.setPlaceholder("Ollama")
+          // eslint-disable-next-line obsidianmd/ui/sentence-case
+          t.setPlaceholder("ollama")
             .setValue(s.nativeAgent.apiKey)
             .onChange(async (v) => { s.nativeAgent.apiKey = v.trim(); await this.plugin.saveSettings(); }),
         );
@@ -226,7 +228,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .setName(T.settings.model_name)
           .setDesc(T.settings.model_desc_native)
           .addText((t) =>
-            t.setPlaceholder("Llama3.2")
+            // eslint-disable-next-line obsidianmd/ui/sentence-case
+            t.setPlaceholder("llama3.2")
               .setValue(s.nativeAgent.model)
               .onChange(async (v) => { s.nativeAgent.model = v.trim(); await this.plugin.saveSettings(); }),
           );
@@ -331,7 +334,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       .setName(T.settings.devMode_evaluatorModel_name)
       .setDesc(T.settings.devMode_evaluatorModel_desc)
       .addText((t) =>
-        t.setPlaceholder("Sonnet")
+        // eslint-disable-next-line obsidianmd/ui/sentence-case
+        t.setPlaceholder("sonnet")
           .setValue(s.devMode.evaluatorModel)
           .onChange(async (v) => { s.devMode.evaluatorModel = v.trim(); await this.plugin.saveSettings(); }),
       );
