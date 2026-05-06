@@ -23,6 +23,10 @@ export class WikiController {
 
   isBusy(): boolean { return this.current !== null; }
 
+  onBusyChange?: () => void;
+
+  get running(): boolean { return this.current !== null; }
+
   cancelCurrent(): void {
     if (this.current) {
       this.current.abort();
@@ -70,6 +74,7 @@ export class WikiController {
     const agentRunner = this.buildAgentRunner(vaultRoot, this._chatSessionId);
     const ctrl = new AbortController();
     this.current = ctrl;
+    this.onBusyChange?.();
 
     const startedAt = Date.now();
     const sessionId = String(startedAt);
@@ -118,6 +123,7 @@ export class WikiController {
       this.logEvent(sessionId, "chat", domainId, { kind: "error", message: finalText });
     } finally {
       this.current = null;
+      this.onBusyChange?.();
       this.currentOp = null;
     }
 
@@ -260,6 +266,7 @@ export class WikiController {
 
     const ctrl = new AbortController();
     this.current = ctrl;
+    this.onBusyChange?.();
     this.currentOp = { op, args };
 
     const startedAt = Date.now();
@@ -315,6 +322,7 @@ export class WikiController {
       this.logEvent(sessionId, op, domainId, { kind: "error", message: finalText });
     } finally {
       this.current = null;
+      this.onBusyChange?.();
       this.currentOp = null;
     }
     this.logEvent(sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
