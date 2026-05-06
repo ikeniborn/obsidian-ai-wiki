@@ -16,7 +16,7 @@ class ClaudeCodeLM(dspy.BaseLM):
         self.claude_path = claude_path
         self._claude_model = model
 
-    def forward(self, prompt: str | None = None, messages: list[dict] | None = None, **kwargs) -> object:
+    def forward(self, prompt: str | None = None, messages: list[dict] | None = None, **_kwargs) -> object:
         full_prompt = self._flatten(messages) if messages else (prompt or "")
         proc = subprocess.run(
             [
@@ -60,6 +60,14 @@ def make_lm():
             api_key="ollama",
         )
 
+    if backend == "ollama-openai":
+        base = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+        return dspy.LM(
+            model=f"openai/{os.environ['OLLAMA_MODEL']}",
+            base_url=f"{base}/v1",
+            api_key="ollama",
+        )
+
     if backend == "claude-code":
         return ClaudeCodeLM(
             claude_path=os.environ["CLAUDE_PATH"],
@@ -67,5 +75,5 @@ def make_lm():
         )
 
     raise ValueError(
-        f"DSPY_BACKEND='{backend}' не поддерживается. Допустимые значения: ollama, claude-code"
+        f"DSPY_BACKEND='{backend}' не поддерживается. Допустимые значения: ollama, ollama-openai, claude-code"
     )
