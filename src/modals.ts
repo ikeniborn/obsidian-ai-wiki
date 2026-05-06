@@ -126,9 +126,6 @@ export class DomainModal extends Modal {
 
 
 function attachFolderDropdown(app: App, inputEl: HTMLInputElement, onSelect: (path: string) => void): void {
-  const wrapper = inputEl.parentElement!;
-  wrapper.style.position = "relative";
-
   let dropEl: HTMLElement | null = null;
 
   const hideDropdown = () => { dropEl?.remove(); dropEl = null; };
@@ -137,7 +134,12 @@ function attachFolderDropdown(app: App, inputEl: HTMLInputElement, onSelect: (pa
     hideDropdown();
     if (!folders.length) return;
 
-    dropEl = wrapper.createDiv({ cls: "llm-wiki-folder-dropdown" });
+    const rect = inputEl.getBoundingClientRect();
+    dropEl = document.body.createDiv({ cls: "llm-wiki-folder-dropdown" });
+    dropEl.style.top = `${rect.bottom + window.scrollY}px`;
+    dropEl.style.left = `${rect.left + window.scrollX}px`;
+    dropEl.style.width = `${rect.width}px`;
+
     for (const folder of folders) {
       const item = dropEl.createDiv({ cls: "llm-wiki-folder-dropdown-item" });
       item.setText(folder.path + "/");
@@ -261,8 +263,6 @@ export class AddDomainModal extends Modal {
       if (e.key === "Enter") { e.preventDefault(); addPath(); }
     });
 
-    addRow.createEl("button", { text: T.addDomainSourcePathsAdd, cls: "mod-cta" })
-      .addEventListener("click", () => addPath());
   }
 
   onClose(): void { this.contentEl.empty(); }
@@ -470,8 +470,6 @@ export class EditDomainModal extends Modal {
       if (e.key === "Enter") { e.preventDefault(); addPath(); }
     });
 
-    const addBtn = addRow.createEl("button", { text: T.sourcePathsAdd, cls: "mod-cta" });
-    addBtn.addEventListener("click", () => addPath());
   }
 
   private renderEntityTypeCard(container: HTMLElement, et: EntityType): void {

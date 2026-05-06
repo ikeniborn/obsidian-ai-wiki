@@ -210,10 +210,7 @@
   font-size: 12px;
 }
 .llm-wiki-folder-dropdown {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 100%;
+  position: fixed;
   z-index: 1000;
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
