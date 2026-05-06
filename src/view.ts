@@ -69,7 +69,6 @@ export class LlmWikiView extends ItemView {
   }
 
   getViewType(): string { return LLM_WIKI_VIEW_TYPE; }
-  // eslint-disable-next-line obsidianmd/ui/sentence-case
   getDisplayText(): string { return "LLM wiki"; }
   getIcon(): string { return "brain-circuit"; }
 
@@ -81,7 +80,6 @@ export class LlmWikiView extends ItemView {
     const T = i18n();
 
     const header = root.createDiv("llm-wiki-header");
-    // eslint-disable-next-line obsidianmd/ui/sentence-case
     header.createEl("h3", { text: "LLM wiki" });
     this.statusEl = header.createDiv("llm-wiki-status");
 

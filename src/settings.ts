@@ -167,8 +167,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .setName(T.settings.model_name)
           .setDesc(T.settings.model_desc_claude)
           .addText((t) =>
-            // eslint-disable-next-line obsidianmd/ui/sentence-case
-            t.setPlaceholder("sonnet")
+            t.setPlaceholder("Sonnet")
               .setValue(s.claudeAgent.model)
               .onChange(async (v) => { s.claudeAgent.model = v.trim(); await this.plugin.saveSettings(); }),
           );
@@ -178,8 +177,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .setName(T.settings.allowedTools_name)
         .setDesc(T.settings.allowedTools_desc)
         .addText((t) =>
-          // eslint-disable-next-line obsidianmd/ui/sentence-case
-          t.setPlaceholder("Bash,Read,Write")
+          t.setPlaceholder("Bash,read,write")
             .setValue(s.claudeAgent.allowedTools)
             .onChange(async (v) => { s.claudeAgent.allowedTools = v.trim(); await this.plugin.saveSettings(); }),
         );
@@ -215,8 +213,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .setName(T.settings.baseUrl_name)
         .setDesc(T.settings.baseUrl_desc)
         .addText((t) =>
-          // eslint-disable-next-line obsidianmd/ui/sentence-case
-          t.setPlaceholder("http://localhost:11434/v1")
+          t.setPlaceholder("HTTP://localhost:11434/v1")
             .setValue(s.nativeAgent.baseUrl)
             .onChange(async (v) => { s.nativeAgent.baseUrl = v.trim(); await this.plugin.saveSettings(); }),
         );
@@ -225,8 +222,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .setName(T.settings.apiKey_name)
         .setDesc(T.settings.apiKey_desc)
         .addText((t) =>
-          // eslint-disable-next-line obsidianmd/ui/sentence-case
-          t.setPlaceholder("ollama")
+          t.setPlaceholder("Ollama")
             .setValue(s.nativeAgent.apiKey)
             .onChange(async (v) => { s.nativeAgent.apiKey = v.trim(); await this.plugin.saveSettings(); }),
         );
@@ -236,7 +232,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .setName(T.settings.model_name)
           .setDesc(T.settings.model_desc_native)
           .addText((t) =>
-            // eslint-disable-next-line obsidianmd/ui/sentence-case
             t.setPlaceholder("llama3.2")
               .setValue(s.nativeAgent.model)
               .onChange(async (v) => { s.nativeAgent.model = v.trim(); await this.plugin.saveSettings(); }),
@@ -342,8 +337,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       .setName(T.settings.devMode_evaluatorModel_name)
       .setDesc(T.settings.devMode_evaluatorModel_desc)
       .addText((t) =>
-        // eslint-disable-next-line obsidianmd/ui/sentence-case
-        t.setPlaceholder("sonnet")
+        t.setPlaceholder("Sonnet")
           .setValue(s.devMode.evaluatorModel)
           .onChange(async (v) => { s.devMode.evaluatorModel = v.trim(); await this.plugin.saveSettings(); }),
       );

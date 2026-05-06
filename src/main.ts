@@ -20,7 +20,6 @@ export default class LlmWikiPlugin extends Plugin {
 
     this.registerView(LLM_WIKI_VIEW_TYPE, (leaf: WorkspaceLeaf) => new LlmWikiView(leaf, this));
 
-    // eslint-disable-next-line obsidianmd/ui/sentence-case
     this.addRibbonIcon("brain-circuit", "LLM wiki", () => {
       const leaves = this.app.workspace.getLeavesOfType(LLM_WIKI_VIEW_TYPE);
       if (leaves.length > 0) {

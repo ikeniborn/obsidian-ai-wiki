@@ -1176,23 +1176,17 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       );
       if (!s.claudeAgent.perOperation) {
         new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_claude).addText(
-          (t) => (
-            // eslint-disable-next-line obsidianmd/ui/sentence-case
-            t.setPlaceholder("sonnet").setValue(s.claudeAgent.model).onChange(async (v) => {
-              s.claudeAgent.model = v.trim();
-              await this.plugin.saveSettings();
-            })
-          )
+          (t) => t.setPlaceholder("Sonnet").setValue(s.claudeAgent.model).onChange(async (v) => {
+            s.claudeAgent.model = v.trim();
+            await this.plugin.saveSettings();
+          })
         );
       }
       new import_obsidian3.Setting(containerEl).setName(T.settings.allowedTools_name).setDesc(T.settings.allowedTools_desc).addText(
-        (t) => (
-          // eslint-disable-next-line obsidianmd/ui/sentence-case
-          t.setPlaceholder("Bash,Read,Write").setValue(s.claudeAgent.allowedTools).onChange(async (v) => {
-            s.claudeAgent.allowedTools = v.trim();
-            await this.plugin.saveSettings();
-          })
-        )
+        (t) => t.setPlaceholder("Bash,read,write").setValue(s.claudeAgent.allowedTools).onChange(async (v) => {
+          s.claudeAgent.allowedTools = v.trim();
+          await this.plugin.saveSettings();
+        })
       );
       new import_obsidian3.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
         (t) => t.setValue(s.claudeAgent.perOperation).onChange(async (v) => {
@@ -1220,32 +1214,23 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       }
     } else {
       new import_obsidian3.Setting(containerEl).setName(T.settings.baseUrl_name).setDesc(T.settings.baseUrl_desc).addText(
-        (t) => (
-          // eslint-disable-next-line obsidianmd/ui/sentence-case
-          t.setPlaceholder("http://localhost:11434/v1").setValue(s.nativeAgent.baseUrl).onChange(async (v) => {
-            s.nativeAgent.baseUrl = v.trim();
-            await this.plugin.saveSettings();
-          })
-        )
+        (t) => t.setPlaceholder("HTTP://localhost:11434/v1").setValue(s.nativeAgent.baseUrl).onChange(async (v) => {
+          s.nativeAgent.baseUrl = v.trim();
+          await this.plugin.saveSettings();
+        })
       );
       new import_obsidian3.Setting(containerEl).setName(T.settings.apiKey_name).setDesc(T.settings.apiKey_desc).addText(
-        (t) => (
-          // eslint-disable-next-line obsidianmd/ui/sentence-case
-          t.setPlaceholder("ollama").setValue(s.nativeAgent.apiKey).onChange(async (v) => {
-            s.nativeAgent.apiKey = v.trim();
-            await this.plugin.saveSettings();
-          })
-        )
+        (t) => t.setPlaceholder("Ollama").setValue(s.nativeAgent.apiKey).onChange(async (v) => {
+          s.nativeAgent.apiKey = v.trim();
+          await this.plugin.saveSettings();
+        })
       );
       if (!s.nativeAgent.perOperation) {
         new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native).addText(
-          (t) => (
-            // eslint-disable-next-line obsidianmd/ui/sentence-case
-            t.setPlaceholder("llama3.2").setValue(s.nativeAgent.model).onChange(async (v) => {
-              s.nativeAgent.model = v.trim();
-              await this.plugin.saveSettings();
-            })
-          )
+          (t) => t.setPlaceholder("llama3.2").setValue(s.nativeAgent.model).onChange(async (v) => {
+            s.nativeAgent.model = v.trim();
+            await this.plugin.saveSettings();
+          })
         );
         new import_obsidian3.Setting(containerEl).setName(T.settings.numCtx_name).setDesc(T.settings.numCtx_desc).addText(
           (t) => t.setPlaceholder("(\u0434\u0435\u0444\u043E\u043B\u0442 \u043C\u043E\u0434\u0435\u043B\u0438)").setValue(s.nativeAgent.numCtx != null ? String(s.nativeAgent.numCtx) : "").onChange(async (v) => {
@@ -1327,13 +1312,10 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       })
     );
     new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_evaluatorModel_name).setDesc(T.settings.devMode_evaluatorModel_desc).addText(
-      (t) => (
-        // eslint-disable-next-line obsidianmd/ui/sentence-case
-        t.setPlaceholder("sonnet").setValue(s.devMode.evaluatorModel).onChange(async (v) => {
-          s.devMode.evaluatorModel = v.trim();
-          await this.plugin.saveSettings();
-        })
-      )
+      (t) => t.setPlaceholder("Sonnet").setValue(s.devMode.evaluatorModel).onChange(async (v) => {
+        s.devMode.evaluatorModel = v.trim();
+        await this.plugin.saveSettings();
+      })
     );
   }
 };
@@ -1402,7 +1384,6 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   getViewType() {
     return LLM_WIKI_VIEW_TYPE;
   }
-  // eslint-disable-next-line obsidianmd/ui/sentence-case
   getDisplayText() {
     return "LLM wiki";
   }
