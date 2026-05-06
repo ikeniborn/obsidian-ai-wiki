@@ -12,10 +12,11 @@
 - Синтез, не копирование. Технические конфиги/SQL можно цитировать в code-блоках.
 - Путь страницы должен начинаться с "{{wiki_path}}/"
 - Frontmatter обязателен: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature
+- wiki_sources: каждый элемент обязательно в формате [[path/to/source]], тип свойства Links в Obsidian
 - Раздел "## Основные характеристики" обязателен для каждой страницы
 - При добавлении из нового источника — фиксировать в "## История изменений" с датой и источником
 - "## Связанные концепции" — создавать только при наличии пояснительного контекста к связям
 {{schema_block}}
 
 Верни ТОЛЬКО JSON-массив, без другого текста:
-[{"path":"{{wiki_path}}/EntityName.md","content":"---\nwiki_sources: [{{source_path}}]\nwiki_updated: {{today}}\nwiki_status: stub\ntags: []\nwiki_outgoing_links: []\n---\n# EntityName\n\ncontент..."}]
+[{"path":"{{wiki_path}}/EntityName.md","content":"---\nwiki_sources: [\"[[{{source_path}}]]\"]\nwiki_updated: {{today}}\nwiki_status: stub\ntags: []\nwiki_outgoing_links: []\n---\n# EntityName\n\ncontент..."}]

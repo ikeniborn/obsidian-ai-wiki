@@ -344,3 +344,65 @@
 - ОБНОВЛЕНА: `.wiki/документация/руководства/публикация-плагина.md` (stub → developing) — добавлены разделы: Требования к описанию, Форк obsidian-releases, Тело PR шаблон; обновлены wiki_external_links и wiki_status
 
 ---
+
+## 2026-05-06T00:00:00
+
+**Операция:** ingest
+**Источник:** scripts/dspy/ (optimize.py, lib/loader.py, lib/backend.py, lib/optimizer.py, lib/signature.py, lib/writer.py, README.md, pyproject.toml, tests/)
+**Домен:** скрипты
+
+**Затронуто страниц:** 3
+
+- СОЗДАНА: `.wiki/скрипты/модули/dspy-optimizer.md` (тип: модуль, status: developing)
+- СОЗДАНА: `.wiki/скрипты/конфигурация/dspy-env-config.md` (тип: конфигурация, status: stub)
+- СОЗДАНА: `.wiki/скрипты/пайплайны/dspy-mipro-pipeline.md` (тип: пайплайн, status: developing)
+
+---
+
+## 2026-05-06T00:00:00
+
+**Операция:** ingest
+**Источник:** scripts/dspy/ (tests/test_optimizer.py, tests/test_backend.py, tests/test_loader.py, tests/test_signature.py, tests/test_writer.py)
+**Домен:** скрипты
+
+**Затронуто страниц:** 1
+
+- ОБНОВЛЕНА: `.wiki/скрипты/модули/dspy-optimizer.md` — добавлены wiki_sources для всех тестовых файлов; раздел "Тесты" расширен детальным описанием каждого test-файла; добавлено ПРОТИВОРЕЧИЕ: test_backend.py ожидает флаг `--tools` в argv, которого нет в текущем backend.py
+
+---
+
+## 2026-05-06T00:00:00
+
+**Операция:** ingest
+**Источник:** scripts/dspy/tests/test_backend.py
+**Домен:** скрипты
+
+**Затронуто страниц:** 1
+
+- ОБНОВЛЕНА: `.wiki/скрипты/модули/dspy-optimizer.md` — удалено ПРОТИВОРЕЧИЕ (assert "--tools" убран из test_backend.py); описание теста `forward()` обновлено: флаг `--tools` исключён из проверяемых argv-флагов
+
+---
+
+## 2026-05-06T00:00:00
+
+**Операция:** ingest
+**Источник:** scripts/dspy/tests/test_backend.py
+**Домен:** скрипты
+
+**Затронуто страниц:** 1
+
+- ОБНОВЛЕНА: `.wiki/скрипты/модули/dspy-optimizer.md` — раздел test_backend.py актуализирован: вызовы `forward()` заменены на `lm(prompt=...)` / `lm(messages=[...])` (через `__call__`); `make_lm()` теперь без аргументов, читает env vars через `monkeypatch.setenv`; атрибут `lm.model` имеет формат `"claude-code/{CLAUDE_MODEL}"`
+
+---
+
+## 2026-05-06T00:00:00
+
+**Операция:** ingest
+**Источник:** scripts/dspy/tests/test_backend.py
+**Домен:** скрипты
+
+**Затронуто страниц:** 0
+
+- ПРОПУЩЕНА: `.wiki/скрипты/модули/dspy-optimizer.md` — источник уже в wiki_sources; изменение (удаление `assert "--tools" in args`) уже отражено в описании теста на странице (флаг `--tools` не упоминается); новой информации нет
+
+---

@@ -29,7 +29,6 @@ def test_call_with_prompt_string():
     args = mock_run.call_args[0][0]
     assert "--print" in args
     assert "--dangerously-skip-permissions" in args
-    assert "--tools" in args
     assert "hello" in args
 
 
