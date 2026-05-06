@@ -113,6 +113,10 @@ export async function* runInit(
     if (entry.wiki_folder?.startsWith(vaultPrefix)) {
       entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
     }
+    // NEW: strip !Wiki/ prefix if LLM output full path
+    if (entry.wiki_folder?.startsWith("!Wiki/")) {
+      entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
+    }
     if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
   } catch (e) {
     yield { kind: "error", message: `Failed to parse domain entry: ${(e as Error).message}` };
@@ -241,6 +245,10 @@ async function* runInitWithSources(
     const vaultPrefix = `vaults/${vaultName}/`;
     if (entry.wiki_folder?.startsWith(vaultPrefix)) {
       entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
+    }
+    // NEW: strip !Wiki/ prefix if LLM output full path
+    if (entry.wiki_folder?.startsWith("!Wiki/")) {
+      entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
     }
     if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
   } catch (e) {

@@ -6,6 +6,7 @@ import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import ingestTemplate from "../../prompts/ingest.md";
 import { render } from "./template";
+import { domainWikiFolder } from "../wiki-path";
 
 export async function* runIngest(
   args: string[],
@@ -46,10 +47,10 @@ export async function* runIngest(
     return;
   }
 
-  const absWiki = join(vaultRoot, domain.wiki_folder);
+  const absWiki = join(vaultRoot, domainWikiFolder(domain.wiki_folder));
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
-    yield { kind: "error", message: `Wiki folder ${domain.wiki_folder} is outside the vault.` };
+    yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
     return;
   }
 

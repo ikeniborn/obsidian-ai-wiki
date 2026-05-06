@@ -37,7 +37,7 @@ const VAULT_ROOT = "/vaults/Work";
 const domain: DomainEntry = {
   id: "work",
   name: "Work",
-  wiki_folder: "!Wiki/work",
+  wiki_folder: "work",
   source_paths: ["Sources/"],
 };
 

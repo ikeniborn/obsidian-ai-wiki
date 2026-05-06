@@ -6,6 +6,7 @@ import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import queryTemplate from "../../prompts/query.md";
 import { render } from "./template";
+import { domainWikiFolder } from "../wiki-path";
 
 const MAX_CONTEXT_CHARS = 80_000;
 const META_FILES = ["_index.md", "_log.md", "_schema.md"];
@@ -33,10 +34,10 @@ export async function* runQuery(
     return;
   }
 
-  const absWiki = join(vaultRoot, domain.wiki_folder);
+  const absWiki = join(vaultRoot, domainWikiFolder(domain.wiki_folder));
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
-    yield { kind: "error", message: `Wiki folder ${domain.wiki_folder} is outside the vault.` };
+    yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
     return;
   }
 

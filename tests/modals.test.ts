@@ -5,7 +5,7 @@ import type { DomainEntry } from "../src/domain-map";
 const domain: DomainEntry = {
   id: "test",
   name: "Test",
-  wiki_folder: "!Wiki/test",
+  wiki_folder: "test",
   source_paths: ["/home/user/docs", "/home/user/notes with spaces"],
   entity_types: [
     { type: "Person", description: "People", extraction_cues: ["author"], min_mentions_for_page: 2 },
@@ -92,7 +92,7 @@ describe("EditDomainModal", () => {
       (m as any).entityTypesList = domain.entity_types;
       (m as any).sourcePathsList = ["/home/user/docs"];
       (m as any).nameVal = "Test";
-      (m as any).wikiFolderVal = "!Wiki/test";
+      (m as any).wikiFolderVal = "test";
       (m as any).languageNotesVal = "";
       (m as any).handleSave();
       expect(onSave).toHaveBeenCalledOnce();
@@ -106,7 +106,7 @@ describe("EditDomainModal", () => {
       (m as any).entityTypesList = [];
       (m as any).sourcePathsList = ["/home/user/notes with spaces"];
       (m as any).nameVal = "Test";
-      (m as any).wikiFolderVal = "!Wiki/test";
+      (m as any).wikiFolderVal = "test";
       (m as any).languageNotesVal = "";
       (m as any).handleSave();
       expect(onSave.mock.calls[0][0].source_paths).toEqual(["/home/user/notes with spaces"]);
@@ -121,7 +121,7 @@ describe("EditDomainModal", () => {
       (m as any).entityTypesVal = JSON.stringify([{ type: "Tech", description: "x", extraction_cues: [] }]);
       (m as any).sourcePathsList = [];
       (m as any).nameVal = "Test";
-      (m as any).wikiFolderVal = "!Wiki/test";
+      (m as any).wikiFolderVal = "test";
       (m as any).languageNotesVal = "";
       (m as any).handleSave();
       expect(onSave).toHaveBeenCalledOnce();
@@ -134,7 +134,7 @@ describe("EditDomainModal", () => {
       (m as any).entityTypesMode = "json";
       (m as any).entityTypesVal = "not valid json {{{";
       (m as any).nameVal = "Test";
-      (m as any).wikiFolderVal = "!Wiki/test";
+      (m as any).wikiFolderVal = "test";
       (m as any).handleSave();
       expect(onSave).not.toHaveBeenCalled();
     });
@@ -145,7 +145,7 @@ describe("EditDomainModal", () => {
       (m as any).entityTypesMode = "json";
       (m as any).entityTypesVal = '{"type":"Tech"}';
       (m as any).nameVal = "Test";
-      (m as any).wikiFolderVal = "!Wiki/test";
+      (m as any).wikiFolderVal = "test";
       (m as any).handleSave();
       expect(onSave).not.toHaveBeenCalled();
     });

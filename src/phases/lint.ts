@@ -7,6 +7,7 @@ import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import { parseJsonPages } from "./ingest";
 import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
+import { domainWikiFolder } from "../wiki-path";
 
 const META_FILES = ["_index.md", "_log.md", "_schema.md"];
 
@@ -36,7 +37,7 @@ export async function* runLint(
   for (const domain of targets) {
     if (signal.aborted) return;
 
-    const absWiki = join(vaultRoot, domain.wiki_folder);
+    const absWiki = join(vaultRoot, domainWikiFolder(domain.wiki_folder));
     const wikiVaultPath = vaultTools.toVaultPath(absWiki);
     if (!wikiVaultPath) {
       reportParts.push(`## ${domain.id}\nWiki folder outside vault — skipped.`);

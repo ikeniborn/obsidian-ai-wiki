@@ -38,7 +38,7 @@ async function collect<T>(gen: AsyncGenerator<T>): Promise<T[]> {
 const existingDomain: DomainEntry = {
   id: "existing",
   name: "Existing",
-  wiki_folder: "!Wiki/existing",
+  wiki_folder: "existing",
   source_paths: [],
 };
 
@@ -118,7 +118,7 @@ describe("runInit", () => {
     const domainCreated = events.find((e: any) => e.kind === "domain_created") as any;
     expect(domainCreated).toBeDefined();
     expect(domainCreated.entry.id).toBe("newdomain");
-    expect(domainCreated.entry.wiki_folder).toBe("!Wiki/newdomain");
+    expect(domainCreated.entry.wiki_folder).toBe("newdomain");
   });
 
   it("yields result event after domain_created", async () => {
