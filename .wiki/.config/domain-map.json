@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LLM Wiki Domain Map",
+  "version": "1.0.0",
+  "wiki_root": ".wiki",
+  "domains": [
+    {
+      "id": "планы",
+      "name": "Планы реализации",
+      "description": "Планы разработки фич obsidian-llm-wiki: задачи, архитектурные решения, цели",
+      "source_paths": [
+        "docs/superpowers/plans"
+      ],
+      "wiki_subfolder": "планы",
+      "entity_types": [
+        {
+          "type": "фича",
+          "description": "Функциональность или улучшение, описанное в плане",
+          "extraction_cues": [
+            "goal", "цель", "feature", "фича", "улучшение", "implementation",
+            "реализация", "добавить", "заменить", "внедрить", "поддержка"
+          ],
+          "min_mentions_for_page": 1,
+          "wiki_subfolder": "планы/фичи"
+        },
+        {
+          "type": "компонент",
+          "description": "Модуль или файл проекта, который затрагивается планом",
+          "extraction_cues": [
+            "src/", ".ts", "view.ts", "controller.ts", "runner.ts", "stream.ts",
+            "settings.ts", "prompt.ts", "main.ts", "файл", "модуль", "компонент"
+          ],
+          "min_mentions_for_page": 2,
+          "wiki_subfolder": "планы/компоненты"
+        },
+        {
+          "type": "паттерн",
+          "description": "Архитектурный паттерн или технический подход, применяемый в планах",
+          "extraction_cues": [
+            "паттерн", "pattern", "архитектура", "architecture", "подход",
+            "approach", "design", "API", "protocol", "поток", "flow"
+          ],
+          "min_mentions_for_page": 2,
+          "wiki_subfolder": "планы/паттерны"
+        }
+      ],
+      "tags": [
+        "planning",
+        "implementation",
+        "obsidian-llm-wiki",
+        "typescript"
+      ],
+      "language_notes": "Планы на русском языке с английскими техническими терминами. Имена файлов и компонентов не переводятся. Технические API (Obsidian ItemView API, DOM-методы) используются как есть."
+    },
+    {
+      "id": "спецификации",
+      "name": "Спецификации дизайна",
+      "description": "Дизайн-спеки фич obsidian-llm-wiki: архитектурные решения, протоколы, UI-изменения, интеграции",
+      "source_paths": [
+        "docs/superpowers/specs"
+      ],
+      "wiki_subfolder": "спецификации",
+      "entity_types": [
+        {
+          "type": "фича",
+          "description": "Функциональность или улучшение, описанное в спеке",
+          "extraction_cues": [
+            "цель", "goal", "feature", "фича", "улучшение", "решение", "solution",
+            "добавить", "заменить", "внедрить", "поддержка", "design", "дизайн"
+          ],
+          "min_mentions_for_page": 1,
+          "wiki_subfolder": "спецификации/фичи"
+        },
+        {
+          "type": "компонент",
+          "description": "Модуль или файл проекта, изменяемый по спеке",
+          "extraction_cues": [
+            "src/", ".ts", "view.ts", "controller.ts", "runner.ts", "stream.ts",
+            "settings.ts", "agent-runner.ts", "claude-cli-client.ts", "phases/", "modals.ts",
+            "файл", "модуль", "компонент"
+          ],
+          "min_mentions_for_page": 2,
+          "wiki_subfolder": "спецификации/компоненты"
+        },
+        {
+          "type": "паттерн",
+          "description": "Архитектурный паттерн или технический подход из спеки",
+          "extraction_cues": [
+            "паттерн", "pattern", "архитектура", "architecture", "подход",
+            "approach", "design", "API", "protocol", "поток", "flow", "backend", "интерфейс"
+          ],
+          "min_mentions_for_page": 2,
+          "wiki_subfolder": "спецификации/паттерны"
+        }
+      ],
+      "tags": [
+        "specs",
+        "design",
+        "obsidian-llm-wiki",
+        "typescript"
+      ],
+      "language_notes": "Спеки на русском языке с английскими техническими терминами. Имена файлов, компонентов и API не переводятся."
+    },
+    {
+      "id": "скрипты",
+      "name": "Вспомогательные скрипты",
+      "description": "Вспомогательные скрипты проекта obsidian-llm-wiki: DSPy-оптимизатор промптов, утилиты, инструменты разработки",
+      "source_paths": [
+        "scripts"
+      ],
+      "wiki_subfolder": "скрипты",
+      "entity_types": [
+        {
+          "type": "модуль",
+          "description": "Python-модуль или скрипт с конкретной функциональностью",
+          "extraction_cues": [
+            "def ", "class ", "import ", ".py", "модуль", "функция", "loader",
+            "optimizer", "writer", "backend", "signature", "optimize"
+          ],
+          "min_mentions_for_page": 1,
+          "wiki_subfolder": "скрипты/модули"
+        },
+        {
+          "type": "конфигурация",
+          "description": "Переменные окружения, настройки запуска, зависимости скрипта",
+          "extraction_cues": [
+            "env", ".env", "pyproject", "DSPY_BACKEND", "OLLAMA_MODEL", "DEV_LOG_PATH",
+            "PROMPTS_DIR", "OUTPUT_DIR", "MIN_EXAMPLES", "настройка", "config"
+          ],
+          "min_mentions_for_page": 1,
+          "wiki_subfolder": "скрипты/конфигурация"
+        },
+        {
+          "type": "пайплайн",
+          "description": "Рабочий процесс или поток данных в скрипте",
+          "extraction_cues": [
+            "pipeline", "пайплайн", "поток", "load_examples", "run_mipro", "write_optimized",
+            "make_lm", "flow", "chain", "шаги", "алгоритм"
+          ],
+          "min_mentions_for_page": 1,
+          "wiki_subfolder": "скрипты/пайплайны"
+        }
+      ],
+      "tags": [
+        "scripts",
+        "dspy",
+        "python",
+        "optimization"
+      ],
+      "language_notes": "Исходники на Python, документация на русском. Технические термины (DSPy, MIPROv2, JSONL, LM) не переводятся. Имена модулей и переменных окружения сохраняются в оригинальном виде."
+    }
+  ],
+  "cross_domain_rules": {
+    "description": "Правила для сущностей, встречающихся в нескольких доменах",
+    "rules": []
+  },
+  "special_source_types": {}
+}
