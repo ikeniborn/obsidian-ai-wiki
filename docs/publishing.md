@@ -69,6 +69,16 @@ I have given proper attribution to these other projects in my `README.md`.
 - Релиз должен содержать `main.js` и `manifest.json` как отдельные файлы
 - `manifest.json` в релизе должен иметь тот же `id` и `description`, что и запись в PR
 
+## Форк obsidian-releases
+
+Форк `ikeniborn/obsidian-releases` (от `obsidianmd/obsidian-releases`) — **временный артефакт** процесса публикации.
+
+- Нужен только для создания PR #12351 в `obsidianmd/obsidian-releases`
+- Пока PR открыт — форк удалять нельзя (GitHub удалит ветку-источник PR)
+- После принятия PR форк можно удалить
+
+Активный PR: https://github.com/obsidianmd/obsidian-releases/pull/12351 (статус: OPEN)
+
 ## Процесс публикации
 
 ### 1. Собрать релиз
