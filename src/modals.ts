@@ -1,4 +1,4 @@
-import { AbstractInputSuggest, App, Modal, Setting, TFolder } from "obsidian";
+import { App, Modal, Setting, TFolder } from "obsidian";
 import type { AddDomainInput, DomainEntry, EntityType } from "./domain-map";
 import { i18n } from "./i18n";
 
@@ -125,27 +125,43 @@ export class DomainModal extends Modal {
 }
 
 
-class FolderSuggest extends AbstractInputSuggest<TFolder> {
-  constructor(app: App, inputEl: HTMLInputElement, private onSelect: (path: string) => void) {
-    super(app, inputEl);
-  }
+function attachFolderDropdown(app: App, inputEl: HTMLInputElement, onSelect: (path: string) => void): void {
+  const wrapper = inputEl.parentElement!;
+  wrapper.style.position = "relative";
 
-  getSuggestions(inputStr: string): TFolder[] {
-    const lower = inputStr.toLowerCase();
-    return this.app.vault.getAllFolders(true)
-      .filter((f) => f.path.toLowerCase().includes(lower))
+  let dropEl: HTMLElement | null = null;
+
+  const hideDropdown = () => { dropEl?.remove(); dropEl = null; };
+
+  const showDropdown = (folders: TFolder[]) => {
+    hideDropdown();
+    if (!folders.length) return;
+
+    dropEl = wrapper.createDiv({ cls: "llm-wiki-folder-dropdown" });
+    for (const folder of folders) {
+      const item = dropEl.createDiv({ cls: "llm-wiki-folder-dropdown-item" });
+      item.setText(folder.path + "/");
+      item.addEventListener("mousedown", (e) => {
+        e.preventDefault(); // prevent input blur before selection
+        hideDropdown();
+        onSelect(folder.path + "/");
+      });
+    }
+  };
+
+  inputEl.addEventListener("input", () => {
+    const lower = inputEl.value.toLowerCase();
+    if (!lower) { hideDropdown(); return; }
+    const matches = app.vault.getAllFolders(true)
+      .filter((f: TFolder) => f.path.toLowerCase().includes(lower))
       .slice(0, 20);
-  }
+    showDropdown(matches);
+  });
 
-  renderSuggestion(folder: TFolder, el: HTMLElement): void {
-    el.setText(folder.path + "/");
-  }
-
-  selectSuggestion(folder: TFolder): void {
-    this.inputEl.value = "";
-    this.close();
-    this.onSelect(folder.path + "/");
-  }
+  inputEl.addEventListener("blur", hideDropdown);
+  inputEl.addEventListener("keydown", (e: KeyboardEvent) => {
+    if (e.key === "Escape") hideDropdown();
+  });
 }
 
 export class AddDomainModal extends Modal {
@@ -231,21 +247,22 @@ export class AddDomainModal extends Modal {
       cls: "llm-wiki-sp-input",
       attr: { type: "text", placeholder: T.addDomainSourcePathsPlaceholder },
     });
-    const addPath = (val = inputEl.value.trim()) => {
-      if (!val || this.input.sourcePaths.includes(val)) return;
-      this.input.sourcePaths.push(val);
+    const addPath = (val?: string) => {
+      const v = val ?? inputEl.value.trim();
+      if (!v || this.input.sourcePaths.includes(v)) return;
+      this.input.sourcePaths.push(v);
       inputEl.value = "";
       rerender();
     };
 
-    new FolderSuggest(this.app, inputEl, addPath);
+    attachFolderDropdown(this.app, inputEl, addPath);
 
     inputEl.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "Enter") { e.preventDefault(); addPath(); }
     });
 
     addRow.createEl("button", { text: T.addDomainSourcePathsAdd, cls: "mod-cta" })
-      .addEventListener("click", addPath);
+      .addEventListener("click", () => addPath());
   }
 
   onClose(): void { this.contentEl.empty(); }
@@ -439,21 +456,22 @@ export class EditDomainModal extends Modal {
       attr: { type: "text", placeholder: T.sourcePathsPlaceholder },
     });
 
-    const addPath = (val = input.value.trim()) => {
-      if (!val || this.sourcePathsList.includes(val)) return;
-      this.sourcePathsList.push(val);
+    const addPath = (val?: string) => {
+      const v = val ?? input.value.trim();
+      if (!v || this.sourcePathsList.includes(v)) return;
+      this.sourcePathsList.push(v);
       input.value = "";
       rerender();
     };
 
-    new FolderSuggest(this.app, input, addPath);
+    attachFolderDropdown(this.app, input, addPath);
 
     input.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "Enter") { e.preventDefault(); addPath(); }
     });
 
     const addBtn = addRow.createEl("button", { text: T.sourcePathsAdd, cls: "mod-cta" });
-    addBtn.addEventListener("click", addPath);
+    addBtn.addEventListener("click", () => addPath());
   }
 
   private renderEntityTypeCard(container: HTMLElement, et: EntityType): void {
