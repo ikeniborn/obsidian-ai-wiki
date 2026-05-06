@@ -173,7 +173,7 @@ export class AddDomainModal extends Modal {
         t.setPlaceholder(T.idPlaceholder).onChange((v) => {
           this.input.id = v.trim();
           if (this.wikiFolderInput && !this.input.wikiFolder) {
-            this.wikiFolderInput.setValue(`${this.wikiRoot}/${this.input.id}`);
+            this.wikiFolderInput.setValue(this.input.id);
           }
         }),
       );
@@ -338,6 +338,7 @@ export class EditDomainModal extends Modal {
 
     new Setting(contentEl)
       .setName(T.wikiFolder_name)
+      .setDesc("!Wiki/[подпапка]")
       .addText((t) => t.setValue(this.wikiFolderVal).onChange((v) => { this.wikiFolderVal = v; }));
 
     const entityTypesContainer = contentEl.createDiv();

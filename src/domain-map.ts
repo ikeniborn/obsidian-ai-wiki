@@ -9,7 +9,7 @@ export interface EntityType {
 export interface DomainEntry {
   id: string;
   name: string;
-  wiki_folder: string;  // vault-relative, e.g. "!Wiki/os"
+  wiki_folder: string;  // domain subfolder within !Wiki/, e.g. "os" (without "!Wiki/" prefix)
   source_paths?: string[];
   entity_types?: EntityType[];
   language_notes?: string;
@@ -18,7 +18,7 @@ export interface DomainEntry {
 export interface AddDomainInput {
   id: string;
   name: string;
-  wikiFolder: string;  // vault-relative, e.g. "!Wiki/os"
+  wikiFolder: string;  // domain subfolder within !Wiki/, e.g. "os"
   sourcePaths: string[];
 }
 

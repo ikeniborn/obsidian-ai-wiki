@@ -171,11 +171,11 @@ export class WikiController {
       new Notice(i18n().ctrl.domainAddFailed(msg));
       return { ok: false, error: msg };
     }
-    const wikiRelative = input.wikiFolder.trim() || `!Wiki/${id}`;
+    const wikiSubfolder = input.wikiFolder.trim() || id;
     s.domains.push({
       id,
       name: input.name.trim() || id,
-      wiki_folder: wikiRelative,
+      wiki_folder: wikiSubfolder,
       source_paths: input.sourcePaths ?? [],
       entity_types: [],
       language_notes: "",
