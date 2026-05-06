@@ -23,12 +23,12 @@ if (production) {
   await ctx.rebuild();
   await ctx.dispose();
   for (const f of ["manifest.json", "styles.css"]) {
-    copyFileSync(f, `dist/${f}`);
+    copyFileSync(`src/${f}`, `dist/${f}`);
   }
   console.log("dist/ updated: main.js, manifest.json, styles.css");
 } else {
   for (const f of ["manifest.json", "styles.css"]) {
-    copyFileSync(f, `dist/${f}`);
+    copyFileSync(`src/${f}`, `dist/${f}`);
   }
   await ctx.watch();
 }

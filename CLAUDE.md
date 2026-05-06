@@ -96,7 +96,7 @@ esbuild (`esbuild.config.mjs`): entrypoint `src/main.ts` → `main.js` (CJS, ES2
 
 1. Прочитать текущую версию из `package.json` (поле `version`)
 2. Инкрементировать patch: `X.Y.Z` → `X.Y.(Z+1)`
-3. Записать новую версию в `package.json` и `manifest.json`
+3. Записать новую версию в `package.json` и `src/manifest.json`
 4. Запустить `npm run build`
 
 ## Rules
