@@ -11,10 +11,12 @@ import { i18n } from "./i18n";
 export default class LlmWikiPlugin extends Plugin {
   settings!: LlmWikiPluginSettings;
   controller!: WikiController;
+  settingTab?: LlmWikiSettingTab;
 
   async onload(): Promise<void> {
     await this.loadSettings();
     this.controller = new WikiController(this.app, this);
+    this.controller.onBusyChange = () => this.settingTab?.display();
 
     this.registerView(LLM_WIKI_VIEW_TYPE, (leaf: WorkspaceLeaf) => new LlmWikiView(leaf, this));
 
@@ -84,7 +86,8 @@ export default class LlmWikiPlugin extends Plugin {
       callback: () => this.controller.cancelCurrent(),
     });
 
-    this.addSettingTab(new LlmWikiSettingTab(this.app, this));
+    this.settingTab = new LlmWikiSettingTab(this.app, this);
+    this.addSettingTab(this.settingTab);
 
     console.debug("[llm-wiki] loaded");
   }

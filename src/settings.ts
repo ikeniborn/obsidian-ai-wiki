@@ -15,6 +15,14 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     const s = this.plugin.settings;
     const T = i18n();
 
+    const busy = this.plugin.controller.running;
+    if (busy) {
+      containerEl.createEl("div", {
+        text: T.settings.busyBanner,
+        cls: "setting-item-description llm-wiki-settings-busy-banner",
+      });
+    }
+
     // ── General settings ───────────────────────────────────────────────────
     new Setting(containerEl).setName(T.settings.h3_general).setHeading();
 
@@ -92,8 +100,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         new Setting(containerEl)
           .setName(d.name || d.id)
           .setDesc(d.id)
-          .addButton((b) =>
-            b.setButtonText(T.settings.editDomain).onClick(() => {
+          .addButton((b) => {
+            b.setButtonText(T.settings.editDomain).setDisabled(busy).onClick(() => {
               new EditDomainModal(this.plugin.app, d, (updated) => {
                 void (async () => {
                   s.domains[i] = updated;
@@ -101,10 +109,10 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                   this.display();
                 })();
               }).open();
-            }),
-          )
-          .addButton((b) =>
-            b.setButtonText(T.settings.deleteDomain).setWarning().onClick(() => {
+            });
+          })
+          .addButton((b) => {
+            b.setButtonText(T.settings.deleteDomain).setWarning().setDisabled(busy).onClick(() => {
               new ConfirmModal(this.plugin.app, T.settings.confirmDeleteDomain(d.id), [], () => {
                 void (async () => {
                   new Notice(T.settings.domainDeleted(d.id));
@@ -113,8 +121,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                   this.display();
                 })();
               }).open();
-            }),
-          );
+            });
+          });
       }
     }
 
