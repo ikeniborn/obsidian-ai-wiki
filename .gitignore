@@ -1,9 +1,10 @@
 .superpowers/
 .worktrees/
+.claude/plans/
 node_modules/
 main.js
 *.log
-tpm/
+tmp/
 **/.vitest-cache/
 !dist/main.js
 .playwright-mcp
