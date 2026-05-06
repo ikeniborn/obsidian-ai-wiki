@@ -1176,7 +1176,7 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       );
       if (!s.claudeAgent.perOperation) {
         new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_claude).addText(
-          (t) => t.setPlaceholder("Sonnet").setValue(s.claudeAgent.model).onChange(async (v) => {
+          (t) => t.setPlaceholder("").setValue(s.claudeAgent.model).onChange(async (v) => {
             s.claudeAgent.model = v.trim();
             await this.plugin.saveSettings();
           })
@@ -1214,7 +1214,7 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       }
     } else {
       new import_obsidian3.Setting(containerEl).setName(T.settings.baseUrl_name).setDesc(T.settings.baseUrl_desc).addText(
-        (t) => t.setPlaceholder("HTTP://localhost:11434/v1").setValue(s.nativeAgent.baseUrl).onChange(async (v) => {
+        (t) => t.setPlaceholder("").setValue(s.nativeAgent.baseUrl).onChange(async (v) => {
           s.nativeAgent.baseUrl = v.trim();
           await this.plugin.saveSettings();
         })
@@ -1312,7 +1312,7 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       })
     );
     new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_evaluatorModel_name).setDesc(T.settings.devMode_evaluatorModel_desc).addText(
-      (t) => t.setPlaceholder("Sonnet").setValue(s.devMode.evaluatorModel).onChange(async (v) => {
+      (t) => t.setPlaceholder("").setValue(s.devMode.evaluatorModel).onChange(async (v) => {
         s.devMode.evaluatorModel = v.trim();
         await this.plugin.saveSettings();
       })

@@ -167,7 +167,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .setName(T.settings.model_name)
           .setDesc(T.settings.model_desc_claude)
           .addText((t) =>
-            t.setPlaceholder("Sonnet")
+            t.setPlaceholder("")
               .setValue(s.claudeAgent.model)
               .onChange(async (v) => { s.claudeAgent.model = v.trim(); await this.plugin.saveSettings(); }),
           );
@@ -213,7 +213,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .setName(T.settings.baseUrl_name)
         .setDesc(T.settings.baseUrl_desc)
         .addText((t) =>
-          t.setPlaceholder("HTTP://localhost:11434/v1")
+          t.setPlaceholder("")
             .setValue(s.nativeAgent.baseUrl)
             .onChange(async (v) => { s.nativeAgent.baseUrl = v.trim(); await this.plugin.saveSettings(); }),
         );
@@ -337,7 +337,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       .setName(T.settings.devMode_evaluatorModel_name)
       .setDesc(T.settings.devMode_evaluatorModel_desc)
       .addText((t) =>
-        t.setPlaceholder("Sonnet")
+        t.setPlaceholder("")
           .setValue(s.devMode.evaluatorModel)
           .onChange(async (v) => { s.devMode.evaluatorModel = v.trim(); await this.plugin.saveSettings(); }),
       );
