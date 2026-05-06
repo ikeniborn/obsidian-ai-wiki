@@ -3,7 +3,6 @@ import { AddDomainModal, BusyCloseModal, ConfirmModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
 import { i18n } from "./i18n";
-import { WIKI_ROOT } from "./wiki-path";
 
 export const LLM_WIKI_VIEW_TYPE = "llm-wiki-view";
 
@@ -197,7 +196,7 @@ export class LlmWikiView extends ItemView {
   private openAddDomain(): void {
     const cwd = this.plugin.controller.cwdOrEmpty();
     if (!cwd) { new Notice(i18n().view.cwdNotSet); return; }
-    new AddDomainModal(this.app, WIKI_ROOT, (input) => {
+    new AddDomainModal(this.app, (input) => {
       const r = this.plugin.controller.registerDomain(input);
       if (!r.ok) return;
       this.refreshDomains();

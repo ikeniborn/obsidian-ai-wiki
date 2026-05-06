@@ -155,7 +155,6 @@ export class AddDomainModal extends Modal {
 
   constructor(
     app: App,
-    private wikiRoot: string,
     private onSubmit: (input: AddDomainInput) => void,
   ) {
     super(app);
@@ -184,9 +183,9 @@ export class AddDomainModal extends Modal {
 
     new Setting(contentEl)
       .setName(T.wikiFolder_name)
-      .setDesc(T.wikiFolder_desc(this.wikiRoot))
+      .setDesc(T.wikiFolder_desc(""))
       .addText((t) => {
-        t.setPlaceholder(T.wikiFolder_placeholder(this.wikiRoot)).onChange((v) => {
+        t.setPlaceholder(T.wikiFolder_placeholder("")).onChange((v) => {
           this.input.wikiFolder = v.trim();
         });
         this.wikiFolderInput = t;
@@ -338,7 +337,7 @@ export class EditDomainModal extends Modal {
 
     new Setting(contentEl)
       .setName(T.wikiFolder_name)
-      .setDesc("!Wiki/[подпапка]")
+      .setDesc(T.wikiFolder_editDesc)
       .addText((t) => t.setValue(this.wikiFolderVal).onChange((v) => { this.wikiFolderVal = v; }));
 
     const entityTypesContainer = contentEl.createDiv();
