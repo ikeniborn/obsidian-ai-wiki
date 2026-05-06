@@ -847,3 +847,507 @@
 {"ts":"2026-05-06T10:57:19.792Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/Портал загрузки не файлов в ЦХД (веб для s3).md"}}}
 {"ts":"2026-05-06T10:57:19.802Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags: \n---\nhttps://confluence.rt.ru/display/UD/HUE+vs+Ozone"}}
 {"ts":"2026-05-06T10:57:19.816Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T10:57:57.322Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/rfc/rfc-portal-s3-upload.md"}}}
+{"ts":"2026-05-06T10:57:57.329Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T10:57:57.335Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «Портал загрузки не файлов в ЦХД (веб для s3).md» → домен «sar»: записано 1 стр.\n  • rfc-portal-s3-upload.md"}}
+{"ts":"2026-05-06T10:57:57.358Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/"}}
+{"ts":"2026-05-06T10:57:57.363Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":37540,"text":"Источник «Портал загрузки не файлов в ЦХД (веб для s3).md» → домен «sar»: записано 1 стр.\n  • rfc-portal-s3-upload.md"}}
+{"ts":"2026-05-06T10:57:57.369Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/Портал загрузки не файлов в ЦХД (веб для s3).md"}}
+{"ts":"2026-05-06T10:57:57.374Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/Проект 122 Минцифра.md","index":25,"total":66}}
+{"ts":"2026-05-06T10:57:57.380Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/Проект 122 Минцифра.md"}}}
+{"ts":"2026-05-06T10:57:57.395Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags:\naliases:\n  - Экспорт оперативной отчетности на FTP 122\nOutgoingLinks:\n---\n\n\n![[Проект 122 "}}
+{"ts":"2026-05-06T10:57:57.424Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T10:59:01.290Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/пайплайны/hdfs-ftp-pipeline.md"}}}
+{"ts":"2026-05-06T10:59:01.296Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T10:59:01.303Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/коннекторы/ftp.md"}}}
+{"ts":"2026-05-06T10:59:01.316Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T10:59:01.322Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «Проект 122 Минцифра.md» → домен «sar»: записано 2 стр.\n  • hdfs-ftp-pipeline.md\n  • ftp.md"}}
+{"ts":"2026-05-06T10:59:01.347Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/"}}
+{"ts":"2026-05-06T10:59:01.353Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":63923,"text":"Источник «Проект 122 Минцифра.md» → домен «sar»: записано 2 стр.\n  • hdfs-ftp-pipeline.md\n  • ftp.md"}}
+{"ts":"2026-05-06T10:59:01.358Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/Проект 122 Минцифра.md"}}
+{"ts":"2026-05-06T10:59:01.364Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/САОB2O.md","index":26,"total":66}}
+{"ts":"2026-05-06T10:59:01.369Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/САОB2O.md"}}}
+{"ts":"2026-05-06T10:59:01.380Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags: \n---\n![[САОB2O 2025-07-01 15.21.00.excalidraw]]\n\nРезультаты встречи\n1. Триггеры с датастей"}}
+{"ts":"2026-05-06T10:59:01.411Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:00:14.856Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/rfc/rfc-sao-b2o-integration.md"}}}
+{"ts":"2026-05-06T11:00:14.861Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:00:14.867Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/слои-данных/ods.md"}}}
+{"ts":"2026-05-06T11:00:14.884Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:00:14.890Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «САОB2O.md» → домен «sar»: записано 2 стр.\n  • rfc-sao-b2o-integration.md\n  • ods.md"}}
+{"ts":"2026-05-06T11:00:14.923Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/"}}
+{"ts":"2026-05-06T11:00:14.931Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":73512,"text":"Источник «САОB2O.md» → домен «sar»: записано 2 стр.\n  • rfc-sao-b2o-integration.md\n  • ods.md"}}
+{"ts":"2026-05-06T11:00:14.936Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/САОB2O.md"}}
+{"ts":"2026-05-06T11:00:14.942Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/СКИТ.md","index":27,"total":66}}
+{"ts":"2026-05-06T11:00:14.947Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/СКИТ.md"}}}
+{"ts":"2026-05-06T11:00:14.962Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags:\n  - architecture\naliases: \nOutgoingLinks:\n---\n\n![[СКИТ hld.excalidraw]]\n# Оптимальная\n\n![["}}
+{"ts":"2026-05-06T11:00:15.018Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:01:21.997Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/superset.md"}}}
+{"ts":"2026-05-06T11:01:22.003Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:01:22.010Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/скит.md"}}}
+{"ts":"2026-05-06T11:01:22.030Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:01:22.036Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «СКИТ.md» → домен «sar»: записано 2 стр.\n  • superset.md\n  • скит.md"}}
+{"ts":"2026-05-06T11:01:22.069Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/"}}
+{"ts":"2026-05-06T11:01:22.074Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":67050,"text":"Источник «СКИТ.md» → домен «sar»: записано 2 стр.\n  • superset.md\n  • скит.md"}}
+{"ts":"2026-05-06T11:01:22.080Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/СКИТ.md"}}
+{"ts":"2026-05-06T11:01:22.085Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/СУ НОП.md","index":28,"total":66}}
+{"ts":"2026-05-06T11:01:22.091Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/СУ НОП.md"}}}
+{"ts":"2026-05-06T11:01:22.105Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags:\n  - architecture\n  - hld\naliases: \nOutgoingLinks:\n  - https://ihelp.rt.ru/browse/DWM-79207"}}
+{"ts":"2026-05-06T11:01:22.147Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:01:36.955Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «СУ НОП.md» обработан — новых или изменённых страниц нет."}}
+{"ts":"2026-05-06T11:01:36.961Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":14808,"text":"Источник «СУ НОП.md» обработан — новых или изменённых страниц нет."}}
+{"ts":"2026-05-06T11:01:36.967Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/СУ НОП.md"}}
+{"ts":"2026-05-06T11:01:36.972Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/СУИТ.md","index":29,"total":66}}
+{"ts":"2026-05-06T11:01:36.977Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/СУИТ.md"}}}
+{"ts":"2026-05-06T11:01:36.986Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags: \n---\nКонтуры СУИТ\n- с тестой среды доступ до vIP 10.245.49.156 порт 443\n- с продуковой сре"}}
+{"ts":"2026-05-06T11:01:37.000Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:02:11.175Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/суит.md"}}}
+{"ts":"2026-05-06T11:02:11.181Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:02:11.187Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «СУИТ.md» → домен «sar»: записано 1 стр.\n  • суит.md"}}
+{"ts":"2026-05-06T11:02:11.215Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/"}}
+{"ts":"2026-05-06T11:02:11.222Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":34215,"text":"Источник «СУИТ.md» → домен «sar»: записано 1 стр.\n  • суит.md"}}
+{"ts":"2026-05-06T11:02:11.227Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/СУИТ.md"}}
+{"ts":"2026-05-06T11:02:11.233Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/Справочник сотрудников в CDM.md","index":30,"total":66}}
+{"ts":"2026-05-06T11:02:11.239Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/Справочник сотрудников в CDM.md"}}}
+{"ts":"2026-05-06T11:02:11.250Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"![[Справочник сотрудников в CDM 2025-10-17 08.39.28.excalidraw]]"}}
+{"ts":"2026-05-06T11:02:11.284Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:02:31.088Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «Справочник сотрудников в CDM.md» обработан — новых или изменённых страниц нет."}}
+{"ts":"2026-05-06T11:02:31.088Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":19798,"text":"Источник «Справочник сотрудников в CDM.md» обработан — новых или изменённых страниц нет."}}
+{"ts":"2026-05-06T11:02:31.096Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/Справочник сотрудников в CDM.md"}}
+{"ts":"2026-05-06T11:02:31.102Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/Экспорт в слой распространения S3.md","index":31,"total":66}}
+{"ts":"2026-05-06T11:02:31.108Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/Экспорт в слой распространения S3.md"}}}
+{"ts":"2026-05-06T11:02:31.117Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags: \n---\n\nhttps://confluence.rt.ru/pages/viewpage.action?pageId=1233560191\n\n# Задачи\n\nИнфрастр"}}
+{"ts":"2026-05-06T11:02:31.131Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:04:24.770Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/trino.md"}}}
+{"ts":"2026-05-06T11:04:24.779Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:04:24.785Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/hive-metastore.md"}}}
+{"ts":"2026-05-06T11:04:24.809Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:04:24.815Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/apache-iceberg.md"}}}
+{"ts":"2026-05-06T11:04:24.840Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:04:24.847Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «Экспорт в слой распространения S3.md» → домен «sar»: записано 3 стр.\n  • trino.md\n  • hive-metastore.md\n  • apache-iceberg.md"}}
+{"ts":"2026-05-06T11:04:24.882Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/"}}
+{"ts":"2026-05-06T11:04:24.888Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":113750,"text":"Источник «Экспорт в слой распространения S3.md» → домен «sar»: записано 3 стр.\n  • trino.md\n  • hive-metastore.md\n  • apache-iceberg.md"}}
+{"ts":"2026-05-06T11:04:24.893Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/Экспорт в слой распространения S3.md"}}
+{"ts":"2026-05-06T11:04:24.900Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/Экспорт витрин из ГП в КХ через S3.md","index":32,"total":66}}
+{"ts":"2026-05-06T11:04:24.906Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/Экспорт витрин из ГП в КХ через S3.md"}}}
+{"ts":"2026-05-06T11:04:24.925Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags:\n  - hld\naliases: \nOutgoingLinks:\n---\n![[Экспорт витрин из ГП в КХ через S3 2025-05-27 10.3"}}
+{"ts":"2026-05-06T11:04:24.984Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:05:14.279Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/rfc/rfc-gp-vitrina-s3-kh-export.md"}}}
+{"ts":"2026-05-06T11:05:14.284Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:05:14.291Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «Экспорт витрин из ГП в КХ через S3.md» → домен «sar»: записано 1 стр.\n  • rfc-gp-vitrina-s3-kh-export.md"}}
+{"ts":"2026-05-06T11:05:14.308Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/"}}
+{"ts":"2026-05-06T11:05:14.313Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":49322,"text":"Источник «Экспорт витрин из ГП в КХ через S3.md» → домен «sar»: записано 1 стр.\n  • rfc-gp-vitrina-s3-kh-export.md"}}
+{"ts":"2026-05-06T11:05:14.319Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/Экспорт витрин из ГП в КХ через S3.md"}}
+{"ts":"2026-05-06T11:05:14.326Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/1ЛТП/1ЛТП DRAFT.md","index":33,"total":66}}
+{"ts":"2026-05-06T11:05:14.332Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/1ЛТП/1ЛТП DRAFT.md"}}}
+{"ts":"2026-05-06T11:05:14.350Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags:\n---\n\n## Содержание\n\n- [[#Ссылки|Ссылки]]\n- [[#Основные требования|Основные требования]]\n- "}}
+{"ts":"2026-05-06T11:05:14.389Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:08:05.703Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/rfc/rfc-1ltp-architecture.md"}}}
+{"ts":"2026-05-06T11:08:05.709Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:08:05.716Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/паттерны/однонаправленный-поток.md"}}}
+{"ts":"2026-05-06T11:08:05.734Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:08:05.741Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/хдрв.md"}}}
+{"ts":"2026-05-06T11:08:05.757Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:08:05.764Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/еасд.md"}}}
+{"ts":"2026-05-06T11:08:05.785Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:08:05.791Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «1ЛТП DRAFT.md» → домен «sar»: записано 4 стр.\n  • rfc-1ltp-architecture.md\n  • однонаправленный-поток.md\n  • хдрв.md\n  • еасд.md"}}
+{"ts":"2026-05-06T11:08:05.825Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/1ЛТП/"}}
+{"ts":"2026-05-06T11:08:05.835Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":171440,"text":"Источник «1ЛТП DRAFT.md» → домен «sar»: записано 4 стр.\n  • rfc-1ltp-architecture.md\n  • однонаправленный-поток.md\n  • хдрв.md\n  • еасд.md"}}
+{"ts":"2026-05-06T11:08:05.840Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/1ЛТП/1ЛТП DRAFT.md"}}
+{"ts":"2026-05-06T11:08:05.847Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/1ЛТП/1ЛТП HLD RFC.md","index":34,"total":66}}
+{"ts":"2026-05-06T11:08:05.854Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/1ЛТП/1ЛТП HLD RFC.md"}}}
+{"ts":"2026-05-06T11:08:05.888Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags:\n  - hld\n  - rfc\n  - 1лтп\n---\n\n# HLD. 1ЛТП — Архитектура платформы оперативной и аналитичес"}}
+{"ts":"2026-05-06T11:08:05.929Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:12:36.336Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/rfc/rfc-1ltp-architecture.md"}}}
+{"ts":"2026-05-06T11:12:36.344Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:12:36.351Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/хдрв.md"}}}
+{"ts":"2026-05-06T11:12:36.369Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:12:36.375Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/еасд.md"}}}
+{"ts":"2026-05-06T11:12:36.392Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:12:36.398Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/паттерны/однонаправленный-поток.md"}}}
+{"ts":"2026-05-06T11:12:36.414Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:12:36.421Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/datastage.md"}}}
+{"ts":"2026-05-06T11:12:36.442Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:12:36.448Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «1ЛТП HLD RFC.md» → домен «sar»: записано 5 стр.\n  • rfc-1ltp-architecture.md\n  • хдрв.md\n  • еасд.md\n  • однонаправленный-поток.md\n  • datastage.md"}}
+{"ts":"2026-05-06T11:12:36.483Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/1ЛТП/"}}
+{"ts":"2026-05-06T11:12:36.489Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":270554,"text":"Источник «1ЛТП HLD RFC.md» → домен «sar»: записано 5 стр.\n  • rfc-1ltp-architecture.md\n  • хдрв.md\n  • еасд.md\n  • однонаправленный-поток.md\n  • datastage.md"}}
+{"ts":"2026-05-06T11:12:36.495Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/1ЛТП/1ЛТП HLD RFC.md"}}
+{"ts":"2026-05-06T11:12:36.501Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/RT.DataExporter HLD.md","index":35,"total":66}}
+{"ts":"2026-05-06T11:12:36.507Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/RT.DataExporter HLD.md"}}}
+{"ts":"2026-05-06T11:12:36.523Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags: \naliases:\n  - ДГ Реестр запросов\n  - RT.DataGovernance Реестр запросов\nOutgoingLinks:\n---\n"}}
+{"ts":"2026-05-06T11:12:36.569Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:13:14.778Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/rt-data-exporter.md"}}}
+{"ts":"2026-05-06T11:13:14.784Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:13:14.791Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «RT.DataExporter HLD.md» → домен «sar»: записано 1 стр.\n  • rt-data-exporter.md"}}
+{"ts":"2026-05-06T11:13:14.829Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/"}}
+{"ts":"2026-05-06T11:13:14.836Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":38260,"text":"Источник «RT.DataExporter HLD.md» → домен «sar»: записано 1 стр.\n  • rt-data-exporter.md"}}
+{"ts":"2026-05-06T11:13:14.844Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/RT.DataExporter HLD.md"}}
+{"ts":"2026-05-06T11:13:14.850Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/RT.DataExporter PRD.md","index":36,"total":66}}
+{"ts":"2026-05-06T11:13:14.856Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/RT.DataExporter PRD.md"}}}
+{"ts":"2026-05-06T11:13:14.882Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# Документ требований к продукту (PRD)\n## RT.DataExporter - Система управления выгрузками данных\n\n**"}}
+{"ts":"2026-05-06T11:13:14.929Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:14:32.920Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/rt-data-exporter.md"}}}
+{"ts":"2026-05-06T11:14:32.923Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:14:32.929Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/rfc/rfc-rt-data-exporter-prd.md"}}}
+{"ts":"2026-05-06T11:14:32.946Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:14:32.953Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «RT.DataExporter PRD.md» → домен «sar»: записано 2 стр.\n  • rt-data-exporter.md\n  • rfc-rt-data-exporter-prd.md"}}
+{"ts":"2026-05-06T11:14:32.978Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/"}}
+{"ts":"2026-05-06T11:14:32.984Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":78048,"text":"Источник «RT.DataExporter PRD.md» → домен «sar»: записано 2 стр.\n  • rt-data-exporter.md\n  • rfc-rt-data-exporter-prd.md"}}
+{"ts":"2026-05-06T11:14:32.990Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/RT.DataExporter PRD.md"}}
+{"ts":"2026-05-06T11:14:32.996Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_balancing_analysis.md","index":37,"total":66}}
+{"ts":"2026-05-06T11:14:33.002Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_balancing_analysis.md"}}}
+{"ts":"2026-05-06T11:14:33.022Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# Анализ архитектуры балансировки: Проблемы и решения\n\n## Текущая схема\n\n```mermaid\nflowchart TB\n   "}}
+{"ts":"2026-05-06T11:14:33.055Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:16:35.747Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/redis.md"}}}
+{"ts":"2026-05-06T11:16:35.753Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:16:35.760Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/паттерны/dns-round-robin.md"}}}
+{"ts":"2026-05-06T11:16:35.778Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:16:35.784Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/airflow.md"}}}
+{"ts":"2026-05-06T11:16:35.804Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:16:35.810Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «airflow_balancing_analysis.md» → домен «sar»: записано 3 стр.\n  • redis.md\n  • dns-round-robin.md\n  • airflow.md"}}
+{"ts":"2026-05-06T11:16:35.832Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/"}}
+{"ts":"2026-05-06T11:16:35.838Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":122776,"text":"Источник «airflow_balancing_analysis.md» → домен «sar»: записано 3 стр.\n  • redis.md\n  • dns-round-robin.md\n  • airflow.md"}}
+{"ts":"2026-05-06T11:16:35.844Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_balancing_analysis.md"}}
+{"ts":"2026-05-06T11:16:35.851Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_calculator_methodology.md","index":38,"total":66}}
+{"ts":"2026-05-06T11:16:35.857Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_calculator_methodology.md"}}}
+{"ts":"2026-05-06T11:16:35.876Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# Методика расчёта ресурсов Airflow HA Cluster\n\n## Оглавление\n\n1. [Обзор архитектуры](#1-обзор-архит"}}
+{"ts":"2026-05-06T11:16:35.920Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:18:58.460Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/airflow.md"}}}
+{"ts":"2026-05-06T11:18:58.473Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:18:58.480Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/rabbitmq.md"}}}
+{"ts":"2026-05-06T11:18:58.498Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:18:58.505Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/postgresql.md"}}}
+{"ts":"2026-05-06T11:18:58.528Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:18:58.537Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/стратегии/airflow-resource-sizing.md"}}}
+{"ts":"2026-05-06T11:18:58.557Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:18:58.563Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «airflow_calculator_methodology.md» → домен «sar»: записано 4 стр.\n  • airflow.md\n  • rabbitmq.md\n  • postgresql.md\n  • airflow-resource-sizing.md"}}
+{"ts":"2026-05-06T11:18:58.591Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/"}}
+{"ts":"2026-05-06T11:18:58.597Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":142670,"text":"Источник «airflow_calculator_methodology.md» → домен «sar»: записано 4 стр.\n  • airflow.md\n  • rabbitmq.md\n  • postgresql.md\n  • airflow-resource-sizing.md"}}
+{"ts":"2026-05-06T11:18:58.603Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_calculator_methodology.md"}}
+{"ts":"2026-05-06T11:18:58.610Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_ha_architecture_v1.md","index":39,"total":66}}
+{"ts":"2026-05-06T11:18:58.616Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_ha_architecture_v1.md"}}}
+{"ts":"2026-05-06T11:18:58.637Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# Отказоустойчивый кластер Apache Airflow 2.7\n\n## Сводка решения\n\n| Параметр                      | "}}
+{"ts":"2026-05-06T11:18:58.717Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:22:27.843Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/стратегии/airflow-ha-cluster.md"}}}
+{"ts":"2026-05-06T11:22:27.855Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:22:27.862Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/airflow.md"}}}
+{"ts":"2026-05-06T11:22:27.877Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:22:27.884Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/rabbitmq.md"}}}
+{"ts":"2026-05-06T11:22:27.900Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:22:27.906Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/redis.md"}}}
+{"ts":"2026-05-06T11:22:27.923Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:22:27.929Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/паттерны/dns-round-robin.md"}}}
+{"ts":"2026-05-06T11:22:27.950Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:22:27.956Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «airflow_ha_architecture_v1.md» → домен «sar»: записано 5 стр.\n  • airflow-ha-cluster.md\n  • airflow.md\n  • rabbitmq.md\n  • redis.md\n  • dns-round-robin.md"}}
+{"ts":"2026-05-06T11:22:27.981Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/"}}
+{"ts":"2026-05-06T11:22:27.988Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":209263,"text":"Источник «airflow_ha_architecture_v1.md» → домен «sar»: записано 5 стр.\n  • airflow-ha-cluster.md\n  • airflow.md\n  • rabbitmq.md\n  • redis.md\n  • dns-round-robin.md"}}
+{"ts":"2026-05-06T11:22:27.993Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_ha_architecture_v1.md"}}
+{"ts":"2026-05-06T11:22:28.000Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_ha_architecture_v2.md","index":40,"total":66}}
+{"ts":"2026-05-06T11:22:28.006Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_ha_architecture_v2.md"}}}
+{"ts":"2026-05-06T11:22:28.023Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# Отказоустойчивый кластер Apache Airflow 2.7\n\n## Сводка решения\n\n| Параметр                      | "}}
+{"ts":"2026-05-06T11:22:28.058Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:27:05.696Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «airflow_ha_architecture_v2.md» обработан — новых или изменённых страниц нет."}}
+{"ts":"2026-05-06T11:27:05.698Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":277633,"text":"Источник «airflow_ha_architecture_v2.md» обработан — новых или изменённых страниц нет."}}
+{"ts":"2026-05-06T11:27:05.704Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_ha_architecture_v2.md"}}
+{"ts":"2026-05-06T11:27:05.710Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_ha_architecture_v3.md","index":41,"total":66}}
+{"ts":"2026-05-06T11:27:05.716Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_ha_architecture_v3.md"}}}
+{"ts":"2026-05-06T11:27:05.725Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# Отказоустойчивый кластер Apache Airflow 2.7\n\n## Сводка решения\n\n| Параметр | Значение |\n|---------"}}
+{"ts":"2026-05-06T11:27:05.744Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:31:32.123Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/dag-builder.md"}}}
+{"ts":"2026-05-06T11:31:32.130Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:31:32.136Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/паттерны/dag-serialization.md"}}}
+{"ts":"2026-05-06T11:31:32.156Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:31:32.162Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/стратегии/airflow-ha-cluster.md"}}}
+{"ts":"2026-05-06T11:31:32.189Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:31:32.195Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/airflow.md"}}}
+{"ts":"2026-05-06T11:31:32.215Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:31:32.221Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «airflow_ha_architecture_v3.md» → домен «sar»: записано 4 стр.\n  • dag-builder.md\n  • dag-serialization.md\n  • airflow-ha-cluster.md\n  • airflow.md"}}
+{"ts":"2026-05-06T11:31:32.252Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/"}}
+{"ts":"2026-05-06T11:31:32.259Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":266508,"text":"Источник «airflow_ha_architecture_v3.md» → домен «sar»: записано 4 стр.\n  • dag-builder.md\n  • dag-serialization.md\n  • airflow-ha-cluster.md\n  • airflow.md"}}
+{"ts":"2026-05-06T11:31:32.265Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_ha_architecture_v3.md"}}
+{"ts":"2026-05-06T11:31:32.271Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_ha_architecture_v4.md","index":42,"total":66}}
+{"ts":"2026-05-06T11:31:32.277Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_ha_architecture_v4.md"}}}
+{"ts":"2026-05-06T11:31:32.300Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# Отказоустойчивый кластер Apache Airflow 2.7\n\n## Сводка решения\n\n| Параметр | Значение |\n|---------"}}
+{"ts":"2026-05-06T11:31:32.359Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:35:54.699Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/стратегии/airflow-ha-cluster.md"}}}
+{"ts":"2026-05-06T11:35:54.734Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:35:54.744Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/dag-builder.md"}}}
+{"ts":"2026-05-06T11:35:54.789Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:35:54.795Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «airflow_ha_architecture_v4.md» → домен «sar»: записано 2 стр.\n  • airflow-ha-cluster.md\n  • dag-builder.md"}}
+{"ts":"2026-05-06T11:35:54.851Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/"}}
+{"ts":"2026-05-06T11:35:54.857Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":262488,"text":"Источник «airflow_ha_architecture_v4.md» → домен «sar»: записано 2 стр.\n  • airflow-ha-cluster.md\n  • dag-builder.md"}}
+{"ts":"2026-05-06T11:35:54.864Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/airflow_ha_architecture_v4.md"}}
+{"ts":"2026-05-06T11:35:54.871Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/s3-download-links-guide.md","index":43,"total":66}}
+{"ts":"2026-05-06T11:35:54.877Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/s3-download-links-guide.md"}}}
+{"ts":"2026-05-06T11:35:54.896Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# Ссылки на скачивание из S3: Presigned URL и Proxy Backend\n\n## Сравнение подходов\n\n| Функция | Pres"}}
+{"ts":"2026-05-06T11:35:54.945Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:37:00.615Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/паттерны/presigned-url.md"}}}
+{"ts":"2026-05-06T11:37:00.626Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:37:00.634Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/паттерны/proxy-backend-download.md"}}}
+{"ts":"2026-05-06T11:37:00.714Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:37:00.720Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «s3-download-links-guide.md» → домен «sar»: записано 2 стр.\n  • presigned-url.md\n  • proxy-backend-download.md"}}
+{"ts":"2026-05-06T11:37:00.751Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/"}}
+{"ts":"2026-05-06T11:37:00.757Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":65805,"text":"Источник «s3-download-links-guide.md» → домен «sar»: записано 2 стр.\n  • presigned-url.md\n  • proxy-backend-download.md"}}
+{"ts":"2026-05-06T11:37:00.763Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.DataExporter/s3-download-links-guide.md"}}
+{"ts":"2026-05-06T11:37:00.770Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.DataUploader/RT_DataUploader_PRD.md","index":44,"total":66}}
+{"ts":"2026-05-06T11:37:00.777Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.DataUploader/RT_DataUploader_PRD.md"}}}
+{"ts":"2026-05-06T11:37:00.796Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# Документ Требований к Продукту (ПРД)\n# RT.DataUploader - Корпоративный Интерфейс Файлового Хранили"}}
+{"ts":"2026-05-06T11:37:00.841Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:39:25.519Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/rt-data-uploader.md"}}}
+{"ts":"2026-05-06T11:39:25.526Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:39:25.533Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/rfc/rfc-rt-data-uploader-prd.md"}}}
+{"ts":"2026-05-06T11:39:25.635Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:39:25.641Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «RT_DataUploader_PRD.md» → домен «sar»: записано 2 стр.\n  • rt-data-uploader.md\n  • rfc-rt-data-uploader-prd.md"}}
+{"ts":"2026-05-06T11:39:25.670Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.DataUploader/"}}
+{"ts":"2026-05-06T11:39:25.679Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":144831,"text":"Источник «RT_DataUploader_PRD.md» → домен «sar»: записано 2 стр.\n  • rt-data-uploader.md\n  • rfc-rt-data-uploader-prd.md"}}
+{"ts":"2026-05-06T11:39:25.685Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.DataUploader/RT_DataUploader_PRD.md"}}
+{"ts":"2026-05-06T11:39:25.691Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.LakeStore/RT.LakeStore ARCH.md","index":45,"total":66}}
+{"ts":"2026-05-06T11:39:25.697Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.LakeStore/RT.LakeStore ARCH.md"}}}
+{"ts":"2026-05-06T11:39:25.716Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# Архитектурное решение: Unified Multi-Tier Lakehouse\n\n## Executive Summary\n\n**Единый кластер ClickH"}}
+{"ts":"2026-05-06T11:39:25.755Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:41:41.029Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/rt-lakestore.md"}}}
+{"ts":"2026-05-06T11:41:41.043Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:41:41.052Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/паттерны/multi-tier-hot-warm-cold.md"}}}
+{"ts":"2026-05-06T11:41:41.086Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:41:41.092Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/пайплайны/iceberg-clickhouse-t1-pipeline.md"}}}
+{"ts":"2026-05-06T11:41:41.110Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:41:41.117Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/clickhouse.md"}}}
+{"ts":"2026-05-06T11:41:41.137Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:41:41.143Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/apache-iceberg.md"}}}
+{"ts":"2026-05-06T11:41:41.159Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:41:41.166Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «RT.LakeStore ARCH.md» → домен «sar»: записано 5 стр.\n  • rt-lakestore.md\n  • multi-tier-hot-warm-cold.md\n  • iceberg-clickhouse-t1-pipeline.md\n  • clickhouse.md\n  • apache-iceberg.md"}}
+{"ts":"2026-05-06T11:41:41.203Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.LakeStore/"}}
+{"ts":"2026-05-06T11:41:41.210Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":135447,"text":"Источник «RT.LakeStore ARCH.md» → домен «sar»: записано 5 стр.\n  • rt-lakestore.md\n  • multi-tier-hot-warm-cold.md\n  • iceberg-clickhouse-t1-pipeline.md\n  • clickhouse.md\n  • apache-iceberg.md"}}
+{"ts":"2026-05-06T11:41:41.216Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.LakeStore/RT.LakeStore ARCH.md"}}
+{"ts":"2026-05-06T11:41:41.222Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.WideStore/RT.WideStore HLD.md","index":46,"total":66}}
+{"ts":"2026-05-06T11:41:41.228Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.WideStore/RT.WideStore HLD.md"}}}
+{"ts":"2026-05-06T11:41:41.243Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags:\n  - rt_widestore\n  - hld\naliases: \nOutgoingLinks:\n  - https://confluence.rt.ru/pages/viewp"}}
+{"ts":"2026-05-06T11:41:41.286Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:42:17.010Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/rt-widestore.md"}}}
+{"ts":"2026-05-06T11:42:17.017Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:42:17.024Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «RT.WideStore HLD.md» → домен «sar»: записано 1 стр.\n  • rt-widestore.md"}}
+{"ts":"2026-05-06T11:42:17.070Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.WideStore/"}}
+{"ts":"2026-05-06T11:42:17.077Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":35784,"text":"Источник «RT.WideStore HLD.md» → домен «sar»: записано 1 стр.\n  • rt-widestore.md"}}
+{"ts":"2026-05-06T11:42:17.083Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.WideStore/RT.WideStore HLD.md"}}
+{"ts":"2026-05-06T11:42:17.090Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.WideStore/clickhouse_s3_storage_optimize_fix.md","index":47,"total":66}}
+{"ts":"2026-05-06T11:42:17.096Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.WideStore/clickhouse_s3_storage_optimize_fix.md"}}}
+{"ts":"2026-05-06T11:42:17.127Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# ClickHouse 23.11: Зависание OPTIMIZE при миграции партиций на S3\n\n## Описание проблемы\n\nПри исполь"}}
+{"ts":"2026-05-06T11:42:17.179Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:45:47.966Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/паттерны/ttl-move-vs-move-factor.md"}}}
+{"ts":"2026-05-06T11:45:47.989Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:45:47.996Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/rt-widestore.md"}}}
+{"ts":"2026-05-06T11:45:48.023Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:45:48.031Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «clickhouse_s3_storage_optimize_fix.md» → домен «sar»: записано 2 стр.\n  • ttl-move-vs-move-factor.md\n  • rt-widestore.md"}}
+{"ts":"2026-05-06T11:45:48.067Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.WideStore/"}}
+{"ts":"2026-05-06T11:45:48.073Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":210887,"text":"Источник «clickhouse_s3_storage_optimize_fix.md» → домен «sar»: записано 2 стр.\n  • ttl-move-vs-move-factor.md\n  • rt-widestore.md"}}
+{"ts":"2026-05-06T11:45:48.079Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.WideStore/clickhouse_s3_storage_optimize_fix.md"}}
+{"ts":"2026-05-06T11:45:48.086Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.WideStore/Технический план миграции кластера ClickHouse через бэкап.md","index":48,"total":66}}
+{"ts":"2026-05-06T11:45:48.094Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.WideStore/Технический план миграции кластера ClickHouse через бэкап.md"}}}
+{"ts":"2026-05-06T11:45:48.117Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags: \n---\n## Исполнительное резюме\n\nМиграция кластера ClickHouse с версии 23.11 на 24.7 с перех"}}
+{"ts":"2026-05-06T11:45:48.159Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:49:03.923Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/clickhouse-keeper.md"}}}
+{"ts":"2026-05-06T11:49:03.935Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:49:03.942Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/стратегии/clickhouse-migration-backup.md"}}}
+{"ts":"2026-05-06T11:49:03.967Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:49:03.976Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/стратегии/резервное-копирование.md"}}}
+{"ts":"2026-05-06T11:49:04.007Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:49:04.013Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «Технический план миграции кластера ClickHouse через бэкап.md» → домен «sar»: записано 3 стр.\n  • clickhouse-keeper.md\n  • clickhouse-migration-backup.md\n  • резервное-копирование.md"}}
+{"ts":"2026-05-06T11:49:04.043Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.WideStore/"}}
+{"ts":"2026-05-06T11:49:04.050Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":195884,"text":"Источник «Технический план миграции кластера ClickHouse через бэкап.md» → домен «sar»: записано 3 стр.\n  • clickhouse-keeper.md\n  • clickhouse-migration-backup.md\n  • резервное-копирование.md"}}
+{"ts":"2026-05-06T11:49:04.056Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.WideStore/Технический план миграции кластера ClickHouse через бэкап.md"}}
+{"ts":"2026-05-06T11:49:04.063Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.WideStore/clickhouse_replica_recovery/ClickHouse Storage Cleanup - Инструкция по очистке после восстановления.md","index":49,"total":66}}
+{"ts":"2026-05-06T11:49:04.071Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.WideStore/clickhouse_replica_recovery/ClickHouse Storage Cleanup - Инструкция по очистке после восстановления.md"}}}
+{"ts":"2026-05-06T11:49:04.092Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"\n## Проблема\n\nПосле восстановления реплики физический размер `/store/` значительно больше размера да"}}
+{"ts":"2026-05-06T11:49:04.136Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:49:51.766Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/стратегии/clickhouse-storage-cleanup.md"}}}
+{"ts":"2026-05-06T11:49:51.773Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:49:51.780Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «ClickHouse Storage Cleanup - Инструкция по очистке после восстановления.md» → домен «sar»: записано 1 стр.\n  • clickhouse-storage-cleanup.md"}}
+{"ts":"2026-05-06T11:49:51.797Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.WideStore/clickhouse_replica_recovery/"}}
+{"ts":"2026-05-06T11:49:51.803Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":47661,"text":"Источник «ClickHouse Storage Cleanup - Инструкция по очистке после восстановления.md» → домен «sar»: записано 1 стр.\n  • clickhouse-storage-cleanup.md"}}
+{"ts":"2026-05-06T11:49:51.808Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.WideStore/clickhouse_replica_recovery/ClickHouse Storage Cleanup - Инструкция по очистке после восстановления.md"}}
+{"ts":"2026-05-06T11:49:51.815Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.WideStore/clickhouse_replica_recovery/Восстановление реплики ClickHouse через переинициализацию метаданных.md","index":50,"total":66}}
+{"ts":"2026-05-06T11:49:51.821Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.WideStore/clickhouse_replica_recovery/Восстановление реплики ClickHouse через переинициализацию метаданных.md"}}}
+{"ts":"2026-05-06T11:49:51.843Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"\n## 📋 Краткая справка\n\n**Что делает инструкция:** Восстанавливает работу реплики ClickHouse, когда "}}
+{"ts":"2026-05-06T11:49:51.883Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:52:01.061Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/стратегии/clickhouse-replica-recovery.md"}}}
+{"ts":"2026-05-06T11:52:01.067Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:52:01.075Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «Восстановление реплики ClickHouse через переинициализацию метаданных.md» → домен «sar»: записано 1 стр.\n  • clickhouse-replica-recovery.md"}}
+{"ts":"2026-05-06T11:52:01.096Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.WideStore/clickhouse_replica_recovery/"}}
+{"ts":"2026-05-06T11:52:01.102Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":129210,"text":"Источник «Восстановление реплики ClickHouse через переинициализацию метаданных.md» → домен «sar»: записано 1 стр.\n  • clickhouse-replica-recovery.md"}}
+{"ts":"2026-05-06T11:52:01.108Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.WideStore/clickhouse_replica_recovery/Восстановление реплики ClickHouse через переинициализацию метаданных.md"}}
+{"ts":"2026-05-06T11:52:01.114Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.WideStore/join/ClickHouse_ETL_JOIN_Analysis.md","index":51,"total":66}}
+{"ts":"2026-05-06T11:52:01.122Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.WideStore/join/ClickHouse_ETL_JOIN_Analysis.md"}}}
+{"ts":"2026-05-06T11:52:01.142Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# Анализ ETL-процессов с JOIN в ClickHouse\n\n> Аналитический отчёт: плюсы, минусы, требования и риски"}}
+{"ts":"2026-05-06T11:52:01.187Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:53:12.509Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/паттерны/clickhouse-join-алгоритмы.md"}}}
+{"ts":"2026-05-06T11:53:12.516Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:53:12.523Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/clickhouse.md"}}}
+{"ts":"2026-05-06T11:53:12.543Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:53:12.549Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «ClickHouse_ETL_JOIN_Analysis.md» → домен «sar»: записано 2 стр.\n  • clickhouse-join-алгоритмы.md\n  • clickhouse.md"}}
+{"ts":"2026-05-06T11:53:12.572Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.WideStore/join/"}}
+{"ts":"2026-05-06T11:53:12.578Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":71384,"text":"Источник «ClickHouse_ETL_JOIN_Analysis.md» → домен «sar»: записано 2 стр.\n  • clickhouse-join-алгоритмы.md\n  • clickhouse.md"}}
+{"ts":"2026-05-06T11:53:12.585Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.WideStore/join/ClickHouse_ETL_JOIN_Analysis.md"}}
+{"ts":"2026-05-06T11:53:12.591Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/RT.WideStore/update_settings_tables/update_tables_guide.md","index":52,"total":66}}
+{"ts":"2026-05-06T11:53:12.598Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/RT.WideStore/update_settings_tables/update_tables_guide.md"}}}
+{"ts":"2026-05-06T11:53:12.615Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# Инструкция по использованию\n\n## 1. Создание скрипта на сервере\n\n```bash\n# Подключиться к серверу с"}}
+{"ts":"2026-05-06T11:53:12.685Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:54:17.476Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/слои-данных/stg.md"}}}
+{"ts":"2026-05-06T11:54:17.483Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:54:17.491Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/паттерны/clickhouse-merge-management.md"}}}
+{"ts":"2026-05-06T11:54:17.528Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:54:17.535Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «update_tables_guide.md» → домен «sar»: записано 2 стр.\n  • stg.md\n  • clickhouse-merge-management.md"}}
+{"ts":"2026-05-06T11:54:17.576Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/RT.WideStore/update_settings_tables/"}}
+{"ts":"2026-05-06T11:54:17.583Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":64891,"text":"Источник «update_tables_guide.md» → домен «sar»: записано 2 стр.\n  • stg.md\n  • clickhouse-merge-management.md"}}
+{"ts":"2026-05-06T11:54:17.589Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/RT.WideStore/update_settings_tables/update_tables_guide.md"}}
+{"ts":"2026-05-06T11:54:17.597Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/ППА/ППА DRAFT.md","index":53,"total":66}}
+{"ts":"2026-05-06T11:54:17.604Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/ППА/ППА DRAFT.md"}}}
+{"ts":"2026-05-06T11:54:17.624Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# ХЛД\n\n![[ППА HLD v1.excalidraw]]\n\n> **Режим T-1d:** отчётность формируется по состоянию на конец пр"}}
+{"ts":"2026-05-06T11:54:17.669Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T11:55:36.516Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/rfc/rfc-ppa-rostelecom-klyuch.md"}}}
+{"ts":"2026-05-06T11:55:36.556Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:55:36.563Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/платформа-ростелеком-ключ.md"}}}
+{"ts":"2026-05-06T11:55:36.590Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T11:55:36.596Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «ППА DRAFT.md» → домен «sar»: записано 2 стр.\n  • rfc-ppa-rostelecom-klyuch.md\n  • платформа-ростелеком-ключ.md"}}
+{"ts":"2026-05-06T11:55:36.644Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/ППА/"}}
+{"ts":"2026-05-06T11:55:36.651Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":78975,"text":"Источник «ППА DRAFT.md» → домен «sar»: записано 2 стр.\n  • rfc-ppa-rostelecom-klyuch.md\n  • платформа-ростелеком-ключ.md"}}
+{"ts":"2026-05-06T11:55:36.656Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/ППА/ППА DRAFT.md"}}
+{"ts":"2026-05-06T11:55:36.663Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/ППА/ППА HLD.md","index":54,"total":66}}
+{"ts":"2026-05-06T11:55:36.669Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/ППА/ППА HLD.md"}}}
+{"ts":"2026-05-06T11:55:36.697Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# HLD. ППА — Аналитическая отчётность T-1d. Платформа продуктовой аналитики\n\n> **Шаблон:** Standard "}}
+{"ts":"2026-05-06T11:55:36.786Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T12:00:25.836Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/rfc/rfc-ppa-hld.md"}}}
+{"ts":"2026-05-06T12:00:25.843Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:00:25.850Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/пайплайны/ppa-etl-t1d-pipeline.md"}}}
+{"ts":"2026-05-06T12:00:25.866Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:00:25.871Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/слои-данных/raw.md"}}}
+{"ts":"2026-05-06T12:00:25.894Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:00:25.901Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/слои-данных/dds.md"}}}
+{"ts":"2026-05-06T12:00:25.941Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:00:25.947Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/rt-wh.md"}}}
+{"ts":"2026-05-06T12:00:25.969Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:00:25.975Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/паттерны/scd-type-2.md"}}}
+{"ts":"2026-05-06T12:00:25.998Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:00:26.004Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/слои-данных/ods.md"}}}
+{"ts":"2026-05-06T12:00:26.028Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:00:26.034Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/слои-данных/витринный-слой.md"}}}
+{"ts":"2026-05-06T12:00:26.057Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:00:26.064Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «ППА HLD.md» → домен «sar»: записано 8 стр.\n  • rfc-ppa-hld.md\n  • ppa-etl-t1d-pipeline.md\n  • raw.md\n  • dds.md\n  • rt-wh.md\n  • scd-type-2.md\n  • ods.md\n  • витринный-слой.md"}}
+{"ts":"2026-05-06T12:00:26.088Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/ППА/"}}
+{"ts":"2026-05-06T12:00:26.094Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":289290,"text":"Источник «ППА HLD.md» → домен «sar»: записано 8 стр.\n  • rfc-ppa-hld.md\n  • ppa-etl-t1d-pipeline.md\n  • raw.md\n  • dds.md\n  • rt-wh.md\n  • scd-type-2.md\n  • ods.md\n  • витринный-слой.md"}}
+{"ts":"2026-05-06T12:00:26.101Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/ППА/ППА HLD.md"}}
+{"ts":"2026-05-06T12:00:26.107Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/ППА ClickStream/ППА ClickStream DRAFT.md","index":55,"total":66}}
+{"ts":"2026-05-06T12:00:26.114Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/ППА ClickStream/ППА ClickStream DRAFT.md"}}}
+{"ts":"2026-05-06T12:00:26.143Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags: \n---\n![[ППА ClickStream DRAFT 2026-04-09 16.28.47.excalidraw]]\n\nhttps://confluence.rt.ru/p"}}
+{"ts":"2026-05-06T12:00:26.176Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T12:03:41.925Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/rfc/rfc-ppa-clickstream.md"}}}
+{"ts":"2026-05-06T12:03:41.944Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:03:41.951Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/пайплайны/clickstream-ingestion-pipeline.md"}}}
+{"ts":"2026-05-06T12:03:41.967Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:03:41.973Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «ППА ClickStream DRAFT.md» → домен «sar»: записано 2 стр.\n  • rfc-ppa-clickstream.md\n  • clickstream-ingestion-pipeline.md"}}
+{"ts":"2026-05-06T12:03:41.991Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/ППА ClickStream/"}}
+{"ts":"2026-05-06T12:03:41.998Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":195815,"text":"Источник «ППА ClickStream DRAFT.md» → домен «sar»: записано 2 стр.\n  • rfc-ppa-clickstream.md\n  • clickstream-ingestion-pipeline.md"}}
+{"ts":"2026-05-06T12:03:42.004Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/ППА ClickStream/ППА ClickStream DRAFT.md"}}
+{"ts":"2026-05-06T12:03:42.012Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/ППА ClickStream/ППА ClickStream HLD.md","index":56,"total":66}}
+{"ts":"2026-05-06T12:03:42.019Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/ППА ClickStream/ППА ClickStream HLD.md"}}}
+{"ts":"2026-05-06T12:03:42.032Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags:\n  - HLD\n  - ClickStream\n  - CDM\n  - архитектура\nstatus: На согласовании\n---\n\n# HLD. ППА Cl"}}
+{"ts":"2026-05-06T12:03:42.058Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T12:06:10.715Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «ППА ClickStream HLD.md» обработан — новых или изменённых страниц нет."}}
+{"ts":"2026-05-06T12:06:10.717Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":148650,"text":"Источник «ППА ClickStream HLD.md» обработан — новых или изменённых страниц нет."}}
+{"ts":"2026-05-06T12:06:10.723Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/ППА ClickStream/ППА ClickStream HLD.md"}}
+{"ts":"2026-05-06T12:06:10.730Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/СИП/СИП DRAFT.md","index":57,"total":66}}
+{"ts":"2026-05-06T12:06:10.736Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/СИП/СИП DRAFT.md"}}}
+{"ts":"2026-05-06T12:06:10.753Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags:\n  - hld\naliases:\n  - Система инвестиционного планирования\nOutgoingLinks:\n---\nhttps://jaga."}}
+{"ts":"2026-05-06T12:06:10.774Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T12:08:09.735Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/rfc/rfc-сип-hld.md"}}}
+{"ts":"2026-05-06T12:08:09.738Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:08:09.745Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/пайплайны/сип-integration-pipeline.md"}}}
+{"ts":"2026-05-06T12:08:09.756Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:08:09.762Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/системы/rt-datavision.md"}}}
+{"ts":"2026-05-06T12:08:09.777Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:08:09.783Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «СИП DRAFT.md» → домен «sar»: записано 3 стр.\n  • rfc-сип-hld.md\n  • сип-integration-pipeline.md\n  • rt-datavision.md"}}
+{"ts":"2026-05-06T12:08:09.809Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/СИП/"}}
+{"ts":"2026-05-06T12:08:09.814Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":119032,"text":"Источник «СИП DRAFT.md» → домен «sar»: записано 3 стр.\n  • rfc-сип-hld.md\n  • сип-integration-pipeline.md\n  • rt-datavision.md"}}
+{"ts":"2026-05-06T12:08:09.820Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/СИП/СИП DRAFT.md"}}
+{"ts":"2026-05-06T12:08:09.827Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/СИП/СИП HLD.md","index":58,"total":66}}
+{"ts":"2026-05-06T12:08:09.833Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/СИП/СИП HLD.md"}}}
+{"ts":"2026-05-06T12:08:09.852Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags:\n  - hld\n  - сип\n  - постмониторинг\naliases:\n  - HLD СИП ПМ\n  - HLD SIPLR-564\ncreated: 2026"}}
+{"ts":"2026-05-06T12:08:09.909Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T12:10:54.459Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/rfc/rfc-сип-pm-hld.md"}}}
+{"ts":"2026-05-06T12:10:54.463Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:10:54.470Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/пайплайны/сип-integration-pipeline.md"}}}
+{"ts":"2026-05-06T12:10:54.480Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:10:54.486Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «СИП HLD.md» → домен «sar»: записано 2 стр.\n  • rfc-сип-pm-hld.md\n  • сип-integration-pipeline.md"}}
+{"ts":"2026-05-06T12:10:54.501Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/СИП/"}}
+{"ts":"2026-05-06T12:10:54.507Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":164591,"text":"Источник «СИП HLD.md» → домен «sar»: записано 2 стр.\n  • rfc-сип-pm-hld.md\n  • сип-integration-pipeline.md"}}
+{"ts":"2026-05-06T12:10:54.512Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/СИП/СИП HLD.md"}}
+{"ts":"2026-05-06T12:10:54.519Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/СИП/Саммари SIPLR-564 DATADEV-803.md","index":59,"total":66}}
+{"ts":"2026-05-06T12:10:54.524Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/СИП/Саммари SIPLR-564 DATADEV-803.md"}}}
+{"ts":"2026-05-06T12:10:54.533Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags:\n  - hld\n  - протокол\n  - сип\naliases:\n  - Договорённости СИП ПМ\ncreated: 2026-04-14\n---\n\n#"}}
+{"ts":"2026-05-06T12:10:54.558Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T12:13:25.178Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/rfc/rfc-сип-pm-hld.md"}}}
+{"ts":"2026-05-06T12:13:25.181Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:13:25.188Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/пайплайны/сип-integration-pipeline.md"}}}
+{"ts":"2026-05-06T12:13:25.200Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:13:25.206Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «Саммари SIPLR-564 DATADEV-803.md» → домен «sar»: записано 2 стр.\n  • rfc-сип-pm-hld.md\n  • сип-integration-pipeline.md"}}
+{"ts":"2026-05-06T12:13:25.224Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/СИП/"}}
+{"ts":"2026-05-06T12:13:25.230Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":150665,"text":"Источник «Саммари SIPLR-564 DATADEV-803.md» → домен «sar»: записано 2 стр.\n  • rfc-сип-pm-hld.md\n  • сип-integration-pipeline.md"}}
+{"ts":"2026-05-06T12:13:25.235Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/СИП/Саммари SIPLR-564 DATADEV-803.md"}}
+{"ts":"2026-05-06T12:13:25.242Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/ЦХД 2/Логические объекты DDS, DM.md","index":60,"total":66}}
+{"ts":"2026-05-06T12:13:25.248Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/ЦХД 2/Логические объекты DDS, DM.md"}}}
+{"ts":"2026-05-06T12:13:25.264Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags:\n  - specification\n  - dds\n  - dm\naliases: \nOutgoingLinks:\n---\n\n![[Объекты в ЦХД2.canvas]]\n"}}
+{"ts":"2026-05-06T12:13:25.287Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T12:13:40.677Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «Логические объекты DDS, DM.md» обработан — новых или изменённых страниц нет."}}
+{"ts":"2026-05-06T12:13:40.678Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":15383,"text":"Источник «Логические объекты DDS, DM.md» обработан — новых или изменённых страниц нет."}}
+{"ts":"2026-05-06T12:13:40.684Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/ЦХД 2/Логические объекты DDS, DM.md"}}
+{"ts":"2026-05-06T12:13:40.692Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/HLD/ЦХД 2/Спецификации ОДС.md","index":61,"total":66}}
+{"ts":"2026-05-06T12:13:40.699Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/HLD/ЦХД 2/Спецификации ОДС.md"}}}
+{"ts":"2026-05-06T12:13:40.708Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"---\ntags:\n  - specification\n  - ods\naliases: \nOutgoingLinks:\n---\n1. 1)      мы в ДГ разделили ODS ГП"}}
+{"ts":"2026-05-06T12:13:40.729Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T12:14:28.911Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/слои-данных/ods.md"}}}
+{"ts":"2026-05-06T12:14:28.917Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:14:28.923Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «Спецификации ОДС.md» → домен «sar»: записано 1 стр.\n  • ods.md"}}
+{"ts":"2026-05-06T12:14:28.939Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/HLD/ЦХД 2/"}}
+{"ts":"2026-05-06T12:14:28.945Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":48209,"text":"Источник «Спецификации ОДС.md» → домен «sar»: записано 1 стр.\n  • ods.md"}}
+{"ts":"2026-05-06T12:14:28.951Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/HLD/ЦХД 2/Спецификации ОДС.md"}}
+{"ts":"2026-05-06T12:14:28.958Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/Template/README.md","index":62,"total":66}}
+{"ts":"2026-05-06T12:14:28.967Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/Template/README.md"}}}
+{"ts":"2026-05-06T12:14:28.979Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# Шаблоны HLD\n\nТри варианта шаблона — выбирайте по масштабу задачи.\n\n## Выбор шаблона\n\n| Вариант | Ф"}}
+{"ts":"2026-05-06T12:14:29.000Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T12:15:34.954Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/стратегии/hld-шаблоны.md"}}}
+{"ts":"2026-05-06T12:15:34.958Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:15:34.965Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «README.md» → домен «sar»: записано 1 стр.\n  • hld-шаблоны.md"}}
+{"ts":"2026-05-06T12:15:34.988Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/Template/"}}
+{"ts":"2026-05-06T12:15:34.995Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":65994,"text":"Источник «README.md» → домен «sar»: записано 1 стр.\n  • hld-шаблоны.md"}}
+{"ts":"2026-05-06T12:15:35.001Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/Template/README.md"}}
+{"ts":"2026-05-06T12:15:35.008Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/Template/hld-v1-lean.md","index":63,"total":66}}
+{"ts":"2026-05-06T12:15:35.014Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/Template/hld-v1-lean.md"}}}
+{"ts":"2026-05-06T12:15:35.035Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# HLD. [Название проекта] — Вариант 1: Lean\n\n> **Когда использовать:** интеграция 1–2 систем, MVP, н"}}
+{"ts":"2026-05-06T12:15:35.114Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T12:16:19.192Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/стратегии/hld-шаблоны.md"}}}
+{"ts":"2026-05-06T12:16:19.199Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:16:19.207Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «hld-v1-lean.md» → домен «sar»: записано 1 стр.\n  • hld-шаблоны.md"}}
+{"ts":"2026-05-06T12:16:19.225Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/Template/"}}
+{"ts":"2026-05-06T12:16:19.230Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":44108,"text":"Источник «hld-v1-lean.md» → домен «sar»: записано 1 стр.\n  • hld-шаблоны.md"}}
+{"ts":"2026-05-06T12:16:19.236Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/Template/hld-v1-lean.md"}}
+{"ts":"2026-05-06T12:16:19.242Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/Template/hld-v2-standard.md","index":64,"total":66}}
+{"ts":"2026-05-06T12:16:19.249Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/Template/hld-v2-standard.md"}}}
+{"ts":"2026-05-06T12:16:19.267Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# HLD. [Название проекта] — Вариант 2: Standard\n\n> **Когда использовать:** ETL/DWH-задачи, несколько"}}
+{"ts":"2026-05-06T12:16:19.354Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T12:17:27.645Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/стратегии/hld-шаблоны.md"}}}
+{"ts":"2026-05-06T12:17:27.651Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:17:27.658Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «hld-v2-standard.md» → домен «sar»: записано 1 стр.\n  • hld-шаблоны.md"}}
+{"ts":"2026-05-06T12:17:27.689Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/Template/"}}
+{"ts":"2026-05-06T12:17:27.696Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":68334,"text":"Источник «hld-v2-standard.md» → домен «sar»: записано 1 стр.\n  • hld-шаблоны.md"}}
+{"ts":"2026-05-06T12:17:27.702Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/Template/hld-v2-standard.md"}}
+{"ts":"2026-05-06T12:17:27.709Z","session":"1778062640905","op":"init","event":{"kind":"file_start","file":"Ростелеком/Системная архитектура/Template/hld-v3-full.md","index":65,"total":66}}
+{"ts":"2026-05-06T12:17:27.715Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Read","input":{"path":"Ростелеком/Системная архитектура/Template/hld-v3-full.md"}}}
+{"ts":"2026-05-06T12:17:27.734Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true,"preview":"# HLD. [Название проекта] — Вариант 3: Full\n\n> **Когда использовать:** сложные проекты с 3+ системам"}}
+{"ts":"2026-05-06T12:17:27.772Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Synthesizing wiki pages for domain \"sar\"...\n"}}
+{"ts":"2026-05-06T12:20:09.566Z","session":"1778062640905","op":"init","event":{"kind":"tool_use","name":"Write","input":{"path":"!Wiki/sar/стратегии/hld-шаблоны.md"}}}
+{"ts":"2026-05-06T12:20:09.572Z","session":"1778062640905","op":"init","event":{"kind":"tool_result","ok":true}}
+{"ts":"2026-05-06T12:20:09.579Z","session":"1778062640905","op":"init","event":{"kind":"assistant_text","delta":"Источник «hld-v3-full.md» → домен «sar»: записано 1 стр.\n  • hld-шаблоны.md"}}
+{"ts":"2026-05-06T12:20:09.607Z","session":"1778062640905","op":"init","event":{"kind":"source_path_added","domainId":"sar","path":"Ростелеком/Системная архитектура/Template/"}}
+{"ts":"2026-05-06T12:20:09.613Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":161834,"text":"Источник «hld-v3-full.md» → домен «sar»: записано 1 стр.\n  • hld-шаблоны.md"}}
+{"ts":"2026-05-06T12:20:09.619Z","session":"1778062640905","op":"init","event":{"kind":"file_done","file":"Ростелеком/Системная архитектура/Template/hld-v3-full.md"}}
+{"ts":"2026-05-06T12:20:09.654Z","session":"1778062640905","op":"init","event":{"kind":"result","durationMs":7368722,"text":"Domain \"sar\" initialised from 66 source files."}}
+{"ts":"2026-05-06T12:20:20.360Z","session":"1778062640905","op":"init","event":{"kind":"eval_result","score":9,"reasoning":"Domain sar initialised from 66 source files matching specified path."}}
+{"ts":"2026-05-06T12:20:20.372Z","session":"1778062640905","op":"init","event":{"kind":"system","message":"finish status=done durationMs=7379467"}}
