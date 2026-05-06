@@ -6,6 +6,7 @@ wiki_outgoing_links:
   - "[[vault-tools]]"
   - "[[llm-client]]"
   - "[[run-event]]"
+  - "[[тесты-фаз]]"
 tags: ["implementation", "typescript", "obsidian-llm-wiki"]
 aliases: ["vitest", "тестирование", "mock infrastructure"]
 ---
@@ -91,3 +92,4 @@ async function collect<T>(gen: AsyncGenerator<T>): Promise<T[]> {
 
 - [[vault-tools]] — мокируется через mockAdapter в тестах фаз
 - [[llm-client]] — мокируется через makeLlm
+- [[тесты-фаз]] — тесты фазовых функций, использующие эту инфраструктуру

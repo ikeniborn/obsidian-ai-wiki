@@ -2,7 +2,9 @@
 wiki_sources: ["src/vault-tools.ts"]
 wiki_updated: 2026-05-06
 wiki_status: developing
-wiki_outgoing_links: []
+wiki_outgoing_links:
+  - "[[agent-runner]]"
+  - "[[run-ingest]]"
 tags: ["implementation", "typescript", "obsidian-llm-wiki"]
 aliases: ["VaultTools", "VaultAdapter"]
 ---
@@ -47,5 +49,8 @@ interface VaultAdapter {
 Все фазовые функции (`runIngest`, `runQuery`, `runLint`, `runInit`) принимают `VaultTools` как зависимость, что позволяет тестировать их без реального Obsidian vault.
 
 ## Связанные концепции
+
+- [[agent-runner]] — использует VaultTools для чтения/записи файлов в рамках инструментальных вызовов
+- [[run-ingest]] — передаёт VaultTools как зависимость для работы с vault
 
 Интерфейс `VaultAdapter` описан в разделе выше — минимальный контракт, который реализуется через `this.app.vault.adapter` в production и мок-объект в тестах.

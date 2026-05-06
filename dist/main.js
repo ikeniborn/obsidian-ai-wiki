@@ -691,23 +691,46 @@ var DomainModal = class extends import_obsidian2.Modal {
     this.contentEl.empty();
   }
 };
-var FolderSuggest = class extends import_obsidian2.AbstractInputSuggest {
-  constructor(app, inputEl) {
-    super(app, inputEl);
-  }
-  getSuggestions(inputStr) {
-    const lower = inputStr.toLowerCase();
-    return this.app.vault.getAllFolders(true).filter((f) => f.path.toLowerCase().includes(lower)).slice(0, 20);
-  }
-  renderSuggestion(folder, el) {
-    el.setText(folder.path + "/");
-  }
-  selectSuggestion(folder) {
-    this.inputEl.value = folder.path + "/";
-    this.inputEl.trigger("input");
-    this.close();
-  }
-};
+function attachFolderDropdown(app, inputEl, onSelect) {
+  let dropEl = null;
+  const hideDropdown = () => {
+    dropEl?.remove();
+    dropEl = null;
+  };
+  const showDropdown = (folders) => {
+    hideDropdown();
+    if (!folders.length)
+      return;
+    const rect = inputEl.getBoundingClientRect();
+    dropEl = document.body.createDiv({ cls: "llm-wiki-folder-dropdown" });
+    dropEl.style.top = `${rect.bottom + window.scrollY}px`;
+    dropEl.style.left = `${rect.left + window.scrollX}px`;
+    dropEl.style.width = `${rect.width}px`;
+    for (const folder of folders) {
+      const item = dropEl.createDiv({ cls: "llm-wiki-folder-dropdown-item" });
+      item.setText(folder.path + "/");
+      item.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        hideDropdown();
+        onSelect(folder.path + "/");
+      });
+    }
+  };
+  inputEl.addEventListener("input", () => {
+    const lower = inputEl.value.toLowerCase();
+    if (!lower) {
+      hideDropdown();
+      return;
+    }
+    const matches = app.vault.getAllFolders(true).filter((f) => f.path.toLowerCase().includes(lower)).slice(0, 20);
+    showDropdown(matches);
+  });
+  inputEl.addEventListener("blur", hideDropdown);
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Escape")
+      hideDropdown();
+  });
+}
 var AddDomainModal = class extends import_obsidian2.Modal {
   constructor(app, onSubmit) {
     super(app);
@@ -774,22 +797,21 @@ var AddDomainModal = class extends import_obsidian2.Modal {
       cls: "llm-wiki-sp-input",
       attr: { type: "text", placeholder: T.addDomainSourcePathsPlaceholder }
     });
-    new FolderSuggest(this.app, inputEl);
-    const addPath = () => {
-      const val = inputEl.value.trim();
-      if (!val || this.input.sourcePaths.includes(val))
+    const addPath = (val) => {
+      const v = val ?? inputEl.value.trim();
+      if (!v || this.input.sourcePaths.includes(v))
         return;
-      this.input.sourcePaths.push(val);
+      this.input.sourcePaths.push(v);
       inputEl.value = "";
       rerender();
     };
+    attachFolderDropdown(this.app, inputEl, addPath);
     inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
         addPath();
       }
     });
-    addRow.createEl("button", { text: T.addDomainSourcePathsAdd, cls: "mod-cta" }).addEventListener("click", addPath);
   }
   onClose() {
     this.contentEl.empty();
@@ -959,22 +981,21 @@ var EditDomainModal = class extends import_obsidian2.Modal {
       cls: "llm-wiki-sp-input",
       attr: { type: "text", placeholder: T.sourcePathsPlaceholder }
     });
-    const addPath = () => {
-      const val = input.value.trim();
-      if (!val || this.sourcePathsList.includes(val))
+    const addPath = (val) => {
+      const v = val ?? input.value.trim();
+      if (!v || this.sourcePathsList.includes(v))
         return;
-      this.sourcePathsList.push(val);
+      this.sourcePathsList.push(v);
       input.value = "";
       rerender();
     };
+    attachFolderDropdown(this.app, input, addPath);
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
         addPath();
       }
     });
-    const addBtn = addRow.createEl("button", { text: T.sourcePathsAdd, cls: "mod-cta" });
-    addBtn.addEventListener("click", addPath);
   }
   renderEntityTypeCard(container, et) {
     const card = container.createDiv({ cls: "llm-wiki-et-card" });

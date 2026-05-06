@@ -292,3 +292,41 @@
 - документация/операции/поток-выполнения-операции.md
 
 **Итого:** 10 CREATE, 0 UPDATE, 0 SKIP
+
+---
+
+## 2026-05-06 — fix реализация (lint-report)
+
+**Операция:** fix (lint-отчёт)
+**Домен:** реализация (Реализация плагина)
+**Результат:** UPDATED + CREATED
+
+### Исправления lint-отчёта
+
+1. **CT-003 (мёртвая ссылка):** В `query-промпт.md` экранирован `[[название]]` в backticks (`` [[название]] ``) — устранён ложный WikiLink в тексте
+2. **CT-003 (orphan):** В `vitest-инфраструктура.md` добавлена ссылка `[[тесты-фаз]]` в frontmatter `wiki_outgoing_links` и в секцию "Связанные концепции"
+3. **CT-004 (orphan):** В `vault-tools.md` добавлены WikiLinks `[[agent-runner]]` и `[[run-ingest]]` с пояснительным контекстом; обновлён `wiki_outgoing_links`
+
+### Ingest (новые источники)
+
+**Модули (6):**
+- реализация/модули/main-ts.md — src/main.ts (LlmWikiPlugin, команды, миграции)
+- реализация/модули/modals-ts.md — src/modals.ts (все Modal компоненты)
+- реализация/модули/settings-ts.md — src/settings.ts (LlmWikiSettingTab)
+- реализация/модули/source-paths-ts.md — src/source-paths.ts (consolidateSourcePaths)
+- реализация/модули/wiki-path-ts.md — src/wiki-path.ts (WIKI_ROOT, domainWikiFolder)
+- реализация/модули/template-ts.md — src/phases/template.ts (render)
+
+**Фазы (1):**
+- реализация/фазы/run-lint-chat.md — src/phases/chat.ts (runLintChat)
+
+**Промпты (3):**
+- реализация/промпты/chat-промпт.md — prompts/chat.md
+- реализация/промпты/fix-промпт.md — prompts/fix.md
+- реализация/промпты/evaluator-промпт.md — prompts/evaluator.md
+
+### wiki_sources расширение
+
+- `тесты-фаз.md`: wiki_sources расширен с 4 до 20 файлов (все тестовые файлы из tests/)
+
+**Итого:** 10 CREATE, 4 UPDATE, 0 SKIP

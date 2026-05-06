@@ -140,6 +140,12 @@
 - [[llm-wiki-view]] — LlmWikiView (view.ts)
 - [[domain-map-ts]] — domain-map.ts (DomainEntry, EntityType)
 - [[llm-utils-ts]] — llm-utils.ts (buildChatParams, extractStreamDeltas)
+- [[main-ts]] — main.ts (точка входа плагина, LlmWikiPlugin)
+- [[modals-ts]] — modals.ts (Modal компоненты)
+- [[settings-ts]] — settings.ts (LlmWikiSettingTab)
+- [[source-paths-ts]] — source-paths.ts (consolidateSourcePaths)
+- [[wiki-path-ts]] — wiki-path.ts (WIKI_ROOT, domainWikiFolder)
+- [[template-ts]] — phases/template.ts (render)
 
 #### реализация/фазы
 
@@ -148,6 +154,7 @@
 - [[run-query]] — runQuery (phases/query.ts)
 - [[run-lint]] — runLint (phases/lint.ts)
 - [[run-fix]] — runFix (phases/fix.ts)
+- [[run-lint-chat]] — runLintChat (phases/chat.ts)
 
 #### реализация/типы
 
@@ -164,6 +171,9 @@
 - [[base-contract-промпт]] — Base Contract промпт (prompts/base.md)
 - [[lint-промпт]] — Lint промпт (prompts/lint.md)
 - [[query-промпт]] — Query промпт (prompts/query.md)
+- [[chat-промпт]] — Chat промпт (prompts/chat.md)
+- [[fix-промпт]] — Fix промпт (prompts/fix.md)
+- [[evaluator-промпт]] — Evaluator промпт (prompts/evaluator.md)
 
 #### реализация/тесты
 
