@@ -197,7 +197,6 @@ export class LlmWikiView extends ItemView {
   private openAddDomain(): void {
     const cwd = this.plugin.controller.cwdOrEmpty();
     if (!cwd) { new Notice(i18n().view.cwdNotSet); return; }
-    const domains = this.plugin.controller.loadDomains();
     new AddDomainModal(this.app, WIKI_ROOT, (input) => {
       const r = this.plugin.controller.registerDomain(input);
       if (!r.ok) return;
