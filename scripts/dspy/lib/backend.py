@@ -21,9 +21,9 @@ class ClaudeCodeLM(dspy.BaseLM):
         proc = subprocess.run(
             [
                 self.claude_path,
+                "--",
                 "--print",
                 "--dangerously-skip-permissions",
-                "--tools", "",
                 "--model", self._claude_model,
                 "--output-format", "json",
                 full_prompt,
@@ -36,6 +36,11 @@ class ClaudeCodeLM(dspy.BaseLM):
             (line for line in reversed(proc.stdout.splitlines()) if line.startswith("{")),
             "",
         )
+        if not json_line:
+            raise RuntimeError(
+                f"claude returned no JSON (exit={proc.returncode}).\n"
+                f"stderr: {proc.stderr[-500:]}"
+            )
         result = json.loads(json_line)["result"]
         choice = SimpleNamespace(message=SimpleNamespace(content=result))
         return SimpleNamespace(choices=[choice], model=self.model)
