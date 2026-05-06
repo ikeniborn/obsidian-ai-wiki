@@ -90,6 +90,30 @@
 - [[hybrid-orchestration]] — Гибридная оркестрация (TypeScript + LLM)
 - [[esbuild-md-loader]] — esbuild MD Loader (встраивание Markdown при сборке)
 
+### Домен: документация (Документация проекта)
+
+#### документация/руководства
+
+- [[разработка-плагина]] — Руководство разработчика (сборка, установка, smoke-test)
+- [[публикация-плагина]] — Публикация плагина в Obsidian Community Plugins
+- [[оптимизация-промптов]] — Оптимизация промптов через DSPy / MIPROv2
+- [[архитектура-плагина]] — Архитектура плагина obsidian-llm-wiki
+
+#### документация/компоненты
+
+- [[wiki-controller]] — WikiController (controller.ts)
+- [[claude-cli-client]] — ClaudeCliClient (claude-cli-client.ts)
+
+#### документация/паттерны
+
+- [[single-flight-guard]] — Single-Flight Guard
+- [[async-generator-events]] — AsyncGenerator / Event-Driven Stream (RunEvent)
+- [[backend-strategy]] — Backend Strategy Pattern (LlmClient)
+
+#### документация/операции
+
+- [[поток-выполнения-операции]] — Поток выполнения операции
+
 ### Домен: скрипты (Вспомогательные скрипты)
 
 #### скрипты/модули
@@ -103,3 +127,45 @@
 #### скрипты/пайплайны
 
 - [[dspy-mipro-pipeline]] — DSPy MIPROv2 Оптимизационный пайплайн
+
+### Домен: реализация (Реализация плагина)
+
+#### реализация/модули
+
+- [[agent-runner]] — AgentRunner (agent-runner.ts)
+- [[claude-cli-client]] — ClaudeCliClient (claude-cli-client.ts)
+- [[vault-tools]] — VaultTools (vault-tools.ts)
+- [[stream-ts]] — parseStreamLine (stream.ts)
+- [[wiki-controller]] — WikiController (controller.ts)
+- [[llm-wiki-view]] — LlmWikiView (view.ts)
+- [[domain-map-ts]] — domain-map.ts (DomainEntry, EntityType)
+- [[llm-utils-ts]] — llm-utils.ts (buildChatParams, extractStreamDeltas)
+
+#### реализация/фазы
+
+- [[run-ingest]] — runIngest (phases/ingest.ts)
+- [[run-init]] — runInit (phases/init.ts)
+- [[run-query]] — runQuery (phases/query.ts)
+- [[run-lint]] — runLint (phases/lint.ts)
+- [[run-fix]] — runFix (phases/fix.ts)
+
+#### реализация/типы
+
+- [[run-event]] — RunEvent (union-тип событий)
+- [[llm-client]] — LlmClient (интерфейс backend)
+- [[llm-wiki-plugin-settings]] — LlmWikiPluginSettings (конфигурация плагина)
+- [[domain-entry]] — DomainEntry (конфигурация домена)
+- [[entity-type]] — EntityType (описание типа сущности)
+
+#### реализация/промпты
+
+- [[ingest-промпт]] — Ingest промпт (prompts/ingest.md)
+- [[init-промпт]] — Init промпт (prompts/init.md)
+- [[base-contract-промпт]] — Base Contract промпт (prompts/base.md)
+- [[lint-промпт]] — Lint промпт (prompts/lint.md)
+- [[query-промпт]] — Query промпт (prompts/query.md)
+
+#### реализация/тесты
+
+- [[vitest-инфраструктура]] — Vitest инфраструктура тестирования
+- [[тесты-фаз]] — Тесты фазовых функций (tests/phases/)

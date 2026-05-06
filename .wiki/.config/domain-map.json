@@ -102,6 +102,64 @@
       "language_notes": "Спеки на русском языке с английскими техническими терминами. Имена файлов, компонентов и API не переводятся."
     },
     {
+      "id": "документация",
+      "name": "Документация проекта",
+      "description": "Документация obsidian-llm-wiki: руководства для разработчиков, архитектурные описания, процесс публикации, оптимизация промптов",
+      "source_paths": [
+        "docs"
+      ],
+      "wiki_subfolder": "документация",
+      "entity_types": [
+        {
+          "type": "руководство",
+          "description": "Практическое руководство или инструкция по процессу (сборка, публикация, разработка)",
+          "extraction_cues": [
+            "как", "шаги", "процесс", "чеклист", "установка", "сборка", "запуск",
+            "публикация", "релиз", "workflow", "guide", "руководство", "инструкция"
+          ],
+          "min_mentions_for_page": 1,
+          "wiki_subfolder": "документация/руководства"
+        },
+        {
+          "type": "компонент",
+          "description": "Архитектурный компонент или модуль плагина, описанный в документации",
+          "extraction_cues": [
+            "src/", ".ts", "controller", "runner", "view", "phases", "stream",
+            "cli-client", "vault-tools", "domain-map", "modals", "settings", "модуль", "компонент"
+          ],
+          "min_mentions_for_page": 2,
+          "wiki_subfolder": "документация/компоненты"
+        },
+        {
+          "type": "паттерн",
+          "description": "Архитектурный паттерн, применяемый в плагине",
+          "extraction_cues": [
+            "паттерн", "pattern", "single-flight", "AsyncGenerator", "Strategy",
+            "layered", "event-driven", "архитектура", "подход", "design"
+          ],
+          "min_mentions_for_page": 1,
+          "wiki_subfolder": "документация/паттерны"
+        },
+        {
+          "type": "операция",
+          "description": "Операция плагина LLM Wiki (ingest, query, lint, fix, init, chat)",
+          "extraction_cues": [
+            "ingest", "query", "lint", "fix", "init", "chat", "операция", "operation",
+            "timeout", "default_timeout"
+          ],
+          "min_mentions_for_page": 1,
+          "wiki_subfolder": "документация/операции"
+        }
+      ],
+      "tags": [
+        "docs",
+        "architecture",
+        "obsidian-llm-wiki",
+        "typescript"
+      ],
+      "language_notes": "Документация на русском языке с английскими техническими терминами. Имена файлов, компонентов, паттернов и CLI-команд не переводятся."
+    },
+    {
       "id": "скрипты",
       "name": "Вспомогательные скрипты",
       "description": "Вспомогательные скрипты проекта obsidian-llm-wiki: DSPy-оптимизатор промптов, утилиты, инструменты разработки",
@@ -148,6 +206,76 @@
         "optimization"
       ],
       "language_notes": "Исходники на Python, документация на русском. Технические термины (DSPy, MIPROv2, JSONL, LM) не переводятся. Имена модулей и переменных окружения сохраняются в оригинальном виде."
+    },
+    {
+      "id": "реализация",
+      "name": "Реализация плагина",
+      "description": "Исходный код obsidian-llm-wiki: TypeScript-модули, фазовые функции, промпты, тесты",
+      "source_paths": [
+        "src",
+        "prompts",
+        "tests"
+      ],
+      "wiki_subfolder": "реализация",
+      "entity_types": [
+        {
+          "type": "модуль",
+          "description": "TypeScript-файл с конкретной функциональностью (src/*.ts или src/phases/*.ts)",
+          "extraction_cues": [
+            "export class", "export function", "export interface", "import", ".ts",
+            "src/", "phases/", "модуль", "компонент", "файл", "класс", "функция"
+          ],
+          "min_mentions_for_page": 2,
+          "wiki_subfolder": "реализация/модули"
+        },
+        {
+          "type": "фаза",
+          "description": "Асинхронная фазовая функция операции wiki (runIngest, runQuery, runLint и т.д.)",
+          "extraction_cues": [
+            "runIngest", "runQuery", "runLint", "runInit", "runFix", "runLintChat",
+            "AsyncGenerator", "RunEvent", "фаза", "операция", "yield"
+          ],
+          "min_mentions_for_page": 1,
+          "wiki_subfolder": "реализация/фазы"
+        },
+        {
+          "type": "тип",
+          "description": "TypeScript интерфейс или тип данных, описывающий контракт системы",
+          "extraction_cues": [
+            "interface", "type ", "RunEvent", "LlmClient", "DomainEntry", "VaultAdapter",
+            "WikiOperation", "LlmWikiPluginSettings", "RunRequest", "контракт", "тип"
+          ],
+          "min_mentions_for_page": 2,
+          "wiki_subfolder": "реализация/типы"
+        },
+        {
+          "type": "промпт",
+          "description": "Шаблон промпта для LLM, встраиваемый через esbuild text-loader",
+          "extraction_cues": [
+            ".md", "промпт", "template", "шаблон", "{{", "system prompt", "prompts/",
+            "ingest.md", "query.md", "lint.md", "init.md", "base.md", "fix.md"
+          ],
+          "min_mentions_for_page": 1,
+          "wiki_subfolder": "реализация/промпты"
+        },
+        {
+          "type": "тест",
+          "description": "Набор тестов для модуля или фазы (Vitest, integration, unit)",
+          "extraction_cues": [
+            "describe", "it(", "expect", "vitest", "test.ts", "integration.test",
+            "vi.fn", "mock", "тест", "spec", "fixture"
+          ],
+          "min_mentions_for_page": 1,
+          "wiki_subfolder": "реализация/тесты"
+        }
+      ],
+      "tags": [
+        "implementation",
+        "typescript",
+        "obsidian-llm-wiki",
+        "source-code"
+      ],
+      "language_notes": "Источники на TypeScript, документация на русском. Имена файлов, функций, интерфейсов и методов не переводятся. Технические термины (AsyncGenerator, RunEvent, LlmClient, VaultTools) используются как есть."
     }
   ],
   "cross_domain_rules": {

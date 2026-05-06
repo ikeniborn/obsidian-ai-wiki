@@ -1,0 +1,63 @@
+id: obsidian-llm-wiki
+name: LLM Wiki Obsidian Plugin
+version: "0.1.51"
+description: >
+  Obsidian-плагин для ведения компаундируемой базы знаний на базе LLM.
+  Запускает AI-агента (Claude CLI или нативный OpenAI-совместимый LLM),
+  отображает прогресс в боковой панели в реальном времени.
+
+language: TypeScript
+runtime: Electron (Obsidian)
+build_tool: esbuild
+entry_point: src/main.ts
+output: main.js (CJS, ES2022)
+
+patterns:
+  - name: Layered Architecture
+    layers: [presentation, application, domain, infrastructure]
+  - name: Event-Driven (AsyncGenerator)
+    description: >
+      Поток событий RunEvent передаётся от runner/phases к view через AsyncGenerator.
+  - name: Strategy (Backend)
+    description: >
+      ClaudeCliClient и OpenAI (native) — взаимозаменяемые LlmClient реализации.
+  - name: Single-Flight
+    description: >
+      WikiController отклоняет параллельные операции через флаг this.current.
+
+backends:
+  - id: claude-agent
+    description: Запускает iclaude.sh как дочерний процесс, парсит stream-json stdout
+    client: ClaudeCliClient
+  - id: native-agent
+    description: Обращается к OpenAI-совместимому API (Ollama, OpenAI)
+    client: openai npm package
+
+operations:
+  - id: ingest
+    description: Извлечение сущностей из файла, обновление wiki-страниц
+    default_timeout_sec: 300
+  - id: query
+    description: Ответ на вопрос по базе знаний
+    default_timeout_sec: 300
+  - id: query-save
+    description: Ответ на вопрос с сохранением результата в vault
+    default_timeout_sec: 300
+  - id: lint
+    description: Проверка качества wiki-страниц домена
+    default_timeout_sec: 900
+  - id: fix
+    description: Автоматическое исправление по результату lint
+    default_timeout_sec: 900
+  - id: init
+    description: Начальная инициализация домена из source_paths
+    default_timeout_sec: 3600
+  - id: chat
+    description: Интерактивный диалог с агентом (контекст lint/query)
+    default_timeout_sec: 900
+
+key_constraints:
+  - Single-flight: одновременно разрешена только одна операция
+  - History limit: 20 записей в settings.json (компромисс UX vs размер)
+  - Wiki domains: источник истины — DomainEntry[] в settings (персистируется Obsidian)
+  - Source paths: consolidateSourcePaths() убирает дубли и поглощённые потомки
