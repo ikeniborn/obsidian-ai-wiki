@@ -58,10 +58,11 @@ export class ClaudeCliClient implements LlmClient {
 
     const isResume = Boolean(this.cfg.resumeSessionId);
     const args: string[] = [];
-    if (model) args.push("--model", model);
     args.push("--");
 
-    // --resume идёт после -- как claude-флаг
+    // --model и --resume идут после -- как claude-флаги (не iclaude-флаги),
+    // чтобы iclaude.sh не вызывал save_model_to_config и не мутировал .claude_config
+    if (model) args.push("--model", model);
     if (isResume) {
       args.push("--resume", this.cfg.resumeSessionId!);
     }
