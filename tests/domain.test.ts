@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateDomainId } from "../src/domain-map";
+import { validateDomainId } from "../src/domain";
 
 describe("validateDomainId", () => {
   it("returns null for valid ASCII id", () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { DomainMapStore, DomainMapCorruptError } from "../src/domain-map-store";
-import type { DomainEntry } from "../src/domain-map";
+import { DomainStore, DomainCorruptError } from "../src/domain-store";
+import type { DomainEntry } from "../src/domain";
 
 function makeVault(adapter: Record<string, any>): any {
   return { adapter };
@@ -15,14 +15,14 @@ const sampleDomain: DomainEntry = {
   language_notes: "",
 };
 
-describe("DomainMapStore", () => {
+describe("DomainStore", () => {
   describe("load", () => {
     it("returns [] when file missing", async () => {
       const adapter = {
         exists: vi.fn().mockResolvedValue(false),
         read: vi.fn(),
       };
-      const store = new DomainMapStore(makeVault(adapter));
+      const store = new DomainStore(makeVault(adapter));
       expect(await store.load()).toEqual([]);
     });
 
@@ -31,27 +31,27 @@ describe("DomainMapStore", () => {
         exists: vi.fn().mockResolvedValue(true),
         read: vi.fn().mockResolvedValue(JSON.stringify([sampleDomain])),
       };
-      const store = new DomainMapStore(makeVault(adapter));
+      const store = new DomainStore(makeVault(adapter));
       const result = await store.load();
       expect(result).toEqual([sampleDomain]);
     });
 
-    it("throws DomainMapCorruptError on invalid JSON", async () => {
+    it("throws DomainCorruptError on invalid JSON", async () => {
       const adapter = {
         exists: vi.fn().mockResolvedValue(true),
         read: vi.fn().mockResolvedValue("{not json"),
       };
-      const store = new DomainMapStore(makeVault(adapter));
-      await expect(store.load()).rejects.toBeInstanceOf(DomainMapCorruptError);
+      const store = new DomainStore(makeVault(adapter));
+      await expect(store.load()).rejects.toBeInstanceOf(DomainCorruptError);
     });
 
-    it("throws DomainMapCorruptError on non-array JSON", async () => {
+    it("throws DomainCorruptError on non-array JSON", async () => {
       const adapter = {
         exists: vi.fn().mockResolvedValue(true),
         read: vi.fn().mockResolvedValue('{"foo":"bar"}'),
       };
-      const store = new DomainMapStore(makeVault(adapter));
-      await expect(store.load()).rejects.toBeInstanceOf(DomainMapCorruptError);
+      const store = new DomainStore(makeVault(adapter));
+      await expect(store.load()).rejects.toBeInstanceOf(DomainCorruptError);
     });
   });
 
@@ -68,7 +68,7 @@ describe("DomainMapStore", () => {
         rename: vi.fn().mockImplementation(async (a: string, b: string) => { calls.push(`rename:${a}->${b}`); }),
         remove: vi.fn().mockImplementation(async (p: string) => { calls.push(`remove:${p}`); }),
       };
-      const store = new DomainMapStore(makeVault(adapter));
+      const store = new DomainStore(makeVault(adapter));
       await store.save([sampleDomain]);
       expect(adapter.write).toHaveBeenCalledWith(
         "!Wiki/_domain.json.tmp",
@@ -99,7 +99,7 @@ describe("DomainMapStore", () => {
         rename: vi.fn().mockImplementation(async (a: string, b: string) => { calls.push(`rename:${a}->${b}`); }),
         remove: vi.fn().mockImplementation(async (p: string) => { calls.push(`remove:${p}`); }),
       };
-      const store = new DomainMapStore(makeVault(adapter));
+      const store = new DomainStore(makeVault(adapter));
       await store.save([sampleDomain]);
       expect(adapter.mkdir).not.toHaveBeenCalled();
       expect(calls).toEqual([

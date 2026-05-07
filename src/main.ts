@@ -1,11 +1,13 @@
 import { Plugin, WorkspaceLeaf } from "obsidian";
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings, type RunHistoryEntry } from "./types";
-import type { DomainEntry } from "./domain-map";
+import type { DomainEntry } from "./domain";
 import { LlmWikiSettingTab } from "./settings";
 import { LLM_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { WikiController } from "./controller";
 import { QueryModal, DomainModal } from "./modals";
 import { i18n } from "./i18n";
+import type { DomainStore } from "./domain-store";
+import type { LocalConfigStore } from "./local-config";
 
 export default class LlmWikiPlugin extends Plugin {
   settings!: LlmWikiPluginSettings;
@@ -180,4 +182,38 @@ export function migrateDomainWikiFolder(domains: DomainEntry[]): boolean {
     }
   }
   return changed;
+}
+
+export async function migrateLegacyData(
+  plugin: LlmWikiPlugin,
+  domainMapStore: DomainStore,
+  localConfigStore: LocalConfigStore,
+): Promise<void> {
+  const data = (await plugin.loadData()) as Record<string, any> | null;
+  if (!data) return;
+
+  let dirty = false;
+
+  if (Array.isArray(data.domains)) {
+    if (data.domains.length > 0) {
+      const vaultExists = await plugin.app.vault.adapter.exists("!Wiki/_domain.json");
+      if (!vaultExists) {
+        await domainMapStore.save(data.domains as DomainEntry[]);
+      }
+    }
+    delete data.domains;
+    dirty = true;
+  }
+
+  const ca = data.claudeAgent as Record<string, any> | undefined;
+  if (ca && typeof ca.iclaudePath === "string") {
+    const cur = await localConfigStore.load();
+    if (ca.iclaudePath.length > 0 && !cur.iclaudePath) {
+      await localConfigStore.save({ iclaudePath: ca.iclaudePath });
+    }
+    delete ca.iclaudePath;
+    dirty = true;
+  }
+
+  if (dirty) await plugin.saveData(data);
 }

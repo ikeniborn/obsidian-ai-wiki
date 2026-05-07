@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { extractParentSourcePath, detectDomain } from "../src/phases/ingest";
-import type { DomainEntry } from "../src/domain-map";
+import type { DomainEntry } from "../src/domain";
 
 describe("extractParentSourcePath", () => {
   const VAULT = "/vaults/Work";

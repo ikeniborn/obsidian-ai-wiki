@@ -1,6 +1,6 @@
 import { isAbsolute, join, relative, dirname } from "node:path";
 import type OpenAI from "openai";
-import type { DomainEntry } from "../domain-map";
+import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";

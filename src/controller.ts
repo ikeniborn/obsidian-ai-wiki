@@ -2,7 +2,7 @@ import { App, Notice } from "obsidian";
 import { existsSync, appendFileSync, mkdirSync } from "node:fs";
 import { relative, isAbsolute, join } from "node:path";
 import { LLM_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
-import { validateDomainId, type DomainEntry, type AddDomainInput } from "./domain-map";
+import { validateDomainId, type DomainEntry, type AddDomainInput } from "./domain";
 import type LlmWikiPlugin from "./main";
 import type { RunEvent, RunHistoryEntry, WikiOperation, OnFileError } from "./types";
 import { AgentRunner } from "./agent-runner";

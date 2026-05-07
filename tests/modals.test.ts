@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { EditDomainModal, FileErrorModal } from "../src/modals";
-import type { DomainEntry } from "../src/domain-map";
+import type { DomainEntry } from "../src/domain";
 
 const domain: DomainEntry = {
   id: "test",

@@ -1,5 +1,5 @@
 import type OpenAI from "openai";
-import type { DomainEntry, EntityType } from "./domain-map";
+import type { DomainEntry, EntityType } from "./domain";
 
 export type WikiOperation =
   | "ingest"
@@ -107,7 +107,6 @@ export interface NativeOperationConfig {
 export interface LlmWikiPluginSettings {
   backend: "claude-agent" | "native-agent";
   systemPrompt: string;
-  domains: DomainEntry[];
   maxTokens: number;
   agentLogEnabled: boolean;
   historyLimit: number;
@@ -120,7 +119,6 @@ export interface LlmWikiPluginSettings {
   };
   history: RunHistoryEntry[];
   claudeAgent: {
-    iclaudePath: string;
     model: string;
     allowedTools: string;
     perOperation: boolean;
@@ -145,14 +143,12 @@ export interface LlmWikiPluginSettings {
 export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   backend: "claude-agent",
   systemPrompt: "",
-  domains: [],
   maxTokens: 4096,
   agentLogEnabled: false,
   historyLimit: 20,
   timeouts: { ingest: 300, query: 300, lint: 900, fix: 900, init: 3600 },
   history: [],
   claudeAgent: {
-    iclaudePath: "",
     model: "sonnet",
     allowedTools: "",
     perOperation: false,

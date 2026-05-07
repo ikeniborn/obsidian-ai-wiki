@@ -1,5 +1,5 @@
 import { App, Modal, Setting, TFolder } from "obsidian";
-import type { AddDomainInput, DomainEntry, EntityType } from "./domain-map";
+import type { AddDomainInput, DomainEntry, EntityType } from "./domain";
 import { i18n } from "./i18n";
 
 export class BusyCloseModal extends Modal {

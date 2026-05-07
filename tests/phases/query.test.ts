@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { runQuery } from "../../src/phases/query";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
-import type { DomainEntry } from "../../src/domain-map";
+import type { DomainEntry } from "../../src/domain";
 
 function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
   return {

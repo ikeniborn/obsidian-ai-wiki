@@ -4,7 +4,7 @@
 
 **Goal:** Перенести `domains[]` из `data.json` в vault-файл `!Wiki/_domain.json` и `iclaudePath` в `<plugin-dir>/local.json`, добавить one-shot auto-migration.
 
-**Architecture:** Два изолированных store-модуля: `DomainMapStore` (vault-relative, lazy reads, atomic writes, hard-fail на corrupt) и `LocalConfigStore` (plugin-dir, кэширующий). `WikiController` принимает оба store через конструктор. Миграция вызывается в `onload()` ДО `loadSettings()`, мутирует `data.json` (удаляет legacy-поля), затем `loadSettings()` читает уже очищенный конфиг.
+**Architecture:** Два изолированных store-модуля: `DomainStore` (vault-relative, lazy reads, atomic writes, hard-fail на corrupt) и `LocalConfigStore` (plugin-dir, кэширующий). `WikiController` принимает оба store через конструктор. Миграция вызывается в `onload()` ДО `loadSettings()`, мутирует `data.json` (удаляет legacy-поля), затем `loadSettings()` читает уже очищенный конфиг.
 
 **Tech Stack:** TypeScript, Obsidian Plugin API (`Vault.adapter`), Vitest.
 
@@ -16,14 +16,14 @@
 
 | Файл | Действие |
 |------|---------|
-| `src/domain-map-store.ts` | **Create** — `DomainMapStore` class + `DomainMapCorruptError` |
+| `src/domain-store.ts` | **Create** — `DomainStore` class + `DomainCorruptError` |
 | `src/local-config.ts` | **Create** — `LocalConfigStore` class, `LocalConfig` type |
-| `src/domain-map.ts` | **Modify** — добавить helper `applyDomainEvent` |
+| `src/domain.ts` | **Modify** — добавить helper `applyDomainEvent` |
 | `src/types.ts` | **Modify** — удалить `domains` и `claudeAgent.iclaudePath`, обновить `DEFAULT_SETTINGS` |
 | `src/main.ts` | **Modify** — добавить `migrateLegacyData()`, инстанцировать stores, вызвать миграцию ПЕРЕД `loadSettings()` |
 | `src/controller.ts` | **Modify** — конструктор принимает stores, `loadDomains()` async, `registerDomain()` async, `dispatch()` пишет через store, `requireClaudeAgent()` async через `localConfig` |
 | `src/settings.ts` | **Modify** — `display()` async, edit/delete доменов через `store.save()`, `iclaudePath` через `localConfig.save()` |
-| `tests/domain-map-store.test.ts` | **Create** |
+| `tests/domain-store.test.ts` | **Create** |
 | `tests/local-config.test.ts` | **Create** |
 | `tests/apply-domain-event.test.ts` | **Create** |
 | `tests/main-migration.test.ts` | **Create** |
@@ -31,20 +31,20 @@
 
 ---
 
-## Task 1: `DomainMapStore` — TDD
+## Task 1: `DomainStore` — TDD
 
 **Files:**
-- Create: `tests/domain-map-store.test.ts`
-- Create: `src/domain-map-store.ts`
+- Create: `tests/domain-store.test.ts`
+- Create: `src/domain-store.ts`
 
 - [ ] **Step 1.1: Написать failing-тест**
 
-Создать `tests/domain-map-store.test.ts`:
+Создать `tests/domain-store.test.ts`:
 
 ```ts
 import { describe, it, expect, vi } from "vitest";
-import { DomainMapStore, DomainMapCorruptError } from "../src/domain-map-store";
-import type { DomainEntry } from "../src/domain-map";
+import { DomainStore, DomainCorruptError } from "../src/domain-store";
+import type { DomainEntry } from "../src/domain";
 
 function makeVault(adapter: Record<string, any>): any {
   return { adapter };
@@ -59,14 +59,14 @@ const sampleDomain: DomainEntry = {
   language_notes: "",
 };
 
-describe("DomainMapStore", () => {
+describe("DomainStore", () => {
   describe("load", () => {
     it("returns [] when file missing", async () => {
       const adapter = {
         exists: vi.fn().mockResolvedValue(false),
         read: vi.fn(),
       };
-      const store = new DomainMapStore(makeVault(adapter));
+      const store = new DomainStore(makeVault(adapter));
       expect(await store.load()).toEqual([]);
     });
 
@@ -75,27 +75,27 @@ describe("DomainMapStore", () => {
         exists: vi.fn().mockResolvedValue(true),
         read: vi.fn().mockResolvedValue(JSON.stringify([sampleDomain])),
       };
-      const store = new DomainMapStore(makeVault(adapter));
+      const store = new DomainStore(makeVault(adapter));
       const result = await store.load();
       expect(result).toEqual([sampleDomain]);
     });
 
-    it("throws DomainMapCorruptError on invalid JSON", async () => {
+    it("throws DomainCorruptError on invalid JSON", async () => {
       const adapter = {
         exists: vi.fn().mockResolvedValue(true),
         read: vi.fn().mockResolvedValue("{not json"),
       };
-      const store = new DomainMapStore(makeVault(adapter));
-      await expect(store.load()).rejects.toBeInstanceOf(DomainMapCorruptError);
+      const store = new DomainStore(makeVault(adapter));
+      await expect(store.load()).rejects.toBeInstanceOf(DomainCorruptError);
     });
 
-    it("throws DomainMapCorruptError on non-array JSON", async () => {
+    it("throws DomainCorruptError on non-array JSON", async () => {
       const adapter = {
         exists: vi.fn().mockResolvedValue(true),
         read: vi.fn().mockResolvedValue('{"foo":"bar"}'),
       };
-      const store = new DomainMapStore(makeVault(adapter));
-      await expect(store.load()).rejects.toBeInstanceOf(DomainMapCorruptError);
+      const store = new DomainStore(makeVault(adapter));
+      await expect(store.load()).rejects.toBeInstanceOf(DomainCorruptError);
     });
   });
 
@@ -114,7 +114,7 @@ describe("DomainMapStore", () => {
         rename: vi.fn().mockImplementation(async (a: string, b: string) => { calls.push(`rename:${a}->${b}`); }),
         remove: vi.fn().mockImplementation(async (p: string) => { calls.push(`remove:${p}`); }),
       };
-      const store = new DomainMapStore(makeVault(adapter));
+      const store = new DomainStore(makeVault(adapter));
       await store.save([sampleDomain]);
       expect(adapter.mkdir).toHaveBeenCalledWith("!Wiki");
       expect(adapter.write).toHaveBeenCalledWith(
@@ -139,7 +139,7 @@ describe("DomainMapStore", () => {
         rename: vi.fn(),
         remove: vi.fn(),
       };
-      const store = new DomainMapStore(makeVault(adapter));
+      const store = new DomainStore(makeVault(adapter));
       await store.save([sampleDomain]);
       expect(adapter.remove).toHaveBeenCalledWith("!Wiki/_domain.json");
       expect(adapter.mkdir).not.toHaveBeenCalled();
@@ -151,29 +151,29 @@ describe("DomainMapStore", () => {
 - [ ] **Step 1.2: Запустить — должен упасть на отсутствии модуля**
 
 ```bash
-npx vitest run tests/domain-map-store.test.ts
+npx vitest run tests/domain-store.test.ts
 ```
 
-Ожидаемо: ошибка импорта `../src/domain-map-store`.
+Ожидаемо: ошибка импорта `../src/domain-store`.
 
-- [ ] **Step 1.3: Реализовать `src/domain-map-store.ts`**
+- [ ] **Step 1.3: Реализовать `src/domain-store.ts`**
 
 ```ts
 import type { Vault } from "obsidian";
-import type { DomainEntry } from "./domain-map";
+import type { DomainEntry } from "./domain";
 
 const FILE_PATH = "!Wiki/_domain.json";
 const TMP_PATH = `${FILE_PATH}.tmp`;
 const WIKI_DIR = "!Wiki";
 
-export class DomainMapCorruptError extends Error {
+export class DomainCorruptError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "DomainMapCorruptError";
+    this.name = "DomainCorruptError";
   }
 }
 
-export class DomainMapStore {
+export class DomainStore {
   constructor(private vault: Vault) {}
 
   async load(): Promise<DomainEntry[]> {
@@ -182,8 +182,8 @@ export class DomainMapStore {
     const raw = await adapter.read(FILE_PATH);
     let parsed: unknown;
     try { parsed = JSON.parse(raw); }
-    catch (e) { throw new DomainMapCorruptError(`${FILE_PATH}: ${(e as Error).message}`); }
-    if (!Array.isArray(parsed)) throw new DomainMapCorruptError(`${FILE_PATH}: expected JSON array`);
+    catch (e) { throw new DomainCorruptError(`${FILE_PATH}: ${(e as Error).message}`); }
+    if (!Array.isArray(parsed)) throw new DomainCorruptError(`${FILE_PATH}: expected JSON array`);
     return parsed as DomainEntry[];
   }
 
@@ -201,7 +201,7 @@ export class DomainMapStore {
 - [ ] **Step 1.4: Запустить — должны пройти**
 
 ```bash
-npx vitest run tests/domain-map-store.test.ts
+npx vitest run tests/domain-store.test.ts
 ```
 
 Ожидаемо: 6 passed.
@@ -209,8 +209,8 @@ npx vitest run tests/domain-map-store.test.ts
 - [ ] **Step 1.5: Коммит**
 
 ```bash
-git add src/domain-map-store.ts tests/domain-map-store.test.ts
-git commit -m "feat: add DomainMapStore for vault-backed domain storage"
+git add src/domain-store.ts tests/domain-store.test.ts
+git commit -m "feat: add DomainStore for vault-backed domain storage"
 ```
 
 ---
@@ -367,7 +367,7 @@ git commit -m "feat: add LocalConfigStore for machine-local plugin settings"
 
 **Files:**
 - Create: `tests/apply-domain-event.test.ts`
-- Modify: `src/domain-map.ts`
+- Modify: `src/domain.ts`
 
 - [ ] **Step 3.1: Написать тест**
 
@@ -375,8 +375,8 @@ git commit -m "feat: add LocalConfigStore for machine-local plugin settings"
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { applyDomainEvent } from "../src/domain-map";
-import type { DomainEntry } from "../src/domain-map";
+import { applyDomainEvent } from "../src/domain";
+import type { DomainEntry } from "../src/domain";
 
 const base: DomainEntry = {
   id: "os",
@@ -450,9 +450,9 @@ describe("applyDomainEvent", () => {
 npx vitest run tests/apply-domain-event.test.ts
 ```
 
-- [ ] **Step 3.3: Добавить helper в `src/domain-map.ts`**
+- [ ] **Step 3.3: Добавить helper в `src/domain.ts`**
 
-В конец `src/domain-map.ts` добавить:
+В конец `src/domain.ts` добавить:
 
 ```ts
 import type { RunEvent } from "./types";
@@ -491,7 +491,7 @@ npx vitest run tests/apply-domain-event.test.ts
 - [ ] **Step 3.5: Коммит**
 
 ```bash
-git add src/domain-map.ts tests/apply-domain-event.test.ts
+git add src/domain.ts tests/apply-domain-event.test.ts
 git commit -m "feat: add applyDomainEvent helper for store updates"
 ```
 
@@ -551,7 +551,7 @@ npx tsc --noEmit -p tsconfig.json
 ```ts
 import { describe, it, expect, vi } from "vitest";
 import { migrateLegacyData } from "../src/main";
-import type { DomainEntry } from "../src/domain-map";
+import type { DomainEntry } from "../src/domain";
 
 function makePlugin(initial: any, adapter: Record<string, any>) {
   let stored = JSON.parse(JSON.stringify(initial));
@@ -583,9 +583,9 @@ describe("migrateLegacyData", () => {
       mkdir: vi.fn().mockResolvedValue(undefined),
     };
     const plugin = makePlugin({ domains: [sampleDomain] }, adapter);
-    const { DomainMapStore } = await import("../src/domain-map-store");
+    const { DomainStore } = await import("../src/domain-store");
     const { LocalConfigStore } = await import("../src/local-config");
-    await migrateLegacyData(plugin, new DomainMapStore({ adapter } as any), new LocalConfigStore(plugin));
+    await migrateLegacyData(plugin, new DomainStore({ adapter } as any), new LocalConfigStore(plugin));
     expect(vaultFiles.has("!Wiki/_domain.json")).toBe(true);
     expect(JSON.parse(vaultFiles.get("!Wiki/_domain.json")!)).toEqual([sampleDomain]);
     expect(plugin.getStored().domains).toBeUndefined();
@@ -605,9 +605,9 @@ describe("migrateLegacyData", () => {
       mkdir: vi.fn(),
     };
     const plugin = makePlugin({ domains: [sampleDomain] }, adapter);
-    const { DomainMapStore } = await import("../src/domain-map-store");
+    const { DomainStore } = await import("../src/domain-store");
     const { LocalConfigStore } = await import("../src/local-config");
-    await migrateLegacyData(plugin, new DomainMapStore({ adapter } as any), new LocalConfigStore(plugin));
+    await migrateLegacyData(plugin, new DomainStore({ adapter } as any), new LocalConfigStore(plugin));
     expect(JSON.parse(vaultFiles.get("!Wiki/_domain.json")!)).toEqual(existing);
     expect(plugin.getStored().domains).toBeUndefined();
   });
@@ -621,10 +621,10 @@ describe("migrateLegacyData", () => {
       rename: vi.fn(), remove: vi.fn(), mkdir: vi.fn(),
     };
     const plugin = makePlugin({ claudeAgent: { iclaudePath: "/usr/local/bin/iclaude.sh", model: "sonnet" } }, adapter);
-    const { DomainMapStore } = await import("../src/domain-map-store");
+    const { DomainStore } = await import("../src/domain-store");
     const { LocalConfigStore } = await import("../src/local-config");
     const localStore = new LocalConfigStore(plugin);
-    await migrateLegacyData(plugin, new DomainMapStore({ adapter } as any), localStore);
+    await migrateLegacyData(plugin, new DomainStore({ adapter } as any), localStore);
     expect(plugin.getStored().claudeAgent.iclaudePath).toBeUndefined();
     expect((await localStore.load()).iclaudePath).toBe("/usr/local/bin/iclaude.sh");
   });
@@ -642,9 +642,9 @@ describe("migrateLegacyData", () => {
       mkdir: vi.fn(),
     };
     const plugin = makePlugin({ domains: [sampleDomain] }, adapter);
-    const { DomainMapStore } = await import("../src/domain-map-store");
+    const { DomainStore } = await import("../src/domain-store");
     const { LocalConfigStore } = await import("../src/local-config");
-    const dms = new DomainMapStore({ adapter } as any);
+    const dms = new DomainStore({ adapter } as any);
     const lcs = new LocalConfigStore(plugin);
     await migrateLegacyData(plugin, dms, lcs);
     const saveCallsAfter1 = plugin.saveData.mock.calls.length;
@@ -664,11 +664,11 @@ describe("migrateLegacyData", () => {
       loadData: vi.fn().mockResolvedValue(null),
       saveData: vi.fn(),
     } as any;
-    const { DomainMapStore } = await import("../src/domain-map-store");
+    const { DomainStore } = await import("../src/domain-store");
     const { LocalConfigStore } = await import("../src/local-config");
     await expect(migrateLegacyData(
       plugin,
-      new DomainMapStore({ adapter } as any),
+      new DomainStore({ adapter } as any),
       new LocalConfigStore(plugin),
     )).resolves.toBeUndefined();
     expect(plugin.saveData).not.toHaveBeenCalled();
@@ -687,12 +687,12 @@ npx vitest run tests/main-migration.test.ts
 Добавить экспортируемую функцию в конец `src/main.ts` (после `migrateDomainWikiFolder`):
 
 ```ts
-import type { DomainMapStore } from "./domain-map-store";
+import type { DomainStore } from "./domain-store";
 import type { LocalConfigStore } from "./local-config";
 
 export async function migrateLegacyData(
   plugin: LlmWikiPlugin,
-  domainMapStore: DomainMapStore,
+  domainMapStore: DomainStore,
   localConfigStore: LocalConfigStore,
 ): Promise<void> {
   const data = (await plugin.loadData()) as Record<string, any> | null;
@@ -727,7 +727,7 @@ export async function migrateLegacyData(
 }
 ```
 
-Объединить импорт `DomainEntry`: сверху файла должен быть один импорт `import type { DomainEntry } from "./domain-map";`.
+Объединить импорт `DomainEntry`: сверху файла должен быть один импорт `import type { DomainEntry } from "./domain";`.
 
 - [ ] **Step 5.4: Запустить тесты миграции**
 
@@ -752,9 +752,9 @@ npx vitest run tests/main-migration.test.ts
 
 Импорты — добавить:
 ```ts
-import { applyDomainEvent } from "./domain-map";
-import type { DomainMapStore } from "./domain-map-store";
-import { DomainMapCorruptError } from "./domain-map-store";
+import { applyDomainEvent } from "./domain";
+import type { DomainStore } from "./domain-store";
+import { DomainCorruptError } from "./domain-store";
 import type { LocalConfigStore } from "./local-config";
 ```
 
@@ -763,7 +763,7 @@ import type { LocalConfigStore } from "./local-config";
 constructor(
   private app: App,
   private plugin: LlmWikiPlugin,
-  private domainMapStore: DomainMapStore,
+  private domainMapStore: DomainStore,
   private localConfigStore: LocalConfigStore,
 ) {}
 ```
@@ -776,7 +776,7 @@ async loadDomains(): Promise<DomainEntry[]> {
   try {
     return await this.domainMapStore.load();
   } catch (e) {
-    if (e instanceof DomainMapCorruptError) {
+    if (e instanceof DomainCorruptError) {
       new Notice(`Domain map corrupt: ${e.message}`);
     }
     throw e;
@@ -896,7 +896,7 @@ if (ev.kind === "domain_created" || ev.kind === "domain_updated" || ev.kind === 
     const next = applyDomainEvent(cur, ev);
     if (next !== cur) await this.domainMapStore.save(next);
   } catch (e) {
-    if (e instanceof DomainMapCorruptError) {
+    if (e instanceof DomainCorruptError) {
       new Notice(`Domain map corrupt: ${e.message}`);
     }
     status = "error";
@@ -929,7 +929,7 @@ npx tsc --noEmit -p tsconfig.json
 
 Добавить в начало:
 ```ts
-import { DomainMapStore } from "./domain-map-store";
+import { DomainStore } from "./domain-store";
 import { LocalConfigStore } from "./local-config";
 ```
 
@@ -937,7 +937,7 @@ import { LocalConfigStore } from "./local-config";
 
 В классе `LlmWikiPlugin` (после `controller!: WikiController;`):
 ```ts
-domainMapStore!: DomainMapStore;
+domainMapStore!: DomainStore;
 localConfigStore!: LocalConfigStore;
 ```
 
@@ -946,7 +946,7 @@ localConfigStore!: LocalConfigStore;
 Заменить начало `onload()` (строки 15-17):
 ```ts
 async onload(): Promise<void> {
-  this.domainMapStore = new DomainMapStore(this.app.vault);
+  this.domainMapStore = new DomainStore(this.app.vault);
   this.localConfigStore = new LocalConfigStore(this);
   await migrateLegacyData(this, this.domainMapStore, this.localConfigStore);
   await this.loadSettings();
@@ -962,9 +962,9 @@ async onload(): Promise<void> {
 domains: Array.isArray(data?.domains) ? (data.domains as DomainEntry[]) : [],
 ```
 
-Удалить блок миграции wiki_folder (строки 163-166), потому что миграция wiki_folder теперь применима только при загрузке из vault. Перенести её внутрь `DomainMapStore.load()` ИЛИ оставить как разовый вызов после migrateLegacyData. Оставляем существующий вызов: `migrateLegacyData` записывает в vault уже мигрированные значения. Добавим стрип в `DomainMapStore.load()`:
+Удалить блок миграции wiki_folder (строки 163-166), потому что миграция wiki_folder теперь применима только при загрузке из vault. Перенести её внутрь `DomainStore.load()` ИЛИ оставить как разовый вызов после migrateLegacyData. Оставляем существующий вызов: `migrateLegacyData` записывает в vault уже мигрированные значения. Добавим стрип в `DomainStore.load()`:
 
-В `src/domain-map-store.ts` после `parsed = JSON.parse(raw)` добавить:
+В `src/domain-store.ts` после `parsed = JSON.parse(raw)` добавить:
 ```ts
 if (Array.isArray(parsed)) {
   for (const d of parsed as DomainEntry[]) {
@@ -1043,7 +1043,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
 
 Импорт:
 ```ts
-import type { DomainEntry } from "./domain-map";
+import type { DomainEntry } from "./domain";
 import { Notice } from "obsidian";
 ```
 
@@ -1117,10 +1117,10 @@ npm test
 - [ ] **Step 8.5: Коммит (промежуточный — после Task 6/7/8)**
 
 ```bash
-git add src/types.ts src/main.ts src/controller.ts src/settings.ts src/domain-map.ts src/domain-map-store.ts src/local-config.ts tests/main-migration.test.ts
+git add src/types.ts src/main.ts src/controller.ts src/settings.ts src/domain.ts src/domain-store.ts src/local-config.ts tests/main-migration.test.ts
 git commit -m "feat: domain-map → vault, iclaudePath → local config
 
-- DomainMapStore writes !Wiki/_domain.json (atomic, lazy reads)
+- DomainStore writes !Wiki/_domain.json (atomic, lazy reads)
 - LocalConfigStore writes <plugin-dir>/local.json (machine-local)
 - migrateLegacyData runs in onload before loadSettings
 - WikiController takes both stores via constructor
@@ -1202,7 +1202,7 @@ git commit -m "chore: bump version, rebuild dist"
 ## Self-Review Result
 
 **Spec coverage:**
-- Components (DomainMapStore, LocalConfigStore) — Task 1, 2 ✓
+- Components (DomainStore, LocalConfigStore) — Task 1, 2 ✓
 - Migration — Task 5 ✓
 - Types удаление — Task 4 ✓
 - Controller интеграция — Task 6 ✓
@@ -1213,7 +1213,7 @@ git commit -m "chore: bump version, rebuild dist"
 - Hard-fail на corrupt → Notice + abort — Step 6.6 ✓
 - `_domain.json` отсутствует → `[]` — Step 1.3 (load returns []) ✓
 - `applyDomainEvent` helper — Task 3 ✓
-- wiki_folder strip migration — Step 7.4 (перенесена в DomainMapStore.load) ✓
+- wiki_folder strip migration — Step 7.4 (перенесена в DomainStore.load) ✓
 - README sync exclusion note — **gap**: добавить в Task 10 step.
 
 **Дополнить Task 10:**
@@ -1239,4 +1239,4 @@ git commit -m "docs: note about local.json sync exclusion"
 
 **Placeholder scan:** ноль `TBD/TODO/implement later`.
 
-**Type consistency:** `DomainMapStore`, `LocalConfigStore`, `applyDomainEvent`, `migrateLegacyData` — имена консистентны во всех тасках.
+**Type consistency:** `DomainStore`, `LocalConfigStore`, `applyDomainEvent`, `migrateLegacyData` — имена консистентны во всех тасках.

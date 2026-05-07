@@ -1,5 +1,5 @@
 import type OpenAI from "openai";
-import type { DomainEntry } from "../domain-map";
+import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient, OnFileError } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { migrateDomainWikiFolder } from "../src/main";
-import type { DomainEntry } from "../src/domain-map";
+import type { DomainEntry } from "../src/domain";
 
 function makeDomain(wiki_folder: string): DomainEntry {
   return { id: "d", name: "D", wiki_folder };

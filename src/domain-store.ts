@@ -1,18 +1,18 @@
 import type { Vault } from "obsidian";
-import type { DomainEntry } from "./domain-map";
+import type { DomainEntry } from "./domain";
 
 const FILE_PATH = "!Wiki/_domain.json";
 const TMP_PATH = `${FILE_PATH}.tmp`;
 const WIKI_DIR = "!Wiki";
 
-export class DomainMapCorruptError extends Error {
+export class DomainCorruptError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "DomainMapCorruptError";
+    this.name = "DomainCorruptError";
   }
 }
 
-export class DomainMapStore {
+export class DomainStore {
   constructor(private vault: Vault) {}
 
   async load(): Promise<DomainEntry[]> {
@@ -21,8 +21,8 @@ export class DomainMapStore {
     const raw = await adapter.read(FILE_PATH);
     let parsed: unknown;
     try { parsed = JSON.parse(raw); }
-    catch (e) { throw new DomainMapCorruptError(`${FILE_PATH}: ${(e as Error).message}`); }
-    if (!Array.isArray(parsed)) throw new DomainMapCorruptError(`${FILE_PATH}: expected JSON array`);
+    catch (e) { throw new DomainCorruptError(`${FILE_PATH}: ${(e as Error).message}`); }
+    if (!Array.isArray(parsed)) throw new DomainCorruptError(`${FILE_PATH}: expected JSON array`);
     return parsed as DomainEntry[];
   }
 

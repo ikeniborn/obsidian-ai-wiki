@@ -1,5 +1,5 @@
 import type OpenAI from "openai";
-import type { DomainEntry } from "../domain-map";
+import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import chatTemplate from "../../prompts/chat.md";

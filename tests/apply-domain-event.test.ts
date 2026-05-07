@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { applyDomainEvent } from "../src/domain-map";
-import type { DomainEntry } from "../src/domain-map";
+import { applyDomainEvent } from "../src/domain";
+import type { DomainEntry } from "../src/domain";
 
 const base: DomainEntry = {
   id: "os",
