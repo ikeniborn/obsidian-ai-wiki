@@ -109,7 +109,7 @@ export interface LlmWikiPluginSettings {
   systemPrompt: string;
   domains: DomainEntry[];
   maxTokens: number;
-  agentLogPath: string;
+  agentLogEnabled: boolean;
   historyLimit: number;
   timeouts: {
     ingest: number;
@@ -138,7 +138,6 @@ export interface LlmWikiPluginSettings {
   };
   devMode: {
     enabled: boolean;
-    logDir: string;
     evaluatorModel: string;
   };
 }
@@ -148,7 +147,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   systemPrompt: "",
   domains: [],
   maxTokens: 4096,
-  agentLogPath: "",
+  agentLogEnabled: false,
   historyLimit: 20,
   timeouts: { ingest: 300, query: 300, lint: 900, fix: 900, init: 3600 },
   history: [],
@@ -181,7 +180,6 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   },
   devMode: {
     enabled: false,
-    logDir: "",
     evaluatorModel: "sonnet",
   },
 };
