@@ -1,5 +1,5 @@
 import { App, Notice } from "obsidian";
-import { existsSync, appendFileSync, statSync, mkdirSync } from "node:fs";
+import { existsSync, appendFileSync, mkdirSync } from "node:fs";
 import { relative, isAbsolute, join } from "node:path";
 import { LLM_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { validateDomainId, type DomainEntry, type AddDomainInput } from "./domain-map";
@@ -82,7 +82,7 @@ export class WikiController {
     let finalText = "";
     let status: "done" | "error" | "cancelled" = "done";
 
-    this.logEvent(sessionId, "chat", domainId, {
+    this.logEvent(vaultRoot, sessionId, "chat", domainId, {
       kind: "system",
       message: `start op=chat args=${JSON.stringify([lastMsg])} domainId=${domainId}`,
     });
@@ -105,7 +105,7 @@ export class WikiController {
 
     try {
       for await (const ev of runGen) {
-        this.logEvent(sessionId, "chat", domainId, ev);
+        this.logEvent(vaultRoot, sessionId, "chat", domainId, ev);
         this.activeView()?.appendChatEvent(ev);
         // Обновляем session_id при каждом init-событии (первый тур — получаем ID,
         // последующие — подтверждаем что сессия жива или получаем новый ID при форке).
@@ -120,7 +120,7 @@ export class WikiController {
       // Сессия может быть невалидна (expired, --resume failed) — сбросить для следующего тура.
       this._chatSessionId = undefined;
       finalText = i18n().ctrl.errorPrefix((err as Error).message);
-      this.logEvent(sessionId, "chat", domainId, { kind: "error", message: finalText });
+      this.logEvent(vaultRoot, sessionId, "chat", domainId, { kind: "error", message: finalText });
     } finally {
       this.current = null;
       this.onBusyChange?.();
@@ -136,7 +136,7 @@ export class WikiController {
     // Aborted turn: session may be in indeterminate state — reset for safety.
     if (ctrl.signal.aborted) this._chatSessionId = undefined;
 
-    this.logEvent(sessionId, "chat", domainId, {
+    this.logEvent(vaultRoot, sessionId, "chat", domainId, {
       kind: "system",
       message: `finish status=${status} durationMs=${Date.now() - startedAt}`,
     });
@@ -233,16 +233,13 @@ export class WikiController {
     return new AgentRunner(llm, s, vaultTools, vaultName, domains);
   }
 
-  private logEvent(sessionId: string, op: WikiOperation, domainId: string | undefined, ev: RunEvent): void {
-    let logPath = this.plugin.settings.agentLogPath;
-    if (!logPath) return;
+  private logEvent(vaultRoot: string, sessionId: string, op: WikiOperation, domainId: string | undefined, ev: RunEvent): void {
+    if (!this.plugin.settings.agentLogEnabled) return;
     try {
-      const stat = existsSync(logPath) ? statSync(logPath) : null;
-      if (stat?.isDirectory() || (!logPath.includes(".") && !logPath.endsWith("/"))) {
-        logPath = join(logPath, "agent.jsonl");
-      }
+      const logDir = join(vaultRoot, "!Logs");
+      mkdirSync(logDir, { recursive: true });
       const line = JSON.stringify({ ts: new Date().toISOString(), session: sessionId, op, domainId, event: ev }) + "\n";
-      appendFileSync(logPath, line, "utf-8");
+      appendFileSync(join(logDir, "agent.jsonl"), line, "utf-8");
     } catch { /* не блокируем операцию */ }
   }
 
@@ -276,7 +273,7 @@ export class WikiController {
     let finalText = "";
     let status: RunHistoryEntry["status"] = "done";
 
-    this.logEvent(sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
+    this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
     view.setRunning(op, args);
 
     const opKey = op === "query-save" ? "query" : op;
@@ -285,7 +282,7 @@ export class WikiController {
 
     try {
       for await (const ev of runGen) {
-        this.logEvent(sessionId, op, domainId, ev);
+        this.logEvent(vaultRoot, sessionId, op, domainId, ev);
         this.activeView()?.appendEvent(ev);
         if (ev.kind === "domain_created") {
           if (!this.plugin.settings.domains) this.plugin.settings.domains = [];
@@ -320,13 +317,13 @@ export class WikiController {
     } catch (err) {
       status = "error";
       finalText = i18n().ctrl.errorPrefix((err as Error).message);
-      this.logEvent(sessionId, op, domainId, { kind: "error", message: finalText });
+      this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
     } finally {
       this.current = null;
       this.onBusyChange?.();
       this.currentOp = null;
     }
-    this.logEvent(sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
+    this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
 
     const entry: RunHistoryEntry = {
       id: `${startedAt}`,
