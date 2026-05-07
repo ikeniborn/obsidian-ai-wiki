@@ -138,7 +138,9 @@
 - [[stream-ts]] — parseStreamLine (stream.ts)
 - [[wiki-controller]] — WikiController (controller.ts)
 - [[llm-wiki-view]] — LlmWikiView (view.ts)
-- [[domain-map-ts]] — domain-map.ts (DomainEntry, EntityType)
+- [[domain-map-ts]] — domain.ts (DomainEntry, EntityType, applyDomainEvent)
+- [[domain-store]] — DomainStore (domain-store.ts) — vault-bound карта доменов
+- [[local-config]] — LocalConfigStore (local-config.ts) — machine-specific iclaudePath
 - [[llm-utils-ts]] — llm-utils.ts (buildChatParams, extractStreamDeltas)
 - [[main-ts]] — main.ts (точка входа плагина, LlmWikiPlugin)
 - [[modals-ts]] — modals.ts (Modal компоненты)
