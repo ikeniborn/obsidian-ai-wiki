@@ -27,8 +27,8 @@
           "type": "компонент",
           "description": "Модуль или файл проекта, который затрагивается планом",
           "extraction_cues": [
-            "src/", ".ts", "view.ts", "controller.ts", "runner.ts", "stream.ts",
-            "settings.ts", "prompt.ts", "main.ts", "файл", "модуль", "компонент"
+            "src/", ".ts", "view.ts", "controller.ts", "agent-runner.ts", "stream.ts",
+            "settings.ts", "claude-cli-client.ts", "main.ts", "файл", "модуль", "компонент"
           ],
           "min_mentions_for_page": 2,
           "wiki_subfolder": "планы/компоненты"
@@ -75,8 +75,8 @@
           "type": "компонент",
           "description": "Модуль или файл проекта, изменяемый по спеке",
           "extraction_cues": [
-            "src/", ".ts", "view.ts", "controller.ts", "runner.ts", "stream.ts",
-            "settings.ts", "agent-runner.ts", "claude-cli-client.ts", "phases/", "modals.ts",
+            "src/", ".ts", "view.ts", "controller.ts", "agent-runner.ts", "stream.ts",
+            "settings.ts", "claude-cli-client.ts", "phases/", "modals.ts",
             "файл", "модуль", "компонент"
           ],
           "min_mentions_for_page": 2,
