@@ -47,11 +47,13 @@ export default class LlmWikiPlugin extends Plugin {
       },
     });
 
-    this.addCommand({
-      id: "ingest-current",
-      name: T.cmd.ingestActive,
-      callback: () => void this.controller.ingestActive(),
-    });
+    if (!Platform.isMobile) {
+      this.addCommand({
+        id: "ingest-current",
+        name: T.cmd.ingestActive,
+        callback: () => void this.controller.ingestActive(),
+      });
+    }
 
     this.addCommand({
       id: "query",
@@ -65,31 +67,33 @@ export default class LlmWikiPlugin extends Plugin {
       callback: () => new QueryModal(this.app, true, (q) => void this.controller.query(q, true)).open(),
     });
 
-    this.addCommand({
-      id: "lint",
-      name: T.cmd.lint,
-      callback: () => {
-        void (async () => {
-          let domains: DomainEntry[];
-          try { domains = await this.controller.loadDomains(); } catch { return; }
-          new DomainModal(this.app, T.cmd.lint, true, null, domains,
-            (d) => void this.controller.lint(d)).open();
-        })();
-      },
-    });
+    if (!Platform.isMobile) {
+      this.addCommand({
+        id: "lint",
+        name: T.cmd.lint,
+        callback: () => {
+          void (async () => {
+            let domains: DomainEntry[];
+            try { domains = await this.controller.loadDomains(); } catch { return; }
+            new DomainModal(this.app, T.cmd.lint, true, null, domains,
+              (d) => void this.controller.lint(d)).open();
+          })();
+        },
+      });
 
-    this.addCommand({
-      id: "init",
-      name: T.cmd.init,
-      callback: () => {
-        void (async () => {
-          let domains: DomainEntry[];
-          try { domains = await this.controller.loadDomains(); } catch { return; }
-          new DomainModal(this.app, T.cmd.init, false, { dryRun: true }, domains,
-            (d, f) => void this.controller.init(d, f.dryRun ?? false)).open();
-        })();
-      },
-    });
+      this.addCommand({
+        id: "init",
+        name: T.cmd.init,
+        callback: () => {
+          void (async () => {
+            let domains: DomainEntry[];
+            try { domains = await this.controller.loadDomains(); } catch { return; }
+            new DomainModal(this.app, T.cmd.init, false, { dryRun: true }, domains,
+              (d, f) => void this.controller.init(d, f.dryRun ?? false)).open();
+          })();
+        },
+      });
+    }
 
     this.addCommand({
       id: "cancel",

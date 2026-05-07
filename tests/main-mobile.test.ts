@@ -42,3 +42,45 @@ describe("loadSettings — mobile backend migration", () => {
     expect(plugin.saveData).not.toHaveBeenCalled();
   });
 });
+
+describe("onload — command registration gating", () => {
+  beforeEach(() => __setPlatformMobile(false));
+
+  function setupPlugin() {
+    const plugin = makePlugin({});
+    const registered: string[] = [];
+    plugin.addCommand = vi.fn((cmd: { id: string }) => { registered.push(cmd.id); });
+    plugin.addRibbonIcon = vi.fn();
+    plugin.addSettingTab = vi.fn();
+    plugin.registerView = vi.fn();
+    plugin.app.workspace = {
+      getLeavesOfType: () => [],
+      getRightLeaf: () => null,
+      revealLeaf: vi.fn(),
+      getActiveFile: () => null,
+    };
+    plugin.app.vault.configDir = ".obsidian";
+    return { plugin, registered };
+  }
+
+  it("desktop: registers all commands", async () => {
+    __setPlatformMobile(false);
+    const { plugin, registered } = setupPlugin();
+    await plugin.onload();
+    expect(registered).toEqual(
+      expect.arrayContaining(["open-panel", "ingest-current", "query", "query-save", "lint", "init", "cancel"]),
+    );
+  });
+
+  it("mobile: registers only query/query-save/open-panel/cancel", async () => {
+    __setPlatformMobile(true);
+    const { plugin, registered } = setupPlugin();
+    await plugin.onload();
+    expect(registered).toEqual(
+      expect.arrayContaining(["open-panel", "query", "query-save", "cancel"]),
+    );
+    expect(registered).not.toContain("ingest-current");
+    expect(registered).not.toContain("lint");
+    expect(registered).not.toContain("init");
+  });
+});
