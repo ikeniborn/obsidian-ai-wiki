@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf } from "obsidian";
+import { Plugin, WorkspaceLeaf, Platform } from "obsidian";
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings, type RunHistoryEntry } from "./types";
 import type { DomainEntry } from "./domain";
 import { LlmWikiSettingTab } from "./settings";
@@ -157,6 +157,12 @@ export default class LlmWikiPlugin extends Plugin {
       this.settings.backend = "claude-agent";
       if (data && data.model && !this.settings.claudeAgent.model)
         this.settings.claudeAgent.model = data.model as string;
+    }
+
+    // Mobile: force native-agent backend (claude-agent unsupported on mobile).
+    if (Platform.isMobile && this.settings.backend === "claude-agent") {
+      this.settings.backend = "native-agent";
+      await this.saveData(this.settings);
     }
 
     // Миграция: agentLogPath → agentLogEnabled
