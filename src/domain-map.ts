@@ -1,3 +1,5 @@
+import type { RunEvent } from "./types";
+
 export interface EntityType {
   type: string;
   description: string;
@@ -27,4 +29,26 @@ export function validateDomainId(id: string): string | null {
   if (!id) return "ID домена пуст";
   if (!/^[\p{L}\p{N}_-]+$/u.test(id)) return "ID допускает только буквы/цифры/_/-";
   return null;
+}
+
+type DomainPersistEvent = Extract<RunEvent, { kind: "domain_created" | "domain_updated" | "source_path_added" }>;
+
+export function applyDomainEvent(domains: DomainEntry[], ev: DomainPersistEvent): DomainEntry[] {
+  const next = [...domains];
+  if (ev.kind === "domain_created") {
+    if (next.some((d) => d.id === ev.entry.id)) return next;
+    next.push(ev.entry);
+    return next;
+  }
+  const i = next.findIndex((d) => d.id === ev.domainId);
+  if (i < 0) return next;
+  if (ev.kind === "domain_updated") {
+    next[i] = { ...next[i], ...ev.patch };
+    return next;
+  }
+  // source_path_added
+  const paths = new Set(next[i].source_paths ?? []);
+  paths.add(ev.path);
+  next[i] = { ...next[i], source_paths: [...paths] };
+  return next;
 }
