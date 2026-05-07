@@ -1,4 +1,3 @@
-import { dirname } from "node:path";
 import { Plugin, WorkspaceLeaf } from "obsidian";
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings, type RunHistoryEntry } from "./types";
 import type { DomainEntry } from "./domain-map";
@@ -150,13 +149,16 @@ export default class LlmWikiPlugin extends Plugin {
         this.settings.claudeAgent.model = data.model as string;
     }
 
-    // Миграция: devMode.logPath → devMode.logDir
-    const devData = data?.devMode as Record<string, unknown> | undefined;
-    if (devData?.logPath !== undefined && devData?.logDir === undefined) {
-      this.settings.devMode.logDir = devData.logPath
-        ? dirname(devData.logPath as string)
-        : "";
+    // Миграция: agentLogPath → agentLogEnabled
+    if (typeof (data as Record<string, unknown> | null)?.agentLogPath === "string") {
+      this.settings.agentLogEnabled = ((data as Record<string, unknown>).agentLogPath as string).length > 0;
     }
+
+    // Миграция: devMode.logDir → удалён (путь фиксирован в коде)
+    this.settings.devMode = {
+      enabled: this.settings.devMode.enabled,
+      evaluatorModel: this.settings.devMode.evaluatorModel,
+    };
 
     // Миграция wiki_folder: strip !Wiki/ prefix (stored as subfolder only)
     if (migrateDomainWikiFolder(this.settings.domains)) {
