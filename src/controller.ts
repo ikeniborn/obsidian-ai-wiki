@@ -1,6 +1,4 @@
 import { App, Notice, Platform } from "obsidian";
-import { existsSync, appendFileSync, mkdirSync } from "node:fs";
-import { relative, isAbsolute, join } from "node:path";
 import { LLM_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { validateDomainId, type DomainEntry, type AddDomainInput } from "./domain";
 import type LlmWikiPlugin from "./main";
@@ -8,7 +6,7 @@ import type { RunEvent, RunHistoryEntry, WikiOperation, OnFileError } from "./ty
 import { AgentRunner } from "./agent-runner";
 import type { ChatMessage } from "./types";
 import { VaultTools, type VaultAdapter } from "./vault-tools";
-import { ClaudeCliClient } from "./claude-cli-client";
+import type { ClaudeCliClient } from "./claude-cli-client";
 import OpenAI from "openai";
 import { i18n } from "./i18n";
 import { applyDomainEvent } from "./domain";
@@ -95,7 +93,7 @@ export class WikiController {
     let finalText = "";
     let status: "done" | "error" | "cancelled" = "done";
 
-    this.logEvent(vaultRoot, sessionId, "chat", domainId, {
+    await this.logEvent(vaultRoot, sessionId, "chat", domainId, {
       kind: "system",
       message: `start op=chat args=${JSON.stringify([lastMsg])} domainId=${domainId}`,
     });
@@ -118,7 +116,7 @@ export class WikiController {
 
     try {
       for await (const ev of runGen) {
-        this.logEvent(vaultRoot, sessionId, "chat", domainId, ev);
+        await this.logEvent(vaultRoot, sessionId, "chat", domainId, ev);
         this.activeView()?.appendChatEvent(ev);
         // Обновляем session_id при каждом init-событии (первый тур — получаем ID,
         // последующие — подтверждаем что сессия жива или получаем новый ID при форке).
@@ -133,7 +131,7 @@ export class WikiController {
       // Сессия может быть невалидна (expired, --resume failed) — сбросить для следующего тура.
       this._chatSessionId = undefined;
       finalText = i18n().ctrl.errorPrefix((err as Error).message);
-      this.logEvent(vaultRoot, sessionId, "chat", domainId, { kind: "error", message: finalText });
+      await this.logEvent(vaultRoot, sessionId, "chat", domainId, { kind: "error", message: finalText });
     } finally {
       this.current = null;
       this.onBusyChange?.();
@@ -149,7 +147,7 @@ export class WikiController {
     // Aborted turn: session may be in indeterminate state — reset for safety.
     if (ctrl.signal.aborted) this._chatSessionId = undefined;
 
-    this.logEvent(vaultRoot, sessionId, "chat", domainId, {
+    await this.logEvent(vaultRoot, sessionId, "chat", domainId, {
       kind: "system",
       message: `finish status=${status} durationMs=${Date.now() - startedAt}`,
     });
@@ -211,6 +209,7 @@ export class WikiController {
   }
 
   private async requireClaudeAgent(): Promise<string | null> {
+    const { existsSync } = await import("node:fs");
     const { iclaudePath } = await this.localConfigStore.load();
     if (!iclaudePath || !existsSync(iclaudePath)) {
       new Notice(i18n().ctrl.setClaudeCodePath);
@@ -231,12 +230,6 @@ export class WikiController {
   private async buildAgentRunner(vaultRoot: string, resumeSessionId?: string): Promise<AgentRunner> {
     const adapter = this.app.vault.adapter as unknown as VaultAdapter;
     const base = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
-    const manifestDir = this.plugin.manifest.dir
-      ?? join(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
-    const pluginDir = (this.app.vault.adapter as { getFullPath: (p: string) => string })
-      .getFullPath(manifestDir);
-    const tmpDir = join(pluginDir, "tmp");
-    mkdirSync(tmpDir, { recursive: true });
     const vaultTools = new VaultTools(adapter, base);
     const vaultName = this.app.vault.getName();
     const domains = await this.domainStore.load();
@@ -246,6 +239,15 @@ export class WikiController {
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm: import("./types").LlmClient;
     if (s.backend === "claude-agent") {
+      const { join } = await import("node:path");
+      const { mkdirSync } = await import("node:fs");
+      const { ClaudeCliClient } = await import("./claude-cli-client");
+      const manifestDir = this.plugin.manifest.dir
+        ?? join(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
+      const pluginDir = (this.app.vault.adapter as { getFullPath: (p: string) => string })
+        .getFullPath(manifestDir);
+      const tmpDir = join(pluginDir, "tmp");
+      mkdirSync(tmpDir, { recursive: true });
       const client = new ClaudeCliClient({
         ...s.claudeAgent,
         iclaudePath: local.iclaudePath,
@@ -269,9 +271,12 @@ export class WikiController {
     return new AgentRunner(llm, s, vaultTools, vaultName, domains);
   }
 
-  private logEvent(vaultRoot: string, sessionId: string, op: WikiOperation, domainId: string | undefined, ev: RunEvent): void {
+  private async logEvent(vaultRoot: string, sessionId: string, op: WikiOperation, domainId: string | undefined, ev: RunEvent): Promise<void> {
     if (!this.plugin.settings.agentLogEnabled) return;
+    if (Platform.isMobile) return;
     try {
+      const { join } = await import("node:path");
+      const { appendFileSync, mkdirSync } = await import("node:fs");
       const logDir = join(vaultRoot, "!Logs");
       mkdirSync(logDir, { recursive: true });
       const line = JSON.stringify({ ts: new Date().toISOString(), session: sessionId, op, domainId, event: ev }) + "\n";
@@ -314,7 +319,7 @@ export class WikiController {
     let finalText = "";
     let status: RunHistoryEntry["status"] = "done";
 
-    this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
+    await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
     view.setRunning(op, args);
 
     const opKey = op === "query-save" ? "query" : op;
@@ -323,7 +328,7 @@ export class WikiController {
 
     try {
       for await (const ev of runGen) {
-        this.logEvent(vaultRoot, sessionId, op, domainId, ev);
+        await this.logEvent(vaultRoot, sessionId, op, domainId, ev);
         this.activeView()?.appendEvent(ev);
         if (ev.kind === "domain_created" || ev.kind === "domain_updated" || ev.kind === "source_path_added") {
           try {
@@ -350,13 +355,13 @@ export class WikiController {
     } catch (err) {
       status = "error";
       finalText = i18n().ctrl.errorPrefix((err as Error).message);
-      this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
+      await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
     } finally {
       this.current = null;
       this.onBusyChange?.();
       this.currentOp = null;
     }
-    this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
+    await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
 
     const entry: RunHistoryEntry = {
       id: `${startedAt}`,
@@ -376,10 +381,10 @@ export class WikiController {
     await this.plugin.saveSettings();
     await this.activeView()?.finish(entry);
 
-    if (op === "query-save" && status === "done") {
+    if (op === "query-save" && status === "done" && !Platform.isMobile) {
       const m = finalText.match(/Создана\s+страница:\s*([^\s`'"]+)/i);
       if (m) {
-        const pathInVault = this.toVaultPath(vaultRoot, m[1]);
+        const pathInVault = await this.toVaultPath(vaultRoot, m[1]);
         if (pathInVault) await this.app.workspace.openLinkText(pathInVault, "");
       }
     }
@@ -410,7 +415,8 @@ export class WikiController {
     return view instanceof LlmWikiView ? view : null;
   }
 
-  private toVaultPath(vaultDir: string, savedPath: string): string | null {
+  private async toVaultPath(vaultDir: string, savedPath: string): Promise<string | null> {
+    const { relative, isAbsolute, join } = await import("node:path");
     const abs = isAbsolute(savedPath) ? savedPath : join(vaultDir, savedPath);
     const rel = relative(vaultDir, abs);
     if (rel.startsWith("..") || isAbsolute(rel)) return null;
