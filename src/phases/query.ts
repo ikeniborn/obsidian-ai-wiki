@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
@@ -34,12 +33,11 @@ export async function* runQuery(
     return;
   }
 
-  const absWiki = join(vaultRoot, domainWikiFolder(domain.wiki_folder));
-  const wikiVaultPath = vaultTools.toVaultPath(absWiki);
-  if (!wikiVaultPath) {
-    yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
+  if (!domain.wiki_folder || domain.wiki_folder.includes("..")) {
+    yield { kind: "error", message: `Wiki folder ${domain.wiki_folder} is outside the vault.` };
     return;
   }
+  const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
 
   const wikiRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
 
