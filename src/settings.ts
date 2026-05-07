@@ -79,10 +79,9 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName(T.settings.agentLog_name)
       .setDesc(T.settings.agentLog_desc)
-      .addText((t) =>
-        t.setPlaceholder("/tmp/llm-wiki-agent.jsonl")
-          .setValue(s.agentLogPath)
-          .onChange(async (v) => { s.agentLogPath = v.trim(); await this.plugin.saveSettings(); }),
+      .addToggle((t) =>
+        t.setValue(s.agentLogEnabled)
+          .onChange(async (v) => { s.agentLogEnabled = v; await this.plugin.saveSettings(); }),
       );
 
     // ── Domains ───────────────────────────────────────────────────────────────
@@ -312,25 +311,18 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       .setDesc(T.settings.devMode_enabled_desc)
       .addToggle((t) =>
         t.setValue(s.devMode.enabled)
-          .onChange(async (v) => { s.devMode.enabled = v; await this.plugin.saveSettings(); }),
+          .onChange(async (v) => { s.devMode.enabled = v; await this.plugin.saveSettings(); this.display(); }),
       );
 
-    new Setting(containerEl)
-      .setName(T.settings.devMode_logDir_name)
-      .setDesc(T.settings.devMode_logDir_desc)
-      .addText((t) =>
-        t.setPlaceholder("/tmp")
-          .setValue(s.devMode.logDir)
-          .onChange(async (v) => { s.devMode.logDir = v.trim(); await this.plugin.saveSettings(); }),
-      );
-
-    new Setting(containerEl)
-      .setName(T.settings.devMode_evaluatorModel_name)
-      .setDesc(T.settings.devMode_evaluatorModel_desc)
-      .addText((t) =>
-        t.setPlaceholder("")
-          .setValue(s.devMode.evaluatorModel)
-          .onChange(async (v) => { s.devMode.evaluatorModel = v.trim(); await this.plugin.saveSettings(); }),
-      );
+    if (s.devMode.enabled) {
+      new Setting(containerEl)
+        .setName(T.settings.devMode_evaluatorModel_name)
+        .setDesc(T.settings.devMode_evaluatorModel_desc)
+        .addText((t) =>
+          t.setPlaceholder("")
+            .setValue(s.devMode.evaluatorModel)
+            .onChange(async (v) => { s.devMode.evaluatorModel = v.trim(); await this.plugin.saveSettings(); }),
+        );
+    }
   }
 }
