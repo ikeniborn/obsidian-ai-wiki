@@ -2,6 +2,7 @@ import { App, ItemView, Modal, WorkspaceLeaf, MarkdownRenderer, Component, Notic
 import { AddDomainModal, BusyCloseModal, ConfirmModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
+import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
 
 export const LLM_WIKI_VIEW_TYPE = "llm-wiki-view";
@@ -188,8 +189,9 @@ export class LlmWikiView extends ItemView {
     }
   }
 
-  private refreshDomains(): void {
-    const domains = this.plugin.controller.loadDomains();
+  private async refreshDomains(): Promise<void> {
+    let domains: DomainEntry[];
+    try { domains = await this.plugin.controller.loadDomains(); } catch { return; }
     const previous = this.domainSelect.value;
     this.domainSelect.empty();
     const allOpt = this.domainSelect.createEl("option", { value: "", text: i18n().view.allDomains });
@@ -206,34 +208,36 @@ export class LlmWikiView extends ItemView {
     const cwd = this.plugin.controller.cwdOrEmpty();
     if (!cwd) { new Notice(i18n().view.cwdNotSet); return; }
     new AddDomainModal(this.app, (input) => {
-      const r = this.plugin.controller.registerDomain(input);
-      if (!r.ok) return;
-      this.refreshDomains();
-      this.domainSelect.value = input.id;
+      void (async () => {
+        const r = await this.plugin.controller.registerDomain(input);
+        if (!r.ok) return;
+        await this.refreshDomains();
+        this.domainSelect.value = input.id;
 
-      if (!input.sourcePaths.length) {
-        void this.plugin.controller.init(input.id, false);
-        return;
-      }
+        if (!input.sourcePaths.length) {
+          void this.plugin.controller.init(input.id, false);
+          return;
+        }
 
-      const T = i18n().modal;
-      const allFiles = this.app.vault.getFiles();
-      const mdFiles = allFiles.filter(
-        (f) => f.extension === "md" &&
-          input.sourcePaths.some((p) => f.path.startsWith(p)),
-      );
+        const T = i18n().modal;
+        const allFiles = this.app.vault.getFiles();
+        const mdFiles = allFiles.filter(
+          (f) => f.extension === "md" &&
+            input.sourcePaths.some((p) => f.path.startsWith(p)),
+        );
 
-      if (!mdFiles.length) {
-        void this.plugin.controller.init(input.id, false);
-        return;
-      }
+        if (!mdFiles.length) {
+          void this.plugin.controller.init(input.id, false);
+          return;
+        }
 
-      new ConfirmModal(
-        this.app,
-        T.initConfirmTitle,
-        [T.initConfirmBody(mdFiles.length, input.sourcePaths.length)],
-        () => void this.plugin.controller.init(input.id, false, input.sourcePaths),
-      ).open();
+        new ConfirmModal(
+          this.app,
+          T.initConfirmTitle,
+          [T.initConfirmBody(mdFiles.length, input.sourcePaths.length)],
+          () => void this.plugin.controller.init(input.id, false, input.sourcePaths),
+        ).open();
+      })();
     }).open();
   }
 
