@@ -8,6 +8,16 @@ export const LLM_WIKI_VIEW_TYPE = "llm-wiki-view";
 
 type ViewState = "idle" | "running" | "done" | "error" | "cancelled";
 
+function registerLinkHandler(el: HTMLElement, app: App): void {
+    el.addEventListener("click", (e) => {
+        const a = (e.target as HTMLElement).closest("a.internal-link");
+        if (!a) return;
+        e.preventDefault();
+        const href = a.getAttribute("data-href") ?? a.getAttribute("href") ?? "";
+        if (href) void app.workspace.openLinkText(href, "", false);
+    });
+}
+
 const PREVIEW_INLINE = 140;
 const ASSISTANT_TEXT_MAX = 600;
 
