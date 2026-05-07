@@ -6,17 +6,22 @@ import { LLM_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { WikiController } from "./controller";
 import { QueryModal, DomainModal } from "./modals";
 import { i18n } from "./i18n";
-import type { DomainStore } from "./domain-store";
-import type { LocalConfigStore } from "./local-config";
+import { DomainStore } from "./domain-store";
+import { LocalConfigStore } from "./local-config";
 
 export default class LlmWikiPlugin extends Plugin {
   settings!: LlmWikiPluginSettings;
   controller!: WikiController;
   settingTab?: LlmWikiSettingTab;
+  domainStore!: DomainStore;
+  localConfigStore!: LocalConfigStore;
 
   async onload(): Promise<void> {
+    this.domainStore = new DomainStore(this.app.vault);
+    this.localConfigStore = new LocalConfigStore(this);
+    await migrateLegacyData(this, this.domainStore, this.localConfigStore);
     await this.loadSettings();
-    this.controller = new WikiController(this.app, this);
+    this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
     this.controller.onBusyChange = () => this.settingTab?.display();
 
     this.registerView(LLM_WIKI_VIEW_TYPE, (leaf: WorkspaceLeaf) => new LlmWikiView(leaf, this));
@@ -64,9 +69,12 @@ export default class LlmWikiPlugin extends Plugin {
       id: "lint",
       name: T.cmd.lint,
       callback: () => {
-        const domains = this.controller.loadDomains();
-        new DomainModal(this.app, T.cmd.lint, true, null, domains,
-          (d) => void this.controller.lint(d)).open();
+        void (async () => {
+          let domains: DomainEntry[];
+          try { domains = await this.controller.loadDomains(); } catch { return; }
+          new DomainModal(this.app, T.cmd.lint, true, null, domains,
+            (d) => void this.controller.lint(d)).open();
+        })();
       },
     });
 
@@ -74,9 +82,12 @@ export default class LlmWikiPlugin extends Plugin {
       id: "init",
       name: T.cmd.init,
       callback: () => {
-        const domains = this.controller.loadDomains();
-        new DomainModal(this.app, T.cmd.init, false, { dryRun: true }, domains,
-          (d, f) => void this.controller.init(d, f.dryRun ?? false)).open();
+        void (async () => {
+          let domains: DomainEntry[];
+          try { domains = await this.controller.loadDomains(); } catch { return; }
+          new DomainModal(this.app, T.cmd.init, false, { dryRun: true }, domains,
+            (d, f) => void this.controller.init(d, f.dryRun ?? false)).open();
+        })();
       },
     });
 
@@ -133,7 +144,6 @@ export default class LlmWikiPlugin extends Plugin {
         },
       },
       history: (data?.history as RunHistoryEntry[]) ?? [],
-      domains: Array.isArray(data?.domains) ? (data.domains as DomainEntry[]) : [],
     } as LlmWikiPluginSettings;
 
     // Миграция: поля, перенесённые с per-backend уровня на top-level (schema v2)
@@ -145,8 +155,6 @@ export default class LlmWikiPlugin extends Plugin {
     // Миграция с claude-code backend
     if ((data?.backend as string) === "claude-code") {
       this.settings.backend = "claude-agent";
-      if (data && data.iclaudePath && !this.settings.claudeAgent.iclaudePath)
-        this.settings.claudeAgent.iclaudePath = data.iclaudePath as string;
       if (data && data.model && !this.settings.claudeAgent.model)
         this.settings.claudeAgent.model = data.model as string;
     }
@@ -161,11 +169,6 @@ export default class LlmWikiPlugin extends Plugin {
       enabled: this.settings.devMode.enabled,
       evaluatorModel: this.settings.devMode.evaluatorModel,
     };
-
-    // Миграция wiki_folder: strip !Wiki/ prefix (stored as subfolder only)
-    if (migrateDomainWikiFolder(this.settings.domains)) {
-      void this.saveSettings();
-    }
   }
 
   async saveSettings(): Promise<void> {
@@ -186,7 +189,7 @@ export function migrateDomainWikiFolder(domains: DomainEntry[]): boolean {
 
 export async function migrateLegacyData(
   plugin: LlmWikiPlugin,
-  domainMapStore: DomainStore,
+  domainStore: DomainStore,
   localConfigStore: LocalConfigStore,
 ): Promise<void> {
   const data = (await plugin.loadData()) as Record<string, any> | null;
@@ -198,7 +201,7 @@ export async function migrateLegacyData(
     if (data.domains.length > 0) {
       const vaultExists = await plugin.app.vault.adapter.exists("!Wiki/_domain.json");
       if (!vaultExists) {
-        await domainMapStore.save(data.domains as DomainEntry[]);
+        await domainStore.save(data.domains as DomainEntry[]);
       }
     }
     delete data.domains;

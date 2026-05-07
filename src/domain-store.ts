@@ -23,7 +23,13 @@ export class DomainStore {
     try { parsed = JSON.parse(raw); }
     catch (e) { throw new DomainCorruptError(`${FILE_PATH}: ${(e as Error).message}`); }
     if (!Array.isArray(parsed)) throw new DomainCorruptError(`${FILE_PATH}: expected JSON array`);
-    return parsed as DomainEntry[];
+    const domains = parsed as DomainEntry[];
+    for (const d of domains) {
+      if (d.wiki_folder?.startsWith("!Wiki/")) {
+        d.wiki_folder = d.wiki_folder.slice("!Wiki/".length);
+      }
+    }
+    return domains;
   }
 
   async save(domains: DomainEntry[]): Promise<void> {

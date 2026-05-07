@@ -45,6 +45,32 @@ describe("DomainStore", () => {
       await expect(store.load()).rejects.toBeInstanceOf(DomainCorruptError);
     });
 
+    it("strips !Wiki/ prefix from wiki_folder on load", async () => {
+      const stored = [{ ...sampleDomain, wiki_folder: "!Wiki/os" }];
+      const adapter = {
+        exists: vi.fn().mockResolvedValue(true),
+        read: vi.fn().mockResolvedValue(JSON.stringify(stored)),
+      };
+      const store = new DomainStore(makeVault(adapter));
+      const result = await store.load();
+      expect(result[0].wiki_folder).toBe("os");
+    });
+
+    it("idempotent strip: already-migrated wiki_folder is unchanged", async () => {
+      const stored = [
+        { ...sampleDomain, id: "a", wiki_folder: "os" },
+        { ...sampleDomain, id: "b", wiki_folder: "Wiki/sub" },
+      ];
+      const adapter = {
+        exists: vi.fn().mockResolvedValue(true),
+        read: vi.fn().mockResolvedValue(JSON.stringify(stored)),
+      };
+      const store = new DomainStore(makeVault(adapter));
+      const result = await store.load();
+      expect(result[0].wiki_folder).toBe("os");
+      expect(result[1].wiki_folder).toBe("Wiki/sub");
+    });
+
     it("throws DomainCorruptError on non-array JSON", async () => {
       const adapter = {
         exists: vi.fn().mockResolvedValue(true),
