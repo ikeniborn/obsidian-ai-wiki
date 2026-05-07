@@ -122,7 +122,6 @@ export interface LlmWikiPluginSettings {
   claudeAgent: {
     iclaudePath: string;
     model: string;
-    spawnCwd: string;
     allowedTools: string;
     perOperation: boolean;
     operations: OpMap<ClaudeOperationConfig>;
@@ -156,7 +155,6 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   claudeAgent: {
     iclaudePath: "",
     model: "sonnet",
-    spawnCwd: "/tmp",
     allowedTools: "",
     perOperation: false,
     operations: {

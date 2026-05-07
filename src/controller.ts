@@ -217,7 +217,7 @@ export class WikiController {
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm: import("./types").LlmClient;
     if (s.backend === "claude-agent") {
-      const client = new ClaudeCliClient({ ...s.claudeAgent, requestTimeoutSec: maxTimeoutSec, cwd: s.claudeAgent.spawnCwd || "/tmp", tmpDir, resumeSessionId });
+      const client = new ClaudeCliClient({ ...s.claudeAgent, requestTimeoutSec: maxTimeoutSec, cwd: vaultRoot, tmpDir, resumeSessionId });
       this._currentClaudeClient = client;
       llm = client;
     } else {

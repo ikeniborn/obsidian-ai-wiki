@@ -153,15 +153,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             .onChange(async (v) => { s.claudeAgent.iclaudePath = v.trim(); await this.plugin.saveSettings(); }),
         );
 
-      new Setting(containerEl)
-        .setName(T.settings.spawnCwd_name)
-        .setDesc(T.settings.spawnCwd_desc)
-        .addText((t) =>
-          t.setPlaceholder("/tmp")
-            .setValue(s.claudeAgent.spawnCwd)
-            .onChange(async (v) => { s.claudeAgent.spawnCwd = v.trim() || "/tmp"; await this.plugin.saveSettings(); }),
-        );
-
       if (!s.claudeAgent.perOperation) {
         new Setting(containerEl)
           .setName(T.settings.model_name)
