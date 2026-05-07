@@ -162,6 +162,14 @@ Settings → LLM Wiki:
 
 ---
 
+## Синхронизация
+
+Файл `<plugin-dir>/local.json` хранит machine-specific путь до `iclaude.sh`. При использовании Obsidian Sync / git / Syncthing для папки `.obsidian/plugins/obsidian-llm-wiki/` исключите `local.json` из синка, иначе путь будет перезаписан на других машинах.
+
+Карта доменов хранится в `!Wiki/_domain.json` (внутри vault) и нормально синхронизируется вместе с заметками.
+
+---
+
 ## Документация
 
 - [docs/dev.md](docs/dev.md) — сборка, установка, smoke-test чеклист для разработчиков

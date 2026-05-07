@@ -21,7 +21,8 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var main_exports = {};
 __export(main_exports, {
   default: () => LlmWikiPlugin,
-  migrateDomainWikiFolder: () => migrateDomainWikiFolder
+  migrateDomainWikiFolder: () => migrateDomainWikiFolder,
+  migrateLegacyData: () => migrateLegacyData
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian6 = require("obsidian");
@@ -30,14 +31,12 @@ var import_obsidian6 = require("obsidian");
 var DEFAULT_SETTINGS = {
   backend: "claude-agent",
   systemPrompt: "",
-  domains: [],
   maxTokens: 4096,
   agentLogEnabled: false,
   historyLimit: 20,
   timeouts: { ingest: 300, query: 300, lint: 900, fix: 900, init: 3600 },
   history: [],
   claudeAgent: {
-    iclaudePath: "",
     model: "sonnet",
     allowedTools: "",
     perOperation: false,
@@ -1047,7 +1046,22 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
     super(app, plugin);
     this.plugin = plugin;
   }
+  cachedDomains = [];
+  cachedIclaudePath = "";
   display() {
+    void this.refresh();
+  }
+  async refresh() {
+    try {
+      this.cachedDomains = await this.plugin.domainStore.load();
+    } catch (e) {
+      this.cachedDomains = [];
+      new import_obsidian3.Notice(`Domain map load failed: ${e.message}`);
+    }
+    this.cachedIclaudePath = (await this.plugin.localConfigStore.load()).iclaudePath;
+    this.render();
+  }
+  render() {
     const { containerEl } = this;
     containerEl.empty();
     const s = this.plugin.settings;
@@ -1105,7 +1119,7 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       })
     );
     new import_obsidian3.Setting(containerEl).setName(T.settings.domains_heading).setHeading();
-    const domains = s.domains ?? [];
+    const domains = this.cachedDomains;
     if (domains.length === 0) {
       containerEl.createEl("p", {
         text: T.settings.domains_empty,
@@ -1118,9 +1132,12 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           b.setButtonText(T.settings.editDomain).setDisabled(busy).onClick(() => {
             new EditDomainModal(this.plugin.app, d, (updated) => {
               void (async () => {
-                s.domains[i] = updated;
-                await this.plugin.saveSettings();
-                this.display();
+                const cur = await this.plugin.domainStore.load();
+                const idx = cur.findIndex((x) => x.id === updated.id);
+                if (idx >= 0)
+                  cur[idx] = updated;
+                await this.plugin.domainStore.save(cur);
+                await this.refresh();
               })();
             }).open();
           });
@@ -1129,9 +1146,9 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
             new ConfirmModal(this.plugin.app, T.settings.confirmDeleteDomain(d.id), [], () => {
               void (async () => {
                 new import_obsidian3.Notice(T.settings.domainDeleted(d.id));
-                s.domains.splice(i, 1);
-                await this.plugin.saveSettings();
-                this.display();
+                const cur = await this.plugin.domainStore.load();
+                await this.plugin.domainStore.save(cur.filter((x) => x.id !== d.id));
+                await this.refresh();
               })();
             }).open();
           });
@@ -1148,9 +1165,9 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
     );
     if (s.backend === "claude-agent") {
       new import_obsidian3.Setting(containerEl).setName(T.settings.iclaudePath_name).setDesc(T.settings.iclaudePath_desc).addText(
-        (t) => t.setPlaceholder("/home/user/Documents/Project/iclaude/iclaude.sh").setValue(s.claudeAgent.iclaudePath).onChange(async (v) => {
-          s.claudeAgent.iclaudePath = v.trim();
-          await this.plugin.saveSettings();
+        (t) => t.setPlaceholder("/home/user/Documents/Project/iclaude/iclaude.sh").setValue(this.cachedIclaudePath).onChange(async (v) => {
+          this.cachedIclaudePath = v.trim();
+          await this.plugin.localConfigStore.save({ iclaudePath: this.cachedIclaudePath });
         })
       );
       if (!s.claudeAgent.perOperation) {
@@ -1472,8 +1489,13 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       new BusyCloseModal(this.app, () => this.plugin.controller.cancelCurrent()).open();
     }
   }
-  refreshDomains() {
-    const domains = this.plugin.controller.loadDomains();
+  async refreshDomains() {
+    let domains;
+    try {
+      domains = await this.plugin.controller.loadDomains();
+    } catch {
+      return;
+    }
     const previous = this.domainSelect.value;
     this.domainSelect.empty();
     const allOpt = this.domainSelect.createEl("option", { value: "", text: i18n().view.allDomains });
@@ -1491,30 +1513,32 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       return;
     }
     new AddDomainModal(this.app, (input) => {
-      const r = this.plugin.controller.registerDomain(input);
-      if (!r.ok)
-        return;
-      this.refreshDomains();
-      this.domainSelect.value = input.id;
-      if (!input.sourcePaths.length) {
-        void this.plugin.controller.init(input.id, false);
-        return;
-      }
-      const T = i18n().modal;
-      const allFiles = this.app.vault.getFiles();
-      const mdFiles = allFiles.filter(
-        (f) => f.extension === "md" && input.sourcePaths.some((p) => f.path.startsWith(p))
-      );
-      if (!mdFiles.length) {
-        void this.plugin.controller.init(input.id, false);
-        return;
-      }
-      new ConfirmModal(
-        this.app,
-        T.initConfirmTitle,
-        [T.initConfirmBody(mdFiles.length, input.sourcePaths.length)],
-        () => void this.plugin.controller.init(input.id, false, input.sourcePaths)
-      ).open();
+      void (async () => {
+        const r = await this.plugin.controller.registerDomain(input);
+        if (!r.ok)
+          return;
+        await this.refreshDomains();
+        this.domainSelect.value = input.id;
+        if (!input.sourcePaths.length) {
+          void this.plugin.controller.init(input.id, false);
+          return;
+        }
+        const T = i18n().modal;
+        const allFiles = this.app.vault.getFiles();
+        const mdFiles = allFiles.filter(
+          (f) => f.extension === "md" && input.sourcePaths.some((p) => f.path.startsWith(p))
+        );
+        if (!mdFiles.length) {
+          void this.plugin.controller.init(input.id, false);
+          return;
+        }
+        new ConfirmModal(
+          this.app,
+          T.initConfirmTitle,
+          [T.initConfirmBody(mdFiles.length, input.sourcePaths.length)],
+          () => void this.plugin.controller.init(input.id, false, input.sourcePaths)
+        ).open();
+      })();
     }).open();
   }
   submitQuery(save) {
@@ -2028,7 +2052,23 @@ var import_obsidian5 = require("obsidian");
 var import_node_fs3 = require("node:fs");
 var import_node_path8 = require("node:path");
 
-// src/domain-map.ts
+// src/source-paths.ts
+var import_node_path = require("node:path");
+function consolidateSourcePaths(existing, newPath, vaultRoot) {
+  const toAbs = (p) => (0, import_node_path.isAbsolute)(p) ? p : (0, import_node_path.join)(vaultRoot, p);
+  const normed = (p) => {
+    const a = toAbs(p);
+    return a.endsWith("/") ? a : a + "/";
+  };
+  const newNormed = normed(newPath);
+  if (existing.some((sp) => newNormed.startsWith(normed(sp)))) {
+    return existing;
+  }
+  const filtered = existing.filter((sp) => !normed(sp).startsWith(newNormed));
+  return [...filtered, newPath];
+}
+
+// src/domain.ts
 function validateDomainId(id) {
   if (!id)
     return "ID \u0434\u043E\u043C\u0435\u043D\u0430 \u043F\u0443\u0441\u0442";
@@ -2036,13 +2076,42 @@ function validateDomainId(id) {
     return "ID \u0434\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u0442 \u0442\u043E\u043B\u044C\u043A\u043E \u0431\u0443\u043A\u0432\u044B/\u0446\u0438\u0444\u0440\u044B/_/-";
   return null;
 }
+function applyDomainEvent(domains, ev, opts) {
+  const next = [...domains];
+  if (ev.kind === "domain_created") {
+    if (next.some((d) => d.id === ev.entry.id))
+      return next;
+    next.push(ev.entry);
+    return next;
+  }
+  const i = next.findIndex((d) => d.id === ev.domainId);
+  if (i < 0)
+    return next;
+  if (ev.kind === "domain_updated") {
+    next[i] = { ...next[i], ...ev.patch };
+    return next;
+  }
+  const existing = next[i].source_paths ?? [];
+  let updated;
+  if (opts?.vaultRoot !== void 0) {
+    updated = consolidateSourcePaths(existing, ev.path, opts.vaultRoot);
+    if (updated === existing)
+      return domains;
+  } else {
+    if (existing.includes(ev.path))
+      return domains;
+    updated = [...existing, ev.path];
+  }
+  next[i] = { ...next[i], source_paths: updated };
+  return next;
+}
 
 // src/agent-runner.ts
 var import_node_fs = require("node:fs");
-var import_node_path5 = require("node:path");
+var import_node_path6 = require("node:path");
 
 // src/phases/ingest.ts
-var import_node_path = require("node:path");
+var import_node_path2 = require("node:path");
 
 // prompts/base.md
 var base_default = "\u0422\u044B \u2014 wiki-\u0430\u0433\u0435\u043D\u0442. \u0421\u043B\u0435\u0434\u0443\u0439 \u044D\u0442\u0438\u043C \u043F\u0440\u0430\u0432\u0438\u043B\u0430\u043C \u043D\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043C\u043E \u043E\u0442 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.\n\n## \u0414\u043E\u0441\u0442\u043E\u0432\u0435\u0440\u043D\u043E\u0441\u0442\u044C\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430.\n\u041D\u0435 \u0432\u044B\u0434\u0443\u043C\u044B\u0432\u0430\u0439 \u0444\u0430\u043A\u0442\u044B, \u043A\u043E\u0442\u043E\u0440\u044B\u0445 \u043D\u0435\u0442 \u0432 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0435.\n\u0415\u0441\u043B\u0438 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E \u2014 \u0441\u043A\u0430\u0436\u0438 \u043E\u0431 \u044D\u0442\u043E\u043C \u043F\u0440\u044F\u043C\u043E.\n\n## \u0424\u043E\u0440\u043C\u0430\u0442\n\u0412\u043E\u0437\u0432\u0440\u0430\u0449\u0430\u0439 \u0440\u043E\u0432\u043D\u043E \u0442\u043E, \u0447\u0442\u043E \u0437\u0430\u043F\u0440\u043E\u0448\u0435\u043D\u043E.\n\u0415\u0441\u043B\u0438 \u043E\u0436\u0438\u0434\u0430\u0435\u0442\u0441\u044F JSON \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON, \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439 \u0432\u043E\u043A\u0440\u0443\u0433.\n\u0415\u0441\u043B\u0438 \u043E\u0436\u0438\u0434\u0430\u0435\u0442\u0441\u044F \u0442\u0435\u043A\u0441\u0442 \u2014 \u0431\u0435\u0437 \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u043C\u0435\u0442\u043E\u043A \u0438 \u0442\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0445 \u0430\u0440\u0442\u0435\u0444\u0430\u043A\u0442\u043E\u0432.\n\n## \u041C\u0438\u043D\u0438\u043C\u0430\u043B\u0438\u0437\u043C\n\u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u0442\u043E, \u043E \u0447\u0451\u043C \u043D\u0435 \u043F\u0440\u043E\u0441\u0438\u043B\u0438.\n\u041D\u0435 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0438\u0440\u0443\u0439 \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u044B\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F, \u0435\u0441\u043B\u0438 \u044D\u0442\u043E \u043D\u0435 \u0447\u0430\u0441\u0442\u044C \u0437\u0430\u0434\u0430\u0447\u0438.\n";
@@ -2120,7 +2189,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     yield { kind: "error", message: "ingest: file path required" };
     return;
   }
-  const absSource = (0, import_node_path.isAbsolute)(filePath) ? filePath : (0, import_node_path.join)(vaultRoot, filePath);
+  const absSource = (0, import_node_path2.isAbsolute)(filePath) ? filePath : (0, import_node_path2.join)(vaultRoot, filePath);
   const sourceVaultPath = vaultTools.toVaultPath(absSource);
   if (!sourceVaultPath) {
     yield { kind: "error", message: `Source file ${filePath} is outside the vault.` };
@@ -2140,7 +2209,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     yield { kind: "error", message: "No domain found for this file. Configure domain-map." };
     return;
   }
-  const absWiki = (0, import_node_path.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+  const absWiki = (0, import_node_path2.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
     yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
@@ -2231,7 +2300,7 @@ function buildIngestSummary(domainId, sourcePath, written, total) {
 function detectDomain(absFilePath, domains, vaultRoot) {
   for (const d of domains) {
     const matched = d.source_paths?.some((sp) => {
-      const abs = (0, import_node_path.isAbsolute)(sp) ? sp : (0, import_node_path.join)(vaultRoot, sp);
+      const abs = (0, import_node_path2.isAbsolute)(sp) ? sp : (0, import_node_path2.join)(vaultRoot, sp);
       return absFilePath.startsWith(abs);
     });
     if (matched)
@@ -2292,10 +2361,10 @@ async function tryRead(vaultTools, path2) {
   }
 }
 function extractParentSourcePath(absSource, vaultRoot) {
-  const parentAbs = (0, import_node_path.dirname)(absSource);
+  const parentAbs = (0, import_node_path2.dirname)(absSource);
   const normedVault = vaultRoot.endsWith("/") ? vaultRoot : vaultRoot + "/";
   const clamped = (parentAbs + "/").startsWith(normedVault) ? parentAbs : vaultRoot;
-  const rel = (0, import_node_path.relative)(vaultRoot, clamped);
+  const rel = (0, import_node_path2.relative)(vaultRoot, clamped);
   return (rel || ".") + "/";
 }
 function buildEntityTypesBlock(domain) {
@@ -2347,7 +2416,7 @@ ${indexContent.slice(0, 2e3)}` : ""
 }
 
 // src/phases/query.ts
-var import_node_path2 = require("node:path");
+var import_node_path3 = require("node:path");
 
 // prompts/query.md
 var query_default = "\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u043F\u043E wiki-\u0431\u0430\u0437\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u0411\u0443\u0434\u044C \u0442\u043E\u0447\u0435\u043D \u0438 \u043B\u0430\u043A\u043E\u043D\u0438\u0447\u0435\u043D.\n\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 WikiLinks [[\u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435]] \u043F\u0440\u0438 \u0441\u0441\u044B\u043B\u043A\u0430\u0445 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0437 \u0438\u043D\u0434\u0435\u043A\u0441\u0430.\n{{entity_types_block}}\n{{schema_block}}\n{{index_block}}\n";
@@ -2366,7 +2435,7 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
     yield { kind: "error", message: "No domain configured. Add a domain in settings." };
     return;
   }
-  const absWiki = (0, import_node_path2.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+  const absWiki = (0, import_node_path3.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
     yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
@@ -2483,7 +2552,7 @@ ${types}${notes}`;
 }
 
 // src/phases/lint.ts
-var import_node_path3 = require("node:path");
+var import_node_path4 = require("node:path");
 
 // prompts/lint.md
 var lint_default = "\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0412\u044B\u044F\u0432\u043B\u044F\u0439: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442.\n\u0412\u0435\u0440\u043D\u0438 \u043A\u0440\u0430\u0442\u043A\u0438\u0439 \u043E\u0442\u0447\u0451\u0442 \u0432 markdown.\n{{entity_types_block}}\n";
@@ -2502,7 +2571,7 @@ async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal
   for (const domain of targets) {
     if (signal.aborted)
       return;
-    const absWiki = (0, import_node_path3.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+    const absWiki = (0, import_node_path4.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
     const wikiVaultPath = vaultTools.toVaultPath(absWiki);
     if (!wikiVaultPath) {
       reportParts.push(`## ${domain.id}
@@ -2772,7 +2841,7 @@ ${c.slice(0, 300)}`).join("\n\n");
 }
 
 // src/phases/fix.ts
-var import_node_path4 = require("node:path");
+var import_node_path5 = require("node:path");
 
 // prompts/fix.md
 var fix_default = '\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n{{fix_instruction}}\n\n{{entity_types_block}}\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432 \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 (\u0435\u0441\u043B\u0438 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0430\u0441\u044C \u2014 \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0430\u0439):\n[{"path":"{{wiki_path}}/EntityName.md","content":"\u043F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B"}]\n\u0414\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u044B\u0435 \u043F\u0443\u0442\u0438 wiki: {{wiki_path}}/\n\u0414\u0430\u0442\u0430: {{today}}\n';
@@ -2786,7 +2855,7 @@ async function* runFix(args, vaultTools, llm, model, domains, vaultRoot, signal,
     yield { kind: "error", message: domainId ? `Domain "${domainId}" not found.` : "No domains configured." };
     return;
   }
-  const absWiki = (0, import_node_path4.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+  const absWiki = (0, import_node_path5.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
     yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
@@ -3362,10 +3431,10 @@ var AgentRunner = class {
     if (!this.settings.devMode?.enabled)
       return;
     try {
-      const logDir = (0, import_node_path5.join)(vaultRoot, "!Logs");
+      const logDir = (0, import_node_path6.join)(vaultRoot, "!Logs");
       (0, import_node_fs.mkdirSync)(logDir, { recursive: true });
       const line = JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), ...entry, eval: null }) + "\n";
-      (0, import_node_fs.appendFileSync)((0, import_node_path5.join)(logDir, "dev.jsonl"), line, "utf-8");
+      (0, import_node_fs.appendFileSync)((0, import_node_path6.join)(logDir, "dev.jsonl"), line, "utf-8");
     } catch {
     }
   }
@@ -3449,7 +3518,7 @@ var AgentRunner = class {
     if (!this.settings.devMode?.enabled)
       return;
     try {
-      const logPath = (0, import_node_path5.join)(vaultRoot, "!Logs", "dev.jsonl");
+      const logPath = (0, import_node_path6.join)(vaultRoot, "!Logs", "dev.jsonl");
       const content = (0, import_node_fs.readFileSync)(logPath, "utf-8");
       const lines = content.trimEnd().split("\n");
       const lastIdx = lines.length - 1;
@@ -3520,7 +3589,7 @@ var VaultTools = class {
 // src/claude-cli-client.ts
 var import_node_child_process = require("node:child_process");
 var import_node_fs2 = require("node:fs");
-var import_node_path6 = require("node:path");
+var import_node_path7 = require("node:path");
 var import_node_readline = require("node:readline");
 
 // src/stream.ts
@@ -3649,7 +3718,7 @@ var ClaudeCliClient = class {
     try {
       const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
       if (isLargeUser) {
-        const tmpUsrFile = (0, import_node_path6.join)(this.cfg.tmpDir, `llm-wiki-usr-${id}.txt`);
+        const tmpUsrFile = (0, import_node_path7.join)(this.cfg.tmpDir, `llm-wiki-usr-${id}.txt`);
         (0, import_node_fs2.writeFileSync)(tmpUsrFile, userText, "utf-8");
         tmpFiles.push(tmpUsrFile);
         args.push("-p", ".");
@@ -3665,7 +3734,7 @@ var ClaudeCliClient = class {
       if (!isResume && systemContent) {
         const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
         if (isLargeSys) {
-          const tmpSysFile = (0, import_node_path6.join)(this.cfg.tmpDir, `llm-wiki-sys-${id}.txt`);
+          const tmpSysFile = (0, import_node_path7.join)(this.cfg.tmpDir, `llm-wiki-sys-${id}.txt`);
           (0, import_node_fs2.writeFileSync)(tmpSysFile, systemContent, "utf-8");
           tmpFiles.push(tmpSysFile);
           args.push("--system-prompt-file", tmpSysFile);
@@ -10970,27 +11039,60 @@ OpenAI.Containers = Containers;
 OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
-// src/source-paths.ts
-var import_node_path7 = require("node:path");
-function consolidateSourcePaths(existing, newPath, vaultRoot) {
-  const toAbs = (p) => (0, import_node_path7.isAbsolute)(p) ? p : (0, import_node_path7.join)(vaultRoot, p);
-  const normed = (p) => {
-    const a = toAbs(p);
-    return a.endsWith("/") ? a : a + "/";
-  };
-  const newNormed = normed(newPath);
-  if (existing.some((sp) => newNormed.startsWith(normed(sp)))) {
-    return existing;
+// src/domain-store.ts
+var FILE_PATH = "!Wiki/_domain.json";
+var TMP_PATH = `${FILE_PATH}.tmp`;
+var WIKI_DIR = "!Wiki";
+var DomainCorruptError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "DomainCorruptError";
   }
-  const filtered = existing.filter((sp) => !normed(sp).startsWith(newNormed));
-  return [...filtered, newPath];
-}
+};
+var DomainStore = class {
+  constructor(vault) {
+    this.vault = vault;
+  }
+  async load() {
+    const adapter = this.vault.adapter;
+    if (!await adapter.exists(FILE_PATH))
+      return [];
+    const raw = await adapter.read(FILE_PATH);
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      throw new DomainCorruptError(`${FILE_PATH}: ${e.message}`);
+    }
+    if (!Array.isArray(parsed))
+      throw new DomainCorruptError(`${FILE_PATH}: expected JSON array`);
+    const domains = parsed;
+    for (const d of domains) {
+      if (d.wiki_folder?.startsWith("!Wiki/")) {
+        d.wiki_folder = d.wiki_folder.slice("!Wiki/".length);
+      }
+    }
+    return domains;
+  }
+  async save(domains) {
+    const adapter = this.vault.adapter;
+    if (!await adapter.exists(WIKI_DIR))
+      await adapter.mkdir(WIKI_DIR);
+    const body = JSON.stringify(domains, null, 2);
+    await adapter.write(TMP_PATH, body);
+    if (await adapter.exists(FILE_PATH))
+      await adapter.remove(FILE_PATH);
+    await adapter.rename(TMP_PATH, FILE_PATH);
+  }
+};
 
 // src/controller.ts
 var WikiController = class {
-  constructor(app, plugin) {
+  constructor(app, plugin, domainStore, localConfigStore) {
     this.app = app;
     this.plugin = plugin;
+    this.domainStore = domainStore;
+    this.localConfigStore = localConfigStore;
   }
   current = null;
   currentOp = null;
@@ -11040,14 +11142,14 @@ var WikiController = class {
       new import_obsidian5.Notice(i18n().ctrl.operationRunning);
       return;
     }
-    if (this.plugin.settings.backend === "claude-agent" && !this.requireClaudeAgent())
+    if (this.plugin.settings.backend === "claude-agent" && !await this.requireClaudeAgent())
       return;
     await this.ensureView();
     const view = this.activeView();
     if (!view)
       return;
     const vaultRoot = this.app.vault.adapter.getBasePath?.() ?? "";
-    const agentRunner = this.buildAgentRunner(vaultRoot, this._chatSessionId);
+    const agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId);
     const ctrl = new AbortController();
     this.current = ctrl;
     this.onBusyChange?.();
@@ -11131,46 +11233,51 @@ var WikiController = class {
   cwdOrEmpty() {
     return this.app.vault.adapter.getBasePath?.() ?? "";
   }
-  loadDomains() {
-    return this.plugin.settings.domains ?? [];
+  async loadDomains() {
+    try {
+      return await this.domainStore.load();
+    } catch (e) {
+      if (e instanceof DomainCorruptError) {
+        new import_obsidian5.Notice(`Domain map corrupt: ${e.message}`);
+      }
+      throw e;
+    }
   }
-  registerDomain(input) {
+  async registerDomain(input) {
     const id = input.id.trim();
     const err = validateDomainId(id);
     if (err) {
       new import_obsidian5.Notice(i18n().ctrl.domainAddFailed(err));
       return { ok: false, error: err };
     }
-    const s = this.plugin.settings;
-    if (!s.domains)
-      s.domains = [];
-    if (s.domains.some((d) => d.id === id)) {
+    const cur = await this.domainStore.load();
+    if (cur.some((d) => d.id === id)) {
       const msg = `\u0414\u043E\u043C\u0435\u043D \xAB${id}\xBB \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442`;
       new import_obsidian5.Notice(i18n().ctrl.domainAddFailed(msg));
       return { ok: false, error: msg };
     }
     const wikiSubfolder = input.wikiFolder.trim() || id;
-    s.domains.push({
+    const next = [...cur, {
       id,
       name: input.name.trim() || id,
       wiki_folder: wikiSubfolder,
       source_paths: input.sourcePaths ?? [],
       entity_types: [],
       language_notes: ""
-    });
-    void this.plugin.saveSettings();
+    }];
+    await this.domainStore.save(next);
     new import_obsidian5.Notice(i18n().ctrl.domainAdded(id));
     return { ok: true };
   }
-  requireClaudeAgent() {
-    const p = this.plugin.settings.claudeAgent.iclaudePath;
-    if (!p || !(0, import_node_fs3.existsSync)(p)) {
+  async requireClaudeAgent() {
+    const { iclaudePath } = await this.localConfigStore.load();
+    if (!iclaudePath || !(0, import_node_fs3.existsSync)(iclaudePath)) {
       new import_obsidian5.Notice(i18n().ctrl.setClaudeCodePath);
       return null;
     }
-    return p;
+    return iclaudePath;
   }
-  buildAgentRunner(vaultRoot, resumeSessionId) {
+  async buildAgentRunner(vaultRoot, resumeSessionId) {
     const adapter = this.app.vault.adapter;
     const base = this.app.vault.adapter.getBasePath?.() ?? "";
     const manifestDir = this.plugin.manifest.dir ?? (0, import_node_path8.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
@@ -11179,12 +11286,20 @@ var WikiController = class {
     (0, import_node_fs3.mkdirSync)(tmpDir, { recursive: true });
     const vaultTools = new VaultTools(adapter, base);
     const vaultName = this.app.vault.getName();
-    const domains = this.plugin.settings.domains ?? [];
+    const domains = await this.domainStore.load();
+    const local = await this.localConfigStore.load();
     const s = this.plugin.settings;
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm;
     if (s.backend === "claude-agent") {
-      const client = new ClaudeCliClient({ ...s.claudeAgent, requestTimeoutSec: maxTimeoutSec, cwd: vaultRoot, tmpDir, resumeSessionId });
+      const client = new ClaudeCliClient({
+        ...s.claudeAgent,
+        iclaudePath: local.iclaudePath,
+        requestTimeoutSec: maxTimeoutSec,
+        cwd: vaultRoot,
+        tmpDir,
+        resumeSessionId
+      });
       this._currentClaudeClient = client;
       llm = client;
     } else {
@@ -11215,14 +11330,14 @@ var WikiController = class {
       return;
     }
     this._chatSessionId = void 0;
-    if (this.plugin.settings.backend === "claude-agent" && !this.requireClaudeAgent())
+    if (this.plugin.settings.backend === "claude-agent" && !await this.requireClaudeAgent())
       return;
     await this.ensureView();
     const view = this.activeView();
     if (!view)
       return;
     const vaultRoot = this.app.vault.adapter.getBasePath?.() ?? "";
-    const agentRunner = this.buildAgentRunner(vaultRoot);
+    const agentRunner = await this.buildAgentRunner(vaultRoot);
     const ctrl = new AbortController();
     this.current = ctrl;
     this.onBusyChange?.();
@@ -11241,30 +11356,19 @@ var WikiController = class {
       for await (const ev of runGen) {
         this.logEvent(vaultRoot, sessionId, op, domainId, ev);
         this.activeView()?.appendEvent(ev);
-        if (ev.kind === "domain_created") {
-          if (!this.plugin.settings.domains)
-            this.plugin.settings.domains = [];
-          this.plugin.settings.domains.push(ev.entry);
-          void this.plugin.saveSettings();
-        }
-        if (ev.kind === "domain_updated") {
-          const domain = this.plugin.settings.domains.find((d) => d.id === ev.domainId);
-          if (domain) {
-            if (ev.patch.entity_types !== void 0)
-              domain.entity_types = ev.patch.entity_types;
-            if (ev.patch.language_notes !== void 0)
-              domain.language_notes = ev.patch.language_notes;
-            void this.plugin.saveSettings();
-          }
-        }
-        if (ev.kind === "source_path_added") {
-          const domain = this.plugin.settings.domains.find((d) => d.id === ev.domainId);
-          if (domain) {
-            const existing = domain.source_paths ?? [];
-            const updated = consolidateSourcePaths(existing, ev.path, vaultRoot);
-            domain.source_paths = updated;
-            if (updated !== existing)
-              void this.plugin.saveSettings();
+        if (ev.kind === "domain_created" || ev.kind === "domain_updated" || ev.kind === "source_path_added") {
+          try {
+            const cur = await this.domainStore.load();
+            const next = applyDomainEvent(cur, ev, { vaultRoot });
+            if (next !== cur)
+              await this.domainStore.save(next);
+          } catch (e) {
+            if (e instanceof DomainCorruptError) {
+              new import_obsidian5.Notice(`Domain map corrupt: ${e.message}`);
+            }
+            status = "error";
+            ctrl.abort();
+            break;
           }
         }
         this.collectStep(ev, steps);
@@ -11347,14 +11451,57 @@ var WikiController = class {
   }
 };
 
+// src/local-config.ts
+var DEFAULTS = { iclaudePath: "" };
+var LocalConfigStore = class {
+  constructor(plugin) {
+    this.plugin = plugin;
+  }
+  cache = null;
+  path() {
+    const dir = this.plugin.manifest.dir;
+    if (!dir)
+      throw new Error("LocalConfigStore: plugin manifest.dir is undefined");
+    return `${dir}/local.json`;
+  }
+  async load() {
+    if (this.cache)
+      return this.cache;
+    const adapter = this.plugin.app.vault.adapter;
+    const p = this.path();
+    if (!await adapter.exists(p)) {
+      this.cache = { ...DEFAULTS };
+      return this.cache;
+    }
+    try {
+      const raw = await adapter.read(p);
+      this.cache = { ...DEFAULTS, ...JSON.parse(raw) };
+    } catch {
+      this.cache = { ...DEFAULTS };
+    }
+    return this.cache;
+  }
+  async save(patch) {
+    const cur = await this.load();
+    const next = { ...cur, ...patch };
+    await this.plugin.app.vault.adapter.write(this.path(), JSON.stringify(next, null, 2));
+    this.cache = next;
+  }
+};
+
 // src/main.ts
 var LlmWikiPlugin = class extends import_obsidian6.Plugin {
   settings;
   controller;
   settingTab;
+  domainStore;
+  localConfigStore;
   async onload() {
+    this.domainStore = new DomainStore(this.app.vault);
+    this.localConfigStore = new LocalConfigStore(this);
+    await migrateLegacyData(this, this.domainStore, this.localConfigStore);
     await this.loadSettings();
-    this.controller = new WikiController(this.app, this);
+    this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
     this.controller.onBusyChange = () => this.settingTab?.display();
     this.registerView(LLM_WIKI_VIEW_TYPE, (leaf) => new LlmWikiView(leaf, this));
     this.addRibbonIcon("brain-circuit", "LLM wiki", () => {
@@ -11396,30 +11543,44 @@ var LlmWikiPlugin = class extends import_obsidian6.Plugin {
       id: "lint",
       name: T.cmd.lint,
       callback: () => {
-        const domains = this.controller.loadDomains();
-        new DomainModal(
-          this.app,
-          T.cmd.lint,
-          true,
-          null,
-          domains,
-          (d) => void this.controller.lint(d)
-        ).open();
+        void (async () => {
+          let domains;
+          try {
+            domains = await this.controller.loadDomains();
+          } catch {
+            return;
+          }
+          new DomainModal(
+            this.app,
+            T.cmd.lint,
+            true,
+            null,
+            domains,
+            (d) => void this.controller.lint(d)
+          ).open();
+        })();
       }
     });
     this.addCommand({
       id: "init",
       name: T.cmd.init,
       callback: () => {
-        const domains = this.controller.loadDomains();
-        new DomainModal(
-          this.app,
-          T.cmd.init,
-          false,
-          { dryRun: true },
-          domains,
-          (d, f) => void this.controller.init(d, f.dryRun ?? false)
-        ).open();
+        void (async () => {
+          let domains;
+          try {
+            domains = await this.controller.loadDomains();
+          } catch {
+            return;
+          }
+          new DomainModal(
+            this.app,
+            T.cmd.init,
+            false,
+            { dryRun: true },
+            domains,
+            (d, f) => void this.controller.init(d, f.dryRun ?? false)
+          ).open();
+        })();
       }
     });
     this.addCommand({
@@ -11467,8 +11628,7 @@ var LlmWikiPlugin = class extends import_obsidian6.Plugin {
           init: { ...defNA.operations.init, ...naOps.init ?? {} }
         }
       },
-      history: data?.history ?? [],
-      domains: Array.isArray(data?.domains) ? data.domains : []
+      history: data?.history ?? []
     };
     if (!data?.systemPrompt && (caData.systemPrompt || naData.systemPrompt))
       this.settings.systemPrompt = caData.systemPrompt ?? naData.systemPrompt;
@@ -11476,8 +11636,6 @@ var LlmWikiPlugin = class extends import_obsidian6.Plugin {
       this.settings.maxTokens = caData.maxTokens ?? naData.maxTokens;
     if (data?.backend === "claude-code") {
       this.settings.backend = "claude-agent";
-      if (data && data.iclaudePath && !this.settings.claudeAgent.iclaudePath)
-        this.settings.claudeAgent.iclaudePath = data.iclaudePath;
       if (data && data.model && !this.settings.claudeAgent.model)
         this.settings.claudeAgent.model = data.model;
     }
@@ -11488,9 +11646,6 @@ var LlmWikiPlugin = class extends import_obsidian6.Plugin {
       enabled: this.settings.devMode.enabled,
       evaluatorModel: this.settings.devMode.evaluatorModel
     };
-    if (migrateDomainWikiFolder(this.settings.domains)) {
-      void this.saveSettings();
-    }
   }
   async saveSettings() {
     await this.saveData(this.settings);
@@ -11506,7 +11661,35 @@ function migrateDomainWikiFolder(domains) {
   }
   return changed;
 }
+async function migrateLegacyData(plugin, domainStore, localConfigStore) {
+  const data = await plugin.loadData();
+  if (!data)
+    return;
+  let dirty = false;
+  if (Array.isArray(data.domains)) {
+    if (data.domains.length > 0) {
+      const vaultExists = await plugin.app.vault.adapter.exists("!Wiki/_domain.json");
+      if (!vaultExists) {
+        await domainStore.save(data.domains);
+      }
+    }
+    delete data.domains;
+    dirty = true;
+  }
+  const ca = data.claudeAgent;
+  if (ca && typeof ca.iclaudePath === "string") {
+    const cur = await localConfigStore.load();
+    if (ca.iclaudePath.length > 0 && !cur.iclaudePath) {
+      await localConfigStore.save({ iclaudePath: ca.iclaudePath });
+    }
+    delete ca.iclaudePath;
+    dirty = true;
+  }
+  if (dirty)
+    await plugin.saveData(data);
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  migrateDomainWikiFolder
+  migrateDomainWikiFolder,
+  migrateLegacyData
 });
