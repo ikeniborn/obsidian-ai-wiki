@@ -166,9 +166,13 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             }),
         );
     } else {
-      containerEl.createEl("p", {
-        text: "Mobile: cloud LLM (native-agent) only. See docs/mobile-cloud-ollama.md.",
+      const p = containerEl.createEl("p", {
+        text: "Mobile: cloud LLM (native-agent) only. Setup guide: ",
         cls: "setting-item-description",
+      });
+      p.createEl("a", {
+        text: "ikeniborn/obsidian-llm-wiki — mobile-cloud-ollama.md",
+        href: "https://github.com/ikeniborn/obsidian-llm-wiki/blob/master/docs/mobile-cloud-ollama.md",
       });
     }
 

@@ -505,7 +505,9 @@ var en = {
     domainAddFailed: (err) => `Failed to add domain: ${err}`,
     setClaudeCodePath: "Set Claude Code path in settings",
     operationRunning: "Operation already running, cancel it first",
-    errorPrefix: (msg) => `Error: ${msg}`
+    errorPrefix: (msg) => `Error: ${msg}`,
+    mobileNotAvailable: "Operation not available on mobile",
+    configureCloudLlm: "Configure cloud LLM (baseUrl + apiKey) in settings"
   },
   cmd: {
     openPanel: "Open panel",
@@ -661,7 +663,9 @@ var ru = {
     domainAddFailed: (err) => `\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D: ${err}`,
     setClaudeCodePath: "\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u043F\u0443\u0442\u044C \u043A Claude Code \u0432 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430\u0445",
     operationRunning: "\u0423\u0436\u0435 \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044F, \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u0435 \u0435\u0451 \u0441\u043D\u0430\u0447\u0430\u043B\u0430",
-    errorPrefix: (msg) => `\u041E\u0448\u0438\u0431\u043A\u0430: ${msg}`
+    errorPrefix: (msg) => `\u041E\u0448\u0438\u0431\u043A\u0430: ${msg}`,
+    mobileNotAvailable: "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0430 \u043D\u0430 \u043C\u043E\u0431\u0438\u043B\u044C\u043D\u043E\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435",
+    configureCloudLlm: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u0442\u0435 cloud LLM (baseUrl + apiKey) \u0432 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430\u0445"
   },
   cmd: {
     openPanel: "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u0430\u043D\u0435\u043B\u044C",
@@ -817,7 +821,9 @@ var es = {
     domainAddFailed: (err) => `Error al a\xF1adir dominio: ${err}`,
     setClaudeCodePath: "Configura la ruta a Claude Code en los ajustes",
     operationRunning: "Ya hay una operaci\xF3n en curso, canc\xE9lala primero",
-    errorPrefix: (msg) => `Error: ${msg}`
+    errorPrefix: (msg) => `Error: ${msg}`,
+    mobileNotAvailable: "Operaci\xF3n no disponible en m\xF3vil",
+    configureCloudLlm: "Configura cloud LLM (baseUrl + apiKey) en los ajustes"
   },
   cmd: {
     openPanel: "Abrir panel",
@@ -1499,9 +1505,13 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         })
       );
     } else {
-      containerEl.createEl("p", {
-        text: "Mobile: cloud LLM (native-agent) only. See docs/mobile-cloud-ollama.md.",
+      const p = containerEl.createEl("p", {
+        text: "Mobile: cloud LLM (native-agent) only. Setup guide: ",
         cls: "setting-item-description"
+      });
+      p.createEl("a", {
+        text: "ikeniborn/obsidian-llm-wiki \u2014 mobile-cloud-ollama.md",
+        href: "https://github.com/ikeniborn/obsidian-llm-wiki/blob/master/docs/mobile-cloud-ollama.md"
       });
     }
     if (s.backend === "claude-agent" && !import_obsidian3.Platform.isMobile) {
@@ -11181,7 +11191,7 @@ var WikiController = class {
       return;
     }
     if (import_obsidian6.Platform.isMobile && operation !== "query" && operation !== "query-save") {
-      new import_obsidian6.Notice("Operation not available on mobile");
+      new import_obsidian6.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
     if (this.plugin.settings.backend === "native-agent" && !this.requireNativeAgent())
@@ -11192,7 +11202,7 @@ var WikiController = class {
     const view = this.activeView();
     if (!view)
       return;
-    const vaultRoot = this.app.vault.adapter.getBasePath?.() ?? "";
+    const vaultRoot = this.cwdOrEmpty();
     const agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId);
     const ctrl = new AbortController();
     this.current = ctrl;
@@ -11275,7 +11285,15 @@ var WikiController = class {
     await this.dispatch("init", args, void 0, void 0, void 0, onFileError);
   }
   cwdOrEmpty() {
-    return this.app.vault.adapter.getBasePath?.() ?? "";
+    const adapter = this.app.vault.adapter;
+    const base = adapter.getBasePath?.();
+    if (base == null) {
+      if (!import_obsidian6.Platform.isMobile) {
+        console.warn("[llm-wiki] vault.adapter.getBasePath is undefined on desktop");
+      }
+      return "";
+    }
+    return base;
   }
   async loadDomains() {
     try {
@@ -11325,14 +11343,14 @@ var WikiController = class {
   requireNativeAgent() {
     const na = this.plugin.settings.nativeAgent;
     if (!na?.baseUrl?.trim() || !na?.apiKey?.trim()) {
-      new import_obsidian6.Notice("Configure cloud LLM (baseUrl + apiKey) in settings");
+      new import_obsidian6.Notice(i18n().ctrl.configureCloudLlm);
       return false;
     }
     return true;
   }
   async buildAgentRunner(vaultRoot, resumeSessionId) {
     const adapter = this.app.vault.adapter;
-    const base = this.app.vault.adapter.getBasePath?.() ?? "";
+    const base = this.cwdOrEmpty();
     const vaultTools = new VaultTools(adapter, base);
     const vaultName = this.app.vault.getName();
     const domains = await this.domainStore.load();
@@ -11391,7 +11409,7 @@ var WikiController = class {
     }
     this._chatSessionId = void 0;
     if (import_obsidian6.Platform.isMobile && op !== "query" && op !== "query-save") {
-      new import_obsidian6.Notice("Operation not available on mobile");
+      new import_obsidian6.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
     if (this.plugin.settings.backend === "native-agent" && !this.requireNativeAgent())
@@ -11402,7 +11420,7 @@ var WikiController = class {
     const view = this.activeView();
     if (!view)
       return;
-    const vaultRoot = this.app.vault.adapter.getBasePath?.() ?? "";
+    const vaultRoot = this.cwdOrEmpty();
     const agentRunner = await this.buildAgentRunner(vaultRoot);
     const ctrl = new AbortController();
     this.current = ctrl;

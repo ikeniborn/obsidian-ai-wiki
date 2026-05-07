@@ -70,7 +70,7 @@ export class WikiController {
   private async dispatchChat(operation: WikiOperation, domainId: string | undefined, context: string, chatMessages: ChatMessage[]): Promise<void> {
     if (this.isBusy()) { new Notice(i18n().ctrl.operationRunning); return; }
     if (Platform.isMobile && operation !== "query" && operation !== "query-save") {
-      new Notice("Operation not available on mobile");
+      new Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
     if (this.plugin.settings.backend === "native-agent" && !this.requireNativeAgent()) return;
@@ -80,7 +80,7 @@ export class WikiController {
     const view = this.activeView();
     if (!view) return;
 
-    const vaultRoot = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
+    const vaultRoot = this.cwdOrEmpty();
 
     const agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId);
     const ctrl = new AbortController();
@@ -170,7 +170,17 @@ export class WikiController {
 
 
   cwdOrEmpty(): string {
-    return (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
+    const adapter = this.app.vault.adapter as { getBasePath?: () => string };
+    const base = adapter.getBasePath?.();
+    if (base == null) {
+      // Mobile: getBasePath отсутствует — vault-root недоступен. Используем "" как маркер.
+      // Все callers должны проверять Platform.isMobile перед обращением к fs.
+      if (!Platform.isMobile) {
+        console.warn("[llm-wiki] vault.adapter.getBasePath is undefined on desktop");
+      }
+      return "";
+    }
+    return base;
   }
 
   async loadDomains(): Promise<DomainEntry[]> {
@@ -221,7 +231,7 @@ export class WikiController {
   private requireNativeAgent(): boolean {
     const na = this.plugin.settings.nativeAgent;
     if (!na?.baseUrl?.trim() || !na?.apiKey?.trim()) {
-      new Notice("Configure cloud LLM (baseUrl + apiKey) in settings");
+      new Notice(i18n().ctrl.configureCloudLlm);
       return false;
     }
     return true;
@@ -229,7 +239,7 @@ export class WikiController {
 
   private async buildAgentRunner(vaultRoot: string, resumeSessionId?: string): Promise<AgentRunner> {
     const adapter = this.app.vault.adapter as unknown as VaultAdapter;
-    const base = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
+    const base = this.cwdOrEmpty();
     const vaultTools = new VaultTools(adapter, base);
     const vaultName = this.app.vault.getName();
     const domains = await this.domainStore.load();
@@ -294,7 +304,7 @@ export class WikiController {
     this._chatSessionId = undefined;
 
     if (Platform.isMobile && op !== "query" && op !== "query-save") {
-      new Notice("Operation not available on mobile");
+      new Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
     if (this.plugin.settings.backend === "native-agent" && !this.requireNativeAgent()) return;
@@ -304,7 +314,7 @@ export class WikiController {
     const view = this.activeView();
     if (!view) return;
 
-    const vaultRoot = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
+    const vaultRoot = this.cwdOrEmpty();
 
     const agentRunner = await this.buildAgentRunner(vaultRoot);
 

@@ -98,6 +98,8 @@ const en = {
     setClaudeCodePath: "Set Claude Code path in settings",
     operationRunning: "Operation already running, cancel it first",
     errorPrefix: (msg: string) => `Error: ${msg}`,
+    mobileNotAvailable: "Operation not available on mobile",
+    configureCloudLlm: "Configure cloud LLM (baseUrl + apiKey) in settings",
   },
   cmd: {
     openPanel: "Open panel",
@@ -258,6 +260,8 @@ const ru: I18n = {
     setClaudeCodePath: "Укажите путь к Claude Code в настройках",
     operationRunning: "Уже выполняется операция, отмените её сначала",
     errorPrefix: (msg: string) => `Ошибка: ${msg}`,
+    mobileNotAvailable: "Операция недоступна на мобильном устройстве",
+    configureCloudLlm: "Настройте cloud LLM (baseUrl + apiKey) в настройках",
   },
   cmd: {
     openPanel: "Открыть панель",
@@ -416,6 +420,8 @@ const es: I18n = {
     setClaudeCodePath: "Configura la ruta a Claude Code en los ajustes",
     operationRunning: "Ya hay una operación en curso, cancélala primero",
     errorPrefix: (msg: string) => `Error: ${msg}`,
+    mobileNotAvailable: "Operación no disponible en móvil",
+    configureCloudLlm: "Configura cloud LLM (baseUrl + apiKey) en los ajustes",
   },
   cmd: {
     openPanel: "Abrir panel",
