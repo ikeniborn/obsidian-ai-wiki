@@ -1,8 +1,13 @@
 "use strict";
+var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
@@ -15,7 +20,334 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// src/stream.ts
+function isRecord(obj) {
+  return typeof obj === "object" && obj !== null;
+}
+function parseStreamLine(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed)
+    return null;
+  if (!trimmed.startsWith("{"))
+    return null;
+  let obj;
+  try {
+    obj = JSON.parse(trimmed);
+  } catch {
+    return { kind: "error", message: `stream parse error: ${truncate2(trimmed, 120)}` };
+  }
+  if (!isRecord(obj))
+    return null;
+  switch (obj.type) {
+    case "system": {
+      const subtype = typeof obj.subtype === "string" ? obj.subtype : "system";
+      const model = typeof obj.model === "string" ? obj.model : "";
+      const sessionId = typeof obj.session_id === "string" ? obj.session_id : void 0;
+      const msg = `${subtype}${model ? ` (${model})` : ""}`;
+      return { kind: "system", message: msg, sessionId };
+    }
+    case "assistant":
+      return mapAssistant(obj);
+    case "user":
+      return mapUserToolResult(obj);
+    case "result":
+      return mapResult(obj);
+    default:
+      return null;
+  }
+}
+function mapAssistant(obj) {
+  const msg = obj.message;
+  if (!isRecord(msg))
+    return null;
+  const content = msg.content;
+  if (!Array.isArray(content) || content.length === 0)
+    return null;
+  const block = content[0];
+  if (block?.type === "tool_use") {
+    if (block.name === "AskUserQuestion") {
+      const input = isRecord(block.input) ? block.input : {};
+      return {
+        kind: "ask_user",
+        question: typeof input.prompt === "string" ? input.prompt : "",
+        options: Array.isArray(input.options) ? input.options.map((o) => typeof o === "string" ? o : String(o)) : [],
+        toolUseId: typeof block.id === "string" ? block.id : ""
+      };
+    }
+    return { kind: "tool_use", name: typeof block.name === "string" ? block.name : "?", input: block.input };
+  }
+  if (block?.type === "text") {
+    return { kind: "assistant_text", delta: typeof block.text === "string" ? block.text : "" };
+  }
+  return null;
+}
+function mapUserToolResult(obj) {
+  const msg = obj.message;
+  if (!isRecord(msg))
+    return null;
+  const content = msg.content;
+  if (!Array.isArray(content))
+    return null;
+  const block = content[0];
+  if (!isRecord(block) || block.type !== "tool_result")
+    return null;
+  const isErr = Boolean(block.is_error);
+  const preview = typeof block.content === "string" ? truncate2(block.content, PREVIEW_MAX) : void 0;
+  return { kind: "tool_result", ok: !isErr, preview };
+}
+function mapResult(obj) {
+  if (obj.is_error || obj.subtype === "error") {
+    const errMsg = typeof obj.result === "string" ? obj.result : typeof obj.error === "string" ? obj.error : "claude error";
+    return { kind: "error", message: errMsg };
+  }
+  return {
+    kind: "result",
+    durationMs: Number(obj.duration_ms ?? 0),
+    usdCost: typeof obj.total_cost_usd === "number" ? obj.total_cost_usd : void 0,
+    text: typeof obj.result === "string" ? obj.result : ""
+  };
+}
+function truncate2(s, n) {
+  return s.length <= n ? s : s.slice(0, n) + "\u2026";
+}
+var PREVIEW_MAX;
+var init_stream = __esm({
+  "src/stream.ts"() {
+    "use strict";
+    PREVIEW_MAX = 200;
+  }
+});
+
+// src/claude-cli-client.ts
+var claude_cli_client_exports = {};
+__export(claude_cli_client_exports, {
+  ClaudeCliClient: () => ClaudeCliClient
+});
+var import_node_child_process, import_node_fs, import_node_path5, import_node_readline, SIGTERM_GRACE_MS, ClaudeCliClient;
+var init_claude_cli_client = __esm({
+  "src/claude-cli-client.ts"() {
+    "use strict";
+    import_node_child_process = require("node:child_process");
+    import_node_fs = require("node:fs");
+    import_node_path5 = require("node:path");
+    import_node_readline = require("node:readline");
+    init_stream();
+    SIGTERM_GRACE_MS = 3e3;
+    ClaudeCliClient = class {
+      constructor(cfg) {
+        this.cfg = cfg;
+      }
+      /** Session ID of the last completed turn, populated from the system init event. */
+      lastSessionId;
+      chat = {
+        completions: {
+          create: (params, opts) => this._create(params, opts)
+        }
+      };
+      _create(params, opts) {
+        const messages = params.messages;
+        const systemContent = messages.filter((m) => m.role === "system").map((m) => typeof m.content === "string" ? m.content : "").join("\n\n");
+        const lastUser = [...messages].reverse().find((m) => m.role === "user");
+        const userText = typeof lastUser?.content === "string" ? lastUser.content : "";
+        const model = params.model || this.cfg.model;
+        const { requestTimeoutSec } = this.cfg;
+        const LARGE_THRESHOLD = 32768;
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const tmpFiles = [];
+        const isResume = Boolean(this.cfg.resumeSessionId);
+        const args = [];
+        args.push("--");
+        if (model)
+          args.push("--model", model);
+        if (isResume) {
+          args.push("--resume", this.cfg.resumeSessionId);
+        }
+        try {
+          const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
+          if (isLargeUser) {
+            const tmpUsrFile = (0, import_node_path5.join)(this.cfg.tmpDir, `llm-wiki-usr-${id}.txt`);
+            (0, import_node_fs.writeFileSync)(tmpUsrFile, userText, "utf-8");
+            tmpFiles.push(tmpUsrFile);
+            args.push("-p", ".");
+            args.push("--append-system-prompt-file", tmpUsrFile);
+          } else {
+            args.push("-p", userText);
+          }
+          args.push("--output-format", "stream-json", "--verbose");
+          args.push("--disable-slash-commands");
+          args.push("--dangerously-skip-permissions");
+          if (this.cfg.allowedTools)
+            args.push("--tools", this.cfg.allowedTools);
+          if (!isResume && systemContent) {
+            const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
+            if (isLargeSys) {
+              const tmpSysFile = (0, import_node_path5.join)(this.cfg.tmpDir, `llm-wiki-sys-${id}.txt`);
+              (0, import_node_fs.writeFileSync)(tmpSysFile, systemContent, "utf-8");
+              tmpFiles.push(tmpSysFile);
+              args.push("--system-prompt-file", tmpSysFile);
+            } else {
+              args.push("--system-prompt", systemContent);
+            }
+          }
+        } catch (err) {
+          for (const f of tmpFiles) {
+            try {
+              (0, import_node_fs.unlinkSync)(f);
+            } catch {
+            }
+          }
+          throw err;
+        }
+        if (params.stream) {
+          return Promise.resolve(this._makeIterable(args, opts?.signal, requestTimeoutSec, tmpFiles));
+        }
+        return this._collect(args, opts?.signal, requestTimeoutSec, tmpFiles);
+      }
+      _makeIterable(args, signal, timeoutSec, tmpFiles) {
+        return { [Symbol.asyncIterator]: () => this._generate(args, signal, timeoutSec, tmpFiles) };
+      }
+      async *_generate(args, signal, timeoutSec, tmpFiles) {
+        const child = (0, import_node_child_process.spawn)(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
+        if (!child.stdout || !child.stderr)
+          throw new Error("spawn: missing stdio");
+        const stderrChunks = [];
+        child.stderr.on("data", (chunk) => stderrChunks.push(chunk));
+        const onAbort = () => {
+          child.kill("SIGTERM");
+          setTimeout(() => {
+            if (child.exitCode === null)
+              child.kill("SIGKILL");
+          }, SIGTERM_GRACE_MS);
+        };
+        if (signal?.aborted) {
+          onAbort();
+          return;
+        }
+        signal?.addEventListener("abort", onAbort, { once: true });
+        const timeoutHandle = setTimeout(() => {
+          timedOut = true;
+          child.kill("SIGTERM");
+          setTimeout(() => {
+            if (child.exitCode === null)
+              child.kill("SIGKILL");
+          }, SIGTERM_GRACE_MS);
+        }, timeoutSec * 1e3);
+        let timedOut = false;
+        const queue = [];
+        let resolveNext = null;
+        const wake = () => {
+          if (resolveNext) {
+            resolveNext();
+            resolveNext = null;
+          }
+        };
+        let id = 0;
+        const rl = (0, import_node_readline.createInterface)({ input: child.stdout });
+        rl.on("line", (line) => {
+          const ev = parseStreamLine(line);
+          if (ev?.kind === "system" && ev.sessionId) {
+            this.lastSessionId = ev.sessionId;
+          }
+          if (ev?.kind === "assistant_text") {
+            const delta = ev.isReasoning ? { reasoning: ev.delta } : { content: ev.delta };
+            queue.push({
+              id: `cc-${++id}`,
+              object: "chat.completion.chunk",
+              model: this.cfg.model || "claude",
+              created: 0,
+              choices: [{ index: 0, delta, finish_reason: null }]
+            });
+            wake();
+          }
+        });
+        let exited = false;
+        let exitCode = null;
+        let spawnError = null;
+        child.on("close", (code) => {
+          exitCode = code;
+          exited = true;
+          wake();
+        });
+        child.on("error", (err) => {
+          spawnError = err;
+          exited = true;
+          wake();
+        });
+        try {
+          while (true) {
+            if (queue.length > 0) {
+              yield queue.shift();
+              continue;
+            }
+            if (exited)
+              break;
+            await new Promise((r) => resolveNext = r);
+          }
+          const stderr = () => Buffer.concat(stderrChunks).toString("utf8").trim();
+          if (spawnError)
+            throw new Error(`claude spawn failed: ${spawnError.message}${stderr() ? `
+${stderr()}` : ""}`);
+          if (signal?.aborted)
+            return;
+          const ec = exitCode;
+          if (ec !== null && ec !== 0)
+            throw new Error(`claude exited with code ${String(ec)}${stderr() ? `
+${stderr()}` : ""}`);
+          if (timedOut)
+            throw new Error(`claude process timed out after ${timeoutSec}s`);
+          yield {
+            id: `cc-${++id}`,
+            object: "chat.completion.chunk",
+            model: this.cfg.model || "claude",
+            created: 0,
+            choices: [{ index: 0, delta: {}, finish_reason: "stop" }]
+          };
+        } finally {
+          clearTimeout(timeoutHandle);
+          signal?.removeEventListener("abort", onAbort);
+          rl.close();
+          for (const f of tmpFiles) {
+            try {
+              (0, import_node_fs.unlinkSync)(f);
+            } catch {
+            }
+          }
+          if (child.exitCode === null) {
+            child.kill("SIGTERM");
+            setTimeout(() => {
+              if (child.exitCode === null)
+                child.kill("SIGKILL");
+            }, SIGTERM_GRACE_MS);
+          }
+        }
+      }
+      async _collect(args, signal, timeoutSec, tmpFiles) {
+        let text = "";
+        for await (const chunk of this._generate(args, signal, timeoutSec, tmpFiles)) {
+          text += chunk.choices[0]?.delta?.content ?? "";
+        }
+        return {
+          id: "cc-0",
+          object: "chat.completion",
+          model: this.cfg.model || "claude",
+          created: 0,
+          choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop", logprobs: null }],
+          usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+        };
+      }
+    };
+  }
+});
 
 // src/main.ts
 var main_exports = {};
@@ -25,7 +357,7 @@ __export(main_exports, {
   migrateLegacyData: () => migrateLegacyData
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian6 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_SETTINGS = {
@@ -1112,12 +1444,14 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         }
       })
     );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.agentLog_name).setDesc(T.settings.agentLog_desc).addToggle(
-      (t) => t.setValue(s.agentLogEnabled).onChange(async (v) => {
-        s.agentLogEnabled = v;
-        await this.plugin.saveSettings();
-      })
-    );
+    if (!import_obsidian3.Platform.isMobile) {
+      new import_obsidian3.Setting(containerEl).setName(T.settings.agentLog_name).setDesc(T.settings.agentLog_desc).addToggle(
+        (t) => t.setValue(s.agentLogEnabled).onChange(async (v) => {
+          s.agentLogEnabled = v;
+          await this.plugin.saveSettings();
+        })
+      );
+    }
     new import_obsidian3.Setting(containerEl).setName(T.settings.domains_heading).setHeading();
     const domains = this.cachedDomains;
     if (domains.length === 0) {
@@ -1156,14 +1490,21 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       }
     }
     new import_obsidian3.Setting(containerEl).setName(T.settings.h3_backend).setHeading();
-    new import_obsidian3.Setting(containerEl).setName(T.settings.backend_name).setDesc(T.settings.backend_desc).addDropdown(
-      (d) => d.addOption("claude-agent", T.settings.claudeCodeAgent).addOption("native-agent", T.settings.nativeAgent).setValue(s.backend).onChange(async (v) => {
-        s.backend = v;
-        await this.plugin.saveSettings();
-        this.display();
-      })
-    );
-    if (s.backend === "claude-agent") {
+    if (!import_obsidian3.Platform.isMobile) {
+      new import_obsidian3.Setting(containerEl).setName(T.settings.backend_name).setDesc(T.settings.backend_desc).addDropdown(
+        (d) => d.addOption("claude-agent", T.settings.claudeCodeAgent).addOption("native-agent", T.settings.nativeAgent).setValue(s.backend).onChange(async (v) => {
+          s.backend = v;
+          await this.plugin.saveSettings();
+          this.display();
+        })
+      );
+    } else {
+      containerEl.createEl("p", {
+        text: "Mobile: cloud LLM (native-agent) only. See docs/mobile-cloud-ollama.md.",
+        cls: "setting-item-description"
+      });
+    }
+    if (s.backend === "claude-agent" && !import_obsidian3.Platform.isMobile) {
       new import_obsidian3.Setting(containerEl).setName(T.settings.iclaudePath_name).setDesc(T.settings.iclaudePath_desc).addText(
         (t) => t.setPlaceholder("/home/user/Documents/Project/iclaude/iclaude.sh").setValue(this.cachedIclaudePath).onChange(async (v) => {
           this.cachedIclaudePath = v.trim();
@@ -2048,9 +2389,7 @@ function translateSystemEvent(message) {
 }
 
 // src/controller.ts
-var import_obsidian5 = require("obsidian");
-var import_node_fs3 = require("node:fs");
-var import_node_path8 = require("node:path");
+var import_obsidian6 = require("obsidian");
 
 // src/source-paths.ts
 var import_node_path = require("node:path");
@@ -2107,8 +2446,7 @@ function applyDomainEvent(domains, ev, opts) {
 }
 
 // src/agent-runner.ts
-var import_node_fs = require("node:fs");
-var import_node_path6 = require("node:path");
+var import_obsidian5 = require("obsidian");
 
 // src/phases/ingest.ts
 var import_node_path2 = require("node:path");
@@ -2415,9 +2753,6 @@ ${indexContent.slice(0, 2e3)}` : ""
   ];
 }
 
-// src/phases/query.ts
-var import_node_path3 = require("node:path");
-
 // prompts/query.md
 var query_default = "\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u043F\u043E wiki-\u0431\u0430\u0437\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u0411\u0443\u0434\u044C \u0442\u043E\u0447\u0435\u043D \u0438 \u043B\u0430\u043A\u043E\u043D\u0438\u0447\u0435\u043D.\n\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 WikiLinks [[\u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435]] \u043F\u0440\u0438 \u0441\u0441\u044B\u043B\u043A\u0430\u0445 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0437 \u0438\u043D\u0434\u0435\u043A\u0441\u0430.\n{{entity_types_block}}\n{{schema_block}}\n{{index_block}}\n";
 
@@ -2435,12 +2770,11 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
     yield { kind: "error", message: "No domain configured. Add a domain in settings." };
     return;
   }
-  const absWiki = (0, import_node_path3.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
-  const wikiVaultPath = vaultTools.toVaultPath(absWiki);
-  if (!wikiVaultPath) {
-    yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
+  if (!domain.wiki_folder || domain.wiki_folder.includes("..")) {
+    yield { kind: "error", message: `Wiki folder ${domain.wiki_folder} is outside the vault.` };
     return;
   }
+  const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
   const wikiRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
   yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
@@ -2552,7 +2886,7 @@ ${types}${notes}`;
 }
 
 // src/phases/lint.ts
-var import_node_path4 = require("node:path");
+var import_node_path3 = require("node:path");
 
 // prompts/lint.md
 var lint_default = "\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0412\u044B\u044F\u0432\u043B\u044F\u0439: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442.\n\u0412\u0435\u0440\u043D\u0438 \u043A\u0440\u0430\u0442\u043A\u0438\u0439 \u043E\u0442\u0447\u0451\u0442 \u0432 markdown.\n{{entity_types_block}}\n";
@@ -2571,7 +2905,7 @@ async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal
   for (const domain of targets) {
     if (signal.aborted)
       return;
-    const absWiki = (0, import_node_path4.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+    const absWiki = (0, import_node_path3.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
     const wikiVaultPath = vaultTools.toVaultPath(absWiki);
     if (!wikiVaultPath) {
       reportParts.push(`## ${domain.id}
@@ -2841,7 +3175,7 @@ ${c.slice(0, 300)}`).join("\n\n");
 }
 
 // src/phases/fix.ts
-var import_node_path5 = require("node:path");
+var import_node_path4 = require("node:path");
 
 // prompts/fix.md
 var fix_default = '\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n{{fix_instruction}}\n\n{{entity_types_block}}\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432 \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 (\u0435\u0441\u043B\u0438 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0430\u0441\u044C \u2014 \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0430\u0439):\n[{"path":"{{wiki_path}}/EntityName.md","content":"\u043F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B"}]\n\u0414\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u044B\u0435 \u043F\u0443\u0442\u0438 wiki: {{wiki_path}}/\n\u0414\u0430\u0442\u0430: {{today}}\n';
@@ -2855,7 +3189,7 @@ async function* runFix(args, vaultTools, llm, model, domains, vaultRoot, signal,
     yield { kind: "error", message: domainId ? `Domain "${domainId}" not found.` : "No domains configured." };
     return;
   }
-  const absWiki = (0, import_node_path5.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+  const absWiki = (0, import_node_path4.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
     yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
@@ -3427,14 +3761,18 @@ var AgentRunner = class {
       return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
     return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
   }
-  writeDevLog(vaultRoot, entry) {
+  async writeDevLog(vaultRoot, entry) {
     if (!this.settings.devMode?.enabled)
       return;
+    if (import_obsidian5.Platform.isMobile)
+      return;
     try {
-      const logDir = (0, import_node_path6.join)(vaultRoot, "!Logs");
-      (0, import_node_fs.mkdirSync)(logDir, { recursive: true });
+      const { appendFileSync, mkdirSync } = await import("node:fs");
+      const { join: join6 } = await import("node:path");
+      const logDir = join6(vaultRoot, "!Logs");
+      mkdirSync(logDir, { recursive: true });
       const line = JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), ...entry, eval: null }) + "\n";
-      (0, import_node_fs.appendFileSync)((0, import_node_path6.join)(logDir, "dev.jsonl"), line, "utf-8");
+      appendFileSync(join6(logDir, "dev.jsonl"), line, "utf-8");
     } catch {
     }
   }
@@ -3495,7 +3833,7 @@ var AgentRunner = class {
     }
     if (this.settings.devMode?.enabled && finalResultText) {
       const taskInput = req.args.join(" ") || req.operation;
-      this.writeDevLog(vaultRoot, {
+      await this.writeDevLog(vaultRoot, {
         operation: req.operation,
         model,
         systemPrompt: opts.systemPrompt ?? "",
@@ -3508,24 +3846,28 @@ var AgentRunner = class {
         for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal)) {
           yield ev;
           if (ev.kind === "eval_result") {
-            this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);
+            await this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);
           }
         }
       }
     }
   }
-  updateDevLogEval(vaultRoot, score, reasoning) {
+  async updateDevLogEval(vaultRoot, score, reasoning) {
     if (!this.settings.devMode?.enabled)
       return;
+    if (import_obsidian5.Platform.isMobile)
+      return;
     try {
-      const logPath = (0, import_node_path6.join)(vaultRoot, "!Logs", "dev.jsonl");
-      const content = (0, import_node_fs.readFileSync)(logPath, "utf-8");
+      const { readFileSync, writeFileSync: writeFileSync2 } = await import("node:fs");
+      const { join: join6 } = await import("node:path");
+      const logPath = join6(vaultRoot, "!Logs", "dev.jsonl");
+      const content = readFileSync(logPath, "utf-8");
       const lines = content.trimEnd().split("\n");
       const lastIdx = lines.length - 1;
       const last = JSON.parse(lines[lastIdx]);
       last.eval = { score, reasoning };
       lines[lastIdx] = JSON.stringify(last);
-      (0, import_node_fs.writeFileSync)(logPath, lines.join("\n") + "\n", "utf-8");
+      writeFileSync2(logPath, lines.join("\n") + "\n", "utf-8");
     } catch {
     }
   }
@@ -3583,310 +3925,6 @@ var VaultTools = class {
     if (!absolutePath.startsWith(base))
       return null;
     return absolutePath.slice(base.length);
-  }
-};
-
-// src/claude-cli-client.ts
-var import_node_child_process = require("node:child_process");
-var import_node_fs2 = require("node:fs");
-var import_node_path7 = require("node:path");
-var import_node_readline = require("node:readline");
-
-// src/stream.ts
-var PREVIEW_MAX = 200;
-function isRecord(obj) {
-  return typeof obj === "object" && obj !== null;
-}
-function parseStreamLine(raw) {
-  const trimmed = raw.trim();
-  if (!trimmed)
-    return null;
-  if (!trimmed.startsWith("{"))
-    return null;
-  let obj;
-  try {
-    obj = JSON.parse(trimmed);
-  } catch {
-    return { kind: "error", message: `stream parse error: ${truncate2(trimmed, 120)}` };
-  }
-  if (!isRecord(obj))
-    return null;
-  switch (obj.type) {
-    case "system": {
-      const subtype = typeof obj.subtype === "string" ? obj.subtype : "system";
-      const model = typeof obj.model === "string" ? obj.model : "";
-      const sessionId = typeof obj.session_id === "string" ? obj.session_id : void 0;
-      const msg = `${subtype}${model ? ` (${model})` : ""}`;
-      return { kind: "system", message: msg, sessionId };
-    }
-    case "assistant":
-      return mapAssistant(obj);
-    case "user":
-      return mapUserToolResult(obj);
-    case "result":
-      return mapResult(obj);
-    default:
-      return null;
-  }
-}
-function mapAssistant(obj) {
-  const msg = obj.message;
-  if (!isRecord(msg))
-    return null;
-  const content = msg.content;
-  if (!Array.isArray(content) || content.length === 0)
-    return null;
-  const block = content[0];
-  if (block?.type === "tool_use") {
-    if (block.name === "AskUserQuestion") {
-      const input = isRecord(block.input) ? block.input : {};
-      return {
-        kind: "ask_user",
-        question: typeof input.prompt === "string" ? input.prompt : "",
-        options: Array.isArray(input.options) ? input.options.map((o) => typeof o === "string" ? o : String(o)) : [],
-        toolUseId: typeof block.id === "string" ? block.id : ""
-      };
-    }
-    return { kind: "tool_use", name: typeof block.name === "string" ? block.name : "?", input: block.input };
-  }
-  if (block?.type === "text") {
-    return { kind: "assistant_text", delta: typeof block.text === "string" ? block.text : "" };
-  }
-  return null;
-}
-function mapUserToolResult(obj) {
-  const msg = obj.message;
-  if (!isRecord(msg))
-    return null;
-  const content = msg.content;
-  if (!Array.isArray(content))
-    return null;
-  const block = content[0];
-  if (!isRecord(block) || block.type !== "tool_result")
-    return null;
-  const isErr = Boolean(block.is_error);
-  const preview = typeof block.content === "string" ? truncate2(block.content, PREVIEW_MAX) : void 0;
-  return { kind: "tool_result", ok: !isErr, preview };
-}
-function mapResult(obj) {
-  if (obj.is_error || obj.subtype === "error") {
-    const errMsg = typeof obj.result === "string" ? obj.result : typeof obj.error === "string" ? obj.error : "claude error";
-    return { kind: "error", message: errMsg };
-  }
-  return {
-    kind: "result",
-    durationMs: Number(obj.duration_ms ?? 0),
-    usdCost: typeof obj.total_cost_usd === "number" ? obj.total_cost_usd : void 0,
-    text: typeof obj.result === "string" ? obj.result : ""
-  };
-}
-function truncate2(s, n) {
-  return s.length <= n ? s : s.slice(0, n) + "\u2026";
-}
-
-// src/claude-cli-client.ts
-var SIGTERM_GRACE_MS = 3e3;
-var ClaudeCliClient = class {
-  constructor(cfg) {
-    this.cfg = cfg;
-  }
-  /** Session ID of the last completed turn, populated from the system init event. */
-  lastSessionId;
-  chat = {
-    completions: {
-      create: (params, opts) => this._create(params, opts)
-    }
-  };
-  _create(params, opts) {
-    const messages = params.messages;
-    const systemContent = messages.filter((m) => m.role === "system").map((m) => typeof m.content === "string" ? m.content : "").join("\n\n");
-    const lastUser = [...messages].reverse().find((m) => m.role === "user");
-    const userText = typeof lastUser?.content === "string" ? lastUser.content : "";
-    const model = params.model || this.cfg.model;
-    const { requestTimeoutSec } = this.cfg;
-    const LARGE_THRESHOLD = 32768;
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const tmpFiles = [];
-    const isResume = Boolean(this.cfg.resumeSessionId);
-    const args = [];
-    args.push("--");
-    if (model)
-      args.push("--model", model);
-    if (isResume) {
-      args.push("--resume", this.cfg.resumeSessionId);
-    }
-    try {
-      const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
-      if (isLargeUser) {
-        const tmpUsrFile = (0, import_node_path7.join)(this.cfg.tmpDir, `llm-wiki-usr-${id}.txt`);
-        (0, import_node_fs2.writeFileSync)(tmpUsrFile, userText, "utf-8");
-        tmpFiles.push(tmpUsrFile);
-        args.push("-p", ".");
-        args.push("--append-system-prompt-file", tmpUsrFile);
-      } else {
-        args.push("-p", userText);
-      }
-      args.push("--output-format", "stream-json", "--verbose");
-      args.push("--disable-slash-commands");
-      args.push("--dangerously-skip-permissions");
-      if (this.cfg.allowedTools)
-        args.push("--tools", this.cfg.allowedTools);
-      if (!isResume && systemContent) {
-        const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
-        if (isLargeSys) {
-          const tmpSysFile = (0, import_node_path7.join)(this.cfg.tmpDir, `llm-wiki-sys-${id}.txt`);
-          (0, import_node_fs2.writeFileSync)(tmpSysFile, systemContent, "utf-8");
-          tmpFiles.push(tmpSysFile);
-          args.push("--system-prompt-file", tmpSysFile);
-        } else {
-          args.push("--system-prompt", systemContent);
-        }
-      }
-    } catch (err) {
-      for (const f of tmpFiles) {
-        try {
-          (0, import_node_fs2.unlinkSync)(f);
-        } catch {
-        }
-      }
-      throw err;
-    }
-    if (params.stream) {
-      return Promise.resolve(this._makeIterable(args, opts?.signal, requestTimeoutSec, tmpFiles));
-    }
-    return this._collect(args, opts?.signal, requestTimeoutSec, tmpFiles);
-  }
-  _makeIterable(args, signal, timeoutSec, tmpFiles) {
-    return { [Symbol.asyncIterator]: () => this._generate(args, signal, timeoutSec, tmpFiles) };
-  }
-  async *_generate(args, signal, timeoutSec, tmpFiles) {
-    const child = (0, import_node_child_process.spawn)(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
-    if (!child.stdout || !child.stderr)
-      throw new Error("spawn: missing stdio");
-    const stderrChunks = [];
-    child.stderr.on("data", (chunk) => stderrChunks.push(chunk));
-    const onAbort = () => {
-      child.kill("SIGTERM");
-      setTimeout(() => {
-        if (child.exitCode === null)
-          child.kill("SIGKILL");
-      }, SIGTERM_GRACE_MS);
-    };
-    if (signal?.aborted) {
-      onAbort();
-      return;
-    }
-    signal?.addEventListener("abort", onAbort, { once: true });
-    const timeoutHandle = setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGTERM");
-      setTimeout(() => {
-        if (child.exitCode === null)
-          child.kill("SIGKILL");
-      }, SIGTERM_GRACE_MS);
-    }, timeoutSec * 1e3);
-    let timedOut = false;
-    const queue = [];
-    let resolveNext = null;
-    const wake = () => {
-      if (resolveNext) {
-        resolveNext();
-        resolveNext = null;
-      }
-    };
-    let id = 0;
-    const rl = (0, import_node_readline.createInterface)({ input: child.stdout });
-    rl.on("line", (line) => {
-      const ev = parseStreamLine(line);
-      if (ev?.kind === "system" && ev.sessionId) {
-        this.lastSessionId = ev.sessionId;
-      }
-      if (ev?.kind === "assistant_text") {
-        const delta = ev.isReasoning ? { reasoning: ev.delta } : { content: ev.delta };
-        queue.push({
-          id: `cc-${++id}`,
-          object: "chat.completion.chunk",
-          model: this.cfg.model || "claude",
-          created: 0,
-          choices: [{ index: 0, delta, finish_reason: null }]
-        });
-        wake();
-      }
-    });
-    let exited = false;
-    let exitCode = null;
-    let spawnError = null;
-    child.on("close", (code) => {
-      exitCode = code;
-      exited = true;
-      wake();
-    });
-    child.on("error", (err) => {
-      spawnError = err;
-      exited = true;
-      wake();
-    });
-    try {
-      while (true) {
-        if (queue.length > 0) {
-          yield queue.shift();
-          continue;
-        }
-        if (exited)
-          break;
-        await new Promise((r) => resolveNext = r);
-      }
-      const stderr = () => Buffer.concat(stderrChunks).toString("utf8").trim();
-      if (spawnError)
-        throw new Error(`claude spawn failed: ${spawnError.message}${stderr() ? `
-${stderr()}` : ""}`);
-      if (signal?.aborted)
-        return;
-      const ec = exitCode;
-      if (ec !== null && ec !== 0)
-        throw new Error(`claude exited with code ${String(ec)}${stderr() ? `
-${stderr()}` : ""}`);
-      if (timedOut)
-        throw new Error(`claude process timed out after ${timeoutSec}s`);
-      yield {
-        id: `cc-${++id}`,
-        object: "chat.completion.chunk",
-        model: this.cfg.model || "claude",
-        created: 0,
-        choices: [{ index: 0, delta: {}, finish_reason: "stop" }]
-      };
-    } finally {
-      clearTimeout(timeoutHandle);
-      signal?.removeEventListener("abort", onAbort);
-      rl.close();
-      for (const f of tmpFiles) {
-        try {
-          (0, import_node_fs2.unlinkSync)(f);
-        } catch {
-        }
-      }
-      if (child.exitCode === null) {
-        child.kill("SIGTERM");
-        setTimeout(() => {
-          if (child.exitCode === null)
-            child.kill("SIGKILL");
-        }, SIGTERM_GRACE_MS);
-      }
-    }
-  }
-  async _collect(args, signal, timeoutSec, tmpFiles) {
-    let text = "";
-    for await (const chunk of this._generate(args, signal, timeoutSec, tmpFiles)) {
-      text += chunk.choices[0]?.delta?.content ?? "";
-    }
-    return {
-      id: "cc-0",
-      object: "chat.completion",
-      model: this.cfg.model || "claude",
-      created: 0,
-      choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop", logprobs: null }],
-      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
-    };
   }
 };
 
@@ -11108,13 +11146,13 @@ var WikiController = class {
   cancelCurrent() {
     if (this.current) {
       this.current.abort();
-      new import_obsidian5.Notice(i18n().ctrl.cancelling);
+      new import_obsidian6.Notice(i18n().ctrl.cancelling);
     }
   }
   async ingestActive(domainId) {
     const file = this.app.workspace.getActiveFile();
     if (!file) {
-      new import_obsidian5.Notice(i18n().ctrl.noActiveFile);
+      new import_obsidian6.Notice(i18n().ctrl.noActiveFile);
       return;
     }
     const abs = this.app.vault.adapter.getFullPath(file.path);
@@ -11139,9 +11177,15 @@ var WikiController = class {
   }
   async dispatchChat(operation, domainId, context, chatMessages) {
     if (this.isBusy()) {
-      new import_obsidian5.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian6.Notice(i18n().ctrl.operationRunning);
       return;
     }
+    if (import_obsidian6.Platform.isMobile && operation !== "query" && operation !== "query-save") {
+      new import_obsidian6.Notice("Operation not available on mobile");
+      return;
+    }
+    if (this.plugin.settings.backend === "native-agent" && !this.requireNativeAgent())
+      return;
     if (this.plugin.settings.backend === "claude-agent" && !await this.requireClaudeAgent())
       return;
     await this.ensureView();
@@ -11158,7 +11202,7 @@ var WikiController = class {
     const lastMsg = chatMessages[chatMessages.length - 1]?.content ?? "";
     let finalText = "";
     let status = "done";
-    this.logEvent(vaultRoot, sessionId, "chat", domainId, {
+    await this.logEvent(vaultRoot, sessionId, "chat", domainId, {
       kind: "system",
       message: `start op=chat args=${JSON.stringify([lastMsg])} domainId=${domainId}`
     });
@@ -11184,7 +11228,7 @@ var WikiController = class {
     });
     try {
       for await (const ev of runGen) {
-        this.logEvent(vaultRoot, sessionId, "chat", domainId, ev);
+        await this.logEvent(vaultRoot, sessionId, "chat", domainId, ev);
         this.activeView()?.appendChatEvent(ev);
         if (ev.kind === "system" && ev.sessionId) {
           this._chatSessionId = ev.sessionId;
@@ -11200,7 +11244,7 @@ var WikiController = class {
       status = "error";
       this._chatSessionId = void 0;
       finalText = i18n().ctrl.errorPrefix(err.message);
-      this.logEvent(vaultRoot, sessionId, "chat", domainId, { kind: "error", message: finalText });
+      await this.logEvent(vaultRoot, sessionId, "chat", domainId, { kind: "error", message: finalText });
     } finally {
       this.current = null;
       this.onBusyChange?.();
@@ -11213,7 +11257,7 @@ var WikiController = class {
     }
     if (ctrl.signal.aborted)
       this._chatSessionId = void 0;
-    this.logEvent(vaultRoot, sessionId, "chat", domainId, {
+    await this.logEvent(vaultRoot, sessionId, "chat", domainId, {
       kind: "system",
       message: `finish status=${status} durationMs=${Date.now() - startedAt}`
     });
@@ -11238,7 +11282,7 @@ var WikiController = class {
       return await this.domainStore.load();
     } catch (e) {
       if (e instanceof DomainCorruptError) {
-        new import_obsidian5.Notice(`Domain map corrupt: ${e.message}`);
+        new import_obsidian6.Notice(`Domain map corrupt: ${e.message}`);
       }
       throw e;
     }
@@ -11247,13 +11291,13 @@ var WikiController = class {
     const id = input.id.trim();
     const err = validateDomainId(id);
     if (err) {
-      new import_obsidian5.Notice(i18n().ctrl.domainAddFailed(err));
+      new import_obsidian6.Notice(i18n().ctrl.domainAddFailed(err));
       return { ok: false, error: err };
     }
     const cur = await this.domainStore.load();
     if (cur.some((d) => d.id === id)) {
       const msg = `\u0414\u043E\u043C\u0435\u043D \xAB${id}\xBB \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442`;
-      new import_obsidian5.Notice(i18n().ctrl.domainAddFailed(msg));
+      new import_obsidian6.Notice(i18n().ctrl.domainAddFailed(msg));
       return { ok: false, error: msg };
     }
     const wikiSubfolder = input.wikiFolder.trim() || id;
@@ -11266,24 +11310,29 @@ var WikiController = class {
       language_notes: ""
     }];
     await this.domainStore.save(next);
-    new import_obsidian5.Notice(i18n().ctrl.domainAdded(id));
+    new import_obsidian6.Notice(i18n().ctrl.domainAdded(id));
     return { ok: true };
   }
   async requireClaudeAgent() {
+    const { existsSync } = await import("node:fs");
     const { iclaudePath } = await this.localConfigStore.load();
-    if (!iclaudePath || !(0, import_node_fs3.existsSync)(iclaudePath)) {
-      new import_obsidian5.Notice(i18n().ctrl.setClaudeCodePath);
+    if (!iclaudePath || !existsSync(iclaudePath)) {
+      new import_obsidian6.Notice(i18n().ctrl.setClaudeCodePath);
       return null;
     }
     return iclaudePath;
   }
+  requireNativeAgent() {
+    const na = this.plugin.settings.nativeAgent;
+    if (!na?.baseUrl?.trim() || !na?.apiKey?.trim()) {
+      new import_obsidian6.Notice("Configure cloud LLM (baseUrl + apiKey) in settings");
+      return false;
+    }
+    return true;
+  }
   async buildAgentRunner(vaultRoot, resumeSessionId) {
     const adapter = this.app.vault.adapter;
     const base = this.app.vault.adapter.getBasePath?.() ?? "";
-    const manifestDir = this.plugin.manifest.dir ?? (0, import_node_path8.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
-    const pluginDir = this.app.vault.adapter.getFullPath(manifestDir);
-    const tmpDir = (0, import_node_path8.join)(pluginDir, "tmp");
-    (0, import_node_fs3.mkdirSync)(tmpDir, { recursive: true });
     const vaultTools = new VaultTools(adapter, base);
     const vaultName = this.app.vault.getName();
     const domains = await this.domainStore.load();
@@ -11292,7 +11341,14 @@ var WikiController = class {
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm;
     if (s.backend === "claude-agent") {
-      const client = new ClaudeCliClient({
+      const { join: join6 } = await import("node:path");
+      const { mkdirSync } = await import("node:fs");
+      const { ClaudeCliClient: ClaudeCliClient2 } = await Promise.resolve().then(() => (init_claude_cli_client(), claude_cli_client_exports));
+      const manifestDir = this.plugin.manifest.dir ?? join6(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
+      const pluginDir = this.app.vault.adapter.getFullPath(manifestDir);
+      const tmpDir = join6(pluginDir, "tmp");
+      mkdirSync(tmpDir, { recursive: true });
+      const client = new ClaudeCliClient2({
         ...s.claudeAgent,
         iclaudePath: local.iclaudePath,
         requestTimeoutSec: maxTimeoutSec,
@@ -11313,23 +11369,33 @@ var WikiController = class {
     }
     return new AgentRunner(llm, s, vaultTools, vaultName, domains);
   }
-  logEvent(vaultRoot, sessionId, op, domainId, ev) {
+  async logEvent(vaultRoot, sessionId, op, domainId, ev) {
     if (!this.plugin.settings.agentLogEnabled)
       return;
+    if (import_obsidian6.Platform.isMobile)
+      return;
     try {
-      const logDir = (0, import_node_path8.join)(vaultRoot, "!Logs");
-      (0, import_node_fs3.mkdirSync)(logDir, { recursive: true });
+      const { join: join6 } = await import("node:path");
+      const { appendFileSync, mkdirSync } = await import("node:fs");
+      const logDir = join6(vaultRoot, "!Logs");
+      mkdirSync(logDir, { recursive: true });
       const line = JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), session: sessionId, op, domainId, event: ev }) + "\n";
-      (0, import_node_fs3.appendFileSync)((0, import_node_path8.join)(logDir, "agent.jsonl"), line, "utf-8");
+      appendFileSync(join6(logDir, "agent.jsonl"), line, "utf-8");
     } catch {
     }
   }
   async dispatch(op, args, domainId, context, instruction, onFileError) {
     if (this.isBusy()) {
-      new import_obsidian5.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian6.Notice(i18n().ctrl.operationRunning);
       return;
     }
     this._chatSessionId = void 0;
+    if (import_obsidian6.Platform.isMobile && op !== "query" && op !== "query-save") {
+      new import_obsidian6.Notice("Operation not available on mobile");
+      return;
+    }
+    if (this.plugin.settings.backend === "native-agent" && !this.requireNativeAgent())
+      return;
     if (this.plugin.settings.backend === "claude-agent" && !await this.requireClaudeAgent())
       return;
     await this.ensureView();
@@ -11347,14 +11413,14 @@ var WikiController = class {
     const steps = [];
     let finalText = "";
     let status = "done";
-    this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
+    await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
     view.setRunning(op, args);
     const opKey = op === "query-save" ? "query" : op;
     const timeoutMs = this.plugin.settings.timeouts[opKey] * 1e3;
     const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError });
     try {
       for await (const ev of runGen) {
-        this.logEvent(vaultRoot, sessionId, op, domainId, ev);
+        await this.logEvent(vaultRoot, sessionId, op, domainId, ev);
         this.activeView()?.appendEvent(ev);
         if (ev.kind === "domain_created" || ev.kind === "domain_updated" || ev.kind === "source_path_added") {
           try {
@@ -11364,7 +11430,7 @@ var WikiController = class {
               await this.domainStore.save(next);
           } catch (e) {
             if (e instanceof DomainCorruptError) {
-              new import_obsidian5.Notice(`Domain map corrupt: ${e.message}`);
+              new import_obsidian6.Notice(`Domain map corrupt: ${e.message}`);
             }
             status = "error";
             ctrl.abort();
@@ -11386,13 +11452,13 @@ var WikiController = class {
     } catch (err) {
       status = "error";
       finalText = i18n().ctrl.errorPrefix(err.message);
-      this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
+      await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
     } finally {
       this.current = null;
       this.onBusyChange?.();
       this.currentOp = null;
     }
-    this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
+    await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
     const entry = {
       id: `${startedAt}`,
       operation: op,
@@ -11410,10 +11476,10 @@ var WikiController = class {
     }
     await this.plugin.saveSettings();
     await this.activeView()?.finish(entry);
-    if (op === "query-save" && status === "done") {
+    if (op === "query-save" && status === "done" && !import_obsidian6.Platform.isMobile) {
       const m = finalText.match(/Создана\s+страница:\s*([^\s`'"]+)/i);
       if (m) {
-        const pathInVault = this.toVaultPath(vaultRoot, m[1]);
+        const pathInVault = await this.toVaultPath(vaultRoot, m[1]);
         if (pathInVault)
           await this.app.workspace.openLinkText(pathInVault, "");
       }
@@ -11442,10 +11508,11 @@ var WikiController = class {
     const view = leaves[0]?.view;
     return view instanceof LlmWikiView ? view : null;
   }
-  toVaultPath(vaultDir, savedPath) {
-    const abs = (0, import_node_path8.isAbsolute)(savedPath) ? savedPath : (0, import_node_path8.join)(vaultDir, savedPath);
-    const rel = (0, import_node_path8.relative)(vaultDir, abs);
-    if (rel.startsWith("..") || (0, import_node_path8.isAbsolute)(rel))
+  async toVaultPath(vaultDir, savedPath) {
+    const { relative: relative2, isAbsolute: isAbsolute3, join: join6 } = await import("node:path");
+    const abs = isAbsolute3(savedPath) ? savedPath : join6(vaultDir, savedPath);
+    const rel = relative2(vaultDir, abs);
+    if (rel.startsWith("..") || isAbsolute3(rel))
       return null;
     return rel;
   }
@@ -11490,7 +11557,7 @@ var LocalConfigStore = class {
 };
 
 // src/main.ts
-var LlmWikiPlugin = class extends import_obsidian6.Plugin {
+var LlmWikiPlugin = class extends import_obsidian7.Plugin {
   settings;
   controller;
   settingTab;
@@ -11524,11 +11591,13 @@ var LlmWikiPlugin = class extends import_obsidian6.Plugin {
           void right.setViewState({ type: LLM_WIKI_VIEW_TYPE, active: true });
       }
     });
-    this.addCommand({
-      id: "ingest-current",
-      name: T.cmd.ingestActive,
-      callback: () => void this.controller.ingestActive()
-    });
+    if (!import_obsidian7.Platform.isMobile) {
+      this.addCommand({
+        id: "ingest-current",
+        name: T.cmd.ingestActive,
+        callback: () => void this.controller.ingestActive()
+      });
+    }
     this.addCommand({
       id: "query",
       name: T.cmd.query,
@@ -11539,50 +11608,52 @@ var LlmWikiPlugin = class extends import_obsidian6.Plugin {
       name: T.cmd.querySave,
       callback: () => new QueryModal(this.app, true, (q) => void this.controller.query(q, true)).open()
     });
-    this.addCommand({
-      id: "lint",
-      name: T.cmd.lint,
-      callback: () => {
-        void (async () => {
-          let domains;
-          try {
-            domains = await this.controller.loadDomains();
-          } catch {
-            return;
-          }
-          new DomainModal(
-            this.app,
-            T.cmd.lint,
-            true,
-            null,
-            domains,
-            (d) => void this.controller.lint(d)
-          ).open();
-        })();
-      }
-    });
-    this.addCommand({
-      id: "init",
-      name: T.cmd.init,
-      callback: () => {
-        void (async () => {
-          let domains;
-          try {
-            domains = await this.controller.loadDomains();
-          } catch {
-            return;
-          }
-          new DomainModal(
-            this.app,
-            T.cmd.init,
-            false,
-            { dryRun: true },
-            domains,
-            (d, f) => void this.controller.init(d, f.dryRun ?? false)
-          ).open();
-        })();
-      }
-    });
+    if (!import_obsidian7.Platform.isMobile) {
+      this.addCommand({
+        id: "lint",
+        name: T.cmd.lint,
+        callback: () => {
+          void (async () => {
+            let domains;
+            try {
+              domains = await this.controller.loadDomains();
+            } catch {
+              return;
+            }
+            new DomainModal(
+              this.app,
+              T.cmd.lint,
+              true,
+              null,
+              domains,
+              (d) => void this.controller.lint(d)
+            ).open();
+          })();
+        }
+      });
+      this.addCommand({
+        id: "init",
+        name: T.cmd.init,
+        callback: () => {
+          void (async () => {
+            let domains;
+            try {
+              domains = await this.controller.loadDomains();
+            } catch {
+              return;
+            }
+            new DomainModal(
+              this.app,
+              T.cmd.init,
+              false,
+              { dryRun: true },
+              domains,
+              (d, f) => void this.controller.init(d, f.dryRun ?? false)
+            ).open();
+          })();
+        }
+      });
+    }
     this.addCommand({
       id: "cancel",
       name: T.cmd.cancel,
@@ -11638,6 +11709,10 @@ var LlmWikiPlugin = class extends import_obsidian6.Plugin {
       this.settings.backend = "claude-agent";
       if (data && data.model && !this.settings.claudeAgent.model)
         this.settings.claudeAgent.model = data.model;
+    }
+    if (import_obsidian7.Platform.isMobile && this.settings.backend === "claude-agent") {
+      this.settings.backend = "native-agent";
+      await this.saveData(this.settings);
     }
     if (typeof data?.agentLogPath === "string") {
       this.settings.agentLogEnabled = data.agentLogPath.length > 0;

@@ -1,10 +1,10 @@
 {
   "id": "llm-wiki",
   "name": "LLM Wiki",
-  "version": "0.1.58",
+  "version": "0.1.59",
   "minAppVersion": "1.0.0",
   "description": "AI-powered compoundable knowledge base \u2014 extracts, synthesizes and maintains a wiki from raw sources.",
   "author": "ikeniborn",
   "authorUrl": "https://github.com/ikeniborn",
-  "isDesktopOnly": true
+  "isDesktopOnly": false
 }
