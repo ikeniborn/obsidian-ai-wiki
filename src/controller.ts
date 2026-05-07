@@ -1,4 +1,4 @@
-import { App, Notice } from "obsidian";
+import { App, Notice, Platform } from "obsidian";
 import { existsSync, appendFileSync, mkdirSync } from "node:fs";
 import { relative, isAbsolute, join } from "node:path";
 import { LLM_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
@@ -71,6 +71,11 @@ export class WikiController {
 
   private async dispatchChat(operation: WikiOperation, domainId: string | undefined, context: string, chatMessages: ChatMessage[]): Promise<void> {
     if (this.isBusy()) { new Notice(i18n().ctrl.operationRunning); return; }
+    if (Platform.isMobile && operation !== "query" && operation !== "query-save") {
+      new Notice("Operation not available on mobile");
+      return;
+    }
+    if (this.plugin.settings.backend === "native-agent" && !this.requireNativeAgent()) return;
     if (this.plugin.settings.backend === "claude-agent" && !await this.requireClaudeAgent()) return;
 
     await this.ensureView();
@@ -214,6 +219,15 @@ export class WikiController {
     return iclaudePath;
   }
 
+  private requireNativeAgent(): boolean {
+    const na = this.plugin.settings.nativeAgent;
+    if (!na?.baseUrl?.trim() || !na?.apiKey?.trim()) {
+      new Notice("Configure cloud LLM (baseUrl + apiKey) in settings");
+      return false;
+    }
+    return true;
+  }
+
   private async buildAgentRunner(vaultRoot: string, resumeSessionId?: string): Promise<AgentRunner> {
     const adapter = this.app.vault.adapter as unknown as VaultAdapter;
     const base = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
@@ -274,6 +288,11 @@ export class WikiController {
     // Новая операция делает предыдущий чат-контекст нерелевантным.
     this._chatSessionId = undefined;
 
+    if (Platform.isMobile && op !== "query" && op !== "query-save") {
+      new Notice("Operation not available on mobile");
+      return;
+    }
+    if (this.plugin.settings.backend === "native-agent" && !this.requireNativeAgent()) return;
     if (this.plugin.settings.backend === "claude-agent" && !await this.requireClaudeAgent()) return;
 
     await this.ensureView();
