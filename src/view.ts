@@ -163,6 +163,7 @@ export class LlmWikiView extends ItemView {
     resultH4.appendText(` ${T.view.result}`);
     resultHeader.addEventListener("click", () => this.toggleResult());
     this.finalEl = this.resultSection.createDiv("llm-wiki-final llm-wiki-hidden");
+    registerLinkHandler(this.finalEl, this.app);
 
     this.historySection = root.createDiv("llm-wiki-history-section llm-wiki-hidden");
     const historyHeader = this.historySection.createDiv("llm-wiki-progress-header");
@@ -412,7 +413,7 @@ export class LlmWikiView extends ItemView {
     if (entry.finalText) {
       const comp = new Component();
       comp.load();
-      await MarkdownRenderer.render(this.app, entry.finalText, this.finalEl, this.plugin.controller.cwdOrEmpty(), comp);
+      await MarkdownRenderer.render(this.app, entry.finalText, this.finalEl, "", comp);
       this.resultSection.removeClass("llm-wiki-hidden");
       this.finalEl.removeClass("llm-wiki-hidden");
       this.resultOpen = true;
@@ -614,7 +615,7 @@ export class LlmWikiView extends ItemView {
         this.finalEl.empty();
         const comp = new Component();
         comp.load();
-        void MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, this.plugin.controller.cwdOrEmpty(), comp);
+        void MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, "", comp);
         this.resultSection.removeClass("llm-wiki-hidden");
         this.finalEl.removeClass("llm-wiki-hidden");
         this.resultOpen = true;
