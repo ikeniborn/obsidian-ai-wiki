@@ -71,19 +71,19 @@ describe("DomainMapStore", () => {
       const store = new DomainMapStore(makeVault(adapter));
       await store.save([sampleDomain]);
       expect(adapter.write).toHaveBeenCalledWith(
-        "!Wiki/_domain-map.json.tmp",
+        "!Wiki/_domain.json.tmp",
         JSON.stringify([sampleDomain], null, 2),
       );
       expect(adapter.rename).toHaveBeenCalledWith(
-        "!Wiki/_domain-map.json.tmp",
-        "!Wiki/_domain-map.json",
+        "!Wiki/_domain.json.tmp",
+        "!Wiki/_domain.json",
       );
       expect(calls).toEqual([
         "exists:!Wiki",
         "mkdir:!Wiki",
-        "write:!Wiki/_domain-map.json.tmp",
-        "exists:!Wiki/_domain-map.json",
-        "rename:!Wiki/_domain-map.json.tmp->!Wiki/_domain-map.json",
+        "write:!Wiki/_domain.json.tmp",
+        "exists:!Wiki/_domain.json",
+        "rename:!Wiki/_domain.json.tmp->!Wiki/_domain.json",
       ]);
     });
 
@@ -104,10 +104,10 @@ describe("DomainMapStore", () => {
       expect(adapter.mkdir).not.toHaveBeenCalled();
       expect(calls).toEqual([
         "exists:!Wiki",
-        "write:!Wiki/_domain-map.json.tmp",
-        "exists:!Wiki/_domain-map.json",
-        "remove:!Wiki/_domain-map.json",
-        "rename:!Wiki/_domain-map.json.tmp->!Wiki/_domain-map.json",
+        "write:!Wiki/_domain.json.tmp",
+        "exists:!Wiki/_domain.json",
+        "remove:!Wiki/_domain.json",
+        "rename:!Wiki/_domain.json.tmp->!Wiki/_domain.json",
       ]);
     });
   });

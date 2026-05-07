@@ -1,7 +1,7 @@
 import type { Vault } from "obsidian";
 import type { DomainEntry } from "./domain-map";
 
-const FILE_PATH = "!Wiki/_domain-map.json";
+const FILE_PATH = "!Wiki/_domain.json";
 const TMP_PATH = `${FILE_PATH}.tmp`;
 const WIKI_DIR = "!Wiki";
 

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Перенести `domains[]` из `data.json` в vault-файл `!Wiki/_domain-map.json` и `iclaudePath` в `<plugin-dir>/local.json`, добавить one-shot auto-migration.
+**Goal:** Перенести `domains[]` из `data.json` в vault-файл `!Wiki/_domain.json` и `iclaudePath` в `<plugin-dir>/local.json`, добавить one-shot auto-migration.
 
 **Architecture:** Два изолированных store-модуля: `DomainMapStore` (vault-relative, lazy reads, atomic writes, hard-fail на corrupt) и `LocalConfigStore` (plugin-dir, кэширующий). `WikiController` принимает оба store через конструктор. Миграция вызывается в `onload()` ДО `loadSettings()`, мутирует `data.json` (удаляет legacy-поля), затем `loadSettings()` читает уже очищенный конфиг.
 
@@ -106,7 +106,7 @@ describe("DomainMapStore", () => {
         exists: vi.fn().mockImplementation(async (p: string) => {
           calls.push(`exists:${p}`);
           if (p === "!Wiki") return false;
-          if (p === "!Wiki/_domain-map.json") return false;
+          if (p === "!Wiki/_domain.json") return false;
           return false;
         }),
         mkdir: vi.fn().mockImplementation(async (p: string) => { calls.push(`mkdir:${p}`); }),
@@ -118,12 +118,12 @@ describe("DomainMapStore", () => {
       await store.save([sampleDomain]);
       expect(adapter.mkdir).toHaveBeenCalledWith("!Wiki");
       expect(adapter.write).toHaveBeenCalledWith(
-        "!Wiki/_domain-map.json.tmp",
+        "!Wiki/_domain.json.tmp",
         JSON.stringify([sampleDomain], null, 2),
       );
       expect(adapter.rename).toHaveBeenCalledWith(
-        "!Wiki/_domain-map.json.tmp",
-        "!Wiki/_domain-map.json",
+        "!Wiki/_domain.json.tmp",
+        "!Wiki/_domain.json",
       );
     });
 
@@ -131,7 +131,7 @@ describe("DomainMapStore", () => {
       const adapter = {
         exists: vi.fn().mockImplementation(async (p: string) => {
           if (p === "!Wiki") return true;
-          if (p === "!Wiki/_domain-map.json") return true;
+          if (p === "!Wiki/_domain.json") return true;
           return false;
         }),
         mkdir: vi.fn(),
@@ -141,7 +141,7 @@ describe("DomainMapStore", () => {
       };
       const store = new DomainMapStore(makeVault(adapter));
       await store.save([sampleDomain]);
-      expect(adapter.remove).toHaveBeenCalledWith("!Wiki/_domain-map.json");
+      expect(adapter.remove).toHaveBeenCalledWith("!Wiki/_domain.json");
       expect(adapter.mkdir).not.toHaveBeenCalled();
     });
   });
@@ -162,7 +162,7 @@ npx vitest run tests/domain-map-store.test.ts
 import type { Vault } from "obsidian";
 import type { DomainEntry } from "./domain-map";
 
-const FILE_PATH = "!Wiki/_domain-map.json";
+const FILE_PATH = "!Wiki/_domain.json";
 const TMP_PATH = `${FILE_PATH}.tmp`;
 const WIKI_DIR = "!Wiki";
 
@@ -586,15 +586,15 @@ describe("migrateLegacyData", () => {
     const { DomainMapStore } = await import("../src/domain-map-store");
     const { LocalConfigStore } = await import("../src/local-config");
     await migrateLegacyData(plugin, new DomainMapStore({ adapter } as any), new LocalConfigStore(plugin));
-    expect(vaultFiles.has("!Wiki/_domain-map.json")).toBe(true);
-    expect(JSON.parse(vaultFiles.get("!Wiki/_domain-map.json")!)).toEqual([sampleDomain]);
+    expect(vaultFiles.has("!Wiki/_domain.json")).toBe(true);
+    expect(JSON.parse(vaultFiles.get("!Wiki/_domain.json")!)).toEqual([sampleDomain]);
     expect(plugin.getStored().domains).toBeUndefined();
   });
 
   it("does not overwrite existing vault file", async () => {
     const existing = [{ id: "existing", name: "E", wiki_folder: "e" }];
     const vaultFiles = new Map<string, string>([
-      ["!Wiki/_domain-map.json", JSON.stringify(existing)],
+      ["!Wiki/_domain.json", JSON.stringify(existing)],
     ]);
     const adapter = {
       exists: vi.fn().mockImplementation(async (p: string) => vaultFiles.has(p) || p === "!Wiki"),
@@ -608,7 +608,7 @@ describe("migrateLegacyData", () => {
     const { DomainMapStore } = await import("../src/domain-map-store");
     const { LocalConfigStore } = await import("../src/local-config");
     await migrateLegacyData(plugin, new DomainMapStore({ adapter } as any), new LocalConfigStore(plugin));
-    expect(JSON.parse(vaultFiles.get("!Wiki/_domain-map.json")!)).toEqual(existing);
+    expect(JSON.parse(vaultFiles.get("!Wiki/_domain.json")!)).toEqual(existing);
     expect(plugin.getStored().domains).toBeUndefined();
   });
 
@@ -703,7 +703,7 @@ export async function migrateLegacyData(
   // domains → vault
   if (Array.isArray(data.domains)) {
     if (data.domains.length > 0) {
-      const vaultExists = await plugin.app.vault.adapter.exists("!Wiki/_domain-map.json");
+      const vaultExists = await plugin.app.vault.adapter.exists("!Wiki/_domain.json");
       if (!vaultExists) {
         await domainMapStore.save(data.domains as DomainEntry[]);
       }
@@ -1120,7 +1120,7 @@ npm test
 git add src/types.ts src/main.ts src/controller.ts src/settings.ts src/domain-map.ts src/domain-map-store.ts src/local-config.ts tests/main-migration.test.ts
 git commit -m "feat: domain-map → vault, iclaudePath → local config
 
-- DomainMapStore writes !Wiki/_domain-map.json (atomic, lazy reads)
+- DomainMapStore writes !Wiki/_domain.json (atomic, lazy reads)
 - LocalConfigStore writes <plugin-dir>/local.json (machine-local)
 - migrateLegacyData runs in onload before loadSettings
 - WikiController takes both stores via constructor
@@ -1211,7 +1211,7 @@ git commit -m "chore: bump version, rebuild dist"
 - Tests — Task 1, 2, 3, 5, 9 ✓
 - Atomic write через .tmp + rename — Step 1.3 ✓
 - Hard-fail на corrupt → Notice + abort — Step 6.6 ✓
-- `_domain-map.json` отсутствует → `[]` — Step 1.3 (load returns []) ✓
+- `_domain.json` отсутствует → `[]` — Step 1.3 (load returns []) ✓
 - `applyDomainEvent` helper — Task 3 ✓
 - wiki_folder strip migration — Step 7.4 (перенесена в DomainMapStore.load) ✓
 - README sync exclusion note — **gap**: добавить в Task 10 step.
