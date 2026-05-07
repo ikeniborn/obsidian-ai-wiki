@@ -1,5 +1,4 @@
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { Platform } from "obsidian";
 import type { DomainEntry } from "./domain";
 import { runIngest } from "./phases/ingest";
 import { runQuery } from "./phases/query";
@@ -36,16 +35,19 @@ export class AgentRunner {
     return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
   }
 
-  private writeDevLog(vaultRoot: string, entry: {
+  private async writeDevLog(vaultRoot: string, entry: {
     operation: string;
     model: string;
     systemPrompt: string;
     userMessage: string;
     result: string;
     durationMs: number;
-  }): void {
+  }): Promise<void> {
     if (!this.settings.devMode?.enabled) return;
+    if (Platform.isMobile) return;
     try {
+      const { appendFileSync, mkdirSync } = await import("node:fs");
+      const { join } = await import("node:path");
       const logDir = join(vaultRoot, "!Logs");
       mkdirSync(logDir, { recursive: true });
       const line = JSON.stringify({ ts: new Date().toISOString(), ...entry, eval: null }) + "\n";
@@ -118,7 +120,7 @@ export class AgentRunner {
 
     if (this.settings.devMode?.enabled && finalResultText) {
       const taskInput = req.args.join(" ") || req.operation;
-      this.writeDevLog(vaultRoot, {
+      await this.writeDevLog(vaultRoot, {
         operation: req.operation,
         model,
         systemPrompt: opts.systemPrompt ?? "",
@@ -132,16 +134,19 @@ export class AgentRunner {
         for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal)) {
           yield ev;
           if (ev.kind === "eval_result") {
-            this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);
+            await this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);
           }
         }
       }
     }
   }
 
-  private updateDevLogEval(vaultRoot: string, score: number, reasoning: string): void {
+  private async updateDevLogEval(vaultRoot: string, score: number, reasoning: string): Promise<void> {
     if (!this.settings.devMode?.enabled) return;
+    if (Platform.isMobile) return;
     try {
+      const { readFileSync, writeFileSync } = await import("node:fs");
+      const { join } = await import("node:path");
       const logPath = join(vaultRoot, "!Logs", "dev.jsonl");
       const content = readFileSync(logPath, "utf-8");
       const lines = content.trimEnd().split("\n");
