@@ -25,10 +25,12 @@ if (production) {
   for (const f of ["manifest.json", "styles.css"]) {
     copyFileSync(`src/${f}`, `dist/${f}`);
   }
-  console.log("dist/ updated: main.js, manifest.json, styles.css");
+  copyFileSync("src/manifest.json", "manifest.json");
+  console.log("dist/ updated: main.js, manifest.json, styles.css; root manifest.json synced");
 } else {
   for (const f of ["manifest.json", "styles.css"]) {
     copyFileSync(`src/${f}`, `dist/${f}`);
   }
+  copyFileSync("src/manifest.json", "manifest.json");
   await ctx.watch();
 }
