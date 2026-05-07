@@ -2,14 +2,33 @@ import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import { ConfirmModal, EditDomainModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { LlmWikiPluginSettings, OpKey } from "./types";
+import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
 
 export class LlmWikiSettingTab extends PluginSettingTab {
+  private cachedDomains: DomainEntry[] = [];
+  private cachedIclaudePath = "";
+
   constructor(app: App, private plugin: LlmWikiPlugin) {
     super(app, plugin);
   }
 
   display(): void {
+    void this.refresh();
+  }
+
+  private async refresh(): Promise<void> {
+    try {
+      this.cachedDomains = await this.plugin.domainStore.load();
+    } catch (e) {
+      this.cachedDomains = [];
+      new Notice(`Domain map load failed: ${(e as Error).message}`);
+    }
+    this.cachedIclaudePath = (await this.plugin.localConfigStore.load()).iclaudePath;
+    this.render();
+  }
+
+  private render(): void {
     const { containerEl } = this;
     containerEl.empty();
     const s = this.plugin.settings;
@@ -87,7 +106,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     // ── Domains ───────────────────────────────────────────────────────────────
     new Setting(containerEl).setName(T.settings.domains_heading).setHeading();
 
-    const domains = s.domains ?? [];
+    const domains = this.cachedDomains;
     if (domains.length === 0) {
       containerEl.createEl("p", {
         text: T.settings.domains_empty,
@@ -103,9 +122,11 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             b.setButtonText(T.settings.editDomain).setDisabled(busy).onClick(() => {
               new EditDomainModal(this.plugin.app, d, (updated) => {
                 void (async () => {
-                  s.domains[i] = updated;
-                  await this.plugin.saveSettings();
-                  this.display();
+                  const cur = await this.plugin.domainStore.load();
+                  const idx = cur.findIndex((x) => x.id === updated.id);
+                  if (idx >= 0) cur[idx] = updated;
+                  await this.plugin.domainStore.save(cur);
+                  await this.refresh();
                 })();
               }).open();
             });
@@ -115,9 +136,9 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               new ConfirmModal(this.plugin.app, T.settings.confirmDeleteDomain(d.id), [], () => {
                 void (async () => {
                   new Notice(T.settings.domainDeleted(d.id));
-                  s.domains.splice(i, 1);
-                  await this.plugin.saveSettings();
-                  this.display();
+                  const cur = await this.plugin.domainStore.load();
+                  await this.plugin.domainStore.save(cur.filter((x) => x.id !== d.id));
+                  await this.refresh();
                 })();
               }).open();
             });
@@ -148,8 +169,11 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .setDesc(T.settings.iclaudePath_desc)
         .addText((t) =>
           t.setPlaceholder("/home/user/Documents/Project/iclaude/iclaude.sh")
-            .setValue(s.claudeAgent.iclaudePath)
-            .onChange(async (v) => { s.claudeAgent.iclaudePath = v.trim(); await this.plugin.saveSettings(); }),
+            .setValue(this.cachedIclaudePath)
+            .onChange(async (v) => {
+              this.cachedIclaudePath = v.trim();
+              await this.plugin.localConfigStore.save({ iclaudePath: this.cachedIclaudePath });
+            }),
         );
 
       if (!s.claudeAgent.perOperation) {
