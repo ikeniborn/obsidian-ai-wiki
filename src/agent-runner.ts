@@ -1,4 +1,4 @@
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DomainEntry } from "./domain-map";
 import { runIngest } from "./phases/ingest";
@@ -36,7 +36,7 @@ export class AgentRunner {
     return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
   }
 
-  private writeDevLog(entry: {
+  private writeDevLog(vaultRoot: string, entry: {
     operation: string;
     model: string;
     systemPrompt: string;
@@ -44,12 +44,12 @@ export class AgentRunner {
     result: string;
     durationMs: number;
   }): void {
-    const logDir = this.settings.devMode?.logDir;
-    if (!logDir) return;
-    const logPath = join(logDir, "dev.jsonl");
+    if (!this.settings.devMode?.enabled) return;
     try {
+      const logDir = join(vaultRoot, "!Logs");
+      mkdirSync(logDir, { recursive: true });
       const line = JSON.stringify({ ts: new Date().toISOString(), ...entry, eval: null }) + "\n";
-      appendFileSync(logPath, line, "utf-8");
+      appendFileSync(join(logDir, "dev.jsonl"), line, "utf-8");
     } catch { /* не блокируем операцию */ }
   }
 
@@ -118,7 +118,7 @@ export class AgentRunner {
 
     if (this.settings.devMode?.enabled && finalResultText) {
       const taskInput = req.args.join(" ") || req.operation;
-      this.writeDevLog({
+      this.writeDevLog(vaultRoot, {
         operation: req.operation,
         model,
         systemPrompt: opts.systemPrompt ?? "",
@@ -132,18 +132,17 @@ export class AgentRunner {
         for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal)) {
           yield ev;
           if (ev.kind === "eval_result") {
-            this.updateDevLogEval(ev.score, ev.reasoning);
+            this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);
           }
         }
       }
     }
   }
 
-  private updateDevLogEval(score: number, reasoning: string): void {
-    const logDir = this.settings.devMode?.logDir;
-    if (!logDir) return;
-    const logPath = join(logDir, "dev.jsonl");
+  private updateDevLogEval(vaultRoot: string, score: number, reasoning: string): void {
+    if (!this.settings.devMode?.enabled) return;
     try {
+      const logPath = join(vaultRoot, "!Logs", "dev.jsonl");
       const content = readFileSync(logPath, "utf-8");
       const lines = content.trimEnd().split("\n");
       const lastIdx = lines.length - 1;
