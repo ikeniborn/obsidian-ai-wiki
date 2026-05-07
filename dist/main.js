@@ -24,7 +24,6 @@ __export(main_exports, {
   migrateDomainWikiFolder: () => migrateDomainWikiFolder
 });
 module.exports = __toCommonJS(main_exports);
-var import_node_path9 = require("node:path");
 var import_obsidian6 = require("obsidian");
 
 // src/types.ts
@@ -33,7 +32,7 @@ var DEFAULT_SETTINGS = {
   systemPrompt: "",
   domains: [],
   maxTokens: 4096,
-  agentLogPath: "",
+  agentLogEnabled: false,
   historyLimit: 20,
   timeouts: { ingest: 300, query: 300, lint: 900, fix: 900, init: 3600 },
   history: [],
@@ -66,7 +65,6 @@ var DEFAULT_SETTINGS = {
   },
   devMode: {
     enabled: false,
-    logDir: "",
     evaluatorModel: "sonnet"
   }
 };
@@ -99,7 +97,7 @@ var en = {
     historyLimit_name: "History limit",
     historyLimit_desc: "Maximum operations in the sidebar history.",
     agentLog_name: "Agent log (JSONL)",
-    agentLog_desc: "Absolute path to log file. Empty \u2014 disabled.",
+    agentLog_desc: "Log agent events to <vault>/!Logs/agent.jsonl. Folder is created automatically.",
     backend_name: "Backend",
     backend_desc: "Select the backend for operations.",
     claudeCodeAgent: "Claude Code agent",
@@ -136,8 +134,6 @@ var en = {
     h3_devmode: "Developer",
     devMode_enabled_name: "Dev mode",
     devMode_enabled_desc: "Enable dev logger and evaluator after each operation.",
-    devMode_logDir_name: "Dev log directory",
-    devMode_logDir_desc: "Directory for dev logs. File name: dev.jsonl",
     devMode_evaluatorModel_name: "Evaluator model",
     devMode_evaluatorModel_desc: "Model name for the evaluator (same backend)."
   },
@@ -257,7 +253,7 @@ var ru = {
     historyLimit_name: "\u041B\u0438\u043C\u0438\u0442 \u0438\u0441\u0442\u043E\u0440\u0438\u0438",
     historyLimit_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439 \u0432 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438.",
     agentLog_name: "\u041B\u043E\u0433 \u0430\u0433\u0435\u043D\u0442\u0430 (JSONL)",
-    agentLog_desc: "\u0410\u0431\u0441\u043E\u043B\u044E\u0442\u043D\u044B\u0439 \u043F\u0443\u0442\u044C \u043A \u0444\u0430\u0439\u043B\u0443 \u043B\u043E\u0433\u0430. \u041F\u0443\u0441\u0442\u043E \u2014 \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E.",
+    agentLog_desc: "\u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u0441\u043E\u0431\u044B\u0442\u0438\u044F \u0430\u0433\u0435\u043D\u0442\u0430 \u0432 <vault>/!Logs/agent.jsonl. \u041F\u0430\u043F\u043A\u0430 \u0441\u043E\u0437\u0434\u0430\u0451\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.",
     backend_name: "Backend",
     backend_desc: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0431\u044D\u043A\u0435\u043D\u0434 \u0434\u043B\u044F \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439.",
     claudeCodeAgent: "Claude Code agent",
@@ -294,8 +290,6 @@ var ru = {
     h3_devmode: "\u0420\u0430\u0437\u0440\u0430\u0431\u043E\u0442\u043A\u0430",
     devMode_enabled_name: "Dev \u0440\u0435\u0436\u0438\u043C",
     devMode_enabled_desc: "\u0412\u043A\u043B\u044E\u0447\u0438\u0442\u044C dev-\u043B\u043E\u0433\u0433\u0435\u0440 \u0438 \u043E\u0446\u0435\u043D\u0449\u0438\u043A \u043F\u043E\u0441\u043B\u0435 \u043A\u0430\u0436\u0434\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.",
-    devMode_logDir_name: "\u0414\u0438\u0440\u0435\u043A\u0442\u043E\u0440\u0438\u044F dev-\u043B\u043E\u0433\u043E\u0432",
-    devMode_logDir_desc: "\u0414\u0438\u0440\u0435\u043A\u0442\u043E\u0440\u0438\u044F \u0434\u043B\u044F dev-\u043B\u043E\u0433\u043E\u0432. \u0418\u043C\u044F \u0444\u0430\u0439\u043B\u0430: dev.jsonl",
     devMode_evaluatorModel_name: "\u041C\u043E\u0434\u0435\u043B\u044C \u043E\u0446\u0435\u043D\u0449\u0438\u043A\u0430",
     devMode_evaluatorModel_desc: "\u0418\u043C\u044F \u043C\u043E\u0434\u0435\u043B\u0438 \u0434\u043B\u044F \u043E\u0446\u0435\u043D\u0449\u0438\u043A\u0430 (\u0442\u043E\u0442 \u0436\u0435 \u0431\u044D\u043A\u0435\u043D\u0434)."
   },
@@ -415,7 +409,7 @@ var es = {
     historyLimit_name: "L\xEDmite de historial",
     historyLimit_desc: "M\xE1ximo de operaciones en el historial del panel lateral.",
     agentLog_name: "Log del agente (JSONL)",
-    agentLog_desc: "Ruta absoluta al archivo de log. Vac\xEDo \u2014 desactivado.",
+    agentLog_desc: "Registra eventos del agente en <vault>/!Logs/agent.jsonl. La carpeta se crea autom\xE1ticamente.",
     backend_name: "Backend",
     backend_desc: "Selecciona el backend para las operaciones.",
     claudeCodeAgent: "Claude Code agent",
@@ -452,8 +446,6 @@ var es = {
     h3_devmode: "Desarrollo",
     devMode_enabled_name: "Modo dev",
     devMode_enabled_desc: "Activar el registrador dev y el evaluador tras cada operaci\xF3n.",
-    devMode_logDir_name: "Directorio de log dev",
-    devMode_logDir_desc: "Directorio para logs dev. Nombre del archivo: dev.jsonl",
     devMode_evaluatorModel_name: "Modelo evaluador",
     devMode_evaluatorModel_desc: "Nombre del modelo para el evaluador (mismo backend)."
   },
@@ -1106,9 +1098,9 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         }
       })
     );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.agentLog_name).setDesc(T.settings.agentLog_desc).addText(
-      (t) => t.setPlaceholder("/tmp/llm-wiki-agent.jsonl").setValue(s.agentLogPath).onChange(async (v) => {
-        s.agentLogPath = v.trim();
+    new import_obsidian3.Setting(containerEl).setName(T.settings.agentLog_name).setDesc(T.settings.agentLog_desc).addToggle(
+      (t) => t.setValue(s.agentLogEnabled).onChange(async (v) => {
+        s.agentLogEnabled = v;
         await this.plugin.saveSettings();
       })
     );
@@ -1290,20 +1282,17 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       (t) => t.setValue(s.devMode.enabled).onChange(async (v) => {
         s.devMode.enabled = v;
         await this.plugin.saveSettings();
+        this.display();
       })
     );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_logDir_name).setDesc(T.settings.devMode_logDir_desc).addText(
-      (t) => t.setPlaceholder("/tmp").setValue(s.devMode.logDir).onChange(async (v) => {
-        s.devMode.logDir = v.trim();
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_evaluatorModel_name).setDesc(T.settings.devMode_evaluatorModel_desc).addText(
-      (t) => t.setPlaceholder("").setValue(s.devMode.evaluatorModel).onChange(async (v) => {
-        s.devMode.evaluatorModel = v.trim();
-        await this.plugin.saveSettings();
-      })
-    );
+    if (s.devMode.enabled) {
+      new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_evaluatorModel_name).setDesc(T.settings.devMode_evaluatorModel_desc).addText(
+        (t) => t.setPlaceholder("").setValue(s.devMode.evaluatorModel).onChange(async (v) => {
+          s.devMode.evaluatorModel = v.trim();
+          await this.plugin.saveSettings();
+        })
+      );
+    }
   }
 };
 
@@ -3355,14 +3344,14 @@ var AgentRunner = class {
       return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
     return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
   }
-  writeDevLog(entry) {
-    const logDir = this.settings.devMode?.logDir;
-    if (!logDir)
+  writeDevLog(vaultRoot, entry) {
+    if (!this.settings.devMode?.enabled)
       return;
-    const logPath = (0, import_node_path5.join)(logDir, "dev.jsonl");
     try {
+      const logDir = (0, import_node_path5.join)(vaultRoot, "!Logs");
+      (0, import_node_fs.mkdirSync)(logDir, { recursive: true });
       const line = JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), ...entry, eval: null }) + "\n";
-      (0, import_node_fs.appendFileSync)(logPath, line, "utf-8");
+      (0, import_node_fs.appendFileSync)((0, import_node_path5.join)(logDir, "dev.jsonl"), line, "utf-8");
     } catch {
     }
   }
@@ -3423,7 +3412,7 @@ var AgentRunner = class {
     }
     if (this.settings.devMode?.enabled && finalResultText) {
       const taskInput = req.args.join(" ") || req.operation;
-      this.writeDevLog({
+      this.writeDevLog(vaultRoot, {
         operation: req.operation,
         model,
         systemPrompt: opts.systemPrompt ?? "",
@@ -3436,18 +3425,17 @@ var AgentRunner = class {
         for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal)) {
           yield ev;
           if (ev.kind === "eval_result") {
-            this.updateDevLogEval(ev.score, ev.reasoning);
+            this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);
           }
         }
       }
     }
   }
-  updateDevLogEval(score, reasoning) {
-    const logDir = this.settings.devMode?.logDir;
-    if (!logDir)
+  updateDevLogEval(vaultRoot, score, reasoning) {
+    if (!this.settings.devMode?.enabled)
       return;
-    const logPath = (0, import_node_path5.join)(logDir, "dev.jsonl");
     try {
+      const logPath = (0, import_node_path5.join)(vaultRoot, "!Logs", "dev.jsonl");
       const content = (0, import_node_fs.readFileSync)(logPath, "utf-8");
       const lines = content.trimEnd().split("\n");
       const lastIdx = lines.length - 1;
@@ -11054,7 +11042,7 @@ var WikiController = class {
     const lastMsg = chatMessages[chatMessages.length - 1]?.content ?? "";
     let finalText = "";
     let status = "done";
-    this.logEvent(sessionId, "chat", domainId, {
+    this.logEvent(vaultRoot, sessionId, "chat", domainId, {
       kind: "system",
       message: `start op=chat args=${JSON.stringify([lastMsg])} domainId=${domainId}`
     });
@@ -11080,7 +11068,7 @@ var WikiController = class {
     });
     try {
       for await (const ev of runGen) {
-        this.logEvent(sessionId, "chat", domainId, ev);
+        this.logEvent(vaultRoot, sessionId, "chat", domainId, ev);
         this.activeView()?.appendChatEvent(ev);
         if (ev.kind === "system" && ev.sessionId) {
           this._chatSessionId = ev.sessionId;
@@ -11096,7 +11084,7 @@ var WikiController = class {
       status = "error";
       this._chatSessionId = void 0;
       finalText = i18n().ctrl.errorPrefix(err.message);
-      this.logEvent(sessionId, "chat", domainId, { kind: "error", message: finalText });
+      this.logEvent(vaultRoot, sessionId, "chat", domainId, { kind: "error", message: finalText });
     } finally {
       this.current = null;
       this.onBusyChange?.();
@@ -11109,7 +11097,7 @@ var WikiController = class {
     }
     if (ctrl.signal.aborted)
       this._chatSessionId = void 0;
-    this.logEvent(sessionId, "chat", domainId, {
+    this.logEvent(vaultRoot, sessionId, "chat", domainId, {
       kind: "system",
       message: `finish status=${status} durationMs=${Date.now() - startedAt}`
     });
@@ -11196,17 +11184,14 @@ var WikiController = class {
     }
     return new AgentRunner(llm, s, vaultTools, vaultName, domains);
   }
-  logEvent(sessionId, op, domainId, ev) {
-    let logPath = this.plugin.settings.agentLogPath;
-    if (!logPath)
+  logEvent(vaultRoot, sessionId, op, domainId, ev) {
+    if (!this.plugin.settings.agentLogEnabled)
       return;
     try {
-      const stat = (0, import_node_fs3.existsSync)(logPath) ? (0, import_node_fs3.statSync)(logPath) : null;
-      if (stat?.isDirectory() || !logPath.includes(".") && !logPath.endsWith("/")) {
-        logPath = (0, import_node_path8.join)(logPath, "agent.jsonl");
-      }
+      const logDir = (0, import_node_path8.join)(vaultRoot, "!Logs");
+      (0, import_node_fs3.mkdirSync)(logDir, { recursive: true });
       const line = JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), session: sessionId, op, domainId, event: ev }) + "\n";
-      (0, import_node_fs3.appendFileSync)(logPath, line, "utf-8");
+      (0, import_node_fs3.appendFileSync)((0, import_node_path8.join)(logDir, "agent.jsonl"), line, "utf-8");
     } catch {
     }
   }
@@ -11233,14 +11218,14 @@ var WikiController = class {
     const steps = [];
     let finalText = "";
     let status = "done";
-    this.logEvent(sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
+    this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
     view.setRunning(op, args);
     const opKey = op === "query-save" ? "query" : op;
     const timeoutMs = this.plugin.settings.timeouts[opKey] * 1e3;
     const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError });
     try {
       for await (const ev of runGen) {
-        this.logEvent(sessionId, op, domainId, ev);
+        this.logEvent(vaultRoot, sessionId, op, domainId, ev);
         this.activeView()?.appendEvent(ev);
         if (ev.kind === "domain_created") {
           if (!this.plugin.settings.domains)
@@ -11283,13 +11268,13 @@ var WikiController = class {
     } catch (err) {
       status = "error";
       finalText = i18n().ctrl.errorPrefix(err.message);
-      this.logEvent(sessionId, op, domainId, { kind: "error", message: finalText });
+      this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
     } finally {
       this.current = null;
       this.onBusyChange?.();
       this.currentOp = null;
     }
-    this.logEvent(sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
+    this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
     const entry = {
       id: `${startedAt}`,
       operation: op,
@@ -11482,10 +11467,13 @@ var LlmWikiPlugin = class extends import_obsidian6.Plugin {
       if (data && data.model && !this.settings.claudeAgent.model)
         this.settings.claudeAgent.model = data.model;
     }
-    const devData = data?.devMode;
-    if (devData?.logPath !== void 0 && devData?.logDir === void 0) {
-      this.settings.devMode.logDir = devData.logPath ? (0, import_node_path9.dirname)(devData.logPath) : "";
+    if (typeof data?.agentLogPath === "string") {
+      this.settings.agentLogEnabled = data.agentLogPath.length > 0;
     }
+    this.settings.devMode = {
+      enabled: this.settings.devMode.enabled,
+      evaluatorModel: this.settings.devMode.evaluatorModel
+    };
     if (migrateDomainWikiFolder(this.settings.domains)) {
       void this.saveSettings();
     }
