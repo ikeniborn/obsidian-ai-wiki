@@ -59,3 +59,19 @@ ln -s $(pwd) ~/.config/obsidian/Plugins/obsidian-llm-wiki
 
 10. **Race / single-flight**
     - Запустить ingest, не дожидаясь вызвать query → Notice «Уже выполняется»
+
+## Mobile (iOS / Android)
+
+`manifest.json` помечен `isDesktopOnly: false` с v0.1.59. Поддерживаются только `query` и `query-save` через `native-agent` (cloud HTTP API).
+
+### Smoke-test на mobile
+1. Установить через Obsidian Sync или BRAT (плагин больше не desktop-only).
+2. Settings → LLM Wiki: убедиться, что backend dropdown скрыт; видна заметка про cloud-only.
+3. Заполнить Native Agent: `baseUrl` + `apiKey` + `model`.
+4. Команды `ingest`/`lint`/`init` НЕ должны быть в палитре.
+5. Открыть панель, выбрать домен, запустить `Query` → стрим работает, ответ виден.
+6. `Query + сохранить` — заметка создаётся в `!Wiki/<domain>` (без auto-open, это desktop-only).
+7. Cancel в первые 2с — `AbortController` обрывает HTTPS-запрос.
+8. Перезапуск Obsidian → история сохранилась (`saveData`).
+
+См. [`mobile-cloud-ollama.md`](mobile-cloud-ollama.md) — провайдеры, CORS, troubleshooting.

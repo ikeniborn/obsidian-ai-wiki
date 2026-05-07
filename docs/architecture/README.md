@@ -1,7 +1,7 @@
 # Architecture Documentation — obsidian-llm-wiki
 
 LLM Wiki — Obsidian-плагин для AI-powered компаундируемой базы знаний.  
-Версия: **0.1.51** | Язык: TypeScript | Runtime: Electron (Obsidian)
+Версия: **0.1.59** | Язык: TypeScript | Runtime: Electron (Obsidian Desktop) + WebView (Obsidian Mobile)
 
 ---
 
@@ -99,6 +99,18 @@ graph TD
 
 ### 5. Phases as Pure Generators
 Каждая операция — отдельный файл в `src/phases/`, принимает `(args, vaultTools, llm, model, domains, vaultRoot, signal, opts)`, возвращает `AsyncGenerator<RunEvent>`. Нет глобального состояния.
+
+### 6. Mobile Platform Branching (v0.1.59+)
+Один bundle для desktop и mobile. Ветвление в рантайме через `Obsidian.Platform.isMobile`:
+- `manifest.json`: `isDesktopOnly: false`.
+- `main.ts`: команды `ingest/lint/init` регистрируются только на desktop. `loadSettings()` мигрирует `backend: claude-agent` → `native-agent` на mobile.
+- `controller.ts`: `dispatch()` и `dispatchChat()` отбрасывают не-query операции на mobile с Notice. `requireNativeAgent()` проверяет `baseUrl` + `apiKey` непустыми. Все `node:fs`/`node:path`/`./claude-cli-client` импорты — динамические, внутри ветки `backend === "claude-agent"` или за `Platform.isMobile` guard.
+- `agent-runner.ts`: `writeDevLog`/`updateDevLogEval` async, ранний выход на mobile.
+- `phases/query.ts`: `node:path` удалён, путь к wiki вычисляется как vault-relative (`!Wiki/<subfolder>` через `domainWikiFolder()`), защита от `..`-сегментов.
+- `settings.ts`: backend dropdown и agentLog toggle скрыты на mobile.
+- Tests: `tests/no-fs-imports.test.ts` ловит регрессии — top-level `node:*` import в hot path.
+
+Поддерживаемые на mobile операции: только `query` и `query-save`. Гайд по настройке провайдера: [`docs/mobile-cloud-ollama.md`](../mobile-cloud-ollama.md).
 
 ---
 

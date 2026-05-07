@@ -1,6 +1,6 @@
 id: obsidian-llm-wiki
 name: LLM Wiki Obsidian Plugin
-version: "0.1.51"
+version: "0.1.59"
 description: >
   Obsidian-плагин для ведения компаундируемой базы знаний на базе LLM.
   Запускает AI-агента (Claude CLI или нативный OpenAI-совместимый LLM),
@@ -61,3 +61,20 @@ key_constraints:
   - History limit: 20 записей в settings.json (компромисс UX vs размер)
   - Wiki domains: источник истины — DomainEntry[] в settings (персистируется Obsidian)
   - Source paths: consolidateSourcePaths() убирает дубли и поглощённые потомки
+  - Mobile: только query/query-save; backend форсится в native-agent; node:fs/path lazy
+
+platforms:
+  desktop:
+    operations: [ingest, query, query-save, lint, fix, init, chat]
+    backends: [claude-agent, native-agent]
+  mobile:
+    operations: [query, query-save]
+    backends: [native-agent]
+    notes: >
+      Платформа определяется через Obsidian.Platform.isMobile.
+      На mobile: ClaudeCliClient недоступен (нет node:child_process),
+      все node:fs/node:path вызовы за lazy import + Platform.isMobile guard.
+      В loadSettings() backend=claude-agent → native-agent (one-time migration).
+      Команды ingest/lint/init не регистрируются. dispatch() и dispatchChat()
+      отбрасывают не-query операции через requireNativeAgent precheck.
+      Логи (agent.jsonl, dev.jsonl) отключены на mobile.

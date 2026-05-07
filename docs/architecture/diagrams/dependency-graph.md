@@ -79,3 +79,23 @@ graph TD
 | Light green | Infrastructure (I/O, LLM) | agent-runner.ts, claude-cli-client.ts, phases/ |
 | Light blue | Presentation (UI) | view.ts, settings.ts, modals.ts |
 | Gray | Shared / Domain | types.ts, domain-map.ts, vault-tools.ts, stream.ts, source-paths.ts, i18n.ts |
+
+## Mobile-Safe Boundary (v0.1.59+)
+
+Импорты `node:fs`, `node:path`, `node:child_process`, `./claude-cli-client` лежат за асинхронным `await import(...)` внутри desktop-only веток. Static-test `tests/no-fs-imports.test.ts` ловит регрессии.
+
+```mermaid
+graph LR
+    main_ts[main.ts] -- "Platform.isMobile?" --> mobile{mobile}
+    mobile -- "yes" --> mobile_path[skip ingest/lint/init<br/>force native-agent]
+    mobile -- "no" --> desktop_path[register all commands<br/>any backend]
+    controller[controller.ts] -- "backend === claude-agent" --> claude_dyn[await import node:fs/path<br/>await import claude-cli-client]
+    controller -- "backend === native-agent" --> openai[OpenAI SDK<br/>HTTPS only]
+    agent_runner[agent-runner.ts] -- "devMode + !mobile" --> dev_log[await import node:fs/path<br/>writeDevLog]
+
+    style mobile_path fill:#fff4e1
+    style desktop_path fill:#e1ffe1
+    style claude_dyn fill:#e1ffe1
+    style openai fill:#e1f5ff
+    style dev_log fill:#e1ffe1
+```
