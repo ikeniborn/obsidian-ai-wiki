@@ -1,10 +1,13 @@
 ---
-wiki_sources: ["prompts/ingest.md"]
-wiki_updated: 2026-05-06
+wiki_sources:
+  - "[[prompts/ingest.md]]"
+  - "[[prompts/optimized/ingest.md]]"
+wiki_updated: 2026-05-07
 wiki_status: developing
 wiki_outgoing_links:
   - "[[run-ingest]]"
   - "[[llm-utils-ts]]"
+  - "[[dspy-mipro-pipeline]]"
 tags: ["implementation", "typescript", "obsidian-llm-wiki"]
 aliases: ["ingest.md", "ingest prompt"]
 ---
@@ -53,7 +56,12 @@ LLM должен вернуть только JSON-массив:
 - Путь страницы должен начинаться с `{{wiki_path}}/`
 - Frontmatter обязателен: wiki_sources, wiki_updated, wiki_status
 
+## История изменений
+
+- **2026-05-07** (из [[prompts/optimized/ingest.md]]): DSPy MIPROv2 оптимизация запускалась с бэкендом `claude-code`. Оптимизированный результат (`prompts/optimized/ingest.md`) совпал с исходным промптом — изменений нет. Файл впоследствии удалён из репозитория (OUTPUT_DIR = `prompts/optimized/`).
+
 ## Связанные концепции
 
 - [[run-ingest]] — использует этот промпт
 - [[llm-utils-ts]] — рендерит промпт через buildChatParams
+- [[dspy-mipro-pipeline]] — пайплайн, генерирующий оптимизированные версии промптов в `prompts/optimized/`
