@@ -474,7 +474,8 @@ export class LlmWikiView extends ItemView {
     } else {
       const comp = new Component();
       comp.load();
-      void MarkdownRenderer.render(this.app, text, el, this.plugin.controller.cwdOrEmpty(), comp);
+      void MarkdownRenderer.render(this.app, text, el, "", comp);
+      registerLinkHandler(el, this.app);
     }
     el.scrollIntoView({ block: "end" });
     return el;
@@ -527,7 +528,8 @@ export class LlmWikiView extends ItemView {
       } else {
         const comp = new Component();
         comp.load();
-        void MarkdownRenderer.render(this.app, msg.content, this.currentChatBubble, this.plugin.controller.cwdOrEmpty(), comp);
+        void MarkdownRenderer.render(this.app, msg.content, this.currentChatBubble, "", comp);
+        registerLinkHandler(this.currentChatBubble!, this.app);
       }
       this.currentChatBubble = null;
     }
