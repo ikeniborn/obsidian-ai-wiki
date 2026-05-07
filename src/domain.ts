@@ -1,4 +1,5 @@
 import type { RunEvent } from "./types";
+import { consolidateSourcePaths } from "./source-paths";
 
 export interface EntityType {
   type: string;
@@ -33,7 +34,11 @@ export function validateDomainId(id: string): string | null {
 
 type DomainPersistEvent = Extract<RunEvent, { kind: "domain_created" | "domain_updated" | "source_path_added" }>;
 
-export function applyDomainEvent(domains: DomainEntry[], ev: DomainPersistEvent): DomainEntry[] {
+export function applyDomainEvent(
+  domains: DomainEntry[],
+  ev: DomainPersistEvent,
+  opts?: { vaultRoot?: string },
+): DomainEntry[] {
   const next = [...domains];
   if (ev.kind === "domain_created") {
     if (next.some((d) => d.id === ev.entry.id)) return next;
@@ -47,8 +52,15 @@ export function applyDomainEvent(domains: DomainEntry[], ev: DomainPersistEvent)
     return next;
   }
   // source_path_added
-  const paths = new Set(next[i].source_paths ?? []);
-  paths.add(ev.path);
-  next[i] = { ...next[i], source_paths: [...paths] };
+  const existing = next[i].source_paths ?? [];
+  let updated: string[];
+  if (opts?.vaultRoot !== undefined) {
+    updated = consolidateSourcePaths(existing, ev.path, opts.vaultRoot);
+    if (updated === existing) return domains;
+  } else {
+    if (existing.includes(ev.path)) return domains;
+    updated = [...existing, ev.path];
+  }
+  next[i] = { ...next[i], source_paths: updated };
   return next;
 }

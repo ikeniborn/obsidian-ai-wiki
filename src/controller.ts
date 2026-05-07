@@ -11,7 +11,10 @@ import { VaultTools, type VaultAdapter } from "./vault-tools";
 import { ClaudeCliClient } from "./claude-cli-client";
 import OpenAI from "openai";
 import { i18n } from "./i18n";
-import { consolidateSourcePaths } from "./source-paths";
+import { applyDomainEvent } from "./domain";
+import type { DomainStore } from "./domain-store";
+import { DomainCorruptError } from "./domain-store";
+import type { LocalConfigStore } from "./local-config";
 import { FileErrorModal } from "./modals";
 
 export class WikiController {
@@ -19,7 +22,12 @@ export class WikiController {
   currentOp: { op: WikiOperation; args: string[] } | null = null;
   private _chatSessionId: string | undefined;
   private _currentClaudeClient: ClaudeCliClient | null = null;
-  constructor(private app: App, private plugin: LlmWikiPlugin) {}
+  constructor(
+    private app: App,
+    private plugin: LlmWikiPlugin,
+    private domainStore: DomainStore,
+    private localConfigStore: LocalConfigStore,
+  ) {}
 
   isBusy(): boolean { return this.current !== null; }
 
@@ -63,7 +71,7 @@ export class WikiController {
 
   private async dispatchChat(operation: WikiOperation, domainId: string | undefined, context: string, chatMessages: ChatMessage[]): Promise<void> {
     if (this.isBusy()) { new Notice(i18n().ctrl.operationRunning); return; }
-    if (this.plugin.settings.backend === "claude-agent" && !this.requireClaudeAgent()) return;
+    if (this.plugin.settings.backend === "claude-agent" && !await this.requireClaudeAgent()) return;
 
     await this.ensureView();
     const view = this.activeView();
@@ -71,7 +79,7 @@ export class WikiController {
 
     const vaultRoot = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
 
-    const agentRunner = this.buildAgentRunner(vaultRoot, this._chatSessionId);
+    const agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId);
     const ctrl = new AbortController();
     this.current = ctrl;
     this.onBusyChange?.();
@@ -162,45 +170,51 @@ export class WikiController {
     return (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
   }
 
-  loadDomains(): DomainEntry[] {
-    return this.plugin.settings.domains ?? [];
+  async loadDomains(): Promise<DomainEntry[]> {
+    try {
+      return await this.domainStore.load();
+    } catch (e) {
+      if (e instanceof DomainCorruptError) {
+        new Notice(`Domain map corrupt: ${e.message}`);
+      }
+      throw e;
+    }
   }
 
-  registerDomain(input: AddDomainInput): { ok: true } | { ok: false; error: string } {
+  async registerDomain(input: AddDomainInput): Promise<{ ok: true } | { ok: false; error: string }> {
     const id = input.id.trim();
     const err = validateDomainId(id);
     if (err) { new Notice(i18n().ctrl.domainAddFailed(err)); return { ok: false, error: err }; }
-    const s = this.plugin.settings;
-    if (!s.domains) s.domains = [];
-    if (s.domains.some((d) => d.id === id)) {
+    const cur = await this.domainStore.load();
+    if (cur.some((d) => d.id === id)) {
       const msg = `Домен «${id}» уже существует`;
       new Notice(i18n().ctrl.domainAddFailed(msg));
       return { ok: false, error: msg };
     }
     const wikiSubfolder = input.wikiFolder.trim() || id;
-    s.domains.push({
+    const next: DomainEntry[] = [...cur, {
       id,
       name: input.name.trim() || id,
       wiki_folder: wikiSubfolder,
       source_paths: input.sourcePaths ?? [],
       entity_types: [],
       language_notes: "",
-    });
-    void this.plugin.saveSettings();
+    }];
+    await this.domainStore.save(next);
     new Notice(i18n().ctrl.domainAdded(id));
     return { ok: true };
   }
 
-  private requireClaudeAgent(): string | null {
-    const p = this.plugin.settings.claudeAgent.iclaudePath;
-    if (!p || !existsSync(p)) {
+  private async requireClaudeAgent(): Promise<string | null> {
+    const { iclaudePath } = await this.localConfigStore.load();
+    if (!iclaudePath || !existsSync(iclaudePath)) {
       new Notice(i18n().ctrl.setClaudeCodePath);
       return null;
     }
-    return p;
+    return iclaudePath;
   }
 
-  private buildAgentRunner(vaultRoot: string, resumeSessionId?: string): AgentRunner {
+  private async buildAgentRunner(vaultRoot: string, resumeSessionId?: string): Promise<AgentRunner> {
     const adapter = this.app.vault.adapter as unknown as VaultAdapter;
     const base = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
     const manifestDir = this.plugin.manifest.dir
@@ -211,13 +225,21 @@ export class WikiController {
     mkdirSync(tmpDir, { recursive: true });
     const vaultTools = new VaultTools(adapter, base);
     const vaultName = this.app.vault.getName();
-    const domains = this.plugin.settings.domains ?? [];
+    const domains = await this.domainStore.load();
+    const local = await this.localConfigStore.load();
     const s = this.plugin.settings;
 
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm: import("./types").LlmClient;
     if (s.backend === "claude-agent") {
-      const client = new ClaudeCliClient({ ...s.claudeAgent, requestTimeoutSec: maxTimeoutSec, cwd: vaultRoot, tmpDir, resumeSessionId });
+      const client = new ClaudeCliClient({
+        ...s.claudeAgent,
+        iclaudePath: local.iclaudePath,
+        requestTimeoutSec: maxTimeoutSec,
+        cwd: vaultRoot,
+        tmpDir,
+        resumeSessionId,
+      });
       this._currentClaudeClient = client;
       llm = client;
     } else {
@@ -252,7 +274,7 @@ export class WikiController {
     // Новая операция делает предыдущий чат-контекст нерелевантным.
     this._chatSessionId = undefined;
 
-    if (this.plugin.settings.backend === "claude-agent" && !this.requireClaudeAgent()) return;
+    if (this.plugin.settings.backend === "claude-agent" && !await this.requireClaudeAgent()) return;
 
     await this.ensureView();
     const view = this.activeView();
@@ -260,7 +282,7 @@ export class WikiController {
 
     const vaultRoot = (this.app.vault.adapter as { getBasePath?: () => string }).getBasePath?.() ?? "";
 
-    const agentRunner = this.buildAgentRunner(vaultRoot);
+    const agentRunner = await this.buildAgentRunner(vaultRoot);
 
     const ctrl = new AbortController();
     this.current = ctrl;
@@ -284,26 +306,18 @@ export class WikiController {
       for await (const ev of runGen) {
         this.logEvent(vaultRoot, sessionId, op, domainId, ev);
         this.activeView()?.appendEvent(ev);
-        if (ev.kind === "domain_created") {
-          if (!this.plugin.settings.domains) this.plugin.settings.domains = [];
-          this.plugin.settings.domains.push(ev.entry);
-          void this.plugin.saveSettings();
-        }
-        if (ev.kind === "domain_updated") {
-          const domain = this.plugin.settings.domains.find((d) => d.id === ev.domainId);
-          if (domain) {
-            if (ev.patch.entity_types !== undefined) domain.entity_types = ev.patch.entity_types;
-            if (ev.patch.language_notes !== undefined) domain.language_notes = ev.patch.language_notes;
-            void this.plugin.saveSettings();
-          }
-        }
-        if (ev.kind === "source_path_added") {
-          const domain = this.plugin.settings.domains.find((d) => d.id === ev.domainId);
-          if (domain) {
-            const existing = domain.source_paths ?? [];
-            const updated = consolidateSourcePaths(existing, ev.path, vaultRoot);
-            domain.source_paths = updated;
-            if (updated !== existing) void this.plugin.saveSettings();
+        if (ev.kind === "domain_created" || ev.kind === "domain_updated" || ev.kind === "source_path_added") {
+          try {
+            const cur = await this.domainStore.load();
+            const next = applyDomainEvent(cur, ev, { vaultRoot });
+            if (next !== cur) await this.domainStore.save(next);
+          } catch (e) {
+            if (e instanceof DomainCorruptError) {
+              new Notice(`Domain map corrupt: ${e.message}`);
+            }
+            status = "error";
+            ctrl.abort();
+            break;
           }
         }
         this.collectStep(ev, steps);

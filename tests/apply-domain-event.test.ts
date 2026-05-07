@@ -60,6 +60,25 @@ describe("applyDomainEvent", () => {
     expect(result[0].source_paths).toEqual(["docs/os"]);
   });
 
+  it("consolidates source paths when vaultRoot is provided (descendant covered by ancestor)", () => {
+    const result = applyDomainEvent(
+      [base],
+      { kind: "source_path_added", domainId: "os", path: "docs/os/new" },
+      { vaultRoot: "/vault" },
+    );
+    expect(result[0].source_paths).toEqual(["docs/os"]);
+  });
+
+  it("consolidates source paths when vaultRoot is provided (ancestor replaces descendants)", () => {
+    const start: DomainEntry = { ...base, source_paths: ["docs/os/sub"] };
+    const result = applyDomainEvent(
+      [start],
+      { kind: "source_path_added", domainId: "os", path: "docs/os" },
+      { vaultRoot: "/vault" },
+    );
+    expect(result[0].source_paths).toEqual(["docs/os"]);
+  });
+
   it("does not mutate input array", () => {
     const input = [base];
     applyDomainEvent(input, { kind: "domain_created", entry: { ...base, id: "new" } });
