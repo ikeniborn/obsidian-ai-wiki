@@ -18,9 +18,26 @@ export class Setting {
 
 export const Platform = {
   isMobile: false,
+  isDesktop: true,
 };
 
-export class Notice {}
+/** Test helper — flip isMobile/isDesktop atomically. */
+export function __setPlatformMobile(isMobile: boolean): void {
+  Platform.isMobile = isMobile;
+  Platform.isDesktop = !isMobile;
+}
+
+export class Notice {
+  static __messages: string[] = [];
+  constructor(message: string) {
+    Notice.__messages.push(message);
+  }
+}
+
+/** Test helper — clear Notice capture between tests. */
+export function __clearNotices(): void {
+  Notice.__messages.length = 0;
+}
 
 function makeEl() {
   const el: any = {
