@@ -65,9 +65,11 @@ git commit -m "chore(manifest): allow mobile install (isDesktopOnly=false)"
 **Files:**
 - Modify: `vitest.mock.ts`
 
-- [ ] **Step 1: Make Platform mutable**
+- [ ] **Step 1: Make Platform mutable + capture Notice messages**
 
-In `vitest.mock.ts`, replace:
+In `vitest.mock.ts`:
+
+(a) Replace:
 
 ```ts
 export const Platform = {
@@ -87,6 +89,28 @@ export const Platform = {
 export function __setPlatformMobile(isMobile: boolean): void {
   Platform.isMobile = isMobile;
   Platform.isDesktop = !isMobile;
+}
+```
+
+(b) Replace:
+
+```ts
+export class Notice {}
+```
+
+with:
+
+```ts
+export class Notice {
+  static __messages: string[] = [];
+  constructor(message: string) {
+    Notice.__messages.push(message);
+  }
+}
+
+/** Test helper — clear Notice capture between tests. */
+export function __clearNotices(): void {
+  Notice.__messages.length = 0;
 }
 ```
 
@@ -219,7 +243,13 @@ describe("onload — command registration gating", () => {
     plugin.addRibbonIcon = vi.fn();
     plugin.addSettingTab = vi.fn();
     plugin.registerView = vi.fn();
-    plugin.app.workspace = { getLeavesOfType: () => [], getRightLeaf: () => null };
+    plugin.app.workspace = {
+      getLeavesOfType: () => [],
+      getRightLeaf: () => null,
+      revealLeaf: vi.fn(),
+      getActiveFile: () => null,
+    };
+    plugin.app.vault.configDir = ".obsidian";
     return { plugin, registered };
   }
 
@@ -319,17 +349,26 @@ Create `tests/controller-mobile.test.ts`:
 
 ```ts
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { __setPlatformMobile, Notice } from "obsidian";
+import { __setPlatformMobile, __clearNotices, Notice } from "obsidian";
 import { WikiController } from "../src/controller";
 
 function makeApp() {
   return {
     vault: {
-      adapter: { getBasePath: () => "/tmp/vault", getFullPath: (p: string) => `/tmp/vault/${p}` },
+      adapter: {
+        getBasePath: () => "/tmp/vault",
+        getFullPath: (p: string) => `/tmp/vault/${p}`,
+        exists: vi.fn().mockResolvedValue(false),
+      },
       configDir: ".obsidian",
       getName: () => "vault",
     },
-    workspace: { getLeavesOfType: () => [], getRightLeaf: () => null, revealLeaf: vi.fn() },
+    workspace: {
+      getLeavesOfType: () => [],
+      getRightLeaf: () => null,
+      revealLeaf: vi.fn(),
+      getActiveFile: () => ({ path: "note.md" }),
+    },
   } as any;
 }
 
@@ -345,34 +384,57 @@ function makePlugin(settings: any) {
 describe("controller — mobile guards", () => {
   beforeEach(() => {
     __setPlatformMobile(false);
-    vi.spyOn(Notice.prototype as any, "constructor").mockImplementation(() => {});
+    __clearNotices();
   });
 
   it("mobile: rejects ingest dispatch with Notice", async () => {
     __setPlatformMobile(true);
-    const plugin = makePlugin({ backend: "native-agent", nativeAgent: { baseUrl: "x", apiKey: "y" } });
-    const ctrl = new WikiController(makeApp(), plugin, {} as any, {} as any);
+    const plugin = makePlugin({
+      backend: "native-agent",
+      nativeAgent: { baseUrl: "https://api.x", apiKey: "key" },
+    });
+    const ctrl = new WikiController(plugin.app, plugin, {} as any, {} as any);
     const buildSpy = vi.spyOn(ctrl as any, "buildAgentRunner");
     await ctrl.ingestActive();
     expect(buildSpy).not.toHaveBeenCalled();
+    expect(Notice.__messages).toContain("Operation not available on mobile");
   });
 
-  it("mobile: rejects native-agent query when baseUrl empty", async () => {
+  it("mobile: query proceeds past mobile guard (does NOT contain mobile-reject Notice)", async () => {
     __setPlatformMobile(true);
-    const plugin = makePlugin({ backend: "native-agent", nativeAgent: { baseUrl: "", apiKey: "y" } });
-    const ctrl = new WikiController(makeApp(), plugin, {} as any, {} as any);
+    const plugin = makePlugin({
+      backend: "native-agent",
+      nativeAgent: { baseUrl: "https://api.x", apiKey: "key" },
+    });
+    const ctrl = new WikiController(plugin.app, plugin, {} as any, {} as any);
+    await ctrl.query("test", false);
+    expect(Notice.__messages).not.toContain("Operation not available on mobile");
+  });
+
+  it("rejects native-agent query when baseUrl empty (desktop or mobile)", async () => {
+    __setPlatformMobile(false);
+    const plugin = makePlugin({
+      backend: "native-agent",
+      nativeAgent: { baseUrl: "", apiKey: "key" },
+    });
+    const ctrl = new WikiController(plugin.app, plugin, {} as any, {} as any);
     const buildSpy = vi.spyOn(ctrl as any, "buildAgentRunner");
     await ctrl.query("test", false);
     expect(buildSpy).not.toHaveBeenCalled();
+    expect(Notice.__messages.some((m) => m.includes("Configure cloud LLM"))).toBe(true);
   });
 
-  it("mobile: rejects native-agent query when apiKey empty", async () => {
-    __setPlatformMobile(true);
-    const plugin = makePlugin({ backend: "native-agent", nativeAgent: { baseUrl: "https://api.x", apiKey: "" } });
-    const ctrl = new WikiController(makeApp(), plugin, {} as any, {} as any);
+  it("rejects native-agent query when apiKey empty", async () => {
+    __setPlatformMobile(false);
+    const plugin = makePlugin({
+      backend: "native-agent",
+      nativeAgent: { baseUrl: "https://api.x", apiKey: "" },
+    });
+    const ctrl = new WikiController(plugin.app, plugin, {} as any, {} as any);
     const buildSpy = vi.spyOn(ctrl as any, "buildAgentRunner");
     await ctrl.query("test", false);
     expect(buildSpy).not.toHaveBeenCalled();
+    expect(Notice.__messages.some((m) => m.includes("Configure cloud LLM"))).toBe(true);
   });
 });
 ```
@@ -528,7 +590,9 @@ In `logEvent()`, gate fs import behind `agentLogEnabled` (already there) AND mob
   }
 ```
 
-Note: `logEvent` becomes async. Update all call sites — replace `this.logEvent(...)` with `await this.logEvent(...)` in the 6 call sites within `controller.ts`.
+Note: `logEvent` becomes async. Update all 8 call sites (4 in `dispatch`, 4 in `dispatchChat`) — replace `this.logEvent(...)` with `await this.logEvent(...)`.
+
+Run: `grep -n 'this\.logEvent' src/controller.ts` after editing — every line should be prefixed with `await`.
 
 In `toVaultPath()`, replace `relative`/`isAbsolute`/`join` with dynamic import:
 
@@ -717,13 +781,13 @@ const absWiki = join(vaultRoot, domainWikiFolder(domain.wiki_folder));
 const wikiVaultPath = vaultTools.toVaultPath(absWiki);
 ```
 
-The `vaultTools.toVaultPath(absWiki)` strips `vaultRoot` back off. Replace with direct vault-relative path:
+`domainWikiFolder()` returns `!Wiki/<subfolder>` — already vault-relative. Replace with direct usage:
 
 ```ts
 const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
 ```
 
-Then the existing check:
+Then the existing escape check:
 
 ```ts
 if (!wikiVaultPath) {
@@ -732,11 +796,11 @@ if (!wikiVaultPath) {
 }
 ```
 
-Tighten — `domainWikiFolder` returns a string. Check it isn't empty and doesn't escape:
+Strengthen — guard against `..` segments injected via `wiki_folder`:
 
 ```ts
-if (!wikiVaultPath || wikiVaultPath.startsWith("..") || wikiVaultPath.startsWith("/")) {
-  yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
+if (!domain.wiki_folder || domain.wiki_folder.includes("..")) {
+  yield { kind: "error", message: `Wiki folder ${domain.wiki_folder} is outside the vault.` };
   return;
 }
 ```
