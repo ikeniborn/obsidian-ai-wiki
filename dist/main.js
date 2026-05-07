@@ -1299,6 +1299,17 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
 // src/view.ts
 var import_obsidian4 = require("obsidian");
 var LLM_WIKI_VIEW_TYPE = "llm-wiki-view";
+function registerLinkHandler(el, app) {
+  el.addEventListener("click", (e) => {
+    const a = e.target.closest("a.internal-link");
+    if (!a)
+      return;
+    e.preventDefault();
+    const href = a.getAttribute("data-href") ?? a.getAttribute("href") ?? "";
+    if (href)
+      void app.workspace.openLinkText(href, "", false);
+  });
+}
 var PREVIEW_INLINE = 140;
 var ASSISTANT_TEXT_MAX = 600;
 var LlmWikiView = class extends import_obsidian4.ItemView {
@@ -1438,6 +1449,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     resultH4.appendText(` ${T.view.result}`);
     resultHeader.addEventListener("click", () => this.toggleResult());
     this.finalEl = this.resultSection.createDiv("llm-wiki-final llm-wiki-hidden");
+    registerLinkHandler(this.finalEl, this.app);
     this.historySection = root.createDiv("llm-wiki-history-section llm-wiki-hidden");
     const historyHeader = this.historySection.createDiv("llm-wiki-progress-header");
     const historyH4 = historyHeader.createEl("h4", { cls: "llm-wiki-progress-title" });
@@ -1693,7 +1705,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     if (entry.finalText) {
       const comp = new import_obsidian4.Component();
       comp.load();
-      await import_obsidian4.MarkdownRenderer.render(this.app, entry.finalText, this.finalEl, this.plugin.controller.cwdOrEmpty(), comp);
+      await import_obsidian4.MarkdownRenderer.render(this.app, entry.finalText, this.finalEl, "", comp);
       this.resultSection.removeClass("llm-wiki-hidden");
       this.finalEl.removeClass("llm-wiki-hidden");
       this.resultOpen = true;
@@ -1750,7 +1762,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     } else {
       const comp = new import_obsidian4.Component();
       comp.load();
-      void import_obsidian4.MarkdownRenderer.render(this.app, text, el, this.plugin.controller.cwdOrEmpty(), comp);
+      void import_obsidian4.MarkdownRenderer.render(this.app, text, el, "", comp);
+      registerLinkHandler(el, this.app);
     }
     el.scrollIntoView({ block: "end" });
     return el;
@@ -1806,7 +1819,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       } else {
         const comp = new import_obsidian4.Component();
         comp.load();
-        void import_obsidian4.MarkdownRenderer.render(this.app, msg.content, this.currentChatBubble, this.plugin.controller.cwdOrEmpty(), comp);
+        void import_obsidian4.MarkdownRenderer.render(this.app, msg.content, this.currentChatBubble, "", comp);
+        registerLinkHandler(this.currentChatBubble, this.app);
       }
       this.currentChatBubble = null;
     }
@@ -1885,7 +1899,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
         this.finalEl.empty();
         const comp = new import_obsidian4.Component();
         comp.load();
-        void import_obsidian4.MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, this.plugin.controller.cwdOrEmpty(), comp);
+        void import_obsidian4.MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, "", comp);
         this.resultSection.removeClass("llm-wiki-hidden");
         this.finalEl.removeClass("llm-wiki-hidden");
         this.resultOpen = true;
