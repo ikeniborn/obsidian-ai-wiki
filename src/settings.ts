@@ -1,4 +1,4 @@
-import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, Platform, PluginSettingTab, Setting } from "obsidian";
 import { ConfirmModal, EditDomainModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { LlmWikiPluginSettings, OpKey } from "./types";
@@ -95,13 +95,15 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
-      .setName(T.settings.agentLog_name)
-      .setDesc(T.settings.agentLog_desc)
-      .addToggle((t) =>
-        t.setValue(s.agentLogEnabled)
-          .onChange(async (v) => { s.agentLogEnabled = v; await this.plugin.saveSettings(); }),
-      );
+    if (!Platform.isMobile) {
+      new Setting(containerEl)
+        .setName(T.settings.agentLog_name)
+        .setDesc(T.settings.agentLog_desc)
+        .addToggle((t) =>
+          t.setValue(s.agentLogEnabled)
+            .onChange(async (v) => { s.agentLogEnabled = v; await this.plugin.saveSettings(); }),
+        );
+    }
 
     // ── Domains ───────────────────────────────────────────────────────────────
     new Setting(containerEl).setName(T.settings.domains_heading).setHeading();
@@ -149,21 +151,28 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     // ── Backend settings ───────────────────────────────────────────────────
     new Setting(containerEl).setName(T.settings.h3_backend).setHeading();
 
-    new Setting(containerEl)
-      .setName(T.settings.backend_name)
-      .setDesc(T.settings.backend_desc)
-      .addDropdown((d) =>
-        d.addOption("claude-agent", T.settings.claudeCodeAgent)
-          .addOption("native-agent", T.settings.nativeAgent)
-          .setValue(s.backend)
-          .onChange(async (v) => {
-            s.backend = v as LlmWikiPluginSettings["backend"];
-            await this.plugin.saveSettings();
-            this.display();
-          }),
-      );
+    if (!Platform.isMobile) {
+      new Setting(containerEl)
+        .setName(T.settings.backend_name)
+        .setDesc(T.settings.backend_desc)
+        .addDropdown((d) =>
+          d.addOption("claude-agent", T.settings.claudeCodeAgent)
+            .addOption("native-agent", T.settings.nativeAgent)
+            .setValue(s.backend)
+            .onChange(async (v) => {
+              s.backend = v as LlmWikiPluginSettings["backend"];
+              await this.plugin.saveSettings();
+              this.display();
+            }),
+        );
+    } else {
+      containerEl.createEl("p", {
+        text: "Mobile: cloud LLM (native-agent) only. See docs/mobile-cloud-ollama.md.",
+        cls: "setting-item-description",
+      });
+    }
 
-    if (s.backend === "claude-agent") {
+    if (s.backend === "claude-agent" && !Platform.isMobile) {
       new Setting(containerEl)
         .setName(T.settings.iclaudePath_name)
         .setDesc(T.settings.iclaudePath_desc)
