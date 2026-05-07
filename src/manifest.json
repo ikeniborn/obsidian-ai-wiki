@@ -6,5 +6,5 @@
   "description": "AI-powered compoundable knowledge base \u2014 extracts, synthesizes and maintains a wiki from raw sources.",
   "author": "ikeniborn",
   "authorUrl": "https://github.com/ikeniborn",
-  "isDesktopOnly": true
+  "isDesktopOnly": false
 }
