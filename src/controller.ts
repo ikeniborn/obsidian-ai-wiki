@@ -8,6 +8,7 @@ import type { ChatMessage } from "./types";
 import { VaultTools, type VaultAdapter } from "./vault-tools";
 import type { ClaudeCliClient } from "./claude-cli-client";
 import OpenAI from "openai";
+import { mobileFetch } from "./mobile-fetch";
 import { i18n } from "./i18n";
 import { applyDomainEvent } from "./domain";
 import type { DomainStore } from "./domain-store";
@@ -284,6 +285,7 @@ export class WikiController {
         apiKey: s.nativeAgent.apiKey,
         timeout: maxTimeoutSec * 1000,
         dangerouslyAllowBrowser: true,
+        fetch: Platform.isMobile ? mobileFetch : undefined,
       });
     }
 

@@ -82,6 +82,20 @@ export class ItemView {}
 
 export const moment = { locale: () => "en" };
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export const __requestUrlCalls: any[] = [];
+export let __requestUrlResponse: { status: number; text: string; headers: Record<string, string> } = {
+  status: 200, text: "{}", headers: { "content-type": "application/json" },
+};
+export function __setRequestUrlResponse(r: typeof __requestUrlResponse): void {
+  __requestUrlResponse = r;
+}
+export function __clearRequestUrlCalls(): void { __requestUrlCalls.length = 0; }
+export async function requestUrl(param: any) {
+  __requestUrlCalls.push(param);
+  return __requestUrlResponse;
+}
+
 /** Test helper — in-memory VaultAdapter compatible with src/vault-tools.ts. */
 export function createMockAdapter() {
   const files = new Map<string, string>();
