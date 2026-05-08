@@ -169,6 +169,20 @@ export default class LlmWikiPlugin extends Plugin {
       await this.saveData(this.settings);
     }
 
+    // Mobile: force per-op + dev mode off (irrelevant — only `query` runs on mobile).
+    if (Platform.isMobile) {
+      let dirty = false;
+      if (this.settings.nativeAgent.perOperation) {
+        this.settings.nativeAgent.perOperation = false;
+        dirty = true;
+      }
+      if (this.settings.devMode.enabled) {
+        this.settings.devMode.enabled = false;
+        dirty = true;
+      }
+      if (dirty) await this.saveData(this.settings);
+    }
+
     // Миграция: agentLogPath → agentLogEnabled
     if (typeof (data as Record<string, unknown> | null)?.agentLogPath === "string") {
       this.settings.agentLogEnabled = ((data as Record<string, unknown>).agentLogPath as string).length > 0;

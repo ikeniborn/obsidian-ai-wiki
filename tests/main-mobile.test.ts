@@ -41,6 +41,31 @@ describe("loadSettings — mobile backend migration", () => {
     expect(plugin.settings.backend).toBe("native-agent");
     expect(plugin.saveData).not.toHaveBeenCalled();
   });
+
+  it("forces nativeAgent.perOperation=false and devMode.enabled=false on mobile", async () => {
+    __setPlatformMobile(true);
+    const plugin = makePlugin({
+      backend: "native-agent",
+      nativeAgent: { perOperation: true },
+      devMode: { enabled: true, evaluatorModel: "x" },
+    });
+    await plugin.loadSettings();
+    expect(plugin.settings.nativeAgent.perOperation).toBe(false);
+    expect(plugin.settings.devMode.enabled).toBe(false);
+    expect(plugin.saveData).toHaveBeenCalled();
+  });
+
+  it("leaves perOperation/devMode flags untouched on desktop", async () => {
+    __setPlatformMobile(false);
+    const plugin = makePlugin({
+      backend: "native-agent",
+      nativeAgent: { perOperation: true },
+      devMode: { enabled: true, evaluatorModel: "x" },
+    });
+    await plugin.loadSettings();
+    expect(plugin.settings.nativeAgent.perOperation).toBe(true);
+    expect(plugin.settings.devMode.enabled).toBe(true);
+  });
 });
 
 describe("onload — command registration gating", () => {

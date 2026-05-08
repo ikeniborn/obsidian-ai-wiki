@@ -291,13 +291,15 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           );
       }
 
-      new Setting(containerEl)
-        .setName(T.settings.perOperation_name)
-        .setDesc(T.settings.perOperation_desc)
-        .addToggle((t) =>
-          t.setValue(s.nativeAgent.perOperation)
-            .onChange(async (v) => { s.nativeAgent.perOperation = v; await this.plugin.saveSettings(); this.display(); }),
-        );
+      if (!Platform.isMobile) {
+        new Setting(containerEl)
+          .setName(T.settings.perOperation_name)
+          .setDesc(T.settings.perOperation_desc)
+          .addToggle((t) =>
+            t.setValue(s.nativeAgent.perOperation)
+              .onChange(async (v) => { s.nativeAgent.perOperation = v; await this.plugin.saveSettings(); this.display(); }),
+          );
+      }
 
       if (s.nativeAgent.perOperation) {
         const ops: Array<{ key: OpKey; label: string }> = [
@@ -341,25 +343,27 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     }
 
     // ── Dev mode ──────────────────────────────────────────────────────────────
-    new Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
+    if (!Platform.isMobile) {
+      new Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
 
-    new Setting(containerEl)
-      .setName(T.settings.devMode_enabled_name)
-      .setDesc(T.settings.devMode_enabled_desc)
-      .addToggle((t) =>
-        t.setValue(s.devMode.enabled)
-          .onChange(async (v) => { s.devMode.enabled = v; await this.plugin.saveSettings(); this.display(); }),
-      );
-
-    if (s.devMode.enabled) {
       new Setting(containerEl)
-        .setName(T.settings.devMode_evaluatorModel_name)
-        .setDesc(T.settings.devMode_evaluatorModel_desc)
-        .addText((t) =>
-          t.setPlaceholder("")
-            .setValue(s.devMode.evaluatorModel)
-            .onChange(async (v) => { s.devMode.evaluatorModel = v.trim(); await this.plugin.saveSettings(); }),
+        .setName(T.settings.devMode_enabled_name)
+        .setDesc(T.settings.devMode_enabled_desc)
+        .addToggle((t) =>
+          t.setValue(s.devMode.enabled)
+            .onChange(async (v) => { s.devMode.enabled = v; await this.plugin.saveSettings(); this.display(); }),
         );
+
+      if (s.devMode.enabled) {
+        new Setting(containerEl)
+          .setName(T.settings.devMode_evaluatorModel_name)
+          .setDesc(T.settings.devMode_evaluatorModel_desc)
+          .addText((t) =>
+            t.setPlaceholder("")
+              .setValue(s.devMode.evaluatorModel)
+              .onChange(async (v) => { s.devMode.evaluatorModel = v.trim(); await this.plugin.saveSettings(); }),
+          );
+      }
     }
   }
 }
