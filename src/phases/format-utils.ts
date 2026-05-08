@@ -84,29 +84,40 @@ const STOP_WORDS = new Set([
 export function significantTokens(text: string): Set<string> {
   const out = new Set<string>();
 
+  let residual = text;
   for (const m of text.matchAll(/https?:\/\/\S+/g)) {
     out.add(m[0].replace(/[.,;:!?)\]}>"']+$/, ""));
   }
-  for (const m of text.matchAll(/\d+(?:\.\d+)?/g)) out.add(m[0]);
-  for (const m of text.matchAll(/[A-Z][A-Za-z0-9-]{2,}/g)) {
+  residual = residual.replace(/https?:\/\/\S+/g, " ");
+
+  for (const m of residual.matchAll(/\d+(?:\.\d+)?/g)) out.add(m[0]);
+  for (const m of residual.matchAll(/[A-Z][A-Za-z0-9-]{2,}/g)) {
     if (!STOP_WORDS.has(m[0])) out.add(m[0]);
   }
-  for (const m of text.matchAll(/\b[A-Z]{2,}\b/g)) out.add(m[0]);
+  for (const m of residual.matchAll(/\b[A-Z]{2,}\b/g)) out.add(m[0]);
 
-  for (const m of text.matchAll(/`([^`\n]+)`/g)) {
+  for (const m of residual.matchAll(/`([^`\n]+)`/g)) {
     for (const id of m[1].matchAll(/[A-Za-z_][A-Za-z0-9_]{2,}/g)) out.add(id[0]);
   }
-  for (const m of text.matchAll(/```[\s\S]*?```/g)) {
+  for (const m of residual.matchAll(/```[\s\S]*?```/g)) {
     for (const id of m[0].matchAll(/[A-Za-z_][A-Za-z0-9_]{2,}/g)) out.add(id[0]);
   }
 
   return out;
 }
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function missingTokens(original: string, formatted: string): string[] {
   const orig = significantTokens(original);
-  const fmt = significantTokens(formatted);
+  const fmtLower = formatted.toLowerCase();
   const missing: string[] = [];
-  for (const t of orig) if (!fmt.has(t)) missing.push(t);
+  for (const t of orig) {
+    const tl = t.toLowerCase();
+    const re = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(tl)}(?:[^A-Za-z0-9_]|$)`);
+    if (!re.test(fmtLower)) missing.push(t);
+  }
   return missing;
 }

@@ -76,4 +76,23 @@ describe("missingTokens", () => {
     const fmt = "Ростелеком 2024";
     expect(missingTokens(orig, fmt)).toContain("https://a.b");
   });
+
+  it("сравнение case-insensitive — Clickhouse vs ClickHouse не теряется", () => {
+    const orig = "Используем ClickHouse и API";
+    const fmt = "Используем clickhouse и api";
+    expect(missingTokens(orig, fmt)).toEqual([]);
+  });
+
+  it("числа внутри URL не дробятся на отдельные токены", () => {
+    const orig = "См. https://example.org/path/15-1244.00/43232405";
+    const fmt = "Ссылка: https://example.org/path/15-1244.00/43232405";
+    expect(missingTokens(orig, fmt)).toEqual([]);
+  });
+
+  it("URL сохранён, но числа из его пути не считаются missing", () => {
+    const orig = "https://example.org/v1/2024";
+    const fmt = "https://example.org/v1/2024";
+    const missing = missingTokens(orig, fmt);
+    expect(missing).toEqual([]);
+  });
 });

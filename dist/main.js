@@ -2172,7 +2172,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     }
     const btnRow = this.formatPreviewSection.createDiv("llm-wiki-format-actions");
     const applyBtn = btnRow.createEl("button", { text: T.view.formatApply, cls: "mod-cta" });
-    applyBtn.disabled = missing.length > 0;
+    applyBtn.disabled = false;
     applyBtn.addEventListener("click", () => void this.plugin.controller.formatApply());
     const cancelBtn = btnRow.createEl("button", { text: T.view.formatCancelBtn, cls: "mod-warning" });
     cancelBtn.addEventListener("click", () => void this.plugin.controller.formatCancel());
@@ -4002,34 +4002,42 @@ var STOP_WORDS = /* @__PURE__ */ new Set([
 ]);
 function significantTokens(text) {
   const out = /* @__PURE__ */ new Set();
+  let residual = text;
   for (const m of text.matchAll(/https?:\/\/\S+/g)) {
     out.add(m[0].replace(/[.,;:!?)\]}>"']+$/, ""));
   }
-  for (const m of text.matchAll(/\d+(?:\.\d+)?/g))
+  residual = residual.replace(/https?:\/\/\S+/g, " ");
+  for (const m of residual.matchAll(/\d+(?:\.\d+)?/g))
     out.add(m[0]);
-  for (const m of text.matchAll(/[A-Z][A-Za-z0-9-]{2,}/g)) {
+  for (const m of residual.matchAll(/[A-Z][A-Za-z0-9-]{2,}/g)) {
     if (!STOP_WORDS.has(m[0]))
       out.add(m[0]);
   }
-  for (const m of text.matchAll(/\b[A-Z]{2,}\b/g))
+  for (const m of residual.matchAll(/\b[A-Z]{2,}\b/g))
     out.add(m[0]);
-  for (const m of text.matchAll(/`([^`\n]+)`/g)) {
+  for (const m of residual.matchAll(/`([^`\n]+)`/g)) {
     for (const id of m[1].matchAll(/[A-Za-z_][A-Za-z0-9_]{2,}/g))
       out.add(id[0]);
   }
-  for (const m of text.matchAll(/```[\s\S]*?```/g)) {
+  for (const m of residual.matchAll(/```[\s\S]*?```/g)) {
     for (const id of m[0].matchAll(/[A-Za-z_][A-Za-z0-9_]{2,}/g))
       out.add(id[0]);
   }
   return out;
 }
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 function missingTokens(original, formatted) {
   const orig = significantTokens(original);
-  const fmt = significantTokens(formatted);
+  const fmtLower = formatted.toLowerCase();
   const missing = [];
-  for (const t of orig)
-    if (!fmt.has(t))
+  for (const t of orig) {
+    const tl = t.toLowerCase();
+    const re = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(tl)}(?:[^A-Za-z0-9_]|$)`);
+    if (!re.test(fmtLower))
       missing.push(t);
+  }
   return missing;
 }
 
