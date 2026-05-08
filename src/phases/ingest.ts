@@ -57,7 +57,7 @@ export async function* runIngest(
   const wikiRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
 
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${wikiRoot}/_schema.md`),
+    tryRead(vaultTools, `${wikiRoot}/_wiki_schema.md`),
     tryRead(vaultTools, `${wikiRoot}/_index.md`),
   ]);
 
@@ -249,7 +249,7 @@ function buildIngestMessages(
     lang_notes: langNotes,
     wiki_path: wikiVaultPath,
     today,
-    schema_block: schemaContent ? `КОНВЕНЦИИ (_schema.md):\n${schemaContent.slice(0, 2000)}` : "",
+    schema_block: schemaContent ? `КОНВЕНЦИИ (_wiki_schema.md):\n${schemaContent.slice(0, 2000)}` : "",
     source_path: sourcePath,
   });
 

@@ -3,7 +3,7 @@ import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient, OnFileError } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";
-import schemaTemplate from "../../templates/_schema.md";
+import schemaTemplate from "../../templates/_wiki_schema.md";
 import initTemplate from "../../prompts/init.md";
 import { render } from "./template";
 import { runIngest } from "./ingest";
@@ -55,14 +55,14 @@ export async function* runInit(
   const sampleFiles = allFiles.slice(0, 5);
   const samples = await vaultTools.readAll(sampleFiles);
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${wikiRootGuess}/_schema.md`),
+    tryRead(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
     tryRead(vaultTools, `${wikiRootGuess}/_index.md`),
   ]);
 
   const systemContent = render(initTemplate, {
     domain_id: domainId,
     vault_name: vaultName,
-    schema_block: schemaContent ? `\nКонвенции вики (_schema.md):\n${schemaContent.slice(0, 1500)}` : "",
+    schema_block: schemaContent ? `\nКонвенции вики (_wiki_schema.md):\n${schemaContent.slice(0, 1500)}` : "",
     index_block: indexContent ? `\nСуществующая структура (_index.md):\n${indexContent.slice(0, 1000)}` : "",
   });
 
@@ -185,7 +185,7 @@ async function* runInitWithSources(
   const sampleFiles = sourceFiles.slice(0, 10);
   const samples = await vaultTools.readAll(sampleFiles);
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${wikiRootGuess}/_schema.md`),
+    tryRead(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
     tryRead(vaultTools, `${wikiRootGuess}/_index.md`),
   ]);
 
@@ -194,7 +194,7 @@ async function* runInitWithSources(
   const systemContent = render(initTemplate, {
     domain_id: domainId,
     vault_name: vaultName,
-    schema_block: schemaContent ? `\nКонвенции вики (_schema.md):\n${schemaContent.slice(0, 1500)}` : "",
+    schema_block: schemaContent ? `\nКонвенции вики (_wiki_schema.md):\n${schemaContent.slice(0, 1500)}` : "",
     index_block: indexContent ? `\nСуществующая структура (_index.md):\n${indexContent.slice(0, 1000)}` : "",
   });
 
@@ -347,7 +347,7 @@ async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
 }
 
 async function ensureRootFiles(vaultTools: VaultTools, wikiRoot: string): Promise<void> {
-  const schema = `${wikiRoot}/_schema.md`;
+  const schema = `${wikiRoot}/_wiki_schema.md`;
   const index  = `${wikiRoot}/_index.md`;
   const log    = `${wikiRoot}/_log.md`;
 

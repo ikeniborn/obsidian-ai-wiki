@@ -8,7 +8,7 @@ import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
 
 const MAX_CONTEXT_CHARS = 80_000;
-const META_FILES = ["_index.md", "_log.md", "_schema.md"];
+const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md"];
 
 export async function* runQuery(
   args: string[],
@@ -48,7 +48,7 @@ export async function* runQuery(
 
   const [indexContent, schemaContent] = await Promise.all([
     tryRead(vaultTools, `${wikiRoot}/_index.md`),
-    tryRead(vaultTools, `${wikiRoot}/_schema.md`),
+    tryRead(vaultTools, `${wikiRoot}/_wiki_schema.md`),
   ]);
 
   const pages = await vaultTools.readAll(files);
@@ -68,7 +68,7 @@ export async function* runQuery(
   const systemPrompt = render(queryTemplate, {
     domain_name: domain.name,
     entity_types_block: entityTypesBlock,
-    schema_block: schemaContent ? `\nКонвенции (_schema.md):\n${schemaContent.slice(0, 2000)}` : "",
+    schema_block: schemaContent ? `\nКонвенции (_wiki_schema.md):\n${schemaContent.slice(0, 2000)}` : "",
     index_block: indexContent ? `\nВики-индекс (_index.md):\n${indexContent.slice(0, 3000)}` : "",
   });
 
