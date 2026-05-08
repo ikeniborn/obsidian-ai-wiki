@@ -1,7 +1,7 @@
 # Architecture Documentation — obsidian-llm-wiki
 
 LLM Wiki — Obsidian-плагин для AI-powered компаундируемой базы знаний.  
-Версия: **0.1.59** | Язык: TypeScript | Runtime: Electron (Obsidian Desktop) + WebView (Obsidian Mobile)
+Версия: **0.1.61** | Язык: TypeScript | Runtime: Electron (Obsidian Desktop) + WebView (Obsidian Mobile)
 
 ---
 
@@ -46,11 +46,15 @@ graph TD
     source_paths["source-paths.ts\nconsolidateSourcePaths()"]
     types["types.ts\nRunEvent · WikiOperation\nLlmWikiPluginSettings"]
     i18n["i18n.ts\nрусский / английский"]
+    local_config["local-config.ts\nLocalConfigStore\n(local.json, per-device)"]
+    eff_settings["effective-settings.ts\nresolveEffective(s, l)"]
+    mobile_fetch["mobile-fetch.ts\nrequestUrl-backed fetch\n(mobile CORS bypass)"]
 
     main --> controller
     main --> view
     main --> settings
     main --> modals
+    main --> local_config
 
     controller --> runner
     controller --> view
@@ -58,6 +62,12 @@ graph TD
     controller --> vault_tools
     controller --> domain_map
     controller --> source_paths
+    controller --> eff_settings
+    controller --> mobile_fetch
+    controller --> local_config
+
+    settings --> eff_settings
+    settings --> local_config
 
     runner --> phases
     cli_client --> stream
@@ -77,6 +87,9 @@ graph TD
     style vault_tools fill:#f0f0f0
     style source_paths fill:#f0f0f0
     style i18n fill:#f0f0f0
+    style local_config fill:#f0f0f0
+    style eff_settings fill:#f0f0f0
+    style mobile_fetch fill:#f0f0f0
 ```
 
 ---
@@ -103,14 +116,22 @@ graph TD
 ### 6. Mobile Platform Branching (v0.1.59+)
 Один bundle для desktop и mobile. Ветвление в рантайме через `Obsidian.Platform.isMobile`:
 - `manifest.json`: `isDesktopOnly: false`.
-- `main.ts`: команды `ingest/lint/init` регистрируются только на desktop. `loadSettings()` мигрирует `backend: claude-agent` → `native-agent` на mobile.
-- `controller.ts`: `dispatch()` и `dispatchChat()` отбрасывают не-query операции на mobile с Notice. `requireNativeAgent()` проверяет `baseUrl` + `apiKey` непустыми. Все `node:fs`/`node:path`/`./claude-cli-client` импорты — динамические, внутри ветки `backend === "claude-agent"` или за `Platform.isMobile` guard.
-- `agent-runner.ts`: `writeDevLog`/`updateDevLogEval` async, ранний выход на mobile.
-- `phases/query.ts`: `node:path` удалён, путь к wiki вычисляется как vault-relative (`!Wiki/<subfolder>` через `domainWikiFolder()`), защита от `..`-сегментов.
-- `settings.ts`: backend dropdown и agentLog toggle скрыты на mobile.
-- Tests: `tests/no-fs-imports.test.ts` ловит регрессии — top-level `node:*` import в hot path.
+- `main.ts`: команды `ingest/lint/init` регистрируются только на desktop. `loadSettings()` мигрирует `backend: claude-agent` → `native-agent` на mobile, принудительно выключает `nativeAgent.perOperation` и `devMode.enabled`. Также вызывает `migrateToLocalV1()` (one-shot перенос per-device полей в `local.json`).
+- `controller.ts`: `dispatch()` и `dispatchChat()` отбрасывают не-query операции на mobile с Notice; `requireNativeAgent(eff)` принимает effective settings (overlay) и проверяет `baseUrl`/`apiKey`. Все `node:fs`/`node:path`/`./claude-cli-client` подгружаются через **`require()`** (esbuild оставляет CJS-вызов как есть для external'ов) — `await import("node:*")` бажит в Electron как ES dynamic import → `Failed to fetch dynamically imported module: node:fs`.
+- `agent-runner.ts`: `writeDevLog`/`updateDevLogEval` пишут через `VaultTools.adapter` (не node:fs) — работают и на mobile.
+- `phases/query.ts`: `node:path` удалён, путь к wiki vault-relative (`!Wiki/<subfolder>` через `domainWikiFolder()`); streaming-fallback на non-streaming при ошибке (mobileFetch не поддерживает stream).
+- `settings.ts`: per-operation toggle, dev-mode block, claude-agent блок скрыты на mobile. Per-device поля (backend, agentLogEnabled, claudeAgent.{model,allowedTools}, nativeAgent.{baseUrl,apiKey,model,temperature,topP,numCtx}) пишутся в `local.json` через `localConfigStore.save()` (не в синхронизируемый `data.json`); UI читает effective view через `resolveEffective(s, l)`.
+- Mobile fetch: `src/mobile-fetch.ts` (`requestUrl` Obsidian) подсовывается в OpenAI SDK как `fetch` опция — обходит CORS для cloud-LLM (Ollama Cloud, OpenRouter).
+- Tests: `tests/no-fs-imports.test.ts` ловит top-level `node:*` импорты в hot path; `tests/mobile-fetch.test.ts` проверяет requestUrl-bridge.
 
 Поддерживаемые на mobile операции: только `query` и `query-save`. Гайд по настройке провайдера: [`docs/mobile-cloud-ollama.md`](../mobile-cloud-ollama.md).
+
+### 7. Per-Device Settings Overlay (v0.1.61+)
+Settings разделены на два слоя:
+- **`data.json`** (синхронизируется через Obsidian Sync) — domains, history, perOperation, operations[].*, timeouts, systemPrompt.
+- **`local.json`** (per-device, не синхронизируется) — `backend`, `iclaudePath`, `agentLogEnabled`, `claudeAgent.{model,allowedTools}`, `nativeAgent.{baseUrl,apiKey,model,temperature,topP,numCtx}`, `migrated_v1`.
+
+`resolveEffective(s, l)` (`src/effective-settings.ts`) сливает overlay поверх settings: при чтении в UI и в `controller.buildAgentRunner` всегда используется effective view. Запись per-device полей идёт через `patchLocal*` хелперы в `LlmWikiSettingTab`. `migrateToLocalV1()` при первом запуске копирует существующие значения из `data.json` в `local.json` и затирает `nativeAgent.apiKey` в синхронизируемом файле (security scrub). Цель — на каждом устройстве (desktop/mobile/laptop) свои model/baseUrl/apiKey без конфликтов синхронизации.
 
 ---
 
@@ -131,6 +152,11 @@ graph TD
 | `src/vault-tools.ts` | VaultTools — read/write/list vault-файлов через VaultAdapter |
 | `src/source-paths.ts` | consolidateSourcePaths() — дедупликация source_paths |
 | `src/i18n.ts` | Локализация строк UI (ru/en) |
+| `src/local-config.ts` | LocalConfigStore — `local.json` (per-device, не синхронизируется) |
+| `src/effective-settings.ts` | `resolveEffective(s, l)` — overlay local поверх settings |
+| `src/mobile-fetch.ts` | `mobileFetch` — `requestUrl`-backed fetch для OpenAI SDK на mobile (CORS) |
+| `src/domain-store.ts` | DomainStore — JSON-хранилище доменов в vault (`!Wiki/_domain.json`) |
+| `src/wiki-path.ts` | `domainWikiFolder()` — нормализация пути к wiki-папке |
 | `src/phases/ingest.ts` | Фаза ingest |
 | `src/phases/query.ts` | Фаза query / query-save |
 | `src/phases/lint.ts` | Фаза lint |

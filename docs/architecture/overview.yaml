@@ -1,6 +1,6 @@
 id: obsidian-llm-wiki
 name: LLM Wiki Obsidian Plugin
-version: "0.1.59"
+version: "0.1.61"
 description: >
   Obsidian-плагин для ведения компаундируемой базы знаний на базе LLM.
   Запускает AI-агента (Claude CLI или нативный OpenAI-совместимый LLM),
@@ -61,7 +61,14 @@ key_constraints:
   - History limit: 20 записей в settings.json (компромисс UX vs размер)
   - Wiki domains: источник истины — DomainEntry[] в settings (персистируется Obsidian)
   - Source paths: consolidateSourcePaths() убирает дубли и поглощённые потомки
-  - Mobile: только query/query-save; backend форсится в native-agent; node:fs/path lazy
+  - Mobile: только query/query-save; backend форсится в native-agent
+  - Per-device overlay: backend, agentLogEnabled, claudeAgent.{model,allowedTools},
+    nativeAgent.{baseUrl,apiKey,model,temperature,topP,numCtx} живут в local.json
+    (не синхронизируются между устройствами); resolveEffective(s, l) сливает overlay
+    поверх settings перед использованием. apiKey scrub-ится из data.json миграцией.
+  - Node-only API: node:fs/node:path вызываются через require() (esbuild оставляет
+    как CJS-require для external'ов); await import("node:*") — баг (URL fetch в Electron).
+  - Логи: agent.jsonl + dev.jsonl пишутся через VaultTools.adapter (работает на mobile).
 
 platforms:
   desktop:
@@ -72,9 +79,17 @@ platforms:
     backends: [native-agent]
     notes: >
       Платформа определяется через Obsidian.Platform.isMobile.
-      На mobile: ClaudeCliClient недоступен (нет node:child_process),
-      все node:fs/node:path вызовы за lazy import + Platform.isMobile guard.
-      В loadSettings() backend=claude-agent → native-agent (one-time migration).
-      Команды ingest/lint/init не регистрируются. dispatch() и dispatchChat()
-      отбрасывают не-query операции через requireNativeAgent precheck.
-      Логи (agent.jsonl, dev.jsonl) отключены на mobile.
+      На mobile: ClaudeCliClient недоступен (нет node:child_process); десктопные
+      команды ingest/lint/init не регистрируются. В loadSettings()
+      backend=claude-agent → native-agent (one-time migration), perOperation +
+      devMode принудительно отключаются. Settings UI скрывает per-operation,
+      dev-mode и iclaudePath блоки. dispatch() и dispatchChat() отбрасывают
+      не-query операции через requireNativeAgent precheck.
+
+      HTTP: OpenAI SDK получает кастомный fetch — mobileFetch (src/mobile-fetch.ts)
+      на основе Obsidian requestUrl (обход CORS для https://ollama.com/v1 и пр.).
+      Streaming не поддерживается → query.ts автоматически фолбэчит на
+      non-streaming запрос при ошибке.
+
+      Логи: agent.jsonl + dev.jsonl пишутся через VaultTools.adapter (vault),
+      доступны и на mobile.
