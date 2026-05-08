@@ -249,6 +249,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           { key: "query",  label: T.settings.op_query },
           { key: "lint",   label: T.settings.op_lint },
           { key: "init",   label: T.settings.op_init },
+          { key: "format", label: T.settings.op_format },
         ];
         for (const { key, label } of ops) {
           new Setting(containerEl).setName(label).setHeading();
@@ -333,6 +334,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           { key: "query",  label: T.settings.op_query },
           { key: "lint",   label: T.settings.op_lint },
           { key: "init",   label: T.settings.op_init },
+          { key: "format", label: T.settings.op_format },
         ];
         for (const { key, label } of ops) {
           new Setting(containerEl).setName(label).setHeading();

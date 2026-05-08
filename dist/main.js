@@ -449,6 +449,7 @@ var en = {
     op_query: "Query",
     op_lint: "Lint",
     op_init: "Init",
+    op_format: "Format",
     opModel_name: "Model",
     opModel_desc: "Model name for this operation.",
     opMaxTokens_name: "Max tokens",
@@ -620,6 +621,7 @@ var ru = {
     op_query: "Query",
     op_lint: "Lint",
     op_init: "Init",
+    op_format: "Format",
     opModel_name: "\u041C\u043E\u0434\u0435\u043B\u044C",
     opModel_desc: "\u0418\u043C\u044F \u043C\u043E\u0434\u0435\u043B\u0438 \u0434\u043B\u044F \u044D\u0442\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.",
     opMaxTokens_name: "Max tokens",
@@ -791,6 +793,7 @@ var es = {
     op_query: "Query",
     op_lint: "Lint",
     op_init: "Init",
+    op_format: "Format",
     opModel_name: "Modelo",
     opModel_desc: "Nombre del modelo para esta operaci\xF3n.",
     opMaxTokens_name: "M\xE1x. tokens",
@@ -1608,7 +1611,8 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           { key: "ingest", label: T.settings.op_ingest },
           { key: "query", label: T.settings.op_query },
           { key: "lint", label: T.settings.op_lint },
-          { key: "init", label: T.settings.op_init }
+          { key: "init", label: T.settings.op_init },
+          { key: "format", label: T.settings.op_format }
         ];
         for (const { key, label } of ops) {
           new import_obsidian3.Setting(containerEl).setName(label).setHeading();
@@ -1671,7 +1675,8 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           { key: "ingest", label: T.settings.op_ingest },
           { key: "query", label: T.settings.op_query },
           { key: "lint", label: T.settings.op_lint },
-          { key: "init", label: T.settings.op_init }
+          { key: "init", label: T.settings.op_init },
+          { key: "format", label: T.settings.op_format }
         ];
         for (const { key, label } of ops) {
           new import_obsidian3.Setting(containerEl).setName(label).setHeading();
@@ -12182,7 +12187,8 @@ var LlmWikiPlugin = class extends import_obsidian7.Plugin {
           ingest: { ...defCA.operations.ingest, ...caOps.ingest ?? {} },
           query: { ...defCA.operations.query, ...caOps.query ?? {} },
           lint: { ...defCA.operations.lint, ...caOps.lint ?? {} },
-          init: { ...defCA.operations.init, ...caOps.init ?? {} }
+          init: { ...defCA.operations.init, ...caOps.init ?? {} },
+          format: { ...defCA.operations.format, ...caOps.format ?? {} }
         }
       },
       nativeAgent: {
@@ -12192,7 +12198,8 @@ var LlmWikiPlugin = class extends import_obsidian7.Plugin {
           ingest: { ...defNA.operations.ingest, ...naOps.ingest ?? {} },
           query: { ...defNA.operations.query, ...naOps.query ?? {} },
           lint: { ...defNA.operations.lint, ...naOps.lint ?? {} },
-          init: { ...defNA.operations.init, ...naOps.init ?? {} }
+          init: { ...defNA.operations.init, ...naOps.init ?? {} },
+          format: { ...defNA.operations.format, ...naOps.format ?? {} }
         }
       },
       history: data?.history ?? []

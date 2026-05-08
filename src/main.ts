@@ -136,6 +136,7 @@ export default class LlmWikiPlugin extends Plugin {
           query:  { ...defCA.operations.query,  ...((caOps.query  as object) ?? {}) },
           lint:   { ...defCA.operations.lint,   ...((caOps.lint   as object) ?? {}) },
           init:   { ...defCA.operations.init,   ...((caOps.init   as object) ?? {}) },
+          format: { ...defCA.operations.format, ...((caOps.format as object) ?? {}) },
         },
       },
       nativeAgent: {
@@ -146,6 +147,7 @@ export default class LlmWikiPlugin extends Plugin {
           query:  { ...defNA.operations.query,  ...((naOps.query  as object) ?? {}) },
           lint:   { ...defNA.operations.lint,   ...((naOps.lint   as object) ?? {}) },
           init:   { ...defNA.operations.init,   ...((naOps.init   as object) ?? {}) },
+          format: { ...defNA.operations.format, ...((naOps.format as object) ?? {}) },
         },
       },
       history: (data?.history as RunHistoryEntry[]) ?? [],
