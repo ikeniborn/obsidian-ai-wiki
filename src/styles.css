@@ -250,6 +250,17 @@
   color: var(--text-on-accent);
   font-size: 12px;
 }
+.llm-wiki-format-warn summary {
+  cursor: pointer;
+}
+.llm-wiki-format-warn-list {
+  margin: 6px 0 0 0;
+  padding-left: 18px;
+  max-height: 160px;
+  overflow-y: auto;
+  font-family: var(--font-monospace);
+  font-size: 11px;
+}
 .llm-wiki-format-actions {
   display: flex;
   justify-content: flex-end;

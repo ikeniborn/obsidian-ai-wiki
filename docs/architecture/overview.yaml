@@ -1,6 +1,6 @@
 id: obsidian-llm-wiki
 name: LLM Wiki Obsidian Plugin
-version: "0.1.65"
+version: "0.1.68"
 description: >
   Obsidian-плагин для ведения компаундируемой базы знаний на базе LLM.
   Запускает AI-агента (Claude CLI или нативный OpenAI-совместимый LLM),
@@ -88,6 +88,10 @@ key_constraints:
     с word-boundary `[^A-Za-z0-9_]`. ClickHouse находит clickhouse, API
     не матчит rapid, 2024 не матчит 20240. Замена прежнего точного
     Set.has() сравнения, дававшего false-positive на нормализации регистра.
+  - Format / missing-tokens UI (v0.1.68): warning в side-panel — раскрываемый
+    <details> с <ul> конкретных токенов. Пользователь визуально оценивает
+    шум (переформулировки section-меток, переписанные комменты в коде) vs
+    реальную потерю фактов. max-height: 160px, monospace 11px.
   - Format JSON-устойчивость (v0.1.63+): запрос идёт с
     response_format: { type: "json_object" }; extractJsonObject снимает
     ```json```-обёртку, repairJson чинит trailing-commas и экранирует сырые
@@ -95,16 +99,34 @@ key_constraints:
     один авто-retry с явным «верни ТОЛЬКО валидный JSON, экранируй спецсимволы».
     Если finish_reason === "length" — retry пропускается, выдаётся ошибка
     «ответ обрезан, увеличьте maxTokens».
+  - Format stripCodeFence anchored (v0.1.68): regex привязан к началу/концу
+    ответа (^\s*```...```\s*$). Прежний жадный /```(?:json)?[\s\S]*?```/
+    ловил ПЕРВЫЙ внутренний markdown-fence из поля formatted (```sql, ```bash,
+    ```yaml) — возвращал чужой блок без `{`, парсер падал → ложный
+    «JSON невалиден → retry → final error» на любых моделях, чей ответ не
+    обёрнут во внешний ```json fence (sonnet, gpt). Haiku маскировала баг
+    собственным внешним fence. Регрессионные тесты в format-utils.test.ts.
+  - Format result-text (v0.1.67): при truncation/invalid-JSON runFormat
+    эмитит result-событие с text="" вместо дампа полного JSON в Result-блок
+    UI. Текст ошибки идёт отдельным событием; Result-блок остаётся пустым.
+  - Mobile UI gating (v0.1.68, in progress): в LlmWikiView поля domainSelect,
+    initBtn, ingestBtn, lintBtn, formatBtn опциональны. Секции «Создание
+    домена» и «Наполнение / Актуализация» обёрнуты if (!Platform.isMobile).
+    refreshDomains, openAddDomain, submitQuery, setRunning используют
+    optional chaining и early-return когда соответствующего элемента нет.
+    На mobile UI остаётся только Query, чат и история — согласовано с
+    dispatch() mobile-guard'ом (query/query-save).
   - Format I/O: temp хранится в !Wiki/-независимой папке !Temp/<basename>.formatted.md;
     Apply читает temp, перезаписывает оригинал через vault.modify(TFile) (буфер
     редактора Obsidian обновляется; adapter.write обходил редактор и затирался
     при следующем save), удаляет temp; Cancel удаляет temp. Файлы внутри
     wiki-домена (по domainWikiFolder) НЕ форматируются — controller показывает
     ConfirmModal с предложением запустить ingest из wiki_sources.
-  - Per-op maxTokens (v0.1.63+): ClaudeOperationConfig + NativeOperationConfig оба
-    несут maxTokens. Settings UI экспонирует поле для каждой операции в обоих
-    backend'ах. Для format default поднят до 16384 (исторически 8192 обрезал
-    JSON на больших страницах).
+  - Per-op maxTokens (v0.1.63+): только NativeOperationConfig несёт maxTokens
+    (default format=32768 после миграции v0.1.65). У claude-agent поле удалено
+    в v0.1.66 — claude CLI не принимает --max-tokens, лимит задаётся через
+    env CLAUDE_CODE_MAX_OUTPUT_TOKENS в iclaude.sh; loadSettings() стрипает
+    legacy claudeAgent.operations.*.maxTokens из data.json при первой загрузке.
   - ClaudeCliClient large-payload (v0.1.63+): порог LARGE_THRESHOLD = 262 144
     байт (Linux ARG_MAX ~2 МБ, 256 КБ inline безопасно). При превышении
     user-content оборачивается <user_input>...</user_input>, пишется в tmp-файл

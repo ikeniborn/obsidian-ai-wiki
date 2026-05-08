@@ -26,6 +26,22 @@ describe("extractJsonObject", () => {
     expect(extractJsonObject("not json")).toBeNull();
     expect(extractJsonObject("{ broken")).toBeNull();
   });
+
+  it("не путается с inner ```fence``` внутри formatted (regression)", () => {
+    // formatted содержит ```sql / ```bash — раньше stripCodeFence жадно вырезал первый внутренний блок.
+    const json = '{"report":"r","formatted":"# H\\n\\n```sql\\nSELECT 1;\\n```\\n\\n```bash\\nls\\n```\\n"}';
+    const out = extractJsonObject(json);
+    expect(out?.report).toBe("r");
+    expect(out?.formatted).toContain("```sql");
+    expect(out?.formatted).toContain("```bash");
+  });
+
+  it("парсит JSON, обёрнутый в ```json fence снаружи", () => {
+    const wrapped = '```json\n{"report":"r","formatted":"```sql\\nSELECT 1;\\n```"}\n```';
+    const out = extractJsonObject(wrapped);
+    expect(out?.report).toBe("r");
+    expect(out?.formatted).toContain("```sql");
+  });
 });
 
 describe("looksTruncated", () => {

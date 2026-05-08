@@ -1,4 +1,4 @@
-import { App, ItemView, Modal, WorkspaceLeaf, MarkdownRenderer, Component, Notice } from "obsidian";
+import { App, ItemView, Modal, WorkspaceLeaf, MarkdownRenderer, Component, Notice, Platform } from "obsidian";
 import { AddDomainModal, BusyCloseModal, ConfirmModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
@@ -41,11 +41,11 @@ export class LlmWikiView extends ItemView {
   private queryInput!: HTMLTextAreaElement;
   private askBtn!: HTMLButtonElement;
   private askSaveBtn!: HTMLButtonElement;
-  private domainSelect!: HTMLSelectElement;
-  private initBtn!: HTMLButtonElement;
-  private ingestBtn!: HTMLButtonElement;
-  private lintBtn!: HTMLButtonElement;
-  private formatBtn!: HTMLButtonElement;
+  private domainSelect?: HTMLSelectElement;
+  private initBtn?: HTMLButtonElement;
+  private ingestBtn?: HTMLButtonElement;
+  private lintBtn?: HTMLButtonElement;
+  private formatBtn?: HTMLButtonElement;
   private formatPreviewSection: HTMLElement | null = null;
   private fixChatEl: HTMLElement | null = null;
   private lastContext: { operation: WikiOperation; domainId: string | undefined; report: string } | null = null;
@@ -91,49 +91,55 @@ export class LlmWikiView extends ItemView {
     root.addClass("llm-wiki-view");
 
     const T = i18n();
+    const isMobile = Platform.isMobile;
 
     const header = root.createDiv("llm-wiki-header");
     header.createEl("h3", { text: "LLM wiki" });
     this.statusEl = header.createDiv("llm-wiki-status");
 
-    // 1. Создание нового домена
-    root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionCreate });
-    const createRow = root.createDiv("llm-wiki-create-row");
-    this.initBtn = createRow.createEl("button", { text: T.view.init, cls: "llm-wiki-init-btn" });
-    this.initBtn.addEventListener("click", () => this.openAddDomain());
+    // На mobile доступна только query-операция (см. types.ts/main.ts gating).
+    // Скрываем секции "Создание домена" и "Наполнение/Актуализация" целиком —
+    // их кнопки (init/ingest/lint/format) не работают.
+    if (!isMobile) {
+      // 1. Создание нового домена
+      root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionCreate });
+      const createRow = root.createDiv("llm-wiki-create-row");
+      this.initBtn = createRow.createEl("button", { text: T.view.init, cls: "llm-wiki-init-btn" });
+      this.initBtn.addEventListener("click", () => this.openAddDomain());
 
-    // 2+3. Наполнение / Актуализация
-    root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionDomain });
-    const domainBox = root.createDiv("llm-wiki-domain");
-    const domainRow = domainBox.createDiv("llm-wiki-domain-row");
-    domainRow.createSpan({ cls: "muted", text: "Domain:" });
-    this.domainSelect = domainRow.createEl("select", { cls: "llm-wiki-domain-select" });
-    const refreshBtn = domainRow.createEl("button", { text: "↻", attr: { title: T.view.refreshTitle } });
-    refreshBtn.addEventListener("click", () => this.refreshDomains());
+      // 2+3. Наполнение / Актуализация
+      root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionDomain });
+      const domainBox = root.createDiv("llm-wiki-domain");
+      const domainRow = domainBox.createDiv("llm-wiki-domain-row");
+      domainRow.createSpan({ cls: "muted", text: "Domain:" });
+      this.domainSelect = domainRow.createEl("select", { cls: "llm-wiki-domain-select" });
+      const refreshBtn = domainRow.createEl("button", { text: "↻", attr: { title: T.view.refreshTitle } });
+      refreshBtn.addEventListener("click", () => this.refreshDomains());
 
-    const actionRow = domainBox.createDiv("llm-wiki-domain-actions");
-    this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
-    this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
-    this.formatBtn = actionRow.createEl("button", { text: T.view.format });
-    this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
-    this.ingestBtn.addEventListener("click", () => {
-      const file = this.plugin.app.workspace.getActiveFile();
-      if (!file) { new Notice(i18n().view.noActiveFile); return; }
-      const domainId = this.domainSelect.value || undefined;
-      new ConfirmModal(this.plugin.app, "Ingest — confirm", [
-        `File: ${file.name}`,
-        "Claude will read the file, extract entities and update domain wiki pages.",
-      ], () => void this.plugin.controller.ingestActive(domainId)).open();
-    });
-    this.lintBtn.addEventListener("click", () => {
-      const d = this.domainSelect.value;
-      const domainLabel = d ? `«${d}»` : "all wiki";
-      new ConfirmModal(this.plugin.app, "Lint — confirm", [
-        `Domain: ${domainLabel}`,
-        "Claude will check wiki pages for quality and update entity_types.",
-      ], () => void this.plugin.controller.lint(d || "all")).open();
-    });
-    this.refreshDomains();
+      const actionRow = domainBox.createDiv("llm-wiki-domain-actions");
+      this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
+      this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
+      this.formatBtn = actionRow.createEl("button", { text: T.view.format });
+      this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
+      this.ingestBtn.addEventListener("click", () => {
+        const file = this.plugin.app.workspace.getActiveFile();
+        if (!file) { new Notice(i18n().view.noActiveFile); return; }
+        const domainId = this.domainSelect.value || undefined;
+        new ConfirmModal(this.plugin.app, "Ingest — confirm", [
+          `File: ${file.name}`,
+          "Claude will read the file, extract entities and update domain wiki pages.",
+        ], () => void this.plugin.controller.ingestActive(domainId)).open();
+      });
+      this.lintBtn.addEventListener("click", () => {
+        const d = this.domainSelect.value;
+        const domainLabel = d ? `«${d}»` : "all wiki";
+        new ConfirmModal(this.plugin.app, "Lint — confirm", [
+          `Domain: ${domainLabel}`,
+          "Claude will check wiki pages for quality and update entity_types.",
+        ], () => void this.plugin.controller.lint(d || "all")).open();
+      });
+      this.refreshDomains();
+    }
 
     // 4. Запрос
     root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionQuery });
@@ -194,6 +200,7 @@ export class LlmWikiView extends ItemView {
   }
 
   private async refreshDomains(): Promise<void> {
+    if (!this.domainSelect) return;
     let domains: DomainEntry[];
     try { domains = await this.plugin.controller.loadDomains(); } catch { return; }
     const previous = this.domainSelect.value;
@@ -216,7 +223,7 @@ export class LlmWikiView extends ItemView {
         const r = await this.plugin.controller.registerDomain(input);
         if (!r.ok) return;
         await this.refreshDomains();
-        this.domainSelect.value = input.id;
+        if (this.domainSelect) this.domainSelect.value = input.id;
 
         if (!input.sourcePaths.length) {
           void this.plugin.controller.init(input.id, false);
@@ -249,7 +256,7 @@ export class LlmWikiView extends ItemView {
     const q = this.queryInput.value.trim();
     if (!q) { new Notice(i18n().view.enterQuestion); return; }
     if (this.state === "running") { new Notice(i18n().view.operationInProgress); return; }
-    void this.plugin.controller.query(q, save, this.domainSelect.value || undefined);
+    void this.plugin.controller.query(q, save, this.domainSelect?.value || undefined);
     this.queryInput.value = "";
   }
 
@@ -261,10 +268,10 @@ export class LlmWikiView extends ItemView {
     this.cancelBtn.disabled = false;
     this.askBtn.disabled = true;
     this.askSaveBtn.disabled = true;
-    this.initBtn.disabled = true;
-    this.ingestBtn.disabled = true;
-    this.lintBtn.disabled = true;
-    this.formatBtn.disabled = true;
+    if (this.initBtn) this.initBtn.disabled = true;
+    if (this.ingestBtn) this.ingestBtn.disabled = true;
+    if (this.lintBtn) this.lintBtn.disabled = true;
+    if (this.formatBtn) this.formatBtn.disabled = true;
     this.fixChatEl?.remove();
     this.fixChatEl = null;
     this.chatSection?.remove();
@@ -437,8 +444,11 @@ export class LlmWikiView extends ItemView {
     void MarkdownRenderer.render(this.app, report, reportEl, "", comp);
 
     if (missing.length > 0) {
-      const warn = this.formatPreviewSection.createDiv("llm-wiki-format-warn");
-      warn.setText(T.view.formatMissingTokens(missing.length));
+      const warn = this.formatPreviewSection.createEl("details", { cls: "llm-wiki-format-warn" });
+      const summary = warn.createEl("summary");
+      summary.setText(T.view.formatMissingTokens(missing.length));
+      const list = warn.createEl("ul", { cls: "llm-wiki-format-warn-list" });
+      for (const t of missing) list.createEl("li", { text: t });
     }
 
     const btnRow = this.formatPreviewSection.createDiv("llm-wiki-format-actions");

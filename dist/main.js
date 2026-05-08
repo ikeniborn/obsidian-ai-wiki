@@ -20277,46 +20277,49 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     root.empty();
     root.addClass("llm-wiki-view");
     const T = i18n();
+    const isMobile = import_obsidian4.Platform.isMobile;
     const header = root.createDiv("llm-wiki-header");
     header.createEl("h3", { text: "LLM wiki" });
     this.statusEl = header.createDiv("llm-wiki-status");
-    root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionCreate });
-    const createRow = root.createDiv("llm-wiki-create-row");
-    this.initBtn = createRow.createEl("button", { text: T.view.init, cls: "llm-wiki-init-btn" });
-    this.initBtn.addEventListener("click", () => this.openAddDomain());
-    root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionDomain });
-    const domainBox = root.createDiv("llm-wiki-domain");
-    const domainRow = domainBox.createDiv("llm-wiki-domain-row");
-    domainRow.createSpan({ cls: "muted", text: "Domain:" });
-    this.domainSelect = domainRow.createEl("select", { cls: "llm-wiki-domain-select" });
-    const refreshBtn = domainRow.createEl("button", { text: "\u21BB", attr: { title: T.view.refreshTitle } });
-    refreshBtn.addEventListener("click", () => this.refreshDomains());
-    const actionRow = domainBox.createDiv("llm-wiki-domain-actions");
-    this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
-    this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
-    this.formatBtn = actionRow.createEl("button", { text: T.view.format });
-    this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
-    this.ingestBtn.addEventListener("click", () => {
-      const file = this.plugin.app.workspace.getActiveFile();
-      if (!file) {
-        new import_obsidian4.Notice(i18n().view.noActiveFile);
-        return;
-      }
-      const domainId = this.domainSelect.value || void 0;
-      new ConfirmModal(this.plugin.app, "Ingest \u2014 confirm", [
-        `File: ${file.name}`,
-        "Claude will read the file, extract entities and update domain wiki pages."
-      ], () => void this.plugin.controller.ingestActive(domainId)).open();
-    });
-    this.lintBtn.addEventListener("click", () => {
-      const d = this.domainSelect.value;
-      const domainLabel = d ? `\xAB${d}\xBB` : "all wiki";
-      new ConfirmModal(this.plugin.app, "Lint \u2014 confirm", [
-        `Domain: ${domainLabel}`,
-        "Claude will check wiki pages for quality and update entity_types."
-      ], () => void this.plugin.controller.lint(d || "all")).open();
-    });
-    this.refreshDomains();
+    if (!isMobile) {
+      root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionCreate });
+      const createRow = root.createDiv("llm-wiki-create-row");
+      this.initBtn = createRow.createEl("button", { text: T.view.init, cls: "llm-wiki-init-btn" });
+      this.initBtn.addEventListener("click", () => this.openAddDomain());
+      root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionDomain });
+      const domainBox = root.createDiv("llm-wiki-domain");
+      const domainRow = domainBox.createDiv("llm-wiki-domain-row");
+      domainRow.createSpan({ cls: "muted", text: "Domain:" });
+      this.domainSelect = domainRow.createEl("select", { cls: "llm-wiki-domain-select" });
+      const refreshBtn = domainRow.createEl("button", { text: "\u21BB", attr: { title: T.view.refreshTitle } });
+      refreshBtn.addEventListener("click", () => this.refreshDomains());
+      const actionRow = domainBox.createDiv("llm-wiki-domain-actions");
+      this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
+      this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
+      this.formatBtn = actionRow.createEl("button", { text: T.view.format });
+      this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
+      this.ingestBtn.addEventListener("click", () => {
+        const file = this.plugin.app.workspace.getActiveFile();
+        if (!file) {
+          new import_obsidian4.Notice(i18n().view.noActiveFile);
+          return;
+        }
+        const domainId = this.domainSelect.value || void 0;
+        new ConfirmModal(this.plugin.app, "Ingest \u2014 confirm", [
+          `File: ${file.name}`,
+          "Claude will read the file, extract entities and update domain wiki pages."
+        ], () => void this.plugin.controller.ingestActive(domainId)).open();
+      });
+      this.lintBtn.addEventListener("click", () => {
+        const d = this.domainSelect.value;
+        const domainLabel = d ? `\xAB${d}\xBB` : "all wiki";
+        new ConfirmModal(this.plugin.app, "Lint \u2014 confirm", [
+          `Domain: ${domainLabel}`,
+          "Claude will check wiki pages for quality and update entity_types."
+        ], () => void this.plugin.controller.lint(d || "all")).open();
+      });
+      this.refreshDomains();
+    }
     root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionQuery });
     const ask = root.createDiv("llm-wiki-ask");
     this.queryInput = ask.createEl("textarea", {
@@ -20370,6 +20373,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     }
   }
   async refreshDomains() {
+    if (!this.domainSelect)
+      return;
     let domains;
     try {
       domains = await this.plugin.controller.loadDomains();
@@ -20398,7 +20403,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
         if (!r.ok)
           return;
         await this.refreshDomains();
-        this.domainSelect.value = input.id;
+        if (this.domainSelect)
+          this.domainSelect.value = input.id;
         if (!input.sourcePaths.length) {
           void this.plugin.controller.init(input.id, false);
           return;
@@ -20431,7 +20437,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       new import_obsidian4.Notice(i18n().view.operationInProgress);
       return;
     }
-    void this.plugin.controller.query(q, save, this.domainSelect.value || void 0);
+    void this.plugin.controller.query(q, save, this.domainSelect?.value || void 0);
     this.queryInput.value = "";
   }
   setRunning(operation, args) {
@@ -20442,10 +20448,14 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.cancelBtn.disabled = false;
     this.askBtn.disabled = true;
     this.askSaveBtn.disabled = true;
-    this.initBtn.disabled = true;
-    this.ingestBtn.disabled = true;
-    this.lintBtn.disabled = true;
-    this.formatBtn.disabled = true;
+    if (this.initBtn)
+      this.initBtn.disabled = true;
+    if (this.ingestBtn)
+      this.ingestBtn.disabled = true;
+    if (this.lintBtn)
+      this.lintBtn.disabled = true;
+    if (this.formatBtn)
+      this.formatBtn.disabled = true;
     this.fixChatEl?.remove();
     this.fixChatEl = null;
     this.chatSection?.remove();
@@ -20616,8 +20626,12 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     comp.load();
     void import_obsidian4.MarkdownRenderer.render(this.app, report, reportEl, "", comp);
     if (missing.length > 0) {
-      const warn = this.formatPreviewSection.createDiv("llm-wiki-format-warn");
-      warn.setText(T.view.formatMissingTokens(missing.length));
+      const warn = this.formatPreviewSection.createEl("details", { cls: "llm-wiki-format-warn" });
+      const summary = warn.createEl("summary");
+      summary.setText(T.view.formatMissingTokens(missing.length));
+      const list = warn.createEl("ul", { cls: "llm-wiki-format-warn-list" });
+      for (const t of missing)
+        list.createEl("li", { text: t });
     }
     const btnRow = this.formatPreviewSection.createDiv("llm-wiki-format-actions");
     const applyBtn = btnRow.createEl("button", { text: T.view.formatApply, cls: "mod-cta" });
@@ -22416,7 +22430,7 @@ function looksTruncated(text) {
   return sawOpen && (depth > 0 || inString);
 }
 function stripCodeFence(text) {
-  const fence = text.match(/```(?:json|JSON)?\s*([\s\S]*?)```/);
+  const fence = text.match(/^\s*```(?:json|JSON)?\s*\n([\s\S]*?)\n```\s*$/);
   if (fence)
     return fence[1];
   return text;

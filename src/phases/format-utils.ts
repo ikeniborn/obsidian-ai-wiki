@@ -56,7 +56,9 @@ export function looksTruncated(text: string): boolean {
 }
 
 function stripCodeFence(text: string): string {
-  const fence = text.match(/```(?:json|JSON)?\s*([\s\S]*?)```/);
+  // Strip ONLY if the entire response is wrapped in a fence — anchored.
+  // Inner ```sql / ```bash etc. внутри `formatted` строки JSON НЕ должны срабатывать.
+  const fence = text.match(/^\s*```(?:json|JSON)?\s*\n([\s\S]*?)\n```\s*$/);
   if (fence) return fence[1];
   return text;
 }
