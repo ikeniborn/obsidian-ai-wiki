@@ -1,5 +1,13 @@
 import type { Plugin } from "obsidian";
 
+export interface ProxyConfig {
+  enabled: boolean;
+  url: string;
+  username?: string;
+  password?: string;
+  noProxy?: string;
+}
+
 export interface LocalConfig {
   iclaudePath: string;
   backend?: "claude-agent" | "native-agent";
@@ -16,6 +24,7 @@ export interface LocalConfig {
     topP: number | null;
     numCtx: number | null;
   };
+  proxy?: ProxyConfig;
   migrated_v1?: boolean;
 }
 
