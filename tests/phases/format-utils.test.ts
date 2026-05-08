@@ -42,11 +42,13 @@ describe("significantTokens", () => {
     expect(t.has("http://a.b")).toBe(true);
   });
 
-  it("извлекает имена собственные (заглавные)", () => {
-    const t = significantTokens("Ростелеком использует ClickHouse и Postgres");
-    expect(t.has("Ростелеком")).toBe(true);
+  it("извлекает Latin-имена собственные и акронимы; кириллица игнорируется (рефраз допустим)", () => {
+    const t = significantTokens("Ростелеком использует ClickHouse и Postgres, API через HTTP");
     expect(t.has("ClickHouse")).toBe(true);
     expect(t.has("Postgres")).toBe(true);
+    expect(t.has("API")).toBe(true);
+    expect(t.has("HTTP")).toBe(true);
+    expect(t.has("Ростелеком")).toBe(false);
   });
 
   it("извлекает идентификаторы из inline кода", () => {

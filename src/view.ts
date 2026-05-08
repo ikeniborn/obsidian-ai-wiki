@@ -452,7 +452,7 @@ export class LlmWikiView extends ItemView {
     const chatBox = this.formatPreviewSection.createDiv("llm-wiki-format-chat");
     const inputEl = chatBox.createEl("textarea", {
       cls: "llm-wiki-format-chat-input",
-      attr: { placeholder: T.view.formatRefinePlaceholder, rows: "2" },
+      attr: { placeholder: T.view.formatRefinePlaceholder, rows: "3" },
     });
     const sendRow = chatBox.createDiv("llm-wiki-format-chat-send-row");
     const sendBtn = sendRow.createEl("button", { text: T.view.chatSend });

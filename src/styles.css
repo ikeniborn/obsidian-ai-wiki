@@ -272,6 +272,7 @@
   font-family: var(--font-monospace);
   font-size: 12px;
   resize: vertical;
+  min-height: 6em;
 }
 .llm-wiki-format-chat-send-row {
   display: flex;

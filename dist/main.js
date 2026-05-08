@@ -2167,7 +2167,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     const chatBox = this.formatPreviewSection.createDiv("llm-wiki-format-chat");
     const inputEl = chatBox.createEl("textarea", {
       cls: "llm-wiki-format-chat-input",
-      attr: { placeholder: T.view.formatRefinePlaceholder, rows: "2" }
+      attr: { placeholder: T.view.formatRefinePlaceholder, rows: "3" }
     });
     const sendRow = chatBox.createDiv("llm-wiki-format-chat-send-row");
     const sendBtn = sendRow.createEl("button", { text: T.view.chatSend });
@@ -3878,14 +3878,15 @@ var format_schema_default = "# Format Schema (\u043F\u0440\u0430\u0432\u0438\u04
 
 // src/phases/format-utils.ts
 function extractJsonObject(text) {
-  const start = text.indexOf("{");
+  const cleaned = stripCodeFence(text);
+  const start = cleaned.indexOf("{");
   if (start < 0)
     return null;
   let depth = 0;
   let inString = false;
   let escape2 = false;
-  for (let i = start; i < text.length; i++) {
-    const ch = text[i];
+  for (let i = start; i < cleaned.length; i++) {
+    const ch = cleaned[i];
     if (escape2) {
       escape2 = false;
       continue;
@@ -3905,18 +3906,75 @@ function extractJsonObject(text) {
     else if (ch === "}") {
       depth--;
       if (depth === 0) {
-        try {
-          const parsed = JSON.parse(text.slice(start, i + 1));
-          if (typeof parsed.report !== "string" || typeof parsed.formatted !== "string")
-            return null;
-          return { report: parsed.report, formatted: parsed.formatted };
-        } catch {
+        const slice = cleaned.slice(start, i + 1);
+        const parsed = tryParseJson(slice);
+        if (!parsed)
           return null;
-        }
+        if (typeof parsed.report !== "string" || typeof parsed.formatted !== "string")
+          return null;
+        return { report: parsed.report, formatted: parsed.formatted };
       }
     }
   }
   return null;
+}
+function stripCodeFence(text) {
+  const fence = text.match(/```(?:json|JSON)?\s*([\s\S]*?)```/);
+  if (fence)
+    return fence[1];
+  return text;
+}
+function tryParseJson(slice) {
+  try {
+    return JSON.parse(slice);
+  } catch {
+    try {
+      return JSON.parse(repairJson(slice));
+    } catch {
+      return null;
+    }
+  }
+}
+function repairJson(s) {
+  const noTrailing = s.replace(/,(\s*[}\]])/g, "$1");
+  return escapeRawControlsInStrings(noTrailing);
+}
+function escapeRawControlsInStrings(src) {
+  let out = "";
+  let inString = false;
+  let escape2 = false;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    const code = ch.charCodeAt(0);
+    if (escape2) {
+      out += ch;
+      escape2 = false;
+      continue;
+    }
+    if (inString && ch === "\\") {
+      out += ch;
+      escape2 = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      out += ch;
+      continue;
+    }
+    if (inString && code < 32) {
+      if (ch === "\n")
+        out += "\\n";
+      else if (ch === "\r")
+        out += "\\r";
+      else if (ch === "	")
+        out += "\\t";
+      else
+        out += `\\u${code.toString(16).padStart(4, "0")}`;
+      continue;
+    }
+    out += ch;
+  }
+  return out;
 }
 var STOP_WORDS = /* @__PURE__ */ new Set([
   "The",
@@ -3928,15 +3986,7 @@ var STOP_WORDS = /* @__PURE__ */ new Set([
   "Or",
   "But",
   "If",
-  "When",
-  "\u042D\u0442\u043E",
-  "\u042D\u0442\u043E\u0442",
-  "\u042D\u0442\u0438",
-  "\u0422\u043E\u0442",
-  "\u0415\u0441\u043B\u0438",
-  "\u041A\u043E\u0433\u0434\u0430",
-  "\u041E\u0434\u043D\u0430\u043A\u043E",
-  "\u0422\u0430\u043A\u0436\u0435"
+  "When"
 ]);
 function significantTokens(text) {
   const out = /* @__PURE__ */ new Set();
@@ -3945,10 +3995,12 @@ function significantTokens(text) {
   }
   for (const m of text.matchAll(/\d+(?:\.\d+)?/g))
     out.add(m[0]);
-  for (const m of text.matchAll(/[A-ZА-Я][\wА-Яа-я-]{2,}/g)) {
+  for (const m of text.matchAll(/[A-Z][A-Za-z0-9-]{2,}/g)) {
     if (!STOP_WORDS.has(m[0]))
       out.add(m[0]);
   }
+  for (const m of text.matchAll(/\b[A-Z]{2,}\b/g))
+    out.add(m[0]);
   for (const m of text.matchAll(/`([^`\n]+)`/g)) {
     for (const id of m[1].matchAll(/[A-Za-z_][A-Za-z0-9_]{2,}/g))
       out.add(id[0]);
@@ -4016,35 +4068,52 @@ ${original}`;
   ];
   yield { kind: "assistant_text", delta: `\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u0430 ${filePath}...
 ` };
-  const params = buildChatParams(model, messages, opts);
-  let fullText = "";
-  try {
-    const stream = await llm.chat.completions.create(
-      { ...params, stream: true },
-      { signal }
-    );
-    for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
-      if (reasoning)
-        yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-      if (content) {
-        fullText += content;
-        yield { kind: "assistant_text", delta: content };
+  const baseParams = { ...buildChatParams(model, messages, opts), response_format: { type: "json_object" } };
+  async function* callOnce(p) {
+    let acc = "";
+    try {
+      const stream = await llm.chat.completions.create(
+        { ...p, stream: true },
+        { signal }
+      );
+      for await (const chunk of stream) {
+        const { reasoning, content } = extractStreamDeltas(chunk);
+        if (reasoning)
+          yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
+        if (content) {
+          acc += content;
+          yield { kind: "assistant_text", delta: content };
+        }
       }
+    } catch (e) {
+      if (signal.aborted || e.name === "AbortError")
+        return acc;
+      const resp = await llm.chat.completions.create(
+        { ...p, stream: false }
+      );
+      acc = resp.choices[0]?.message?.content ?? "";
     }
-  } catch (e) {
-    if (signal.aborted || e.name === "AbortError")
-      return;
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false }
-    );
-    fullText = resp.choices[0]?.message?.content ?? "";
+    return acc;
   }
+  let fullText = yield* callOnce(baseParams);
   if (signal.aborted)
     return;
-  const parsed = extractJsonObject(fullText);
+  let parsed = extractJsonObject(fullText);
   if (!parsed) {
-    yield { kind: "error", message: "Format: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON" };
+    yield { kind: "assistant_text", delta: "\n[JSON \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u2014 \u043F\u043E\u0432\u0442\u043E\u0440\u044F\u044E \u0437\u0430\u043F\u0440\u043E\u0441]\n" };
+    const retryMessages = [
+      ...messages,
+      { role: "assistant", content: fullText },
+      { role: "user", content: '\u0422\u0432\u043E\u0439 \u043F\u0440\u0435\u0434\u044B\u0434\u0443\u0449\u0438\u0439 \u043E\u0442\u0432\u0435\u0442 \u043D\u0435 \u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u043C JSON. \u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 {"report": "...", "formatted": "..."} \u0431\u0435\u0437 markdown-\u043E\u0431\u0451\u0440\u0442\u043A\u0438, \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439. \u0412\u0441\u0435 \u0441\u043F\u0435\u0446\u0441\u0438\u043C\u0432\u043E\u043B\u044B \u0432\u043D\u0443\u0442\u0440\u0438 \u0441\u0442\u0440\u043E\u043A \u0434\u043E\u043B\u0436\u043D\u044B \u0431\u044B\u0442\u044C \u044D\u043A\u0440\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u044B (\\n, \\", \\\\).' }
+    ];
+    const retryParams = { ...buildChatParams(model, retryMessages, opts), response_format: { type: "json_object" } };
+    fullText = yield* callOnce(retryParams);
+    if (signal.aborted)
+      return;
+    parsed = extractJsonObject(fullText);
+  }
+  if (!parsed) {
+    yield { kind: "error", message: "Format: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON (\u043F\u043E\u0441\u043B\u0435 retry)" };
     yield { kind: "result", durationMs: Date.now() - start, text: fullText };
     return;
   }

@@ -71,31 +71,48 @@ export async function* runFormat(
 
   yield { kind: "assistant_text", delta: `Анализ файла ${filePath}...\n` };
 
-  const params = buildChatParams(model, messages, opts);
-  let fullText = "";
-  try {
-    const stream = await llm.chat.completions.create(
-      { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-      { signal },
-    );
-    for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
-      if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-      if (content) { fullText += content; yield { kind: "assistant_text", delta: content }; }
+  const baseParams = { ...buildChatParams(model, messages, opts), response_format: { type: "json_object" } };
+
+  async function* callOnce(p: Record<string, unknown>): AsyncGenerator<RunEvent, string> {
+    let acc = "";
+    try {
+      const stream = await llm.chat.completions.create(
+        { ...p, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
+        { signal },
+      );
+      for await (const chunk of stream) {
+        const { reasoning, content } = extractStreamDeltas(chunk);
+        if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
+        if (content) { acc += content; yield { kind: "assistant_text", delta: content }; }
+      }
+    } catch (e) {
+      if (signal.aborted || (e as Error).name === "AbortError") return acc;
+      const resp = await llm.chat.completions.create(
+        { ...p, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+      );
+      acc = resp.choices[0]?.message?.content ?? "";
     }
-  } catch (e) {
-    if (signal.aborted || (e as Error).name === "AbortError") return;
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-    );
-    fullText = resp.choices[0]?.message?.content ?? "";
+    return acc;
   }
 
+  let fullText = yield* callOnce(baseParams);
   if (signal.aborted) return;
 
-  const parsed = extractJsonObject(fullText);
+  let parsed = extractJsonObject(fullText);
   if (!parsed) {
-    yield { kind: "error", message: "Format: LLM вернул невалидный JSON" };
+    yield { kind: "assistant_text", delta: "\n[JSON невалиден — повторяю запрос]\n" };
+    const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      ...messages,
+      { role: "assistant", content: fullText },
+      { role: "user", content: "Твой предыдущий ответ не является валидным JSON. Верни ТОЛЬКО JSON-объект {\"report\": \"...\", \"formatted\": \"...\"} без markdown-обёртки, без пояснений. Все спецсимволы внутри строк должны быть экранированы (\\n, \\\", \\\\)." },
+    ];
+    const retryParams = { ...buildChatParams(model, retryMessages, opts), response_format: { type: "json_object" } };
+    fullText = yield* callOnce(retryParams);
+    if (signal.aborted) return;
+    parsed = extractJsonObject(fullText);
+  }
+  if (!parsed) {
+    yield { kind: "error", message: "Format: LLM вернул невалидный JSON (после retry)" };
     yield { kind: "result", durationMs: Date.now() - start, text: fullText };
     return;
   }
