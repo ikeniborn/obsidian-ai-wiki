@@ -1016,7 +1016,11 @@ async format(): Promise<void> {
   if (file.extension !== "md") { new Notice(i18n().view.formatOnlyMarkdown ?? "Format only works on markdown"); return; }
 
   const domains = await this.loadDomains();
-  const inWiki = domains.find((d) => file.path.startsWith(d.wiki_folder + "/") || file.path === d.wiki_folder);
+  // wiki-папка реально лежит под !Wiki/<subfolder> (см. src/wiki-path.ts → domainWikiFolder).
+  const inWiki = domains.find((d) => {
+    const wikiPrefix = domainWikiFolder(d.wiki_folder);
+    return file.path === wikiPrefix || file.path.startsWith(wikiPrefix + "/");
+  });
   if (inWiki) {
     new ConfirmModal(
       this.app,
@@ -1045,9 +1049,30 @@ private async suggestIngestForWikiFile(filePath: string, domain: DomainEntry): P
 }
 ```
 
-Импорт `ConfirmModal` сверху уже есть.
+Импорт `ConfirmModal` сверху уже есть. Добавить импорт:
 
-В `dispatch()`: после события `format_preview` обновить `_pendingFormat.tempPath`. Вставить в цикл for-await (~строка 371):
+```ts
+import { domainWikiFolder } from "./wiki-path";
+```
+
+В `dispatch()`:
+
+(a) Разрешить format на mobile. Существующий блок (строка ~326):
+```ts
+if (Platform.isMobile && op !== "query" && op !== "query-save") {
+  new Notice(i18n().ctrl.mobileNotAvailable);
+  return;
+}
+```
+Заменить на:
+```ts
+if (Platform.isMobile && op !== "query" && op !== "query-save" && op !== "format") {
+  new Notice(i18n().ctrl.mobileNotAvailable);
+  return;
+}
+```
+
+(b) После события `format_preview` обновить `_pendingFormat.tempPath`. Вставить в цикл for-await (~строка 371):
 
 ```ts
 if (ev.kind === "format_preview" && this._pendingFormat) {
