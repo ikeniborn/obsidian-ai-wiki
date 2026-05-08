@@ -260,6 +260,16 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               t.setValue(s.claudeAgent.operations[key].model)
                 .onChange(async (v) => { s.claudeAgent.operations[key].model = v.trim(); await this.plugin.saveSettings(); }),
             );
+          new Setting(containerEl)
+            .setName(T.settings.opMaxTokens_name)
+            .setDesc(T.settings.opMaxTokens_desc)
+            .addText((t) =>
+              t.setValue(String(s.claudeAgent.operations[key].maxTokens))
+                .onChange(async (v) => {
+                  const n = Number(v);
+                  if (Number.isFinite(n) && n > 0) { s.claudeAgent.operations[key].maxTokens = Math.floor(n); await this.plugin.saveSettings(); }
+                }),
+            );
         }
       }
     } else {
