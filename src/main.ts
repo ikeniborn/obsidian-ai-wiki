@@ -196,6 +196,19 @@ export default class LlmWikiPlugin extends Plugin {
       enabled: this.settings.devMode.enabled,
       evaluatorModel: this.settings.devMode.evaluatorModel,
     };
+
+    // Миграция v0.1.65: format.maxTokens 16384 (старый default) → 32768.
+    // 16K давал truncation на больших markdown-страницах с frontmatter rewrite.
+    let formatMaxTokensMigrated = false;
+    if (this.settings.claudeAgent.operations.format.maxTokens === 16384) {
+      this.settings.claudeAgent.operations.format.maxTokens = 32768;
+      formatMaxTokensMigrated = true;
+    }
+    if (this.settings.nativeAgent.operations.format.maxTokens === 16384) {
+      this.settings.nativeAgent.operations.format.maxTokens = 32768;
+      formatMaxTokensMigrated = true;
+    }
+    if (formatMaxTokensMigrated) await this.saveData(this.settings);
   }
 
   async saveSettings(): Promise<void> {
