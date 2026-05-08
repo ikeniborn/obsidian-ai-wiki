@@ -19,8 +19,7 @@
 | `package.json` | Modify | Добавить `https-proxy-agent` в `dependencies` |
 | `src/local-config.ts` | Modify | Добавить `ProxyConfig` и поле `proxy?` в `LocalConfig` |
 | `src/proxy.ts` | Create | Чистые утилиты: `buildProxyUrl`, `parseNoProxy`, `shouldBypass`, `createProxyAgent`, `maskProxyUrl` |
-| `src/effective-settings.ts` | Modify | Возвращать `proxy` (default `{enabled:false,url:""}`) |
-| `src/types.ts` | Modify | Расширить return-type `resolveEffective` через `proxy: ProxyConfig` |
+| `src/effective-settings.ts` | Modify | Возвращать `proxy` (default `{enabled:false,url:""}`); экспорт `EffectiveSettings = LlmWikiPluginSettings & { proxy: ProxyConfig }` |
 | `src/i18n.ts` | Modify | Строки `proxy_*` для en/ru/es |
 | `src/settings.ts` | Modify | UI секция Proxy (только для `native-agent`) |
 | `src/controller.ts` | Modify | В `buildAgentRunner`/native-agent ветке создать агент и передать в `OpenAI` |
@@ -394,28 +393,23 @@ git commit -m "feat(proxy): buildProxyUrl util"
 
 - [ ] **Step 1: Падающие тесты**
 
-В начало `tests/proxy.test.ts` добавить mock и тесты:
+В `tests/proxy.test.ts` добавить (используем глобальный mock `vitest.mock.ts` — обращаемся к хелперу `__setPlatformMobile`):
 
 ```ts
-import { vi } from "vitest";
-
-vi.mock("obsidian", () => ({
-  Platform: { isMobile: false },
-}));
-
-// ...existing tests...
-
 import { createProxyAgent } from "../src/proxy";
-import { Platform } from "obsidian";
+import { __setPlatformMobile } from "obsidian";
 
 describe("createProxyAgent", () => {
   it("returns null when disabled", () => {
     expect(createProxyAgent({ enabled: false, url: "http://p:1" })).toBeNull();
   });
   it("returns null on mobile", () => {
-    (Platform as { isMobile: boolean }).isMobile = true;
-    expect(createProxyAgent({ enabled: true, url: "http://p:1" })).toBeNull();
-    (Platform as { isMobile: boolean }).isMobile = false;
+    __setPlatformMobile(true);
+    try {
+      expect(createProxyAgent({ enabled: true, url: "http://p:1" })).toBeNull();
+    } finally {
+      __setPlatformMobile(false);
+    }
   });
   it("returns an agent object on desktop when enabled", () => {
     const a = createProxyAgent({ enabled: true, url: "http://p:1" });
@@ -689,7 +683,7 @@ if (eff.backend === "native-agent") {
 - [ ] **Step 4: Проверить компиляцию + сборка**
 
 Run: `npx tsc --noEmit && npm run build`
-Expected: 0 errors, `main.js` собран.
+Expected: 0 errors, `dist/main.js` собран.
 
 - [ ] **Step 5: Commit**
 
@@ -787,7 +781,7 @@ Expected: например `0.1.62`.
 - [ ] **Step 3: Сборка**
 
 Run: `npm run build`
-Expected: успешная сборка, `main.js` обновлён.
+Expected: успешная сборка, `dist/main.js` обновлён.
 
 - [ ] **Step 4: Полный прогон тестов**
 
@@ -797,7 +791,7 @@ Expected: все тесты PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add package.json src/manifest.json main.js
+git add package.json package-lock.json src/manifest.json manifest.json dist/main.js dist/manifest.json
 git commit -m "chore: bump patch — proxy support for native-agent"
 ```
 
