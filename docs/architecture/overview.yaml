@@ -1,6 +1,6 @@
 id: obsidian-llm-wiki
 name: LLM Wiki Obsidian Plugin
-version: "0.1.61"
+version: "0.1.62"
 description: >
   Obsidian-плагин для ведения компаундируемой базы знаний на базе LLM.
   Запускает AI-агента (Claude CLI или нативный OpenAI-совместимый LLM),
@@ -55,6 +55,12 @@ operations:
   - id: chat
     description: Интерактивный диалог с агентом (контекст lint/query)
     default_timeout_sec: 900
+  - id: format
+    description: >
+      Анализ открытой не-wiki markdown-страницы, генерация preview в !Temp/,
+      итерация через чат, Apply/Cancel. Жёсткий инвариант: запрещено
+      добавлять/удалять факты или искажать смысл — только перефраз.
+    default_timeout_sec: 600
 
 key_constraints:
   - Single-flight: одновременно разрешена только одна операция
@@ -69,10 +75,18 @@ key_constraints:
   - Node-only API: node:fs/node:path вызываются через require() (esbuild оставляет
     как CJS-require для external'ов); await import("node:*") — баг (URL fetch в Electron).
   - Логи: agent.jsonl + dev.jsonl пишутся через VaultTools.adapter (работает на mobile).
+  - Format-инвариант: runFormat возвращает JSON {report, formatted}; перед записью
+    temp-файла missingTokens() сверяет значимые токены (числа, URL, имена,
+    code identifiers) исходника с форматированным текстом. Apply дисейблится в UI
+    при непустом списке потерянных токенов.
+  - Format I/O: temp хранится в !Wiki/-независимой папке !Temp/<basename>.formatted.md;
+    Apply читает temp → перезаписывает оригинал → удаляет temp; Cancel удаляет temp.
+    Файлы внутри wiki-домена (по domainWikiFolder) НЕ форматируются — controller
+    показывает ConfirmModal с предложением запустить ingest из wiki_sources.
 
 platforms:
   desktop:
-    operations: [ingest, query, query-save, lint, fix, init, chat]
+    operations: [ingest, query, query-save, lint, fix, init, chat, format]
     backends: [claude-agent, native-agent]
   mobile:
     operations: [query, query-save]

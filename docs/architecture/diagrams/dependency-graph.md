@@ -10,7 +10,9 @@ graph TD
     settings["settings.ts\nLlmWikiSettingTab"]
     modals["modals.ts\nQueryModal / DomainModal\n/ FileErrorModal / ConfirmModal"]
     runner["agent-runner.ts\nAgentRunner"]
-    phases["phases/\ningest · query · lint\nfix · init · chat · evaluator"]
+    phases["phases/\ningest · query · lint\nfix · init · chat\nevaluator · format"]
+    format_utils["phases/format-utils.ts\nextractJsonObject\nsignificantTokens\nmissingTokens"]
+    wiki_path["wiki-path.ts\ndomainWikiFolder()"]
     cli_client["claude-cli-client.ts\nClaudeCliClient"]
     stream["stream.ts\nparseStreamLine()"]
     vault_tools["vault-tools.ts\nVaultTools"]
@@ -33,6 +35,7 @@ graph TD
     controller --> source_paths
     controller --> modals
     controller --> i18n
+    controller --> wiki_path
 
     runner --> phases
     runner --> types
@@ -45,6 +48,7 @@ graph TD
     phases --> vault_tools
     phases --> types
     phases --> domain_map
+    phases --> format_utils
 
     view --> types
     view --> i18n
@@ -69,6 +73,8 @@ graph TD
     style vault_tools fill:#f0f0f0
     style source_paths fill:#f0f0f0
     style i18n fill:#f0f0f0
+    style format_utils fill:#f0f0f0
+    style wiki_path fill:#f0f0f0
 ```
 
 ## Layer Legend
@@ -78,7 +84,7 @@ graph TD
 | Light yellow | Application (orchestration) | main.ts, controller.ts |
 | Light green | Infrastructure (I/O, LLM) | agent-runner.ts, claude-cli-client.ts, phases/ |
 | Light blue | Presentation (UI) | view.ts, settings.ts, modals.ts |
-| Gray | Shared / Domain | types.ts, domain-map.ts, vault-tools.ts, stream.ts, source-paths.ts, i18n.ts |
+| Gray | Shared / Domain | types.ts, domain-map.ts, vault-tools.ts, stream.ts, source-paths.ts, i18n.ts, wiki-path.ts, phases/format-utils.ts |
 
 ## Mobile-Safe Boundary (v0.1.59+)
 
@@ -98,4 +104,29 @@ graph LR
     style claude_dyn fill:#e1ffe1
     style openai fill:#e1f5ff
     style dev_log fill:#e1ffe1
+```
+
+## Format Operation Flow (v0.1.62+)
+
+```mermaid
+graph LR
+    btn[view.ts<br/>Format button] --> ctrl_format[controller.format]
+    ctrl_format -- "file in wiki?" --> wiki_check{domainWikiFolder match?}
+    wiki_check -- yes --> confirm_modal[ConfirmModal<br/>→ suggestIngestForWikiFile]
+    wiki_check -- no --> dispatch_format[dispatch 'format']
+    dispatch_format --> run_format[runFormat<br/>phases/format.ts]
+    run_format --> llm_call[LlmClient.chat.completions.create<br/>+ image_url parts when vision]
+    llm_call --> json_extract[extractJsonObject<br/>format-utils.ts]
+    json_extract --> validator[missingTokens<br/>significantTokens]
+    validator --> temp_write[VaultTools.write<br/>!Temp/&lt;basename&gt;.formatted.md]
+    temp_write --> emit_preview[yield format_preview<br/>→ view.renderFormatPreview]
+    emit_preview --> apply[Apply: read temp<br/>→ write original<br/>→ remove temp]
+    emit_preview --> cancel[Cancel: remove temp]
+    emit_preview --> refine[Refine chat:<br/>push user msg → re-dispatch]
+    refine --> run_format
+
+    style ctrl_format fill:#fff4e1
+    style run_format fill:#e1ffe1
+    style validator fill:#f0f0f0
+    style emit_preview fill:#e1f5ff
 ```

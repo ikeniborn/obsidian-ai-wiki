@@ -60,6 +60,14 @@ ln -s $(pwd) ~/.config/obsidian/Plugins/obsidian-llm-wiki
 10. **Race / single-flight**
     - Запустить ingest, не дожидаясь вызвать query → Notice «Уже выполняется»
 
+11. **Format (v0.1.62+)**
+    - Открыть `.md` вне `!Wiki/` — нажать **Format** в боковой панели
+    - В preview-блоке появились отчёт + кнопки Apply/Discard + чат для refine
+    - При наличии missing-tokens (число/URL/имя пропущены) Apply дисейблнут — в чате попросить вернуть пропущенное → preview регенерируется
+    - **Apply**: оригинал перезаписался, `!Temp/<name>.formatted.md` удалён
+    - **Discard**: temp удалён, оригинал не тронут
+    - Открыть `.md` ВНУТРИ `!Wiki/<domain>/` → ConfirmModal с предложением запустить ingest из wiki_sources
+
 ## Mobile (iOS / Android)
 
 `manifest.json` помечен `isDesktopOnly: false` с v0.1.59. Поддерживаются только `query` и `query-save` через `native-agent` (cloud HTTP API).
