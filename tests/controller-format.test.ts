@@ -16,6 +16,8 @@ function makeApp(activeFile: { path: string; extension?: string; name?: string }
       },
       configDir: ".obsidian",
       getName: () => "vault",
+      getAbstractFileByPath: vi.fn().mockReturnValue(null),
+      modify: vi.fn().mockResolvedValue(undefined),
     },
     workspace: {
       getLeavesOfType: () => [],

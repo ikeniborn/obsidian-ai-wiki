@@ -1,4 +1,4 @@
-import { App, Notice, Platform } from "obsidian";
+import { App, Notice, Platform, TFile } from "obsidian";
 import { LLM_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { validateDomainId, type DomainEntry, type AddDomainInput } from "./domain";
 import type LlmWikiPlugin from "./main";
@@ -99,7 +99,12 @@ export class WikiController {
     if (this.isBusy()) { new Notice(i18n().ctrl.operationRunning); return; }
     try {
       const content = await this.app.vault.adapter.read(p.tempPath);
-      await this.app.vault.adapter.write(p.originalPath, content);
+      const origFile = this.app.vault.getAbstractFileByPath(p.originalPath);
+      if (origFile && "stat" in origFile) {
+        await this.app.vault.modify(origFile as TFile, content);
+      } else {
+        await this.app.vault.adapter.write(p.originalPath, content);
+      }
       await this.app.vault.adapter.remove(p.tempPath);
       new Notice(i18n().view.formatApplied(p.originalPath));
       this.activeView()?.appendEvent({ kind: "format_applied", path: p.originalPath });

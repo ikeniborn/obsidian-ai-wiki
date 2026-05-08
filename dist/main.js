@@ -11566,7 +11566,12 @@ var WikiController = class {
     }
     try {
       const content = await this.app.vault.adapter.read(p.tempPath);
-      await this.app.vault.adapter.write(p.originalPath, content);
+      const origFile = this.app.vault.getAbstractFileByPath(p.originalPath);
+      if (origFile && "stat" in origFile) {
+        await this.app.vault.modify(origFile, content);
+      } else {
+        await this.app.vault.adapter.write(p.originalPath, content);
+      }
       await this.app.vault.adapter.remove(p.tempPath);
       new import_obsidian6.Notice(i18n().view.formatApplied(p.originalPath));
       this.activeView()?.appendEvent({ kind: "format_applied", path: p.originalPath });
