@@ -1,3 +1,12 @@
+import type { ProxyConfig } from "./local-config";
+
+export function buildProxyUrl(cfg: ProxyConfig): string {
+  const u = new URL(cfg.url);
+  if (cfg.username) u.username = encodeURIComponent(cfg.username);
+  if (cfg.password) u.password = encodeURIComponent(cfg.password);
+  return u.toString();
+}
+
 export function shouldBypass(host: string, list: string[]): boolean {
   const h = host.toLowerCase();
   for (const raw of list) {

@@ -1,5 +1,34 @@
 import { describe, it, expect } from "vitest";
-import { maskProxyUrl, parseNoProxy, shouldBypass } from "../src/proxy";
+import { buildProxyUrl, maskProxyUrl, parseNoProxy, shouldBypass } from "../src/proxy";
+
+describe("buildProxyUrl", () => {
+  it("returns url unchanged when no creds", () => {
+    expect(buildProxyUrl({ enabled: true, url: "http://proxy:8080" }))
+      .toBe("http://proxy:8080/");
+  });
+  it("embeds and url-encodes user/pass", () => {
+    const out = buildProxyUrl({
+      enabled: true,
+      url: "http://proxy:8080",
+      username: "alice@corp",
+      password: "p@ss:word/!",
+    });
+    expect(out).toContain("alice%40corp:p%40ss%3Aword%2F!@proxy:8080");
+  });
+  it("throws on malformed url", () => {
+    expect(() => buildProxyUrl({ enabled: true, url: "::not a url" }))
+      .toThrow();
+  });
+  it("encodes spaces in password", () => {
+    const out = buildProxyUrl({
+      enabled: true,
+      url: "http://h:1",
+      username: "u",
+      password: "a b",
+    });
+    expect(out).toContain("u:a%20b@h:1");
+  });
+});
 
 describe("shouldBypass", () => {
   it("exact match (case-insensitive)", () => {
