@@ -1,0 +1,738 @@
+{
+  "vitest.mock.ts": {
+    "mtime": 1778244328.3213654,
+    "hash": "23f255e6d09218d4a726381cf77b7c06"
+  },
+  "vitest.config.ts": {
+    "mtime": 1778002989.1864026,
+    "hash": "cf554e8204719b0eac62ad9ed9c43887"
+  },
+  "esbuild.config.mjs": {
+    "mtime": 1778182816.9625041,
+    "hash": "a9aed09a6a19b1673f3bcc5edf5ba4ad"
+  },
+  "tests/local-config.test.ts": {
+    "mtime": 1778175596.0935135,
+    "hash": "713c401e41e639969819e63b924c6ab2"
+  },
+  "tests/agent-runner.integration.test.js": {
+    "mtime": 1777576293.203834,
+    "hash": "9a6243c4c80767e96c2b7693e2043e6f"
+  },
+  "tests/llm-utils.test.ts": {
+    "mtime": 1778002989.185913,
+    "hash": "c677226ea09d6abdbebff6a4ee07e2fd"
+  },
+  "tests/evaluator.test.ts": {
+    "mtime": 1778002989.1858618,
+    "hash": "af1cef8899a2cf491c41202f72c7614e"
+  },
+  "tests/main-mobile.test.ts": {
+    "mtime": 1778244328.3212314,
+    "hash": "33a271fd90870527617353238845abae"
+  },
+  "tests/domain.test.ts": {
+    "mtime": 1778175596.0934157,
+    "hash": "64f3d854fbf28f7068569f2264cc0e3d"
+  },
+  "tests/claude-cli-client.test.js": {
+    "mtime": 1777576293.2051308,
+    "hash": "a2e16d8690b4f0406cee9a69b522cdf2"
+  },
+  "tests/source-paths.test.ts": {
+    "mtime": 1778002989.1862934,
+    "hash": "da88350bb57f1da3c5ee2a3da6a3433f"
+  },
+  "tests/apply-domain-event.test.ts": {
+    "mtime": 1778175596.093311,
+    "hash": "ca084fd2e1dd5799235312094da95713"
+  },
+  "tests/main-migration.test.ts": {
+    "mtime": 1778244328.321185,
+    "hash": "7f9392dabc20078dde2a5af0de6a63a5"
+  },
+  "tests/claude-cli-client.test.ts": {
+    "mtime": 1778244583.1890373,
+    "hash": "66682ede86a20d01b30df3430b12b943"
+  },
+  "tests/stream.test.ts": {
+    "mtime": 1778012516.9371862,
+    "hash": "a32f590e9e2f7ccb4d514956f6ca1a9b"
+  },
+  "tests/no-fs-imports.test.ts": {
+    "mtime": 1778188632.756213,
+    "hash": "96aa30dc423598215043090db51eda66"
+  },
+  "tests/controller-mobile.test.ts": {
+    "mtime": 1778244328.3210673,
+    "hash": "d2dfd289c6d10e9358dcb168495e3dfe"
+  },
+  "tests/template.test.ts": {
+    "mtime": 1778002989.1863148,
+    "hash": "560e20c7f38390d22e5c7618af075486"
+  },
+  "tests/ingest.test.ts": {
+    "mtime": 1778175596.0934732,
+    "hash": "0f14c75e1c242940810cc905cc60c2fa"
+  },
+  "tests/vault-tools.test.ts": {
+    "mtime": 1778002989.1863587,
+    "hash": "91e4cb107acce56bf0b0c35fb101a7c2"
+  },
+  "tests/controller-build-fail.test.ts": {
+    "mtime": 1778244328.3209667,
+    "hash": "28d06248fdbc1b36ad4ecfa7c66a26a1"
+  },
+  "tests/controller-log-adapter.test.ts": {
+    "mtime": 1778244328.3210232,
+    "hash": "fedaf23dbfb2a77013fe50f5fa115a81"
+  },
+  "tests/agent-runner.integration.test.ts": {
+    "mtime": 1778244328.3209429,
+    "hash": "2b97e5c92ac57dc165b7a8d46322b603"
+  },
+  "tests/init-args.test.ts": {
+    "mtime": 1778040405.2435849,
+    "hash": "ea518dbb689cf323f9e06eb98a305ee7"
+  },
+  "tests/format-migration.test.ts": {
+    "mtime": 1778248225.2103164,
+    "hash": "7635338b84fb4aff1b2375131d8acf1e"
+  },
+  "tests/modals.test.ts": {
+    "mtime": 1778175596.0936866,
+    "hash": "50321efe0d12e1d190398a139a339301"
+  },
+  "tests/controller-format.test.ts": {
+    "mtime": 1778244583.1891286,
+    "hash": "4e078e817ab91c0a6e4e96477c4d2063"
+  },
+  "tests/vault-tools.test.js": {
+    "mtime": 1777576293.2072546,
+    "hash": "80fe9cfc30540659fc8f423f1da35887"
+  },
+  "tests/wiki-path.test.ts": {
+    "mtime": 1778065174.9931672,
+    "hash": "805e37cc17784a7a219ae37ff3964527"
+  },
+  "tests/proxy.test.ts": {
+    "mtime": 1778247800.0255823,
+    "hash": "cfda65a626cdab4b9af71fec2e62dc33"
+  },
+  "tests/stream.test.js": {
+    "mtime": 1777576293.2064414,
+    "hash": "da66de61b15cece5b994f1be1604c478"
+  },
+  "tests/effective-settings.test.ts": {
+    "mtime": 1778247847.3135388,
+    "hash": "137b77fd3630a7bef0e200f9ce8d21cc"
+  },
+  "tests/migration.test.ts": {
+    "mtime": 1778175596.0936232,
+    "hash": "33da158a59e5677d853de5757c1174eb"
+  },
+  "tests/mobile-fetch.test.ts": {
+    "mtime": 1778244328.3212535,
+    "hash": "26b8c92ce56f6c9f7a629f686f20a0fa"
+  },
+  "tests/domain-store.test.ts": {
+    "mtime": 1778175596.093339,
+    "hash": "697ab6b917b10a37b00050658bc97753"
+  },
+  "tests/modals.test.js": {
+    "mtime": 1777576293.2056496,
+    "hash": "8c8b4230f6ec60e7dbe4d11be7490418"
+  },
+  "tests/domain.test.js": {
+    "mtime": 1778175596.09338,
+    "hash": "f08e6f6c9046bf45af04801190f0d397"
+  },
+  "tests/phases/query.test.ts": {
+    "mtime": 1778175596.093953,
+    "hash": "815c8a1a173f3a8c58010999ff3f6d54"
+  },
+  "tests/phases/ingest.test.js": {
+    "mtime": 1777576293.2092216,
+    "hash": "0e173ef78fefa66a8d4eeacd44485360"
+  },
+  "tests/phases/format-utils.test.ts": {
+    "mtime": 1778247524.3677473,
+    "hash": "94062d58eb9da75e15d7d772c074afc6"
+  },
+  "tests/phases/lint.test.ts": {
+    "mtime": 1778175596.0938969,
+    "hash": "aee125dfa7df692bf472b499b0e3d928"
+  },
+  "tests/phases/ingest.test.ts": {
+    "mtime": 1778175596.0937655,
+    "hash": "4980a6dd7ca77c8a5d8ecc220907a7f8"
+  },
+  "tests/phases/format.test.ts": {
+    "mtime": 1778244328.3213177,
+    "hash": "76785fed32e1d1c5620a5ccfc1846e3c"
+  },
+  "tests/phases/lint.test.js": {
+    "mtime": 1777576293.212555,
+    "hash": "e89a91ab2c3d77e1ca59915e2cc34461"
+  },
+  "tests/phases/query.test.js": {
+    "mtime": 1777576293.2137778,
+    "hash": "c078a465949ee44958327861fe463848"
+  },
+  "tests/phases/init.test.js": {
+    "mtime": 1777576293.2108822,
+    "hash": "9d8164e46ce6e5fd9059880880023d6b"
+  },
+  "tests/phases/init.test.ts": {
+    "mtime": 1778175596.0938346,
+    "hash": "62196204f15564cbf4010abd3b0e932c"
+  },
+  "scripts/dspy/optimize.py": {
+    "mtime": 1778002989.182415,
+    "hash": "7835ff54e18b18a08fc61793c185988c"
+  },
+  "scripts/dspy/lib/writer.py": {
+    "mtime": 1778002989.1823485,
+    "hash": "ee86f07f288a62da42eaee06860d27d1"
+  },
+  "scripts/dspy/lib/optimizer.py": {
+    "mtime": 1778002989.1823485,
+    "hash": "8153eac7b9f318aa7c2928c14797054d"
+  },
+  "scripts/dspy/lib/__init__.py": {
+    "mtime": 1778002989.182225,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "scripts/dspy/lib/signature.py": {
+    "mtime": 1778002989.1823485,
+    "hash": "e482827ddf7c590dc48201f507580d61"
+  },
+  "scripts/dspy/lib/loader.py": {
+    "mtime": 1778002989.1823218,
+    "hash": "3750bb1ec18d70a6f3c502adcfbabccf"
+  },
+  "scripts/dspy/lib/backend.py": {
+    "mtime": 1778095518.7743165,
+    "hash": "4dead88b619d3dd283d7eeb61440f97a"
+  },
+  "scripts/dspy/tests/test_signature.py": {
+    "mtime": 1778002989.182658,
+    "hash": "3abfdf85a4a867f25590ad0377a4f093"
+  },
+  "scripts/dspy/tests/test_loader.py": {
+    "mtime": 1778002989.182608,
+    "hash": "2868b548a5b624b6acb4955dbcf9423b"
+  },
+  "scripts/dspy/tests/test_writer.py": {
+    "mtime": 1778002989.182682,
+    "hash": "143bb66c6b2fb739cc9ac39343e53036"
+  },
+  "scripts/dspy/tests/__init__.py": {
+    "mtime": 1778002989.182415,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "scripts/dspy/tests/test_optimizer.py": {
+    "mtime": 1778002989.1826363,
+    "hash": "4b09d57f8fa93a92f75018713f8d786e"
+  },
+  "scripts/dspy/tests/test_backend.py": {
+    "mtime": 1778078159.5810492,
+    "hash": "1015bd4ab4a42ff5d28f7892f7a2cae6"
+  },
+  "src/mobile-fetch.ts": {
+    "mtime": 1778244328.3196335,
+    "hash": "f1868a1c3af510e20e4f8067d61fa2b2"
+  },
+  "src/modals.ts": {
+    "mtime": 1778175596.0925155,
+    "hash": "601f7988cd49eeb46022906cfb2749ca"
+  },
+  "src/effective-settings.ts": {
+    "mtime": 1778247828.75772,
+    "hash": "b3d22c976a459a7964cbe9413364c7d0"
+  },
+  "src/controller.ts": {
+    "mtime": 1778248028.1289706,
+    "hash": "11c0b7b7a1f52fefcb002708182d6a6f"
+  },
+  "src/agent-runner.ts": {
+    "mtime": 1778248174.9662914,
+    "hash": "2263557866ea704f65d5f44c4e3af948"
+  },
+  "src/proxy.ts": {
+    "mtime": 1778247790.4356923,
+    "hash": "154e1a27814aba6332b8007bb56d9c56"
+  },
+  "src/main.ts": {
+    "mtime": 1778248206.6082296,
+    "hash": "e693eda222d4336d4d3eaf6b5aad9b00"
+  },
+  "src/domain.ts": {
+    "mtime": 1778175596.092271,
+    "hash": "b217f194f2048cdc91ab5c5a7daa34c0"
+  },
+  "src/source-paths.ts": {
+    "mtime": 1778002989.1853192,
+    "hash": "d6e92e2fcbd72f21e66d61e36ecfcc65"
+  },
+  "src/md-modules.d.ts": {
+    "mtime": 1778002989.1846082,
+    "hash": "abffb78177d180c14a8441155503afd2"
+  },
+  "src/settings.ts": {
+    "mtime": 1778248189.1593208,
+    "hash": "638438236b5e0d23b97fcdf8d64a0e8a"
+  },
+  "src/vault-tools.ts": {
+    "mtime": 1778244328.3202398,
+    "hash": "f076837c4617573fcb48518fa0a7397d"
+  },
+  "src/local-config.ts": {
+    "mtime": 1778247469.732376,
+    "hash": "1d8e0ee73e22766d96058be1dc1ca220"
+  },
+  "src/wiki-path.ts": {
+    "mtime": 1778065174.9931672,
+    "hash": "99e2cf4a0fa8cdd04846bc229e5a9567"
+  },
+  "src/i18n.ts": {
+    "mtime": 1778247896.7853687,
+    "hash": "2ddf8317d16d44712f476397c18a1f21"
+  },
+  "src/domain-store.ts": {
+    "mtime": 1778175596.092214,
+    "hash": "3a5e56cf37f42c23ca8df72631cc17f0"
+  },
+  "src/claude-cli-client.ts": {
+    "mtime": 1778248018.6945987,
+    "hash": "8052ff1e248a5dfbb9afb2b94784ed36"
+  },
+  "src/types.ts": {
+    "mtime": 1778248162.762431,
+    "hash": "37469d0c2a967d45ecca4b309c31ee5e"
+  },
+  "src/view.ts": {
+    "mtime": 1778246775.8553104,
+    "hash": "bd43a0286231aca068bdbe89b75c7d93"
+  },
+  "src/stream.ts": {
+    "mtime": 1778013399.4866312,
+    "hash": "b2bdbdbf1314f2125a64d49b5d295ade"
+  },
+  "src/phases/query.ts": {
+    "mtime": 1778244328.319995,
+    "hash": "a3676574b369423bec4c24c2f088dacc"
+  },
+  "src/phases/template.ts": {
+    "mtime": 1778002989.1852071,
+    "hash": "9d0f43f65825fb57db42a1591fec7381"
+  },
+  "src/phases/ingest.ts": {
+    "mtime": 1778244328.3198388,
+    "hash": "3404c5d70f5accdd18043221d214a2ae"
+  },
+  "src/phases/format-utils.ts": {
+    "mtime": 1778247473.3903341,
+    "hash": "ef80478540ea59590b511843f0c3c49d"
+  },
+  "src/phases/format.ts": {
+    "mtime": 1778247492.7971106,
+    "hash": "7a3d487d760c19e663148c794c4b6d7e"
+  },
+  "src/phases/init.ts": {
+    "mtime": 1778244328.3198388,
+    "hash": "0daf6f6ee9494dffb641d8033627d6fe"
+  },
+  "src/phases/chat.ts": {
+    "mtime": 1778175596.092602,
+    "hash": "bf53a332f41c4bc8b74e175922f91035"
+  },
+  "src/phases/llm-utils.ts": {
+    "mtime": 1778002989.1851597,
+    "hash": "dda4ae1cdb7b8e6a8f6bd468a51a7e7a"
+  },
+  "src/phases/evaluator.ts": {
+    "mtime": 1778002989.1848404,
+    "hash": "6becfcdfb39e15da29339657627af505"
+  },
+  "src/phases/fix.ts": {
+    "mtime": 1778244328.3196921,
+    "hash": "816d153106858d7f23b4358593397fbc"
+  },
+  "src/phases/lint.ts": {
+    "mtime": 1778244328.3199408,
+    "hash": "b381574fbeb2ebba6da7143945baeea8"
+  },
+  "CLAUDE.md": {
+    "mtime": 1778152103.9124217,
+    "hash": "f22f004fe22cec3b7a6b3c51d8968c52"
+  },
+  "README.md": {
+    "mtime": 1778244328.3168583,
+    "hash": "dc1e99f798442fb9aac05164dc8a1125"
+  },
+  "prompts/evaluator.md": {
+    "mtime": 1778002989.181896,
+    "hash": "9fe1b583429e2c7bc06751e64053f9d8"
+  },
+  "prompts/ingest.md": {
+    "mtime": 1778083270.9557104,
+    "hash": "6ad91e7f83fbeb5e19d5891f4e4576b5"
+  },
+  "prompts/chat.md": {
+    "mtime": 1778002989.181896,
+    "hash": "0a16ae24cd9a358ccf42b5b4f2b6c9e0"
+  },
+  "prompts/format.md": {
+    "mtime": 1778244583.1878872,
+    "hash": "f7c11797417c2b0e83dd3a085c7540b7"
+  },
+  "prompts/query.md": {
+    "mtime": 1778002989.182161,
+    "hash": "a60329456888705ceaf2087b1984e0d1"
+  },
+  "prompts/lint.md": {
+    "mtime": 1778002989.1820576,
+    "hash": "f3e0367a3d23c4e3e097bab22503bd20"
+  },
+  "prompts/init.md": {
+    "mtime": 1778002989.1820576,
+    "hash": "f5436f5446dec02a1ee420247aadc5f9"
+  },
+  "prompts/base.md": {
+    "mtime": 1778002989.1818602,
+    "hash": "c429cd10245c8de0d3ad8d8f3aad304b"
+  },
+  "prompts/fix.md": {
+    "mtime": 1778002989.1819685,
+    "hash": "33713ecc3495ff3844bfac58fbedf8b0"
+  },
+  "templates/_wiki_schema.md": {
+    "mtime": 1778244328.3205743,
+    "hash": "ddf45706c9e9f5eecd72c3525f7e5113"
+  },
+  "templates/_format-schema.md": {
+    "mtime": 1778244328.3204916,
+    "hash": "dd6c82591c7f90fb43760d10620ab1b3"
+  },
+  "docs/publishing.md": {
+    "mtime": 1778072287.1619582,
+    "hash": "c74decc854feae76bafff9c49973080f"
+  },
+  "docs/dev.md": {
+    "mtime": 1778244583.187624,
+    "hash": "705f38f27633d2c3efa3678e6e8a009a"
+  },
+  "docs/mobile-cloud-ollama.md": {
+    "mtime": 1778188749.286868,
+    "hash": "0eebbcec8fdba378a98175c76c95ef13"
+  },
+  "docs/optimize.md": {
+    "mtime": 1778002989.1788619,
+    "hash": "0893cacf5a6e5e9b87fa3af9ec706561"
+  },
+  "docs/architecture/overview.yaml": {
+    "mtime": 1778247758.6480567,
+    "hash": "853abd50b3b5790cf2419962305c1a7c"
+  },
+  "docs/architecture/README.md": {
+    "mtime": 1778247758.5770576,
+    "hash": "26eed778d67ff9709144092be5c0b884"
+  },
+  "docs/architecture/diagrams/data-flow.md": {
+    "mtime": 1778244583.1872861,
+    "hash": "83ab262c277079dfa3fc07d252a6a107"
+  },
+  "docs/architecture/diagrams/dependency-graph.md": {
+    "mtime": 1778244583.1873724,
+    "hash": "6d6ade1d864ba653a442dae3546917c9"
+  },
+  "docs/superpowers/specs/2026-04-29-per-operation-models-design.md": {
+    "mtime": 1777472034.0187044,
+    "hash": "e381fc8bef3bed9315d763860e7d349b"
+  },
+  "docs/superpowers/specs/2026-05-04-agent-base-contract-design.md": {
+    "mtime": 1778002989.1798284,
+    "hash": "e96724bb6ab69de7d2ce267738f12f72"
+  },
+  "docs/superpowers/specs/2026-05-06-schema-sync-wiki-path-settings-lock-design.md": {
+    "mtime": 1778065174.9921439,
+    "hash": "58eb51ba50c74f423731abdd670592f1"
+  },
+  "docs/superpowers/specs/2026-05-07-clickable-links-design.md": {
+    "mtime": 1778159779.2248242,
+    "hash": "5108f74e62559aeb40ea30eef34455b4"
+  },
+  "docs/superpowers/specs/2026-05-07-mobile-query-design.md": {
+    "mtime": 1778183757.4198434,
+    "hash": "e934514a58685a4c8353f5362b3077f0"
+  },
+  "docs/superpowers/specs/2026-04-30-domain-map-in-vault-design.md": {
+    "mtime": 1777546317.6600049,
+    "hash": "70d98cc328bfbf7477a661eabae668a2"
+  },
+  "docs/superpowers/specs/2026-05-06-readme-value-devlink-design.md": {
+    "mtime": 1778065174.9921439,
+    "hash": "2e1b8b7e27c143a29418e14e1638ff97"
+  },
+  "docs/superpowers/specs/2026-05-08-mobile-fixes-design.md": {
+    "mtime": 1778244328.3190057,
+    "hash": "1c51bd0ed0884ad4a3bccb761a4ae454"
+  },
+  "docs/superpowers/specs/2026-04-27-interactive-mode-design.md": {
+    "mtime": 1777300202.0501878,
+    "hash": "b8349508d2d963f127916c5668ee8c37"
+  },
+  "docs/superpowers/specs/2026-05-08-proxy-support-design.md": {
+    "mtime": 1778246706.28128,
+    "hash": "47be8525d5c3ee5018ced681ebde34c7"
+  },
+  "docs/superpowers/specs/2026-05-05-links-frontmatter-design.md": {
+    "mtime": 1778002989.1802604,
+    "hash": "3a16ba338ded7561156a3f7761829d7c"
+  },
+  "docs/superpowers/specs/2026-05-04-chat-feedback-design.md": {
+    "mtime": 1778002989.179865,
+    "hash": "5ed84823f9d0434aa9996b9bbb66b3a8"
+  },
+  "docs/superpowers/specs/2026-05-05-devmode-logdir-design.md": {
+    "mtime": 1778002989.1801646,
+    "hash": "9a6d60850b315fd4134ca52ca9189488"
+  },
+  "docs/superpowers/specs/2026-04-28-native-agent-design.md": {
+    "mtime": 1777325055.4622235,
+    "hash": "4a66e4fde28907827c08c3b62cdb396b"
+  },
+  "docs/superpowers/specs/2026-05-04-dev-mode-prompt-management-design.md": {
+    "mtime": 1778002989.179912,
+    "hash": "80c9e622449a5f8b34132450fd6965b8"
+  },
+  "docs/superpowers/specs/2026-05-08-format-operation-design.md": {
+    "mtime": 1778244328.318944,
+    "hash": "ed1d98232c34ad34bc473d2964a979e2"
+  },
+  "docs/superpowers/specs/2026-05-05-domain-populate-design.md": {
+    "mtime": 1778013900.7491546,
+    "hash": "a881ff2115deb5f2c1150a33632eb8aa"
+  },
+  "docs/superpowers/specs/2026-05-04-wiki-init-root-files-design.md": {
+    "mtime": 1778002989.180038,
+    "hash": "a7c850f654f647e214ffee99ad35cf99"
+  },
+  "docs/superpowers/specs/2026-05-05-e2big-fix-design.md": {
+    "mtime": 1778002989.1802604,
+    "hash": "507a87fb260f1bebf3c6937577e94f81"
+  },
+  "docs/superpowers/specs/2026-05-05-vault-relative-paths-design.md": {
+    "mtime": 1778002989.180348,
+    "hash": "6d00160beeeb67e9df0202427ddc53d2"
+  },
+  "docs/superpowers/specs/2026-05-05-chat-after-all-operations-design.md": {
+    "mtime": 1778002989.1801362,
+    "hash": "63d44aa9cec82a7bd19147a09858b062"
+  },
+  "docs/superpowers/specs/2026-04-28-obsidian-review-fixes-design.md": {
+    "mtime": 1777409112.6777482,
+    "hash": "b059e96eb564272ecd1de72d4ac021ac"
+  },
+  "docs/superpowers/specs/2026-04-29-claude-agent-backend-design.md": {
+    "mtime": 1777460886.0105357,
+    "hash": "f42286dc4eb0c07e10129c99189e9048"
+  },
+  "docs/superpowers/specs/2026-04-28-domain-map-native-agent-design.md": {
+    "mtime": 1777408208.6523285,
+    "hash": "bf3268addabdc7b254d1e781d4136643"
+  },
+  "docs/superpowers/specs/2026-04-27-multi-vault-domain-maps-design.md": {
+    "mtime": 1777288663.9706776,
+    "hash": "cc64028338053a87af61639c41a28b6e"
+  },
+  "docs/superpowers/specs/2026-04-26-progress-display-design.md": {
+    "mtime": 1777288663.9705472,
+    "hash": "51f6771eadb87abcf9d7d9c77ff07baa"
+  },
+  "docs/superpowers/specs/2026-05-07-fixed-log-paths-design.md": {
+    "mtime": 1778152103.9137018,
+    "hash": "1d0dbda5508c2b87480fe8341daf9cfb"
+  },
+  "docs/superpowers/specs/2026-04-28-readme-design.md": {
+    "mtime": 1777407624.463705,
+    "hash": "f71c26db4fd0613eed0e099aaa5b2a0b"
+  },
+  "docs/superpowers/specs/2026-05-05-domain-form-ux-design.md": {
+    "mtime": 1778002989.1802082,
+    "hash": "d1d0cb8b9b1be10b16647710038ee2b1"
+  },
+  "docs/superpowers/specs/2026-05-04-dspy-prompt-optimization-design.md": {
+    "mtime": 1778002989.1799586,
+    "hash": "1ef382d49e52666f12e3d8a3e3324cd9"
+  },
+  "docs/superpowers/specs/2026-05-07-domain-map-vault-storage-design.md": {
+    "mtime": 1778175596.0919862,
+    "hash": "7974e0eab709c62b1b55cb579db91247"
+  },
+  "docs/superpowers/plans/2026-05-08-format-operation.md": {
+    "mtime": 1778244328.3187535,
+    "hash": "4362d4ac18f2d7f9c875443fddfed03f"
+  },
+  "docs/superpowers/plans/2026-04-28-readme-rewrite.md": {
+    "mtime": 1777407863.8315852,
+    "hash": "62628896d47e0f8b0def866cdc70ab7d"
+  },
+  "docs/superpowers/plans/2026-04-28-domain-map-native-agent.md": {
+    "mtime": 1777465915.1305826,
+    "hash": "5a83f50d41942c50ba7529a1f06dc983"
+  },
+  "docs/superpowers/plans/2026-05-05-vault-relative-paths.md": {
+    "mtime": 1778002989.1797721,
+    "hash": "5d173895989d5aef88e54869ad2c3403"
+  },
+  "docs/superpowers/plans/2026-04-29-per-operation-models.md": {
+    "mtime": 1777472692.2606874,
+    "hash": "d68e661c20dae56be57b7ce4a0f6b54d"
+  },
+  "docs/superpowers/plans/2026-05-05-chat-after-all-operations.md": {
+    "mtime": 1778002989.17937,
+    "hash": "cf60a74f85240faad5e7bfbf8ba133f2"
+  },
+  "docs/superpowers/plans/2026-05-06-schema-sync-wiki-path-settings-lock.md": {
+    "mtime": 1778065174.9921439,
+    "hash": "88ea8ee85d71d8d841ebde13c04fb8cf"
+  },
+  "docs/superpowers/plans/2026-05-04-dspy-prompt-optimization.md": {
+    "mtime": 1778002989.1792307,
+    "hash": "818cfc6e702745f0c39d68ef609942de"
+  },
+  "docs/superpowers/plans/2026-04-28-native-agent.md": {
+    "mtime": 1777375047.1574752,
+    "hash": "faa105cd55e4110c96eec5c6815d386c"
+  },
+  "docs/superpowers/plans/2026-05-07-domain-map-vault-storage.md": {
+    "mtime": 1778175596.091876,
+    "hash": "b584f4e0facf7bdf7549ff059fdeb9c7"
+  },
+  "docs/superpowers/plans/2026-05-08-mobile-fixes.md": {
+    "mtime": 1778244328.3188512,
+    "hash": "0725a154fcaa0c3ff866e839d0ae539b"
+  },
+  "docs/superpowers/plans/2026-05-04-dev-mode-prompt-management.md": {
+    "mtime": 1778002989.179124,
+    "hash": "ce4c47c9f5821c39f5ccbc4b42c6b177"
+  },
+  "docs/superpowers/plans/2026-05-06-readme-value-devlink.md": {
+    "mtime": 1778065174.9921439,
+    "hash": "71e778aed0445ceacf639a3bd194ec04"
+  },
+  "docs/superpowers/plans/2026-04-28-obsidian-review-fixes.md": {
+    "mtime": 1777409264.6792274,
+    "hash": "63e2f9fef487ade2816bd2f9a5f4f737"
+  },
+  "docs/superpowers/plans/2026-05-05-devmode-logdir.md": {
+    "mtime": 1778002989.1794221,
+    "hash": "095d7714f88edc0e36a12d23f5411a18"
+  },
+  "docs/superpowers/plans/2026-04-27-interactive-mode.md": {
+    "mtime": 1777300561.0171494,
+    "hash": "2ea81ff5a64f29cb8574b75b453a0f92"
+  },
+  "docs/superpowers/plans/2026-05-08-proxy-support.md": {
+    "mtime": 1778246803.9971197,
+    "hash": "0b7c37bce7a917016dfb30f9ad105d64"
+  },
+  "docs/superpowers/plans/2026-04-29-claude-agent-backend.md": {
+    "mtime": 1777460886.010458,
+    "hash": "21121cd217dcec46094f9e5a60be3c93"
+  },
+  "docs/superpowers/plans/2026-05-04-wiki-init-root-files.md": {
+    "mtime": 1778002989.1793058,
+    "hash": "c0d0847d3ae6a81406dc0c2be0538211"
+  },
+  "docs/superpowers/plans/2026-05-06-domain-populate.md": {
+    "mtime": 1778016478.8431938,
+    "hash": "aa8398192ac0334e0f13beb8d82fe13b"
+  },
+  "docs/superpowers/plans/2026-05-04-agent-base-contract.md": {
+    "mtime": 1778002989.1789343,
+    "hash": "395986fd4ee1ebcd2da2ccfa0c77d403"
+  },
+  "docs/superpowers/plans/2026-05-05-domain-form-ux.md": {
+    "mtime": 1778002989.1795073,
+    "hash": "cda296a31bc58950cdc8fc3f23f1bf8b"
+  },
+  "docs/superpowers/plans/2026-05-05-chat-session-resume.md": {
+    "mtime": 1778012163.679796,
+    "hash": "67bafd5d07bfb919b3dedacb629c326f"
+  },
+  "docs/superpowers/plans/2026-05-05-links-frontmatter.md": {
+    "mtime": 1778002989.1796207,
+    "hash": "e81e3427b53d0ed0a1d50c0c08d8929c"
+  },
+  "docs/superpowers/plans/2026-04-30-domain-map-in-vault.md": {
+    "mtime": 1777548047.1641462,
+    "hash": "dc02d06b41591b30e549d33cedfe4d03"
+  },
+  "docs/superpowers/plans/2026-04-26-progress-display.md": {
+    "mtime": 1777288663.970467,
+    "hash": "e6aa726e857f02341b12a777bc16fb67"
+  },
+  "docs/superpowers/plans/2026-05-07-clickable-links.md": {
+    "mtime": 1778159779.2238243,
+    "hash": "43ec2b2b0a330015082537c11d1b88ae"
+  },
+  "docs/superpowers/plans/2026-05-05-e2big-fix.md": {
+    "mtime": 1778002989.179529,
+    "hash": "95f285cfb7e623328dfe1d505273e237"
+  },
+  "docs/superpowers/plans/2026-05-05-source-path-auto-add.md": {
+    "mtime": 1778002989.179671,
+    "hash": "f58daddcd00ce7d31da46e255771fcc0"
+  },
+  "docs/superpowers/plans/2026-04-27-multi-vault-domain-maps.md": {
+    "mtime": 1777288663.9705472,
+    "hash": "fb47da0e35ef76ee0ce59012d6946c69"
+  },
+  "docs/superpowers/plans/2026-05-07-mobile-query.md": {
+    "mtime": 1778186894.2993796,
+    "hash": "344548399be29413294a5d94dff6cac8"
+  },
+  "docs/superpowers/plans/2026-05-04-chat-feedback.md": {
+    "mtime": 1778002989.1790023,
+    "hash": "dc2d7f409b672e0c95f526c908b822b7"
+  },
+  "docs/superpowers/plans/2026-05-07-fixed-log-paths.md": {
+    "mtime": 1778152103.913662,
+    "hash": "3204e516978cc1f818896e9c8d77eade"
+  },
+  "obsidian-releases/plugin-review.md": {
+    "mtime": 1777312076.2892463,
+    "hash": "6df19a578f2300e13a3ca1a09ab0ec5c"
+  },
+  "obsidian-releases/README.md": {
+    "mtime": 1777312076.2803073,
+    "hash": "f2e2d420c528e2196b71a4d76629c155"
+  },
+  "obsidian-releases/cla.md": {
+    "mtime": 1777312076.2803485,
+    "hash": "f3b94d53f085ba296c2fe0c9e877c58c"
+  },
+  "tests/fixtures/format-sample.md": {
+    "mtime": 1778244328.32109,
+    "hash": "81e51cd228789d22c02c282c4ef6bd68"
+  },
+  "scripts/dspy/CLAUDE.md": {
+    "mtime": 1778095055.471888,
+    "hash": "90d83e6bc05aa57101464b875baa1f4e"
+  },
+  "scripts/dspy/README.md": {
+    "mtime": 1778015541.6113856,
+    "hash": "9a740b7601f415692d8ef916c30560af"
+  },
+  "obsidian-releases/light.png": {
+    "mtime": 1777312076.2889977,
+    "hash": "bc29ea90a1de921f784c879ce0a313ff"
+  },
+  "obsidian-releases/dark.png": {
+    "mtime": 1777312076.2871296,
+    "hash": "786981513d80210cd443ce38c0f9c5c6"
+  }
+}
