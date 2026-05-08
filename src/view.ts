@@ -421,7 +421,7 @@ export class LlmWikiView extends ItemView {
     this.updateMetrics();
   }
 
-  private renderFormatPreview(tempPath: string, report: string, missing: string[]): void {
+  private renderFormatPreview(tempPath: string, report: string, missing: { token: string; context: string }[]): void {
     const T = i18n();
     this.formatPreviewSection?.remove();
 
@@ -448,7 +448,14 @@ export class LlmWikiView extends ItemView {
       const summary = warn.createEl("summary");
       summary.setText(T.view.formatMissingTokens(missing.length));
       const list = warn.createEl("ul", { cls: "llm-wiki-format-warn-list" });
-      for (const t of missing) list.createEl("li", { text: t });
+      for (const m of missing) {
+        const li = list.createEl("li");
+        li.createEl("code", { text: m.token, cls: "llm-wiki-format-warn-token" });
+        if (m.context) {
+          li.createSpan({ text: " — ", cls: "llm-wiki-format-warn-sep" });
+          li.createSpan({ text: m.context, cls: "llm-wiki-format-warn-ctx" });
+        }
+      }
     }
 
     const btnRow = this.formatPreviewSection.createDiv("llm-wiki-format-actions");

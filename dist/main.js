@@ -20630,8 +20630,14 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       const summary = warn.createEl("summary");
       summary.setText(T.view.formatMissingTokens(missing.length));
       const list = warn.createEl("ul", { cls: "llm-wiki-format-warn-list" });
-      for (const t of missing)
-        list.createEl("li", { text: t });
+      for (const m of missing) {
+        const li = list.createEl("li");
+        li.createEl("code", { text: m.token, cls: "llm-wiki-format-warn-token" });
+        if (m.context) {
+          li.createSpan({ text: " \u2014 ", cls: "llm-wiki-format-warn-sep" });
+          li.createSpan({ text: m.context, cls: "llm-wiki-format-warn-ctx" });
+        }
+      }
     }
     const btnRow = this.formatPreviewSection.createDiv("llm-wiki-format-actions");
     const applyBtn = btnRow.createEl("button", { text: T.view.formatApply, cls: "mod-cta" });
@@ -22527,17 +22533,28 @@ function significantTokens(text) {
 function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-function missingTokens(original, formatted) {
+function missingTokensWithContext(original, formatted) {
   const orig = significantTokens(original);
   const fmtLower = formatted.toLowerCase();
-  const missing = [];
+  const lines = original.split(/\r?\n/);
+  const out = [];
   for (const t of orig) {
     const tl = t.toLowerCase();
     const re = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(tl)}(?:[^A-Za-z0-9_]|$)`);
-    if (!re.test(fmtLower))
-      missing.push(t);
+    if (re.test(fmtLower))
+      continue;
+    const lineRe = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(t)}(?:[^A-Za-z0-9_]|$)`);
+    let context = "";
+    for (const line of lines) {
+      if (lineRe.test(line)) {
+        const trimmed = line.trim();
+        context = trimmed.length > 120 ? trimmed.slice(0, 117) + "\u2026" : trimmed;
+        break;
+      }
+    }
+    out.push({ token: t, context });
   }
-  return missing;
+  return out;
 }
 
 // src/phases/format.ts
@@ -22661,7 +22678,7 @@ ${original}`;
     yield { kind: "error", message: `Format: \u0437\u0430\u043F\u0438\u0441\u044C temp \u043D\u0435 \u0443\u0434\u0430\u043B\u0430\u0441\u044C \u2014 ${e.message}` };
     return;
   }
-  const missing = missingTokens(original, parsed.formatted);
+  const missing = missingTokensWithContext(original, parsed.formatted);
   yield { kind: "format_preview", tempPath, report: parsed.report, missingTokens: missing };
   yield { kind: "result", durationMs: Date.now() - start, text: parsed.report };
 }

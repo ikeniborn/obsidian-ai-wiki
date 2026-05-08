@@ -136,13 +136,33 @@ function escapeRegExp(s: string): string {
 }
 
 export function missingTokens(original: string, formatted: string): string[] {
+  return missingTokensWithContext(original, formatted).map((m) => m.token);
+}
+
+export interface MissingToken {
+  token: string;
+  context: string;
+}
+
+export function missingTokensWithContext(original: string, formatted: string): MissingToken[] {
   const orig = significantTokens(original);
   const fmtLower = formatted.toLowerCase();
-  const missing: string[] = [];
+  const lines = original.split(/\r?\n/);
+  const out: MissingToken[] = [];
   for (const t of orig) {
     const tl = t.toLowerCase();
     const re = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(tl)}(?:[^A-Za-z0-9_]|$)`);
-    if (!re.test(fmtLower)) missing.push(t);
+    if (re.test(fmtLower)) continue;
+    const lineRe = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(t)}(?:[^A-Za-z0-9_]|$)`);
+    let context = "";
+    for (const line of lines) {
+      if (lineRe.test(line)) {
+        const trimmed = line.trim();
+        context = trimmed.length > 120 ? trimmed.slice(0, 117) + "…" : trimmed;
+        break;
+      }
+    }
+    out.push({ token: t, context });
   }
-  return missing;
+  return out;
 }

@@ -54,7 +54,7 @@ export type RunEvent =
   | { kind: "init_start"; totalFiles: number }
   | { kind: "file_start"; file: string; index: number; total: number }
   | { kind: "file_done"; file: string }
-  | { kind: "format_preview"; tempPath: string; report: string; missingTokens: string[] }
+  | { kind: "format_preview"; tempPath: string; report: string; missingTokens: { token: string; context: string }[] }
   | { kind: "format_applied"; path: string }
   | { kind: "format_cancelled" };
 

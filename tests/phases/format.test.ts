@@ -69,9 +69,9 @@ describe("runFormat", () => {
     const events = await collect(
       runFormat([FILE], vt, makeLlm(json), "model", false, [], new AbortController().signal),
     );
-    const preview = events.find((e: unknown) => (e as { kind: string }).kind === "format_preview") as { missingTokens: string[] };
+    const preview = events.find((e: unknown) => (e as { kind: string }).kind === "format_preview") as { missingTokens: { token: string; context: string }[] };
     expect(preview.missingTokens.length).toBeGreaterThan(0);
-    expect(preview.missingTokens).toContain("https://clickhouse.com/docs");
+    expect(preview.missingTokens.map((m) => m.token)).toContain("https://clickhouse.com/docs");
   });
 
   it("создаёт !Temp если папки нет", async () => {

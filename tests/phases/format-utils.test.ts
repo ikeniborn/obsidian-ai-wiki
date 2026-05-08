@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractJsonObject, significantTokens, missingTokens, looksTruncated } from "../../src/phases/format-utils";
+import { extractJsonObject, significantTokens, missingTokens, missingTokensWithContext, looksTruncated } from "../../src/phases/format-utils";
 
 describe("extractJsonObject", () => {
   it("парсит чистый JSON", () => {
@@ -128,5 +128,24 @@ describe("missingTokens", () => {
     const fmt = "https://example.org/v1/2024";
     const missing = missingTokens(orig, fmt);
     expect(missing).toEqual([]);
+  });
+});
+
+describe("missingTokensWithContext", () => {
+  it("возвращает контекст-строку из оригинала для каждого missing токена", () => {
+    const orig = "Дата релиза: 2025-01-XX (placeholder)\nДругая строка про API";
+    const fmt = "Дата релиза\nДругая строка про API";
+    const missing = missingTokensWithContext(orig, fmt);
+    const xx = missing.find((m) => m.token === "XX");
+    expect(xx).toBeDefined();
+    expect(xx?.context).toContain("placeholder");
+  });
+
+  it("обрезает длинный контекст на 120 символов", () => {
+    const longLine = "PER " + "x".repeat(200);
+    const missing = missingTokensWithContext(longLine, "");
+    const per = missing.find((m) => m.token === "PER");
+    expect(per?.context.length).toBeLessThanOrEqual(120);
+    expect(per?.context).toMatch(/…$/);
   });
 });

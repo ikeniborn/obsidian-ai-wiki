@@ -256,10 +256,27 @@
 .llm-wiki-format-warn-list {
   margin: 6px 0 0 0;
   padding-left: 18px;
-  max-height: 160px;
+  max-height: 240px;
   overflow-y: auto;
-  font-family: var(--font-monospace);
   font-size: 11px;
+}
+.llm-wiki-format-warn-list li {
+  margin: 4px 0;
+  word-break: break-word;
+}
+.llm-wiki-format-warn-token {
+  font-family: var(--font-monospace);
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0 4px;
+  border-radius: 2px;
+}
+.llm-wiki-format-warn-sep {
+  opacity: 0.7;
+}
+.llm-wiki-format-warn-ctx {
+  opacity: 0.85;
+  font-style: italic;
 }
 .llm-wiki-format-actions {
   display: flex;

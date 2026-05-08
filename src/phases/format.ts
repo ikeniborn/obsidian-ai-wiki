@@ -5,7 +5,7 @@ import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import formatTemplate from "../../prompts/format.md";
 import formatSchema from "../../templates/_format-schema.md";
 import { render } from "./template";
-import { extractJsonObject, missingTokens, looksTruncated } from "./format-utils";
+import { extractJsonObject, missingTokensWithContext, looksTruncated } from "./format-utils";
 
 const TEMP_FOLDER = "!Temp";
 
@@ -146,7 +146,7 @@ export async function* runFormat(
     return;
   }
 
-  const missing = missingTokens(original, parsed.formatted);
+  const missing = missingTokensWithContext(original, parsed.formatted);
   yield { kind: "format_preview", tempPath, report: parsed.report, missingTokens: missing };
   yield { kind: "result", durationMs: Date.now() - start, text: parsed.report };
 }
