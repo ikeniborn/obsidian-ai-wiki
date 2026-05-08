@@ -1,5 +1,24 @@
 import { describe, it, expect } from "vitest";
-import { maskProxyUrl, parseNoProxy } from "../src/proxy";
+import { maskProxyUrl, parseNoProxy, shouldBypass } from "../src/proxy";
+
+describe("shouldBypass", () => {
+  it("exact match (case-insensitive)", () => {
+    expect(shouldBypass("Localhost", ["localhost"])).toBe(true);
+    expect(shouldBypass("api.example.com", ["other.com"])).toBe(false);
+  });
+  it("suffix glob *.domain", () => {
+    expect(shouldBypass("api.internal", ["*.internal"])).toBe(true);
+    expect(shouldBypass("internal", ["*.internal"])).toBe(false);
+    expect(shouldBypass("a.b.internal", ["*.internal"])).toBe(true);
+  });
+  it("IP literal exact", () => {
+    expect(shouldBypass("127.0.0.1", ["127.0.0.1"])).toBe(true);
+    expect(shouldBypass("127.0.0.2", ["127.0.0.1"])).toBe(false);
+  });
+  it("empty list never bypasses", () => {
+    expect(shouldBypass("anything", [])).toBe(false);
+  });
+});
 
 describe("parseNoProxy", () => {
   it("splits CSV and trims", () => {
