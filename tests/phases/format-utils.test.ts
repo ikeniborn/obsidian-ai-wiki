@@ -96,6 +96,21 @@ describe("significantTokens", () => {
     expect(t.has("foo")).toBe(true);
     expect(t.has("BAR_CONST")).toBe(true);
   });
+
+  it("НЕ извлекает Pascal-suffix из camelCase (regression: socketTimeout → Timeout)", () => {
+    const t = significantTokens("`socketTimeout` равен `connectionKeepAlive`");
+    expect(t.has("socketTimeout")).toBe(true);
+    expect(t.has("connectionKeepAlive")).toBe(true);
+    expect(t.has("Timeout")).toBe(false);
+    expect(t.has("KeepAlive")).toBe(false);
+  });
+
+  it("НЕ дробит числа: 2025 → не «025», not «25»", () => {
+    const t = significantTokens("Год 2025 версия v3.7");
+    expect(t.has("2025")).toBe(true);
+    expect(t.has("025")).toBe(false);
+    expect(t.has("25")).toBe(false);
+  });
 });
 
 describe("missingTokens", () => {

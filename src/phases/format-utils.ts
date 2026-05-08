@@ -115,17 +115,22 @@ export function significantTokens(text: string): Set<string> {
   }
   residual = residual.replace(/https?:\/\/\S+/g, " ");
 
-  for (const m of residual.matchAll(/\d+(?:\.\d+)?/g)) out.add(m[0]);
-  for (const m of residual.matchAll(/[A-Z][A-Za-z0-9-]{2,}/g)) {
+  // Числа: только standalone (с word-boundary) — иначе из "2025" извлекаем "025".
+  for (const m of residual.matchAll(/\b\d+(?:\.\d+)?\b/g)) out.add(m[0]);
+  // Latin-имена: \b перед заглавной — НЕ извлекать suffix из camelCase
+  // (раньше из "socketTimeout" доставали "Timeout" → false-positive в формат-валидаторе).
+  for (const m of residual.matchAll(/\b[A-Z][A-Za-z0-9-]{2,}/g)) {
     if (!STOP_WORDS.has(m[0])) out.add(m[0]);
   }
   for (const m of residual.matchAll(/\b[A-Z]{2,}\b/g)) out.add(m[0]);
 
+  // Идентификаторы из inline `code` и fenced ```blocks``` — целое слово,
+  // word-boundary защищает от извлечения подстрок.
   for (const m of residual.matchAll(/`([^`\n]+)`/g)) {
-    for (const id of m[1].matchAll(/[A-Za-z_][A-Za-z0-9_]{2,}/g)) out.add(id[0]);
+    for (const id of m[1].matchAll(/\b[A-Za-z_][A-Za-z0-9_]{2,}\b/g)) out.add(id[0]);
   }
   for (const m of residual.matchAll(/```[\s\S]*?```/g)) {
-    for (const id of m[0].matchAll(/[A-Za-z_][A-Za-z0-9_]{2,}/g)) out.add(id[0]);
+    for (const id of m[0].matchAll(/\b[A-Za-z_][A-Za-z0-9_]{2,}\b/g)) out.add(id[0]);
   }
 
   return out;
