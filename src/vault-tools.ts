@@ -59,6 +59,10 @@ export class VaultTools {
     return this.adapter.exists(vaultPath);
   }
 
+  async mkdir(vaultPath: string): Promise<void> {
+    return this.adapter.mkdir(vaultPath);
+  }
+
   toVaultPath(absolutePath: string): string | null {
     const base = this.basePath.endsWith("/") ? this.basePath : this.basePath + "/";
     if (!absolutePath.startsWith(base)) return null;

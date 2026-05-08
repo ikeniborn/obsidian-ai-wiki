@@ -41,7 +41,9 @@ const STOP_WORDS = new Set([
 export function significantTokens(text: string): Set<string> {
   const out = new Set<string>();
 
-  for (const m of text.matchAll(/https?:\/\/\S+/g)) out.add(m[0]);
+  for (const m of text.matchAll(/https?:\/\/\S+/g)) {
+    out.add(m[0].replace(/[.,;:!?)\]}>"']+$/, ""));
+  }
   for (const m of text.matchAll(/\d+(?:\.\d+)?/g)) out.add(m[0]);
   for (const m of text.matchAll(/[A-ZА-Я][\wА-Яа-я-]{2,}/g)) {
     if (!STOP_WORDS.has(m[0])) out.add(m[0]);
