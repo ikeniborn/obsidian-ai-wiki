@@ -1,6 +1,6 @@
 id: obsidian-llm-wiki
 name: LLM Wiki Obsidian Plugin
-version: "0.1.63"
+version: "0.1.64"
 description: >
   Obsidian-плагин для ведения компаундируемой базы знаний на базе LLM.
   Запускает AI-агента (Claude CLI или нативный OpenAI-совместимый LLM),
@@ -77,12 +77,17 @@ key_constraints:
   - Логи: agent.jsonl + dev.jsonl пишутся через VaultTools.adapter (работает на mobile).
   - Format-инвариант: runFormat возвращает JSON {report, formatted}; перед записью
     temp-файла missingTokens() сверяет значимые токены исходника с форматированным
-    текстом. Apply дисейблится в UI при непустом списке потерянных токенов.
-  - Format / significantTokens (v0.1.63+): значимые = числа, URL, Latin-имена ≥3 букв
-    (Camel/Pascal/dash), ALL-CAPS-акронимы ≥2 букв, идентификаторы из `inline` и
-    ```fenced``` блоков. Кириллические capitalized слова НЕ значимые — рефраз
-    русских существительных штатно, иначе ложноположительные срабатывания
-    блокировали Apply.
+    текстом. Apply больше НЕ дисейблится при missing>0 (v0.1.64) — показывается
+    warning, но кнопка активна (валидатор давал false-positive ≥80% случаев).
+  - Format / significantTokens (v0.1.64): URL извлекаются ПЕРВЫМИ и удаляются
+    из текста, остальные matchers работают на residual — числа в путях URL
+    больше не дробятся в отдельные missing-токены. Значимые = URL, числа,
+    Latin-имена ≥3 букв (Camel/Pascal/dash), ALL-CAPS-акронимы ≥2 букв,
+    идентификаторы из `inline` и ```fenced``` блоков. Кириллица не значимая.
+  - Format / missingTokens (v0.1.64): сравнение case-insensitive через regex
+    с word-boundary `[^A-Za-z0-9_]`. ClickHouse находит clickhouse, API
+    не матчит rapid, 2024 не матчит 20240. Замена прежнего точного
+    Set.has() сравнения, дававшего false-positive на нормализации регистра.
   - Format JSON-устойчивость (v0.1.63+): запрос идёт с
     response_format: { type: "json_object" }; extractJsonObject снимает
     ```json```-обёртку, repairJson чинит trailing-commas и экранирует сырые

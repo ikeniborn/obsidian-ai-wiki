@@ -1,7 +1,7 @@
 # Architecture Documentation — obsidian-llm-wiki
 
 LLM Wiki — Obsidian-плагин для AI-powered компаундируемой базы знаний.  
-Версия: **0.1.63** | Язык: TypeScript | Runtime: Electron (Obsidian Desktop) + WebView (Obsidian Mobile)
+Версия: **0.1.64** | Язык: TypeScript | Runtime: Electron (Obsidian Desktop) + WebView (Obsidian Mobile)
 
 ---
 
@@ -135,7 +135,7 @@ graph TD
 
 - **Pre-flight guard:** `controller.format()` отклоняет файлы внутри wiki-домена (по `domainWikiFolder(d.wiki_folder)`) — открывается `ConfirmModal` с предложением запустить ingest из `wiki_sources` frontmatter.
 - **Preview workflow:** результат пишется в `!Temp/<basename>.formatted.md`, событие `format_preview {tempPath, report, missingTokens}` рендерится в side-panel блоком с Apply/Cancel + чатом для refine. CSS отделяет блоки border-top'ами; чат-textarea на всю ширину панели, Send-кнопка в собственном ряду справа под textarea.
-- **Validator (`format-utils.ts`, v0.1.63+):** `significantTokens()` извлекает числа, URL (с зачисткой trailing punctuation), Latin-имена ≥3 букв, ALL-CAPS-акронимы ≥2 букв, идентификаторы из inline/fenced code. Кириллические capitalized слова **не** считаются значимыми (рефраз русских существительных штатно). `missingTokens(orig, formatted)` возвращает потерянные значимые токены. Apply дисейблится при непустом списке.
+- **Validator (`format-utils.ts`, v0.1.64):** `significantTokens()` извлекает URL первыми, удаляет их из текста, затем парсит residual на числа, Latin-имена ≥3 букв, ALL-CAPS ≥2 букв, идентификаторы из inline/fenced code — числа внутри URL не дробятся в отдельные missing-токены. Кириллические capitalized слова не считаются значимыми. `missingTokens(orig, formatted)` сравнивает токены case-insensitive с word-boundary regex (через `[^A-Za-z0-9_]`) — `ClickHouse` находит `clickhouse`, `API` не матчит `rapid`, `2024` не матчит `20240`. Apply **больше не дисейблится** при непустом missing — показывается warning, но кнопка активна (предыдущая блокировка давала false-positive ≥80% случаев).
 - **JSON-устойчивость (v0.1.63+):** запрос идёт с `response_format: { type: "json_object" }`. `extractJsonObject` снимает ```` ```json ```` обёртку, `repairJson` чинит trailing-commas + экранирует сырые control-chars (`\n`, `\r`, `\t`, и пр.) внутри строк. При первом провале — авто-retry с явной инструкцией «верни ТОЛЬКО валидный JSON, экранируй спецсимволы». Если `finish_reason === "length"` — retry пропускается, выдаётся ошибка «ответ обрезан, увеличьте maxTokens».
 - **Refine loop:** `controller.formatRefine(msg)` добавляет user-message в `_pendingFormat.chat` и редиспатчит `format` — `runFormat` принимает `chatHistory` параметром, передаёт в LLM как продолжение диалога.
 - **Lifecycle:** `formatApply` читает temp → перезаписывает оригинал через `vault.modify(TFile, content)` (буфер открытого редактора Obsidian обновляется; `adapter.write` обходил редактор и затирался при следующем save) → удаляет temp. `formatCancel` удаляет temp. Оба чистят `_pendingFormat` и эмитят `format_applied`/`format_cancelled` для UI cleanup.

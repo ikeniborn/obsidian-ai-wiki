@@ -32,6 +32,29 @@ export function extractJsonObject(text: string): FormatResponse | null {
   return null;
 }
 
+export function looksTruncated(text: string): boolean {
+  const cleaned = stripCodeFence(text);
+  const start = cleaned.indexOf("{");
+  if (start < 0) return false;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  let sawOpen = false;
+  for (let i = start; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (escape) { escape = false; continue; }
+    if (ch === "\\" && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") { depth++; sawOpen = true; }
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return false;
+    }
+  }
+  return sawOpen && (depth > 0 || inString);
+}
+
 function stripCodeFence(text: string): string {
   const fence = text.match(/```(?:json|JSON)?\s*([\s\S]*?)```/);
   if (fence) return fence[1];

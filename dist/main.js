@@ -371,7 +371,7 @@ var DEFAULT_SETTINGS = {
       query: { model: "sonnet", maxTokens: 4096 },
       lint: { model: "sonnet", maxTokens: 8192 },
       init: { model: "sonnet", maxTokens: 8192 },
-      format: { model: "sonnet", maxTokens: 16384 }
+      format: { model: "sonnet", maxTokens: 32768 }
     }
   },
   nativeAgent: {
@@ -387,7 +387,7 @@ var DEFAULT_SETTINGS = {
       query: { model: "llama3.2", maxTokens: 4096, temperature: 0.2 },
       lint: { model: "llama3.2", maxTokens: 8192, temperature: 0.2 },
       init: { model: "llama3.2", maxTokens: 8192, temperature: 0.2 },
-      format: { model: "llama3.2", maxTokens: 16384, temperature: 0.2 }
+      format: { model: "llama3.2", maxTokens: 32768, temperature: 0.2 }
     }
   },
   devMode: {
@@ -3930,6 +3930,42 @@ function extractJsonObject(text) {
   }
   return null;
 }
+function looksTruncated(text) {
+  const cleaned = stripCodeFence(text);
+  const start = cleaned.indexOf("{");
+  if (start < 0)
+    return false;
+  let depth = 0;
+  let inString = false;
+  let escape2 = false;
+  let sawOpen = false;
+  for (let i = start; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (escape2) {
+      escape2 = false;
+      continue;
+    }
+    if (ch === "\\" && inString) {
+      escape2 = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString)
+      continue;
+    if (ch === "{") {
+      depth++;
+      sawOpen = true;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0)
+        return false;
+    }
+  }
+  return sawOpen && (depth > 0 || inString);
+}
 function stripCodeFence(text) {
   const fence = text.match(/```(?:json|JSON)?\s*([\s\S]*?)```/);
   if (fence)
@@ -4125,7 +4161,8 @@ ${original}`;
   if (signal.aborted)
     return;
   let parsed = extractJsonObject(fullText);
-  if (!parsed && lastFinishReason === "length") {
+  const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
+  if (!parsed && truncated) {
     yield { kind: "error", message: "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u2014 \u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 maxTokens (Settings \u2192 per-operation \u2192 format) \u0438\u043B\u0438 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443" };
     yield { kind: "result", durationMs: Date.now() - start, text: fullText };
     return;
@@ -4133,9 +4170,9 @@ ${original}`;
   if (!parsed) {
     yield { kind: "assistant_text", delta: "\n[JSON \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u2014 \u043F\u043E\u0432\u0442\u043E\u0440\u044F\u044E \u0437\u0430\u043F\u0440\u043E\u0441]\n" };
     const retryMessages = [
-      ...messages,
-      { role: "assistant", content: fullText },
-      { role: "user", content: '\u0422\u0432\u043E\u0439 \u043F\u0440\u0435\u0434\u044B\u0434\u0443\u0449\u0438\u0439 \u043E\u0442\u0432\u0435\u0442 \u043D\u0435 \u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u043C JSON. \u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 {"report": "...", "formatted": "..."} \u0431\u0435\u0437 markdown-\u043E\u0431\u0451\u0440\u0442\u043A\u0438, \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439. \u0412\u0441\u0435 \u0441\u043F\u0435\u0446\u0441\u0438\u043C\u0432\u043E\u043B\u044B \u0432\u043D\u0443\u0442\u0440\u0438 \u0441\u0442\u0440\u043E\u043A \u0434\u043E\u043B\u0436\u043D\u044B \u0431\u044B\u0442\u044C \u044D\u043A\u0440\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u044B (\\n, \\", \\\\).' }
+      { role: "system", content: systemContent + '\n\n\u041A\u0420\u0418\u0422\u0418\u0427\u0415\u0421\u041A\u0418 \u0412\u0410\u0416\u041D\u041E: \u0432\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 {"report": "...", "formatted": "..."} \u0431\u0435\u0437 markdown-\u043E\u0431\u0451\u0440\u0442\u043A\u0438, \u0431\u0435\u0437 ```json fence, \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439. \u0412\u0441\u0435 \u0441\u043F\u0435\u0446\u0441\u0438\u043C\u0432\u043E\u043B\u044B \u0432\u043D\u0443\u0442\u0440\u0438 \u0441\u0442\u0440\u043E\u043A \u0434\u043E\u043B\u0436\u043D\u044B \u0431\u044B\u0442\u044C \u044D\u043A\u0440\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u044B (\\n, \\", \\\\).' },
+      { role: "user", content: userContent },
+      ...chatHistory.map((m) => ({ role: m.role, content: m.content }))
     ];
     const retryParams = { ...buildChatParams(model, retryMessages, opts), response_format: { type: "json_object" } };
     fullText = yield* callOnce(retryParams);
@@ -4144,7 +4181,9 @@ ${original}`;
     parsed = extractJsonObject(fullText);
   }
   if (!parsed) {
-    yield { kind: "error", message: "Format: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON (\u043F\u043E\u0441\u043B\u0435 retry)" };
+    const retryTruncated = lastFinishReason === "length" || looksTruncated(fullText);
+    const msg = retryTruncated ? "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0442\u043E\u043A\u0435\u043D\u043E\u0432 (\u043F\u043E\u0441\u043B\u0435 retry) \u2014 \u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 maxTokens (Settings \u2192 per-operation \u2192 format) \u0438\u043B\u0438 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443" : "Format: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON (\u043F\u043E\u0441\u043B\u0435 retry)";
+    yield { kind: "error", message: msg };
     yield { kind: "result", durationMs: Date.now() - start, text: fullText };
     return;
   }

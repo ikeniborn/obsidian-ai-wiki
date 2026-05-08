@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractJsonObject, significantTokens, missingTokens } from "../../src/phases/format-utils";
+import { extractJsonObject, significantTokens, missingTokens, looksTruncated } from "../../src/phases/format-utils";
 
 describe("extractJsonObject", () => {
   it("парсит чистый JSON", () => {
@@ -25,6 +25,24 @@ describe("extractJsonObject", () => {
   it("возвращает null для невалидного JSON", () => {
     expect(extractJsonObject("not json")).toBeNull();
     expect(extractJsonObject("{ broken")).toBeNull();
+  });
+});
+
+describe("looksTruncated", () => {
+  it("обнаруживает обрыв на середине JSON", () => {
+    expect(looksTruncated('```json\n{"report":"start of report')).toBe(true);
+  });
+
+  it("полный JSON не считается обрезанным", () => {
+    expect(looksTruncated('{"report":"r","formatted":"f"}')).toBe(false);
+  });
+
+  it("текст без { не считается обрезанным", () => {
+    expect(looksTruncated("just text no json")).toBe(false);
+  });
+
+  it("открытая скобка без закрытия — обрезано", () => {
+    expect(looksTruncated('{"a":{"b":"c"}')).toBe(true);
   });
 });
 

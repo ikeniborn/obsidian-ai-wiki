@@ -5,7 +5,7 @@ import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import formatTemplate from "../../prompts/format.md";
 import formatSchema from "../../templates/_format-schema.md";
 import { render } from "./template";
-import { extractJsonObject, missingTokens } from "./format-utils";
+import { extractJsonObject, missingTokens, looksTruncated } from "./format-utils";
 
 const TEMP_FOLDER = "!Temp";
 
@@ -105,7 +105,8 @@ export async function* runFormat(
   if (signal.aborted) return;
 
   let parsed = extractJsonObject(fullText);
-  if (!parsed && lastFinishReason === "length") {
+  const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
+  if (!parsed && truncated) {
     yield { kind: "error", message: "Format: ответ обрезан по лимиту токенов — увеличьте maxTokens (Settings → per-operation → format) или сократите страницу" };
     yield { kind: "result", durationMs: Date.now() - start, text: fullText };
     return;
@@ -113,9 +114,9 @@ export async function* runFormat(
   if (!parsed) {
     yield { kind: "assistant_text", delta: "\n[JSON невалиден — повторяю запрос]\n" };
     const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      ...messages,
-      { role: "assistant", content: fullText },
-      { role: "user", content: "Твой предыдущий ответ не является валидным JSON. Верни ТОЛЬКО JSON-объект {\"report\": \"...\", \"formatted\": \"...\"} без markdown-обёртки, без пояснений. Все спецсимволы внутри строк должны быть экранированы (\\n, \\\", \\\\)." },
+      { role: "system", content: systemContent + "\n\nКРИТИЧЕСКИ ВАЖНО: верни ТОЛЬКО JSON-объект {\"report\": \"...\", \"formatted\": \"...\"} без markdown-обёртки, без ```json fence, без пояснений. Все спецсимволы внутри строк должны быть экранированы (\\n, \\\", \\\\)." },
+      { role: "user", content: userContent } as OpenAI.Chat.ChatCompletionMessageParam,
+      ...chatHistory.map((m) => ({ role: m.role, content: m.content } as OpenAI.Chat.ChatCompletionMessageParam)),
     ];
     const retryParams = { ...buildChatParams(model, retryMessages, opts), response_format: { type: "json_object" } };
     fullText = yield* callOnce(retryParams);
@@ -123,7 +124,11 @@ export async function* runFormat(
     parsed = extractJsonObject(fullText);
   }
   if (!parsed) {
-    yield { kind: "error", message: "Format: LLM вернул невалидный JSON (после retry)" };
+    const retryTruncated = lastFinishReason === "length" || looksTruncated(fullText);
+    const msg = retryTruncated
+      ? "Format: ответ обрезан по лимиту токенов (после retry) — увеличьте maxTokens (Settings → per-operation → format) или сократите страницу"
+      : "Format: LLM вернул невалидный JSON (после retry)";
+    yield { kind: "error", message: msg };
     yield { kind: "result", durationMs: Date.now() - start, text: fullText };
     return;
   }
