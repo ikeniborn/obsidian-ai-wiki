@@ -55,6 +55,11 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     await this.patchLocal({ claudeAgent: { ...cur, ...patch } });
   }
 
+  private async patchLocalProxy(patch: Partial<NonNullable<LocalConfig["proxy"]>>): Promise<void> {
+    const cur = this.localCache.proxy ?? { enabled: false, url: "" };
+    await this.patchLocal({ proxy: { ...cur, ...patch } });
+  }
+
   private render(): void {
     const { containerEl } = this;
     containerEl.empty();
@@ -378,6 +383,70 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         }
       }
 
+      // ── Proxy section (native-agent only) ───────────────────────────────────
+      const proxy = eff.proxy;
+      new Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
+
+      new Setting(containerEl)
+        .setName(T.settings.proxy_enabled_name)
+        .setDesc(T.settings.proxy_enabled_desc)
+        .addToggle((t) =>
+          t.setValue(proxy.enabled)
+            .onChange(async (v) => { await this.patchLocalProxy({ enabled: v }); this.display(); }),
+        );
+
+      const dim = (st: Setting) => {
+        if (!proxy.enabled) st.settingEl.style.opacity = "0.5";
+      };
+
+      dim(
+        new Setting(containerEl)
+          .setName(T.settings.proxy_url_name)
+          .setDesc(T.settings.proxy_url_desc)
+          .addText((t) =>
+            t.setPlaceholder("http://proxy.example.com:8080")
+              .setValue(proxy.url)
+              .setDisabled(!proxy.enabled)
+              .onChange(async (v) => { await this.patchLocalProxy({ url: v.trim() }); }),
+          ),
+      );
+
+      dim(
+        new Setting(containerEl)
+          .setName(T.settings.proxy_username_name)
+          .setDesc(T.settings.proxy_username_desc)
+          .addText((t) =>
+            t.setValue(proxy.username ?? "")
+              .setDisabled(!proxy.enabled)
+              .onChange(async (v) => { await this.patchLocalProxy({ username: v }); }),
+          ),
+      );
+
+      dim(
+        new Setting(containerEl)
+          .setName(T.settings.proxy_password_name)
+          .setDesc(T.settings.proxy_password_desc)
+          .addText((t) => {
+            t.setValue(proxy.password ?? "")
+              .setDisabled(!proxy.enabled)
+              .onChange(async (v) => { await this.patchLocalProxy({ password: v }); });
+            t.inputEl.type = "password";
+          }),
+      );
+
+      dim(
+        new Setting(containerEl)
+          .setName(T.settings.proxy_noProxy_name)
+          .setDesc(T.settings.proxy_noProxy_desc)
+          .addText((t) =>
+            t.setPlaceholder("localhost,127.0.0.1")
+              .setValue(proxy.noProxy ?? "")
+              .setDisabled(!proxy.enabled)
+              .onChange(async (v) => { await this.patchLocalProxy({ noProxy: v.trim() }); }),
+          ),
+      );
+
+      containerEl.createEl("p", { text: T.settings.proxy_hint, cls: "setting-item-description" });
     }
 
     // ── Dev mode ──────────────────────────────────────────────────────────────
