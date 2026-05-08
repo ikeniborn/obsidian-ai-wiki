@@ -149,15 +149,31 @@ export interface MissingToken {
   context: string;
 }
 
+function lemmas(token: string): string[] {
+  const out = [token];
+  // Plural → singular: aggregations → aggregation, entries → entry, boxes → box.
+  if (/ies$/i.test(token) && token.length > 4) out.push(token.slice(0, -3) + "y");
+  else if (/(?:s|x|z|ch|sh)es$/i.test(token) && token.length > 4) out.push(token.slice(0, -2));
+  else if (/s$/i.test(token) && !/ss$/i.test(token) && token.length > 3) out.push(token.slice(0, -1));
+  // Singular → plural: aggregation → aggregations, box → boxes, entry → entries.
+  else if (/[^aeiou]y$/i.test(token) && token.length > 2) out.push(token.slice(0, -1) + "ies");
+  else if (/(?:s|x|z|ch|sh)$/i.test(token) && token.length > 2) out.push(token + "es");
+  else if (token.length > 2) out.push(token + "s");
+  return out;
+}
+
 export function missingTokensWithContext(original: string, formatted: string): MissingToken[] {
   const orig = significantTokens(original);
   const fmtLower = formatted.toLowerCase();
   const lines = original.split(/\r?\n/);
   const out: MissingToken[] = [];
   for (const t of orig) {
-    const tl = t.toLowerCase();
-    const re = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(tl)}(?:[^A-Za-z0-9_]|$)`);
-    if (re.test(fmtLower)) continue;
+    const variants = lemmas(t).map((v) => v.toLowerCase());
+    const found = variants.some((v) => {
+      const re = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(v)}(?:[^A-Za-z0-9_]|$)`);
+      return re.test(fmtLower);
+    });
+    if (found) continue;
     const lineRe = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(t)}(?:[^A-Za-z0-9_]|$)`);
     let context = "";
     for (const line of lines) {

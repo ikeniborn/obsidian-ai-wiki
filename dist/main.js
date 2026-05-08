@@ -22533,15 +22533,34 @@ function significantTokens(text) {
 function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+function lemmas(token) {
+  const out = [token];
+  if (/ies$/i.test(token) && token.length > 4)
+    out.push(token.slice(0, -3) + "y");
+  else if (/(?:s|x|z|ch|sh)es$/i.test(token) && token.length > 4)
+    out.push(token.slice(0, -2));
+  else if (/s$/i.test(token) && !/ss$/i.test(token) && token.length > 3)
+    out.push(token.slice(0, -1));
+  else if (/[^aeiou]y$/i.test(token) && token.length > 2)
+    out.push(token.slice(0, -1) + "ies");
+  else if (/(?:s|x|z|ch|sh)$/i.test(token) && token.length > 2)
+    out.push(token + "es");
+  else if (token.length > 2)
+    out.push(token + "s");
+  return out;
+}
 function missingTokensWithContext(original, formatted) {
   const orig = significantTokens(original);
   const fmtLower = formatted.toLowerCase();
   const lines = original.split(/\r?\n/);
   const out = [];
   for (const t of orig) {
-    const tl = t.toLowerCase();
-    const re = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(tl)}(?:[^A-Za-z0-9_]|$)`);
-    if (re.test(fmtLower))
+    const variants = lemmas(t).map((v) => v.toLowerCase());
+    const found = variants.some((v) => {
+      const re = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(v)}(?:[^A-Za-z0-9_]|$)`);
+      return re.test(fmtLower);
+    });
+    if (found)
       continue;
     const lineRe = new RegExp(`(?:^|[^A-Za-z0-9_])${escapeRegExp(t)}(?:[^A-Za-z0-9_]|$)`);
     let context = "";

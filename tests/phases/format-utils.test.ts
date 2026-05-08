@@ -144,6 +144,18 @@ describe("missingTokens", () => {
     const missing = missingTokens(orig, fmt);
     expect(missing).toEqual([]);
   });
+
+  it("plural→singular: Aggregations ≈ aggregation, CTEs ≈ CTE (lemma rephrase)", () => {
+    const orig = "Aggregations и CTEs и Files используются.";
+    const fmt = "aggregation, CTE и file применяются.";
+    expect(missingTokens(orig, fmt)).toEqual([]);
+  });
+
+  it("singular→plural не теряется: aggregation ≈ aggregations", () => {
+    const orig = "Используем `Aggregation` для группировки.";
+    const fmt = "Используем aggregations для группировки.";
+    expect(missingTokens(orig, fmt)).toEqual([]);
+  });
 });
 
 describe("missingTokensWithContext", () => {
