@@ -14,6 +14,16 @@ export class Setting {
   addText() { return this; }
   addDropdown() { return this; }
   addToggle() { return this; }
+  addButton(cb?: (b: any) => any) {
+    const btn = {
+      setButtonText: () => btn,
+      setCta: () => btn,
+      setWarning: () => btn,
+      onClick: () => btn,
+    };
+    cb?.(btn);
+    return this;
+  }
 }
 
 export const Platform = {
@@ -74,8 +84,11 @@ export class TFolder {
 }
 
 export class Modal {
+  app: any;
   contentEl = makeEl();
-  close() {}
+  constructor(app?: any) { this.app = app; }
+  open() { (this as any).onOpen?.(); }
+  close() { (this as any).onClose?.(); }
 }
 
 export class ItemView {}

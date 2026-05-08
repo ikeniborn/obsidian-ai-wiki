@@ -16,7 +16,8 @@ import type { DomainStore } from "./domain-store";
 import { DomainCorruptError } from "./domain-store";
 import type { LocalConfig, LocalConfigStore } from "./local-config";
 import type { LlmWikiPluginSettings } from "./types";
-import { FileErrorModal } from "./modals";
+import { FileErrorModal, ConfirmModal } from "./modals";
+import { domainWikiFolder } from "./wiki-path";
 
 declare const require: NodeJS.Require;
 
@@ -25,6 +26,7 @@ export class WikiController {
   currentOp: { op: WikiOperation; args: string[] } | null = null;
   private _chatSessionId: string | undefined;
   private _currentClaudeClient: ClaudeCliClient | null = null;
+  private _pendingFormat: { originalPath: string; tempPath: string; chat: ChatMessage[] } | null = null;
   constructor(
     private app: App,
     private plugin: LlmWikiPlugin,
@@ -43,6 +45,91 @@ export class WikiController {
       this.current.abort();
       new Notice(i18n().ctrl.cancelling);
     }
+  }
+
+  async format(): Promise<void> {
+    const file = this.app.workspace.getActiveFile();
+    if (!file) { new Notice(i18n().ctrl.noActiveFile); return; }
+    if (file.extension !== "md") {
+      new Notice(i18n().view.formatOnlyMarkdown ?? "Format only works on markdown files");
+      return;
+    }
+
+    const domains = await this.loadDomains();
+    const inWiki = domains.find((d) => {
+      const wikiPrefix = domainWikiFolder(d.wiki_folder);
+      return file.path === wikiPrefix || file.path.startsWith(wikiPrefix + "/");
+    });
+    if (inWiki) {
+      const T = i18n().view;
+      new ConfirmModal(
+        this.app,
+        T.formatInWikiTitle,
+        [T.formatInWikiBody(inWiki.id)],
+        () => void this.suggestIngestForWikiFile(file.path, inWiki),
+      ).open();
+      return;
+    }
+
+    this._pendingFormat = { originalPath: file.path, tempPath: "", chat: [] };
+    await this.dispatch("format", [file.path]);
+  }
+
+  private async suggestIngestForWikiFile(filePath: string, domain: DomainEntry): Promise<void> {
+    const content = await this.app.vault.adapter.read(filePath);
+    const m = content.match(/^---\n([\s\S]*?)\n---/);
+    if (!m) { new Notice(i18n().view.formatInWikiNoSources); return; }
+    const frontmatter = m[1];
+    const sourcesMatch = frontmatter.match(/wiki_sources:\s*\n((?:\s*-\s*.+\n?)+)/);
+    if (!sourcesMatch) { new Notice(i18n().view.formatInWikiNoSources); return; }
+    const sources = sourcesMatch[1]
+      .split("\n")
+      .map((l) => l.replace(/^\s*-\s*/, "").trim())
+      .filter(Boolean);
+    if (!sources.length) { new Notice(i18n().view.formatInWikiNoSources); return; }
+    await this.init(domain.id, false, sources);
+  }
+
+  async formatApply(): Promise<void> {
+    const p = this._pendingFormat;
+    if (!p || !p.tempPath) {
+      new Notice(i18n().view.formatNoPending ?? "No format preview to apply");
+      return;
+    }
+    if (this.isBusy()) { new Notice(i18n().ctrl.operationRunning); return; }
+    try {
+      const content = await this.app.vault.adapter.read(p.tempPath);
+      await this.app.vault.adapter.write(p.originalPath, content);
+      await this.app.vault.adapter.remove(p.tempPath);
+      new Notice(i18n().view.formatApplied(p.originalPath));
+      this.activeView()?.appendEvent({ kind: "format_applied", path: p.originalPath });
+    } catch (e) {
+      new Notice(i18n().ctrl.errorPrefix((e as Error).message));
+    } finally {
+      this._pendingFormat = null;
+      this.onBusyChange?.();
+    }
+  }
+
+  async formatCancel(): Promise<void> {
+    const p = this._pendingFormat;
+    if (!p || !p.tempPath) { this._pendingFormat = null; return; }
+    try { await this.app.vault.adapter.remove(p.tempPath); } catch { /* orphan */ }
+    this._pendingFormat = null;
+    new Notice(i18n().view.formatCancelled);
+    this.activeView()?.appendEvent({ kind: "format_cancelled" });
+    this.onBusyChange?.();
+  }
+
+  async formatRefine(message: string): Promise<void> {
+    const p = this._pendingFormat;
+    if (!p) {
+      new Notice(i18n().view.formatNoPending ?? "No format preview to refine");
+      return;
+    }
+    if (this.isBusy()) { new Notice(i18n().ctrl.operationRunning); return; }
+    p.chat.push({ role: "user", content: message });
+    await this.dispatch("format", [p.originalPath]);
   }
 
   async ingestActive(domainId?: string): Promise<void> {
@@ -323,7 +410,7 @@ export class WikiController {
     // Новая операция делает предыдущий чат-контекст нерелевантным.
     this._chatSessionId = undefined;
 
-    if (Platform.isMobile && op !== "query" && op !== "query-save") {
+    if (Platform.isMobile && op !== "query" && op !== "query-save" && op !== "format") {
       new Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
@@ -365,7 +452,8 @@ export class WikiController {
 
     const opKey = op === "query-save" ? "query" : op;
     const timeoutMs = this.plugin.settings.timeouts[opKey as keyof typeof this.plugin.settings.timeouts] * 1000;
-    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError });
+    const chatMessages = op === "format" ? this._pendingFormat?.chat : undefined;
+    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages });
 
     try {
       for await (const ev of runGen) {
@@ -384,6 +472,10 @@ export class WikiController {
             ctrl.abort();
             break;
           }
+        }
+        if (ev.kind === "format_preview" && this._pendingFormat) {
+          this._pendingFormat.tempPath = ev.tempPath;
+          this._pendingFormat.chat.push({ role: "assistant", content: ev.report });
         }
         this.collectStep(ev, steps);
         if (ev.kind === "result") finalText = ev.text;
