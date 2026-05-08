@@ -107,8 +107,8 @@ export async function* runFormat(
   let parsed = extractJsonObject(fullText);
   const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
   if (!parsed && truncated) {
-    yield { kind: "error", message: "Format: ответ обрезан по лимиту токенов — увеличьте maxTokens (Settings → per-operation → format) или сократите страницу" };
-    yield { kind: "result", durationMs: Date.now() - start, text: fullText };
+    yield { kind: "error", message: "Format: ответ обрезан по лимиту вывода модели — сократите страницу или увеличьте лимит (claude-agent: env CLAUDE_CODE_MAX_OUTPUT_TOKENS в iclaude.sh; native-agent: Settings → per-operation → format → maxTokens)" };
+    yield { kind: "result", durationMs: Date.now() - start, text: "" };
     return;
   }
   if (!parsed) {
@@ -126,10 +126,10 @@ export async function* runFormat(
   if (!parsed) {
     const retryTruncated = lastFinishReason === "length" || looksTruncated(fullText);
     const msg = retryTruncated
-      ? "Format: ответ обрезан по лимиту токенов (после retry) — увеличьте maxTokens (Settings → per-operation → format) или сократите страницу"
+      ? "Format: ответ обрезан по лимиту вывода модели (после retry) — сократите страницу или увеличьте лимит (claude-agent: env CLAUDE_CODE_MAX_OUTPUT_TOKENS в iclaude.sh; native-agent: Settings → per-operation → format → maxTokens)"
       : "Format: LLM вернул невалидный JSON (после retry)";
     yield { kind: "error", message: msg };
-    yield { kind: "result", durationMs: Date.now() - start, text: fullText };
+    yield { kind: "result", durationMs: Date.now() - start, text: "" };
     return;
   }
 

@@ -22612,8 +22612,8 @@ ${original}`;
   let parsed = extractJsonObject(fullText);
   const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
   if (!parsed && truncated) {
-    yield { kind: "error", message: "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u2014 \u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 maxTokens (Settings \u2192 per-operation \u2192 format) \u0438\u043B\u0438 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443" };
-    yield { kind: "result", durationMs: Date.now() - start, text: fullText };
+    yield { kind: "error", message: "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 \u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442 (claude-agent: env CLAUDE_CODE_MAX_OUTPUT_TOKENS \u0432 iclaude.sh; native-agent: Settings \u2192 per-operation \u2192 format \u2192 maxTokens)" };
+    yield { kind: "result", durationMs: Date.now() - start, text: "" };
     return;
   }
   if (!parsed) {
@@ -22631,9 +22631,9 @@ ${original}`;
   }
   if (!parsed) {
     const retryTruncated = lastFinishReason === "length" || looksTruncated(fullText);
-    const msg = retryTruncated ? "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0442\u043E\u043A\u0435\u043D\u043E\u0432 (\u043F\u043E\u0441\u043B\u0435 retry) \u2014 \u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 maxTokens (Settings \u2192 per-operation \u2192 format) \u0438\u043B\u0438 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443" : "Format: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON (\u043F\u043E\u0441\u043B\u0435 retry)";
+    const msg = retryTruncated ? "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 (\u043F\u043E\u0441\u043B\u0435 retry) \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 \u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442 (claude-agent: env CLAUDE_CODE_MAX_OUTPUT_TOKENS \u0432 iclaude.sh; native-agent: Settings \u2192 per-operation \u2192 format \u2192 maxTokens)" : "Format: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON (\u043F\u043E\u0441\u043B\u0435 retry)";
     yield { kind: "error", message: msg };
-    yield { kind: "result", durationMs: Date.now() - start, text: fullText };
+    yield { kind: "result", durationMs: Date.now() - start, text: "" };
     return;
   }
   const baseName = filePath.split("/").pop()?.replace(/\.md$/, "") ?? "page";
