@@ -1,6 +1,6 @@
 ---
 wiki_sources: ["src/agent-runner.ts"]
-wiki_updated: 2026-05-06
+wiki_updated: 2026-05-08
 wiki_status: developing
 wiki_outgoing_links:
   - "[[claude-cli-client]]"
@@ -46,7 +46,7 @@ aliases: ["AgentRunner"]
 
 ### DevMode интеграция
 
-При `devMode.enabled` — записывает лог операции в `dev.jsonl` и запускает `runEvaluator` для автооценки результата.
+При `devMode.enabled` — записывает лог операции в `!Logs/dev.jsonl` через `vaultTools.adapter` (mobile-compatible) и запускает `runEvaluator` для автооценки результата. Оценка `eval_result` дописывается обратно в последнюю строку JSONL через `read+write` (без append, поскольку нужно обновить запись на месте).
 
 ## Связанные концепции
 

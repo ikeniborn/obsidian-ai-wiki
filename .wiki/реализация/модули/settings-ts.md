@@ -1,18 +1,19 @@
 ---
 wiki_sources: ["src/settings.ts"]
-wiki_updated: 2026-05-07
+wiki_updated: 2026-05-08
 wiki_status: developing
 wiki_outgoing_links:
   - "[[llm-wiki-plugin-settings]]"
   - "[[domain-entry]]"
   - "[[domain-store]]"
   - "[[local-config]]"
+  - "[[effective-settings]]"
 tags: ["implementation", "typescript", "obsidian-llm-wiki"]
 aliases: ["settings.ts", "LlmWikiSettingTab"]
 ---
 # settings.ts (LlmWikiSettingTab)
 
-Вкладка настроек плагина. `PluginSettingTab` с UI: общие, backend, домены, dev mode. Домены читаются через `DomainStore`, `iclaudePath` — через `LocalConfigStore`. UI рендерится async-aware: `display() → refresh() async → render() sync`.
+Вкладка настроек плагина. `PluginSettingTab` с UI: общие, backend, домены, dev mode. Все machine-specific и чувствительные поля (`backend`, `iclaudePath`, API-credentials, `model`, `agentLogEnabled`) пишутся в `LocalConfig` через `LocalConfigStore`. UI рендерится async-aware: `display() → refresh() async → render() sync`. Эффективные значения для отображения собираются через [[effective-settings|resolveEffective()]].
 
 ## Основные характеристики
 
@@ -25,24 +26,41 @@ aliases: ["settings.ts", "LlmWikiSettingTab"]
 ```
 display(): void              // вызов от Obsidian
   → void this.refresh()      // async, не блокирует
-      → await domainStore.load()      // → cachedDomains
-      → await localConfigStore.load() // → cachedIclaudePath
-      → this.render()                  // sync, использует кэши
+      → await domainStore.load()      → cachedDomains
+      → await localConfigStore.load() → localCache
+      → this.render()                  // sync, использует кэши + resolveEffective
 ```
 
-Поля кэша: `cachedDomains: DomainEntry[]`, `cachedIclaudePath: string`. На `DomainCorruptError` — `Notice` + `cachedDomains = []`.
+Поля кэша: `cachedDomains: DomainEntry[]`, `localCache: LocalConfig`. На `DomainCorruptError` — `Notice` + `cachedDomains = []`.
+
+### Patch-хелперы
+
+| Хелпер | Запись | Применение |
+|--------|--------|-----------|
+| `patchLocal(patch)` | top-level поля `LocalConfig` | `iclaudePath`, `backend`, `agentLogEnabled` |
+| `patchLocalNative(patch)` | вложенный `nativeAgent` overlay | `baseUrl`, `apiKey`, `model`, `temperature`, `numCtx` |
+| `patchLocalClaude(patch)` | вложенный `claudeAgent` overlay | `model`, `allowedTools` |
+
+Все три обновляют `localCache` и пишут через `localConfigStore.save()`. Per-operation секция и dev-mode остаются в synced `plugin.settings` через `plugin.saveSettings()`.
 
 ### Секции UI
 
-| Секция | Содержимое |
-|--------|-----------|
-| General | `systemPrompt`, `maxTokens` (если !perOperation && !claude-agent), `timeouts`, `historyLimit`, `agentLogEnabled` |
-| Domains | Список из `cachedDomains`: Edit / Delete; пустой → пояснительный текст. Edit/Delete → `domainStore.load+save+refresh()` |
-| Backend | Dropdown claude-agent / native-agent |
-| claude-agent | `iclaudePath` (из `LocalConfigStore`, save через `localConfigStore.save({ iclaudePath })`), `spawnCwd`, `model`, `allowedTools`, `perOperation` |
-| native-agent | `baseUrl`, `apiKey`, `model`, `numCtx`, `temperature`, `perOperation` |
-| Per-Operation | Per-op model (claude) или model+maxTokens+temperature (native) |
-| Dev Mode | `enabled`, `evaluatorModel` |
+| Секция | Содержимое | Источник |
+|--------|-----------|----------|
+| General | `systemPrompt`, `maxTokens` (если !perOperation && !claude-agent), `timeouts`, `historyLimit`, `agentLogEnabled` (десктоп) | synced + local (`agentLogEnabled`) |
+| Domains | Список из `cachedDomains`: Edit / Delete | `DomainStore` |
+| Backend | Dropdown `claude-agent` / `native-agent` (скрыт на мобильном — только cloud LLM) | `local.backend` |
+| claude-agent | `iclaudePath`, `model`, `allowedTools`, `perOperation` | `local` (через `patchLocal`/`patchLocalClaude`) |
+| native-agent | `baseUrl`, `apiKey`, `model`, `numCtx`, `temperature`, `perOperation` (десктоп) | `local.nativeAgent` (через `patchLocalNative`) |
+| Per-Operation | Per-op `model` (claude) или `model + maxTokens + temperature` (native) | synced |
+| Dev Mode | `enabled`, `evaluatorModel` (только десктоп) | synced |
+
+### Mobile-only UI
+
+При `Platform.isMobile`:
+- Скрыт выбор backend (forced `native-agent`), вместо него — ссылка на mobile-cloud-ollama.md
+- Скрыт `agentLogEnabled` toggle, dev-mode секция, claude-agent секция, per-operation toggle
+- Native-agent остаётся, но без переключателя per-operation
 
 ### Реактивность
 
@@ -50,7 +68,8 @@ display(): void              // вызов от Obsidian
 
 ## Связанные концепции
 
-- [[llm-wiki-plugin-settings]] — без `domains` и без `claudeAgent.iclaudePath`
+- [[llm-wiki-plugin-settings]] — synced часть конфига; чувствительные/per-device поля выгружены в `LocalConfig`
+- [[local-config]] — overlay для machine-specific полей; именно туда пишет UI
+- [[effective-settings]] — функция, формирующая значения для отображения
 - [[domain-store]] — источник списка доменов
-- [[local-config]] — источник `iclaudePath`
 - [[domain-entry]] — структура для EditDomainModal

@@ -140,7 +140,9 @@
 - [[llm-wiki-view]] — LlmWikiView (view.ts)
 - [[domain-map-ts]] — domain.ts (DomainEntry, EntityType, applyDomainEvent)
 - [[domain-store]] — DomainStore (domain-store.ts) — vault-bound карта доменов
-- [[local-config]] — LocalConfigStore (local-config.ts) — machine-specific iclaudePath
+- [[local-config]] — LocalConfigStore (local-config.ts) — per-device overlay (iclaudePath, backend, API)
+- [[effective-settings]] — resolveEffective (effective-settings.ts) — слияние synced + local
+- [[mobile-fetch]] — mobileFetch (mobile-fetch.ts) — fetch на базе Obsidian requestUrl
 - [[llm-utils-ts]] — llm-utils.ts (buildChatParams, extractStreamDeltas)
 - [[main-ts]] — main.ts (точка входа плагина, LlmWikiPlugin)
 - [[modals-ts]] — modals.ts (Modal компоненты)

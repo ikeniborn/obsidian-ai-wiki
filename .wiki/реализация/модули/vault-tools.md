@@ -1,6 +1,6 @@
 ---
 wiki_sources: ["src/vault-tools.ts"]
-wiki_updated: 2026-05-06
+wiki_updated: 2026-05-08
 wiki_status: developing
 wiki_outgoing_links:
   - "[[agent-runner]]"
@@ -15,7 +15,7 @@ aliases: ["VaultTools", "VaultAdapter"]
 ## Основные характеристики
 
 - **Расположение:** `src/vault-tools.ts`
-- **Интерфейс:** `VaultAdapter` — минимальный контракт адаптера (read, write, list, exists, mkdir)
+- **Интерфейс:** `VaultAdapter` — минимальный контракт адаптера (read, write, append, list, exists, mkdir)
 - **Класс:** `VaultTools(adapter: VaultAdapter, basePath: string)`
 
 ### Ключевые методы
@@ -36,13 +36,14 @@ aliases: ["VaultTools", "VaultAdapter"]
 interface VaultAdapter {
   read(path: string): Promise<string>;
   write(path: string, data: string): Promise<void>;
+  append(path: string, data: string): Promise<void>;
   list(path: string): Promise<{ files: string[]; folders: string[] }>;
   exists(path: string): Promise<boolean>;
   mkdir(path: string): Promise<void>;
 }
 ```
 
-В production-коде адаптер создаётся из `this.app.vault.adapter`. В тестах — мокируется через `vi.fn()`.
+В production-коде адаптер создаётся из `this.app.vault.adapter`. В тестах — мокируется через `vi.fn()`. Метод `append` нужен `WikiController.logEvent()` и `AgentRunner.writeDevLog()` для эффективной дозаписи JSONL без read+concat.
 
 ## Применение в контексте реализации
 

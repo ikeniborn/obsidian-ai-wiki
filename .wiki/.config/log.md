@@ -420,3 +420,25 @@
 **Примечание:** Оптимизированный вариант промпта (prompts/optimized/ingest.md) совпал с исходным prompts/ingest.md — DSPy не внёс изменений. Файл удалён из рабочего дерева (D в git status).
 
 ---
+
+## 2026-05-08T00:00:00 — ingest v0.1.61
+
+**Операция:** ingest (batch)
+**Источники:** src/mobile-fetch.ts, src/effective-settings.ts, src/local-config.ts, src/controller.ts, src/settings.ts, src/main.ts, src/agent-runner.ts, src/vault-tools.ts, src/phases/query.ts
+**Домен:** реализация
+
+**Затронуто страниц:** 9 (создано 2, обновлено 7)
+
+- СОЗДАНА: `.wiki/реализация/модули/mobile-fetch.md` — новый модуль `mobile-fetch.ts` (адаптер `fetch` через Obsidian `requestUrl()` для обхода CORS на мобильной платформе)
+- СОЗДАНА: `.wiki/реализация/модули/effective-settings.md` — новый модуль `effective-settings.ts` (`resolveEffective()` — слияние synced `LlmWikiPluginSettings` + per-device `LocalConfig` overlay)
+- ОБНОВЛЕНА: `.wiki/реализация/модули/local-config.md` — расширен тип `LocalConfig` (добавлены `backend`, `agentLogEnabled`, `claudeAgent`, `nativeAgent`, `migrated_v1`); расширено описание per-device overlay; ссылка на [[effective-settings]]
+- ОБНОВЛЕНА: `.wiki/реализация/модули/wiki-controller.md` — описана интеграция с `resolveEffective()` (выбор backend, build OpenAI/Claude клиента); mobile guards (`Platform.isMobile`, `cwdOrEmpty()`); подключение `mobileFetch` для OpenAI клиента; ссылки на [[effective-settings]] и [[mobile-fetch]]
+- ОБНОВЛЕНА: `.wiki/реализация/модули/settings-ts.md` — описаны patch-хелперы (`patchLocal`/`patchLocalNative`/`patchLocalClaude`); все machine-specific и чувствительные поля пишутся в `LocalConfig`; mobile-only UI (скрыт backend dropdown, dev-mode, claude-agent); `localCache: LocalConfig` вместо `cachedIclaudePath`
+- ОБНОВЛЕНА: `.wiki/реализация/модули/main-ts.md` — добавлен шаг `migrateToLocalV1()` в onload; описан перенос backend/native/claude/agentLogEnabled из synced в `LocalConfig` + scrub `apiKey`; mobile-форсинг backend и off-флагов в `loadSettings()`; команды ingest/lint/init только на десктопе
+- ОБНОВЛЕНА: `.wiki/реализация/модули/agent-runner.md` — `dev.jsonl` пишется через `vaultTools.adapter` в `!Logs/dev.jsonl` (mobile-compatible); обновлена `wiki_updated`
+- ОБНОВЛЕНА: `.wiki/реализация/модули/vault-tools.md` — в `VaultAdapter` явно описан метод `append`; пояснение зачем используется (`logEvent`, `writeDevLog`)
+- ОБНОВЛЕНА: `.wiki/реализация/фазы/run-query.md` — детализирован алгоритм (vault-relative пути, мета-файлы, лимиты контекста, fallback non-streaming); отмечена mobile-совместимость; ссылка на [[wiki-path-ts]]
+
+**Примечание:** Изменения соответствуют v0.1.61 — мобильная поддержка (CORS bypass через `requestUrl`) + per-device overlay для backend/credentials с однократной миграцией из synced `data.json`.
+
+---

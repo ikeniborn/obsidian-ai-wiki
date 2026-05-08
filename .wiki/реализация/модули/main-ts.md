@@ -1,6 +1,6 @@
 ---
 wiki_sources: ["src/main.ts"]
-wiki_updated: 2026-05-07
+wiki_updated: 2026-05-08
 wiki_status: developing
 wiki_outgoing_links:
   - "[[wiki-controller]]"
@@ -8,12 +8,13 @@ wiki_outgoing_links:
   - "[[llm-wiki-plugin-settings]]"
   - "[[domain-store]]"
   - "[[local-config]]"
+  - "[[effective-settings]]"
 tags: ["implementation", "typescript", "obsidian-llm-wiki"]
-aliases: ["main.ts", "LlmWikiPlugin", "точка входа", "migrateLegacyData"]
+aliases: ["main.ts", "LlmWikiPlugin", "точка входа", "migrateLegacyData", "migrateToLocalV1"]
 ---
 # main.ts (точка входа плагина)
 
-Главный файл плагина. Регистрирует View, команды, настройки, ribbon-иконку. Управляет жизненным циклом: `onload` / `onunload`. Инстанцирует `DomainStore` и `LocalConfigStore`, запускает идемпотентную миграцию `migrateLegacyData()` ДО `loadSettings()`.
+Главный файл плагина. Регистрирует View, команды, настройки, ribbon-иконку. Управляет жизненным циклом: `onload` / `onunload`. Инстанцирует `DomainStore` и `LocalConfigStore`, запускает две идемпотентные миграции: `migrateLegacyData()` ДО `loadSettings()` и `migrateToLocalV1()` после.
 
 ## Основные характеристики
 
@@ -27,19 +28,20 @@ aliases: ["main.ts", "LlmWikiPlugin", "точка входа", "migrateLegacyDat
 2. `new LocalConfigStore(this)` — plugin-dir-bound
 3. `migrateLegacyData(this, domainStore, localConfigStore)` — переносит legacy поля
 4. `await this.loadSettings()` — после миграции, чтобы `data.json` уже был очищен
-5. `new WikiController(app, plugin, domainStore, localConfigStore)`
-6. `registerView`, `addRibbonIcon`, `addCommand`, `addSettingTab`
+5. `migrateToLocalV1(this, localConfigStore)` — однократно копирует backend/native/claude/agentLogEnabled из synced в `LocalConfig`, ставит `migrated_v1: true`, очищает `apiKey` из `data.json`
+6. `new WikiController(app, plugin, domainStore, localConfigStore)`
+7. `registerView`, `addRibbonIcon`, `addCommand`, `addSettingTab`
 
 ### Регистрируемые команды
 
 | id | Действие |
 |----|---------|
 | `open-panel` | Открыть боковую панель |
-| `ingest-current` | Ingest активного файла |
+| `ingest-current` | Ingest активного файла (только десктоп — на мобильном команда не регистрируется) |
 | `query` | Query без сохранения |
 | `query-save` | Query с сохранением |
-| `lint` | Lint домена (DomainModal, async load доменов) |
-| `init` | Init домена с dryRun (DomainModal, async load) |
+| `lint` | Lint домена (DomainModal, async load доменов) — только десктоп |
+| `init` | Init домена с dryRun (DomainModal, async load) — только десктоп |
 | `cancel` | Отменить текущую операцию |
 
 `lint`/`init` — callback обёрнут в async IIFE: `controller.loadDomains()` асинхронен; при `DomainCorruptError` — silent return.
@@ -62,6 +64,16 @@ aliases: ["main.ts", "LlmWikiPlugin", "точка входа", "migrateLegacyDat
 - Перенос `systemPrompt`/`maxTokens` per-backend → top-level
 - `agentLogPath` → `agentLogEnabled` (boolean)
 - Очистка `devMode` от устаревшего `logDir`
+- На `Platform.isMobile`: backend форсится в `native-agent` (claude-agent несовместим), `nativeAgent.perOperation` и `devMode.enabled` принудительно выключаются (релевантна только операция `query`)
+
+### `migrateToLocalV1(plugin, localConfigStore)`
+
+Однократная миграция (флаг `local.migrated_v1`). Если флаг не выставлен:
+1. Копирует в `LocalConfig`: `backend`, `nativeAgent` (включая `apiKey`), `claudeAgent` (model + allowedTools), `agentLogEnabled`
+2. Ставит `migrated_v1: true`
+3. Затирает `s.nativeAgent.apiKey = ""` в synced и сохраняет (чтобы ключ не попал в Obsidian Sync)
+
+После миграции UI настроек пишет per-device поля только в `LocalConfig`; synced `data.json` хранит дефолты для совместимости старого схемного дерева.
 
 ### `migrateDomainWikiFolder(domains)` — устарела
 
