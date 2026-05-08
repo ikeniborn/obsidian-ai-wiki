@@ -1,5 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { maskProxyUrl } from "../src/proxy";
+import { maskProxyUrl, parseNoProxy } from "../src/proxy";
+
+describe("parseNoProxy", () => {
+  it("splits CSV and trims", () => {
+    expect(parseNoProxy("localhost, 127.0.0.1 ,*.internal"))
+      .toEqual(["localhost", "127.0.0.1", "*.internal"]);
+  });
+  it("drops empty entries", () => {
+    expect(parseNoProxy("a,,b,")).toEqual(["a", "b"]);
+  });
+  it("returns [] for undefined", () => {
+    expect(parseNoProxy(undefined)).toEqual([]);
+  });
+  it("returns [] for empty string", () => {
+    expect(parseNoProxy("")).toEqual([]);
+  });
+});
 
 describe("maskProxyUrl", () => {
   it("masks user:pass to user:****", () => {
