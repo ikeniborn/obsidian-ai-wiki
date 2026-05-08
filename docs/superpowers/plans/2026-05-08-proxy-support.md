@@ -4,9 +4,9 @@
 
 **Goal:** Подключить HTTP/HTTPS-прокси (с опциональным basic-auth и `noProxy`) для `native-agent` backend на десктопе; на мобильном — Notice-предупреждение.
 
-**Architecture:** Конфигурация прокси хранится в `local.json` через расширение `LocalConfig`. Утилиты прокси изолированы в новом модуле `src/proxy.ts`. Интеграция — одна точка в `controller.buildAgentRunner` для `native-agent` ветки: создаём `HttpsProxyAgent` и пробрасываем через опцию `httpAgent` OpenAI SDK. Для `claude-agent` ничего не меняем (out of scope).
+**Architecture:** Конфигурация прокси хранится в `local.json` через расширение `LocalConfig`. Утилиты прокси изолированы в новом модуле `src/proxy.ts`. Интеграция — одна точка в `controller.buildAgentRunner` для `native-agent` ветки: создаём `undici.ProxyAgent` (Dispatcher) и оборачиваем `undici.fetch`, передаём как `fetch` в `OpenAI` SDK. Причина: openai SDK v6 не поддерживает поле `httpAgent`, а Chromium-fetch в Electron renderer не принимает Node-агенты. Для `claude-agent` ничего не меняем (out of scope).
 
-**Tech Stack:** TypeScript, Obsidian Plugin API, OpenAI SDK, `https-proxy-agent`, vitest.
+**Tech Stack:** TypeScript, Obsidian Plugin API, OpenAI SDK, `undici` (ProxyAgent + fetch), vitest.
 
 **Spec:** `docs/superpowers/specs/2026-05-08-proxy-support-design.md`
 
@@ -16,9 +16,9 @@
 
 | Файл | Действие | Ответственность |
 |---|---|---|
-| `package.json` | Modify | Добавить `https-proxy-agent` в `dependencies` |
+| `package.json` | Modify | Добавить `undici` в `dependencies` |
 | `src/local-config.ts` | Modify | Добавить `ProxyConfig` и поле `proxy?` в `LocalConfig` |
-| `src/proxy.ts` | Create | Чистые утилиты: `buildProxyUrl`, `parseNoProxy`, `shouldBypass`, `createProxyAgent`, `maskProxyUrl` |
+| `src/proxy.ts` | Create | Чистые утилиты: `buildProxyUrl`, `parseNoProxy`, `shouldBypass`, `createProxyDispatcher`, `createProxyFetch`, `maskProxyUrl` |
 | `src/effective-settings.ts` | Modify | Возвращать `proxy` (default `{enabled:false,url:""}`); экспорт `EffectiveSettings = LlmWikiPluginSettings & { proxy: ProxyConfig }` |
 | `src/i18n.ts` | Modify | Строки `proxy_*` для en/ru/es |
 | `src/settings.ts` | Modify | UI секция Proxy (только для `native-agent`) |
@@ -28,7 +28,7 @@
 
 ---
 
-## Task 1: Добавить зависимость `https-proxy-agent`
+## Task 1: Добавить зависимость `undici`
 
 **Files:**
 - Modify: `package.json`
@@ -36,24 +36,24 @@
 - [ ] **Step 1: Добавить пакет**
 
 ```bash
-npm install --save https-proxy-agent@^7.0.0
+npm install --save undici@^6.20.0
 ```
 
 - [ ] **Step 2: Проверить, что `package.json` содержит зависимость**
 
-Run: `grep https-proxy-agent package.json`
-Expected: строка `"https-proxy-agent": "^7.0.0"` в `dependencies`.
+Run: `grep undici package.json`
+Expected: строка `"undici": "^6.20.0"` в `dependencies`.
 
-- [ ] **Step 3: Проверить, что есbuild не упадёт**
+- [ ] **Step 3: Проверить, что esbuild не упадёт**
 
 Run: `npm run build`
-Expected: успешная сборка `main.js`.
+Expected: успешная сборка `dist/main.js`.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add package.json package-lock.json
-git commit -m "chore(deps): add https-proxy-agent"
+git commit -m "chore(deps): add undici for proxy fetch"
 ```
 
 ---
@@ -385,7 +385,7 @@ git commit -m "feat(proxy): buildProxyUrl util"
 
 ---
 
-## Task 7: `createProxyAgent` с mobile-mock (TDD)
+## Task 7: `createProxyDispatcher` + `createProxyFetch` (TDD)
 
 **Files:**
 - Modify: `src/proxy.ts`
@@ -393,27 +393,46 @@ git commit -m "feat(proxy): buildProxyUrl util"
 
 - [ ] **Step 1: Падающие тесты**
 
-В `tests/proxy.test.ts` добавить (используем глобальный mock `vitest.mock.ts` — обращаемся к хелперу `__setPlatformMobile`):
+В `tests/proxy.test.ts` добавить (глобальный mock `vitest.mock.ts` — хелпер `__setPlatformMobile`):
 
 ```ts
-import { createProxyAgent } from "../src/proxy";
+import { createProxyDispatcher, createProxyFetch } from "../src/proxy";
 import { __setPlatformMobile } from "obsidian";
 
-describe("createProxyAgent", () => {
+describe("createProxyDispatcher", () => {
   it("returns null when disabled", () => {
-    expect(createProxyAgent({ enabled: false, url: "http://p:1" })).toBeNull();
+    expect(createProxyDispatcher({ enabled: false, url: "http://p:1" })).toBeNull();
   });
   it("returns null on mobile", () => {
     __setPlatformMobile(true);
     try {
-      expect(createProxyAgent({ enabled: true, url: "http://p:1" })).toBeNull();
+      expect(createProxyDispatcher({ enabled: true, url: "http://p:1" })).toBeNull();
     } finally {
       __setPlatformMobile(false);
     }
   });
-  it("returns an agent object on desktop when enabled", () => {
-    const a = createProxyAgent({ enabled: true, url: "http://p:1" });
-    expect(a).not.toBeNull();
+  it("returns Dispatcher when enabled on desktop", () => {
+    const d = createProxyDispatcher({ enabled: true, url: "http://p:1" });
+    expect(d).not.toBeNull();
+    expect(typeof (d as { dispatch?: unknown }).dispatch).toBe("function");
+  });
+});
+
+describe("createProxyFetch", () => {
+  it("returns null when no dispatcher (mobile)", () => {
+    __setPlatformMobile(true);
+    try {
+      expect(createProxyFetch({ enabled: true, url: "http://p:1" })).toBeNull();
+    } finally {
+      __setPlatformMobile(false);
+    }
+  });
+  it("returns null when disabled", () => {
+    expect(createProxyFetch({ enabled: false, url: "http://p:1" })).toBeNull();
+  });
+  it("returns a function on desktop when enabled", () => {
+    const f = createProxyFetch({ enabled: true, url: "http://p:1" });
+    expect(typeof f).toBe("function");
   });
 });
 ```
@@ -421,7 +440,7 @@ describe("createProxyAgent", () => {
 - [ ] **Step 2: Запустить — fail**
 
 Run: `npx vitest run tests/proxy.test.ts`
-Expected: FAIL — `createProxyAgent is not a function`.
+Expected: FAIL — функции не экспортируются.
 
 - [ ] **Step 3: Реализация**
 
@@ -432,24 +451,39 @@ import { Platform } from "obsidian";
 
 declare const require: NodeJS.Require;
 
-export function createProxyAgent(cfg: ProxyConfig): unknown | null {
+export function createProxyDispatcher(cfg: ProxyConfig): import("undici").Dispatcher | null {
   if (!cfg.enabled) return null;
   if (Platform.isMobile) return null;
-  const { HttpsProxyAgent } = require("https-proxy-agent") as typeof import("https-proxy-agent");
-  return new HttpsProxyAgent(buildProxyUrl(cfg));
+  const undici = require("undici") as typeof import("undici");
+  return new undici.ProxyAgent(buildProxyUrl(cfg));
+}
+
+export function createProxyFetch(cfg: ProxyConfig): typeof fetch | null {
+  const dispatcher = createProxyDispatcher(cfg);
+  if (!dispatcher) return null;
+  const undici = require("undici") as typeof import("undici");
+  const wrapped: typeof fetch = (input, init) => {
+    return undici.fetch(
+      input as Parameters<typeof undici.fetch>[0],
+      { ...(init as Parameters<typeof undici.fetch>[1]), dispatcher } as Parameters<typeof undici.fetch>[1],
+    ) as unknown as Promise<Response>;
+  };
+  return wrapped;
 }
 ```
+
+Примечание: `undici.fetch` сигнатура совместима с DOM-fetch, но типы различаются (Response из undici vs lib.dom). Каст через `unknown as Promise<Response>` — неизбежен, иначе TS не примет. OpenAI SDK ожидает `typeof fetch` из lib.dom.
 
 - [ ] **Step 4: PASS**
 
 Run: `npx vitest run tests/proxy.test.ts`
-Expected: PASS — все 5 групп.
+Expected: PASS — 6 describe-групп.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/proxy.ts tests/proxy.test.ts
-git commit -m "feat(proxy): createProxyAgent (desktop only)"
+git commit -m "feat(proxy): createProxyDispatcher + createProxyFetch (undici)"
 ```
 
 ---
@@ -704,7 +738,7 @@ git commit -m "feat(settings): Proxy UI section for native-agent"
 В верх файла добавить:
 
 ```ts
-import { createProxyAgent, parseNoProxy, shouldBypass, maskProxyUrl } from "./proxy";
+import { createProxyFetch, parseNoProxy, shouldBypass, maskProxyUrl } from "./proxy";
 ```
 
 - [ ] **Step 2: Заменить native-agent ветку**
@@ -716,23 +750,21 @@ import { createProxyAgent, parseNoProxy, shouldBypass, maskProxyUrl } from "./pr
   this._currentClaudeClient = null;
 
   const proxyCfg = s.proxy;
-  let httpAgent: unknown | undefined;
-  if (proxyCfg.enabled) {
-    if (Platform.isMobile) {
-      new Notice(i18n().settings.proxy_mobile_warning);
-    } else {
-      try {
-        const baseHost = new URL(s.nativeAgent.baseUrl).hostname;
-        const noProxyList = parseNoProxy(proxyCfg.noProxy);
-        if (!shouldBypass(baseHost, noProxyList)) {
-          httpAgent = createProxyAgent(proxyCfg) ?? undefined;
-          if (httpAgent) {
-            console.info(`[llm-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
-          }
+  let proxyFetch: typeof fetch | null = null;
+  if (proxyCfg.enabled && Platform.isMobile) {
+    new Notice(i18n().settings.proxy_mobile_warning);
+  } else if (proxyCfg.enabled) {
+    try {
+      const baseHost = new URL(s.nativeAgent.baseUrl).hostname;
+      const noProxyList = parseNoProxy(proxyCfg.noProxy);
+      if (!shouldBypass(baseHost, noProxyList)) {
+        proxyFetch = createProxyFetch(proxyCfg);
+        if (proxyFetch) {
+          console.info(`[llm-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
         }
-      } catch (e) {
-        new Notice(i18n().settings.proxy_invalid((e as Error).message));
       }
+    } catch (e) {
+      new Notice(i18n().settings.proxy_invalid((e as Error).message));
     }
   }
 
@@ -741,13 +773,12 @@ import { createProxyAgent, parseNoProxy, shouldBypass, maskProxyUrl } from "./pr
     apiKey: s.nativeAgent.apiKey,
     timeout: maxTimeoutSec * 1000,
     dangerouslyAllowBrowser: true,
-    fetch: Platform.isMobile ? mobileFetch : undefined,
-    httpAgent,
+    fetch: Platform.isMobile ? mobileFetch : (proxyFetch ?? undefined),
   });
 }
 ```
 
-Примечание: если у TS-типа `OpenAI` параметры конструктора не содержат `httpAgent` напрямую — добавить cast `as ConstructorParameters<typeof OpenAI>[0]`. Поле принимается рантаймом — необходима проверка через `npx tsc --noEmit`; при ошибке: оборачивать опции в `as unknown as ConstructorParameters<typeof OpenAI>[0]`.
+Примечание: тип `typeof fetch` берётся из lib.dom; `createProxyFetch` уже возвращает совместимую сигнатуру через каст. Поле `fetch` присутствует в `ClientOptions` openai SDK v6 и принимает `Fetch | undefined`.
 
 - [ ] **Step 3: Компиляция и существующие тесты**
 
@@ -813,12 +844,12 @@ git commit -m "chore: bump patch — proxy support for native-agent"
 - [ ] Все секции спецификации покрыты задачами:
   - Storage (ProxyConfig в LocalConfig) → Task 2
   - UI секция Proxy → Task 10
-  - Модуль `src/proxy.ts` (5 функций) → Tasks 3–7
+  - Модуль `src/proxy.ts` (6 функций) → Tasks 3–7
   - Интеграция controller → Task 11
   - effective-settings.proxy → Task 8
-  - Dependency `https-proxy-agent` → Task 1
+  - Dependency `undici` → Task 1
   - Security (mask, no-leak в логах) → Task 11 (использование `maskProxyUrl`)
   - Тесты → Tasks 3–8
 - [ ] Нет TODO/TBD в коде.
-- [ ] Имена функций/полей идентичны во всех задачах: `buildProxyUrl`, `parseNoProxy`, `shouldBypass`, `createProxyAgent`, `maskProxyUrl`, `ProxyConfig.enabled/url/username/password/noProxy`.
+- [ ] Имена функций/полей идентичны во всех задачах: `buildProxyUrl`, `parseNoProxy`, `shouldBypass`, `createProxyDispatcher`, `createProxyFetch`, `maskProxyUrl`, `ProxyConfig.enabled/url/username/password/noProxy`.
 - [ ] `ProxyConfig.password` не пишется в `data.json` (плагин всегда сохраняет в `local.json` через `LocalConfigStore`).

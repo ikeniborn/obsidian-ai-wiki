@@ -13,7 +13,7 @@ Plugin's `native-agent` backend talks to OpenAI-compatible HTTP endpoints (Ollam
 
 - Add a Proxy section to plugin settings (visible only when backend is `native-agent`).
 - Single toggle controls usage; URL + optional `username`/`password` + optional `noProxy` list.
-- Apply to native-agent OpenAI client on desktop via `https-proxy-agent`.
+- Apply to native-agent OpenAI client on desktop via custom `fetch` обёртку поверх `undici.fetch` + `undici.ProxyAgent` (Chromium-fetch в Electron renderer не принимает Node-агенты — поэтому нужен Node-fetch).
 - Mobile: show warning, do not attempt proxying (Obsidian `requestUrl` lacks proxy support).
 - Credentials live in `local.json` (per-machine, not synced).
 
@@ -71,7 +71,8 @@ export interface ResolvedProxy {
 export function buildProxyUrl(cfg: ProxyConfig): string;
 export function parseNoProxy(csv: string | undefined): string[];
 export function shouldBypass(host: string, noProxyList: string[]): boolean;
-export function createProxyAgent(cfg: ProxyConfig): unknown | null;
+export function createProxyDispatcher(cfg: ProxyConfig): import("undici").Dispatcher | null;
+export function createProxyFetch(cfg: ProxyConfig): typeof fetch | null;
 export function maskProxyUrl(url: string): string;  // for logs/Notices
 ```
 
@@ -83,7 +84,8 @@ Behavior:
   - exact case-insensitive equality
   - leading `*.` → suffix match (e.g. `*.internal` matches `api.internal`)
   - IP literal exact match
-- `createProxyAgent`: `require("https-proxy-agent")`, return `new HttpsProxyAgent(buildProxyUrl(cfg))`. Returns `null` when `Platform.isMobile`.
+- `createProxyDispatcher`: `require("undici")`, return `new ProxyAgent(buildProxyUrl(cfg))`. Returns `null` when `cfg.enabled === false` or `Platform.isMobile`.
+- `createProxyFetch`: создаёт обёртку над `undici.fetch` с фиксированным `dispatcher`. Подпись совместима с `typeof fetch`. Возвращает `null` если dispatcher не создан.
 - `maskProxyUrl`: replaces `user:pass@` with `user:****@`.
 
 ## Integration: `src/controller.ts` — `buildAgentRunner`
@@ -91,17 +93,21 @@ Behavior:
 In the `native-agent` branch:
 
 ```ts
-const proxyCfg = local.proxy;
-let httpAgent: unknown | undefined;
-if (proxyCfg?.enabled && !Platform.isMobile) {
+const proxyCfg = s.proxy;
+let proxyFetch: typeof fetch | null = null;
+if (proxyCfg.enabled && Platform.isMobile) {
+  new Notice(i18n().settings.proxy_mobile_warning);
+} else if (proxyCfg.enabled) {
   try {
-    httpAgent = createProxyAgent(proxyCfg) ?? undefined;
+    const baseHost = new URL(s.nativeAgent.baseUrl).hostname;
+    const noProxyList = parseNoProxy(proxyCfg.noProxy);
+    if (!shouldBypass(baseHost, noProxyList)) {
+      proxyFetch = createProxyFetch(proxyCfg);
+      if (proxyFetch) console.info(`[llm-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
+    }
   } catch (e) {
-    new Notice(`Proxy config invalid: ${(e as Error).message}`);
+    new Notice(i18n().settings.proxy_invalid((e as Error).message));
   }
-}
-if (proxyCfg?.enabled && Platform.isMobile) {
-  new Notice("Proxy is not supported on mobile in this version.");
 }
 
 llm = new OpenAI({
@@ -109,12 +115,11 @@ llm = new OpenAI({
   apiKey: s.nativeAgent.apiKey,
   timeout: maxTimeoutSec * 1000,
   dangerouslyAllowBrowser: true,
-  fetch: Platform.isMobile ? mobileFetch : undefined,
-  httpAgent,
+  fetch: Platform.isMobile ? mobileFetch : (proxyFetch ?? undefined),
 });
 ```
 
-Note: when `noProxy` matches `baseURL` host, skip agent injection — pass `undefined` so OpenAI SDK uses the default HTTP path.
+Note: when `noProxy` matches `baseURL` host, `proxyFetch` остаётся `null` → SDK использует дефолтный (Chromium) fetch.
 
 ## Effective settings (`src/effective-settings.ts`)
 
@@ -129,7 +134,7 @@ return {
 
 ## Dependencies
 
-Add `https-proxy-agent` to `dependencies` in `package.json`. Bundle via esbuild (not external) — small, pure JS, works on desktop.
+Add `undici` to `dependencies` in `package.json`. Bundle via esbuild (`platform: "node"`, undici работает только в Node-окружении). Размер бандла +~700KB; alternatives рассмотрены и отброшены: `https-proxy-agent` не интегрируется с openai SDK v6 (нет поля `httpAgent`), а Chromium-fetch в Electron renderer не принимает Node-агенты.
 
 ## Security
 
@@ -146,7 +151,8 @@ Add `https-proxy-agent` to `dependencies` in `package.json`. Bundle via esbuild 
   - `parseNoProxy` — handles whitespace, empty entries
   - `shouldBypass` — exact, suffix glob, IP, case-insensitive
   - `maskProxyUrl` — masks password, leaves user/host intact
-  - `createProxyAgent` — returns null on mobile (mock `Platform`)
+  - `createProxyDispatcher` — returns null on mobile / when disabled
+  - `createProxyFetch` — возвращает функцию-обёртку, делегирующую `undici.fetch` с заданным dispatcher (smoke-mock на uniciFetch)
 
 - `tests/settings.test.ts` (extend): `resolveEffective` returns `proxy` from local.
 
