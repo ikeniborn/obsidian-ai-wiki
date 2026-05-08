@@ -31,6 +31,10 @@ function makePlugin(settings: any) {
   } as any;
 }
 
+function makeLocalConfigStore() {
+  return { load: vi.fn().mockResolvedValue({ iclaudePath: "" }) } as any;
+}
+
 describe("controller — mobile guards", () => {
   beforeEach(() => {
     __setPlatformMobile(false);
@@ -43,7 +47,7 @@ describe("controller — mobile guards", () => {
       backend: "native-agent",
       nativeAgent: { baseUrl: "https://api.x", apiKey: "key" },
     });
-    const ctrl = new WikiController(plugin.app, plugin, {} as any, {} as any);
+    const ctrl = new WikiController(plugin.app, plugin, {} as any, makeLocalConfigStore());
     const buildSpy = vi.spyOn(ctrl as any, "buildAgentRunner");
     await ctrl.ingestActive();
     expect(buildSpy).not.toHaveBeenCalled();
@@ -56,7 +60,7 @@ describe("controller — mobile guards", () => {
       backend: "native-agent",
       nativeAgent: { baseUrl: "https://api.x", apiKey: "key" },
     });
-    const ctrl = new WikiController(plugin.app, plugin, {} as any, {} as any);
+    const ctrl = new WikiController(plugin.app, plugin, {} as any, makeLocalConfigStore());
     await ctrl.query("test", false);
     expect(Notice.__messages).not.toContain("Operation not available on mobile");
   });
@@ -67,7 +71,7 @@ describe("controller — mobile guards", () => {
       backend: "native-agent",
       nativeAgent: { baseUrl: "", apiKey: "key" },
     });
-    const ctrl = new WikiController(plugin.app, plugin, {} as any, {} as any);
+    const ctrl = new WikiController(plugin.app, plugin, {} as any, makeLocalConfigStore());
     const buildSpy = vi.spyOn(ctrl as any, "buildAgentRunner");
     await ctrl.query("test", false);
     expect(buildSpy).not.toHaveBeenCalled();
@@ -80,7 +84,7 @@ describe("controller — mobile guards", () => {
       backend: "native-agent",
       nativeAgent: { baseUrl: "https://api.x", apiKey: "" },
     });
-    const ctrl = new WikiController(plugin.app, plugin, {} as any, {} as any);
+    const ctrl = new WikiController(plugin.app, plugin, {} as any, makeLocalConfigStore());
     const buildSpy = vi.spyOn(ctrl as any, "buildAgentRunner");
     await ctrl.query("test", false);
     expect(buildSpy).not.toHaveBeenCalled();

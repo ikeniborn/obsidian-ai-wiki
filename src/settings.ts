@@ -4,10 +4,12 @@ import type LlmWikiPlugin from "./main";
 import type { LlmWikiPluginSettings, OpKey } from "./types";
 import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
+import { resolveEffective } from "./effective-settings";
+import type { LocalConfig } from "./local-config";
 
 export class LlmWikiSettingTab extends PluginSettingTab {
   private cachedDomains: DomainEntry[] = [];
-  private cachedIclaudePath = "";
+  private localCache: LocalConfig = { iclaudePath: "" };
 
   constructor(app: App, private plugin: LlmWikiPlugin) {
     super(app, plugin);
@@ -24,14 +26,40 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       this.cachedDomains = [];
       new Notice(`Domain map load failed: ${(e as Error).message}`);
     }
-    this.cachedIclaudePath = (await this.plugin.localConfigStore.load()).iclaudePath;
+    this.localCache = await this.plugin.localConfigStore.load();
     this.render();
+  }
+
+  private async patchLocal(patch: Partial<LocalConfig>): Promise<void> {
+    this.localCache = { ...this.localCache, ...patch };
+    await this.plugin.localConfigStore.save(patch);
+  }
+
+  private async patchLocalNative(patch: Partial<NonNullable<LocalConfig["nativeAgent"]>>): Promise<void> {
+    const cur = this.localCache.nativeAgent ?? {
+      baseUrl: this.plugin.settings.nativeAgent.baseUrl,
+      apiKey: this.plugin.settings.nativeAgent.apiKey,
+      model: this.plugin.settings.nativeAgent.model,
+      temperature: this.plugin.settings.nativeAgent.temperature,
+      topP: this.plugin.settings.nativeAgent.topP,
+      numCtx: this.plugin.settings.nativeAgent.numCtx,
+    };
+    await this.patchLocal({ nativeAgent: { ...cur, ...patch } });
+  }
+
+  private async patchLocalClaude(patch: Partial<NonNullable<LocalConfig["claudeAgent"]>>): Promise<void> {
+    const cur = this.localCache.claudeAgent ?? {
+      model: this.plugin.settings.claudeAgent.model,
+      allowedTools: this.plugin.settings.claudeAgent.allowedTools,
+    };
+    await this.patchLocal({ claudeAgent: { ...cur, ...patch } });
   }
 
   private render(): void {
     const { containerEl } = this;
     containerEl.empty();
     const s = this.plugin.settings;
+    const eff = resolveEffective(s, this.localCache);
     const T = i18n();
 
     const busy = this.plugin.controller.running;
@@ -55,8 +83,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         return t;
       });
 
-    const isPerOp = s.backend === "claude-agent" ? s.claudeAgent.perOperation : s.nativeAgent.perOperation;
-    if (!isPerOp && s.backend !== "claude-agent") {
+    const isPerOp = eff.backend === "claude-agent" ? s.claudeAgent.perOperation : s.nativeAgent.perOperation;
+    if (!isPerOp && eff.backend !== "claude-agent") {
       new Setting(containerEl)
         .setName(T.settings.maxTokens_name)
         .setDesc(T.settings.maxTokens_desc)
@@ -100,8 +128,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .setName(T.settings.agentLog_name)
         .setDesc(T.settings.agentLog_desc)
         .addToggle((t) =>
-          t.setValue(s.agentLogEnabled)
-            .onChange(async (v) => { s.agentLogEnabled = v; await this.plugin.saveSettings(); }),
+          t.setValue(eff.agentLogEnabled)
+            .onChange(async (v) => { await this.patchLocal({ agentLogEnabled: v }); }),
         );
     }
 
@@ -158,10 +186,9 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .addDropdown((d) =>
           d.addOption("claude-agent", T.settings.claudeCodeAgent)
             .addOption("native-agent", T.settings.nativeAgent)
-            .setValue(s.backend)
+            .setValue(eff.backend)
             .onChange(async (v) => {
-              s.backend = v as LlmWikiPluginSettings["backend"];
-              await this.plugin.saveSettings();
+              await this.patchLocal({ backend: v as LlmWikiPluginSettings["backend"] });
               this.display();
             }),
         );
@@ -176,16 +203,15 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       });
     }
 
-    if (s.backend === "claude-agent" && !Platform.isMobile) {
+    if (eff.backend === "claude-agent" && !Platform.isMobile) {
       new Setting(containerEl)
         .setName(T.settings.iclaudePath_name)
         .setDesc(T.settings.iclaudePath_desc)
         .addText((t) =>
           t.setPlaceholder("/home/user/Documents/Project/iclaude/iclaude.sh")
-            .setValue(this.cachedIclaudePath)
+            .setValue(this.localCache.iclaudePath)
             .onChange(async (v) => {
-              this.cachedIclaudePath = v.trim();
-              await this.plugin.localConfigStore.save({ iclaudePath: this.cachedIclaudePath });
+              await this.patchLocal({ iclaudePath: v.trim() });
             }),
         );
 
@@ -195,8 +221,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .setDesc(T.settings.model_desc_claude)
           .addText((t) =>
             t.setPlaceholder("")
-              .setValue(s.claudeAgent.model)
-              .onChange(async (v) => { s.claudeAgent.model = v.trim(); await this.plugin.saveSettings(); }),
+              .setValue(eff.claudeAgent.model)
+              .onChange(async (v) => { await this.patchLocalClaude({ model: v.trim() }); }),
           );
       }
 
@@ -205,8 +231,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .setDesc(T.settings.allowedTools_desc)
         .addText((t) =>
           t.setPlaceholder("Bash,read,write")
-            .setValue(s.claudeAgent.allowedTools)
-            .onChange(async (v) => { s.claudeAgent.allowedTools = v.trim(); await this.plugin.saveSettings(); }),
+            .setValue(eff.claudeAgent.allowedTools)
+            .onChange(async (v) => { await this.patchLocalClaude({ allowedTools: v.trim() }); }),
         );
 
       new Setting(containerEl)
@@ -241,8 +267,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .setDesc(T.settings.baseUrl_desc)
         .addText((t) =>
           t.setPlaceholder("")
-            .setValue(s.nativeAgent.baseUrl)
-            .onChange(async (v) => { s.nativeAgent.baseUrl = v.trim(); await this.plugin.saveSettings(); }),
+            .setValue(eff.nativeAgent.baseUrl)
+            .onChange(async (v) => { await this.patchLocalNative({ baseUrl: v.trim() }); }),
         );
 
       new Setting(containerEl)
@@ -250,8 +276,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .setDesc(T.settings.apiKey_desc)
         .addText((t) =>
           t.setPlaceholder("Ollama")
-            .setValue(s.nativeAgent.apiKey)
-            .onChange(async (v) => { s.nativeAgent.apiKey = v.trim(); await this.plugin.saveSettings(); }),
+            .setValue(eff.nativeAgent.apiKey)
+            .onChange(async (v) => { await this.patchLocalNative({ apiKey: v.trim() }); }),
         );
 
       if (!s.nativeAgent.perOperation) {
@@ -260,8 +286,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .setDesc(T.settings.model_desc_native)
           .addText((t) =>
             t.setPlaceholder("llama3.2")
-              .setValue(s.nativeAgent.model)
-              .onChange(async (v) => { s.nativeAgent.model = v.trim(); await this.plugin.saveSettings(); }),
+              .setValue(eff.nativeAgent.model)
+              .onChange(async (v) => { await this.patchLocalNative({ model: v.trim() }); }),
           );
 
         new Setting(containerEl)
@@ -269,12 +295,12 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .setDesc(T.settings.numCtx_desc)
           .addText((t) =>
             t.setPlaceholder("(дефолт модели)")
-              .setValue(s.nativeAgent.numCtx != null ? String(s.nativeAgent.numCtx) : "")
+              .setValue(eff.nativeAgent.numCtx != null ? String(eff.nativeAgent.numCtx) : "")
               .onChange(async (v) => {
                 const trimmed = v.trim();
-                if (!trimmed) { s.nativeAgent.numCtx = null; }
-                else { const n = Number(trimmed); if (Number.isFinite(n) && n > 0) s.nativeAgent.numCtx = Math.floor(n); }
-                await this.plugin.saveSettings();
+                if (!trimmed) { await this.patchLocalNative({ numCtx: null }); return; }
+                const n = Number(trimmed);
+                if (Number.isFinite(n) && n > 0) await this.patchLocalNative({ numCtx: Math.floor(n) });
               }),
           );
 
@@ -283,10 +309,10 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .setDesc(T.settings.temperature_desc)
           .addText((t) =>
             t.setPlaceholder("0.2")
-              .setValue(String(s.nativeAgent.temperature))
+              .setValue(String(eff.nativeAgent.temperature))
               .onChange(async (v) => {
                 const n = Number(v);
-                if (Number.isFinite(n) && n >= 0 && n <= 2) { s.nativeAgent.temperature = n; await this.plugin.saveSettings(); }
+                if (Number.isFinite(n) && n >= 0 && n <= 2) await this.patchLocalNative({ temperature: n });
               }),
           );
       }

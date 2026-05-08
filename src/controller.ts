@@ -10,10 +10,12 @@ import type { ClaudeCliClient } from "./claude-cli-client";
 import OpenAI from "openai";
 import { mobileFetch } from "./mobile-fetch";
 import { i18n } from "./i18n";
+import { resolveEffective } from "./effective-settings";
 import { applyDomainEvent } from "./domain";
 import type { DomainStore } from "./domain-store";
 import { DomainCorruptError } from "./domain-store";
-import type { LocalConfigStore } from "./local-config";
+import type { LocalConfig, LocalConfigStore } from "./local-config";
+import type { LlmWikiPluginSettings } from "./types";
 import { FileErrorModal } from "./modals";
 
 declare const require: NodeJS.Require;
@@ -76,8 +78,12 @@ export class WikiController {
       new Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
-    if (this.plugin.settings.backend === "native-agent" && !this.requireNativeAgent()) return;
-    if (this.plugin.settings.backend === "claude-agent" && !await this.requireClaudeAgent()) return;
+    {
+      const local = await this.localConfigStore.load();
+      const eff = resolveEffective(this.plugin.settings, local);
+      if (eff.backend === "native-agent" && !this.requireNativeAgent(eff)) return;
+      if (eff.backend === "claude-agent" && !await this.requireClaudeAgent(local)) return;
+    }
 
     await this.ensureView();
     const view = this.activeView();
@@ -228,9 +234,9 @@ export class WikiController {
     return { ok: true };
   }
 
-  private async requireClaudeAgent(): Promise<string | null> {
+  private async requireClaudeAgent(local: LocalConfig): Promise<string | null> {
     const { existsSync } = require("node:fs") as typeof import("node:fs");
-    const { iclaudePath } = await this.localConfigStore.load();
+    const { iclaudePath } = local;
     if (!iclaudePath || !existsSync(iclaudePath)) {
       new Notice(i18n().ctrl.setClaudeCodePath);
       return null;
@@ -238,8 +244,8 @@ export class WikiController {
     return iclaudePath;
   }
 
-  private requireNativeAgent(): boolean {
-    const na = this.plugin.settings.nativeAgent;
+  private requireNativeAgent(eff: LlmWikiPluginSettings): boolean {
+    const na = eff.nativeAgent;
     if (!na?.baseUrl?.trim() || !na?.apiKey?.trim()) {
       new Notice(i18n().ctrl.configureCloudLlm);
       return false;
@@ -254,7 +260,7 @@ export class WikiController {
     const vaultName = this.app.vault.getName();
     const domains = await this.domainStore.load();
     const local = await this.localConfigStore.load();
-    const s = this.plugin.settings;
+    const s = resolveEffective(this.plugin.settings, local);
 
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm: import("./types").LlmClient;
@@ -321,8 +327,12 @@ export class WikiController {
       new Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
-    if (this.plugin.settings.backend === "native-agent" && !this.requireNativeAgent()) return;
-    if (this.plugin.settings.backend === "claude-agent" && !await this.requireClaudeAgent()) return;
+    {
+      const local = await this.localConfigStore.load();
+      const eff = resolveEffective(this.plugin.settings, local);
+      if (eff.backend === "native-agent" && !this.requireNativeAgent(eff)) return;
+      if (eff.backend === "claude-agent" && !await this.requireClaudeAgent(local)) return;
+    }
 
     await this.ensureView();
     const view = this.activeView();

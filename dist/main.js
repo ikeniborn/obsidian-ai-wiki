@@ -1,9 +1,7 @@
 "use strict";
-var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
-var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -20,14 +18,6 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-  // If the importer is in node compatibility mode or this is not an ESM
-  // file that has been converted to a CommonJS file using a Babel-
-  // compatible transform (i.e. "__esModule" has not been set), then set
-  // "default" to the CommonJS "module.exports" for node compatibility.
-  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
-  mod
-));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // src/stream.ts
@@ -354,7 +344,8 @@ var main_exports = {};
 __export(main_exports, {
   default: () => LlmWikiPlugin,
   migrateDomainWikiFolder: () => migrateDomainWikiFolder,
-  migrateLegacyData: () => migrateLegacyData
+  migrateLegacyData: () => migrateLegacyData,
+  migrateToLocalV1: () => migrateToLocalV1
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian7 = require("obsidian");
@@ -1378,6 +1369,17 @@ var EditDomainModal = class extends import_obsidian2.Modal {
   }
 };
 
+// src/effective-settings.ts
+function resolveEffective(s, l) {
+  return {
+    ...s,
+    backend: l.backend ?? s.backend,
+    agentLogEnabled: l.agentLogEnabled ?? s.agentLogEnabled,
+    claudeAgent: { ...s.claudeAgent, ...l.claudeAgent ?? {} },
+    nativeAgent: { ...s.nativeAgent, ...l.nativeAgent ?? {} }
+  };
+}
+
 // src/settings.ts
 var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
@@ -1385,7 +1387,7 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
     this.plugin = plugin;
   }
   cachedDomains = [];
-  cachedIclaudePath = "";
+  localCache = { iclaudePath: "" };
   display() {
     void this.refresh();
   }
@@ -1396,13 +1398,36 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       this.cachedDomains = [];
       new import_obsidian3.Notice(`Domain map load failed: ${e.message}`);
     }
-    this.cachedIclaudePath = (await this.plugin.localConfigStore.load()).iclaudePath;
+    this.localCache = await this.plugin.localConfigStore.load();
     this.render();
+  }
+  async patchLocal(patch) {
+    this.localCache = { ...this.localCache, ...patch };
+    await this.plugin.localConfigStore.save(patch);
+  }
+  async patchLocalNative(patch) {
+    const cur = this.localCache.nativeAgent ?? {
+      baseUrl: this.plugin.settings.nativeAgent.baseUrl,
+      apiKey: this.plugin.settings.nativeAgent.apiKey,
+      model: this.plugin.settings.nativeAgent.model,
+      temperature: this.plugin.settings.nativeAgent.temperature,
+      topP: this.plugin.settings.nativeAgent.topP,
+      numCtx: this.plugin.settings.nativeAgent.numCtx
+    };
+    await this.patchLocal({ nativeAgent: { ...cur, ...patch } });
+  }
+  async patchLocalClaude(patch) {
+    const cur = this.localCache.claudeAgent ?? {
+      model: this.plugin.settings.claudeAgent.model,
+      allowedTools: this.plugin.settings.claudeAgent.allowedTools
+    };
+    await this.patchLocal({ claudeAgent: { ...cur, ...patch } });
   }
   render() {
     const { containerEl } = this;
     containerEl.empty();
     const s = this.plugin.settings;
+    const eff = resolveEffective(s, this.localCache);
     const T = i18n();
     const busy = this.plugin.controller.running;
     if (busy) {
@@ -1420,8 +1445,8 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       });
       return t;
     });
-    const isPerOp = s.backend === "claude-agent" ? s.claudeAgent.perOperation : s.nativeAgent.perOperation;
-    if (!isPerOp && s.backend !== "claude-agent") {
+    const isPerOp = eff.backend === "claude-agent" ? s.claudeAgent.perOperation : s.nativeAgent.perOperation;
+    if (!isPerOp && eff.backend !== "claude-agent") {
       new import_obsidian3.Setting(containerEl).setName(T.settings.maxTokens_name).setDesc(T.settings.maxTokens_desc).addText(
         (t) => t.setPlaceholder("4096").setValue(String(s.maxTokens)).onChange(async (v) => {
           const n = Number(v);
@@ -1452,9 +1477,8 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
     );
     if (!import_obsidian3.Platform.isMobile) {
       new import_obsidian3.Setting(containerEl).setName(T.settings.agentLog_name).setDesc(T.settings.agentLog_desc).addToggle(
-        (t) => t.setValue(s.agentLogEnabled).onChange(async (v) => {
-          s.agentLogEnabled = v;
-          await this.plugin.saveSettings();
+        (t) => t.setValue(eff.agentLogEnabled).onChange(async (v) => {
+          await this.patchLocal({ agentLogEnabled: v });
         })
       );
     }
@@ -1498,9 +1522,8 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
     new import_obsidian3.Setting(containerEl).setName(T.settings.h3_backend).setHeading();
     if (!import_obsidian3.Platform.isMobile) {
       new import_obsidian3.Setting(containerEl).setName(T.settings.backend_name).setDesc(T.settings.backend_desc).addDropdown(
-        (d) => d.addOption("claude-agent", T.settings.claudeCodeAgent).addOption("native-agent", T.settings.nativeAgent).setValue(s.backend).onChange(async (v) => {
-          s.backend = v;
-          await this.plugin.saveSettings();
+        (d) => d.addOption("claude-agent", T.settings.claudeCodeAgent).addOption("native-agent", T.settings.nativeAgent).setValue(eff.backend).onChange(async (v) => {
+          await this.patchLocal({ backend: v });
           this.display();
         })
       );
@@ -1514,25 +1537,22 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         href: "https://github.com/ikeniborn/obsidian-llm-wiki/blob/master/docs/mobile-cloud-ollama.md"
       });
     }
-    if (s.backend === "claude-agent" && !import_obsidian3.Platform.isMobile) {
+    if (eff.backend === "claude-agent" && !import_obsidian3.Platform.isMobile) {
       new import_obsidian3.Setting(containerEl).setName(T.settings.iclaudePath_name).setDesc(T.settings.iclaudePath_desc).addText(
-        (t) => t.setPlaceholder("/home/user/Documents/Project/iclaude/iclaude.sh").setValue(this.cachedIclaudePath).onChange(async (v) => {
-          this.cachedIclaudePath = v.trim();
-          await this.plugin.localConfigStore.save({ iclaudePath: this.cachedIclaudePath });
+        (t) => t.setPlaceholder("/home/user/Documents/Project/iclaude/iclaude.sh").setValue(this.localCache.iclaudePath).onChange(async (v) => {
+          await this.patchLocal({ iclaudePath: v.trim() });
         })
       );
       if (!s.claudeAgent.perOperation) {
         new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_claude).addText(
-          (t) => t.setPlaceholder("").setValue(s.claudeAgent.model).onChange(async (v) => {
-            s.claudeAgent.model = v.trim();
-            await this.plugin.saveSettings();
+          (t) => t.setPlaceholder("").setValue(eff.claudeAgent.model).onChange(async (v) => {
+            await this.patchLocalClaude({ model: v.trim() });
           })
         );
       }
       new import_obsidian3.Setting(containerEl).setName(T.settings.allowedTools_name).setDesc(T.settings.allowedTools_desc).addText(
-        (t) => t.setPlaceholder("Bash,read,write").setValue(s.claudeAgent.allowedTools).onChange(async (v) => {
-          s.claudeAgent.allowedTools = v.trim();
-          await this.plugin.saveSettings();
+        (t) => t.setPlaceholder("Bash,read,write").setValue(eff.claudeAgent.allowedTools).onChange(async (v) => {
+          await this.patchLocalClaude({ allowedTools: v.trim() });
         })
       );
       new import_obsidian3.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
@@ -1561,54 +1581,50 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       }
     } else {
       new import_obsidian3.Setting(containerEl).setName(T.settings.baseUrl_name).setDesc(T.settings.baseUrl_desc).addText(
-        (t) => t.setPlaceholder("").setValue(s.nativeAgent.baseUrl).onChange(async (v) => {
-          s.nativeAgent.baseUrl = v.trim();
-          await this.plugin.saveSettings();
+        (t) => t.setPlaceholder("").setValue(eff.nativeAgent.baseUrl).onChange(async (v) => {
+          await this.patchLocalNative({ baseUrl: v.trim() });
         })
       );
       new import_obsidian3.Setting(containerEl).setName(T.settings.apiKey_name).setDesc(T.settings.apiKey_desc).addText(
-        (t) => t.setPlaceholder("Ollama").setValue(s.nativeAgent.apiKey).onChange(async (v) => {
-          s.nativeAgent.apiKey = v.trim();
-          await this.plugin.saveSettings();
+        (t) => t.setPlaceholder("Ollama").setValue(eff.nativeAgent.apiKey).onChange(async (v) => {
+          await this.patchLocalNative({ apiKey: v.trim() });
         })
       );
       if (!s.nativeAgent.perOperation) {
         new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native).addText(
-          (t) => t.setPlaceholder("llama3.2").setValue(s.nativeAgent.model).onChange(async (v) => {
-            s.nativeAgent.model = v.trim();
-            await this.plugin.saveSettings();
+          (t) => t.setPlaceholder("llama3.2").setValue(eff.nativeAgent.model).onChange(async (v) => {
+            await this.patchLocalNative({ model: v.trim() });
           })
         );
         new import_obsidian3.Setting(containerEl).setName(T.settings.numCtx_name).setDesc(T.settings.numCtx_desc).addText(
-          (t) => t.setPlaceholder("(\u0434\u0435\u0444\u043E\u043B\u0442 \u043C\u043E\u0434\u0435\u043B\u0438)").setValue(s.nativeAgent.numCtx != null ? String(s.nativeAgent.numCtx) : "").onChange(async (v) => {
+          (t) => t.setPlaceholder("(\u0434\u0435\u0444\u043E\u043B\u0442 \u043C\u043E\u0434\u0435\u043B\u0438)").setValue(eff.nativeAgent.numCtx != null ? String(eff.nativeAgent.numCtx) : "").onChange(async (v) => {
             const trimmed = v.trim();
             if (!trimmed) {
-              s.nativeAgent.numCtx = null;
-            } else {
-              const n = Number(trimmed);
-              if (Number.isFinite(n) && n > 0)
-                s.nativeAgent.numCtx = Math.floor(n);
+              await this.patchLocalNative({ numCtx: null });
+              return;
             }
-            await this.plugin.saveSettings();
+            const n = Number(trimmed);
+            if (Number.isFinite(n) && n > 0)
+              await this.patchLocalNative({ numCtx: Math.floor(n) });
           })
         );
         new import_obsidian3.Setting(containerEl).setName(T.settings.temperature_name).setDesc(T.settings.temperature_desc).addText(
-          (t) => t.setPlaceholder("0.2").setValue(String(s.nativeAgent.temperature)).onChange(async (v) => {
+          (t) => t.setPlaceholder("0.2").setValue(String(eff.nativeAgent.temperature)).onChange(async (v) => {
             const n = Number(v);
-            if (Number.isFinite(n) && n >= 0 && n <= 2) {
-              s.nativeAgent.temperature = n;
-              await this.plugin.saveSettings();
-            }
+            if (Number.isFinite(n) && n >= 0 && n <= 2)
+              await this.patchLocalNative({ temperature: n });
           })
         );
       }
-      new import_obsidian3.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
-        (t) => t.setValue(s.nativeAgent.perOperation).onChange(async (v) => {
-          s.nativeAgent.perOperation = v;
-          await this.plugin.saveSettings();
-          this.display();
-        })
-      );
+      if (!import_obsidian3.Platform.isMobile) {
+        new import_obsidian3.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
+          (t) => t.setValue(s.nativeAgent.perOperation).onChange(async (v) => {
+            s.nativeAgent.perOperation = v;
+            await this.plugin.saveSettings();
+            this.display();
+          })
+        );
+      }
       if (s.nativeAgent.perOperation) {
         const ops = [
           { key: "ingest", label: T.settings.op_ingest },
@@ -1645,21 +1661,23 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         }
       }
     }
-    new import_obsidian3.Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
-    new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_enabled_name).setDesc(T.settings.devMode_enabled_desc).addToggle(
-      (t) => t.setValue(s.devMode.enabled).onChange(async (v) => {
-        s.devMode.enabled = v;
-        await this.plugin.saveSettings();
-        this.display();
-      })
-    );
-    if (s.devMode.enabled) {
-      new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_evaluatorModel_name).setDesc(T.settings.devMode_evaluatorModel_desc).addText(
-        (t) => t.setPlaceholder("").setValue(s.devMode.evaluatorModel).onChange(async (v) => {
-          s.devMode.evaluatorModel = v.trim();
+    if (!import_obsidian3.Platform.isMobile) {
+      new import_obsidian3.Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
+      new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_enabled_name).setDesc(T.settings.devMode_enabled_desc).addToggle(
+        (t) => t.setValue(s.devMode.enabled).onChange(async (v) => {
+          s.devMode.enabled = v;
           await this.plugin.saveSettings();
+          this.display();
         })
       );
+      if (s.devMode.enabled) {
+        new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_evaluatorModel_name).setDesc(T.settings.devMode_evaluatorModel_desc).addText(
+          (t) => t.setPlaceholder("").setValue(s.devMode.evaluatorModel).onChange(async (v) => {
+            s.devMode.evaluatorModel = v.trim();
+            await this.plugin.saveSettings();
+          })
+        );
+      }
     }
   }
 };
@@ -2454,9 +2472,6 @@ function applyDomainEvent(domains, ev, opts) {
   next[i] = { ...next[i], source_paths: updated };
   return next;
 }
-
-// src/agent-runner.ts
-var import_obsidian5 = require("obsidian");
 
 // src/phases/ingest.ts
 var import_node_path2 = require("node:path");
@@ -3771,18 +3786,20 @@ var AgentRunner = class {
       return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
     return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
   }
-  async writeDevLog(vaultRoot, entry) {
+  async writeDevLog(_vaultRoot, entry) {
     if (!this.settings.devMode?.enabled)
       return;
-    if (import_obsidian5.Platform.isMobile)
-      return;
+    const adapter = this.vaultTools.adapter;
+    const dir = "!Logs";
+    const path2 = `${dir}/dev.jsonl`;
     try {
-      const { appendFileSync, mkdirSync } = await import("node:fs");
-      const { join: join6 } = await import("node:path");
-      const logDir = join6(vaultRoot, "!Logs");
-      mkdirSync(logDir, { recursive: true });
+      if (!await adapter.exists(dir))
+        await adapter.mkdir(dir);
       const line = JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), ...entry, eval: null }) + "\n";
-      appendFileSync(join6(logDir, "dev.jsonl"), line, "utf-8");
+      if (await adapter.exists(path2))
+        await adapter.append(path2, line);
+      else
+        await adapter.write(path2, line);
     } catch {
     }
   }
@@ -3862,22 +3879,21 @@ var AgentRunner = class {
       }
     }
   }
-  async updateDevLogEval(vaultRoot, score, reasoning) {
+  async updateDevLogEval(_vaultRoot, score, reasoning) {
     if (!this.settings.devMode?.enabled)
       return;
-    if (import_obsidian5.Platform.isMobile)
-      return;
+    const adapter = this.vaultTools.adapter;
+    const path2 = "!Logs/dev.jsonl";
     try {
-      const { readFileSync, writeFileSync: writeFileSync2 } = await import("node:fs");
-      const { join: join6 } = await import("node:path");
-      const logPath = join6(vaultRoot, "!Logs", "dev.jsonl");
-      const content = readFileSync(logPath, "utf-8");
+      if (!await adapter.exists(path2))
+        return;
+      const content = await adapter.read(path2);
       const lines = content.trimEnd().split("\n");
       const lastIdx = lines.length - 1;
       const last = JSON.parse(lines[lastIdx]);
       last.eval = { score, reasoning };
       lines[lastIdx] = JSON.stringify(last);
-      writeFileSync2(logPath, lines.join("\n") + "\n", "utf-8");
+      await adapter.write(path2, lines.join("\n") + "\n");
     } catch {
     }
   }
@@ -11087,6 +11103,26 @@ OpenAI.Containers = Containers;
 OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
+// src/mobile-fetch.ts
+var import_obsidian5 = require("obsidian");
+var mobileFetch = async (input, init) => {
+  if (init?.signal?.aborted)
+    throw new DOMException("Aborted", "AbortError");
+  const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  const body = init?.body;
+  if (body != null && typeof body !== "string") {
+    throw new Error("mobileFetch: only string body supported");
+  }
+  const r = await (0, import_obsidian5.requestUrl)({
+    url,
+    method: init?.method ?? "GET",
+    headers: init?.headers,
+    body: body ?? void 0,
+    throw: false
+  });
+  return new Response(r.text, { status: r.status, headers: r.headers });
+};
+
 // src/domain-store.ts
 var FILE_PATH = "!Wiki/_domain.json";
 var TMP_PATH = `${FILE_PATH}.tmp`;
@@ -11194,16 +11230,27 @@ var WikiController = class {
       new import_obsidian6.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
-    if (this.plugin.settings.backend === "native-agent" && !this.requireNativeAgent())
-      return;
-    if (this.plugin.settings.backend === "claude-agent" && !await this.requireClaudeAgent())
-      return;
+    {
+      const local = await this.localConfigStore.load();
+      const eff = resolveEffective(this.plugin.settings, local);
+      if (eff.backend === "native-agent" && !this.requireNativeAgent(eff))
+        return;
+      if (eff.backend === "claude-agent" && !await this.requireClaudeAgent(local))
+        return;
+    }
     await this.ensureView();
     const view = this.activeView();
     if (!view)
       return;
     const vaultRoot = this.cwdOrEmpty();
-    const agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId);
+    let agentRunner;
+    try {
+      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId);
+    } catch (e) {
+      new import_obsidian6.Notice(i18n().ctrl.errorPrefix(e.message));
+      console.error("[llm-wiki] buildAgentRunner failed", e);
+      return;
+    }
     const ctrl = new AbortController();
     this.current = ctrl;
     this.onBusyChange?.();
@@ -11331,17 +11378,17 @@ var WikiController = class {
     new import_obsidian6.Notice(i18n().ctrl.domainAdded(id));
     return { ok: true };
   }
-  async requireClaudeAgent() {
-    const { existsSync } = await import("node:fs");
-    const { iclaudePath } = await this.localConfigStore.load();
+  async requireClaudeAgent(local) {
+    const { existsSync } = require("node:fs");
+    const { iclaudePath } = local;
     if (!iclaudePath || !existsSync(iclaudePath)) {
       new import_obsidian6.Notice(i18n().ctrl.setClaudeCodePath);
       return null;
     }
     return iclaudePath;
   }
-  requireNativeAgent() {
-    const na = this.plugin.settings.nativeAgent;
+  requireNativeAgent(eff) {
+    const na = eff.nativeAgent;
     if (!na?.baseUrl?.trim() || !na?.apiKey?.trim()) {
       new import_obsidian6.Notice(i18n().ctrl.configureCloudLlm);
       return false;
@@ -11355,13 +11402,13 @@ var WikiController = class {
     const vaultName = this.app.vault.getName();
     const domains = await this.domainStore.load();
     const local = await this.localConfigStore.load();
-    const s = this.plugin.settings;
+    const s = resolveEffective(this.plugin.settings, local);
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm;
     if (s.backend === "claude-agent") {
-      const { join: join6 } = await import("node:path");
-      const { mkdirSync } = await import("node:fs");
-      const { ClaudeCliClient: ClaudeCliClient2 } = await Promise.resolve().then(() => (init_claude_cli_client(), claude_cli_client_exports));
+      const { join: join6 } = require("node:path");
+      const { mkdirSync } = require("node:fs");
+      const { ClaudeCliClient: ClaudeCliClient2 } = (init_claude_cli_client(), __toCommonJS(claude_cli_client_exports));
       const manifestDir = this.plugin.manifest.dir ?? join6(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
       const pluginDir = this.app.vault.adapter.getFullPath(manifestDir);
       const tmpDir = join6(pluginDir, "tmp");
@@ -11382,23 +11429,32 @@ var WikiController = class {
         baseURL: s.nativeAgent.baseUrl,
         apiKey: s.nativeAgent.apiKey,
         timeout: maxTimeoutSec * 1e3,
-        dangerouslyAllowBrowser: true
+        dangerouslyAllowBrowser: true,
+        fetch: import_obsidian6.Platform.isMobile ? mobileFetch : void 0
       });
     }
     return new AgentRunner(llm, s, vaultTools, vaultName, domains);
   }
-  async logEvent(vaultRoot, sessionId, op, domainId, ev) {
+  async logEvent(_vaultRoot, sessionId, op, domainId, ev) {
     if (!this.plugin.settings.agentLogEnabled)
       return;
-    if (import_obsidian6.Platform.isMobile)
-      return;
+    const adapter = this.app.vault.adapter;
+    const dir = "!Logs";
+    const path2 = `${dir}/agent.jsonl`;
     try {
-      const { join: join6 } = await import("node:path");
-      const { appendFileSync, mkdirSync } = await import("node:fs");
-      const logDir = join6(vaultRoot, "!Logs");
-      mkdirSync(logDir, { recursive: true });
-      const line = JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), session: sessionId, op, domainId, event: ev }) + "\n";
-      appendFileSync(join6(logDir, "agent.jsonl"), line, "utf-8");
+      if (!await adapter.exists(dir))
+        await adapter.mkdir(dir);
+      const line = JSON.stringify({
+        ts: (/* @__PURE__ */ new Date()).toISOString(),
+        session: sessionId,
+        op,
+        domainId,
+        event: ev
+      }) + "\n";
+      if (await adapter.exists(path2))
+        await adapter.append(path2, line);
+      else
+        await adapter.write(path2, line);
     } catch {
     }
   }
@@ -11412,16 +11468,27 @@ var WikiController = class {
       new import_obsidian6.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
-    if (this.plugin.settings.backend === "native-agent" && !this.requireNativeAgent())
-      return;
-    if (this.plugin.settings.backend === "claude-agent" && !await this.requireClaudeAgent())
-      return;
+    {
+      const local = await this.localConfigStore.load();
+      const eff = resolveEffective(this.plugin.settings, local);
+      if (eff.backend === "native-agent" && !this.requireNativeAgent(eff))
+        return;
+      if (eff.backend === "claude-agent" && !await this.requireClaudeAgent(local))
+        return;
+    }
     await this.ensureView();
     const view = this.activeView();
     if (!view)
       return;
     const vaultRoot = this.cwdOrEmpty();
-    const agentRunner = await this.buildAgentRunner(vaultRoot);
+    let agentRunner;
+    try {
+      agentRunner = await this.buildAgentRunner(vaultRoot);
+    } catch (e) {
+      new import_obsidian6.Notice(i18n().ctrl.errorPrefix(e.message));
+      console.error("[llm-wiki] buildAgentRunner failed", e);
+      return;
+    }
     const ctrl = new AbortController();
     this.current = ctrl;
     this.onBusyChange?.();
@@ -11469,6 +11536,7 @@ var WikiController = class {
       }
     } catch (err) {
       status = "error";
+      console.error("[llm-wiki] dispatch failed", err);
       finalText = i18n().ctrl.errorPrefix(err.message);
       await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
     } finally {
@@ -11527,7 +11595,7 @@ var WikiController = class {
     return view instanceof LlmWikiView ? view : null;
   }
   async toVaultPath(vaultDir, savedPath) {
-    const { relative: relative2, isAbsolute: isAbsolute3, join: join6 } = await import("node:path");
+    const { relative: relative2, isAbsolute: isAbsolute3, join: join6 } = require("node:path");
     const abs = isAbsolute3(savedPath) ? savedPath : join6(vaultDir, savedPath);
     const rel = relative2(vaultDir, abs);
     if (rel.startsWith("..") || isAbsolute3(rel))
@@ -11586,6 +11654,7 @@ var LlmWikiPlugin = class extends import_obsidian7.Plugin {
     this.localConfigStore = new LocalConfigStore(this);
     await migrateLegacyData(this, this.domainStore, this.localConfigStore);
     await this.loadSettings();
+    await migrateToLocalV1(this, this.localConfigStore);
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
     this.controller.onBusyChange = () => this.settingTab?.display();
     this.registerView(LLM_WIKI_VIEW_TYPE, (leaf) => new LlmWikiView(leaf, this));
@@ -11732,6 +11801,19 @@ var LlmWikiPlugin = class extends import_obsidian7.Plugin {
       this.settings.backend = "native-agent";
       await this.saveData(this.settings);
     }
+    if (import_obsidian7.Platform.isMobile) {
+      let dirty = false;
+      if (this.settings.nativeAgent.perOperation) {
+        this.settings.nativeAgent.perOperation = false;
+        dirty = true;
+      }
+      if (this.settings.devMode.enabled) {
+        this.settings.devMode.enabled = false;
+        dirty = true;
+      }
+      if (dirty)
+        await this.saveData(this.settings);
+    }
     if (typeof data?.agentLogPath === "string") {
       this.settings.agentLogEnabled = data.agentLogPath.length > 0;
     }
@@ -11781,8 +11863,34 @@ async function migrateLegacyData(plugin, domainStore, localConfigStore) {
   if (dirty)
     await plugin.saveData(data);
 }
+async function migrateToLocalV1(plugin, localConfigStore) {
+  const local = await localConfigStore.load();
+  if (local.migrated_v1)
+    return;
+  const s = plugin.settings;
+  await localConfigStore.save({
+    backend: s.backend,
+    nativeAgent: {
+      baseUrl: s.nativeAgent.baseUrl,
+      apiKey: s.nativeAgent.apiKey,
+      model: s.nativeAgent.model,
+      temperature: s.nativeAgent.temperature,
+      topP: s.nativeAgent.topP,
+      numCtx: s.nativeAgent.numCtx
+    },
+    claudeAgent: {
+      model: s.claudeAgent.model,
+      allowedTools: s.claudeAgent.allowedTools
+    },
+    agentLogEnabled: s.agentLogEnabled,
+    migrated_v1: true
+  });
+  s.nativeAgent.apiKey = "";
+  await plugin.saveSettings();
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   migrateDomainWikiFolder,
-  migrateLegacyData
+  migrateLegacyData,
+  migrateToLocalV1
 });
