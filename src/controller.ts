@@ -91,22 +91,41 @@ export class WikiController {
     await this.init(domain.id, false, sources);
   }
 
-  async formatApply(): Promise<void> {
+  async formatApply(keepOld: boolean): Promise<void> {
     const p = this._pendingFormat;
     if (!p || !p.tempPath) {
       new Notice(i18n().view.formatNoPending ?? "No format preview to apply");
       return;
     }
     if (this.isBusy()) { new Notice(i18n().ctrl.operationRunning); return; }
+    const adapter = this.app.vault.adapter as VaultAdapter & { rename?(from: string, to: string): Promise<void> };
     try {
-      const content = await this.app.vault.adapter.read(p.tempPath);
-      const origFile = this.app.vault.getAbstractFileByPath(p.originalPath);
-      if (origFile && "stat" in origFile) {
-        await this.app.vault.modify(origFile as TFile, content);
+      if (keepOld) {
+        const deprecatedPath = p.originalPath.replace(/\.md$/, ".deprecated.md");
+        if (await adapter.exists(deprecatedPath)) {
+          throw new Error(`${deprecatedPath} уже существует — удалите вручную или примените delete-old`);
+        }
+        if (adapter.rename) {
+          await adapter.rename(p.originalPath, deprecatedPath);
+          await adapter.rename(p.tempPath, p.originalPath);
+        } else {
+          // fallback: read+write+remove
+          const old = await adapter.read(p.originalPath);
+          await adapter.write(deprecatedPath, old);
+          const fresh = await adapter.read(p.tempPath);
+          await adapter.write(p.originalPath, fresh);
+          await this.app.vault.adapter.remove(p.tempPath);
+        }
       } else {
-        await this.app.vault.adapter.write(p.originalPath, content);
+        const content = await adapter.read(p.tempPath);
+        const origFile = this.app.vault.getAbstractFileByPath(p.originalPath);
+        if (origFile && "stat" in origFile) {
+          await this.app.vault.modify(origFile as TFile, content);
+        } else {
+          await adapter.write(p.originalPath, content);
+        }
+        await this.app.vault.adapter.remove(p.tempPath);
       }
-      await this.app.vault.adapter.remove(p.tempPath);
       new Notice(i18n().view.formatApplied(p.originalPath));
       this.activeView()?.appendEvent({ kind: "format_applied", path: p.originalPath });
     } catch (e) {

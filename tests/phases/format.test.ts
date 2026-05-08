@@ -46,9 +46,9 @@ describe("runFormat", () => {
     );
     const preview = events.find((e: unknown) => (e as { kind: string }).kind === "format_preview");
     expect(preview).toBeDefined();
-    expect((preview as { tempPath: string }).tempPath).toBe("!Temp/note.formatted.md");
+    expect((preview as { tempPath: string }).tempPath).toBe("note.formatted.md");
     expect((preview as { report: string }).report).toContain("frontmatter");
-    expect(adapter.write).toHaveBeenCalledWith("!Temp/note.formatted.md", formatted);
+    expect(adapter.write).toHaveBeenCalledWith("note.formatted.md", formatted);
   });
 
   it("при невалидном JSON эмитит error и не пишет temp", async () => {
@@ -74,14 +74,15 @@ describe("runFormat", () => {
     expect(preview.missingTokens.map((m) => m.token)).toContain("https://clickhouse.com/docs");
   });
 
-  it("создаёт !Temp если папки нет", async () => {
-    const formatted = SAMPLE;
-    const json = JSON.stringify({ report: "r", formatted });
-    const adapter = mockAdapter({ [FILE]: SAMPLE });
-    (adapter.exists as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+  it("сохраняет formatted рядом с исходником (вложенный путь)", async () => {
+    const NESTED = "wiki/notes/page.md";
+    const json = JSON.stringify({ report: "r", formatted: SAMPLE });
+    const adapter = mockAdapter({ [NESTED]: SAMPLE });
     const vt = new VaultTools(adapter, VAULT);
-    await collect(runFormat([FILE], vt, makeLlm(json), "model", false, [], new AbortController().signal));
-    expect(adapter.mkdir).toHaveBeenCalledWith("!Temp");
+    const events = await collect(runFormat([NESTED], vt, makeLlm(json), "model", false, [], new AbortController().signal));
+    const preview = events.find((e: unknown) => (e as { kind: string }).kind === "format_preview") as { tempPath: string };
+    expect(preview.tempPath).toBe("wiki/notes/page.formatted.md");
+    expect(adapter.write).toHaveBeenCalledWith("wiki/notes/page.formatted.md", SAMPLE);
   });
 
   it("abort прекращает работу без записи temp", async () => {

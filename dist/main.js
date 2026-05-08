@@ -18876,6 +18876,8 @@ var en = {
     formatCancelled: "Format cancelled",
     formatPreviewHeader: "Format preview",
     formatApply: "Apply",
+    formatApplyReplace: "Apply (delete old)",
+    formatApplyKeep: "Apply (keep old as .deprecated)",
     formatCancelBtn: "Discard",
     formatRefinePlaceholder: "Refine the formatting (Enter to send)\u2026",
     formatMissingTokens: (n) => `\u26A0 ${n} significant token(s) missing in formatted text`,
@@ -19062,6 +19064,8 @@ var ru = {
     formatCancelled: "\u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E",
     formatPreviewHeader: "\u041F\u0440\u0435\u0434\u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F",
     formatApply: "\u041F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C",
+    formatApplyReplace: "\u041F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C (\u0443\u0434\u0430\u043B\u0438\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E)",
+    formatApplyKeep: "\u041F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C (\u043E\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u043A\u0430\u043A .deprecated)",
     formatCancelBtn: "\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C",
     formatRefinePlaceholder: "\u0423\u0442\u043E\u0447\u043D\u0438\u0442\u0435 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 (Enter \u2014 \u043E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C)\u2026",
     formatMissingTokens: (n) => `\u26A0 \u041F\u043E\u0442\u0435\u0440\u044F\u043D\u043E \u0437\u043D\u0430\u0447\u0438\u043C\u044B\u0445 \u0442\u043E\u043A\u0435\u043D\u043E\u0432: ${n}`,
@@ -19248,6 +19252,8 @@ var es = {
     formatCancelled: "Formateo cancelado",
     formatPreviewHeader: "Previsualizaci\xF3n del formateo",
     formatApply: "Aplicar",
+    formatApplyReplace: "Aplicar (eliminar antigua)",
+    formatApplyKeep: "Aplicar (mantener como .deprecated)",
     formatCancelBtn: "Descartar",
     formatRefinePlaceholder: "Refina el formateo (Enter para enviar)\u2026",
     formatMissingTokens: (n) => `\u26A0 ${n} token(s) significativo(s) perdido(s)`,
@@ -20640,9 +20646,10 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       }
     }
     const btnRow = this.formatPreviewSection.createDiv("llm-wiki-format-actions");
-    const applyBtn = btnRow.createEl("button", { text: T.view.formatApply, cls: "mod-cta" });
-    applyBtn.disabled = false;
-    applyBtn.addEventListener("click", () => void this.plugin.controller.formatApply());
+    const applyReplaceBtn = btnRow.createEl("button", { text: T.view.formatApplyReplace, cls: "mod-cta" });
+    applyReplaceBtn.addEventListener("click", () => void this.plugin.controller.formatApply(false));
+    const applyKeepBtn = btnRow.createEl("button", { text: T.view.formatApplyKeep });
+    applyKeepBtn.addEventListener("click", () => void this.plugin.controller.formatApply(true));
     const cancelBtn = btnRow.createEl("button", { text: T.view.formatCancelBtn, cls: "mod-warning" });
     cancelBtn.addEventListener("click", () => void this.plugin.controller.formatCancel());
     const chatBox = this.formatPreviewSection.createDiv("llm-wiki-format-chat");
@@ -22577,7 +22584,6 @@ function missingTokensWithContext(original, formatted) {
 }
 
 // src/phases/format.ts
-var TEMP_FOLDER = "!Temp";
 function extractImagePaths(md) {
   const out = [];
   for (const m of md.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)) {
@@ -22686,15 +22692,14 @@ ${original}`;
     yield { kind: "result", durationMs: Date.now() - start, text: "" };
     return;
   }
-  const baseName = filePath.split("/").pop()?.replace(/\.md$/, "") ?? "page";
-  const tempPath = `${TEMP_FOLDER}/${baseName}.formatted.md`;
+  const lastSlash = filePath.lastIndexOf("/");
+  const dir = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "";
+  const baseName = (lastSlash >= 0 ? filePath.slice(lastSlash + 1) : filePath).replace(/\.md$/, "") || "page";
+  const tempPath = dir ? `${dir}/${baseName}.formatted.md` : `${baseName}.formatted.md`;
   try {
-    if (!await vaultTools.exists(TEMP_FOLDER)) {
-      await vaultTools.mkdir(TEMP_FOLDER);
-    }
     await vaultTools.write(tempPath, parsed.formatted);
   } catch (e) {
-    yield { kind: "error", message: `Format: \u0437\u0430\u043F\u0438\u0441\u044C temp \u043D\u0435 \u0443\u0434\u0430\u043B\u0430\u0441\u044C \u2014 ${e.message}` };
+    yield { kind: "error", message: `Format: \u0437\u0430\u043F\u0438\u0441\u044C \u0444\u043E\u0440\u043C\u0430\u0442\u0430 \u043D\u0435 \u0443\u0434\u0430\u043B\u0430\u0441\u044C \u2014 ${e.message}` };
     return;
   }
   const missing = missingTokensWithContext(original, parsed.formatted);
@@ -30254,7 +30259,7 @@ var WikiController = class {
     }
     await this.init(domain.id, false, sources);
   }
-  async formatApply() {
+  async formatApply(keepOld) {
     const p = this._pendingFormat;
     if (!p || !p.tempPath) {
       new import_obsidian7.Notice(i18n().view.formatNoPending ?? "No format preview to apply");
@@ -30264,15 +30269,33 @@ var WikiController = class {
       new import_obsidian7.Notice(i18n().ctrl.operationRunning);
       return;
     }
+    const adapter = this.app.vault.adapter;
     try {
-      const content = await this.app.vault.adapter.read(p.tempPath);
-      const origFile = this.app.vault.getAbstractFileByPath(p.originalPath);
-      if (origFile && "stat" in origFile) {
-        await this.app.vault.modify(origFile, content);
+      if (keepOld) {
+        const deprecatedPath = p.originalPath.replace(/\.md$/, ".deprecated.md");
+        if (await adapter.exists(deprecatedPath)) {
+          throw new Error(`${deprecatedPath} \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2014 \u0443\u0434\u0430\u043B\u0438\u0442\u0435 \u0432\u0440\u0443\u0447\u043D\u0443\u044E \u0438\u043B\u0438 \u043F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u0435 delete-old`);
+        }
+        if (adapter.rename) {
+          await adapter.rename(p.originalPath, deprecatedPath);
+          await adapter.rename(p.tempPath, p.originalPath);
+        } else {
+          const old = await adapter.read(p.originalPath);
+          await adapter.write(deprecatedPath, old);
+          const fresh = await adapter.read(p.tempPath);
+          await adapter.write(p.originalPath, fresh);
+          await this.app.vault.adapter.remove(p.tempPath);
+        }
       } else {
-        await this.app.vault.adapter.write(p.originalPath, content);
+        const content = await adapter.read(p.tempPath);
+        const origFile = this.app.vault.getAbstractFileByPath(p.originalPath);
+        if (origFile && "stat" in origFile) {
+          await this.app.vault.modify(origFile, content);
+        } else {
+          await adapter.write(p.originalPath, content);
+        }
+        await this.app.vault.adapter.remove(p.tempPath);
       }
-      await this.app.vault.adapter.remove(p.tempPath);
       new import_obsidian7.Notice(i18n().view.formatApplied(p.originalPath));
       this.activeView()?.appendEvent({ kind: "format_applied", path: p.originalPath });
     } catch (e) {

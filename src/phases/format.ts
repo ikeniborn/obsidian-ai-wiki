@@ -7,8 +7,6 @@ import formatSchema from "../../templates/_format-schema.md";
 import { render } from "./template";
 import { extractJsonObject, missingTokensWithContext, looksTruncated } from "./format-utils";
 
-const TEMP_FOLDER = "!Temp";
-
 function extractImagePaths(md: string): string[] {
   const out: string[] = [];
   for (const m of md.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)) {
@@ -133,16 +131,15 @@ export async function* runFormat(
     return;
   }
 
-  const baseName = filePath.split("/").pop()?.replace(/\.md$/, "") ?? "page";
-  const tempPath = `${TEMP_FOLDER}/${baseName}.formatted.md`;
+  const lastSlash = filePath.lastIndexOf("/");
+  const dir = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "";
+  const baseName = (lastSlash >= 0 ? filePath.slice(lastSlash + 1) : filePath).replace(/\.md$/, "") || "page";
+  const tempPath = dir ? `${dir}/${baseName}.formatted.md` : `${baseName}.formatted.md`;
 
   try {
-    if (!(await vaultTools.exists(TEMP_FOLDER))) {
-      await vaultTools.mkdir(TEMP_FOLDER);
-    }
     await vaultTools.write(tempPath, parsed.formatted);
   } catch (e) {
-    yield { kind: "error", message: `Format: запись temp не удалась — ${(e as Error).message}` };
+    yield { kind: "error", message: `Format: запись формата не удалась — ${(e as Error).message}` };
     return;
   }
 

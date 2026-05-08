@@ -459,9 +459,11 @@ export class LlmWikiView extends ItemView {
     }
 
     const btnRow = this.formatPreviewSection.createDiv("llm-wiki-format-actions");
-    const applyBtn = btnRow.createEl("button", { text: T.view.formatApply, cls: "mod-cta" });
-    applyBtn.disabled = false;
-    applyBtn.addEventListener("click", () => void this.plugin.controller.formatApply());
+    const applyReplaceBtn = btnRow.createEl("button", { text: T.view.formatApplyReplace, cls: "mod-cta" });
+    applyReplaceBtn.addEventListener("click", () => void this.plugin.controller.formatApply(false));
+
+    const applyKeepBtn = btnRow.createEl("button", { text: T.view.formatApplyKeep });
+    applyKeepBtn.addEventListener("click", () => void this.plugin.controller.formatApply(true));
 
     const cancelBtn = btnRow.createEl("button", { text: T.view.formatCancelBtn, cls: "mod-warning" });
     cancelBtn.addEventListener("click", () => void this.plugin.controller.formatCancel());
