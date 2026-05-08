@@ -8,6 +8,7 @@ import type { ChatMessage } from "./types";
 import { VaultTools, type VaultAdapter } from "./vault-tools";
 import type { ClaudeCliClient } from "./claude-cli-client";
 import OpenAI from "openai";
+import { createProxyFetch, parseNoProxy, shouldBypass, maskProxyUrl } from "./proxy";
 import { mobileFetch } from "./mobile-fetch";
 import { i18n } from "./i18n";
 import { resolveEffective } from "./effective-settings";
@@ -378,12 +379,30 @@ export class WikiController {
       llm = client;
     } else {
       this._currentClaudeClient = null;
+
+      const proxyCfg = s.proxy;
+      let proxyFetch: typeof fetch | null = null;
+      if (proxyCfg.enabled && Platform.isMobile) {
+        new Notice(i18n().settings.proxy_mobile_warning);
+      } else if (proxyCfg.enabled) {
+        try {
+          const baseHost = new URL(s.nativeAgent.baseUrl).hostname;
+          const noProxyList = parseNoProxy(proxyCfg.noProxy);
+          if (!shouldBypass(baseHost, noProxyList)) {
+            proxyFetch = createProxyFetch(proxyCfg);
+            if (proxyFetch) console.info(`[llm-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
+          }
+        } catch (e) {
+          new Notice(i18n().settings.proxy_invalid((e as Error).message));
+        }
+      }
+
       llm = new OpenAI({
         baseURL: s.nativeAgent.baseUrl,
         apiKey: s.nativeAgent.apiKey,
         timeout: maxTimeoutSec * 1000,
         dangerouslyAllowBrowser: true,
-        fetch: Platform.isMobile ? mobileFetch : undefined,
+        fetch: Platform.isMobile ? mobileFetch : (proxyFetch ?? undefined),
       });
     }
 
