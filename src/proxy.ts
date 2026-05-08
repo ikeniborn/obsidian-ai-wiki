@@ -1,4 +1,27 @@
+import { Platform } from "obsidian";
 import type { ProxyConfig } from "./local-config";
+
+declare const require: NodeJS.Require;
+
+export function createProxyDispatcher(cfg: ProxyConfig): import("undici").Dispatcher | null {
+  if (!cfg.enabled) return null;
+  if (Platform.isMobile) return null;
+  const undici = require("undici") as typeof import("undici");
+  return new undici.ProxyAgent(buildProxyUrl(cfg));
+}
+
+export function createProxyFetch(cfg: ProxyConfig): typeof fetch | null {
+  const dispatcher = createProxyDispatcher(cfg);
+  if (!dispatcher) return null;
+  const undici = require("undici") as typeof import("undici");
+  const wrapped: typeof fetch = (input, init) => {
+    return undici.fetch(
+      input as Parameters<typeof undici.fetch>[0],
+      { ...(init as Parameters<typeof undici.fetch>[1]), dispatcher } as Parameters<typeof undici.fetch>[1],
+    ) as unknown as Promise<Response>;
+  };
+  return wrapped;
+}
 
 export function buildProxyUrl(cfg: ProxyConfig): string {
   const u = new URL(cfg.url);

@@ -1,5 +1,43 @@
 import { describe, it, expect } from "vitest";
-import { buildProxyUrl, maskProxyUrl, parseNoProxy, shouldBypass } from "../src/proxy";
+import { buildProxyUrl, createProxyDispatcher, createProxyFetch, maskProxyUrl, parseNoProxy, shouldBypass } from "../src/proxy";
+import { __setPlatformMobile } from "obsidian";
+
+describe("createProxyDispatcher", () => {
+  it("returns null when disabled", () => {
+    expect(createProxyDispatcher({ enabled: false, url: "http://p:1" })).toBeNull();
+  });
+  it("returns null on mobile", () => {
+    __setPlatformMobile(true);
+    try {
+      expect(createProxyDispatcher({ enabled: true, url: "http://p:1" })).toBeNull();
+    } finally {
+      __setPlatformMobile(false);
+    }
+  });
+  it("returns Dispatcher when enabled on desktop", () => {
+    const d = createProxyDispatcher({ enabled: true, url: "http://p:1" });
+    expect(d).not.toBeNull();
+    expect(typeof (d as { dispatch?: unknown }).dispatch).toBe("function");
+  });
+});
+
+describe("createProxyFetch", () => {
+  it("returns null when no dispatcher (mobile)", () => {
+    __setPlatformMobile(true);
+    try {
+      expect(createProxyFetch({ enabled: true, url: "http://p:1" })).toBeNull();
+    } finally {
+      __setPlatformMobile(false);
+    }
+  });
+  it("returns null when disabled", () => {
+    expect(createProxyFetch({ enabled: false, url: "http://p:1" })).toBeNull();
+  });
+  it("returns a function on desktop when enabled", () => {
+    const f = createProxyFetch({ enabled: true, url: "http://p:1" });
+    expect(typeof f).toBe("function");
+  });
+});
 
 describe("buildProxyUrl", () => {
   it("returns url unchanged when no creds", () => {
