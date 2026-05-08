@@ -100,6 +100,12 @@ key_constraints:
     несут maxTokens. Settings UI экспонирует поле для каждой операции в обоих
     backend'ах. Для format default поднят до 16384 (исторически 8192 обрезал
     JSON на больших страницах).
+  - ClaudeCliClient large-payload (v0.1.63+): порог LARGE_THRESHOLD = 262 144
+    байт (Linux ARG_MAX ~2 МБ, 256 КБ inline безопасно). При превышении
+    user-content оборачивается <user_input>...</user_input>, пишется в tmp-файл
+    и подключается через --append-system-prompt-file; -p несёт явную инструкцию
+    «обработай содержимое из <user_input>». Старый '-p .' workaround вызывал
+    "Dot received. What's next?" у haiku и терял весь контент.
 
 platforms:
   desktop:

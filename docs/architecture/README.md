@@ -1,7 +1,7 @@
 # Architecture Documentation — obsidian-llm-wiki
 
 LLM Wiki — Obsidian-плагин для AI-powered компаундируемой базы знаний.  
-Версия: **0.1.62** | Язык: TypeScript | Runtime: Electron (Obsidian Desktop) + WebView (Obsidian Mobile)
+Версия: **0.1.63** | Язык: TypeScript | Runtime: Electron (Obsidian Desktop) + WebView (Obsidian Mobile)
 
 ---
 
@@ -134,12 +134,21 @@ graph TD
 Операция `format` — отдельная фаза `runFormat` (`src/phases/format.ts`), возвращает JSON `{report, formatted}` (схема `templates/_format-schema.md`, промт `prompts/format.md`).
 
 - **Pre-flight guard:** `controller.format()` отклоняет файлы внутри wiki-домена (по `domainWikiFolder(d.wiki_folder)`) — открывается `ConfirmModal` с предложением запустить ingest из `wiki_sources` frontmatter.
-- **Preview workflow:** результат пишется в `!Temp/<basename>.formatted.md`, событие `format_preview {tempPath, report, missingTokens}` рендерится в side-panel блоком с Apply/Cancel + чатом для refine.
-- **Validator (`format-utils.ts`):** `significantTokens()` извлекает числа, URL (с зачисткой trailing punctuation), proper nouns, inline/fenced code identifiers; `missingTokens(orig, formatted)` возвращает потерянные токены. Apply дисейблится при непустом списке.
+- **Preview workflow:** результат пишется в `!Temp/<basename>.formatted.md`, событие `format_preview {tempPath, report, missingTokens}` рендерится в side-panel блоком с Apply/Cancel + чатом для refine. CSS отделяет блоки border-top'ами; чат-textarea на всю ширину панели, Send-кнопка в собственном ряду справа под textarea.
+- **Validator (`format-utils.ts`, v0.1.63+):** `significantTokens()` извлекает числа, URL (с зачисткой trailing punctuation), Latin-имена ≥3 букв, ALL-CAPS-акронимы ≥2 букв, идентификаторы из inline/fenced code. Кириллические capitalized слова **не** считаются значимыми (рефраз русских существительных штатно). `missingTokens(orig, formatted)` возвращает потерянные значимые токены. Apply дисейблится при непустом списке.
+- **JSON-устойчивость (v0.1.63+):** запрос идёт с `response_format: { type: "json_object" }`. `extractJsonObject` снимает ```` ```json ```` обёртку, `repairJson` чинит trailing-commas + экранирует сырые control-chars (`\n`, `\r`, `\t`, и пр.) внутри строк. При первом провале — авто-retry с явной инструкцией «верни ТОЛЬКО валидный JSON, экранируй спецсимволы». Если `finish_reason === "length"` — retry пропускается, выдаётся ошибка «ответ обрезан, увеличьте maxTokens».
 - **Refine loop:** `controller.formatRefine(msg)` добавляет user-message в `_pendingFormat.chat` и редиспатчит `format` — `runFormat` принимает `chatHistory` параметром, передаёт в LLM как продолжение диалога.
-- **Lifecycle:** `formatApply` читает temp → перезаписывает оригинал → удаляет temp; `formatCancel` удаляет temp; оба чистят `_pendingFormat` и эмитят `format_applied`/`format_cancelled` для UI cleanup.
+- **Lifecycle:** `formatApply` читает temp → перезаписывает оригинал через `vault.modify(TFile, content)` (буфер открытого редактора Obsidian обновляется; `adapter.write` обходил редактор и затирался при следующем save) → удаляет temp. `formatCancel` удаляет temp. Оба чистят `_pendingFormat` и эмитят `format_applied`/`format_cancelled` для UI cleanup.
 - **Vision:** при `backend === claude-agent` `extractImagePaths()` собирает локальные image refs и передаёт их content-parts'ами в OpenAI message — для распознавания/описания.
 - **Mobile:** разрешена в `dispatch()` mobile-guard'е (наряду с query/query-save) — поскольку использует тот же native-agent stream.
+
+### 7a. ClaudeCliClient large-payload (v0.1.63+)
+`ClaudeCliClient.chat.completions.create` собирает argv для `iclaude.sh`. Когда `userText > LARGE_THRESHOLD` (262 144 байт = 256 КБ; ARG_MAX на Linux ~2 МБ, 256 КБ inline безопасно), плагин:
+1. Оборачивает контент: `<user_input>\n${userText}\n</user_input>`.
+2. Пишет в `tmpDir/llm-wiki-usr-<id>.txt`, передаёт `--append-system-prompt-file <path>`.
+3. `-p` несёт явную инструкцию «обработай содержимое из `<user_input>` согласно системному промпту».
+
+Прежний workaround (`-p "."` + append) приводил к ответу haiku «Dot received. What's next?» — модель видела только точку и игнорировала контент в системном промпте. Симметричная ветка для systemContent работает аналогично через `--system-prompt-file`.
 
 ### 8. Per-Device Settings Overlay (v0.1.61+)
 Settings разделены на два слоя:

@@ -106,7 +106,7 @@ graph LR
     style dev_log fill:#e1ffe1
 ```
 
-## Format Operation Flow (v0.1.62+)
+## Format Operation Flow (v0.1.62+, hardened in v0.1.63)
 
 ```mermaid
 graph LR
@@ -114,13 +114,17 @@ graph LR
     ctrl_format -- "file in wiki?" --> wiki_check{domainWikiFolder match?}
     wiki_check -- yes --> confirm_modal[ConfirmModal<br/>→ suggestIngestForWikiFile]
     wiki_check -- no --> dispatch_format[dispatch 'format']
-    dispatch_format --> run_format[runFormat<br/>phases/format.ts]
+    dispatch_format --> run_format["runFormat<br/>phases/format.ts<br/>response_format=json_object"]
     run_format --> llm_call[LlmClient.chat.completions.create<br/>+ image_url parts when vision]
-    llm_call --> json_extract[extractJsonObject<br/>format-utils.ts]
-    json_extract --> validator[missingTokens<br/>significantTokens]
+    llm_call --> finish_check{finish_reason}
+    finish_check -- "length" --> trunc_err[error: ответ обрезан<br/>увеличьте maxTokens]
+    finish_check -- "stop" --> json_extract["extractJsonObject<br/>format-utils.ts<br/>(stripCodeFence + repairJson)"]
+    json_extract -- parse fail --> retry["авто-retry: 'верни ТОЛЬКО валидный JSON'"]
+    retry --> json_extract
+    json_extract -- parse OK --> validator["missingTokens<br/>significantTokens<br/>(Latin/numbers/URL/code only)"]
     validator --> temp_write[VaultTools.write<br/>!Temp/&lt;basename&gt;.formatted.md]
     temp_write --> emit_preview[yield format_preview<br/>→ view.renderFormatPreview]
-    emit_preview --> apply[Apply: read temp<br/>→ write original<br/>→ remove temp]
+    emit_preview --> apply["Apply: read temp<br/>→ vault.modify(TFile, content)<br/>→ remove temp"]
     emit_preview --> cancel[Cancel: remove temp]
     emit_preview --> refine[Refine chat:<br/>push user msg → re-dispatch]
     refine --> run_format
@@ -129,4 +133,24 @@ graph LR
     style run_format fill:#e1ffe1
     style validator fill:#f0f0f0
     style emit_preview fill:#e1f5ff
+    style trunc_err fill:#ffe1e1
+    style retry fill:#fff4e1
 ```
+
+## Claude CLI Large-Payload Branch (v0.1.63+)
+
+```mermaid
+graph LR
+    create["chat.completions.create"] --> sz{userText > 256 КБ?}
+    sz -- no --> inline_p["argv: -p &lt;userText&gt;"]
+    sz -- yes --> wrap["wrap &lt;user_input&gt;…&lt;/user_input&gt;<br/>tmpDir/llm-wiki-usr-id.txt"]
+    wrap --> append_sys["--append-system-prompt-file FILE<br/>-p «обработай содержимое из user_input»"]
+    inline_p --> spawn["spawn iclaude.sh"]
+    append_sys --> spawn
+
+    style wrap fill:#fff4e1
+    style inline_p fill:#e1ffe1
+    style append_sys fill:#fff4e1
+```
+
+Порог `LARGE_THRESHOLD = 262 144` байт (Linux ARG_MAX ~2 МБ). Старый workaround `-p .` + payload в системном промпте ломал haiku ("Dot received. What's next?").

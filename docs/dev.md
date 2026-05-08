@@ -60,13 +60,17 @@ ln -s $(pwd) ~/.config/obsidian/Plugins/obsidian-llm-wiki
 10. **Race / single-flight**
     - Запустить ingest, не дожидаясь вызвать query → Notice «Уже выполняется»
 
-11. **Format (v0.1.62+)**
+11. **Format (v0.1.62+, hardened v0.1.63)**
     - Открыть `.md` вне `!Wiki/` — нажать **Format** в боковой панели
-    - В preview-блоке появились отчёт + кнопки Apply/Discard + чат для refine
-    - При наличии missing-tokens (число/URL/имя пропущены) Apply дисейблнут — в чате попросить вернуть пропущенное → preview регенерируется
-    - **Apply**: оригинал перезаписался, `!Temp/<name>.formatted.md` удалён
+    - В preview-блоке появились отчёт + кнопки Apply/Discard (правый край, отдельный блок) + чат для refine с textarea ≥6em и кнопкой Send снизу
+    - При наличии missing-tokens (число/URL/Latin-имя/ALL-CAPS-акроним/code-identifier пропущены) Apply дисейблнут — в чате попросить вернуть пропущенное → preview регенерируется
+    - Кириллические capitalized слова (имена, топонимы) НЕ блокируют Apply (рефраз русских существительных штатно)
+    - **Apply**: открытый файл в редакторе обновился (буфер Obsidian), `!Temp/<name>.formatted.md` удалён, исходный путь — финальное содержимое
     - **Discard**: temp удалён, оригинал не тронут
     - Открыть `.md` ВНУТРИ `!Wiki/<domain>/` → ConfirmModal с предложением запустить ingest из wiki_sources
+    - **Большие файлы (>30 КБ)**: больше нет ошибки "Dot received. What's next?" у haiku — ClaudeCliClient.LARGE_THRESHOLD поднят до 256 КБ, при превышении контент оборачивается `<user_input>…</user_input>`
+    - **JSON robustness**: при сбое парсинга 1 авто-retry с явной инструкцией; finish_reason=length → ошибка "ответ обрезан, увеличьте maxTokens" (без бесполезного retry); default maxTokens для format поднят до 16384
+    - **Per-op maxTokens**: Settings UI экспонирует поле в обоих backend-блоках (claudeAgent + nativeAgent) для каждой операции
 
 ## Mobile (iOS / Android)
 
