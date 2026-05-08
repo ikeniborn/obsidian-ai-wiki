@@ -1,6 +1,6 @@
 id: obsidian-llm-wiki
 name: LLM Wiki Obsidian Plugin
-version: "0.1.62"
+version: "0.1.63"
 description: >
   Obsidian-плагин для ведения компаундируемой базы знаний на базе LLM.
   Запускает AI-агента (Claude CLI или нативный OpenAI-совместимый LLM),
@@ -76,13 +76,30 @@ key_constraints:
     как CJS-require для external'ов); await import("node:*") — баг (URL fetch в Electron).
   - Логи: agent.jsonl + dev.jsonl пишутся через VaultTools.adapter (работает на mobile).
   - Format-инвариант: runFormat возвращает JSON {report, formatted}; перед записью
-    temp-файла missingTokens() сверяет значимые токены (числа, URL, имена,
-    code identifiers) исходника с форматированным текстом. Apply дисейблится в UI
-    при непустом списке потерянных токенов.
+    temp-файла missingTokens() сверяет значимые токены исходника с форматированным
+    текстом. Apply дисейблится в UI при непустом списке потерянных токенов.
+  - Format / significantTokens (v0.1.63+): значимые = числа, URL, Latin-имена ≥3 букв
+    (Camel/Pascal/dash), ALL-CAPS-акронимы ≥2 букв, идентификаторы из `inline` и
+    ```fenced``` блоков. Кириллические capitalized слова НЕ значимые — рефраз
+    русских существительных штатно, иначе ложноположительные срабатывания
+    блокировали Apply.
+  - Format JSON-устойчивость (v0.1.63+): запрос идёт с
+    response_format: { type: "json_object" }; extractJsonObject снимает
+    ```json```-обёртку, repairJson чинит trailing-commas и экранирует сырые
+    control-chars (\n/\r/\t) внутри строк; при первом провале runFormat делает
+    один авто-retry с явным «верни ТОЛЬКО валидный JSON, экранируй спецсимволы».
+    Если finish_reason === "length" — retry пропускается, выдаётся ошибка
+    «ответ обрезан, увеличьте maxTokens».
   - Format I/O: temp хранится в !Wiki/-независимой папке !Temp/<basename>.formatted.md;
-    Apply читает temp → перезаписывает оригинал → удаляет temp; Cancel удаляет temp.
-    Файлы внутри wiki-домена (по domainWikiFolder) НЕ форматируются — controller
-    показывает ConfirmModal с предложением запустить ingest из wiki_sources.
+    Apply читает temp, перезаписывает оригинал через vault.modify(TFile) (буфер
+    редактора Obsidian обновляется; adapter.write обходил редактор и затирался
+    при следующем save), удаляет temp; Cancel удаляет temp. Файлы внутри
+    wiki-домена (по domainWikiFolder) НЕ форматируются — controller показывает
+    ConfirmModal с предложением запустить ingest из wiki_sources.
+  - Per-op maxTokens (v0.1.63+): ClaudeOperationConfig + NativeOperationConfig оба
+    несут maxTokens. Settings UI экспонирует поле для каждой операции в обоих
+    backend'ах. Для format default поднят до 16384 (исторически 8192 обрезал
+    JSON на больших страницах).
 
 platforms:
   desktop:

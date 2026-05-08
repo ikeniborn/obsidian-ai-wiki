@@ -151,7 +151,7 @@ var init_claude_cli_client = __esm({
         const userText = typeof lastUser?.content === "string" ? lastUser.content : "";
         const model = params.model || this.cfg.model;
         const { requestTimeoutSec } = this.cfg;
-        const LARGE_THRESHOLD = 32768;
+        const LARGE_THRESHOLD = 262144;
         const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const tmpFiles = [];
         const isResume = Boolean(this.cfg.resumeSessionId);
@@ -166,9 +166,12 @@ var init_claude_cli_client = __esm({
           const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
           if (isLargeUser) {
             const tmpUsrFile = (0, import_node_path5.join)(this.cfg.tmpDir, `llm-wiki-usr-${id}.txt`);
-            (0, import_node_fs.writeFileSync)(tmpUsrFile, userText, "utf-8");
+            const wrapped = `<user_input>
+${userText}
+</user_input>`;
+            (0, import_node_fs.writeFileSync)(tmpUsrFile, wrapped, "utf-8");
             tmpFiles.push(tmpUsrFile);
-            args.push("-p", ".");
+            args.push("-p", "\u041E\u0431\u0440\u0430\u0431\u043E\u0442\u0430\u0439 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u0438\u0437 <user_input> \u0441\u043E\u0433\u043B\u0430\u0441\u043D\u043E \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u043C\u0443 \u043F\u0440\u043E\u043C\u043F\u0442\u0443.");
             args.push("--append-system-prompt-file", tmpUsrFile);
           } else {
             args.push("-p", userText);

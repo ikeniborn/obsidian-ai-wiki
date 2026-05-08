@@ -144,11 +144,11 @@ describe("ClaudeCliClient", () => {
     expect(proc.kill).toHaveBeenCalledWith("SIGTERM");
   });
 
-  it("uses --append-system-prompt-file when userText exceeds 32KB", async () => {
+  it("uses --append-system-prompt-file when userText exceeds 256KB", async () => {
     (spawn as any).mockReturnValue(makeMockProcess([]));
 
     const client = new ClaudeCliClient(cfg);
-    const largeText = "x".repeat(33_000); // > 32 768 bytes
+    const largeText = "x".repeat(300_000); // > 262 144 bytes
 
     await client.chat.completions.create(
       { model: "sonnet", messages: [{ role: "user", content: largeText }], stream: false } as any,
@@ -158,21 +158,23 @@ describe("ClaudeCliClient", () => {
     expect(args).toContain("--append-system-prompt-file");
     expect(args).toContain("-p");
     const pIdx = args.indexOf("-p");
-    expect(args[pIdx + 1]).toBe(".");
+    expect(args[pIdx + 1]).toContain("user_input");
 
     const writtenUsrPath = (writeFileSync as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
     expect(writtenUsrPath).toContain("llm-wiki-usr-");
     expect(writtenUsrPath).toContain("/plugin/tmp");
-    expect(writeFileSync).toHaveBeenCalledWith(writtenUsrPath, largeText, "utf-8");
+    const writtenContent = (writeFileSync as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+    expect(writtenContent).toContain("<user_input>");
+    expect(writtenContent).toContain(largeText);
 
     expect(unlinkSync).toHaveBeenCalledWith(writtenUsrPath);
   });
 
-  it("uses --system-prompt-file when systemContent exceeds 32KB", async () => {
+  it("uses --system-prompt-file when systemContent exceeds 256KB", async () => {
     (spawn as any).mockReturnValue(makeMockProcess([]));
 
     const client = new ClaudeCliClient(cfg);
-    const largeSystem = "s".repeat(33_000);
+    const largeSystem = "s".repeat(300_000);
 
     await client.chat.completions.create(
       {

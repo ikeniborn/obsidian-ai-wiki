@@ -52,7 +52,7 @@ export class ClaudeCliClient implements LlmClient {
     const model = (params as { model?: string }).model || this.cfg.model;
     const { requestTimeoutSec } = this.cfg;
 
-    const LARGE_THRESHOLD = 32_768;
+    const LARGE_THRESHOLD = 262_144;
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const tmpFiles: string[] = [];
 
@@ -71,9 +71,10 @@ export class ClaudeCliClient implements LlmClient {
       const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
       if (isLargeUser) {
         const tmpUsrFile = join(this.cfg.tmpDir, `llm-wiki-usr-${id}.txt`);
-        writeFileSync(tmpUsrFile, userText, "utf-8");
+        const wrapped = `<user_input>\n${userText}\n</user_input>`;
+        writeFileSync(tmpUsrFile, wrapped, "utf-8");
         tmpFiles.push(tmpUsrFile);
-        args.push("-p", ".");
+        args.push("-p", "Обработай содержимое из <user_input> согласно системному промпту.");
         args.push("--append-system-prompt-file", tmpUsrFile);
       } else {
         args.push("-p", userText);
