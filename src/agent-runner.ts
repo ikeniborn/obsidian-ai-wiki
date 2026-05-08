@@ -1,4 +1,3 @@
-import { Platform } from "obsidian";
 import type { DomainEntry } from "./domain";
 import { runIngest } from "./phases/ingest";
 import { runQuery } from "./phases/query";
@@ -9,8 +8,6 @@ import { runInit } from "./phases/init";
 import { runEvaluator } from "./phases/evaluator";
 import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, OpKey, RunEvent, RunRequest } from "./types";
 import type { VaultTools } from "./vault-tools";
-
-declare const require: NodeJS.Require;
 
 export class AgentRunner {
   constructor(
@@ -37,7 +34,7 @@ export class AgentRunner {
     return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
   }
 
-  private async writeDevLog(vaultRoot: string, entry: {
+  private async writeDevLog(_vaultRoot: string, entry: {
     operation: string;
     model: string;
     systemPrompt: string;
@@ -46,14 +43,14 @@ export class AgentRunner {
     durationMs: number;
   }): Promise<void> {
     if (!this.settings.devMode?.enabled) return;
-    if (Platform.isMobile) return;
+    const adapter = this.vaultTools.adapter;
+    const dir = "!Logs";
+    const path = `${dir}/dev.jsonl`;
     try {
-      const { appendFileSync, mkdirSync } = require("node:fs") as typeof import("node:fs");
-      const { join } = require("node:path") as typeof import("node:path");
-      const logDir = join(vaultRoot, "!Logs");
-      mkdirSync(logDir, { recursive: true });
+      if (!(await adapter.exists(dir))) await adapter.mkdir(dir);
       const line = JSON.stringify({ ts: new Date().toISOString(), ...entry, eval: null }) + "\n";
-      appendFileSync(join(logDir, "dev.jsonl"), line, "utf-8");
+      if (await adapter.exists(path)) await adapter.append(path, line);
+      else await adapter.write(path, line);
     } catch { /* не блокируем операцию */ }
   }
 
@@ -143,20 +140,19 @@ export class AgentRunner {
     }
   }
 
-  private async updateDevLogEval(vaultRoot: string, score: number, reasoning: string): Promise<void> {
+  private async updateDevLogEval(_vaultRoot: string, score: number, reasoning: string): Promise<void> {
     if (!this.settings.devMode?.enabled) return;
-    if (Platform.isMobile) return;
+    const adapter = this.vaultTools.adapter;
+    const path = "!Logs/dev.jsonl";
     try {
-      const { readFileSync, writeFileSync } = require("node:fs") as typeof import("node:fs");
-      const { join } = require("node:path") as typeof import("node:path");
-      const logPath = join(vaultRoot, "!Logs", "dev.jsonl");
-      const content = readFileSync(logPath, "utf-8");
+      if (!(await adapter.exists(path))) return;
+      const content = await adapter.read(path);
       const lines = content.trimEnd().split("\n");
       const lastIdx = lines.length - 1;
       const last = JSON.parse(lines[lastIdx]);
       last.eval = { score, reasoning };
       lines[lastIdx] = JSON.stringify(last);
-      writeFileSync(logPath, lines.join("\n") + "\n", "utf-8");
+      await adapter.write(path, lines.join("\n") + "\n");
     } catch { /* не блокируем */ }
   }
 }

@@ -1,6 +1,7 @@
 export interface VaultAdapter {
   read(path: string): Promise<string>;
   write(path: string, data: string): Promise<void>;
+  append(path: string, data: string): Promise<void>;
   list(path: string): Promise<{ files: string[]; folders: string[] }>;
   exists(path: string): Promise<boolean>;
   mkdir(path: string): Promise<void>;
@@ -8,7 +9,7 @@ export interface VaultAdapter {
 
 export class VaultTools {
   constructor(
-    private adapter: VaultAdapter,
+    public readonly adapter: VaultAdapter,
     private basePath: string,
   ) {}
 

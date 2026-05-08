@@ -81,3 +81,25 @@ export class Modal {
 export class ItemView {}
 
 export const moment = { locale: () => "en" };
+
+/** Test helper — in-memory VaultAdapter compatible with src/vault-tools.ts. */
+export function createMockAdapter() {
+  const files = new Map<string, string>();
+  const dirs = new Set<string>();
+  return {
+    files,
+    dirs,
+    exists: async (p: string) => files.has(p) || dirs.has(p),
+    read: async (p: string) => {
+      const v = files.get(p);
+      if (v == null) throw new Error(`ENOENT: ${p}`);
+      return v;
+    },
+    write: async (p: string, data: string) => { files.set(p, data); },
+    append: async (p: string, data: string) => {
+      files.set(p, (files.get(p) ?? "") + data);
+    },
+    mkdir: async (p: string) => { dirs.add(p); },
+    list: async (_p: string) => ({ files: [], folders: [] }),
+  };
+}

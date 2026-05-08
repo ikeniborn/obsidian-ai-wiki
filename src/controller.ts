@@ -290,16 +290,19 @@ export class WikiController {
     return new AgentRunner(llm, s, vaultTools, vaultName, domains);
   }
 
-  private async logEvent(vaultRoot: string, sessionId: string, op: WikiOperation, domainId: string | undefined, ev: RunEvent): Promise<void> {
+  private async logEvent(_vaultRoot: string, sessionId: string, op: WikiOperation, domainId: string | undefined, ev: RunEvent): Promise<void> {
     if (!this.plugin.settings.agentLogEnabled) return;
-    if (Platform.isMobile) return;
+    const adapter = this.app.vault.adapter;
+    const dir = "!Logs";
+    const path = `${dir}/agent.jsonl`;
     try {
-      const { join } = require("node:path") as typeof import("node:path");
-      const { appendFileSync, mkdirSync } = require("node:fs") as typeof import("node:fs");
-      const logDir = join(vaultRoot, "!Logs");
-      mkdirSync(logDir, { recursive: true });
-      const line = JSON.stringify({ ts: new Date().toISOString(), session: sessionId, op, domainId, event: ev }) + "\n";
-      appendFileSync(join(logDir, "agent.jsonl"), line, "utf-8");
+      if (!(await adapter.exists(dir))) await adapter.mkdir(dir);
+      const line = JSON.stringify({
+        ts: new Date().toISOString(),
+        session: sessionId, op, domainId, event: ev,
+      }) + "\n";
+      if (await adapter.exists(path)) await adapter.append(path, line);
+      else await adapter.write(path, line);
     } catch { /* не блокируем операцию */ }
   }
 
