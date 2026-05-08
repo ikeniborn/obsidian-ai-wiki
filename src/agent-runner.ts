@@ -6,6 +6,7 @@ import { runFix } from "./phases/fix";
 import { runLintChat } from "./phases/chat";
 import { runInit } from "./phases/init";
 import { runEvaluator } from "./phases/evaluator";
+import { runFormat } from "./phases/format";
 import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, OpKey, RunEvent, RunRequest } from "./types";
 import type { VaultTools } from "./vault-tools";
 
@@ -90,6 +91,11 @@ export class AgentRunner {
       case "init":
         yield* runInit(req.args, this.vaultTools, this.llm, model, domains, this.vaultName, req.signal, opts, req.onFileError);
         break;
+      case "format": {
+        const hasVision = this.settings.backend === "claude-agent";
+        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts);
+        break;
+      }
       default: {
         const start = Date.now();
         yield { kind: "error", message: `Unknown operation: ${req.operation as string}` };

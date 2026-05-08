@@ -73,6 +73,24 @@ describe("AgentRunner", () => {
     expect(events.some((e) => e.kind === "result" || e.kind === "error")).toBe(true);
   });
 
+  it("маршрутизирует operation=format в runFormat", async () => {
+    const formatted = "# OK";
+    const json = JSON.stringify({ report: "r", formatted });
+    const adapter = mockAdapter({ read: vi.fn().mockResolvedValue("# Заметка ClickHouse 1.0") });
+    const vt = new VaultTools(adapter, "/vault");
+    const runner = new AgentRunner(makeLlm(json), baseSettings, vt, "TestVault", []);
+    const events = await collect(
+      runner.run({
+        operation: "format",
+        args: ["note.md"],
+        cwd: "/vault",
+        signal: new AbortController().signal,
+        timeoutMs: 60_000,
+      }),
+    );
+    expect(events.some((e) => e.kind === "format_preview")).toBe(true);
+  });
+
   it("stops early on aborted signal", async () => {
     const vt = new VaultTools(mockAdapter(), "/vault");
     const runner = new AgentRunner(makeLlm("answer"), baseSettings, vt, "TestVault", []);
