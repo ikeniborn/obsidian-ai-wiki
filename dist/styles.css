@@ -228,3 +228,52 @@
 .llm-wiki-folder-dropdown-item:hover {
   background: var(--background-modifier-hover);
 }
+
+.llm-wiki-format-preview {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-secondary);
+}
+.llm-wiki-format-preview h4 {
+  margin: 0 0 8px 0;
+}
+.llm-wiki-format-report {
+  margin-bottom: 8px;
+}
+.llm-wiki-format-warn {
+  margin: 8px 0;
+  padding: 6px 8px;
+  border-radius: 3px;
+  background: var(--background-modifier-error);
+  color: var(--text-on-accent);
+  font-size: 12px;
+}
+.llm-wiki-format-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.llm-wiki-format-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.llm-wiki-format-chat-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  resize: vertical;
+}
+.llm-wiki-format-chat-send-row {
+  display: flex;
+  justify-content: flex-end;
+}

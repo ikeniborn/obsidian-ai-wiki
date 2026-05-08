@@ -454,7 +454,8 @@ export class LlmWikiView extends ItemView {
       cls: "llm-wiki-format-chat-input",
       attr: { placeholder: T.view.formatRefinePlaceholder, rows: "2" },
     });
-    const sendBtn = chatBox.createEl("button", { text: T.view.chatSend });
+    const sendRow = chatBox.createDiv("llm-wiki-format-chat-send-row");
+    const sendBtn = sendRow.createEl("button", { text: T.view.chatSend });
     sendBtn.addEventListener("click", () => {
       const msg = inputEl.value.trim();
       if (!msg) return;
