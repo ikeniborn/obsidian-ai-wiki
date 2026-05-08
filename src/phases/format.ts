@@ -73,8 +73,11 @@ export async function* runFormat(
 
   const baseParams = { ...buildChatParams(model, messages, opts), response_format: { type: "json_object" } };
 
+  let lastFinishReason: string | null = null;
+
   async function* callOnce(p: Record<string, unknown>): AsyncGenerator<RunEvent, string> {
     let acc = "";
+    lastFinishReason = null;
     try {
       const stream = await llm.chat.completions.create(
         { ...p, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
@@ -84,6 +87,8 @@ export async function* runFormat(
         const { reasoning, content } = extractStreamDeltas(chunk);
         if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
         if (content) { acc += content; yield { kind: "assistant_text", delta: content }; }
+        const fr = chunk.choices[0]?.finish_reason;
+        if (fr) lastFinishReason = fr;
       }
     } catch (e) {
       if (signal.aborted || (e as Error).name === "AbortError") return acc;
@@ -91,6 +96,7 @@ export async function* runFormat(
         { ...p, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
       );
       acc = resp.choices[0]?.message?.content ?? "";
+      lastFinishReason = resp.choices[0]?.finish_reason ?? null;
     }
     return acc;
   }
@@ -99,6 +105,11 @@ export async function* runFormat(
   if (signal.aborted) return;
 
   let parsed = extractJsonObject(fullText);
+  if (!parsed && lastFinishReason === "length") {
+    yield { kind: "error", message: "Format: ответ обрезан по лимиту токенов — увеличьте maxTokens (Settings → per-operation → format) или сократите страницу" };
+    yield { kind: "result", durationMs: Date.now() - start, text: fullText };
+    return;
+  }
   if (!parsed) {
     yield { kind: "assistant_text", delta: "\n[JSON невалиден — повторяю запрос]\n" };
     const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
