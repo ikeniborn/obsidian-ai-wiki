@@ -32,6 +32,17 @@ describe("resolveEffective", () => {
     expect(eff.nativeAgent.operations).toEqual(DEFAULT_SETTINGS.nativeAgent.operations);
   });
 
+  it("returns proxy from local when present", () => {
+    const proxy = { enabled: true, url: "http://p:1" };
+    const eff = resolveEffective(DEFAULT_SETTINGS, { iclaudePath: "", proxy });
+    expect(eff.proxy).toEqual(proxy);
+  });
+
+  it("returns disabled default proxy when missing in local", () => {
+    const eff = resolveEffective(DEFAULT_SETTINGS, { iclaudePath: "" });
+    expect(eff.proxy).toEqual({ enabled: false, url: "" });
+  });
+
   it("merges claudeAgent overrides", () => {
     const eff = resolveEffective(DEFAULT_SETTINGS, {
       iclaudePath: "",
