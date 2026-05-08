@@ -1,565 +1,665 @@
 {
-  "vitest.config.ts": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/vitest.config.ts": {
     "mtime": 1777881779.7175083,
     "hash": "cf554e8204719b0eac62ad9ed9c43887"
   },
-  "vitest.mock.ts": {
-    "mtime": 1778045270.5198662,
-    "hash": "a0df6b5360060aaf38bd5638a1b3ab4b"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/esbuild.config.mjs": {
+    "mtime": 1778222920.3258023,
+    "hash": "a9aed09a6a19b1673f3bcc5edf5ba4ad"
   },
-  "esbuild.config.mjs": {
-    "mtime": 1778062835.9365804,
-    "hash": "ca9ba56d50f66c3814895e951d8a3cc2"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/vitest.mock.ts": {
+    "mtime": 1778227272.692577,
+    "hash": "5dc0b0e28d42a5bceb926d6ffa5df199"
   },
-  "src/md-modules.d.ts": {
-    "mtime": 1777881784.0656214,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/md-modules.d.ts": {
+    "mtime": 1778162866.598874,
     "hash": "abffb78177d180c14a8441155503afd2"
   },
-  "src/vault-tools.ts": {
-    "mtime": 1777998816.5758064,
-    "hash": "92e1696ea8d09913fcc3a0e46dee806c"
-  },
-  "src/source-paths.ts": {
-    "mtime": 1778000335.638516,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/source-paths.ts": {
+    "mtime": 1778162866.601874,
     "hash": "d6e92e2fcbd72f21e66d61e36ecfcc65"
   },
-  "src/agent-runner.ts": {
-    "mtime": 1778045270.5168662,
-    "hash": "392cfb4efb0b7024110c1637c6d75890"
-  },
-  "src/stream.ts": {
-    "mtime": 1778045270.5178661,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/stream.ts": {
+    "mtime": 1778162866.6038742,
     "hash": "b2bdbdbf1314f2125a64d49b5d295ade"
   },
-  "src/wiki-path.ts": {
-    "mtime": 1778050837.3775964,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/wiki-path.ts": {
+    "mtime": 1778162866.6058743,
     "hash": "99e2cf4a0fa8cdd04846bc229e5a9567"
   },
-  "src/domain-map.ts": {
-    "mtime": 1778051992.8849082,
-    "hash": "c3937a5056c4c9a4fa6602c64da0c0c4"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/modals.ts": {
+    "mtime": 1778162866.6078744,
+    "hash": "601f7988cd49eeb46022906cfb2749ca"
   },
-  "src/modals.ts": {
-    "mtime": 1778056333.5802047,
-    "hash": "feb4a21e8fc1a5b41f3a2d3e64ce18a1"
-  },
-  "src/claude-cli-client.ts": {
-    "mtime": 1778059707.994111,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/claude-cli-client.ts": {
+    "mtime": 1778162866.6088743,
     "hash": "cf759396d94b0a45c54fc8beffa178fa"
   },
-  "src/view.ts": {
-    "mtime": 1778071439.420142,
-    "hash": "9263f5ef58c38f62f98d92d2b271b5a2"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/types.ts": {
+    "mtime": 1778162866.6198747,
+    "hash": "2730044c1b0b492e9128f96c7146b0ce"
   },
-  "src/controller.ts": {
-    "mtime": 1778131992.5038593,
-    "hash": "14eed538433c23669f87e3c6b7acf70f"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/domain.ts": {
+    "mtime": 1778164656.1678889,
+    "hash": "b217f194f2048cdc91ab5c5a7daa34c0"
   },
-  "src/settings.ts": {
-    "mtime": 1778131992.5128596,
-    "hash": "2592c333f3bf2c23e05f97bf947f63eb"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/domain-store.ts": {
+    "mtime": 1778164861.077274,
+    "hash": "3a5e56cf37f42c23ca8df72631cc17f0"
   },
-  "src/types.ts": {
-    "mtime": 1778135900.2538733,
-    "hash": "c852c39cf8cf57903914975696cdacff"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/view.ts": {
+    "mtime": 1778165573.1699908,
+    "hash": "c1c60f5c7d49fb1cff1a644577cae9f1"
   },
-  "src/main.ts": {
-    "mtime": 1778136064.5632017,
-    "hash": "aac61c7446fa021939f0e29ed3e84ca5"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/i18n.ts": {
+    "mtime": 1778222920.3268025,
+    "hash": "5e951ca74a8bbd5e03cd415748fd7049"
   },
-  "src/i18n.ts": {
-    "mtime": 1778136314.9777982,
-    "hash": "a95c06753343728a85dd3330bc46b6ac"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/vault-tools.ts": {
+    "mtime": 1778226877.1831489,
+    "hash": "5cdc15db51564f7a123e4d986f2888a5"
   },
-  "src/phases/template.ts": {
-    "mtime": 1777884665.7305853,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/agent-runner.ts": {
+    "mtime": 1778226955.9362252,
+    "hash": "e98df3c7cd4dd4d1dba24d864af6d9ba"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/mobile-fetch.ts": {
+    "mtime": 1778227389.1626477,
+    "hash": "f1868a1c3af510e20e4f8067d61fa2b2"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/local-config.ts": {
+    "mtime": 1778228029.995541,
+    "hash": "336fc891bedb418588fa063cdb0b3d64"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/effective-settings.ts": {
+    "mtime": 1778228030.0285418,
+    "hash": "cf08a8b19b17e2a16d33aa974305e287"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/main.ts": {
+    "mtime": 1778228090.1551268,
+    "hash": "a8efe727e524fb07e4eafd5bc44f4875"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/settings.ts": {
+    "mtime": 1778228818.9943805,
+    "hash": "f9008df21c1ae49094b814fd9a68ecfa"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/controller.ts": {
+    "mtime": 1778229128.801579,
+    "hash": "e1d7155fe9c159ae27532bcbda9b2685"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/phases/template.ts": {
+    "mtime": 1778162866.5838737,
     "hash": "9d0f43f65825fb57db42a1591fec7381"
   },
-  "src/phases/llm-utils.ts": {
-    "mtime": 1777889429.8516576,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/phases/llm-utils.ts": {
+    "mtime": 1778162866.5858738,
     "hash": "dda4ae1cdb7b8e6a8f6bd468a51a7e7a"
   },
-  "src/phases/evaluator.ts": {
-    "mtime": 1777898220.4816504,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/phases/evaluator.ts": {
+    "mtime": 1778162866.5878737,
     "hash": "6becfcdfb39e15da29339657627af505"
   },
-  "src/phases/chat.ts": {
-    "mtime": 1777998349.7646031,
-    "hash": "13bbc5951babed5cc3bfd9d6f013e24f"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/phases/chat.ts": {
+    "mtime": 1778162866.5888739,
+    "hash": "bf53a332f41c4bc8b74e175922f91035"
   },
-  "src/phases/ingest.ts": {
-    "mtime": 1778051044.8420343,
-    "hash": "5eb8a0cb70b731f75aab6ea5b515e198"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/phases/ingest.ts": {
+    "mtime": 1778162866.590874,
+    "hash": "9e9e5e5d3e199e0d85a829fd7fafb4dd"
   },
-  "src/phases/query.ts": {
-    "mtime": 1778051060.0664334,
-    "hash": "7c5b8427b6ef765400063e4a4af90dfb"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/phases/lint.ts": {
+    "mtime": 1778162866.594874,
+    "hash": "64848c71e411dc04bfa69f209517c37d"
   },
-  "src/phases/lint.ts": {
-    "mtime": 1778051075.4218361,
-    "hash": "ea9106dd24cd7e867128eb787155d318"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/phases/fix.ts": {
+    "mtime": 1778162866.595874,
+    "hash": "1012a9b2b0a5e52916040944e45c1727"
   },
-  "src/phases/fix.ts": {
-    "mtime": 1778051091.1522489,
-    "hash": "839f08ac4a274656e48363e65b78b27a"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/phases/init.ts": {
+    "mtime": 1778162866.5978742,
+    "hash": "68e4439b73e7817f3d4667154a60df7f"
   },
-  "src/phases/init.ts": {
-    "mtime": 1778051440.7204208,
-    "hash": "59e3d31ba3ca3698e17e1488c984cf07"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/src/phases/query.ts": {
+    "mtime": 1778222920.3278024,
+    "hash": "eb3fafc1a64c42b62f86e2e7888ed997"
   },
-  "tests/agent-runner.integration.test.js": {
-    "mtime": 1777874243.2968953,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/agent-runner.integration.test.js": {
+    "mtime": 1778162866.6398752,
     "hash": "9a6243c4c80767e96c2b7693e2043e6f"
   },
-  "tests/agent-runner.integration.test.ts": {
-    "mtime": 1777874243.2968953,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/agent-runner.integration.test.ts": {
+    "mtime": 1778162866.640875,
     "hash": "958524b8265cfe649866d0ca900a7cb9"
   },
-  "tests/claude-cli-client.test.js": {
-    "mtime": 1777874243.2968953,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/claude-cli-client.test.js": {
+    "mtime": 1778162866.6428752,
     "hash": "a2e16d8690b4f0406cee9a69b522cdf2"
   },
-  "tests/domain-map.test.js": {
-    "mtime": 1777874243.2968953,
-    "hash": "3af0d3bbaa9c1c3bfc06af7952edb82e"
-  },
-  "tests/domain-map.test.ts": {
-    "mtime": 1777874243.2968953,
-    "hash": "8b2d780f347a39032f900f29b9ee390b"
-  },
-  "tests/modals.test.js": {
-    "mtime": 1777874243.2978952,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/modals.test.js": {
+    "mtime": 1778162866.6438754,
     "hash": "8c8b4230f6ec60e7dbe4d11be7490418"
   },
-  "tests/stream.test.js": {
-    "mtime": 1777874243.2988954,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/stream.test.js": {
+    "mtime": 1778162866.6458752,
     "hash": "da66de61b15cece5b994f1be1604c478"
   },
-  "tests/vault-tools.test.js": {
-    "mtime": 1777874243.2988954,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/vault-tools.test.js": {
+    "mtime": 1778162866.6468754,
     "hash": "80fe9cfc30540659fc8f423f1da35887"
   },
-  "tests/template.test.ts": {
-    "mtime": 1777884655.4973192,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/template.test.ts": {
+    "mtime": 1778162866.6488755,
     "hash": "560e20c7f38390d22e5c7618af075486"
   },
-  "tests/evaluator.test.ts": {
-    "mtime": 1777885777.0424922,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/evaluator.test.ts": {
+    "mtime": 1778162866.6498754,
     "hash": "af1cef8899a2cf491c41202f72c7614e"
   },
-  "tests/llm-utils.test.ts": {
-    "mtime": 1777889513.194831,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/llm-utils.test.ts": {
+    "mtime": 1778162866.6518755,
     "hash": "c677226ea09d6abdbebff6a4ee07e2fd"
   },
-  "tests/vault-tools.test.ts": {
-    "mtime": 1777963115.687837,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/vault-tools.test.ts": {
+    "mtime": 1778162866.6528754,
     "hash": "91e4cb107acce56bf0b0c35fb101a7c2"
   },
-  "tests/ingest.test.ts": {
-    "mtime": 1778000335.640516,
-    "hash": "9693f7fd60cb2803fe568aa543984080"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/ingest.test.ts": {
+    "mtime": 1778162866.6548755,
+    "hash": "0f14c75e1c242940810cc905cc60c2fa"
   },
-  "tests/source-paths.test.ts": {
-    "mtime": 1778000335.641516,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/source-paths.test.ts": {
+    "mtime": 1778162866.6568756,
     "hash": "da88350bb57f1da3c5ee2a3da6a3433f"
   },
-  "tests/claude-cli-client.test.ts": {
-    "mtime": 1778045270.5188663,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/claude-cli-client.test.ts": {
+    "mtime": 1778162866.6588757,
     "hash": "c932a03cf64877e857ab7a6f858c93ad"
   },
-  "tests/init-args.test.ts": {
-    "mtime": 1778045270.5188663,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/init-args.test.ts": {
+    "mtime": 1778162866.6608758,
     "hash": "ea518dbb689cf323f9e06eb98a305ee7"
   },
-  "tests/stream.test.ts": {
-    "mtime": 1778045270.5198662,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/stream.test.ts": {
+    "mtime": 1778162866.6618757,
     "hash": "a32f590e9e2f7ccb4d514956f6ca1a9b"
   },
-  "tests/wiki-path.test.ts": {
-    "mtime": 1778050827.8113456,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/wiki-path.test.ts": {
+    "mtime": 1778162866.6638758,
     "hash": "805e37cc17784a7a219ae37ff3964527"
   },
-  "tests/modals.test.ts": {
-    "mtime": 1778051026.512554,
-    "hash": "b9429c0e2573b2ee065e23a763153a46"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/modals.test.ts": {
+    "mtime": 1778162866.6648757,
+    "hash": "50321efe0d12e1d190398a139a339301"
   },
-  "tests/migration.test.ts": {
-    "mtime": 1778051515.7973907,
-    "hash": "7af6833d812eab461368e5aefd2d21c4"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/migration.test.ts": {
+    "mtime": 1778162866.6668758,
+    "hash": "33da158a59e5677d853de5757c1174eb"
   },
-  "tests/phases/ingest.test.js": {
-    "mtime": 1777874243.2978952,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/local-config.test.ts": {
+    "mtime": 1778162866.668876,
+    "hash": "713c401e41e639969819e63b924c6ab2"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/domain.test.ts": {
+    "mtime": 1778162866.673876,
+    "hash": "64f3d854fbf28f7068569f2264cc0e3d"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/domain.test.js": {
+    "mtime": 1778162866.676876,
+    "hash": "f08e6f6c9046bf45af04801190f0d397"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/apply-domain-event.test.ts": {
+    "mtime": 1778164683.4446058,
+    "hash": "ca084fd2e1dd5799235312094da95713"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/domain-store.test.ts": {
+    "mtime": 1778165199.3411636,
+    "hash": "697ab6b917b10a37b00050658bc97753"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/no-fs-imports.test.ts": {
+    "mtime": 1778222920.3278024,
+    "hash": "96aa30dc423598215043090db51eda66"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/controller-build-fail.test.ts": {
+    "mtime": 1778226595.7297277,
+    "hash": "28d06248fdbc1b36ad4ecfa7c66a26a1"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/controller-log-adapter.test.ts": {
+    "mtime": 1778226894.829614,
+    "hash": "fedaf23dbfb2a77013fe50f5fa115a81"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/mobile-fetch.test.ts": {
+    "mtime": 1778227365.6350274,
+    "hash": "26b8c92ce56f6c9f7a629f686f20a0fa"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/main-mobile.test.ts": {
+    "mtime": 1778227779.8989482,
+    "hash": "33a271fd90870527617353238845abae"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/effective-settings.test.ts": {
+    "mtime": 1778228030.0665429,
+    "hash": "8a1c04099215ad1ee225e82b52d84499"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/main-migration.test.ts": {
+    "mtime": 1778228176.6314065,
+    "hash": "7f9392dabc20078dde2a5af0de6a63a5"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/controller-mobile.test.ts": {
+    "mtime": 1778228859.2094448,
+    "hash": "d2dfd289c6d10e9358dcb168495e3dfe"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/phases/ingest.test.js": {
+    "mtime": 1778162866.626875,
     "hash": "0e173ef78fefa66a8d4eeacd44485360"
   },
-  "tests/phases/init.test.js": {
-    "mtime": 1777874243.2978952,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/phases/init.test.js": {
+    "mtime": 1778162866.6288748,
     "hash": "9d8164e46ce6e5fd9059880880023d6b"
   },
-  "tests/phases/lint.test.js": {
-    "mtime": 1777874243.2978952,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/phases/lint.test.js": {
+    "mtime": 1778162866.629875,
     "hash": "e89a91ab2c3d77e1ca59915e2cc34461"
   },
-  "tests/phases/query.test.js": {
-    "mtime": 1777874243.2978952,
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/phases/query.test.js": {
+    "mtime": 1778162866.631875,
     "hash": "c078a465949ee44958327861fe463848"
   },
-  "tests/phases/ingest.test.ts": {
-    "mtime": 1778051007.8560648,
-    "hash": "8ac25cca4c6340360995dc1bbef1e008"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/phases/ingest.test.ts": {
+    "mtime": 1778162866.632875,
+    "hash": "4980a6dd7ca77c8a5d8ecc220907a7f8"
   },
-  "tests/phases/query.test.ts": {
-    "mtime": 1778051007.8890657,
-    "hash": "832e2a9dc4f26963be589438baf4cc6f"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/phases/query.test.ts": {
+    "mtime": 1778162866.634875,
+    "hash": "815c8a1a173f3a8c58010999ff3f6d54"
   },
-  "tests/phases/lint.test.ts": {
-    "mtime": 1778051007.9230666,
-    "hash": "4fe8d47b4adb75eb8cc6e53fb001c4bc"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/phases/lint.test.ts": {
+    "mtime": 1778162866.635875,
+    "hash": "aee125dfa7df692bf472b499b0e3d928"
   },
-  "tests/phases/init.test.ts": {
-    "mtime": 1778051167.574254,
-    "hash": "51f0aa29dcaf3dcb251ca16ef99fecd2"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/tests/phases/init.test.ts": {
+    "mtime": 1778162866.637875,
+    "hash": "62196204f15564cbf4010abd3b0e932c"
   },
-  "scripts/dspy/optimize.py": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/scripts/dspy/optimize.py": {
     "mtime": 1777896231.006548,
     "hash": "7835ff54e18b18a08fc61793c185988c"
   },
-  "scripts/dspy/lib/__init__.py": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/scripts/dspy/lib/__init__.py": {
     "mtime": 1777892477.6203053,
     "hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
-  "scripts/dspy/lib/loader.py": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/scripts/dspy/lib/loader.py": {
     "mtime": 1777893551.0413318,
     "hash": "3750bb1ec18d70a6f3c502adcfbabccf"
   },
-  "scripts/dspy/lib/signature.py": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/scripts/dspy/lib/signature.py": {
     "mtime": 1777894469.2253435,
     "hash": "e482827ddf7c590dc48201f507580d61"
   },
-  "scripts/dspy/lib/optimizer.py": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/scripts/dspy/lib/optimizer.py": {
     "mtime": 1777895061.4448814,
     "hash": "8153eac7b9f318aa7c2928c14797054d"
   },
-  "scripts/dspy/lib/writer.py": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/scripts/dspy/lib/writer.py": {
     "mtime": 1777895236.1164618,
     "hash": "ee86f07f288a62da42eaee06860d27d1"
   },
-  "scripts/dspy/lib/backend.py": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/scripts/dspy/lib/backend.py": {
     "mtime": 1778131992.5018592,
     "hash": "4dead88b619d3dd283d7eeb61440f97a"
   },
-  "scripts/dspy/tests/__init__.py": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/scripts/dspy/tests/__init__.py": {
     "mtime": 1777892477.7433085,
     "hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
-  "scripts/dspy/tests/test_loader.py": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/scripts/dspy/tests/test_loader.py": {
     "mtime": 1777893546.1642044,
     "hash": "2868b548a5b624b6acb4955dbcf9423b"
   },
-  "scripts/dspy/tests/test_signature.py": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/scripts/dspy/tests/test_signature.py": {
     "mtime": 1777894614.3491518,
     "hash": "3abfdf85a4a867f25590ad0377a4f093"
   },
-  "scripts/dspy/tests/test_optimizer.py": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/scripts/dspy/tests/test_optimizer.py": {
     "mtime": 1777895027.6689959,
     "hash": "4b09d57f8fa93a92f75018713f8d786e"
   },
-  "scripts/dspy/tests/test_writer.py": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/scripts/dspy/tests/test_writer.py": {
     "mtime": 1777895230.487314,
     "hash": "143bb66c6b2fb739cc9ac39343e53036"
   },
-  "scripts/dspy/tests/test_backend.py": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/scripts/dspy/tests/test_backend.py": {
     "mtime": 1778131992.5018592,
     "hash": "1015bd4ab4a42ff5d28f7892f7a2cae6"
   },
-  "README.md": {
-    "mtime": 1778071439.4141417,
-    "hash": "9d72c83829dc25d2df25051b72444fd1"
-  },
-  "CLAUDE.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/CLAUDE.md": {
     "mtime": 1778136457.8375614,
     "hash": "f22f004fe22cec3b7a6b3c51d8968c52"
   },
-  "docs/dev.md": {
-    "mtime": 1777874243.287895,
-    "hash": "f15630c6e2a6728ed09cf397172039fc"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/README.md": {
+    "mtime": 1778165758.5348654,
+    "hash": "616d2f1fd3fc8c538e9706bf37de8cf1"
   },
-  "docs/optimize.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/optimize.md": {
     "mtime": 1777909125.0981061,
     "hash": "0893cacf5a6e5e9b87fa3af9ec706561"
   },
-  "docs/publishing.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/publishing.md": {
     "mtime": 1778131992.5008593,
     "hash": "c74decc854feae76bafff9c49973080f"
   },
-  "docs/superpowers/plans/2026-04-26-progress-display.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/dev.md": {
+    "mtime": 1778222920.3248024,
+    "hash": "3e7349ec77dff37f44294aa20724f503"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/mobile-cloud-ollama.md": {
+    "mtime": 1778222920.3258023,
+    "hash": "0eebbcec8fdba378a98175c76c95ef13"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-04-26-progress-display.md": {
     "mtime": 1777874243.287895,
     "hash": "e6aa726e857f02341b12a777bc16fb67"
   },
-  "docs/superpowers/plans/2026-04-27-interactive-mode.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-04-27-interactive-mode.md": {
     "mtime": 1777874243.2888951,
     "hash": "2ea81ff5a64f29cb8574b75b453a0f92"
   },
-  "docs/superpowers/plans/2026-04-27-multi-vault-domain-maps.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-04-27-multi-vault-domain-maps.md": {
     "mtime": 1777874243.2888951,
     "hash": "fb47da0e35ef76ee0ce59012d6946c69"
   },
-  "docs/superpowers/plans/2026-04-28-domain-map-native-agent.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-04-28-domain-map-native-agent.md": {
     "mtime": 1777874243.2888951,
     "hash": "5a83f50d41942c50ba7529a1f06dc983"
   },
-  "docs/superpowers/plans/2026-04-28-native-agent.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-04-28-native-agent.md": {
     "mtime": 1777874243.2888951,
     "hash": "faa105cd55e4110c96eec5c6815d386c"
   },
-  "docs/superpowers/plans/2026-04-28-obsidian-review-fixes.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-04-28-obsidian-review-fixes.md": {
     "mtime": 1777874243.2888951,
     "hash": "63e2f9fef487ade2816bd2f9a5f4f737"
   },
-  "docs/superpowers/plans/2026-04-28-readme-rewrite.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-04-28-readme-rewrite.md": {
     "mtime": 1777874243.2888951,
     "hash": "62628896d47e0f8b0def866cdc70ab7d"
   },
-  "docs/superpowers/plans/2026-04-29-claude-agent-backend.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-04-29-claude-agent-backend.md": {
     "mtime": 1777874243.289895,
     "hash": "21121cd217dcec46094f9e5a60be3c93"
   },
-  "docs/superpowers/plans/2026-04-29-per-operation-models.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-04-29-per-operation-models.md": {
     "mtime": 1777874243.289895,
     "hash": "d68e661c20dae56be57b7ce4a0f6b54d"
   },
-  "docs/superpowers/plans/2026-04-30-domain-map-in-vault.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-04-30-domain-map-in-vault.md": {
     "mtime": 1777874243.289895,
     "hash": "dc02d06b41591b30e549d33cedfe4d03"
   },
-  "docs/superpowers/plans/2026-05-04-chat-feedback.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-04-chat-feedback.md": {
     "mtime": 1777878518.1598024,
     "hash": "dc2d7f409b672e0c95f526c908b822b7"
   },
-  "docs/superpowers/plans/2026-05-04-wiki-init-root-files.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-04-wiki-init-root-files.md": {
     "mtime": 1777881577.725255,
     "hash": "c0d0847d3ae6a81406dc0c2be0538211"
   },
-  "docs/superpowers/plans/2026-05-04-dev-mode-prompt-management.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-04-dev-mode-prompt-management.md": {
     "mtime": 1777884457.8931785,
     "hash": "ce4c47c9f5821c39f5ccbc4b42c6b177"
   },
-  "docs/superpowers/plans/2026-05-04-agent-base-contract.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-04-agent-base-contract.md": {
     "mtime": 1777889172.8979573,
     "hash": "395986fd4ee1ebcd2da2ccfa0c77d403"
   },
-  "docs/superpowers/plans/2026-05-04-dspy-prompt-optimization.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-04-dspy-prompt-optimization.md": {
     "mtime": 1777892210.3203313,
     "hash": "818cfc6e702745f0c39d68ef609942de"
   },
-  "docs/superpowers/plans/2026-05-05-devmode-logdir.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-05-devmode-logdir.md": {
     "mtime": 1777960952.0796077,
     "hash": "095d7714f88edc0e36a12d23f5411a18"
   },
-  "docs/superpowers/plans/2026-05-05-source-path-auto-add.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-05-source-path-auto-add.md": {
     "mtime": 1777962862.913268,
     "hash": "f58daddcd00ce7d31da46e255771fcc0"
   },
-  "docs/superpowers/plans/2026-05-05-e2big-fix.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-05-e2big-fix.md": {
     "mtime": 1777964488.154514,
     "hash": "95f285cfb7e623328dfe1d505273e237"
   },
-  "docs/superpowers/plans/2026-05-05-links-frontmatter.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-05-links-frontmatter.md": {
     "mtime": 1777967181.3675516,
     "hash": "e81e3427b53d0ed0a1d50c0c08d8929c"
   },
-  "docs/superpowers/plans/2026-05-05-domain-form-ux.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-05-domain-form-ux.md": {
     "mtime": 1777974157.1955605,
     "hash": "cda296a31bc58950cdc8fc3f23f1bf8b"
   },
-  "docs/superpowers/plans/2026-05-05-vault-relative-paths.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-05-vault-relative-paths.md": {
     "mtime": 1777974522.8831036,
     "hash": "5d173895989d5aef88e54869ad2c3403"
   },
-  "docs/superpowers/plans/2026-05-05-chat-after-all-operations.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-05-chat-after-all-operations.md": {
     "mtime": 1777977078.2788458,
     "hash": "cf60a74f85240faad5e7bfbf8ba133f2"
   },
-  "docs/superpowers/plans/2026-05-05-chat-session-resume.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-05-chat-session-resume.md": {
     "mtime": 1778045270.509866,
     "hash": "67bafd5d07bfb919b3dedacb629c326f"
   },
-  "docs/superpowers/plans/2026-05-06-domain-populate.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-06-domain-populate.md": {
     "mtime": 1778045270.509866,
     "hash": "aa8398192ac0334e0f13beb8d82fe13b"
   },
-  "docs/superpowers/plans/2026-05-06-schema-sync-wiki-path-settings-lock.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-06-schema-sync-wiki-path-settings-lock.md": {
     "mtime": 1778050315.506917,
     "hash": "88ea8ee85d71d8d841ebde13c04fb8cf"
   },
-  "docs/superpowers/plans/2026-05-06-readme-value-devlink.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-06-readme-value-devlink.md": {
     "mtime": 1778062780.9371247,
     "hash": "71e778aed0445ceacf639a3bd194ec04"
   },
-  "docs/superpowers/plans/2026-05-07-fixed-log-paths.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-07-fixed-log-paths.md": {
     "mtime": 1778134813.8331995,
     "hash": "3204e516978cc1f818896e9c8d77eade"
   },
-  "docs/superpowers/specs/2026-04-26-progress-display-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-07-clickable-links.md": {
+    "mtime": 1778153506.1106617,
+    "hash": "43ec2b2b0a330015082537c11d1b88ae"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-07-domain-map-vault-storage.md": {
+    "mtime": 1778162917.45521,
+    "hash": "b584f4e0facf7bdf7549ff059fdeb9c7"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-07-mobile-query.md": {
+    "mtime": 1778222920.3258023,
+    "hash": "344548399be29413294a5d94dff6cac8"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-08-mobile-fixes.md": {
+    "mtime": 1778225380.2196844,
+    "hash": "0725a154fcaa0c3ff866e839d0ae539b"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/plans/2026-05-08-format-operation.md": {
+    "mtime": 1778230622.7200825,
+    "hash": "64a44df681c479965a259228344fc563"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-04-26-progress-display-design.md": {
     "mtime": 1777874243.289895,
     "hash": "51f6771eadb87abcf9d7d9c77ff07baa"
   },
-  "docs/superpowers/specs/2026-04-27-interactive-mode-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-04-27-interactive-mode-design.md": {
     "mtime": 1777874243.289895,
     "hash": "b8349508d2d963f127916c5668ee8c37"
   },
-  "docs/superpowers/specs/2026-04-27-multi-vault-domain-maps-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-04-27-multi-vault-domain-maps-design.md": {
     "mtime": 1777874243.289895,
     "hash": "cc64028338053a87af61639c41a28b6e"
   },
-  "docs/superpowers/specs/2026-04-28-domain-map-native-agent-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-04-28-domain-map-native-agent-design.md": {
     "mtime": 1777874243.289895,
     "hash": "bf3268addabdc7b254d1e781d4136643"
   },
-  "docs/superpowers/specs/2026-04-28-native-agent-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-04-28-native-agent-design.md": {
     "mtime": 1777874243.2908952,
     "hash": "4a66e4fde28907827c08c3b62cdb396b"
   },
-  "docs/superpowers/specs/2026-04-28-obsidian-review-fixes-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-04-28-obsidian-review-fixes-design.md": {
     "mtime": 1777874243.2908952,
     "hash": "b059e96eb564272ecd1de72d4ac021ac"
   },
-  "docs/superpowers/specs/2026-04-28-readme-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-04-28-readme-design.md": {
     "mtime": 1777874243.2908952,
     "hash": "f71c26db4fd0613eed0e099aaa5b2a0b"
   },
-  "docs/superpowers/specs/2026-04-29-claude-agent-backend-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-04-29-claude-agent-backend-design.md": {
     "mtime": 1777874243.2908952,
     "hash": "f42286dc4eb0c07e10129c99189e9048"
   },
-  "docs/superpowers/specs/2026-04-29-per-operation-models-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-04-29-per-operation-models-design.md": {
     "mtime": 1777874243.2908952,
     "hash": "e381fc8bef3bed9315d763860e7d349b"
   },
-  "docs/superpowers/specs/2026-04-30-domain-map-in-vault-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-04-30-domain-map-in-vault-design.md": {
     "mtime": 1777874243.2908952,
     "hash": "70d98cc328bfbf7477a661eabae668a2"
   },
-  "docs/superpowers/specs/2026-05-04-chat-feedback-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-04-chat-feedback-design.md": {
     "mtime": 1777878212.2918785,
     "hash": "5ed84823f9d0434aa9996b9bbb66b3a8"
   },
-  "docs/superpowers/specs/2026-05-04-wiki-init-root-files-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-04-wiki-init-root-files-design.md": {
     "mtime": 1777880472.0585082,
     "hash": "a7c850f654f647e214ffee99ad35cf99"
   },
-  "docs/superpowers/specs/2026-05-04-dev-mode-prompt-management-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-04-dev-mode-prompt-management-design.md": {
     "mtime": 1777883937.5246367,
     "hash": "80c9e622449a5f8b34132450fd6965b8"
   },
-  "docs/superpowers/specs/2026-05-04-agent-base-contract-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-04-agent-base-contract-design.md": {
     "mtime": 1777887746.5187724,
     "hash": "e96724bb6ab69de7d2ce267738f12f72"
   },
-  "docs/superpowers/specs/2026-05-04-dspy-prompt-optimization-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-04-dspy-prompt-optimization-design.md": {
     "mtime": 1777890718.4753659,
     "hash": "1ef382d49e52666f12e3d8a3e3324cd9"
   },
-  "docs/superpowers/specs/2026-05-05-devmode-logdir-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-05-devmode-logdir-design.md": {
     "mtime": 1777960609.737714,
     "hash": "9a6d60850b315fd4134ca52ca9189488"
   },
-  "docs/superpowers/specs/2026-05-05-e2big-fix-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-05-e2big-fix-design.md": {
     "mtime": 1777962475.8712103,
     "hash": "507a87fb260f1bebf3c6937577e94f81"
   },
-  "docs/superpowers/specs/2026-05-05-links-frontmatter-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-05-links-frontmatter-design.md": {
     "mtime": 1777966453.909631,
     "hash": "3a16ba338ded7561156a3f7761829d7c"
   },
-  "docs/superpowers/specs/2026-05-05-domain-form-ux-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-05-domain-form-ux-design.md": {
     "mtime": 1777970968.766385,
     "hash": "d1d0cb8b9b1be10b16647710038ee2b1"
   },
-  "docs/superpowers/specs/2026-05-05-vault-relative-paths-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-05-vault-relative-paths-design.md": {
     "mtime": 1777971603.9589517,
     "hash": "6d00160beeeb67e9df0202427ddc53d2"
   },
-  "docs/superpowers/specs/2026-05-05-chat-after-all-operations-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-05-chat-after-all-operations-design.md": {
     "mtime": 1777976834.7674828,
     "hash": "63d44aa9cec82a7bd19147a09858b062"
   },
-  "docs/superpowers/specs/2026-05-05-domain-populate-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-05-domain-populate-design.md": {
     "mtime": 1778045270.509866,
     "hash": "a881ff2115deb5f2c1150a33632eb8aa"
   },
-  "docs/superpowers/specs/2026-05-06-schema-sync-wiki-path-settings-lock-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-06-schema-sync-wiki-path-settings-lock-design.md": {
     "mtime": 1778047945.2168539,
     "hash": "58eb51ba50c74f423731abdd670592f1"
   },
-  "docs/superpowers/specs/2026-05-06-readme-value-devlink-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-06-readme-value-devlink-design.md": {
     "mtime": 1778062522.1262748,
     "hash": "2e1b8b7e27c143a29418e14e1638ff97"
   },
-  "docs/superpowers/specs/2026-05-07-fixed-log-paths-design.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-07-fixed-log-paths-design.md": {
     "mtime": 1778133246.4078765,
     "hash": "1d0dbda5508c2b87480fe8341daf9cfb"
   },
-  "docs/architecture/overview.yaml": {
-    "mtime": 1778046319.6343198,
-    "hash": "f7f67565ea57b35afe65409052921abf"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-07-clickable-links-design.md": {
+    "mtime": 1778149388.4273136,
+    "hash": "5108f74e62559aeb40ea30eef34455b4"
   },
-  "docs/architecture/README.md": {
-    "mtime": 1778046403.5485153,
-    "hash": "cb5f53a5cbb018483e7f543cac6d569c"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-07-domain-map-vault-storage-design.md": {
+    "mtime": 1778162917.45521,
+    "hash": "7974e0eab709c62b1b55cb579db91247"
   },
-  "docs/architecture/diagrams/dependency-graph.md": {
-    "mtime": 1778046335.3297303,
-    "hash": "b0f6c1eafc129b4cf90f4950a00d8358"
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-07-mobile-query-design.md": {
+    "mtime": 1778222920.3258023,
+    "hash": "e934514a58685a4c8353f5362b3077f0"
   },
-  "docs/architecture/diagrams/data-flow.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-08-mobile-fixes-design.md": {
+    "mtime": 1778224755.1691952,
+    "hash": "1c51bd0ed0884ad4a3bccb761a4ae454"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/superpowers/specs/2026-05-08-format-operation-design.md": {
+    "mtime": 1778230198.5648732,
+    "hash": "ed1d98232c34ad34bc473d2964a979e2"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/architecture/overview.yaml": {
+    "mtime": 1778229931.703817,
+    "hash": "45944050bfa43d739d5a6a03d6c74274"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/architecture/README.md": {
+    "mtime": 1778230020.662169,
+    "hash": "0fab3f372f61b4541c66f31787447002"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/architecture/diagrams/data-flow.md": {
     "mtime": 1778046367.227565,
     "hash": "2ed5e8ced6a7d329e84aa77018394316"
   },
-  "templates/_schema.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/docs/architecture/diagrams/dependency-graph.md": {
+    "mtime": 1778222920.3248024,
+    "hash": "c6cdb62516718f9d54ca9bcec3267952"
+  },
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/templates/_schema.md": {
     "mtime": 1778131992.5128596,
     "hash": "0fbadb0c7f121b6ca63ff49a9f0bc471"
   },
-  "prompts/query.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/prompts/query.md": {
     "mtime": 1777884820.2366042,
     "hash": "a60329456888705ceaf2087b1984e0d1"
   },
-  "prompts/lint.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/prompts/lint.md": {
     "mtime": 1777884823.3746858,
     "hash": "f3e0367a3d23c4e3e097bab22503bd20"
   },
-  "prompts/fix.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/prompts/fix.md": {
     "mtime": 1777884830.9298823,
     "hash": "33713ecc3495ff3844bfac58fbedf8b0"
   },
-  "prompts/init.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/prompts/init.md": {
     "mtime": 1777884838.3440752,
     "hash": "f5436f5446dec02a1ee420247aadc5f9"
   },
-  "prompts/evaluator.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/prompts/evaluator.md": {
     "mtime": 1777884842.8601925,
     "hash": "9fe1b583429e2c7bc06751e64053f9d8"
   },
-  "prompts/base.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/prompts/base.md": {
     "mtime": 1777889302.8043447,
     "hash": "c429cd10245c8de0d3ad8d8f3aad304b"
   },
-  "prompts/chat.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/prompts/chat.md": {
     "mtime": 1777998222.703276,
     "hash": "0a16ae24cd9a358ccf42b5b4f2b6c9e0"
   },
-  "prompts/ingest.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/prompts/ingest.md": {
     "mtime": 1778131992.5008593,
     "hash": "6ad91e7f83fbeb5e19d5891f4e4576b5"
   },
-  "prompts/optimized/ingest.md": {
-    "mtime": 1778131992.5008593,
-    "hash": "fa052aaf393b630e365279c66e51b287"
-  },
-  "scripts/dspy/README.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/scripts/dspy/README.md": {
     "mtime": 1778045270.5168662,
     "hash": "9a740b7601f415692d8ef916c30560af"
   },
-  "scripts/dspy/CLAUDE.md": {
+  "/home/UF.RT.RU/i.y.tischenko/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Git/obsidian-llm-wiki/scripts/dspy/CLAUDE.md": {
     "mtime": 1778131992.5018592,
     "hash": "90d83e6bc05aa57101464b875baa1f4e"
   }
