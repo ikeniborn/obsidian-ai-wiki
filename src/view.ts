@@ -45,6 +45,8 @@ export class LlmWikiView extends ItemView {
   private initBtn!: HTMLButtonElement;
   private ingestBtn!: HTMLButtonElement;
   private lintBtn!: HTMLButtonElement;
+  private formatBtn!: HTMLButtonElement;
+  private formatPreviewSection: HTMLElement | null = null;
   private fixChatEl: HTMLElement | null = null;
   private lastContext: { operation: WikiOperation; domainId: string | undefined; report: string } | null = null;
   // Chat state
@@ -112,6 +114,8 @@ export class LlmWikiView extends ItemView {
     const actionRow = domainBox.createDiv("llm-wiki-domain-actions");
     this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
     this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
+    this.formatBtn = actionRow.createEl("button", { text: T.view.format });
+    this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
     this.ingestBtn.addEventListener("click", () => {
       const file = this.plugin.app.workspace.getActiveFile();
       if (!file) { new Notice(i18n().view.noActiveFile); return; }
@@ -260,6 +264,7 @@ export class LlmWikiView extends ItemView {
     this.initBtn.disabled = true;
     this.ingestBtn.disabled = true;
     this.lintBtn.disabled = true;
+    this.formatBtn.disabled = true;
     this.fixChatEl?.remove();
     this.fixChatEl = null;
     this.chatSection?.remove();
@@ -291,6 +296,15 @@ export class LlmWikiView extends ItemView {
   }
 
   appendEvent(ev: RunEvent): void {
+    if (ev.kind === "format_preview") {
+      this.renderFormatPreview(ev.tempPath, ev.report, ev.missingTokens);
+      return;
+    }
+    if (ev.kind === "format_applied" || ev.kind === "format_cancelled") {
+      this.formatPreviewSection?.remove();
+      this.formatPreviewSection = null;
+      return;
+    }
     if (ev.kind === "init_start") {
       this.progressTotal = ev.totalFiles;
       this.progressDone = 0;
@@ -400,6 +414,61 @@ export class LlmWikiView extends ItemView {
     this.updateMetrics();
   }
 
+  private renderFormatPreview(tempPath: string, report: string, missing: string[]): void {
+    const T = i18n();
+    this.formatPreviewSection?.remove();
+
+    const root = this.containerEl.children[1] as HTMLElement;
+    this.formatPreviewSection = root.createDiv("llm-wiki-format-preview");
+
+    this.formatPreviewSection.createEl("h4", { text: T.view.formatPreviewHeader });
+
+    const link = this.formatPreviewSection.createEl("a", {
+      text: `📄 ${tempPath}`,
+      cls: "internal-link",
+      attr: { href: tempPath, "data-href": tempPath },
+    });
+    void link;
+    registerLinkHandler(this.formatPreviewSection, this.app);
+
+    const reportEl = this.formatPreviewSection.createDiv("llm-wiki-format-report");
+    const comp = new Component();
+    comp.load();
+    void MarkdownRenderer.render(this.app, report, reportEl, "", comp);
+
+    if (missing.length > 0) {
+      const warn = this.formatPreviewSection.createDiv("llm-wiki-format-warn");
+      warn.setText(T.view.formatMissingTokens(missing.length));
+    }
+
+    const btnRow = this.formatPreviewSection.createDiv("llm-wiki-format-actions");
+    const applyBtn = btnRow.createEl("button", { text: T.view.formatApply, cls: "mod-cta" });
+    applyBtn.disabled = missing.length > 0;
+    applyBtn.addEventListener("click", () => void this.plugin.controller.formatApply());
+
+    const cancelBtn = btnRow.createEl("button", { text: T.view.formatCancelBtn, cls: "mod-warning" });
+    cancelBtn.addEventListener("click", () => void this.plugin.controller.formatCancel());
+
+    const chatBox = this.formatPreviewSection.createDiv("llm-wiki-format-chat");
+    const inputEl = chatBox.createEl("textarea", {
+      cls: "llm-wiki-format-chat-input",
+      attr: { placeholder: T.view.formatRefinePlaceholder, rows: "2" },
+    });
+    const sendBtn = chatBox.createEl("button", { text: T.view.chatSend });
+    sendBtn.addEventListener("click", () => {
+      const msg = inputEl.value.trim();
+      if (!msg) return;
+      inputEl.value = "";
+      void this.plugin.controller.formatRefine(msg);
+    });
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendBtn.click();
+      }
+    });
+  }
+
   async finish(entry: RunHistoryEntry): Promise<void> {
     this.state = entry.status;
     this.statusEl.setText(this.statusLabel(entry));
@@ -409,6 +478,7 @@ export class LlmWikiView extends ItemView {
     this.initBtn.disabled = false;
     this.ingestBtn.disabled = false;
     this.lintBtn.disabled = false;
+    this.formatBtn.disabled = false;
     this.fixChatEl?.remove();
     this.fixChatEl = null;
     if (this.tickHandle !== null) { window.clearInterval(this.tickHandle); this.tickHandle = null; }
