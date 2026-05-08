@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { migrateLegacyData } from "../src/main";
+import { migrateLegacyData, migrateToLocalV1 } from "../src/main";
 import type { DomainEntry } from "../src/domain";
 
 function makePlugin(initial: any, adapter: Record<string, any>) {
@@ -121,5 +121,50 @@ describe("migrateLegacyData", () => {
       new LocalConfigStore(plugin),
     )).resolves.toBeUndefined();
     expect(plugin.saveData).not.toHaveBeenCalled();
+  });
+});
+
+describe("migrateToLocalV1", () => {
+  it("copies backend+API to local.json and scrubs apiKey", async () => {
+    const local: any = { iclaudePath: "" };
+    const plugin: any = {
+      settings: {
+        backend: "native-agent",
+        nativeAgent: {
+          baseUrl: "https://x/v1", apiKey: "secret", model: "m",
+          temperature: 0.2, topP: null, numCtx: null,
+          perOperation: false, operations: {},
+        },
+        claudeAgent: { model: "sonnet", allowedTools: "", perOperation: false, operations: {} },
+        agentLogEnabled: true,
+      },
+      saveSettings: vi.fn().mockResolvedValue(undefined),
+    };
+    const store: any = {
+      load: vi.fn().mockImplementation(async () => local),
+      save: vi.fn().mockImplementation(async (patch: any) => { Object.assign(local, patch); }),
+    };
+    await migrateToLocalV1(plugin, store);
+    expect(local.migrated_v1).toBe(true);
+    expect(local.nativeAgent.apiKey).toBe("secret");
+    expect(local.backend).toBe("native-agent");
+    expect(plugin.settings.nativeAgent.apiKey).toBe("");
+    expect(plugin.saveSettings).toHaveBeenCalled();
+  });
+
+  it("is idempotent (no-op when migrated_v1 already true)", async () => {
+    const local: any = { iclaudePath: "", migrated_v1: true, nativeAgent: { apiKey: "old" } };
+    const plugin: any = {
+      settings: { nativeAgent: { apiKey: "should-not-touch" } },
+      saveSettings: vi.fn(async () => { throw new Error("must not call saveSettings"); }),
+    };
+    const store: any = {
+      load: vi.fn().mockImplementation(async () => local),
+      save: vi.fn(async () => { throw new Error("must not call save"); }),
+    };
+    await migrateToLocalV1(plugin, store);
+    expect(plugin.settings.nativeAgent.apiKey).toBe("should-not-touch");
+    expect(store.save).not.toHaveBeenCalled();
+    expect(plugin.saveSettings).not.toHaveBeenCalled();
   });
 });

@@ -21,6 +21,7 @@ export default class LlmWikiPlugin extends Plugin {
     this.localConfigStore = new LocalConfigStore(this);
     await migrateLegacyData(this, this.domainStore, this.localConfigStore);
     await this.loadSettings();
+    await migrateToLocalV1(this, this.localConfigStore);
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
     this.controller.onBusyChange = () => this.settingTab?.display();
 
@@ -243,4 +244,35 @@ export async function migrateLegacyData(
   }
 
   if (dirty) await plugin.saveData(data);
+}
+
+export async function migrateToLocalV1(
+  plugin: LlmWikiPlugin,
+  localConfigStore: LocalConfigStore,
+): Promise<void> {
+  const local = await localConfigStore.load();
+  if (local.migrated_v1) return;
+
+  const s = plugin.settings;
+  await localConfigStore.save({
+    backend: s.backend,
+    nativeAgent: {
+      baseUrl: s.nativeAgent.baseUrl,
+      apiKey: s.nativeAgent.apiKey,
+      model: s.nativeAgent.model,
+      temperature: s.nativeAgent.temperature,
+      topP: s.nativeAgent.topP,
+      numCtx: s.nativeAgent.numCtx,
+    },
+    claudeAgent: {
+      model: s.claudeAgent.model,
+      allowedTools: s.claudeAgent.allowedTools,
+    },
+    agentLogEnabled: s.agentLogEnabled,
+    migrated_v1: true,
+  });
+
+  // Scrub apiKey from synced data.json — sensitive.
+  s.nativeAgent.apiKey = "";
+  await plugin.saveSettings();
 }

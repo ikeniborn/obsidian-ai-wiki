@@ -2,6 +2,21 @@ import type { Plugin } from "obsidian";
 
 export interface LocalConfig {
   iclaudePath: string;
+  backend?: "claude-agent" | "native-agent";
+  agentLogEnabled?: boolean;
+  claudeAgent?: {
+    model: string;
+    allowedTools: string;
+  };
+  nativeAgent?: {
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+    temperature: number;
+    topP: number | null;
+    numCtx: number | null;
+  };
+  migrated_v1?: boolean;
 }
 
 const DEFAULTS: LocalConfig = { iclaudePath: "" };
