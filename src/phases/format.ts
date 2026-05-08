@@ -9,6 +9,15 @@ import { extractJsonObject, missingTokens } from "./format-utils";
 
 const TEMP_FOLDER = "!Temp";
 
+function extractImagePaths(md: string): string[] {
+  const out: string[] = [];
+  for (const m of md.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)) {
+    const url = m[1].trim();
+    if (!url.startsWith("http")) out.push(url);
+  }
+  return out;
+}
+
 export async function* runFormat(
   args: string[],
   vaultTools: VaultTools,
@@ -41,9 +50,22 @@ export async function* runFormat(
 
   const userInitial = `Исходный файл: ${filePath}\n---\n${original}`;
 
+  const imagePaths = hasVision ? extractImagePaths(original) : [];
+
+  const userContent: OpenAI.Chat.ChatCompletionContentPart[] | string =
+    imagePaths.length > 0
+      ? [
+          { type: "text", text: userInitial },
+          ...imagePaths.map<OpenAI.Chat.ChatCompletionContentPart>((p) => ({
+            type: "image_url",
+            image_url: { url: p },
+          })),
+        ]
+      : userInitial;
+
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemContent },
-    { role: "user", content: userInitial },
+    { role: "user", content: userContent } as OpenAI.Chat.ChatCompletionMessageParam,
     ...chatHistory.map((m) => ({ role: m.role, content: m.content } as OpenAI.Chat.ChatCompletionMessageParam)),
   ];
 

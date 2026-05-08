@@ -92,6 +92,38 @@ describe("runFormat", () => {
     expect(adapter.write).not.toHaveBeenCalled();
   });
 
+  it("при hasVision=true и наличии image-ссылки добавляет image_url content blocks", async () => {
+    const sampleWithImg = SAMPLE + "\n\n![схема](images/diagram.png)\n";
+    const formatted = sampleWithImg;
+    const json = JSON.stringify({ report: "r", formatted });
+    const llm = makeLlm(json);
+    const adapter = mockAdapter({ [FILE]: sampleWithImg });
+    const vt = new VaultTools(adapter, VAULT);
+    await collect(runFormat([FILE], vt, llm, "model", true, [], new AbortController().signal));
+    const create = llm.chat.completions.create as ReturnType<typeof vi.fn>;
+    const callArgs = create.mock.calls[0][0] as { messages: Array<{ role: string; content: unknown }> };
+    const messages = callArgs.messages;
+    const userMsg = messages.find((m) => m.role === "user")!;
+    expect(Array.isArray(userMsg.content)).toBe(true);
+    const blocks = userMsg.content as Array<{ type: string }>;
+    expect(blocks.some((b) => b.type === "image_url")).toBe(true);
+  });
+
+  it("при hasVision=false image-ссылки в content blocks НЕ добавляет", async () => {
+    const sampleWithImg = SAMPLE + "\n\n![схема](images/diagram.png)\n";
+    const formatted = sampleWithImg;
+    const json = JSON.stringify({ report: "r", formatted });
+    const llm = makeLlm(json);
+    const adapter = mockAdapter({ [FILE]: sampleWithImg });
+    const vt = new VaultTools(adapter, VAULT);
+    await collect(runFormat([FILE], vt, llm, "model", false, [], new AbortController().signal));
+    const create = llm.chat.completions.create as ReturnType<typeof vi.fn>;
+    const callArgs = create.mock.calls[0][0] as { messages: Array<{ role: string; content: unknown }> };
+    const messages = callArgs.messages;
+    const userMsg = messages.find((m) => m.role === "user")!;
+    expect(typeof userMsg.content).toBe("string");
+  });
+
   it("включает chat history в messages при refine", async () => {
     const formatted = SAMPLE;
     const json = JSON.stringify({ report: "r", formatted });
