@@ -15,6 +15,8 @@ import { DomainCorruptError } from "./domain-store";
 import type { LocalConfigStore } from "./local-config";
 import { FileErrorModal } from "./modals";
 
+declare const require: NodeJS.Require;
+
 export class WikiController {
   private current: AbortController | null = null;
   currentOp: { op: WikiOperation; args: string[] } | null = null;
@@ -219,7 +221,7 @@ export class WikiController {
   }
 
   private async requireClaudeAgent(): Promise<string | null> {
-    const { existsSync } = await import("node:fs");
+    const { existsSync } = require("node:fs") as typeof import("node:fs");
     const { iclaudePath } = await this.localConfigStore.load();
     if (!iclaudePath || !existsSync(iclaudePath)) {
       new Notice(i18n().ctrl.setClaudeCodePath);
@@ -249,9 +251,9 @@ export class WikiController {
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm: import("./types").LlmClient;
     if (s.backend === "claude-agent") {
-      const { join } = await import("node:path");
-      const { mkdirSync } = await import("node:fs");
-      const { ClaudeCliClient } = await import("./claude-cli-client");
+      const { join } = require("node:path") as typeof import("node:path");
+      const { mkdirSync } = require("node:fs") as typeof import("node:fs");
+      const { ClaudeCliClient } = require("./claude-cli-client") as typeof import("./claude-cli-client");
       const manifestDir = this.plugin.manifest.dir
         ?? join(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
       const pluginDir = (this.app.vault.adapter as { getFullPath: (p: string) => string })
@@ -285,8 +287,8 @@ export class WikiController {
     if (!this.plugin.settings.agentLogEnabled) return;
     if (Platform.isMobile) return;
     try {
-      const { join } = await import("node:path");
-      const { appendFileSync, mkdirSync } = await import("node:fs");
+      const { join } = require("node:path") as typeof import("node:path");
+      const { appendFileSync, mkdirSync } = require("node:fs") as typeof import("node:fs");
       const logDir = join(vaultRoot, "!Logs");
       mkdirSync(logDir, { recursive: true });
       const line = JSON.stringify({ ts: new Date().toISOString(), session: sessionId, op, domainId, event: ev }) + "\n";
@@ -426,7 +428,7 @@ export class WikiController {
   }
 
   private async toVaultPath(vaultDir: string, savedPath: string): Promise<string | null> {
-    const { relative, isAbsolute, join } = await import("node:path");
+    const { relative, isAbsolute, join } = require("node:path") as typeof import("node:path");
     const abs = isAbsolute(savedPath) ? savedPath : join(vaultDir, savedPath);
     const rel = relative(vaultDir, abs);
     if (rel.startsWith("..") || isAbsolute(rel)) return null;

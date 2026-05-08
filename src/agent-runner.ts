@@ -10,6 +10,8 @@ import { runEvaluator } from "./phases/evaluator";
 import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, OpKey, RunEvent, RunRequest } from "./types";
 import type { VaultTools } from "./vault-tools";
 
+declare const require: NodeJS.Require;
+
 export class AgentRunner {
   constructor(
     private llm: LlmClient,
@@ -46,8 +48,8 @@ export class AgentRunner {
     if (!this.settings.devMode?.enabled) return;
     if (Platform.isMobile) return;
     try {
-      const { appendFileSync, mkdirSync } = await import("node:fs");
-      const { join } = await import("node:path");
+      const { appendFileSync, mkdirSync } = require("node:fs") as typeof import("node:fs");
+      const { join } = require("node:path") as typeof import("node:path");
       const logDir = join(vaultRoot, "!Logs");
       mkdirSync(logDir, { recursive: true });
       const line = JSON.stringify({ ts: new Date().toISOString(), ...entry, eval: null }) + "\n";
@@ -145,8 +147,8 @@ export class AgentRunner {
     if (!this.settings.devMode?.enabled) return;
     if (Platform.isMobile) return;
     try {
-      const { readFileSync, writeFileSync } = await import("node:fs");
-      const { join } = await import("node:path");
+      const { readFileSync, writeFileSync } = require("node:fs") as typeof import("node:fs");
+      const { join } = require("node:path") as typeof import("node:path");
       const logPath = join(vaultRoot, "!Logs", "dev.jsonl");
       const content = readFileSync(logPath, "utf-8");
       const lines = content.trimEnd().split("\n");
