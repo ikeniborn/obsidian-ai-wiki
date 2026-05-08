@@ -84,7 +84,14 @@ export class WikiController {
 
     const vaultRoot = this.cwdOrEmpty();
 
-    const agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId);
+    let agentRunner: AgentRunner;
+    try {
+      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId);
+    } catch (e) {
+      new Notice(i18n().ctrl.errorPrefix((e as Error).message));
+      console.error("[llm-wiki] buildAgentRunner failed", e);
+      return;
+    }
     const ctrl = new AbortController();
     this.current = ctrl;
     this.onBusyChange?.();
@@ -318,7 +325,14 @@ export class WikiController {
 
     const vaultRoot = this.cwdOrEmpty();
 
-    const agentRunner = await this.buildAgentRunner(vaultRoot);
+    let agentRunner: AgentRunner;
+    try {
+      agentRunner = await this.buildAgentRunner(vaultRoot);
+    } catch (e) {
+      new Notice(i18n().ctrl.errorPrefix((e as Error).message));
+      console.error("[llm-wiki] buildAgentRunner failed", e);
+      return;
+    }
 
     const ctrl = new AbortController();
     this.current = ctrl;
@@ -366,6 +380,7 @@ export class WikiController {
       }
     } catch (err) {
       status = "error";
+      console.error("[llm-wiki] dispatch failed", err);
       finalText = i18n().ctrl.errorPrefix((err as Error).message);
       await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
     } finally {
