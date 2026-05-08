@@ -1,7 +1,7 @@
 # Architecture Documentation — obsidian-llm-wiki
 
 LLM Wiki — Obsidian-плагин для AI-powered компаундируемой базы знаний.  
-Версия: **0.1.64** | Язык: TypeScript | Runtime: Electron (Obsidian Desktop) + WebView (Obsidian Mobile)
+Версия: **0.1.65** | Язык: TypeScript | Runtime: Electron (Obsidian Desktop) + WebView (Obsidian Mobile)
 
 ---
 

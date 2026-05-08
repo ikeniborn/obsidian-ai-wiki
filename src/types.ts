@@ -99,7 +99,6 @@ export type OpMap<T> = Record<OpKey, T>;
 
 export interface ClaudeOperationConfig {
   model: string;
-  maxTokens: number;
 }
 
 export interface NativeOperationConfig {
@@ -158,11 +157,11 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     allowedTools: "",
     perOperation: false,
     operations: {
-      ingest: { model: "haiku",  maxTokens: 4096 },
-      query:  { model: "sonnet", maxTokens: 4096 },
-      lint:   { model: "sonnet", maxTokens: 8192 },
-      init:   { model: "sonnet", maxTokens: 8192 },
-      format: { model: "sonnet", maxTokens: 32768 },
+      ingest: { model: "haiku" },
+      query:  { model: "sonnet" },
+      lint:   { model: "sonnet" },
+      init:   { model: "sonnet" },
+      format: { model: "sonnet" },
     },
   },
   nativeAgent: {

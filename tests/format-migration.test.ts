@@ -39,12 +39,12 @@ describe("settings migration: format defaults", () => {
     expect(p.settings.nativeAgent.operations.format).toBeDefined();
   });
 
-  it("preserves user-set operations.format", async () => {
+  it("preserves user-set operations.format model and strips legacy maxTokens", async () => {
     const p = makePlugin({
       claudeAgent: { operations: { format: { model: "custom-claude", maxTokens: 9999 } } },
     });
     await p.loadSettings();
     expect(p.settings.claudeAgent.operations.format.model).toBe("custom-claude");
-    expect(p.settings.claudeAgent.operations.format.maxTokens).toBe(9999);
+    expect((p.settings.claudeAgent.operations.format as Record<string, unknown>).maxTokens).toBeUndefined();
   });
 });

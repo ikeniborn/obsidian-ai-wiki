@@ -1,6 +1,6 @@
 id: obsidian-llm-wiki
 name: LLM Wiki Obsidian Plugin
-version: "0.1.64"
+version: "0.1.65"
 description: >
   Obsidian-плагин для ведения компаундируемой базы знаний на базе LLM.
   Запускает AI-агента (Claude CLI или нативный OpenAI-совместимый LLM),

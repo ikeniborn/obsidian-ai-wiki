@@ -24,9 +24,11 @@ export class AgentRunner {
     const s = this.settings;
 
     if (s.backend === "claude-agent") {
+      // claude-agent: maxTokens задаётся на уровне iclaude.sh (env CLAUDE_CODE_MAX_OUTPUT_TOKENS),
+      // плагин его не плумит — параметр был бы избыточным.
       const c = s.claudeAgent.perOperation ? s.claudeAgent.operations[key] : undefined;
-      if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, systemPrompt: s.systemPrompt } };
-      return { model: s.claudeAgent.model, opts: { maxTokens: s.maxTokens, systemPrompt: s.systemPrompt } };
+      if (c) return { model: c.model, opts: { systemPrompt: s.systemPrompt } };
+      return { model: s.claudeAgent.model, opts: { systemPrompt: s.systemPrompt } };
     }
 
     const na = s.nativeAgent;

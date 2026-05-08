@@ -18746,11 +18746,11 @@ var DEFAULT_SETTINGS = {
     allowedTools: "",
     perOperation: false,
     operations: {
-      ingest: { model: "haiku", maxTokens: 4096 },
-      query: { model: "sonnet", maxTokens: 4096 },
-      lint: { model: "sonnet", maxTokens: 8192 },
-      init: { model: "sonnet", maxTokens: 8192 },
-      format: { model: "sonnet", maxTokens: 32768 }
+      ingest: { model: "haiku" },
+      query: { model: "sonnet" },
+      lint: { model: "sonnet" },
+      init: { model: "sonnet" },
+      format: { model: "sonnet" }
     }
   },
   nativeAgent: {
@@ -20049,15 +20049,6 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
             (t) => t.setValue(s.claudeAgent.operations[key].model).onChange(async (v) => {
               s.claudeAgent.operations[key].model = v.trim();
               await this.plugin.saveSettings();
-            })
-          );
-          new import_obsidian3.Setting(containerEl).setName(T.settings.opMaxTokens_name).setDesc(T.settings.opMaxTokens_desc).addText(
-            (t) => t.setValue(String(s.claudeAgent.operations[key].maxTokens)).onChange(async (v) => {
-              const n = Number(v);
-              if (Number.isFinite(n) && n > 0) {
-                s.claudeAgent.operations[key].maxTokens = Math.floor(n);
-                await this.plugin.saveSettings();
-              }
             })
           );
         }
@@ -22686,8 +22677,8 @@ var AgentRunner = class {
     if (s.backend === "claude-agent") {
       const c2 = s.claudeAgent.perOperation ? s.claudeAgent.operations[key] : void 0;
       if (c2)
-        return { model: c2.model, opts: { maxTokens: c2.maxTokens, systemPrompt: s.systemPrompt } };
-      return { model: s.claudeAgent.model, opts: { maxTokens: s.maxTokens, systemPrompt: s.systemPrompt } };
+        return { model: c2.model, opts: { systemPrompt: s.systemPrompt } };
+      return { model: s.claudeAgent.model, opts: { systemPrompt: s.systemPrompt } };
     }
     const na = s.nativeAgent;
     const c = na.perOperation ? na.operations[key] : void 0;
@@ -30930,15 +30921,19 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
       evaluatorModel: this.settings.devMode.evaluatorModel
     };
     let formatMaxTokensMigrated = false;
-    if (this.settings.claudeAgent.operations.format.maxTokens === 16384) {
-      this.settings.claudeAgent.operations.format.maxTokens = 32768;
-      formatMaxTokensMigrated = true;
-    }
     if (this.settings.nativeAgent.operations.format.maxTokens === 16384) {
       this.settings.nativeAgent.operations.format.maxTokens = 32768;
       formatMaxTokensMigrated = true;
     }
-    if (formatMaxTokensMigrated)
+    const ca = this.settings.claudeAgent.operations;
+    let claudeCleanup = false;
+    for (const k of Object.keys(ca)) {
+      if ("maxTokens" in ca[k]) {
+        delete ca[k].maxTokens;
+        claudeCleanup = true;
+      }
+    }
+    if (formatMaxTokensMigrated || claudeCleanup)
       await this.saveData(this.settings);
   }
   async saveSettings() {

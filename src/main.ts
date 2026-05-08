@@ -197,18 +197,21 @@ export default class LlmWikiPlugin extends Plugin {
       evaluatorModel: this.settings.devMode.evaluatorModel,
     };
 
-    // Миграция v0.1.65: format.maxTokens 16384 (старый default) → 32768.
-    // 16K давал truncation на больших markdown-страницах с frontmatter rewrite.
+    // Миграция v0.1.65: format.maxTokens 16384 (старый default) → 32768 для native.
+    // claude-agent.operations.*.maxTokens удалён в v0.1.66 (плумился из плагина впустую —
+    // claude CLI берёт CLAUDE_CODE_MAX_OUTPUT_TOKENS из env iclaude.sh).
     let formatMaxTokensMigrated = false;
-    if (this.settings.claudeAgent.operations.format.maxTokens === 16384) {
-      this.settings.claudeAgent.operations.format.maxTokens = 32768;
-      formatMaxTokensMigrated = true;
-    }
     if (this.settings.nativeAgent.operations.format.maxTokens === 16384) {
       this.settings.nativeAgent.operations.format.maxTokens = 32768;
       formatMaxTokensMigrated = true;
     }
-    if (formatMaxTokensMigrated) await this.saveData(this.settings);
+    // Очистка старого поля у claude-операций (если присутствует в data.json).
+    const ca = this.settings.claudeAgent.operations as unknown as Record<string, Record<string, unknown>>;
+    let claudeCleanup = false;
+    for (const k of Object.keys(ca)) {
+      if ("maxTokens" in ca[k]) { delete ca[k].maxTokens; claudeCleanup = true; }
+    }
+    if (formatMaxTokensMigrated || claudeCleanup) await this.saveData(this.settings);
   }
 
   async saveSettings(): Promise<void> {
