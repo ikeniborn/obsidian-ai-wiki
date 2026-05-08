@@ -20143,40 +20143,30 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           this.display();
         })
       );
-      const dim = (st) => {
-        if (!proxy.enabled)
-          st.settingEl.style.opacity = "0.5";
-      };
-      dim(
+      if (proxy.enabled) {
         new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_url_name).setDesc(T.settings.proxy_url_desc).addText(
-          (t) => t.setPlaceholder("http://proxy.example.com:8080").setValue(proxy.url).setDisabled(!proxy.enabled).onChange(async (v) => {
+          (t) => t.setPlaceholder("http://proxy.example.com:8080").setValue(proxy.url).onChange(async (v) => {
             await this.patchLocalProxy({ url: v.trim() });
           })
-        )
-      );
-      dim(
+        );
         new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_username_name).setDesc(T.settings.proxy_username_desc).addText(
-          (t) => t.setValue(proxy.username ?? "").setDisabled(!proxy.enabled).onChange(async (v) => {
+          (t) => t.setValue(proxy.username ?? "").onChange(async (v) => {
             await this.patchLocalProxy({ username: v });
           })
-        )
-      );
-      dim(
+        );
         new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_password_name).setDesc(T.settings.proxy_password_desc).addText((t) => {
-          t.setValue(proxy.password ?? "").setDisabled(!proxy.enabled).onChange(async (v) => {
+          t.setValue(proxy.password ?? "").onChange(async (v) => {
             await this.patchLocalProxy({ password: v });
           });
           t.inputEl.type = "password";
-        })
-      );
-      dim(
+        });
         new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_noProxy_name).setDesc(T.settings.proxy_noProxy_desc).addText(
-          (t) => t.setPlaceholder("localhost,127.0.0.1").setValue(proxy.noProxy ?? "").setDisabled(!proxy.enabled).onChange(async (v) => {
+          (t) => t.setPlaceholder("localhost,127.0.0.1").setValue(proxy.noProxy ?? "").onChange(async (v) => {
             await this.patchLocalProxy({ noProxy: v.trim() });
           })
-        )
-      );
-      containerEl.createEl("p", { text: T.settings.proxy_hint, cls: "setting-item-description" });
+        );
+        containerEl.createEl("p", { text: T.settings.proxy_hint, cls: "setting-item-description" });
+      }
     }
     if (!import_obsidian3.Platform.isMobile) {
       new import_obsidian3.Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
