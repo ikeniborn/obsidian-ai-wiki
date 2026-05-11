@@ -10,7 +10,7 @@ import fixTemplate from "../../prompts/fix.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
 
-const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md"];
+const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
 export async function* runFix(
   args: string[],

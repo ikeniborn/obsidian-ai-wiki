@@ -96,8 +96,8 @@
     "hash": "ea518dbb689cf323f9e06eb98a305ee7"
   },
   "tests/format-migration.test.ts": {
-    "mtime": 1778244328.3211362,
-    "hash": "19f6d548a43643c9271c4cd002900c56"
+    "mtime": 1778248225.2103164,
+    "hash": "7635338b84fb4aff1b2375131d8acf1e"
   },
   "tests/modals.test.ts": {
     "mtime": 1778175596.0936866,
@@ -115,13 +115,17 @@
     "mtime": 1778065174.9931672,
     "hash": "805e37cc17784a7a219ae37ff3964527"
   },
+  "tests/proxy.test.ts": {
+    "mtime": 1778247800.0255823,
+    "hash": "cfda65a626cdab4b9af71fec2e62dc33"
+  },
   "tests/stream.test.js": {
     "mtime": 1777576293.2064414,
     "hash": "da66de61b15cece5b994f1be1604c478"
   },
   "tests/effective-settings.test.ts": {
-    "mtime": 1778244328.32109,
-    "hash": "8a1c04099215ad1ee225e82b52d84499"
+    "mtime": 1778247847.3135388,
+    "hash": "137b77fd3630a7bef0e200f9ce8d21cc"
   },
   "tests/migration.test.ts": {
     "mtime": 1778175596.0936232,
@@ -152,8 +156,8 @@
     "hash": "0e173ef78fefa66a8d4eeacd44485360"
   },
   "tests/phases/format-utils.test.ts": {
-    "mtime": 1778246786.5703273,
-    "hash": "12d48e4f3ada8a798cba9c4c4a790628"
+    "mtime": 1778263894.3668234,
+    "hash": "48f06e10b255e4d7a104461ce22dbb25"
   },
   "tests/phases/lint.test.ts": {
     "mtime": 1778175596.0938969,
@@ -164,8 +168,8 @@
     "hash": "4980a6dd7ca77c8a5d8ecc220907a7f8"
   },
   "tests/phases/format.test.ts": {
-    "mtime": 1778244328.3213177,
-    "hash": "76785fed32e1d1c5620a5ccfc1846e3c"
+    "mtime": 1778264144.6153998,
+    "hash": "51b3b90783eddc2502477179321b72d1"
   },
   "tests/phases/lint.test.js": {
     "mtime": 1777576293.212555,
@@ -244,20 +248,24 @@
     "hash": "601f7988cd49eeb46022906cfb2749ca"
   },
   "src/effective-settings.ts": {
-    "mtime": 1778244328.3193207,
-    "hash": "cf08a8b19b17e2a16d33aa974305e287"
+    "mtime": 1778247828.75772,
+    "hash": "b3d22c976a459a7964cbe9413364c7d0"
   },
   "src/controller.ts": {
-    "mtime": 1778244583.1882274,
-    "hash": "a2bd537cd614f73d303cd5830a32f312"
+    "mtime": 1778264075.8490767,
+    "hash": "2260183204878e0b3ea50952b8d50ea8"
   },
   "src/agent-runner.ts": {
-    "mtime": 1778244328.319217,
-    "hash": "b19b5863a921a121c19f6d6432492a16"
+    "mtime": 1778248174.9662914,
+    "hash": "2263557866ea704f65d5f44c4e3af948"
+  },
+  "src/proxy.ts": {
+    "mtime": 1778247790.4356923,
+    "hash": "154e1a27814aba6332b8007bb56d9c56"
   },
   "src/main.ts": {
-    "mtime": 1778244328.3195784,
-    "hash": "20a62b2f549fd268d8fe6134ee189798"
+    "mtime": 1778248206.6082296,
+    "hash": "e693eda222d4336d4d3eaf6b5aad9b00"
   },
   "src/domain.ts": {
     "mtime": 1778175596.092271,
@@ -272,48 +280,48 @@
     "hash": "abffb78177d180c14a8441155503afd2"
   },
   "src/settings.ts": {
-    "mtime": 1778244583.188541,
-    "hash": "704cc88788d3067dcc8217f281d2e7cf"
+    "mtime": 1778248771.2097492,
+    "hash": "adcea930ec479a5fb367d4d686d255c2"
   },
   "src/vault-tools.ts": {
     "mtime": 1778244328.3202398,
     "hash": "f076837c4617573fcb48518fa0a7397d"
   },
   "src/local-config.ts": {
-    "mtime": 1778244328.319509,
-    "hash": "336fc891bedb418588fa063cdb0b3d64"
+    "mtime": 1778247469.732376,
+    "hash": "1d8e0ee73e22766d96058be1dc1ca220"
   },
   "src/wiki-path.ts": {
     "mtime": 1778065174.9931672,
     "hash": "99e2cf4a0fa8cdd04846bc229e5a9567"
   },
   "src/i18n.ts": {
-    "mtime": 1778244328.3194554,
-    "hash": "5e7bcf8e33d79cd0e5cef38cb9dc9aff"
+    "mtime": 1778264126.1345823,
+    "hash": "f46ef325f4c6f47b2f6d814a8c702b8c"
   },
   "src/domain-store.ts": {
     "mtime": 1778175596.092214,
     "hash": "3a5e56cf37f42c23ca8df72631cc17f0"
   },
   "src/claude-cli-client.ts": {
-    "mtime": 1778244583.1880808,
+    "mtime": 1778248018.6945987,
     "hash": "8052ff1e248a5dfbb9afb2b94784ed36"
   },
   "src/types.ts": {
-    "mtime": 1778244583.1887643,
-    "hash": "8f4df41ac5c3fee21bf816308015a661"
+    "mtime": 1778259567.7858706,
+    "hash": "5f50206a7ffb670c36ab8ea4193156b9"
   },
   "src/view.ts": {
-    "mtime": 1778246775.8553104,
-    "hash": "bd43a0286231aca068bdbe89b75c7d93"
+    "mtime": 1778264086.8549688,
+    "hash": "2a476733991774d8169ad2a508d84f78"
   },
   "src/stream.ts": {
     "mtime": 1778013399.4866312,
     "hash": "b2bdbdbf1314f2125a64d49b5d295ade"
   },
   "src/phases/query.ts": {
-    "mtime": 1778244328.319995,
-    "hash": "a3676574b369423bec4c24c2f088dacc"
+    "mtime": 1778521600.6028135,
+    "hash": "716b02cfd228b5f6af0ecc60bb280b30"
   },
   "src/phases/template.ts": {
     "mtime": 1778002989.1852071,
@@ -324,15 +332,15 @@
     "hash": "3404c5d70f5accdd18043221d214a2ae"
   },
   "src/phases/format-utils.ts": {
-    "mtime": 1778246809.1180608,
-    "hash": "9acbd7f6b69b550ab8070d945723920a"
+    "mtime": 1778263915.9106195,
+    "hash": "da1df28110805cb0d56d215bc61e5f73"
   },
   "src/phases/format.ts": {
-    "mtime": 1778244583.1884675,
-    "hash": "df94af2d160241ba3617051e246c5973"
+    "mtime": 1778521635.9953113,
+    "hash": "08ab9dca63693961b6621786874945a7"
   },
   "src/phases/init.ts": {
-    "mtime": 1778244328.3198388,
+    "mtime": 1778521629.7893987,
     "hash": "0daf6f6ee9494dffb641d8033627d6fe"
   },
   "src/phases/chat.ts": {
@@ -348,12 +356,12 @@
     "hash": "6becfcdfb39e15da29339657627af505"
   },
   "src/phases/fix.ts": {
-    "mtime": 1778244328.3196921,
-    "hash": "816d153106858d7f23b4358593397fbc"
+    "mtime": 1778521595.5028865,
+    "hash": "57f3f57666a58459a04211921d833749"
   },
   "src/phases/lint.ts": {
-    "mtime": 1778244328.3199408,
-    "hash": "b381574fbeb2ebba6da7143945baeea8"
+    "mtime": 1778521590.5449576,
+    "hash": "4ad0981bfde76f56dcc2c77733224a0b"
   },
   "CLAUDE.md": {
     "mtime": 1778152103.9124217,
@@ -403,7 +411,7 @@
     "mtime": 1778244328.3205743,
     "hash": "ddf45706c9e9f5eecd72c3525f7e5113"
   },
-  "templates/_format-schema.md": {
+  "templates/_format_schema.md": {
     "mtime": 1778244328.3204916,
     "hash": "dd6c82591c7f90fb43760d10620ab1b3"
   },
@@ -424,12 +432,12 @@
     "hash": "0893cacf5a6e5e9b87fa3af9ec706561"
   },
   "docs/architecture/overview.yaml": {
-    "mtime": 1778247192.0125844,
-    "hash": "1054dc68d8029feac364db2795766fc3"
+    "mtime": 1778259122.686548,
+    "hash": "28d89cdae3fa56237bfaadc13fe5159a"
   },
   "docs/architecture/README.md": {
-    "mtime": 1778247169.6148443,
-    "hash": "7e1a0cef02f17bb83540d86f1b20190c"
+    "mtime": 1778259111.576696,
+    "hash": "1a7efdaa4138ee5287f142c4751eb998"
   },
   "docs/architecture/diagrams/data-flow.md": {
     "mtime": 1778244583.1872861,
@@ -450,6 +458,10 @@
   "docs/superpowers/specs/2026-05-06-schema-sync-wiki-path-settings-lock-design.md": {
     "mtime": 1778065174.9921439,
     "hash": "58eb51ba50c74f423731abdd670592f1"
+  },
+  "docs/superpowers/specs/2026-05-08-format-validator-judge-design.md": {
+    "mtime": 1778265370.4157789,
+    "hash": "b084b677fb3e6c11350d63b5bd7c14ed"
   },
   "docs/superpowers/specs/2026-05-07-clickable-links-design.md": {
     "mtime": 1778159779.2248242,
@@ -650,6 +662,10 @@
   "docs/superpowers/plans/2026-05-05-domain-form-ux.md": {
     "mtime": 1778002989.1795073,
     "hash": "cda296a31bc58950cdc8fc3f23f1bf8b"
+  },
+  "docs/superpowers/plans/2026-05-08-format-validator-judge.md": {
+    "mtime": 1778266448.2930665,
+    "hash": "4b9ea7cffe3bbd0e5e9fe51bfb4660ee"
   },
   "docs/superpowers/plans/2026-05-05-chat-session-resume.md": {
     "mtime": 1778012163.679796,

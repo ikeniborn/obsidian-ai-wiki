@@ -3,9 +3,10 @@ import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types"
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import formatTemplate from "../../prompts/format.md";
-import formatSchema from "../../templates/_format-schema.md";
+import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
 import { extractJsonObject, missingTokensWithContext, looksTruncated } from "./format-utils";
+import { WIKI_ROOT } from "../wiki-path";
 
 function extractImagePaths(md: string): string[] {
   const out: string[] = [];
@@ -39,6 +40,15 @@ export async function* runFormat(
   if (!original) {
     yield { kind: "error", message: `Format: cannot read ${filePath}` };
     return;
+  }
+
+  const formatSchemaPath = `${WIKI_ROOT}/_format_schema.md`;
+  let formatSchema: string;
+  try {
+    formatSchema = await vaultTools.read(formatSchemaPath);
+  } catch {
+    formatSchema = formatSchemaDefault;
+    try { await vaultTools.write(formatSchemaPath, formatSchemaDefault); } catch { /* не блокируем */ }
   }
 
   const systemContent = render(formatTemplate, {
