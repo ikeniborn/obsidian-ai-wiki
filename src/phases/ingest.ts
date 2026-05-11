@@ -1,4 +1,4 @@
-import { isAbsolute, join, relative, dirname } from "node:path";
+import { isAbsolute, join, relative, dirname } from "path";
 import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";

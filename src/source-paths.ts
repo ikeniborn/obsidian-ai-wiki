@@ -1,4 +1,4 @@
-import { isAbsolute, join } from "node:path";
+import { isAbsolute, join } from "path";
 
 /**
  * Returns updated source_paths after adding newPath with consolidation:

@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join } from "path";
 import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
