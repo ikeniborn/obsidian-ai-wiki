@@ -22,6 +22,14 @@ import { domainWikiFolder } from "./wiki-path";
 
 declare const require: NodeJS.Require;
 
+function toVaultPath(vaultDir: string, savedPath: string): string | null {
+  const { relative, isAbsolute, join } = require("path") as typeof import("path");
+  const abs = isAbsolute(savedPath) ? savedPath : join(vaultDir, savedPath);
+  const rel = relative(vaultDir, abs);
+  if (rel.startsWith("..") || isAbsolute(rel)) return null;
+  return rel;
+}
+
 export class WikiController {
   private current: AbortController | null = null;
   currentOp: { op: WikiOperation; args: string[] } | null = null;
@@ -194,7 +202,7 @@ export class WikiController {
       const local = await this.localConfigStore.load();
       const eff = resolveEffective(this.plugin.settings, local);
       if (eff.backend === "native-agent" && !this.requireNativeAgent(eff)) return;
-      if (eff.backend === "claude-agent" && !await this.requireClaudeAgent(local)) return;
+      if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local)) return;
     }
 
     await this.ensureView();
@@ -346,8 +354,8 @@ export class WikiController {
     return { ok: true };
   }
 
-  private async requireClaudeAgent(local: LocalConfig): Promise<string | null> {
-    const { existsSync } = require("node:fs") as typeof import("node:fs");
+  private requireClaudeAgent(local: LocalConfig): string | null {
+    const { existsSync } = require("fs") as typeof import("fs");
     const { iclaudePath } = local;
     if (!iclaudePath || !existsSync(iclaudePath)) {
       new Notice(i18n().ctrl.setClaudeCodePath);
@@ -377,8 +385,8 @@ export class WikiController {
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm: import("./types").LlmClient;
     if (s.backend === "claude-agent") {
-      const { join } = require("node:path") as typeof import("node:path");
-      const { mkdirSync } = require("node:fs") as typeof import("node:fs");
+      const { join } = require("path") as typeof import("path");
+      const { mkdirSync } = require("fs") as typeof import("fs");
       const { ClaudeCliClient } = require("./claude-cli-client") as typeof import("./claude-cli-client");
       const manifestDir = this.plugin.manifest.dir
         ?? join(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
@@ -461,7 +469,7 @@ export class WikiController {
       const local = await this.localConfigStore.load();
       const eff = resolveEffective(this.plugin.settings, local);
       if (eff.backend === "native-agent" && !this.requireNativeAgent(eff)) return;
-      if (eff.backend === "claude-agent" && !await this.requireClaudeAgent(local)) return;
+      if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local)) return;
     }
 
     await this.ensureView();
@@ -561,7 +569,7 @@ export class WikiController {
     if (op === "query-save" && status === "done" && !Platform.isMobile) {
       const m = finalText.match(/Создана\s+страница:\s*([^\s`'"]+)/i);
       if (m) {
-        const pathInVault = await this.toVaultPath(vaultRoot, m[1]);
+        const pathInVault = toVaultPath(vaultRoot, m[1]);
         if (pathInVault) await this.app.workspace.openLinkText(pathInVault, "");
       }
     }
@@ -590,13 +598,5 @@ export class WikiController {
     const leaves = this.app.workspace.getLeavesOfType(LLM_WIKI_VIEW_TYPE);
     const view = leaves[0]?.view;
     return view instanceof LlmWikiView ? view : null;
-  }
-
-  private async toVaultPath(vaultDir: string, savedPath: string): Promise<string | null> {
-    const { relative, isAbsolute, join } = require("node:path") as typeof import("node:path");
-    const abs = isAbsolute(savedPath) ? savedPath : join(vaultDir, savedPath);
-    const rel = relative(vaultDir, abs);
-    if (rel.startsWith("..") || isAbsolute(rel)) return null;
-    return rel;
   }
 }
