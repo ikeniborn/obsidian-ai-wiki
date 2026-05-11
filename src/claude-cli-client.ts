@@ -1,7 +1,6 @@
 import { spawn } from "node:child_process";
-import { writeFileSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
-import { createInterface } from "node:readline";
+import { writeFileSync, unlinkSync } from "fs";
+import { join } from "path";
 import type OpenAI from "openai";
 import { parseStreamLine } from "./stream";
 import type { LlmClient } from "./types";
@@ -149,24 +148,30 @@ export class ClaudeCliClient implements LlmClient {
     const wake = () => { if (resolveNext) { resolveNext(); resolveNext = null; } };
 
     let id = 0;
-    const rl = createInterface({ input: child.stdout });
-    rl.on("line", (line) => {
-      const ev = parseStreamLine(line);
-      if (ev?.kind === "system" && ev.sessionId) {
-        this.lastSessionId = ev.sessionId;
-      }
-      if (ev?.kind === "assistant_text") {
-        const delta: Record<string, unknown> = ev.isReasoning
-          ? { reasoning: ev.delta }
-          : { content: ev.delta };
-        queue.push({
-          id: `cc-${++id}`,
-          object: "chat.completion.chunk",
-          model: this.cfg.model || "claude",
-          created: 0,
-          choices: [{ index: 0, delta: delta as OpenAI.Chat.ChatCompletionChunk.Choice.Delta, finish_reason: null }],
-        });
-        wake();
+    let buf = "";
+    child.stdout.on("data", (chunk: Buffer) => {
+      buf += chunk.toString("utf8");
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) !== -1) {
+        const line = buf.slice(0, nl);
+        buf = buf.slice(nl + 1);
+        const ev = parseStreamLine(line);
+        if (ev?.kind === "system" && ev.sessionId) {
+          this.lastSessionId = ev.sessionId;
+        }
+        if (ev?.kind === "assistant_text") {
+          const delta: Record<string, unknown> = ev.isReasoning
+            ? { reasoning: ev.delta }
+            : { content: ev.delta };
+          queue.push({
+            id: `cc-${++id}`,
+            object: "chat.completion.chunk",
+            model: this.cfg.model || "claude",
+            created: 0,
+            choices: [{ index: 0, delta: delta as OpenAI.Chat.ChatCompletionChunk.Choice.Delta, finish_reason: null }],
+          });
+          wake();
+        }
       }
     });
 
@@ -198,7 +203,6 @@ export class ClaudeCliClient implements LlmClient {
     } finally {
       clearTimeout(timeoutHandle);
       signal?.removeEventListener("abort", onAbort);
-      rl.close();
       for (const f of tmpFiles) { try { unlinkSync(f); } catch { /* already gone */ } }
       if (child.exitCode === null) {
         child.kill("SIGTERM");
