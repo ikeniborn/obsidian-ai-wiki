@@ -19006,7 +19006,7 @@ var en = {
     history: "History",
     allDomains: "(all)",
     noHistory: "No history yet.",
-    answerRequired: "LLM Wiki \u2014 answer required",
+    answerRequired: "AI Wiki \u2014 answer required",
     noActiveFile: "No active file",
     selectDomainForInit: "Select a specific domain for init",
     cwdNotSet: "Working directory is not set",
@@ -19194,7 +19194,7 @@ var ru = {
     history: "\u0418\u0441\u0442\u043E\u0440\u0438\u044F",
     allDomains: "(\u0432\u0441\u0435)",
     noHistory: "\u0418\u0441\u0442\u043E\u0440\u0438\u044F \u043F\u0443\u0441\u0442\u0430.",
-    answerRequired: "LLM Wiki \u2014 \u0442\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044F \u043E\u0442\u0432\u0435\u0442",
+    answerRequired: "AI Wiki \u2014 \u0442\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044F \u043E\u0442\u0432\u0435\u0442",
     noActiveFile: "\u041D\u0435\u0442 \u0430\u043A\u0442\u0438\u0432\u043D\u043E\u0433\u043E \u0444\u0430\u0439\u043B\u0430",
     selectDomainForInit: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u043A\u043E\u043D\u043A\u0440\u0435\u0442\u043D\u044B\u0439 \u0434\u043E\u043C\u0435\u043D \u0434\u043B\u044F init",
     cwdNotSet: "\u0420\u0430\u0431\u043E\u0447\u0430\u044F \u0434\u0438\u0440\u0435\u043A\u0442\u043E\u0440\u0438\u044F \u043D\u0435 \u0437\u0430\u0434\u0430\u043D\u0430",
@@ -19382,7 +19382,7 @@ var es = {
     history: "Historial",
     allDomains: "(todos)",
     noHistory: "Sin historial.",
-    answerRequired: "LLM Wiki \u2014 se requiere respuesta",
+    answerRequired: "AI Wiki \u2014 se requiere respuesta",
     noActiveFile: "No hay archivo activo",
     selectDomainForInit: "Selecciona un dominio espec\xEDfico para init",
     cwdNotSet: "El directorio de trabajo no est\xE1 configurado",
@@ -19521,7 +19521,7 @@ var QueryModal = class extends import_obsidian2.Modal {
     const { contentEl } = this;
     contentEl.createEl("h3", { text: this.save ? T.queryAndSave : T.query });
     const ta = contentEl.createEl("textarea", {
-      cls: "llm-wiki-modal-input",
+      cls: "ai-wiki-modal-input",
       attr: { rows: "5" },
       placeholder: T.queryPlaceholder
     });
@@ -19602,12 +19602,12 @@ function attachFolderDropdown(app, inputEl, onSelect) {
     if (!folders.length)
       return;
     const rect = inputEl.getBoundingClientRect();
-    dropEl = document.body.createDiv({ cls: "llm-wiki-folder-dropdown" });
+    dropEl = document.body.createDiv({ cls: "ai-wiki-folder-dropdown" });
     dropEl.style.top = `${rect.bottom + window.scrollY}px`;
     dropEl.style.left = `${rect.left + window.scrollX}px`;
     dropEl.style.width = `${rect.width}px`;
     for (const folder of folders) {
-      const item = dropEl.createDiv({ cls: "llm-wiki-folder-dropdown-item" });
+      const item = dropEl.createDiv({ cls: "ai-wiki-folder-dropdown-item" });
       item.setText(folder.path + "/");
       item.addEventListener("mousedown", (e) => {
         e.preventDefault();
@@ -19676,15 +19676,15 @@ var AddDomainModal = class extends import_obsidian2.Modal {
       return;
     this.sourcePathsContainer.empty();
     const T = i18n().modal;
-    const header = this.sourcePathsContainer.createDiv({ cls: "llm-wiki-sp-header" });
-    header.createEl("span", { text: T.addDomainSourcePathsLabel, cls: "llm-wiki-sp-label" });
-    const listEl = this.sourcePathsContainer.createDiv({ cls: "llm-wiki-sp-list" });
+    const header = this.sourcePathsContainer.createDiv({ cls: "ai-wiki-sp-header" });
+    header.createEl("span", { text: T.addDomainSourcePathsLabel, cls: "ai-wiki-sp-label" });
+    const listEl = this.sourcePathsContainer.createDiv({ cls: "ai-wiki-sp-list" });
     const rerender = () => {
       listEl.empty();
       this.input.sourcePaths.forEach((p, i) => {
-        const row = listEl.createDiv({ cls: "llm-wiki-sp-row" });
-        row.createEl("span", { text: p, cls: "llm-wiki-sp-path", attr: { title: p } });
-        const removeBtn = row.createEl("button", { text: "\xD7", cls: "llm-wiki-sp-remove" });
+        const row = listEl.createDiv({ cls: "ai-wiki-sp-row" });
+        row.createEl("span", { text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
+        const removeBtn = row.createEl("button", { text: "\xD7", cls: "ai-wiki-sp-remove" });
         removeBtn.addEventListener("click", () => {
           this.input.sourcePaths.splice(i, 1);
           rerender();
@@ -19692,9 +19692,9 @@ var AddDomainModal = class extends import_obsidian2.Modal {
       });
     };
     rerender();
-    const addRow = this.sourcePathsContainer.createDiv({ cls: "llm-wiki-sp-add-row" });
+    const addRow = this.sourcePathsContainer.createDiv({ cls: "ai-wiki-sp-add-row" });
     const inputEl = addRow.createEl("input", {
-      cls: "llm-wiki-sp-input",
+      cls: "ai-wiki-sp-input",
       attr: { type: "text", placeholder: T.addDomainSourcePathsPlaceholder }
     });
     const addPath = (val) => {
@@ -19741,8 +19741,8 @@ var FileErrorModal = class extends import_obsidian2.Modal {
     const T = i18n().modal;
     const { contentEl } = this;
     contentEl.createEl("h3", { text: T.fileErrorTitle });
-    contentEl.createEl("p", { text: this.file, cls: "llm-wiki-file-error-path" });
-    contentEl.createEl("p", { text: this.err.message, cls: "llm-wiki-file-error-msg" });
+    contentEl.createEl("p", { text: this.file, cls: "ai-wiki-file-error-path" });
+    contentEl.createEl("p", { text: this.err.message, cls: "ai-wiki-file-error-msg" });
     const setting = new import_obsidian2.Setting(contentEl);
     setting.addButton(
       (b) => b.setButtonText(T.fileErrorSkip).onClick(() => this.pick("skip"))
@@ -19805,14 +19805,14 @@ var EditDomainModal = class extends import_obsidian2.Modal {
         this.languageNotesVal = v;
       });
     });
-    this.errorEl = contentEl.createEl("p", { cls: "mod-warning llm-wiki-hidden" });
+    this.errorEl = contentEl.createEl("p", { cls: "mod-warning ai-wiki-hidden" });
     new import_obsidian2.Setting(contentEl).addButton((b) => b.setButtonText(T.cancel).onClick(() => this.close())).addButton((b) => b.setButtonText(T.save).setCta().onClick(() => this.handleSave()));
   }
   renderEntityTypes(container) {
     container.empty();
     const T = i18n().modal;
-    const header = container.createDiv({ cls: "llm-wiki-et-header" });
-    header.createEl("span", { text: T.entityTypesLabel, cls: "llm-wiki-et-label" });
+    const header = container.createDiv({ cls: "ai-wiki-et-header" });
+    header.createEl("span", { text: T.entityTypesLabel, cls: "ai-wiki-et-label" });
     const toggleBtn = header.createEl("button", {
       text: this.entityTypesMode === "cards" ? T.entityTypesEditJson : T.entityTypesBackToCards
     });
@@ -19831,14 +19831,14 @@ var EditDomainModal = class extends import_obsidian2.Modal {
       }
     } else {
       const ta = container.createEl("textarea", {
-        cls: "llm-wiki-settings-textarea llm-wiki-monospace",
+        cls: "ai-wiki-settings-textarea ai-wiki-monospace",
         attr: { rows: "10" }
       });
       ta.value = this.entityTypesVal;
       ta.addEventListener("input", () => {
         this.entityTypesVal = ta.value;
       });
-      const jsonErrorEl = container.createEl("p", { cls: "mod-warning llm-wiki-hidden" });
+      const jsonErrorEl = container.createEl("p", { cls: "mod-warning ai-wiki-hidden" });
       toggleBtn.addEventListener("click", () => {
         try {
           const parsed = JSON.parse(this.entityTypesVal.trim() || "[]");
@@ -19852,7 +19852,7 @@ var EditDomainModal = class extends import_obsidian2.Modal {
           this.renderEntityTypes(container);
         } catch {
           jsonErrorEl.textContent = T.entityTypesError;
-          jsonErrorEl.removeClass("llm-wiki-hidden");
+          jsonErrorEl.removeClass("ai-wiki-hidden");
         }
       });
     }
@@ -19860,15 +19860,15 @@ var EditDomainModal = class extends import_obsidian2.Modal {
   renderSourcePaths(container) {
     container.empty();
     const T = i18n().modal;
-    const header = container.createDiv({ cls: "llm-wiki-sp-header" });
-    header.createEl("span", { text: T.sourcePathsLabel, cls: "llm-wiki-sp-label" });
-    const listEl = container.createDiv({ cls: "llm-wiki-sp-list" });
+    const header = container.createDiv({ cls: "ai-wiki-sp-header" });
+    header.createEl("span", { text: T.sourcePathsLabel, cls: "ai-wiki-sp-label" });
+    const listEl = container.createDiv({ cls: "ai-wiki-sp-list" });
     const rerender = () => {
       listEl.empty();
       this.sourcePathsList.forEach((p, i) => {
-        const row = listEl.createDiv({ cls: "llm-wiki-sp-row" });
-        row.createEl("span", { text: p, cls: "llm-wiki-sp-path", attr: { title: p } });
-        const removeBtn = row.createEl("button", { text: "\xD7", cls: "llm-wiki-sp-remove" });
+        const row = listEl.createDiv({ cls: "ai-wiki-sp-row" });
+        row.createEl("span", { text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
+        const removeBtn = row.createEl("button", { text: "\xD7", cls: "ai-wiki-sp-remove" });
         removeBtn.addEventListener("click", () => {
           this.sourcePathsList.splice(i, 1);
           rerender();
@@ -19876,9 +19876,9 @@ var EditDomainModal = class extends import_obsidian2.Modal {
       });
     };
     rerender();
-    const addRow = container.createDiv({ cls: "llm-wiki-sp-add-row" });
+    const addRow = container.createDiv({ cls: "ai-wiki-sp-add-row" });
     const input = addRow.createEl("input", {
-      cls: "llm-wiki-sp-input",
+      cls: "ai-wiki-sp-input",
       attr: { type: "text", placeholder: T.sourcePathsPlaceholder }
     });
     const addPath = (val) => {
@@ -19898,28 +19898,28 @@ var EditDomainModal = class extends import_obsidian2.Modal {
     });
   }
   renderEntityTypeCard(container, et) {
-    const card = container.createDiv({ cls: "llm-wiki-et-card" });
-    const head = card.createDiv({ cls: "llm-wiki-et-card-head" });
-    head.createEl("span", { text: et.type, cls: "llm-wiki-et-card-type" });
+    const card = container.createDiv({ cls: "ai-wiki-et-card" });
+    const head = card.createDiv({ cls: "ai-wiki-et-card-head" });
+    head.createEl("span", { text: et.type, cls: "ai-wiki-et-card-type" });
     if (et.wiki_subfolder) {
-      head.createEl("span", { text: et.wiki_subfolder + "/", cls: "llm-wiki-et-card-subfolder" });
+      head.createEl("span", { text: et.wiki_subfolder + "/", cls: "ai-wiki-et-card-subfolder" });
     }
-    const body = card.createDiv({ cls: "llm-wiki-et-card-body" });
+    const body = card.createDiv({ cls: "ai-wiki-et-card-body" });
     if (et.description) {
-      body.createEl("p", { text: et.description, cls: "llm-wiki-et-card-desc" });
+      body.createEl("p", { text: et.description, cls: "ai-wiki-et-card-desc" });
     }
     if (et.extraction_cues?.length) {
-      const tags = body.createDiv({ cls: "llm-wiki-et-card-tags" });
+      const tags = body.createDiv({ cls: "ai-wiki-et-card-tags" });
       for (const cue of et.extraction_cues) {
-        tags.createEl("span", { text: cue, cls: "llm-wiki-et-card-tag" });
+        tags.createEl("span", { text: cue, cls: "ai-wiki-et-card-tag" });
       }
     }
     if (et.min_mentions_for_page != null) {
-      body.createEl("small", { text: `min_mentions: ${et.min_mentions_for_page}`, cls: "llm-wiki-et-card-meta" });
+      body.createEl("small", { text: `min_mentions: ${et.min_mentions_for_page}`, cls: "ai-wiki-et-card-meta" });
     }
   }
   handleSave() {
-    this.errorEl?.addClass("llm-wiki-hidden");
+    this.errorEl?.addClass("ai-wiki-hidden");
     let entityTypes;
     if (this.entityTypesMode === "cards") {
       entityTypes = this.entityTypesList;
@@ -19935,7 +19935,7 @@ var EditDomainModal = class extends import_obsidian2.Modal {
       } catch {
         if (this.errorEl) {
           this.errorEl.textContent = i18n().modal.entityTypesError;
-          this.errorEl.removeClass("llm-wiki-hidden");
+          this.errorEl.removeClass("ai-wiki-hidden");
         }
         return;
       }
@@ -20025,12 +20025,12 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
     if (busy) {
       containerEl.createEl("div", {
         text: T.settings.busyBanner,
-        cls: "setting-item-description llm-wiki-settings-busy-banner"
+        cls: "setting-item-description ai-wiki-settings-busy-banner"
       });
     }
     new import_obsidian3.Setting(containerEl).setName(T.settings.h3_general).setHeading();
     new import_obsidian3.Setting(containerEl).setName(T.settings.systemPrompt_name).setDesc(T.settings.systemPrompt_desc).addTextArea((t) => {
-      t.inputEl.addClass("llm-wiki-settings-textarea");
+      t.inputEl.addClass("ai-wiki-settings-textarea");
       t.setValue(s.systemPrompt).onChange(async (v) => {
         s.systemPrompt = v;
         await this.plugin.saveSettings();
@@ -20310,7 +20310,7 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
 
 // src/view.ts
 var import_obsidian4 = require("obsidian");
-var LLM_WIKI_VIEW_TYPE = "llm-wiki-view";
+var AI_WIKI_VIEW_TYPE = "ai-wiki-view";
 function registerLinkHandler(el, app) {
   el.addEventListener("click", (e) => {
     const a = e.target.closest("a.internal-link");
@@ -20383,11 +20383,11 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   reasoningBlock = null;
   reasoningBuffer = "";
   getViewType() {
-    return LLM_WIKI_VIEW_TYPE;
+    return AI_WIKI_VIEW_TYPE;
   }
-  // eslint-disable-next-line obsidianmd/ui/sentence-case -- "LLM Wiki" is the plugin name (proper noun)
+  // eslint-disable-next-line obsidianmd/ui/sentence-case -- "AI Wiki" is the plugin name (proper noun)
   getDisplayText() {
-    return "LLM Wiki";
+    return "AI Wiki";
   }
   getIcon() {
     return "brain-circuit";
@@ -20395,25 +20395,25 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   onOpen() {
     const root = this.containerEl.children[1];
     root.empty();
-    root.addClass("llm-wiki-view");
+    root.addClass("ai-wiki-view");
     const T = i18n();
     const isMobile = import_obsidian4.Platform.isMobile;
-    const header = root.createDiv("llm-wiki-header");
-    header.createEl("h3", { text: "LLM wiki" });
-    this.statusEl = header.createDiv("llm-wiki-status");
+    const header = root.createDiv("ai-wiki-header");
+    header.createEl("h3", { text: "AI wiki" });
+    this.statusEl = header.createDiv("ai-wiki-status");
     if (!isMobile) {
-      root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionCreate });
-      const createRow = root.createDiv("llm-wiki-create-row");
-      this.initBtn = createRow.createEl("button", { text: T.view.init, cls: "llm-wiki-init-btn" });
+      root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionCreate });
+      const createRow = root.createDiv("ai-wiki-create-row");
+      this.initBtn = createRow.createEl("button", { text: T.view.init, cls: "ai-wiki-init-btn" });
       this.initBtn.addEventListener("click", () => this.openAddDomain());
-      root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionDomain });
-      const domainBox = root.createDiv("llm-wiki-domain");
-      const domainRow = domainBox.createDiv("llm-wiki-domain-row");
+      root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionDomain });
+      const domainBox = root.createDiv("ai-wiki-domain");
+      const domainRow = domainBox.createDiv("ai-wiki-domain-row");
       domainRow.createSpan({ cls: "muted", text: "Domain:" });
-      this.domainSelect = domainRow.createEl("select", { cls: "llm-wiki-domain-select" });
+      this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
       const refreshBtn = domainRow.createEl("button", { text: "\u21BB", attr: { title: T.view.refreshTitle } });
       refreshBtn.addEventListener("click", () => void this.refreshDomains());
-      const actionRow = domainBox.createDiv("llm-wiki-domain-actions");
+      const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
       this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
       this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
       this.formatBtn = actionRow.createEl("button", { text: T.view.format });
@@ -20440,13 +20440,13 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       });
       void this.refreshDomains();
     }
-    root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionQuery });
-    const ask = root.createDiv("llm-wiki-ask");
+    root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionQuery });
+    const ask = root.createDiv("ai-wiki-ask");
     this.queryInput = ask.createEl("textarea", {
-      cls: "llm-wiki-query-input",
+      cls: "ai-wiki-query-input",
       attr: { placeholder: "Question\u2026", rows: "3" }
     });
-    const askRow = ask.createDiv("llm-wiki-ask-row");
+    const askRow = ask.createDiv("ai-wiki-ask-row");
     this.askBtn = askRow.createEl("button", { text: T.view.ask });
     this.askSaveBtn = askRow.createEl("button", { text: T.view.askAndSave });
     this.cancelBtn = askRow.createEl("button", { text: T.view.cancel, cls: "mod-warning" });
@@ -20454,29 +20454,29 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.askBtn.addEventListener("click", () => this.submitQuery(false));
     this.askSaveBtn.addEventListener("click", () => this.submitQuery(true));
     this.cancelBtn.addEventListener("click", () => this.plugin.controller.cancelCurrent());
-    const progressHeader = root.createDiv("llm-wiki-progress-header");
-    const progressH4 = progressHeader.createEl("h4", { cls: "llm-wiki-progress-title" });
-    this.progressToggle = progressH4.createSpan({ cls: "llm-wiki-progress-arrow", text: "\u25B6" });
+    const progressHeader = root.createDiv("ai-wiki-progress-header");
+    const progressH4 = progressHeader.createEl("h4", { cls: "ai-wiki-progress-title" });
+    this.progressToggle = progressH4.createSpan({ cls: "ai-wiki-progress-arrow", text: "\u25B6" });
     progressH4.appendText(" Progress ");
-    this.progressCount = progressH4.createSpan({ cls: "llm-wiki-progress-count muted", text: "" });
+    this.progressCount = progressH4.createSpan({ cls: "ai-wiki-progress-count muted", text: "" });
     progressHeader.addEventListener("click", () => this.toggleSteps());
-    this.stepsEl = root.createDiv("llm-wiki-steps");
-    this.stepsEl.addClass("llm-wiki-hidden");
-    this.resultSection = root.createDiv("llm-wiki-result-section llm-wiki-hidden");
-    const resultHeader = this.resultSection.createDiv("llm-wiki-progress-header");
-    const resultH4 = resultHeader.createEl("h4", { cls: "llm-wiki-progress-title" });
-    this.resultToggle = resultH4.createSpan({ cls: "llm-wiki-progress-arrow", text: "\u25B6" });
+    this.stepsEl = root.createDiv("ai-wiki-steps");
+    this.stepsEl.addClass("ai-wiki-hidden");
+    this.resultSection = root.createDiv("ai-wiki-result-section ai-wiki-hidden");
+    const resultHeader = this.resultSection.createDiv("ai-wiki-progress-header");
+    const resultH4 = resultHeader.createEl("h4", { cls: "ai-wiki-progress-title" });
+    this.resultToggle = resultH4.createSpan({ cls: "ai-wiki-progress-arrow", text: "\u25B6" });
     resultH4.appendText(` ${T.view.result}`);
     resultHeader.addEventListener("click", () => this.toggleResult());
-    this.finalEl = this.resultSection.createDiv("llm-wiki-final llm-wiki-hidden");
+    this.finalEl = this.resultSection.createDiv("ai-wiki-final ai-wiki-hidden");
     registerLinkHandler(this.finalEl, this.app);
-    this.historySection = root.createDiv("llm-wiki-history-section llm-wiki-hidden");
-    const historyHeader = this.historySection.createDiv("llm-wiki-progress-header");
-    const historyH4 = historyHeader.createEl("h4", { cls: "llm-wiki-progress-title" });
-    this.historyToggle = historyH4.createSpan({ cls: "llm-wiki-progress-arrow", text: "\u25B6" });
+    this.historySection = root.createDiv("ai-wiki-history-section ai-wiki-hidden");
+    const historyHeader = this.historySection.createDiv("ai-wiki-progress-header");
+    const historyH4 = historyHeader.createEl("h4", { cls: "ai-wiki-progress-title" });
+    this.historyToggle = historyH4.createSpan({ cls: "ai-wiki-progress-arrow", text: "\u25B6" });
     historyH4.appendText(` ${T.view.history}`);
     historyHeader.addEventListener("click", () => this.toggleHistory());
-    this.historyEl = this.historySection.createDiv("llm-wiki-history llm-wiki-hidden");
+    this.historyEl = this.historySection.createDiv("ai-wiki-history ai-wiki-hidden");
     this.renderHistory();
     const ongoing = this.plugin.controller.currentOp;
     if (ongoing) {
@@ -20582,7 +20582,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.chatSection = null;
     this.lastContext = null;
     this.chatHistory = [];
-    this.resultSection.addClass("llm-wiki-hidden");
+    this.resultSection.addClass("ai-wiki-hidden");
     this.finalEl.empty();
     this.resultOpen = false;
     this.startTs = Date.now();
@@ -20597,7 +20597,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.reasoningBlock = null;
     this.reasoningBuffer = "";
     this.stepsOpen = true;
-    this.stepsEl.removeClass("llm-wiki-hidden");
+    this.stepsEl.removeClass("ai-wiki-hidden");
     this.progressToggle.setText("\u25BC");
     this.updateMetrics();
     if (this.tickHandle !== null)
@@ -20617,9 +20617,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     if (ev.kind === "init_start") {
       this.progressTotal = ev.totalFiles;
       this.progressDone = 0;
-      const step = this.stepsEl.createDiv("llm-wiki-step llm-wiki-progress");
-      step.createSpan({ cls: "llm-wiki-step-icon" }).setText("\u{1F4C2}");
-      this.progressEl = step.createSpan({ cls: "llm-wiki-progress-text" });
+      const step = this.stepsEl.createDiv("ai-wiki-step ai-wiki-progress");
+      step.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F4C2}");
+      this.progressEl = step.createSpan({ cls: "ai-wiki-progress-text" });
       this.progressEl.setText(`0 / ${ev.totalFiles} \u0444\u0430\u0439\u043B\u043E\u0432`);
       this.scrollSteps();
       return;
@@ -20656,75 +20656,75 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.assistantBuffer = "";
       this.reasoningBlock = null;
       this.reasoningBuffer = "";
-      const step = this.stepsEl.createDiv("llm-wiki-step");
-      const head = step.createDiv("llm-wiki-step-head");
-      head.createSpan({ cls: "llm-wiki-step-icon" }).setText("\u{1F527}");
-      head.createSpan({ cls: "llm-wiki-step-name" }).setText(ev.name);
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      const head = step.createDiv("ai-wiki-step-head");
+      head.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F527}");
+      head.createSpan({ cls: "ai-wiki-step-name" }).setText(ev.name);
       const summary = summariseInput(ev.input);
       if (summary)
-        head.createSpan({ cls: "llm-wiki-step-arg" }).setText(summary);
-      head.createSpan({ cls: "llm-wiki-step-time muted" }).setText(this.elapsedShort());
+        head.createSpan({ cls: "ai-wiki-step-arg" }).setText(summary);
+      head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
       this.currentToolStep = step;
       this.currentToolStartedAt = Date.now();
       this.scrollSteps();
     } else if (ev.kind === "tool_result") {
       const step = this.currentToolStep;
       if (step) {
-        const head = step.querySelector(".llm-wiki-step-head");
+        const head = step.querySelector(".ai-wiki-step-head");
         head?.addClass(ev.ok ? "ok" : "err");
         const dur = ((Date.now() - this.currentToolStartedAt) / 1e3).toFixed(1);
-        const t = step.querySelector(".llm-wiki-step-time");
+        const t = step.querySelector(".ai-wiki-step-time");
         if (t)
           t.setText(`${dur}s`);
         if (ev.preview) {
-          const p = step.createDiv("llm-wiki-step-preview");
+          const p = step.createDiv("ai-wiki-step-preview");
           p.setText(truncate(ev.preview.replace(/\s+/g, " "), PREVIEW_INLINE));
         }
         this.currentToolStep = null;
       }
     } else if (ev.kind === "ask_user") {
-      const el = this.stepsEl.createDiv("llm-wiki-step llm-wiki-step--ask");
+      const el = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step--ask");
       el.createSpan({ text: "\u23F3 Waiting for answer\u2026" });
       return;
     } else if (ev.kind === "assistant_text") {
       if (ev.isReasoning) {
         if (!this.reasoningBlock) {
-          this.reasoningBlock = this.stepsEl.createDiv("llm-wiki-step reasoning");
+          this.reasoningBlock = this.stepsEl.createDiv("ai-wiki-step reasoning");
           if (this.assistantBlock) {
             this.stepsEl.insertBefore(this.reasoningBlock, this.assistantBlock);
           }
-          this.reasoningBlock.createSpan({ cls: "llm-wiki-step-icon" }).setText("\u{1F9E0}");
-          this.reasoningBlock.createSpan({ cls: "llm-wiki-reasoning-text" });
+          this.reasoningBlock.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F9E0}");
+          this.reasoningBlock.createSpan({ cls: "ai-wiki-reasoning-text" });
         }
         this.reasoningBuffer += ev.delta;
-        const span = this.reasoningBlock.querySelector(".llm-wiki-reasoning-text");
+        const span = this.reasoningBlock.querySelector(".ai-wiki-reasoning-text");
         if (span)
           span.setText(truncate(this.reasoningBuffer, ASSISTANT_TEXT_MAX));
       } else {
         if (!this.assistantBlock) {
-          this.assistantBlock = this.stepsEl.createDiv("llm-wiki-step assistant");
-          this.assistantBlock.createSpan({ cls: "llm-wiki-step-icon" }).setText("\u{1F4AC}");
-          this.assistantBlock.createSpan({ cls: "llm-wiki-assistant-text" });
+          this.assistantBlock = this.stepsEl.createDiv("ai-wiki-step assistant");
+          this.assistantBlock.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F4AC}");
+          this.assistantBlock.createSpan({ cls: "ai-wiki-assistant-text" });
         }
         this.assistantBuffer += ev.delta;
-        const span = this.assistantBlock.querySelector(".llm-wiki-assistant-text");
+        const span = this.assistantBlock.querySelector(".ai-wiki-assistant-text");
         if (span)
           span.setText(truncate(this.assistantBuffer, ASSISTANT_TEXT_MAX));
       }
       this.scrollSteps();
     } else if (ev.kind === "system") {
-      const step = this.stepsEl.createDiv("llm-wiki-step");
-      const head = step.createDiv("llm-wiki-step-head");
-      head.createSpan({ cls: "llm-wiki-step-icon" }).setText("\u2699");
-      head.createSpan({ cls: "llm-wiki-step-name muted" }).setText(translateSystemEvent(ev.message));
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      const head = step.createDiv("ai-wiki-step-head");
+      head.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u2699");
+      head.createSpan({ cls: "ai-wiki-step-name muted" }).setText(translateSystemEvent(ev.message));
       this.scrollSteps();
     } else if (ev.kind === "error") {
-      this.stepsEl.createDiv("llm-wiki-step err").setText(`\u2717 ${ev.message}`);
+      this.stepsEl.createDiv("ai-wiki-step err").setText(`\u2717 ${ev.message}`);
       this.scrollSteps();
     } else if (ev.kind === "result") {
       this.assistantBlock = null;
     } else if (ev.kind === "eval_result") {
-      const el = this.stepsEl.createEl("div", { cls: "llm-wiki-eval-result" });
+      const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
       el.setText(`[eval: ${ev.score}/10] ${ev.reasoning}`);
     }
     this.updateMetrics();
@@ -20733,7 +20733,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     const T = i18n();
     this.formatPreviewSection?.remove();
     const root = this.containerEl.children[1];
-    this.formatPreviewSection = root.createDiv("llm-wiki-format-preview");
+    this.formatPreviewSection = root.createDiv("ai-wiki-format-preview");
     this.formatPreviewSection.createEl("h4", { text: T.view.formatPreviewHeader });
     const link = this.formatPreviewSection.createEl("a", {
       text: `\u{1F4C4} ${tempPath}`,
@@ -20741,37 +20741,37 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       attr: { href: tempPath, "data-href": tempPath }
     });
     registerLinkHandler(this.formatPreviewSection, this.app);
-    const reportEl = this.formatPreviewSection.createDiv("llm-wiki-format-report");
+    const reportEl = this.formatPreviewSection.createDiv("ai-wiki-format-report");
     const comp = new import_obsidian4.Component();
     comp.load();
     void import_obsidian4.MarkdownRenderer.render(this.app, report, reportEl, "", comp);
     if (missing.length > 0) {
-      const warn = this.formatPreviewSection.createEl("details", { cls: "llm-wiki-format-warn" });
+      const warn = this.formatPreviewSection.createEl("details", { cls: "ai-wiki-format-warn" });
       const summary = warn.createEl("summary");
       summary.setText(T.view.formatMissingTokens(missing.length));
-      const list = warn.createEl("ul", { cls: "llm-wiki-format-warn-list" });
+      const list = warn.createEl("ul", { cls: "ai-wiki-format-warn-list" });
       for (const m of missing) {
         const li = list.createEl("li");
-        li.createEl("code", { text: m.token, cls: "llm-wiki-format-warn-token" });
+        li.createEl("code", { text: m.token, cls: "ai-wiki-format-warn-token" });
         if (m.context) {
-          li.createSpan({ text: " \u2014 ", cls: "llm-wiki-format-warn-sep" });
-          li.createSpan({ text: m.context, cls: "llm-wiki-format-warn-ctx" });
+          li.createSpan({ text: " \u2014 ", cls: "ai-wiki-format-warn-sep" });
+          li.createSpan({ text: m.context, cls: "ai-wiki-format-warn-ctx" });
         }
       }
     }
-    const btnRow = this.formatPreviewSection.createDiv("llm-wiki-format-actions");
+    const btnRow = this.formatPreviewSection.createDiv("ai-wiki-format-actions");
     const applyReplaceBtn = btnRow.createEl("button", { text: T.view.formatApplyReplace, cls: "mod-cta" });
     applyReplaceBtn.addEventListener("click", () => void this.plugin.controller.formatApply(false));
     const applyKeepBtn = btnRow.createEl("button", { text: T.view.formatApplyKeep });
     applyKeepBtn.addEventListener("click", () => void this.plugin.controller.formatApply(true));
     const cancelBtn = btnRow.createEl("button", { text: T.view.formatCancelBtn, cls: "mod-warning" });
     cancelBtn.addEventListener("click", () => void this.plugin.controller.formatCancel());
-    const chatBox = this.formatPreviewSection.createDiv("llm-wiki-format-chat");
+    const chatBox = this.formatPreviewSection.createDiv("ai-wiki-format-chat");
     const inputEl = chatBox.createEl("textarea", {
-      cls: "llm-wiki-format-chat-input",
+      cls: "ai-wiki-format-chat-input",
       attr: { placeholder: T.view.formatRefinePlaceholder, rows: "3" }
     });
-    const sendRow = chatBox.createDiv("llm-wiki-format-chat-send-row");
+    const sendRow = chatBox.createDiv("ai-wiki-format-chat-send-row");
     const sendBtn = sendRow.createEl("button", { text: T.view.chatSend });
     sendBtn.addEventListener("click", () => {
       const msg = inputEl.value.trim();
@@ -20809,8 +20809,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       const comp = new import_obsidian4.Component();
       comp.load();
       await import_obsidian4.MarkdownRenderer.render(this.app, entry.finalText, this.finalEl, "", comp);
-      this.resultSection.removeClass("llm-wiki-hidden");
-      this.finalEl.removeClass("llm-wiki-hidden");
+      this.resultSection.removeClass("ai-wiki-hidden");
+      this.finalEl.removeClass("ai-wiki-hidden");
       this.resultOpen = true;
       this.resultToggle.setText("\u25BC");
       const CHAT_OPS = ["lint", "ingest", "query", "query-save"];
@@ -20830,17 +20830,17 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.chatSection?.remove();
     this.chatOpen = true;
     const T = i18n();
-    this.chatSection = this.resultSection.createDiv("llm-wiki-chat-section");
-    const chatHeader = this.chatSection.createDiv("llm-wiki-progress-header");
-    const chatH4 = chatHeader.createEl("h4", { cls: "llm-wiki-progress-title" });
-    this.chatToggle = chatH4.createSpan({ cls: "llm-wiki-progress-arrow", text: "\u25BC" });
+    this.chatSection = this.resultSection.createDiv("ai-wiki-chat-section");
+    const chatHeader = this.chatSection.createDiv("ai-wiki-progress-header");
+    const chatH4 = chatHeader.createEl("h4", { cls: "ai-wiki-progress-title" });
+    this.chatToggle = chatH4.createSpan({ cls: "ai-wiki-progress-arrow", text: "\u25BC" });
     chatH4.appendText(` ${T.view.chatLabel}`);
     chatHeader.addEventListener("click", () => this.toggleChat());
-    this.chatBodyEl = this.chatSection.createDiv("llm-wiki-chat-body");
-    this.chatMessagesEl = this.chatBodyEl.createDiv("llm-wiki-chat-messages");
-    const inputRow = this.chatBodyEl.createDiv("llm-wiki-chat-input-row");
-    this.chatInputEl = inputRow.createEl("textarea", { cls: "llm-wiki-chat-input", attr: { rows: "2" } });
-    this.chatSendBtn = inputRow.createEl("button", { text: T.view.chatSend, cls: "llm-wiki-chat-send" });
+    this.chatBodyEl = this.chatSection.createDiv("ai-wiki-chat-body");
+    this.chatMessagesEl = this.chatBodyEl.createDiv("ai-wiki-chat-messages");
+    const inputRow = this.chatBodyEl.createDiv("ai-wiki-chat-input-row");
+    this.chatInputEl = inputRow.createEl("textarea", { cls: "ai-wiki-chat-input", attr: { rows: "2" } });
+    this.chatSendBtn = inputRow.createEl("button", { text: T.view.chatSend, cls: "ai-wiki-chat-send" });
     const submit = () => {
       const text = this.chatInputEl.value.trim();
       if (!text || !this.lastContext)
@@ -20859,7 +20859,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.chatSendBtn.addEventListener("click", submit);
   }
   addChatBubble(role, text) {
-    const el = this.chatMessagesEl.createDiv(`llm-wiki-chat-msg llm-wiki-chat-msg--${role}`);
+    const el = this.chatMessagesEl.createDiv(`ai-wiki-chat-msg ai-wiki-chat-msg--${role}`);
     if (role === "user") {
       el.setText(text);
     } else {
@@ -20878,7 +20878,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.chatInputEl.disabled = true;
     this.currentChatBuffer = "";
     if (this.chatMessagesEl) {
-      this.currentChatBubble = this.chatMessagesEl.createDiv("llm-wiki-chat-msg llm-wiki-chat-msg--assistant llm-wiki-chat-msg--streaming");
+      this.currentChatBubble = this.chatMessagesEl.createDiv("ai-wiki-chat-msg ai-wiki-chat-msg--assistant ai-wiki-chat-msg--streaming");
       this.currentChatBubble.setText("\u2026");
       this.currentChatBubble.scrollIntoView({ block: "end" });
     }
@@ -20914,10 +20914,10 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.chatInputEl.focus();
     }
     if (this.currentChatBubble) {
-      this.currentChatBubble.removeClass("llm-wiki-chat-msg--streaming");
+      this.currentChatBubble.removeClass("ai-wiki-chat-msg--streaming");
       this.currentChatBubble.empty();
       if (isError) {
-        this.currentChatBubble.addClass("llm-wiki-chat-msg--error");
+        this.currentChatBubble.addClass("ai-wiki-chat-msg--error");
         this.currentChatBubble.setText(msg.content);
       } else {
         const comp = new import_obsidian4.Component();
@@ -20937,33 +20937,33 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   toggleHistory() {
     this.historyOpen = !this.historyOpen;
     if (this.historyOpen) {
-      this.historyEl.removeClass("llm-wiki-hidden");
+      this.historyEl.removeClass("ai-wiki-hidden");
     } else {
-      this.historyEl.addClass("llm-wiki-hidden");
+      this.historyEl.addClass("ai-wiki-hidden");
     }
     this.historyToggle.setText(this.historyOpen ? "\u25BC" : "\u25B6");
   }
   toggleResult() {
     this.resultOpen = !this.resultOpen;
     if (this.resultOpen) {
-      this.finalEl.removeClass("llm-wiki-hidden");
+      this.finalEl.removeClass("ai-wiki-hidden");
     } else {
-      this.finalEl.addClass("llm-wiki-hidden");
+      this.finalEl.addClass("ai-wiki-hidden");
     }
     this.resultToggle.setText(this.resultOpen ? "\u25BC" : "\u25B6");
   }
   toggleSteps() {
     this.stepsOpen = !this.stepsOpen;
     if (this.stepsOpen) {
-      this.stepsEl.removeClass("llm-wiki-hidden");
+      this.stepsEl.removeClass("ai-wiki-hidden");
     } else {
-      this.stepsEl.addClass("llm-wiki-hidden");
+      this.stepsEl.addClass("ai-wiki-hidden");
     }
     this.progressToggle.setText(this.stepsOpen ? "\u25BC" : "\u25B6");
   }
   toggleChat() {
     this.chatOpen = !this.chatOpen;
-    this.chatBodyEl?.toggleClass("llm-wiki-hidden", !this.chatOpen);
+    this.chatBodyEl?.toggleClass("ai-wiki-hidden", !this.chatOpen);
     this.chatToggle?.setText(this.chatOpen ? "\u25BC" : "\u25B6");
   }
   updateMetrics() {
@@ -20989,13 +20989,13 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.historyEl.empty();
     const items = this.plugin.settings.history.slice().reverse();
     if (items.length === 0) {
-      this.historySection.addClass("llm-wiki-hidden");
+      this.historySection.addClass("ai-wiki-hidden");
       this.historyOpen = false;
       return;
     }
-    this.historySection.removeClass("llm-wiki-hidden");
+    this.historySection.removeClass("ai-wiki-hidden");
     for (const it of items) {
-      const row = this.historyEl.createDiv("llm-wiki-history-row");
+      const row = this.historyEl.createDiv("ai-wiki-history-row");
       row.createSpan().setText(this.statusLabel(it));
       row.createSpan({ cls: "muted" }).setText(` ${it.args.join(" ")}`);
       row.addEventListener("click", () => {
@@ -21003,8 +21003,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
         const comp = new import_obsidian4.Component();
         comp.load();
         void import_obsidian4.MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, "", comp);
-        this.resultSection.removeClass("llm-wiki-hidden");
-        this.finalEl.removeClass("llm-wiki-hidden");
+        this.resultSection.removeClass("ai-wiki-hidden");
+        this.finalEl.removeClass("ai-wiki-hidden");
         this.resultOpen = true;
         this.resultToggle.setText("\u25BC");
       });
@@ -21032,7 +21032,7 @@ var WikiQuestionModal = class extends import_obsidian4.Modal {
     contentEl.createEl("h3", { text: i18n().view.answerRequired });
     contentEl.createEl("p", { text: this.question });
     if (this.options.length > 0) {
-      const btnRow = contentEl.createDiv("llm-wiki-modal-options");
+      const btnRow = contentEl.createDiv("ai-wiki-modal-options");
       for (const opt of this.options) {
         const btn = btnRow.createEl("button", { text: opt });
         btn.addEventListener("click", () => {
@@ -21046,7 +21046,7 @@ var WikiQuestionModal = class extends import_obsidian4.Modal {
     } else {
       const input = contentEl.createEl("input", {
         attr: { type: "text" },
-        cls: "llm-wiki-modal-input"
+        cls: "ai-wiki-modal-input"
       });
       input.focus();
       const submit = () => {
@@ -23163,7 +23163,7 @@ var ClaudeCliClient = class {
     try {
       const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
       if (isLargeUser) {
-        const tmpUsrFile = (0, import_path_browserify5.join)(this.cfg.tmpDir, `llm-wiki-usr-${id}.txt`);
+        const tmpUsrFile = (0, import_path_browserify5.join)(this.cfg.tmpDir, `ai-wiki-usr-${id}.txt`);
         const wrapped = `<user_input>
 ${userText}
 </user_input>`;
@@ -23182,7 +23182,7 @@ ${userText}
       if (!isResume && systemContent) {
         const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
         if (isLargeSys) {
-          const tmpSysFile = (0, import_path_browserify5.join)(this.cfg.tmpDir, `llm-wiki-sys-${id}.txt`);
+          const tmpSysFile = (0, import_path_browserify5.join)(this.cfg.tmpDir, `ai-wiki-sys-${id}.txt`);
           await this.cfg.tmpWrite(tmpSysFile, systemContent);
           tmpFiles.push(tmpSysFile);
           args.push("--system-prompt-file", tmpSysFile);
@@ -30841,7 +30841,7 @@ var WikiController = class {
       agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId);
     } catch (e) {
       new import_obsidian7.Notice(i18n().ctrl.errorPrefix(e.message));
-      console.error("[llm-wiki] buildAgentRunner failed", e);
+      console.error("[ai-wiki] buildAgentRunner failed", e);
       return;
     }
     const ctrl = new AbortController();
@@ -30929,7 +30929,7 @@ var WikiController = class {
     const base = adapter.getBasePath?.();
     if (base == null) {
       if (!import_obsidian7.Platform.isMobile) {
-        console.warn("[llm-wiki] vault.adapter.getBasePath is undefined on desktop");
+        console.warn("[ai-wiki] vault.adapter.getBasePath is undefined on desktop");
       }
       return "";
     }
@@ -31048,7 +31048,7 @@ var WikiController = class {
           if (!shouldBypass(baseHost, noProxyList)) {
             proxyFetch = createProxyFetch(proxyCfg);
             if (proxyFetch)
-              console.debug(`[llm-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
+              console.debug(`[ai-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
           }
         } catch (e) {
           new import_obsidian7.Notice(i18n().settings.proxy_invalid(e.message));
@@ -31115,7 +31115,7 @@ var WikiController = class {
       agentRunner = await this.buildAgentRunner(vaultRoot);
     } catch (e) {
       new import_obsidian7.Notice(i18n().ctrl.errorPrefix(e.message));
-      console.error("[llm-wiki] buildAgentRunner failed", e);
+      console.error("[ai-wiki] buildAgentRunner failed", e);
       return;
     }
     const ctrl = new AbortController();
@@ -31170,7 +31170,7 @@ var WikiController = class {
       }
     } catch (err) {
       status = "error";
-      console.error("[llm-wiki] dispatch failed", err);
+      console.error("[ai-wiki] dispatch failed", err);
       finalText = i18n().ctrl.errorPrefix(err.message);
       await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
     } finally {
@@ -31214,17 +31214,17 @@ var WikiController = class {
     }
   }
   async ensureView() {
-    const leaves = this.app.workspace.getLeavesOfType(LLM_WIKI_VIEW_TYPE);
+    const leaves = this.app.workspace.getLeavesOfType(AI_WIKI_VIEW_TYPE);
     if (leaves.length === 0) {
       const right = this.app.workspace.getRightLeaf(false);
       if (right)
-        await right.setViewState({ type: LLM_WIKI_VIEW_TYPE, active: true });
+        await right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
     } else {
       void this.app.workspace.revealLeaf(leaves[0]);
     }
   }
   activeView() {
-    const leaves = this.app.workspace.getLeavesOfType(LLM_WIKI_VIEW_TYPE);
+    const leaves = this.app.workspace.getLeavesOfType(AI_WIKI_VIEW_TYPE);
     const view = leaves[0]?.view;
     return view instanceof LlmWikiView ? view : null;
   }
@@ -31283,15 +31283,15 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
     await migrateToLocalV1(this, this.localConfigStore);
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
     this.controller.onBusyChange = () => this.settingTab?.display();
-    this.registerView(LLM_WIKI_VIEW_TYPE, (leaf) => new LlmWikiView(leaf, this));
-    this.addRibbonIcon("brain-circuit", "LLM Wiki", () => {
-      const leaves = this.app.workspace.getLeavesOfType(LLM_WIKI_VIEW_TYPE);
+    this.registerView(AI_WIKI_VIEW_TYPE, (leaf) => new LlmWikiView(leaf, this));
+    this.addRibbonIcon("brain-circuit", "AI Wiki", () => {
+      const leaves = this.app.workspace.getLeavesOfType(AI_WIKI_VIEW_TYPE);
       if (leaves.length > 0) {
         void this.app.workspace.revealLeaf(leaves[0]);
       } else {
         const right = this.app.workspace.getRightLeaf(false);
         if (right)
-          void right.setViewState({ type: LLM_WIKI_VIEW_TYPE, active: true });
+          void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
     const T = i18n();
@@ -31301,7 +31301,7 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
       callback: () => {
         const right = this.app.workspace.getRightLeaf(false);
         if (right)
-          void right.setViewState({ type: LLM_WIKI_VIEW_TYPE, active: true });
+          void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
     if (!import_obsidian8.Platform.isMobile) {
@@ -31374,11 +31374,11 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
     });
     this.settingTab = new LlmWikiSettingTab(this.app, this);
     this.addSettingTab(this.settingTab);
-    console.debug("[llm-wiki] loaded");
+    console.debug("[ai-wiki] loaded");
   }
   onunload() {
     this.controller.cancelCurrent();
-    console.debug("[llm-wiki] unloaded");
+    console.debug("[ai-wiki] unloaded");
   }
   async loadSettings() {
     const data = await this.loadData();
