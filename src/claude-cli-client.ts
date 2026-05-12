@@ -1,6 +1,5 @@
 import { spawn } from "node:child_process";
-import { writeFileSync, unlinkSync } from "fs";
-import { join } from "path";
+import { join } from "path-browserify";
 import type OpenAI from "openai";
 import { parseStreamLine } from "./stream";
 import type { LlmClient } from "./types";
@@ -13,6 +12,8 @@ export interface ClaudeCliConfig {
   allowedTools?: string;
   tmpDir: string;
   resumeSessionId?: string;
+  tmpWrite: (name: string, content: string) => Promise<string>;
+  tmpRemove: (path: string) => Promise<void>;
 }
 
 const SIGTERM_GRACE_MS = 3000;
@@ -34,7 +35,7 @@ export class ClaudeCliClient implements LlmClient {
     },
   };
 
-  private _create(
+  private async _create(
     params:
       | OpenAI.Chat.ChatCompletionCreateParamsStreaming
       | OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
@@ -69,9 +70,9 @@ export class ClaudeCliClient implements LlmClient {
     try {
       const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
       if (isLargeUser) {
-        const tmpUsrFile = join(this.cfg.tmpDir, `llm-wiki-usr-${id}.txt`);
+        const tmpUsrName = `llm-wiki-usr-${id}.txt`;
         const wrapped = `<user_input>\n${userText}\n</user_input>`;
-        writeFileSync(tmpUsrFile, wrapped, "utf-8");
+        const tmpUsrFile = await this.cfg.tmpWrite(tmpUsrName, wrapped);
         tmpFiles.push(tmpUsrFile);
         args.push("-p", "Обработай содержимое из <user_input> согласно системному промпту.");
         args.push("--append-system-prompt-file", tmpUsrFile);
@@ -90,8 +91,8 @@ export class ClaudeCliClient implements LlmClient {
       if (!isResume && systemContent) {
         const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
         if (isLargeSys) {
-          const tmpSysFile = join(this.cfg.tmpDir, `llm-wiki-sys-${id}.txt`);
-          writeFileSync(tmpSysFile, systemContent, "utf-8");
+          const tmpSysName = `llm-wiki-sys-${id}.txt`;
+          const tmpSysFile = await this.cfg.tmpWrite(tmpSysName, systemContent);
           tmpFiles.push(tmpSysFile);
           args.push("--system-prompt-file", tmpSysFile);
         } else {
@@ -99,12 +100,12 @@ export class ClaudeCliClient implements LlmClient {
         }
       }
     } catch (err) {
-      for (const f of tmpFiles) { try { unlinkSync(f); } catch { /* ignore */ } }
+      for (const f of tmpFiles) { try { await this.cfg.tmpRemove(f); } catch { /* ignore */ } }
       throw err;
     }
 
     if ((params as { stream?: boolean }).stream) {
-      return Promise.resolve(this._makeIterable(args, opts?.signal, requestTimeoutSec, tmpFiles));
+      return this._makeIterable(args, opts?.signal, requestTimeoutSec, tmpFiles);
     }
     return this._collect(args, opts?.signal, requestTimeoutSec, tmpFiles);
   }
@@ -208,7 +209,7 @@ export class ClaudeCliClient implements LlmClient {
     } finally {
       clearTimeout(timeoutHandle);
       signal?.removeEventListener("abort", onAbort);
-      for (const f of tmpFiles) { try { unlinkSync(f); } catch { /* already gone */ } }
+      for (const f of tmpFiles) { try { await this.cfg.tmpRemove(f); } catch { /* already gone */ } }
       if (child.exitCode === null) {
         child.kill("SIGTERM");
         setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, SIGTERM_GRACE_MS);

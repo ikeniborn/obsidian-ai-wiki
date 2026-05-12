@@ -7,13 +7,8 @@ vi.mock("node:readline", async (importOriginal) => {
   const orig = await importOriginal<typeof import("node:readline")>();
   return orig;
 });
-vi.mock("node:fs", () => ({
-  writeFileSync: vi.fn(),
-  unlinkSync: vi.fn(),
-}));
 
 import { spawn } from "node:child_process";
-import { writeFileSync, unlinkSync } from "node:fs";
 import { ClaudeCliClient } from "../src/claude-cli-client";
 
 function makeMockProcess(lines: string[]) {
@@ -35,7 +30,25 @@ function makeMockProcess(lines: string[]) {
   return proc;
 }
 
-const cfg = { iclaudePath: "/usr/bin/claude", model: "sonnet", maxTokens: 1024, requestTimeoutSec: 30, tmpDir: "/plugin/tmp" };
+const mockTmpWrite = vi.fn(async (name: string, content: string) => {
+  const path = `/plugin/tmp/${name}`;
+  // Just return the path; callback is responsible for actual file ops
+  return path;
+});
+
+const mockTmpRemove = vi.fn(async (path: string) => {
+  // Callback is responsible for cleanup
+});
+
+const cfg = {
+  iclaudePath: "/usr/bin/claude",
+  model: "sonnet",
+  maxTokens: 1024,
+  requestTimeoutSec: 30,
+  tmpDir: "/plugin/tmp",
+  tmpWrite: mockTmpWrite,
+  tmpRemove: mockTmpRemove,
+};
 
 describe("ClaudeCliClient", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -147,6 +160,8 @@ describe("ClaudeCliClient", () => {
   it("uses --append-system-prompt-file when userText exceeds 256KB", async () => {
     (spawn as any).mockReturnValue(makeMockProcess([]));
 
+    mockTmpWrite.mockResolvedValue("/plugin/tmp/llm-wiki-usr-123.txt");
+
     const client = new ClaudeCliClient(cfg);
     const largeText = "x".repeat(300_000); // > 262 144 bytes
 
@@ -160,18 +175,22 @@ describe("ClaudeCliClient", () => {
     const pIdx = args.indexOf("-p");
     expect(args[pIdx + 1]).toContain("user_input");
 
-    const writtenUsrPath = (writeFileSync as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-    expect(writtenUsrPath).toContain("llm-wiki-usr-");
-    expect(writtenUsrPath).toContain("/plugin/tmp");
-    const writtenContent = (writeFileSync as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+    // Check tmpWrite was called with file name and wrapped content
+    expect(mockTmpWrite).toHaveBeenCalled();
+    const writtenName = mockTmpWrite.mock.calls[0][0] as string;
+    const writtenContent = mockTmpWrite.mock.calls[0][1] as string;
+    expect(writtenName).toContain("llm-wiki-usr-");
     expect(writtenContent).toContain("<user_input>");
     expect(writtenContent).toContain(largeText);
 
-    expect(unlinkSync).toHaveBeenCalledWith(writtenUsrPath);
+    // Check tmpRemove was called with the returned path
+    expect(mockTmpRemove).toHaveBeenCalledWith("/plugin/tmp/llm-wiki-usr-123.txt");
   });
 
   it("uses --system-prompt-file when systemContent exceeds 256KB", async () => {
     (spawn as any).mockReturnValue(makeMockProcess([]));
+
+    mockTmpWrite.mockResolvedValue("/plugin/tmp/llm-wiki-sys-456.txt");
 
     const client = new ClaudeCliClient(cfg);
     const largeSystem = "s".repeat(300_000);
@@ -191,16 +210,21 @@ describe("ClaudeCliClient", () => {
     expect(args).toContain("--system-prompt-file");
     expect(args).not.toContain("--system-prompt");
 
-    const writtenSysPath = (writeFileSync as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-    expect(writtenSysPath).toContain("llm-wiki-sys-");
-    expect(writtenSysPath).toContain("/plugin/tmp");
-    expect(writeFileSync).toHaveBeenCalledWith(writtenSysPath, largeSystem, "utf-8");
+    // Check tmpWrite was called with file name and system content
+    expect(mockTmpWrite).toHaveBeenCalled();
+    const writtenName = mockTmpWrite.mock.calls[0][0] as string;
+    const writtenContent = mockTmpWrite.mock.calls[0][1] as string;
+    expect(writtenName).toContain("llm-wiki-sys-");
+    expect(writtenContent).toBe(largeSystem);
 
-    expect(unlinkSync).toHaveBeenCalledWith(writtenSysPath);
+    // Check tmpRemove was called with the returned path
+    expect(mockTmpRemove).toHaveBeenCalledWith("/plugin/tmp/llm-wiki-sys-456.txt");
   });
 
   it("keeps small userText and systemContent inline in argv", async () => {
     (spawn as any).mockReturnValue(makeMockProcess([]));
+
+    mockTmpWrite.mockClear();
 
     const client = new ClaudeCliClient(cfg);
 
@@ -221,7 +245,7 @@ describe("ClaudeCliClient", () => {
     expect(args).toContain("--system-prompt");
     expect(args).not.toContain("--system-prompt-file");
     expect(args).not.toContain("--append-system-prompt-file");
-    expect(writeFileSync).not.toHaveBeenCalled();
+    expect(mockTmpWrite).not.toHaveBeenCalled();
   });
 
   it("passes --resume after -- and skips --system-prompt when resumeSessionId is set", async () => {
