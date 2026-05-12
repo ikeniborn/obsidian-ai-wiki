@@ -82,7 +82,7 @@ export class LlmWikiView extends ItemView {
   }
 
   getViewType(): string { return LLM_WIKI_VIEW_TYPE; }
-  // eslint-disable-next-line /skip
+  // eslint-disable-next-line obsidianmd/ui/sentence-case -- "LLM Wiki" is the plugin name (proper noun)
   getDisplayText(): string { return "LLM Wiki"; }
   getIcon(): string { return "brain-circuit"; }
 
