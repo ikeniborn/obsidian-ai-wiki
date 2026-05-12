@@ -20121,7 +20121,7 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       );
     } else {
       const p = containerEl.createEl("p", {
-        text: "Mobile: cloud LLM (native-agent) only. Setup guide: ",
+        text: "Mobile: cloud LLM (native-agent) only. setup guide: ",
         cls: "setting-item-description"
       });
       p.createEl("a", {
@@ -20385,6 +20385,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   getViewType() {
     return LLM_WIKI_VIEW_TYPE;
   }
+  // eslint-disable-next-line /skip
   getDisplayText() {
     return "LLM Wiki";
   }
