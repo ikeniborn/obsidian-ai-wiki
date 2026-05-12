@@ -21326,6 +21326,12 @@ function parseWikiSourcesFromFm(content) {
     return [];
   return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
 }
+function hasFrontmatterField(content, field) {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch)
+    return false;
+  return new RegExp(`^${field}:`, "m").test(fmMatch[1]);
+}
 
 // src/phases/ingest.ts
 async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}) {
@@ -21426,8 +21432,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     await appendLog(vaultTools, wikiRoot, sourceVaultPath, domain.id, written);
     await updateIndex(vaultTools, wikiRoot, written);
     const backlinkToday = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-    const fmMatch = /^---\n([\s\S]*?)\n---\n?/.exec(sourceContent);
-    const isFirstTime = fmMatch ? !/^wiki_added:/m.test(fmMatch[1]) : true;
+    const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
     const existingArticles = parseWikiArticlesFromFm(sourceContent);
     const writtenLinks = written.map((p) => `[[${p}]]`);
     const mergedArticles = [.../* @__PURE__ */ new Set([...existingArticles, ...writtenLinks])];

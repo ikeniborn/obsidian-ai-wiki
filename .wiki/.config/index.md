@@ -148,6 +148,7 @@
 - [[modals-ts]] — modals.ts (Modal компоненты)
 - [[settings-ts]] — settings.ts (LlmWikiSettingTab)
 - [[source-paths-ts]] — source-paths.ts (consolidateSourcePaths)
+- [[raw-frontmatter-ts]] — raw-frontmatter.ts (upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm)
 - [[wiki-path-ts]] — wiki-path.ts (WIKI_ROOT, domainWikiFolder)
 - [[template-ts]] — phases/template.ts (render)
 

@@ -1,6 +1,6 @@
 ---
 wiki_sources: ["src/phases/ingest.ts"]
-wiki_updated: 2026-05-06
+wiki_updated: 2026-05-12
 wiki_status: developing
 wiki_outgoing_links:
   - "[[agent-runner]]"
@@ -9,6 +9,7 @@ wiki_outgoing_links:
   - "[[run-event]]"
   - "[[ingest-промпт]]"
   - "[[domain-entry]]"
+  - "[[raw-frontmatter-ts]]"
 tags: ["implementation", "typescript", "obsidian-llm-wiki"]
 aliases: ["runIngest", "ingest.ts"]
 ---
@@ -26,11 +27,25 @@ aliases: ["runIngest", "ingest.ts"]
 1. Разрешить абсолютный путь файла-источника → vault-relative через `vaultTools.toVaultPath()`
 2. Прочитать файл (yield tool_use/tool_result)
 3. `detectDomain()` — найти домен по prefix-match `source_paths`; если не найден — использовать первый домен
-4. Прочитать `_schema.md`, `_index.md` и существующие wiki-страницы домена
-5. Вызвать LLM с `ingest.md` промптом → получить JSON-массив страниц
+4. Прочитать `_wiki_schema.md`, `_index.md` и существующие wiki-страницы домена (исключая `_index.md`)
+5. Вызвать LLM с `ingest.md` промптом → получить JSON-массив страниц `[{path, content}]`
 6. Записать страницы через `vaultTools.write()` (блокировать пути вне wiki-папки домена)
 7. Обновить `_log.md` и `_index.md`
-8. yield `source_path_added` с родительской папкой источника
+8. **Записать backlinks в source-файл** (см. ниже)
+9. yield `source_path_added` с родительской папкой источника
+
+### Запись backlinks в source-файл
+
+После успешной записи wiki-страниц (`written.length > 0`) функция обновляет frontmatter самого файла-источника:
+
+- Определяет, является ли это первым ingest файла (нет поля `wiki_added` в frontmatter)
+- Читает существующие `wiki_articles` из frontmatter через `parseWikiArticlesFromFm()`
+- Объединяет их с новыми ссылками `[[path]]` на записанные wiki-страницы (дедупликация через `Set`)
+- Вызывает `upsertRawFrontmatter()` с полями:
+  - `wiki_added`: ISO-дата сегодня (только если первый раз)
+  - `wiki_updated`: ISO-дата сегодня
+  - `wiki_articles`: merged массив WikiLinks
+- Записывает обновлённый источник через `vaultTools.write()`
 
 ### parseJsonPages(text)
 
@@ -48,3 +63,4 @@ Prefix-match: возвращает первый домен, чей `source_path`
 
 - [[ingest-промпт]] — шаблон промпта для синтеза wiki-страниц
 - [[run-init]] — использует runIngest внутри для обработки источников
+- [[raw-frontmatter-ts]] — `upsertRawFrontmatter`, `parseWikiArticlesFromFm` для backlinks в source

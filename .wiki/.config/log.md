@@ -442,3 +442,19 @@
 **Примечание:** Изменения соответствуют v0.1.61 — мобильная поддержка (CORS bypass через `requestUrl`) + per-device overlay для backend/credentials с однократной миграцией из synced `data.json`.
 
 ---
+
+## 2026-05-12 — ingest реализация
+
+**Операция:** ingest  
+**Домен:** реализация (Реализация плагина)  
+**Источники:**
+- `src/utils/raw-frontmatter.ts`
+- `src/phases/ingest.ts`
+- `src/phases/lint.ts`
+
+**Результат:**
+- СОЗДАНА: `.wiki/реализация/модули/raw-frontmatter-ts.md` — новый модуль (upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm)
+- ОБНОВЛЕНА: `.wiki/реализация/фазы/run-ingest.md` — добавлена секция «Запись backlinks в source-файл» (upsertRawFrontmatter, wiki_added/wiki_updated/wiki_articles); обновлена ссылка на [[raw-frontmatter-ts]]
+- ОБНОВЛЕНА: `.wiki/реализация/фазы/run-lint.md` — статус stub→developing; детализирован 3-фазный алгоритм (LLM-аудит, actualizeDomainConfig, fix-pass, backlink sync); документированы checkStructure, computeEntityDiff, META_FILES; добавлены ссылки на [[raw-frontmatter-ts]] и [[domain-entry]]
+
+---
