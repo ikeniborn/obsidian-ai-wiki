@@ -18502,14 +18502,13 @@ var claude_cli_client_exports = {};
 __export(claude_cli_client_exports, {
   ClaudeCliClient: () => ClaudeCliClient
 });
-var import_node_child_process, import_node_fs, import_node_path5, import_node_readline, SIGTERM_GRACE_MS, ClaudeCliClient;
+var import_node_child_process, import_fs, import_path41, SIGTERM_GRACE_MS, ClaudeCliClient;
 var init_claude_cli_client = __esm({
   "src/claude-cli-client.ts"() {
     "use strict";
     import_node_child_process = require("node:child_process");
-    import_node_fs = require("node:fs");
-    import_node_path5 = require("node:path");
-    import_node_readline = require("node:readline");
+    import_fs = require("fs");
+    import_path41 = require("path");
     init_stream();
     SIGTERM_GRACE_MS = 3e3;
     ClaudeCliClient = class {
@@ -18544,11 +18543,11 @@ var init_claude_cli_client = __esm({
         try {
           const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
           if (isLargeUser) {
-            const tmpUsrFile = (0, import_node_path5.join)(this.cfg.tmpDir, `llm-wiki-usr-${id}.txt`);
+            const tmpUsrFile = (0, import_path41.join)(this.cfg.tmpDir, `llm-wiki-usr-${id}.txt`);
             const wrapped = `<user_input>
 ${userText}
 </user_input>`;
-            (0, import_node_fs.writeFileSync)(tmpUsrFile, wrapped, "utf-8");
+            (0, import_fs.writeFileSync)(tmpUsrFile, wrapped, "utf-8");
             tmpFiles.push(tmpUsrFile);
             args.push("-p", "\u041E\u0431\u0440\u0430\u0431\u043E\u0442\u0430\u0439 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u0438\u0437 <user_input> \u0441\u043E\u0433\u043B\u0430\u0441\u043D\u043E \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u043C\u0443 \u043F\u0440\u043E\u043C\u043F\u0442\u0443.");
             args.push("--append-system-prompt-file", tmpUsrFile);
@@ -18563,8 +18562,8 @@ ${userText}
           if (!isResume && systemContent) {
             const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
             if (isLargeSys) {
-              const tmpSysFile = (0, import_node_path5.join)(this.cfg.tmpDir, `llm-wiki-sys-${id}.txt`);
-              (0, import_node_fs.writeFileSync)(tmpSysFile, systemContent, "utf-8");
+              const tmpSysFile = (0, import_path41.join)(this.cfg.tmpDir, `llm-wiki-sys-${id}.txt`);
+              (0, import_fs.writeFileSync)(tmpSysFile, systemContent, "utf-8");
               tmpFiles.push(tmpSysFile);
               args.push("--system-prompt-file", tmpSysFile);
             } else {
@@ -18574,7 +18573,7 @@ ${userText}
         } catch (err) {
           for (const f of tmpFiles) {
             try {
-              (0, import_node_fs.unlinkSync)(f);
+              (0, import_fs.unlinkSync)(f);
             } catch {
             }
           }
@@ -18624,22 +18623,28 @@ ${userText}
           }
         };
         let id = 0;
-        const rl = (0, import_node_readline.createInterface)({ input: child.stdout });
-        rl.on("line", (line) => {
-          const ev = parseStreamLine(line);
-          if (ev?.kind === "system" && ev.sessionId) {
-            this.lastSessionId = ev.sessionId;
-          }
-          if (ev?.kind === "assistant_text") {
-            const delta = ev.isReasoning ? { reasoning: ev.delta } : { content: ev.delta };
-            queue.push({
-              id: `cc-${++id}`,
-              object: "chat.completion.chunk",
-              model: this.cfg.model || "claude",
-              created: 0,
-              choices: [{ index: 0, delta, finish_reason: null }]
-            });
-            wake();
+        let buf = "";
+        child.stdout.on("data", (chunk) => {
+          buf += chunk.toString("utf8");
+          let nl;
+          while ((nl = buf.indexOf("\n")) !== -1) {
+            const line = buf.slice(0, nl);
+            buf = buf.slice(nl + 1);
+            const ev = parseStreamLine(line);
+            if (ev?.kind === "system" && ev.sessionId) {
+              this.lastSessionId = ev.sessionId;
+            }
+            if (ev?.kind === "assistant_text") {
+              const delta = ev.isReasoning ? { reasoning: ev.delta } : { content: ev.delta };
+              queue.push({
+                id: `cc-${++id}`,
+                object: "chat.completion.chunk",
+                model: this.cfg.model || "claude",
+                created: 0,
+                choices: [{ index: 0, delta, finish_reason: null }]
+              });
+              wake();
+            }
           }
         });
         let exited = false;
@@ -18665,6 +18670,11 @@ ${userText}
               break;
             await new Promise((r) => resolveNext = r);
           }
+          if (buf.trim()) {
+            const ev = parseStreamLine(buf.trim());
+            if (ev?.kind === "system" && ev.sessionId)
+              this.lastSessionId = ev.sessionId;
+          }
           const stderr = () => Buffer.concat(stderrChunks).toString("utf8").trim();
           if (spawnError)
             throw new Error(`claude spawn failed: ${spawnError.message}${stderr() ? `
@@ -18687,10 +18697,9 @@ ${stderr()}` : ""}`);
         } finally {
           clearTimeout(timeoutHandle);
           signal?.removeEventListener("abort", onAbort);
-          rl.close();
           for (const f of tmpFiles) {
             try {
-              (0, import_node_fs.unlinkSync)(f);
+              (0, import_fs.unlinkSync)(f);
             } catch {
             }
           }
@@ -20273,7 +20282,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     return LLM_WIKI_VIEW_TYPE;
   }
   getDisplayText() {
-    return "LLM wiki";
+    return "LLM Wiki";
   }
   getIcon() {
     return "brain-circuit";
@@ -20298,7 +20307,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       domainRow.createSpan({ cls: "muted", text: "Domain:" });
       this.domainSelect = domainRow.createEl("select", { cls: "llm-wiki-domain-select" });
       const refreshBtn = domainRow.createEl("button", { text: "\u21BB", attr: { title: T.view.refreshTitle } });
-      refreshBtn.addEventListener("click", () => this.refreshDomains());
+      refreshBtn.addEventListener("click", () => void this.refreshDomains());
       const actionRow = domainBox.createDiv("llm-wiki-domain-actions");
       this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
       this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
@@ -20324,7 +20333,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
           "Claude will check wiki pages for quality and update entity_types."
         ], () => void this.plugin.controller.lint(d || "all")).open();
       });
-      this.refreshDomains();
+      void this.refreshDomains();
     }
     root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionQuery });
     const ask = root.createDiv("llm-wiki-ask");
@@ -20526,13 +20535,13 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       return;
     }
     if (ev.kind === "domain_created") {
-      this.refreshDomains();
+      void this.refreshDomains();
       return;
     }
     if (ev.kind === "source_path_added")
       return;
     if (ev.kind === "domain_updated") {
-      this.refreshDomains();
+      void this.refreshDomains();
       return;
     }
     this.stepCount++;
@@ -21016,9 +21025,9 @@ function translateSystemEvent(message) {
 var import_obsidian7 = require("obsidian");
 
 // src/source-paths.ts
-var import_node_path = require("node:path");
+var import_path = require("path");
 function consolidateSourcePaths(existing, newPath, vaultRoot) {
-  const toAbs = (p) => (0, import_node_path.isAbsolute)(p) ? p : (0, import_node_path.join)(vaultRoot, p);
+  const toAbs = (p) => (0, import_path.isAbsolute)(p) ? p : (0, import_path.join)(vaultRoot, p);
   const normed = (p) => {
     const a = toAbs(p);
     return a.endsWith("/") ? a : a + "/";
@@ -21070,7 +21079,7 @@ function applyDomainEvent(domains, ev, opts) {
 }
 
 // src/phases/ingest.ts
-var import_node_path2 = require("node:path");
+var import_path2 = require("path");
 
 // prompts/base.md
 var base_default = "\u0422\u044B \u2014 wiki-\u0430\u0433\u0435\u043D\u0442. \u0421\u043B\u0435\u0434\u0443\u0439 \u044D\u0442\u0438\u043C \u043F\u0440\u0430\u0432\u0438\u043B\u0430\u043C \u043D\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043C\u043E \u043E\u0442 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.\n\n## \u0414\u043E\u0441\u0442\u043E\u0432\u0435\u0440\u043D\u043E\u0441\u0442\u044C\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430.\n\u041D\u0435 \u0432\u044B\u0434\u0443\u043C\u044B\u0432\u0430\u0439 \u0444\u0430\u043A\u0442\u044B, \u043A\u043E\u0442\u043E\u0440\u044B\u0445 \u043D\u0435\u0442 \u0432 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0435.\n\u0415\u0441\u043B\u0438 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E \u2014 \u0441\u043A\u0430\u0436\u0438 \u043E\u0431 \u044D\u0442\u043E\u043C \u043F\u0440\u044F\u043C\u043E.\n\n## \u0424\u043E\u0440\u043C\u0430\u0442\n\u0412\u043E\u0437\u0432\u0440\u0430\u0449\u0430\u0439 \u0440\u043E\u0432\u043D\u043E \u0442\u043E, \u0447\u0442\u043E \u0437\u0430\u043F\u0440\u043E\u0448\u0435\u043D\u043E.\n\u0415\u0441\u043B\u0438 \u043E\u0436\u0438\u0434\u0430\u0435\u0442\u0441\u044F JSON \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON, \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439 \u0432\u043E\u043A\u0440\u0443\u0433.\n\u0415\u0441\u043B\u0438 \u043E\u0436\u0438\u0434\u0430\u0435\u0442\u0441\u044F \u0442\u0435\u043A\u0441\u0442 \u2014 \u0431\u0435\u0437 \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u043C\u0435\u0442\u043E\u043A \u0438 \u0442\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0445 \u0430\u0440\u0442\u0435\u0444\u0430\u043A\u0442\u043E\u0432.\n\n## \u041C\u0438\u043D\u0438\u043C\u0430\u043B\u0438\u0437\u043C\n\u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u0442\u043E, \u043E \u0447\u0451\u043C \u043D\u0435 \u043F\u0440\u043E\u0441\u0438\u043B\u0438.\n\u041D\u0435 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0438\u0440\u0443\u0439 \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u044B\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F, \u0435\u0441\u043B\u0438 \u044D\u0442\u043E \u043D\u0435 \u0447\u0430\u0441\u0442\u044C \u0437\u0430\u0434\u0430\u0447\u0438.\n";
@@ -21148,7 +21157,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     yield { kind: "error", message: "ingest: file path required" };
     return;
   }
-  const absSource = (0, import_node_path2.isAbsolute)(filePath) ? filePath : (0, import_node_path2.join)(vaultRoot, filePath);
+  const absSource = (0, import_path2.isAbsolute)(filePath) ? filePath : (0, import_path2.join)(vaultRoot, filePath);
   const sourceVaultPath = vaultTools.toVaultPath(absSource);
   if (!sourceVaultPath) {
     yield { kind: "error", message: `Source file ${filePath} is outside the vault.` };
@@ -21168,7 +21177,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     yield { kind: "error", message: "No domain found for this file. Configure domain-map." };
     return;
   }
-  const absWiki = (0, import_node_path2.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+  const absWiki = (0, import_path2.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
     yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
@@ -21259,7 +21268,7 @@ function buildIngestSummary(domainId, sourcePath, written, total) {
 function detectDomain(absFilePath, domains, vaultRoot) {
   for (const d of domains) {
     const matched = d.source_paths?.some((sp) => {
-      const abs = (0, import_node_path2.isAbsolute)(sp) ? sp : (0, import_node_path2.join)(vaultRoot, sp);
+      const abs = (0, import_path2.isAbsolute)(sp) ? sp : (0, import_path2.join)(vaultRoot, sp);
       return absFilePath.startsWith(abs);
     });
     if (matched)
@@ -21320,10 +21329,10 @@ async function tryRead(vaultTools, path2) {
   }
 }
 function extractParentSourcePath(absSource, vaultRoot) {
-  const parentAbs = (0, import_node_path2.dirname)(absSource);
+  const parentAbs = (0, import_path2.dirname)(absSource);
   const normedVault = vaultRoot.endsWith("/") ? vaultRoot : vaultRoot + "/";
   const clamped = (parentAbs + "/").startsWith(normedVault) ? parentAbs : vaultRoot;
-  const rel = (0, import_node_path2.relative)(vaultRoot, clamped);
+  const rel = (0, import_path2.relative)(vaultRoot, clamped);
   return (rel || ".") + "/";
 }
 function buildEntityTypesBlock(domain) {
@@ -21507,7 +21516,7 @@ ${types}${notes}`;
 }
 
 // src/phases/lint.ts
-var import_node_path3 = require("node:path");
+var import_path3 = require("path");
 
 // prompts/lint.md
 var lint_default = "\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0412\u044B\u044F\u0432\u043B\u044F\u0439: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442.\n\u0412\u0435\u0440\u043D\u0438 \u043A\u0440\u0430\u0442\u043A\u0438\u0439 \u043E\u0442\u0447\u0451\u0442 \u0432 markdown.\n{{entity_types_block}}\n";
@@ -21526,7 +21535,7 @@ async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal
   for (const domain of targets) {
     if (signal.aborted)
       return;
-    const absWiki = (0, import_node_path3.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+    const absWiki = (0, import_path3.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
     const wikiVaultPath = vaultTools.toVaultPath(absWiki);
     if (!wikiVaultPath) {
       reportParts.push(`## ${domain.id}
@@ -21796,7 +21805,7 @@ ${c.slice(0, 300)}`).join("\n\n");
 }
 
 // src/phases/fix.ts
-var import_node_path4 = require("node:path");
+var import_path4 = require("path");
 
 // prompts/fix.md
 var fix_default = '\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n{{fix_instruction}}\n\n{{entity_types_block}}\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432 \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 (\u0435\u0441\u043B\u0438 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0430\u0441\u044C \u2014 \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0430\u0439):\n[{"path":"{{wiki_path}}/EntityName.md","content":"\u043F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B"}]\n\u0414\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u044B\u0435 \u043F\u0443\u0442\u0438 wiki: {{wiki_path}}/\n\u0414\u0430\u0442\u0430: {{today}}\n';
@@ -21810,7 +21819,7 @@ async function* runFix(args, vaultTools, llm, model, domains, vaultRoot, signal,
     yield { kind: "error", message: domainId ? `Domain "${domainId}" not found.` : "No domains configured." };
     return;
   }
-  const absWiki = (0, import_node_path4.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+  const absWiki = (0, import_path4.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
     yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
@@ -30134,7 +30143,14 @@ var import_obsidian6 = require("obsidian");
 var mobileFetch = async (input, init) => {
   if (init?.signal?.aborted)
     throw new DOMException("Aborted", "AbortError");
-  const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  let url;
+  if (typeof input === "string") {
+    url = input;
+  } else if (input instanceof URL) {
+    url = input.toString();
+  } else {
+    url = input.url;
+  }
   const body = init?.body;
   if (body != null && typeof body !== "string") {
     throw new Error("mobileFetch: only string body supported");
@@ -30197,6 +30213,14 @@ var DomainStore = class {
 };
 
 // src/controller.ts
+function toVaultPath(vaultDir, savedPath) {
+  const { relative: relative2, isAbsolute: isAbsolute3, join: join6 } = require("path");
+  const abs = isAbsolute3(savedPath) ? savedPath : join6(vaultDir, savedPath);
+  const rel = relative2(vaultDir, abs);
+  if (rel.startsWith("..") || isAbsolute3(rel))
+    return null;
+  return rel;
+}
 var WikiController = class {
   constructor(app, plugin, domainStore, localConfigStore) {
     this.app = app;
@@ -30300,7 +30324,7 @@ var WikiController = class {
       } else {
         const content = await adapter.read(p.tempPath);
         const origFile = this.app.vault.getAbstractFileByPath(p.originalPath);
-        if (origFile && "stat" in origFile) {
+        if (origFile instanceof import_obsidian7.TFile) {
           await this.app.vault.modify(origFile, content);
         } else {
           await adapter.write(p.originalPath, content);
@@ -30384,7 +30408,7 @@ var WikiController = class {
       const eff = resolveEffective(this.plugin.settings, local);
       if (eff.backend === "native-agent" && !this.requireNativeAgent(eff))
         return;
-      if (eff.backend === "claude-agent" && !await this.requireClaudeAgent(local))
+      if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local))
         return;
     }
     await this.ensureView();
@@ -30527,8 +30551,8 @@ var WikiController = class {
     new import_obsidian7.Notice(i18n().ctrl.domainAdded(id));
     return { ok: true };
   }
-  async requireClaudeAgent(local) {
-    const { existsSync } = require("node:fs");
+  requireClaudeAgent(local) {
+    const { existsSync } = require("fs");
     const { iclaudePath } = local;
     if (!iclaudePath || !existsSync(iclaudePath)) {
       new import_obsidian7.Notice(i18n().ctrl.setClaudeCodePath);
@@ -30555,8 +30579,8 @@ var WikiController = class {
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm;
     if (s.backend === "claude-agent") {
-      const { join: join6 } = require("node:path");
-      const { mkdirSync } = require("node:fs");
+      const { join: join6 } = require("path");
+      const { mkdirSync } = require("fs");
       const { ClaudeCliClient: ClaudeCliClient2 } = (init_claude_cli_client(), __toCommonJS(claude_cli_client_exports));
       const manifestDir = this.plugin.manifest.dir ?? join6(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
       const pluginDir = this.app.vault.adapter.getFullPath(manifestDir);
@@ -30585,7 +30609,7 @@ var WikiController = class {
           if (!shouldBypass(baseHost, noProxyList)) {
             proxyFetch = createProxyFetch(proxyCfg);
             if (proxyFetch)
-              console.info(`[llm-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
+              console.debug(`[llm-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
           }
         } catch (e) {
           new import_obsidian7.Notice(i18n().settings.proxy_invalid(e.message));
@@ -30639,7 +30663,7 @@ var WikiController = class {
       const eff = resolveEffective(this.plugin.settings, local);
       if (eff.backend === "native-agent" && !this.requireNativeAgent(eff))
         return;
-      if (eff.backend === "claude-agent" && !await this.requireClaudeAgent(local))
+      if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local))
         return;
     }
     await this.ensureView();
@@ -30736,7 +30760,7 @@ var WikiController = class {
     if (op === "query-save" && status === "done" && !import_obsidian7.Platform.isMobile) {
       const m = finalText.match(/Создана\s+страница:\s*([^\s`'"]+)/i);
       if (m) {
-        const pathInVault = await this.toVaultPath(vaultRoot, m[1]);
+        const pathInVault = toVaultPath(vaultRoot, m[1]);
         if (pathInVault)
           await this.app.workspace.openLinkText(pathInVault, "");
       }
@@ -30764,14 +30788,6 @@ var WikiController = class {
     const leaves = this.app.workspace.getLeavesOfType(LLM_WIKI_VIEW_TYPE);
     const view = leaves[0]?.view;
     return view instanceof LlmWikiView ? view : null;
-  }
-  async toVaultPath(vaultDir, savedPath) {
-    const { relative: relative2, isAbsolute: isAbsolute3, join: join6 } = require("node:path");
-    const abs = isAbsolute3(savedPath) ? savedPath : join6(vaultDir, savedPath);
-    const rel = relative2(vaultDir, abs);
-    if (rel.startsWith("..") || isAbsolute3(rel))
-      return null;
-    return rel;
   }
 };
 
@@ -30829,7 +30845,7 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
     this.controller.onBusyChange = () => this.settingTab?.display();
     this.registerView(LLM_WIKI_VIEW_TYPE, (leaf) => new LlmWikiView(leaf, this));
-    this.addRibbonIcon("brain-circuit", "LLM wiki", () => {
+    this.addRibbonIcon("brain-circuit", "LLM Wiki", () => {
       const leaves = this.app.workspace.getLeavesOfType(LLM_WIKI_VIEW_TYPE);
       if (leaves.length > 0) {
         void this.app.workspace.revealLeaf(leaves[0]);
@@ -30987,8 +31003,9 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
       if (dirty)
         await this.saveData(this.settings);
     }
-    if (typeof data?.agentLogPath === "string") {
-      this.settings.agentLogEnabled = data.agentLogPath.length > 0;
+    const legacyLogPath = data?.agentLogPath;
+    if (typeof legacyLogPath === "string") {
+      this.settings.agentLogEnabled = legacyLogPath.length > 0;
     }
     this.settings.devMode = {
       enabled: this.settings.devMode.enabled,
