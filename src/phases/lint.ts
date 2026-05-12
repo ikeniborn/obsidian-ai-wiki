@@ -180,7 +180,7 @@ export async function* runLint(
         };
       }
     }
-    reportParts.push(`## ${domain.id}\nBacklinks synced: ${syncUpdated} raw files updated`);
+    reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
   }
 
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n") };
