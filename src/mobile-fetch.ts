@@ -2,9 +2,14 @@ import { requestUrl } from "obsidian";
 
 export const mobileFetch: typeof fetch = async (input, init) => {
   if (init?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
-  const url = typeof input === "string"
-    ? input
-    : input instanceof URL ? input.toString() : (input as Request).url;
+  let url: string;
+  if (typeof input === "string") {
+    url = input;
+  } else if (input instanceof URL) {
+    url = input.toString();
+  } else {
+    url = input.url;
+  }
   const body = init?.body;
   if (body != null && typeof body !== "string") {
     throw new Error("mobileFetch: only string body supported");
