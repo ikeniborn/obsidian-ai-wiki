@@ -12,8 +12,8 @@ export interface ClaudeCliConfig {
   allowedTools?: string;
   tmpDir: string;
   resumeSessionId?: string;
-  tmpWrite: (name: string, content: string) => Promise<string>;
-  tmpRemove: (path: string) => Promise<void>;
+  tmpWrite: (absPath: string, content: string) => Promise<void>;
+  tmpRemove: (absPath: string) => void;
 }
 
 const SIGTERM_GRACE_MS = 3000;
@@ -70,9 +70,9 @@ export class ClaudeCliClient implements LlmClient {
     try {
       const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
       if (isLargeUser) {
-        const tmpUsrName = `llm-wiki-usr-${id}.txt`;
+        const tmpUsrFile = join(this.cfg.tmpDir, `llm-wiki-usr-${id}.txt`);
         const wrapped = `<user_input>\n${userText}\n</user_input>`;
-        const tmpUsrFile = await this.cfg.tmpWrite(tmpUsrName, wrapped);
+        await this.cfg.tmpWrite(tmpUsrFile, wrapped);
         tmpFiles.push(tmpUsrFile);
         args.push("-p", "Обработай содержимое из <user_input> согласно системному промпту.");
         args.push("--append-system-prompt-file", tmpUsrFile);
@@ -91,8 +91,8 @@ export class ClaudeCliClient implements LlmClient {
       if (!isResume && systemContent) {
         const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
         if (isLargeSys) {
-          const tmpSysName = `llm-wiki-sys-${id}.txt`;
-          const tmpSysFile = await this.cfg.tmpWrite(tmpSysName, systemContent);
+          const tmpSysFile = join(this.cfg.tmpDir, `llm-wiki-sys-${id}.txt`);
+          await this.cfg.tmpWrite(tmpSysFile, systemContent);
           tmpFiles.push(tmpSysFile);
           args.push("--system-prompt-file", tmpSysFile);
         } else {
@@ -100,7 +100,7 @@ export class ClaudeCliClient implements LlmClient {
         }
       }
     } catch (err) {
-      for (const f of tmpFiles) { try { await this.cfg.tmpRemove(f); } catch { /* ignore */ } }
+      for (const f of tmpFiles) { try { this.cfg.tmpRemove(f); } catch { /* ignore */ } }
       throw err;
     }
 
@@ -209,7 +209,7 @@ export class ClaudeCliClient implements LlmClient {
     } finally {
       clearTimeout(timeoutHandle);
       signal?.removeEventListener("abort", onAbort);
-      for (const f of tmpFiles) { try { await this.cfg.tmpRemove(f); } catch { /* already gone */ } }
+      for (const f of tmpFiles) { try { this.cfg.tmpRemove(f); } catch { /* already gone */ } }
       if (child.exitCode === null) {
         child.kill("SIGTERM");
         setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, SIGTERM_GRACE_MS);

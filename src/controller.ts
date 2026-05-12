@@ -408,23 +408,17 @@ export class WikiController {
         cwd: vaultRoot,
         tmpDir,
         resumeSessionId,
-        tmpWrite: async (name: string, content: string) => {
-          const path = join(tmpDir, name);
-          if (base && !path.startsWith(base)) {
-            // Path is absolute but outside vault; write directly with mock adapter
-            // This shouldn't happen in practice since tmpDir is inside the plugin dir
-            throw new Error(`tmpDir path outside vault: ${path}`);
+        tmpWrite: async (absPath: string, content: string) => {
+          if (base && !absPath.startsWith(base)) {
+            throw new Error(`tmpDir path outside vault: ${absPath}`);
           }
-          const vaultPath = base ? path.slice(base.length).replace(/^\//, "") : path;
+          const vaultPath = base ? absPath.slice(base.length).replace(/^\//, "") : absPath;
           await adapter.write(vaultPath, content);
-          return path;
         },
-        tmpRemove: async (path: string) => {
-          if (base && path.startsWith(base)) {
-            const vaultPath = path.slice(base.length).replace(/^\//, "");
-            try {
-              await fullAdapter.remove(vaultPath);
-            } catch { /* ignore if already gone */ }
+        tmpRemove: (absPath: string) => {
+          if (base && absPath.startsWith(base)) {
+            const vaultPath = absPath.slice(base.length).replace(/^\//, "");
+            fullAdapter.remove(vaultPath).catch(() => { /* ignore if already gone */ });
           }
         },
       });

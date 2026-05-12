@@ -3,10 +3,6 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 
 vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
-vi.mock("node:readline", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("node:readline")>();
-  return orig;
-});
 
 import { spawn } from "node:child_process";
 import { ClaudeCliClient } from "../src/claude-cli-client";
@@ -30,24 +26,16 @@ function makeMockProcess(lines: string[]) {
   return proc;
 }
 
-const mockTmpWrite = vi.fn(async (name: string, content: string) => {
-  const path = `/plugin/tmp/${name}`;
-  // Just return the path; callback is responsible for actual file ops
-  return path;
-});
-
-const mockTmpRemove = vi.fn(async (path: string) => {
-  // Callback is responsible for cleanup
-});
-
+const tmpWrite = vi.fn().mockResolvedValue(undefined);
+const tmpRemove = vi.fn();
 const cfg = {
   iclaudePath: "/usr/bin/claude",
   model: "sonnet",
   maxTokens: 1024,
   requestTimeoutSec: 30,
   tmpDir: "/plugin/tmp",
-  tmpWrite: mockTmpWrite,
-  tmpRemove: mockTmpRemove,
+  tmpWrite,
+  tmpRemove,
 };
 
 describe("ClaudeCliClient", () => {
@@ -160,8 +148,6 @@ describe("ClaudeCliClient", () => {
   it("uses --append-system-prompt-file when userText exceeds 256KB", async () => {
     (spawn as any).mockReturnValue(makeMockProcess([]));
 
-    mockTmpWrite.mockResolvedValue("/plugin/tmp/llm-wiki-usr-123.txt");
-
     const client = new ClaudeCliClient(cfg);
     const largeText = "x".repeat(300_000); // > 262 144 bytes
 
@@ -175,22 +161,20 @@ describe("ClaudeCliClient", () => {
     const pIdx = args.indexOf("-p");
     expect(args[pIdx + 1]).toContain("user_input");
 
-    // Check tmpWrite was called with file name and wrapped content
-    expect(mockTmpWrite).toHaveBeenCalled();
-    const writtenName = mockTmpWrite.mock.calls[0][0] as string;
-    const writtenContent = mockTmpWrite.mock.calls[0][1] as string;
-    expect(writtenName).toContain("llm-wiki-usr-");
+    // Check tmpWrite was called with absolute path and wrapped content
+    const writtenUsrPath = (tmpWrite as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(writtenUsrPath).toContain("llm-wiki-usr-");
+    expect(writtenUsrPath).toContain("/plugin/tmp");
+    const writtenContent = (tmpWrite as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
     expect(writtenContent).toContain("<user_input>");
     expect(writtenContent).toContain(largeText);
 
-    // Check tmpRemove was called with the returned path
-    expect(mockTmpRemove).toHaveBeenCalledWith("/plugin/tmp/llm-wiki-usr-123.txt");
+    // Check tmpRemove was called with the same path
+    expect(tmpRemove).toHaveBeenCalledWith(writtenUsrPath);
   });
 
   it("uses --system-prompt-file when systemContent exceeds 256KB", async () => {
     (spawn as any).mockReturnValue(makeMockProcess([]));
-
-    mockTmpWrite.mockResolvedValue("/plugin/tmp/llm-wiki-sys-456.txt");
 
     const client = new ClaudeCliClient(cfg);
     const largeSystem = "s".repeat(300_000);
@@ -210,21 +194,18 @@ describe("ClaudeCliClient", () => {
     expect(args).toContain("--system-prompt-file");
     expect(args).not.toContain("--system-prompt");
 
-    // Check tmpWrite was called with file name and system content
-    expect(mockTmpWrite).toHaveBeenCalled();
-    const writtenName = mockTmpWrite.mock.calls[0][0] as string;
-    const writtenContent = mockTmpWrite.mock.calls[0][1] as string;
-    expect(writtenName).toContain("llm-wiki-sys-");
-    expect(writtenContent).toBe(largeSystem);
+    // Check tmpWrite was called with absolute path and system content
+    const writtenSysPath = (tmpWrite as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(writtenSysPath).toContain("llm-wiki-sys-");
+    expect(writtenSysPath).toContain("/plugin/tmp");
+    expect(tmpWrite).toHaveBeenCalledWith(writtenSysPath, largeSystem);
 
-    // Check tmpRemove was called with the returned path
-    expect(mockTmpRemove).toHaveBeenCalledWith("/plugin/tmp/llm-wiki-sys-456.txt");
+    // Check tmpRemove was called with the same path
+    expect(tmpRemove).toHaveBeenCalledWith(writtenSysPath);
   });
 
   it("keeps small userText and systemContent inline in argv", async () => {
     (spawn as any).mockReturnValue(makeMockProcess([]));
-
-    mockTmpWrite.mockClear();
 
     const client = new ClaudeCliClient(cfg);
 
@@ -245,7 +226,7 @@ describe("ClaudeCliClient", () => {
     expect(args).toContain("--system-prompt");
     expect(args).not.toContain("--system-prompt-file");
     expect(args).not.toContain("--append-system-prompt-file");
-    expect(mockTmpWrite).not.toHaveBeenCalled();
+    expect(tmpWrite).not.toHaveBeenCalled();
   });
 
   it("passes --resume after -- and skips --system-prompt when resumeSessionId is set", async () => {
