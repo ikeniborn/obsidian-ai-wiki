@@ -166,7 +166,7 @@ var require_path_browserify = __commonJS({
         assertPath(path2);
         return path2.length > 0 && path2.charCodeAt(0) === 47;
       },
-      join: function join6() {
+      join: function join7() {
         if (arguments.length === 0)
           return ".";
         var joined;
@@ -20385,7 +20385,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   getViewType() {
     return LLM_WIKI_VIEW_TYPE;
   }
-  // eslint-disable-next-line /skip
+  // eslint-disable-next-line obsidianmd/ui/sentence-case -- "LLM Wiki" is the plugin name (proper noun)
   getDisplayText() {
     return "LLM Wiki";
   }
@@ -21128,7 +21128,7 @@ function translateSystemEvent(message) {
 
 // src/controller.ts
 var import_obsidian7 = require("obsidian");
-var import_path_browserify5 = __toESM(require_path_browserify(), 1);
+var import_path_browserify6 = __toESM(require_path_browserify(), 1);
 
 // src/source-paths.ts
 var import_path_browserify = __toESM(require_path_browserify(), 1);
@@ -23035,6 +23035,7 @@ var VaultTools = class {
 
 // src/claude-cli-client.ts
 var import_node_child_process = require("node:child_process");
+var import_path_browserify5 = __toESM(require_path_browserify(), 1);
 
 // src/stream.ts
 var PREVIEW_MAX = 200;
@@ -23162,11 +23163,11 @@ var ClaudeCliClient = class {
     try {
       const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
       if (isLargeUser) {
-        const tmpUsrName = `llm-wiki-usr-${id}.txt`;
+        const tmpUsrFile = (0, import_path_browserify5.join)(this.cfg.tmpDir, `llm-wiki-usr-${id}.txt`);
         const wrapped = `<user_input>
 ${userText}
 </user_input>`;
-        const tmpUsrFile = await this.cfg.tmpWrite(tmpUsrName, wrapped);
+        await this.cfg.tmpWrite(tmpUsrFile, wrapped);
         tmpFiles.push(tmpUsrFile);
         args.push("-p", "\u041E\u0431\u0440\u0430\u0431\u043E\u0442\u0430\u0439 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u0438\u0437 <user_input> \u0441\u043E\u0433\u043B\u0430\u0441\u043D\u043E \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u043C\u0443 \u043F\u0440\u043E\u043C\u043F\u0442\u0443.");
         args.push("--append-system-prompt-file", tmpUsrFile);
@@ -23181,8 +23182,8 @@ ${userText}
       if (!isResume && systemContent) {
         const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
         if (isLargeSys) {
-          const tmpSysName = `llm-wiki-sys-${id}.txt`;
-          const tmpSysFile = await this.cfg.tmpWrite(tmpSysName, systemContent);
+          const tmpSysFile = (0, import_path_browserify5.join)(this.cfg.tmpDir, `llm-wiki-sys-${id}.txt`);
+          await this.cfg.tmpWrite(tmpSysFile, systemContent);
           tmpFiles.push(tmpSysFile);
           args.push("--system-prompt-file", tmpSysFile);
         } else {
@@ -23192,7 +23193,7 @@ ${userText}
     } catch (err) {
       for (const f of tmpFiles) {
         try {
-          await this.cfg.tmpRemove(f);
+          this.cfg.tmpRemove(f);
         } catch {
         }
       }
@@ -23318,7 +23319,7 @@ ${stderr()}` : ""}`);
       signal?.removeEventListener("abort", onAbort);
       for (const f of tmpFiles) {
         try {
-          await this.cfg.tmpRemove(f);
+          this.cfg.tmpRemove(f);
         } catch {
         }
       }
@@ -30634,9 +30635,9 @@ var DomainStore = class {
 
 // src/controller.ts
 function toVaultPath(vaultDir, savedPath) {
-  const abs = (0, import_path_browserify5.isAbsolute)(savedPath) ? savedPath : (0, import_path_browserify5.join)(vaultDir, savedPath);
-  const rel = (0, import_path_browserify5.relative)(vaultDir, abs);
-  if (rel.startsWith("..") || (0, import_path_browserify5.isAbsolute)(rel))
+  const abs = (0, import_path_browserify6.isAbsolute)(savedPath) ? savedPath : (0, import_path_browserify6.join)(vaultDir, savedPath);
+  const rel = (0, import_path_browserify6.relative)(vaultDir, abs);
+  if (rel.startsWith("..") || (0, import_path_browserify6.isAbsolute)(rel))
     return null;
   return rel;
 }
@@ -30997,9 +30998,9 @@ var WikiController = class {
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm;
     if (s.backend === "claude-agent") {
-      const manifestDir = this.plugin.manifest.dir ?? (0, import_path_browserify5.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
+      const manifestDir = this.plugin.manifest.dir ?? (0, import_path_browserify6.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
       const pluginDir = this.app.vault.adapter.getFullPath(manifestDir);
-      const tmpDir = (0, import_path_browserify5.join)(pluginDir, "tmp");
+      const tmpDir = (0, import_path_browserify6.join)(pluginDir, "tmp");
       const tmpDirRelative = tmpDir.startsWith(base) ? tmpDir.slice(base.length).replace(/^\//, "") : tmpDir;
       if (base) {
         try {
@@ -31017,22 +31018,18 @@ var WikiController = class {
         cwd: vaultRoot,
         tmpDir,
         resumeSessionId,
-        tmpWrite: async (name, content) => {
-          const path2 = (0, import_path_browserify5.join)(tmpDir, name);
-          if (base && !path2.startsWith(base)) {
-            throw new Error(`tmpDir path outside vault: ${path2}`);
+        tmpWrite: async (absPath, content) => {
+          if (base && !absPath.startsWith(base)) {
+            throw new Error(`tmpDir path outside vault: ${absPath}`);
           }
-          const vaultPath = base ? path2.slice(base.length).replace(/^\//, "") : path2;
+          const vaultPath = base ? absPath.slice(base.length).replace(/^\//, "") : absPath;
           await adapter.write(vaultPath, content);
-          return path2;
         },
-        tmpRemove: async (path2) => {
-          if (base && path2.startsWith(base)) {
-            const vaultPath = path2.slice(base.length).replace(/^\//, "");
-            try {
-              await fullAdapter.remove(vaultPath);
-            } catch {
-            }
+        tmpRemove: (absPath) => {
+          if (base && absPath.startsWith(base)) {
+            const vaultPath = absPath.slice(base.length).replace(/^\//, "");
+            fullAdapter.remove(vaultPath).catch(() => {
+            });
           }
         }
       });
