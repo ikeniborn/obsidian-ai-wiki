@@ -72,3 +72,9 @@ export function parseWikiSourcesFromFm(content: string): string[] {
   if (!match) return [];
   return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
 }
+
+export function hasFrontmatterField(content: string, field: string): boolean {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return false;
+  return new RegExp(`^${field}:`, "m").test(fmMatch[1]);
+}

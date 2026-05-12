@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm } from "../../src/utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, hasFrontmatterField } from "../../src/utils/raw-frontmatter";
 
 const TODAY = "2026-05-12";
 const ARTICLES = ['[[!Wiki/work/Entity.md]]'];
@@ -112,5 +112,28 @@ describe("parseWikiSourcesFromFm", () => {
       "[[Sources/raw.md]]",
       "[[Sources/other.md]]",
     ]);
+  });
+});
+
+describe("hasFrontmatterField", () => {
+  it("returns false when file has no frontmatter", () => {
+    expect(hasFrontmatterField("# Content\n\nBody.", "wiki_added")).toBe(false);
+  });
+
+  it("returns false when field absent from frontmatter", () => {
+    expect(hasFrontmatterField("---\ntitle: X\n---\n# Content", "wiki_added")).toBe(false);
+  });
+
+  it("returns true when field present in frontmatter", () => {
+    expect(hasFrontmatterField("---\nwiki_added: 2026-01-01\n---\n# Content", "wiki_added")).toBe(true);
+  });
+
+  it("returns false when field name appears only in body, not frontmatter", () => {
+    const content = "---\ntitle: X\n---\n# Content\n\nSome text with wiki_added: mention in body.";
+    expect(hasFrontmatterField(content, "wiki_added")).toBe(false);
+  });
+
+  it("returns true for wiki_updated when present", () => {
+    expect(hasFrontmatterField("---\nwiki_updated: 2026-05-12\n---\n", "wiki_updated")).toBe(true);
   });
 });
