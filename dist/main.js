@@ -21256,6 +21256,77 @@ function domainWikiFolder(subfolder) {
   return `${WIKI_ROOT}/${subfolder}`;
 }
 
+// src/utils/raw-frontmatter.ts
+var FM_RE = /^---\n([\s\S]*?)\n---\n?/;
+function removeWikiFields(yaml) {
+  yaml = yaml.replace(/^wiki_added:[^\n]*\n?/m, "");
+  yaml = yaml.replace(/^wiki_updated:[^\n]*\n?/m, "");
+  yaml = yaml.replace(/^wiki_articles:[^\n]*\n(?:[ \t]+-[^\n]*\n?)*/m, "");
+  return yaml;
+}
+function buildWikiFields(fields) {
+  const lines = [];
+  if (fields.wiki_added !== void 0) {
+    lines.push(`wiki_added: ${fields.wiki_added}`);
+  }
+  lines.push(`wiki_updated: ${fields.wiki_updated}`);
+  if (fields.wiki_articles.length > 0) {
+    lines.push("wiki_articles:");
+    for (const a of fields.wiki_articles) {
+      lines.push(`  - "${a}"`);
+    }
+  }
+  return lines.join("\n");
+}
+function upsertRawFrontmatter(content, fields) {
+  const newFields = buildWikiFields(fields);
+  const match = FM_RE.exec(content);
+  if (match) {
+    let yaml = match[1];
+    let preservedWikiAdded;
+    if (fields.wiki_added === void 0) {
+      const addedMatch = /^wiki_added:[ \t]*(.+)$/m.exec(yaml);
+      if (addedMatch)
+        preservedWikiAdded = addedMatch[1].trim();
+    }
+    const cleaned = removeWikiFields(yaml).trimEnd();
+    let finalFields = newFields;
+    if (preservedWikiAdded !== void 0) {
+      finalFields = `wiki_added: ${preservedWikiAdded}
+${newFields}`;
+    }
+    const newYaml = cleaned ? `${cleaned}
+${finalFields}` : finalFields;
+    const rest = content.slice(match[0].length);
+    return `---
+${newYaml}
+---
+${rest}`;
+  }
+  return `---
+${newFields}
+---
+${content}`;
+}
+function parseWikiArticlesFromFm(content) {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch)
+    return [];
+  const match = /wiki_articles:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
+  if (!match)
+    return [];
+  return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
+}
+function parseWikiSourcesFromFm(content) {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch)
+    return [];
+  const match = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
+  if (!match)
+    return [];
+  return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
+}
+
 // src/phases/ingest.ts
 async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}) {
   const filePath = args[0];
@@ -21354,6 +21425,24 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   if (written.length > 0) {
     await appendLog(vaultTools, wikiRoot, sourceVaultPath, domain.id, written);
     await updateIndex(vaultTools, wikiRoot, written);
+    const backlinkToday = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const fmMatch = /^---\n([\s\S]*?)\n---\n?/.exec(sourceContent);
+    const isFirstTime = fmMatch ? !/^wiki_added:/m.test(fmMatch[1]) : true;
+    const existingArticles = parseWikiArticlesFromFm(sourceContent);
+    const writtenLinks = written.map((p) => `[[${p}]]`);
+    const mergedArticles = [.../* @__PURE__ */ new Set([...existingArticles, ...writtenLinks])];
+    const updatedSource = upsertRawFrontmatter(sourceContent, {
+      wiki_added: isFirstTime ? backlinkToday : void 0,
+      wiki_updated: backlinkToday,
+      wiki_articles: mergedArticles
+    });
+    yield { kind: "tool_use", name: "Write", input: { path: sourceVaultPath } };
+    try {
+      await vaultTools.write(sourceVaultPath, updatedSource);
+      yield { kind: "tool_result", ok: true, preview: `backlinks \u2192 ${sourceVaultPath}` };
+    } catch (e) {
+      yield { kind: "tool_result", ok: false, preview: `backlink write failed: ${e.message}` };
+    }
     const parentPath = extractParentSourcePath(absSource, vaultRoot);
     yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
   }
@@ -21767,6 +21856,38 @@ Applying fixes for "${domain.id}"...
       reportParts.push(`### \u0418\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u0441\u0442\u0440\u0430\u043D\u0438\u0446: ${writtenPaths.length}
 ${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
     }
+    const backlinks = /* @__PURE__ */ new Map();
+    for (const [wikiPath, wikiContent] of pages) {
+      for (const src of parseWikiSourcesFromFm(wikiContent)) {
+        const rawPath = src.slice(2, -2);
+        if (!backlinks.has(rawPath))
+          backlinks.set(rawPath, /* @__PURE__ */ new Set());
+        backlinks.get(rawPath).add(`[[${wikiPath}]]`);
+      }
+    }
+    const syncToday = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    let syncUpdated = 0;
+    for (const [rawPath, articles] of backlinks) {
+      yield { kind: "tool_use", name: "Write", input: { path: rawPath } };
+      try {
+        const rawContent = await vaultTools.read(rawPath);
+        const newContent = upsertRawFrontmatter(rawContent, {
+          wiki_updated: syncToday,
+          wiki_articles: [...articles]
+        });
+        await vaultTools.write(rawPath, newContent);
+        syncUpdated++;
+        yield { kind: "tool_result", ok: true, preview: rawPath };
+      } catch (e) {
+        yield {
+          kind: "tool_result",
+          ok: false,
+          preview: `backlink sync failed: ${rawPath}: ${e.message}`
+        };
+      }
+    }
+    reportParts.push(`## ${domain.id}
+Backlinks synced: ${syncUpdated} raw files updated`);
   }
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n") };
 }
