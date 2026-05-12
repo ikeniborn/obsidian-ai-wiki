@@ -82,7 +82,7 @@ export class LlmWikiView extends ItemView {
   }
 
   getViewType(): string { return LLM_WIKI_VIEW_TYPE; }
-  getDisplayText(): string { return "LLM wiki"; }
+  getDisplayText(): string { return "LLM Wiki"; }
   getIcon(): string { return "brain-circuit"; }
 
   onOpen(): void {
@@ -114,7 +114,7 @@ export class LlmWikiView extends ItemView {
       domainRow.createSpan({ cls: "muted", text: "Domain:" });
       this.domainSelect = domainRow.createEl("select", { cls: "llm-wiki-domain-select" });
       const refreshBtn = domainRow.createEl("button", { text: "↻", attr: { title: T.view.refreshTitle } });
-      refreshBtn.addEventListener("click", () => this.refreshDomains());
+      refreshBtn.addEventListener("click", () => void this.refreshDomains());
 
       const actionRow = domainBox.createDiv("llm-wiki-domain-actions");
       this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
@@ -138,7 +138,7 @@ export class LlmWikiView extends ItemView {
           "Claude will check wiki pages for quality and update entity_types.",
         ], () => void this.plugin.controller.lint(d || "all")).open();
       });
-      this.refreshDomains();
+      void this.refreshDomains();
     }
 
     // 4. Запрос
@@ -338,11 +338,11 @@ export class LlmWikiView extends ItemView {
       return;
     }
     if (ev.kind === "domain_created") {
-      this.refreshDomains();
+      void this.refreshDomains();
       return;
     }
     if (ev.kind === "source_path_added") return;
-    if (ev.kind === "domain_updated") { this.refreshDomains(); return; }
+    if (ev.kind === "domain_updated") { void this.refreshDomains(); return; }
     this.stepCount++;
     if (ev.kind === "tool_use") {
       this.toolCount++;
@@ -623,7 +623,7 @@ export class LlmWikiView extends ItemView {
         const comp = new Component();
         comp.load();
         void MarkdownRenderer.render(this.app, msg.content, this.currentChatBubble, "", comp);
-        registerLinkHandler(this.currentChatBubble!, this.app);
+        registerLinkHandler(this.currentChatBubble, this.app);
       }
       this.currentChatBubble = null;
     }
