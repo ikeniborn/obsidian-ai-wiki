@@ -21,7 +21,7 @@ wiki_articles:
 ---
 ```
 
-Формат `wiki_articles` идентичен `wiki_sources` — Obsidian wikilinks.
+Формат `wiki_articles` идентичен `wiki_sources` — Obsidian wikilinks. Даты — `YYYY-MM-DD`.
 
 ## Approach: Regex-upsert (Подход A)
 
@@ -36,7 +36,7 @@ export function upsertRawFrontmatter(
   content: string,
   fields: {
     wiki_added?: string;    // undefined = не трогать существующее значение
-    wiki_updated: string;
+    wiki_updated: string;   // YYYY-MM-DD
     wiki_articles: string[];
   }
 ): string
@@ -56,26 +56,30 @@ export function upsertRawFrontmatter(
 
 **Семантика `wiki_added`:**
 - Если `fields.wiki_added === undefined` → поле не добавляется и не удаляется из существующего FM
-- Если задано → перезаписывается (только при первом ingest, когда его ещё нет)
+- Если задано → записывается (только при первом ingest, когда его ещё нет в файле)
 
-### 2. `src/phases/ingest.ts` — добавить шаг после записи wiki-страниц
+**Важно:** функция принимает готовый список `wiki_articles` и делает replace. Логика merge (union) — в вызывающем коде (ingest.ts).
 
-Место: после `vaultTools.write` wiki-страниц (строки 99–113).
+### 2. `src/phases/ingest.ts` — добавить шаг внутри блока `if (written.length > 0)`
+
+Место: в существующий блок `if (written.length > 0)` (строки 118–124), вместе с `appendLog`/`updateIndex`.  
+Переменная raw-контента: `sourceContent` (строка 37, уже прочитана).
 
 ```
-rawContent (уже прочитан раньше, переиспользуем переменную)
+// внутри if (written.length > 0):
 
-isFirstTime = !rawContent.includes('wiki_added:')
-existingArticles = parseWikiArticles(rawContent)   // regex по wiki_articles
-writtenLinks = pages.map(p => `[[${p.path}]]`)
-mergedArticles = union(existingArticles, writtenLinks)
+isFirstTime = !sourceContent.includes('wiki_added:')
+existingArticles = parseWikiArticlesFromFm(sourceContent)  // regex по wiki_articles блоку
+writtenLinks = written.map(p => `[[${p}]]`)                // written — только успешно записанные пути
+mergedArticles = [...new Set([...existingArticles, ...writtenLinks])]
 
-updated = upsertRawFrontmatter(rawContent, {
-  wiki_added: isFirstTime ? today : undefined,
+updated = upsertRawFrontmatter(sourceContent, {
+  wiki_added: isFirstTime ? today : undefined,  // YYYY-MM-DD
   wiki_updated: today,
   wiki_articles: mergedArticles
 })
 
+yield { kind: "tool_use", name: "Write", input: { path: sourceVaultPath } }
 try {
   await vaultTools.write(sourceVaultPath, updated)
   yield { kind: "tool_result", ok: true, preview: `backlinks → ${sourceVaultPath}` }
@@ -85,85 +89,98 @@ try {
 }
 ```
 
-**Поведение `wiki_articles` при ingest:** merge-only (union). Старые ссылки не удаляются.
+**`wiki_articles` при ingest:** merge-only (union существующих + только что записанных `written`). Не `pages` (содержит заблокированные пути) — только `written`.
 
-### 3. `src/phases/lint.ts` — добавить `syncBacklinks` после существующих проверок
+### 3. `src/phases/lint.ts` — добавить `syncBacklinks` после LLM-отчёта
+
+Место: в конец цикла `for (const domain of targets)`, после `reportParts.push(...)` (строка 98).  
+Lint уже читает все wiki-страницы в `const pages = await vaultTools.readAll(files)` (строка 52, `Map<vaultPath, content>`). Использовать эту же переменную.
 
 ```
-syncBacklinks(domain, wikiFiles, vaultTools):
+// Backlink full sync — используем уже загруженный pages: Map<string, string>
 
-  // 1. Build reverse map
-  // wikiFiles = string[] (vault paths) из vaultTools.listFiles()
-  map = Map<rawVaultPath, Set<wikiArticleWikilink>>
-  for each wikiFilePath of wikiFiles:
-    content = await vaultTools.read(wikiFilePath)
-    sources = parseWikiSources(content)  // regex /wiki_sources:\s*\n((?:\s*-\s*.+\n?)+)/
-    for source of sources:
-      rawPath = extractPath(source)      // [[path]] → path (strip [[ ]])
-      map[rawPath] ??= new Set()
-      map[rawPath].add(`[[${wikiFilePath}]]`)
+backlinks = new Map<string, Set<string>>()  // rawVaultPath → Set<wikilink>
 
-  // 2. Update each raw file
-  updated = 0
-  for [rawPath, articles] of map:
-    try:
-      rawContent = await vaultTools.read(rawPath)
-      newContent = upsertRawFrontmatter(rawContent, {
-        wiki_added: undefined,    // не трогаем — был установлен при ingest
-        wiki_updated: today,
-        wiki_articles: [...articles]   // полная замена (full sync)
-      })
-      await vaultTools.write(rawPath, newContent)
-      updated++
-    catch:
-      reportParts.push(`  ⚠ backlink sync failed: ${rawPath}`)
+for [wikiPath, wikiContent] of pages:
+  sources = parseWikiSourcesFromFm(wikiContent)  // regex /wiki_sources:\s*\n((?:\s*-\s*.+\n?)+)/
+  for source of sources:
+    rawPath = source.replace(/^\[\[/, '').replace(/\]\]$/, '')  // [[path]] → path
+    if not backlinks.has(rawPath): backlinks.set(rawPath, new Set())
+    backlinks.get(rawPath).add(`[[${wikiPath}]]`)
 
-  reportParts.push(`Backlinks synced: ${updated} raw files updated`)
+updated = 0
+for [rawPath, articles] of backlinks:
+  try:
+    rawContent = await vaultTools.read(rawPath)
+    newContent = upsertRawFrontmatter(rawContent, {
+      wiki_added: undefined,          // не трогаем — установлен при первом ingest
+      wiki_updated: today,            // YYYY-MM-DD
+      wiki_articles: [...articles]    // полная замена (full sync)
+    })
+    await vaultTools.write(rawPath, newContent)
+    updated++
+  catch:
+    reportParts.push(`  ⚠ backlink sync failed: ${rawPath}`)
+
+reportParts.push(`Backlinks synced: ${updated} raw files updated`)
 ```
 
 **Отличие от ingest:** `wiki_articles` полностью заменяется (full sync), а не merge.  
-**`wiki_added` не трогается** при sync — он установлен при первом ingest.
+**`wiki_added` не трогается** при sync — установлен при первом ingest.  
+**Дополнительных reads нет** — lint уже загружает все wiki-страницы через `readAll`.
+
+### 4. init-фаза
+
+`init.ts` внутри вызывает `runIngest()` для каждого source-файла (строки 286–324). Backlinks проставляются автоматически через ingest — отдельной обработки в init не нужно.
 
 ## Behavior Summary
 
 | Операция | `wiki_added` | `wiki_updated` | `wiki_articles` |
 |----------|-------------|----------------|-----------------|
-| Первый ingest | set today | set today | merge с [] |
-| Повторный ingest | не трогать | update | merge с существующими |
-| Lint sync | не трогать | update | full replace |
+| Первый ingest | set today | set today | union с [] |
+| Повторный ingest | не трогать | update | union с существующими в FM |
+| Lint sync | не трогать | update | full replace (по wiki_sources) |
+| init | (через ingest) | (через ingest) | (через ingest) |
 
 ## Tests
 
 ### `tests/utils/raw-frontmatter.test.ts` (новый файл)
 
-| Кейс | Вход | Ожидание |
-|------|------|----------|
-| Нет frontmatter | plain markdown | prepend блок с wiki_ полями |
-| Есть FM без wiki_ | `title: X` | добавить wiki_ в конец FM |
-| Есть FM + старые wiki_articles | `[A]` + merge `[B]` | результат `[A, B]` |
-| `wiki_added` уже есть, `fields.wiki_added=undefined` | `wiki_added: 2026-01-01` | сохранить старую дату |
-| `wiki_articles` block style | `wiki_articles:\n  - "[[A]]"` | корректно заменить |
-| Пустой файл | `""` | prepend блок |
+Тестирует `upsertRawFrontmatter` как чистую функцию (replace-семантика):
+
+| Кейс | Входной контент | fields | Ожидание |
+|------|----------------|--------|----------|
+| Нет frontmatter | plain markdown | все поля заданы | prepend блок `---\nwiki_*\n---\n` |
+| Есть FM без wiki_ | `---\ntitle: X\n---` | все поля | wiki_ добавлены в конец FM |
+| Есть FM + старый wiki_articles `[A]`, вызов с `[A,B]` | block style | `wiki_articles:[A,B]` | FM содержит только `[A,B]` |
+| `wiki_added` в FM, `fields.wiki_added=undefined` | `wiki_added: 2026-01-01` | `wiki_added:undefined` | дата сохранена |
+| `wiki_added` не в FM, `fields.wiki_added='2026-05-12'` | нет wiki_added | `wiki_added:'2026-05-12'` | поле добавлено |
+| Пустой файл | `""` | все поля | prepend блок |
 
 ### `tests/phases/ingest.test.ts` — дополнить существующие тесты
 
-- После ingest `vaultTools.write` вызван для raw-файла с корректным frontmatter
+- После ingest `vaultTools.write` вызван для `sourceVaultPath` с корректным frontmatter (wiki_added, wiki_updated, wiki_articles = только `written[]`)
+- `pages` содержит заблокированный путь → он не попадает в `wiki_articles`
 - Повторный ingest: `wiki_added` не меняется, `wiki_articles` — union
-- Ошибка write raw → ingest не падает
+- `written.length === 0` → backlink write не вызывается
+- Ошибка write raw → ingest не падает, продолжает
 
 ### `tests/phases/lint.test.ts` — дополнить
 
-- `syncBacklinks` строит корректный map из `wiki_sources`
-- raw-файлы обновлены с полным списком (full replace)
-- raw-файл вне vault → warning в report, не fail
+- `syncBacklinks` строит корректный map из `wiki_sources` wiki-страниц
+- raw-файлы обновлены с полным списком (full replace), не merge
+- `wiki_added` в raw сохранён без изменений
+- `vaultTools.read(rawPath)` бросает → warning в reportParts, не fail
+- `pages` уже загружен — лишних `read` вызовов нет (mock не ожидает дополнительных вызовов read для wiki-файлов)
 
 ## UI / Events
 
-Backlink-запись отображается через существующий `tool_result` event — отдельный UI-компонент не нужен.
+Backlink-запись отображается через существующий `tool_result` event. Перед write — `tool_use` с `name: "Write"`. Отдельный UI-компонент не нужен.
 
 ## Constraints
 
-- Ошибка записи backlink не прерывает ingest/lint
+- Backlink write ошибка не прерывает ingest/lint
 - `wiki_added` никогда не перезаписывается автоматически после первой установки
-- Raw-файл вне vault при lint sync — пропускается с warning
-- Не трогаем raw-файлы без записей в backlink map (могут быть источниками другого домена)
+- Raw-файл недоступен при lint sync — пропускается с warning в report
+- Raw-файлы без записей в backlink map не трогаются
+- `wiki_articles` строятся только из `written[]` при ingest (не из `pages[]`)
