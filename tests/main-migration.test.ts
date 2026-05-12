@@ -5,7 +5,7 @@ import type { DomainEntry } from "../src/domain";
 function makePlugin(initial: any, adapter: Record<string, any>) {
   let stored = JSON.parse(JSON.stringify(initial));
   return {
-    manifest: { dir: ".obsidian/plugins/ai-wiki", id: "ai-wiki" },
+    manifest: { dir: ".obsidian/plugins/llm-wiki", id: "llm-wiki" },
     app: { vault: { adapter } },
     loadData: vi.fn().mockImplementation(async () => stored),
     saveData: vi.fn().mockImplementation(async (d: any) => { stored = d; }),
@@ -108,7 +108,7 @@ describe("migrateLegacyData", () => {
       rename: vi.fn(), remove: vi.fn(), mkdir: vi.fn(),
     };
     const plugin = {
-      manifest: { dir: ".obsidian/plugins/ai-wiki", id: "ai-wiki" },
+      manifest: { dir: ".obsidian/plugins/llm-wiki", id: "llm-wiki" },
       app: { vault: { adapter } },
       loadData: vi.fn().mockResolvedValue(null),
       saveData: vi.fn(),

@@ -1,26 +1,26 @@
 {
-  "name": "obsidian-llm-wiki",
-  "version": "0.1.77",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "build": "node esbuild.config.mjs production",
-    "dev": "node esbuild.config.mjs",
-    "test": "vitest run",
-    "test:watch": "vitest"
-  },
-  "devDependencies": {
-    "@types/node": "^20.11.0",
-    "@types/path-browserify": "^1.0.3",
-    "esbuild": "^0.20.0",
-    "eslint-plugin-obsidianmd": "github:obsidianmd/eslint-plugin",
-    "obsidian": "^1.5.0",
-    "typescript": "^5.4.0",
-    "vitest": "^1.4.0"
-  },
-  "dependencies": {
-    "openai": "^6.34.0",
-    "path-browserify": "^1.0.1",
-    "undici": "^6.25.0"
-  }
+	"name": "obsidian-llm-wiki",
+	"version": "0.1.78",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "node esbuild.config.mjs production",
+		"dev": "node esbuild.config.mjs",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"devDependencies": {
+		"@types/node": "^20.11.0",
+		"@types/path-browserify": "^1.0.3",
+		"esbuild": "^0.20.0",
+		"eslint-plugin-obsidianmd": "github:obsidianmd/eslint-plugin",
+		"obsidian": "^1.5.0",
+		"typescript": "^5.4.0",
+		"vitest": "^1.4.0"
+	},
+	"dependencies": {
+		"openai": "^6.34.0",
+		"path-browserify": "^1.0.1",
+		"undici": "^6.25.0"
+	}
 }

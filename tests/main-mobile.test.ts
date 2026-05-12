@@ -10,7 +10,7 @@ function makePlugin(stored: any) {
   };
   const plugin: any = Object.create(LlmWikiPlugin.prototype);
   plugin.app = { vault: { adapter } };
-  plugin.manifest = { dir: ".obsidian/plugins/ai-wiki", id: "ai-wiki" };
+  plugin.manifest = { dir: ".obsidian/plugins/llm-wiki", id: "llm-wiki" };
   plugin.loadData = vi.fn().mockResolvedValue(stored);
   plugin.saveData = vi.fn().mockImplementation(async (d: any) => { stored = d; });
   return plugin;

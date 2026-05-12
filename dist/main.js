@@ -20310,7 +20310,7 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
 
 // src/view.ts
 var import_obsidian4 = require("obsidian");
-var AI_WIKI_VIEW_TYPE = "ai-wiki-view";
+var AI_WIKI_VIEW_TYPE = "llm-wiki-view";
 function registerLinkHandler(el, app) {
   el.addEventListener("click", (e) => {
     const a = e.target.closest("a.internal-link");
@@ -21886,8 +21886,7 @@ ${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
         };
       }
     }
-    reportParts.push(`## ${domain.id}
-Backlinks synced: ${syncUpdated} raw files updated`);
+    reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
   }
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n") };
 }

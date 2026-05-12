@@ -32,7 +32,7 @@ function makePlugin(app: ReturnType<typeof makeApp>) {
   return {
     settings: { backend: "native-agent", nativeAgent: { baseUrl: "https://api.x", apiKey: "k" } },
     saveSettings: vi.fn(),
-    manifest: { dir: ".obsidian/plugins/ai-wiki", id: "ai-wiki" },
+    manifest: { dir: ".obsidian/plugins/llm-wiki", id: "llm-wiki" },
     app,
   } as unknown as Parameters<typeof WikiController>[1];
 }
