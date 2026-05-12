@@ -79,8 +79,14 @@ export class AbstractInputSuggest<T> {
   close() {}
 }
 
-export class TFolder {
+export class TAbstractFile {
   path: string = "";
+}
+
+export class TFolder extends TAbstractFile {}
+
+export class TFile extends TAbstractFile {
+  stat?: any;
 }
 
 export class Modal {

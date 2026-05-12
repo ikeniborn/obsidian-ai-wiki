@@ -127,8 +127,8 @@ export class WikiController {
       } else {
         const content = await adapter.read(p.tempPath);
         const origFile = this.app.vault.getAbstractFileByPath(p.originalPath);
-        if (origFile && "stat" in origFile) {
-          await this.app.vault.modify(origFile as TFile, content);
+        if (origFile instanceof TFile) {
+          await this.app.vault.modify(origFile, content);
         } else {
           await adapter.write(p.originalPath, content);
         }
@@ -417,7 +417,7 @@ export class WikiController {
           const noProxyList = parseNoProxy(proxyCfg.noProxy);
           if (!shouldBypass(baseHost, noProxyList)) {
             proxyFetch = createProxyFetch(proxyCfg);
-            if (proxyFetch) console.info(`[llm-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
+            if (proxyFetch) console.debug(`[llm-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
           }
         } catch (e) {
           new Notice(i18n().settings.proxy_invalid((e as Error).message));
