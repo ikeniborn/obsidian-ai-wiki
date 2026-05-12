@@ -598,25 +598,30 @@ gh release create "$NEW_VERSION" \
 
 ## Task 7: Post /skip comment on obsidian-releases PR
 
-- [ ] **Step 1: Post /skip for node:child_process**
+> **Note (2026-05-12):** PR #12351 was closed. Plugin `llm-wiki` by `ikeniborn` is already
+> in upstream `community-plugins.json` (added 2026-04-20, commit `6f8608b`). No new PR needed.
+> ObsidianReviewBot rescans accepted plugins periodically — v0.1.75 fixes should clear violations.
+> If a new bot-triggered PR appears in obsidian-releases, post /skip comments there.
 
-Post the following comment on https://github.com/obsidianmd/obsidian-releases/pull/12351:
+- [x] **Step 1: Post /skip for node:child_process** — N/A, plugin already accepted; no active PR to comment on.
 
-```
-/skip node:child_process — plugin spawns a desktop CLI binary (Claude Code). All spawn calls are guarded by !Platform.isMobile checks; mobile users receive a Notice and cannot trigger this code path.
-```
+- [ ] **Step 2: Post /skip for LLM Wiki sentence case (if bot re-flags in a new PR)**
 
-- [ ] **Step 2: Post /skip for LLM Wiki sentence case (if bot re-flags)**
-
-If the bot re-flags `"LLM Wiki"` despite the eslint-disable comments in source (the bot may scan raw source differently):
+If bot opens a new review PR, post:
 
 ```
 /skip obsidianmd/ui/sentence-case — "LLM Wiki" is the plugin's product name (proper noun), equivalent to how other plugins display their name in ribbon and panel header
 ```
 
+And for node:child_process:
+
+```
+/skip node:child_process — plugin spawns a desktop CLI binary (Claude Code). All spawn calls are guarded by !Platform.isMobile checks; mobile users receive a Notice and cannot trigger this code path.
+```
+
 - [ ] **Step 3: Wait for rescan**
 
-The bot rescans within 6 hours of a push. Monitor for the next scan result. If new Required violations appear (especially remaining sentence case items in `settings.ts`), address them with targeted fixes.
+The bot rescans within 6 hours of a push to the plugin repo. Monitor for the next scan result. If new Required violations appear, address them with targeted fixes.
 
 ---
 

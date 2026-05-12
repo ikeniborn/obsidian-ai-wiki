@@ -1,7 +1,7 @@
 # Design: ObsidianReviewBot Required Fixes (v2)
 
 **Date:** 2026-05-12  
-**PR:** https://github.com/obsidianmd/obsidian-releases/pull/12351  
+**PR:** https://github.com/obsidianmd/obsidian-releases/pull/12351 *(closed; plugin already accepted in upstream community-plugins.json, commit `6f8608b`, 2026-04-20)*  
 **Goal:** Fix all Required items from the 2026-05-12 ObsidianReviewBot scan (against HEAD `31e3e9d`).
 
 ---
@@ -110,7 +110,7 @@ tmpRemove: (absPath) => {
 
 ## Section 3: `node:child_process` → `/skip`
 
-No Obsidian API equivalent for process spawning. Post on PR #12351:
+No Obsidian API equivalent for process spawning. Post `/skip` comment if a new bot PR appears (PR #12351 is closed; plugin already accepted):
 
 > `/skip node:child_process — plugin spawns a desktop CLI binary (Claude Code). All spawn calls are guarded by !Platform.isMobile checks; mobile users receive a Notice instead.`
 
@@ -148,7 +148,7 @@ No Obsidian API equivalent for process spawning. Post on PR #12351:
 | `src/main.ts` | add `/skip` eslint comment |
 | `src/view.ts` | add `/skip` eslint comment; verify h3 text |
 | `src/settings.ts` | fix "Setup" → "setup"; fix remaining sentence case |
-| PR #12351 comment | post `/skip node:child_process` |
+| obsidian-releases PR | post `/skip node:child_process` if new bot PR appears (PR #12351 closed; plugin already in community-plugins.json) |
 
 ---
 
