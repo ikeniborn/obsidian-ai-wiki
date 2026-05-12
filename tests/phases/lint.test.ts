@@ -134,6 +134,103 @@ describe("runLint", () => {
     expect(events.some((e: any) => e.kind === "result")).toBe(true);
   });
 
+  it("unions wiki_articles across two domain lint runs on same raw file", async () => {
+    const wikiContentA =
+      '---\nwiki_sources:\n  - "[[Sources/shared.md]]"\nwiki_status: stub\n---\n# EntityA';
+    const wikiContentB =
+      '---\nwiki_sources:\n  - "[[Sources/shared.md]]"\nwiki_status: stub\n---\n# EntityB';
+    const domainA: DomainEntry = {
+      id: "domainA", name: "Domain A", wiki_folder: "A", source_paths: [],
+    };
+    const domainB: DomainEntry = {
+      id: "domainB", name: "Domain B", wiki_folder: "B", source_paths: [],
+    };
+
+    let rawContent = "# Shared source";
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockImplementation((path: string) => {
+        if (path.includes("!Wiki/A")) return Promise.resolve({ files: ["!Wiki/A/EntityA.md"], folders: [] });
+        if (path.includes("!Wiki/B")) return Promise.resolve({ files: ["!Wiki/B/EntityB.md"], folders: [] });
+        return Promise.resolve({ files: [], folders: [] });
+      }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/A/EntityA.md") return Promise.resolve(wikiContentA);
+        if (path === "!Wiki/B/EntityB.md") return Promise.resolve(wikiContentB);
+        if (path === "Sources/shared.md") return Promise.resolve(rawContent);
+        return Promise.resolve("");
+      }),
+      write: vi.fn().mockImplementation((path: string, content: string) => {
+        if (path === "Sources/shared.md") rawContent = content;
+        return Promise.resolve();
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    await collect(
+      runLint([], vt, makeLlm("Lint OK"), "model", [domainA, domainB], VAULT_ROOT, new AbortController().signal),
+    );
+
+    expect(rawContent).toContain("[[!Wiki/A/EntityA.md]]");
+    expect(rawContent).toContain("[[!Wiki/B/EntityB.md]]");
+  });
+
+  it("refreshes pages map after fix-pass so backlink sync uses updated wiki_sources", async () => {
+    const originalContent = "---\nwiki_status: stub\n---\n# Page";
+    const fixedContent =
+      '---\nwiki_sources:\n  - "[[Sources/raw.md]]"\nwiki_status: stub\n---\n# Page';
+
+    let fixPassCalled = false;
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockImplementation((path: string) => {
+        if (path.includes("!Wiki")) {
+          return Promise.resolve({ files: ["!Wiki/work/Page.md"], folders: [] });
+        }
+        return Promise.resolve({ files: [], folders: [] });
+      }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/work/Page.md") {
+          return Promise.resolve(fixPassCalled ? fixedContent : originalContent);
+        }
+        if (path === "Sources/raw.md") return Promise.resolve("# Raw source");
+        return Promise.resolve("");
+      }),
+      write: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/work/Page.md") fixPassCalled = true;
+        return Promise.resolve();
+      }),
+    });
+
+    const fixLlm = makeLlm(
+      JSON.stringify([{ path: "!Wiki/work/Page.md", content: fixedContent }]),
+    );
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    await collect(
+      runLint([], vt, fixLlm, "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+
+    const rawCall = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([path]: [string]) => path === "Sources/raw.md",
+    );
+    expect(rawCall).toBeDefined();
+    const writtenContent = rawCall![1] as string;
+    expect(writtenContent).toContain("[[!Wiki/work/Page.md]]");
+  });
+
+  it("does not append backlink sync line when no wiki pages have wiki_sources", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      read: vi.fn().mockResolvedValue("---\nwiki_status: stub\n---\n# Page\n\nContent."),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const events = await collect(
+      runLint([], vt, makeLlm("Lint OK"), "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    const result = events.find((e: any) => e.kind === "result") as any;
+    expect(result.text).not.toContain("Backlinks synced:");
+  });
+
   it("yields domain_updated with entity_types from second LLM call", async () => {
     const adapter = mockAdapter({
       list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),

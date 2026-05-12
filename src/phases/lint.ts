@@ -8,7 +8,7 @@ import { parseJsonPages } from "./ingest";
 import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
-import { upsertRawFrontmatter, parseWikiSourcesFromFm } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm } from "../utils/raw-frontmatter";
 
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
@@ -148,6 +148,11 @@ export async function* runLint(
     }
     if (writtenPaths.length > 0) {
       reportParts.push(`### Исправлено страниц: ${writtenPaths.length}\n${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
+      for (const p of writtenPaths) {
+        try {
+          pages.set(p, await vaultTools.read(p));
+        } catch { /* non-critical */ }
+      }
     }
 
     const backlinks = new Map<string, Set<string>>();
@@ -165,9 +170,11 @@ export async function* runLint(
       yield { kind: "tool_use", name: "Write", input: { path: rawPath } };
       try {
         const rawContent = await vaultTools.read(rawPath);
+        const existingArticles = parseWikiArticlesFromFm(rawContent);
+        const mergedArticles = [...new Set([...existingArticles, ...articles])];
         const newContent = upsertRawFrontmatter(rawContent, {
           wiki_updated: syncToday,
-          wiki_articles: [...articles],
+          wiki_articles: mergedArticles,
         });
         await vaultTools.write(rawPath, newContent);
         syncUpdated++;
@@ -180,7 +187,9 @@ export async function* runLint(
         };
       }
     }
-    reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
+    if (backlinks.size > 0) {
+      reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
+    }
   }
 
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n") };
