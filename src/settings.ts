@@ -425,6 +425,39 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       }
     }
 
+    // ── Graph settings ────────────────────────────────────────────────────────
+    new Setting(containerEl).setName(T.settings.h3_graph).setHeading();
+
+    new Setting(containerEl)
+      .setName(T.settings.graphDepth_name)
+      .setDesc(T.settings.graphDepth_desc)
+      .addText((t) =>
+        t.setPlaceholder("1")
+          .setValue(String(s.graphDepth))
+          .onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isInteger(n) && n >= 0 && n <= 3) {
+              s.graphDepth = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName(T.settings.hubThreshold_name)
+      .setDesc(T.settings.hubThreshold_desc)
+      .addText((t) =>
+        t.setPlaceholder("20")
+          .setValue(String(s.hubThreshold))
+          .onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isInteger(n) && n > 0) {
+              s.hubThreshold = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
     // ── Dev mode ──────────────────────────────────────────────────────────────
     if (!Platform.isMobile) {
       new Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
