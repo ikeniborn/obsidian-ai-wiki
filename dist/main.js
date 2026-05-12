@@ -20310,7 +20310,7 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
 
 // src/view.ts
 var import_obsidian4 = require("obsidian");
-var AI_WIKI_VIEW_TYPE = "llm-wiki-view";
+var AI_WIKI_VIEW_TYPE = "ai-wiki-view";
 function registerLinkHandler(el, app) {
   el.addEventListener("click", (e) => {
     const a = e.target.closest("a.internal-link");

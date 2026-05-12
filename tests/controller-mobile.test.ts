@@ -26,7 +26,7 @@ function makePlugin(settings: any) {
   return {
     settings,
     saveSettings: vi.fn(),
-    manifest: { dir: ".obsidian/plugins/llm-wiki", id: "llm-wiki" },
+    manifest: { dir: ".obsidian/plugins/ai-wiki", id: "ai-wiki" },
     app: makeApp(),
   } as any;
 }

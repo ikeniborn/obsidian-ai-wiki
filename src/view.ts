@@ -5,7 +5,7 @@ import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./ty
 import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
 
-export const AI_WIKI_VIEW_TYPE = "llm-wiki-view";
+export const AI_WIKI_VIEW_TYPE = "ai-wiki-view";
 
 type ViewState = "idle" | "running" | "done" | "error" | "cancelled";
 
