@@ -153,4 +153,126 @@ describe("runIngest", () => {
     expect(result).toBeDefined();
     expect(result.text).toMatch(/новых или изменённых страниц нет/);
   });
+
+  it("writes backlinks frontmatter to raw file after successful ingest", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llmResponse = JSON.stringify([
+      { path: "!Wiki/work/Entity.md", content: "# Entity\n\nFact." },
+    ]);
+    await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt,
+        makeLlm(llmResponse),
+        "llama3.2",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+      ),
+    );
+    const rawCall = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([path]: [string]) => path === "Sources/doc.md",
+    );
+    expect(rawCall).toBeDefined();
+    const writtenContent = rawCall![1] as string;
+    expect(writtenContent).toContain("wiki_added:");
+    expect(writtenContent).toContain("wiki_updated:");
+    expect(writtenContent).toContain("wiki_articles:");
+    expect(writtenContent).toContain("[[!Wiki/work/Entity.md]]");
+  });
+
+  it("preserves wiki_added and unions wiki_articles on repeated ingest", async () => {
+    const existingFm =
+      '---\nwiki_added: 2026-01-01\nwiki_updated: 2026-01-01\nwiki_articles:\n  - "[[!Wiki/work/Old.md]]"\n---\nsource text';
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue(existingFm),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llmResponse = JSON.stringify([
+      { path: "!Wiki/work/New.md", content: "# New" },
+    ]);
+    await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt,
+        makeLlm(llmResponse),
+        "llama3.2",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+      ),
+    );
+    const rawCall = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([path]: [string]) => path === "Sources/doc.md",
+    );
+    expect(rawCall).toBeDefined();
+    const writtenContent = rawCall![1] as string;
+    expect(writtenContent).toContain("wiki_added: 2026-01-01"); // preserved
+    expect(writtenContent).toContain("[[!Wiki/work/Old.md]]");  // union
+    expect(writtenContent).toContain("[[!Wiki/work/New.md]]");  // union
+  });
+
+  it("does not write backlinks when no wiki pages were written", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt,
+        makeLlm("[]"),
+        "llama3.2",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+      ),
+    );
+    const rawCall = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([path]: [string]) => path === "Sources/doc.md",
+    );
+    expect(rawCall).toBeUndefined();
+  });
+
+  it("does not fail ingest when raw file backlink write throws", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      write: vi.fn().mockImplementation((path: string) => {
+        if (path === "Sources/doc.md") {
+          return Promise.reject(new Error("permission denied"));
+        }
+        return Promise.resolve();
+      }),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llmResponse = JSON.stringify([
+      { path: "!Wiki/work/Entity.md", content: "# Entity" },
+    ]);
+    const events = await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt,
+        makeLlm(llmResponse),
+        "llama3.2",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+      ),
+    );
+    expect(events.some((e: any) => e.kind === "result")).toBe(true);
+    const failEvent = events.find(
+      (e: any) =>
+        e.kind === "tool_result" &&
+        e.ok === false &&
+        (e.preview as string)?.includes("backlink write failed"),
+    );
+    expect(failEvent).toBeDefined();
+  });
 });

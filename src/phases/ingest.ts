@@ -7,6 +7,7 @@ import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import ingestTemplate from "../../prompts/ingest.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm } from "../utils/raw-frontmatter";
 
 export async function* runIngest(
   args: string[],
@@ -118,6 +119,24 @@ export async function* runIngest(
   if (written.length > 0) {
     await appendLog(vaultTools, wikiRoot, sourceVaultPath, domain.id, written);
     await updateIndex(vaultTools, wikiRoot, written);
+
+    const backlinkToday = new Date().toISOString().slice(0, 10);
+    const isFirstTime = !sourceContent.includes("wiki_added:");
+    const existingArticles = parseWikiArticlesFromFm(sourceContent);
+    const writtenLinks = written.map((p) => `[[${p}]]`);
+    const mergedArticles = [...new Set([...existingArticles, ...writtenLinks])];
+    const updatedSource = upsertRawFrontmatter(sourceContent, {
+      wiki_added: isFirstTime ? backlinkToday : undefined,
+      wiki_updated: backlinkToday,
+      wiki_articles: mergedArticles,
+    });
+    yield { kind: "tool_use", name: "Write", input: { path: sourceVaultPath } };
+    try {
+      await vaultTools.write(sourceVaultPath, updatedSource);
+      yield { kind: "tool_result", ok: true, preview: `backlinks → ${sourceVaultPath}` };
+    } catch (e) {
+      yield { kind: "tool_result", ok: false, preview: `backlink write failed: ${(e as Error).message}` };
+    }
 
     const parentPath = extractParentSourcePath(absSource, vaultRoot);
     yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
