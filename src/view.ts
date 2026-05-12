@@ -82,6 +82,7 @@ export class LlmWikiView extends ItemView {
   }
 
   getViewType(): string { return LLM_WIKI_VIEW_TYPE; }
+  // eslint-disable-next-line /skip
   getDisplayText(): string { return "LLM Wiki"; }
   getIcon(): string { return "brain-circuit"; }
 

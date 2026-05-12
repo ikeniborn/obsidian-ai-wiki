@@ -199,7 +199,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         );
     } else {
       const p = containerEl.createEl("p", {
-        text: "Mobile: cloud LLM (native-agent) only. Setup guide: ",
+        text: "Mobile: cloud LLM (native-agent) only. setup guide: ",
         cls: "setting-item-description",
       });
       p.createEl("a", {
