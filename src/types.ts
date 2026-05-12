@@ -113,6 +113,8 @@ export interface LlmWikiPluginSettings {
   maxTokens: number;
   agentLogEnabled: boolean;
   historyLimit: number;
+  graphDepth: number;
+  hubThreshold: number;
   timeouts: {
     ingest: number;
     query: number;
@@ -150,6 +152,8 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   maxTokens: 4096,
   agentLogEnabled: false,
   historyLimit: 20,
+  graphDepth: 1,
+  hubThreshold: 20,
   timeouts: { ingest: 300, query: 300, lint: 900, fix: 900, init: 3600, format: 600 },
   history: [],
   claudeAgent: {
