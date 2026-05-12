@@ -21860,6 +21860,12 @@ Applying fixes for "${domain.id}"...
     if (writtenPaths.length > 0) {
       reportParts.push(`### \u0418\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u0441\u0442\u0440\u0430\u043D\u0438\u0446: ${writtenPaths.length}
 ${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
+      for (const p of writtenPaths) {
+        try {
+          pages.set(p, await vaultTools.read(p));
+        } catch {
+        }
+      }
     }
     const backlinks = /* @__PURE__ */ new Map();
     for (const [wikiPath, wikiContent] of pages) {
@@ -21876,9 +21882,11 @@ ${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
       yield { kind: "tool_use", name: "Write", input: { path: rawPath } };
       try {
         const rawContent = await vaultTools.read(rawPath);
+        const existingArticles = parseWikiArticlesFromFm(rawContent);
+        const mergedArticles = [.../* @__PURE__ */ new Set([...existingArticles, ...articles])];
         const newContent = upsertRawFrontmatter(rawContent, {
           wiki_updated: syncToday,
-          wiki_articles: [...articles]
+          wiki_articles: mergedArticles
         });
         await vaultTools.write(rawPath, newContent);
         syncUpdated++;
@@ -21891,7 +21899,9 @@ ${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
         };
       }
     }
-    reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
+    if (backlinks.size > 0) {
+      reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
+    }
   }
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n") };
 }
