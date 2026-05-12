@@ -187,6 +187,11 @@ export class ClaudeCliClient implements LlmClient {
         if (exited) break;
         await new Promise<void>((r) => (resolveNext = r));
       }
+      // Flush partial last line (no trailing \n — edge case on some environments)
+      if (buf.trim()) {
+        const ev = parseStreamLine(buf.trim());
+        if (ev?.kind === "system" && ev.sessionId) this.lastSessionId = ev.sessionId;
+      }
       const stderr = () => Buffer.concat(stderrChunks).toString("utf8").trim();
       if (spawnError) throw new Error(`claude spawn failed: ${spawnError.message}${stderr() ? `\n${stderr()}` : ""}`);
       if (signal?.aborted) return;
