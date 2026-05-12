@@ -100,4 +100,42 @@ describe("runQuery", () => {
     const [savedPath] = (adapter.write as any).mock.calls[0];
     expect(savedPath).toMatch(/\.md$/);
   });
+
+  it("excludes pages not reached by BFS when keyword seed found (graphDepth=0)", async () => {
+    const adapter = mockAdapter({
+      list: vi.fn().mockResolvedValue({
+        files: ["!Wiki/work/Neural-network.md", "!Wiki/work/Unrelated.md"],
+        folders: [],
+      }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path.endsWith("Neural-network.md"))
+          return Promise.resolve("# Neural network\nA learning system.");
+        if (path.endsWith("Unrelated.md"))
+          return Promise.resolve("# Unrelated\nSomething else entirely.");
+        return Promise.resolve("");
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm("answer");
+    await collect(
+      runQuery(
+        ["neural network question"],
+        false,
+        vt,
+        llm,
+        "model",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+        0, // graphDepth=0: seeds only, no BFS expansion
+      ),
+    );
+    // Find the streaming LLM call (main query call)
+    const createMock = llm.chat.completions.create as ReturnType<typeof vi.fn>;
+    const streamCall = createMock.mock.calls.find((c: any) => c[0]?.stream === true);
+    const userContent = streamCall?.[0]?.messages?.find((m: any) => m.role === "user")?.content ?? "";
+    // "neural" keyword matches "Neural-network" page; "Unrelated" excluded at depth=0
+    expect(userContent).toContain("Neural-network");
+    expect(userContent).not.toContain("Unrelated");
+  });
 });

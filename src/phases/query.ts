@@ -6,6 +6,7 @@ import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import queryTemplate from "../../prompts/query.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
+import { pageId, buildWikiGraph, bfsExpand } from "../wiki-graph";
 
 const MAX_CONTEXT_CHARS = 80_000;
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
@@ -19,6 +20,7 @@ export async function* runQuery(
   domains: DomainEntry[],
   vaultRoot: string,
   signal: AbortSignal,
+  graphDepth: number = 1,
   opts: LlmCallOptions = {},
 ): AsyncGenerator<RunEvent> {
   const question = args[0]?.trim();
@@ -38,7 +40,6 @@ export async function* runQuery(
     return;
   }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
-
   const wikiRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
 
   yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
@@ -55,13 +56,20 @@ export async function* runQuery(
 
   const start = Date.now();
 
-  let contextBlock = [...pages.entries()]
-    .map(([p, c]) => `--- ${p} ---\n${c}`)
-    .join("\n\n");
-
-  if (contextBlock.length > MAX_CONTEXT_CHARS) {
-    contextBlock = contextBlock.slice(0, MAX_CONTEXT_CHARS) + "\n[...truncated]";
+  // Graph-filtered context
+  const graph = buildWikiGraph(pages);
+  const allPageIds = [...pages.keys()].map(pageId);
+  let seeds = keywordSeeds(question, pages);
+  if (seeds.length === 0) {
+    seeds = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, signal);
   }
+  if (signal.aborted) return;
+  if (seeds.length === 0) {
+    seeds = allPageIds;
+  }
+  const seedSet = new Set(seeds);
+  const selectedIds = bfsExpand(seeds, graph, graphDepth);
+  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, MAX_CONTEXT_CHARS);
 
   const entityTypesBlock = buildEntityTypesBlock(domain);
 
@@ -132,6 +140,82 @@ export async function* runQuery(
 
 async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
   try { return await vaultTools.read(path); } catch { return ""; }
+}
+
+function keywordSeeds(question: string, pages: Map<string, string>): string[] {
+  const words = question.split(/\W+/).filter((w) => w.length > 3).map((w) => w.toLowerCase());
+  if (words.length === 0) return [];
+  const seeds: string[] = [];
+  for (const path of pages.keys()) {
+    const id = pageId(path);
+    if (words.some((w) => id.toLowerCase().includes(w))) {
+      seeds.push(id);
+    }
+  }
+  return seeds;
+}
+
+async function llmSelectSeeds(
+  question: string,
+  indexContent: string,
+  allPageIds: string[],
+  llm: LlmClient,
+  model: string,
+  signal: AbortSignal,
+): Promise<string[]> {
+  const prompt = [
+    `Question: "${question}"`,
+    `Available wiki pages: ${allPageIds.join(", ")}`,
+    indexContent ? `\nIndex:\n${indexContent.slice(0, 3000)}` : "",
+    `\nReturn JSON only: {"seeds": ["PageA", "PageB"]} — most relevant page names (bare names, no path, no .md).`,
+  ].filter(Boolean).join("\n");
+
+  try {
+    const resp = await llm.chat.completions.create(
+      {
+        model,
+        messages: [{ role: "user", content: prompt }],
+        stream: false,
+      } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+      { signal },
+    );
+    const text = resp.choices[0]?.message?.content ?? "";
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return [];
+    const parsed = JSON.parse(match[0]) as { seeds?: unknown };
+    if (!Array.isArray(parsed.seeds)) return [];
+    return parsed.seeds.filter((s): s is string => typeof s === "string");
+  } catch {
+    return [];
+  }
+}
+
+function buildContextBlock(
+  pages: Map<string, string>,
+  seeds: Set<string>,
+  selectedIds: Set<string>,
+  maxChars: number,
+): string {
+  const seedPages: [string, string][] = [];
+  const bfsPages: [string, string][] = [];
+  for (const [path, content] of pages) {
+    const id = pageId(path);
+    if (!selectedIds.has(id)) continue;
+    if (seeds.has(id)) seedPages.push([path, content]);
+    else bfsPages.push([path, content]);
+  }
+  const ordered = [...seedPages, ...bfsPages];
+  let block = "";
+  for (const [p, c] of ordered) {
+    const chunk = `--- ${p} ---\n${c}\n\n`;
+    if (block.length + chunk.length > maxChars) break;
+    block += chunk;
+  }
+  if (block.length === 0 && ordered.length > 0) {
+    const [p, c] = ordered[0];
+    block = `--- ${p} ---\n${c}`.slice(0, maxChars) + "\n[...truncated]";
+  }
+  return block;
 }
 
 function buildEntityTypesBlock(domain: DomainEntry): string {
