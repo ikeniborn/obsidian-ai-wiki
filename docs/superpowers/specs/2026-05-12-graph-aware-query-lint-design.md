@@ -23,70 +23,94 @@ Build an in-memory wiki graph from `[[links]]` at runtime (no persistence, no ca
 
 ### New file: `src/wiki-graph.ts`
 
-Three pure functions, no side effects, no I/O:
+Four pure functions, no side effects, no I/O:
 
 ```typescript
-type WikiGraph = Map<string, Set<string>>; // pageId → outgoing links
+type WikiGraph = Map<string, Set<string>>; // pageId → outgoing pageIds
+
+// Strip vault-path prefix and .md suffix → bare entity name used as graph node ID.
+// e.g. "!Wiki/ai/ИИ-агент.md" → "ИИ-агент"
+function pageId(vaultPath: string): string
 
 function buildWikiGraph(pages: Map<string, string>): WikiGraph
 function bfsExpand(seeds: string[], graph: WikiGraph, depth: number): Set<string>
 function checkGraphStructure(graph: WikiGraph, hubThreshold: number): string
 ```
 
-`buildWikiGraph` — regex scan of all pages for `[[...]]` links, O(pages × links).  
-`bfsExpand` — BFS from seed nodes up to `depth` hops.  
-`checkGraphStructure` — returns newline-joined issue strings (same format as existing `checkStructure`).
+**`pageId(vaultPath)`** — `path.basename(vaultPath, ".md")`. Used everywhere to normalize vault paths to graph node IDs.
+
+**`buildWikiGraph(pages)`** — iterates all pages, extracts `[[links]]` via `/\[\[([^\]|#]+)/g`, maps source `pageId → Set<target pageId>`. Dead links (target not in `pages`) create dangling targets — `graph.get(target)` returns `undefined`, BFS silently skips them. O(pages × avg_links).
+
+**`bfsExpand(seeds, graph, depth)`** — BFS on **undirected** graph: at each hop, follow both outgoing edges (`graph.get(node)`) and incoming edges (pre-computed reverse index). Rationale: pages that link *to* a seed are as relevant as pages the seed links *to*. Returns `Set<pageId>` including seeds.
+
+**`checkGraphStructure(graph, hubThreshold)`** — returns newline-joined issue strings (same format as existing `checkStructure`).
 
 ### `src/phases/query.ts` changes
 
-Replace flat page concatenation with graph-filtered context:
+Replace flat page concatenation with graph-filtered context. `pages` and `indexContent` are already read by existing code — no new I/O.
 
 ```
-loadAllWikiPages()
-  → buildWikiGraph(pages)
-  → keywordSeeds(question, pages)     // match question words against page names
-  → llmSelectSeeds(candidates, index) // only if keyword found 0 candidates
-  → bfsExpand(seeds, graph, depth)    // depth from settings.graphDepth
-  → buildContextBlock(selectedPages)  // only selected pages, priority: seed > hop-1 > hop-2
-  → LLM.answer()
+pages = vaultTools.readAll(files)           // existing
+indexContent = tryRead(vaultTools, ...)     // existing
+graph = buildWikiGraph(pages)               // new
+candidates = keywordSeeds(question, pages)  // new: keyword match on pageId(path)
+seeds = candidates.length > 0
+  ? candidates
+  : await llmSelectSeeds(question, indexContent, llm, model, signal)  // new: pre-pass
+if seeds.length === 0:
+  seeds = [...pages.keys()].map(pageId)    // fallback: treat all pages as seeds
+selectedIds = bfsExpand(seeds, graph, settings.graphDepth)
+selectedPages = filter pages where pageId(path) ∈ selectedIds
+contextBlock = buildContextBlock(selectedPages, MAX_CONTEXT_CHARS)
+LLM(systemPrompt, question, contextBlock)  // existing call, new contextBlock
 ```
 
-**Seed selection logic:**
+**`keywordSeeds(question, pages)`** — split question by `\W+`, keep words with `length > 3`, match against `pageId(path).toLowerCase()` for each page. Returns matching pageIds.
 
-| Keyword candidates | Action |
-|---|---|
-| ≥ 1 found | Use as seeds directly (skip LLM pre-pass) |
-| 0 found | LLM pre-pass: send question + all page names, get `{ "seeds": [...] }` |
+**`llmSelectSeeds(question, indexContent, llm, model, signal)`** — sends question + index to LLM, returns `{ "seeds": ["PageA", "PageB"] }`. Uses lightweight call (no streaming). Timeout-guarded by existing `signal`.
 
-If after BFS expansion `selectedPages` still exceeds `MAX_CONTEXT_CHARS`, truncate by priority: seed pages first, then hop-1, then hop-2.
+**Fallback chain:**
+1. Keyword → candidates found → use directly
+2. Keyword → 0 candidates → LLM pre-pass
+3. LLM pre-pass → 0 seeds or error → treat all pages as seeds (existing behavior)
+
+**Context priority when `selectedPages` exceeds `MAX_CONTEXT_CHARS`:** seed pages first, then hop-1, then hop-2+.
 
 ### `src/phases/lint.ts` changes
 
-Add graph checks to structural analysis:
+Graph checks feed into ALL THREE LLM calls in lint:
 
 ```typescript
-const structuralIssues = checkStructure(pages);               // existing
-const graphIssues = checkGraphStructure(graph, hubThreshold); // new
+const pages = await vaultTools.readAll(files);  // existing
+const graph = buildWikiGraph(pages);             // new
+const structuralIssues = checkStructure(pages);  // existing
+const graphIssues = checkGraphStructure(graph, settings.hubThreshold);  // new
 const allIssues = [structuralIssues, graphIssues].filter(Boolean).join("\n");
 ```
 
-Graph issues are passed to the LLM lint prompt unchanged — LLM proposes fixes (add back-link, split hub page, etc.).
+1. **Lint report LLM call** — replace `structuralIssues` with `allIssues` in user message.
+2. **`actualizeDomainConfig`** — unchanged (receives page content, not issues).
+3. **`buildFixMessages`** — replace `structuralIssues` param with `allIssues` so LLM auto-fixer sees graph issues too.
 
-**Three graph checks:**
+Graph issues LLM can fix: add reciprocal `[[link]]` for unidirectional edges, add at least one link to/from isolated pages, note hub pages for user attention (no auto-split — too destructive).
+
+**Three graph checks in `checkGraphStructure`:**
 
 | Check | Condition | Issue string |
 |---|---|---|
-| Isolated node | `inLinks === 0 && outLinks === 0` | `page: isolated node (no links in or out)` |
-| Hub page | `outLinks > hubThreshold` | `page: hub node (N outgoing links)` |
-| Unidirectional link | `A → B` but `B` exists in graph and has no link back to `A` | `A → [[B]] not reciprocated` |
+| Isolated node | `inDegree === 0 && outDegree === 0` | `- page: isolated node (no links in or out)` |
+| Hub page | `outDegree > hubThreshold` | `- page: hub node (N outgoing links)` |
+| Unidirectional link | `A → B`, B exists in graph, B has no link to A | `- A → [[B]] not reciprocated` |
+
+Hub check uses **outgoing** degree only — flags pages referencing too many others (potential scope creep).
 
 ## Settings
 
-Two new fields in `LlmWikiPluginSettings`:
+Two new fields in `LlmWikiPluginSettings` and `DEFAULT_SETTINGS`:
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `graphDepth` | `number` | `1` | BFS hops from seed nodes in query. `0` = seeds only. |
+| `graphDepth` | `number` | `1` | BFS hops from seed nodes in query. `0` = seeds only, max sensible value: 3. |
 | `hubThreshold` | `number` | `20` | Outgoing-link count triggering hub warning in lint. |
 
 Both exposed in the Settings tab under a new "Graph" section.
@@ -95,36 +119,44 @@ Both exposed in the Settings tab under a new "Graph" section.
 
 ```
 query.ts
-  loadAllWikiPages() → pages: Map<string,string>
-  buildWikiGraph(pages) → graph: WikiGraph
-  keywordSeeds(question, pages) → candidates: string[]
-  [if candidates.length === 0] llmSelectSeeds(question, indexContent) → seeds
+  vaultTools.readAll(files) → pages: Map<vaultPath, content>
+  tryRead(..._index.md) → indexContent: string          // already exists
+  buildWikiGraph(pages) → graph: WikiGraph              // new
+  keywordSeeds(question, pages) → candidates: string[]  // new
+  [candidates.length === 0]
+    llmSelectSeeds(question, indexContent) → seeds      // new, may return []
+  [seeds.length === 0] → seeds = all pageIds            // fallback
   bfsExpand(seeds, graph, depth) → selectedIds: Set<string>
-  filter pages by selectedIds → selectedPages: Map<string,string>
+  filter pages → selectedPages: Map<vaultPath, content>
   buildContextBlock(selectedPages) → contextBlock: string
-  LLM(systemPrompt, question, contextBlock) → answer
+  LLM(systemPrompt, question, contextBlock) → answer    // existing call
 
 lint.ts
-  loadAllWikiPages() → pages: Map<string,string>
-  buildWikiGraph(pages) → graph: WikiGraph
-  checkStructure(pages) → structuralIssues: string
-  checkGraphStructure(graph, hubThreshold) → graphIssues: string
-  LLM(lintPrompt, allIssues, pages) → lintReport
+  vaultTools.readAll(files) → pages: Map<vaultPath, content>
+  buildWikiGraph(pages) → graph: WikiGraph              // new
+  checkStructure(pages) → structuralIssues: string      // existing
+  checkGraphStructure(graph, hubThreshold) → graphIssues: string  // new
+  allIssues = structuralIssues + graphIssues
+  LLM(lintPrompt, allIssues, pages) → lintReport        // allIssues replaces structuralIssues
+  actualizeDomainConfig(...) → patch                    // unchanged
+  buildFixMessages(..., allIssues, ...) → fixMessages   // allIssues replaces structuralIssues
+  LLM(fixMessages) → fixedPages
 ```
 
 ## Files Touched
 
 | File | Change |
 |---|---|
-| `src/wiki-graph.ts` | **New** — `buildWikiGraph`, `bfsExpand`, `checkGraphStructure` |
-| `src/phases/query.ts` | Replace flat context with graph-filtered context |
-| `src/phases/lint.ts` | Add `checkGraphStructure` to structural checks |
-| `src/settings.ts` | Add `graphDepth`, `hubThreshold` fields + UI |
-| `src/types.ts` | Extend `LlmWikiPluginSettings` with two new fields |
+| `src/wiki-graph.ts` | **New** — `pageId`, `buildWikiGraph`, `bfsExpand`, `checkGraphStructure` |
+| `src/phases/query.ts` | Add graph build + seed finding + BFS; replace flat contextBlock |
+| `src/phases/lint.ts` | Add `buildWikiGraph` + `checkGraphStructure`; pass `allIssues` to both LLM calls |
+| `src/types.ts` | Extend `LlmWikiPluginSettings` + `DEFAULT_SETTINGS` with `graphDepth`, `hubThreshold` |
+| `src/settings.ts` | Add "Graph" section UI for `graphDepth`, `hubThreshold` |
 
 ## Out of Scope
 
-- Persisted graph cache (not needed — build time negligible vs LLM latency)
+- Persisted graph cache (build time negligible vs LLM latency)
 - Graph visualization in Obsidian UI
 - Cross-domain graph traversal
 - Weighted edges or semantic similarity
+- Auto-split of hub pages (too destructive for auto-fix)
