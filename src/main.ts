@@ -187,8 +187,9 @@ export default class LlmWikiPlugin extends Plugin {
     }
 
     // Миграция: agentLogPath → agentLogEnabled
-    if (typeof (data as Record<string, unknown> | null)?.agentLogPath === "string") {
-      this.settings.agentLogEnabled = ((data as Record<string, unknown>).agentLogPath as string).length > 0;
+    const legacyLogPath = (data as Record<string, unknown> | null)?.agentLogPath;
+    if (typeof legacyLogPath === "string") {
+      this.settings.agentLogEnabled = legacyLogPath.length > 0;
     }
 
     // Миграция: devMode.logDir → удалён (путь фиксирован в коде)
@@ -235,7 +236,7 @@ export async function migrateLegacyData(
   domainStore: DomainStore,
   localConfigStore: LocalConfigStore,
 ): Promise<void> {
-  const data = (await plugin.loadData()) as Record<string, any> | null;
+  const data = (await plugin.loadData()) as Record<string, unknown> | null;
   if (!data) return;
 
   let dirty = false;
@@ -251,7 +252,7 @@ export async function migrateLegacyData(
     dirty = true;
   }
 
-  const ca = data.claudeAgent as Record<string, any> | undefined;
+  const ca = data.claudeAgent as Record<string, unknown> | undefined;
   if (ca && typeof ca.iclaudePath === "string") {
     const cur = await localConfigStore.load();
     if (ca.iclaudePath.length > 0 && !cur.iclaudePath) {
