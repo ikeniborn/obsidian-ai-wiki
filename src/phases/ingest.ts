@@ -121,7 +121,8 @@ export async function* runIngest(
     await updateIndex(vaultTools, wikiRoot, written);
 
     const backlinkToday = new Date().toISOString().slice(0, 10);
-    const isFirstTime = !sourceContent.includes("wiki_added:");
+    const fmMatch = /^---\n([\s\S]*?)\n---\n?/.exec(sourceContent);
+    const isFirstTime = fmMatch ? !/^wiki_added:/m.test(fmMatch[1]) : true;
     const existingArticles = parseWikiArticlesFromFm(sourceContent);
     const writtenLinks = written.map((p) => `[[${p}]]`);
     const mergedArticles = [...new Set([...existingArticles, ...writtenLinks])];
