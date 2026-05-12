@@ -7,7 +7,7 @@ import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import ingestTemplate from "../../prompts/ingest.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField } from "../utils/raw-frontmatter";
 
 export async function* runIngest(
   args: string[],
@@ -121,8 +121,7 @@ export async function* runIngest(
     await updateIndex(vaultTools, wikiRoot, written);
 
     const backlinkToday = new Date().toISOString().slice(0, 10);
-    const fmMatch = /^---\n([\s\S]*?)\n---\n?/.exec(sourceContent);
-    const isFirstTime = fmMatch ? !/^wiki_added:/m.test(fmMatch[1]) : true;
+    const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
     const existingArticles = parseWikiArticlesFromFm(sourceContent);
     const writtenLinks = written.map((p) => `[[${p}]]`);
     const mergedArticles = [...new Set([...existingArticles, ...writtenLinks])];
