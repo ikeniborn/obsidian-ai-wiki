@@ -8,6 +8,7 @@ import { parseJsonPages } from "./ingest";
 import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
+import { upsertRawFrontmatter, parseWikiSourcesFromFm } from "../utils/raw-frontmatter";
 
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
@@ -148,6 +149,38 @@ export async function* runLint(
     if (writtenPaths.length > 0) {
       reportParts.push(`### Исправлено страниц: ${writtenPaths.length}\n${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
     }
+
+    const backlinks = new Map<string, Set<string>>();
+    for (const [wikiPath, wikiContent] of pages) {
+      for (const src of parseWikiSourcesFromFm(wikiContent)) {
+        const rawPath = src.slice(2, -2); // strip [[ and ]]
+        if (!backlinks.has(rawPath)) backlinks.set(rawPath, new Set());
+        backlinks.get(rawPath)!.add(`[[${wikiPath}]]`);
+      }
+    }
+
+    const syncToday = new Date().toISOString().slice(0, 10);
+    let syncUpdated = 0;
+    for (const [rawPath, articles] of backlinks) {
+      yield { kind: "tool_use", name: "Write", input: { path: rawPath } };
+      try {
+        const rawContent = await vaultTools.read(rawPath);
+        const newContent = upsertRawFrontmatter(rawContent, {
+          wiki_updated: syncToday,
+          wiki_articles: [...articles],
+        });
+        await vaultTools.write(rawPath, newContent);
+        syncUpdated++;
+        yield { kind: "tool_result", ok: true, preview: rawPath };
+      } catch (e) {
+        yield {
+          kind: "tool_result",
+          ok: false,
+          preview: `backlink sync failed: ${rawPath}: ${(e as Error).message}`,
+        };
+      }
+    }
+    reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
   }
 
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n") };

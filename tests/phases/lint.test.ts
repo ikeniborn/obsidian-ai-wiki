@@ -80,6 +80,60 @@ describe("runLint", () => {
     expect(result.text).toBeTruthy();
   });
 
+  it("syncs wiki_articles backlinks to raw files during lint", async () => {
+    const wikiContent =
+      '---\nwiki_sources:\n  - "[[Sources/raw.md]]"\nwiki_status: stub\n---\n# Entity\n\nContent.';
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockImplementation((path: string) => {
+        if (path.includes("!Wiki")) {
+          return Promise.resolve({ files: ["!Wiki/work/Entity.md"], folders: [] });
+        }
+        return Promise.resolve({ files: [], folders: [] });
+      }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/work/Entity.md") return Promise.resolve(wikiContent);
+        if (path === "Sources/raw.md") return Promise.resolve("# Raw\n\nContent.");
+        return Promise.resolve("");
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    await collect(
+      runLint([], vt, makeLlm("Lint OK"), "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    const rawCall = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([path]: [string]) => path === "Sources/raw.md",
+    );
+    expect(rawCall).toBeDefined();
+    const writtenContent = rawCall![1] as string;
+    expect(writtenContent).toContain("wiki_articles:");
+    expect(writtenContent).toContain("[[!Wiki/work/Entity.md]]");
+  });
+
+  it("does not fail lint when raw file read throws during sync", async () => {
+    const wikiContent =
+      '---\nwiki_sources:\n  - "[[Sources/missing.md]]"\nwiki_status: stub\n---\n# Entity';
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockImplementation((path: string) => {
+        if (path.includes("!Wiki")) {
+          return Promise.resolve({ files: ["!Wiki/work/Entity.md"], folders: [] });
+        }
+        return Promise.resolve({ files: [], folders: [] });
+      }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/work/Entity.md") return Promise.resolve(wikiContent);
+        if (path === "Sources/missing.md") return Promise.reject(new Error("not found"));
+        return Promise.resolve("");
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const events = await collect(
+      runLint([], vt, makeLlm("Lint OK"), "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    expect(events.some((e: any) => e.kind === "result")).toBe(true);
+  });
+
   it("yields domain_updated with entity_types from second LLM call", async () => {
     const adapter = mockAdapter({
       list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
