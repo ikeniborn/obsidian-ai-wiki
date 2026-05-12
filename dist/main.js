@@ -280,7 +280,7 @@ var require_path_browserify = __commonJS({
           return "//";
         return path2.slice(0, end);
       },
-      basename: function basename(path2, ext) {
+      basename: function basename2(path2, ext) {
         if (ext !== void 0 && typeof ext !== "string")
           throw new TypeError('"ext" argument must be a string');
         assertPath(path2);
@@ -18852,6 +18852,8 @@ var DEFAULT_SETTINGS = {
   maxTokens: 4096,
   agentLogEnabled: false,
   historyLimit: 20,
+  graphDepth: 1,
+  hubThreshold: 20,
   timeouts: { ingest: 300, query: 300, lint: 900, fix: 900, init: 3600, format: 600 },
   history: [],
   claudeAgent: {
@@ -18969,7 +18971,12 @@ var en = {
     proxy_noProxy_desc: "CSV. Supports exact host and *.suffix. Example: localhost,127.0.0.1,*.internal",
     proxy_hint: "Proxy applies to native-agent only. claude-agent uses its own configuration. On mobile, proxy is currently not supported.",
     proxy_mobile_warning: "Proxy is not supported on mobile in this version.",
-    proxy_invalid: (m) => `Proxy config invalid: ${m}`
+    proxy_invalid: (m) => `Proxy config invalid: ${m}`,
+    h3_graph: "Graph",
+    graphDepth_name: "BFS depth",
+    graphDepth_desc: "Query: hops from seed pages. 0 = seeds only, max sensible: 3.",
+    hubThreshold_name: "Hub threshold",
+    hubThreshold_desc: "Lint: pages with more outgoing links than this are flagged as hub nodes."
   },
   view: {
     refreshTitle: "Refresh domains",
@@ -19157,7 +19164,12 @@ var ru = {
     proxy_noProxy_desc: "CSV. \u0422\u043E\u0447\u043D\u043E\u0435 \u0438\u043C\u044F \u0438\u043B\u0438 *.\u0441\u0443\u0444\u0444\u0438\u043A\u0441. \u041F\u0440\u0438\u043C\u0435\u0440: localhost,127.0.0.1,*.internal",
     proxy_hint: "\u041F\u0440\u043E\u043A\u0441\u0438 \u043F\u0440\u0438\u043C\u0435\u043D\u044F\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043A native-agent. claude-agent \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442 \u0441\u0432\u043E\u044E \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u044E. \u041D\u0430 \u043C\u043E\u0431\u0438\u043B\u044C\u043D\u043E\u043C \u043F\u0440\u043E\u043A\u0441\u0438 \u043F\u043E\u043A\u0430 \u043D\u0435 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044F.",
     proxy_mobile_warning: "\u041F\u0440\u043E\u043A\u0441\u0438 \u043D\u0430 \u043C\u043E\u0431\u0438\u043B\u044C\u043D\u043E\u043C \u043F\u043E\u043A\u0430 \u043D\u0435 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044F.",
-    proxy_invalid: (m) => `\u041D\u0435\u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u0430\u044F \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u044F \u043F\u0440\u043E\u043A\u0441\u0438: ${m}`
+    proxy_invalid: (m) => `\u041D\u0435\u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u0430\u044F \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u044F \u043F\u0440\u043E\u043A\u0441\u0438: ${m}`,
+    h3_graph: "\u0413\u0440\u0430\u0444",
+    graphDepth_name: "\u0413\u043B\u0443\u0431\u0438\u043D\u0430 BFS",
+    graphDepth_desc: "Query: \u0448\u0430\u0433\u043E\u0432 \u043E\u0442 seed-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. 0 = \u0442\u043E\u043B\u044C\u043A\u043E seeds, \u0440\u0430\u0437\u0443\u043C\u043D\u044B\u0439 \u043C\u0430\u043A\u0441\u0438\u043C\u0443\u043C: 3.",
+    hubThreshold_name: "\u041F\u043E\u0440\u043E\u0433 \u0445\u0430\u0431\u0430",
+    hubThreshold_desc: "Lint: \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0441 \u0431\u043E\u0301\u043B\u044C\u0448\u0438\u043C \u0447\u0438\u0441\u043B\u043E\u043C \u0438\u0441\u0445\u043E\u0434\u044F\u0449\u0438\u0445 \u0441\u0441\u044B\u043B\u043E\u043A \u043F\u043E\u043C\u0435\u0447\u0430\u044E\u0442\u0441\u044F \u043A\u0430\u043A hub."
   },
   view: {
     refreshTitle: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D\u044B",
@@ -19345,7 +19357,12 @@ var es = {
     proxy_noProxy_desc: "CSV. Soporta host exacto y *.sufijo. Ejemplo: localhost,127.0.0.1,*.internal",
     proxy_hint: "El proxy se aplica solo a native-agent. claude-agent usa su propia configuraci\xF3n. En m\xF3vil el proxy no est\xE1 soportado.",
     proxy_mobile_warning: "El proxy no est\xE1 soportado en m\xF3vil en esta versi\xF3n.",
-    proxy_invalid: (m) => `Configuraci\xF3n de proxy inv\xE1lida: ${m}`
+    proxy_invalid: (m) => `Configuraci\xF3n de proxy inv\xE1lida: ${m}`,
+    h3_graph: "Grafo",
+    graphDepth_name: "Profundidad BFS",
+    graphDepth_desc: "Query: saltos desde p\xE1ginas semilla. 0 = solo semillas, m\xE1x recomendado: 3.",
+    hubThreshold_name: "Umbral de hub",
+    hubThreshold_desc: "Lint: p\xE1ginas con m\xE1s enlaces salientes que este valor se marcan como hub."
   },
   view: {
     refreshTitle: "Actualizar dominios",
@@ -20287,6 +20304,25 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         containerEl.createEl("p", { text: T.settings.proxy_hint, cls: "setting-item-description" });
       }
     }
+    new import_obsidian3.Setting(containerEl).setName(T.settings.h3_graph).setHeading();
+    new import_obsidian3.Setting(containerEl).setName(T.settings.graphDepth_name).setDesc(T.settings.graphDepth_desc).addText(
+      (t) => t.setPlaceholder("1").setValue(String(s.graphDepth)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isInteger(n) && n >= 0 && n <= 3) {
+          s.graphDepth = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName(T.settings.hubThreshold_name).setDesc(T.settings.hubThreshold_desc).addText(
+      (t) => t.setPlaceholder("20").setValue(String(s.hubThreshold)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isInteger(n) && n > 0) {
+          s.hubThreshold = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
     if (!import_obsidian3.Platform.isMobile) {
       new import_obsidian3.Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
       new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_enabled_name).setDesc(T.settings.devMode_enabled_desc).addToggle(
@@ -21128,7 +21164,7 @@ function translateSystemEvent(message) {
 
 // src/controller.ts
 var import_obsidian7 = require("obsidian");
-var import_path_browserify6 = __toESM(require_path_browserify(), 1);
+var import_path_browserify7 = __toESM(require_path_browserify(), 1);
 
 // src/source-paths.ts
 var import_path_browserify = __toESM(require_path_browserify(), 1);
@@ -21586,10 +21622,93 @@ ${indexContent.slice(0, 2e3)}` : ""
 // prompts/query.md
 var query_default = "\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u043F\u043E wiki-\u0431\u0430\u0437\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u0411\u0443\u0434\u044C \u0442\u043E\u0447\u0435\u043D \u0438 \u043B\u0430\u043A\u043E\u043D\u0438\u0447\u0435\u043D.\n\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 WikiLinks [[\u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435]] \u043F\u0440\u0438 \u0441\u0441\u044B\u043B\u043A\u0430\u0445 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0437 \u0438\u043D\u0434\u0435\u043A\u0441\u0430.\n{{entity_types_block}}\n{{schema_block}}\n{{index_block}}\n";
 
+// src/wiki-graph.ts
+var import_path_browserify3 = __toESM(require_path_browserify(), 1);
+function pageId(vaultPath) {
+  return (0, import_path_browserify3.basename)(vaultPath, ".md");
+}
+function buildWikiGraph(pages) {
+  const graph = /* @__PURE__ */ new Map();
+  for (const vaultPath of pages.keys()) {
+    graph.set(pageId(vaultPath), /* @__PURE__ */ new Set());
+  }
+  for (const [vaultPath, content] of pages) {
+    const src = pageId(vaultPath);
+    for (const match of content.matchAll(/\[\[([^\]|#]+)/g)) {
+      const tgt = match[1].trim();
+      if (tgt)
+        graph.get(src).add(tgt);
+    }
+  }
+  return graph;
+}
+function bfsExpand(seeds, graph, depth) {
+  if (seeds.length === 0)
+    return /* @__PURE__ */ new Set();
+  const reverse = /* @__PURE__ */ new Map();
+  for (const [src, targets] of graph) {
+    for (const tgt of targets) {
+      if (!reverse.has(tgt))
+        reverse.set(tgt, /* @__PURE__ */ new Set());
+      reverse.get(tgt).add(src);
+    }
+  }
+  const visited = new Set(seeds);
+  let frontier = new Set(seeds);
+  for (let hop = 0; hop < depth; hop++) {
+    const next = /* @__PURE__ */ new Set();
+    for (const node of frontier) {
+      for (const neighbor of graph.get(node) ?? []) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          next.add(neighbor);
+        }
+      }
+      for (const neighbor of reverse.get(node) ?? []) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          next.add(neighbor);
+        }
+      }
+    }
+    if (next.size === 0)
+      break;
+    frontier = next;
+  }
+  return visited;
+}
+function checkGraphStructure(graph, hubThreshold) {
+  const inDegree = /* @__PURE__ */ new Map();
+  for (const node of graph.keys()) {
+    if (!inDegree.has(node))
+      inDegree.set(node, 0);
+    for (const tgt of graph.get(node)) {
+      inDegree.set(tgt, (inDegree.get(tgt) ?? 0) + 1);
+    }
+  }
+  const issues = [];
+  for (const [node, neighbors] of graph) {
+    const outDeg = neighbors.size;
+    const inDeg = inDegree.get(node) ?? 0;
+    if (inDeg === 0 && outDeg === 0) {
+      issues.push(`${node}: isolated node (no links in or out)`);
+    }
+    if (outDeg > hubThreshold) {
+      issues.push(`${node}: hub node (${outDeg} outgoing links)`);
+    }
+    for (const tgt of neighbors) {
+      if (graph.has(tgt) && !graph.get(tgt).has(node)) {
+        issues.push(`${node} \u2192 [[${tgt}]] not reciprocated`);
+      }
+    }
+  }
+  return issues.join("\n");
+}
+
 // src/phases/query.ts
 var MAX_CONTEXT_CHARS = 8e4;
 var META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
-async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}) {
+async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}) {
   const question = args[0]?.trim();
   if (!question) {
     yield { kind: "error", message: "query: question required" };
@@ -21616,11 +21735,20 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   ]);
   const pages = await vaultTools.readAll(files);
   const start = Date.now();
-  let contextBlock = [...pages.entries()].map(([p, c]) => `--- ${p} ---
-${c}`).join("\n\n");
-  if (contextBlock.length > MAX_CONTEXT_CHARS) {
-    contextBlock = contextBlock.slice(0, MAX_CONTEXT_CHARS) + "\n[...truncated]";
+  const graph = buildWikiGraph(pages);
+  const allPageIds = [...pages.keys()].map(pageId);
+  let seeds = keywordSeeds(question, pages);
+  if (seeds.length === 0) {
+    seeds = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, signal);
   }
+  if (signal.aborted)
+    return;
+  if (seeds.length === 0) {
+    seeds = allPageIds;
+  }
+  const seedSet = new Set(seeds);
+  const selectedIds = bfsExpand(seeds, graph, graphDepth);
+  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, MAX_CONTEXT_CHARS);
   const entityTypesBlock = buildEntityTypesBlock2(domain);
   const systemPrompt = render(query_default, {
     domain_name: domain.name,
@@ -21705,6 +21833,80 @@ async function tryRead2(vaultTools, path2) {
     return "";
   }
 }
+function keywordSeeds(question, pages) {
+  const words = question.split(/\W+/).filter((w) => w.length > 3).map((w) => w.toLowerCase());
+  if (words.length === 0)
+    return [];
+  const seeds = [];
+  for (const path2 of pages.keys()) {
+    const id = pageId(path2);
+    if (words.some((w) => id.toLowerCase().includes(w))) {
+      seeds.push(id);
+    }
+  }
+  return seeds;
+}
+async function llmSelectSeeds(question, indexContent, allPageIds, llm, model, signal) {
+  const prompt = [
+    `Question: "${question}"`,
+    `Available wiki pages: ${allPageIds.join(", ")}`,
+    indexContent ? `
+Index:
+${indexContent.slice(0, 3e3)}` : "",
+    `
+Return JSON only: {"seeds": ["PageA", "PageB"]} \u2014 most relevant page names (bare names, no path, no .md).`
+  ].filter(Boolean).join("\n");
+  try {
+    const resp = await llm.chat.completions.create(
+      {
+        model,
+        messages: [{ role: "user", content: prompt }],
+        stream: false
+      },
+      { signal }
+    );
+    const text = resp.choices[0]?.message?.content ?? "";
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match)
+      return [];
+    const parsed = JSON.parse(match[0]);
+    if (!Array.isArray(parsed.seeds))
+      return [];
+    return parsed.seeds.filter((s) => typeof s === "string");
+  } catch {
+    return [];
+  }
+}
+function buildContextBlock(pages, seeds, selectedIds, maxChars) {
+  const seedPages = [];
+  const bfsPages = [];
+  for (const [path2, content] of pages) {
+    const id = pageId(path2);
+    if (!selectedIds.has(id))
+      continue;
+    if (seeds.has(id))
+      seedPages.push([path2, content]);
+    else
+      bfsPages.push([path2, content]);
+  }
+  const ordered = [...seedPages, ...bfsPages];
+  let block = "";
+  for (const [p, c] of ordered) {
+    const chunk = `--- ${p} ---
+${c}
+
+`;
+    if (block.length + chunk.length > maxChars)
+      break;
+    block += chunk;
+  }
+  if (block.length === 0 && ordered.length > 0) {
+    const [p, c] = ordered[0];
+    block = `--- ${p} ---
+${c}`.slice(0, maxChars) + "\n[...truncated]";
+  }
+  return block;
+}
 function buildEntityTypesBlock2(domain) {
   if (!domain.entity_types?.length)
     return "";
@@ -21716,14 +21918,14 @@ ${types}${notes}`;
 }
 
 // src/phases/lint.ts
-var import_path_browserify3 = __toESM(require_path_browserify(), 1);
+var import_path_browserify4 = __toESM(require_path_browserify(), 1);
 
 // prompts/lint.md
 var lint_default = "\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0412\u044B\u044F\u0432\u043B\u044F\u0439: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442.\n\u0412\u0435\u0440\u043D\u0438 \u043A\u0440\u0430\u0442\u043A\u0438\u0439 \u043E\u0442\u0447\u0451\u0442 \u0432 markdown.\n{{entity_types_block}}\n";
 
 // src/phases/lint.ts
 var META_FILES2 = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
-async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}) {
+async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal, hubThreshold = 20, opts = {}) {
   const domainId = args[0];
   const targets = domainId ? domains.filter((d) => d.id === domainId) : domains;
   if (targets.length === 0) {
@@ -21735,7 +21937,7 @@ async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal
   for (const domain of targets) {
     if (signal.aborted)
       return;
-    const absWiki = (0, import_path_browserify3.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+    const absWiki = (0, import_path_browserify4.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
     const wikiVaultPath = vaultTools.toVaultPath(absWiki);
     if (!wikiVaultPath) {
       reportParts.push(`## ${domain.id}
@@ -21747,7 +21949,10 @@ Wiki folder outside vault \u2014 skipped.`);
     const files = allFiles.filter((f) => !META_FILES2.some((m) => f.endsWith(m)));
     yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
     const pages = await vaultTools.readAll(files);
+    const graph = buildWikiGraph(pages);
     const structuralIssues = checkStructure(pages);
+    const graphIssues = checkGraphStructure(graph, hubThreshold);
+    const allIssues = [structuralIssues, graphIssues].filter(Boolean).join("\n");
     const entityTypesBlock = buildEntityTypesBlock3(domain);
     yield { kind: "assistant_text", delta: `Evaluating domain "${domain.id}" quality...
 ` };
@@ -21764,7 +21969,7 @@ ${entityTypesBlock}` : ""
         content: [
           `\u0414\u043E\u043C\u0435\u043D: ${domain.id} (${domain.name})`,
           `\u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B:
-${structuralIssues || "\u041D\u0435\u0442."}`,
+${allIssues || "\u041D\u0435\u0442."}`,
           "",
           `Wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B:
 ${[...pages.entries()].map(([p, c]) => `--- ${p} ---
@@ -21799,8 +22004,8 @@ ${c.slice(0, 500)}`).join("\n\n")}`
         yield { kind: "assistant_text", delta: llmReport };
     }
     reportParts.push(`## ${domain.id}
-${structuralIssues ? `**\u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B:**
-${structuralIssues}
+${allIssues ? `**\u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B:**
+${allIssues}
 
 ` : ""}${llmReport}`);
     if (signal.aborted)
@@ -21819,7 +22024,7 @@ Actualizing domain config for "${domain.id}"...
     yield { kind: "assistant_text", delta: `
 Applying fixes for "${domain.id}"...
 ` };
-    const fixMessages = buildFixMessages(domain, wikiVaultPath, pages, structuralIssues, entityTypesBlock, llmReport);
+    const fixMessages = buildFixMessages(domain, wikiVaultPath, pages, allIssues, entityTypesBlock, llmReport);
     const fixParams = buildChatParams(model, fixMessages, opts);
     let fixFullText = "";
     try {
@@ -21942,7 +22147,7 @@ function computeEntityDiff(oldTypes, newTypes) {
   modified.forEach((et) => lines.push(`- \u270E \u043E\u0431\u043D\u043E\u0432\u043B\u0451\u043D: **${et.type}**`));
   return lines.join("\n");
 }
-function buildFixMessages(domain, wikiVaultPath, pages, structuralIssues, entityTypesBlock, lintReport) {
+function buildFixMessages(domain, wikiVaultPath, pages, allIssues, entityTypesBlock, lintReport) {
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const pagesBlock = [...pages.entries()].map(([p, c]) => `--- ${p} ---
 ${c}`).join("\n\n");
@@ -21965,9 +22170,9 @@ ${entityTypesBlock}` : "",
       role: "user",
       content: [
         `\u0414\u043E\u043C\u0435\u043D: ${domain.id} (${domain.name})`,
-        structuralIssues ? `
+        allIssues ? `
 \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B:
-${structuralIssues}` : "\n\u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0445 \u043F\u0440\u043E\u0431\u043B\u0435\u043C \u043D\u0435 \u043E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u043E.",
+${allIssues}` : "\n\u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0445 \u043F\u0440\u043E\u0431\u043B\u0435\u043C \u043D\u0435 \u043E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u043E.",
         `
 \u041E\u0442\u0447\u0451\u0442 Lint (\u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u0438):
 ${lintReport}`,
@@ -22046,7 +22251,7 @@ ${c.slice(0, 300)}`).join("\n\n");
 }
 
 // src/phases/fix.ts
-var import_path_browserify4 = __toESM(require_path_browserify(), 1);
+var import_path_browserify5 = __toESM(require_path_browserify(), 1);
 
 // prompts/fix.md
 var fix_default = '\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n{{fix_instruction}}\n\n{{entity_types_block}}\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432 \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 (\u0435\u0441\u043B\u0438 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0430\u0441\u044C \u2014 \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0430\u0439):\n[{"path":"{{wiki_path}}/EntityName.md","content":"\u043F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B"}]\n\u0414\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u044B\u0435 \u043F\u0443\u0442\u0438 wiki: {{wiki_path}}/\n\u0414\u0430\u0442\u0430: {{today}}\n';
@@ -22060,7 +22265,7 @@ async function* runFix(args, vaultTools, llm, model, domains, vaultRoot, signal,
     yield { kind: "error", message: domainId ? `Domain "${domainId}" not found.` : "No domains configured." };
     return;
   }
-  const absWiki = (0, import_path_browserify4.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+  const absWiki = (0, import_path_browserify5.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
     yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
@@ -23015,13 +23220,13 @@ var AgentRunner = class {
         yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
         break;
       case "query":
-        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
+        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts);
         break;
       case "query-save":
-        yield* runQuery(req.args, true, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
+        yield* runQuery(req.args, true, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts);
         break;
       case "lint":
-        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
+        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, opts);
         break;
       case "fix":
         yield* runFix(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, req.context, req.instruction);
@@ -23170,7 +23375,7 @@ var VaultTools = class {
 
 // src/claude-cli-client.ts
 var import_node_child_process = require("node:child_process");
-var import_path_browserify5 = __toESM(require_path_browserify(), 1);
+var import_path_browserify6 = __toESM(require_path_browserify(), 1);
 
 // src/stream.ts
 var PREVIEW_MAX = 200;
@@ -23298,7 +23503,7 @@ var ClaudeCliClient = class {
     try {
       const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
       if (isLargeUser) {
-        const tmpUsrFile = (0, import_path_browserify5.join)(this.cfg.tmpDir, `ai-wiki-usr-${id}.txt`);
+        const tmpUsrFile = (0, import_path_browserify6.join)(this.cfg.tmpDir, `ai-wiki-usr-${id}.txt`);
         const wrapped = `<user_input>
 ${userText}
 </user_input>`;
@@ -23317,7 +23522,7 @@ ${userText}
       if (!isResume && systemContent) {
         const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
         if (isLargeSys) {
-          const tmpSysFile = (0, import_path_browserify5.join)(this.cfg.tmpDir, `ai-wiki-sys-${id}.txt`);
+          const tmpSysFile = (0, import_path_browserify6.join)(this.cfg.tmpDir, `ai-wiki-sys-${id}.txt`);
           await this.cfg.tmpWrite(tmpSysFile, systemContent);
           tmpFiles.push(tmpSysFile);
           args.push("--system-prompt-file", tmpSysFile);
@@ -30770,9 +30975,9 @@ var DomainStore = class {
 
 // src/controller.ts
 function toVaultPath(vaultDir, savedPath) {
-  const abs = (0, import_path_browserify6.isAbsolute)(savedPath) ? savedPath : (0, import_path_browserify6.join)(vaultDir, savedPath);
-  const rel = (0, import_path_browserify6.relative)(vaultDir, abs);
-  if (rel.startsWith("..") || (0, import_path_browserify6.isAbsolute)(rel))
+  const abs = (0, import_path_browserify7.isAbsolute)(savedPath) ? savedPath : (0, import_path_browserify7.join)(vaultDir, savedPath);
+  const rel = (0, import_path_browserify7.relative)(vaultDir, abs);
+  if (rel.startsWith("..") || (0, import_path_browserify7.isAbsolute)(rel))
     return null;
   return rel;
 }
@@ -31133,9 +31338,9 @@ var WikiController = class {
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm;
     if (s.backend === "claude-agent") {
-      const manifestDir = this.plugin.manifest.dir ?? (0, import_path_browserify6.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
+      const manifestDir = this.plugin.manifest.dir ?? (0, import_path_browserify7.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
       const pluginDir = this.app.vault.adapter.getFullPath(manifestDir);
-      const tmpDir = (0, import_path_browserify6.join)(pluginDir, "tmp");
+      const tmpDir = (0, import_path_browserify7.join)(pluginDir, "tmp");
       const tmpDirRelative = tmpDir.startsWith(base) ? tmpDir.slice(base.length).replace(/^\//, "") : tmpDir;
       if (base) {
         try {
