@@ -91,7 +91,7 @@ tests/fixtures/
 
 esbuild (`esbuild.config.mjs`): entrypoint `src/main.ts` → `main.js` (CJS, ES2022).
 
-Внешние зависимости (не бандлятся): `obsidian`, `electron`, `node:child_process`, `node:readline`, `node:path`, `node:fs`.
+Внешние зависимости (не бандлятся): `obsidian`, `electron`, `node:child_process`, `node:readline`. `path-browserify` бандлится; `node:path` и `node:fs` удалены из external.
 
 ### Версионирование
 

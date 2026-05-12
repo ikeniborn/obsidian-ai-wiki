@@ -1,4 +1,4 @@
-import { join } from "path";
+import { join } from "path-browserify";
 import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";

@@ -1,4 +1,4 @@
-import { isAbsolute, join, relative, dirname } from "path";
+import { isAbsolute, join, relative, dirname } from "path-browserify";
 import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";

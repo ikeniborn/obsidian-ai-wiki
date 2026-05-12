@@ -1,4 +1,4 @@
-import { isAbsolute, join } from "path";
+import { isAbsolute, join } from "path-browserify";
 
 /**
  * Returns updated source_paths after adding newPath with consolidation:
