@@ -21691,14 +21691,14 @@ function checkGraphStructure(graph, hubThreshold) {
     const outDeg = neighbors.size;
     const inDeg = inDegree.get(node) ?? 0;
     if (inDeg === 0 && outDeg === 0) {
-      issues.push(`${node}: isolated node (no links in or out)`);
+      issues.push(`- ${node}: isolated node (no links in or out)`);
     }
     if (outDeg > hubThreshold) {
-      issues.push(`${node}: hub node (${outDeg} outgoing links)`);
+      issues.push(`- ${node}: hub node (${outDeg} outgoing links)`);
     }
     for (const tgt of neighbors) {
       if (graph.has(tgt) && !graph.get(tgt).has(node)) {
-        issues.push(`${node} \u2192 [[${tgt}]] not reciprocated`);
+        issues.push(`- ${node} \u2192 [[${tgt}]] not reciprocated`);
       }
     }
   }
@@ -21951,7 +21951,7 @@ Wiki folder outside vault \u2014 skipped.`);
     const pages = await vaultTools.readAll(files);
     const graph = buildWikiGraph(pages);
     const structuralIssues = checkStructure(pages);
-    const graphIssues = checkGraphStructure(graph, hubThreshold);
+    const graphIssues = checkGraphStructure(graph, hubThreshold).slice(0, 8e3);
     const allIssues = [structuralIssues, graphIssues].filter(Boolean).join("\n");
     const entityTypesBlock = buildEntityTypesBlock3(domain);
     yield { kind: "assistant_text", delta: `Evaluating domain "${domain.id}" quality...

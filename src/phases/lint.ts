@@ -56,7 +56,7 @@ export async function* runLint(
 
     const graph = buildWikiGraph(pages);
     const structuralIssues = checkStructure(pages);
-    const graphIssues = checkGraphStructure(graph, hubThreshold);
+    const graphIssues = checkGraphStructure(graph, hubThreshold).slice(0, 8_000);
     const allIssues = [structuralIssues, graphIssues].filter(Boolean).join("\n");
 
     const entityTypesBlock = buildEntityTypesBlock(domain);

@@ -68,14 +68,14 @@ export function checkGraphStructure(graph: WikiGraph, hubThreshold: number): str
     const inDeg = inDegree.get(node) ?? 0;
 
     if (inDeg === 0 && outDeg === 0) {
-      issues.push(`${node}: isolated node (no links in or out)`);
+      issues.push(`- ${node}: isolated node (no links in or out)`);
     }
     if (outDeg > hubThreshold) {
-      issues.push(`${node}: hub node (${outDeg} outgoing links)`);
+      issues.push(`- ${node}: hub node (${outDeg} outgoing links)`);
     }
     for (const tgt of neighbors) {
       if (graph.has(tgt) && !graph.get(tgt)!.has(node)) {
-        issues.push(`${node} → [[${tgt}]] not reciprocated`);
+        issues.push(`- ${node} → [[${tgt}]] not reciprocated`);
       }
     }
   }
