@@ -70,7 +70,7 @@ export class ClaudeCliClient implements LlmClient {
     try {
       const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
       if (isLargeUser) {
-        const tmpUsrFile = join(this.cfg.tmpDir, `llm-wiki-usr-${id}.txt`);
+        const tmpUsrFile = join(this.cfg.tmpDir, `ai-wiki-usr-${id}.txt`);
         const wrapped = `<user_input>\n${userText}\n</user_input>`;
         await this.cfg.tmpWrite(tmpUsrFile, wrapped);
         tmpFiles.push(tmpUsrFile);
@@ -91,7 +91,7 @@ export class ClaudeCliClient implements LlmClient {
       if (!isResume && systemContent) {
         const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
         if (isLargeSys) {
-          const tmpSysFile = join(this.cfg.tmpDir, `llm-wiki-sys-${id}.txt`);
+          const tmpSysFile = join(this.cfg.tmpDir, `ai-wiki-sys-${id}.txt`);
           await this.cfg.tmpWrite(tmpSysFile, systemContent);
           tmpFiles.push(tmpSysFile);
           args.push("--system-prompt-file", tmpSysFile);

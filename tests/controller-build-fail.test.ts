@@ -12,13 +12,13 @@ describe("dispatch — buildAgentRunner failure", () => {
         throw new Error("simulated tmpDir failure");
       } catch (e) {
         new Notice(`Error: ${(e as Error).message}`);
-        console.error("[llm-wiki] buildAgentRunner failed", e);
+        console.error("[ai-wiki] buildAgentRunner failed", e);
         return;
       }
     };
     await fn();
     expect(Notice.__messages.some((m) => m.includes("simulated tmpDir failure"))).toBe(true);
-    expect(errSpy).toHaveBeenCalledWith("[llm-wiki] buildAgentRunner failed", expect.any(Error));
+    expect(errSpy).toHaveBeenCalledWith("[ai-wiki] buildAgentRunner failed", expect.any(Error));
     errSpy.mockRestore();
   });
 });

@@ -2,7 +2,7 @@ import { Plugin, WorkspaceLeaf, Platform } from "obsidian";
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings, type RunHistoryEntry } from "./types";
 import type { DomainEntry } from "./domain";
 import { LlmWikiSettingTab } from "./settings";
-import { LLM_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
+import { AI_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { WikiController } from "./controller";
 import { QueryModal, DomainModal } from "./modals";
 import { i18n } from "./i18n";
@@ -25,16 +25,16 @@ export default class LlmWikiPlugin extends Plugin {
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
     this.controller.onBusyChange = () => this.settingTab?.display();
 
-    this.registerView(LLM_WIKI_VIEW_TYPE, (leaf: WorkspaceLeaf) => new LlmWikiView(leaf, this));
+    this.registerView(AI_WIKI_VIEW_TYPE, (leaf: WorkspaceLeaf) => new LlmWikiView(leaf, this));
 
-    // eslint-disable-next-line obsidianmd/ui/sentence-case -- "LLM Wiki" is the plugin name (proper noun)
-    this.addRibbonIcon("brain-circuit", "LLM Wiki", () => {
-      const leaves = this.app.workspace.getLeavesOfType(LLM_WIKI_VIEW_TYPE);
+    // eslint-disable-next-line obsidianmd/ui/sentence-case -- "AI Wiki" is the plugin name (proper noun)
+    this.addRibbonIcon("brain-circuit", "AI Wiki", () => {
+      const leaves = this.app.workspace.getLeavesOfType(AI_WIKI_VIEW_TYPE);
       if (leaves.length > 0) {
         void this.app.workspace.revealLeaf(leaves[0]);
       } else {
         const right = this.app.workspace.getRightLeaf(false);
-        if (right) void right.setViewState({ type: LLM_WIKI_VIEW_TYPE, active: true });
+        if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
 
@@ -45,7 +45,7 @@ export default class LlmWikiPlugin extends Plugin {
       name: T.cmd.openPanel,
       callback: () => {
         const right = this.app.workspace.getRightLeaf(false);
-        if (right) void right.setViewState({ type: LLM_WIKI_VIEW_TYPE, active: true });
+        if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       },
     });
 
@@ -106,12 +106,12 @@ export default class LlmWikiPlugin extends Plugin {
     this.settingTab = new LlmWikiSettingTab(this.app, this);
     this.addSettingTab(this.settingTab);
 
-    console.debug("[llm-wiki] loaded");
+    console.debug("[ai-wiki] loaded");
   }
 
   onunload(): void {
     this.controller.cancelCurrent();
-    console.debug("[llm-wiki] unloaded");
+    console.debug("[ai-wiki] unloaded");
   }
 
   async loadSettings(): Promise<void> {

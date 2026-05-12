@@ -1,6 +1,6 @@
 {
-  "id": "llm-wiki",
-  "name": "LLM Wiki",
+  "id": "ai-wiki",
+  "name": "AI Wiki",
   "version": "0.1.75",
   "minAppVersion": "1.0.0",
   "description": "AI-powered compoundable knowledge base — extracts, synthesizes and maintains a wiki from raw sources.",

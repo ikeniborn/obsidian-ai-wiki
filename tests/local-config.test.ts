@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { LocalConfigStore } from "../src/local-config";
 
-function makePlugin(adapterImpl: Record<string, any>, manifestDir = ".obsidian/plugins/llm-wiki") {
+function makePlugin(adapterImpl: Record<string, any>, manifestDir = ".obsidian/plugins/ai-wiki") {
   return {
-    manifest: { dir: manifestDir, id: "llm-wiki" },
+    manifest: { dir: manifestDir, id: "ai-wiki" },
     app: { vault: { adapter: adapterImpl } },
   } as any;
 }
@@ -42,10 +42,10 @@ describe("LocalConfigStore", () => {
       read: vi.fn(),
       write: vi.fn().mockResolvedValue(undefined),
     };
-    const store = new LocalConfigStore(makePlugin(adapter, ".obsidian/plugins/llm-wiki"));
+    const store = new LocalConfigStore(makePlugin(adapter, ".obsidian/plugins/ai-wiki"));
     await store.save({ iclaudePath: "/new/path" });
     expect(adapter.write).toHaveBeenCalledWith(
-      ".obsidian/plugins/llm-wiki/local.json",
+      ".obsidian/plugins/ai-wiki/local.json",
       JSON.stringify({ iclaudePath: "/new/path" }, null, 2),
     );
     expect((await store.load()).iclaudePath).toBe("/new/path");

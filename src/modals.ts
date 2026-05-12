@@ -55,7 +55,7 @@ export class QueryModal extends Modal {
     const { contentEl } = this;
     contentEl.createEl("h3", { text: this.save ? T.queryAndSave : T.query });
     const ta = contentEl.createEl("textarea", {
-      cls: "llm-wiki-modal-input",
+      cls: "ai-wiki-modal-input",
       attr: { rows: "5" },
       placeholder: T.queryPlaceholder,
     });
@@ -135,13 +135,13 @@ function attachFolderDropdown(app: App, inputEl: HTMLInputElement, onSelect: (pa
     if (!folders.length) return;
 
     const rect = inputEl.getBoundingClientRect();
-    dropEl = document.body.createDiv({ cls: "llm-wiki-folder-dropdown" });
+    dropEl = document.body.createDiv({ cls: "ai-wiki-folder-dropdown" });
     dropEl.style.top = `${rect.bottom + window.scrollY}px`;
     dropEl.style.left = `${rect.left + window.scrollX}px`;
     dropEl.style.width = `${rect.width}px`;
 
     for (const folder of folders) {
-      const item = dropEl.createDiv({ cls: "llm-wiki-folder-dropdown-item" });
+      const item = dropEl.createDiv({ cls: "ai-wiki-folder-dropdown-item" });
       item.setText(folder.path + "/");
       item.addEventListener("mousedown", (e) => {
         e.preventDefault(); // prevent input blur before selection
@@ -226,16 +226,16 @@ export class AddDomainModal extends Modal {
     this.sourcePathsContainer.empty();
     const T = i18n().modal;
 
-    const header = this.sourcePathsContainer.createDiv({ cls: "llm-wiki-sp-header" });
-    header.createEl("span", { text: T.addDomainSourcePathsLabel, cls: "llm-wiki-sp-label" });
+    const header = this.sourcePathsContainer.createDiv({ cls: "ai-wiki-sp-header" });
+    header.createEl("span", { text: T.addDomainSourcePathsLabel, cls: "ai-wiki-sp-label" });
 
-    const listEl = this.sourcePathsContainer.createDiv({ cls: "llm-wiki-sp-list" });
+    const listEl = this.sourcePathsContainer.createDiv({ cls: "ai-wiki-sp-list" });
     const rerender = () => {
       listEl.empty();
       this.input.sourcePaths.forEach((p, i) => {
-        const row = listEl.createDiv({ cls: "llm-wiki-sp-row" });
-        row.createEl("span", { text: p, cls: "llm-wiki-sp-path", attr: { title: p } });
-        const removeBtn = row.createEl("button", { text: "×", cls: "llm-wiki-sp-remove" });
+        const row = listEl.createDiv({ cls: "ai-wiki-sp-row" });
+        row.createEl("span", { text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
+        const removeBtn = row.createEl("button", { text: "×", cls: "ai-wiki-sp-remove" });
         removeBtn.addEventListener("click", () => {
           this.input.sourcePaths.splice(i, 1);
           rerender();
@@ -244,9 +244,9 @@ export class AddDomainModal extends Modal {
     };
     rerender();
 
-    const addRow = this.sourcePathsContainer.createDiv({ cls: "llm-wiki-sp-add-row" });
+    const addRow = this.sourcePathsContainer.createDiv({ cls: "ai-wiki-sp-add-row" });
     const inputEl = addRow.createEl("input", {
-      cls: "llm-wiki-sp-input",
+      cls: "ai-wiki-sp-input",
       attr: { type: "text", placeholder: T.addDomainSourcePathsPlaceholder },
     });
     const addPath = (val?: string) => {
@@ -294,8 +294,8 @@ export class FileErrorModal extends Modal {
     const T = i18n().modal;
     const { contentEl } = this;
     contentEl.createEl("h3", { text: T.fileErrorTitle });
-    contentEl.createEl("p", { text: this.file, cls: "llm-wiki-file-error-path" });
-    contentEl.createEl("p", { text: this.err.message, cls: "llm-wiki-file-error-msg" });
+    contentEl.createEl("p", { text: this.file, cls: "ai-wiki-file-error-path" });
+    contentEl.createEl("p", { text: this.err.message, cls: "ai-wiki-file-error-msg" });
 
     const setting = new Setting(contentEl);
     setting.addButton((b) =>
@@ -369,7 +369,7 @@ export class EditDomainModal extends Modal {
         t.setValue(this.languageNotesVal).onChange((v) => { this.languageNotesVal = v; });
       });
 
-    this.errorEl = contentEl.createEl("p", { cls: "mod-warning llm-wiki-hidden" });
+    this.errorEl = contentEl.createEl("p", { cls: "mod-warning ai-wiki-hidden" });
 
     new Setting(contentEl)
       .addButton((b) => b.setButtonText(T.cancel).onClick(() => this.close()))
@@ -380,8 +380,8 @@ export class EditDomainModal extends Modal {
     container.empty();
     const T = i18n().modal;
 
-    const header = container.createDiv({ cls: "llm-wiki-et-header" });
-    header.createEl("span", { text: T.entityTypesLabel, cls: "llm-wiki-et-label" });
+    const header = container.createDiv({ cls: "ai-wiki-et-header" });
+    header.createEl("span", { text: T.entityTypesLabel, cls: "ai-wiki-et-label" });
     const toggleBtn = header.createEl("button", {
       text: this.entityTypesMode === "cards" ? T.entityTypesEditJson : T.entityTypesBackToCards,
     });
@@ -401,13 +401,13 @@ export class EditDomainModal extends Modal {
       }
     } else {
       const ta = container.createEl("textarea", {
-        cls: "llm-wiki-settings-textarea llm-wiki-monospace",
+        cls: "ai-wiki-settings-textarea ai-wiki-monospace",
         attr: { rows: "10" },
       });
       ta.value = this.entityTypesVal;
       ta.addEventListener("input", () => { this.entityTypesVal = ta.value; });
 
-      const jsonErrorEl = container.createEl("p", { cls: "mod-warning llm-wiki-hidden" });
+      const jsonErrorEl = container.createEl("p", { cls: "mod-warning ai-wiki-hidden" });
 
       toggleBtn.addEventListener("click", () => {
         try {
@@ -421,7 +421,7 @@ export class EditDomainModal extends Modal {
           this.renderEntityTypes(container);
         } catch {
           jsonErrorEl.textContent = T.entityTypesError;
-          jsonErrorEl.removeClass("llm-wiki-hidden");
+          jsonErrorEl.removeClass("ai-wiki-hidden");
         }
       });
     }
@@ -431,17 +431,17 @@ export class EditDomainModal extends Modal {
     container.empty();
     const T = i18n().modal;
 
-    const header = container.createDiv({ cls: "llm-wiki-sp-header" });
-    header.createEl("span", { text: T.sourcePathsLabel, cls: "llm-wiki-sp-label" });
+    const header = container.createDiv({ cls: "ai-wiki-sp-header" });
+    header.createEl("span", { text: T.sourcePathsLabel, cls: "ai-wiki-sp-label" });
 
-    const listEl = container.createDiv({ cls: "llm-wiki-sp-list" });
+    const listEl = container.createDiv({ cls: "ai-wiki-sp-list" });
 
     const rerender = () => {
       listEl.empty();
       this.sourcePathsList.forEach((p, i) => {
-        const row = listEl.createDiv({ cls: "llm-wiki-sp-row" });
-        row.createEl("span", { text: p, cls: "llm-wiki-sp-path", attr: { title: p } });
-        const removeBtn = row.createEl("button", { text: "×", cls: "llm-wiki-sp-remove" });
+        const row = listEl.createDiv({ cls: "ai-wiki-sp-row" });
+        row.createEl("span", { text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
+        const removeBtn = row.createEl("button", { text: "×", cls: "ai-wiki-sp-remove" });
         removeBtn.addEventListener("click", () => {
           this.sourcePathsList.splice(i, 1);
           rerender();
@@ -450,9 +450,9 @@ export class EditDomainModal extends Modal {
     };
     rerender();
 
-    const addRow = container.createDiv({ cls: "llm-wiki-sp-add-row" });
+    const addRow = container.createDiv({ cls: "ai-wiki-sp-add-row" });
     const input = addRow.createEl("input", {
-      cls: "llm-wiki-sp-input",
+      cls: "ai-wiki-sp-input",
       attr: { type: "text", placeholder: T.sourcePathsPlaceholder },
     });
 
@@ -473,29 +473,29 @@ export class EditDomainModal extends Modal {
   }
 
   private renderEntityTypeCard(container: HTMLElement, et: EntityType): void {
-    const card = container.createDiv({ cls: "llm-wiki-et-card" });
-    const head = card.createDiv({ cls: "llm-wiki-et-card-head" });
-    head.createEl("span", { text: et.type, cls: "llm-wiki-et-card-type" });
+    const card = container.createDiv({ cls: "ai-wiki-et-card" });
+    const head = card.createDiv({ cls: "ai-wiki-et-card-head" });
+    head.createEl("span", { text: et.type, cls: "ai-wiki-et-card-type" });
     if (et.wiki_subfolder) {
-      head.createEl("span", { text: et.wiki_subfolder + "/", cls: "llm-wiki-et-card-subfolder" });
+      head.createEl("span", { text: et.wiki_subfolder + "/", cls: "ai-wiki-et-card-subfolder" });
     }
-    const body = card.createDiv({ cls: "llm-wiki-et-card-body" });
+    const body = card.createDiv({ cls: "ai-wiki-et-card-body" });
     if (et.description) {
-      body.createEl("p", { text: et.description, cls: "llm-wiki-et-card-desc" });
+      body.createEl("p", { text: et.description, cls: "ai-wiki-et-card-desc" });
     }
     if (et.extraction_cues?.length) {
-      const tags = body.createDiv({ cls: "llm-wiki-et-card-tags" });
+      const tags = body.createDiv({ cls: "ai-wiki-et-card-tags" });
       for (const cue of et.extraction_cues) {
-        tags.createEl("span", { text: cue, cls: "llm-wiki-et-card-tag" });
+        tags.createEl("span", { text: cue, cls: "ai-wiki-et-card-tag" });
       }
     }
     if (et.min_mentions_for_page != null) {
-      body.createEl("small", { text: `min_mentions: ${et.min_mentions_for_page}`, cls: "llm-wiki-et-card-meta" });
+      body.createEl("small", { text: `min_mentions: ${et.min_mentions_for_page}`, cls: "ai-wiki-et-card-meta" });
     }
   }
 
   private handleSave(): void {
-    this.errorEl?.addClass("llm-wiki-hidden");
+    this.errorEl?.addClass("ai-wiki-hidden");
     let entityTypes: EntityType[];
     if (this.entityTypesMode === "cards") {
       entityTypes = this.entityTypesList;
@@ -510,7 +510,7 @@ export class EditDomainModal extends Modal {
       } catch {
         if (this.errorEl) {
           this.errorEl.textContent = i18n().modal.entityTypesError;
-          this.errorEl.removeClass("llm-wiki-hidden");
+          this.errorEl.removeClass("ai-wiki-hidden");
         }
         return;
       }

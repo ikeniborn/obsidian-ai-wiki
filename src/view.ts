@@ -5,7 +5,7 @@ import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./ty
 import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
 
-export const LLM_WIKI_VIEW_TYPE = "llm-wiki-view";
+export const AI_WIKI_VIEW_TYPE = "ai-wiki-view";
 
 type ViewState = "idle" | "running" | "done" | "error" | "cancelled";
 
@@ -81,43 +81,43 @@ export class LlmWikiView extends ItemView {
     super(leaf);
   }
 
-  getViewType(): string { return LLM_WIKI_VIEW_TYPE; }
-  // eslint-disable-next-line obsidianmd/ui/sentence-case -- "LLM Wiki" is the plugin name (proper noun)
-  getDisplayText(): string { return "LLM Wiki"; }
+  getViewType(): string { return AI_WIKI_VIEW_TYPE; }
+  // eslint-disable-next-line obsidianmd/ui/sentence-case -- "AI Wiki" is the plugin name (proper noun)
+  getDisplayText(): string { return "AI Wiki"; }
   getIcon(): string { return "brain-circuit"; }
 
   onOpen(): void {
     const root = this.containerEl.children[1];
     root.empty();
-    root.addClass("llm-wiki-view");
+    root.addClass("ai-wiki-view");
 
     const T = i18n();
     const isMobile = Platform.isMobile;
 
-    const header = root.createDiv("llm-wiki-header");
-    header.createEl("h3", { text: "LLM wiki" });
-    this.statusEl = header.createDiv("llm-wiki-status");
+    const header = root.createDiv("ai-wiki-header");
+    header.createEl("h3", { text: "AI wiki" });
+    this.statusEl = header.createDiv("ai-wiki-status");
 
     // На mobile доступна только query-операция (см. types.ts/main.ts gating).
     // Скрываем секции "Создание домена" и "Наполнение/Актуализация" целиком —
     // их кнопки (init/ingest/lint/format) не работают.
     if (!isMobile) {
       // 1. Создание нового домена
-      root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionCreate });
-      const createRow = root.createDiv("llm-wiki-create-row");
-      this.initBtn = createRow.createEl("button", { text: T.view.init, cls: "llm-wiki-init-btn" });
+      root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionCreate });
+      const createRow = root.createDiv("ai-wiki-create-row");
+      this.initBtn = createRow.createEl("button", { text: T.view.init, cls: "ai-wiki-init-btn" });
       this.initBtn.addEventListener("click", () => this.openAddDomain());
 
       // 2+3. Наполнение / Актуализация
-      root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionDomain });
-      const domainBox = root.createDiv("llm-wiki-domain");
-      const domainRow = domainBox.createDiv("llm-wiki-domain-row");
+      root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionDomain });
+      const domainBox = root.createDiv("ai-wiki-domain");
+      const domainRow = domainBox.createDiv("ai-wiki-domain-row");
       domainRow.createSpan({ cls: "muted", text: "Domain:" });
-      this.domainSelect = domainRow.createEl("select", { cls: "llm-wiki-domain-select" });
+      this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
       const refreshBtn = domainRow.createEl("button", { text: "↻", attr: { title: T.view.refreshTitle } });
       refreshBtn.addEventListener("click", () => void this.refreshDomains());
 
-      const actionRow = domainBox.createDiv("llm-wiki-domain-actions");
+      const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
       this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
       this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
       this.formatBtn = actionRow.createEl("button", { text: T.view.format });
@@ -143,13 +143,13 @@ export class LlmWikiView extends ItemView {
     }
 
     // 4. Запрос
-    root.createDiv({ cls: "llm-wiki-section-label", text: T.view.sectionQuery });
-    const ask = root.createDiv("llm-wiki-ask");
+    root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionQuery });
+    const ask = root.createDiv("ai-wiki-ask");
     this.queryInput = ask.createEl("textarea", {
-      cls: "llm-wiki-query-input",
+      cls: "ai-wiki-query-input",
       attr: { placeholder: "Question…", rows: "3" },
     });
-    const askRow = ask.createDiv("llm-wiki-ask-row");
+    const askRow = ask.createDiv("ai-wiki-ask-row");
     this.askBtn = askRow.createEl("button", { text: T.view.ask });
     this.askSaveBtn = askRow.createEl("button", { text: T.view.askAndSave });
     this.cancelBtn = askRow.createEl("button", { text: T.view.cancel, cls: "mod-warning" });
@@ -158,32 +158,32 @@ export class LlmWikiView extends ItemView {
     this.askSaveBtn.addEventListener("click", () => this.submitQuery(true));
     this.cancelBtn.addEventListener("click", () => this.plugin.controller.cancelCurrent());
 
-    const progressHeader = root.createDiv("llm-wiki-progress-header");
-    const progressH4 = progressHeader.createEl("h4", { cls: "llm-wiki-progress-title" });
-    this.progressToggle = progressH4.createSpan({ cls: "llm-wiki-progress-arrow", text: "▶" });
+    const progressHeader = root.createDiv("ai-wiki-progress-header");
+    const progressH4 = progressHeader.createEl("h4", { cls: "ai-wiki-progress-title" });
+    this.progressToggle = progressH4.createSpan({ cls: "ai-wiki-progress-arrow", text: "▶" });
     progressH4.appendText(" Progress ");
-    this.progressCount = progressH4.createSpan({ cls: "llm-wiki-progress-count muted", text: "" });
+    this.progressCount = progressH4.createSpan({ cls: "ai-wiki-progress-count muted", text: "" });
     progressHeader.addEventListener("click", () => this.toggleSteps());
 
-    this.stepsEl = root.createDiv("llm-wiki-steps");
-    this.stepsEl.addClass("llm-wiki-hidden");
+    this.stepsEl = root.createDiv("ai-wiki-steps");
+    this.stepsEl.addClass("ai-wiki-hidden");
 
-    this.resultSection = root.createDiv("llm-wiki-result-section llm-wiki-hidden");
-    const resultHeader = this.resultSection.createDiv("llm-wiki-progress-header");
-    const resultH4 = resultHeader.createEl("h4", { cls: "llm-wiki-progress-title" });
-    this.resultToggle = resultH4.createSpan({ cls: "llm-wiki-progress-arrow", text: "▶" });
+    this.resultSection = root.createDiv("ai-wiki-result-section ai-wiki-hidden");
+    const resultHeader = this.resultSection.createDiv("ai-wiki-progress-header");
+    const resultH4 = resultHeader.createEl("h4", { cls: "ai-wiki-progress-title" });
+    this.resultToggle = resultH4.createSpan({ cls: "ai-wiki-progress-arrow", text: "▶" });
     resultH4.appendText(` ${T.view.result}`);
     resultHeader.addEventListener("click", () => this.toggleResult());
-    this.finalEl = this.resultSection.createDiv("llm-wiki-final llm-wiki-hidden");
+    this.finalEl = this.resultSection.createDiv("ai-wiki-final ai-wiki-hidden");
     registerLinkHandler(this.finalEl, this.app);
 
-    this.historySection = root.createDiv("llm-wiki-history-section llm-wiki-hidden");
-    const historyHeader = this.historySection.createDiv("llm-wiki-progress-header");
-    const historyH4 = historyHeader.createEl("h4", { cls: "llm-wiki-progress-title" });
-    this.historyToggle = historyH4.createSpan({ cls: "llm-wiki-progress-arrow", text: "▶" });
+    this.historySection = root.createDiv("ai-wiki-history-section ai-wiki-hidden");
+    const historyHeader = this.historySection.createDiv("ai-wiki-progress-header");
+    const historyH4 = historyHeader.createEl("h4", { cls: "ai-wiki-progress-title" });
+    this.historyToggle = historyH4.createSpan({ cls: "ai-wiki-progress-arrow", text: "▶" });
     historyH4.appendText(` ${T.view.history}`);
     historyHeader.addEventListener("click", () => this.toggleHistory());
-    this.historyEl = this.historySection.createDiv("llm-wiki-history llm-wiki-hidden");
+    this.historyEl = this.historySection.createDiv("ai-wiki-history ai-wiki-hidden");
     this.renderHistory();
 
     const ongoing = this.plugin.controller.currentOp;
@@ -280,7 +280,7 @@ export class LlmWikiView extends ItemView {
     this.lastContext = null;
     this.chatHistory = [];
 
-    this.resultSection.addClass("llm-wiki-hidden");
+    this.resultSection.addClass("ai-wiki-hidden");
     this.finalEl.empty();
     this.resultOpen = false;
 
@@ -296,7 +296,7 @@ export class LlmWikiView extends ItemView {
     this.reasoningBlock = null;
     this.reasoningBuffer = "";
     this.stepsOpen = true;
-    this.stepsEl.removeClass("llm-wiki-hidden");
+    this.stepsEl.removeClass("ai-wiki-hidden");
     this.progressToggle.setText("▼");
     this.updateMetrics();
     if (this.tickHandle !== null) window.clearInterval(this.tickHandle);
@@ -316,9 +316,9 @@ export class LlmWikiView extends ItemView {
     if (ev.kind === "init_start") {
       this.progressTotal = ev.totalFiles;
       this.progressDone = 0;
-      const step = this.stepsEl.createDiv("llm-wiki-step llm-wiki-progress");
-      step.createSpan({ cls: "llm-wiki-step-icon" }).setText("📂");
-      this.progressEl = step.createSpan({ cls: "llm-wiki-progress-text" });
+      const step = this.stepsEl.createDiv("ai-wiki-step ai-wiki-progress");
+      step.createSpan({ cls: "ai-wiki-step-icon" }).setText("📂");
+      this.progressEl = step.createSpan({ cls: "ai-wiki-progress-text" });
       this.progressEl.setText(`0 / ${ev.totalFiles} файлов`);
       this.scrollSteps();
       return;
@@ -351,72 +351,72 @@ export class LlmWikiView extends ItemView {
       this.assistantBuffer = "";
       this.reasoningBlock = null;
       this.reasoningBuffer = "";
-      const step = this.stepsEl.createDiv("llm-wiki-step");
-      const head = step.createDiv("llm-wiki-step-head");
-      head.createSpan({ cls: "llm-wiki-step-icon" }).setText("🔧");
-      head.createSpan({ cls: "llm-wiki-step-name" }).setText(ev.name);
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      const head = step.createDiv("ai-wiki-step-head");
+      head.createSpan({ cls: "ai-wiki-step-icon" }).setText("🔧");
+      head.createSpan({ cls: "ai-wiki-step-name" }).setText(ev.name);
       const summary = summariseInput(ev.input);
-      if (summary) head.createSpan({ cls: "llm-wiki-step-arg" }).setText(summary);
-      head.createSpan({ cls: "llm-wiki-step-time muted" }).setText(this.elapsedShort());
+      if (summary) head.createSpan({ cls: "ai-wiki-step-arg" }).setText(summary);
+      head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
       this.currentToolStep = step;
       this.currentToolStartedAt = Date.now();
       this.scrollSteps();
     } else if (ev.kind === "tool_result") {
       const step = this.currentToolStep;
       if (step) {
-        const head = step.querySelector(".llm-wiki-step-head");
+        const head = step.querySelector(".ai-wiki-step-head");
         head?.addClass(ev.ok ? "ok" : "err");
         const dur = ((Date.now() - this.currentToolStartedAt) / 1000).toFixed(1);
-        const t = step.querySelector(".llm-wiki-step-time");
+        const t = step.querySelector(".ai-wiki-step-time");
         if (t) t.setText(`${dur}s`);
         if (ev.preview) {
-          const p = step.createDiv("llm-wiki-step-preview");
+          const p = step.createDiv("ai-wiki-step-preview");
           p.setText(truncate(ev.preview.replace(/\s+/g, " "), PREVIEW_INLINE));
         }
         this.currentToolStep = null;
       }
     } else if (ev.kind === "ask_user") {
-      const el = this.stepsEl.createDiv("llm-wiki-step llm-wiki-step--ask");
+      const el = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step--ask");
       el.createSpan({ text: "⏳ Waiting for answer…" });
       return;
     } else if (ev.kind === "assistant_text") {
       if (ev.isReasoning) {
         if (!this.reasoningBlock) {
-          this.reasoningBlock = this.stepsEl.createDiv("llm-wiki-step reasoning");
+          this.reasoningBlock = this.stepsEl.createDiv("ai-wiki-step reasoning");
           if (this.assistantBlock) {
             this.stepsEl.insertBefore(this.reasoningBlock, this.assistantBlock);
           }
-          this.reasoningBlock.createSpan({ cls: "llm-wiki-step-icon" }).setText("🧠");
-          this.reasoningBlock.createSpan({ cls: "llm-wiki-reasoning-text" });
+          this.reasoningBlock.createSpan({ cls: "ai-wiki-step-icon" }).setText("🧠");
+          this.reasoningBlock.createSpan({ cls: "ai-wiki-reasoning-text" });
         }
         this.reasoningBuffer += ev.delta;
-        const span = this.reasoningBlock.querySelector<HTMLElement>(".llm-wiki-reasoning-text");
+        const span = this.reasoningBlock.querySelector<HTMLElement>(".ai-wiki-reasoning-text");
         if (span) span.setText(truncate(this.reasoningBuffer, ASSISTANT_TEXT_MAX));
       } else {
         if (!this.assistantBlock) {
-          this.assistantBlock = this.stepsEl.createDiv("llm-wiki-step assistant");
-          this.assistantBlock.createSpan({ cls: "llm-wiki-step-icon" }).setText("💬");
-          this.assistantBlock.createSpan({ cls: "llm-wiki-assistant-text" });
+          this.assistantBlock = this.stepsEl.createDiv("ai-wiki-step assistant");
+          this.assistantBlock.createSpan({ cls: "ai-wiki-step-icon" }).setText("💬");
+          this.assistantBlock.createSpan({ cls: "ai-wiki-assistant-text" });
         }
         this.assistantBuffer += ev.delta;
-        const span = this.assistantBlock.querySelector<HTMLElement>(".llm-wiki-assistant-text");
+        const span = this.assistantBlock.querySelector<HTMLElement>(".ai-wiki-assistant-text");
         if (span) span.setText(truncate(this.assistantBuffer, ASSISTANT_TEXT_MAX));
       }
       this.scrollSteps();
     } else if (ev.kind === "system") {
-      const step = this.stepsEl.createDiv("llm-wiki-step");
-      const head = step.createDiv("llm-wiki-step-head");
-      head.createSpan({ cls: "llm-wiki-step-icon" }).setText("⚙");
-      head.createSpan({ cls: "llm-wiki-step-name muted" }).setText(translateSystemEvent(ev.message));
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      const head = step.createDiv("ai-wiki-step-head");
+      head.createSpan({ cls: "ai-wiki-step-icon" }).setText("⚙");
+      head.createSpan({ cls: "ai-wiki-step-name muted" }).setText(translateSystemEvent(ev.message));
       this.scrollSteps();
     } else if (ev.kind === "error") {
-      this.stepsEl.createDiv("llm-wiki-step err").setText(`✗ ${ev.message}`);
+      this.stepsEl.createDiv("ai-wiki-step err").setText(`✗ ${ev.message}`);
       this.scrollSteps();
     } else if (ev.kind === "result") {
       // финальный result рендерим в finishe(), здесь — отметка
       this.assistantBlock = null;
     } else if (ev.kind === "eval_result") {
-      const el = this.stepsEl.createEl("div", { cls: "llm-wiki-eval-result" });
+      const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
       el.setText(`[eval: ${ev.score}/10] ${ev.reasoning}`);
     }
     this.updateMetrics();
@@ -427,7 +427,7 @@ export class LlmWikiView extends ItemView {
     this.formatPreviewSection?.remove();
 
     const root = this.containerEl.children[1] as HTMLElement;
-    this.formatPreviewSection = root.createDiv("llm-wiki-format-preview");
+    this.formatPreviewSection = root.createDiv("ai-wiki-format-preview");
 
     this.formatPreviewSection.createEl("h4", { text: T.view.formatPreviewHeader });
 
@@ -439,27 +439,27 @@ export class LlmWikiView extends ItemView {
     void link;
     registerLinkHandler(this.formatPreviewSection, this.app);
 
-    const reportEl = this.formatPreviewSection.createDiv("llm-wiki-format-report");
+    const reportEl = this.formatPreviewSection.createDiv("ai-wiki-format-report");
     const comp = new Component();
     comp.load();
     void MarkdownRenderer.render(this.app, report, reportEl, "", comp);
 
     if (missing.length > 0) {
-      const warn = this.formatPreviewSection.createEl("details", { cls: "llm-wiki-format-warn" });
+      const warn = this.formatPreviewSection.createEl("details", { cls: "ai-wiki-format-warn" });
       const summary = warn.createEl("summary");
       summary.setText(T.view.formatMissingTokens(missing.length));
-      const list = warn.createEl("ul", { cls: "llm-wiki-format-warn-list" });
+      const list = warn.createEl("ul", { cls: "ai-wiki-format-warn-list" });
       for (const m of missing) {
         const li = list.createEl("li");
-        li.createEl("code", { text: m.token, cls: "llm-wiki-format-warn-token" });
+        li.createEl("code", { text: m.token, cls: "ai-wiki-format-warn-token" });
         if (m.context) {
-          li.createSpan({ text: " — ", cls: "llm-wiki-format-warn-sep" });
-          li.createSpan({ text: m.context, cls: "llm-wiki-format-warn-ctx" });
+          li.createSpan({ text: " — ", cls: "ai-wiki-format-warn-sep" });
+          li.createSpan({ text: m.context, cls: "ai-wiki-format-warn-ctx" });
         }
       }
     }
 
-    const btnRow = this.formatPreviewSection.createDiv("llm-wiki-format-actions");
+    const btnRow = this.formatPreviewSection.createDiv("ai-wiki-format-actions");
     const applyReplaceBtn = btnRow.createEl("button", { text: T.view.formatApplyReplace, cls: "mod-cta" });
     applyReplaceBtn.addEventListener("click", () => void this.plugin.controller.formatApply(false));
 
@@ -469,12 +469,12 @@ export class LlmWikiView extends ItemView {
     const cancelBtn = btnRow.createEl("button", { text: T.view.formatCancelBtn, cls: "mod-warning" });
     cancelBtn.addEventListener("click", () => void this.plugin.controller.formatCancel());
 
-    const chatBox = this.formatPreviewSection.createDiv("llm-wiki-format-chat");
+    const chatBox = this.formatPreviewSection.createDiv("ai-wiki-format-chat");
     const inputEl = chatBox.createEl("textarea", {
-      cls: "llm-wiki-format-chat-input",
+      cls: "ai-wiki-format-chat-input",
       attr: { placeholder: T.view.formatRefinePlaceholder, rows: "3" },
     });
-    const sendRow = chatBox.createDiv("llm-wiki-format-chat-send-row");
+    const sendRow = chatBox.createDiv("ai-wiki-format-chat-send-row");
     const sendBtn = sendRow.createEl("button", { text: T.view.chatSend });
     sendBtn.addEventListener("click", () => {
       const msg = inputEl.value.trim();
@@ -509,8 +509,8 @@ export class LlmWikiView extends ItemView {
       const comp = new Component();
       comp.load();
       await MarkdownRenderer.render(this.app, entry.finalText, this.finalEl, "", comp);
-      this.resultSection.removeClass("llm-wiki-hidden");
-      this.finalEl.removeClass("llm-wiki-hidden");
+      this.resultSection.removeClass("ai-wiki-hidden");
+      this.finalEl.removeClass("ai-wiki-hidden");
       this.resultOpen = true;
       this.resultToggle.setText("▼");
 
@@ -532,19 +532,19 @@ export class LlmWikiView extends ItemView {
     this.chatSection?.remove();
     this.chatOpen = true;
     const T = i18n();
-    this.chatSection = this.resultSection.createDiv("llm-wiki-chat-section");
+    this.chatSection = this.resultSection.createDiv("ai-wiki-chat-section");
 
-    const chatHeader = this.chatSection.createDiv("llm-wiki-progress-header");
-    const chatH4 = chatHeader.createEl("h4", { cls: "llm-wiki-progress-title" });
-    this.chatToggle = chatH4.createSpan({ cls: "llm-wiki-progress-arrow", text: "▼" });
+    const chatHeader = this.chatSection.createDiv("ai-wiki-progress-header");
+    const chatH4 = chatHeader.createEl("h4", { cls: "ai-wiki-progress-title" });
+    this.chatToggle = chatH4.createSpan({ cls: "ai-wiki-progress-arrow", text: "▼" });
     chatH4.appendText(` ${T.view.chatLabel}`);
     chatHeader.addEventListener("click", () => this.toggleChat());
 
-    this.chatBodyEl = this.chatSection.createDiv("llm-wiki-chat-body");
-    this.chatMessagesEl = this.chatBodyEl.createDiv("llm-wiki-chat-messages");
-    const inputRow = this.chatBodyEl.createDiv("llm-wiki-chat-input-row");
-    this.chatInputEl = inputRow.createEl("textarea", { cls: "llm-wiki-chat-input", attr: { rows: "2" } });
-    this.chatSendBtn = inputRow.createEl("button", { text: T.view.chatSend, cls: "llm-wiki-chat-send" });
+    this.chatBodyEl = this.chatSection.createDiv("ai-wiki-chat-body");
+    this.chatMessagesEl = this.chatBodyEl.createDiv("ai-wiki-chat-messages");
+    const inputRow = this.chatBodyEl.createDiv("ai-wiki-chat-input-row");
+    this.chatInputEl = inputRow.createEl("textarea", { cls: "ai-wiki-chat-input", attr: { rows: "2" } });
+    this.chatSendBtn = inputRow.createEl("button", { text: T.view.chatSend, cls: "ai-wiki-chat-send" });
     const submit = () => {
       const text = this.chatInputEl!.value.trim();
       if (!text || !this.lastContext) return;
@@ -563,7 +563,7 @@ export class LlmWikiView extends ItemView {
   }
 
   private addChatBubble(role: "user" | "assistant", text: string): HTMLElement {
-    const el = this.chatMessagesEl!.createDiv(`llm-wiki-chat-msg llm-wiki-chat-msg--${role}`);
+    const el = this.chatMessagesEl!.createDiv(`ai-wiki-chat-msg ai-wiki-chat-msg--${role}`);
     if (role === "user") {
       el.setText(text);
     } else {
@@ -581,7 +581,7 @@ export class LlmWikiView extends ItemView {
     if (this.chatInputEl) this.chatInputEl.disabled = true;
     this.currentChatBuffer = "";
     if (this.chatMessagesEl) {
-      this.currentChatBubble = this.chatMessagesEl.createDiv("llm-wiki-chat-msg llm-wiki-chat-msg--assistant llm-wiki-chat-msg--streaming");
+      this.currentChatBubble = this.chatMessagesEl.createDiv("ai-wiki-chat-msg ai-wiki-chat-msg--assistant ai-wiki-chat-msg--streaming");
       this.currentChatBubble.setText("…");
       this.currentChatBubble.scrollIntoView({ block: "end" });
     }
@@ -615,10 +615,10 @@ export class LlmWikiView extends ItemView {
     if (this.chatSendBtn) this.chatSendBtn.disabled = false;
     if (this.chatInputEl) { this.chatInputEl.disabled = false; this.chatInputEl.focus(); }
     if (this.currentChatBubble) {
-      this.currentChatBubble.removeClass("llm-wiki-chat-msg--streaming");
+      this.currentChatBubble.removeClass("ai-wiki-chat-msg--streaming");
       this.currentChatBubble.empty();
       if (isError) {
-        this.currentChatBubble.addClass("llm-wiki-chat-msg--error");
+        this.currentChatBubble.addClass("ai-wiki-chat-msg--error");
         this.currentChatBubble.setText(msg.content);
       } else {
         const comp = new Component();
@@ -639,9 +639,9 @@ export class LlmWikiView extends ItemView {
   private toggleHistory(): void {
     this.historyOpen = !this.historyOpen;
     if (this.historyOpen) {
-      this.historyEl.removeClass("llm-wiki-hidden");
+      this.historyEl.removeClass("ai-wiki-hidden");
     } else {
-      this.historyEl.addClass("llm-wiki-hidden");
+      this.historyEl.addClass("ai-wiki-hidden");
     }
     this.historyToggle.setText(this.historyOpen ? "▼" : "▶");
   }
@@ -649,9 +649,9 @@ export class LlmWikiView extends ItemView {
   private toggleResult(): void {
     this.resultOpen = !this.resultOpen;
     if (this.resultOpen) {
-      this.finalEl.removeClass("llm-wiki-hidden");
+      this.finalEl.removeClass("ai-wiki-hidden");
     } else {
-      this.finalEl.addClass("llm-wiki-hidden");
+      this.finalEl.addClass("ai-wiki-hidden");
     }
     this.resultToggle.setText(this.resultOpen ? "▼" : "▶");
   }
@@ -659,16 +659,16 @@ export class LlmWikiView extends ItemView {
   private toggleSteps(): void {
     this.stepsOpen = !this.stepsOpen;
     if (this.stepsOpen) {
-      this.stepsEl.removeClass("llm-wiki-hidden");
+      this.stepsEl.removeClass("ai-wiki-hidden");
     } else {
-      this.stepsEl.addClass("llm-wiki-hidden");
+      this.stepsEl.addClass("ai-wiki-hidden");
     }
     this.progressToggle.setText(this.stepsOpen ? "▼" : "▶");
   }
 
   private toggleChat(): void {
     this.chatOpen = !this.chatOpen;
-    this.chatBodyEl?.toggleClass("llm-wiki-hidden", !this.chatOpen);
+    this.chatBodyEl?.toggleClass("ai-wiki-hidden", !this.chatOpen);
     this.chatToggle?.setText(this.chatOpen ? "▼" : "▶");
   }
 
@@ -699,13 +699,13 @@ export class LlmWikiView extends ItemView {
     this.historyEl.empty();
     const items = this.plugin.settings.history.slice().reverse();
     if (items.length === 0) {
-      this.historySection.addClass("llm-wiki-hidden");
+      this.historySection.addClass("ai-wiki-hidden");
       this.historyOpen = false;
       return;
     }
-    this.historySection.removeClass("llm-wiki-hidden");
+    this.historySection.removeClass("ai-wiki-hidden");
     for (const it of items) {
-      const row = this.historyEl.createDiv("llm-wiki-history-row");
+      const row = this.historyEl.createDiv("ai-wiki-history-row");
       row.createSpan().setText(this.statusLabel(it));
       row.createSpan({ cls: "muted" }).setText(` ${it.args.join(" ")}`);
       row.addEventListener("click", () => {
@@ -713,8 +713,8 @@ export class LlmWikiView extends ItemView {
         const comp = new Component();
         comp.load();
         void MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, "", comp);
-        this.resultSection.removeClass("llm-wiki-hidden");
-        this.finalEl.removeClass("llm-wiki-hidden");
+        this.resultSection.removeClass("ai-wiki-hidden");
+        this.finalEl.removeClass("ai-wiki-hidden");
         this.resultOpen = true;
         this.resultToggle.setText("▼");
       });
@@ -750,7 +750,7 @@ class WikiQuestionModal extends Modal {
     contentEl.createEl("p", { text: this.question });
 
     if (this.options.length > 0) {
-      const btnRow = contentEl.createDiv("llm-wiki-modal-options");
+      const btnRow = contentEl.createDiv("ai-wiki-modal-options");
       for (const opt of this.options) {
         const btn = btnRow.createEl("button", { text: opt });
         btn.addEventListener("click", () => {
@@ -763,7 +763,7 @@ class WikiQuestionModal extends Modal {
     } else {
       const input = contentEl.createEl("input", {
         attr: { type: "text" },
-        cls: "llm-wiki-modal-input",
+        cls: "ai-wiki-modal-input",
       });
       input.focus();
       const submit = () => {

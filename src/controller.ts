@@ -1,6 +1,6 @@
 import { App, Notice, Platform, TFile } from "obsidian";
 import { relative, isAbsolute, join } from "path-browserify";
-import { LLM_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
+import { AI_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { validateDomainId, type DomainEntry, type AddDomainInput } from "./domain";
 import type LlmWikiPlugin from "./main";
 import type { RunEvent, RunHistoryEntry, WikiOperation, OnFileError } from "./types";
@@ -214,7 +214,7 @@ export class WikiController {
       agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId);
     } catch (e) {
       new Notice(i18n().ctrl.errorPrefix((e as Error).message));
-      console.error("[llm-wiki] buildAgentRunner failed", e);
+      console.error("[ai-wiki] buildAgentRunner failed", e);
       return;
     }
     const ctrl = new AbortController();
@@ -310,7 +310,7 @@ export class WikiController {
       // Mobile: getBasePath отсутствует — vault-root недоступен. Используем "" как маркер.
       // Все callers должны проверять Platform.isMobile перед обращением к fs.
       if (!Platform.isMobile) {
-        console.warn("[llm-wiki] vault.adapter.getBasePath is undefined on desktop");
+        console.warn("[ai-wiki] vault.adapter.getBasePath is undefined on desktop");
       }
       return "";
     }
@@ -437,7 +437,7 @@ export class WikiController {
           const noProxyList = parseNoProxy(proxyCfg.noProxy);
           if (!shouldBypass(baseHost, noProxyList)) {
             proxyFetch = createProxyFetch(proxyCfg);
-            if (proxyFetch) console.debug(`[llm-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
+            if (proxyFetch) console.debug(`[ai-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
           }
         } catch (e) {
           new Notice(i18n().settings.proxy_invalid((e as Error).message));
@@ -503,7 +503,7 @@ export class WikiController {
       agentRunner = await this.buildAgentRunner(vaultRoot);
     } catch (e) {
       new Notice(i18n().ctrl.errorPrefix((e as Error).message));
-      console.error("[llm-wiki] buildAgentRunner failed", e);
+      console.error("[ai-wiki] buildAgentRunner failed", e);
       return;
     }
 
@@ -558,7 +558,7 @@ export class WikiController {
       }
     } catch (err) {
       status = "error";
-      console.error("[llm-wiki] dispatch failed", err);
+      console.error("[ai-wiki] dispatch failed", err);
       finalText = i18n().ctrl.errorPrefix((err as Error).message);
       await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
     } finally {
@@ -605,17 +605,17 @@ export class WikiController {
   }
 
   private async ensureView(): Promise<void> {
-    const leaves = this.app.workspace.getLeavesOfType(LLM_WIKI_VIEW_TYPE);
+    const leaves = this.app.workspace.getLeavesOfType(AI_WIKI_VIEW_TYPE);
     if (leaves.length === 0) {
       const right = this.app.workspace.getRightLeaf(false);
-      if (right) await right.setViewState({ type: LLM_WIKI_VIEW_TYPE, active: true });
+      if (right) await right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
     } else {
       void this.app.workspace.revealLeaf(leaves[0]);
     }
   }
 
   private activeView(): LlmWikiView | null {
-    const leaves = this.app.workspace.getLeavesOfType(LLM_WIKI_VIEW_TYPE);
+    const leaves = this.app.workspace.getLeavesOfType(AI_WIKI_VIEW_TYPE);
     const view = leaves[0]?.view;
     return view instanceof LlmWikiView ? view : null;
   }

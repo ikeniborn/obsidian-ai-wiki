@@ -163,7 +163,7 @@ describe("ClaudeCliClient", () => {
 
     // Check tmpWrite was called with absolute path and wrapped content
     const writtenUsrPath = (tmpWrite as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-    expect(writtenUsrPath).toContain("llm-wiki-usr-");
+    expect(writtenUsrPath).toContain("ai-wiki-usr-");
     expect(writtenUsrPath).toContain("/plugin/tmp");
     const writtenContent = (tmpWrite as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
     expect(writtenContent).toContain("<user_input>");
@@ -196,7 +196,7 @@ describe("ClaudeCliClient", () => {
 
     // Check tmpWrite was called with absolute path and system content
     const writtenSysPath = (tmpWrite as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-    expect(writtenSysPath).toContain("llm-wiki-sys-");
+    expect(writtenSysPath).toContain("ai-wiki-sys-");
     expect(writtenSysPath).toContain("/plugin/tmp");
     expect(tmpWrite).toHaveBeenCalledWith(writtenSysPath, largeSystem);
 

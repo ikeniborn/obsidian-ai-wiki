@@ -71,7 +71,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     if (busy) {
       containerEl.createEl("div", {
         text: T.settings.busyBanner,
-        cls: "setting-item-description llm-wiki-settings-busy-banner",
+        cls: "setting-item-description ai-wiki-settings-busy-banner",
       });
     }
 
@@ -82,7 +82,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       .setName(T.settings.systemPrompt_name)
       .setDesc(T.settings.systemPrompt_desc)
       .addTextArea((t) => {
-        t.inputEl.addClass("llm-wiki-settings-textarea");
+        t.inputEl.addClass("ai-wiki-settings-textarea");
         t.setValue(s.systemPrompt)
           .onChange(async (v) => { s.systemPrompt = v; await this.plugin.saveSettings(); });
         return t;
