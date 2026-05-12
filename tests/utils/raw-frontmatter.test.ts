@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm } from "../../src/utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm } from "../../src/utils/raw-frontmatter";
 
 const TODAY = "2026-05-12";
 const ARTICLES = ['[[!Wiki/work/Entity.md]]'];
@@ -96,6 +96,21 @@ describe("parseWikiArticlesFromFm", () => {
     expect(parseWikiArticlesFromFm(content)).toEqual([
       "[[!Wiki/work/A.md]]",
       "[[!Wiki/work/B.md]]",
+    ]);
+  });
+});
+
+describe("parseWikiSourcesFromFm", () => {
+  it("returns empty array when no wiki_sources field", () => {
+    expect(parseWikiSourcesFromFm("---\ntitle: X\n---\n")).toEqual([]);
+  });
+
+  it("extracts wikilinks from wiki_sources block", () => {
+    const content =
+      '---\nwiki_sources:\n  - "[[Sources/raw.md]]"\n  - "[[Sources/other.md]]"\n---\n';
+    expect(parseWikiSourcesFromFm(content)).toEqual([
+      "[[Sources/raw.md]]",
+      "[[Sources/other.md]]",
     ]);
   });
 });

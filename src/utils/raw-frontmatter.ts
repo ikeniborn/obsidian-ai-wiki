@@ -39,7 +39,6 @@ export function upsertRawFrontmatter(
 
   if (match) {
     let yaml = match[1];
-    // If wiki_added is not being set, extract and preserve existing value
     let preservedWikiAdded: string | undefined;
     if (fields.wiki_added === undefined) {
       const addedMatch = /^wiki_added:[ \t]*(.+)$/m.exec(yaml);
@@ -59,13 +58,17 @@ export function upsertRawFrontmatter(
 }
 
 export function parseWikiArticlesFromFm(content: string): string[] {
-  const match = /wiki_articles:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(content);
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return [];
+  const match = /wiki_articles:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
   if (!match) return [];
   return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
 }
 
 export function parseWikiSourcesFromFm(content: string): string[] {
-  const match = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(content);
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return [];
+  const match = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
   if (!match) return [];
   return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
 }
