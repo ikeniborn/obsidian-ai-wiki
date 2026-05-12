@@ -153,7 +153,7 @@ export async function* runLint(
     const backlinks = new Map<string, Set<string>>();
     for (const [wikiPath, wikiContent] of pages) {
       for (const src of parseWikiSourcesFromFm(wikiContent)) {
-        const rawPath = src.slice(2, -2); // strip [[ and ]]
+        const rawPath = src.slice(2, -2);
         if (!backlinks.has(rawPath)) backlinks.set(rawPath, new Set());
         backlinks.get(rawPath)!.add(`[[${wikiPath}]]`);
       }
@@ -180,7 +180,7 @@ export async function* runLint(
         };
       }
     }
-    reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
+    reportParts.push(`## ${domain.id}\nBacklinks synced: ${syncUpdated} raw files updated`);
   }
 
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n") };
