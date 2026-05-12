@@ -1,4 +1,5 @@
 import { App, Notice, Platform, TFile } from "obsidian";
+import { relative, isAbsolute, join } from "path-browserify";
 import { LLM_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { validateDomainId, type DomainEntry, type AddDomainInput } from "./domain";
 import type LlmWikiPlugin from "./main";
@@ -6,7 +7,7 @@ import type { RunEvent, RunHistoryEntry, WikiOperation, OnFileError } from "./ty
 import { AgentRunner } from "./agent-runner";
 import type { ChatMessage } from "./types";
 import { VaultTools, type VaultAdapter } from "./vault-tools";
-import type { ClaudeCliClient } from "./claude-cli-client";
+import { ClaudeCliClient } from "./claude-cli-client";
 import OpenAI from "openai";
 import { createProxyFetch, parseNoProxy, shouldBypass, maskProxyUrl } from "./proxy";
 import { mobileFetch } from "./mobile-fetch";
@@ -20,10 +21,7 @@ import type { LlmWikiPluginSettings } from "./types";
 import { FileErrorModal, ConfirmModal } from "./modals";
 import { domainWikiFolder } from "./wiki-path";
 
-declare const require: NodeJS.Require;
-
 function toVaultPath(vaultDir: string, savedPath: string): string | null {
-  const { relative, isAbsolute, join } = require("path") as typeof import("path");
   const abs = isAbsolute(savedPath) ? savedPath : join(vaultDir, savedPath);
   const rel = relative(vaultDir, abs);
   if (rel.startsWith("..") || isAbsolute(rel)) return null;
@@ -355,9 +353,8 @@ export class WikiController {
   }
 
   private requireClaudeAgent(local: LocalConfig): string | null {
-    const { existsSync } = require("fs") as typeof import("fs");
     const { iclaudePath } = local;
-    if (!iclaudePath || !existsSync(iclaudePath)) {
+    if (!iclaudePath) {
       new Notice(i18n().ctrl.setClaudeCodePath);
       return null;
     }
@@ -385,15 +382,25 @@ export class WikiController {
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm: import("./types").LlmClient;
     if (s.backend === "claude-agent") {
-      const { join } = require("path") as typeof import("path");
-      const { mkdirSync } = require("fs") as typeof import("fs");
-      const { ClaudeCliClient } = require("./claude-cli-client") as typeof import("./claude-cli-client");
       const manifestDir = this.plugin.manifest.dir
         ?? join(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
       const pluginDir = (this.app.vault.adapter as { getFullPath: (p: string) => string })
         .getFullPath(manifestDir);
       const tmpDir = join(pluginDir, "tmp");
-      mkdirSync(tmpDir, { recursive: true });
+
+      // Ensure tmpDir exists using vault adapter
+      const tmpDirRelative = tmpDir.startsWith(base)
+        ? tmpDir.slice(base.length).replace(/^\//, "")
+        : tmpDir;
+      if (base) {
+        try {
+          if (!(await adapter.exists(tmpDirRelative))) {
+            await adapter.mkdir(tmpDirRelative);
+          }
+        } catch { /* ignore mkdir failures; will fail on actual write if needed */ }
+      }
+
+      const fullAdapter = this.app.vault.adapter as any;
       const client = new ClaudeCliClient({
         ...s.claudeAgent,
         iclaudePath: local.iclaudePath,
@@ -401,6 +408,25 @@ export class WikiController {
         cwd: vaultRoot,
         tmpDir,
         resumeSessionId,
+        tmpWrite: async (name: string, content: string) => {
+          const path = join(tmpDir, name);
+          if (base && !path.startsWith(base)) {
+            // Path is absolute but outside vault; write directly with mock adapter
+            // This shouldn't happen in practice since tmpDir is inside the plugin dir
+            throw new Error(`tmpDir path outside vault: ${path}`);
+          }
+          const vaultPath = base ? path.slice(base.length).replace(/^\//, "") : path;
+          await adapter.write(vaultPath, content);
+          return path;
+        },
+        tmpRemove: async (path: string) => {
+          if (base && path.startsWith(base)) {
+            const vaultPath = path.slice(base.length).replace(/^\//, "");
+            try {
+              await fullAdapter.remove(vaultPath);
+            } catch { /* ignore if already gone */ }
+          }
+        },
       });
       this._currentClaudeClient = client;
       llm = client;
