@@ -250,4 +250,21 @@ describe("runLint", () => {
     expect(ev.patch.entity_types).toHaveLength(1);
     expect(ev.patch.language_notes).toBe("Updated notes.");
   });
+
+  it("includes isolated node graph issue in LLM prompt", async () => {
+    const adapter = mockAdapter({
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Orphan.md"], folders: [] }),
+      read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Orphan\nNo links."),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm("no issues");
+    await collect(
+      runLint(["work"], vt, llm, "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    const createMock = llm.chat.completions.create as ReturnType<typeof vi.fn>;
+    const streamCall = createMock.mock.calls.find((c: any) => c[0]?.stream === true);
+    const userContent = streamCall?.[0]?.messages?.find((m: any) => m.role === "user")?.content ?? "";
+    // Orphan has no links in or out → checkGraphStructure adds "isolated node" to allIssues
+    expect(userContent).toContain("isolated node");
+  });
 });

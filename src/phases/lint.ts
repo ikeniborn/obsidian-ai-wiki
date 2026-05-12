@@ -9,6 +9,7 @@ import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm } from "../utils/raw-frontmatter";
+import { buildWikiGraph, checkGraphStructure } from "../wiki-graph";
 
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
@@ -20,6 +21,7 @@ export async function* runLint(
   domains: DomainEntry[],
   vaultRoot: string,
   signal: AbortSignal,
+  hubThreshold: number = 20,
   opts: LlmCallOptions = {},
 ): AsyncGenerator<RunEvent> {
   const domainId = args[0];
@@ -52,7 +54,10 @@ export async function* runLint(
 
     const pages = await vaultTools.readAll(files);
 
+    const graph = buildWikiGraph(pages);
     const structuralIssues = checkStructure(pages);
+    const graphIssues = checkGraphStructure(graph, hubThreshold);
+    const allIssues = [structuralIssues, graphIssues].filter(Boolean).join("\n");
 
     const entityTypesBlock = buildEntityTypesBlock(domain);
 
@@ -68,7 +73,7 @@ export async function* runLint(
         role: "user",
         content: [
           `Домен: ${domain.id} (${domain.name})`,
-          `Автоматические проблемы:\n${structuralIssues || "Нет."}`,
+          `Автоматические проблемы:\n${allIssues || "Нет."}`,
           "",
           `Wiki-страницы:\n${[...pages.entries()].map(([p, c]) => `--- ${p} ---\n${c.slice(0, 500)}`).join("\n\n")}`,
         ].join("\n"),
@@ -96,7 +101,7 @@ export async function* runLint(
       if (llmReport) yield { kind: "assistant_text", delta: llmReport };
     }
 
-    reportParts.push(`## ${domain.id}\n${structuralIssues ? `**Структурные проблемы:**\n${structuralIssues}\n\n` : ""}${llmReport}`);
+    reportParts.push(`## ${domain.id}\n${allIssues ? `**Структурные проблемы:**\n${allIssues}\n\n` : ""}${llmReport}`);
 
     if (signal.aborted) return;
     yield { kind: "assistant_text", delta: `\nActualizing domain config for "${domain.id}"...\n` };
@@ -109,7 +114,7 @@ export async function* runLint(
 
     if (signal.aborted) return;
     yield { kind: "assistant_text", delta: `\nApplying fixes for "${domain.id}"...\n` };
-    const fixMessages = buildFixMessages(domain, wikiVaultPath, pages, structuralIssues, entityTypesBlock, llmReport);
+    const fixMessages = buildFixMessages(domain, wikiVaultPath, pages, allIssues, entityTypesBlock, llmReport);
     const fixParams = buildChatParams(model, fixMessages, opts);
     let fixFullText = "";
     try {
@@ -238,7 +243,7 @@ function buildFixMessages(
   domain: DomainEntry,
   wikiVaultPath: string,
   pages: Map<string, string>,
-  structuralIssues: string,
+  allIssues: string,
   entityTypesBlock: string,
   lintReport: string,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
@@ -260,7 +265,7 @@ function buildFixMessages(
       role: "user",
       content: [
         `Домен: ${domain.id} (${domain.name})`,
-        structuralIssues ? `\nСтруктурные проблемы:\n${structuralIssues}` : "\nСтруктурных проблем не обнаружено.",
+        allIssues ? `\nСтруктурные проблемы:\n${allIssues}` : "\nСтруктурных проблем не обнаружено.",
         `\nОтчёт Lint (рекомендации):\n${lintReport}`,
         `\nWiki-страницы:\n${pagesBlock}`,
       ].join("\n"),
