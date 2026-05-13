@@ -23,17 +23,36 @@ Ingest и lint записывают `wiki_added`, `wiki_updated`, `wiki_articles
 
 ### 2. `src/controller.ts` — `formatApply()`
 
-После чтения отформатированного контента (из `.formatted.md`), перед записью в оригинал:
+Добавить хелпер `patchWikiFields(originalContent: string, formattedContent: string): string`:
 
-1. Прочитать оригинальный файл (`p.originalPath`)
-2. Распарсить из него `wiki_*` поля:
-   - `wiki_articles` — через `parseWikiArticlesFromFm`
-   - `wiki_added` — регексом `/^wiki_added:[ \t]*(.+)$/m`
+1. Распарсить из `originalContent` поля:
    - `wiki_updated` — регексом `/^wiki_updated:[ \t]*(.+)$/m`
-3. Если хотя бы одно поле присутствует — вызвать `upsertRawFrontmatter(formattedContent, { wiki_added, wiki_updated, wiki_articles })`
-4. Использовать результат вместо `formattedContent`
+   - `wiki_added` — регексом `/^wiki_added:[ \t]*(.+)$/m`
+   - `wiki_articles` — через `parseWikiArticlesFromFm`
+2. Если `wiki_updated` отсутствует — вернуть `formattedContent` без изменений (нечего восстанавливать)
+3. Иначе — вернуть `upsertRawFrontmatter(formattedContent, { wiki_added, wiki_updated, wiki_articles })`
 
-Применяется для обоих режимов apply: replace (`keepOld=false`) и keep-old (`keepOld=true`).
+**Режим replace (`keepOld=false`):**
+```
+formattedContent = await adapter.read(p.tempPath)
+patched = patchWikiFields(original, formattedContent)
+vault.modify(origFile, patched)
+adapter.remove(p.tempPath)
+```
+
+**Режим keep-old (`keepOld=true`):**
+```
+// Патч ДО рейнеймов, пока original ещё на месте
+originalContent = await adapter.read(p.originalPath)
+formattedContent = await adapter.read(p.tempPath)
+patched = patchWikiFields(originalContent, formattedContent)
+await adapter.write(p.tempPath, patched)   // перезаписать .formatted.md
+// Затем рейнеймы
+adapter.rename(p.originalPath, deprecatedPath)
+adapter.rename(p.tempPath, p.originalPath)
+```
+
+Для keepOld-fallback (read+write+remove) то же самое: патч применяется к `fresh` перед `adapter.write(p.originalPath, fresh)`.
 
 ## Инварианты
 
