@@ -60,7 +60,7 @@ export class LlmWikiView extends ItemView {
   private chatBodyEl: HTMLElement | null = null;
   private currentChatBubble: HTMLElement | null = null;
   private currentChatBuffer = "";
-  private chatTickHandle: number | null = null;
+  private chatTickHandle: ReturnType<typeof window.setTimeout> | null = null;
   private chatStartTs = 0;
   private lastUserMessage = "";
   private startTs = 0;
@@ -69,7 +69,7 @@ export class LlmWikiView extends ItemView {
   private progressEl: HTMLElement | null = null;
   private progressTotal = 0;
   private progressDone = 0;
-  private tickHandle: number | null = null;
+  private tickHandle: ReturnType<typeof window.setTimeout> | null = null;
   private currentToolStep: HTMLElement | null = null;
   private currentToolStartedAt = 0;
   private assistantBlock: HTMLElement | null = null;
@@ -192,8 +192,8 @@ export class LlmWikiView extends ItemView {
   }
 
   onClose(): void {
-    if (this.tickHandle !== null) window.clearInterval(this.tickHandle);
-    if (this.chatTickHandle !== null) window.clearInterval(this.chatTickHandle);
+    if (this.tickHandle !== null) window.clearTimeout(this.tickHandle);
+    if (this.chatTickHandle !== null) window.clearTimeout(this.chatTickHandle);
     if (this.plugin.controller.isBusy()) {
       new BusyCloseModal(this.app, () => this.plugin.controller.cancelCurrent()).open();
     }
@@ -298,8 +298,8 @@ export class LlmWikiView extends ItemView {
     this.stepsEl.removeClass("ai-wiki-hidden");
     this.progressToggle.setText("▼");
     this.updateMetrics();
-    if (this.tickHandle !== null) window.clearInterval(this.tickHandle);
-    this.tickHandle = window.setInterval(() => this.updateMetrics(), 500);
+    if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
+    this.scheduleMetricsTick();
   }
 
   appendEvent(ev: RunEvent): void {
@@ -501,7 +501,7 @@ export class LlmWikiView extends ItemView {
     this.formatBtn.disabled = false;
     this.fixChatEl?.remove();
     this.fixChatEl = null;
-    if (this.tickHandle !== null) { window.clearInterval(this.tickHandle); this.tickHandle = null; }
+    if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
     this.updateMetrics();
     this.finalEl.empty();
     if (entry.finalText) {
@@ -586,10 +586,18 @@ export class LlmWikiView extends ItemView {
       this.currentChatBubble.scrollIntoView({ block: "end" });
     }
     this.chatStartTs = Date.now();
-    this.chatTickHandle = window.setInterval(() => {
+    if (this.chatTickHandle !== null) { window.clearTimeout(this.chatTickHandle); this.chatTickHandle = null; }
+    this.scheduleChatTick();
+  }
+
+  private scheduleChatTick(): void {
+    this.chatTickHandle = window.setTimeout(() => {
       if (this.currentChatBubble) {
         const s = ((Date.now() - this.chatStartTs) / 1000).toFixed(1);
         this.currentChatBubble.setText(`⏳ ${s}s…`);
+        this.scheduleChatTick();
+      } else {
+        this.chatTickHandle = null;
       }
     }, 500);
   }
@@ -597,7 +605,7 @@ export class LlmWikiView extends ItemView {
   appendChatEvent(ev: RunEvent): void {
     if (ev.kind === "assistant_text" && !ev.isReasoning && this.currentChatBubble) {
       if (this.chatTickHandle !== null) {
-        window.clearInterval(this.chatTickHandle);
+        window.clearTimeout(this.chatTickHandle);
         this.chatTickHandle = null;
         this.currentChatBubble.setText("");
       }
@@ -609,7 +617,7 @@ export class LlmWikiView extends ItemView {
 
   finishChat(msg: ChatMessage, isError: boolean): void {
     if (this.chatTickHandle !== null) {
-      window.clearInterval(this.chatTickHandle);
+      window.clearTimeout(this.chatTickHandle);
       this.chatTickHandle = null;
     }
     if (this.chatSendBtn) this.chatSendBtn.disabled = false;
@@ -679,6 +687,13 @@ export class LlmWikiView extends ItemView {
     }
     const dur = ((Date.now() - this.startTs) / 1000).toFixed(1);
     this.progressCount.setText(i18n().view.stepsCount(this.stepCount, dur));
+  }
+
+  private scheduleMetricsTick(): void {
+    this.tickHandle = window.setTimeout(() => {
+      this.updateMetrics();
+      if (this.state === "running") this.scheduleMetricsTick();
+    }, 500);
   }
 
   private elapsedShort(): string {
