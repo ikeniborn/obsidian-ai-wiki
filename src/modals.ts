@@ -135,7 +135,7 @@ function attachFolderDropdown(app: App, inputEl: HTMLInputElement, onSelect: (pa
     if (!folders.length) return;
 
     const rect = inputEl.getBoundingClientRect();
-    dropEl = activeDocument.body.createDiv({ cls: "ai-wiki-folder-dropdown" });
+    dropEl = (activeDocument.body as HTMLElement).createDiv({ cls: "ai-wiki-folder-dropdown" });
     dropEl.style.top = `${rect.bottom + window.scrollY}px`;
     dropEl.style.left = `${rect.left + window.scrollX}px`;
     dropEl.style.width = `${rect.width}px`;
