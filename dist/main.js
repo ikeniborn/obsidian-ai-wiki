@@ -20520,9 +20520,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   }
   onClose() {
     if (this.tickHandle !== null)
-      window.clearInterval(this.tickHandle);
+      window.clearTimeout(this.tickHandle);
     if (this.chatTickHandle !== null)
-      window.clearInterval(this.chatTickHandle);
+      window.clearTimeout(this.chatTickHandle);
     if (this.plugin.controller.isBusy()) {
       new BusyCloseModal(this.app, () => this.plugin.controller.cancelCurrent()).open();
     }
@@ -20635,9 +20635,11 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.stepsEl.removeClass("ai-wiki-hidden");
     this.progressToggle.setText("\u25BC");
     this.updateMetrics();
-    if (this.tickHandle !== null)
-      window.clearInterval(this.tickHandle);
-    this.tickHandle = window.setInterval(() => this.updateMetrics(), 500);
+    if (this.tickHandle !== null) {
+      window.clearTimeout(this.tickHandle);
+      this.tickHandle = null;
+    }
+    this.scheduleMetricsTick();
   }
   appendEvent(ev) {
     if (ev.kind === "format_preview") {
@@ -20835,7 +20837,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.fixChatEl?.remove();
     this.fixChatEl = null;
     if (this.tickHandle !== null) {
-      window.clearInterval(this.tickHandle);
+      window.clearTimeout(this.tickHandle);
       this.tickHandle = null;
     }
     this.updateMetrics();
@@ -20919,17 +20921,27 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.currentChatBubble.scrollIntoView({ block: "end" });
     }
     this.chatStartTs = Date.now();
-    this.chatTickHandle = window.setInterval(() => {
+    if (this.chatTickHandle !== null) {
+      window.clearTimeout(this.chatTickHandle);
+      this.chatTickHandle = null;
+    }
+    this.scheduleChatTick();
+  }
+  scheduleChatTick() {
+    this.chatTickHandle = window.setTimeout(() => {
       if (this.currentChatBubble) {
         const s = ((Date.now() - this.chatStartTs) / 1e3).toFixed(1);
         this.currentChatBubble.setText(`\u23F3 ${s}s\u2026`);
+        this.scheduleChatTick();
+      } else {
+        this.chatTickHandle = null;
       }
     }, 500);
   }
   appendChatEvent(ev) {
     if (ev.kind === "assistant_text" && !ev.isReasoning && this.currentChatBubble) {
       if (this.chatTickHandle !== null) {
-        window.clearInterval(this.chatTickHandle);
+        window.clearTimeout(this.chatTickHandle);
         this.chatTickHandle = null;
         this.currentChatBubble.setText("");
       }
@@ -20940,7 +20952,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   }
   finishChat(msg, isError) {
     if (this.chatTickHandle !== null) {
-      window.clearInterval(this.chatTickHandle);
+      window.clearTimeout(this.chatTickHandle);
       this.chatTickHandle = null;
     }
     if (this.chatSendBtn)
@@ -21009,6 +21021,13 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     }
     const dur = ((Date.now() - this.startTs) / 1e3).toFixed(1);
     this.progressCount.setText(i18n().view.stepsCount(this.stepCount, dur));
+  }
+  scheduleMetricsTick() {
+    this.tickHandle = window.setTimeout(() => {
+      this.updateMetrics();
+      if (this.state === "running")
+        this.scheduleMetricsTick();
+    }, 500);
   }
   elapsedShort() {
     return `${((Date.now() - this.startTs) / 1e3).toFixed(1)}s`;
@@ -23426,7 +23445,7 @@ var VaultTools = class {
 };
 
 // src/claude-cli-client.ts
-var import_node_child_process = require("node:child_process");
+var import_child_process = require("child_process");
 var import_path_browserify6 = __toESM(require_path_browserify(), 1);
 
 // src/stream.ts
@@ -23600,7 +23619,7 @@ ${userText}
     return { [Symbol.asyncIterator]: () => this._generate(args, signal, timeoutSec, tmpFiles) };
   }
   async *_generate(args, signal, timeoutSec, tmpFiles) {
-    const child = (0, import_node_child_process.spawn)(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
+    const child = (0, import_child_process.spawn)(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
     if (!child.stdout || !child.stderr)
       throw new Error("spawn: missing stdio");
     const stderrChunks = [];
