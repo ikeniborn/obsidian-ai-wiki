@@ -442,7 +442,7 @@ export class LlmWikiView extends ItemView {
     const reportEl = this.formatPreviewSection.createDiv("ai-wiki-format-report");
     const comp = new Component();
     comp.load();
-    void MarkdownRenderer.render(this.app, report, reportEl, "", comp);
+    void MarkdownRenderer.render(this.app, report, reportEl, "", comp).then(() => sanitizeLinks(reportEl));
 
     if (missing.length > 0) {
       const warn = this.formatPreviewSection.createEl("details", { cls: "ai-wiki-format-warn" });
@@ -509,6 +509,7 @@ export class LlmWikiView extends ItemView {
       const comp = new Component();
       comp.load();
       await MarkdownRenderer.render(this.app, entry.finalText, this.finalEl, "", comp);
+      sanitizeLinks(this.finalEl);
       this.resultSection.removeClass("ai-wiki-hidden");
       this.finalEl.removeClass("ai-wiki-hidden");
       this.resultOpen = true;
@@ -569,7 +570,7 @@ export class LlmWikiView extends ItemView {
     } else {
       const comp = new Component();
       comp.load();
-      void MarkdownRenderer.render(this.app, text, el, "", comp);
+      void MarkdownRenderer.render(this.app, text, el, "", comp).then(() => sanitizeLinks(el));
       registerLinkHandler(el, this.app);
     }
     el.scrollIntoView({ block: "end" });
@@ -623,7 +624,7 @@ export class LlmWikiView extends ItemView {
       } else {
         const comp = new Component();
         comp.load();
-        void MarkdownRenderer.render(this.app, msg.content, this.currentChatBubble, "", comp);
+        void MarkdownRenderer.render(this.app, msg.content, this.currentChatBubble, "", comp).then(() => sanitizeLinks(this.currentChatBubble!));
         registerLinkHandler(this.currentChatBubble, this.app);
       }
       this.currentChatBubble = null;
@@ -712,7 +713,7 @@ export class LlmWikiView extends ItemView {
         this.finalEl.empty();
         const comp = new Component();
         comp.load();
-        void MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, "", comp);
+        void MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, "", comp).then(() => sanitizeLinks(this.finalEl));
         this.resultSection.removeClass("ai-wiki-hidden");
         this.finalEl.removeClass("ai-wiki-hidden");
         this.resultOpen = true;
@@ -828,6 +829,14 @@ function summariseInput(input: unknown): string {
 
 function truncate(s: string, n: number): string {
   return s.length <= n ? s : s.slice(0, n) + "…";
+}
+
+function sanitizeLinks(el: HTMLElement): void {
+  el.querySelectorAll("a[href]").forEach((a) => {
+    if (/^javascript:/i.test((a.getAttribute("href") ?? "").trim())) {
+      a.removeAttribute("href");
+    }
+  });
 }
 
 function translateSystemEvent(message: string): string {

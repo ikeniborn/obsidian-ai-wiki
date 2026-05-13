@@ -1,4 +1,4 @@
-import { join } from "path-browserify";
+import { join, normalize } from "path-browserify";
 import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
@@ -91,6 +91,12 @@ export async function* runFix(
   const writtenPaths: string[] = [];
   const errors: string[] = [];
   for (const page of fixedPages) {
+    if (!normalize(page.path).startsWith(wikiVaultPath + "/")) {
+      yield { kind: "tool_use", name: "Write", input: { path: page.path } };
+      yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
+      errors.push(`${page.path}: blocked, outside wiki folder`);
+      continue;
+    }
     yield { kind: "tool_use", name: "Write", input: { path: page.path } };
     try {
       await vaultTools.write(page.path, page.content);
