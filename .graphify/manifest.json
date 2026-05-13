@@ -1,11 +1,15 @@
 {
   "vitest.mock.ts": {
-    "mtime": 1778537098.0879104,
-    "hash": "3dd51da8d533ce5c10c4018f2cd22cbd"
+    "mtime": 1778678913.8622425,
+    "hash": "9b391cdd82a423fc2065f3a2c92fff89"
+  },
+  "vitest.setup.ts": {
+    "mtime": 1778678937.334986,
+    "hash": "369832f9ec383c6280e79d41df333e16"
   },
   "vitest.config.ts": {
-    "mtime": 1778002989.1864026,
-    "hash": "cf554e8204719b0eac62ad9ed9c43887"
+    "mtime": 1778678932.684037,
+    "hash": "ba2401a4ef1ad22740d670856cecb76e"
   },
   "esbuild.config.mjs": {
     "mtime": 1778606071.9236655,
@@ -164,8 +168,8 @@
     "hash": "0e173ef78fefa66a8d4eeacd44485360"
   },
   "tests/phases/format-utils.test.ts": {
-    "mtime": 1778610393.722005,
-    "hash": "48f06e10b255e4d7a104461ce22dbb25"
+    "mtime": 1778678795.6950443,
+    "hash": "03c638bf9580084878e40e0b7f62695e"
   },
   "tests/phases/lint.test.ts": {
     "mtime": 1778620013.9676132,
@@ -176,8 +180,8 @@
     "hash": "fd8d2dd5adafb9ecb3c5e68535d360a1"
   },
   "tests/phases/format.test.ts": {
-    "mtime": 1778610393.7218165,
-    "hash": "51b3b90783eddc2502477179321b72d1"
+    "mtime": 1778678795.6951528,
+    "hash": "3654e2dc22dc43a07874749057177d35"
   },
   "tests/phases/lint.test.js": {
     "mtime": 1777576293.212555,
@@ -252,28 +256,28 @@
     "hash": "1b4c7264a3e06ca33547f2d74de8bf52"
   },
   "src/modals.ts": {
-    "mtime": 1778610393.7152612,
-    "hash": "715ade910905e5bc6ec1e5d087af5c1f"
+    "mtime": 1778679291.884479,
+    "hash": "51c48ce4069a58a6c9cfad90ba1c8a04"
   },
   "src/effective-settings.ts": {
     "mtime": 1778247828.75772,
     "hash": "b3d22c976a459a7964cbe9413364c7d0"
   },
   "src/controller.ts": {
-    "mtime": 1778672657.4652371,
-    "hash": "f773ae8d18da1dbd30e6e22532fac5f2"
+    "mtime": 1778679225.750277,
+    "hash": "0d180a9fbd863d4b91f03b3299bc0ece"
   },
   "src/agent-runner.ts": {
-    "mtime": 1778620329.3857727,
-    "hash": "c5a391aab1b300f9f89849a514c2824b"
+    "mtime": 1778679269.1616035,
+    "hash": "1ad42a2f2ba8153b1d46119c007adce6"
   },
   "src/proxy.ts": {
     "mtime": 1778674396.4506316,
     "hash": "154e1a27814aba6332b8007bb56d9c56"
   },
   "src/main.ts": {
-    "mtime": 1778610393.715976,
-    "hash": "1e48673fcf3eb991f8c13bc2ff64c968"
+    "mtime": 1778679299.5034363,
+    "hash": "b1fa5fcc74108d7598609be34c909666"
   },
   "src/domain.ts": {
     "mtime": 1778175596.092271,
@@ -316,20 +320,20 @@
     "hash": "c5476bbae7d8a6e79f6df1227009751c"
   },
   "src/claude-cli-client.ts": {
-    "mtime": 1778610393.713395,
-    "hash": "7e3ccb17dd459f362651963489566a9d"
+    "mtime": 1778678884.9315586,
+    "hash": "78994dfe7456f860934c8f5f4fb0b172"
   },
   "src/types.ts": {
     "mtime": 1778619132.7027771,
     "hash": "d7bd05f4b40df4b18b42c35daac657c4"
   },
   "src/view.ts": {
-    "mtime": 1778674465.7979667,
-    "hash": "3abfc4149f8b129949fa0d200039dfa3"
+    "mtime": 1778678838.679617,
+    "hash": "aeb468c3d0db68ac6e7b377dbaaf8962"
   },
   "src/stream.ts": {
-    "mtime": 1778013399.4866312,
-    "hash": "b2bdbdbf1314f2125a64d49b5d295ade"
+    "mtime": 1778679222.4518447,
+    "hash": "6a56f9d187a46c899c7d7b69708aaec8"
   },
   "src/utils/raw-frontmatter.ts": {
     "mtime": 1778618034.7092347,
@@ -340,20 +344,20 @@
     "hash": "fd852aea95a1108045662d46fa4beef3"
   },
   "src/phases/template.ts": {
-    "mtime": 1778002989.1852071,
-    "hash": "9d0f43f65825fb57db42a1591fec7381"
+    "mtime": 1778679181.047041,
+    "hash": "5c7446685a6238fba936e71b9885eb79"
   },
   "src/phases/ingest.ts": {
-    "mtime": 1778618178.126508,
-    "hash": "71ee057fc37dcfacd8086df558d03c10"
+    "mtime": 1778679177.5290568,
+    "hash": "917df7a80a32d3d0518be0a030f5c15c"
   },
   "src/phases/format-utils.ts": {
-    "mtime": 1778263915.9106195,
-    "hash": "da1df28110805cb0d56d215bc61e5f73"
+    "mtime": 1778678795.6948268,
+    "hash": "415fabb522b41be6416243ede8e4fe3e"
   },
   "src/phases/format.ts": {
-    "mtime": 1778521635.9953113,
-    "hash": "08ab9dca63693961b6621786874945a7"
+    "mtime": 1778678795.6949358,
+    "hash": "4851a86fdaf130dbe4657a42121c4fea"
   },
   "src/phases/init.ts": {
     "mtime": 1778521629.7893987,
@@ -364,15 +368,15 @@
     "hash": "bf53a332f41c4bc8b74e175922f91035"
   },
   "src/phases/llm-utils.ts": {
-    "mtime": 1778002989.1851597,
-    "hash": "dda4ae1cdb7b8e6a8f6bd468a51a7e7a"
+    "mtime": 1778679279.5099387,
+    "hash": "dcd489da066f097015c46974ec65dc25"
   },
   "src/phases/evaluator.ts": {
-    "mtime": 1778002989.1848404,
-    "hash": "6becfcdfb39e15da29339657627af505"
+    "mtime": 1778679172.6390789,
+    "hash": "8f26138e188efe03b33ed4ac6c7ef1fa"
   },
   "src/phases/fix.ts": {
-    "mtime": 1778673973.199688,
+    "mtime": 1778678505.468723,
     "hash": "f2f5d853c318951b5baf9d53f9451d34"
   },
   "src/phases/lint.ts": {

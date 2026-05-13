@@ -6,11 +6,12 @@
 
 ### документация
 
-#### компоненты (4)
+#### компоненты (5)
 - [[wiki-controller]] — `документация/компоненты/wiki-controller.md`
 - [[agent-runner]] — `документация/компоненты/agent-runner.md`
 - [[claude-cli-client]] — `документация/компоненты/claude-cli-client.md`
 - [[llm-wiki-view]] — `документация/компоненты/llm-wiki-view.md`
+- [[format-utils]] — `документация/компоненты/format-utils.md`
 
 #### операции (3)
 - [[format-operation]] — `документация/операции/format-operation.md`
@@ -22,7 +23,8 @@
 - [[async-generator-events]] — `документация/паттерны/async-generator-events.md`
 - [[backend-strategy]] — `документация/паттерны/backend-strategy.md`
 
-#### спецификации (3)
+#### спецификации (4)
 - [[agent-base-contract]] — `документация/спецификации/agent-base-contract.md`
 - [[format-operation-design]] — `документация/спецификации/format-operation-design.md`
 - [[claude-agent-backend-design]] — `документация/спецификации/claude-agent-backend-design.md`
+- [[audit-fix-design]] — `документация/спецификации/audit-fix-design.md`

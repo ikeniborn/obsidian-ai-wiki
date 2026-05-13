@@ -41,3 +41,38 @@
 - документация/операции/fix-operation.md (developing) — описание операции fix с акцентом на path-блокировку (security)
 
 **Обновлено:** index.md, log.md
+
+## 2026-05-13 — ingest audit-fix-design spec + format-token-preservation plan
+
+**Операция:** ingest  
+**Домен:** документация  
+**Источники:** docs/superpowers/specs/2026-05-13-audit-fix-design.md, docs/superpowers/plans/2026-05-13-format-token-preservation.md
+
+**Создано страниц:** 1
+- документация/спецификации/audit-fix-design.md (mature) — spec: 4 ошибки + ~21 предупреждение для Community Plugins (minAppVersion, sentence-case, window APIs, TypeScript any)
+
+**Не создано (уже покрыто):** формат план → format-operation.md уже содержит token-retry и appendMissingLines
+
+**Обновлено:** index.md (спецификации 3→4), log.md
+
+## 2026-05-13 — ingest src/phases/format.ts
+
+**Операция:** ingest  
+**Домен:** документация  
+**Источник:** src/phases/format.ts
+
+**Обновлено страниц:** 1
+- документация/операции/format-operation.md — добавлены: три LLM-вызова (основной / JSON-retry / token-restore), `callOnce()` inner generator (stream + fallback), `extractImagePaths`, `format_schema` загрузка из `!Wiki/_format_schema.md`, исправлен `tempPath` (`<dir>/<basename>` вместо `!Temp/`), `missingTokensWithContext` вместо `missingTokens`, `appendMissingLines` hard fallback, `looksTruncated` проверка до retry
+
+**Обновлено:** log.md
+
+## 2026-05-13 — ingest src/phases/format-utils.ts
+
+**Операция:** ingest  
+**Домен:** документация  
+**Источник:** src/phases/format-utils.ts
+
+**Создано страниц:** 1
+- документация/компоненты/format-utils.md (stub) — публичный API: `FormatResponse`, `MissingToken`, `extractJsonObject`, `looksTruncated`, `significantTokens`, `missingTokens`, `missingTokensWithContext`, `appendMissingLines`; алгоритмы token-extraction и lemmatization; поток использования в runFormat
+
+**Обновлено:** index.md (компоненты 4→5), log.md
