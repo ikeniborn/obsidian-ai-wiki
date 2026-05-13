@@ -157,8 +157,8 @@ export class AgentRunner {
       const content = await adapter.read(path);
       const lines = content.trimEnd().split("\n");
       const lastIdx = lines.length - 1;
-      const last = JSON.parse(lines[lastIdx]);
-      last.eval = { score, reasoning };
+      const last: Record<string, unknown> = JSON.parse(lines[lastIdx]) as Record<string, unknown>;
+      last["eval"] = { score, reasoning };
       lines[lastIdx] = JSON.stringify(last);
       await adapter.write(path, lines.join("\n") + "\n");
     } catch { /* не блокируем */ }

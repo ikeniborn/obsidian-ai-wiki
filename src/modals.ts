@@ -411,7 +411,7 @@ export class EditDomainModal extends Modal {
 
       toggleBtn.addEventListener("click", () => {
         try {
-          const parsed = JSON.parse(this.entityTypesVal.trim() || "[]");
+          const parsed: unknown = JSON.parse(this.entityTypesVal.trim() || "[]");
           if (!Array.isArray(parsed)) throw new Error();
           if (!parsed.every((x: unknown) => typeof x === "object" && x !== null && !Array.isArray(x))) {
             throw new Error();
@@ -501,7 +501,7 @@ export class EditDomainModal extends Modal {
       entityTypes = this.entityTypesList;
     } else {
       try {
-        const parsed = JSON.parse(this.entityTypesVal.trim() || "[]");
+        const parsed: unknown = JSON.parse(this.entityTypesVal.trim() || "[]");
         if (!Array.isArray(parsed)) throw new Error("not an array");
         if (!parsed.every((x: unknown) => typeof x === "object" && x !== null && !Array.isArray(x))) {
           throw new Error("not an array of objects");

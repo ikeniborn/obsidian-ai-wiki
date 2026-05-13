@@ -187,7 +187,7 @@ export default class LlmWikiPlugin extends Plugin {
     }
 
     // Миграция: agentLogPath → agentLogEnabled
-    const legacyLogPath = (data as Record<string, unknown> | null)?.agentLogPath;
+    const legacyLogPath = data?.agentLogPath;
     if (typeof legacyLogPath === "string") {
       this.settings.agentLogEnabled = legacyLogPath.length > 0;
     }
