@@ -14,9 +14,14 @@ export function parseEvalResponse(text: string): EvalResult | null {
     ?? text.match(/\{[^{}]*"reasoning"[^{}]*"score"[^{}]*\}/s);
   if (!match) return null;
   try {
-    const parsed = JSON.parse(match[0]);
-    if (typeof parsed.score !== "number" || typeof parsed.reasoning !== "string") return null;
-    return { score: Math.min(10, Math.max(0, parsed.score)), reasoning: parsed.reasoning };
+    const parsed: unknown = JSON.parse(match[0]);
+    if (
+      typeof parsed !== "object" || parsed === null ||
+      typeof (parsed as Record<string, unknown>).score !== "number" ||
+      typeof (parsed as Record<string, unknown>).reasoning !== "string"
+    ) return null;
+    const p = parsed as { score: number; reasoning: string };
+    return { score: Math.min(10, Math.max(0, p.score)), reasoning: p.reasoning };
   } catch {
     return null;
   }

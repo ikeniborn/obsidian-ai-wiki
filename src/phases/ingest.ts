@@ -173,9 +173,9 @@ export function parseJsonPages(text: string): Array<{ path: string; content: str
   const match = text.match(/\[[\s\S]*\]/);
   if (!match) return [];
   try {
-    const arr = JSON.parse(match[0]);
+    const arr: unknown = JSON.parse(match[0]);
     if (!Array.isArray(arr)) return [];
-    return arr.filter(
+    return (arr as unknown[]).filter(
       (x): x is { path: string; content: string } =>
         x !== null &&
         typeof x === "object" &&
