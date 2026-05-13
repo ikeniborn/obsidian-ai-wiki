@@ -32,7 +32,7 @@
 **Files:**
 - Modify: `src/types.ts`
 
-- [ ] **Step 1: Add fields to `LlmWikiPluginSettings`**
+- [x] **Step 1: Add fields to `LlmWikiPluginSettings`**
 
 In `src/types.ts`, inside `LlmWikiPluginSettings` interface, after `historyLimit: number;` add:
 
@@ -41,7 +41,7 @@ In `src/types.ts`, inside `LlmWikiPluginSettings` interface, after `historyLimit
   hubThreshold: number;
 ```
 
-- [ ] **Step 2: Add defaults to `DEFAULT_SETTINGS`**
+- [x] **Step 2: Add defaults to `DEFAULT_SETTINGS`**
 
 In `src/types.ts`, inside `DEFAULT_SETTINGS`, after `historyLimit: 20,` add:
 
@@ -50,7 +50,7 @@ In `src/types.ts`, inside `DEFAULT_SETTINGS`, after `historyLimit: 20,` add:
   hubThreshold: 20,
 ```
 
-- [ ] **Step 3: Run TypeScript check**
+- [x] **Step 3: Run TypeScript check**
 
 ```bash
 cd /home/ikeniborn/Documents/Project/obsidian-llm-wiki
@@ -59,7 +59,7 @@ npx tsc --noEmit 2>&1 | head -20
 
 Expected: no errors about `graphDepth` or `hubThreshold`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/types.ts
@@ -74,7 +74,7 @@ git commit -m "feat(types): add graphDepth and hubThreshold settings"
 - Create: `tests/wiki-graph.test.ts`
 - Create: `src/wiki-graph.ts`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Create `tests/wiki-graph.test.ts`:
 
@@ -220,7 +220,7 @@ describe("checkGraphStructure", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to confirm they fail**
+- [x] **Step 2: Run tests to confirm they fail**
 
 ```bash
 cd /home/ikeniborn/Documents/Project/obsidian-llm-wiki
@@ -229,7 +229,7 @@ npx vitest run tests/wiki-graph.test.ts 2>&1 | tail -10
 
 Expected: FAIL — module `../src/wiki-graph` not found.
 
-- [ ] **Step 3: Implement `src/wiki-graph.ts`**
+- [x] **Step 3: Implement `src/wiki-graph.ts`**
 
 Create `src/wiki-graph.ts`:
 
@@ -319,7 +319,7 @@ export function checkGraphStructure(graph: WikiGraph, hubThreshold: number): str
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 cd /home/ikeniborn/Documents/Project/obsidian-llm-wiki
@@ -328,7 +328,7 @@ npx vitest run tests/wiki-graph.test.ts 2>&1 | tail -15
 
 Expected: all PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/wiki-graph.ts tests/wiki-graph.test.ts
@@ -343,7 +343,7 @@ git commit -m "feat(wiki-graph): add pageId, buildWikiGraph, bfsExpand, checkGra
 - Modify: `src/phases/query.ts`
 - Modify: `tests/phases/query.test.ts`
 
-- [ ] **Step 1: Add BFS integration test to `tests/phases/query.test.ts`**
+- [x] **Step 1: Add BFS integration test to `tests/phases/query.test.ts`**
 
 Append to `tests/phases/query.test.ts` inside the `describe("runQuery", ...)` block:
 
@@ -387,7 +387,7 @@ Append to `tests/phases/query.test.ts` inside the `describe("runQuery", ...)` bl
   });
 ```
 
-- [ ] **Step 2: Run test to confirm it fails**
+- [x] **Step 2: Run test to confirm it fails**
 
 ```bash
 cd /home/ikeniborn/Documents/Project/obsidian-llm-wiki
@@ -396,7 +396,7 @@ npx vitest run tests/phases/query.test.ts 2>&1 | tail -15
 
 Expected: new test FAILS — old `runQuery` includes all pages in context so "Unrelated" appears in the LLM call. Existing 3 tests still PASS (new `graphDepth` param has a default, old calls work unchanged).
 
-- [ ] **Step 3: Rewrite `src/phases/query.ts`**
+- [x] **Step 3: Rewrite `src/phases/query.ts`**
 
 Replace the entire file content with:
 
@@ -630,7 +630,7 @@ function buildEntityTypesBlock(domain: DomainEntry): string {
 }
 ```
 
-- [ ] **Step 4: Run query tests to confirm all pass**
+- [x] **Step 4: Run query tests to confirm all pass**
 
 ```bash
 cd /home/ikeniborn/Documents/Project/obsidian-llm-wiki
@@ -639,7 +639,7 @@ npx vitest run tests/phases/query.test.ts 2>&1 | tail -15
 
 Expected: all 4 tests PASS (3 existing + new BFS test).
 
-- [ ] **Step 5: Run full test suite**
+- [x] **Step 5: Run full test suite**
 
 ```bash
 cd /home/ikeniborn/Documents/Project/obsidian-llm-wiki
@@ -648,7 +648,7 @@ npm test 2>&1 | tail -20
 
 Expected: no regressions.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/phases/query.ts tests/phases/query.test.ts
@@ -663,7 +663,7 @@ git commit -m "feat(query): graph-filtered context via BFS seed expansion"
 - Modify: `src/phases/lint.ts`
 - Modify: `tests/phases/lint.test.ts`
 
-- [ ] **Step 1: Add graph-issues integration test to `tests/phases/lint.test.ts`**
+- [x] **Step 1: Add graph-issues integration test to `tests/phases/lint.test.ts`**
 
 Append inside the `describe("runLint", ...)` block:
 
@@ -686,16 +686,16 @@ Append inside the `describe("runLint", ...)` block:
   });
 ```
 
-- [ ] **Step 2: Run test to confirm it fails**
+- [x] **Step 2: Run test to confirm it fails**
 
 ```bash
 cd /home/ikeniborn/Documents/Project/obsidian-llm-wiki
 npx vitest run tests/phases/lint.test.ts 2>&1 | tail -15
 ```
 
-Expected: new test FAILS — old `runLint` doesn't call `checkGraphStructure`, so "isolated node" is absent from the LLM prompt. Existing 6 tests still PASS.
+Expected: new test FAILS — old `runLint` doesn't call `checkGraphStructure`, so "isolated node" is absent from the LLM prompt. Existing 9 tests still PASS.
 
-- [ ] **Step 3: Add `import` and update `runLint` signature in `src/phases/lint.ts`**
+- [x] **Step 3: Add `import` and update `runLint` signature in `src/phases/lint.ts`**
 
 At top of `src/phases/lint.ts`, after existing imports, add:
 
@@ -719,7 +719,7 @@ export async function* runLint(
 ): AsyncGenerator<RunEvent> {
 ```
 
-- [ ] **Step 4: Integrate `checkGraphStructure` into `runLint`**
+- [x] **Step 4: Integrate `checkGraphStructure` into `runLint`**
 
 In the per-domain loop, find this existing block (around line 53–55):
 
@@ -740,7 +740,7 @@ Replace with:
     const allIssues = [structuralIssues, graphIssues].filter(Boolean).join("\n");
 ```
 
-- [ ] **Step 5: Replace `structuralIssues` with `allIssues` in the lint report LLM call**
+- [x] **Step 5: Replace `structuralIssues` with `allIssues` in the lint report LLM call**
 
 Find the `messages` array construction for the lint LLM call (around line 65–76):
 
@@ -758,7 +758,7 @@ Replace `structuralIssues` with `allIssues`:
         `Автоматические проблемы:\n${allIssues || "Нет."}`,
 ```
 
-- [ ] **Step 6: Replace `structuralIssues` in `reportParts.push` and `buildFixMessages`**
+- [x] **Step 6: Replace `structuralIssues` in `reportParts.push` and `buildFixMessages`**
 
 Find (around line 99):
 ```typescript
@@ -780,16 +780,16 @@ Replace:
     const fixMessages = buildFixMessages(domain, wikiVaultPath, pages, allIssues, entityTypesBlock, llmReport);
 ```
 
-- [ ] **Step 7: Run lint tests to confirm all pass**
+- [x] **Step 7: Run lint tests to confirm all pass**
 
 ```bash
 cd /home/ikeniborn/Documents/Project/obsidian-llm-wiki
 npx vitest run tests/phases/lint.test.ts 2>&1 | tail -15
 ```
 
-Expected: all 7 tests PASS (6 existing + new graph-issues test).
+Expected: all 10 tests PASS (9 existing + new graph-issues test).
 
-- [ ] **Step 8: Run full test suite**
+- [x] **Step 8: Run full test suite**
 
 ```bash
 cd /home/ikeniborn/Documents/Project/obsidian-llm-wiki
@@ -798,7 +798,7 @@ npm test 2>&1 | tail -20
 
 Expected: no regressions.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/phases/lint.ts tests/phases/lint.test.ts
@@ -812,7 +812,7 @@ git commit -m "feat(lint): add graph-structural checks (isolated, hub, unidirect
 **Files:**
 - Modify: `src/agent-runner.ts`
 
-- [ ] **Step 1: Pass `graphDepth` to `runQuery` calls**
+- [x] **Step 1: Pass `graphDepth` to `runQuery` calls**
 
 Find both `runQuery` calls (lines ~72 and ~75):
 
@@ -828,7 +828,7 @@ Replace with:
         yield* runQuery(req.args, true, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts);
 ```
 
-- [ ] **Step 2: Pass `hubThreshold` to `runLint` call**
+- [x] **Step 2: Pass `hubThreshold` to `runLint` call**
 
 Find (line ~78):
 ```typescript
@@ -840,7 +840,7 @@ Replace:
         yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, opts);
 ```
 
-- [ ] **Step 3: TypeScript check**
+- [x] **Step 3: TypeScript check**
 
 ```bash
 cd /home/ikeniborn/Documents/Project/obsidian-llm-wiki
@@ -849,7 +849,7 @@ npx tsc --noEmit 2>&1 | head -20
 
 Expected: no errors.
 
-- [ ] **Step 4: Run full test suite**
+- [x] **Step 4: Run full test suite**
 
 ```bash
 cd /home/ikeniborn/Documents/Project/obsidian-llm-wiki
@@ -858,7 +858,7 @@ npm test 2>&1 | tail -20
 
 Expected: all PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/agent-runner.ts
@@ -873,7 +873,7 @@ git commit -m "feat(agent-runner): pass graphDepth and hubThreshold to phases"
 - Modify: `src/i18n.ts`
 - Modify: `src/settings.ts`
 
-- [ ] **Step 1: Add i18n keys to `src/i18n.ts`**
+- [x] **Step 1: Add i18n keys to `src/i18n.ts`**
 
 `type I18n = typeof en` — adding keys to `en` auto-extends the type, requiring matching keys in `ru` and `es`. Add to all three locales in this step.
 
@@ -907,7 +907,7 @@ In the `es` object, after `proxy_invalid: (m: string) => \`Configuración de pro
     hubThreshold_desc: "Lint: páginas con más enlaces salientes que este valor se marcan como hub.",
 ```
 
-- [ ] **Step 2: Add Graph section to `src/settings.ts`**
+- [x] **Step 2: Add Graph section to `src/settings.ts`**
 
 Find the dev mode section opener (around line 428):
 
@@ -954,7 +954,7 @@ Insert before it:
 
 ```
 
-- [ ] **Step 3: TypeScript check**
+- [x] **Step 3: TypeScript check**
 
 ```bash
 cd /home/ikeniborn/Documents/Project/obsidian-llm-wiki
@@ -963,7 +963,7 @@ npx tsc --noEmit 2>&1 | head -20
 
 Expected: no errors. `type I18n = typeof en` auto-includes the new keys — no separate type edit needed. If errors appear, verify all three locales have the 5 new keys from Step 1.
 
-- [ ] **Step 4: Run full test suite**
+- [x] **Step 4: Run full test suite**
 
 ```bash
 cd /home/ikeniborn/Documents/Project/obsidian-llm-wiki
@@ -972,7 +972,7 @@ npm test 2>&1 | tail -20
 
 Expected: all PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/i18n.ts src/settings.ts
@@ -986,26 +986,25 @@ git commit -m "feat(settings): add Graph section with graphDepth and hubThreshol
 **Files:**
 - Modify: `package.json`
 - Modify: `src/manifest.json`
-- Modify: `manifest.json` (root — Obsidian reads this directly)
 
-- [ ] **Step 1: Bump patch version**
+> Note: root `manifest.json` and `dist/manifest.json` are **auto-synced by the build** via `copyFileSync("src/manifest.json", "manifest.json")` in `esbuild.config.mjs`. Do NOT edit them manually.
 
-Current version: `0.1.77`. New version: `0.1.78`.
+- [x] **Step 1: Bump patch version**
+
+Current version: `0.1.80`. New version: `0.1.81`.
 
 In `package.json`, change:
 ```json
-"version": "0.1.77",
+"version": "0.1.80",
 ```
 to:
 ```json
-"version": "0.1.78",
+"version": "0.1.81",
 ```
 
-In `src/manifest.json`, change the `version` field to `"0.1.78"`.
+In `src/manifest.json`, change the `version` field to `"0.1.81"`.
 
-In `manifest.json` (root), change the `version` field to `"0.1.78"` as well.
-
-- [ ] **Step 2: Build**
+- [x] **Step 2: Build**
 
 ```bash
 cd /home/ikeniborn/Documents/Project/obsidian-llm-wiki
@@ -1014,7 +1013,7 @@ npm run build 2>&1 | tail -10
 
 Expected: build succeeds, `main.js` updated.
 
-- [ ] **Step 3: Run full test suite one final time**
+- [x] **Step 3: Run full test suite one final time**
 
 ```bash
 cd /home/ikeniborn/Documents/Project/obsidian-llm-wiki
@@ -1023,11 +1022,11 @@ npm test 2>&1 | tail -20
 
 Expected: all PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
-git add package.json src/manifest.json manifest.json main.js
-git commit -m "chore: bump version to 0.1.78, build — graph-aware query and lint"
+git add package.json src/manifest.json manifest.json dist/manifest.json main.js
+git commit -m "chore: bump version to 0.1.81, build — graph-aware query and lint"
 ```
 
 ---

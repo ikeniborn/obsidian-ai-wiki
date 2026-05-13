@@ -12,7 +12,7 @@
     "hash": "7f03929e7eaaaa052482d0107acdfe9d"
   },
   "tests/local-config.test.ts": {
-    "mtime": 1778610420.0156074,
+    "mtime": 1778618629.0741901,
     "hash": "dcab4cc1e5a8659b7c139e7bfedf1ad0"
   },
   "tests/agent-runner.integration.test.js": {
@@ -28,7 +28,7 @@
     "hash": "af1cef8899a2cf491c41202f72c7614e"
   },
   "tests/main-mobile.test.ts": {
-    "mtime": 1778610420.015708,
+    "mtime": 1778618629.0725183,
     "hash": "5ab4524d6db727afc73f8e710de334ce"
   },
   "tests/domain.test.ts": {
@@ -47,8 +47,12 @@
     "mtime": 1778610393.7191584,
     "hash": "ca084fd2e1dd5799235312094da95713"
   },
+  "tests/wiki-graph.test.ts": {
+    "mtime": 1778619294.9995809,
+    "hash": "e16c5d6949d0f4dd1f9f3ce1ce99eb79"
+  },
   "tests/main-migration.test.ts": {
-    "mtime": 1778610420.0157907,
+    "mtime": 1778618629.07241,
     "hash": "2147dbd7ae2cd7b60d27fd6d1f14f740"
   },
   "tests/claude-cli-client.test.ts": {
@@ -64,7 +68,7 @@
     "hash": "96aa30dc423598215043090db51eda66"
   },
   "tests/controller-mobile.test.ts": {
-    "mtime": 1778610420.0158665,
+    "mtime": 1778618629.0721922,
     "hash": "f32a39a814a62ab7e9fe64c72cdcd0fc"
   },
   "tests/template.test.ts": {
@@ -104,7 +108,7 @@
     "hash": "50321efe0d12e1d190398a139a339301"
   },
   "tests/controller-format.test.ts": {
-    "mtime": 1778610420.0160694,
+    "mtime": 1778618629.0720556,
     "hash": "6b7eabe89de9140cb0f8b067b4471d3c"
   },
   "tests/vault-tools.test.js": {
@@ -148,12 +152,12 @@
     "hash": "f08e6f6c9046bf45af04801190f0d397"
   },
   "tests/utils/raw-frontmatter.test.ts": {
-    "mtime": 1778615298.9155579,
-    "hash": "bfddc6aafef38dc79f4a5652859264bb"
+    "mtime": 1778618019.6703994,
+    "hash": "368614c9df85e3c484c861bd24ecc5a0"
   },
   "tests/phases/query.test.ts": {
-    "mtime": 1778610393.7223108,
-    "hash": "815c8a1a173f3a8c58010999ff3f6d54"
+    "mtime": 1778619601.082207,
+    "hash": "5e10c95c1e5c54b36eb5695397a5be05"
   },
   "tests/phases/ingest.test.js": {
     "mtime": 1777576293.2092216,
@@ -164,8 +168,8 @@
     "hash": "48f06e10b255e4d7a104461ce22dbb25"
   },
   "tests/phases/lint.test.ts": {
-    "mtime": 1778615682.0779247,
-    "hash": "95368ab0b8143ea04859e28865212a04"
+    "mtime": 1778620013.9676132,
+    "hash": "67c116cd29aafe1f1f88a216a8f4d66d"
   },
   "tests/phases/ingest.test.ts": {
     "mtime": 1778615428.5514586,
@@ -260,8 +264,8 @@
     "hash": "c1590ecbaae821576c9f210b45ac2ca1"
   },
   "src/agent-runner.ts": {
-    "mtime": 1778248174.9662914,
-    "hash": "2263557866ea704f65d5f44c4e3af948"
+    "mtime": 1778620329.3857727,
+    "hash": "c5a391aab1b300f9f89849a514c2824b"
   },
   "src/proxy.ts": {
     "mtime": 1778247790.4356923,
@@ -284,8 +288,8 @@
     "hash": "abffb78177d180c14a8441155503afd2"
   },
   "src/settings.ts": {
-    "mtime": 1778610393.7156935,
-    "hash": "82771f80416456e8055e83495ba68f75"
+    "mtime": 1778621255.2750466,
+    "hash": "9cb83b3d10de27b70818d1836ebc00aa"
   },
   "src/vault-tools.ts": {
     "mtime": 1778244328.3202398,
@@ -300,23 +304,27 @@
     "hash": "99e2cf4a0fa8cdd04846bc229e5a9567"
   },
   "src/i18n.ts": {
-    "mtime": 1778610393.7042317,
-    "hash": "e8f8de4e6a49f34ad4453df289d39cb7"
+    "mtime": 1778621249.4645243,
+    "hash": "62c78bb3063ab59fb073a10ba134f041"
   },
   "src/domain-store.ts": {
     "mtime": 1778175596.092214,
     "hash": "3a5e56cf37f42c23ca8df72631cc17f0"
+  },
+  "src/wiki-graph.ts": {
+    "mtime": 1778621886.3425245,
+    "hash": "c5476bbae7d8a6e79f6df1227009751c"
   },
   "src/claude-cli-client.ts": {
     "mtime": 1778610393.713395,
     "hash": "7e3ccb17dd459f362651963489566a9d"
   },
   "src/types.ts": {
-    "mtime": 1778259567.7858706,
-    "hash": "5f50206a7ffb670c36ab8ea4193156b9"
+    "mtime": 1778619132.7027771,
+    "hash": "d7bd05f4b40df4b18b42c35daac657c4"
   },
   "src/view.ts": {
-    "mtime": 1778610393.7155402,
+    "mtime": 1778618629.0683477,
     "hash": "bb4551fb3bf01bf07e06db6be3b0bdb5"
   },
   "src/stream.ts": {
@@ -324,20 +332,20 @@
     "hash": "b2bdbdbf1314f2125a64d49b5d295ade"
   },
   "src/utils/raw-frontmatter.ts": {
-    "mtime": 1778615284.6537006,
-    "hash": "fa2e3d7468a76f0f6b6e12f01cf008a6"
+    "mtime": 1778618034.7092347,
+    "hash": "5afb45f826ca1a1d6bd03fade3dc8d48"
   },
   "src/phases/query.ts": {
-    "mtime": 1778521600.6028135,
-    "hash": "716b02cfd228b5f6af0ecc60bb280b30"
+    "mtime": 1778619890.711284,
+    "hash": "fd852aea95a1108045662d46fa4beef3"
   },
   "src/phases/template.ts": {
     "mtime": 1778002989.1852071,
     "hash": "9d0f43f65825fb57db42a1591fec7381"
   },
   "src/phases/ingest.ts": {
-    "mtime": 1778615579.0679128,
-    "hash": "5820f36cfca2530dabf5f0ab6976cd2f"
+    "mtime": 1778618178.126508,
+    "hash": "71ee057fc37dcfacd8086df558d03c10"
   },
   "src/phases/format-utils.ts": {
     "mtime": 1778263915.9106195,
@@ -368,8 +376,8 @@
     "hash": "07e5a58ecbd4d7227d8d5f891c654d8d"
   },
   "src/phases/lint.ts": {
-    "mtime": 1778616119.0128086,
-    "hash": "64fdb96ccda557a98580891d1f7aa3f5"
+    "mtime": 1778621898.7793705,
+    "hash": "f386e9c8e43c29a993f598c02f553fb4"
   },
   "CLAUDE.md": {
     "mtime": 1778606260.7946482,
@@ -434,5 +442,41 @@
   "scripts/dspy/README.md": {
     "mtime": 1778015541.6113856,
     "hash": "9a740b7601f415692d8ef916c30560af"
+  },
+  ".claude/skills/obsidian-plugin-dev/SKILL.md": {
+    "mtime": 1778621153.2014105,
+    "hash": "89f6bb0d5825f00c9a4cde7ce82f852a"
+  },
+  ".claude/skills/obsidian-plugin-dev/rules/performance.md": {
+    "mtime": 1778621125.707663,
+    "hash": "41805eabe819a044a938b3690deb2f0d"
+  },
+  ".claude/skills/obsidian-plugin-dev/rules/submission.md": {
+    "mtime": 1778621124.9516702,
+    "hash": "92005c25c6b83e511f3f1e4eddcb4a6f"
+  },
+  ".claude/skills/obsidian-plugin-dev/rules/manifest.md": {
+    "mtime": 1778621120.690709,
+    "hash": "9b15c72f09c914911f6eeff6e1ca990d"
+  },
+  ".claude/skills/obsidian-plugin-dev/rules/commands-ui.md": {
+    "mtime": 1778621122.659691,
+    "hash": "8d303c48954969acd6af2550add6ad21"
+  },
+  ".claude/skills/obsidian-plugin-dev/rules/api.md": {
+    "mtime": 1778621121.818699,
+    "hash": "9c5e0667a3f8355087ee96d687eeceed"
+  },
+  ".claude/skills/obsidian-plugin-dev/rules/memory.md": {
+    "mtime": 1778621123.227686,
+    "hash": "7952e1e04366dc3ee6b4060c231ef085"
+  },
+  ".claude/skills/obsidian-plugin-dev/rules/tooling.md": {
+    "mtime": 1778621126.6676543,
+    "hash": "9326e566778c20b0cb280e3b44d574ac"
+  },
+  ".claude/skills/obsidian-plugin-dev/rules/security.md": {
+    "mtime": 1778621123.7246814,
+    "hash": "0482077656432fb13dfa00ec42ed620e"
   }
 }
