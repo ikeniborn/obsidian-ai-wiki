@@ -19554,7 +19554,7 @@ var QueryModal = class extends import_obsidian2.Modal {
         this.onSubmit(q);
       })
     );
-    setTimeout(() => ta.focus(), 0);
+    window.setTimeout(() => ta.focus(), 0);
   }
   onClose() {
     this.contentEl.empty();
@@ -19619,7 +19619,7 @@ function attachFolderDropdown(app, inputEl, onSelect) {
     if (!folders.length)
       return;
     const rect = inputEl.getBoundingClientRect();
-    dropEl = document.body.createDiv({ cls: "ai-wiki-folder-dropdown" });
+    dropEl = import_obsidian2.activeDocument.body.createDiv({ cls: "ai-wiki-folder-dropdown" });
     dropEl.style.top = `${rect.bottom + window.scrollY}px`;
     dropEl.style.left = `${rect.left + window.scrollX}px`;
     dropEl.style.width = `${rect.width}px`;
@@ -20421,9 +20421,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   getViewType() {
     return AI_WIKI_VIEW_TYPE;
   }
-  // eslint-disable-next-line obsidianmd/ui/sentence-case -- "AI Wiki" is the plugin name (proper noun)
   getDisplayText() {
-    return "AI Wiki";
+    return "AIWiki";
   }
   getIcon() {
     return "brain-circuit";
@@ -22804,9 +22803,10 @@ function parseEvalResponse(text) {
     return null;
   try {
     const parsed = JSON.parse(match[0]);
-    if (typeof parsed.score !== "number" || typeof parsed.reasoning !== "string")
+    if (typeof parsed !== "object" || parsed === null || typeof parsed.score !== "number" || typeof parsed.reasoning !== "string")
       return null;
-    return { score: Math.min(10, Math.max(0, parsed.score)), reasoning: parsed.reasoning };
+    const p = parsed;
+    return { score: Math.min(10, Math.max(0, p.score)), reasoning: p.reasoning };
   } catch {
     return null;
   }
@@ -23359,7 +23359,7 @@ var AgentRunner = class {
       const lines = content.trimEnd().split("\n");
       const lastIdx = lines.length - 1;
       const last = JSON.parse(lines[lastIdx]);
-      last.eval = { score, reasoning };
+      last["eval"] = { score, reasoning };
       lines[lastIdx] = JSON.stringify(last);
       await adapter.write(path2, lines.join("\n") + "\n");
     } catch {
@@ -23607,7 +23607,7 @@ ${userText}
     child.stderr.on("data", (chunk) => stderrChunks.push(chunk));
     const onAbort = () => {
       child.kill("SIGTERM");
-      setTimeout(() => {
+      window.setTimeout(() => {
         if (child.exitCode === null)
           child.kill("SIGKILL");
       }, SIGTERM_GRACE_MS);
@@ -23617,10 +23617,10 @@ ${userText}
       return;
     }
     signal?.addEventListener("abort", onAbort, { once: true });
-    const timeoutHandle = setTimeout(() => {
+    const timeoutHandle = window.setTimeout(() => {
       timedOut = true;
       child.kill("SIGTERM");
-      setTimeout(() => {
+      window.setTimeout(() => {
         if (child.exitCode === null)
           child.kill("SIGKILL");
       }, SIGTERM_GRACE_MS);
@@ -23707,7 +23707,7 @@ ${stderr()}` : ""}`);
         choices: [{ index: 0, delta: {}, finish_reason: "stop" }]
       };
     } finally {
-      clearTimeout(timeoutHandle);
+      window.clearTimeout(timeoutHandle);
       signal?.removeEventListener("abort", onAbort);
       for (const f of tmpFiles) {
         try {
@@ -23717,7 +23717,7 @@ ${stderr()}` : ""}`);
       }
       if (child.exitCode === null) {
         child.kill("SIGTERM");
-        setTimeout(() => {
+        window.setTimeout(() => {
           if (child.exitCode === null)
             child.kill("SIGKILL");
         }, SIGTERM_GRACE_MS);
@@ -31694,7 +31694,7 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
     this.controller.onBusyChange = () => this.settingTab?.display();
     this.registerView(AI_WIKI_VIEW_TYPE, (leaf) => new LlmWikiView(leaf, this));
-    this.addRibbonIcon("brain-circuit", "AI Wiki", () => {
+    this.addRibbonIcon("brain-circuit", "AIWiki", () => {
       const leaves = this.app.workspace.getLeavesOfType(AI_WIKI_VIEW_TYPE);
       if (leaves.length > 0) {
         void this.app.workspace.revealLeaf(leaves[0]);
