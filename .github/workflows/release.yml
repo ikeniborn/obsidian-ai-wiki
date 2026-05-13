@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      attestations: write
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -23,6 +25,13 @@ jobs:
 
       - name: Build
         run: node esbuild.config.mjs production
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/main.js
+            dist/styles.css
 
       - name: Read version
         id: version
