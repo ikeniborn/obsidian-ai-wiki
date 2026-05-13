@@ -1,7 +1,5 @@
 docs/
-obsidian-releases/
 logs/
 dist/
-.graphify/
 node_modules/
 scripts/dspy/.venv/
