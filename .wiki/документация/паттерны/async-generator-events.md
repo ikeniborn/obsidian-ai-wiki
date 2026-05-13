@@ -1,27 +1,54 @@
 ---
-wiki_sources: ["docs/architecture/README.md", "docs/architecture/overview.yaml", "docs/architecture/diagrams/data-flow.md"]
-wiki_updated: 2026-05-06
-wiki_status: stub
-wiki_outgoing_links:
-  - "[[архитектура-плагина]]"
-  - "[[поток-выполнения-операции]]"
-  - "[[wiki-controller]]"
-wiki_external_links: []
-tags: ["docs", "architecture", "obsidian-llm-wiki"]
-aliases: ["AsyncGenerator", "event stream", "RunEvent", "event-driven"]
+wiki_status: mature
+wiki_sources:
+  - docs/architecture/README.md
+  - docs/architecture/overview.yaml
+wiki_updated: 2026-05-13
+wiki_domain: документация
+tags: [паттерн, async, generator, event-driven]
 ---
 
-# AsyncGenerator / Event-Driven Stream (RunEvent)
+# AsyncGenerator Event Stream
 
-Архитектурный паттерн передачи событий между слоями плагина: каждая операция (ingest, query, lint и др.) реализована как `AsyncGenerator<RunEvent>`, что позволяет транслировать события в реальном времени в UI без колбэков и разделяемого состояния.
+Операции возвращают `AsyncGenerator<RunEvent>`. Это позволяет передавать события в реальном времени в UI без колбэков и SharedState.
 
-## Основные характеристики
+## Принцип
 
-- **Тип события:** `RunEvent` (определён в `src/types.ts`)
-- **Производители:** файлы в `src/phases/` — каждая фаза возвращает `AsyncGenerator<RunEvent>`
-- **Потребитель:** [[wiki-controller|WikiController]] итерирует события через `for await` и передаёт в `LlmWikiView.appendEvent(ev)`
-- **Преимущество:** live-рендер в боковой панели без polling и SharedState
+Каждая фаза (`src/phases/*.ts`) — чистый AsyncGenerator:
 
-## Применение в контексте obsidian-llm-wiki
+```ts
+export async function* runIngest(
+  args: string[], vaultTools: VaultTools, llm: LlmClient,
+  model: string, domains: DomainEntry[], vaultRoot: string,
+  signal: AbortSignal, opts: LlmCallOptions
+): AsyncGenerator<RunEvent> {
+  // ...
+  yield { kind: "assistant_text", delta: "..." };
+  // ...
+  yield { kind: "result", durationMs: ..., text: ... };
+}
+```
 
-Поток данных: `phases/*` → `AgentRunner` → `WikiController` → `LlmWikiView`. На каждое событие view обновляет UI. Специальные события (`domain_created`, `source_path_added`) перехватываются контроллером для обновления settings.
+`AgentRunner.run()` делегирует `yield*` в нужную фазу. `WikiController` итерирует генератор через `for await` и передаёт каждый `RunEvent` в `View.appendEvent()`.
+
+## Типы RunEvent
+
+| kind | Содержимое |
+|---|---|
+| `assistant_text` | `{ delta: string; isReasoning?: boolean }` |
+| `result` | `{ durationMs: number; text: string; isError?: boolean }` |
+| `error` | `{ message: string }` |
+| `domain_created` | `{ entry: DomainEntry }` |
+| `source_path_added` | `{ domainId: string; paths: string[] }` |
+| `format_preview` | `{ tempPath: string; report: string; missingTokens: string[] }` |
+| `format_applied` | `{ path: string }` |
+| `format_cancelled` | `{}` |
+
+## Нет глобального состояния
+
+Фазы не имеют мутируемого состояния модуля. Все данные передаются через параметры. Это позволяет легко тестировать — фаза = чистая функция с side effects через `vaultTools`.
+
+## Связанные страницы
+
+- [[agent-runner]]
+- [[поток-выполнения-операции]]

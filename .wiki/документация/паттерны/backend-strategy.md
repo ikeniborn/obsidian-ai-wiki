@@ -1,30 +1,63 @@
 ---
-wiki_sources: ["docs/architecture/README.md", "docs/architecture/overview.yaml", "docs/architecture/diagrams/data-flow.md"]
-wiki_updated: 2026-05-06
-wiki_status: stub
-wiki_outgoing_links:
-  - "[[архитектура-плагина]]"
-  - "[[claude-cli-client]]"
-wiki_external_links: []
-tags: ["docs", "architecture", "obsidian-llm-wiki"]
-aliases: ["Backend Strategy Pattern", "LlmClient", "strategy pattern", "бэкенд"]
+wiki_status: mature
+wiki_sources:
+  - docs/architecture/README.md
+  - docs/architecture/overview.yaml
+  - docs/architecture/diagrams/data-flow.md
+  - docs/superpowers/specs/2026-04-29-claude-agent-backend-design.md
+wiki_updated: 2026-05-13
+wiki_domain: документация
+tags: [паттерн, strategy, backend, LlmClient]
 ---
 
-# Backend Strategy Pattern (LlmClient)
+# Backend Strategy Pattern
 
-Паттерн Strategy для абстракции LLM-бэкенда в obsidian-llm-wiki. `LlmClient` — тонкий интерфейс с единственным полем `chat.completions.create`, совместимый с OpenAI SDK. Две реализации взаимозаменяемы и выбираются через настройку `settings.backend`.
+`LlmClient` — тонкий интерфейс (одно поле `chat.completions.create`). Две реализации взаимозаменяемы — фазы не знают, с каким backend работают.
 
-## Основные характеристики
+## Интерфейс LlmClient
 
-| Реализация | Описание | Протокол |
-|-----------|----------|----------|
-| [[claude-cli-client\|ClaudeCliClient]] | spawn iclaude.sh, readline по stdout, SIGTERM/SIGKILL | stream-json (parseStreamLine()) |
-| `new OpenAI(...)` | прямое подключение к OpenAI-совместимому API | OpenAI streaming API (ChatCompletionChunk) |
+```ts
+export type LlmClient = {
+  chat: {
+    completions: {
+      create(params: ChatCompletionCreateParamsStreaming, opts?: { signal?: AbortSignal }):
+        Promise<AsyncIterable<ChatCompletionChunk>>;
+      create(params: ChatCompletionCreateParamsNonStreaming, opts?: { signal?: AbortSignal }):
+        Promise<ChatCompletion>;
+    };
+  };
+};
+```
 
-- **Интерфейс:** `LlmClient` — одно поле `chat.completions.create`
-- **Выбор бэкенда:** `settings.backend` (`"claude-agent"` | `"native-agent"`)
-- **Абстракция:** фазы (phases/) работают с `LlmClient`, не зависят от конкретного бэкенда
+`OpenAI` из npm удовлетворяет этому типу структурно. `ClaudeCliClient` реализует явно.
 
-## Применение в контексте obsidian-llm-wiki
+## Реализации
 
-`AgentRunner` получает нужный клиент от `WikiController` и передаёт его в фазы. Фазы вызывают `llm.chat.completions.create(...)` — и не знают, через CLI или HTTP это выполняется.
+| Backend | Класс | Транспорт |
+|---|---|---|
+| `claude-agent` | `ClaudeCliClient` | spawn iclaude.sh, stream-json stdout |
+| `native-agent` | `new OpenAI(...)` | HTTP API (Ollama, OpenAI, OpenRouter) |
+
+## Выбор реализации
+
+В `WikiController.buildAgentRunner()`:
+
+```ts
+const llm: LlmClient = settings.backend === "claude-agent"
+  ? new ClaudeCliClient(settings.claudeAgent)
+  : new OpenAI({ baseURL, apiKey, dangerouslyAllowBrowser: true });
+```
+
+## Per-Device Settings Overlay
+
+`backend`, `iclaudePath`, `apiKey`, `baseUrl`, `model` хранятся в `local.json` (не синхронизируются через Obsidian Sync). `resolveEffective(settings, local)` сливает overlay перед использованием. Цель: на каждом устройстве своя конфигурация backend.
+
+## Mobile
+
+На mobile `ClaudeCliClient` недоступен (`node:child_process` нет). При загрузке `backend: "claude-agent"` мигрирует → `"native-agent"`. Используется `mobileFetch` (`src/mobile-fetch.ts`) — `requestUrl`-backed fetch, обходит CORS для cloud-провайдеров.
+
+## Связанные страницы
+
+- [[claude-cli-client]]
+- [[agent-runner]]
+- [[wiki-controller]]

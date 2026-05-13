@@ -5,282 +5,97 @@
   "wiki_root": ".wiki",
   "domains": [
     {
-      "id": "планы",
-      "name": "Планы реализации",
-      "description": "Планы разработки фич obsidian-llm-wiki: задачи, архитектурные решения, цели",
-      "source_paths": [
-        "docs/superpowers/plans"
-      ],
-      "wiki_subfolder": "планы",
-      "entity_types": [
-        {
-          "type": "фича",
-          "description": "Функциональность или улучшение, описанное в плане",
-          "extraction_cues": [
-            "goal", "цель", "feature", "фича", "улучшение", "implementation",
-            "реализация", "добавить", "заменить", "внедрить", "поддержка"
-          ],
-          "min_mentions_for_page": 1,
-          "wiki_subfolder": "планы/фичи"
-        },
-        {
-          "type": "компонент",
-          "description": "Модуль или файл проекта, который затрагивается планом",
-          "extraction_cues": [
-            "src/", ".ts", "view.ts", "controller.ts", "agent-runner.ts", "stream.ts",
-            "settings.ts", "claude-cli-client.ts", "main.ts", "файл", "модуль", "компонент"
-          ],
-          "min_mentions_for_page": 2,
-          "wiki_subfolder": "планы/компоненты"
-        },
-        {
-          "type": "паттерн",
-          "description": "Архитектурный паттерн или технический подход, применяемый в планах",
-          "extraction_cues": [
-            "паттерн", "pattern", "архитектура", "architecture", "подход",
-            "approach", "design", "API", "protocol", "поток", "flow"
-          ],
-          "min_mentions_for_page": 2,
-          "wiki_subfolder": "планы/паттерны"
-        }
-      ],
-      "tags": [
-        "planning",
-        "implementation",
-        "obsidian-llm-wiki",
-        "typescript"
-      ],
-      "language_notes": "Планы на русском языке с английскими техническими терминами. Имена файлов и компонентов не переводятся. Технические API (Obsidian ItemView API, DOM-методы) используются как есть."
-    },
-    {
-      "id": "спецификации",
-      "name": "Спецификации дизайна",
-      "description": "Дизайн-спеки фич obsidian-llm-wiki: архитектурные решения, протоколы, UI-изменения, интеграции",
-      "source_paths": [
-        "docs/superpowers/specs"
-      ],
-      "wiki_subfolder": "спецификации",
-      "entity_types": [
-        {
-          "type": "фича",
-          "description": "Функциональность или улучшение, описанное в спеке",
-          "extraction_cues": [
-            "цель", "goal", "feature", "фича", "улучшение", "решение", "solution",
-            "добавить", "заменить", "внедрить", "поддержка", "design", "дизайн"
-          ],
-          "min_mentions_for_page": 1,
-          "wiki_subfolder": "спецификации/фичи"
-        },
-        {
-          "type": "компонент",
-          "description": "Модуль или файл проекта, изменяемый по спеке",
-          "extraction_cues": [
-            "src/", ".ts", "view.ts", "controller.ts", "agent-runner.ts", "stream.ts",
-            "settings.ts", "claude-cli-client.ts", "phases/", "modals.ts",
-            "файл", "модуль", "компонент"
-          ],
-          "min_mentions_for_page": 2,
-          "wiki_subfolder": "спецификации/компоненты"
-        },
-        {
-          "type": "паттерн",
-          "description": "Архитектурный паттерн или технический подход из спеки",
-          "extraction_cues": [
-            "паттерн", "pattern", "архитектура", "architecture", "подход",
-            "approach", "design", "API", "protocol", "поток", "flow", "backend", "интерфейс"
-          ],
-          "min_mentions_for_page": 2,
-          "wiki_subfolder": "спецификации/паттерны"
-        }
-      ],
-      "tags": [
-        "specs",
-        "design",
-        "obsidian-llm-wiki",
-        "typescript"
-      ],
-      "language_notes": "Спеки на русском языке с английскими техническими терминами. Имена файлов, компонентов и API не переводятся."
-    },
-    {
       "id": "документация",
-      "name": "Документация проекта",
-      "description": "Документация obsidian-llm-wiki: руководства для разработчиков, архитектурные описания, процесс публикации, оптимизация промптов",
-      "source_paths": [
-        "docs"
-      ],
+      "name": "Документация obsidian-llm-wiki",
+      "source_paths": ["docs"],
       "wiki_subfolder": "документация",
+      "tags": ["obsidian", "plugin", "typescript"],
+      "language_notes": "ru/en смешанный — термины TypeScript/Obsidian оставлять на английском",
       "entity_types": [
         {
-          "type": "руководство",
-          "description": "Практическое руководство или инструкция по процессу (сборка, публикация, разработка)",
-          "extraction_cues": [
-            "как", "шаги", "процесс", "чеклист", "установка", "сборка", "запуск",
-            "публикация", "релиз", "workflow", "guide", "руководство", "инструкция"
-          ],
-          "min_mentions_for_page": 1,
-          "wiki_subfolder": "документация/руководства"
-        },
-        {
           "type": "компонент",
-          "description": "Архитектурный компонент или модуль плагина, описанный в документации",
-          "extraction_cues": [
-            "src/", ".ts", "controller", "runner", "view", "phases", "stream",
-            "cli-client", "vault-tools", "domain-map", "modals", "settings", "модуль", "компонент"
-          ],
+          "description": "TypeScript-модуль или класс плагина (WikiController, AgentRunner, LlmWikiView и т.д.)",
+          "extraction_cues": ["controller", "runner", "view", "client", "phase", "модуль", "класс", "src/", ".ts", "export class", "export function"],
           "min_mentions_for_page": 2,
           "wiki_subfolder": "документация/компоненты"
         },
         {
-          "type": "паттерн",
-          "description": "Архитектурный паттерн, применяемый в плагине",
-          "extraction_cues": [
-            "паттерн", "pattern", "single-flight", "AsyncGenerator", "Strategy",
-            "layered", "event-driven", "архитектура", "подход", "design"
-          ],
+          "type": "операция",
+          "description": "Wiki-операция плагина (ingest, query, lint, fix, init, chat, format)",
+          "extraction_cues": ["ingest", "query", "query-save", "lint", "fix", "init", "chat", "format", "operation", "операция", "dispatch"],
           "min_mentions_for_page": 1,
+          "wiki_subfolder": "документация/операции"
+        },
+        {
+          "type": "паттерн",
+          "description": "Архитектурный паттерн или техническое решение (Single-Flight, AsyncGenerator, Backend Strategy, Per-Device Settings и т.д.)",
+          "extraction_cues": ["pattern", "паттерн", "single-flight", "async generator", "strategy", "guard", "overlay", "migration", "решение"],
+          "min_mentions_for_page": 2,
           "wiki_subfolder": "документация/паттерны"
         },
         {
-          "type": "операция",
-          "description": "Операция плагина LLM Wiki (ingest, query, lint, fix, init, chat)",
-          "extraction_cues": [
-            "ingest", "query", "lint", "fix", "init", "chat", "операция", "operation",
-            "timeout", "default_timeout"
-          ],
+          "type": "спецификация",
+          "description": "Дизайн-документ или спецификация функциональности (specs/)",
+          "extraction_cues": ["design", "spec", "спецификация", "дизайн", "цель", "архитектура", "ux-поток", "контракт", "§"],
           "min_mentions_for_page": 1,
-          "wiki_subfolder": "документация/операции"
+          "wiki_subfolder": "документация/спецификации"
+        },
+        {
+          "type": "план",
+          "description": "Реализационный план задачи (plans/)",
+          "extraction_cues": ["plan", "план", "task", "step", "- [ ]", "реализация", "implementation", "goal"],
+          "min_mentions_for_page": 1,
+          "wiki_subfolder": "документация/планы"
         }
       ],
-      "tags": [
-        "docs",
-        "architecture",
-        "obsidian-llm-wiki",
-        "typescript"
-      ],
-      "language_notes": "Документация на русском языке с английскими техническими терминами. Имена файлов, компонентов, паттернов и CLI-команд не переводятся."
-    },
-    {
-      "id": "скрипты",
-      "name": "Вспомогательные скрипты",
-      "description": "Вспомогательные скрипты проекта obsidian-llm-wiki: DSPy-оптимизатор промптов, утилиты, инструменты разработки",
-      "source_paths": [
-        "scripts"
-      ],
-      "wiki_subfolder": "скрипты",
-      "entity_types": [
-        {
-          "type": "модуль",
-          "description": "Python-модуль или скрипт с конкретной функциональностью",
-          "extraction_cues": [
-            "def ", "class ", "import ", ".py", "модуль", "функция", "loader",
-            "optimizer", "writer", "backend", "signature", "optimize"
-          ],
-          "min_mentions_for_page": 1,
-          "wiki_subfolder": "скрипты/модули"
-        },
-        {
-          "type": "конфигурация",
-          "description": "Переменные окружения, настройки запуска, зависимости скрипта",
-          "extraction_cues": [
-            "env", ".env", "pyproject", "DSPY_BACKEND", "OLLAMA_MODEL", "DEV_LOG_PATH",
-            "PROMPTS_DIR", "OUTPUT_DIR", "MIN_EXAMPLES", "настройка", "config"
-          ],
-          "min_mentions_for_page": 1,
-          "wiki_subfolder": "скрипты/конфигурация"
-        },
-        {
-          "type": "пайплайн",
-          "description": "Рабочий процесс или поток данных в скрипте",
-          "extraction_cues": [
-            "pipeline", "пайплайн", "поток", "load_examples", "run_mipro", "write_optimized",
-            "make_lm", "flow", "chain", "шаги", "алгоритм"
-          ],
-          "min_mentions_for_page": 1,
-          "wiki_subfolder": "скрипты/пайплайны"
-        }
-      ],
-      "tags": [
-        "scripts",
-        "dspy",
-        "python",
-        "optimization"
-      ],
-      "language_notes": "Исходники на Python, документация на русском. Технические термины (DSPy, MIPROv2, JSONL, LM) не переводятся. Имена модулей и переменных окружения сохраняются в оригинальном виде."
-    },
-    {
-      "id": "реализация",
-      "name": "Реализация плагина",
-      "description": "Исходный код obsidian-llm-wiki: TypeScript-модули, фазовые функции, промпты, тесты",
-      "source_paths": [
-        "src",
-        "prompts",
-        "tests"
-      ],
-      "wiki_subfolder": "реализация",
-      "entity_types": [
-        {
-          "type": "модуль",
-          "description": "TypeScript-файл с конкретной функциональностью (src/*.ts или src/phases/*.ts)",
-          "extraction_cues": [
-            "export class", "export function", "export interface", "import", ".ts",
-            "src/", "phases/", "модуль", "компонент", "файл", "класс", "функция"
-          ],
-          "min_mentions_for_page": 2,
-          "wiki_subfolder": "реализация/модули"
-        },
-        {
-          "type": "фаза",
-          "description": "Асинхронная фазовая функция операции wiki (runIngest, runQuery, runLint и т.д.)",
-          "extraction_cues": [
-            "runIngest", "runQuery", "runLint", "runInit", "runFix", "runLintChat",
-            "AsyncGenerator", "RunEvent", "фаза", "операция", "yield"
-          ],
-          "min_mentions_for_page": 1,
-          "wiki_subfolder": "реализация/фазы"
-        },
-        {
-          "type": "тип",
-          "description": "TypeScript интерфейс или тип данных, описывающий контракт системы",
-          "extraction_cues": [
-            "interface", "type ", "RunEvent", "LlmClient", "DomainEntry", "VaultAdapter",
-            "WikiOperation", "LlmWikiPluginSettings", "RunRequest", "контракт", "тип"
-          ],
-          "min_mentions_for_page": 2,
-          "wiki_subfolder": "реализация/типы"
-        },
-        {
-          "type": "промпт",
-          "description": "Шаблон промпта для LLM, встраиваемый через esbuild text-loader",
-          "extraction_cues": [
-            ".md", "промпт", "template", "шаблон", "{{", "system prompt", "prompts/",
-            "ingest.md", "query.md", "lint.md", "init.md", "base.md", "fix.md"
-          ],
-          "min_mentions_for_page": 1,
-          "wiki_subfolder": "реализация/промпты"
-        },
-        {
-          "type": "тест",
-          "description": "Набор тестов для модуля или фазы (Vitest, integration, unit)",
-          "extraction_cues": [
-            "describe", "it(", "expect", "vitest", "test.ts", "integration.test",
-            "vi.fn", "mock", "тест", "spec", "fixture"
-          ],
-          "min_mentions_for_page": 1,
-          "wiki_subfolder": "реализация/тесты"
-        }
-      ],
-      "tags": [
-        "implementation",
-        "typescript",
-        "obsidian-llm-wiki",
-        "source-code"
-      ],
-      "language_notes": "Источники на TypeScript, документация на русском. Имена файлов, функций, интерфейсов и методов не переводятся. Технические термины (AsyncGenerator, RunEvent, LlmClient, VaultTools) используются как есть."
+      "cross_domain_refs": []
     }
   ],
   "cross_domain_rules": {
     "description": "Правила для сущностей, встречающихся в нескольких доменах",
     "rules": []
   },
-  "special_source_types": {}
+  "special_source_types": {},
+  "source_types": {
+    ".md": {
+      "reader": "markdown",
+      "extract": ["narrative", "frontmatter", "code_blocks", "headings"],
+      "rules_file": "rules/readers/markdown.md"
+    },
+    ".py": {
+      "reader": "python",
+      "extract": ["public_api", "docstrings", "types", "imports"],
+      "rules_file": "rules/readers/python.md"
+    },
+    ".ts": {
+      "reader": "typescript",
+      "extract": ["public_api", "docstrings", "types", "imports"],
+      "rules_file": "rules/readers/typescript.md"
+    },
+    ".tsx": {
+      "reader": "typescript",
+      "extract": ["public_api", "docstrings", "types", "imports"],
+      "rules_file": "rules/readers/typescript.md"
+    },
+    ".js": {
+      "reader": "javascript",
+      "extract": ["public_api", "docstrings", "imports"],
+      "rules_file": "rules/readers/javascript.md"
+    },
+    ".mjs": {
+      "reader": "javascript",
+      "extract": ["public_api", "docstrings", "imports"],
+      "rules_file": "rules/readers/javascript.md"
+    },
+    ".sh": {
+      "reader": "bash",
+      "extract": ["functions", "flags", "exports", "comments"],
+      "rules_file": "rules/readers/bash.md"
+    },
+    ".yaml": {
+      "reader": "markdown",
+      "extract": ["narrative", "headings"],
+      "rules_file": "rules/readers/markdown.md"
+    }
+  }
 }
