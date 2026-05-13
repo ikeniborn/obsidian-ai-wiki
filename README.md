@@ -1,3 +1,19 @@
+# AI Wiki — Obsidian Plugin
+
+Automatically builds and maintains a knowledge-base wiki from your notes using an LLM backend.
+
+**Key features:**
+- **Offline-first** — works with Ollama or any OpenAI-compatible server; data never leaves your machine
+- **Compounding knowledge** — each Ingest enriches the wiki; links and pages accumulate automatically
+- **Real-time transparency** — agent step progress visible live in the sidebar panel
+- **Dual backends** — Native Agent (Ollama / OpenAI) and Claude Agent; switchable in settings
+
+**Operations:** Ingest · Query · Lint · Fix · Init · Format · Chat
+
+**Requirements:** Obsidian 1.4+, desktop (mobile: Query only). For Claude Agent: [iclaude](https://github.com/ikeniborn/iclaude) CLI.
+
+---
+
 # AI Wiki — плагин Obsidian
 
 Автоматически строит и пополняет wiki-базу знаний из ваших заметок с помощью LLM.
