@@ -20,12 +20,27 @@ import type { LocalConfig, LocalConfigStore } from "./local-config";
 import type { LlmWikiPluginSettings } from "./types";
 import { FileErrorModal, ConfirmModal } from "./modals";
 import { domainWikiFolder } from "./wiki-path";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm } from "./utils/raw-frontmatter";
 
 function toVaultPath(vaultDir: string, savedPath: string): string | null {
   const abs = isAbsolute(savedPath) ? savedPath : join(vaultDir, savedPath);
   const rel = relative(vaultDir, abs);
   if (rel.startsWith("..") || isAbsolute(rel)) return null;
   return rel;
+}
+
+function patchWikiFields(originalContent: string, formattedContent: string): string {
+  const wikiUpdatedMatch = /^wiki_updated:[ \t]*(.+)$/m.exec(originalContent);
+  if (!wikiUpdatedMatch) return formattedContent;
+  const wikiUpdated = wikiUpdatedMatch[1].trim();
+  const wikiAddedMatch = /^wiki_added:[ \t]*(.+)$/m.exec(originalContent);
+  const wikiAdded = wikiAddedMatch?.[1].trim();
+  const wikiArticles = parseWikiArticlesFromFm(originalContent);
+  return upsertRawFrontmatter(formattedContent, {
+    wiki_added: wikiAdded,
+    wiki_updated: wikiUpdated,
+    wiki_articles: wikiArticles,
+  });
 }
 
 export class WikiController {
@@ -111,24 +126,28 @@ export class WikiController {
         if (await adapter.exists(deprecatedPath)) {
           throw new Error(`${deprecatedPath} уже существует — удалите вручную или примените delete-old`);
         }
+        const originalContent = await adapter.read(p.originalPath);
+        const formattedContent = await adapter.read(p.tempPath);
+        const patched = patchWikiFields(originalContent, formattedContent);
         if (adapter.rename) {
+          await adapter.write(p.tempPath, patched);
           await adapter.rename(p.originalPath, deprecatedPath);
           await adapter.rename(p.tempPath, p.originalPath);
         } else {
           // fallback: read+write+remove
-          const old = await adapter.read(p.originalPath);
-          await adapter.write(deprecatedPath, old);
-          const fresh = await adapter.read(p.tempPath);
-          await adapter.write(p.originalPath, fresh);
+          await adapter.write(deprecatedPath, originalContent);
+          await adapter.write(p.originalPath, patched);
           await this.app.vault.adapter.remove(p.tempPath);
         }
       } else {
+        const originalContent = await adapter.read(p.originalPath);
         const content = await adapter.read(p.tempPath);
+        const patched = patchWikiFields(originalContent, content);
         const origFile = this.app.vault.getAbstractFileByPath(p.originalPath);
         if (origFile instanceof TFile) {
-          await this.app.vault.modify(origFile, content);
+          await this.app.vault.modify(origFile, patched);
         } else {
-          await adapter.write(p.originalPath, content);
+          await adapter.write(p.originalPath, patched);
         }
         await this.app.vault.adapter.remove(p.tempPath);
       }

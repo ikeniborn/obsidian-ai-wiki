@@ -97,11 +97,84 @@ describe("WikiController formatApply / formatCancel / formatRefine", () => {
     (ctrl as unknown as { _pendingFormat: unknown })._pendingFormat = {
       originalPath: "x.md", tempPath: "!Temp/x.formatted.md", chat: [],
     };
-    (app.vault.adapter.read as ReturnType<typeof vi.fn>).mockResolvedValueOnce("ОТФОРМАТИРОВАНО");
-    await ctrl.formatApply();
+    // First read: original (no wiki fields) → patch is no-op
+    // Second read: temp (formatted content)
+    (app.vault.adapter.read as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("")
+      .mockResolvedValueOnce("ОТФОРМАТИРОВАНО");
+    await ctrl.formatApply(false);
     expect(app.vault.adapter.write).toHaveBeenCalledWith("x.md", "ОТФОРМАТИРОВАНО");
     expect(app.vault.adapter.remove).toHaveBeenCalledWith("!Temp/x.formatted.md");
     expect((ctrl as unknown as { _pendingFormat: unknown })._pendingFormat).toBeNull();
+  });
+
+  it("formatApply(replace) сохраняет wiki_* поля из оригинала", async () => {
+    const { ctrl, app } = build();
+    (ctrl as unknown as { _pendingFormat: unknown })._pendingFormat = {
+      originalPath: "x.md", tempPath: "!Temp/x.formatted.md", chat: [],
+    };
+    const original = [
+      "---",
+      "wiki_added: 2026-01-01",
+      "wiki_updated: 2026-05-01",
+      "wiki_articles:",
+      '  - "[[AI]]"',
+      "---",
+      "Старый текст",
+    ].join("\n");
+    const formatted = "---\ntags:\n  - note\n---\nНовый текст";
+    (app.vault.adapter.read as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(original)
+      .mockResolvedValueOnce(formatted);
+    await ctrl.formatApply(false);
+    const written = (app.vault.adapter.write as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+    expect(written).toContain("wiki_updated: 2026-05-01");
+    expect(written).toContain("wiki_added: 2026-01-01");
+    expect(written).toContain("[[AI]]");
+    expect(written).toContain("Новый текст");
+  });
+
+  it("formatApply(replace) без wiki_* в оригинале — контент без изменений", async () => {
+    const { ctrl, app } = build();
+    (ctrl as unknown as { _pendingFormat: unknown })._pendingFormat = {
+      originalPath: "x.md", tempPath: "!Temp/x.formatted.md", chat: [],
+    };
+    const original = "---\ntags:\n  - note\n---\nОригинал";
+    const formatted = "---\ntags:\n  - note\n---\nОтформатировано";
+    (app.vault.adapter.read as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(original)
+      .mockResolvedValueOnce(formatted);
+    await ctrl.formatApply(false);
+    expect(app.vault.adapter.write).toHaveBeenCalledWith("x.md", formatted);
+  });
+
+  it("formatApply(keepOld) сохраняет wiki_* поля (fallback read+write+remove)", async () => {
+    const { ctrl, app } = build();
+    (ctrl as unknown as { _pendingFormat: unknown })._pendingFormat = {
+      originalPath: "x.md", tempPath: "!Temp/x.formatted.md", chat: [],
+    };
+    (app.vault.adapter.exists as ReturnType<typeof vi.fn>).mockResolvedValueOnce(false);
+    const original = [
+      "---",
+      "wiki_updated: 2026-05-01",
+      "wiki_articles:",
+      '  - "[[AI]]"',
+      "---",
+      "Старый",
+    ].join("\n");
+    const formatted = "---\ntags:\n  - note\n---\nНовый";
+    (app.vault.adapter.read as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(original)   // p.originalPath
+      .mockResolvedValueOnce(formatted); // p.tempPath
+    await ctrl.formatApply(true);
+    const writeCalls = (app.vault.adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
+    const toOriginal = writeCalls.find(([path]) => path === "x.md");
+    expect(toOriginal?.[1]).toContain("wiki_updated: 2026-05-01");
+    expect(toOriginal?.[1]).toContain("[[AI]]");
+    expect(toOriginal?.[1]).toContain("Новый");
+    // deprecated file gets the unmodified original
+    const toDeprecated = writeCalls.find(([path]) => path === "x.deprecated.md");
+    expect(toDeprecated?.[1]).toBe(original);
   });
 
   it("formatCancel удаляет temp без изменения оригинала", async () => {
