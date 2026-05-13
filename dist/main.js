@@ -23011,6 +23011,16 @@ function lemmas(token) {
     out.push(token + "s");
   return out;
 }
+function appendMissingLines(formatted, missing) {
+  const lines = [...new Set(missing.filter((m) => m.context !== "").map((m) => m.context))];
+  if (lines.length === 0)
+    return formatted;
+  return `${formatted}
+
+---
+<!-- restored-lines: token loss after retry -->
+${lines.join("\n")}`;
+}
 function missingTokensWithContext(original, formatted) {
   const orig = significantTokens(original);
   const fmtLower = formatted.toLowerCase();
@@ -23162,15 +23172,43 @@ ${original}`;
   const dir = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "";
   const baseName = (lastSlash >= 0 ? filePath.slice(lastSlash + 1) : filePath).replace(/\.md$/, "") || "page";
   const tempPath = dir ? `${dir}/${baseName}.formatted.md` : `${baseName}.formatted.md`;
+  let finalFormatted = parsed.formatted;
+  let finalReport = parsed.report;
+  const missing1 = missingTokensWithContext(original, parsed.formatted);
+  if (missing1.length > 0 && !signal.aborted) {
+    const tokenList = missing1.map((m) => `\`${m.token}\``).join(", ");
+    const restoreMessages = [
+      ...messages,
+      { role: "assistant", content: fullText },
+      {
+        role: "user",
+        content: `\u0412\u041E\u0421\u0421\u0422\u0410\u041D\u041E\u0412\u0418 \u0422\u041E\u041A\u0415\u041D\u042B: \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u0438\u0437 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u0430 \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0442 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u043E\u043C \u0442\u0435\u043A\u0441\u0442\u0435. \u0412\u0435\u0440\u043D\u0438 \u043F\u043E\u043B\u043D\u044B\u0439 JSON {report, formatted} \u0433\u0434\u0435 formatted \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0432\u0441\u0435 \u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u0435\u043D\u043D\u044B\u0435 \u0442\u043E\u043A\u0435\u043D\u044B \u0431\u0435\u0437 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F \u043E\u0441\u0442\u0430\u043B\u044C\u043D\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430.
+\u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043D\u044B\u0435: ${tokenList}`
+      }
+    ];
+    const restoreParams = { ...buildChatParams(model, restoreMessages, opts), response_format: { type: "json_object" } };
+    const fullText2 = yield* callOnce(restoreParams);
+    if (!signal.aborted) {
+      const parsed2 = extractJsonObject(fullText2);
+      if (parsed2) {
+        finalFormatted = parsed2.formatted;
+        finalReport = parsed2.report;
+      }
+      const missing2 = missingTokensWithContext(original, finalFormatted);
+      if (missing2.length > 0) {
+        finalFormatted = appendMissingLines(finalFormatted, missing2);
+      }
+    }
+  }
   try {
-    await vaultTools.write(tempPath, parsed.formatted);
+    await vaultTools.write(tempPath, finalFormatted);
   } catch (e) {
     yield { kind: "error", message: `Format: \u0437\u0430\u043F\u0438\u0441\u044C \u0444\u043E\u0440\u043C\u0430\u0442\u0430 \u043D\u0435 \u0443\u0434\u0430\u043B\u0430\u0441\u044C \u2014 ${e.message}` };
     return;
   }
-  const missing = missingTokensWithContext(original, parsed.formatted);
-  yield { kind: "format_preview", tempPath, report: parsed.report, missingTokens: missing };
-  yield { kind: "result", durationMs: Date.now() - start, text: parsed.report };
+  const missingFinal = missingTokensWithContext(original, finalFormatted);
+  yield { kind: "format_preview", tempPath, report: finalReport, missingTokens: missingFinal };
+  yield { kind: "result", durationMs: Date.now() - start, text: finalReport };
 }
 
 // src/agent-runner.ts
