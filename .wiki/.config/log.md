@@ -76,3 +76,22 @@
 - документация/компоненты/format-utils.md (stub) — публичный API: `FormatResponse`, `MissingToken`, `extractJsonObject`, `looksTruncated`, `significantTokens`, `missingTokens`, `missingTokensWithContext`, `appendMissingLines`; алгоритмы token-extraction и lemmatization; поток использования в runFormat
 
 **Обновлено:** index.md (компоненты 4→5), log.md
+
+## 2026-05-14T00:00:00
+
+**Операция:** ingest
+**Источник:** README.md
+**Домен:** документация
+
+**Затронуто страниц:** 6
+
+- СОЗДАНА: `документация/операции/ingest-operation.md` (stub) — UX-поток, desktop-only
+- СОЗДАНА: `документация/операции/query-operation.md` (stub) — query + query-save, desktop+mobile
+- СОЗДАНА: `документация/операции/lint-operation.md` (stub) — проверка качества, desktop-only
+- СОЗДАНА: `документация/операции/init-operation.md` (stub) — инициализация домена, desktop-only
+- СОЗДАНА: `документация/операции/chat-operation.md` (stub) — интерактивный чат после Lint/Query
+- СОЗДАНА: `документация/паттерны/per-device-settings.md` (stub) — local.json для machine-specific путей
+
+**Примечание:** README.md вне source_paths["docs"], обработан по содержимому как документация домена
+
+---

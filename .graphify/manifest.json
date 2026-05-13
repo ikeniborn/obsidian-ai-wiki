@@ -12,8 +12,8 @@
     "hash": "ba2401a4ef1ad22740d670856cecb76e"
   },
   "esbuild.config.mjs": {
-    "mtime": 1778606071.9236655,
-    "hash": "7f03929e7eaaaa052482d0107acdfe9d"
+    "mtime": 1778706168.9357188,
+    "hash": "db4b76c07d0df2c562079f3af1a3702e"
   },
   "tests/local-config.test.ts": {
     "mtime": 1778618629.0741901,
@@ -256,8 +256,8 @@
     "hash": "1b4c7264a3e06ca33547f2d74de8bf52"
   },
   "src/modals.ts": {
-    "mtime": 1778679291.884479,
-    "hash": "51c48ce4069a58a6c9cfad90ba1c8a04"
+    "mtime": 1778706377.584247,
+    "hash": "56498d56052469613ddf5b251155a085"
   },
   "src/effective-settings.ts": {
     "mtime": 1778247828.75772,
@@ -320,16 +320,16 @@
     "hash": "c5476bbae7d8a6e79f6df1227009751c"
   },
   "src/claude-cli-client.ts": {
-    "mtime": 1778678884.9315586,
-    "hash": "78994dfe7456f860934c8f5f4fb0b172"
+    "mtime": 1778706168.8967192,
+    "hash": "7802ad1589930a2fb12cd4827a2a8264"
   },
   "src/types.ts": {
     "mtime": 1778619132.7027771,
     "hash": "d7bd05f4b40df4b18b42c35daac657c4"
   },
   "src/view.ts": {
-    "mtime": 1778678838.679617,
-    "hash": "aeb468c3d0db68ac6e7b377dbaaf8962"
+    "mtime": 1778706751.8078015,
+    "hash": "9b5dd95fa58c033ef84240f4b0fa1dac"
   },
   "src/stream.ts": {
     "mtime": 1778679222.4518447,
@@ -388,8 +388,8 @@
     "hash": "fefe13e8617726084fda7e95cc8832bc"
   },
   "README.md": {
-    "mtime": 1778672657.4613893,
-    "hash": "b6323394db0e5e809628aa8e9b419792"
+    "mtime": 1778706907.7269464,
+    "hash": "bba6ac7577330e1f34d4d846b507b6d3"
   },
   "prompts/evaluator.md": {
     "mtime": 1778002989.181896,

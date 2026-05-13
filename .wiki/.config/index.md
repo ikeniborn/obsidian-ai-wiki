@@ -13,15 +13,21 @@
 - [[llm-wiki-view]] — `документация/компоненты/llm-wiki-view.md`
 - [[format-utils]] — `документация/компоненты/format-utils.md`
 
-#### операции (3)
+#### операции (8)
 - [[format-operation]] — `документация/операции/format-operation.md`
 - [[fix-operation]] — `документация/операции/fix-operation.md`
 - [[поток-выполнения-операции]] — `документация/операции/поток-выполнения-операции.md`
+- [[ingest-operation]] — `документация/операции/ingest-operation.md`
+- [[query-operation]] — `документация/операции/query-operation.md`
+- [[lint-operation]] — `документация/операции/lint-operation.md`
+- [[init-operation]] — `документация/операции/init-operation.md`
+- [[chat-operation]] — `документация/операции/chat-operation.md`
 
-#### паттерны (3)
+#### паттерны (4)
 - [[single-flight-guard]] — `документация/паттерны/single-flight-guard.md`
 - [[async-generator-events]] — `документация/паттерны/async-generator-events.md`
 - [[backend-strategy]] — `документация/паттерны/backend-strategy.md`
+- [[per-device-settings]] — `документация/паттерны/per-device-settings.md`
 
 #### спецификации (4)
 - [[agent-base-contract]] — `документация/спецификации/agent-base-contract.md`
