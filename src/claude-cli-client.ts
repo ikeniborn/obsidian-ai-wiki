@@ -132,15 +132,15 @@ export class ClaudeCliClient implements LlmClient {
 
     const onAbort = () => {
       child.kill("SIGTERM");
-      setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, SIGTERM_GRACE_MS);
+      window.setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, SIGTERM_GRACE_MS);
     };
     if (signal?.aborted) { onAbort(); return; }
     signal?.addEventListener("abort", onAbort, { once: true });
 
-    const timeoutHandle = setTimeout(() => {
+    const timeoutHandle = window.setTimeout(() => {
       timedOut = true;
       child.kill("SIGTERM");
-      setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, SIGTERM_GRACE_MS);
+      window.setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, SIGTERM_GRACE_MS);
     }, timeoutSec * 1000);
 
     let timedOut = false;
@@ -207,12 +207,12 @@ export class ClaudeCliClient implements LlmClient {
         choices: [{ index: 0, delta: {} as OpenAI.Chat.ChatCompletionChunk.Choice.Delta, finish_reason: "stop" }],
       };
     } finally {
-      clearTimeout(timeoutHandle);
+      window.clearTimeout(timeoutHandle);
       signal?.removeEventListener("abort", onAbort);
       for (const f of tmpFiles) { try { this.cfg.tmpRemove(f); } catch { /* already gone */ } }
       if (child.exitCode === null) {
         child.kill("SIGTERM");
-        setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, SIGTERM_GRACE_MS);
+        window.setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, SIGTERM_GRACE_MS);
       }
     }
   }

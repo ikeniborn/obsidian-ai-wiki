@@ -1,4 +1,4 @@
-import { App, Modal, Setting, TFolder } from "obsidian";
+import { App, Modal, Setting, TFolder, activeDocument } from "obsidian";
 import type { AddDomainInput, DomainEntry, EntityType } from "./domain";
 import { i18n } from "./i18n";
 
@@ -68,7 +68,7 @@ export class QueryModal extends Modal {
         this.onSubmit(q);
       }),
     );
-    setTimeout(() => ta.focus(), 0);
+    window.setTimeout(() => ta.focus(), 0);
   }
   onClose(): void { this.contentEl.empty(); }
 }
@@ -135,7 +135,7 @@ function attachFolderDropdown(app: App, inputEl: HTMLInputElement, onSelect: (pa
     if (!folders.length) return;
 
     const rect = inputEl.getBoundingClientRect();
-    dropEl = document.body.createDiv({ cls: "ai-wiki-folder-dropdown" });
+    dropEl = activeDocument.body.createDiv({ cls: "ai-wiki-folder-dropdown" });
     dropEl.style.top = `${rect.bottom + window.scrollY}px`;
     dropEl.style.left = `${rect.left + window.scrollX}px`;
     dropEl.style.width = `${rect.width}px`;

@@ -1,4 +1,37 @@
 // Mock for obsidian module in tests
+
+// Global window mock for setTimeout/clearTimeout in tests
+if (typeof globalThis.window === "undefined") {
+  (globalThis as any).window = globalThis;
+}
+
+function makeEl() {
+  const el: any = {
+    empty: () => {},
+    createEl: (_tag: string, opts?: any) => makeElWithText(opts?.text ?? ""),
+    createDiv: (_opts?: any) => makeEl(),
+    addClass: () => {},
+    removeClass: () => {},
+    textContent: "",
+    value: "",
+    rows: 0,
+    addEventListener: () => {},
+    getBoundingClientRect: () => ({ top: 0, left: 0, bottom: 0, width: 0 }),
+  };
+  return el;
+}
+
+function makeElWithText(text: string) {
+  const el = makeEl();
+  el.textContent = text;
+  return el;
+}
+
+// activeDocument export for Obsidian compatibility
+export const activeDocument = {
+  body: makeEl(),
+};
+
 export class App {}
 
 export class Plugin {}
@@ -49,25 +82,6 @@ export function __clearNotices(): void {
   Notice.__messages.length = 0;
 }
 
-function makeEl() {
-  const el: any = {
-    empty: () => {},
-    createEl: (_tag: string, opts?: any) => makeElWithText(opts?.text ?? ""),
-    createDiv: (_opts?: any) => makeEl(),
-    addClass: () => {},
-    removeClass: () => {},
-    textContent: "",
-    value: "",
-    rows: 0,
-    addEventListener: () => {},
-  };
-  return el;
-}
-function makeElWithText(text: string) {
-  const el = makeEl();
-  el.textContent = text;
-  return el;
-}
 
 export class AbstractInputSuggest<T> {
   app: any;
