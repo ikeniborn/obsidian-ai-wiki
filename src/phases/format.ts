@@ -5,7 +5,7 @@ import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import formatTemplate from "../../prompts/format.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
-import { extractJsonObject, missingTokensWithContext, looksTruncated } from "./format-utils";
+import { extractJsonObject, missingTokensWithContext, looksTruncated, appendMissingLines } from "./format-utils";
 import { WIKI_ROOT } from "../wiki-path";
 
 function extractImagePaths(md: string): string[] {
@@ -146,14 +146,44 @@ export async function* runFormat(
   const baseName = (lastSlash >= 0 ? filePath.slice(lastSlash + 1) : filePath).replace(/\.md$/, "") || "page";
   const tempPath = dir ? `${dir}/${baseName}.formatted.md` : `${baseName}.formatted.md`;
 
+  // Token-retry: if first response lost tokens — one multi-turn correction call.
+  let finalFormatted = parsed.formatted;
+  let finalReport = parsed.report;
+  const missing1 = missingTokensWithContext(original, parsed.formatted);
+
+  if (missing1.length > 0 && !signal.aborted) {
+    const tokenList = missing1.map((m) => `\`${m.token}\``).join(", ");
+    const restoreMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      ...messages,
+      { role: "assistant", content: fullText },
+      {
+        role: "user",
+        content: `ВОССТАНОВИ ТОКЕНЫ: следующие значения из оригинала отсутствуют в форматированном тексте. Верни полный JSON {report, formatted} где formatted содержит все перечисленные токены без изменения форматирования остального текста.\nПропущенные: ${tokenList}`,
+      },
+    ];
+    const restoreParams = { ...buildChatParams(model, restoreMessages, opts), response_format: { type: "json_object" } };
+    const fullText2 = yield* callOnce(restoreParams);
+    if (!signal.aborted) {
+      const parsed2 = extractJsonObject(fullText2);
+      if (parsed2) {
+        finalFormatted = parsed2.formatted;
+        finalReport = parsed2.report;
+      }
+      const missing2 = missingTokensWithContext(original, finalFormatted);
+      if (missing2.length > 0) {
+        finalFormatted = appendMissingLines(finalFormatted, missing2);
+      }
+    }
+  }
+
   try {
-    await vaultTools.write(tempPath, parsed.formatted);
+    await vaultTools.write(tempPath, finalFormatted);
   } catch (e) {
     yield { kind: "error", message: `Format: запись формата не удалась — ${(e as Error).message}` };
     return;
   }
 
-  const missing = missingTokensWithContext(original, parsed.formatted);
-  yield { kind: "format_preview", tempPath, report: parsed.report, missingTokens: missing };
-  yield { kind: "result", durationMs: Date.now() - start, text: parsed.report };
+  const missingFinal = missingTokensWithContext(original, finalFormatted);
+  yield { kind: "format_preview", tempPath, report: finalReport, missingTokens: missingFinal };
+  yield { kind: "result", durationMs: Date.now() - start, text: finalReport };
 }

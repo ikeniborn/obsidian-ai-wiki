@@ -162,6 +162,12 @@ function lemmas(token: string): string[] {
   return out;
 }
 
+export function appendMissingLines(formatted: string, missing: MissingToken[]): string {
+  const lines = [...new Set(missing.filter((m) => m.context !== "").map((m) => m.context))];
+  if (lines.length === 0) return formatted;
+  return `${formatted}\n\n---\n<!-- restored-lines: token loss after retry -->\n${lines.join("\n")}`;
+}
+
 export function missingTokensWithContext(original: string, formatted: string): MissingToken[] {
   const orig = significantTokens(original);
   const fmtLower = formatted.toLowerCase();

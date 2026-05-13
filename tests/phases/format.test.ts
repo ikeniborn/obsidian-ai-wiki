@@ -35,9 +35,28 @@ async function collect<T>(gen: AsyncGenerator<T>): Promise<T[]> {
   const out: T[] = []; for await (const e of gen) out.push(e); return out;
 }
 
+function makeLlmSequence(responses: string[]): LlmClient {
+  let callCount = 0;
+  return {
+    chat: {
+      completions: {
+        create: vi.fn().mockImplementation(() => {
+          const response = responses[Math.min(callCount, responses.length - 1)];
+          callCount++;
+          return Promise.resolve({
+            [Symbol.asyncIterator]: async function* () {
+              yield { choices: [{ delta: { content: response }, finish_reason: null }] };
+            },
+          });
+        }),
+      },
+    },
+  } as unknown as LlmClient;
+}
+
 describe("runFormat", () => {
   it("парсит JSON, пишет temp, эмитит format_preview", async () => {
-    const formatted = "---\ntags: [db]\n---\n\n# Заметка про ClickHouse\n\nClickHouse 23.8 SQL https://clickhouse.com/docs `insertBatch`. Яндекс.";
+    const formatted = "---\ntags: [db]\n---\n\n# Заметка про ClickHouse\n\nClickHouse 23.8 SQL-диалект https://clickhouse.com/docs `insertBatch`. Яндекс. Replicated движок.";
     const json = JSON.stringify({ report: "## Изменения\n- frontmatter", formatted });
     const adapter = mockAdapter({ [FILE]: SAMPLE });
     const vt = new VaultTools(adapter, VAULT);
@@ -61,7 +80,7 @@ describe("runFormat", () => {
     expect(adapter.write).not.toHaveBeenCalled();
   });
 
-  it("validator: при потере значимых токенов добавляет их в missingTokens", async () => {
+  it("validator: при потере значимых токенов — appendMissingLines восстанавливает их в файл", async () => {
     const formatted = "# Заметка";
     const json = JSON.stringify({ report: "r", formatted });
     const adapter = mockAdapter({ [FILE]: SAMPLE });
@@ -69,9 +88,10 @@ describe("runFormat", () => {
     const events = await collect(
       runFormat([FILE], vt, makeLlm(json), "model", false, [], new AbortController().signal),
     );
-    const preview = events.find((e: unknown) => (e as { kind: string }).kind === "format_preview") as { missingTokens: { token: string; context: string }[] };
-    expect(preview.missingTokens.length).toBeGreaterThan(0);
-    expect(preview.missingTokens.map((m) => m.token)).toContain("https://clickhouse.com/docs");
+    // После token-retry + appendMissingLines токены восстановлены в файл
+    const written = (adapter.write as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+    expect(written).toContain("<!-- restored-lines: token loss after retry -->");
+    expect(written).toContain("https://clickhouse.com/docs");
   });
 
   it("сохраняет formatted рядом с исходником (вложенный путь)", async () => {
@@ -141,5 +161,58 @@ describe("runFormat", () => {
     const messages = callArgs.messages;
     expect(messages.some((m) => m.role === "user" && typeof m.content === "string" && m.content.includes("сделай таблицу"))).toBe(true);
     expect(messages.some((m) => m.role === "assistant")).toBe(true);
+  });
+
+  it("token-retry: LLM дропает токен в первом ответе, восстанавливает во втором", async () => {
+    // Первый ответ: formatted без URL
+    const formatted1 = "# Заметка про ClickHouse\n\nClickHouse 23.8 SQL.";
+    const json1 = JSON.stringify({ report: "r", formatted: formatted1 });
+    // Второй ответ (token-retry): formatted с URL
+    const formatted2 = "# Заметка про ClickHouse\n\nClickHouse 23.8 SQL https://clickhouse.com/docs `insertBatch`. Яндекс.";
+    const json2 = JSON.stringify({ report: "r2", formatted: formatted2 });
+
+    const adapter = mockAdapter({ [FILE]: SAMPLE });
+    const vt = new VaultTools(adapter, VAULT);
+    const llm = makeLlmSequence([json1, json2]);
+
+    const events = await collect(
+      runFormat([FILE], vt, llm, "model", false, [], new AbortController().signal),
+    );
+
+    // LLM вызван дважды
+    expect((llm.chat.completions.create as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2);
+
+    const preview = events.find((e: unknown) => (e as { kind: string }).kind === "format_preview") as {
+      missingTokens: { token: string }[];
+      tempPath: string;
+    };
+    expect(preview).toBeDefined();
+    // После retry URL должен быть восстановлен (не в missing)
+    expect(preview.missingTokens.map((m) => m.token)).not.toContain("https://clickhouse.com/docs");
+
+    // Записан результат второго ответа
+    expect(adapter.write).toHaveBeenCalledWith("note.formatted.md", expect.stringContaining("https://clickhouse.com/docs"));
+  });
+
+  it("token-retry: оба ответа дропают токен → restored-block добавлен в tempPath", async () => {
+    // Оба ответа: formatted без URL
+    const formatted1 = "# Заметка про ClickHouse\n\nClickHouse 23.8 SQL.";
+    const json1 = JSON.stringify({ report: "r", formatted: formatted1 });
+    const json2 = JSON.stringify({ report: "r2", formatted: formatted1 });
+
+    const adapter = mockAdapter({ [FILE]: SAMPLE });
+    const vt = new VaultTools(adapter, VAULT);
+    const llm = makeLlmSequence([json1, json2]);
+
+    const events = await collect(
+      runFormat([FILE], vt, llm, "model", false, [], new AbortController().signal),
+    );
+
+    expect((llm.chat.completions.create as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2);
+
+    // write вызван с restored-block
+    const written = (adapter.write as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+    expect(written).toContain("<!-- restored-lines: token loss after retry -->");
+    expect(written).toContain("https://clickhouse.com/docs");
   });
 });
