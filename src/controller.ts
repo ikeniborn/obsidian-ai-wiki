@@ -419,7 +419,8 @@ export class WikiController {
         } catch { /* ignore mkdir failures; will fail on actual write if needed */ }
       }
 
-      const fullAdapter = this.app.vault.adapter as any;
+      interface InternalAdapter { remove(p: string): Promise<void>; }
+      const fullAdapter = this.app.vault.adapter as unknown as InternalAdapter;
       const client = new ClaudeCliClient({
         ...s.claudeAgent,
         iclaudePath: local.iclaudePath,

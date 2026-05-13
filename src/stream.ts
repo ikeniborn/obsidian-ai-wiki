@@ -75,7 +75,7 @@ function mapUserToolResult(obj: Record<string, unknown>): RunEvent | null {
   if (!isRecord(msg)) return null;
   const content = msg.content;
   if (!Array.isArray(content)) return null;
-  const block = content[0];
+  const block: unknown = (content as unknown[])[0];
   if (!isRecord(block) || block.type !== "tool_result") return null;
   const isErr = Boolean(block.is_error);
   const preview = typeof block.content === "string" ? truncate(block.content, PREVIEW_MAX) : undefined;
