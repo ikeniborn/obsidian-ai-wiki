@@ -27,8 +27,7 @@ export default class LlmWikiPlugin extends Plugin {
 
     this.registerView(AI_WIKI_VIEW_TYPE, (leaf: WorkspaceLeaf) => new LlmWikiView(leaf, this));
 
-    // eslint-disable-next-line obsidianmd/ui/sentence-case -- "AI Wiki" is the plugin name (proper noun)
-    this.addRibbonIcon("brain-circuit", "AI Wiki", () => {
+    this.addRibbonIcon("brain-circuit", "AIWiki", () => {
       const leaves = this.app.workspace.getLeavesOfType(AI_WIKI_VIEW_TYPE);
       if (leaves.length > 0) {
         void this.app.workspace.revealLeaf(leaves[0]);

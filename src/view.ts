@@ -82,8 +82,7 @@ export class LlmWikiView extends ItemView {
   }
 
   getViewType(): string { return AI_WIKI_VIEW_TYPE; }
-  // eslint-disable-next-line obsidianmd/ui/sentence-case -- "AI Wiki" is the plugin name (proper noun)
-  getDisplayText(): string { return "AI Wiki"; }
+  getDisplayText(): string { return "AIWiki"; }
   getIcon(): string { return "brain-circuit"; }
 
   onOpen(): void {

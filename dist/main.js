@@ -147,7 +147,7 @@ var require_path_browserify = __commonJS({
           return ".";
         }
       },
-      normalize: function normalize(path2) {
+      normalize: function normalize2(path2) {
         assertPath(path2);
         if (path2.length === 0)
           return ".";
@@ -20780,7 +20780,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     const reportEl = this.formatPreviewSection.createDiv("ai-wiki-format-report");
     const comp = new import_obsidian4.Component();
     comp.load();
-    void import_obsidian4.MarkdownRenderer.render(this.app, report, reportEl, "", comp);
+    void import_obsidian4.MarkdownRenderer.render(this.app, report, reportEl, "", comp).then(() => sanitizeLinks(reportEl));
     if (missing.length > 0) {
       const warn = this.formatPreviewSection.createEl("details", { cls: "ai-wiki-format-warn" });
       const summary = warn.createEl("summary");
@@ -20845,6 +20845,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       const comp = new import_obsidian4.Component();
       comp.load();
       await import_obsidian4.MarkdownRenderer.render(this.app, entry.finalText, this.finalEl, "", comp);
+      sanitizeLinks(this.finalEl);
       this.resultSection.removeClass("ai-wiki-hidden");
       this.finalEl.removeClass("ai-wiki-hidden");
       this.resultOpen = true;
@@ -20901,7 +20902,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     } else {
       const comp = new import_obsidian4.Component();
       comp.load();
-      void import_obsidian4.MarkdownRenderer.render(this.app, text, el, "", comp);
+      void import_obsidian4.MarkdownRenderer.render(this.app, text, el, "", comp).then(() => sanitizeLinks(el));
       registerLinkHandler(el, this.app);
     }
     el.scrollIntoView({ block: "end" });
@@ -20958,7 +20959,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       } else {
         const comp = new import_obsidian4.Component();
         comp.load();
-        void import_obsidian4.MarkdownRenderer.render(this.app, msg.content, this.currentChatBubble, "", comp);
+        void import_obsidian4.MarkdownRenderer.render(this.app, msg.content, this.currentChatBubble, "", comp).then(() => sanitizeLinks(this.currentChatBubble));
         registerLinkHandler(this.currentChatBubble, this.app);
       }
       this.currentChatBubble = null;
@@ -21038,7 +21039,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
         this.finalEl.empty();
         const comp = new import_obsidian4.Component();
         comp.load();
-        void import_obsidian4.MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, "", comp);
+        void import_obsidian4.MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, "", comp).then(() => sanitizeLinks(this.finalEl));
         this.resultSection.removeClass("ai-wiki-hidden");
         this.finalEl.removeClass("ai-wiki-hidden");
         this.resultOpen = true;
@@ -21148,6 +21149,13 @@ function summariseInput(input) {
 }
 function truncate(s, n) {
   return s.length <= n ? s : s.slice(0, n) + "\u2026";
+}
+function sanitizeLinks(el) {
+  el.querySelectorAll("a[href]").forEach((a) => {
+    if (/^javascript:/i.test((a.getAttribute("href") ?? "").trim())) {
+      a.removeAttribute("href");
+    }
+  });
 }
 function translateSystemEvent(message) {
   const T = i18n().view;
@@ -22319,6 +22327,12 @@ async function* runFix(args, vaultTools, llm, model, domains, vaultRoot, signal,
   const writtenPaths = [];
   const errors = [];
   for (const page of fixedPages) {
+    if (!(0, import_path_browserify5.normalize)(page.path).startsWith(wikiVaultPath + "/")) {
+      yield { kind: "tool_use", name: "Write", input: { path: page.path } };
+      yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
+      errors.push(`${page.path}: blocked, outside wiki folder`);
+      continue;
+    }
     yield { kind: "tool_use", name: "Write", input: { path: page.path } };
     try {
       await vaultTools.write(page.path, page.content);

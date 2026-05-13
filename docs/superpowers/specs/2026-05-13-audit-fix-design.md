@@ -129,6 +129,17 @@ const existing: string = typeof updated[firstSystem].content === "string"
 (_, key: string) => vars[key] ?? `{{${key}}}`
 ```
 
+### 4f. Unnecessary type assertion (main.ts:191)
+
+`data` is already typed as `Record<string, unknown> | null` at line 118. The cast at line 191 is redundant:
+```ts
+// было
+const legacyLogPath = (data as Record<string, unknown> | null)?.agentLogPath;
+
+// стало
+const legacyLogPath = data?.agentLogPath;
+```
+
 ---
 
 ## 5. setInterval + network (no fix)
@@ -156,5 +167,5 @@ CI/CD topic, separate from code audit. Not addressed in this task.
 | minAppVersion | manifest.json ×2 | 3 | 0 |
 | sentence-case | main.ts, view.ts | 1 | 0 |
 | window APIs | claude-cli-client.ts, modals.ts | 0 | 6 |
-| TypeScript any | evaluator.ts, agent-runner.ts, ingest.ts, stream.ts, controller.ts, llm-utils.ts, template.ts, modals.ts | 0 | ~14 |
+| TypeScript any | evaluator.ts, agent-runner.ts, ingest.ts, stream.ts, controller.ts, llm-utils.ts, template.ts, modals.ts, main.ts | 0 | ~15 |
 | **Total** | **12 files** | **4** | **~20** |

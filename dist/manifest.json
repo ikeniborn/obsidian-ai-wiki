@@ -1,10 +1,10 @@
 {
-  "id": "ai-wiki",
-  "name": "AI Wiki",
-  "version": "0.1.83",
-  "minAppVersion": "1.0.0",
-  "description": "AI-powered compoundable knowledge base — extracts, synthesizes and maintains a wiki from raw sources.",
-  "author": "ikeniborn",
-  "authorUrl": "https://github.com/ikeniborn",
-  "isDesktopOnly": false
+	"id": "ai-wiki",
+	"name": "AI Wiki",
+	"version": "0.1.83",
+	"minAppVersion": "1.0.0",
+	"description": "AI-powered compoundable knowledge base — extracts, synthesizes and maintains a wiki from raw sources.",
+	"author": "ikeniborn",
+	"authorUrl": "https://github.com/ikeniborn",
+	"isDesktopOnly": false
 }

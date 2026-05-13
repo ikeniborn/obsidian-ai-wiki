@@ -3,9 +3,10 @@ wiki_status: developing
 wiki_sources:
   - docs/architecture/README.md
   - docs/architecture/overview.yaml
+  - src/view.ts
 wiki_updated: 2026-05-13
 wiki_domain: документация
-tags: [компонент, view, ui, obsidian]
+tags: [компонент, view, ui, obsidian, security]
 ---
 
 # LlmWikiView
@@ -24,7 +25,28 @@ tags: [компонент, view, ui, obsidian]
 | Progress section | Шаги операции (Read, Write, thinking) |
 | Result block | Итоговый текст и метрики |
 | Format preview | Отчёт об изменениях + Apply/Cancel/Refine chat |
+| Chat section | Чат-сессия после lint/ingest/query |
 | History | Список предыдущих запусков (лимит 20) |
+
+## XSS-защита: sanitizeLinks
+
+После каждого `MarkdownRenderer.render(…)` вызывается `sanitizeLinks(el)`:
+
+```ts
+function sanitizeLinks(el: HTMLElement): void {
+  el.querySelectorAll("a[href]").forEach((a) => {
+    if (/^javascript:/i.test((a.getAttribute("href") ?? "").trim())) {
+      a.removeAttribute("href");
+    }
+  });
+}
+```
+
+Удаляет `href` у всех ссылок с `javascript:` схемой. Применяется к: `finalEl` (result), чат-пузырям (`addChatBubble`), `currentChatBubble` при `finishChat`, format preview (`reportEl`, `formatPreviewSection`), history-записям.
+
+## registerLinkHandler
+
+Перехватывает клики по `.internal-link` и открывает через `app.workspace.openLinkText()`. Применяется к `finalEl` и format preview, чтобы WikiLinks открывались в Obsidian, а не как стандартные ссылки браузера.
 
 ## Mobile UI gating (v0.1.68)
 
@@ -34,9 +56,9 @@ tags: [компонент, view, ui, obsidian]
 
 При событии `format_preview` вызывается `renderFormatPreview(tempPath, report, missingTokens)`:
 - Ссылка на temp-файл (`!Temp/<name>.formatted.md`)
-- Markdown-отчёт об изменениях
+- Markdown-отчёт об изменениях (через `MarkdownRenderer.render` + `sanitizeLinks`)
 - Warning с раскрываемым `<details>` если `missingTokens.length > 0`
-- Кнопки Apply/Cancel
+- Кнопки Apply Replace / Apply Keep / Cancel
 - Чат-textarea для refine
 
 ## Связанные страницы
@@ -44,3 +66,4 @@ tags: [компонент, view, ui, obsidian]
 - [[wiki-controller]]
 - [[format-operation]]
 - [[async-generator-events]]
+- [[fix-operation]]
