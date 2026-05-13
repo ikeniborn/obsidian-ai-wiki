@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractJsonObject, significantTokens, missingTokens, missingTokensWithContext, looksTruncated } from "../../src/phases/format-utils";
+import { extractJsonObject, significantTokens, missingTokens, missingTokensWithContext, looksTruncated, appendMissingLines } from "../../src/phases/format-utils";
 
 describe("extractJsonObject", () => {
   it("парсит чистый JSON", () => {
@@ -174,5 +174,54 @@ describe("missingTokensWithContext", () => {
     const per = missing.find((m) => m.token === "PER");
     expect(per?.context.length).toBeLessThanOrEqual(120);
     expect(per?.context).toMatch(/…$/);
+  });
+});
+
+describe("appendMissingLines", () => {
+  it("дописывает restored-block с оригинальными строками", () => {
+    const formatted = "# Заголовок\n\nТекст.";
+    const missing = [
+      { token: "ClickHouse", context: "ClickHouse 23.8 — колоночная СУБД." },
+      { token: "https://a.b", context: "См. https://a.b/docs" },
+    ];
+    const result = appendMissingLines(formatted, missing);
+    expect(result).toContain("---\n<!-- restored-lines: token loss after retry -->");
+    expect(result).toContain("ClickHouse 23.8 — колоночная СУБД.");
+    expect(result).toContain("См. https://a.b/docs");
+  });
+
+  it("дедуплицирует строки-источники", () => {
+    const formatted = "# H";
+    const missing = [
+      { token: "API", context: "Строка с API и другими токенами" },
+      { token: "HTTP", context: "Строка с API и другими токенами" },
+    ];
+    const result = appendMissingLines(formatted, missing);
+    const count = (result.match(/Строка с API/g) ?? []).length;
+    expect(count).toBe(1);
+  });
+
+  it("пропускает токены с пустым context", () => {
+    const formatted = "# H";
+    const missing = [
+      { token: "API", context: "" },
+      { token: "URL", context: "" },
+    ];
+    const result = appendMissingLines(formatted, missing);
+    expect(result).toBe("# H");
+  });
+
+  it("если все context пустые — возвращает formatted без изменений", () => {
+    const formatted = "# H\n\nТекст.";
+    const result = appendMissingLines(formatted, [{ token: "X", context: "" }]);
+    expect(result).toBe("# H\n\nТекст.");
+  });
+
+  it("не мутирует входной formatted", () => {
+    const formatted = "# H";
+    const missing = [{ token: "API", context: "строка с API" }];
+    const before = formatted;
+    appendMissingLines(formatted, missing);
+    expect(formatted).toBe(before);
   });
 });
