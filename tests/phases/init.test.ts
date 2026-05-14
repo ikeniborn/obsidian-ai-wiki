@@ -432,3 +432,78 @@ describe("runInitWithSources — Phase 1 incremental", () => {
     expect(initStarts[1].phase).toBe("ingest");
   });
 });
+
+describe("runInitWithSources — error handling", () => {
+  const bootstrapJson = JSON.stringify({
+    id: "dom",
+    name: "Dom",
+    wiki_folder: "dom",
+    source_paths: [],
+    entity_types: [{ type: "concept", description: "Concept", extraction_cues: [] }],
+    language_notes: "",
+  });
+
+  it("skips unreadable file in Phase 1 and continues with next file", async () => {
+    const adapter = mockAdapter({
+      list: vi.fn().mockResolvedValue({ files: ["src/a.md", "src/b.md"], folders: [] }),
+      read: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "src/a.md") return "content a";
+        if (path === "src/b.md") throw new Error("Permission denied");
+        return "";
+      }),
+    });
+    const vt = new VaultTools(adapter, "/vault");
+    const events = await collect(
+      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson]), "model", [], "TestVault", new AbortController().signal),
+    );
+    // Should complete (reach result) and emit warning for b.md
+    const warnings = events.filter((e: any) => e.kind === "assistant_text" && e.delta?.includes("src/b.md")) as any[];
+    expect(warnings.length).toBeGreaterThan(0);
+    // Phase 1 should not abort — a result event must be present
+    const resultEvent = events.find((e: any) => e.kind === "result");
+    expect(resultEvent).toBeDefined();
+  });
+
+  it("skips file when LLM returns invalid JSON and does NOT add it to analyzed_sources", async () => {
+    const adapter = mockAdapterWithSources({ "src/a.md": "content a", "src/b.md": "content b" });
+    const vt = new VaultTools(adapter, "/vault");
+    const invalidJson = "not json at all";
+    const events = await collect(
+      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, invalidJson]), "model", [], "TestVault", new AbortController().signal),
+    );
+    const domainUpdatesWithSources = events.filter(
+      (e: any) => e.kind === "domain_updated" && Array.isArray(e.patch?.analyzed_sources)
+    ) as any[];
+    // b.md (invalid JSON) should NOT be in analyzed_sources
+    for (const upd of domainUpdatesWithSources) {
+      expect(upd.patch.analyzed_sources).not.toContain("src/b.md");
+    }
+  });
+
+  it("emits assistant_text truncation warning when file exceeds 8000 chars", async () => {
+    const longContent = "x".repeat(8_001);
+    const adapter = mockAdapterWithSources({ "src/a.md": longContent });
+    const vt = new VaultTools(adapter, "/vault");
+    const events = await collect(
+      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson]), "model", [], "TestVault", new AbortController().signal),
+    );
+    const warning = events.find(
+      (e: any) => e.kind === "assistant_text" && e.delta?.includes("truncated to 8 000 chars")
+    ) as any;
+    expect(warning).toBeDefined();
+    expect(warning.delta).toContain("src/a.md");
+  });
+
+  it("does NOT emit truncation warning when file is exactly 8000 chars", async () => {
+    const exactContent = "x".repeat(8_000);
+    const adapter = mockAdapterWithSources({ "src/a.md": exactContent });
+    const vt = new VaultTools(adapter, "/vault");
+    const events = await collect(
+      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson]), "model", [], "TestVault", new AbortController().signal),
+    );
+    const warning = events.find(
+      (e: any) => e.kind === "assistant_text" && e.delta?.includes("truncated to 8 000 chars")
+    );
+    expect(warning).toBeUndefined();
+  });
+});
