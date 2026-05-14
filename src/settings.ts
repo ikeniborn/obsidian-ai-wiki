@@ -319,6 +319,20 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           );
 
         new Setting(containerEl)
+          .setName("Structured Output")
+          .setDesc("json_object — valid JSON guaranteed (recommended). json_schema — schema-enforced + CoT (requires OpenAI / Qwen API). none — plain text + fallback parsing.")
+          .addDropdown((d) =>
+            d.addOption("json_object", "json_object (recommended)")
+              .addOption("json_schema", "json_schema — schema + CoT")
+              .addOption("none", "none — fallback only")
+              .setValue(s.nativeAgent.structuredOutput ?? "json_object")
+              .onChange(async (v) => {
+                s.nativeAgent.structuredOutput = v as "json_object" | "json_schema" | "none";
+                await this.plugin.saveSettings();
+              }),
+          );
+
+        new Setting(containerEl)
           .setName(T.settings.temperature_name)
           .setDesc(T.settings.temperature_desc)
           .addText((t) =>
