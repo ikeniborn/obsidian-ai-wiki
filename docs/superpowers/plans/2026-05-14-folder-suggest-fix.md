@@ -167,7 +167,8 @@ Expected: no output (all references removed).
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/modals.ts src/styles.css package.json src/manifest.json
+git add src/modals.ts src/styles.css package.json src/manifest.json \
+        dist/main.js dist/styles.css dist/manifest.json manifest.json
 git commit -m "fix(modals): replace attachFolderDropdown with AbstractInputSuggest
 
 Vault folder search in sourcePaths inputs stopped working due to
