@@ -12,11 +12,17 @@ Remove all hard-coded content truncation from LLM prompt construction. Replace t
 
 ### `src/phases/init.ts`
 
+**Initial system prompt (lines 73–92, before main loop):**
+- **Remove** `schemaContent.slice(0, 1500)` → `schemaContent` (line 76).
+- **Remove** `indexContent.slice(0, 1000)` → `indexContent` (line 77).
+- **Remove** `c.slice(0, 400)` on sample files content → `c` (line 89).
+
+**Main per-file loop:**
 - **Remove** lines 232–235: the `if (fileContent.length > 8_000)` warning block and `const truncated = fileContent.slice(0, 8_000)`.
-- **Add** informational log: `yield { kind: "assistant_text", delta: \`ℹ ${file}: ${fileContent.length} chars\n\` }` (always, not conditional).
+- **Add** informational log (always, not conditional): `yield { kind: "assistant_text", delta: \`ℹ ${file}: ${fileContent.length} chars\n\` }`.
 - **Replace** all `truncated` references with `fileContent`.
-- **Remove** `schemaContent.slice(0, 1500)` → `schemaContent`.
-- **Remove** `indexContent.slice(0, 1000)` → `indexContent`.
+- **Remove** `schemaContent.slice(0, 1500)` → `schemaContent` (line 242).
+- **Remove** `indexContent.slice(0, 1000)` → `indexContent` (line 243).
 
 ### `src/phases/ingest.ts`
 
@@ -34,6 +40,7 @@ Remove all hard-coded content truncation from LLM prompt construction. Replace t
 
 - **Remove** `schemaContent.slice(0, 2000)` → `schemaContent`.
 - **Remove** `indexContent.slice(0, 3000)` → `indexContent`.
+- **Refactor** `buildContextBlock` (lines 193–219): remove `maxChars` parameter entirely. Remove the `break` on line 211 and the `.slice(0, maxChars)` fallback on line 216. All selected wiki pages are included without limit. Update the call site to drop the `maxChars` argument.
 
 ## Out of Scope
 
@@ -43,7 +50,8 @@ Remove all hard-coded content truncation from LLM prompt construction. Replace t
 
 ## Success Criteria
 
-- No `.slice(0, N)` calls remain in LLM prompt construction code in the four phase files.
+- No content-slicing `.slice(0, N)` calls remain in LLM prompt construction code in the four phase files.
+- `query.ts` `buildContextBlock` has no `maxChars` parameter and no truncation logic.
 - `init` phase logs file size informationally for every file processed.
 - Tests pass: `npm test`.
 - Manual verification: large file (>8k chars) processed by init/ingest shows full content sent to LLM (no truncation warning).
