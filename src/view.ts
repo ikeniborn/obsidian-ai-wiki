@@ -359,7 +359,7 @@ export class LlmWikiView extends ItemView {
     }
     if (ev.kind === "source_path_added") return;
     if (ev.kind === "domain_updated") { void this.refreshDomains(); return; }
-    this.stepCount++;
+    if (ev.kind !== "assistant_text") this.stepCount++;
     if (ev.kind === "tool_use") {
       this.toolCount++;
       this.assistantBlock = null;
