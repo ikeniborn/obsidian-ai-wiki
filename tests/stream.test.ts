@@ -49,6 +49,7 @@ describe("parseStreamLine", () => {
     expect(result.text).toBe("Создано 1 страница, обновлено 0");
     expect(result.durationMs).toBe(42000);
     expect(result.usdCost).toBe(0.012);
+    expect(result.outputTokens).toBe(580);
   });
 
   it("handles tool_result with is_error true", () => {
