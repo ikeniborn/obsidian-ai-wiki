@@ -47,7 +47,6 @@ export class LlmWikiView extends ItemView {
   private lintBtn?: HTMLButtonElement;
   private formatBtn?: HTMLButtonElement;
   private formatPreviewSection: HTMLElement | null = null;
-  private fixChatEl: HTMLElement | null = null;
   private lastContext: { operation: WikiOperation; domainId: string | undefined; report: string } | null = null;
   // Chat state
   private chatSection: HTMLElement | null = null;
@@ -272,8 +271,6 @@ export class LlmWikiView extends ItemView {
     if (this.ingestBtn) this.ingestBtn.disabled = true;
     if (this.lintBtn) this.lintBtn.disabled = true;
     if (this.formatBtn) this.formatBtn.disabled = true;
-    this.fixChatEl?.remove();
-    this.fixChatEl = null;
     this.chatSection?.remove();
     this.chatSection = null;
     this.lastContext = null;
@@ -499,8 +496,6 @@ export class LlmWikiView extends ItemView {
     this.ingestBtn.disabled = false;
     this.lintBtn.disabled = false;
     this.formatBtn.disabled = false;
-    this.fixChatEl?.remove();
-    this.fixChatEl = null;
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
     this.updateMetrics();
     this.finalEl.empty();

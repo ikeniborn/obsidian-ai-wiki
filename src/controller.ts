@@ -200,10 +200,6 @@ export class WikiController {
     await this.dispatch("lint", args);
   }
 
-  async fix(domainId: string, lintReport: string, instruction: string): Promise<void> {
-    await this.dispatch("fix", [domainId], domainId, lintReport, instruction);
-  }
-
   async chat(operation: WikiOperation, domainId: string | undefined, context: string, history: ChatMessage[], newMessage: string): Promise<void> {
     const chatMessages: ChatMessage[] = [...history, { role: "user", content: newMessage }];
     await this.dispatchChat(operation, domainId, context, chatMessages);

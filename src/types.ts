@@ -6,7 +6,6 @@ export type WikiOperation =
   | "query"
   | "query-save"
   | "lint"
-  | "fix"
   | "chat"
   | "init"
   | "format";
@@ -119,7 +118,6 @@ export interface LlmWikiPluginSettings {
     ingest: number;
     query: number;
     lint: number;
-    fix: number;
     init: number;
     format: number;
   };
@@ -154,7 +152,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   historyLimit: 20,
   graphDepth: 1,
   hubThreshold: 20,
-  timeouts: { ingest: 300, query: 300, lint: 900, fix: 900, init: 3600, format: 600 },
+  timeouts: { ingest: 300, query: 300, lint: 900, init: 3600, format: 600 },
   history: [],
   claudeAgent: {
     model: "sonnet",

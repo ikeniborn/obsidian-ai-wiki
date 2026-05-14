@@ -2,7 +2,6 @@ import type { DomainEntry } from "./domain";
 import { runIngest } from "./phases/ingest";
 import { runQuery } from "./phases/query";
 import { runLint } from "./phases/lint";
-import { runFix } from "./phases/fix";
 import { runLintChat } from "./phases/chat";
 import { runInit } from "./phases/init";
 import { runEvaluator } from "./phases/evaluator";
@@ -20,7 +19,7 @@ export class AgentRunner {
   ) {}
 
   private buildOptsFor(op: RunRequest["operation"]): { model: string; opts: LlmCallOptions } {
-    const key = (op === "query-save" ? "query" : (op === "fix" || op === "chat") ? "lint" : op) as OpKey;
+    const key = (op === "query-save" ? "query" : op === "chat" ? "lint" : op) as OpKey;
     const s = this.settings;
 
     if (s.backend === "claude-agent") {
@@ -76,9 +75,6 @@ export class AgentRunner {
         break;
       case "lint":
         yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, opts);
-        break;
-      case "fix":
-        yield* runFix(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, req.context, req.instruction);
         break;
       case "chat": {
         const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : undefined;
