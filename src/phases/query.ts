@@ -40,7 +40,7 @@ export async function* runQuery(
     return;
   }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
-  const wikiRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
+  const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
 
   yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
@@ -48,8 +48,8 @@ export async function* runQuery(
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
 
   const [indexContent, schemaContent] = await Promise.all([
-    tryRead(vaultTools, `${wikiRoot}/_index.md`),
-    tryRead(vaultTools, `${wikiRoot}/_wiki_schema.md`),
+    tryRead(vaultTools, `${wikiVaultPath}/_index.md`),
+    tryRead(vaultTools, `${schemaRoot}/_wiki_schema.md`),
   ]);
 
   const pages = await vaultTools.readAll(files);
