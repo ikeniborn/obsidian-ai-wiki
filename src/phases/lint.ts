@@ -3,7 +3,8 @@ import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, parseStructured } from "./llm-utils";
+import { ENTITY_TYPES_DELTA_SCHEMA, type EntityTypesDeltaResponse } from "./schemas";
 import { parseJsonPages } from "./ingest";
 import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
@@ -332,7 +333,8 @@ async function actualizeDomainConfig(
     },
   ];
 
-  const params = buildChatParams(model, messages, opts);
+  const schema = opts.jsonMode === "json_schema" ? ENTITY_TYPES_DELTA_SCHEMA : undefined;
+  const params = buildChatParams(model, messages, opts, schema);
   let fullText = "";
   try {
     const resp = await llm.chat.completions.create(
@@ -345,9 +347,7 @@ async function actualizeDomainConfig(
   }
 
   try {
-    const match = fullText.match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    const parsed = JSON.parse(match[0]) as { entity_types?: unknown; language_notes?: unknown };
+    const parsed = parseStructured(fullText) as EntityTypesDeltaResponse;
     const patch: { entity_types?: EntityType[]; language_notes?: string } = {};
     if (Array.isArray(parsed.entity_types)) patch.entity_types = parsed.entity_types as EntityType[];
     if (typeof parsed.language_notes === "string") patch.language_notes = parsed.language_notes;
