@@ -199,6 +199,14 @@ export class LlmWikiView extends ItemView {
   onClose(): void {
     if (this.tickHandle !== null) window.clearTimeout(this.tickHandle);
     if (this.chatTickHandle !== null) window.clearTimeout(this.chatTickHandle);
+    if (this.assistantRafHandle !== null) {
+      window.cancelAnimationFrame(this.assistantRafHandle);
+      this.assistantRafHandle = null;
+    }
+    if (this.reasoningRafHandle !== null) {
+      window.cancelAnimationFrame(this.reasoningRafHandle);
+      this.reasoningRafHandle = null;
+    }
     if (this.plugin.controller.isBusy()) {
       new BusyCloseModal(this.app, () => this.plugin.controller.cancelCurrent()).open();
     }
