@@ -280,7 +280,7 @@ var require_path_browserify = __commonJS({
           return "//";
         return path2.slice(0, end);
       },
-      basename: function basename2(path2, ext) {
+      basename: function basename3(path2, ext) {
         if (ext !== void 0 && typeof ext !== "string")
           throw new TypeError('"ext" argument must be a string');
         assertPath(path2);
@@ -21430,10 +21430,11 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
     return;
   }
-  const wikiRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
+  const domainRoot = wikiVaultPath;
+  const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${wikiRoot}/_wiki_schema.md`),
-    tryRead(vaultTools, `${wikiRoot}/_index.md`)
+    tryRead(vaultTools, `${schemaRoot}/_wiki_schema.md`),
+    tryRead(vaultTools, `${domainRoot}/_index.md`)
   ]);
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
   const existingPages = await vaultTools.readAll(existingPaths.filter((f) => !f.endsWith("_index.md")));
@@ -21493,8 +21494,8 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   const resultText = buildIngestSummary(domain.id, sourceVaultPath, written, pages.length);
   yield { kind: "assistant_text", delta: resultText };
   if (written.length > 0) {
-    await appendLog(vaultTools, wikiRoot, sourceVaultPath, domain.id, written);
-    await updateIndex(vaultTools, wikiRoot, written);
+    await appendLog(vaultTools, domainRoot, sourceVaultPath, domain.id, written);
+    await updateIndex(vaultTools, domainRoot, written);
     const backlinkToday = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
     const existingArticles = parseWikiArticlesFromFm(sourceContent);
@@ -21752,14 +21753,14 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
     return;
   }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
-  const wikiRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
+  const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
   yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
   const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
   const [indexContent, schemaContent] = await Promise.all([
-    tryRead2(vaultTools, `${wikiRoot}/_index.md`),
-    tryRead2(vaultTools, `${wikiRoot}/_wiki_schema.md`)
+    tryRead2(vaultTools, `${wikiVaultPath}/_index.md`),
+    tryRead2(vaultTools, `${schemaRoot}/_wiki_schema.md`)
   ]);
   const pages = await vaultTools.readAll(files);
   const start = Date.now();
@@ -22135,6 +22136,15 @@ ${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
     if (backlinks.size > 0) {
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
     }
+    const indexPath = `${wikiVaultPath}/_index.md`;
+    const indexLinks = files.map((f) => `- [[${(0, import_path_browserify4.basename)(f, ".md")}]]`).join("\n");
+    try {
+      await vaultTools.write(indexPath, `# Wiki Index
+
+${indexLinks}
+`);
+    } catch {
+    }
   }
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n") };
 }
@@ -22368,9 +22378,10 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
   const allFiles = await vaultTools.listFiles("");
   const sampleFiles = allFiles.slice(0, 5);
   const samples = await vaultTools.readAll(sampleFiles);
+  const existingDomain = domains.find((d) => d.id === domainId);
   const [schemaContent, indexContent] = await Promise.all([
     tryRead3(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
-    tryRead3(vaultTools, `${wikiRootGuess}/_index.md`)
+    existingDomain ? tryRead3(vaultTools, `${domainWikiFolder(existingDomain.wiki_folder)}/_index.md`) : Promise.resolve("")
   ]);
   const systemContent = render(init_default, {
     domain_id: domainId,
@@ -22461,7 +22472,7 @@ ${JSON.stringify(entry, null, 2)}
     yield { kind: "domain_created", entry };
   }
   yield { kind: "tool_result", ok: true };
-  await appendLog2(vaultTools, wikiRootGuess, domainId);
+  await appendLog2(vaultTools, domainWikiFolder(entry.wiki_folder), domainId);
   yield {
     kind: "result",
     durationMs: Date.now() - start,
@@ -22485,11 +22496,11 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
 ` };
   const sampleFiles = sourceFiles.slice(0, 10);
   const samples = await vaultTools.readAll(sampleFiles);
+  const existing = domains.find((d) => d.id === domainId);
   const [schemaContent, indexContent] = await Promise.all([
     tryRead3(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
-    tryRead3(vaultTools, `${wikiRootGuess}/_index.md`)
+    existing ? tryRead3(vaultTools, `${domainWikiFolder(existing.wiki_folder)}/_index.md`) : Promise.resolve("")
   ]);
-  const existing = domains.find((d) => d.id === domainId);
   const systemContent = render(init_default, {
     domain_id: domainId,
     vault_name: vaultName,
@@ -22622,7 +22633,7 @@ Creating wiki pages from ${sourceFiles.length} source files...
     }
     yield { kind: "file_done", file };
   }
-  await appendLog2(vaultTools, wikiRootGuess, domainId);
+  await appendLog2(vaultTools, domainWikiFolder(updatedDomain.wiki_folder), domainId);
   yield {
     kind: "result",
     durationMs: Date.now() - start,
@@ -22651,15 +22662,15 @@ async function tryRead3(vaultTools, path2) {
 }
 async function ensureRootFiles(vaultTools, wikiRoot) {
   const schema = `${wikiRoot}/_wiki_schema.md`;
-  const index = `${wikiRoot}/_index.md`;
-  const log = `${wikiRoot}/_log.md`;
+  const legacyIndex = `${wikiRoot}/_index.md`;
+  const legacyLog = `${wikiRoot}/_log.md`;
   try {
     if (!await vaultTools.exists(schema))
       await vaultTools.write(schema, wiki_schema_default);
-    if (!await vaultTools.exists(index))
-      await vaultTools.write(index, "# Wiki Index\n");
-    if (!await vaultTools.exists(log))
-      await vaultTools.write(log, "# Wiki Log\n");
+    if (await vaultTools.exists(legacyIndex))
+      await vaultTools.remove(legacyIndex);
+    if (await vaultTools.exists(legacyLog))
+      await vaultTools.remove(legacyLog);
   } catch {
   }
 }
@@ -23284,6 +23295,9 @@ var VaultTools = class {
   }
   async mkdir(vaultPath) {
     return this.adapter.mkdir(vaultPath);
+  }
+  async remove(vaultPath) {
+    await this.adapter.remove?.(vaultPath);
   }
   toVaultPath(absolutePath) {
     const base = this.basePath.endsWith("/") ? this.basePath : this.basePath + "/";
