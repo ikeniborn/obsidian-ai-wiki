@@ -19608,46 +19608,22 @@ var DomainModal = class extends import_obsidian2.Modal {
     this.contentEl.empty();
   }
 };
-function attachFolderDropdown(app, inputEl, onSelect) {
-  let dropEl = null;
-  const hideDropdown = () => {
-    dropEl?.remove();
-    dropEl = null;
-  };
-  const showDropdown = (folders) => {
-    hideDropdown();
-    if (!folders.length)
-      return;
-    const rect = inputEl.getBoundingClientRect();
-    dropEl = import_obsidian2.activeDocument.body.createDiv({ cls: "ai-wiki-folder-dropdown" });
-    dropEl.style.top = `${rect.bottom + window.scrollY}px`;
-    dropEl.style.left = `${rect.left + window.scrollX}px`;
-    dropEl.style.width = `${rect.width}px`;
-    for (const folder of folders) {
-      const item = dropEl.createDiv({ cls: "ai-wiki-folder-dropdown-item" });
-      item.setText(folder.path + "/");
-      item.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        hideDropdown();
-        onSelect(folder.path + "/");
-      });
-    }
-  };
-  inputEl.addEventListener("input", () => {
-    const lower = inputEl.value.toLowerCase();
-    if (!lower) {
-      hideDropdown();
-      return;
-    }
-    const matches = app.vault.getAllFolders(true).filter((f) => f.path.toLowerCase().includes(lower)).slice(0, 20);
-    showDropdown(matches);
-  });
-  inputEl.addEventListener("blur", hideDropdown);
-  inputEl.addEventListener("keydown", (e) => {
-    if (e.key === "Escape")
-      hideDropdown();
-  });
-}
+var FolderInputSuggest = class extends import_obsidian2.AbstractInputSuggest {
+  constructor(app, input, onPick) {
+    super(app, input);
+    this.onSelect((folder) => {
+      this.setValue(folder.path + "/");
+      onPick(folder.path + "/");
+    });
+  }
+  getSuggestions(query) {
+    const q = query.toLowerCase();
+    return this.app.vault.getAllFolders(true).filter((f) => f.path.toLowerCase().includes(q)).slice(0, 20);
+  }
+  renderSuggestion(folder, el) {
+    el.setText(folder.path + "/");
+  }
+};
 var AddDomainModal = class extends import_obsidian2.Modal {
   constructor(app, onSubmit) {
     super(app);
@@ -19722,7 +19698,7 @@ var AddDomainModal = class extends import_obsidian2.Modal {
       inputEl.value = "";
       rerender();
     };
-    attachFolderDropdown(this.app, inputEl, addPath);
+    new FolderInputSuggest(this.app, inputEl, addPath);
     inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -19906,7 +19882,7 @@ var EditDomainModal = class extends import_obsidian2.Modal {
       input.value = "";
       rerender();
     };
-    attachFolderDropdown(this.app, input, addPath);
+    new FolderInputSuggest(this.app, input, addPath);
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
