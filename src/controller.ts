@@ -49,6 +49,7 @@ export class WikiController {
   private _chatSessionId: string | undefined;
   private _currentClaudeClient: ClaudeCliClient | null = null;
   private _pendingFormat: { originalPath: string; tempPath: string; chat: ChatMessage[] } | null = null;
+  private _currentLogMeta: { backend: string; model: string } | null = null;
   constructor(
     private app: App,
     private plugin: LlmWikiPlugin,
@@ -479,9 +480,16 @@ export class WikiController {
     const path = `${dir}/agent.jsonl`;
     try {
       if (!(await adapter.exists(dir))) await adapter.mkdir(dir);
+      const extra = ev.kind === "result" && ev.outputTokens !== undefined && ev.durationMs > 0
+        ? { tokPerSec: Math.round(ev.outputTokens / (ev.durationMs / 1000)) }
+        : {};
       const line = JSON.stringify({
         ts: new Date().toISOString(),
-        session: sessionId, op, domainId, event: ev,
+        session: sessionId, op, domainId,
+        backend: this._currentLogMeta?.backend,
+        model: this._currentLogMeta?.model,
+        event: ev,
+        ...extra,
       }) + "\n";
       if (await adapter.exists(path)) await adapter.append(path, line);
       else await adapter.write(path, line);
@@ -506,6 +514,13 @@ export class WikiController {
       const eff = resolveEffective(this.plugin.settings, local);
       if (eff.backend === "native-agent" && !this.requireNativeAgent(eff)) return;
       if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local)) return;
+      const opKey = (op === "query-save" ? "query" : op) as import("./types").OpKey;
+      this._currentLogMeta = {
+        backend: eff.backend,
+        model: eff.backend === "claude-agent"
+          ? (eff.claudeAgent.perOperation ? eff.claudeAgent.operations[opKey].model : eff.claudeAgent.model)
+          : (eff.nativeAgent.perOperation ? eff.nativeAgent.operations[opKey].model : eff.nativeAgent.model),
+      };
     }
 
     await this.ensureView();
@@ -581,6 +596,7 @@ export class WikiController {
       this.current = null;
       this.onBusyChange?.();
       this.currentOp = null;
+      this._currentLogMeta = null;
     }
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
 
