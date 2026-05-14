@@ -294,6 +294,20 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             .onChange(async (v) => { await this.patchLocalNative({ apiKey: v.trim() }); }),
         );
 
+      new Setting(containerEl)
+        .setName("Structured Output")
+        .setDesc("json_object — valid JSON guaranteed (recommended). json_schema — schema-enforced + CoT (requires OpenAI / Qwen API). none — plain text + fallback parsing.")
+        .addDropdown((d) =>
+          d.addOption("json_object", "json_object (recommended)")
+            .addOption("json_schema", "json_schema — schema + CoT")
+            .addOption("none", "none — fallback only")
+            .setValue(s.nativeAgent.structuredOutput ?? "json_object")
+            .onChange(async (v) => {
+              s.nativeAgent.structuredOutput = v as "json_object" | "json_schema" | "none";
+              await this.plugin.saveSettings();
+            }),
+        );
+
       if (!s.nativeAgent.perOperation) {
         new Setting(containerEl)
           .setName(T.settings.model_name)
@@ -315,20 +329,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                 if (!trimmed) { await this.patchLocalNative({ numCtx: null }); return; }
                 const n = Number(trimmed);
                 if (Number.isFinite(n) && n > 0) await this.patchLocalNative({ numCtx: Math.floor(n) });
-              }),
-          );
-
-        new Setting(containerEl)
-          .setName("Structured Output")
-          .setDesc("json_object — valid JSON guaranteed (recommended). json_schema — schema-enforced + CoT (requires OpenAI / Qwen API). none — plain text + fallback parsing.")
-          .addDropdown((d) =>
-            d.addOption("json_object", "json_object (recommended)")
-              .addOption("json_schema", "json_schema — schema + CoT")
-              .addOption("none", "none — fallback only")
-              .setValue(s.nativeAgent.structuredOutput ?? "json_object")
-              .onChange(async (v) => {
-                s.nativeAgent.structuredOutput = v as "json_object" | "json_schema" | "none";
-                await this.plugin.saveSettings();
               }),
           );
 
