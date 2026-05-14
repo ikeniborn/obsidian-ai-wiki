@@ -147,7 +147,7 @@ var require_path_browserify = __commonJS({
           return ".";
         }
       },
-      normalize: function normalize2(path2) {
+      normalize: function normalize(path2) {
         assertPath(path2);
         if (path2.length === 0)
           return ".";
@@ -166,7 +166,7 @@ var require_path_browserify = __commonJS({
         assertPath(path2);
         return path2.length > 0 && path2.charCodeAt(0) === 47;
       },
-      join: function join7() {
+      join: function join6() {
         if (arguments.length === 0)
           return ".";
         var joined;
@@ -18854,7 +18854,7 @@ var DEFAULT_SETTINGS = {
   historyLimit: 20,
   graphDepth: 1,
   hubThreshold: 20,
-  timeouts: { ingest: 300, query: 300, lint: 900, fix: 900, init: 3600, format: 600 },
+  timeouts: { ingest: 300, query: 300, lint: 900, init: 3600, format: 600 },
   history: [],
   claudeAgent: {
     model: "sonnet",
@@ -18914,7 +18914,7 @@ var en = {
     busyBanner: "Operation in progress \u2014 domain editing is disabled.",
     domains_empty: "No domains. Use 'Add domain' in the sidebar panel to create one.",
     timeouts_name: "Timeouts (seconds)",
-    timeouts_desc: "ingest / query / lint / init",
+    timeouts_desc: "ingest / query / lint / init / format",
     historyLimit_name: "History limit",
     historyLimit_desc: "Maximum operations in the sidebar history.",
     agentLog_name: "Agent log (JSONL)",
@@ -19107,7 +19107,7 @@ var ru = {
     busyBanner: "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0434\u043E\u043C\u0435\u043D\u043E\u0432 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E.",
     domains_empty: "\u0414\u043E\u043C\u0435\u043D\u044B \u043D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u044B. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 '\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D' \u0432 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438.",
     timeouts_name: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442\u044B (\u0441\u0435\u043A\u0443\u043D\u0434\u044B)",
-    timeouts_desc: "ingest / query / lint / init",
+    timeouts_desc: "ingest / query / lint / init / format",
     historyLimit_name: "\u041B\u0438\u043C\u0438\u0442 \u0438\u0441\u0442\u043E\u0440\u0438\u0438",
     historyLimit_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439 \u0432 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438.",
     agentLog_name: "\u041B\u043E\u0433 \u0430\u0433\u0435\u043D\u0442\u0430 (JSONL)",
@@ -19300,7 +19300,7 @@ var es = {
     busyBanner: "Operaci\xF3n en curso \u2014 la edici\xF3n de dominios est\xE1 desactivada.",
     domains_empty: "No hay dominios. Use 'A\xF1adir dominio' en el panel lateral.",
     timeouts_name: "Tiempos de espera (segundos)",
-    timeouts_desc: "ingest / query / lint / init",
+    timeouts_desc: "ingest / query / lint / init / format",
     historyLimit_name: "L\xEDmite de historial",
     historyLimit_desc: "M\xE1ximo de operaciones en el historial del panel lateral.",
     agentLog_name: "Log del agente (JSONL)",
@@ -19986,6 +19986,13 @@ function resolveEffective(s, l) {
 }
 
 // src/settings.ts
+function parseTimeoutString(v) {
+  const parts = v.split("/").map((x) => Number(x.trim()));
+  if (parts.length === 5 && parts.every((n) => Number.isFinite(n) && n > 0)) {
+    return { ingest: parts[0], query: parts[1], lint: parts[2], init: parts[3], format: parts[4] };
+  }
+  return null;
+}
 var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
@@ -20067,10 +20074,10 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       );
     }
     new import_obsidian3.Setting(containerEl).setName(T.settings.timeouts_name).setDesc(T.settings.timeouts_desc).addText(
-      (t) => t.setValue(`${s.timeouts.ingest}/${s.timeouts.query}/${s.timeouts.lint}/${s.timeouts.init}`).onChange(async (v) => {
-        const parts = v.split("/").map((x) => Number(x.trim()));
-        if (parts.length === 4 && parts.every((n) => Number.isFinite(n) && n > 0)) {
-          s.timeouts = { ingest: parts[0], query: parts[1], lint: parts[2], init: parts[3] };
+      (t) => t.setValue(`${s.timeouts.ingest}/${s.timeouts.query}/${s.timeouts.lint}/${s.timeouts.init}/${s.timeouts.format}`).onChange(async (v) => {
+        const parsed = parseTimeoutString(v);
+        if (parsed) {
+          s.timeouts = { ...s.timeouts, ...parsed };
           await this.plugin.saveSettings();
         }
       })
@@ -20389,7 +20396,6 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   lintBtn;
   formatBtn;
   formatPreviewSection = null;
-  fixChatEl = null;
   lastContext = null;
   // Chat state
   chatSection = null;
@@ -20611,8 +20617,6 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.lintBtn.disabled = true;
     if (this.formatBtn)
       this.formatBtn.disabled = true;
-    this.fixChatEl?.remove();
-    this.fixChatEl = null;
     this.chatSection?.remove();
     this.chatSection = null;
     this.lastContext = null;
@@ -20834,8 +20838,6 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.ingestBtn.disabled = false;
     this.lintBtn.disabled = false;
     this.formatBtn.disabled = false;
-    this.fixChatEl?.remove();
-    this.fixChatEl = null;
     if (this.tickHandle !== null) {
       window.clearTimeout(this.tickHandle);
       this.tickHandle = null;
@@ -21190,7 +21192,7 @@ function translateSystemEvent(message) {
 
 // src/controller.ts
 var import_obsidian7 = require("obsidian");
-var import_path_browserify7 = __toESM(require_path_browserify(), 1);
+var import_path_browserify6 = __toESM(require_path_browserify(), 1);
 
 // src/source-paths.ts
 var import_path_browserify = __toESM(require_path_browserify(), 1);
@@ -22276,156 +22278,6 @@ ${c.slice(0, 300)}`).join("\n\n");
   }
 }
 
-// src/phases/fix.ts
-var import_path_browserify5 = __toESM(require_path_browserify(), 1);
-
-// prompts/fix.md
-var fix_default = '\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n{{fix_instruction}}\n\n{{entity_types_block}}\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432 \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 (\u0435\u0441\u043B\u0438 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0430\u0441\u044C \u2014 \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0430\u0439):\n[{"path":"{{wiki_path}}/EntityName.md","content":"\u043F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B"}]\n\u0414\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u044B\u0435 \u043F\u0443\u0442\u0438 wiki: {{wiki_path}}/\n\u0414\u0430\u0442\u0430: {{today}}\n';
-
-// src/phases/fix.ts
-var META_FILES3 = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
-async function* runFix(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}, lintReport, userInstruction) {
-  const domainId = args[0];
-  const domain = domainId ? domains.find((d) => d.id === domainId) : domains[0];
-  if (!domain) {
-    yield { kind: "error", message: domainId ? `Domain "${domainId}" not found.` : "No domains configured." };
-    return;
-  }
-  const absWiki = (0, import_path_browserify5.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
-  const wikiVaultPath = vaultTools.toVaultPath(absWiki);
-  if (!wikiVaultPath) {
-    yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
-    return;
-  }
-  yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
-  const allFiles = await vaultTools.listFiles(wikiVaultPath);
-  const files = allFiles.filter((f) => !META_FILES3.some((m) => f.endsWith(m)));
-  yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
-  if (files.length === 0) {
-    const start2 = Date.now();
-    yield { kind: "result", durationMs: Date.now() - start2, text: "No wiki pages to fix." };
-    return;
-  }
-  const pages = await vaultTools.readAll(files);
-  const structuralIssues = checkStructure(pages);
-  const entityTypesBlock = domain.entity_types?.length ? domain.entity_types.map((et) => `- ${et.type}: ${et.description}`).join("\n") : "";
-  yield { kind: "assistant_text", delta: `Fixing wiki pages for domain "${domain.id}"...
-` };
-  const start = Date.now();
-  const messages = buildFixMessages2(domain, wikiVaultPath, pages, structuralIssues, entityTypesBlock, lintReport, userInstruction);
-  const params = buildChatParams(model, messages, opts);
-  let fullText = "";
-  try {
-    const stream = await llm.chat.completions.create(
-      { ...params, stream: true },
-      { signal }
-    );
-    for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
-      if (reasoning)
-        yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-      if (content) {
-        fullText += content;
-        yield { kind: "assistant_text", delta: content };
-      }
-    }
-  } catch (e) {
-    if (signal.aborted || e.name === "AbortError")
-      return;
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false }
-    );
-    fullText = resp.choices[0]?.message?.content ?? "";
-    if (fullText)
-      yield { kind: "assistant_text", delta: fullText };
-  }
-  if (signal.aborted)
-    return;
-  const fixedPages = parseJsonPages(fullText);
-  const writtenPaths = [];
-  const errors = [];
-  for (const page of fixedPages) {
-    if (!(0, import_path_browserify5.normalize)(page.path).startsWith(wikiVaultPath + "/")) {
-      yield { kind: "tool_use", name: "Write", input: { path: page.path } };
-      yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
-      errors.push(`${page.path}: blocked, outside wiki folder`);
-      continue;
-    }
-    yield { kind: "tool_use", name: "Write", input: { path: page.path } };
-    try {
-      await vaultTools.write(page.path, page.content);
-      writtenPaths.push(page.path);
-      yield { kind: "tool_result", ok: true };
-    } catch (e) {
-      errors.push(`${page.path}: ${e.message}`);
-      yield { kind: "tool_result", ok: false, preview: e.message };
-    }
-  }
-  const summary = buildFixSummary(domain.id, writtenPaths, errors, structuralIssues, lintReport);
-  yield { kind: "result", durationMs: Date.now() - start, text: summary };
-}
-function buildFixSummary(domainId, writtenPaths, errors, structuralIssues, lintReport) {
-  const lines = [];
-  const source = lintReport ? "lint-\u043E\u0442\u0447\u0451\u0442\u0430" : "\u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u043E\u0433\u043E \u0430\u043D\u0430\u043B\u0438\u0437\u0430";
-  if (writtenPaths.length > 0) {
-    lines.push(`\u0418\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E ${writtenPaths.length} \u0441\u0442\u0440. \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${domainId}\xBB \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 ${source}:`);
-    for (const p of writtenPaths) {
-      const name = p.split("/").pop() ?? p;
-      lines.push(`  \u2022 ${name}`);
-    }
-  } else {
-    lines.push(`\u0414\u043E\u043C\u0435\u043D \xAB${domainId}\xBB: \u043F\u0440\u0430\u0432\u043A\u0438 \u043D\u0435 \u043F\u043E\u0442\u0440\u0435\u0431\u043E\u0432\u0430\u043B\u0438\u0441\u044C (\u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 ${source}).`);
-  }
-  if (errors.length > 0) {
-    lines.push(`
-\u041E\u0448\u0438\u0431\u043A\u0438 \u0437\u0430\u043F\u0438\u0441\u0438 (${errors.length}):`);
-    for (const e of errors)
-      lines.push(`  \u2716 ${e}`);
-  }
-  if (structuralIssues) {
-    lines.push(`
-\u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B:
-${structuralIssues}`);
-  } else {
-    lines.push("\n\u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0445 \u043F\u0440\u043E\u0431\u043B\u0435\u043C \u043D\u0435 \u043E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u043E.");
-  }
-  return lines.join("\n");
-}
-function buildFixMessages2(domain, wikiVaultPath, pages, structuralIssues, entityTypesBlock, lintReport, userInstruction) {
-  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const pagesBlock = [...pages.entries()].map(([p, c]) => `--- ${p} ---
-${c}`).join("\n\n");
-  const fixInstruction = userInstruction ? `\u0412\u044B\u043F\u043E\u043B\u043D\u0438 \u0437\u0430\u0434\u0430\u0447\u0443 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F. \u0412\u0435\u0440\u043D\u0438 \u0442\u043E\u043B\u044C\u043A\u043E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.` : `\u0418\u0441\u043F\u0440\u0430\u0432\u044C \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B \u0432 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430\u0445 \u0438 \u0432\u0435\u0440\u043D\u0438 \u0442\u043E\u043B\u044C\u043A\u043E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.`;
-  const systemContent = render(fix_default, {
-    domain_name: domain.name,
-    fix_instruction: fixInstruction,
-    entity_types_block: entityTypesBlock ? `\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419:
-${entityTypesBlock}
-` : "",
-    wiki_path: wikiVaultPath,
-    today
-  });
-  return [
-    { role: "system", content: systemContent },
-    {
-      role: "user",
-      content: [
-        userInstruction ? `\u0417\u0410\u0414\u0410\u0427\u0410:
-${userInstruction}` : "",
-        lintReport ? `
-\u041E\u0422\u0427\u0401\u0422 LINT:
-${lintReport}` : "",
-        structuralIssues ? `
-\u0421\u0422\u0420\u0423\u041A\u0422\u0423\u0420\u041D\u042B\u0415 \u041F\u0420\u041E\u0411\u041B\u0415\u041C\u042B:
-${structuralIssues}` : "",
-        `
-WIKI-\u0421\u0422\u0420\u0410\u041D\u0418\u0426\u042B \u0434\u043E\u043C\u0435\u043D\u0430 ${domain.id}:
-${pagesBlock}`
-      ].filter(Boolean).join("\n")
-    }
-  ];
-}
-
 // prompts/chat.md
 var chat_default = "{{operation_header}}\n\u041F\u043E\u043C\u043E\u0433\u0430\u0439 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044E \u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0438 \u043E\u0431\u0441\u0443\u0436\u0434\u0430\u0442\u044C \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u044B \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u043A\u043E\u043D\u043A\u0440\u0435\u0442\u043D\u043E, \u0441\u0441\u044B\u043B\u0430\u044F\u0441\u044C \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430.\n\n\u0420\u0415\u0417\u0423\u041B\u042C\u0422\u0410\u0422 \u041E\u041F\u0415\u0420\u0410\u0426\u0418\u0418:\n{{context}}\n";
 
@@ -23227,10 +23079,10 @@ ${original}`;
         finalFormatted = parsed2.formatted;
         finalReport = parsed2.report;
       }
-      const missing2 = missingTokensWithContext(original, finalFormatted);
-      if (missing2.length > 0) {
-        finalFormatted = appendMissingLines(finalFormatted, missing2);
-      }
+    }
+    const missing2 = missingTokensWithContext(original, finalFormatted);
+    if (missing2.length > 0) {
+      finalFormatted = appendMissingLines(finalFormatted, missing2);
     }
   }
   try {
@@ -23254,7 +23106,7 @@ var AgentRunner = class {
     this.domains = domains;
   }
   buildOptsFor(op) {
-    const key = op === "query-save" ? "query" : op === "fix" || op === "chat" ? "lint" : op;
+    const key = op === "query-save" ? "query" : op === "chat" ? "lint" : op;
     const s = this.settings;
     if (s.backend === "claude-agent") {
       const c2 = s.claudeAgent.perOperation ? s.claudeAgent.operations[key] : void 0;
@@ -23298,9 +23150,6 @@ var AgentRunner = class {
         break;
       case "lint":
         yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, opts);
-        break;
-      case "fix":
-        yield* runFix(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, req.context, req.instruction);
         break;
       case "chat": {
         const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
@@ -23446,7 +23295,7 @@ var VaultTools = class {
 
 // src/claude-cli-client.ts
 var import_child_process = require("child_process");
-var import_path_browserify6 = __toESM(require_path_browserify(), 1);
+var import_path_browserify5 = __toESM(require_path_browserify(), 1);
 
 // src/stream.ts
 var PREVIEW_MAX = 200;
@@ -23574,7 +23423,7 @@ var ClaudeCliClient = class {
     try {
       const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
       if (isLargeUser) {
-        const tmpUsrFile = (0, import_path_browserify6.join)(this.cfg.tmpDir, `ai-wiki-usr-${id}.txt`);
+        const tmpUsrFile = (0, import_path_browserify5.join)(this.cfg.tmpDir, `ai-wiki-usr-${id}.txt`);
         const wrapped = `<user_input>
 ${userText}
 </user_input>`;
@@ -23593,7 +23442,7 @@ ${userText}
       if (!isResume && systemContent) {
         const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
         if (isLargeSys) {
-          const tmpSysFile = (0, import_path_browserify6.join)(this.cfg.tmpDir, `ai-wiki-sys-${id}.txt`);
+          const tmpSysFile = (0, import_path_browserify5.join)(this.cfg.tmpDir, `ai-wiki-sys-${id}.txt`);
           await this.cfg.tmpWrite(tmpSysFile, systemContent);
           tmpFiles.push(tmpSysFile);
           args.push("--system-prompt-file", tmpSysFile);
@@ -31046,9 +30895,9 @@ var DomainStore = class {
 
 // src/controller.ts
 function toVaultPath(vaultDir, savedPath) {
-  const abs = (0, import_path_browserify7.isAbsolute)(savedPath) ? savedPath : (0, import_path_browserify7.join)(vaultDir, savedPath);
-  const rel = (0, import_path_browserify7.relative)(vaultDir, abs);
-  if (rel.startsWith("..") || (0, import_path_browserify7.isAbsolute)(rel))
+  const abs = (0, import_path_browserify6.isAbsolute)(savedPath) ? savedPath : (0, import_path_browserify6.join)(vaultDir, savedPath);
+  const rel = (0, import_path_browserify6.relative)(vaultDir, abs);
+  if (rel.startsWith("..") || (0, import_path_browserify6.isAbsolute)(rel))
     return null;
   return rel;
 }
@@ -31235,9 +31084,6 @@ var WikiController = class {
   async lint(domain) {
     const args = domain === "all" ? [] : [domain];
     await this.dispatch("lint", args);
-  }
-  async fix(domainId, lintReport, instruction) {
-    await this.dispatch("fix", [domainId], domainId, lintReport, instruction);
   }
   async chat(operation, domainId, context, history, newMessage) {
     const chatMessages = [...history, { role: "user", content: newMessage }];
@@ -31427,9 +31273,9 @@ var WikiController = class {
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm;
     if (s.backend === "claude-agent") {
-      const manifestDir = this.plugin.manifest.dir ?? (0, import_path_browserify7.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
+      const manifestDir = this.plugin.manifest.dir ?? (0, import_path_browserify6.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
       const pluginDir = this.app.vault.adapter.getFullPath(manifestDir);
-      const tmpDir = (0, import_path_browserify7.join)(pluginDir, "tmp");
+      const tmpDir = (0, import_path_browserify6.join)(pluginDir, "tmp");
       const tmpDirRelative = tmpDir.startsWith(base) ? tmpDir.slice(base.length).replace(/^\//, "") : tmpDir;
       if (base) {
         try {
