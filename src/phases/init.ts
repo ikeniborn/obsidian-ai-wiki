@@ -5,6 +5,7 @@ import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import schemaTemplate from "../../templates/_wiki_schema.md";
 import initTemplate from "../../prompts/init.md";
+import initIncrementalTemplate from "../../prompts/init-incremental.md";
 import { render } from "./template";
 import { runIngest } from "./ingest";
 import { domainWikiFolder } from "../wiki-path";
@@ -177,7 +178,6 @@ async function* runInitWithSources(
 
   await ensureRootFiles(vaultTools, wikiRootGuess);
 
-  // Collect all .md files from source paths
   const allVaultFiles = await vaultTools.listFiles("");
   const sourceFiles = allVaultFiles.filter(
     (f) => f.endsWith(".md") && sourcePaths.some((sp) => f.startsWith(sp)),
@@ -188,113 +188,226 @@ async function* runInitWithSources(
     return;
   }
 
-  yield { kind: "init_start", totalFiles: sourceFiles.length };
-  yield { kind: "assistant_text", delta: `Analysing ${sourceFiles.length} source files for domain "${domainId}"...\n` };
-
-  // Phase 1: Analyse sources → entity_types + language_notes
-  const sampleFiles = sourceFiles.slice(0, 10);
-  const samples = await vaultTools.readAll(sampleFiles);
   const existing = domains.find((d) => d.id === domainId);
+
+  // isResuming = analyzed_sources defined (even []) means bootstrap was done; skip it
+  const isResuming = existing?.analyzed_sources !== undefined;
+  const alreadyAnalyzed = new Set(existing?.analyzed_sources ?? []);
+  const toAnalyze = isResuming
+    ? sourceFiles.filter(f => !alreadyAnalyzed.has(f))
+    : sourceFiles;
+
+  // --- Phase 1: Analysis ---
+  yield { kind: "init_start", totalFiles: toAnalyze.length, phase: "analysis" };
+
   const [schemaContent, indexContent] = await Promise.all([
     tryRead(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
-    existing
-      ? tryRead(vaultTools, `${domainWikiFolder(existing.wiki_folder)}/_index.md`)
-      : Promise.resolve(""),
+    tryRead(vaultTools, `${wikiRootGuess}/_index.md`),
   ]);
 
-  const systemContent = render(initTemplate, {
-    domain_id: domainId,
-    vault_name: vaultName,
-    schema_block: schemaContent ? `\nКонвенции вики (_wiki_schema.md):\n${schemaContent.slice(0, 1500)}` : "",
-    index_block: indexContent ? `\nСуществующая структура (_index.md):\n${indexContent.slice(0, 1000)}` : "",
-  });
+  let currentDomain: DomainEntry | null = existing ?? null;
 
-  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    { role: "system", content: systemContent },
-    {
-      role: "user",
-      content: [
-        `Domain ID: ${domainId}`,
-        `Vault name: ${vaultName}`,
-        `Source paths: ${sourcePaths.join(", ")}`,
-        "",
-        `Примеры файлов источников:`,
-        [...samples.entries()].map(([p, c]) => `${p}:\n${c.slice(0, 400)}`).join("\n\n"),
-      ].join("\n"),
-    },
-  ];
-
-  const params = buildChatParams(model, messages, opts);
-  let fullText = "";
-  try {
-    const stream = await llm.chat.completions.create(
-      { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-      { signal },
-    );
-    for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
-      if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-      if (content) { fullText += content; yield { kind: "assistant_text", delta: content }; }
+  for (let i = 0; i < toAnalyze.length; i++) {
+    if (signal.aborted) {
+      if (currentDomain) {
+        yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
+        yield { kind: "domain_updated", domainId, patch: { analyzed_sources: currentDomain.analyzed_sources } };
+        yield { kind: "tool_result", ok: true };
+      }
+      return;
     }
-  } catch (e) {
-    if (signal.aborted || (e as Error).name === "AbortError") return;
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-    );
-    fullText = resp.choices[0]?.message?.content ?? "";
-    if (fullText) yield { kind: "assistant_text", delta: fullText };
+
+    const file = toAnalyze[i];
+    yield { kind: "file_start", file, index: i, total: toAnalyze.length, phase: "analysis" };
+
+    let fileContent: string;
+    try {
+      fileContent = await vaultTools.read(file);
+    } catch {
+      yield { kind: "assistant_text", delta: `⚠ ${file}: не удалось прочитать файл, пропускаем\n` };
+      yield { kind: "file_done", file, phase: "analysis" };
+      continue;
+    }
+
+    if (fileContent.length > 8_000) {
+      yield { kind: "assistant_text", delta: `⚠ ${file}: truncated to 8 000 chars (original: ${fileContent.length} chars)\n` };
+    }
+    const truncated = fileContent.slice(0, 8_000);
+
+    if (i === 0 && !isResuming) {
+      // Bootstrap: use initTemplate to get full DomainEntry
+      const systemContent = render(initTemplate, {
+        domain_id: domainId,
+        vault_name: vaultName,
+        schema_block: schemaContent ? `\nКонвенции вики (_wiki_schema.md):\n${schemaContent.slice(0, 1500)}` : "",
+        index_block: indexContent ? `\nСуществующая структура (_index.md):\n${indexContent.slice(0, 1000)}` : "",
+      });
+
+      const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+        { role: "system", content: systemContent },
+        {
+          role: "user",
+          content: `Domain ID: ${domainId}\nVault name: ${vaultName}\nSource paths: ${sourcePaths.join(", ")}\n\n${file}:\n${truncated}`,
+        },
+      ];
+
+      let fullText = "";
+      try {
+        const params = buildChatParams(model, messages, opts);
+        const stream = await llm.chat.completions.create(
+          { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
+          { signal },
+        );
+        for await (const chunk of stream) {
+          const { reasoning, content } = extractStreamDeltas(chunk);
+          if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
+          if (content) { fullText += content; yield { kind: "assistant_text", delta: content }; }
+        }
+      } catch (e) {
+        if (signal.aborted || (e as Error).name === "AbortError") return;
+        const params = buildChatParams(model, messages, opts);
+        const resp = await llm.chat.completions.create(
+          { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+        );
+        fullText = resp.choices[0]?.message?.content ?? "";
+        if (fullText) yield { kind: "assistant_text", delta: fullText };
+      }
+
+      if (signal.aborted) return;
+
+      let entry: DomainEntry;
+      try {
+        const match = fullText.match(/\{[\s\S]*\}/);
+        if (!match) throw new Error("No JSON object found");
+        entry = JSON.parse(match[0]) as DomainEntry;
+        const vaultPrefix = `vaults/${vaultName}/`;
+        if (entry.wiki_folder?.startsWith(vaultPrefix)) entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
+        if (entry.wiki_folder?.startsWith("!Wiki/")) entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
+        if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
+      } catch {
+        yield { kind: "assistant_text", delta: `⚠ ${file}: LLM вернул невалидный JSON, пропускаем bootstrap\n` };
+        yield { kind: "file_done", file, phase: "analysis" };
+        continue;
+      }
+
+      if (dryRun) {
+        yield {
+          kind: "result",
+          durationMs: Date.now() - start,
+          text: `Dry run — domain entry:\n\`\`\`json\n${JSON.stringify(entry, null, 2)}\n\`\`\``,
+        };
+        return;
+      }
+
+      currentDomain = {
+        ...(existing ?? { id: domainId, name: entry.name }),
+        wiki_folder: entry.wiki_folder,
+        entity_types: entry.entity_types,
+        language_notes: entry.language_notes,
+        source_paths: sourcePaths,
+        analyzed_sources: [],
+      };
+
+      yield { kind: "tool_use", name: existing ? "UpdateDomain" : "SaveDomain", input: { id: domainId } };
+      if (existing) {
+        yield {
+          kind: "domain_updated", domainId,
+          patch: { entity_types: currentDomain.entity_types, language_notes: currentDomain.language_notes, wiki_folder: currentDomain.wiki_folder, analyzed_sources: [] },
+        };
+      } else {
+        yield { kind: "domain_created", entry: currentDomain };
+      }
+      yield { kind: "tool_result", ok: true };
+
+    } else {
+      // Incremental: use initIncrementalTemplate to get delta entity_types
+      const currentEntityTypes = currentDomain?.entity_types ?? [];
+      const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+        { role: "system", content: initIncrementalTemplate },
+        {
+          role: "user",
+          content: `Текущие entity_types:\n${JSON.stringify(currentEntityTypes, null, 2)}\n\nФайл: ${file}\n\n${truncated}`,
+        },
+      ];
+
+      let fullText = "";
+      try {
+        const params = buildChatParams(model, messages, opts);
+        const stream = await llm.chat.completions.create(
+          { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
+          { signal },
+        );
+        for await (const chunk of stream) {
+          const { reasoning, content } = extractStreamDeltas(chunk);
+          if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
+          if (content) { fullText += content; }
+        }
+      } catch (e) {
+        if (signal.aborted || (e as Error).name === "AbortError") return;
+        const params = buildChatParams(model, messages, opts);
+        const resp = await llm.chat.completions.create(
+          { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+        );
+        fullText = resp.choices[0]?.message?.content ?? "";
+      }
+
+      if (signal.aborted) return;
+
+      let delta: { entity_types?: EntityType[]; language_notes?: string };
+      try {
+        const match = fullText.match(/\{[\s\S]*\}/);
+        if (!match) throw new Error("No JSON");
+        delta = JSON.parse(match[0]) as { entity_types?: EntityType[]; language_notes?: string };
+      } catch {
+        yield { kind: "assistant_text", delta: `⚠ ${file}: LLM вернул невалидный JSON, пропускаем\n` };
+        yield { kind: "file_done", file, phase: "analysis" };
+        continue;
+      }
+
+      if (!currentDomain) {
+        yield { kind: "file_done", file, phase: "analysis" };
+        continue;
+      }
+
+      const mergedTypes = mergeEntityTypes(currentDomain.entity_types ?? [], delta.entity_types ?? []);
+      currentDomain = {
+        ...currentDomain,
+        entity_types: mergedTypes,
+        language_notes: delta.language_notes ?? currentDomain.language_notes,
+        analyzed_sources: [...(currentDomain.analyzed_sources ?? []), file],
+      };
+
+      yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
+      yield {
+        kind: "domain_updated", domainId,
+        patch: {
+          entity_types: currentDomain.entity_types,
+          language_notes: currentDomain.language_notes,
+          analyzed_sources: currentDomain.analyzed_sources,
+        },
+      };
+      yield { kind: "tool_result", ok: true };
+    }
+
+    yield { kind: "file_done", file, phase: "analysis" };
   }
 
-  if (signal.aborted) return;
+  // Phase 1 complete — clear analyzed_sources progress marker
+  if (currentDomain) {
+    yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
+    yield { kind: "domain_updated", domainId, patch: { analyzed_sources: undefined } };
+    yield { kind: "tool_result", ok: true };
+  }
 
-  // Parse entity_types from LLM response
-  let entry: DomainEntry;
-  try {
-    const match = fullText.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("No JSON object found in LLM response");
-    entry = JSON.parse(match[0]) as DomainEntry;
-    const vaultPrefix = `vaults/${vaultName}/`;
-    if (entry.wiki_folder?.startsWith(vaultPrefix)) {
-      entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
-    }
-    // Strip !Wiki/ prefix if LLM outputs the full path rather than the subfolder
-    if (entry.wiki_folder?.startsWith("!Wiki/")) {
-      entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
-    }
-    if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
-  } catch (e) {
-    yield { kind: "error", message: `Failed to parse domain entry: ${(e as Error).message}` };
+  if (!currentDomain) {
+    yield { kind: "error", message: `init --sources: не удалось создать домен из файлов` };
     return;
   }
 
-  // Build updated domain with new entity_types for Phase 2
-  const updatedDomain: DomainEntry = {
-    ...(existing ?? { id: domainId, name: domainId, wiki_folder: entry.wiki_folder }),
-    entity_types: entry.entity_types,
-    language_notes: entry.language_notes,
-    source_paths: sourcePaths,
-  };
-
-  if (dryRun) {
-    yield {
-      kind: "result",
-      durationMs: Date.now() - start,
-      text: `Dry run — domain entry:\n\`\`\`json\n${JSON.stringify(entry, null, 2)}\n\`\`\``,
-    };
-    return;
-  }
-
-  yield { kind: "tool_use", name: existing ? "UpdateDomain" : "SaveDomain", input: { id: domainId } };
-  if (existing) {
-    yield { kind: "domain_updated", domainId, patch: { entity_types: entry.entity_types, language_notes: entry.language_notes } };
-  } else {
-    yield { kind: "domain_created", entry: { ...entry, source_paths: sourcePaths } };
-  }
-  yield { kind: "tool_result", ok: true };
-
+  // --- Phase 2: Ingest ---
+  yield { kind: "init_start", totalFiles: sourceFiles.length, phase: "ingest" };
   yield { kind: "assistant_text", delta: `\nCreating wiki pages from ${sourceFiles.length} source files...\n` };
 
-  // Phase 2: Ingest each source file
   for (let i = 0; i < sourceFiles.length; i++) {
     if (signal.aborted) return;
     const file = sourceFiles[i];
@@ -305,10 +418,8 @@ async function* runInitWithSources(
     while (!done) {
       let hadError = false;
       let caughtErr: Error | null = null;
-
       try {
-        // vaultTools.vaultRoot — абсолютный путь к vault, нужен runIngest для toVaultPath()
-        for await (const ev of runIngest([file], vaultTools, llm, model, [updatedDomain], vaultTools.vaultRoot, signal, opts)) {
+        for await (const ev of runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts)) {
           yield ev;
         }
         done = true;
@@ -316,25 +427,19 @@ async function* runInitWithSources(
         hadError = true;
         caughtErr = e as Error;
       }
-
       if (hadError && caughtErr) {
         const canRetry = !retried;
-        const choice = onFileError
-          ? await onFileError(file, caughtErr, canRetry)
-          : "skip";
+        const choice = onFileError ? await onFileError(file, caughtErr, canRetry) : "skip";
         if (choice === "stop") return;
-        if (choice === "retry" && canRetry) {
-          retried = true;
-          continue;
-        }
-        done = true; // skip
+        if (choice === "retry" && canRetry) { retried = true; continue; }
+        done = true;
       }
     }
 
     yield { kind: "file_done", file };
   }
 
-  await appendLog(vaultTools, domainWikiFolder(updatedDomain.wiki_folder), domainId);
+  await appendLog(vaultTools, wikiRootGuess, domainId);
 
   yield {
     kind: "result",

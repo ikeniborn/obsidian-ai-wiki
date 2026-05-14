@@ -37,6 +37,39 @@ async function collect<T>(gen: AsyncGenerator<T>): Promise<T[]> {
   return out;
 }
 
+function makeMultiLlm(responses: string[]): LlmClient {
+  let callIndex = 0;
+  return {
+    chat: {
+      completions: {
+        create: vi.fn().mockImplementation(() => {
+          const json = responses[callIndex] ?? responses[responses.length - 1];
+          callIndex++;
+          return Promise.resolve({
+            [Symbol.asyncIterator]: async function* () {
+              yield { choices: [{ delta: { content: json } }] };
+            },
+          });
+        }),
+      },
+    },
+  } as unknown as LlmClient;
+}
+
+function mockAdapterWithSources(files: Record<string, string>): VaultAdapter {
+  return mockAdapter({
+    list: vi.fn().mockImplementation(async (path: string) => {
+      const all = Object.keys(files);
+      const filtered = path === "" ? all : all.filter(f => f.startsWith(path));
+      return { files: filtered, folders: [] };
+    }),
+    read: vi.fn().mockImplementation(async (path: string) => {
+      if (path in files) return files[path];
+      return "";
+    }),
+  });
+}
+
 const existingDomain: DomainEntry = {
   id: "existing",
   name: "Existing",
@@ -243,5 +276,75 @@ describe("mergeEntityTypes", () => {
     const result = mergeEntityTypes([], incoming);
     expect(result).toHaveLength(1);
     expect(result[0].type).toBe("company");
+  });
+});
+
+describe("runInitWithSources — Phase 1 bootstrap", () => {
+  const bootstrapDomainJson = JSON.stringify({
+    id: "testdomain",
+    name: "Test Domain",
+    wiki_folder: "testdomain",
+    source_paths: [],
+    entity_types: [{ type: "concept", description: "A concept", extraction_cues: ["concept"] }],
+    language_notes: "English",
+  });
+
+  const sourceFiles = {
+    "sources/file0.md": "Content of file 0",
+  };
+
+  it("emits init_start { phase: 'analysis' } before bootstrap", async () => {
+    const adapter = mockAdapterWithSources(sourceFiles);
+    const vt = new VaultTools(adapter, "/vault");
+    const events = await collect(
+      runInit(["testdomain", "--sources", "sources"], vt, makeMultiLlm([bootstrapDomainJson]), "model", [], "TestVault", new AbortController().signal),
+    );
+    const initStart = events.find((e: any) => e.kind === "init_start") as any;
+    expect(initStart).toBeDefined();
+    expect(initStart.phase).toBe("analysis");
+    expect(initStart.totalFiles).toBe(1);
+  });
+
+  it("new domain → emits domain_created with full entry and source_paths from args", async () => {
+    const adapter = mockAdapterWithSources(sourceFiles);
+    const vt = new VaultTools(adapter, "/vault");
+    const events = await collect(
+      runInit(["testdomain", "--sources", "sources"], vt, makeMultiLlm([bootstrapDomainJson]), "model", [], "TestVault", new AbortController().signal),
+    );
+    const created = events.find((e: any) => e.kind === "domain_created") as any;
+    expect(created).toBeDefined();
+    expect(created.entry.id).toBe("testdomain");
+    expect(created.entry.source_paths).toContain("sources");
+    expect(created.entry.entity_types).toHaveLength(1);
+  });
+
+  it("existing domain → emits domain_updated with patch { entity_types, language_notes, wiki_folder, analyzed_sources: [] }", async () => {
+    const adapter = mockAdapterWithSources(sourceFiles);
+    const vt = new VaultTools(adapter, "/vault");
+    const existing: DomainEntry = { id: "testdomain", name: "Existing", wiki_folder: "old" };
+    const events = await collect(
+      runInit(["testdomain", "--sources", "sources"], vt, makeMultiLlm([bootstrapDomainJson]), "model", [existing], "TestVault", new AbortController().signal),
+    );
+    // First domain_updated is the bootstrap patch (before clear event)
+    const bootstrapUpdate = events.find((e: any) => e.kind === "domain_updated" && Array.isArray(e.patch?.analyzed_sources)) as any;
+    expect(bootstrapUpdate).toBeDefined();
+    expect(bootstrapUpdate.patch.entity_types).toBeDefined();
+    expect(bootstrapUpdate.patch.language_notes).toBeDefined();
+    expect(bootstrapUpdate.patch.wiki_folder).toBeDefined();
+    expect(bootstrapUpdate.patch.analyzed_sources).toEqual([]);
+    expect(events.some((e: any) => e.kind === "domain_created")).toBe(false);
+  });
+
+  it("emits file_start { index: 0, phase: 'analysis' } and file_done { phase: 'analysis' } for file_0", async () => {
+    const adapter = mockAdapterWithSources(sourceFiles);
+    const vt = new VaultTools(adapter, "/vault");
+    const events = await collect(
+      runInit(["testdomain", "--sources", "sources"], vt, makeMultiLlm([bootstrapDomainJson]), "model", [], "TestVault", new AbortController().signal),
+    );
+    const fileStart = events.find((e: any) => e.kind === "file_start") as any;
+    const fileDone = events.find((e: any) => e.kind === "file_done") as any;
+    expect(fileStart?.index).toBe(0);
+    expect(fileStart?.phase).toBe("analysis");
+    expect(fileDone?.phase).toBe("analysis");
   });
 });
