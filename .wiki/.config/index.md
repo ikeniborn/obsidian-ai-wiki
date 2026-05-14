@@ -29,8 +29,13 @@
 - [[backend-strategy]] — `документация/паттерны/backend-strategy.md`
 - [[per-device-settings]] — `документация/паттерны/per-device-settings.md`
 
-#### спецификации (4)
+#### спецификации (6)
 - [[agent-base-contract]] — `документация/спецификации/agent-base-contract.md`
 - [[format-operation-design]] — `документация/спецификации/format-operation-design.md`
 - [[claude-agent-backend-design]] — `документация/спецификации/claude-agent-backend-design.md`
 - [[audit-fix-design]] — `документация/спецификации/audit-fix-design.md`
+- [[generation-speed-design]] — `документация/спецификации/generation-speed-design.md`
+- [[remove-content-truncation-design]] — `документация/спецификации/remove-content-truncation-design.md`
+
+#### планы (1)
+- [[generation-speed-plan]] — `документация/планы/generation-speed-plan.md`

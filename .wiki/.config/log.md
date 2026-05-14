@@ -95,3 +95,35 @@
 **Примечание:** README.md вне source_paths["docs"], обработан по содержимому как документация домена
 
 ---
+
+## 2026-05-14 — ingest generation-speed spec + plan
+
+**Операция:** ingest
+**Домен:** документация
+**Источники:**
+- `docs/superpowers/specs/2026-05-14-generation-speed-design.md`
+- `docs/superpowers/plans/2026-05-14-generation-speed.md`
+
+**Создано страниц:** 2
+- `документация/спецификации/generation-speed-design.md` (mature) — дизайн отображения tok/s: источник `usage.output_tokens`, два DOM-места (progressCount + resultSpeedEl), поток данных через appendEvent→finish→setRunning, изменения в types/stream/view/controller
+- `документация/планы/generation-speed-plan.md` (mature) — 6 задач реализации: TDD для stream.ts, 4 под-изменения view.ts, обогащение лога controller.ts, bump версии
+
+**Обновлено страниц:** 1
+- `документация/компоненты/llm-wiki-view.md` — добавлен раздел «Отображение скорости генерации» с описанием `lastTokPerSec`, `resultSpeedEl` и потоком данных
+
+**Обновлено:** index.md (спецификации 4→5, планы 0→1), log.md
+
+---
+
+## 2026-05-14 — ingest remove-content-truncation spec
+
+**Операция:** ingest
+**Домен:** документация
+**Источник:** `docs/superpowers/specs/2026-05-14-remove-content-truncation-design.md`
+
+**Создано страниц:** 1
+- `документация/спецификации/remove-content-truncation-design.md` (mature) — spec: удаление всех `.slice(0, N)` из четырёх LLM-фаз (init/ingest/lint/query); рефактор `buildContextBlock` в query.ts без параметра `maxChars`; замена truncation-предупреждения в init на информационный лог размера
+
+**Обновлено:** index.md (спецификации 5→6), log.md
+
+---

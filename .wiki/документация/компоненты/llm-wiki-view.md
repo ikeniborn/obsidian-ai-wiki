@@ -4,7 +4,7 @@ wiki_sources:
   - docs/architecture/README.md
   - docs/architecture/overview.yaml
   - src/view.ts
-wiki_updated: 2026-05-13
+wiki_updated: 2026-05-14
 wiki_domain: документация
 tags: [компонент, view, ui, obsidian, security]
 ---
@@ -61,9 +61,21 @@ function sanitizeLinks(el: HTMLElement): void {
 - Кнопки Apply Replace / Apply Keep / Cancel
 - Чат-textarea для refine
 
+## Отображение скорости генерации (v0.1.x)
+
+После завершения операции показывается скорость генерации `tok/s` в двух местах:
+
+| Место | Поле | Поведение |
+|---|---|---|
+| Progress header (`progressCount`) | `lastTokPerSec` | `steps N, 42.1s · 150 tok/s` (после `updateMetrics()` в `finish()`) |
+| Result section header | `resultSpeedEl` (HTMLElement span) | ` 150 tok/s` — пустая строка если нет данных |
+
+Поток: `appendEvent(result)` → вычислить `lastTokPerSec` → `finish()` записывает оба места → `setRunning()` сбрасывает. Значение НЕ хранится в `RunHistoryEntry`.
+
 ## Связанные страницы
 
 - [[wiki-controller]]
 - [[format-operation]]
 - [[async-generator-events]]
 - [[fix-operation]]
+- [[generation-speed-design]]

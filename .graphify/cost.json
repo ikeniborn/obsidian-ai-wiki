@@ -65,6 +65,20 @@
       "input_tokens": 0,
       "output_tokens": 0,
       "files": 118
+    },
+    {
+      "date": "2026-05-14T13:49:15.239083+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 6,
+      "mode": "update-code-only"
+    },
+    {
+      "date": "2026-05-14T15:42:01.754532+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 5,
+      "mode": "incremental-code-only"
     }
   ],
   "total_input_tokens": 9200,
