@@ -376,6 +376,14 @@ export class LlmWikiView extends ItemView {
       this.assistantBuffer = "";
       this.reasoningBlock = null;
       this.reasoningBuffer = "";
+      if (this.assistantRafHandle !== null) {
+        window.cancelAnimationFrame(this.assistantRafHandle);
+        this.assistantRafHandle = null;
+      }
+      if (this.reasoningRafHandle !== null) {
+        window.cancelAnimationFrame(this.reasoningRafHandle);
+        this.reasoningRafHandle = null;
+      }
       const step = this.stepsEl.createDiv("ai-wiki-step");
       const head = step.createDiv("ai-wiki-step-head");
       head.createSpan({ cls: "ai-wiki-step-icon" }).setText("🔧");
