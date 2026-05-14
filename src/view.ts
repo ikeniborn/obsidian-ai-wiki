@@ -298,6 +298,14 @@ export class LlmWikiView extends ItemView {
     this.assistantBuffer = "";
     this.reasoningBlock = null;
     this.reasoningBuffer = "";
+    if (this.assistantRafHandle !== null) {
+      window.cancelAnimationFrame(this.assistantRafHandle);
+      this.assistantRafHandle = null;
+    }
+    if (this.reasoningRafHandle !== null) {
+      window.cancelAnimationFrame(this.reasoningRafHandle);
+      this.reasoningRafHandle = null;
+    }
     this.lastTokPerSec = undefined;
     this.resultSpeedEl?.setText("");
     this.stepsOpen = true;
