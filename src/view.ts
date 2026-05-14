@@ -63,6 +63,8 @@ export class LlmWikiView extends ItemView {
   private chatStartTs = 0;
   private lastUserMessage = "";
   private startTs = 0;
+  private lastTokPerSec: number | undefined;
+  private resultSpeedEl: HTMLElement | null = null;
   private toolCount = 0;
   private stepCount = 0;
   private progressEl: HTMLElement | null = null;
@@ -172,6 +174,7 @@ export class LlmWikiView extends ItemView {
     const resultH4 = resultHeader.createEl("h4", { cls: "ai-wiki-progress-title" });
     this.resultToggle = resultH4.createSpan({ cls: "ai-wiki-progress-arrow", text: "▶" });
     resultH4.appendText(` ${T.view.result}`);
+    this.resultSpeedEl = resultH4.createSpan({ cls: "muted ai-wiki-result-speed" });
     resultHeader.addEventListener("click", () => this.toggleResult());
     this.finalEl = this.resultSection.createDiv("ai-wiki-final ai-wiki-hidden");
     registerLinkHandler(this.finalEl, this.app);
@@ -293,6 +296,8 @@ export class LlmWikiView extends ItemView {
     this.assistantBuffer = "";
     this.reasoningBlock = null;
     this.reasoningBuffer = "";
+    this.lastTokPerSec = undefined;
+    this.resultSpeedEl?.setText("");
     this.stepsOpen = true;
     this.stepsEl.removeClass("ai-wiki-hidden");
     this.progressToggle.setText("▼");
@@ -423,8 +428,10 @@ export class LlmWikiView extends ItemView {
       this.stepsEl.createDiv("ai-wiki-step err").setText(`✗ ${ev.message}`);
       this.scrollSteps();
     } else if (ev.kind === "result") {
-      // финальный result рендерим в finishe(), здесь — отметка
       this.assistantBlock = null;
+      if (ev.outputTokens !== undefined && ev.durationMs > 0) {
+        this.lastTokPerSec = Math.round(ev.outputTokens / (ev.durationMs / 1000));
+      }
     } else if (ev.kind === "eval_result") {
       const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
       el.setText(`[eval: ${ev.score}/10] ${ev.reasoning}`);
@@ -512,6 +519,13 @@ export class LlmWikiView extends ItemView {
     this.formatBtn.disabled = false;
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
     this.updateMetrics();
+    if (this.lastTokPerSec !== undefined) {
+      const dur = ((entry.finishedAt - entry.startedAt) / 1000).toFixed(1);
+      this.progressCount.setText(
+        i18n().view.stepsCount(this.stepCount, dur) + ` · ${this.lastTokPerSec} tok/s`
+      );
+    }
+    this.resultSpeedEl?.setText(this.lastTokPerSec !== undefined ? ` ${this.lastTokPerSec} tok/s` : "");
     this.finalEl.empty();
     if (entry.finalText) {
       const comp = new Component();
