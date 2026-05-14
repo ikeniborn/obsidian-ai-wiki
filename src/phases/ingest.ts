@@ -256,7 +256,7 @@ function buildIngestMessages(
   indexContent: string,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const existing = existingPages.size > 0
-    ? [...existingPages.entries()].map(([p, c]) => `${p}:\n${c.slice(0, 400)}`).join("\n\n")
+    ? [...existingPages.entries()].map(([p, c]) => `${p}:\n${c}`).join("\n\n")
     : "Нет.";
 
   const today = new Date().toISOString().slice(0, 10);
@@ -269,7 +269,7 @@ function buildIngestMessages(
     lang_notes: langNotes,
     wiki_path: wikiVaultPath,
     today,
-    schema_block: schemaContent ? `КОНВЕНЦИИ (_wiki_schema.md):\n${schemaContent.slice(0, 2000)}` : "",
+    schema_block: schemaContent ? `КОНВЕНЦИИ (_wiki_schema.md):\n${schemaContent}` : "",
     source_path: sourcePath,
   });
 
@@ -282,10 +282,10 @@ function buildIngestMessages(
         `Wiki-папка: ${wikiVaultPath}`,
         ``,
         `Источник: ${sourcePath}`,
-        sourceContent.slice(0, 8000),
+        sourceContent,
         ``,
         `Существующие wiki-страницы:\n${existing}`,
-        indexContent ? `\nИндекс wiki (_index.md):\n${indexContent.slice(0, 2000)}` : "",
+        indexContent ? `\nИндекс wiki (_index.md):\n${indexContent}` : "",
       ].filter(Boolean).join("\n"),
     },
   ];
