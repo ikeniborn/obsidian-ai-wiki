@@ -20403,6 +20403,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   assistantBuffer = "";
   reasoningBlock = null;
   reasoningBuffer = "";
+  assistantRafHandle = null;
+  reasoningRafHandle = null;
   getViewType() {
     return AI_WIKI_VIEW_TYPE;
   }
@@ -20509,6 +20511,14 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       window.clearTimeout(this.tickHandle);
     if (this.chatTickHandle !== null)
       window.clearTimeout(this.chatTickHandle);
+    if (this.assistantRafHandle !== null) {
+      window.cancelAnimationFrame(this.assistantRafHandle);
+      this.assistantRafHandle = null;
+    }
+    if (this.reasoningRafHandle !== null) {
+      window.cancelAnimationFrame(this.reasoningRafHandle);
+      this.reasoningRafHandle = null;
+    }
     if (this.plugin.controller.isBusy()) {
       new BusyCloseModal(this.app, () => this.plugin.controller.cancelCurrent()).open();
     }
@@ -20616,6 +20626,14 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.assistantBuffer = "";
     this.reasoningBlock = null;
     this.reasoningBuffer = "";
+    if (this.assistantRafHandle !== null) {
+      window.cancelAnimationFrame(this.assistantRafHandle);
+      this.assistantRafHandle = null;
+    }
+    if (this.reasoningRafHandle !== null) {
+      window.cancelAnimationFrame(this.reasoningRafHandle);
+      this.reasoningRafHandle = null;
+    }
     this.lastTokPerSec = void 0;
     this.resultSpeedEl?.setText("");
     this.stepsOpen = true;
@@ -20684,13 +20702,22 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       void this.refreshDomains();
       return;
     }
-    this.stepCount++;
+    if (ev.kind !== "assistant_text")
+      this.stepCount++;
     if (ev.kind === "tool_use") {
       this.toolCount++;
       this.assistantBlock = null;
       this.assistantBuffer = "";
       this.reasoningBlock = null;
       this.reasoningBuffer = "";
+      if (this.assistantRafHandle !== null) {
+        window.cancelAnimationFrame(this.assistantRafHandle);
+        this.assistantRafHandle = null;
+      }
+      if (this.reasoningRafHandle !== null) {
+        window.cancelAnimationFrame(this.reasoningRafHandle);
+        this.reasoningRafHandle = null;
+      }
       const step = this.stepsEl.createDiv("ai-wiki-step");
       const head = step.createDiv("ai-wiki-step-head");
       head.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F527}");
@@ -20732,9 +20759,15 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
           this.reasoningBlock.createSpan({ cls: "ai-wiki-reasoning-text" });
         }
         this.reasoningBuffer += ev.delta;
-        const span = this.reasoningBlock.querySelector(".ai-wiki-reasoning-text");
-        if (span)
-          span.setText(truncate(this.reasoningBuffer, ASSISTANT_TEXT_MAX));
+        if (!this.reasoningRafHandle) {
+          this.reasoningRafHandle = window.requestAnimationFrame(() => {
+            this.reasoningRafHandle = null;
+            const span = this.reasoningBlock?.querySelector(".ai-wiki-reasoning-text");
+            if (span)
+              span.setText(truncate(this.reasoningBuffer, ASSISTANT_TEXT_MAX));
+            this.scrollSteps();
+          });
+        }
       } else {
         if (!this.assistantBlock) {
           this.assistantBlock = this.stepsEl.createDiv("ai-wiki-step assistant");
@@ -20742,11 +20775,16 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
           this.assistantBlock.createSpan({ cls: "ai-wiki-assistant-text" });
         }
         this.assistantBuffer += ev.delta;
-        const span = this.assistantBlock.querySelector(".ai-wiki-assistant-text");
-        if (span)
-          span.setText(truncate(this.assistantBuffer, ASSISTANT_TEXT_MAX));
+        if (!this.assistantRafHandle) {
+          this.assistantRafHandle = window.requestAnimationFrame(() => {
+            this.assistantRafHandle = null;
+            const span = this.assistantBlock?.querySelector(".ai-wiki-assistant-text");
+            if (span)
+              span.setText(truncate(this.assistantBuffer, ASSISTANT_TEXT_MAX));
+            this.scrollSteps();
+          });
+        }
       }
-      this.scrollSteps();
     } else if (ev.kind === "system") {
       const step = this.stepsEl.createDiv("ai-wiki-step");
       const head = step.createDiv("ai-wiki-step-head");
@@ -21617,7 +21655,7 @@ function buildEntityTypesBlock(domain) {
 }
 function buildIngestMessages(sourcePath, sourceContent, domain, wikiVaultPath, existingPages, schemaContent, indexContent) {
   const existing = existingPages.size > 0 ? [...existingPages.entries()].map(([p, c]) => `${p}:
-${c.slice(0, 400)}`).join("\n\n") : "\u041D\u0435\u0442.";
+${c}`).join("\n\n") : "\u041D\u0435\u0442.";
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const entityTypesBlock = buildEntityTypesBlock(domain);
   const langNotes = domain.language_notes ? `\u042F\u0437\u044B\u043A\u043E\u0432\u044B\u0435 \u043F\u0440\u0430\u0432\u0438\u043B\u0430: ${domain.language_notes}` : "";
@@ -21628,7 +21666,7 @@ ${c.slice(0, 400)}`).join("\n\n") : "\u041D\u0435\u0442.";
     wiki_path: wikiVaultPath,
     today,
     schema_block: schemaContent ? `\u041A\u041E\u041D\u0412\u0415\u041D\u0426\u0418\u0418 (_wiki_schema.md):
-${schemaContent.slice(0, 2e3)}` : "",
+${schemaContent}` : "",
     source_path: sourcePath
   });
   return [
@@ -21640,13 +21678,13 @@ ${schemaContent.slice(0, 2e3)}` : "",
         `Wiki-\u043F\u0430\u043F\u043A\u0430: ${wikiVaultPath}`,
         ``,
         `\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A: ${sourcePath}`,
-        sourceContent.slice(0, 8e3),
+        sourceContent,
         ``,
         `\u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B:
 ${existing}`,
         indexContent ? `
 \u0418\u043D\u0434\u0435\u043A\u0441 wiki (_index.md):
-${indexContent.slice(0, 2e3)}` : ""
+${indexContent}` : ""
       ].filter(Boolean).join("\n")
     }
   ];
@@ -21739,7 +21777,6 @@ function checkGraphStructure(graph, hubThreshold) {
 }
 
 // src/phases/query.ts
-var MAX_CONTEXT_CHARS = 8e4;
 var META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}) {
   const question = args[0]?.trim();
@@ -21781,17 +21818,17 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   }
   const seedSet = new Set(seeds);
   const selectedIds = bfsExpand(seeds, graph, graphDepth);
-  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, MAX_CONTEXT_CHARS);
+  const contextBlock = buildContextBlock(pages, seedSet, selectedIds);
   const entityTypesBlock = buildEntityTypesBlock2(domain);
   const systemPrompt = render(query_default, {
     domain_name: domain.name,
     entity_types_block: entityTypesBlock,
     schema_block: schemaContent ? `
 \u041A\u043E\u043D\u0432\u0435\u043D\u0446\u0438\u0438 (_wiki_schema.md):
-${schemaContent.slice(0, 2e3)}` : "",
+${schemaContent}` : "",
     index_block: indexContent ? `
 \u0412\u0438\u043A\u0438-\u0438\u043D\u0434\u0435\u043A\u0441 (_index.md):
-${indexContent.slice(0, 3e3)}` : ""
+${indexContent}` : ""
   });
   const messages = [
     { role: "system", content: systemPrompt },
@@ -21885,7 +21922,7 @@ async function llmSelectSeeds(question, indexContent, allPageIds, llm, model, si
     `Available wiki pages: ${allPageIds.join(", ")}`,
     indexContent ? `
 Index:
-${indexContent.slice(0, 3e3)}` : "",
+${indexContent}` : "",
     `
 Return JSON only: {"seeds": ["PageA", "PageB"]} \u2014 most relevant page names (bare names, no path, no .md).`
   ].filter(Boolean).join("\n");
@@ -21910,7 +21947,7 @@ Return JSON only: {"seeds": ["PageA", "PageB"]} \u2014 most relevant page names 
     return [];
   }
 }
-function buildContextBlock(pages, seeds, selectedIds, maxChars) {
+function buildContextBlock(pages, seeds, selectedIds) {
   const seedPages = [];
   const bfsPages = [];
   for (const [path2, content] of pages) {
@@ -21925,18 +21962,10 @@ function buildContextBlock(pages, seeds, selectedIds, maxChars) {
   const ordered = [...seedPages, ...bfsPages];
   let block = "";
   for (const [p, c] of ordered) {
-    const chunk = `--- ${p} ---
+    block += `--- ${p} ---
 ${c}
 
 `;
-    if (block.length + chunk.length > maxChars)
-      break;
-    block += chunk;
-  }
-  if (block.length === 0 && ordered.length > 0) {
-    const [p, c] = ordered[0];
-    block = `--- ${p} ---
-${c}`.slice(0, maxChars) + "\n[...truncated]";
   }
   return block;
 }
@@ -21984,7 +22013,7 @@ Wiki folder outside vault \u2014 skipped.`);
     const pages = await vaultTools.readAll(files);
     const graph = buildWikiGraph(pages);
     const structuralIssues = checkStructure(pages);
-    const graphIssues = checkGraphStructure(graph, hubThreshold).slice(0, 8e3);
+    const graphIssues = checkGraphStructure(graph, hubThreshold);
     const allIssues = [structuralIssues, graphIssues].filter(Boolean).join("\n");
     const entityTypesBlock = buildEntityTypesBlock3(domain);
     yield { kind: "assistant_text", delta: `Evaluating domain "${domain.id}" quality...
@@ -22006,7 +22035,7 @@ ${allIssues || "\u041D\u0435\u0442."}`,
           "",
           `Wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B:
 ${[...pages.entries()].map(([p, c]) => `--- ${p} ---
-${c.slice(0, 500)}`).join("\n\n")}`
+${c}`).join("\n\n")}`
         ].join("\n")
       }
     ];
@@ -22231,7 +22260,7 @@ async function actualizeDomainConfig(domain, pages, llm, model, opts, signal) {
     language_notes: domain.language_notes ?? ""
   }, null, 2);
   const pagesSnippet = [...pages.entries()].map(([p, c]) => `${p}:
-${c.slice(0, 300)}`).join("\n\n");
+${c}`).join("\n\n");
   const messages = [
     {
       role: "system",
@@ -22401,10 +22430,10 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
     vault_name: vaultName,
     schema_block: schemaContent ? `
 \u041A\u043E\u043D\u0432\u0435\u043D\u0446\u0438\u0438 \u0432\u0438\u043A\u0438 (_wiki_schema.md):
-${schemaContent.slice(0, 1500)}` : "",
+${schemaContent}` : "",
     index_block: indexContent ? `
 \u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0430\u044F \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 (_index.md):
-${indexContent.slice(0, 1e3)}` : ""
+${indexContent}` : ""
   });
   const messages = [
     { role: "system", content: systemContent },
@@ -22416,7 +22445,7 @@ ${indexContent.slice(0, 1e3)}` : ""
         "",
         `\u041F\u0440\u0438\u043C\u0435\u0440\u044B \u0444\u0430\u0439\u043B\u043E\u0432 vault:`,
         [...samples.entries()].map(([p, c]) => `${p}:
-${c.slice(0, 400)}`).join("\n\n")
+${c}`).join("\n\n")
       ].join("\n")
     }
   ];
@@ -22534,21 +22563,18 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
       yield { kind: "file_done", file, phase: "analysis" };
       continue;
     }
-    if (fileContent.length > 8e3) {
-      yield { kind: "assistant_text", delta: `\u26A0 ${file}: truncated to 8 000 chars (original: ${fileContent.length} chars)
+    yield { kind: "assistant_text", delta: `\u2139 ${file}: ${fileContent.length} chars
 ` };
-    }
-    const truncated = fileContent.slice(0, 8e3);
     if (i === 0 && !isResuming) {
       const systemContent = render(init_default, {
         domain_id: domainId,
         vault_name: vaultName,
         schema_block: schemaContent ? `
 \u041A\u043E\u043D\u0432\u0435\u043D\u0446\u0438\u0438 \u0432\u0438\u043A\u0438 (_wiki_schema.md):
-${schemaContent.slice(0, 1500)}` : "",
+${schemaContent}` : "",
         index_block: indexContent ? `
 \u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0430\u044F \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 (_index.md):
-${indexContent.slice(0, 1e3)}` : ""
+${indexContent}` : ""
       });
       const messages = [
         { role: "system", content: systemContent },
@@ -22559,7 +22585,7 @@ Vault name: ${vaultName}
 Source paths: ${sourcePaths.join(", ")}
 
 ${file}:
-${truncated}`
+${fileContent}`
         }
       ];
       let fullText = "";
@@ -22651,7 +22677,7 @@ ${JSON.stringify(currentEntityTypes, null, 2)}
 
 \u0424\u0430\u0439\u043B: ${file}
 
-${truncated}`
+${fileContent}`
         }
       ];
       let fullText = "";
@@ -31489,6 +31515,8 @@ var WikiController = class {
   }
   async logEvent(_vaultRoot, sessionId, op, domainId, ev) {
     if (!this.plugin.settings.agentLogEnabled)
+      return;
+    if (ev.kind === "assistant_text")
       return;
     const adapter = this.app.vault.adapter;
     const dir = "!Logs";
