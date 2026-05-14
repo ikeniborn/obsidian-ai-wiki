@@ -1,4 +1,4 @@
-import { join } from "path-browserify";
+import { join, basename } from "path-browserify";
 import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
@@ -195,6 +195,14 @@ export async function* runLint(
     if (backlinks.size > 0) {
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
     }
+
+    const indexPath = `${wikiVaultPath}/_index.md`;
+    const indexLinks = files
+      .map((f) => `- [[${basename(f, ".md")}]]`)
+      .join("\n");
+    try {
+      await vaultTools.write(indexPath, `# Wiki Index\n\n${indexLinks}\n`);
+    } catch { /* не критично */ }
   }
 
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n") };

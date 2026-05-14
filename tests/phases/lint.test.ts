@@ -251,6 +251,26 @@ describe("runLint", () => {
     expect(ev.patch.language_notes).toBe("Updated notes.");
   });
 
+  it("rebuilds _index.md in domain folder after lint run", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({
+        files: ["!Wiki/work/Entity.md", "!Wiki/work/Concept.md"],
+        folders: [],
+      }),
+      read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    await collect(
+      runLint(["work"], vt, makeLlm("No issues."), "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
+    const indexWrite = writeCalls.find(([path]) => path === "!Wiki/work/_index.md");
+    expect(indexWrite).toBeDefined();
+    expect(indexWrite![1]).toContain("[[Entity]]");
+    expect(indexWrite![1]).toContain("[[Concept]]");
+  });
+
   it("includes isolated node graph issue in LLM prompt", async () => {
     const adapter = mockAdapter({
       list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Orphan.md"], folders: [] }),
