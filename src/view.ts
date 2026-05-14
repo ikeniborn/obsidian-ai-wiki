@@ -68,6 +68,7 @@ export class LlmWikiView extends ItemView {
   private progressEl: HTMLElement | null = null;
   private progressTotal = 0;
   private progressDone = 0;
+  private progressPhaseEl: HTMLElement | null = null;
   private tickHandle: ReturnType<typeof window.setTimeout> | null = null;
   private currentToolStep: HTMLElement | null = null;
   private currentToolStartedAt = 0;
@@ -284,6 +285,7 @@ export class LlmWikiView extends ItemView {
     this.toolCount = 0;
     this.stepCount = 0;
     this.progressEl = null;
+    this.progressPhaseEl = null;
     this.progressTotal = 0;
     this.progressDone = 0;
     this.currentToolStep = null;
@@ -312,10 +314,22 @@ export class LlmWikiView extends ItemView {
     if (ev.kind === "init_start") {
       this.progressTotal = ev.totalFiles;
       this.progressDone = 0;
-      const step = this.stepsEl.createDiv("ai-wiki-step ai-wiki-progress");
-      step.createSpan({ cls: "ai-wiki-step-icon" }).setText("📂");
-      this.progressEl = step.createSpan({ cls: "ai-wiki-progress-text" });
-      this.progressEl.setText(`0 / ${ev.totalFiles} файлов`);
+      if (this.progressEl) {
+        // Second init_start (Phase 2) — reset existing elements in place
+        this.progressEl.setText(`0 / ${ev.totalFiles} файлов`);
+        if (this.progressPhaseEl) {
+          const label = ev.phase === "ingest" ? "Ingesting files…" : "Analysing files…";
+          this.progressPhaseEl.setText(label);
+        }
+      } else {
+        const step = this.stepsEl.createDiv("ai-wiki-step ai-wiki-progress");
+        step.createSpan({ cls: "ai-wiki-step-icon" }).setText("📂");
+        const label = ev.phase === "ingest" ? "Ingesting files…" : "Analysing files…";
+        this.progressPhaseEl = step.createSpan({ cls: "ai-wiki-progress-phase" });
+        this.progressPhaseEl.setText(label);
+        this.progressEl = step.createSpan({ cls: "ai-wiki-progress-text" });
+        this.progressEl.setText(`0 / ${ev.totalFiles} файлов`);
+      }
       this.scrollSteps();
       return;
     }
