@@ -158,41 +158,43 @@ describe("runInit — ensureRootFiles", () => {
     expect(schemaCall![1]).toContain("# Wiki Schema");
   });
 
-  it("создаёт _index.md когда файл отсутствует", async () => {
-    const adapter = mockAdapter({ exists: vi.fn().mockResolvedValue(false) });
-    const vt = new VaultTools(adapter, "/vault");
-    await collect(
-      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "TestVault", new AbortController().signal),
-    );
-    const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
-    const indexCall = writeCalls.find(([path]) => path.endsWith("_index.md"));
-    expect(indexCall).toBeDefined();
-    expect(indexCall![1]).toContain("# Wiki Index");
-  });
-
-  it("создаёт _log.md когда файл отсутствует", async () => {
-    const adapter = mockAdapter({ exists: vi.fn().mockResolvedValue(false) });
-    const vt = new VaultTools(adapter, "/vault");
-    await collect(
-      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "TestVault", new AbortController().signal),
-    );
-    const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
-    const logCall = writeCalls.find(([path]) => path.endsWith("_log.md"));
-    expect(logCall).toBeDefined();
-    expect(logCall![1]).toContain("# Wiki Log");
-  });
-
-  it("не перезаписывает существующие корневые файлы", async () => {
+  it("не перезаписывает существующую корневую схему", async () => {
     const adapter = mockAdapter({ exists: vi.fn().mockResolvedValue(true) });
     const vt = new VaultTools(adapter, "/vault");
     await collect(
       runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "TestVault", new AbortController().signal),
     );
     const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
-    const schemaWrite = writeCalls.find(([path]) => path.endsWith("_schema.md"));
-    const indexWrite = writeCalls.find(([path]) => path.endsWith("_index.md"));
-    expect(schemaWrite).toBeUndefined();
-    expect(indexWrite).toBeUndefined();
+    const schemaWrite = writeCalls.find(([path]) => path === "!Wiki/_wiki_schema.md");
+    expect(schemaWrite).toBeUndefined(); // exists=true → not written
+  });
+
+  it("удаляет !Wiki/_index.md если существует (миграция)", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockImplementation((path: string) =>
+        Promise.resolve(path === "!Wiki/_index.md"),
+      ),
+      remove: vi.fn().mockResolvedValue(undefined),
+    });
+    const vt = new VaultTools(adapter, "/vault");
+    await collect(
+      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "TestVault", new AbortController().signal),
+    );
+    expect(adapter.remove).toHaveBeenCalledWith("!Wiki/_index.md");
+  });
+
+  it("appendLog пишет в папку домена, а не в корень !Wiki", async () => {
+    const adapter = mockAdapter({
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, "/vault");
+    await collect(
+      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "TestVault", new AbortController().signal),
+    );
+    const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
+    const logWrite = writeCalls.find(([path]) => path.includes("_log.md") && path !== "!Wiki/_log.md");
+    expect(logWrite).toBeDefined();
+    expect(logWrite![0]).toBe("!Wiki/newdomain/_log.md");
   });
 
   it("удаляет !Wiki/_log.md если существует (миграция)", async () => {
