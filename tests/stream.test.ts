@@ -66,6 +66,35 @@ describe("parseStreamLine", () => {
     expect(ev?.kind).toBe("error");
   });
 
+  it("parses outputTokens from result event with usage", () => {
+    const line = JSON.stringify({
+      type: "result",
+      subtype: "success",
+      duration_ms: 42000,
+      is_error: false,
+      result: "done",
+      total_cost_usd: 0.012,
+      usage: { output_tokens: 580 },
+    });
+    const ev = parseStreamLine(line);
+    expect(ev?.kind).toBe("result");
+    expect((ev as Extract<RunEvent, { kind: "result" }>).outputTokens).toBe(580);
+  });
+
+  it("leaves outputTokens undefined when usage absent", () => {
+    const line = JSON.stringify({
+      type: "result",
+      subtype: "success",
+      duration_ms: 42000,
+      is_error: false,
+      result: "done",
+      total_cost_usd: 0.012,
+    });
+    const ev = parseStreamLine(line);
+    expect(ev?.kind).toBe("result");
+    expect((ev as Extract<RunEvent, { kind: "result" }>).outputTokens).toBeUndefined();
+  });
+
   it("returns null for unknown type without throwing", () => {
     expect(parseStreamLine(JSON.stringify({ type: "unknown" }))).toBeNull();
   });
