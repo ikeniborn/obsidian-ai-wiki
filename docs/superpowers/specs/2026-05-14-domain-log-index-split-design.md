@@ -59,11 +59,25 @@ Same split on line 43. Read `_index.md` from `wikiVaultPath`, `_wiki_schema.md` 
 
 **LLM context in both `runInit` and `runInitWithSources`:**
 - Schema: read from `!Wiki/_wiki_schema.md` (unchanged)
-- Index: remove from context (root index gone, domain index doesn't exist yet at init time)
+- Index: if domain already exists in store → read from `!Wiki/{existing.wiki_folder}/_index.md`; if new domain → empty context (no index yet)
 
 ### src/phases/lint.ts
 
-No changes. `META_FILES` filter uses `f.endsWith(m)` — matches `_index.md` and `_log.md` by filename suffix regardless of path.
+After fixing pages, rebuild `_index.md` for the domain:
+
+```ts
+// after writing fixed pages, rebuild domain index:
+const allPages = await vaultTools.listFiles(wikiVaultPath);
+const pageLinks = allPages
+  .filter((f) => !META_FILES.some((m) => f.endsWith(m)))
+  .map((f) => `- [[${basename(f, ".md")}]]`)
+  .join("\n");
+await vaultTools.write(`${wikiVaultPath}/_index.md`, `# Wiki Index\n\n${pageLinks}\n`);
+```
+
+Full rebuild (overwrite), not append. Ensures index stays consistent with actual pages after any lint run.
+
+`META_FILES` filter continues to work by filename suffix regardless of path — no change needed there.
 
 ### Tests
 
