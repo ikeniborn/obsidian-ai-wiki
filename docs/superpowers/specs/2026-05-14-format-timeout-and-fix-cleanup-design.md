@@ -41,13 +41,24 @@ t.setValue(`${s.timeouts.ingest}/${s.timeouts.query}/${s.timeouts.lint}/${s.time
       s.timeouts = { ingest: parts[0], query: parts[1], lint: parts[2], init: parts[3] };
 ```
 
-**After (5 parts, spread preserves unlisted fields):**
+**After:** extract parsing into an exported pure function (placed before the settings class), then use it in `onChange`:
+
+```typescript
+export function parseTimeoutString(v: string): { ingest: number; query: number; lint: number; init: number; format: number } | null {
+  const parts = v.split("/").map((x) => Number(x.trim()));
+  if (parts.length === 5 && parts.every((n) => Number.isFinite(n) && n > 0)) {
+    return { ingest: parts[0], query: parts[1], lint: parts[2], init: parts[3], format: parts[4] };
+  }
+  return null;
+}
+```
+
 ```typescript
 t.setValue(`${s.timeouts.ingest}/${s.timeouts.query}/${s.timeouts.lint}/${s.timeouts.init}/${s.timeouts.format}`)
   .onChange(async (v) => {
-    const parts = v.split("/").map((x) => Number(x.trim()));
-    if (parts.length === 5 && parts.every((n) => Number.isFinite(n) && n > 0)) {
-      s.timeouts = { ...s.timeouts, ingest: parts[0], query: parts[1], lint: parts[2], init: parts[3], format: parts[4] };
+    const parsed = parseTimeoutString(v);
+    if (parsed) { s.timeouts = { ...s.timeouts, ...parsed }; await this.plugin.saveSettings(); }
+  }),
 ```
 
 Order: `ingest(300) / query(300) / lint(900) / init(3600) / format(600)` — matches DEFAULT_SETTINGS, skips `fix` since it has no UI entry point.
@@ -56,7 +67,7 @@ Backward compatibility: `loadSettings` already does `{ ...DEFAULT_SETTINGS.timeo
 
 ### 2. `src/i18n.ts` — timeouts_desc
 
-Update in all three locales (EN line 19, RU line 216, ES):
+Update in all three locales (EN line 19, RU line 216, ES line 411):
 
 ```
 "ingest / query / lint / init / format"
@@ -82,12 +93,16 @@ if (!signal.aborted) {
   const parsed2 = extractJsonObject(fullText2);
   if (parsed2) { finalFormatted = parsed2.formatted; finalReport = parsed2.report; }
 }
-// Always append missing lines — file is written regardless of abort state
+// Append missing lines regardless of abort — vaultTools.write runs after this block
+// regardless of abort state, so finalFormatted must be complete.
+// Note: if callOnce throws (rather than completing with signal.aborted=true), the
+// exception propagates and neither this block nor vaultTools.write is reached — that
+// scenario is out of scope for this fix.
 const missing2 = missingTokensWithContext(original, finalFormatted);
 if (missing2.length > 0) { finalFormatted = appendMissingLines(finalFormatted, missing2); }
 ```
 
-Invariant: if `vaultTools.write(tempPath, ...)` runs, `finalFormatted` must already have the restored-lines block if tokens are missing.
+Invariant: if `vaultTools.write(tempPath, ...)` runs, `finalFormatted` must already have the restored-lines block if tokens are missing. This fix covers only the case where `callOnce` completes normally while `signal.aborted` is true; if `callOnce` throws, neither the write nor the restored-block logic runs, and that is acceptable.
 
 ### 4. `tests/phases/format.test.ts` — new test
 
@@ -156,7 +171,17 @@ Remove:
 
 ## Testing
 
-1. Open Settings → timeout field shows `300/300/900/3600/600`
-2. Change format value → save → reopen → verify persisted
-3. Run format on technical file → verify token-retry fires (dev log) and restored-block appears when retry fails to restore tokens
-4. Run full test suite → all pass
+### Automated
+
+1. `tests/settings.test.ts` — add unit test for 5-part timeout string parsing:
+   - Valid `"300/300/900/3600/600"` → all five values parsed correctly
+   - 4-part string → rejected (no mutation)
+   - Non-numeric part → rejected
+2. `tests/phases/format.test.ts` — new test (§Design §4): abort during retry still produces restored-block if write runs.
+3. Run full test suite → all pass.
+
+### Manual
+
+4. Open Settings → timeout field shows `300/300/900/3600/600`
+5. Change format value → save → reopen → verify persisted.
+6. Run format on a file that triggers token-retry (dev log shows `token loss after first pass`; force it by using a file whose formatted output is significantly shorter than the original) → verify `.formatted.md` contains `<!-- restored-lines: token loss after retry -->`.
