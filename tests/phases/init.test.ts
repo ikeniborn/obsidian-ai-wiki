@@ -348,3 +348,87 @@ describe("runInitWithSources — Phase 1 bootstrap", () => {
     expect(fileDone?.phase).toBe("analysis");
   });
 });
+
+describe("runInitWithSources — Phase 1 incremental", () => {
+  const bootstrapJson = JSON.stringify({
+    id: "dom",
+    name: "Dom",
+    wiki_folder: "dom",
+    source_paths: [],
+    entity_types: [{ type: "concept", description: "Concept", extraction_cues: ["concept"] }],
+    language_notes: "",
+  });
+
+  const incrementalJson1 = JSON.stringify({
+    entity_types: [
+      { type: "concept", description: "Refined concept", extraction_cues: ["refined"] },
+      { type: "person", description: "A person", extraction_cues: ["person"] },
+    ],
+  });
+
+  const incrementalJson2 = JSON.stringify({
+    entity_types: [
+      { type: "place", description: "A place", extraction_cues: ["location"] },
+    ],
+    language_notes: "Russian",
+  });
+
+  const sourceFiles = {
+    "src/a.md": "content a",
+    "src/b.md": "content b",
+    "src/c.md": "content c",
+  };
+
+  it("emits domain_updated after each incremental file with merged entity_types", async () => {
+    const adapter = mockAdapterWithSources(sourceFiles);
+    const vt = new VaultTools(adapter, "/vault");
+    const events = await collect(
+      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, incrementalJson1, incrementalJson2]), "model", [], "TestVault", new AbortController().signal),
+    );
+    const updates = events.filter((e: any) => e.kind === "domain_updated" && e.patch?.entity_types) as any[];
+    // 2 incremental updates + final clear
+    expect(updates.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("entity_types accumulate correctly — later files merge on top of earlier", async () => {
+    const adapter = mockAdapterWithSources(sourceFiles);
+    const vt = new VaultTools(adapter, "/vault");
+    const events = await collect(
+      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, incrementalJson1, incrementalJson2]), "model", [], "TestVault", new AbortController().signal),
+    );
+    // Find last domain_updated with entity_types before clear (analyzed_sources: undefined)
+    const updatesWithTypes = events.filter((e: any) => e.kind === "domain_updated" && e.patch?.entity_types !== undefined) as any[];
+    const last = updatesWithTypes[updatesWithTypes.length - 1];
+    const types = last.patch.entity_types.map((e: any) => e.type);
+    expect(types).toContain("concept");
+    expect(types).toContain("person");
+    expect(types).toContain("place");
+    // concept should be refined (from incrementalJson1)
+    const concept = last.patch.entity_types.find((e: any) => e.type === "concept");
+    expect(concept.description).toBe("Refined concept");
+  });
+
+  it("emits file_start { phase: 'analysis' } and file_done { phase: 'analysis' } for each incremental file", async () => {
+    const adapter = mockAdapterWithSources(sourceFiles);
+    const vt = new VaultTools(adapter, "/vault");
+    const events = await collect(
+      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, incrementalJson1, incrementalJson2]), "model", [], "TestVault", new AbortController().signal),
+    );
+    const fileStarts = events.filter((e: any) => e.kind === "file_start" && e.phase === "analysis") as any[];
+    const fileDones = events.filter((e: any) => e.kind === "file_done" && e.phase === "analysis") as any[];
+    expect(fileStarts).toHaveLength(3);
+    expect(fileDones).toHaveLength(3);
+  });
+
+  it("emits init_start { phase: 'ingest' } before Phase 2 loop", async () => {
+    const adapter = mockAdapterWithSources(sourceFiles);
+    const vt = new VaultTools(adapter, "/vault");
+    const events = await collect(
+      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, incrementalJson1, incrementalJson2]), "model", [], "TestVault", new AbortController().signal),
+    );
+    const initStarts = events.filter((e: any) => e.kind === "init_start") as any[];
+    expect(initStarts).toHaveLength(2);
+    expect(initStarts[0].phase).toBe("analysis");
+    expect(initStarts[1].phase).toBe("ingest");
+  });
+});
