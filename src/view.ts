@@ -407,8 +407,14 @@ export class LlmWikiView extends ItemView {
           this.reasoningBlock.createSpan({ cls: "ai-wiki-reasoning-text" });
         }
         this.reasoningBuffer += ev.delta;
-        const span = this.reasoningBlock.querySelector<HTMLElement>(".ai-wiki-reasoning-text");
-        if (span) span.setText(truncate(this.reasoningBuffer, ASSISTANT_TEXT_MAX));
+        if (!this.reasoningRafHandle) {
+          this.reasoningRafHandle = window.requestAnimationFrame(() => {
+            this.reasoningRafHandle = null;
+            const span = this.reasoningBlock?.querySelector<HTMLElement>(".ai-wiki-reasoning-text");
+            if (span) span.setText(truncate(this.reasoningBuffer, ASSISTANT_TEXT_MAX));
+            this.scrollSteps();
+          });
+        }
       } else {
         if (!this.assistantBlock) {
           this.assistantBlock = this.stepsEl.createDiv("ai-wiki-step assistant");
@@ -416,10 +422,15 @@ export class LlmWikiView extends ItemView {
           this.assistantBlock.createSpan({ cls: "ai-wiki-assistant-text" });
         }
         this.assistantBuffer += ev.delta;
-        const span = this.assistantBlock.querySelector<HTMLElement>(".ai-wiki-assistant-text");
-        if (span) span.setText(truncate(this.assistantBuffer, ASSISTANT_TEXT_MAX));
+        if (!this.assistantRafHandle) {
+          this.assistantRafHandle = window.requestAnimationFrame(() => {
+            this.assistantRafHandle = null;
+            const span = this.assistantBlock?.querySelector<HTMLElement>(".ai-wiki-assistant-text");
+            if (span) span.setText(truncate(this.assistantBuffer, ASSISTANT_TEXT_MAX));
+            this.scrollSteps();
+          });
+        }
       }
-      this.scrollSteps();
     } else if (ev.kind === "system") {
       const step = this.stepsEl.createDiv("ai-wiki-step");
       const head = step.createDiv("ai-wiki-step-head");
