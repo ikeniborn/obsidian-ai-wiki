@@ -55,11 +55,12 @@ export async function* runIngest(
     return;
   }
 
-  const wikiRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
+  const domainRoot = wikiVaultPath;
+  const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
 
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${wikiRoot}/_wiki_schema.md`),
-    tryRead(vaultTools, `${wikiRoot}/_index.md`),
+    tryRead(vaultTools, `${schemaRoot}/_wiki_schema.md`),
+    tryRead(vaultTools, `${domainRoot}/_index.md`),
   ]);
 
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
@@ -117,8 +118,8 @@ export async function* runIngest(
   yield { kind: "assistant_text", delta: resultText };
 
   if (written.length > 0) {
-    await appendLog(vaultTools, wikiRoot, sourceVaultPath, domain.id, written);
-    await updateIndex(vaultTools, wikiRoot, written);
+    await appendLog(vaultTools, domainRoot, sourceVaultPath, domain.id, written);
+    await updateIndex(vaultTools, domainRoot, written);
 
     const backlinkToday = new Date().toISOString().slice(0, 10);
     const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
