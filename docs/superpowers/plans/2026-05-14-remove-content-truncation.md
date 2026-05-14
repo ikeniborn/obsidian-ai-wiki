@@ -242,21 +242,7 @@ Replace line 169:
     indexContent ? `\nIndex:\n${indexContent}` : "",
 ```
 
-- [ ] **Step 3: Remove `MAX_CONTEXT_CHARS` constant (line 11)**
-
-Delete:
-```typescript
-const MAX_CONTEXT_CHARS = 80_000;
-```
-
-- [ ] **Step 4: Update `buildContextBlock` call site (line 72)**
-
-Replace:
-```typescript
-  const contextBlock = buildContextBlock(pages, seedSet, selectedIds);
-```
-
-- [ ] **Step 5: Refactor `buildContextBlock` — remove `maxChars` parameter**
+- [ ] **Step 3: Refactor `buildContextBlock` — remove `maxChars` parameter**
 
 Replace the entire function (lines 193–219):
 ```typescript
@@ -280,6 +266,25 @@ function buildContextBlock(
   }
   return block;
 }
+```
+
+- [ ] **Step 4: Update `buildContextBlock` call site (line 72)**
+
+Find:
+```typescript
+  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, MAX_CONTEXT_CHARS);
+```
+
+Replace with:
+```typescript
+  const contextBlock = buildContextBlock(pages, seedSet, selectedIds);
+```
+
+- [ ] **Step 5: Remove `MAX_CONTEXT_CHARS` constant (line 11)**
+
+Delete:
+```typescript
+const MAX_CONTEXT_CHARS = 80_000;
 ```
 
 - [ ] **Step 6: Run query tests**
