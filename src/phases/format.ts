@@ -169,10 +169,10 @@ export async function* runFormat(
         finalFormatted = parsed2.formatted;
         finalReport = parsed2.report;
       }
-      const missing2 = missingTokensWithContext(original, finalFormatted);
-      if (missing2.length > 0) {
-        finalFormatted = appendMissingLines(finalFormatted, missing2);
-      }
+    }
+    const missing2 = missingTokensWithContext(original, finalFormatted);
+    if (missing2.length > 0) {
+      finalFormatted = appendMissingLines(finalFormatted, missing2);
     }
   }
 
