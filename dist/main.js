@@ -20388,6 +20388,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   chatStartTs = 0;
   lastUserMessage = "";
   startTs = 0;
+  lastTokPerSec;
+  resultSpeedEl = null;
   toolCount = 0;
   stepCount = 0;
   progressEl = null;
@@ -20485,6 +20487,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     const resultH4 = resultHeader.createEl("h4", { cls: "ai-wiki-progress-title" });
     this.resultToggle = resultH4.createSpan({ cls: "ai-wiki-progress-arrow", text: "\u25B6" });
     resultH4.appendText(` ${T.view.result}`);
+    this.resultSpeedEl = resultH4.createSpan({ cls: "muted ai-wiki-result-speed" });
     resultHeader.addEventListener("click", () => this.toggleResult());
     this.finalEl = this.resultSection.createDiv("ai-wiki-final ai-wiki-hidden");
     registerLinkHandler(this.finalEl, this.app);
@@ -20613,6 +20616,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.assistantBuffer = "";
     this.reasoningBlock = null;
     this.reasoningBuffer = "";
+    this.lastTokPerSec = void 0;
+    this.resultSpeedEl?.setText("");
     this.stepsOpen = true;
     this.stepsEl.removeClass("ai-wiki-hidden");
     this.progressToggle.setText("\u25BC");
@@ -20753,6 +20758,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.scrollSteps();
     } else if (ev.kind === "result") {
       this.assistantBlock = null;
+      if (ev.outputTokens !== void 0 && ev.durationMs > 0) {
+        this.lastTokPerSec = Math.round(ev.outputTokens / (ev.durationMs / 1e3));
+      }
     } else if (ev.kind === "eval_result") {
       const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
       el.setText(`[eval: ${ev.score}/10] ${ev.reasoning}`);
@@ -20832,6 +20840,13 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.tickHandle = null;
     }
     this.updateMetrics();
+    if (this.lastTokPerSec !== void 0) {
+      const dur = ((entry.finishedAt - entry.startedAt) / 1e3).toFixed(1);
+      this.progressCount.setText(
+        i18n().view.stepsCount(this.stepCount, dur) + ` \xB7 ${this.lastTokPerSec} tok/s`
+      );
+    }
+    this.resultSpeedEl?.setText(this.lastTokPerSec !== void 0 ? ` ${this.lastTokPerSec} tok/s` : "");
     this.finalEl.empty();
     if (entry.finalText) {
       const comp = new import_obsidian4.Component();
@@ -23507,11 +23522,14 @@ function mapResult(obj) {
     const errMsg = typeof obj.result === "string" ? obj.result : typeof obj.error === "string" ? obj.error : "claude error";
     return { kind: "error", message: errMsg };
   }
+  const usage = isRecord(obj.usage) ? obj.usage : null;
+  const outputTokens = typeof usage?.output_tokens === "number" ? usage.output_tokens : void 0;
   return {
     kind: "result",
     durationMs: Number(obj.duration_ms ?? 0),
     usdCost: typeof obj.total_cost_usd === "number" ? obj.total_cost_usd : void 0,
-    text: typeof obj.result === "string" ? obj.result : ""
+    text: typeof obj.result === "string" ? obj.result : "",
+    outputTokens
   };
 }
 function truncate2(s, n) {
@@ -31056,6 +31074,7 @@ var WikiController = class {
   _chatSessionId;
   _currentClaudeClient = null;
   _pendingFormat = null;
+  _currentLogMeta = null;
   isBusy() {
     return this.current !== null;
   }
@@ -31477,12 +31496,16 @@ var WikiController = class {
     try {
       if (!await adapter.exists(dir))
         await adapter.mkdir(dir);
+      const extra = ev.kind === "result" && ev.outputTokens !== void 0 && ev.durationMs > 0 ? { tokPerSec: Math.round(ev.outputTokens / (ev.durationMs / 1e3)) } : {};
       const line = JSON.stringify({
         ts: (/* @__PURE__ */ new Date()).toISOString(),
         session: sessionId,
         op,
         domainId,
-        event: ev
+        backend: this._currentLogMeta?.backend,
+        model: this._currentLogMeta?.model,
+        event: ev,
+        ...extra
       }) + "\n";
       if (await adapter.exists(path2))
         await adapter.append(path2, line);
@@ -31508,6 +31531,11 @@ var WikiController = class {
         return;
       if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local))
         return;
+      const opKey2 = op === "query-save" ? "query" : op;
+      this._currentLogMeta = {
+        backend: eff.backend,
+        model: eff.backend === "claude-agent" ? eff.claudeAgent.perOperation ? eff.claudeAgent.operations[opKey2].model : eff.claudeAgent.model : eff.nativeAgent.perOperation ? eff.nativeAgent.operations[opKey2].model : eff.nativeAgent.model
+      };
     }
     await this.ensureView();
     const view = this.activeView();
@@ -31581,6 +31609,7 @@ var WikiController = class {
       this.current = null;
       this.onBusyChange?.();
       this.currentOp = null;
+      this._currentLogMeta = null;
     }
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
     const entry = {
