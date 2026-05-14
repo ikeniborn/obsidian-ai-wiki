@@ -8,7 +8,6 @@ import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
 import { pageId, buildWikiGraph, bfsExpand } from "../wiki-graph";
 
-const MAX_CONTEXT_CHARS = 80_000;
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
 export async function* runQuery(
@@ -69,15 +68,15 @@ export async function* runQuery(
   }
   const seedSet = new Set(seeds);
   const selectedIds = bfsExpand(seeds, graph, graphDepth);
-  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, MAX_CONTEXT_CHARS);
+  const contextBlock = buildContextBlock(pages, seedSet, selectedIds);
 
   const entityTypesBlock = buildEntityTypesBlock(domain);
 
   const systemPrompt = render(queryTemplate, {
     domain_name: domain.name,
     entity_types_block: entityTypesBlock,
-    schema_block: schemaContent ? `\nКонвенции (_wiki_schema.md):\n${schemaContent.slice(0, 2000)}` : "",
-    index_block: indexContent ? `\nВики-индекс (_index.md):\n${indexContent.slice(0, 3000)}` : "",
+    schema_block: schemaContent ? `\nКонвенции (_wiki_schema.md):\n${schemaContent}` : "",
+    index_block: indexContent ? `\nВики-индекс (_index.md):\n${indexContent}` : "",
   });
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -166,7 +165,7 @@ async function llmSelectSeeds(
   const prompt = [
     `Question: "${question}"`,
     `Available wiki pages: ${allPageIds.join(", ")}`,
-    indexContent ? `\nIndex:\n${indexContent.slice(0, 3000)}` : "",
+    indexContent ? `\nIndex:\n${indexContent}` : "",
     `\nReturn JSON only: {"seeds": ["PageA", "PageB"]} — most relevant page names (bare names, no path, no .md).`,
   ].filter(Boolean).join("\n");
 
@@ -194,7 +193,6 @@ function buildContextBlock(
   pages: Map<string, string>,
   seeds: Set<string>,
   selectedIds: Set<string>,
-  maxChars: number,
 ): string {
   const seedPages: [string, string][] = [];
   const bfsPages: [string, string][] = [];
@@ -207,13 +205,7 @@ function buildContextBlock(
   const ordered = [...seedPages, ...bfsPages];
   let block = "";
   for (const [p, c] of ordered) {
-    const chunk = `--- ${p} ---\n${c}\n\n`;
-    if (block.length + chunk.length > maxChars) break;
-    block += chunk;
-  }
-  if (block.length === 0 && ordered.length > 0) {
-    const [p, c] = ordered[0];
-    block = `--- ${p} ---\n${c}`.slice(0, maxChars) + "\n[...truncated]";
+    block += `--- ${p} ---\n${c}\n\n`;
   }
   return block;
 }
