@@ -2,7 +2,11 @@ import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient, OnFileError } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, parseStructured } from "./llm-utils";
+import {
+  DOMAIN_ENTRY_SCHEMA, ENTITY_TYPES_DELTA_SCHEMA,
+  type DomainEntryResponse, type EntityTypesDeltaResponse,
+} from "./schemas";
 import schemaTemplate from "../../templates/_wiki_schema.md";
 import initTemplate from "../../prompts/init.md";
 import initIncrementalTemplate from "../../prompts/init-incremental.md";
@@ -91,7 +95,8 @@ export async function* runInit(
     },
   ];
 
-  const params = buildChatParams(model, messages, opts);
+  const schema = opts.jsonMode === "json_schema" ? DOMAIN_ENTRY_SCHEMA : undefined;
+  const params = buildChatParams(model, messages, opts, schema);
   let fullText = "";
   try {
     const stream = await llm.chat.completions.create(
@@ -116,9 +121,14 @@ export async function* runInit(
 
   let entry: DomainEntry;
   try {
-    const match = fullText.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("No JSON object found in LLM response");
-    entry = JSON.parse(match[0]) as DomainEntry;
+    const parsed = parseStructured(fullText) as DomainEntryResponse;
+    entry = {
+      id: parsed.id,
+      name: parsed.name,
+      wiki_folder: parsed.wiki_folder,
+      entity_types: parsed.entity_types,
+      language_notes: parsed.language_notes,
+    } as DomainEntry;
     // Normalize wiki_folder to vault-relative (strip vaults/<vaultName>/ prefix if LLM used old format)
     const vaultPrefix = `vaults/${vaultName}/`;
     if (entry.wiki_folder?.startsWith(vaultPrefix)) {
@@ -178,10 +188,8 @@ async function* runInitWithSources(
 
   await ensureRootFiles(vaultTools, wikiRootGuess);
 
-  const allVaultFiles = await vaultTools.listFiles("");
-  const sourceFiles = allVaultFiles.filter(
-    (f) => f.endsWith(".md") && sourcePaths.some((sp) => f.startsWith(sp)),
-  );
+  const sourceFileLists = await Promise.all(sourcePaths.map((sp) => vaultTools.listFiles(sp)));
+  const sourceFiles = [...new Set(sourceFileLists.flat())].filter((f) => f.endsWith(".md"));
 
   if (!sourceFiles.length) {
     yield { kind: "error", message: `No .md files found in source paths: ${sourcePaths.join(", ")}` };
@@ -249,8 +257,9 @@ async function* runInitWithSources(
       ];
 
       let fullText = "";
+      const bootstrapSchema = opts.jsonMode === "json_schema" ? DOMAIN_ENTRY_SCHEMA : undefined;
       try {
-        const params = buildChatParams(model, messages, opts);
+        const params = buildChatParams(model, messages, opts, bootstrapSchema);
         const stream = await llm.chat.completions.create(
           { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
           { signal },
@@ -262,7 +271,7 @@ async function* runInitWithSources(
         }
       } catch (e) {
         if (signal.aborted || (e as Error).name === "AbortError") return;
-        const params = buildChatParams(model, messages, opts);
+        const params = buildChatParams(model, messages, opts, bootstrapSchema);
         const resp = await llm.chat.completions.create(
           { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
         );
@@ -274,9 +283,14 @@ async function* runInitWithSources(
 
       let entry: DomainEntry;
       try {
-        const match = fullText.match(/\{[\s\S]*\}/);
-        if (!match) throw new Error("No JSON object found");
-        entry = JSON.parse(match[0]) as DomainEntry;
+        const parsed = parseStructured(fullText) as DomainEntryResponse;
+        entry = {
+          id: parsed.id,
+          name: parsed.name,
+          wiki_folder: parsed.wiki_folder,
+          entity_types: parsed.entity_types,
+          language_notes: parsed.language_notes,
+        } as DomainEntry;
         const vaultPrefix = `vaults/${vaultName}/`;
         if (entry.wiki_folder?.startsWith(vaultPrefix)) entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
         if (entry.wiki_folder?.startsWith("!Wiki/")) entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
@@ -328,8 +342,9 @@ async function* runInitWithSources(
       ];
 
       let fullText = "";
+      const deltaSchema = opts.jsonMode === "json_schema" ? ENTITY_TYPES_DELTA_SCHEMA : undefined;
       try {
-        const params = buildChatParams(model, messages, opts);
+        const params = buildChatParams(model, messages, opts, deltaSchema);
         const stream = await llm.chat.completions.create(
           { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
           { signal },
@@ -341,7 +356,7 @@ async function* runInitWithSources(
         }
       } catch (e) {
         if (signal.aborted || (e as Error).name === "AbortError") return;
-        const params = buildChatParams(model, messages, opts);
+        const params = buildChatParams(model, messages, opts, deltaSchema);
         const resp = await llm.chat.completions.create(
           { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
         );
@@ -352,9 +367,8 @@ async function* runInitWithSources(
 
       let delta: { entity_types?: EntityType[]; language_notes?: string };
       try {
-        const match = fullText.match(/\{[\s\S]*\}/);
-        if (!match) throw new Error("No JSON");
-        delta = JSON.parse(match[0]) as { entity_types?: EntityType[]; language_notes?: string };
+        const parsed = parseStructured(fullText) as EntityTypesDeltaResponse;
+        delta = { entity_types: parsed.entity_types, language_notes: parsed.language_notes };
       } catch {
         yield { kind: "assistant_text", delta: `⚠ ${file}: LLM вернул невалидный JSON, пропускаем\n` };
         yield { kind: "file_done", file, phase: "analysis" };
