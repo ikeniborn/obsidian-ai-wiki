@@ -2,6 +2,31 @@ import type OpenAI from "openai";
 import type { LlmCallOptions } from "../types";
 import baseContract from "../../prompts/base.md";
 
+export interface StructuredOutputSchema {
+  name: string;
+  schema: Record<string, unknown>;
+}
+
+/** Remove <think>...</think> blocks leaked into content by thinking models. */
+export function stripThinking(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+}
+
+/**
+ * Parse structured JSON from LLM output.
+ * Fast path: direct parse (works for json_schema / json_object mode).
+ * Fallback: strip <think> tags, then find JSON block.
+ * Throws if no valid JSON found.
+ */
+export function parseStructured(fullText: string): unknown {
+  const text = fullText.trim();
+  try { return JSON.parse(text); } catch { /* fall through */ }
+  const stripped = stripThinking(text);
+  const match = stripped.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("No JSON object found");
+  return JSON.parse(match[0]);
+}
+
 /** Извлекает reasoning и content из одного streaming-чанка.
  *  Reasoning-модели (minimax, o1 и др.) возвращают думающий текст в нестандартном поле delta.reasoning.
  *  Модели без поддержки reasoning возвращают пустую строку — ошибок не возникает. */
@@ -18,6 +43,7 @@ export function buildChatParams(
   model: string,
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   opts: LlmCallOptions,
+  responseSchema?: StructuredOutputSchema,
 ): Record<string, unknown> {
   let msgs = prependBaseContract(messages);
   msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
@@ -26,6 +52,16 @@ export function buildChatParams(
   if (opts.maxTokens != null) params.max_tokens = opts.maxTokens;
   if (opts.topP != null) params.top_p = opts.topP;
   if (opts.numCtx != null) params.num_ctx = opts.numCtx;
+
+  if (responseSchema && opts.jsonMode === "json_schema") {
+    params.response_format = {
+      type: "json_schema",
+      json_schema: { name: responseSchema.name, schema: responseSchema.schema, strict: true },
+    };
+  } else if (opts.jsonMode === "json_object") {
+    params.response_format = { type: "json_object" };
+  }
+
   return params;
 }
 
