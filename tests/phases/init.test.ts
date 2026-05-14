@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runInit } from "../../src/phases/init";
+import { runInit, mergeEntityTypes } from "../../src/phases/init";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
@@ -210,5 +210,38 @@ describe("runInit — ensureRootFiles", () => {
     );
     const removeMock = adapter.remove as ReturnType<typeof vi.fn>;
     expect(removeMock).toHaveBeenCalledWith("!Wiki/_log.md");
+  });
+});
+
+describe("mergeEntityTypes", () => {
+  it("appends new type from incoming", () => {
+    const current = [{ type: "person", description: "A person", extraction_cues: [] }];
+    const incoming = [{ type: "company", description: "A company", extraction_cues: [] }];
+    const result = mergeEntityTypes(current, incoming);
+    expect(result).toHaveLength(2);
+    expect(result.map(e => e.type)).toContain("company");
+  });
+
+  it("overrides existing type when incoming has same type id", () => {
+    const current = [{ type: "person", description: "Old", extraction_cues: ["old cue"] }];
+    const incoming = [{ type: "person", description: "New", extraction_cues: ["new cue"] }];
+    const result = mergeEntityTypes(current, incoming);
+    expect(result).toHaveLength(1);
+    expect(result[0].description).toBe("New");
+    expect(result[0].extraction_cues).toEqual(["new cue"]);
+  });
+
+  it("returns current unchanged when incoming is empty", () => {
+    const current = [{ type: "person", description: "A person", extraction_cues: [] }];
+    const result = mergeEntityTypes(current, []);
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe("person");
+  });
+
+  it("returns incoming when current is empty", () => {
+    const incoming = [{ type: "company", description: "A company", extraction_cues: [] }];
+    const result = mergeEntityTypes([], incoming);
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe("company");
   });
 });
