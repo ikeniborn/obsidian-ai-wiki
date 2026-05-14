@@ -12,10 +12,11 @@ export interface EntityType {
 export interface DomainEntry {
   id: string;
   name: string;
-  wiki_folder: string;  // domain subfolder within !Wiki/, e.g. "os" (without "!Wiki/" prefix)
+  wiki_folder: string;
   source_paths?: string[];
   entity_types?: EntityType[];
   language_notes?: string;
+  analyzed_sources?: string[];
 }
 
 export interface AddDomainInput {

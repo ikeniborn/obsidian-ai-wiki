@@ -48,11 +48,11 @@ export type RunEvent =
   | { kind: "ask_user"; question: string; options: string[]; toolUseId: string }
   | { kind: "domain_created"; entry: DomainEntry }
   | { kind: "source_path_added"; domainId: string; path: string }
-  | { kind: "domain_updated"; domainId: string; patch: { entity_types?: EntityType[]; language_notes?: string } }
+  | { kind: "domain_updated"; domainId: string; patch: { entity_types?: EntityType[]; language_notes?: string; wiki_folder?: string; analyzed_sources?: string[] } }
   | { kind: "eval_result"; score: number; reasoning: string }
-  | { kind: "init_start"; totalFiles: number }
-  | { kind: "file_start"; file: string; index: number; total: number }
-  | { kind: "file_done"; file: string }
+  | { kind: "init_start"; totalFiles: number; phase?: "analysis" | "ingest" }
+  | { kind: "file_start"; file: string; index: number; total: number; phase?: "analysis" | "ingest" }
+  | { kind: "file_done"; file: string; phase?: "analysis" | "ingest" }
   | { kind: "format_preview"; tempPath: string; report: string; missingTokens: { token: string; context: string }[] }
   | { kind: "format_applied"; path: string }
   | { kind: "format_cancelled" };
