@@ -73,8 +73,8 @@ export async function* runInit(
   const systemContent = render(initTemplate, {
     domain_id: domainId,
     vault_name: vaultName,
-    schema_block: schemaContent ? `\nКонвенции вики (_wiki_schema.md):\n${schemaContent.slice(0, 1500)}` : "",
-    index_block: indexContent ? `\nСуществующая структура (_index.md):\n${indexContent.slice(0, 1000)}` : "",
+    schema_block: schemaContent ? `\nКонвенции вики (_wiki_schema.md):\n${schemaContent}` : "",
+    index_block: indexContent ? `\nСуществующая структура (_index.md):\n${indexContent}` : "",
   });
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -86,7 +86,7 @@ export async function* runInit(
         `Vault name: ${vaultName}`,
         "",
         `Примеры файлов vault:`,
-        [...samples.entries()].map(([p, c]) => `${p}:\n${c.slice(0, 400)}`).join("\n\n"),
+        [...samples.entries()].map(([p, c]) => `${p}:\n${c}`).join("\n\n"),
       ].join("\n"),
     },
   ];
@@ -229,25 +229,22 @@ async function* runInitWithSources(
       continue;
     }
 
-    if (fileContent.length > 8_000) {
-      yield { kind: "assistant_text", delta: `⚠ ${file}: truncated to 8 000 chars (original: ${fileContent.length} chars)\n` };
-    }
-    const truncated = fileContent.slice(0, 8_000);
+    yield { kind: "assistant_text", delta: `ℹ ${file}: ${fileContent.length} chars\n` };
 
     if (i === 0 && !isResuming) {
       // Bootstrap: use initTemplate to get full DomainEntry
       const systemContent = render(initTemplate, {
         domain_id: domainId,
         vault_name: vaultName,
-        schema_block: schemaContent ? `\nКонвенции вики (_wiki_schema.md):\n${schemaContent.slice(0, 1500)}` : "",
-        index_block: indexContent ? `\nСуществующая структура (_index.md):\n${indexContent.slice(0, 1000)}` : "",
+        schema_block: schemaContent ? `\nКонвенции вики (_wiki_schema.md):\n${schemaContent}` : "",
+        index_block: indexContent ? `\nСуществующая структура (_index.md):\n${indexContent}` : "",
       });
 
       const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
         { role: "system", content: systemContent },
         {
           role: "user",
-          content: `Domain ID: ${domainId}\nVault name: ${vaultName}\nSource paths: ${sourcePaths.join(", ")}\n\n${file}:\n${truncated}`,
+          content: `Domain ID: ${domainId}\nVault name: ${vaultName}\nSource paths: ${sourcePaths.join(", ")}\n\n${file}:\n${fileContent}`,
         },
       ];
 
@@ -326,7 +323,7 @@ async function* runInitWithSources(
         { role: "system", content: initIncrementalTemplate },
         {
           role: "user",
-          content: `Текущие entity_types:\n${JSON.stringify(currentEntityTypes, null, 2)}\n\nФайл: ${file}\n\n${truncated}`,
+          content: `Текущие entity_types:\n${JSON.stringify(currentEntityTypes, null, 2)}\n\nФайл: ${file}\n\n${fileContent}`,
         },
       ];
 

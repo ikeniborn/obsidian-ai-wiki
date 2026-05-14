@@ -480,23 +480,22 @@ describe("runInitWithSources — error handling", () => {
     }
   });
 
-  it("emits assistant_text truncation warning when file exceeds 8000 chars", async () => {
+  it("emits informational size log for every file processed", async () => {
     const longContent = "x".repeat(8_001);
     const adapter = mockAdapterWithSources({ "src/a.md": longContent });
     const vt = new VaultTools(adapter, "/vault");
     const events = await collect(
       runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson]), "model", [], "TestVault", new AbortController().signal),
     );
-    const warning = events.find(
-      (e: any) => e.kind === "assistant_text" && e.delta?.includes("truncated to 8 000 chars")
+    const info = events.find(
+      (e: any) => e.kind === "assistant_text" && e.delta?.includes("ℹ src/a.md:") && e.delta?.includes("chars")
     ) as any;
-    expect(warning).toBeDefined();
-    expect(warning.delta).toContain("src/a.md");
+    expect(info).toBeDefined();
   });
 
-  it("does NOT emit truncation warning when file is exactly 8000 chars", async () => {
-    const exactContent = "x".repeat(8_000);
-    const adapter = mockAdapterWithSources({ "src/a.md": exactContent });
+  it("does NOT emit truncation warning for large files", async () => {
+    const longContent = "x".repeat(8_001);
+    const adapter = mockAdapterWithSources({ "src/a.md": longContent });
     const vt = new VaultTools(adapter, "/vault");
     const events = await collect(
       runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson]), "model", [], "TestVault", new AbortController().signal),
