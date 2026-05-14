@@ -8,9 +8,11 @@ function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
   return {
     read: vi.fn().mockResolvedValue(""),
     write: vi.fn().mockResolvedValue(undefined),
+    append: vi.fn().mockResolvedValue(undefined),
     list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     exists: vi.fn().mockResolvedValue(true),
     mkdir: vi.fn().mockResolvedValue(undefined),
+    remove: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -191,5 +193,20 @@ describe("runInit — ensureRootFiles", () => {
     const indexWrite = writeCalls.find(([path]) => path.endsWith("_index.md"));
     expect(schemaWrite).toBeUndefined();
     expect(indexWrite).toBeUndefined();
+  });
+
+  it("удаляет !Wiki/_log.md если существует (миграция)", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockImplementation((path: string) =>
+        Promise.resolve(path === "!Wiki/_log.md"),
+      ),
+      remove: vi.fn().mockResolvedValue(undefined),
+    });
+    const vt = new VaultTools(adapter, "/vault");
+    await collect(
+      runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "TestVault", new AbortController().signal),
+    );
+    const removeMock = adapter.remove as ReturnType<typeof vi.fn>;
+    expect(removeMock).toHaveBeenCalledWith("!Wiki/_log.md");
   });
 });
