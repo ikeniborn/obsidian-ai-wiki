@@ -217,7 +217,9 @@ const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
 const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
 
 yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
-// ... (keep existing listFiles call unchanged)
+const allFiles = await vaultTools.listFiles(wikiVaultPath);
+const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
+yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
 
 const [indexContent, schemaContent] = await Promise.all([
   tryRead(vaultTools, `${wikiVaultPath}/_index.md`),
@@ -487,6 +489,14 @@ Delete these two test cases from `describe("runInit — ensureRootFiles")`:
 - `"создаёт _index.md когда файл отсутствует"` — root `_index.md` no longer created
 - `"создаёт _log.md когда файл отсутствует"` — root `_log.md` no longer created
 
+Verify deletion worked:
+
+```bash
+npx vitest run tests/phases/init.test.ts 2>&1 | tail -20
+```
+
+Expected: tests for `_index.md` / `_log.md` creation gone. Migration test `"удаляет !Wiki/_log.md если существует"` (added in Task 1) should now PASS — Task 4 already added `vaultTools.remove()` calls. Other tests should pass too unless they assert on old root paths.
+
 - [ ] **Step 2: Update "не перезаписывает существующие корневые файлы"**
 
 That test currently checks `indexWrite` is undefined. After our change, `_wiki_schema.md` is the only root file init creates. Update:
@@ -504,7 +514,15 @@ it("не перезаписывает существующую корневую 
 });
 ```
 
-- [ ] **Step 3: Add test — legacy root _log.md deleted on init**
+- [ ] **Step 3: Verify test — legacy root _log.md deleted on init**
+
+> **Нет новой работы.** Этот тест был добавлен в Task 1 Step 1 (TDD-шаг). Убедись, что он присутствует в файле:
+
+```ts
+it("удаляет !Wiki/_log.md если существует (миграция)", ...)
+```
+
+Если по какой-то причине отсутствует — добавь:
 
 ```ts
 it("удаляет !Wiki/_log.md если существует (миграция)", async () => {
@@ -603,6 +621,6 @@ git status
 If clean — no commit needed. If any files changed:
 
 ```bash
-git add -A
+git add src/ tests/
 git commit -m "chore: cleanup after domain log/index split"
 ```
