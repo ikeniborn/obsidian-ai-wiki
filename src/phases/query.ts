@@ -2,7 +2,8 @@ import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, parseStructured } from "./llm-utils";
+import { SEEDS_SCHEMA, type SeedsResponse } from "./schemas";
 import queryTemplate from "../../prompts/query.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
@@ -60,7 +61,7 @@ export async function* runQuery(
   const allPageIds = [...pages.keys()].map(pageId);
   let seeds = keywordSeeds(question, pages);
   if (seeds.length === 0) {
-    seeds = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, signal);
+    seeds = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal);
   }
   if (signal.aborted) return;
   if (seeds.length === 0) {
@@ -160,6 +161,7 @@ async function llmSelectSeeds(
   allPageIds: string[],
   llm: LlmClient,
   model: string,
+  opts: LlmCallOptions,
   signal: AbortSignal,
 ): Promise<string[]> {
   const prompt = [
@@ -169,21 +171,20 @@ async function llmSelectSeeds(
     `\nReturn JSON only: {"seeds": ["PageA", "PageB"]} — most relevant page names (bare names, no path, no .md).`,
   ].filter(Boolean).join("\n");
 
+  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    { role: "user", content: prompt },
+  ];
+  const schema = opts.jsonMode === "json_schema" ? SEEDS_SCHEMA : undefined;
+  const params = buildChatParams(model, messages, opts, schema);
+
   try {
     const resp = await llm.chat.completions.create(
-      {
-        model,
-        messages: [{ role: "user", content: prompt }],
-        stream: false,
-      } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+      { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
       { signal },
     );
     const text = resp.choices[0]?.message?.content ?? "";
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) return [];
-    const parsed = JSON.parse(match[0]) as { seeds?: unknown };
-    if (!Array.isArray(parsed.seeds)) return [];
-    return parsed.seeds.filter((s): s is string => typeof s === "string");
+    const parsed = parseStructured(text) as SeedsResponse;
+    return Array.isArray(parsed.seeds) ? parsed.seeds.filter((s): s is string => typeof s === "string") : [];
   } catch {
     return [];
   }
