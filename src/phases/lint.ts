@@ -56,7 +56,7 @@ export async function* runLint(
 
     const graph = buildWikiGraph(pages);
     const structuralIssues = checkStructure(pages);
-    const graphIssues = checkGraphStructure(graph, hubThreshold).slice(0, 8_000);
+    const graphIssues = checkGraphStructure(graph, hubThreshold);
     const allIssues = [structuralIssues, graphIssues].filter(Boolean).join("\n");
 
     const entityTypesBlock = buildEntityTypesBlock(domain);
@@ -75,7 +75,7 @@ export async function* runLint(
           `Домен: ${domain.id} (${domain.name})`,
           `Автоматические проблемы:\n${allIssues || "Нет."}`,
           "",
-          `Wiki-страницы:\n${[...pages.entries()].map(([p, c]) => `--- ${p} ---\n${c.slice(0, 500)}`).join("\n\n")}`,
+          `Wiki-страницы:\n${[...pages.entries()].map(([p, c]) => `--- ${p} ---\n${c}`).join("\n\n")}`,
         ].join("\n"),
       },
     ];
@@ -295,7 +295,7 @@ async function actualizeDomainConfig(
   }, null, 2);
 
   const pagesSnippet = [...pages.entries()]
-    .map(([p, c]) => `${p}:\n${c.slice(0, 300)}`)
+    .map(([p, c]) => `${p}:\n${c}`)
     .join("\n\n");
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
