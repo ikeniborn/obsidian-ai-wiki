@@ -78,6 +78,8 @@ export class LlmWikiView extends ItemView {
   private assistantBuffer = "";
   private reasoningBlock: HTMLElement | null = null;
   private reasoningBuffer = "";
+  private assistantRafHandle: number | null = null;
+  private reasoningRafHandle: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, private plugin: LlmWikiPlugin) {
     super(leaf);
