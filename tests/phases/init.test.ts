@@ -507,3 +507,96 @@ describe("runInitWithSources — error handling", () => {
     expect(warning).toBeUndefined();
   });
 });
+
+describe("runInitWithSources — resume logic", () => {
+  const bootstrapJson = JSON.stringify({
+    id: "dom",
+    name: "Dom",
+    wiki_folder: "dom",
+    source_paths: [],
+    entity_types: [{ type: "concept", description: "Concept", extraction_cues: [] }],
+    language_notes: "",
+  });
+
+  const incrementalJson = JSON.stringify({
+    entity_types: [{ type: "person", description: "Person", extraction_cues: [] }],
+  });
+
+  it("skips files already in analyzed_sources and resumes from next file", async () => {
+    const files = { "src/a.md": "a", "src/b.md": "b", "src/c.md": "c" };
+    const adapter = mockAdapterWithSources(files);
+    const vt = new VaultTools(adapter, "/vault");
+    // Domain already has a.md and b.md analyzed
+    const existingWithProgress: DomainEntry = {
+      id: "dom", name: "Dom", wiki_folder: "dom",
+      entity_types: [{ type: "concept", description: "Concept", extraction_cues: [] }],
+      analyzed_sources: ["src/a.md", "src/b.md"],
+    };
+    const llm = makeMultiLlm([incrementalJson]); // only 1 call expected (c.md)
+    const events = await collect(
+      runInit(["dom", "--sources", "src"], vt, llm, "model", [existingWithProgress], "TestVault", new AbortController().signal),
+    );
+    const fileStarts = events.filter((e: any) => e.kind === "file_start" && e.phase === "analysis") as any[];
+    expect(fileStarts).toHaveLength(1);
+    expect(fileStarts[0].file).toBe("src/c.md");
+  });
+
+  it("clears analyzed_sources after successful Phase 1 (emits domain_updated with analyzed_sources: undefined)", async () => {
+    const files = { "src/a.md": "a", "src/b.md": "b" };
+    const adapter = mockAdapterWithSources(files);
+    const vt = new VaultTools(adapter, "/vault");
+    const events = await collect(
+      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, incrementalJson]), "model", [], "TestVault", new AbortController().signal),
+    );
+    const clearEvent = events.find(
+      (e: any) => e.kind === "domain_updated" && "analyzed_sources" in e.patch && e.patch.analyzed_sources === undefined
+    ) as any;
+    expect(clearEvent).toBeDefined();
+  });
+
+  it("abort during Phase 1 stops loop and persists current analyzed_sources", async () => {
+    const files = { "src/a.md": "a", "src/b.md": "b", "src/c.md": "c" };
+    const ac = new AbortController();
+    let callCount = 0;
+    // Abort after bootstrap call (a.md), before b.md
+    const llm: LlmClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(() => {
+            callCount++;
+            if (callCount === 1) {
+              return Promise.resolve({
+                [Symbol.asyncIterator]: async function* () {
+                  yield { choices: [{ delta: { content: bootstrapJson } }] };
+                },
+              });
+            }
+            // Second call (b.md incremental) — abort before returning
+            ac.abort();
+            return Promise.resolve({
+              [Symbol.asyncIterator]: async function* () {
+                yield { choices: [{ delta: { content: incrementalJson } }] };
+              },
+            });
+          }),
+        },
+      },
+    } as unknown as LlmClient;
+    const adapter = mockAdapterWithSources(files);
+    const vt = new VaultTools(adapter, "/vault");
+    const events = await collect(
+      runInit(["dom", "--sources", "src"], vt, llm, "model", [], "TestVault", ac.signal),
+    );
+    // No final result event (aborted before Phase 2)
+    expect(events.some((e: any) => e.kind === "result")).toBe(false);
+    // No Phase 2 init_start event
+    expect(events.filter((e: any) => e.kind === "init_start" && e.phase === "ingest")).toHaveLength(0);
+    // analyzed_sources persisted at abort point — either via domain_created (new domain) or domain_updated (existing domain)
+    const persistEvent = events.find(
+      (e: any) =>
+        (e.kind === "domain_updated" && Array.isArray(e.patch?.analyzed_sources)) ||
+        (e.kind === "domain_created" && Array.isArray(e.entry?.analyzed_sources))
+    ) as any;
+    expect(persistEvent).toBeDefined();
+  });
+});
