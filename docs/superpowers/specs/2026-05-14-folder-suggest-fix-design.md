@@ -17,10 +17,14 @@ Replace custom `attachFolderDropdown` with a `FolderInputSuggest` class that ext
 
 ```typescript
 class FolderInputSuggest extends AbstractInputSuggest<TFolder> {
-  constructor(app: App, input: HTMLInputElement, private onPick: (path: string) => void) {
+  constructor(app: App, input: HTMLInputElement, onPick: (path: string) => void) {
     super(app, input);
+    this.onSelect((folder) => {
+      this.setValue(folder.path + "/");
+      onPick(folder.path + "/");
+    });
   }
-  getSuggestions(query: string): TFolder[] {
+  protected getSuggestions(query: string): TFolder[] {
     const q = query.toLowerCase();
     return this.app.vault.getAllFolders(true)
       .filter(f => f.path.toLowerCase().includes(q))
@@ -28,10 +32,6 @@ class FolderInputSuggest extends AbstractInputSuggest<TFolder> {
   }
   renderSuggestion(folder: TFolder, el: HTMLElement): void {
     el.setText(folder.path + "/");
-  }
-  selectSuggestion(folder: TFolder): void {
-    this.setValue(folder.path + "/");
-    this.onPick(folder.path + "/");
   }
 }
 ```
