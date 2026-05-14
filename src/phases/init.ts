@@ -7,6 +7,7 @@ import schemaTemplate from "../../templates/_wiki_schema.md";
 import initTemplate from "../../prompts/init.md";
 import { render } from "./template";
 import { runIngest } from "./ingest";
+import { domainWikiFolder } from "../wiki-path";
 
 export async function* runInit(
   args: string[],
@@ -54,9 +55,12 @@ export async function* runInit(
   const allFiles = await vaultTools.listFiles("");
   const sampleFiles = allFiles.slice(0, 5);
   const samples = await vaultTools.readAll(sampleFiles);
+  const existingDomain = domains.find((d) => d.id === domainId);
   const [schemaContent, indexContent] = await Promise.all([
     tryRead(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
-    tryRead(vaultTools, `${wikiRootGuess}/_index.md`),
+    existingDomain
+      ? tryRead(vaultTools, `${domainWikiFolder(existingDomain.wiki_folder)}/_index.md`)
+      : Promise.resolve(""),
   ]);
 
   const systemContent = render(initTemplate, {
@@ -140,7 +144,7 @@ export async function* runInit(
   }
   yield { kind: "tool_result", ok: true };
 
-  await appendLog(vaultTools, wikiRootGuess, domainId);
+  await appendLog(vaultTools, domainWikiFolder(entry.wiki_folder), domainId);
 
   yield {
     kind: "result",
@@ -184,12 +188,13 @@ async function* runInitWithSources(
   // Phase 1: Analyse sources → entity_types + language_notes
   const sampleFiles = sourceFiles.slice(0, 10);
   const samples = await vaultTools.readAll(sampleFiles);
+  const existing = domains.find((d) => d.id === domainId);
   const [schemaContent, indexContent] = await Promise.all([
     tryRead(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
-    tryRead(vaultTools, `${wikiRootGuess}/_index.md`),
+    existing
+      ? tryRead(vaultTools, `${domainWikiFolder(existing.wiki_folder)}/_index.md`)
+      : Promise.resolve(""),
   ]);
-
-  const existing = domains.find((d) => d.id === domainId);
 
   const systemContent = render(initTemplate, {
     domain_id: domainId,
@@ -323,7 +328,7 @@ async function* runInitWithSources(
     yield { kind: "file_done", file };
   }
 
-  await appendLog(vaultTools, wikiRootGuess, domainId);
+  await appendLog(vaultTools, domainWikiFolder(updatedDomain.wiki_folder), domainId);
 
   yield {
     kind: "result",
@@ -348,12 +353,12 @@ async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
 
 async function ensureRootFiles(vaultTools: VaultTools, wikiRoot: string): Promise<void> {
   const schema = `${wikiRoot}/_wiki_schema.md`;
-  const index  = `${wikiRoot}/_index.md`;
-  const log    = `${wikiRoot}/_log.md`;
+  const legacyIndex = `${wikiRoot}/_index.md`;
+  const legacyLog   = `${wikiRoot}/_log.md`;
 
   try {
     if (!(await vaultTools.exists(schema))) await vaultTools.write(schema, schemaTemplate);
-    if (!(await vaultTools.exists(index)))  await vaultTools.write(index, "# Wiki Index\n");
-    if (!(await vaultTools.exists(log)))    await vaultTools.write(log, "# Wiki Log\n");
+    if (await vaultTools.exists(legacyIndex)) await vaultTools.remove(legacyIndex);
+    if (await vaultTools.exists(legacyLog))   await vaultTools.remove(legacyLog);
   } catch { /* не блокируем init */ }
 }
