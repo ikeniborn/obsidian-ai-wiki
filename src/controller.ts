@@ -475,6 +475,7 @@ export class WikiController {
 
   private async logEvent(_vaultRoot: string, sessionId: string, op: WikiOperation, domainId: string | undefined, ev: RunEvent): Promise<void> {
     if (!this.plugin.settings.agentLogEnabled) return;
+    if (ev.kind === "assistant_text") return;
     const adapter = this.app.vault.adapter;
     const dir = "!Logs";
     const path = `${dir}/agent.jsonl`;
