@@ -34,6 +34,7 @@ npx vitest run tests/stream.test.ts
   → WikiController.run()       # single-flight guard, валидация путей
   → AgentRunner.run()          # маршрутизация по операции в нужную фазу
   → phase (ingest/query/…)     # TypeScript-фаза вызывает LlmClient
+                               # (query/lint используют graphCache.get; query вызывает selectSeeds и эмитит graph_stats)
   → ClaudeCliClient.chat       # spawn iclaude.sh, stream-json stdout
   → parseStreamLine()          # парсинг одной JSON-строки в RunEvent
   → LlmWikiView.onEvent()      # рендер в боковой панели (live)
@@ -51,6 +52,8 @@ npx vitest run tests/stream.test.ts
 | `src/view.ts` | LlmWikiView (ItemView) — живой рендер шагов, метрик, истории |
 | `src/settings.ts` | Настройки + `autodetectCwd()` (обходит дерево вверх до 6 уровней) |
 | `src/types.ts` | Все TypeScript-типы: WikiOperation, RunEvent, LlmWikiPluginSettings |
+| `src/wiki-graph-cache.ts` | GraphCache — in-memory, per-domain, hash-keyed; invalidated controller-ом после writes |
+| `src/wiki-seeds.ts` | `selectSeeds()` — Jaccard на токенах pageId + первые 200 символов контента |
 
 ### Протокол stream-json (stdout iclaude)
 

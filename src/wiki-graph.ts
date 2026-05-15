@@ -21,6 +21,13 @@ export function buildWikiGraph(pages: Map<string, string>): WikiGraph {
   return graph;
 }
 
+/**
+ * BFS-expansion seeds → set of reachable pageIds within `depth` hops.
+ * Graph is treated as **undirected**: edge `A → B` lets BFS traverse `B → A` too.
+ * Rationale: wiki backlinks are symmetric in user mental model — a page referenced
+ * by a seed should also be considered context, regardless of which direction the
+ * `[[link]]` was authored. Seeds not present in the graph are silently skipped.
+ */
 export function bfsExpand(seeds: string[], graph: WikiGraph, depth: number): Set<string> {
   if (seeds.length === 0) return new Set();
 
