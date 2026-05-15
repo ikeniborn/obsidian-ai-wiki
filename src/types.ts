@@ -136,7 +136,6 @@ export interface LlmWikiPluginSettings {
     temperature: number;
     topP: number | null;
     numCtx: number | null;
-    structuredOutput: "json_schema" | "json_object" | "none";
     perOperation: boolean;
     operations: OpMap<NativeOperationConfig>;
   };
@@ -175,7 +174,6 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     temperature: 0.2,
     topP: null,
     numCtx: null,
-    structuredOutput: "json_object",
     perOperation: false,
     operations: {
       ingest: { model: "llama3.2", maxTokens: 4096, temperature: 0.2 },
