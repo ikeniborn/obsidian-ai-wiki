@@ -2,8 +2,9 @@ import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured } from "./llm-utils";
-import { type SeedsResponse } from "./schemas";
+import { buildChatParams, extractStreamDeltas, extractUsage } from "./llm-utils";
+import { parseWithRetry } from "./parse-with-retry";
+import { SeedsSchema } from "./zod-schemas";
 import queryTemplate from "../../prompts/query.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
@@ -170,28 +171,33 @@ async function llmSelectSeeds(
   opts: LlmCallOptions,
   signal: AbortSignal,
 ): Promise<{ seeds: string[]; outputTokens: number }> {
+  const example = JSON.stringify({
+    reasoning: "PageA matches keyword X; PageB referenced by index.",
+    seeds: ["PageA", "PageB"],
+  }, null, 2);
   const prompt = [
     `Question: "${question}"`,
     `Available wiki pages: ${allPageIds.join(", ")}`,
     indexContent ? `\nIndex:\n${indexContent}` : "",
-    `\nReturn JSON only: {"seeds": ["PageA", "PageB"]} — most relevant page names (bare names, no path, no .md).`,
+    `\nReturn JSON only matching this shape (most relevant page names — bare names, no path, no .md):`,
+    `\n## Output JSON Example`,
+    example,
   ].filter(Boolean).join("\n");
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "user", content: prompt },
   ];
-  const params = buildChatParams(model, messages, opts);
 
   try {
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-      { signal },
-    );
-    const text = resp.choices[0]?.message?.content ?? "";
-    const tok = extractUsage(resp) ?? 0;
-    const parsed = parseStructured(text) as SeedsResponse;
-    const seeds = Array.isArray(parsed.seeds) ? parsed.seeds.filter((s): s is string => typeof s === "string") : [];
-    return { seeds, outputTokens: tok };
+    const r = await parseWithRetry({
+      llm, model, baseMessages: messages, opts,
+      schema: SeedsSchema,
+      maxRetries: opts.structuredRetries ?? 1,
+      callSite: "query.seeds",
+      signal,
+      onEvent: () => { /* helper has no yield channel; counter still fires */ },
+    });
+    return { seeds: r.value.seeds, outputTokens: r.outputTokens };
   } catch {
     return { seeds: [], outputTokens: 0 };
   }

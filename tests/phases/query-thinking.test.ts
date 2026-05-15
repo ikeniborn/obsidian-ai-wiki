@@ -60,32 +60,38 @@ function makeAdapterWithPages(pages: Record<string, string>): VaultAdapter {
 
 /**
  * LLM mock:
- * - Non-streaming (llmSelectSeeds): returns thinking-model output.
- * - Streaming (final answer): captures message content and yields a short answer.
+ * - First streaming call (llmSelectSeeds via parseWithRetry): yields seeds JSON output.
+ * - Second streaming call (final answer): captures message content and yields a short answer.
  */
 function makeLlmCapturingContext(seedsOutput: string): {
   llm: LlmClient;
   getCapturedMessages: () => string;
 } {
   let capturedMessages = "";
+  let callCount = 0;
   const llm: LlmClient = {
     chat: {
       completions: {
         create: vi.fn().mockImplementation((params: any) => {
-          if (params.stream) {
-            capturedMessages = (params.messages ?? [])
-              .map((m: any) =>
-                typeof m.content === "string" ? m.content : JSON.stringify(m.content),
-              )
-              .join("\n");
+          callCount++;
+          if (callCount === 1) {
+            // seeds call: yield the thinking-model output as a streaming chunk
             return Promise.resolve({
               [Symbol.asyncIterator]: async function* () {
-                yield { choices: [{ delta: { content: "Answer." } }] };
+                yield { choices: [{ delta: { content: seedsOutput } }] };
               },
             });
           }
+          // final answer call: capture context and yield answer
+          capturedMessages = (params.messages ?? [])
+            .map((m: any) =>
+              typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+            )
+            .join("\n");
           return Promise.resolve({
-            choices: [{ message: { content: seedsOutput } }],
+            [Symbol.asyncIterator]: async function* () {
+              yield { choices: [{ delta: { content: "Answer." } }] };
+            },
           });
         }),
       },
