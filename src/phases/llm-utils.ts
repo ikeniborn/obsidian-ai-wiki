@@ -1,5 +1,5 @@
 import type OpenAI from "openai";
-import type { LlmCallOptions } from "../types";
+import type { LlmCallOptions, LlmClient } from "../types";
 import baseContract from "../../prompts/base.md";
 
 export interface StructuredOutputSchema {
@@ -88,6 +88,76 @@ function prependBaseContract(
     return updated;
   }
   return [{ role: "system", content: baseContract }, ...messages];
+}
+
+const JSON_MODE_KEYWORDS = ["response_format", "json_object", "json mode", "unsupported"];
+
+export function isJsonModeError(e: unknown): boolean {
+  if (!e || typeof e !== "object") return false;
+  const status = (e as { status?: unknown }).status;
+  if (status !== 400 && status !== 422) return false;
+  const msg = String((e as { message?: unknown }).message ?? "").toLowerCase();
+  return JSON_MODE_KEYWORDS.some((kw) => msg.includes(kw));
+}
+
+function hasContentDelta(chunk: OpenAI.Chat.ChatCompletionChunk): boolean {
+  const c = chunk.choices?.[0]?.delta?.content;
+  return typeof c === "string" && c.length > 0;
+}
+
+function stripResponseFormat(params: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...params };
+  delete next.response_format;
+  return next;
+}
+
+export function wrapWithJsonFallback(inner: LlmClient): LlmClient {
+  const create = ((params: Record<string, unknown>, callOpts?: { signal?: AbortSignal }) => {
+    const hasRf = params.response_format !== undefined;
+    const isStream = params.stream === true;
+
+    if (!hasRf) {
+      return (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<unknown>)(params, callOpts);
+    }
+
+    if (!isStream) {
+      return (async () => {
+        try {
+          return await (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<unknown>)(params, callOpts);
+        } catch (e) {
+          if (!isJsonModeError(e)) throw e;
+          return (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<unknown>)(stripResponseFormat(params), callOpts);
+        }
+      })();
+    }
+
+    return (async () => {
+      let upstream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
+      try {
+        upstream = await (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>)(params, callOpts);
+      } catch (e) {
+        if (!isJsonModeError(e)) throw e;
+        return (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>)(stripResponseFormat(params), callOpts);
+      }
+
+      async function* gated(): AsyncIterable<OpenAI.Chat.ChatCompletionChunk> {
+        let seenContent = false;
+        try {
+          for await (const chunk of upstream) {
+            if (hasContentDelta(chunk)) seenContent = true;
+            yield chunk;
+          }
+        } catch (e) {
+          if (seenContent || !isJsonModeError(e)) throw e;
+          const retry = await (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>)(stripResponseFormat(params), callOpts);
+          for await (const c of retry) yield c;
+        }
+      }
+      return gated();
+    })();
+  }) as unknown as LlmClient["chat"]["completions"]["create"];
+
+  return { chat: { completions: { create } } };
 }
 
 function injectSystemPrompt(

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { buildChatParams, stripThinking, parseStructured, extractStreamDeltas, extractUsage } from "../src/phases/llm-utils";
+import { buildChatParams, stripThinking, parseStructured, extractStreamDeltas, extractUsage, isJsonModeError, wrapWithJsonFallback } from "../src/phases/llm-utils";
 import type OpenAI from "openai";
+import type { LlmClient } from "../src/types";
 import baseContract from "../prompts/base.md";
 
 describe("buildChatParams — User prompt injection", () => {
@@ -194,5 +195,200 @@ describe("extractUsage — non-stream", () => {
       choices: [{ message: { content: "x", role: "assistant" }, finish_reason: "stop", index: 0 }],
     } as unknown as OpenAI.Chat.ChatCompletion;
     expect(extractUsage(resp)).toBeUndefined();
+  });
+});
+
+describe("isJsonModeError", () => {
+  it("true for status 400 with response_format keyword", () => {
+    const e = Object.assign(new Error("response_format not supported"), { status: 400 });
+    expect(isJsonModeError(e)).toBe(true);
+  });
+  it("true for status 422 with json_object keyword", () => {
+    const e = Object.assign(new Error("Unsupported json_object mode"), { status: 422 });
+    expect(isJsonModeError(e)).toBe(true);
+  });
+  it("true for keyword 'json mode'", () => {
+    const e = Object.assign(new Error("provider does not support json mode"), { status: 400 });
+    expect(isJsonModeError(e)).toBe(true);
+  });
+  it("true for keyword 'unsupported'", () => {
+    const e = Object.assign(new Error("Unsupported response format"), { status: 400 });
+    expect(isJsonModeError(e)).toBe(true);
+  });
+  it("false for 401/403/429/500", () => {
+    for (const status of [401, 403, 429, 500]) {
+      const e = Object.assign(new Error("response_format unsupported"), { status });
+      expect(isJsonModeError(e)).toBe(false);
+    }
+  });
+  it("false for 400 without trigger keyword", () => {
+    const e = Object.assign(new Error("Invalid prompt token"), { status: 400 });
+    expect(isJsonModeError(e)).toBe(false);
+  });
+  it("false for non-Error values", () => {
+    expect(isJsonModeError("string error")).toBe(false);
+    expect(isJsonModeError(null)).toBe(false);
+  });
+});
+
+function makeMockLlm(handler: (params: Record<string, unknown>) => unknown): LlmClient {
+  return {
+    chat: {
+      completions: {
+        create: ((params: Record<string, unknown>) => Promise.resolve(handler(params))) as unknown as LlmClient["chat"]["completions"]["create"],
+      },
+    },
+  };
+}
+
+describe("wrapWithJsonFallback — non-streaming", () => {
+  it("retries without response_format on json-mode error", async () => {
+    const calls: Record<string, unknown>[] = [];
+    const inner = makeMockLlm((params) => {
+      calls.push(params);
+      if (params.response_format) {
+        const e = Object.assign(new Error("response_format unsupported"), { status: 400 });
+        throw e;
+      }
+      return { choices: [{ message: { content: "ok", role: "assistant" }, index: 0, finish_reason: "stop" }] };
+    });
+    const wrapped = wrapWithJsonFallback(inner);
+    const resp = await wrapped.chat.completions.create({
+      model: "m", messages: [], stream: false,
+      response_format: { type: "json_object" },
+    } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming);
+    expect(calls.length).toBe(2);
+    expect(calls[0].response_format).toBeDefined();
+    expect(calls[1].response_format).toBeUndefined();
+    expect((resp as OpenAI.Chat.ChatCompletion).choices[0].message.content).toBe("ok");
+  });
+
+  it("rethrows non-json-mode errors without retry", async () => {
+    let count = 0;
+    const inner = makeMockLlm(() => {
+      count++;
+      throw Object.assign(new Error("quota exceeded"), { status: 429 });
+    });
+    const wrapped = wrapWithJsonFallback(inner);
+    await expect(wrapped.chat.completions.create({
+      model: "m", messages: [], stream: false,
+      response_format: { type: "json_object" },
+    } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming)).rejects.toThrow("quota exceeded");
+    expect(count).toBe(1);
+  });
+
+  it("passes through when no response_format", async () => {
+    let count = 0;
+    const inner = makeMockLlm(() => {
+      count++;
+      return { choices: [{ message: { content: "x", role: "assistant" }, index: 0, finish_reason: "stop" }] };
+    });
+    const wrapped = wrapWithJsonFallback(inner);
+    await wrapped.chat.completions.create({
+      model: "m", messages: [], stream: false,
+    } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming);
+    expect(count).toBe(1);
+  });
+});
+
+describe("wrapWithJsonFallback — streaming", () => {
+  it("retries when stream rejects at create()", async () => {
+    const calls: Record<string, unknown>[] = [];
+    const inner: LlmClient = {
+      chat: { completions: { create: ((params: Record<string, unknown>) => {
+        calls.push(params);
+        if (params.response_format) {
+          return Promise.reject(Object.assign(new Error("response_format not supported"), { status: 400 }));
+        }
+        return Promise.resolve((async function* () {
+          yield { choices: [{ delta: { content: "hello" }, index: 0, finish_reason: null }] } as OpenAI.Chat.ChatCompletionChunk;
+        })());
+      }) as unknown as LlmClient["chat"]["completions"]["create"] } },
+    };
+    const wrapped = wrapWithJsonFallback(inner);
+    const stream = await wrapped.chat.completions.create({
+      model: "m", messages: [], stream: true,
+      response_format: { type: "json_object" },
+    } as OpenAI.Chat.ChatCompletionCreateParamsStreaming);
+    const chunks: OpenAI.Chat.ChatCompletionChunk[] = [];
+    for await (const c of stream) chunks.push(c);
+    expect(calls.length).toBe(2);
+    expect(chunks[0].choices[0].delta.content).toBe("hello");
+  });
+
+  it("retries when stream throws before first content chunk", async () => {
+    const calls: Record<string, unknown>[] = [];
+    const inner: LlmClient = {
+      chat: { completions: { create: ((params: Record<string, unknown>) => {
+        calls.push(params);
+        if (params.response_format) {
+          return Promise.resolve((async function* () {
+            yield { choices: [{ delta: { role: "assistant" }, index: 0, finish_reason: null }] } as OpenAI.Chat.ChatCompletionChunk;
+            throw Object.assign(new Error("json_object unsupported"), { status: 400 });
+          })());
+        }
+        return Promise.resolve((async function* () {
+          yield { choices: [{ delta: { content: "fallback ok" }, index: 0, finish_reason: null }] } as OpenAI.Chat.ChatCompletionChunk;
+        })());
+      }) as unknown as LlmClient["chat"]["completions"]["create"] } },
+    };
+    const wrapped = wrapWithJsonFallback(inner);
+    const stream = await wrapped.chat.completions.create({
+      model: "m", messages: [], stream: true,
+      response_format: { type: "json_object" },
+    } as OpenAI.Chat.ChatCompletionCreateParamsStreaming);
+    const chunks: OpenAI.Chat.ChatCompletionChunk[] = [];
+    for await (const c of stream) chunks.push(c);
+    expect(calls.length).toBe(2);
+    expect(chunks.some((c) => c.choices[0].delta.content === "fallback ok")).toBe(true);
+  });
+
+  it("does NOT retry after first content delta", async () => {
+    const calls: Record<string, unknown>[] = [];
+    const inner: LlmClient = {
+      chat: { completions: { create: ((params: Record<string, unknown>) => {
+        calls.push(params);
+        return Promise.resolve((async function* () {
+          yield { choices: [{ delta: { content: "partial" }, index: 0, finish_reason: null }] } as OpenAI.Chat.ChatCompletionChunk;
+          throw Object.assign(new Error("response_format unsupported"), { status: 400 });
+        })());
+      }) as unknown as LlmClient["chat"]["completions"]["create"] } },
+    };
+    const wrapped = wrapWithJsonFallback(inner);
+    const stream = await wrapped.chat.completions.create({
+      model: "m", messages: [], stream: true,
+      response_format: { type: "json_object" },
+    } as OpenAI.Chat.ChatCompletionCreateParamsStreaming);
+    await expect((async () => {
+      for await (const _ of stream) { /* drain */ }
+    })()).rejects.toThrow();
+    expect(calls.length).toBe(1);
+  });
+
+  it("reasoning-only chunks don't count as content (retry still possible)", async () => {
+    const calls: Record<string, unknown>[] = [];
+    const inner: LlmClient = {
+      chat: { completions: { create: ((params: Record<string, unknown>) => {
+        calls.push(params);
+        if (params.response_format) {
+          return Promise.resolve((async function* () {
+            yield { choices: [{ delta: { reasoning: "thinking..." }, index: 0, finish_reason: null }] } as unknown as OpenAI.Chat.ChatCompletionChunk;
+            throw Object.assign(new Error("json_object not supported"), { status: 400 });
+          })());
+        }
+        return Promise.resolve((async function* () {
+          yield { choices: [{ delta: { content: "after-retry" }, index: 0, finish_reason: null }] } as OpenAI.Chat.ChatCompletionChunk;
+        })());
+      }) as unknown as LlmClient["chat"]["completions"]["create"] } },
+    };
+    const wrapped = wrapWithJsonFallback(inner);
+    const stream = await wrapped.chat.completions.create({
+      model: "m", messages: [], stream: true,
+      response_format: { type: "json_object" },
+    } as OpenAI.Chat.ChatCompletionCreateParamsStreaming);
+    const chunks: OpenAI.Chat.ChatCompletionChunk[] = [];
+    for await (const c of stream) chunks.push(c);
+    expect(calls.length).toBe(2);
+    expect(chunks.some((c) => c.choices[0].delta.content === "after-retry")).toBe(true);
   });
 });
