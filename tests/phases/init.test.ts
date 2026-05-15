@@ -363,6 +363,7 @@ describe("runInitWithSources — Phase 1 incremental", () => {
   });
 
   const incrementalJson1 = JSON.stringify({
+    reasoning: "",
     entity_types: [
       { type: "concept", description: "Refined concept", extraction_cues: ["refined"] },
       { type: "person", description: "A person", extraction_cues: ["person"] },
@@ -370,6 +371,7 @@ describe("runInitWithSources — Phase 1 incremental", () => {
   });
 
   const incrementalJson2 = JSON.stringify({
+    reasoning: "",
     entity_types: [
       { type: "place", description: "A place", extraction_cues: ["location"] },
     ],

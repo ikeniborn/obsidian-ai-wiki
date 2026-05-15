@@ -2,12 +2,8 @@ import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient, OnFileError } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured } from "./llm-utils";
-import {
-  type DomainEntryResponse, type EntityTypesDeltaResponse,
-} from "./schemas";
 import { parseWithRetry } from "./parse-with-retry";
-import { DomainEntrySchema } from "./zod-schemas";
+import { DomainEntrySchema, EntityTypesDeltaSchema } from "./zod-schemas";
 import schemaTemplate from "../../templates/_wiki_schema.md";
 import initTemplate from "../../prompts/init.md";
 import initIncrementalTemplate from "../../prompts/init-incremental.md";
@@ -343,41 +339,31 @@ async function* runInitWithSources(
         { role: "user", content: `Текущие entity_types:\n${JSON.stringify(currentEntityTypes, null, 2)}\n\nФайл: ${file}\n\n${fileContent}` },
       ];
 
-      let fullText = "";
+      const collected: RunEvent[] = [];
+      let parsed: { entity_types?: EntityType[]; language_notes?: string };
       try {
-        const params = buildChatParams(model, messages, opts, true);
-        const stream = await llm.chat.completions.create(
-          { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-          { signal },
-        );
-        for await (const chunk of stream) {
-          const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
-          if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-          if (content) { fullText += content; }
-          if (tok !== undefined) outputTokens += tok;
-        }
+        const r = await parseWithRetry({
+          llm, model, baseMessages: messages, opts,
+          schema: EntityTypesDeltaSchema,
+          maxRetries: opts.structuredRetries ?? 1,
+          callSite: "init.delta",
+          signal,
+          onEvent: (e) => collected.push(e),
+        });
+        parsed = r.value;
+        outputTokens += r.outputTokens;
       } catch (e) {
-        if (signal.aborted || (e as Error).name === "AbortError") return;
-        const params = buildChatParams(model, messages, opts);
-        const resp = await llm.chat.completions.create(
-          { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-        );
-        fullText = resp.choices[0]?.message?.content ?? "";
-        const tok = extractUsage(resp);
-        if (tok !== undefined) outputTokens += tok;
-      }
-
-      if (signal.aborted) return;
-
-      let delta: { entity_types?: EntityType[]; language_notes?: string };
-      try {
-        const parsed = parseStructured(fullText) as EntityTypesDeltaResponse;
-        delta = { entity_types: parsed.entity_types, language_notes: parsed.language_notes };
-      } catch {
-        yield { kind: "assistant_text", delta: `⚠ ${file}: LLM вернул невалидный JSON, пропускаем\n` };
+        for (const ev of collected) yield ev;
+        if ((e as Error).name === "AbortError" || signal.aborted) return;
+        yield { kind: "assistant_text", delta: `⚠ ${file}: LLM вернул невалидный JSON, пропускаем (${(e as Error).message})\n` };
         yield { kind: "file_done", file };
         continue;
       }
+      for (const ev of collected) yield ev;
+
+      if (signal.aborted) return;
+
+      const delta = { entity_types: parsed.entity_types, language_notes: parsed.language_notes };
 
       if (!currentDomain) {
         yield { kind: "file_done", file };
