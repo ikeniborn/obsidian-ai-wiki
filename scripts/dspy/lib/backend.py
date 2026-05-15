@@ -62,10 +62,11 @@ def make_lm():
 
     if backend == "ollama-openai":
         base = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+        key = os.environ.get("OLLAMA_API_KEY", "ollama")
         return dspy.LM(
             model=f"openai/{os.environ['OLLAMA_MODEL']}",
             base_url=f"{base}/v1",
-            api_key="ollama",
+            api_key=f"{key}",
         )
 
     if backend == "claude-code":
