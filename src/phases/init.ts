@@ -95,7 +95,7 @@ export async function* runInit(
     },
   ];
 
-  const params = buildChatParams(model, messages, opts, undefined, true);
+  const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
   try {
     const stream = await llm.chat.completions.create(
@@ -263,7 +263,7 @@ async function* runInitWithSources(
 
       let fullText = "";
       try {
-        const params = buildChatParams(model, messages, opts, undefined, true);
+        const params = buildChatParams(model, messages, opts, true);
         const stream = await llm.chat.completions.create(
           { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
           { signal },
@@ -276,7 +276,7 @@ async function* runInitWithSources(
         }
       } catch (e) {
         if (signal.aborted || (e as Error).name === "AbortError") return;
-        const params = buildChatParams(model, messages, opts, undefined);
+        const params = buildChatParams(model, messages, opts);
         const resp = await llm.chat.completions.create(
           { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
         );
@@ -351,7 +351,7 @@ async function* runInitWithSources(
 
       let fullText = "";
       try {
-        const params = buildChatParams(model, messages, opts, undefined, true);
+        const params = buildChatParams(model, messages, opts, true);
         const stream = await llm.chat.completions.create(
           { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
           { signal },
@@ -364,7 +364,7 @@ async function* runInitWithSources(
         }
       } catch (e) {
         if (signal.aborted || (e as Error).name === "AbortError") return;
-        const params = buildChatParams(model, messages, opts, undefined);
+        const params = buildChatParams(model, messages, opts);
         const resp = await llm.chat.completions.create(
           { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
         );

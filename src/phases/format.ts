@@ -79,7 +79,7 @@ export async function* runFormat(
 
   yield { kind: "assistant_text", delta: `Анализ файла ${filePath}...\n` };
 
-  const baseParams = { ...buildChatParams(model, messages, opts, undefined, true), response_format: { type: "json_object" } };
+  const baseParams = { ...buildChatParams(model, messages, opts, true), response_format: { type: "json_object" } };
 
   let lastFinishReason: string | null = null;
   let outputTokens = 0;
@@ -130,7 +130,7 @@ export async function* runFormat(
       { role: "user", content: userContent } as OpenAI.Chat.ChatCompletionMessageParam,
       ...chatHistory.map((m) => ({ role: m.role, content: m.content } as OpenAI.Chat.ChatCompletionMessageParam)),
     ];
-    const retryParams = { ...buildChatParams(model, retryMessages, opts, undefined, true), response_format: { type: "json_object" } };
+    const retryParams = { ...buildChatParams(model, retryMessages, opts, true), response_format: { type: "json_object" } };
     fullText = yield* callOnce(retryParams);
     if (signal.aborted) return;
     parsed = extractJsonObject(fullText);
@@ -165,7 +165,7 @@ export async function* runFormat(
         content: `ВОССТАНОВИ ТОКЕНЫ: следующие значения из оригинала отсутствуют в форматированном тексте. Верни полный JSON {report, formatted} где formatted содержит все перечисленные токены без изменения форматирования остального текста.\nПропущенные: ${tokenList}`,
       },
     ];
-    const restoreParams = { ...buildChatParams(model, restoreMessages, opts, undefined, true), response_format: { type: "json_object" } };
+    const restoreParams = { ...buildChatParams(model, restoreMessages, opts, true), response_format: { type: "json_object" } };
     const fullText2 = yield* callOnce(restoreParams);
     if (!signal.aborted) {
       const parsed2 = extractJsonObject(fullText2);

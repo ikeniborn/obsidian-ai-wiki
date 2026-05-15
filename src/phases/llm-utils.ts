@@ -2,11 +2,6 @@ import type OpenAI from "openai";
 import type { LlmCallOptions, LlmClient } from "../types";
 import baseContract from "../../prompts/base.md";
 
-export interface StructuredOutputSchema {
-  name: string;
-  schema: Record<string, unknown>;
-}
-
 /** Remove <think>...</think> blocks leaked into content by thinking models. */
 export function stripThinking(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
@@ -58,7 +53,6 @@ export function buildChatParams(
   model: string,
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   opts: LlmCallOptions,
-  responseSchema?: StructuredOutputSchema,
   stream: boolean = false,
 ): Record<string, unknown> {
   let msgs = prependBaseContract(messages);

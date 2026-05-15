@@ -73,7 +73,7 @@ export async function* runIngest(
     sourceVaultPath, sourceContent, domain, wikiVaultPath,
     existingPages, schemaContent, indexContent,
   );
-  const params = buildChatParams(model, messages, opts, undefined, true);
+  const params = buildChatParams(model, messages, opts, true);
 
   let fullText = "";
   let outputTokens = 0;

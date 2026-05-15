@@ -82,7 +82,7 @@ export async function* runLint(
       },
     ];
 
-    const params = buildChatParams(model, messages, opts, undefined, true);
+    const params = buildChatParams(model, messages, opts, true);
     let llmReport = "";
     try {
       const stream = await llm.chat.completions.create(
@@ -122,7 +122,7 @@ export async function* runLint(
     if (signal.aborted) return;
     yield { kind: "assistant_text", delta: `\nApplying fixes for "${domain.id}"...\n` };
     const fixMessages = buildFixMessages(domain, wikiVaultPath, pages, allIssues, entityTypesBlock, llmReport);
-    const fixParams = buildChatParams(model, fixMessages, opts, undefined, true);
+    const fixParams = buildChatParams(model, fixMessages, opts, true);
     let fixFullText = "";
     try {
       const fixStream = await llm.chat.completions.create(
@@ -342,7 +342,7 @@ async function actualizeDomainConfig(
     },
   ];
 
-  const params = buildChatParams(model, messages, opts, undefined);
+  const params = buildChatParams(model, messages, opts);
   let fullText = "";
   let outputTokens = 0;
   try {

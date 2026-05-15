@@ -88,7 +88,7 @@ export async function* runQuery(
     { role: "user", content: `Вопрос: ${question}\n\nWiki-страницы:\n${contextBlock}` },
   ];
 
-  const params = buildChatParams(model, messages, opts, undefined, true);
+  const params = buildChatParams(model, messages, opts, true);
   let answer = "";
   try {
     const stream = await llm.chat.completions.create(
@@ -180,7 +180,7 @@ async function llmSelectSeeds(
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "user", content: prompt },
   ];
-  const params = buildChatParams(model, messages, opts, undefined);
+  const params = buildChatParams(model, messages, opts);
 
   try {
     const resp = await llm.chat.completions.create(

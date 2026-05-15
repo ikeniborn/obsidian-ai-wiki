@@ -151,7 +151,7 @@ describe("buildChatParams — stream_options.include_usage", () => {
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [{ role: "user", content: "q" }];
 
   it("adds stream_options.include_usage when stream=true", () => {
-    const params = buildChatParams("m", messages, {}, undefined, true);
+    const params = buildChatParams("m", messages, {}, true);
     expect(params.stream_options).toEqual({ include_usage: true });
   });
 
