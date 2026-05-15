@@ -202,16 +202,23 @@ async function* runInitWithSources(
   }
 
   const existing = domains.find((d) => d.id === domainId);
-
-  // isResuming = analyzed_sources defined (even []) means bootstrap was done; skip it
   const isResuming = existing?.analyzed_sources !== undefined;
   const alreadyAnalyzed = new Set(existing?.analyzed_sources ?? []);
   const toAnalyze = isResuming
-    ? sourceFiles.filter(f => !alreadyAnalyzed.has(f))
+    ? sourceFiles.filter((f) => !alreadyAnalyzed.has(f))
     : sourceFiles;
 
-  // --- Phase 1: Analysis ---
-  yield { kind: "init_start", totalFiles: toAnalyze.length, phase: "analysis" };
+  yield { kind: "init_start", totalFiles: toAnalyze.length };
+
+  if (toAnalyze.length === 0) {
+    yield {
+      kind: "result",
+      durationMs: Date.now() - start,
+      text: `Domain "${domainId}": no new sources to process.`,
+      outputTokens: outputTokens || undefined,
+    };
+    return;
+  }
 
   const [schemaContent, indexContent] = await Promise.all([
     tryRead(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
@@ -221,31 +228,25 @@ async function* runInitWithSources(
   let currentDomain: DomainEntry | null = existing ?? null;
 
   for (let i = 0; i < toAnalyze.length; i++) {
-    if (signal.aborted) {
-      if (currentDomain) {
-        yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
-        yield { kind: "domain_updated", domainId, patch: { analyzed_sources: currentDomain.analyzed_sources } };
-        yield { kind: "tool_result", ok: true };
-      }
-      return;
-    }
+    if (signal.aborted) return;
 
     const file = toAnalyze[i];
-    yield { kind: "file_start", file, index: i, total: toAnalyze.length, phase: "analysis" };
+    yield { kind: "file_start", file, index: i, total: toAnalyze.length };
 
     let fileContent: string;
     try {
       fileContent = await vaultTools.read(file);
     } catch {
       yield { kind: "assistant_text", delta: `⚠ ${file}: не удалось прочитать файл, пропускаем\n` };
-      yield { kind: "file_done", file, phase: "analysis" };
+      yield { kind: "file_done", file };
       continue;
     }
 
     yield { kind: "assistant_text", delta: `ℹ ${file}: ${fileContent.length} chars\n` };
 
+    // --- Step 1: Analyze ---
     if (i === 0 && !isResuming) {
-      // Bootstrap: use initTemplate to get full DomainEntry
+      // Bootstrap
       const systemContent = render(initTemplate, {
         domain_id: domainId,
         vault_name: vaultName,
@@ -255,10 +256,7 @@ async function* runInitWithSources(
 
       const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
         { role: "system", content: systemContent },
-        {
-          role: "user",
-          content: `Domain ID: ${domainId}\nVault name: ${vaultName}\nSource paths: ${sourcePaths.join(", ")}\n\n${file}:\n${fileContent}`,
-        },
+        { role: "user", content: `Domain ID: ${domainId}\nVault name: ${vaultName}\nSource paths: ${sourcePaths.join(", ")}\n\n${file}:\n${fileContent}` },
       ];
 
       let fullText = "";
@@ -304,7 +302,7 @@ async function* runInitWithSources(
         if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
       } catch {
         yield { kind: "assistant_text", delta: `⚠ ${file}: LLM вернул невалидный JSON, пропускаем bootstrap\n` };
-        yield { kind: "file_done", file, phase: "analysis" };
+        yield { kind: "file_done", file };
         continue;
       }
 
@@ -325,28 +323,30 @@ async function* runInitWithSources(
         language_notes: entry.language_notes,
         source_paths: sourcePaths,
         analyzed_sources: [],
+        analyzed_sources_v2: true,
       };
 
       yield { kind: "tool_use", name: existing ? "UpdateDomain" : "SaveDomain", input: { id: domainId } };
       if (existing) {
         yield {
           kind: "domain_updated", domainId,
-          patch: { entity_types: currentDomain.entity_types, language_notes: currentDomain.language_notes, wiki_folder: currentDomain.wiki_folder, analyzed_sources: [] },
+          patch: {
+            entity_types: currentDomain.entity_types,
+            language_notes: currentDomain.language_notes,
+            wiki_folder: currentDomain.wiki_folder,
+            analyzed_sources: [],
+          },
         };
       } else {
         yield { kind: "domain_created", entry: currentDomain };
       }
       yield { kind: "tool_result", ok: true };
-
     } else {
-      // Incremental: use initIncrementalTemplate to get delta entity_types
+      // Incremental: delta entity_types
       const currentEntityTypes = currentDomain?.entity_types ?? [];
       const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
         { role: "system", content: initIncrementalTemplate },
-        {
-          role: "user",
-          content: `Текущие entity_types:\n${JSON.stringify(currentEntityTypes, null, 2)}\n\nФайл: ${file}\n\n${fileContent}`,
-        },
+        { role: "user", content: `Текущие entity_types:\n${JSON.stringify(currentEntityTypes, null, 2)}\n\nФайл: ${file}\n\n${fileContent}` },
       ];
 
       let fullText = "";
@@ -381,12 +381,12 @@ async function* runInitWithSources(
         delta = { entity_types: parsed.entity_types, language_notes: parsed.language_notes };
       } catch {
         yield { kind: "assistant_text", delta: `⚠ ${file}: LLM вернул невалидный JSON, пропускаем\n` };
-        yield { kind: "file_done", file, phase: "analysis" };
+        yield { kind: "file_done", file };
         continue;
       }
 
       if (!currentDomain) {
-        yield { kind: "file_done", file, phase: "analysis" };
+        yield { kind: "file_done", file };
         continue;
       }
 
@@ -395,7 +395,7 @@ async function* runInitWithSources(
         ...currentDomain,
         entity_types: mergedTypes,
         language_notes: delta.language_notes ?? currentDomain.language_notes,
-        analyzed_sources: [...(currentDomain.analyzed_sources ?? []), file],
+        analyzed_sources_v2: true,
       };
 
       yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
@@ -404,36 +404,18 @@ async function* runInitWithSources(
         patch: {
           entity_types: currentDomain.entity_types,
           language_notes: currentDomain.language_notes,
-          analyzed_sources: currentDomain.analyzed_sources,
         },
       };
       yield { kind: "tool_result", ok: true };
     }
 
-    yield { kind: "file_done", file, phase: "analysis" };
-  }
-
-  // Phase 1 complete — clear analyzed_sources progress marker
-  if (currentDomain) {
-    yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
-    yield { kind: "domain_updated", domainId, patch: { analyzed_sources: undefined } };
-    yield { kind: "tool_result", ok: true };
-  }
-
-  if (!currentDomain) {
-    yield { kind: "error", message: `init --sources: не удалось создать домен из файлов` };
-    return;
-  }
-
-  // --- Phase 2: Ingest ---
-  yield { kind: "init_start", totalFiles: sourceFiles.length, phase: "ingest" };
-  yield { kind: "assistant_text", delta: `\nCreating wiki pages from ${sourceFiles.length} source files...\n` };
-
-  for (let i = 0; i < sourceFiles.length; i++) {
     if (signal.aborted) return;
-    const file = sourceFiles[i];
-    yield { kind: "file_start", file, index: i, total: sourceFiles.length };
+    if (!currentDomain) {
+      yield { kind: "file_done", file };
+      continue;
+    }
 
+    // --- Step 2: Ingest (immediate write) ---
     let retried = false;
     let done = false;
     while (!done) {
@@ -457,7 +439,26 @@ async function* runInitWithSources(
       }
     }
 
+    if (signal.aborted) return;
+
+    // --- Mark file complete: update analyzed_sources ---
+    currentDomain = {
+      ...currentDomain,
+      analyzed_sources: [...(currentDomain.analyzed_sources ?? []), file],
+    };
+    yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
+    yield {
+      kind: "domain_updated", domainId,
+      patch: { analyzed_sources: currentDomain.analyzed_sources },
+    };
+    yield { kind: "tool_result", ok: true };
+
     yield { kind: "file_done", file };
+  }
+
+  if (!currentDomain) {
+    yield { kind: "error", message: `init --sources: не удалось создать домен из файлов` };
+    return;
   }
 
   await appendLog(vaultTools, wikiRootGuess, domainId);
@@ -465,7 +466,7 @@ async function* runInitWithSources(
   yield {
     kind: "result",
     durationMs: Date.now() - start,
-    text: `Domain "${domainId}" initialised from ${sourceFiles.length} source files.`,
+    text: `Domain "${domainId}" initialised from ${toAnalyze.length} source files.`,
     outputTokens: outputTokens || undefined,
   };
 }

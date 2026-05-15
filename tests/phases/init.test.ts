@@ -293,7 +293,7 @@ describe("runInitWithSources — Phase 1 bootstrap", () => {
     "sources/file0.md": "Content of file 0",
   };
 
-  it("emits init_start { phase: 'analysis' } before bootstrap", async () => {
+  it("emits init_start with totalFiles count before bootstrap", async () => {
     const adapter = mockAdapterWithSources(sourceFiles);
     const vt = new VaultTools(adapter, "/vault");
     const events = await collect(
@@ -301,7 +301,7 @@ describe("runInitWithSources — Phase 1 bootstrap", () => {
     );
     const initStart = events.find((e: any) => e.kind === "init_start") as any;
     expect(initStart).toBeDefined();
-    expect(initStart.phase).toBe("analysis");
+    expect(initStart.phase).toBeUndefined();
     expect(initStart.totalFiles).toBe(1);
   });
 
@@ -335,7 +335,7 @@ describe("runInitWithSources — Phase 1 bootstrap", () => {
     expect(events.some((e: any) => e.kind === "domain_created")).toBe(false);
   });
 
-  it("emits file_start { index: 0, phase: 'analysis' } and file_done { phase: 'analysis' } for file_0", async () => {
+  it("emits file_start { index: 0 } and file_done for file_0 (no phase field)", async () => {
     const adapter = mockAdapterWithSources(sourceFiles);
     const vt = new VaultTools(adapter, "/vault");
     const events = await collect(
@@ -344,8 +344,8 @@ describe("runInitWithSources — Phase 1 bootstrap", () => {
     const fileStart = events.find((e: any) => e.kind === "file_start") as any;
     const fileDone = events.find((e: any) => e.kind === "file_done") as any;
     expect(fileStart?.index).toBe(0);
-    expect(fileStart?.phase).toBe("analysis");
-    expect(fileDone?.phase).toBe("analysis");
+    expect(fileStart?.phase).toBeUndefined();
+    expect(fileDone?.phase).toBeUndefined();
   });
 });
 
@@ -393,8 +393,10 @@ describe("runInitWithSources — Phase 1 incremental", () => {
   it("entity_types accumulate correctly — later files merge on top of earlier", async () => {
     const adapter = mockAdapterWithSources(sourceFiles);
     const vt = new VaultTools(adapter, "/vault");
+    const ingestEmpty = JSON.stringify([]);
+    // Per-file pipeline: bootstrap(a), ingest(a), incremental(b), ingest(b), incremental(c), ingest(c)
     const events = await collect(
-      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, incrementalJson1, incrementalJson2]), "model", [], "TestVault", new AbortController().signal),
+      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, ingestEmpty, incrementalJson1, ingestEmpty, incrementalJson2, ingestEmpty]), "model", [], "TestVault", new AbortController().signal),
     );
     // Find last domain_updated with entity_types before clear (analyzed_sources: undefined)
     const updatesWithTypes = events.filter((e: any) => e.kind === "domain_updated" && e.patch?.entity_types !== undefined) as any[];
@@ -408,28 +410,29 @@ describe("runInitWithSources — Phase 1 incremental", () => {
     expect(concept.description).toBe("Refined concept");
   });
 
-  it("emits file_start { phase: 'analysis' } and file_done { phase: 'analysis' } for each incremental file", async () => {
+  it("emits file_start and file_done for each file (no phase field)", async () => {
     const adapter = mockAdapterWithSources(sourceFiles);
     const vt = new VaultTools(adapter, "/vault");
     const events = await collect(
       runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, incrementalJson1, incrementalJson2]), "model", [], "TestVault", new AbortController().signal),
     );
-    const fileStarts = events.filter((e: any) => e.kind === "file_start" && e.phase === "analysis") as any[];
-    const fileDones = events.filter((e: any) => e.kind === "file_done" && e.phase === "analysis") as any[];
+    const fileStarts = events.filter((e: any) => e.kind === "file_start") as any[];
+    const fileDones = events.filter((e: any) => e.kind === "file_done") as any[];
     expect(fileStarts).toHaveLength(3);
     expect(fileDones).toHaveLength(3);
+    for (const fs of fileStarts) expect(fs.phase).toBeUndefined();
+    for (const fd of fileDones) expect(fd.phase).toBeUndefined();
   });
 
-  it("emits init_start { phase: 'ingest' } before Phase 2 loop", async () => {
+  it("emits a single init_start (per-file pipeline, no separate ingest phase)", async () => {
     const adapter = mockAdapterWithSources(sourceFiles);
     const vt = new VaultTools(adapter, "/vault");
     const events = await collect(
       runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, incrementalJson1, incrementalJson2]), "model", [], "TestVault", new AbortController().signal),
     );
     const initStarts = events.filter((e: any) => e.kind === "init_start") as any[];
-    expect(initStarts).toHaveLength(2);
-    expect(initStarts[0].phase).toBe("analysis");
-    expect(initStarts[1].phase).toBe("ingest");
+    expect(initStarts).toHaveLength(1);
+    expect(initStarts[0].phase).toBeUndefined();
   });
 });
 
@@ -535,22 +538,9 @@ describe("runInitWithSources — resume logic", () => {
     const events = await collect(
       runInit(["dom", "--sources", "src"], vt, llm, "model", [existingWithProgress], "TestVault", new AbortController().signal),
     );
-    const fileStarts = events.filter((e: any) => e.kind === "file_start" && e.phase === "analysis") as any[];
+    const fileStarts = events.filter((e: any) => e.kind === "file_start") as any[];
     expect(fileStarts).toHaveLength(1);
     expect(fileStarts[0].file).toBe("src/c.md");
-  });
-
-  it("clears analyzed_sources after successful Phase 1 (emits domain_updated with analyzed_sources: undefined)", async () => {
-    const files = { "src/a.md": "a", "src/b.md": "b" };
-    const adapter = mockAdapterWithSources(files);
-    const vt = new VaultTools(adapter, "/vault");
-    const events = await collect(
-      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, incrementalJson]), "model", [], "TestVault", new AbortController().signal),
-    );
-    const clearEvent = events.find(
-      (e: any) => e.kind === "domain_updated" && "analyzed_sources" in e.patch && e.patch.analyzed_sources === undefined
-    ) as any;
-    expect(clearEvent).toBeDefined();
   });
 
   it("abort during Phase 1 stops loop and persists current analyzed_sources", async () => {
@@ -597,5 +587,225 @@ describe("runInitWithSources — resume logic", () => {
         (e.kind === "domain_created" && Array.isArray(e.entry?.analyzed_sources))
     ) as any;
     expect(persistEvent).toBeDefined();
+  });
+});
+
+describe("runInitWithSources — per-file pipeline", () => {
+  const bootstrapJson = JSON.stringify({
+    id: "dom",
+    name: "Dom",
+    wiki_folder: "dom",
+    source_paths: [],
+    entity_types: [{ type: "concept", description: "Concept", extraction_cues: [] }],
+    language_notes: "",
+  });
+
+  const incrementalJson = JSON.stringify({
+    entity_types: [{ type: "person", description: "Person", extraction_cues: [] }],
+  });
+
+  // Ingest returns a JSON array of { path, content } pages.
+  // Path must start with `!Wiki/dom/`.
+  function ingestPagesJson(name: string): string {
+    return JSON.stringify([{ path: `!Wiki/dom/${name}.md`, content: `# ${name}\nbody` }]);
+  }
+
+  function makeOrderedLlm(events: string[][], onCall: (idx: number) => void): LlmClient {
+    let callIndex = 0;
+    return {
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(() => {
+            const idx = callIndex;
+            onCall(idx);
+            const chunks = events[idx] ?? events[events.length - 1];
+            callIndex++;
+            return Promise.resolve({
+              [Symbol.asyncIterator]: async function* () {
+                for (const c of chunks) yield { choices: [{ delta: { content: c } }] };
+              },
+            });
+          }),
+        },
+      },
+    } as unknown as LlmClient;
+  }
+
+  it("writes articles for file[0] before LLM is called for file[1]", async () => {
+    const files = { "src/a.md": "a", "src/b.md": "b", "src/c.md": "c" };
+    const writeLog: string[] = [];
+    const llmCallLog: number[] = [];
+
+    const adapter = mockAdapter({
+      list: vi.fn().mockImplementation(async (path: string) => {
+        const all = Object.keys(files);
+        const filtered = path === "" ? all : all.filter((f) => f.startsWith(path));
+        return { files: filtered, folders: [] };
+      }),
+      read: vi.fn().mockImplementation(async (path: string) => files[path as keyof typeof files] ?? ""),
+      write: vi.fn().mockImplementation(async (path: string) => {
+        writeLog.push(`write:${path}@call=${llmCallLog.length}`);
+      }),
+    });
+    const vt = new VaultTools(adapter, "/vault");
+
+    // Calls expected: [0]=bootstrap(a), [1]=ingest(a), [2]=incremental(b), [3]=ingest(b), [4]=incremental(c), [5]=ingest(c)
+    const llm = makeOrderedLlm(
+      [
+        [bootstrapJson],
+        [ingestPagesJson("A")],
+        [incrementalJson],
+        [ingestPagesJson("B")],
+        [incrementalJson],
+        [ingestPagesJson("C")],
+      ],
+      (idx) => llmCallLog.push(idx),
+    );
+
+    await collect(
+      runInit(["dom", "--sources", "src"], vt, llm, "model", [], "TestVault", new AbortController().signal),
+    );
+
+    // The article A.md must have been written before the 3rd LLM call (incremental for b)
+    const writeAIdx = writeLog.findIndex((w) => w.startsWith("write:!Wiki/dom/A.md"));
+    expect(writeAIdx).toBeGreaterThanOrEqual(0);
+    const writeACallCount = Number(writeLog[writeAIdx].split("@call=")[1]);
+    // call=2 means after 2 LLM calls (bootstrap + ingest-a) — the 3rd call (incremental b) hasn't happened yet
+    expect(writeACallCount).toBeLessThanOrEqual(2);
+  });
+
+  it("resume: skips files already in analyzed_sources_v2 domain", async () => {
+    const files = { "src/a.md": "a", "src/b.md": "b", "src/c.md": "c" };
+    const llmCalls: string[] = [];
+
+    const adapter = mockAdapterWithSources(files);
+    const vt = new VaultTools(adapter, "/vault");
+
+    const existing: DomainEntry = {
+      id: "dom",
+      name: "Dom",
+      wiki_folder: "dom",
+      entity_types: [{ type: "concept", description: "Concept", extraction_cues: [] }],
+      analyzed_sources: ["src/a.md"],
+      analyzed_sources_v2: true,
+    };
+
+    const llm: LlmClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation((params: any) => {
+            // Record user message to identify which file was sent
+            const userMsg = params.messages?.find((m: any) => m.role === "user")?.content ?? "";
+            llmCalls.push(userMsg as string);
+            // alternate: incremental → ingest pages
+            const isIngest = String(userMsg).includes("Wiki schema") || String(userMsg).includes("!Wiki");
+            const body = isIngest
+              ? JSON.stringify([{ path: `!Wiki/dom/X.md`, content: "x" }])
+              : incrementalJson;
+            return Promise.resolve({
+              [Symbol.asyncIterator]: async function* () {
+                yield { choices: [{ delta: { content: body } }] };
+              },
+            });
+          }),
+        },
+      },
+    } as unknown as LlmClient;
+
+    await collect(
+      runInit(["dom", "--sources", "src"], vt, llm, "model", [existing], "TestVault", new AbortController().signal),
+    );
+
+    // No LLM call should reference "src/a.md" as the analysis file (it might appear in ingest of b/c indirectly? — no, ingest only reads one file at a time)
+    const refsToA = llmCalls.filter((m) => m.includes("src/a.md"));
+    expect(refsToA).toHaveLength(0);
+  });
+
+  it("abort mid-file: analyzed_sources NOT updated for that file", async () => {
+    const files = { "src/a.md": "a", "src/b.md": "b" };
+    const ac = new AbortController();
+    let callIndex = 0;
+    const llm: LlmClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(() => {
+            const idx = callIndex++;
+            // 0: bootstrap(a), 1: ingest(a), 2: incremental(b) — abort here AFTER returning JSON
+            if (idx === 2) {
+              return Promise.resolve({
+                [Symbol.asyncIterator]: async function* () {
+                  yield { choices: [{ delta: { content: incrementalJson } }] };
+                  // After yielding the chunk, signal abort so the post-stream check returns
+                  ac.abort();
+                },
+              });
+            }
+            const body =
+              idx === 0 ? bootstrapJson : JSON.stringify([{ path: "!Wiki/dom/A.md", content: "a" }]);
+            return Promise.resolve({
+              [Symbol.asyncIterator]: async function* () {
+                yield { choices: [{ delta: { content: body } }] };
+              },
+            });
+          }),
+        },
+      },
+    } as unknown as LlmClient;
+
+    const adapter = mockAdapterWithSources(files);
+    const vt = new VaultTools(adapter, "/vault");
+
+    const events = await collect(
+      runInit(["dom", "--sources", "src"], vt, llm, "model", [], "TestVault", ac.signal),
+    );
+
+    // Collect all domain_updated events with analyzed_sources array
+    const sourceUpdates = events.filter(
+      (e: any) => e.kind === "domain_updated" && Array.isArray(e.patch?.analyzed_sources),
+    ) as any[];
+    // Last analyzed_sources snapshot should contain "src/a.md" but NOT "src/b.md"
+    const lastSnapshot = sourceUpdates[sourceUpdates.length - 1]?.patch?.analyzed_sources ?? [];
+    expect(lastSnapshot).toContain("src/a.md");
+    expect(lastSnapshot).not.toContain("src/b.md");
+  });
+
+  it("repeated init: no new sources → toAnalyze empty → no LLM calls", async () => {
+    const files = { "src/a.md": "a", "src/b.md": "b", "src/c.md": "c" };
+    let llmCallCount = 0;
+    const llm: LlmClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(() => {
+            llmCallCount++;
+            return Promise.resolve({
+              [Symbol.asyncIterator]: async function* () {
+                yield { choices: [{ delta: { content: "{}" } }] };
+              },
+            });
+          }),
+        },
+      },
+    } as unknown as LlmClient;
+
+    const existing: DomainEntry = {
+      id: "dom",
+      name: "Dom",
+      wiki_folder: "dom",
+      entity_types: [{ type: "concept", description: "Concept", extraction_cues: [] }],
+      analyzed_sources: ["src/a.md", "src/b.md", "src/c.md"],
+      analyzed_sources_v2: true,
+    };
+
+    const adapter = mockAdapterWithSources(files);
+    const vt = new VaultTools(adapter, "/vault");
+
+    const events = await collect(
+      runInit(["dom", "--sources", "src"], vt, llm, "model", [existing], "TestVault", new AbortController().signal),
+    );
+
+    expect(llmCallCount).toBe(0);
+    const result = events.find((e: any) => e.kind === "result") as any;
+    expect(result).toBeDefined();
+    expect(result.text).toContain("no new sources");
   });
 });
