@@ -3,7 +3,7 @@ import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured } from "./llm-utils";
-import { SEEDS_SCHEMA, type SeedsResponse } from "./schemas";
+import { type SeedsResponse } from "./schemas";
 import queryTemplate from "../../prompts/query.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
@@ -180,8 +180,7 @@ async function llmSelectSeeds(
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "user", content: prompt },
   ];
-  const schema = opts.jsonMode === "json_schema" ? SEEDS_SCHEMA : undefined;
-  const params = buildChatParams(model, messages, opts, schema);
+  const params = buildChatParams(model, messages, opts, undefined);
 
   try {
     const resp = await llm.chat.completions.create(

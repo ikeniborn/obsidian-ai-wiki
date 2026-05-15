@@ -31,7 +31,7 @@ export class AgentRunner {
     }
 
     const na = s.nativeAgent;
-    const jsonMode = na.structuredOutput === "none" ? (false as const) : na.structuredOutput;
+    const jsonMode: "json_object" | false = na.structuredOutput === "none" ? false : "json_object";
     const c = na.perOperation ? na.operations[key] : undefined;
     if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode } };
     return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode } };

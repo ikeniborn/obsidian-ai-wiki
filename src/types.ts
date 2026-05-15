@@ -75,7 +75,7 @@ export interface LlmCallOptions {
   topP?: number | null;
   systemPrompt?: string;
   numCtx?: number | null;
-  jsonMode?: "json_object" | "json_schema" | false;
+  jsonMode?: "json_object" | false;
 }
 
 /** Минимальный интерфейс OpenAI-клиента, используемый фазами. */

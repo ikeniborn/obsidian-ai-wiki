@@ -4,7 +4,7 @@ import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured } from "./llm-utils";
-import { ENTITY_TYPES_DELTA_SCHEMA, type EntityTypesDeltaResponse } from "./schemas";
+import { type EntityTypesDeltaResponse } from "./schemas";
 import { parseJsonPages } from "./ingest";
 import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
@@ -342,8 +342,7 @@ async function actualizeDomainConfig(
     },
   ];
 
-  const schema = opts.jsonMode === "json_schema" ? ENTITY_TYPES_DELTA_SCHEMA : undefined;
-  const params = buildChatParams(model, messages, opts, schema);
+  const params = buildChatParams(model, messages, opts, undefined);
   let fullText = "";
   let outputTokens = 0;
   try {

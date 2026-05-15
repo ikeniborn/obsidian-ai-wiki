@@ -4,7 +4,6 @@ import type { LlmCallOptions, RunEvent, LlmClient, OnFileError } from "../types"
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured } from "./llm-utils";
 import {
-  DOMAIN_ENTRY_SCHEMA, ENTITY_TYPES_DELTA_SCHEMA,
   type DomainEntryResponse, type EntityTypesDeltaResponse,
 } from "./schemas";
 import schemaTemplate from "../../templates/_wiki_schema.md";
@@ -96,8 +95,7 @@ export async function* runInit(
     },
   ];
 
-  const schema = opts.jsonMode === "json_schema" ? DOMAIN_ENTRY_SCHEMA : undefined;
-  const params = buildChatParams(model, messages, opts, schema, true);
+  const params = buildChatParams(model, messages, opts, undefined, true);
   let fullText = "";
   try {
     const stream = await llm.chat.completions.create(
@@ -264,9 +262,8 @@ async function* runInitWithSources(
       ];
 
       let fullText = "";
-      const bootstrapSchema = opts.jsonMode === "json_schema" ? DOMAIN_ENTRY_SCHEMA : undefined;
       try {
-        const params = buildChatParams(model, messages, opts, bootstrapSchema, true);
+        const params = buildChatParams(model, messages, opts, undefined, true);
         const stream = await llm.chat.completions.create(
           { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
           { signal },
@@ -279,7 +276,7 @@ async function* runInitWithSources(
         }
       } catch (e) {
         if (signal.aborted || (e as Error).name === "AbortError") return;
-        const params = buildChatParams(model, messages, opts, bootstrapSchema);
+        const params = buildChatParams(model, messages, opts, undefined);
         const resp = await llm.chat.completions.create(
           { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
         );
@@ -353,9 +350,8 @@ async function* runInitWithSources(
       ];
 
       let fullText = "";
-      const deltaSchema = opts.jsonMode === "json_schema" ? ENTITY_TYPES_DELTA_SCHEMA : undefined;
       try {
-        const params = buildChatParams(model, messages, opts, deltaSchema, true);
+        const params = buildChatParams(model, messages, opts, undefined, true);
         const stream = await llm.chat.completions.create(
           { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
           { signal },
@@ -368,7 +364,7 @@ async function* runInitWithSources(
         }
       } catch (e) {
         if (signal.aborted || (e as Error).name === "AbortError") return;
-        const params = buildChatParams(model, messages, opts, deltaSchema);
+        const params = buildChatParams(model, messages, opts, undefined);
         const resp = await llm.chat.completions.create(
           { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
         );
