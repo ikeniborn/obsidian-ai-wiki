@@ -465,6 +465,36 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           }),
       );
 
+    new Setting(containerEl)
+      .setName(T.settings.seedTopK_name)
+      .setDesc(T.settings.seedTopK_desc)
+      .addText((t) =>
+        t.setPlaceholder("5")
+          .setValue(String(s.seedTopK))
+          .onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isInteger(n) && n >= 1 && n <= 50) {
+              s.seedTopK = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName(T.settings.seedMinScore_name)
+      .setDesc(T.settings.seedMinScore_desc)
+      .addText((t) =>
+        t.setPlaceholder("0.1")
+          .setValue(String(s.seedMinScore))
+          .onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n >= 0 && n <= 1) {
+              s.seedMinScore = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
     // ── Dev mode ──────────────────────────────────────────────────────────────
     if (!Platform.isMobile) {
       new Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
