@@ -432,6 +432,62 @@ event, не падает (single-flight остаётся consistent).
   `query-thinking.test.ts` — функционально остаются (thinking → parseStructured
   → zod). Если call-site signature сменится — обновить mocks.
 
+## Применимость к backends
+
+Плагин поддерживает 2 backend (`src/types.ts: backend = "native-agent" | "claude-agent"`).
+Оба роутятся через одни и те же phases (init/lint/query), поэтому zod-валидация
++ parseWithRetry применяются к обоим. Различия:
+
+### native-agent (OpenAI-совместимые провайдеры)
+
+- `buildOptsFor` выставляет `jsonMode: "json_object"` (agent-runner.ts:39-40).
+- `wrapWithJsonFallback` страхует от провайдеров без `response_format`.
+- Multi-turn retry: orchestrator передаёт полный `[...base, assistant, user-feedback]`
+  в один HTTP-запрос — стандартный OpenAI multi-turn.
+- **Полная функциональность retry-with-feedback работает as designed.**
+
+### claude-agent (`ClaudeCliClient` через `iclaude.sh`)
+
+- `buildOptsFor` НЕ выставляет `jsonMode` (agent-runner.ts:33-34) — Claude Code
+  сам форматирует через CLI; `response_format` не применим.
+- `wrapWithJsonFallback` для claude-agent — pass-through (нет
+  `response_format` в params, ранний return в llm-utils.ts:134).
+- **Особенность multi-turn**: `ClaudeCliClient._create` (claude-cli-client.ts:49)
+  берёт ТОЛЬКО last user message; assistant-история игнорируется. При resume
+  через `--resume <sessionId>` Claude помнит prior context из своей сессии.
+- Retry для claude-agent: orchestrator должен либо
+  (a) встроить `fullText` (raw bad output) прямо в текст user-feedback message,
+  чтобы Claude увидел "previous output: <bad>; errors: <list>; retry"
+  единым сообщением, либо
+  (b) опираться на `lastSessionId` + resume (но первый retry в рамках одной
+  операции происходит до сохранения sessionId в settings).
+
+  Принимаем (a): `formatZodFeedback(err, fullText)` уже включает raw в
+  выход. Для claude-agent assistant-msg в массиве messages дропается,
+  но user-msg содержит и feedback, и raw — функциональность сохраняется.
+
+- **JSON example в промптах** работает одинаково (промпт идёт в
+  `--append-system-prompt-file` или system content).
+- **Telemetry** (RunEvent + counter + status bar) работает идентично — это
+  plugin-side, не backend-side.
+
+### Проверка избыточности для claude-agent
+
+Гипотеза пользователя: для claude-agent zod может быть избыточен (Claude Code
+сам структурирует JSON качественно). Контр-аргументы:
+
+1. Текущий код уже падает с `parseStructured(...) as Type` без runtime-проверки
+   — даже Claude может вернуть JSON с пропущенным `wiki_folder` (наблюдалось
+   в `init.ts:143` ручная проверка `if (!entry.id || !entry.wiki_folder)`).
+2. zod-валидация per-call дёшева (микросекунды), не влияет на performance.
+3. Telemetry даст эмпирические данные: после 1-2 недель — если
+   `failed/total` для claude-agent ≈ 0, можно обсудить отключение retry
+   через `structuredRetries: 0` в claude-agent ветке `buildOptsFor`.
+
+**Решение**: включаем zod + retry для обоих backends по умолчанию. Если
+телеметрия покажет нулевые failures у claude-agent — отключим retry для
+него отдельной правкой (тривиально: `structuredRetries: backend === "claude-agent" ? 0 : (settings ?? 1)`).
+
 ## Совместимость и миграция
 
 - `nativeAgent.structuredRetries` отсутствует у существующих пользователей →
