@@ -6,6 +6,8 @@ import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured } f
 import {
   type DomainEntryResponse, type EntityTypesDeltaResponse,
 } from "./schemas";
+import { parseWithRetry } from "./parse-with-retry";
+import { DomainEntrySchema } from "./zod-schemas";
 import schemaTemplate from "../../templates/_wiki_schema.md";
 import initTemplate from "../../prompts/init.md";
 import initIncrementalTemplate from "../../prompts/init-incremental.md";
@@ -95,35 +97,32 @@ export async function* runInit(
     },
   ];
 
-  const params = buildChatParams(model, messages, opts, true);
-  let fullText = "";
+  const collected: RunEvent[] = [];
+  let parsed: { id: string; name: string; wiki_folder: string; entity_types: EntityType[]; language_notes: string };
   try {
-    const stream = await llm.chat.completions.create(
-      { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-      { signal },
-    );
-    for await (const chunk of stream) {
-      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
-      if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-      if (content) { fullText += content; yield { kind: "assistant_text", delta: content }; }
-      if (tok !== undefined) outputTokens += tok;
-    }
+    const r = await parseWithRetry({
+      llm, model, baseMessages: messages, opts,
+      schema: DomainEntrySchema,
+      maxRetries: opts.structuredRetries ?? 1,
+      callSite: "init.bootstrap",
+      signal,
+      onEvent: (e) => collected.push(e),
+    });
+    parsed = r.value;
+    outputTokens += r.outputTokens;
+    if (r.fullText) yield { kind: "assistant_text", delta: r.fullText };
   } catch (e) {
-    if (signal.aborted || (e as Error).name === "AbortError") return;
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-    );
-    fullText = resp.choices[0]?.message?.content ?? "";
-    const tok = extractUsage(resp);
-    if (tok !== undefined) outputTokens += tok;
-    if (fullText) yield { kind: "assistant_text", delta: fullText };
+    for (const ev of collected) yield ev;
+    if ((e as Error).name === "AbortError" || signal.aborted) return;
+    yield { kind: "error", message: `Failed to parse domain entry: ${(e as Error).message}` };
+    return;
   }
+  for (const ev of collected) yield ev;
 
   if (signal.aborted) return;
 
   let entry: DomainEntry;
   try {
-    const parsed = parseStructured(fullText) as DomainEntryResponse;
     entry = {
       id: parsed.id,
       name: parsed.name,
@@ -131,18 +130,16 @@ export async function* runInit(
       entity_types: parsed.entity_types,
       language_notes: parsed.language_notes,
     } as DomainEntry;
-    // Normalize wiki_folder to vault-relative (strip vaults/<vaultName>/ prefix if LLM used old format)
     const vaultPrefix = `vaults/${vaultName}/`;
     if (entry.wiki_folder?.startsWith(vaultPrefix)) {
       entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
     }
-    // Strip !Wiki/ prefix if LLM outputs the full path rather than the subfolder
     if (entry.wiki_folder?.startsWith("!Wiki/")) {
       entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
     }
     if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
   } catch (e) {
-    yield { kind: "error", message: `Failed to parse domain entry: ${(e as Error).message}` };
+    yield { kind: "error", message: `Failed to build domain entry: ${(e as Error).message}` };
     return;
   }
 

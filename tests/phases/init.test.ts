@@ -79,6 +79,7 @@ const existingDomain: DomainEntry = {
 
 // LLM may return old-format wiki_folder — normalization should strip prefix
 const validDomainJson = JSON.stringify({
+  reasoning: "",
   id: "newdomain",
   name: "New Domain",
   wiki_folder: "vaults/TestVault/!Wiki/newdomain",
