@@ -3,8 +3,9 @@ import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured } from "./llm-utils";
-import { type EntityTypesDeltaResponse } from "./schemas";
+import { buildChatParams, extractStreamDeltas, extractUsage } from "./llm-utils";
+import { parseWithRetry } from "./parse-with-retry";
+import { EntityTypesDeltaSchema } from "./zod-schemas";
 import { parseJsonPages } from "./ingest";
 import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
@@ -342,28 +343,33 @@ async function actualizeDomainConfig(
     },
   ];
 
-  const params = buildChatParams(model, messages, opts);
-  let fullText = "";
-  let outputTokens = 0;
-  try {
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-      { signal },
-    );
-    fullText = resp.choices[0]?.message?.content ?? "";
-    const tok = extractUsage(resp);
-    if (tok !== undefined) outputTokens += tok;
-  } catch {
-    return { patch: null, outputTokens };
-  }
+  // JSON example appended to system prompt for stronger structural guidance.
+  const systemContent = (messages[0].content as string) + `\n\n## Output JSON Example\n\n` + JSON.stringify({
+    reasoning: "Сохранил Process, добавил Contract по новым страницам.",
+    entity_types: [
+      { type: "Process", description: "Бизнес-процесс", extraction_cues: ["BPMN","workflow"], wiki_subfolder: "processes" },
+      { type: "Contract", description: "Договор/SLA", extraction_cues: ["SLA","договор"], wiki_subfolder: "contracts" },
+    ],
+    language_notes: "Использовать русский для бизнес-терминов.",
+  }, null, 2);
+  messages[0] = { role: "system", content: systemContent };
 
+  const collected: RunEvent[] = [];
   try {
-    const parsed = parseStructured(fullText) as EntityTypesDeltaResponse;
+    const r = await parseWithRetry({
+      llm, model, baseMessages: messages, opts,
+      schema: EntityTypesDeltaSchema,
+      maxRetries: opts.structuredRetries ?? 1,
+      callSite: "lint.patch",
+      signal,
+      onEvent: (e) => collected.push(e),
+    });
+    const parsed = r.value;
     const patch: { entity_types?: EntityType[]; language_notes?: string } = {};
     if (Array.isArray(parsed.entity_types)) patch.entity_types = parsed.entity_types as EntityType[];
     if (typeof parsed.language_notes === "string") patch.language_notes = parsed.language_notes;
-    return { patch: Object.keys(patch).length > 0 ? patch : null, outputTokens };
+    return { patch: Object.keys(patch).length > 0 ? patch : null, outputTokens: r.outputTokens };
   } catch {
-    return { patch: null, outputTokens };
+    return { patch: null, outputTokens: 0 };
   }
 }

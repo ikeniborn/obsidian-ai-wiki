@@ -16,18 +16,22 @@ function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
 }
 
 function makeLlm(report: string, configJson = "{}"): LlmClient {
-  const streamResponse = {
-    [Symbol.asyncIterator]: async function* () {
-      yield { choices: [{ delta: { content: report } }] };
-    },
-  };
-  const nonStreamResponse = { choices: [{ message: { content: configJson } }] };
+  let callCount = 0;
   return {
     chat: {
       completions: {
-        create: vi.fn().mockImplementation((params: any) =>
-          Promise.resolve(params.stream ? streamResponse : nonStreamResponse)
-        ),
+        create: vi.fn().mockImplementation((_params: any) => {
+          const call = ++callCount;
+          // call 1: lint report (streaming), call 2: actualizeDomainConfig (streaming via parseWithRetry),
+          // call 3: fix pass (streaming)
+          const isConfig = call === 2;
+          const content = isConfig ? configJson : report;
+          return Promise.resolve({
+            [Symbol.asyncIterator]: async function* () {
+              yield { choices: [{ delta: { content } }] };
+            },
+          });
+        }),
       },
     },
   } as unknown as LlmClient;
@@ -238,6 +242,7 @@ describe("runLint", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const configJson = JSON.stringify({
+      reasoning: "Updated entity types.",
       entity_types: [{ type: "концепция", description: "updated", extraction_cues: ["тест"], min_mentions_for_page: 1, wiki_subfolder: "work/концепции" }],
       language_notes: "Updated notes.",
     });

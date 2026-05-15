@@ -22,28 +22,22 @@ function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
 
 const VAULT_ROOT = "/vaults/Work";
 
-// actualizeDomainConfig is called non-streaming; lint report is called streaming.
-// We use a mock that:
-// - streaming call: yields a plain lint report text (no JSON)
-// - non-streaming call: returns thinking-model output with <think> + real JSON patch
+// parseWithRetry calls streaming first for all calls.
+// call 1: lint report — plain text
+// call 2: actualizeDomainConfig via parseWithRetry — returns thinking-model output with <think> + real JSON patch
+// call 3: fix pass — plain text
 function makeLlmWithThinkingPatch(patchJson: string): LlmClient {
   let callCount = 0;
   return {
     chat: {
       completions: {
-        create: vi.fn().mockImplementation((params: any) => {
-          callCount++;
-          if (params.stream) {
-            // lint report streaming call — return plain text, no JSON
-            return Promise.resolve({
-              [Symbol.asyncIterator]: async function* () {
-                yield { choices: [{ delta: { content: "Lint report: all good." } }] };
-              },
-            });
-          }
-          // actualizeDomainConfig non-streaming call — return thinking model output
+        create: vi.fn().mockImplementation((_params: any) => {
+          const call = ++callCount;
+          const content = call === 2 ? patchJson : "Lint report: all good.";
           return Promise.resolve({
-            choices: [{ message: { content: patchJson } }],
+            [Symbol.asyncIterator]: async function* () {
+              yield { choices: [{ delta: { content } }] };
+            },
           });
         }),
       },
@@ -52,6 +46,7 @@ function makeLlmWithThinkingPatch(patchJson: string): LlmClient {
 }
 
 const VALID_PATCH_JSON = JSON.stringify({
+  reasoning: "Added Patched entity type.",
   entity_types: [
     { type: "Patched", description: "Patched entity", extraction_cues: ["patched"], wiki_subfolder: "Patched" },
   ],
