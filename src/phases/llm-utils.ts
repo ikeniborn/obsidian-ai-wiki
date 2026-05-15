@@ -92,6 +92,15 @@ function prependBaseContract(
 
 const JSON_MODE_KEYWORDS = ["response_format", "json_object", "json mode", "unsupported"];
 
+/**
+ * Heuristic: detect if an LLM error means the backend doesn't support `response_format`.
+ * True iff: status 400 or 422 AND message contains one of the keywords
+ * ("response_format", "json_object", "json mode", "unsupported").
+ * False for non-object inputs and for any other status (401/403/429/500/etc.).
+ *
+ * Note: "unsupported" alone is intentionally broad — may produce false positives on
+ * other 400s mentioning unsupported features. Cost is one extra retry, acceptable.
+ */
 export function isJsonModeError(e: unknown): boolean {
   if (!e || typeof e !== "object") return false;
   const status = (e as { status?: unknown }).status;
@@ -111,6 +120,18 @@ function stripResponseFormat(params: Record<string, unknown>): Record<string, un
   return next;
 }
 
+/**
+ * Decorator over LlmClient: if a request with `response_format` fails because the backend
+ * doesn't support it (see {@link isJsonModeError}), retry once with `response_format` stripped.
+ *
+ * - Non-streaming: on caught json-mode error, transparently retry without `response_format`.
+ * - Streaming: retry only if no content delta has been yielded yet. Reasoning chunks
+ *   (`delta.reasoning`) do NOT count as content, so retry is still possible after them.
+ * - When request has no `response_format`, behaves as pass-through.
+ *
+ * Trade-off: mid-stream retry replays reasoning chunks already yielded to the consumer.
+ * Downstream parsers (parseStructured) tolerate `<think>` noise, so this is safe in practice.
+ */
 export function wrapWithJsonFallback(inner: LlmClient): LlmClient {
   const create = ((params: Record<string, unknown>, callOpts?: { signal?: AbortSignal }) => {
     const hasRf = params.response_format !== undefined;
