@@ -18980,6 +18980,7 @@ var en = {
   },
   view: {
     refreshTitle: "Refresh domains",
+    reinitTitle: "Re-init selected domain",
     addDomain: "Add domain",
     sectionCreate: "Create",
     sectionDomain: "Fill / Maintain",
@@ -19069,6 +19070,9 @@ var en = {
     addDomainSourcePathsAdd: "+ Add path",
     initConfirmTitle: "Start domain initialization?",
     initConfirmBody: (files, folders) => `Found ${files} .md files in ${folders} folder(s). Run init to analyze sources and create wiki pages?`,
+    reinitConfirmTitle: "Re-init \u2014 confirm",
+    reinitConfirmBody: (id, files, srcCount) => `Domain \xAB${id}\xBB. ${files} md-files across ${srcCount} source paths. Re-run init?`,
+    reinitConfirmBodyNoSources: (id) => `Domain \xAB${id}\xBB. No source paths \u2014 only metadata refresh (entity_types, language_notes).`,
     fileErrorTitle: "Error processing file",
     fileErrorSkip: "Skip",
     fileErrorRetry: "Retry",
@@ -19173,6 +19177,7 @@ var ru = {
   },
   view: {
     refreshTitle: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D\u044B",
+    reinitTitle: "\u041F\u043E\u0432\u0442\u043E\u0440\u043D\u044B\u0439 init \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0433\u043E \u0434\u043E\u043C\u0435\u043D\u0430",
     addDomain: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D",
     sectionCreate: "\u0421\u043E\u0437\u0434\u0430\u043D\u0438\u0435",
     sectionDomain: "\u041D\u0430\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u0435 / \u0410\u043A\u0442\u0443\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F",
@@ -19262,6 +19267,9 @@ var ru = {
     addDomainSourcePathsAdd: "+ \u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043F\u0443\u0442\u044C",
     initConfirmTitle: "\u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C \u0438\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044E \u0434\u043E\u043C\u0435\u043D\u0430?",
     initConfirmBody: (files, folders) => `\u041D\u0430\u0439\u0434\u0435\u043D\u043E ${files} .md \u0444\u0430\u0439\u043B\u043E\u0432 \u0432 ${folders} \u043F\u0430\u043F\u043A\u0430\u0445. \u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C init \u0434\u043B\u044F \u0430\u043D\u0430\u043B\u0438\u0437\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432 \u0438 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446?`,
+    reinitConfirmTitle: "Re-init \u2014 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435",
+    reinitConfirmBody: (id, files, srcCount) => `\u0414\u043E\u043C\u0435\u043D \xAB${id}\xBB. ${files} md-\u0444\u0430\u0439\u043B\u043E\u0432 \u0432 ${srcCount} sourcePaths. \u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u044B\u0439 init?`,
+    reinitConfirmBodyNoSources: (id) => `\u0414\u043E\u043C\u0435\u043D \xAB${id}\xBB. sourcePaths \u043F\u0443\u0441\u0442\u044B \u2014 \u0431\u0443\u0434\u0443\u0442 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u043C\u0435\u0442\u0430\u0434\u0430\u043D\u043D\u044B\u0435 (entity_types, language_notes).`,
     fileErrorTitle: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u0438 \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u043A\u0435 \u0444\u0430\u0439\u043B\u0430",
     fileErrorSkip: "\u041F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C",
     fileErrorRetry: "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C",
@@ -19366,6 +19374,7 @@ var es = {
   },
   view: {
     refreshTitle: "Actualizar dominios",
+    reinitTitle: "Re-init del dominio seleccionado",
     addDomain: "A\xF1adir dominio",
     sectionCreate: "Crear",
     sectionDomain: "Rellenar / Mantener",
@@ -19455,6 +19464,9 @@ var es = {
     addDomainSourcePathsAdd: "+ A\xF1adir ruta",
     initConfirmTitle: "\xBFIniciar inicializaci\xF3n del dominio?",
     initConfirmBody: (files, folders) => `Se encontraron ${files} archivos .md en ${folders} carpeta(s). \xBFEjecutar init para analizar fuentes y crear p\xE1ginas wiki?`,
+    reinitConfirmTitle: "Re-init \u2014 confirmar",
+    reinitConfirmBody: (id, files, srcCount) => `Dominio \xAB${id}\xBB. ${files} archivos md en ${srcCount} rutas fuente. \xBFRe-ejecutar init?`,
+    reinitConfirmBodyNoSources: (id) => `Dominio \xAB${id}\xBB. Sin rutas fuente \u2014 solo refresco de metadatos (entity_types, language_notes).`,
     fileErrorTitle: "Error al procesar archivo",
     fileErrorSkip: "Saltar",
     fileErrorRetry: "Reintentar",
@@ -20371,6 +20383,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   ingestBtn;
   lintBtn;
   formatBtn;
+  reinitBtn;
   formatPreviewSection = null;
   lastContext = null;
   // Chat state
@@ -20435,6 +20448,16 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
       const refreshBtn = domainRow.createEl("button", { text: "\u21BB", attr: { title: T.view.refreshTitle } });
       refreshBtn.addEventListener("click", () => void this.refreshDomains());
+      this.reinitBtn = domainRow.createEl("button", {
+        text: "\u27F3",
+        attr: { title: T.view.reinitTitle }
+      });
+      this.reinitBtn.disabled = true;
+      this.reinitBtn.addEventListener("click", () => void this.runReinit());
+      this.domainSelect.addEventListener("change", () => {
+        if (this.reinitBtn)
+          this.reinitBtn.disabled = !this.domainSelect.value;
+      });
       const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
       this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
       this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
@@ -20541,6 +20564,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     if (previous && Array.from(this.domainSelect.options).some((o) => o.value === previous)) {
       this.domainSelect.value = previous;
     }
+    if (this.reinitBtn)
+      this.reinitBtn.disabled = !this.domainSelect.value;
   }
   openAddDomain() {
     const cwd = this.plugin.controller.cwdOrEmpty();
@@ -20578,6 +20603,44 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       })();
     }).open();
   }
+  async runReinit() {
+    if (!this.domainSelect)
+      return;
+    const domainId = this.domainSelect.value;
+    if (!domainId)
+      return;
+    let entry;
+    try {
+      const domains = await this.plugin.controller.loadDomains();
+      entry = domains.find((d) => d.id === domainId);
+    } catch {
+      return;
+    }
+    if (!entry)
+      return;
+    const T = i18n().modal;
+    const sourcePaths = entry.sourcePaths ?? [];
+    const hasSources = sourcePaths.length > 0;
+    let body;
+    if (hasSources) {
+      const mdFiles = this.app.vault.getFiles().filter(
+        (f) => f.extension === "md" && sourcePaths.some((p) => f.path.startsWith(p))
+      );
+      body = T.reinitConfirmBody(entry.id, mdFiles.length, sourcePaths.length);
+    } else {
+      body = T.reinitConfirmBodyNoSources(entry.id);
+    }
+    new ConfirmModal(
+      this.app,
+      T.reinitConfirmTitle,
+      [body],
+      () => void this.plugin.controller.init(
+        entry.id,
+        false,
+        hasSources ? sourcePaths : void 0
+      )
+    ).open();
+  }
   submitQuery(save) {
     const q = this.queryInput.value.trim();
     if (!q) {
@@ -20607,6 +20670,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.lintBtn.disabled = true;
     if (this.formatBtn)
       this.formatBtn.disabled = true;
+    if (this.reinitBtn)
+      this.reinitBtn.disabled = true;
     this.chatSection?.remove();
     this.chatSection = null;
     this.lastContext = null;
@@ -20873,11 +20938,19 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.ingestBtn.disabled = false;
     this.lintBtn.disabled = false;
     this.formatBtn.disabled = false;
+    if (this.reinitBtn)
+      this.reinitBtn.disabled = !(this.domainSelect && this.domainSelect.value);
     if (this.tickHandle !== null) {
       window.clearTimeout(this.tickHandle);
       this.tickHandle = null;
     }
     this.updateMetrics();
+    if (this.lastTokPerSec !== void 0) {
+      const dur = ((entry.finishedAt - entry.startedAt) / 1e3).toFixed(1);
+      this.progressCount.setText(
+        i18n().view.stepsCount(this.stepCount, dur) + ` \xB7 ${this.lastTokPerSec} tok/s`
+      );
+    }
     this.resultSpeedEl?.setText(this.lastTokPerSec !== void 0 ? ` ${this.lastTokPerSec} tok/s` : "");
     this.finalEl.empty();
     if (entry.finalText) {
