@@ -276,6 +276,24 @@ describe("runLint", () => {
     expect(indexWrite![1]).toContain("[[Concept]]");
   });
 
+  it("second runLint call hits GraphCache for the same domain", async () => {
+    const { graphCache } = await import("../../src/wiki-graph-cache");
+    graphCache.clear();
+    const adapter = {
+      read: vi.fn().mockResolvedValue("---\n---\n# X"),
+      write: vi.fn().mockResolvedValue(undefined),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/X.md"], folders: [] }),
+      exists: vi.fn().mockResolvedValue(true),
+      mkdir: vi.fn().mockResolvedValue(undefined),
+    } as any;
+    const vt = new (await import("../../src/vault-tools")).VaultTools(adapter, "/v");
+    const llm = makeLlm("[]");
+    const dom = { id: "work", name: "Work", wiki_folder: "work", source_paths: [] };
+    await collect(runLint([], vt, llm, "model", [dom], "/v", new AbortController().signal, 20, {}));
+    const pages = new Map([["!Wiki/work/X.md", "---\n---\n# X"]]);
+    expect(graphCache.get("work", pages).fromCache).toBe(true);
+  });
+
   it("includes isolated node graph issue in LLM prompt", async () => {
     const adapter = mockAdapter({
       list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Orphan.md"], folders: [] }),

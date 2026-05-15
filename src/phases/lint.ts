@@ -11,7 +11,8 @@ import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm } from "../utils/raw-frontmatter";
-import { buildWikiGraph, checkGraphStructure } from "../wiki-graph";
+import { checkGraphStructure } from "../wiki-graph";
+import { graphCache } from "../wiki-graph-cache";
 
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
@@ -57,7 +58,7 @@ export async function* runLint(
 
     const pages = await vaultTools.readAll(files);
 
-    const graph = buildWikiGraph(pages);
+    const { graph } = graphCache.get(domain.id, pages);
     const structuralIssues = checkStructure(pages);
     const graphIssues = checkGraphStructure(graph, hubThreshold);
     const allIssues = [structuralIssues, graphIssues].filter(Boolean).join("\n");
