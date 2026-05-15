@@ -1,7 +1,7 @@
 import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient, OnFileError } from "../types";
-import type { VaultTools } from "../vault-tools";
+import { VaultTools } from "../vault-tools";
 import { parseWithRetry } from "./parse-with-retry";
 import { DomainEntrySchema, EntityTypesDeltaSchema } from "./zod-schemas";
 import schemaTemplate from "../../templates/_wiki_schema.md";
@@ -449,6 +449,15 @@ async function* runInitWithSources(
     text: `Domain "${domainId}" initialised from ${toAnalyze.length} source files.`,
     outputTokens: outputTokens || undefined,
   };
+}
+
+export async function wipeDomainFolder(vaultTools: VaultTools, wikiFolder: string): Promise<string[]> {
+  const root = domainWikiFolder(wikiFolder);
+  const files = await vaultTools.listFiles(root);
+  for (const f of files) {
+    try { await vaultTools.remove(f); } catch { /* skip locked */ }
+  }
+  return files;
 }
 
 async function appendLog(vaultTools: VaultTools, wikiRoot: string, domainId: string): Promise<void> {
