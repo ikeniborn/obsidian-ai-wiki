@@ -50,7 +50,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       model: this.plugin.settings.nativeAgent.model,
       temperature: this.plugin.settings.nativeAgent.temperature,
       topP: this.plugin.settings.nativeAgent.topP,
-      numCtx: this.plugin.settings.nativeAgent.numCtx,
     };
     await this.patchLocal({ nativeAgent: { ...cur, ...patch } });
   }
@@ -95,21 +94,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .onChange(async (v) => { s.systemPrompt = v; await this.plugin.saveSettings(); });
         return t;
       });
-
-    const isPerOp = eff.backend === "claude-agent" ? s.claudeAgent.perOperation : s.nativeAgent.perOperation;
-    if (!isPerOp && eff.backend !== "claude-agent") {
-      new Setting(containerEl)
-        .setName(T.settings.maxTokens_name)
-        .setDesc(T.settings.maxTokens_desc)
-        .addText((t) =>
-          t.setPlaceholder("4096")
-            .setValue(String(s.maxTokens))
-            .onChange(async (v) => {
-              const n = Number(v);
-              if (Number.isFinite(n) && n > 0) { s.maxTokens = Math.floor(n); await this.plugin.saveSettings(); }
-            }),
-        );
-    }
 
     new Setting(containerEl)
       .setName(T.settings.timeouts_name)
@@ -305,16 +289,17 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           );
 
         new Setting(containerEl)
-          .setName(T.settings.numCtx_name)
-          .setDesc(T.settings.numCtx_desc)
+          .setName(T.settings.maxTokens_name)
+          .setDesc(T.settings.maxTokens_desc)
           .addText((t) =>
-            t.setPlaceholder("(дефолт модели)")
-              .setValue(eff.nativeAgent.numCtx != null ? String(eff.nativeAgent.numCtx) : "")
+            t.setPlaceholder("4096")
+              .setValue(String(s.nativeAgent.maxTokens))
               .onChange(async (v) => {
-                const trimmed = v.trim();
-                if (!trimmed) { await this.patchLocalNative({ numCtx: null }); return; }
-                const n = Number(trimmed);
-                if (Number.isFinite(n) && n > 0) await this.patchLocalNative({ numCtx: Math.floor(n) });
+                const n = Number(v);
+                if (Number.isFinite(n) && n > 0) {
+                  s.nativeAgent.maxTokens = Math.floor(n);
+                  await this.plugin.saveSettings();
+                }
               }),
           );
 
