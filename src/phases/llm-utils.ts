@@ -21,10 +21,16 @@ export function stripThinking(text: string): string {
 export function parseStructured(fullText: string): unknown {
   const text = fullText.trim();
   try { return JSON.parse(text); } catch { /* fall through */ }
-  const stripped = stripThinking(text);
+  const stripped = stripFences(stripThinking(text));
+  try { return JSON.parse(stripped); } catch { /* fall through */ }
   const match = stripped.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("No JSON object found");
   return JSON.parse(match[0]);
+}
+
+function stripFences(text: string): string {
+  const fenced = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/i);
+  return fenced ? fenced[1].trim() : text;
 }
 
 /** Извлекает reasoning, content и usage.completion_tokens из одного streaming-чанка.

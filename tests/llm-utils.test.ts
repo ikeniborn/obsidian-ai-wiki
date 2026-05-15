@@ -108,6 +108,21 @@ describe("parseStructured", () => {
     const input = '{"outer": {"inner": [1, 2]}}';
     expect(parseStructured(input)).toEqual({ outer: { inner: [1, 2] } });
   });
+
+  it("strips ```json fences and parses", () => {
+    const input = "```json\n{\"a\": 1}\n```";
+    expect(parseStructured(input)).toEqual({ a: 1 });
+  });
+
+  it("strips plain ``` fences without language and parses", () => {
+    const input = "```\n{\"b\": 2}\n```";
+    expect(parseStructured(input)).toEqual({ b: 2 });
+  });
+
+  it("strips <think>...</think> followed by fenced JSON", () => {
+    const input = "<think>reasoning</think>\n```json\n{\"c\": 3}\n```";
+    expect(parseStructured(input)).toEqual({ c: 3 });
+  });
 });
 
 describe("buildChatParams — response_format", () => {
