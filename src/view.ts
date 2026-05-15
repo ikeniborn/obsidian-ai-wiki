@@ -276,6 +276,46 @@ export class LlmWikiView extends ItemView {
     }).open();
   }
 
+  private async runReinit(): Promise<void> {
+    if (!this.domainSelect) return;
+    const domainId = this.domainSelect.value;
+    if (!domainId) return;
+
+    let entry: DomainEntry | undefined;
+    try {
+      const domains = await this.plugin.controller.loadDomains();
+      entry = domains.find((d) => d.id === domainId);
+    } catch {
+      return;
+    }
+    if (!entry) return;
+
+    const T = i18n().modal;
+    const sourcePaths = entry.sourcePaths ?? [];
+    const hasSources = sourcePaths.length > 0;
+
+    let body: string;
+    if (hasSources) {
+      const mdFiles = this.app.vault.getFiles().filter(
+        (f) => f.extension === "md" && sourcePaths.some((p) => f.path.startsWith(p)),
+      );
+      body = T.reinitConfirmBody(entry.id, mdFiles.length, sourcePaths.length);
+    } else {
+      body = T.reinitConfirmBodyNoSources(entry.id);
+    }
+
+    new ConfirmModal(
+      this.app,
+      T.reinitConfirmTitle,
+      [body],
+      () => void this.plugin.controller.init(
+        entry!.id,
+        false,
+        hasSources ? sourcePaths : undefined,
+      ),
+    ).open();
+  }
+
   private submitQuery(save: boolean): void {
     const q = this.queryInput.value.trim();
     if (!q) { new Notice(i18n().view.enterQuestion); return; }
