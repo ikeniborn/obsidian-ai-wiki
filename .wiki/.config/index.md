@@ -23,11 +23,12 @@
 - [[init-operation]] — `документация/операции/init-operation.md`
 - [[chat-operation]] — `документация/операции/chat-operation.md`
 
-#### паттерны (4)
+#### паттерны (5)
 - [[single-flight-guard]] — `документация/паттерны/single-flight-guard.md`
 - [[async-generator-events]] — `документация/паттерны/async-generator-events.md`
 - [[backend-strategy]] — `документация/паттерны/backend-strategy.md`
 - [[per-device-settings]] — `документация/паттерны/per-device-settings.md`
+- [[reasoning-first-json]] — `документация/паттерны/reasoning-first-json.md`
 
 #### спецификации (6)
 - [[agent-base-contract]] — `документация/спецификации/agent-base-contract.md`

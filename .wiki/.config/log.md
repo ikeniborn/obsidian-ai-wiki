@@ -127,3 +127,19 @@
 **Обновлено:** index.md (спецификации 5→6), log.md
 
 ---
+
+## 2026-05-15T00:00:00
+
+**Операция:** ingest
+**Источники:** `prompts/init.md`, `prompts/init-incremental.md`, `prompts/lint.md`
+**Домен:** документация
+
+**Затронуто страниц:** 3
+
+- ОБНОВЛЕНА: `документация/операции/init-operation.md` (stub → developing) — добавлены разделы «LLM-промпты»: bootstrap-анализ (init.md) и инкрементальное обновление entity_types (init-incremental.md); структура выходного JSON; правила обновления entity_types
+- ОБНОВЛЕНА: `документация/операции/lint-operation.md` (stub → developing) — добавлен раздел «LLM-промпт (lint.md)»: входные данные, выходной JSON, назначение поля reasoning
+- СОЗДАНА: `документация/паттерны/reasoning-first-json.md` (stub) — соглашение: поле reasoning первым в JSON-ответах LLM-промптов; применяется в init.md, init-incremental.md, lint.md
+
+**Примечание:** prompts/ вне source_paths["docs"], обработаны по содержимому как документация домена
+
+---
