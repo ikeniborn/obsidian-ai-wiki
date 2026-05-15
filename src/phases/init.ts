@@ -167,7 +167,7 @@ export async function* runInit(
   };
 }
 
-async function* runInitWithSources(
+export async function* runInitWithSources(
   domainId: string,
   sourcePaths: string[],
   dryRun: boolean,
@@ -179,6 +179,7 @@ async function* runInitWithSources(
   signal: AbortSignal,
   opts: LlmCallOptions,
   onFileError: OnFileError | undefined,
+  force: boolean = false,
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
   let outputTokens = 0;
@@ -195,8 +196,8 @@ async function* runInitWithSources(
   }
 
   const existing = domains.find((d) => d.id === domainId);
-  const isResuming = existing?.analyzed_sources !== undefined;
-  const alreadyAnalyzed = new Set(existing?.analyzed_sources ?? []);
+  const isResuming = !force && existing?.analyzed_sources !== undefined;
+  const alreadyAnalyzed = new Set(force ? [] : (existing?.analyzed_sources ?? []));
   const toAnalyze = isResuming
     ? sourceFiles.filter((f) => !alreadyAnalyzed.has(f))
     : sourceFiles;
