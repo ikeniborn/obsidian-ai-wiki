@@ -417,6 +417,17 @@ export class LlmWikiView extends ItemView {
       this.scrollSteps();
       return;
     }
+    if (ev.kind === "graph_stats") {
+      const cacheHint = ev.fromCache ? " (cache hit)" : "";
+      const preview = ev.seeds.slice(0, 3).join(", ");
+      const extra = ev.seeds.length > 3 ? `, …+${ev.seeds.length - 3}` : "";
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      step.createSpan({ cls: "ai-wiki-step-icon" }).setText("🌐");
+      step.createSpan({ cls: "ai-wiki-step-name" })
+        .setText(`Граф: ${ev.seeds.length} seeds [${preview}${extra}] → ${ev.expanded} / ${ev.total} страниц${cacheHint}`);
+      this.scrollSteps();
+      return;
+    }
     if (ev.kind === "domain_created") {
       void this.refreshDomains();
       return;
