@@ -165,3 +165,25 @@
 **Обновлено:** index.md (спецификации 6→8, планы 1→3), log.md
 
 ---
+
+## 2026-05-15 — ingest (structured-output-resilience plan + prompt examples)
+
+**Операция:** ingest
+**Домен:** документация
+**Источники:**
+- docs/superpowers/plans/2026-05-15-structured-output-resilience.md
+- prompts/init.md
+- prompts/init-incremental.md
+
+**Создано страниц:** 4
+- документация/планы/structured-output-resilience-plan.md (mature)
+- документация/компоненты/parse-with-retry.md (developing)
+- документация/компоненты/structural-error-counter.md (developing)
+- документация/паттерны/structured-output-retry.md (developing)
+
+**Обновлено страниц:** 1
+- документация/паттерны/reasoning-first-json.md — добавлена секция «Output JSON Example в промптах», ссылки на [[parse-with-retry]] и [[structured-output-retry]]; статус stub → developing
+
+**Обновлено:** index.md (счётчики: компоненты 5→7, паттерны 5→6, планы 3→4)
+
+**Следующий шаг:** lint документация после реализации плана; ingest спецификации docs/superpowers/specs/2026-05-15-structured-output-resilience-design.md для дополнения контекста

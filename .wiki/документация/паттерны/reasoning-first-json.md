@@ -1,5 +1,5 @@
 ---
-wiki_status: stub
+wiki_status: developing
 wiki_sources:
   - prompts/init.md
   - prompts/init-incremental.md
@@ -31,7 +31,13 @@ aliases: ["reasoning first", "chain-of-thought JSON"]
 | `init-incremental.md` | `entity_types`, `language_notes` |
 | `lint.md` | `entity_types`, `language_notes` |
 
+## Output JSON Example в промптах
+
+`prompts/init.md` и `prompts/init-incremental.md` дополнены секциями `## Output JSON Example` — эталон формы ответа с reasoning-полем первым. Снижает частоту retry в [[parse-with-retry]] при работе native backend ([[backend-strategy]]).
+
 ## Связанные страницы
 
 - [[init-operation]]
 - [[lint-operation]]
+- [[structured-output-retry]] — паттерн валидации формы ответа
+- [[parse-with-retry]] — использует zod-схемы, обязывающие поле `reasoning`

@@ -6,12 +6,14 @@
 
 ### документация
 
-#### компоненты (5)
+#### компоненты (7)
 - [[wiki-controller]] — `документация/компоненты/wiki-controller.md`
 - [[agent-runner]] — `документация/компоненты/agent-runner.md`
 - [[claude-cli-client]] — `документация/компоненты/claude-cli-client.md`
 - [[llm-wiki-view]] — `документация/компоненты/llm-wiki-view.md`
 - [[format-utils]] — `документация/компоненты/format-utils.md`
+- [[parse-with-retry]] — `документация/компоненты/parse-with-retry.md`
+- [[structural-error-counter]] — `документация/компоненты/structural-error-counter.md`
 
 #### операции (8)
 - [[format-operation]] — `документация/операции/format-operation.md`
@@ -23,12 +25,13 @@
 - [[init-operation]] — `документация/операции/init-operation.md`
 - [[chat-operation]] — `документация/операции/chat-operation.md`
 
-#### паттерны (5)
+#### паттерны (6)
 - [[single-flight-guard]] — `документация/паттерны/single-flight-guard.md`
 - [[async-generator-events]] — `документация/паттерны/async-generator-events.md`
 - [[backend-strategy]] — `документация/паттерны/backend-strategy.md`
 - [[per-device-settings]] — `документация/паттерны/per-device-settings.md`
 - [[reasoning-first-json]] — `документация/паттерны/reasoning-first-json.md`
+- [[structured-output-retry]] — `документация/паттерны/structured-output-retry.md`
 
 #### спецификации (8)
 - [[agent-base-contract]] — `документация/спецификации/agent-base-contract.md`
@@ -40,7 +43,8 @@
 - [[init-stability-design]] — `документация/спецификации/init-stability-design.md`
 - [[reinit-button-design]] — `документация/спецификации/reinit-button-design.md`
 
-#### планы (3)
+#### планы (4)
 - [[generation-speed-plan]] — `документация/планы/generation-speed-plan.md`
 - [[init-stability-plan]] — `документация/планы/init-stability-plan.md`
 - [[reinit-button-plan]] — `документация/планы/reinit-button-plan.md`
+- [[structured-output-resilience-plan]] — `документация/планы/structured-output-resilience-plan.md`
