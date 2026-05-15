@@ -21,6 +21,7 @@ import type { LlmWikiPluginSettings } from "./types";
 import { FileErrorModal, ConfirmModal } from "./modals";
 import { domainWikiFolder } from "./wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm } from "./utils/raw-frontmatter";
+import { graphCache } from "./wiki-graph-cache";
 
 function toVaultPath(vaultDir: string, savedPath: string): string | null {
   const abs = isAbsolute(savedPath) ? savedPath : join(vaultDir, savedPath);
@@ -600,6 +601,13 @@ export class WikiController {
       this.onBusyChange?.();
       this.currentOp = null;
       this._currentLogMeta = null;
+    }
+    if (status === "done") {
+      const mutatesWiki = op === "ingest" || op === "lint" || op === "query-save" || op === "init";
+      if (mutatesWiki) {
+        const targets = domainId ? [domainId] : (await this.domainStore.load()).map((d) => d.id);
+        for (const id of targets) graphCache.invalidate(id);
+      }
     }
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
 
