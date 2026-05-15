@@ -123,6 +123,11 @@ describe("parseStructured", () => {
     const input = "<think>reasoning</think>\n```json\n{\"c\": 3}\n```";
     expect(parseStructured(input)).toEqual({ c: 3 });
   });
+
+  it("strips fences around top-level JSON array (regex fallback would fail)", () => {
+    const input = "```json\n[1, 2, 3]\n```";
+    expect(parseStructured(input)).toEqual([1, 2, 3]);
+  });
 });
 
 describe("buildChatParams — response_format", () => {

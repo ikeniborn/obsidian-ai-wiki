@@ -14,8 +14,8 @@ export function stripThinking(text: string): string {
 
 /**
  * Parse structured JSON from LLM output.
- * Fast path: direct parse (works for json_schema / json_object mode).
- * Fallback: strip <think> tags, then find JSON block.
+ * Fast path: direct parse (works for json_object mode).
+ * Fallback: strip <think> tags and markdown fences, retry parse, then regex-extract JSON block.
  * Throws if no valid JSON found.
  */
 export function parseStructured(fullText: string): unknown {
