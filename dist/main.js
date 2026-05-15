@@ -18875,7 +18875,6 @@ var DEFAULT_SETTINGS = {
     temperature: 0.2,
     topP: null,
     numCtx: null,
-    structuredOutput: "json_object",
     perOperation: false,
     operations: {
       ingest: { model: "llama3.2", maxTokens: 4096, temperature: 0.2 },
@@ -20184,12 +20183,6 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           await this.patchLocalNative({ apiKey: v.trim() });
         })
       );
-      new import_obsidian3.Setting(containerEl).setName("Structured Output").setDesc("json_object \u2014 valid JSON guaranteed (recommended). json_schema \u2014 schema-enforced + CoT (requires OpenAI / Qwen API). none \u2014 plain text + fallback parsing.").addDropdown(
-        (d) => d.addOption("json_object", "json_object (recommended)").addOption("json_schema", "json_schema \u2014 schema + CoT").addOption("none", "none \u2014 fallback only").setValue(s.nativeAgent.structuredOutput ?? "json_object").onChange(async (v) => {
-          s.nativeAgent.structuredOutput = v;
-          await this.plugin.saveSettings();
-        })
-      );
       if (!s.nativeAgent.perOperation) {
         new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native).addText(
           (t) => t.setPlaceholder("llama3.2").setValue(eff.nativeAgent.model).onChange(async (v) => {
@@ -20885,12 +20878,6 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.tickHandle = null;
     }
     this.updateMetrics();
-    if (this.lastTokPerSec !== void 0) {
-      const dur = ((entry.finishedAt - entry.startedAt) / 1e3).toFixed(1);
-      this.progressCount.setText(
-        i18n().view.stepsCount(this.stepCount, dur) + ` \xB7 ${this.lastTokPerSec} tok/s`
-      );
-    }
     this.resultSpeedEl?.setText(this.lastTokPerSec !== void 0 ? ` ${this.lastTokPerSec} tok/s` : "");
     this.finalEl.empty();
     if (entry.finalText) {
@@ -21260,6 +21247,17 @@ function consolidateSourcePaths(existing, newPath, vaultRoot) {
 }
 
 // src/domain.ts
+function migrateDomainsV2(domains) {
+  let migrated = false;
+  for (const d of domains) {
+    if (d.analyzed_sources !== void 0 && !d.analyzed_sources_v2) {
+      d.analyzed_sources = [];
+      d.analyzed_sources_v2 = true;
+      migrated = true;
+    }
+  }
+  return { domains, migrated };
+}
 function validateDomainId(id) {
   if (!id)
     return "ID \u0434\u043E\u043C\u0435\u043D\u0430 \u043F\u0443\u0441\u0442";
@@ -21313,11 +21311,19 @@ function parseStructured(fullText) {
     return JSON.parse(text);
   } catch {
   }
-  const stripped = stripThinking(text);
+  const stripped = stripFences(stripThinking(text));
+  try {
+    return JSON.parse(stripped);
+  } catch {
+  }
   const match = stripped.match(/\{[\s\S]*\}/);
   if (!match)
     throw new Error("No JSON object found");
   return JSON.parse(match[0]);
+}
+function stripFences(text) {
+  const fenced = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/i);
+  return fenced ? fenced[1].trim() : text;
 }
 function extractStreamDeltas(chunk) {
   const delta = chunk.choices[0]?.delta;
@@ -21334,7 +21340,7 @@ function extractUsage(resp) {
   const tok = resp.usage?.completion_tokens;
   return typeof tok === "number" ? tok : void 0;
 }
-function buildChatParams(model, messages, opts, responseSchema, stream = false) {
+function buildChatParams(model, messages, opts, stream = false) {
   let msgs = prependBaseContract(messages);
   msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
   const params = { model, messages: msgs };
@@ -21348,12 +21354,7 @@ function buildChatParams(model, messages, opts, responseSchema, stream = false) 
     params.num_ctx = opts.numCtx;
   if (stream)
     params.stream_options = { include_usage: true };
-  if (responseSchema && opts.jsonMode === "json_schema") {
-    params.response_format = {
-      type: "json_schema",
-      json_schema: { name: responseSchema.name, schema: responseSchema.schema, strict: true }
-    };
-  } else if (opts.jsonMode === "json_object") {
+  if (opts.jsonMode === "json_object") {
     params.response_format = { type: "json_object" };
   }
   return params;
@@ -21369,6 +21370,73 @@ ${existing}` };
     return updated;
   }
   return [{ role: "system", content: base_default }, ...messages];
+}
+var JSON_MODE_KEYWORDS = ["response_format", "json_object", "json mode", "unsupported"];
+function isJsonModeError(e) {
+  if (!e || typeof e !== "object")
+    return false;
+  const status = e.status;
+  if (status !== 400 && status !== 422)
+    return false;
+  const msg = String(e.message ?? "").toLowerCase();
+  return JSON_MODE_KEYWORDS.some((kw) => msg.includes(kw));
+}
+function hasContentDelta(chunk) {
+  const c = chunk.choices?.[0]?.delta?.content;
+  return typeof c === "string" && c.length > 0;
+}
+function stripResponseFormat(params) {
+  const next = { ...params };
+  delete next.response_format;
+  return next;
+}
+function wrapWithJsonFallback(inner) {
+  const create = (params, callOpts) => {
+    const hasRf = params.response_format !== void 0;
+    const isStream = params.stream === true;
+    if (!hasRf) {
+      return inner.chat.completions.create(params, callOpts);
+    }
+    if (!isStream) {
+      return (async () => {
+        try {
+          return await inner.chat.completions.create(params, callOpts);
+        } catch (e) {
+          if (!isJsonModeError(e))
+            throw e;
+          return inner.chat.completions.create(stripResponseFormat(params), callOpts);
+        }
+      })();
+    }
+    return (async () => {
+      let upstream;
+      try {
+        upstream = await inner.chat.completions.create(params, callOpts);
+      } catch (e) {
+        if (!isJsonModeError(e))
+          throw e;
+        return inner.chat.completions.create(stripResponseFormat(params), callOpts);
+      }
+      async function* gated() {
+        let seenContent = false;
+        try {
+          for await (const chunk of upstream) {
+            if (hasContentDelta(chunk))
+              seenContent = true;
+            yield chunk;
+          }
+        } catch (e) {
+          if (seenContent || !isJsonModeError(e))
+            throw e;
+          const retry = await inner.chat.completions.create(stripResponseFormat(params), callOpts);
+          for await (const c of retry)
+            yield c;
+        }
+      }
+      return gated();
+    })();
+  };
+  return { chat: { completions: { create } } };
 }
 function injectSystemPrompt(messages, systemPrompt) {
   if (!systemPrompt)
@@ -21388,7 +21456,7 @@ ${section}` };
 }
 
 // prompts/ingest.md
-var ingest_default = '\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0441\u0438\u043D\u0442\u0435\u0437\u0430 wiki-\u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0418\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439/\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n\n\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:\n{{entity_types_block}}\n{{lang_notes}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- CREATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 wiki, \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 >= min_mentions_for_page\n- UPDATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2192 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E, \u041D\u0415 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E\n- SKIP: \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u043E \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0435\u0441\u0442\u044C\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043A\u043E\u043D\u0444\u0438\u0433\u0438/SQL \u043C\u043E\u0436\u043D\u043E \u0446\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445.\n- \u041F\u0443\u0442\u044C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0434\u043E\u043B\u0436\u0435\u043D \u043D\u0430\u0447\u0438\u043D\u0430\u0442\u044C\u0441\u044F \u0441 "{{wiki_path}}/"\n- Frontmatter \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- wiki_sources: \u043A\u0430\u0436\u0434\u044B\u0439 \u044D\u043B\u0435\u043C\u0435\u043D\u0442 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 [[path/to/source]], \u0442\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 Links \u0432 Obsidian\n- \u0420\u0430\u0437\u0434\u0435\u043B "## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438" \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D \u0434\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0444\u0438\u043A\u0441\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 "## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439" \u0441 \u0434\u0430\u0442\u043E\u0439 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u043C\n- "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438" \u2014 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043A \u0441\u0432\u044F\u0437\u044F\u043C\n{{schema_block}}\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432, \u0431\u0435\u0437 \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n[{"path":"{{wiki_path}}/EntityName.md","content":"---\\nwiki_sources: [\\"[[{{source_path}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncont\u0435\u043D\u0442..."}]\n';
+var ingest_default = '\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0441\u0438\u043D\u0442\u0435\u0437\u0430 wiki-\u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0418\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439/\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n\n\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:\n{{entity_types_block}}\n{{lang_notes}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- CREATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 wiki, \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 >= min_mentions_for_page\n- UPDATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2192 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E, \u041D\u0415 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E\n- SKIP: \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u043E \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0435\u0441\u0442\u044C\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043A\u043E\u043D\u0444\u0438\u0433\u0438/SQL \u043C\u043E\u0436\u043D\u043E \u0446\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445.\n- \u041F\u0443\u0442\u044C \u0441\u0442\u0430\u0442\u044C\u0438 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u0435\u0442\u0441\u044F \u0442\u0438\u043F\u043E\u043C \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u2014 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u043E\u0447\u043D\u044B\u0439 \u0448\u0430\u0431\u043B\u043E\u043D \u0438\u0437 \u0441\u0435\u043A\u0446\u0438\u0438 \xAB\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410\xBB (\u0432\u044B\u0448\u0435, \u0434\u043E \u0431\u043B\u043E\u043A\u0430 \u041F\u0420\u0410\u0412\u0418\u041B\u0410), \u043F\u043E\u0434\u0441\u0442\u0430\u0432\u0438\u0432 \u0438\u043C\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0432\u043C\u0435\u0441\u0442\u043E <EntityName>\n- \u0415\u0441\u043B\u0438 \u0442\u0438\u043F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u043D\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0451\u043D \u0438\u043B\u0438 \u0443 \u0434\u043E\u043C\u0435\u043D\u0430 \u043D\u0435\u0442 entity_types \u2192 \u043F\u0443\u0442\u044C \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E: {{wiki_path}}/<EntityName>.md\n- Frontmatter \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- wiki_sources: \u043A\u0430\u0436\u0434\u044B\u0439 \u044D\u043B\u0435\u043C\u0435\u043D\u0442 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 [[path/to/source]], \u0442\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 Links \u0432 Obsidian\n- \u0420\u0430\u0437\u0434\u0435\u043B "## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438" \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D \u0434\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0444\u0438\u043A\u0441\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 "## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439" \u0441 \u0434\u0430\u0442\u043E\u0439 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u043C\n- "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438" \u2014 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043A \u0441\u0432\u044F\u0437\u044F\u043C\n{{schema_block}}\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432, \u0431\u0435\u0437 \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n[{"path":"{{wiki_path}}/EntityName.md","content":"---\\nwiki_sources: [\\"[[{{source_path}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncont\u0435\u043D\u0442..."}]\n';
 
 // src/phases/template.ts
 function render(template, vars) {
@@ -21531,7 +21599,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     schemaContent,
     indexContent
   );
-  const params = buildChatParams(model, messages, opts, void 0, true);
+  const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
   let outputTokens = 0;
   try {
@@ -21687,22 +21755,26 @@ function extractParentSourcePath(absSource, vaultRoot) {
   const rel = (0, import_path_browserify2.relative)(vaultRoot, clamped);
   return (rel || ".") + "/";
 }
-function buildEntityTypesBlock(domain) {
+function buildEntityTypesBlock(domain, wikiVaultPath) {
   if (!domain.entity_types?.length)
     return "";
-  return domain.entity_types.map((et) => [
-    `### \u0422\u0438\u043F: ${et.type}`,
-    `\u041E\u043F\u0438\u0441\u0430\u043D\u0438\u0435: ${et.description}`,
-    `\u041A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430: ${et.extraction_cues.join(", ")}`,
-    et.min_mentions_for_page != null ? `\u041C\u0438\u043D. \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B: ${et.min_mentions_for_page}` : "",
-    et.wiki_subfolder ? `\u041F\u043E\u0434\u043F\u0430\u043F\u043A\u0430 \u0432 wiki: ${et.wiki_subfolder}` : ""
-  ].filter(Boolean).join("\n")).join("\n\n");
+  return domain.entity_types.map((et) => {
+    const pathTemplate = et.wiki_subfolder ? `${wikiVaultPath}/${et.wiki_subfolder}/<EntityName>.md` : `${wikiVaultPath}/<EntityName>.md`;
+    return [
+      `### \u0422\u0438\u043F: ${et.type}`,
+      `\u041E\u043F\u0438\u0441\u0430\u043D\u0438\u0435: ${et.description}`,
+      `\u041A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430: ${et.extraction_cues.join(", ")}`,
+      et.min_mentions_for_page != null ? `\u041C\u0438\u043D. \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B: ${et.min_mentions_for_page}` : "",
+      et.wiki_subfolder ? `\u041F\u043E\u0434\u043F\u0430\u043F\u043A\u0430 \u0432 wiki: ${et.wiki_subfolder}` : "",
+      `\u041F\u0443\u0442\u044C \u0434\u043B\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0435\u0439 \u044D\u0442\u043E\u0433\u043E \u0442\u0438\u043F\u0430: ${pathTemplate}`
+    ].filter(Boolean).join("\n");
+  }).join("\n\n");
 }
 function buildIngestMessages(sourcePath, sourceContent, domain, wikiVaultPath, existingPages, schemaContent, indexContent) {
   const existing = existingPages.size > 0 ? [...existingPages.entries()].map(([p, c]) => `${p}:
 ${c}`).join("\n\n") : "\u041D\u0435\u0442.";
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const entityTypesBlock = buildEntityTypesBlock(domain);
+  const entityTypesBlock = buildEntityTypesBlock(domain, wikiVaultPath);
   const langNotes = domain.language_notes ? `\u042F\u0437\u044B\u043A\u043E\u0432\u044B\u0435 \u043F\u0440\u0430\u0432\u0438\u043B\u0430: ${domain.language_notes}` : "";
   const systemContent = render(ingest_default, {
     domain_name: domain.name,
@@ -21734,61 +21806,6 @@ ${indexContent}` : ""
     }
   ];
 }
-
-// src/phases/schemas.ts
-var ENTITY_TYPE_ITEM_SCHEMA = {
-  type: "object",
-  properties: {
-    type: { type: "string" },
-    description: { type: "string" },
-    extraction_cues: { type: "array", items: { type: "string" } },
-    min_mentions_for_page: { type: "number" },
-    wiki_subfolder: { type: "string" }
-  },
-  required: ["type", "description", "extraction_cues", "wiki_subfolder"],
-  additionalProperties: false
-};
-var DOMAIN_ENTRY_SCHEMA = {
-  name: "domain_entry",
-  schema: {
-    type: "object",
-    properties: {
-      reasoning: { type: "string" },
-      id: { type: "string" },
-      name: { type: "string" },
-      wiki_folder: { type: "string" },
-      entity_types: { type: "array", items: ENTITY_TYPE_ITEM_SCHEMA },
-      language_notes: { type: "string" }
-    },
-    required: ["reasoning", "id", "name", "wiki_folder", "entity_types", "language_notes"],
-    additionalProperties: false
-  }
-};
-var ENTITY_TYPES_DELTA_SCHEMA = {
-  name: "entity_types_delta",
-  schema: {
-    type: "object",
-    properties: {
-      reasoning: { type: "string" },
-      entity_types: { type: "array", items: ENTITY_TYPE_ITEM_SCHEMA },
-      language_notes: { type: "string" }
-    },
-    required: ["reasoning"],
-    additionalProperties: false
-  }
-};
-var SEEDS_SCHEMA = {
-  name: "seeds",
-  schema: {
-    type: "object",
-    properties: {
-      reasoning: { type: "string" },
-      seeds: { type: "array", items: { type: "string" } }
-    },
-    required: ["reasoning", "seeds"],
-    additionalProperties: false
-  }
-};
 
 // prompts/query.md
 var query_default = "\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u043F\u043E wiki-\u0431\u0430\u0437\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u0411\u0443\u0434\u044C \u0442\u043E\u0447\u0435\u043D \u0438 \u043B\u0430\u043A\u043E\u043D\u0438\u0447\u0435\u043D.\n\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 WikiLinks [[\u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435]] \u043F\u0440\u0438 \u0441\u0441\u044B\u043B\u043A\u0430\u0445 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0437 \u0438\u043D\u0434\u0435\u043A\u0441\u0430.\n{{entity_types_block}}\n{{schema_block}}\n{{index_block}}\n";
@@ -21940,7 +21957,7 @@ ${indexContent}` : ""
 Wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B:
 ${contextBlock}` }
   ];
-  const params = buildChatParams(model, messages, opts, void 0, true);
+  const params = buildChatParams(model, messages, opts, true);
   let answer = "";
   try {
     const stream = await llm.chat.completions.create(
@@ -22037,8 +22054,7 @@ Return JSON only: {"seeds": ["PageA", "PageB"]} \u2014 most relevant page names 
   const messages = [
     { role: "user", content: prompt }
   ];
-  const schema = opts.jsonMode === "json_schema" ? SEEDS_SCHEMA : void 0;
-  const params = buildChatParams(model, messages, opts, schema);
+  const params = buildChatParams(model, messages, opts);
   try {
     const resp = await llm.chat.completions.create(
       { ...params, stream: false },
@@ -22146,7 +22162,7 @@ ${c}`).join("\n\n")}`
         ].join("\n")
       }
     ];
-    const params = buildChatParams(model, messages, opts, void 0, true);
+    const params = buildChatParams(model, messages, opts, true);
     let llmReport = "";
     try {
       const stream = await llm.chat.completions.create(
@@ -22201,7 +22217,7 @@ Actualizing domain config for "${domain.id}"...
 Applying fixes for "${domain.id}"...
 ` };
     const fixMessages = buildFixMessages(domain, wikiVaultPath, pages, allIssues, entityTypesBlock, llmReport);
-    const fixParams = buildChatParams(model, fixMessages, opts, void 0, true);
+    const fixParams = buildChatParams(model, fixMessages, opts, true);
     let fixFullText = "";
     try {
       const fixStream = await llm.chat.completions.create(
@@ -22413,8 +22429,7 @@ ${c}`).join("\n\n");
       ].join("\n")
     }
   ];
-  const schema = opts.jsonMode === "json_schema" ? ENTITY_TYPES_DELTA_SCHEMA : void 0;
-  const params = buildChatParams(model, messages, opts, schema);
+  const params = buildChatParams(model, messages, opts);
   let fullText = "";
   let outputTokens = 0;
   try {
@@ -22456,7 +22471,7 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
     { role: "system", content: systemContent },
     ...history.map((m) => ({ role: m.role, content: m.content }))
   ];
-  const params = buildChatParams(model, messages, opts, void 0, true);
+  const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
   let outputTokens = 0;
   try {
@@ -22577,8 +22592,7 @@ ${c}`).join("\n\n")
       ].join("\n")
     }
   ];
-  const schema = opts.jsonMode === "json_schema" ? DOMAIN_ENTRY_SCHEMA : void 0;
-  const params = buildChatParams(model, messages, opts, schema, true);
+  const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
   try {
     const stream = await llm.chat.completions.create(
@@ -22676,30 +22690,33 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
   const isResuming = existing?.analyzed_sources !== void 0;
   const alreadyAnalyzed = new Set(existing?.analyzed_sources ?? []);
   const toAnalyze = isResuming ? sourceFiles.filter((f) => !alreadyAnalyzed.has(f)) : sourceFiles;
-  yield { kind: "init_start", totalFiles: toAnalyze.length, phase: "analysis" };
+  yield { kind: "init_start", totalFiles: toAnalyze.length };
+  if (toAnalyze.length === 0) {
+    yield {
+      kind: "result",
+      durationMs: Date.now() - start,
+      text: `Domain "${domainId}": no new sources to process.`,
+      outputTokens: outputTokens || void 0
+    };
+    return;
+  }
   const [schemaContent, indexContent] = await Promise.all([
     tryRead3(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
     tryRead3(vaultTools, `${wikiRootGuess}/_index.md`)
   ]);
   let currentDomain = existing ?? null;
   for (let i = 0; i < toAnalyze.length; i++) {
-    if (signal.aborted) {
-      if (currentDomain) {
-        yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
-        yield { kind: "domain_updated", domainId, patch: { analyzed_sources: currentDomain.analyzed_sources } };
-        yield { kind: "tool_result", ok: true };
-      }
+    if (signal.aborted)
       return;
-    }
     const file = toAnalyze[i];
-    yield { kind: "file_start", file, index: i, total: toAnalyze.length, phase: "analysis" };
+    yield { kind: "file_start", file, index: i, total: toAnalyze.length };
     let fileContent;
     try {
       fileContent = await vaultTools.read(file);
     } catch {
       yield { kind: "assistant_text", delta: `\u26A0 ${file}: \u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u0444\u0430\u0439\u043B, \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u043C
 ` };
-      yield { kind: "file_done", file, phase: "analysis" };
+      yield { kind: "file_done", file };
       continue;
     }
     yield { kind: "assistant_text", delta: `\u2139 ${file}: ${fileContent.length} chars
@@ -22717,20 +22734,16 @@ ${indexContent}` : ""
       });
       const messages = [
         { role: "system", content: systemContent },
-        {
-          role: "user",
-          content: `Domain ID: ${domainId}
+        { role: "user", content: `Domain ID: ${domainId}
 Vault name: ${vaultName}
 Source paths: ${sourcePaths.join(", ")}
 
 ${file}:
-${fileContent}`
-        }
+${fileContent}` }
       ];
       let fullText = "";
-      const bootstrapSchema = opts.jsonMode === "json_schema" ? DOMAIN_ENTRY_SCHEMA : void 0;
       try {
-        const params = buildChatParams(model, messages, opts, bootstrapSchema, true);
+        const params = buildChatParams(model, messages, opts, true);
         const stream = await llm.chat.completions.create(
           { ...params, stream: true },
           { signal }
@@ -22749,7 +22762,7 @@ ${fileContent}`
       } catch (e) {
         if (signal.aborted || e.name === "AbortError")
           return;
-        const params = buildChatParams(model, messages, opts, bootstrapSchema);
+        const params = buildChatParams(model, messages, opts);
         const resp = await llm.chat.completions.create(
           { ...params, stream: false }
         );
@@ -22782,7 +22795,7 @@ ${fileContent}`
       } catch {
         yield { kind: "assistant_text", delta: `\u26A0 ${file}: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON, \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u043C bootstrap
 ` };
-        yield { kind: "file_done", file, phase: "analysis" };
+        yield { kind: "file_done", file };
         continue;
       }
       if (dryRun) {
@@ -22803,14 +22816,20 @@ ${JSON.stringify(entry, null, 2)}
         entity_types: entry.entity_types,
         language_notes: entry.language_notes,
         source_paths: sourcePaths,
-        analyzed_sources: []
+        analyzed_sources: [],
+        analyzed_sources_v2: true
       };
       yield { kind: "tool_use", name: existing ? "UpdateDomain" : "SaveDomain", input: { id: domainId } };
       if (existing) {
         yield {
           kind: "domain_updated",
           domainId,
-          patch: { entity_types: currentDomain.entity_types, language_notes: currentDomain.language_notes, wiki_folder: currentDomain.wiki_folder, analyzed_sources: [] }
+          patch: {
+            entity_types: currentDomain.entity_types,
+            language_notes: currentDomain.language_notes,
+            wiki_folder: currentDomain.wiki_folder,
+            analyzed_sources: []
+          }
         };
       } else {
         yield { kind: "domain_created", entry: currentDomain };
@@ -22820,20 +22839,16 @@ ${JSON.stringify(entry, null, 2)}
       const currentEntityTypes = currentDomain?.entity_types ?? [];
       const messages = [
         { role: "system", content: init_incremental_default },
-        {
-          role: "user",
-          content: `\u0422\u0435\u043A\u0443\u0449\u0438\u0435 entity_types:
+        { role: "user", content: `\u0422\u0435\u043A\u0443\u0449\u0438\u0435 entity_types:
 ${JSON.stringify(currentEntityTypes, null, 2)}
 
 \u0424\u0430\u0439\u043B: ${file}
 
-${fileContent}`
-        }
+${fileContent}` }
       ];
       let fullText = "";
-      const deltaSchema = opts.jsonMode === "json_schema" ? ENTITY_TYPES_DELTA_SCHEMA : void 0;
       try {
-        const params = buildChatParams(model, messages, opts, deltaSchema, true);
+        const params = buildChatParams(model, messages, opts, true);
         const stream = await llm.chat.completions.create(
           { ...params, stream: true },
           { signal }
@@ -22851,7 +22866,7 @@ ${fileContent}`
       } catch (e) {
         if (signal.aborted || e.name === "AbortError")
           return;
-        const params = buildChatParams(model, messages, opts, deltaSchema);
+        const params = buildChatParams(model, messages, opts);
         const resp = await llm.chat.completions.create(
           { ...params, stream: false }
         );
@@ -22869,11 +22884,11 @@ ${fileContent}`
       } catch {
         yield { kind: "assistant_text", delta: `\u26A0 ${file}: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON, \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u043C
 ` };
-        yield { kind: "file_done", file, phase: "analysis" };
+        yield { kind: "file_done", file };
         continue;
       }
       if (!currentDomain) {
-        yield { kind: "file_done", file, phase: "analysis" };
+        yield { kind: "file_done", file };
         continue;
       }
       const mergedTypes = mergeEntityTypes(currentDomain.entity_types ?? [], delta.entity_types ?? []);
@@ -22881,7 +22896,7 @@ ${fileContent}`
         ...currentDomain,
         entity_types: mergedTypes,
         language_notes: delta.language_notes ?? currentDomain.language_notes,
-        analyzed_sources: [...currentDomain.analyzed_sources ?? [], file]
+        analyzed_sources_v2: true
       };
       yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
       yield {
@@ -22889,32 +22904,17 @@ ${fileContent}`
         domainId,
         patch: {
           entity_types: currentDomain.entity_types,
-          language_notes: currentDomain.language_notes,
-          analyzed_sources: currentDomain.analyzed_sources
+          language_notes: currentDomain.language_notes
         }
       };
       yield { kind: "tool_result", ok: true };
     }
-    yield { kind: "file_done", file, phase: "analysis" };
-  }
-  if (currentDomain) {
-    yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
-    yield { kind: "domain_updated", domainId, patch: { analyzed_sources: void 0 } };
-    yield { kind: "tool_result", ok: true };
-  }
-  if (!currentDomain) {
-    yield { kind: "error", message: `init --sources: \u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0437\u0434\u0430\u0442\u044C \u0434\u043E\u043C\u0435\u043D \u0438\u0437 \u0444\u0430\u0439\u043B\u043E\u0432` };
-    return;
-  }
-  yield { kind: "init_start", totalFiles: sourceFiles.length, phase: "ingest" };
-  yield { kind: "assistant_text", delta: `
-Creating wiki pages from ${sourceFiles.length} source files...
-` };
-  for (let i = 0; i < sourceFiles.length; i++) {
     if (signal.aborted)
       return;
-    const file = sourceFiles[i];
-    yield { kind: "file_start", file, index: i, total: sourceFiles.length };
+    if (!currentDomain) {
+      yield { kind: "file_done", file };
+      continue;
+    }
     let retried = false;
     let done = false;
     while (!done) {
@@ -22941,13 +22941,30 @@ Creating wiki pages from ${sourceFiles.length} source files...
         done = true;
       }
     }
+    if (signal.aborted)
+      return;
+    currentDomain = {
+      ...currentDomain,
+      analyzed_sources: [...currentDomain.analyzed_sources ?? [], file]
+    };
+    yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
+    yield {
+      kind: "domain_updated",
+      domainId,
+      patch: { analyzed_sources: currentDomain.analyzed_sources }
+    };
+    yield { kind: "tool_result", ok: true };
     yield { kind: "file_done", file };
+  }
+  if (!currentDomain) {
+    yield { kind: "error", message: `init --sources: \u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0437\u0434\u0430\u0442\u044C \u0434\u043E\u043C\u0435\u043D \u0438\u0437 \u0444\u0430\u0439\u043B\u043E\u0432` };
+    return;
   }
   await appendLog2(vaultTools, wikiRootGuess, domainId);
   yield {
     kind: "result",
     durationMs: Date.now() - start,
-    text: `Domain "${domainId}" initialised from ${sourceFiles.length} source files.`,
+    text: `Domain "${domainId}" initialised from ${toAnalyze.length} source files.`,
     outputTokens: outputTokens || void 0
   };
 }
@@ -23312,7 +23329,7 @@ ${original}`;
   ];
   yield { kind: "assistant_text", delta: `\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u0430 ${filePath}...
 ` };
-  const baseParams = { ...buildChatParams(model, messages, opts, void 0, true), response_format: { type: "json_object" } };
+  const baseParams = { ...buildChatParams(model, messages, opts, true), response_format: { type: "json_object" } };
   let lastFinishReason = null;
   let outputTokens = 0;
   async function* callOnce(p) {
@@ -23368,7 +23385,7 @@ ${original}`;
       { role: "user", content: userContent },
       ...chatHistory.map((m) => ({ role: m.role, content: m.content }))
     ];
-    const retryParams = { ...buildChatParams(model, retryMessages, opts, void 0, true), response_format: { type: "json_object" } };
+    const retryParams = { ...buildChatParams(model, retryMessages, opts, true), response_format: { type: "json_object" } };
     fullText = yield* callOnce(retryParams);
     if (signal.aborted)
       return;
@@ -23399,7 +23416,7 @@ ${original}`;
 \u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043D\u044B\u0435: ${tokenList}`
       }
     ];
-    const restoreParams = { ...buildChatParams(model, restoreMessages, opts, void 0, true), response_format: { type: "json_object" } };
+    const restoreParams = { ...buildChatParams(model, restoreMessages, opts, true), response_format: { type: "json_object" } };
     const fullText2 = yield* callOnce(restoreParams);
     if (!signal.aborted) {
       const parsed2 = extractJsonObject(fullText2);
@@ -23427,12 +23444,13 @@ ${original}`;
 // src/agent-runner.ts
 var AgentRunner = class {
   constructor(llm, settings, vaultTools, vaultName, domains) {
-    this.llm = llm;
     this.settings = settings;
     this.vaultTools = vaultTools;
     this.vaultName = vaultName;
     this.domains = domains;
+    this.llm = wrapWithJsonFallback(llm);
   }
+  llm;
   buildOptsFor(op) {
     const key = op === "query-save" ? "query" : op === "chat" ? "lint" : op;
     const s = this.settings;
@@ -23443,11 +23461,10 @@ var AgentRunner = class {
       return { model: s.claudeAgent.model, opts: { systemPrompt: s.systemPrompt } };
     }
     const na = s.nativeAgent;
-    const jsonMode = na.structuredOutput === "none" ? false : na.structuredOutput;
     const c = na.perOperation ? na.operations[key] : void 0;
     if (c)
-      return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode } };
-    return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode } };
+      return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object" } };
+    return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object" } };
   }
   async writeDevLog(_vaultRoot, entry) {
     if (!this.settings.devMode?.enabled)
@@ -31214,6 +31231,9 @@ var DomainStore = class {
         d.wiki_folder = d.wiki_folder.slice("!Wiki/".length);
       }
     }
+    const { migrated } = migrateDomainsV2(domains);
+    if (migrated)
+      await this.save(domains);
     return domains;
   }
   async save(domains) {
