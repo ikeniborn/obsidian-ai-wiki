@@ -2,39 +2,43 @@ import type { DomainEntry } from "./domain";
 import { runIngest } from "./phases/ingest";
 import { runQuery } from "./phases/query";
 import { runLint } from "./phases/lint";
-import { runFix } from "./phases/fix";
 import { runLintChat } from "./phases/chat";
 import { runInit } from "./phases/init";
 import { runEvaluator } from "./phases/evaluator";
 import { runFormat } from "./phases/format";
 import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, OpKey, RunEvent, RunRequest } from "./types";
 import type { VaultTools } from "./vault-tools";
+import { wrapWithJsonFallback } from "./phases/llm-utils";
 
 export class AgentRunner {
+  private llm: LlmClient;
   constructor(
-    private llm: LlmClient,
+    llm: LlmClient,
     private settings: LlmWikiPluginSettings,
     private vaultTools: VaultTools,
     private vaultName: string,
     private domains: DomainEntry[],
-  ) {}
+  ) {
+    this.llm = wrapWithJsonFallback(llm);
+  }
 
   private buildOptsFor(op: RunRequest["operation"]): { model: string; opts: LlmCallOptions } {
-    const key = (op === "query-save" ? "query" : (op === "fix" || op === "chat") ? "lint" : op) as OpKey;
+    const key = (op === "query-save" ? "query" : op === "chat" ? "lint" : op) as OpKey;
     const s = this.settings;
+    const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
 
     if (s.backend === "claude-agent") {
       // claude-agent: maxTokens задаётся на уровне iclaude.sh (env CLAUDE_CODE_MAX_OUTPUT_TOKENS),
       // плагин его не плумит — параметр был бы избыточным.
       const c = s.claudeAgent.perOperation ? s.claudeAgent.operations[key] : undefined;
-      if (c) return { model: c.model, opts: { systemPrompt: s.systemPrompt } };
-      return { model: s.claudeAgent.model, opts: { systemPrompt: s.systemPrompt } };
+      const model = c ? c.model : s.claudeAgent.model;
+      return { model, opts: { systemPrompt: s.systemPrompt, structuredRetries } };
     }
 
     const na = s.nativeAgent;
     const c = na.perOperation ? na.operations[key] : undefined;
-    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
-    return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
+    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
+    return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
   }
 
   private async writeDevLog(_vaultRoot: string, entry: {
@@ -76,9 +80,6 @@ export class AgentRunner {
         break;
       case "lint":
         yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, opts);
-        break;
-      case "fix":
-        yield* runFix(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, req.context, req.instruction);
         break;
       case "chat": {
         const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : undefined;

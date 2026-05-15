@@ -7,6 +7,14 @@ import { i18n } from "./i18n";
 import { resolveEffective } from "./effective-settings";
 import type { LocalConfig } from "./local-config";
 
+export function parseTimeoutString(v: string): { ingest: number; query: number; lint: number; init: number; format: number } | null {
+  const parts = v.split("/").map((x) => Number(x.trim()));
+  if (parts.length === 5 && parts.every((n) => Number.isFinite(n) && n > 0)) {
+    return { ingest: parts[0], query: parts[1], lint: parts[2], init: parts[3], format: parts[4] };
+  }
+  return null;
+}
+
 export class LlmWikiSettingTab extends PluginSettingTab {
   private cachedDomains: DomainEntry[] = [];
   private localCache: LocalConfig = { iclaudePath: "" };
@@ -107,11 +115,11 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       .setName(T.settings.timeouts_name)
       .setDesc(T.settings.timeouts_desc)
       .addText((t) =>
-        t.setValue(`${s.timeouts.ingest}/${s.timeouts.query}/${s.timeouts.lint}/${s.timeouts.init}`)
+        t.setValue(`${s.timeouts.ingest}/${s.timeouts.query}/${s.timeouts.lint}/${s.timeouts.init}/${s.timeouts.format}`)
           .onChange(async (v) => {
-            const parts = v.split("/").map((x) => Number(x.trim()));
-            if (parts.length === 4 && parts.every((n) => Number.isFinite(n) && n > 0)) {
-              s.timeouts = { ingest: parts[0], query: parts[1], lint: parts[2], init: parts[3] };
+            const parsed = parseTimeoutString(v);
+            if (parsed) {
+              s.timeouts = { ...s.timeouts, ...parsed };
               await this.plugin.saveSettings();
             }
           }),
@@ -372,6 +380,20 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             );
         }
       }
+
+      new Setting(containerEl)
+        .setName(T.settings.structuredRetries_name)
+        .setDesc(T.settings.structuredRetries_desc)
+        .addText((t) =>
+          t.setPlaceholder("1")
+            .setValue(String(s.nativeAgent.structuredRetries))
+            .onChange(async (v) => {
+              const n = Number(v);
+              if (!Number.isFinite(n) || n < 0 || n > 3) return;
+              s.nativeAgent.structuredRetries = Math.floor(n);
+              await this.plugin.saveSettings();
+            }),
+        );
 
       // ── Proxy section (native-agent only) ───────────────────────────────────
       const proxy = eff.proxy;

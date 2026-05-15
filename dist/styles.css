@@ -209,25 +209,6 @@
   font-family: var(--font-monospace);
   font-size: 12px;
 }
-.ai-wiki-folder-dropdown {
-  position: fixed;
-  z-index: 1000;
-  background: var(--background-primary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  max-height: 200px;
-  overflow-y: auto;
-}
-.ai-wiki-folder-dropdown-item {
-  padding: 5px 10px;
-  font-family: var(--font-monospace);
-  font-size: 12px;
-  cursor: pointer;
-}
-.ai-wiki-folder-dropdown-item:hover {
-  background: var(--background-modifier-hover);
-}
 
 .ai-wiki-format-preview {
   margin-top: 12px;

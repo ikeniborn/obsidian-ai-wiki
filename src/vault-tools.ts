@@ -5,6 +5,7 @@ export interface VaultAdapter {
   list(path: string): Promise<{ files: string[]; folders: string[] }>;
   exists(path: string): Promise<boolean>;
   mkdir(path: string): Promise<void>;
+  remove?(path: string): Promise<void>;
 }
 
 export class VaultTools {
@@ -61,6 +62,10 @@ export class VaultTools {
 
   async mkdir(vaultPath: string): Promise<void> {
     return this.adapter.mkdir(vaultPath);
+  }
+
+  async remove(vaultPath: string): Promise<void> {
+    await this.adapter.remove?.(vaultPath);
   }
 
   toVaultPath(absolutePath: string): string | null {

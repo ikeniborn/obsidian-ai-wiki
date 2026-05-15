@@ -194,6 +194,39 @@ describe("runFormat", () => {
     expect(adapter.write).toHaveBeenCalledWith("note.formatted.md", expect.stringContaining("https://clickhouse.com/docs"));
   });
 
+  it("token-retry: abort во время retry не ломает restored-block", async () => {
+    const formatted1 = "# Заметка про ClickHouse\n\nClickHouse 23.8 SQL.";
+    const json1 = JSON.stringify({ report: "r", formatted: formatted1 });
+
+    const ctrl = new AbortController();
+    let callCount = 0;
+    const llm: LlmClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(() => {
+            callCount++;
+            if (callCount === 2) ctrl.abort();
+            return Promise.resolve({
+              [Symbol.asyncIterator]: async function* () {
+                if (ctrl.signal.aborted) return;
+                yield { choices: [{ delta: { content: json1 }, finish_reason: null }] };
+              },
+            });
+          }),
+        },
+      },
+    } as unknown as LlmClient;
+
+    const adapter = mockAdapter({ [FILE]: SAMPLE });
+    const vt = new VaultTools(adapter, VAULT);
+    await collect(runFormat([FILE], vt, llm, "model", false, [], ctrl.signal));
+
+    const written = (adapter.write as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as string | undefined;
+    if (written) {
+      expect(written).toContain("<!-- restored-lines: token loss after retry -->");
+    }
+  });
+
   it("token-retry: оба ответа дропают токен → restored-block добавлен в tempPath", async () => {
     // Оба ответа: formatted без URL
     const formatted1 = "# Заметка про ClickHouse\n\nClickHouse 23.8 SQL.";

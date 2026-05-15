@@ -95,3 +95,119 @@
 **Примечание:** README.md вне source_paths["docs"], обработан по содержимому как документация домена
 
 ---
+
+## 2026-05-14 — ingest generation-speed spec + plan
+
+**Операция:** ingest
+**Домен:** документация
+**Источники:**
+- `docs/superpowers/specs/2026-05-14-generation-speed-design.md`
+- `docs/superpowers/plans/2026-05-14-generation-speed.md`
+
+**Создано страниц:** 2
+- `документация/спецификации/generation-speed-design.md` (mature) — дизайн отображения tok/s: источник `usage.output_tokens`, два DOM-места (progressCount + resultSpeedEl), поток данных через appendEvent→finish→setRunning, изменения в types/stream/view/controller
+- `документация/планы/generation-speed-plan.md` (mature) — 6 задач реализации: TDD для stream.ts, 4 под-изменения view.ts, обогащение лога controller.ts, bump версии
+
+**Обновлено страниц:** 1
+- `документация/компоненты/llm-wiki-view.md` — добавлен раздел «Отображение скорости генерации» с описанием `lastTokPerSec`, `resultSpeedEl` и потоком данных
+
+**Обновлено:** index.md (спецификации 4→5, планы 0→1), log.md
+
+---
+
+## 2026-05-14 — ingest remove-content-truncation spec
+
+**Операция:** ingest
+**Домен:** документация
+**Источник:** `docs/superpowers/specs/2026-05-14-remove-content-truncation-design.md`
+
+**Создано страниц:** 1
+- `документация/спецификации/remove-content-truncation-design.md` (mature) — spec: удаление всех `.slice(0, N)` из четырёх LLM-фаз (init/ingest/lint/query); рефактор `buildContextBlock` в query.ts без параметра `maxChars`; замена truncation-предупреждения в init на информационный лог размера
+
+**Обновлено:** index.md (спецификации 5→6), log.md
+
+---
+
+## 2026-05-15T00:00:00
+
+**Операция:** ingest
+**Источники:** `prompts/init.md`, `prompts/init-incremental.md`, `prompts/lint.md`
+**Домен:** документация
+
+**Затронуто страниц:** 3
+
+- ОБНОВЛЕНА: `документация/операции/init-operation.md` (stub → developing) — добавлены разделы «LLM-промпты»: bootstrap-анализ (init.md) и инкрементальное обновление entity_types (init-incremental.md); структура выходного JSON; правила обновления entity_types
+- ОБНОВЛЕНА: `документация/операции/lint-operation.md` (stub → developing) — добавлен раздел «LLM-промпт (lint.md)»: входные данные, выходной JSON, назначение поля reasoning
+- СОЗДАНА: `документация/паттерны/reasoning-first-json.md` (stub) — соглашение: поле reasoning первым в JSON-ответах LLM-промптов; применяется в init.md, init-incremental.md, lint.md
+
+**Примечание:** prompts/ вне source_paths["docs"], обработаны по содержимому как документация домена
+
+---
+
+## 2026-05-15T11:57:00
+
+**Операция:** ingest
+**Источники:**
+- `docs/superpowers/specs/2026-05-15-init-stability-design.md`
+- `docs/superpowers/specs/2026-05-15-reinit-button-design.md`
+- `docs/superpowers/plans/2026-05-15-init-stability-design.md`
+- `docs/superpowers/plans/2026-05-15-reinit-button.md`
+
+**Домен:** документация
+
+**Затронуто страниц:** 4
+
+- СОЗДАНА: `документация/спецификации/init-stability-design.md` (mature) — спека трёх блоков init: auto-fallback structured output (json_object с retry без response_format), размещение статей по wiki_subfolder через path-шаблоны в prompt'е, per-file pipeline (analyze + ingest в одном цикле), миграция analyzed_sources_v2
+- СОЗДАНА: `документация/спецификации/reinit-button-design.md` (mature) — UI-спека кнопки ⟳ в domainRow: вызов controller.init для выбранного домена с сохранёнными sourcePaths, ConfirmModal с подсчётом md-файлов, disabled-синхронизация во всех переходах (change/refreshDomains/setRunning/finish), 4 i18n-ключа
+- СОЗДАНА: `документация/планы/init-stability-plan.md` (mature) — 12 задач реализации init-stability: типы, llm-utils (parseStructured fences, wrapWithJsonFallback, isJsonModeError), agent-runner, settings, ingest path templates, DomainStore миграция migrateDomainsV2, rewrite runInitWithSources, тесты. F-003: миграция перенесена в DomainStore.load() из spec'овой loadSettings
+- СОЗДАНА: `документация/планы/reinit-button-plan.md` (mature) — 5 задач реализации reinit-button: i18n (en/ru/es), поле reinitBtn в view.ts, disabled-sync, метод runReinit с loadDomains+ConfirmModal+controller.init, patch-bump 0.1.96→0.1.97
+
+**Обновлено:** index.md (спецификации 6→8, планы 1→3), log.md
+
+---
+
+## 2026-05-15 — ingest (structured-output-resilience plan + prompt examples)
+
+**Операция:** ingest
+**Домен:** документация
+**Источники:**
+- docs/superpowers/plans/2026-05-15-structured-output-resilience.md
+- prompts/init.md
+- prompts/init-incremental.md
+
+**Создано страниц:** 4
+- документация/планы/structured-output-resilience-plan.md (mature)
+- документация/компоненты/parse-with-retry.md (developing)
+- документация/компоненты/structural-error-counter.md (developing)
+- документация/паттерны/structured-output-retry.md (developing)
+
+**Обновлено страниц:** 1
+- документация/паттерны/reasoning-first-json.md — добавлена секция «Output JSON Example в промптах», ссылки на [[parse-with-retry]] и [[structured-output-retry]]; статус stub → developing
+
+**Обновлено:** index.md (счётчики: компоненты 5→7, паттерны 5→6, планы 3→4)
+
+**Следующий шаг:** lint документация после реализации плана; ingest спецификации docs/superpowers/specs/2026-05-15-structured-output-resilience-design.md для дополнения контекста
+
+## 2026-05-15 — ingest (reinit-force: spec, plan, TODO)
+
+**Операция:** ingest
+**Домен:** документация
+**Источники:**
+- `docs/TODO.md` (roadmap, item 5 — re-init wipe + rebuild)
+- `docs/superpowers/specs/2026-05-15-reinit-force-design.md`
+- `docs/superpowers/plans/2026-05-15-reinit-force-design.md`
+
+**Создано страниц:** 2
+- `документация/спецификации/reinit-force-design.md` (mature) — флаг `--force` для init: wipe wiki-папки + сброс entity_types/analyzed_sources/language_notes + recycle-иконка
+- `документация/планы/reinit-force-plan.md` (mature) — TDD-декомпозиция: 7 задач (wipeDomainFolder helper, force param в runInitWithSources, --force dispatch в runInit, controller signature, view snake_case + recycle icon, i18n en/ru/es, manual verification)
+
+**Обновлено страниц:** 1
+- `документация/операции/init-operation.md` — добавлен раздел «Флаги CLI» с описанием `--dry-run` / `--sources` / `--force`; обновлены wiki_sources, теги, связанные страницы
+
+**Не создано:**
+- Для `docs/TODO.md` отдельная страница не создаётся — это roadmap-tracker, item 5 уже покрыт страницами reinit-force-* (синтез вместо дублирования)
+- Для helper `wipeDomainFolder` — описан внутри `reinit-force-design.md`, отдельная страница нецелесообразна (одна функция, тесно связанная с фазой)
+
+**Обновлено:** index.md (спецификации 8→9, планы 4→5), log.md
+
+**Следующий шаг:** после реализации (commits по плану) — запустить `/llm-wiki lint документация` для проверки актуальности

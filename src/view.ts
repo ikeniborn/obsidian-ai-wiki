@@ -1,4 +1,4 @@
-import { App, ItemView, Modal, WorkspaceLeaf, MarkdownRenderer, Component, Notice, Platform } from "obsidian";
+import { App, ItemView, Modal, WorkspaceLeaf, MarkdownRenderer, Component, Notice, Platform, setIcon } from "obsidian";
 import { AddDomainModal, BusyCloseModal, ConfirmModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
@@ -46,8 +46,8 @@ export class LlmWikiView extends ItemView {
   private ingestBtn?: HTMLButtonElement;
   private lintBtn?: HTMLButtonElement;
   private formatBtn?: HTMLButtonElement;
+  private reinitBtn?: HTMLButtonElement;
   private formatPreviewSection: HTMLElement | null = null;
-  private fixChatEl: HTMLElement | null = null;
   private lastContext: { operation: WikiOperation; domainId: string | undefined; report: string } | null = null;
   // Chat state
   private chatSection: HTMLElement | null = null;
@@ -64,11 +64,14 @@ export class LlmWikiView extends ItemView {
   private chatStartTs = 0;
   private lastUserMessage = "";
   private startTs = 0;
+  private lastTokPerSec: number | undefined;
+  private resultSpeedEl: HTMLElement | null = null;
   private toolCount = 0;
   private stepCount = 0;
   private progressEl: HTMLElement | null = null;
   private progressTotal = 0;
   private progressDone = 0;
+  private progressPhaseEl: HTMLElement | null = null;
   private tickHandle: ReturnType<typeof window.setTimeout> | null = null;
   private currentToolStep: HTMLElement | null = null;
   private currentToolStartedAt = 0;
@@ -76,6 +79,8 @@ export class LlmWikiView extends ItemView {
   private assistantBuffer = "";
   private reasoningBlock: HTMLElement | null = null;
   private reasoningBuffer = "";
+  private assistantRafHandle: number | null = null;
+  private reasoningRafHandle: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, private plugin: LlmWikiPlugin) {
     super(leaf);
@@ -115,6 +120,15 @@ export class LlmWikiView extends ItemView {
       this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
       const refreshBtn = domainRow.createEl("button", { text: "↻", attr: { title: T.view.refreshTitle } });
       refreshBtn.addEventListener("click", () => void this.refreshDomains());
+      this.reinitBtn = domainRow.createEl("button", {
+        attr: { title: T.view.reinitTitle },
+      });
+      setIcon(this.reinitBtn, "recycle");
+      this.reinitBtn.disabled = true;
+      this.reinitBtn.addEventListener("click", () => void this.runReinit());
+      this.domainSelect.addEventListener("change", () => {
+        if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect!.value;
+      });
 
       const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
       this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
@@ -172,6 +186,7 @@ export class LlmWikiView extends ItemView {
     const resultH4 = resultHeader.createEl("h4", { cls: "ai-wiki-progress-title" });
     this.resultToggle = resultH4.createSpan({ cls: "ai-wiki-progress-arrow", text: "▶" });
     resultH4.appendText(` ${T.view.result}`);
+    this.resultSpeedEl = resultH4.createSpan({ cls: "muted ai-wiki-result-speed" });
     resultHeader.addEventListener("click", () => this.toggleResult());
     this.finalEl = this.resultSection.createDiv("ai-wiki-final ai-wiki-hidden");
     registerLinkHandler(this.finalEl, this.app);
@@ -194,6 +209,14 @@ export class LlmWikiView extends ItemView {
   onClose(): void {
     if (this.tickHandle !== null) window.clearTimeout(this.tickHandle);
     if (this.chatTickHandle !== null) window.clearTimeout(this.chatTickHandle);
+    if (this.assistantRafHandle !== null) {
+      window.cancelAnimationFrame(this.assistantRafHandle);
+      this.assistantRafHandle = null;
+    }
+    if (this.reasoningRafHandle !== null) {
+      window.cancelAnimationFrame(this.reasoningRafHandle);
+      this.reasoningRafHandle = null;
+    }
     if (this.plugin.controller.isBusy()) {
       new BusyCloseModal(this.app, () => this.plugin.controller.cancelCurrent()).open();
     }
@@ -213,6 +236,7 @@ export class LlmWikiView extends ItemView {
     if (previous && Array.from(this.domainSelect.options).some((o) => o.value === previous)) {
       this.domainSelect.value = previous;
     }
+    if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect.value;
   }
 
   private openAddDomain(): void {
@@ -252,6 +276,40 @@ export class LlmWikiView extends ItemView {
     }).open();
   }
 
+  private async runReinit(): Promise<void> {
+    if (!this.domainSelect) return;
+    const domainId = this.domainSelect.value;
+    if (!domainId) return;
+
+    let entry: DomainEntry | undefined;
+    try {
+      const domains = await this.plugin.controller.loadDomains();
+      entry = domains.find((d) => d.id === domainId);
+    } catch {
+      return;
+    }
+    if (!entry) return;
+
+    const sourcePaths = entry.source_paths ?? [];
+    if (sourcePaths.length === 0) {
+      new Notice(i18n().view.reinitNoSources);
+      return;
+    }
+
+    const T = i18n().modal;
+    const mdFiles = this.app.vault.getFiles().filter(
+      (f) => f.extension === "md" && sourcePaths.some((p) => f.path.startsWith(p)),
+    );
+    const body = T.reinitConfirmBody(entry.id, mdFiles.length, sourcePaths.length);
+
+    new ConfirmModal(
+      this.app,
+      T.reinitConfirmTitle,
+      [body],
+      () => void this.plugin.controller.init(entry!.id, false, sourcePaths, true),
+    ).open();
+  }
+
   private submitQuery(save: boolean): void {
     const q = this.queryInput.value.trim();
     if (!q) { new Notice(i18n().view.enterQuestion); return; }
@@ -272,8 +330,7 @@ export class LlmWikiView extends ItemView {
     if (this.ingestBtn) this.ingestBtn.disabled = true;
     if (this.lintBtn) this.lintBtn.disabled = true;
     if (this.formatBtn) this.formatBtn.disabled = true;
-    this.fixChatEl?.remove();
-    this.fixChatEl = null;
+    if (this.reinitBtn) this.reinitBtn.disabled = true;
     this.chatSection?.remove();
     this.chatSection = null;
     this.lastContext = null;
@@ -287,6 +344,7 @@ export class LlmWikiView extends ItemView {
     this.toolCount = 0;
     this.stepCount = 0;
     this.progressEl = null;
+    this.progressPhaseEl = null;
     this.progressTotal = 0;
     this.progressDone = 0;
     this.currentToolStep = null;
@@ -294,6 +352,16 @@ export class LlmWikiView extends ItemView {
     this.assistantBuffer = "";
     this.reasoningBlock = null;
     this.reasoningBuffer = "";
+    if (this.assistantRafHandle !== null) {
+      window.cancelAnimationFrame(this.assistantRafHandle);
+      this.assistantRafHandle = null;
+    }
+    if (this.reasoningRafHandle !== null) {
+      window.cancelAnimationFrame(this.reasoningRafHandle);
+      this.reasoningRafHandle = null;
+    }
+    this.lastTokPerSec = undefined;
+    this.resultSpeedEl?.setText("");
     this.stepsOpen = true;
     this.stepsEl.removeClass("ai-wiki-hidden");
     this.progressToggle.setText("▼");
@@ -315,10 +383,22 @@ export class LlmWikiView extends ItemView {
     if (ev.kind === "init_start") {
       this.progressTotal = ev.totalFiles;
       this.progressDone = 0;
-      const step = this.stepsEl.createDiv("ai-wiki-step ai-wiki-progress");
-      step.createSpan({ cls: "ai-wiki-step-icon" }).setText("📂");
-      this.progressEl = step.createSpan({ cls: "ai-wiki-progress-text" });
-      this.progressEl.setText(`0 / ${ev.totalFiles} файлов`);
+      if (this.progressEl) {
+        // Second init_start (Phase 2) — reset existing elements in place
+        this.progressEl.setText(`0 / ${ev.totalFiles} файлов`);
+        if (this.progressPhaseEl) {
+          const label = ev.phase === "ingest" ? "Ingesting files…" : "Analysing files…";
+          this.progressPhaseEl.setText(label);
+        }
+      } else {
+        const step = this.stepsEl.createDiv("ai-wiki-step ai-wiki-progress");
+        step.createSpan({ cls: "ai-wiki-step-icon" }).setText("📂");
+        const label = ev.phase === "ingest" ? "Ingesting files…" : "Analysing files…";
+        this.progressPhaseEl = step.createSpan({ cls: "ai-wiki-progress-phase" });
+        this.progressPhaseEl.setText(label);
+        this.progressEl = step.createSpan({ cls: "ai-wiki-progress-text" });
+        this.progressEl.setText(`0 / ${ev.totalFiles} файлов`);
+      }
       this.scrollSteps();
       return;
     }
@@ -343,13 +423,21 @@ export class LlmWikiView extends ItemView {
     }
     if (ev.kind === "source_path_added") return;
     if (ev.kind === "domain_updated") { void this.refreshDomains(); return; }
-    this.stepCount++;
+    if (ev.kind !== "assistant_text") this.stepCount++;
     if (ev.kind === "tool_use") {
       this.toolCount++;
       this.assistantBlock = null;
       this.assistantBuffer = "";
       this.reasoningBlock = null;
       this.reasoningBuffer = "";
+      if (this.assistantRafHandle !== null) {
+        window.cancelAnimationFrame(this.assistantRafHandle);
+        this.assistantRafHandle = null;
+      }
+      if (this.reasoningRafHandle !== null) {
+        window.cancelAnimationFrame(this.reasoningRafHandle);
+        this.reasoningRafHandle = null;
+      }
       const step = this.stepsEl.createDiv("ai-wiki-step");
       const head = step.createDiv("ai-wiki-step-head");
       head.createSpan({ cls: "ai-wiki-step-icon" }).setText("🔧");
@@ -389,8 +477,14 @@ export class LlmWikiView extends ItemView {
           this.reasoningBlock.createSpan({ cls: "ai-wiki-reasoning-text" });
         }
         this.reasoningBuffer += ev.delta;
-        const span = this.reasoningBlock.querySelector<HTMLElement>(".ai-wiki-reasoning-text");
-        if (span) span.setText(truncate(this.reasoningBuffer, ASSISTANT_TEXT_MAX));
+        if (!this.reasoningRafHandle) {
+          this.reasoningRafHandle = window.requestAnimationFrame(() => {
+            this.reasoningRafHandle = null;
+            const span = this.reasoningBlock?.querySelector<HTMLElement>(".ai-wiki-reasoning-text");
+            if (span) span.setText(truncate(this.reasoningBuffer, ASSISTANT_TEXT_MAX));
+            this.scrollSteps();
+          });
+        }
       } else {
         if (!this.assistantBlock) {
           this.assistantBlock = this.stepsEl.createDiv("ai-wiki-step assistant");
@@ -398,10 +492,15 @@ export class LlmWikiView extends ItemView {
           this.assistantBlock.createSpan({ cls: "ai-wiki-assistant-text" });
         }
         this.assistantBuffer += ev.delta;
-        const span = this.assistantBlock.querySelector<HTMLElement>(".ai-wiki-assistant-text");
-        if (span) span.setText(truncate(this.assistantBuffer, ASSISTANT_TEXT_MAX));
+        if (!this.assistantRafHandle) {
+          this.assistantRafHandle = window.requestAnimationFrame(() => {
+            this.assistantRafHandle = null;
+            const span = this.assistantBlock?.querySelector<HTMLElement>(".ai-wiki-assistant-text");
+            if (span) span.setText(truncate(this.assistantBuffer, ASSISTANT_TEXT_MAX));
+            this.scrollSteps();
+          });
+        }
       }
-      this.scrollSteps();
     } else if (ev.kind === "system") {
       const step = this.stepsEl.createDiv("ai-wiki-step");
       const head = step.createDiv("ai-wiki-step-head");
@@ -412,8 +511,10 @@ export class LlmWikiView extends ItemView {
       this.stepsEl.createDiv("ai-wiki-step err").setText(`✗ ${ev.message}`);
       this.scrollSteps();
     } else if (ev.kind === "result") {
-      // финальный result рендерим в finishe(), здесь — отметка
       this.assistantBlock = null;
+      if (ev.outputTokens !== undefined && ev.durationMs > 0) {
+        this.lastTokPerSec = Math.round(ev.outputTokens / (ev.durationMs / 1000));
+      }
     } else if (ev.kind === "eval_result") {
       const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
       el.setText(`[eval: ${ev.score}/10] ${ev.reasoning}`);
@@ -499,10 +600,10 @@ export class LlmWikiView extends ItemView {
     this.ingestBtn.disabled = false;
     this.lintBtn.disabled = false;
     this.formatBtn.disabled = false;
-    this.fixChatEl?.remove();
-    this.fixChatEl = null;
+    if (this.reinitBtn) this.reinitBtn.disabled = !(this.domainSelect && this.domainSelect.value);
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
     this.updateMetrics();
+    this.resultSpeedEl?.setText(this.lastTokPerSec !== undefined ? ` ${this.lastTokPerSec} tok/s` : "");
     this.finalEl.empty();
     if (entry.finalText) {
       const comp = new Component();

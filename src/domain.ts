@@ -12,10 +12,24 @@ export interface EntityType {
 export interface DomainEntry {
   id: string;
   name: string;
-  wiki_folder: string;  // domain subfolder within !Wiki/, e.g. "os" (without "!Wiki/" prefix)
+  wiki_folder: string;
   source_paths?: string[];
   entity_types?: EntityType[];
   language_notes?: string;
+  analyzed_sources?: string[];
+  analyzed_sources_v2?: boolean;
+}
+
+export function migrateDomainsV2(domains: DomainEntry[]): { domains: DomainEntry[]; migrated: boolean } {
+  let migrated = false;
+  for (const d of domains) {
+    if (d.analyzed_sources !== undefined && !d.analyzed_sources_v2) {
+      d.analyzed_sources = [];
+      d.analyzed_sources_v2 = true;
+      migrated = true;
+    }
+  }
+  return { domains, migrated };
 }
 
 export interface AddDomainInput {

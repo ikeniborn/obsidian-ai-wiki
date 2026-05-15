@@ -1,38 +1,61 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AgentRunner } from "../src/agent-runner";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
 import type { RunEvent, LlmWikiPluginSettings, LlmClient } from "../src/types";
 import { DEFAULT_SETTINGS } from "../src/types";
+import { structuralErrorCounter } from "../src/structural-error-counter";
+import type OpenAI from "openai";
 
 function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
   return {
     read: vi.fn().mockResolvedValue("source content"),
     write: vi.fn().mockResolvedValue(undefined),
+    append: vi.fn().mockResolvedValue(undefined),
     list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
-    exists: vi.fn().mockResolvedValue(true),
+    exists: vi.fn().mockResolvedValue(false),
     mkdir: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
 
-function makeLlm(text: string): LlmClient {
+function streamFromText(text: string): AsyncIterable<OpenAI.Chat.ChatCompletionChunk> {
+  return {
+    async *[Symbol.asyncIterator]() {
+      yield {
+        choices: [{ delta: { content: text }, index: 0, finish_reason: null }],
+      } as unknown as OpenAI.Chat.ChatCompletionChunk;
+      yield {
+        choices: [{ delta: {}, index: 0, finish_reason: "stop" }],
+        usage: { completion_tokens: 1 },
+      } as unknown as OpenAI.Chat.ChatCompletionChunk;
+    },
+  };
+}
+
+function makeLlmMulti(responses: string[]): LlmClient {
+  let i = 0;
   return {
     chat: {
       completions: {
-        create: vi.fn().mockResolvedValue({
-          [Symbol.asyncIterator]: async function* () {
-            yield { choices: [{ delta: { content: text } }] };
-          },
-        }),
+        create: vi.fn(async (_params: unknown) => {
+          const text = responses[Math.min(i++, responses.length - 1)];
+          return streamFromText(text) as never;
+        }) as never,
       },
     },
   } as unknown as LlmClient;
+}
+
+function makeLlm(text: string): LlmClient {
+  return makeLlmMulti([text]);
 }
 
 const baseSettings: LlmWikiPluginSettings = {
   ...DEFAULT_SETTINGS,
   backend: "native-agent",
 };
+
+beforeEach(() => structuralErrorCounter.reset());
 
 async function collect(gen: AsyncGenerator<RunEvent>): Promise<RunEvent[]> {
   const out: RunEvent[] = [];
@@ -107,5 +130,30 @@ describe("AgentRunner", () => {
     );
     expect(events.length).toBeGreaterThan(0);
     expect(events[0]).toMatchObject({ kind: "system" });
+  });
+
+  it("emits structural_error + error events when init LLM returns invalid JSON for all retries", async () => {
+    const settings: LlmWikiPluginSettings = {
+      ...DEFAULT_SETTINGS,
+      backend: "native-agent",
+      nativeAgent: { ...DEFAULT_SETTINGS.nativeAgent, structuredRetries: 1 },
+    };
+    const llm = makeLlmMulti(["not json at all", "still not json"]);
+    const vt = new VaultTools(mockAdapter(), "/vault");
+    const runner = new AgentRunner(llm, settings, vt, "TestVault", []);
+    const events = await collect(
+      runner.run({
+        operation: "init",
+        args: ["new-domain"],
+        cwd: "/vault",
+        signal: new AbortController().signal,
+        timeoutMs: 60_000,
+      }),
+    );
+    const structErr = events.find(e => e.kind === "structural_error" && e.succeeded === false);
+    const err = events.find(e => e.kind === "error");
+    expect(structErr).toBeDefined();
+    expect(err).toBeDefined();
+    expect(structuralErrorCounter.get().failed).toBe(1);
   });
 });

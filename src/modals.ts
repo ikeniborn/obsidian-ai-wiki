@@ -1,4 +1,4 @@
-import { App, Modal, Setting, TFolder, activeDocument } from "obsidian";
+import { AbstractInputSuggest, App, Modal, Setting, TFolder } from "obsidian";
 import type { AddDomainInput, DomainEntry, EntityType } from "./domain";
 import { i18n } from "./i18n";
 
@@ -125,45 +125,23 @@ export class DomainModal extends Modal {
 }
 
 
-function attachFolderDropdown(app: App, inputEl: HTMLInputElement, onSelect: (path: string) => void): void {
-  let dropEl: HTMLElement | null = null;
-
-  const hideDropdown = () => { dropEl?.remove(); dropEl = null; };
-
-  const showDropdown = (folders: TFolder[]) => {
-    hideDropdown();
-    if (!folders.length) return;
-
-    const rect = inputEl.getBoundingClientRect();
-    dropEl = (activeDocument.body as HTMLElement).createDiv({ cls: "ai-wiki-folder-dropdown" });
-    dropEl.style.top = `${rect.bottom + window.scrollY}px`;
-    dropEl.style.left = `${rect.left + window.scrollX}px`;
-    dropEl.style.width = `${rect.width}px`;
-
-    for (const folder of folders) {
-      const item = dropEl.createDiv({ cls: "ai-wiki-folder-dropdown-item" });
-      item.setText(folder.path + "/");
-      item.addEventListener("mousedown", (e) => {
-        e.preventDefault(); // prevent input blur before selection
-        hideDropdown();
-        onSelect(folder.path + "/");
-      });
-    }
-  };
-
-  inputEl.addEventListener("input", () => {
-    const lower = inputEl.value.toLowerCase();
-    if (!lower) { hideDropdown(); return; }
-    const matches = app.vault.getAllFolders(true)
-      .filter((f: TFolder) => f.path.toLowerCase().includes(lower))
+class FolderInputSuggest extends AbstractInputSuggest<TFolder> {
+  constructor(app: App, input: HTMLInputElement, onPick: (path: string) => void) {
+    super(app, input);
+    this.onSelect((folder) => {
+      this.setValue(folder.path + "/");
+      onPick(folder.path + "/");
+    });
+  }
+  protected getSuggestions(query: string): TFolder[] {
+    const q = query.toLowerCase();
+    return this.app.vault.getAllFolders(true)
+      .filter(f => f.path.toLowerCase().includes(q))
       .slice(0, 20);
-    showDropdown(matches);
-  });
-
-  inputEl.addEventListener("blur", hideDropdown);
-  inputEl.addEventListener("keydown", (e: KeyboardEvent) => {
-    if (e.key === "Escape") hideDropdown();
-  });
+  }
+  renderSuggestion(folder: TFolder, el: HTMLElement): void {
+    el.setText(folder.path + "/");
+  }
 }
 
 export class AddDomainModal extends Modal {
@@ -257,7 +235,7 @@ export class AddDomainModal extends Modal {
       rerender();
     };
 
-    attachFolderDropdown(this.app, inputEl, addPath);
+    new FolderInputSuggest(this.app, inputEl, addPath);
 
     inputEl.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "Enter") { e.preventDefault(); addPath(); }
@@ -464,7 +442,7 @@ export class EditDomainModal extends Modal {
       rerender();
     };
 
-    attachFolderDropdown(this.app, input, addPath);
+    new FolderInputSuggest(this.app, input, addPath);
 
     input.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "Enter") { e.preventDefault(); addPath(); }

@@ -3,7 +3,7 @@ import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, extractUsage } from "./llm-utils";
 import ingestTemplate from "../../prompts/ingest.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
@@ -55,11 +55,12 @@ export async function* runIngest(
     return;
   }
 
-  const wikiRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
+  const domainRoot = wikiVaultPath;
+  const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
 
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${wikiRoot}/_wiki_schema.md`),
-    tryRead(vaultTools, `${wikiRoot}/_index.md`),
+    tryRead(vaultTools, `${schemaRoot}/_wiki_schema.md`),
+    tryRead(vaultTools, `${domainRoot}/_index.md`),
   ]);
 
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
@@ -72,18 +73,20 @@ export async function* runIngest(
     sourceVaultPath, sourceContent, domain, wikiVaultPath,
     existingPages, schemaContent, indexContent,
   );
-  const params = buildChatParams(model, messages, opts);
+  const params = buildChatParams(model, messages, opts, true);
 
   let fullText = "";
+  let outputTokens = 0;
   try {
     const stream = await llm.chat.completions.create(
       { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
       { signal },
     );
     for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
+      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
       if (content) fullText += content;
+      if (tok !== undefined) outputTokens += tok;
     }
   } catch (e) {
     if (signal.aborted || (e as Error).name === "AbortError") return;
@@ -91,6 +94,8 @@ export async function* runIngest(
       { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
     );
     fullText = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp);
+    if (tok !== undefined) outputTokens += tok;
   }
 
   if (signal.aborted) return;
@@ -117,8 +122,8 @@ export async function* runIngest(
   yield { kind: "assistant_text", delta: resultText };
 
   if (written.length > 0) {
-    await appendLog(vaultTools, wikiRoot, sourceVaultPath, domain.id, written);
-    await updateIndex(vaultTools, wikiRoot, written);
+    await appendLog(vaultTools, domainRoot, sourceVaultPath, domain.id, written);
+    await updateIndex(vaultTools, domainRoot, written);
 
     const backlinkToday = new Date().toISOString().slice(0, 10);
     const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
@@ -142,7 +147,7 @@ export async function* runIngest(
     yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
   }
 
-  yield { kind: "result", durationMs: Date.now() - start, text: resultText };
+  yield { kind: "result", durationMs: Date.now() - start, text: resultText, outputTokens: outputTokens || undefined };
 }
 
 function buildIngestSummary(domainId: string, sourcePath: string, written: string[], total: number): string {
@@ -234,15 +239,21 @@ export function extractParentSourcePath(
   return (rel || ".") + "/";
 }
 
-function buildEntityTypesBlock(domain: DomainEntry): string {
+export function buildEntityTypesBlock(domain: DomainEntry, wikiVaultPath: string): string {
   if (!domain.entity_types?.length) return "";
-  return domain.entity_types.map((et) => [
-    `### Тип: ${et.type}`,
-    `Описание: ${et.description}`,
-    `Ключевые слова: ${et.extraction_cues.join(", ")}`,
-    et.min_mentions_for_page != null ? `Мин. упоминаний для страницы: ${et.min_mentions_for_page}` : "",
-    et.wiki_subfolder ? `Подпапка в wiki: ${et.wiki_subfolder}` : "",
-  ].filter(Boolean).join("\n")).join("\n\n");
+  return domain.entity_types.map((et) => {
+    const pathTemplate = et.wiki_subfolder
+      ? `${wikiVaultPath}/${et.wiki_subfolder}/<EntityName>.md`
+      : `${wikiVaultPath}/<EntityName>.md`;
+    return [
+      `### Тип: ${et.type}`,
+      `Описание: ${et.description}`,
+      `Ключевые слова: ${et.extraction_cues.join(", ")}`,
+      et.min_mentions_for_page != null ? `Мин. упоминаний для страницы: ${et.min_mentions_for_page}` : "",
+      et.wiki_subfolder ? `Подпапка в wiki: ${et.wiki_subfolder}` : "",
+      `Путь для сущностей этого типа: ${pathTemplate}`,
+    ].filter(Boolean).join("\n");
+  }).join("\n\n");
 }
 
 function buildIngestMessages(
@@ -255,11 +266,11 @@ function buildIngestMessages(
   indexContent: string,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const existing = existingPages.size > 0
-    ? [...existingPages.entries()].map(([p, c]) => `${p}:\n${c.slice(0, 400)}`).join("\n\n")
+    ? [...existingPages.entries()].map(([p, c]) => `${p}:\n${c}`).join("\n\n")
     : "Нет.";
 
   const today = new Date().toISOString().slice(0, 10);
-  const entityTypesBlock = buildEntityTypesBlock(domain);
+  const entityTypesBlock = buildEntityTypesBlock(domain, wikiVaultPath);
   const langNotes = domain.language_notes ? `Языковые правила: ${domain.language_notes}` : "";
 
   const systemContent = render(ingestTemplate, {
@@ -268,7 +279,7 @@ function buildIngestMessages(
     lang_notes: langNotes,
     wiki_path: wikiVaultPath,
     today,
-    schema_block: schemaContent ? `КОНВЕНЦИИ (_wiki_schema.md):\n${schemaContent.slice(0, 2000)}` : "",
+    schema_block: schemaContent ? `КОНВЕНЦИИ (_wiki_schema.md):\n${schemaContent}` : "",
     source_path: sourcePath,
   });
 
@@ -281,10 +292,10 @@ function buildIngestMessages(
         `Wiki-папка: ${wikiVaultPath}`,
         ``,
         `Источник: ${sourcePath}`,
-        sourceContent.slice(0, 8000),
+        sourceContent,
         ``,
         `Существующие wiki-страницы:\n${existing}`,
-        indexContent ? `\nИндекс wiki (_index.md):\n${indexContent.slice(0, 2000)}` : "",
+        indexContent ? `\nИндекс wiki (_index.md):\n${indexContent}` : "",
       ].filter(Boolean).join("\n"),
     },
   ];

@@ -76,6 +76,8 @@ describe("onload — command registration gating", () => {
     const registered: string[] = [];
     plugin.addCommand = vi.fn((cmd: { id: string }) => { registered.push(cmd.id); });
     plugin.addRibbonIcon = vi.fn();
+    plugin.addStatusBarItem = vi.fn(() => ({ setText: vi.fn(), setAttribute: vi.fn() }));
+    plugin.register = vi.fn();
     plugin.addSettingTab = vi.fn();
     plugin.registerView = vi.fn();
     plugin.app.workspace = {

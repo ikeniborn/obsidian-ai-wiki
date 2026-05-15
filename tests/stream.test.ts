@@ -49,6 +49,7 @@ describe("parseStreamLine", () => {
     expect(result.text).toBe("Создано 1 страница, обновлено 0");
     expect(result.durationMs).toBe(42000);
     expect(result.usdCost).toBe(0.012);
+    expect(result.outputTokens).toBe(580);
   });
 
   it("handles tool_result with is_error true", () => {
@@ -64,6 +65,35 @@ describe("parseStreamLine", () => {
     const line = JSON.stringify({ type: "result", subtype: "error", is_error: true, result: "rate limit" });
     const ev = parseStreamLine(line);
     expect(ev?.kind).toBe("error");
+  });
+
+  it("parses outputTokens from result event with usage", () => {
+    const line = JSON.stringify({
+      type: "result",
+      subtype: "success",
+      duration_ms: 42000,
+      is_error: false,
+      result: "done",
+      total_cost_usd: 0.012,
+      usage: { output_tokens: 580 },
+    });
+    const ev = parseStreamLine(line);
+    expect(ev?.kind).toBe("result");
+    expect((ev as Extract<RunEvent, { kind: "result" }>).outputTokens).toBe(580);
+  });
+
+  it("leaves outputTokens undefined when usage absent", () => {
+    const line = JSON.stringify({
+      type: "result",
+      subtype: "success",
+      duration_ms: 42000,
+      is_error: false,
+      result: "done",
+      total_cost_usd: 0.012,
+    });
+    const ev = parseStreamLine(line);
+    expect(ev?.kind).toBe("result");
+    expect((ev as Extract<RunEvent, { kind: "result" }>).outputTokens).toBeUndefined();
   });
 
   it("returns null for unknown type without throwing", () => {

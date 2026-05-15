@@ -1,9 +1,11 @@
-import { join } from "path-browserify";
+import { join, basename } from "path-browserify";
 import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, extractUsage } from "./llm-utils";
+import { parseWithRetry } from "./parse-with-retry";
+import { EntityTypesDeltaSchema } from "./zod-schemas";
 import { parseJsonPages } from "./ingest";
 import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
@@ -36,6 +38,7 @@ export async function* runLint(
 
   const start = Date.now();
   const reportParts: string[] = [];
+  let outputTokens = 0;
 
   for (const domain of targets) {
     if (signal.aborted) return;
@@ -56,7 +59,7 @@ export async function* runLint(
 
     const graph = buildWikiGraph(pages);
     const structuralIssues = checkStructure(pages);
-    const graphIssues = checkGraphStructure(graph, hubThreshold).slice(0, 8_000);
+    const graphIssues = checkGraphStructure(graph, hubThreshold);
     const allIssues = [structuralIssues, graphIssues].filter(Boolean).join("\n");
 
     const entityTypesBlock = buildEntityTypesBlock(domain);
@@ -75,12 +78,12 @@ export async function* runLint(
           `Домен: ${domain.id} (${domain.name})`,
           `Автоматические проблемы:\n${allIssues || "Нет."}`,
           "",
-          `Wiki-страницы:\n${[...pages.entries()].map(([p, c]) => `--- ${p} ---\n${c.slice(0, 500)}`).join("\n\n")}`,
+          `Wiki-страницы:\n${[...pages.entries()].map(([p, c]) => `--- ${p} ---\n${c}`).join("\n\n")}`,
         ].join("\n"),
       },
     ];
 
-    const params = buildChatParams(model, messages, opts);
+    const params = buildChatParams(model, messages, opts, true);
     let llmReport = "";
     try {
       const stream = await llm.chat.completions.create(
@@ -88,9 +91,10 @@ export async function* runLint(
         { signal },
       );
       for await (const chunk of stream) {
-        const { reasoning, content } = extractStreamDeltas(chunk);
+        const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
         if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
         if (content) { llmReport += content; yield { kind: "assistant_text", delta: content }; }
+        if (tok !== undefined) outputTokens += tok;
       }
     } catch (e) {
       if (signal.aborted || (e as Error).name === "AbortError") return;
@@ -98,6 +102,8 @@ export async function* runLint(
         { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
       );
       llmReport = resp.choices[0]?.message?.content ?? "";
+      const tok = extractUsage(resp);
+      if (tok !== undefined) outputTokens += tok;
       if (llmReport) yield { kind: "assistant_text", delta: llmReport };
     }
 
@@ -105,7 +111,9 @@ export async function* runLint(
 
     if (signal.aborted) return;
     yield { kind: "assistant_text", delta: `\nActualizing domain config for "${domain.id}"...\n` };
-    const patch = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
+    const patchRes = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
+    outputTokens += patchRes.outputTokens;
+    const patch = patchRes.patch;
     if (patch) {
       const diffReport = computeEntityDiff(domain.entity_types ?? [], patch.entity_types ?? domain.entity_types ?? []);
       reportParts.push(diffReport);
@@ -115,7 +123,7 @@ export async function* runLint(
     if (signal.aborted) return;
     yield { kind: "assistant_text", delta: `\nApplying fixes for "${domain.id}"...\n` };
     const fixMessages = buildFixMessages(domain, wikiVaultPath, pages, allIssues, entityTypesBlock, llmReport);
-    const fixParams = buildChatParams(model, fixMessages, opts);
+    const fixParams = buildChatParams(model, fixMessages, opts, true);
     let fixFullText = "";
     try {
       const fixStream = await llm.chat.completions.create(
@@ -123,8 +131,9 @@ export async function* runLint(
         { signal },
       );
       for await (const chunk of fixStream) {
-        const { content } = extractStreamDeltas(chunk);
+        const { content, outputTokens: tok } = extractStreamDeltas(chunk);
         if (content) fixFullText += content;
+        if (tok !== undefined) outputTokens += tok;
       }
     } catch (e) {
       if (signal.aborted || (e as Error).name === "AbortError") return;
@@ -132,6 +141,8 @@ export async function* runLint(
         { ...fixParams, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
       );
       fixFullText = resp.choices[0]?.message?.content ?? "";
+      const tok = extractUsage(resp);
+      if (tok !== undefined) outputTokens += tok;
     }
 
     const fixedPages = parseJsonPages(fixFullText);
@@ -195,9 +206,17 @@ export async function* runLint(
     if (backlinks.size > 0) {
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
     }
+
+    const indexPath = `${wikiVaultPath}/_index.md`;
+    const indexLinks = files
+      .map((f) => `- [[${basename(f, ".md")}]]`)
+      .join("\n");
+    try {
+      await vaultTools.write(indexPath, `# Wiki Index\n\n${indexLinks}\n`);
+    } catch { /* не критично */ }
   }
 
-  yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n") };
+  yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n"), outputTokens: outputTokens || undefined };
 }
 
 export function checkStructure(pages: Map<string, string>): string {
@@ -280,14 +299,14 @@ async function actualizeDomainConfig(
   model: string,
   opts: LlmCallOptions,
   signal: AbortSignal,
-): Promise<{ entity_types?: EntityType[]; language_notes?: string } | null> {
+): Promise<{ patch: { entity_types?: EntityType[]; language_notes?: string } | null; outputTokens: number }> {
   const currentConfig = JSON.stringify({
     entity_types: domain.entity_types ?? [],
     language_notes: domain.language_notes ?? "",
   }, null, 2);
 
   const pagesSnippet = [...pages.entries()]
-    .map(([p, c]) => `${p}:\n${c.slice(0, 300)}`)
+    .map(([p, c]) => `${p}:\n${c}`)
     .join("\n\n");
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -324,27 +343,33 @@ async function actualizeDomainConfig(
     },
   ];
 
-  const params = buildChatParams(model, messages, opts);
-  let fullText = "";
-  try {
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-      { signal },
-    );
-    fullText = resp.choices[0]?.message?.content ?? "";
-  } catch {
-    return null;
-  }
+  // JSON example appended to system prompt for stronger structural guidance.
+  const systemContent = (messages[0].content as string) + `\n\n## Output JSON Example\n\n` + JSON.stringify({
+    reasoning: "Сохранил Process, добавил Contract по новым страницам.",
+    entity_types: [
+      { type: "Process", description: "Бизнес-процесс", extraction_cues: ["BPMN","workflow"], wiki_subfolder: "processes" },
+      { type: "Contract", description: "Договор/SLA", extraction_cues: ["SLA","договор"], wiki_subfolder: "contracts" },
+    ],
+    language_notes: "Использовать русский для бизнес-терминов.",
+  }, null, 2);
+  messages[0] = { role: "system", content: systemContent };
 
+  const collected: RunEvent[] = [];
   try {
-    const match = fullText.match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    const parsed = JSON.parse(match[0]) as { entity_types?: unknown; language_notes?: unknown };
+    const r = await parseWithRetry({
+      llm, model, baseMessages: messages, opts,
+      schema: EntityTypesDeltaSchema,
+      maxRetries: opts.structuredRetries ?? 1,
+      callSite: "lint.patch",
+      signal,
+      onEvent: (e) => collected.push(e),
+    });
+    const parsed = r.value;
     const patch: { entity_types?: EntityType[]; language_notes?: string } = {};
     if (Array.isArray(parsed.entity_types)) patch.entity_types = parsed.entity_types as EntityType[];
     if (typeof parsed.language_notes === "string") patch.language_notes = parsed.language_notes;
-    return Object.keys(patch).length > 0 ? patch : null;
+    return { patch: Object.keys(patch).length > 0 ? patch : null, outputTokens: r.outputTokens };
   } catch {
-    return null;
+    return { patch: null, outputTokens: 0 };
   }
 }

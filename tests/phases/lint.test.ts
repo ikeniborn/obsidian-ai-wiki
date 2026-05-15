@@ -16,18 +16,22 @@ function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
 }
 
 function makeLlm(report: string, configJson = "{}"): LlmClient {
-  const streamResponse = {
-    [Symbol.asyncIterator]: async function* () {
-      yield { choices: [{ delta: { content: report } }] };
-    },
-  };
-  const nonStreamResponse = { choices: [{ message: { content: configJson } }] };
+  let callCount = 0;
   return {
     chat: {
       completions: {
-        create: vi.fn().mockImplementation((params: any) =>
-          Promise.resolve(params.stream ? streamResponse : nonStreamResponse)
-        ),
+        create: vi.fn().mockImplementation((_params: any) => {
+          const call = ++callCount;
+          // call 1: lint report (streaming), call 2: actualizeDomainConfig (streaming via parseWithRetry),
+          // call 3: fix pass (streaming)
+          const isConfig = call === 2;
+          const content = isConfig ? configJson : report;
+          return Promise.resolve({
+            [Symbol.asyncIterator]: async function* () {
+              yield { choices: [{ delta: { content } }] };
+            },
+          });
+        }),
       },
     },
   } as unknown as LlmClient;
@@ -238,6 +242,7 @@ describe("runLint", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const configJson = JSON.stringify({
+      reasoning: "Updated entity types.",
       entity_types: [{ type: "концепция", description: "updated", extraction_cues: ["тест"], min_mentions_for_page: 1, wiki_subfolder: "work/концепции" }],
       language_notes: "Updated notes.",
     });
@@ -249,6 +254,26 @@ describe("runLint", () => {
     expect(ev.domainId).toBe("work");
     expect(ev.patch.entity_types).toHaveLength(1);
     expect(ev.patch.language_notes).toBe("Updated notes.");
+  });
+
+  it("rebuilds _index.md in domain folder after lint run", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({
+        files: ["!Wiki/work/Entity.md", "!Wiki/work/Concept.md"],
+        folders: [],
+      }),
+      read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    await collect(
+      runLint(["work"], vt, makeLlm("No issues."), "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
+    const indexWrite = writeCalls.find(([path]) => path === "!Wiki/work/_index.md");
+    expect(indexWrite).toBeDefined();
+    expect(indexWrite![1]).toContain("[[Entity]]");
+    expect(indexWrite![1]).toContain("[[Concept]]");
   });
 
   it("includes isolated node graph issue in LLM prompt", async () => {

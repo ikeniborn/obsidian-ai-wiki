@@ -147,7 +147,7 @@ var require_path_browserify = __commonJS({
           return ".";
         }
       },
-      normalize: function normalize2(path2) {
+      normalize: function normalize(path2) {
         assertPath(path2);
         if (path2.length === 0)
           return ".";
@@ -166,7 +166,7 @@ var require_path_browserify = __commonJS({
         assertPath(path2);
         return path2.length > 0 && path2.charCodeAt(0) === 47;
       },
-      join: function join7() {
+      join: function join6() {
         if (arguments.length === 0)
           return ".";
         var joined;
@@ -280,7 +280,7 @@ var require_path_browserify = __commonJS({
           return "//";
         return path2.slice(0, end);
       },
-      basename: function basename2(path2, ext) {
+      basename: function basename3(path2, ext) {
         if (ext !== void 0 && typeof ext !== "string")
           throw new TypeError('"ext" argument must be a string');
         assertPath(path2);
@@ -1658,10 +1658,10 @@ var require_diagnostics = __commonJS({
   "node_modules/undici/lib/core/diagnostics.js"(exports2, module2) {
     "use strict";
     var diagnosticsChannel = require("diagnostics_channel");
-    var util = require("util");
-    var undiciDebugLog = util.debuglog("undici");
-    var fetchDebuglog = util.debuglog("fetch");
-    var websocketDebuglog = util.debuglog("websocket");
+    var util2 = require("util");
+    var undiciDebugLog = util2.debuglog("undici");
+    var fetchDebuglog = util2.debuglog("fetch");
+    var websocketDebuglog = util2.debuglog("websocket");
     var isClientSet = false;
     var channels = {
       // Client
@@ -2631,7 +2631,7 @@ var require_connect = __commonJS({
     "use strict";
     var net = require("net");
     var assert = require("assert");
-    var util = require_util();
+    var util2 = require_util();
     var { InvalidArgumentError, ConnectTimeoutError } = require_errors();
     var timers = require_timers();
     function noop2() {
@@ -2700,7 +2700,7 @@ var require_connect = __commonJS({
           if (!tls) {
             tls = require("tls");
           }
-          servername = servername || options.servername || util.getServerName(host) || null;
+          servername = servername || options.servername || util2.getServerName(host) || null;
           const sessionKey = servername || hostname;
           assert(sessionKey);
           const session = customSession || sessionCache.get(sessionKey) || null;
@@ -2799,7 +2799,7 @@ var require_connect = __commonJS({
         message += ` (attempted address: ${opts.hostname}:${opts.port},`;
       }
       message += ` timeout: ${opts.timeout}ms)`;
-      util.destroy(socket, new ConnectTimeoutError(message));
+      util2.destroy(socket, new ConnectTimeoutError(message));
     }
     module2.exports = buildConnector;
   }
@@ -4586,7 +4586,7 @@ var require_util2 = __commonJS({
       });
       return { promise, resolve: res, reject: rej };
     }
-    function isAborted(fetchParams) {
+    function isAborted2(fetchParams) {
       return fetchParams.controller.state === "aborted";
     }
     function isCancelled(fetchParams) {
@@ -4995,7 +4995,7 @@ var require_util2 = __commonJS({
     };
     var environmentSettingsObject = new EnvironmentSettingsObject();
     module2.exports = {
-      isAborted,
+      isAborted: isAborted2,
       isCancelled,
       isValidEncodedURL,
       createDeferredPromise,
@@ -5531,7 +5531,7 @@ var require_formdata_parser = __commonJS({
 var require_body = __commonJS({
   "node_modules/undici/lib/web/fetch/body.js"(exports2, module2) {
     "use strict";
-    var util = require_util();
+    var util2 = require_util();
     var {
       ReadableStreamFrom: ReadableStreamFrom2,
       isBlobLike: isBlobLike2,
@@ -5606,7 +5606,7 @@ var require_body = __commonJS({
         source = new Uint8Array(object.slice());
       } else if (ArrayBuffer.isView(object)) {
         source = new Uint8Array(object.buffer.slice(object.byteOffset, object.byteOffset + object.byteLength));
-      } else if (util.isFormDataLike(object)) {
+      } else if (util2.isFormDataLike(object)) {
         const boundary = `----formdata-undici-0${`${random(1e11)}`.padStart(11, "0")}`;
         const prefix = `--${boundary}\r
 Content-Disposition: form-data`;
@@ -5665,14 +5665,14 @@ Content-Type: ${value.type || "application/octet-stream"}\r
         if (keepalive) {
           throw new TypeError("keepalive");
         }
-        if (util.isDisturbed(object) || object.locked) {
+        if (util2.isDisturbed(object) || object.locked) {
           throw new TypeError(
             "Response body object should not be disturbed or locked"
           );
         }
         stream = object instanceof ReadableStream ? object : ReadableStreamFrom2(object);
       }
-      if (typeof source === "string" || util.isBuffer(source)) {
+      if (typeof source === "string" || util2.isBuffer(source)) {
         length = Buffer.byteLength(source);
       }
       if (action != null) {
@@ -5709,7 +5709,7 @@ Content-Type: ${value.type || "application/octet-stream"}\r
     }
     function safelyExtractBody(object, keepalive = false) {
       if (object instanceof ReadableStream) {
-        assert(!util.isDisturbed(object), "The body has already been consumed.");
+        assert(!util2.isDisturbed(object), "The body has already been consumed.");
         assert(!object.locked, "The stream is locked.");
       }
       return extractBody(object, keepalive);
@@ -5816,7 +5816,7 @@ Content-Type: ${value.type || "application/octet-stream"}\r
     }
     function bodyUnusable(object) {
       const body = object[kState].body;
-      return body != null && (body.stream.locked || util.isDisturbed(body.stream));
+      return body != null && (body.stream.locked || util2.isDisturbed(body.stream));
     }
     function parseJSONFromBytes(bytes) {
       return JSON.parse(utf8DecodeBytes(bytes));
@@ -5846,7 +5846,7 @@ var require_client_h1 = __commonJS({
   "node_modules/undici/lib/dispatcher/client-h1.js"(exports2, module2) {
     "use strict";
     var assert = require("assert");
-    var util = require_util();
+    var util2 = require_util();
     var { channels } = require_diagnostics();
     var timers = require_timers();
     var {
@@ -5897,8 +5897,8 @@ var require_client_h1 = __commonJS({
     var constants = require_constants2();
     var EMPTY_BUF = Buffer.alloc(0);
     var FastBuffer = Buffer[Symbol.species];
-    var addListener = util.addListener;
-    var removeAllListeners = util.removeAllListeners;
+    var addListener = util2.addListener;
+    var removeAllListeners = util2.removeAllListeners;
     var extractBody;
     async function lazyllhttp() {
       const llhttpWasmData = process.env.JEST_WORKER_ID ? require_llhttp_wasm() : void 0;
@@ -6076,7 +6076,7 @@ var require_client_h1 = __commonJS({
             throw new HTTPParserError(message, constants.ERROR[ret], data.slice(offset));
           }
         } catch (err) {
-          util.destroy(socket, err);
+          util2.destroy(socket, err);
         }
       }
       destroy() {
@@ -6123,13 +6123,13 @@ var require_client_h1 = __commonJS({
         }
         const key = this.headers[len - 2];
         if (key.length === 10) {
-          const headerName = util.bufferToLowerCasedHeaderName(key);
+          const headerName = util2.bufferToLowerCasedHeaderName(key);
           if (headerName === "keep-alive") {
             this.keepAlive += buf.toString();
           } else if (headerName === "connection") {
             this.connection += buf.toString();
           }
-        } else if (key.length === 14 && util.bufferToLowerCasedHeaderName(key) === "content-length") {
+        } else if (key.length === 14 && util2.bufferToLowerCasedHeaderName(key) === "content-length") {
           this.contentLength += buf.toString();
         }
         this.trackHeader(buf.length);
@@ -6137,7 +6137,7 @@ var require_client_h1 = __commonJS({
       trackHeader(len) {
         this.headersSize += len;
         if (this.headersSize >= this.headersMaxSize) {
-          util.destroy(this.socket, new HeadersOverflowError());
+          util2.destroy(this.socket, new HeadersOverflowError());
         }
       }
       onUpgrade(head) {
@@ -6168,7 +6168,7 @@ var require_client_h1 = __commonJS({
         try {
           request.onUpgrade(statusCode, headers, socket);
         } catch (err) {
-          util.destroy(socket, err);
+          util2.destroy(socket, err);
         }
         client[kResume]();
       }
@@ -6184,11 +6184,11 @@ var require_client_h1 = __commonJS({
         assert(!this.upgrade);
         assert(this.statusCode < 200);
         if (statusCode === 100) {
-          util.destroy(socket, new SocketError("bad response", util.getSocketInfo(socket)));
+          util2.destroy(socket, new SocketError("bad response", util2.getSocketInfo(socket)));
           return -1;
         }
         if (upgrade && !request.upgrade) {
-          util.destroy(socket, new SocketError("bad upgrade", util.getSocketInfo(socket)));
+          util2.destroy(socket, new SocketError("bad upgrade", util2.getSocketInfo(socket)));
           return -1;
         }
         assert(this.timeoutType === TIMEOUT_HEADERS);
@@ -6217,7 +6217,7 @@ var require_client_h1 = __commonJS({
         this.headers = [];
         this.headersSize = 0;
         if (this.shouldKeepAlive && client[kPipelining]) {
-          const keepAliveTimeout = this.keepAlive ? util.parseKeepAliveTimeout(this.keepAlive) : null;
+          const keepAliveTimeout = this.keepAlive ? util2.parseKeepAliveTimeout(this.keepAlive) : null;
           if (keepAliveTimeout != null) {
             const timeout = Math.min(
               keepAliveTimeout - client[kKeepAliveTimeoutThreshold],
@@ -6265,7 +6265,7 @@ var require_client_h1 = __commonJS({
         }
         assert(statusCode >= 200);
         if (maxResponseSize > -1 && this.bytesRead + buf.length > maxResponseSize) {
-          util.destroy(socket, new ResponseExceededMaxSizeError());
+          util2.destroy(socket, new ResponseExceededMaxSizeError());
           return -1;
         }
         this.bytesRead += buf.length;
@@ -6297,20 +6297,20 @@ var require_client_h1 = __commonJS({
           return;
         }
         if (request.method !== "HEAD" && contentLength && bytesRead !== parseInt(contentLength, 10)) {
-          util.destroy(socket, new ResponseContentLengthMismatchError());
+          util2.destroy(socket, new ResponseContentLengthMismatchError());
           return -1;
         }
         request.onComplete(headers);
         client[kQueue][client[kRunningIdx]++] = null;
         if (socket[kWriting]) {
           assert(client[kRunning] === 0);
-          util.destroy(socket, new InformationalError("reset"));
+          util2.destroy(socket, new InformationalError("reset"));
           return constants.ERROR.PAUSED;
         } else if (!shouldKeepAlive) {
-          util.destroy(socket, new InformationalError("reset"));
+          util2.destroy(socket, new InformationalError("reset"));
           return constants.ERROR.PAUSED;
         } else if (socket[kReset] && client[kRunning] === 0) {
-          util.destroy(socket, new InformationalError("reset"));
+          util2.destroy(socket, new InformationalError("reset"));
           return constants.ERROR.PAUSED;
         } else if (client[kPipelining] == null || client[kPipelining] === 1) {
           setImmediate(() => client[kResume]());
@@ -6324,15 +6324,15 @@ var require_client_h1 = __commonJS({
       if (timeoutType === TIMEOUT_HEADERS) {
         if (!socket[kWriting] || socket.writableNeedDrain || client[kRunning] > 1) {
           assert(!paused, "cannot be paused while waiting for headers");
-          util.destroy(socket, new HeadersTimeoutError());
+          util2.destroy(socket, new HeadersTimeoutError());
         }
       } else if (timeoutType === TIMEOUT_BODY) {
         if (!paused) {
-          util.destroy(socket, new BodyTimeoutError());
+          util2.destroy(socket, new BodyTimeoutError());
         }
       } else if (timeoutType === TIMEOUT_KEEP_ALIVE) {
         assert(client[kRunning] === 0 && client[kKeepAliveTimeoutValue]);
-        util.destroy(socket, new InformationalError("socket idle timeout"));
+        util2.destroy(socket, new InformationalError("socket idle timeout"));
       }
     }
     async function connectH1(client, socket) {
@@ -6368,7 +6368,7 @@ var require_client_h1 = __commonJS({
           parser.onMessageComplete();
           return;
         }
-        util.destroy(this, new SocketError("other side closed", util.getSocketInfo(this)));
+        util2.destroy(this, new SocketError("other side closed", util2.getSocketInfo(this)));
       });
       addListener(socket, "close", function() {
         const client2 = this[kClient];
@@ -6380,7 +6380,7 @@ var require_client_h1 = __commonJS({
           this[kParser].destroy();
           this[kParser] = null;
         }
-        const err = this[kError] || new SocketError("closed", util.getSocketInfo(this));
+        const err = this[kError] || new SocketError("closed", util2.getSocketInfo(this));
         client2[kSocket] = null;
         client2[kHTTPContext] = null;
         if (client2.destroyed) {
@@ -6388,12 +6388,12 @@ var require_client_h1 = __commonJS({
           const requests = client2[kQueue].splice(client2[kRunningIdx]);
           for (let i = 0; i < requests.length; i++) {
             const request = requests[i];
-            util.errorRequest(client2, request, err);
+            util2.errorRequest(client2, request, err);
           }
         } else if (client2[kRunning] > 0 && err.code !== "UND_ERR_INFO") {
           const request = client2[kQueue][client2[kRunningIdx]];
           client2[kQueue][client2[kRunningIdx]++] = null;
-          util.errorRequest(client2, request, err);
+          util2.errorRequest(client2, request, err);
         }
         client2[kPendingIdx] = client2[kRunningIdx];
         assert(client2[kRunning] === 0);
@@ -6434,7 +6434,7 @@ var require_client_h1 = __commonJS({
             if (client[kRunning] > 0 && (request.upgrade || request.method === "CONNECT")) {
               return true;
             }
-            if (client[kRunning] > 0 && util.bodyLength(request.body) !== 0 && (util.isStream(request.body) || util.isAsyncIterable(request.body) || util.isFormDataLike(request.body))) {
+            if (client[kRunning] > 0 && util2.bodyLength(request.body) !== 0 && (util2.isStream(request.body) || util2.isAsyncIterable(request.body) || util2.isFormDataLike(request.body))) {
               return true;
             }
           }
@@ -6474,7 +6474,7 @@ var require_client_h1 = __commonJS({
       const { method, path: path2, host, upgrade, blocking, reset } = request;
       let { body, headers, contentLength } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
-      if (util.isFormDataLike(body)) {
+      if (util2.isFormDataLike(body)) {
         if (!extractBody) {
           extractBody = require_body().extractBody;
         }
@@ -6484,13 +6484,13 @@ var require_client_h1 = __commonJS({
         }
         body = bodyStream.stream;
         contentLength = bodyStream.length;
-      } else if (util.isBlobLike(body) && request.contentType == null && body.type) {
+      } else if (util2.isBlobLike(body) && request.contentType == null && body.type) {
         headers.push("content-type", body.type);
       }
       if (body && typeof body.read === "function") {
         body.read(0);
       }
-      const bodyLength = util.bodyLength(body);
+      const bodyLength = util2.bodyLength(body);
       contentLength = bodyLength ?? contentLength;
       if (contentLength === null) {
         contentLength = request.contentLength;
@@ -6500,7 +6500,7 @@ var require_client_h1 = __commonJS({
       }
       if (shouldSendContentLength(method) && contentLength > 0 && request.contentLength !== null && request.contentLength !== contentLength) {
         if (client[kStrictContentLength]) {
-          util.errorRequest(client, request, new RequestContentLengthMismatchError());
+          util2.errorRequest(client, request, new RequestContentLengthMismatchError());
           return false;
         }
         process.emitWarning(new RequestContentLengthMismatchError());
@@ -6510,14 +6510,14 @@ var require_client_h1 = __commonJS({
         if (request.aborted || request.completed) {
           return;
         }
-        util.errorRequest(client, request, err || new RequestAbortedError());
-        util.destroy(body);
-        util.destroy(socket, new InformationalError("aborted"));
+        util2.errorRequest(client, request, err || new RequestAbortedError());
+        util2.destroy(body);
+        util2.destroy(socket, new InformationalError("aborted"));
       };
       try {
         request.onConnect(abort);
       } catch (err) {
-        util.errorRequest(client, request, err);
+        util2.errorRequest(client, request, err);
       }
       if (request.aborted) {
         return false;
@@ -6574,17 +6574,17 @@ upgrade: ${upgrade}\r
       }
       if (!body || bodyLength === 0) {
         writeBuffer(abort, null, client, request, socket, contentLength, header, expectsPayload);
-      } else if (util.isBuffer(body)) {
+      } else if (util2.isBuffer(body)) {
         writeBuffer(abort, body, client, request, socket, contentLength, header, expectsPayload);
-      } else if (util.isBlobLike(body)) {
+      } else if (util2.isBlobLike(body)) {
         if (typeof body.stream === "function") {
           writeIterable(abort, body.stream(), client, request, socket, contentLength, header, expectsPayload);
         } else {
           writeBlob(abort, body, client, request, socket, contentLength, header, expectsPayload);
         }
-      } else if (util.isStream(body)) {
+      } else if (util2.isStream(body)) {
         writeStream(abort, body, client, request, socket, contentLength, header, expectsPayload);
-      } else if (util.isIterable(body)) {
+      } else if (util2.isIterable(body)) {
         writeIterable(abort, body, client, request, socket, contentLength, header, expectsPayload);
       } else {
         assert(false);
@@ -6604,7 +6604,7 @@ upgrade: ${upgrade}\r
             this.pause();
           }
         } catch (err) {
-          util.destroy(this, err);
+          util2.destroy(this, err);
         }
       };
       const onDrain = function() {
@@ -6641,9 +6641,9 @@ upgrade: ${upgrade}\r
         }
         writer.destroy(err);
         if (err && (err.code !== "UND_ERR_INFO" || err.message !== "reset")) {
-          util.destroy(body, err);
+          util2.destroy(body, err);
         } else {
-          util.destroy(body);
+          util2.destroy(body);
         }
       };
       body.on("data", onData).on("end", onFinished).on("error", onFinished).on("close", onClose);
@@ -6672,7 +6672,7 @@ upgrade: ${upgrade}\r
             socket.write(`${header}\r
 `, "latin1");
           }
-        } else if (util.isBuffer(body)) {
+        } else if (util2.isBuffer(body)) {
           assert(contentLength === body.byteLength, "buffer body must have content length");
           socket.cork();
           socket.write(`${header}content-length: ${contentLength}\r
@@ -6867,7 +6867,7 @@ var require_client_h2 = __commonJS({
     "use strict";
     var assert = require("assert");
     var { pipeline } = require("stream");
-    var util = require_util();
+    var util2 = require_util();
     var {
       RequestContentLengthMismatchError,
       RequestAbortedError,
@@ -6941,37 +6941,37 @@ var require_client_h2 = __commonJS({
       session[kOpenStreams] = 0;
       session[kClient] = client;
       session[kSocket] = socket;
-      util.addListener(session, "error", onHttp2SessionError);
-      util.addListener(session, "frameError", onHttp2FrameError);
-      util.addListener(session, "end", onHttp2SessionEnd);
-      util.addListener(session, "goaway", onHTTP2GoAway);
-      util.addListener(session, "close", function() {
+      util2.addListener(session, "error", onHttp2SessionError);
+      util2.addListener(session, "frameError", onHttp2FrameError);
+      util2.addListener(session, "end", onHttp2SessionEnd);
+      util2.addListener(session, "goaway", onHTTP2GoAway);
+      util2.addListener(session, "close", function() {
         const { [kClient]: client2 } = this;
         const { [kSocket]: socket2 } = client2;
-        const err = this[kSocket][kError] || this[kError] || new SocketError("closed", util.getSocketInfo(socket2));
+        const err = this[kSocket][kError] || this[kError] || new SocketError("closed", util2.getSocketInfo(socket2));
         client2[kHTTP2Session] = null;
         if (client2.destroyed) {
           assert(client2[kPending] === 0);
           const requests = client2[kQueue].splice(client2[kRunningIdx]);
           for (let i = 0; i < requests.length; i++) {
             const request = requests[i];
-            util.errorRequest(client2, request, err);
+            util2.errorRequest(client2, request, err);
           }
         }
       });
       session.unref();
       client[kHTTP2Session] = session;
       socket[kHTTP2Session] = session;
-      util.addListener(socket, "error", function(err) {
+      util2.addListener(socket, "error", function(err) {
         assert(err.code !== "ERR_TLS_CERT_ALTNAME_INVALID");
         this[kError] = err;
         this[kClient][kOnError](err);
       });
-      util.addListener(socket, "end", function() {
-        util.destroy(this, new SocketError("other side closed", util.getSocketInfo(this)));
+      util2.addListener(socket, "end", function() {
+        util2.destroy(this, new SocketError("other side closed", util2.getSocketInfo(this)));
       });
-      util.addListener(socket, "close", function() {
-        const err = this[kError] || new SocketError("closed", util.getSocketInfo(this));
+      util2.addListener(socket, "close", function() {
+        const err = this[kError] || new SocketError("closed", util2.getSocketInfo(this));
         client[kSocket] = null;
         if (this[kHTTP2Session] != null) {
           this[kHTTP2Session].destroy(err);
@@ -7034,12 +7034,12 @@ var require_client_h2 = __commonJS({
       }
     }
     function onHttp2SessionEnd() {
-      const err = new SocketError("other side closed", util.getSocketInfo(this[kSocket]));
+      const err = new SocketError("other side closed", util2.getSocketInfo(this[kSocket]));
       this.destroy(err);
-      util.destroy(this[kSocket], err);
+      util2.destroy(this[kSocket], err);
     }
     function onHTTP2GoAway(code) {
-      const err = this[kError] || new SocketError(`HTTP/2: "GOAWAY" frame received with code ${code}`, util.getSocketInfo(this));
+      const err = this[kError] || new SocketError(`HTTP/2: "GOAWAY" frame received with code ${code}`, util2.getSocketInfo(this));
       const client = this[kClient];
       client[kSocket] = null;
       client[kHTTPContext] = null;
@@ -7047,11 +7047,11 @@ var require_client_h2 = __commonJS({
         this[kHTTP2Session].destroy(err);
         this[kHTTP2Session] = null;
       }
-      util.destroy(this[kSocket], err);
+      util2.destroy(this[kSocket], err);
       if (client[kRunningIdx] < client[kQueue].length) {
         const request = client[kQueue][client[kRunningIdx]];
         client[kQueue][client[kRunningIdx]++] = null;
-        util.errorRequest(client, request, err);
+        util2.errorRequest(client, request, err);
         client[kPendingIdx] = client[kRunningIdx];
       }
       assert(client[kRunning] === 0);
@@ -7066,7 +7066,7 @@ var require_client_h2 = __commonJS({
       const { method, path: path2, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
       let { body } = request;
       if (upgrade) {
-        util.errorRequest(client, request, new Error("Upgrade not supported for H2"));
+        util2.errorRequest(client, request, new Error("Upgrade not supported for H2"));
         return false;
       }
       const headers = {};
@@ -7094,18 +7094,18 @@ var require_client_h2 = __commonJS({
           return;
         }
         err = err || new RequestAbortedError();
-        util.errorRequest(client, request, err);
+        util2.errorRequest(client, request, err);
         if (stream != null) {
-          util.destroy(stream, err);
+          util2.destroy(stream, err);
         }
-        util.destroy(body, err);
+        util2.destroy(body, err);
         client[kQueue][client[kRunningIdx]++] = null;
         client[kResume]();
       };
       try {
         request.onConnect(abort);
       } catch (err) {
-        util.errorRequest(client, request, err);
+        util2.errorRequest(client, request, err);
       }
       if (request.aborted) {
         return false;
@@ -7137,8 +7137,8 @@ var require_client_h2 = __commonJS({
       if (body && typeof body.read === "function") {
         body.read(0);
       }
-      let contentLength = util.bodyLength(body);
-      if (util.isFormDataLike(body)) {
+      let contentLength = util2.bodyLength(body);
+      if (util2.isFormDataLike(body)) {
         extractBody ??= require_body().extractBody;
         const [bodyStream, contentType] = extractBody(body);
         headers["content-type"] = contentType;
@@ -7153,7 +7153,7 @@ var require_client_h2 = __commonJS({
       }
       if (shouldSendContentLength(method) && contentLength > 0 && request.contentLength != null && request.contentLength !== contentLength) {
         if (client[kStrictContentLength]) {
-          util.errorRequest(client, request, new RequestContentLengthMismatchError());
+          util2.errorRequest(client, request, new RequestContentLengthMismatchError());
           return false;
         }
         process.emitWarning(new RequestContentLengthMismatchError());
@@ -7181,8 +7181,8 @@ var require_client_h2 = __commonJS({
         request.onResponseStarted();
         if (request.aborted) {
           const err = new RequestAbortedError();
-          util.errorRequest(client, request, err);
-          util.destroy(stream, err);
+          util2.errorRequest(client, request, err);
+          util2.destroy(stream, err);
           return;
         }
         if (request.onHeaders(Number(statusCode), parseH2Headers(realHeaders), stream.resume.bind(stream), "") === false) {
@@ -7231,7 +7231,7 @@ var require_client_h2 = __commonJS({
             contentLength,
             expectsPayload
           );
-        } else if (util.isBuffer(body)) {
+        } else if (util2.isBuffer(body)) {
           writeBuffer(
             abort,
             stream,
@@ -7242,7 +7242,7 @@ var require_client_h2 = __commonJS({
             contentLength,
             expectsPayload
           );
-        } else if (util.isBlobLike(body)) {
+        } else if (util2.isBlobLike(body)) {
           if (typeof body.stream === "function") {
             writeIterable(
               abort,
@@ -7266,7 +7266,7 @@ var require_client_h2 = __commonJS({
               expectsPayload
             );
           }
-        } else if (util.isStream(body)) {
+        } else if (util2.isStream(body)) {
           writeStream(
             abort,
             client[kSocket],
@@ -7277,7 +7277,7 @@ var require_client_h2 = __commonJS({
             request,
             contentLength
           );
-        } else if (util.isIterable(body)) {
+        } else if (util2.isIterable(body)) {
           writeIterable(
             abort,
             stream,
@@ -7295,7 +7295,7 @@ var require_client_h2 = __commonJS({
     }
     function writeBuffer(abort, h2stream, body, client, request, socket, contentLength, expectsPayload) {
       try {
-        if (body != null && util.isBuffer(body)) {
+        if (body != null && util2.isBuffer(body)) {
           assert(contentLength === body.byteLength, "buffer body must have content length");
           h2stream.cork();
           h2stream.write(body);
@@ -7319,10 +7319,10 @@ var require_client_h2 = __commonJS({
         h2stream,
         (err) => {
           if (err) {
-            util.destroy(pipe, err);
+            util2.destroy(pipe, err);
             abort(err);
           } else {
-            util.removeAllListeners(pipe);
+            util2.removeAllListeners(pipe);
             request.onRequestSent();
             if (!expectsPayload) {
               socket[kReset] = true;
@@ -7331,7 +7331,7 @@ var require_client_h2 = __commonJS({
           }
         }
       );
-      util.addListener(pipe, "data", onPipeData);
+      util2.addListener(pipe, "data", onPipeData);
       function onPipeData(chunk) {
         request.onBodySent(chunk);
       }
@@ -7407,7 +7407,7 @@ var require_client_h2 = __commonJS({
 var require_redirect_handler = __commonJS({
   "node_modules/undici/lib/handler/redirect-handler.js"(exports2, module2) {
     "use strict";
-    var util = require_util();
+    var util2 = require_util();
     var { kBodyUsed } = require_symbols();
     var assert = require("assert");
     var { InvalidArgumentError } = require_errors();
@@ -7430,7 +7430,7 @@ var require_redirect_handler = __commonJS({
         if (maxRedirections != null && (!Number.isInteger(maxRedirections) || maxRedirections < 0)) {
           throw new InvalidArgumentError("maxRedirections must be a positive number");
         }
-        util.validateHandler(handler, opts.method, opts.upgrade);
+        util2.validateHandler(handler, opts.method, opts.upgrade);
         this.dispatch = dispatch;
         this.location = null;
         this.abort = null;
@@ -7439,8 +7439,8 @@ var require_redirect_handler = __commonJS({
         this.handler = handler;
         this.history = [];
         this.redirectionLimitReached = false;
-        if (util.isStream(this.opts.body)) {
-          if (util.bodyLength(this.opts.body) === 0) {
+        if (util2.isStream(this.opts.body)) {
+          if (util2.bodyLength(this.opts.body) === 0) {
             this.opts.body.on("data", function() {
               assert(false);
             });
@@ -7453,7 +7453,7 @@ var require_redirect_handler = __commonJS({
           }
         } else if (this.opts.body && typeof this.opts.body.pipeTo === "function") {
           this.opts.body = new BodyAsyncIterable(this.opts.body);
-        } else if (this.opts.body && typeof this.opts.body !== "string" && !ArrayBuffer.isView(this.opts.body) && util.isIterable(this.opts.body)) {
+        } else if (this.opts.body && typeof this.opts.body !== "string" && !ArrayBuffer.isView(this.opts.body) && util2.isIterable(this.opts.body)) {
           this.opts.body = new BodyAsyncIterable(this.opts.body);
         }
       }
@@ -7468,7 +7468,7 @@ var require_redirect_handler = __commonJS({
         this.handler.onError(error);
       }
       onHeaders(statusCode, headers, resume, statusText) {
-        this.location = this.history.length >= this.maxRedirections || util.isDisturbed(this.opts.body) ? null : parseLocation(statusCode, headers);
+        this.location = this.history.length >= this.maxRedirections || util2.isDisturbed(this.opts.body) ? null : parseLocation(statusCode, headers);
         if (this.opts.throwOnMaxRedirect && this.history.length >= this.maxRedirections) {
           if (this.request) {
             this.request.abort(new Error("max redirects"));
@@ -7483,7 +7483,7 @@ var require_redirect_handler = __commonJS({
         if (!this.location) {
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
-        const { origin, pathname, search } = util.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
+        const { origin, pathname, search } = util2.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
         const path2 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
         this.opts.path = path2;
@@ -7521,20 +7521,20 @@ var require_redirect_handler = __commonJS({
         return null;
       }
       for (let i = 0; i < headers.length; i += 2) {
-        if (headers[i].length === 8 && util.headerNameToString(headers[i]) === "location") {
+        if (headers[i].length === 8 && util2.headerNameToString(headers[i]) === "location") {
           return headers[i + 1];
         }
       }
     }
     function shouldRemoveHeader(header, removeContent, unknownOrigin) {
       if (header.length === 4) {
-        return util.headerNameToString(header) === "host";
+        return util2.headerNameToString(header) === "host";
       }
-      if (removeContent && util.headerNameToString(header).startsWith("content-")) {
+      if (removeContent && util2.headerNameToString(header).startsWith("content-")) {
         return true;
       }
       if (unknownOrigin && (header.length === 13 || header.length === 6 || header.length === 19)) {
-        const name = util.headerNameToString(header);
+        const name = util2.headerNameToString(header);
         return name === "authorization" || name === "cookie" || name === "proxy-authorization";
       }
       return false;
@@ -7591,7 +7591,7 @@ var require_client = __commonJS({
     var assert = require("assert");
     var net = require("net");
     var http = require("http");
-    var util = require_util();
+    var util2 = require_util();
     var { channels } = require_diagnostics();
     var Request = require_request();
     var DispatcherBase = require_dispatcher_base();
@@ -7775,7 +7775,7 @@ var require_client = __commonJS({
         } else {
           this[kInterceptors] = [createRedirectInterceptor({ maxRedirections })];
         }
-        this[kUrl] = util.parseOrigin(url);
+        this[kUrl] = util2.parseOrigin(url);
         this[kConnector] = connect2;
         this[kPipelining] = pipelining != null ? pipelining : 1;
         this[kMaxHeadersSize] = maxHeaderSize || http.maxHeaderSize;
@@ -7838,7 +7838,7 @@ var require_client = __commonJS({
         const request = new Request(origin, opts, handler);
         this[kQueue].push(request);
         if (this[kResuming]) {
-        } else if (util.bodyLength(request.body) == null && util.isIterable(request.body)) {
+        } else if (util2.bodyLength(request.body) == null && util2.isIterable(request.body)) {
           this[kResuming] = 1;
           queueMicrotask(() => resume(this));
         } else {
@@ -7863,7 +7863,7 @@ var require_client = __commonJS({
           const requests = this[kQueue].splice(this[kPendingIdx]);
           for (let i = 0; i < requests.length; i++) {
             const request = requests[i];
-            util.errorRequest(this, request, err);
+            util2.errorRequest(this, request, err);
           }
           const callback = () => {
             if (this[kClosedResolve]) {
@@ -7889,7 +7889,7 @@ var require_client = __commonJS({
         const requests = client[kQueue].splice(client[kRunningIdx]);
         for (let i = 0; i < requests.length; i++) {
           const request = requests[i];
-          util.errorRequest(client, request, err);
+          util2.errorRequest(client, request, err);
         }
         assert(client[kSize] === 0);
       }
@@ -7938,7 +7938,7 @@ var require_client = __commonJS({
           });
         });
         if (client.destroyed) {
-          util.destroy(socket.on("error", noop2), new ClientDestroyedError());
+          util2.destroy(socket.on("error", noop2), new ClientDestroyedError());
           return;
         }
         assert(socket);
@@ -7993,7 +7993,7 @@ var require_client = __commonJS({
           assert(client[kRunning] === 0);
           while (client[kPending] > 0 && client[kQueue][client[kPendingIdx]].servername === client[kServerName]) {
             const request = client[kQueue][client[kPendingIdx]++];
-            util.errorRequest(client, request, err);
+            util2.errorRequest(client, request, err);
           }
         } else {
           onError(client, err);
@@ -8344,7 +8344,7 @@ var require_pool = __commonJS({
     var {
       InvalidArgumentError
     } = require_errors();
-    var util = require_util();
+    var util2 = require_util();
     var { kUrl, kInterceptors } = require_symbols();
     var buildConnector = require_connect();
     var kOptions = Symbol("options");
@@ -8390,8 +8390,8 @@ var require_pool = __commonJS({
         super(options);
         this[kInterceptors] = options.interceptors?.Pool && Array.isArray(options.interceptors.Pool) ? options.interceptors.Pool : [];
         this[kConnections] = connections || null;
-        this[kUrl] = util.parseOrigin(origin);
-        this[kOptions] = { ...util.deepClone(options), connect, allowH2 };
+        this[kUrl] = util2.parseOrigin(origin);
+        this[kOptions] = { ...util2.deepClone(options), connect, allowH2 };
         this[kOptions].interceptors = options.interceptors ? { ...options.interceptors } : void 0;
         this[kFactory] = factory;
         this.on("connectionError", (origin2, targets, error) => {
@@ -8574,7 +8574,7 @@ var require_agent = __commonJS({
     var DispatcherBase = require_dispatcher_base();
     var Pool = require_pool();
     var Client = require_client();
-    var util = require_util();
+    var util2 = require_util();
     var createRedirectInterceptor = require_redirect_interceptor();
     var kOnConnect = Symbol("onConnect");
     var kOnDisconnect = Symbol("onDisconnect");
@@ -8602,7 +8602,7 @@ var require_agent = __commonJS({
           connect = { ...connect };
         }
         this[kInterceptors] = options.interceptors?.Agent && Array.isArray(options.interceptors.Agent) ? options.interceptors.Agent : [createRedirectInterceptor({ maxRedirections })];
-        this[kOptions] = { ...util.deepClone(options), connect };
+        this[kOptions] = { ...util2.deepClone(options), connect };
         this[kOptions].interceptors = options.interceptors ? { ...options.interceptors } : void 0;
         this[kMaxRedirections] = maxRedirections;
         this[kFactory] = factory;
@@ -9363,7 +9363,7 @@ var require_readable = __commonJS({
     var assert = require("assert");
     var { Readable } = require("stream");
     var { RequestAbortedError, NotSupportedError, InvalidArgumentError, AbortError } = require_errors();
-    var util = require_util();
+    var util2 = require_util();
     var { ReadableStreamFrom: ReadableStreamFrom2 } = require_util();
     var kConsume = Symbol("kConsume");
     var kReading = Symbol("kReading");
@@ -9465,7 +9465,7 @@ var require_readable = __commonJS({
       }
       // https://fetch.spec.whatwg.org/#dom-body-bodyused
       get bodyUsed() {
-        return util.isDisturbed(this);
+        return util2.isDisturbed(this);
       }
       // https://fetch.spec.whatwg.org/#dom-body-body
       get body() {
@@ -9516,7 +9516,7 @@ var require_readable = __commonJS({
       return self[kBody] && self[kBody].locked === true || self[kConsume];
     }
     function isUnusable(self) {
-      return util.isDisturbed(self) || isLocked(self);
+      return util2.isDisturbed(self) || isLocked(self);
     }
     async function consume(stream, type) {
       assert(!stream[kConsume]);
@@ -9717,7 +9717,7 @@ var require_api_request = __commonJS({
     var assert = require("assert");
     var { Readable } = require_readable();
     var { InvalidArgumentError, RequestAbortedError } = require_errors();
-    var util = require_util();
+    var util2 = require_util();
     var { getResolveErrorBodyCallback } = require_util3();
     var { AsyncResource } = require("async_hooks");
     var RequestHandler = class extends AsyncResource {
@@ -9744,8 +9744,8 @@ var require_api_request = __commonJS({
           }
           super("UNDICI_REQUEST");
         } catch (err) {
-          if (util.isStream(body)) {
-            util.destroy(body.on("error", util.nop), err);
+          if (util2.isStream(body)) {
+            util2.destroy(body.on("error", util2.nop), err);
           }
           throw err;
         }
@@ -9764,7 +9764,7 @@ var require_api_request = __commonJS({
         this.signal = signal;
         this.reason = null;
         this.removeAbortListener = null;
-        if (util.isStream(body)) {
+        if (util2.isStream(body)) {
           body.on("error", (err) => {
             this.onError(err);
           });
@@ -9773,10 +9773,10 @@ var require_api_request = __commonJS({
           if (this.signal.aborted) {
             this.reason = this.signal.reason ?? new RequestAbortedError();
           } else {
-            this.removeAbortListener = util.addAbortListener(this.signal, () => {
+            this.removeAbortListener = util2.addAbortListener(this.signal, () => {
               this.reason = this.signal.reason ?? new RequestAbortedError();
               if (this.res) {
-                util.destroy(this.res.on("error", util.nop), this.reason);
+                util2.destroy(this.res.on("error", util2.nop), this.reason);
               } else if (this.abort) {
                 this.abort(this.reason);
               }
@@ -9800,14 +9800,14 @@ var require_api_request = __commonJS({
       }
       onHeaders(statusCode, rawHeaders, resume, statusMessage) {
         const { callback, opaque, abort, context, responseHeaders, highWaterMark } = this;
-        const headers = responseHeaders === "raw" ? util.parseRawHeaders(rawHeaders) : util.parseHeaders(rawHeaders);
+        const headers = responseHeaders === "raw" ? util2.parseRawHeaders(rawHeaders) : util2.parseHeaders(rawHeaders);
         if (statusCode < 200) {
           if (this.onInfo) {
             this.onInfo({ statusCode, headers });
           }
           return;
         }
-        const parsedHeaders = responseHeaders === "raw" ? util.parseHeaders(rawHeaders) : headers;
+        const parsedHeaders = responseHeaders === "raw" ? util2.parseHeaders(rawHeaders) : headers;
         const contentType = parsedHeaders["content-type"];
         const contentLength = parsedHeaders["content-length"];
         const res = new Readable({
@@ -9845,7 +9845,7 @@ var require_api_request = __commonJS({
         return this.res.push(chunk);
       }
       onComplete(trailers) {
-        util.parseHeaders(trailers, this.trailers);
+        util2.parseHeaders(trailers, this.trailers);
         this.res.push(null);
       }
       onError(err) {
@@ -9859,12 +9859,12 @@ var require_api_request = __commonJS({
         if (res) {
           this.res = null;
           queueMicrotask(() => {
-            util.destroy(res, err);
+            util2.destroy(res, err);
           });
         }
         if (body) {
           this.body = null;
-          util.destroy(body, err);
+          util2.destroy(body, err);
         }
         if (this.removeAbortListener) {
           res?.off("close", this.removeAbortListener);
@@ -9954,7 +9954,7 @@ var require_api_stream = __commonJS({
     var assert = require("assert");
     var { finished, PassThrough } = require("stream");
     var { InvalidArgumentError, InvalidReturnValueError } = require_errors();
-    var util = require_util();
+    var util2 = require_util();
     var { getResolveErrorBodyCallback } = require_util3();
     var { AsyncResource } = require("async_hooks");
     var { addSignal, removeSignal } = require_abort_signal();
@@ -9982,8 +9982,8 @@ var require_api_stream = __commonJS({
           }
           super("UNDICI_STREAM");
         } catch (err) {
-          if (util.isStream(body)) {
-            util.destroy(body.on("error", util.nop), err);
+          if (util2.isStream(body)) {
+            util2.destroy(body.on("error", util2.nop), err);
           }
           throw err;
         }
@@ -9998,7 +9998,7 @@ var require_api_stream = __commonJS({
         this.body = body;
         this.onInfo = onInfo || null;
         this.throwOnError = throwOnError || false;
-        if (util.isStream(body)) {
+        if (util2.isStream(body)) {
           body.on("error", (err) => {
             this.onError(err);
           });
@@ -10016,7 +10016,7 @@ var require_api_stream = __commonJS({
       }
       onHeaders(statusCode, rawHeaders, resume, statusMessage) {
         const { factory, opaque, context, callback, responseHeaders } = this;
-        const headers = responseHeaders === "raw" ? util.parseRawHeaders(rawHeaders) : util.parseHeaders(rawHeaders);
+        const headers = responseHeaders === "raw" ? util2.parseRawHeaders(rawHeaders) : util2.parseHeaders(rawHeaders);
         if (statusCode < 200) {
           if (this.onInfo) {
             this.onInfo({ statusCode, headers });
@@ -10026,7 +10026,7 @@ var require_api_stream = __commonJS({
         this.factory = null;
         let res;
         if (this.throwOnError && statusCode >= 400) {
-          const parsedHeaders = responseHeaders === "raw" ? util.parseHeaders(rawHeaders) : headers;
+          const parsedHeaders = responseHeaders === "raw" ? util2.parseHeaders(rawHeaders) : headers;
           const contentType = parsedHeaders["content-type"];
           res = new PassThrough();
           this.callback = null;
@@ -10052,7 +10052,7 @@ var require_api_stream = __commonJS({
             const { callback: callback2, res: res2, opaque: opaque2, trailers, abort } = this;
             this.res = null;
             if (err || !res2.readable) {
-              util.destroy(res2, err);
+              util2.destroy(res2, err);
             }
             this.callback = null;
             this.runInAsyncScope(callback2, null, err || null, { opaque: opaque2, trailers });
@@ -10076,7 +10076,7 @@ var require_api_stream = __commonJS({
         if (!res) {
           return;
         }
-        this.trailers = util.parseHeaders(trailers);
+        this.trailers = util2.parseHeaders(trailers);
         res.end();
       }
       onError(err) {
@@ -10085,7 +10085,7 @@ var require_api_stream = __commonJS({
         this.factory = null;
         if (res) {
           this.res = null;
-          util.destroy(res, err);
+          util2.destroy(res, err);
         } else if (callback) {
           this.callback = null;
           queueMicrotask(() => {
@@ -10094,7 +10094,7 @@ var require_api_stream = __commonJS({
         }
         if (body) {
           this.body = null;
-          util.destroy(body, err);
+          util2.destroy(body, err);
         }
       }
     };
@@ -10134,7 +10134,7 @@ var require_api_pipeline = __commonJS({
       InvalidReturnValueError,
       RequestAbortedError
     } = require_errors();
-    var util = require_util();
+    var util2 = require_util();
     var { AsyncResource } = require("async_hooks");
     var { addSignal, removeSignal } = require_abort_signal();
     var assert = require("assert");
@@ -10196,7 +10196,7 @@ var require_api_pipeline = __commonJS({
         this.abort = null;
         this.context = null;
         this.onInfo = onInfo || null;
-        this.req = new PipelineRequest().on("error", util.nop);
+        this.req = new PipelineRequest().on("error", util2.nop);
         this.ret = new Duplex({
           readableObjectMode: opts.objectMode,
           autoDestroy: true,
@@ -10222,9 +10222,9 @@ var require_api_pipeline = __commonJS({
             if (abort && err) {
               abort();
             }
-            util.destroy(body, err);
-            util.destroy(req, err);
-            util.destroy(res, err);
+            util2.destroy(body, err);
+            util2.destroy(req, err);
+            util2.destroy(res, err);
             removeSignal(this);
             callback(err);
           }
@@ -10250,7 +10250,7 @@ var require_api_pipeline = __commonJS({
         const { opaque, handler, context } = this;
         if (statusCode < 200) {
           if (this.onInfo) {
-            const headers = this.responseHeaders === "raw" ? util.parseRawHeaders(rawHeaders) : util.parseHeaders(rawHeaders);
+            const headers = this.responseHeaders === "raw" ? util2.parseRawHeaders(rawHeaders) : util2.parseHeaders(rawHeaders);
             this.onInfo({ statusCode, headers });
           }
           return;
@@ -10259,7 +10259,7 @@ var require_api_pipeline = __commonJS({
         let body;
         try {
           this.handler = null;
-          const headers = this.responseHeaders === "raw" ? util.parseRawHeaders(rawHeaders) : util.parseHeaders(rawHeaders);
+          const headers = this.responseHeaders === "raw" ? util2.parseRawHeaders(rawHeaders) : util2.parseHeaders(rawHeaders);
           body = this.runInAsyncScope(handler, null, {
             statusCode,
             headers,
@@ -10268,7 +10268,7 @@ var require_api_pipeline = __commonJS({
             context
           });
         } catch (err) {
-          this.res.on("error", util.nop);
+          this.res.on("error", util2.nop);
           throw err;
         }
         if (!body || typeof body.on !== "function") {
@@ -10281,14 +10281,14 @@ var require_api_pipeline = __commonJS({
           }
         }).on("error", (err) => {
           const { ret } = this;
-          util.destroy(ret, err);
+          util2.destroy(ret, err);
         }).on("end", () => {
           const { ret } = this;
           ret.push(null);
         }).on("close", () => {
           const { ret } = this;
           if (!ret._readableState.ended) {
-            util.destroy(ret, new RequestAbortedError());
+            util2.destroy(ret, new RequestAbortedError());
           }
         });
         this.body = body;
@@ -10304,7 +10304,7 @@ var require_api_pipeline = __commonJS({
       onError(err) {
         const { ret } = this;
         this.handler = null;
-        util.destroy(ret, err);
+        util2.destroy(ret, err);
       }
     };
     function pipeline(opts, handler) {
@@ -10326,7 +10326,7 @@ var require_api_upgrade = __commonJS({
     "use strict";
     var { InvalidArgumentError, SocketError } = require_errors();
     var { AsyncResource } = require("async_hooks");
-    var util = require_util();
+    var util2 = require_util();
     var { addSignal, removeSignal } = require_abort_signal();
     var assert = require("assert");
     var UpgradeHandler = class extends AsyncResource {
@@ -10366,7 +10366,7 @@ var require_api_upgrade = __commonJS({
         const { callback, opaque, context } = this;
         removeSignal(this);
         this.callback = null;
-        const headers = this.responseHeaders === "raw" ? util.parseRawHeaders(rawHeaders) : util.parseHeaders(rawHeaders);
+        const headers = this.responseHeaders === "raw" ? util2.parseRawHeaders(rawHeaders) : util2.parseHeaders(rawHeaders);
         this.runInAsyncScope(callback, null, null, {
           headers,
           socket,
@@ -10419,7 +10419,7 @@ var require_api_connect = __commonJS({
     var assert = require("assert");
     var { AsyncResource } = require("async_hooks");
     var { InvalidArgumentError, SocketError } = require_errors();
-    var util = require_util();
+    var util2 = require_util();
     var { addSignal, removeSignal } = require_abort_signal();
     var ConnectHandler = class extends AsyncResource {
       constructor(opts, callback) {
@@ -10458,7 +10458,7 @@ var require_api_connect = __commonJS({
         this.callback = null;
         let headers = rawHeaders;
         if (headers != null) {
-          headers = this.responseHeaders === "raw" ? util.parseRawHeaders(rawHeaders) : util.parseHeaders(rawHeaders);
+          headers = this.responseHeaders === "raw" ? util2.parseRawHeaders(rawHeaders) : util2.parseHeaders(rawHeaders);
         }
         this.runInAsyncScope(callback, null, null, {
           statusCode,
@@ -11458,7 +11458,7 @@ var require_retry = __commonJS({
 var require_dump = __commonJS({
   "node_modules/undici/lib/interceptor/dump.js"(exports2, module2) {
     "use strict";
-    var util = require_util();
+    var util2 = require_util();
     var { InvalidArgumentError, RequestAbortedError } = require_errors();
     var DecoratorHandler = require_decorator_handler();
     var DumpHandler = class extends DecoratorHandler {
@@ -11487,7 +11487,7 @@ var require_dump = __commonJS({
       }
       // TODO: will require adjustment after new hooks are out
       onHeaders(statusCode, rawHeaders, resume, statusMessage) {
-        const headers = util.parseHeaders(rawHeaders);
+        const headers = util2.parseHeaders(rawHeaders);
         const contentLength = headers["content-length"];
         if (contentLength != null && contentLength > this.#maxSize) {
           throw new RequestAbortedError(
@@ -11853,7 +11853,7 @@ var require_headers = __commonJS({
     } = require_util2();
     var { webidl } = require_webidl();
     var assert = require("assert");
-    var util = require("util");
+    var util2 = require("util");
     var kHeadersMap = Symbol("headers map");
     var kHeadersSortedMap = Symbol("headers map sorted");
     function isHTTPWhiteSpaceCharCode(code) {
@@ -12215,9 +12215,9 @@ var require_headers = __commonJS({
         }
         return this.#headersList[kHeadersSortedMap] = headers;
       }
-      [util.inspect.custom](depth, options) {
+      [util2.inspect.custom](depth, options) {
         options.depth ??= depth;
-        return `Headers ${util.formatWithOptions(options, this.#headersList.entries)}`;
+        return `Headers ${util2.formatWithOptions(options, this.#headersList.entries)}`;
       }
       static getHeadersGuard(o) {
         return o.#guard;
@@ -12249,14 +12249,14 @@ var require_headers = __commonJS({
         value: "Headers",
         configurable: true
       },
-      [util.inspect.custom]: {
+      [util2.inspect.custom]: {
         enumerable: false
       }
     });
     webidl.converters.HeadersInit = function(V, prefix, argument) {
       if (webidl.util.Type(V) === "Object") {
         const iterator = Reflect.get(V, Symbol.iterator);
-        if (!util.types.isProxy(V) && iterator === Headers2.prototype.entries) {
+        if (!util2.types.isProxy(V) && iterator === Headers2.prototype.entries) {
           try {
             return getHeadersList(V).entriesList;
           } catch {
@@ -12293,13 +12293,13 @@ var require_response = __commonJS({
     "use strict";
     var { Headers: Headers2, HeadersList, fill, getHeadersGuard, setHeadersGuard, setHeadersList } = require_headers();
     var { extractBody, cloneBody, mixinBody, hasFinalizationRegistry, streamRegistry, bodyUnusable } = require_body();
-    var util = require_util();
+    var util2 = require_util();
     var nodeUtil = require("util");
-    var { kEnumerableProperty } = util;
+    var { kEnumerableProperty } = util2;
     var {
       isValidReasonPhrase,
       isCancelled,
-      isAborted,
+      isAborted: isAborted2,
       isBlobLike: isBlobLike2,
       serializeJavascriptValueToJSONString,
       isErrorLike,
@@ -12425,7 +12425,7 @@ var require_response = __commonJS({
       }
       get bodyUsed() {
         webidl.brandCheck(this, _Response);
-        return !!this[kState].body && util.isDisturbed(this[kState].body.stream);
+        return !!this[kState].body && util2.isDisturbed(this[kState].body.stream);
       }
       // Returns a clone of response.
       clone() {
@@ -12577,7 +12577,7 @@ var require_response = __commonJS({
     }
     function makeAppropriateNetworkError(fetchParams, err = null) {
       assert(isCancelled(fetchParams));
-      return isAborted(fetchParams) ? makeNetworkError(Object.assign(new DOMException("The operation was aborted.", "AbortError"), { cause: err })) : makeNetworkError(Object.assign(new DOMException("Request was cancelled."), { cause: err }));
+      return isAborted2(fetchParams) ? makeNetworkError(Object.assign(new DOMException("The operation was aborted.", "AbortError"), { cause: err })) : makeNetworkError(Object.assign(new DOMException("Request was cancelled."), { cause: err }));
     }
     function initializeResponse(response, init, body) {
       if (init.status !== null && (init.status < 200 || init.status > 599)) {
@@ -12640,7 +12640,7 @@ var require_response = __commonJS({
       if (ArrayBuffer.isView(V) || types.isArrayBuffer(V)) {
         return webidl.converters.BufferSource(V, prefix, name);
       }
-      if (util.isFormDataLike(V)) {
+      if (util2.isFormDataLike(V)) {
         return webidl.converters.FormData(V, prefix, name, { strict: false });
       }
       if (V instanceof URLSearchParams) {
@@ -12735,7 +12735,7 @@ var require_request2 = __commonJS({
     var { extractBody, mixinBody, cloneBody, bodyUnusable } = require_body();
     var { Headers: Headers2, fill: fillHeaders, HeadersList, setHeadersGuard, getHeadersGuard, setHeadersList, getHeadersList } = require_headers();
     var { FinalizationRegistry: FinalizationRegistry2 } = require_dispatcher_weakref()();
-    var util = require_util();
+    var util2 = require_util();
     var nodeUtil = require("util");
     var {
       isValidHTTPToken,
@@ -12752,7 +12752,7 @@ var require_request2 = __commonJS({
       requestCache,
       requestDuplex
     } = require_constants3();
-    var { kEnumerableProperty, normalizedMethodRecordsBase, normalizedMethodRecords } = util;
+    var { kEnumerableProperty, normalizedMethodRecordsBase, normalizedMethodRecords } = util2;
     var { kHeaders, kSignal, kState, kDispatcher } = require_symbols2();
     var { webidl } = require_webidl();
     var { URLSerializer } = require_data_url();
@@ -12997,7 +12997,7 @@ var require_request2 = __commonJS({
               }
             } catch {
             }
-            util.addAbortListener(signal, abort);
+            util2.addAbortListener(signal, abort);
             requestFinalizer.register(ac, { signal, abort }, abort);
           }
         }
@@ -13180,7 +13180,7 @@ var require_request2 = __commonJS({
       }
       get bodyUsed() {
         webidl.brandCheck(this, _Request);
-        return !!this[kState].body && util.isDisturbed(this[kState].body.stream);
+        return !!this[kState].body && util2.isDisturbed(this[kState].body.stream);
       }
       get duplex() {
         webidl.brandCheck(this, _Request);
@@ -13204,7 +13204,7 @@ var require_request2 = __commonJS({
           }
           const acRef = new WeakRef(ac);
           list.add(acRef);
-          util.addAbortListener(
+          util2.addAbortListener(
             ac.signal,
             buildAbort(acRef)
           );
@@ -13458,7 +13458,7 @@ var require_fetch = __commonJS({
       isBlobLike: isBlobLike2,
       sameOrigin,
       isCancelled,
-      isAborted,
+      isAborted: isAborted2,
       isErrorLike,
       fullyReadBody,
       readableStreamClose,
@@ -14291,7 +14291,7 @@ var require_fetch = __commonJS({
           let isFailure;
           try {
             const { done, value } = await fetchParams.controller.next();
-            if (isAborted(fetchParams)) {
+            if (isAborted2(fetchParams)) {
               break;
             }
             bytes = done ? void 0 : value;
@@ -14327,7 +14327,7 @@ var require_fetch = __commonJS({
         }
       };
       function onAborted(reason) {
-        if (isAborted(fetchParams)) {
+        if (isAborted2(fetchParams)) {
           response.aborted = true;
           if (isReadable(stream)) {
             fetchParams.controller.controller.error(
@@ -18705,7 +18705,7 @@ var require_undici = __commonJS({
     var EnvHttpProxyAgent = require_env_http_proxy_agent();
     var RetryAgent = require_retry_agent();
     var errors = require_errors();
-    var util = require_util();
+    var util2 = require_util();
     var { InvalidArgumentError } = errors;
     var api = require_api();
     var buildConnector = require_connect();
@@ -18740,8 +18740,8 @@ var require_undici = __commonJS({
     module2.exports.buildConnector = buildConnector;
     module2.exports.errors = errors;
     module2.exports.util = {
-      parseHeaders: util.parseHeaders,
-      headerNameToString: util.headerNameToString
+      parseHeaders: util2.parseHeaders,
+      headerNameToString: util2.headerNameToString
     };
     function makeDispatcher(fn) {
       return (url, opts, handler) => {
@@ -18763,12 +18763,12 @@ var require_undici = __commonJS({
           if (!opts.path.startsWith("/")) {
             path2 = `/${path2}`;
           }
-          url = new URL(util.parseOrigin(url).origin + path2);
+          url = new URL(util2.parseOrigin(url).origin + path2);
         } else {
           if (!opts) {
             opts = typeof url === "object" ? url : {};
           }
-          url = util.parseURL(url);
+          url = util2.parseURL(url);
         }
         const { agent, dispatcher = getGlobalDispatcher() } = opts;
         if (agent) {
@@ -18854,7 +18854,7 @@ var DEFAULT_SETTINGS = {
   historyLimit: 20,
   graphDepth: 1,
   hubThreshold: 20,
-  timeouts: { ingest: 300, query: 300, lint: 900, fix: 900, init: 3600, format: 600 },
+  timeouts: { ingest: 300, query: 300, lint: 900, init: 3600, format: 600 },
   history: [],
   claudeAgent: {
     model: "sonnet",
@@ -18882,7 +18882,8 @@ var DEFAULT_SETTINGS = {
       lint: { model: "llama3.2", maxTokens: 8192, temperature: 0.2 },
       init: { model: "llama3.2", maxTokens: 8192, temperature: 0.2 },
       format: { model: "llama3.2", maxTokens: 32768, temperature: 0.2 }
-    }
+    },
+    structuredRetries: 1
   },
   devMode: {
     enabled: false,
@@ -18914,7 +18915,7 @@ var en = {
     busyBanner: "Operation in progress \u2014 domain editing is disabled.",
     domains_empty: "No domains. Use 'Add domain' in the sidebar panel to create one.",
     timeouts_name: "Timeouts (seconds)",
-    timeouts_desc: "ingest / query / lint / init",
+    timeouts_desc: "ingest / query / lint / init / format",
     historyLimit_name: "History limit",
     historyLimit_desc: "Maximum operations in the sidebar history.",
     agentLog_name: "Agent log (JSONL)",
@@ -18976,10 +18977,14 @@ var en = {
     graphDepth_name: "BFS depth",
     graphDepth_desc: "Query: hops from seed pages. 0 = seeds only, max sensible: 3.",
     hubThreshold_name: "Hub threshold",
-    hubThreshold_desc: "Lint: pages with more outgoing links than this are flagged as hub nodes."
+    hubThreshold_desc: "Lint: pages with more outgoing links than this are flagged as hub nodes.",
+    structuredRetries_name: "Structured output retries",
+    structuredRetries_desc: "Retries on schema validation failure (0-3, default 1). Higher values improve success rate on weaker models at cost of latency/tokens."
   },
   view: {
     refreshTitle: "Refresh domains",
+    reinitTitle: "Re-init domain (wipe + rebuild)",
+    reinitNoSources: "Domain has no source_paths \u2014 re-init not possible",
     addDomain: "Add domain",
     sectionCreate: "Create",
     sectionDomain: "Fill / Maintain",
@@ -19069,6 +19074,8 @@ var en = {
     addDomainSourcePathsAdd: "+ Add path",
     initConfirmTitle: "Start domain initialization?",
     initConfirmBody: (files, folders) => `Found ${files} .md files in ${folders} folder(s). Run init to analyze sources and create wiki pages?`,
+    reinitConfirmTitle: "Re-init \u2014 confirm",
+    reinitConfirmBody: (id, files, srcCount) => `Domain \xAB${id}\xBB: entire wiki folder will be deleted and rebuilt from ${files} md-files (${srcCount} source paths). Continue?`,
     fileErrorTitle: "Error processing file",
     fileErrorSkip: "Skip",
     fileErrorRetry: "Retry",
@@ -19107,7 +19114,7 @@ var ru = {
     busyBanner: "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0434\u043E\u043C\u0435\u043D\u043E\u0432 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E.",
     domains_empty: "\u0414\u043E\u043C\u0435\u043D\u044B \u043D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u044B. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 '\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D' \u0432 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438.",
     timeouts_name: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442\u044B (\u0441\u0435\u043A\u0443\u043D\u0434\u044B)",
-    timeouts_desc: "ingest / query / lint / init",
+    timeouts_desc: "ingest / query / lint / init / format",
     historyLimit_name: "\u041B\u0438\u043C\u0438\u0442 \u0438\u0441\u0442\u043E\u0440\u0438\u0438",
     historyLimit_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439 \u0432 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438.",
     agentLog_name: "\u041B\u043E\u0433 \u0430\u0433\u0435\u043D\u0442\u0430 (JSONL)",
@@ -19169,10 +19176,14 @@ var ru = {
     graphDepth_name: "\u0413\u043B\u0443\u0431\u0438\u043D\u0430 BFS",
     graphDepth_desc: "Query: \u0448\u0430\u0433\u043E\u0432 \u043E\u0442 seed-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. 0 = \u0442\u043E\u043B\u044C\u043A\u043E seeds, \u0440\u0430\u0437\u0443\u043C\u043D\u044B\u0439 \u043C\u0430\u043A\u0441\u0438\u043C\u0443\u043C: 3.",
     hubThreshold_name: "\u041F\u043E\u0440\u043E\u0433 \u0445\u0430\u0431\u0430",
-    hubThreshold_desc: "Lint: \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0441 \u0431\u043E\u0301\u043B\u044C\u0448\u0438\u043C \u0447\u0438\u0441\u043B\u043E\u043C \u0438\u0441\u0445\u043E\u0434\u044F\u0449\u0438\u0445 \u0441\u0441\u044B\u043B\u043E\u043A \u043F\u043E\u043C\u0435\u0447\u0430\u044E\u0442\u0441\u044F \u043A\u0430\u043A hub."
+    hubThreshold_desc: "Lint: \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0441 \u0431\u043E\u0301\u043B\u044C\u0448\u0438\u043C \u0447\u0438\u0441\u043B\u043E\u043C \u0438\u0441\u0445\u043E\u0434\u044F\u0449\u0438\u0445 \u0441\u0441\u044B\u043B\u043E\u043A \u043F\u043E\u043C\u0435\u0447\u0430\u044E\u0442\u0441\u044F \u043A\u0430\u043A hub.",
+    structuredRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u043F\u0440\u0438 \u043E\u0448\u0438\u0431\u043A\u0435 \u0441\u0445\u0435\u043C\u044B",
+    structuredRetries_desc: "\u0421\u043A\u043E\u043B\u044C\u043A\u043E \u0440\u0430\u0437 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u0432\u044B\u0437\u043E\u0432 LLM \u043F\u0440\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0435 \u043E\u0442\u0432\u0435\u0442\u0430 (0-3, \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 1). \u0412\u044B\u0448\u0435 \u2014 \u043D\u0430\u0434\u0451\u0436\u043D\u0435\u0435 \u043D\u0430 \u0441\u043B\u0430\u0431\u044B\u0445 \u043C\u043E\u0434\u0435\u043B\u044F\u0445, \u0434\u043E\u0440\u043E\u0436\u0435 \u043F\u043E \u0442\u043E\u043A\u0435\u043D\u0430\u043C."
   },
   view: {
     refreshTitle: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D\u044B",
+    reinitTitle: "\u041F\u0435\u0440\u0435\u0438\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F \u0434\u043E\u043C\u0435\u043D\u0430 (wipe + \u0437\u0430\u043D\u043E\u0432\u043E)",
+    reinitNoSources: "\u0423 \u0434\u043E\u043C\u0435\u043D\u0430 \u043D\u0435\u0442 source_paths \u2014 re-init \u043D\u0435\u0432\u043E\u0437\u043C\u043E\u0436\u0435\u043D",
     addDomain: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D",
     sectionCreate: "\u0421\u043E\u0437\u0434\u0430\u043D\u0438\u0435",
     sectionDomain: "\u041D\u0430\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u0435 / \u0410\u043A\u0442\u0443\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F",
@@ -19262,6 +19273,8 @@ var ru = {
     addDomainSourcePathsAdd: "+ \u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043F\u0443\u0442\u044C",
     initConfirmTitle: "\u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C \u0438\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044E \u0434\u043E\u043C\u0435\u043D\u0430?",
     initConfirmBody: (files, folders) => `\u041D\u0430\u0439\u0434\u0435\u043D\u043E ${files} .md \u0444\u0430\u0439\u043B\u043E\u0432 \u0432 ${folders} \u043F\u0430\u043F\u043A\u0430\u0445. \u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C init \u0434\u043B\u044F \u0430\u043D\u0430\u043B\u0438\u0437\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432 \u0438 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446?`,
+    reinitConfirmTitle: "Re-init \u2014 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435",
+    reinitConfirmBody: (id, files, srcCount) => `\u0414\u043E\u043C\u0435\u043D \xAB${id}\xBB: \u0431\u0443\u0434\u0435\u0442 \u0443\u0434\u0430\u043B\u0435\u043D\u0430 \u0432\u0441\u044F \u0432\u0438\u043A\u0438-\u043F\u0430\u043F\u043A\u0430 \u0434\u043E\u043C\u0435\u043D\u0430 \u0438 \u043F\u0435\u0440\u0435\u0441\u043E\u0431\u0440\u0430\u043D\u0430 \u0438\u0437 ${files} md-\u0444\u0430\u0439\u043B\u043E\u0432 (${srcCount} sourcePaths). \u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C?`,
     fileErrorTitle: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u0438 \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u043A\u0435 \u0444\u0430\u0439\u043B\u0430",
     fileErrorSkip: "\u041F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C",
     fileErrorRetry: "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C",
@@ -19300,7 +19313,7 @@ var es = {
     busyBanner: "Operaci\xF3n en curso \u2014 la edici\xF3n de dominios est\xE1 desactivada.",
     domains_empty: "No hay dominios. Use 'A\xF1adir dominio' en el panel lateral.",
     timeouts_name: "Tiempos de espera (segundos)",
-    timeouts_desc: "ingest / query / lint / init",
+    timeouts_desc: "ingest / query / lint / init / format",
     historyLimit_name: "L\xEDmite de historial",
     historyLimit_desc: "M\xE1ximo de operaciones en el historial del panel lateral.",
     agentLog_name: "Log del agente (JSONL)",
@@ -19362,10 +19375,14 @@ var es = {
     graphDepth_name: "Profundidad BFS",
     graphDepth_desc: "Query: saltos desde p\xE1ginas semilla. 0 = solo semillas, m\xE1x recomendado: 3.",
     hubThreshold_name: "Umbral de hub",
-    hubThreshold_desc: "Lint: p\xE1ginas con m\xE1s enlaces salientes que este valor se marcan como hub."
+    hubThreshold_desc: "Lint: p\xE1ginas con m\xE1s enlaces salientes que este valor se marcan como hub.",
+    structuredRetries_name: "Structured output retries",
+    structuredRetries_desc: "Retries on schema validation failure (0-3, default 1). Higher values improve success rate on weaker models at cost of latency/tokens."
   },
   view: {
     refreshTitle: "Actualizar dominios",
+    reinitTitle: "Re-init del dominio (borrar + reconstruir)",
+    reinitNoSources: "El dominio no tiene source_paths \u2014 re-init imposible",
     addDomain: "A\xF1adir dominio",
     sectionCreate: "Crear",
     sectionDomain: "Rellenar / Mantener",
@@ -19455,6 +19472,8 @@ var es = {
     addDomainSourcePathsAdd: "+ A\xF1adir ruta",
     initConfirmTitle: "\xBFIniciar inicializaci\xF3n del dominio?",
     initConfirmBody: (files, folders) => `Se encontraron ${files} archivos .md en ${folders} carpeta(s). \xBFEjecutar init para analizar fuentes y crear p\xE1ginas wiki?`,
+    reinitConfirmTitle: "Re-init \u2014 confirmar",
+    reinitConfirmBody: (id, files, srcCount) => `Dominio \xAB${id}\xBB: se borrar\xE1 toda la carpeta wiki del dominio y se reconstruir\xE1 desde ${files} archivos md (${srcCount} rutas fuente). \xBFContinuar?`,
     fileErrorTitle: "Error al procesar archivo",
     fileErrorSkip: "Saltar",
     fileErrorRetry: "Reintentar",
@@ -19608,46 +19627,22 @@ var DomainModal = class extends import_obsidian2.Modal {
     this.contentEl.empty();
   }
 };
-function attachFolderDropdown(app, inputEl, onSelect) {
-  let dropEl = null;
-  const hideDropdown = () => {
-    dropEl?.remove();
-    dropEl = null;
-  };
-  const showDropdown = (folders) => {
-    hideDropdown();
-    if (!folders.length)
-      return;
-    const rect = inputEl.getBoundingClientRect();
-    dropEl = import_obsidian2.activeDocument.body.createDiv({ cls: "ai-wiki-folder-dropdown" });
-    dropEl.style.top = `${rect.bottom + window.scrollY}px`;
-    dropEl.style.left = `${rect.left + window.scrollX}px`;
-    dropEl.style.width = `${rect.width}px`;
-    for (const folder of folders) {
-      const item = dropEl.createDiv({ cls: "ai-wiki-folder-dropdown-item" });
-      item.setText(folder.path + "/");
-      item.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        hideDropdown();
-        onSelect(folder.path + "/");
-      });
-    }
-  };
-  inputEl.addEventListener("input", () => {
-    const lower = inputEl.value.toLowerCase();
-    if (!lower) {
-      hideDropdown();
-      return;
-    }
-    const matches = app.vault.getAllFolders(true).filter((f) => f.path.toLowerCase().includes(lower)).slice(0, 20);
-    showDropdown(matches);
-  });
-  inputEl.addEventListener("blur", hideDropdown);
-  inputEl.addEventListener("keydown", (e) => {
-    if (e.key === "Escape")
-      hideDropdown();
-  });
-}
+var FolderInputSuggest = class extends import_obsidian2.AbstractInputSuggest {
+  constructor(app, input, onPick) {
+    super(app, input);
+    this.onSelect((folder) => {
+      this.setValue(folder.path + "/");
+      onPick(folder.path + "/");
+    });
+  }
+  getSuggestions(query) {
+    const q = query.toLowerCase();
+    return this.app.vault.getAllFolders(true).filter((f) => f.path.toLowerCase().includes(q)).slice(0, 20);
+  }
+  renderSuggestion(folder, el) {
+    el.setText(folder.path + "/");
+  }
+};
 var AddDomainModal = class extends import_obsidian2.Modal {
   constructor(app, onSubmit) {
     super(app);
@@ -19722,7 +19717,7 @@ var AddDomainModal = class extends import_obsidian2.Modal {
       inputEl.value = "";
       rerender();
     };
-    attachFolderDropdown(this.app, inputEl, addPath);
+    new FolderInputSuggest(this.app, inputEl, addPath);
     inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -19906,7 +19901,7 @@ var EditDomainModal = class extends import_obsidian2.Modal {
       input.value = "";
       rerender();
     };
-    attachFolderDropdown(this.app, input, addPath);
+    new FolderInputSuggest(this.app, input, addPath);
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -19986,6 +19981,13 @@ function resolveEffective(s, l) {
 }
 
 // src/settings.ts
+function parseTimeoutString(v) {
+  const parts = v.split("/").map((x) => Number(x.trim()));
+  if (parts.length === 5 && parts.every((n) => Number.isFinite(n) && n > 0)) {
+    return { ingest: parts[0], query: parts[1], lint: parts[2], init: parts[3], format: parts[4] };
+  }
+  return null;
+}
 var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
@@ -20067,10 +20069,10 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       );
     }
     new import_obsidian3.Setting(containerEl).setName(T.settings.timeouts_name).setDesc(T.settings.timeouts_desc).addText(
-      (t) => t.setValue(`${s.timeouts.ingest}/${s.timeouts.query}/${s.timeouts.lint}/${s.timeouts.init}`).onChange(async (v) => {
-        const parts = v.split("/").map((x) => Number(x.trim()));
-        if (parts.length === 4 && parts.every((n) => Number.isFinite(n) && n > 0)) {
-          s.timeouts = { ingest: parts[0], query: parts[1], lint: parts[2], init: parts[3] };
+      (t) => t.setValue(`${s.timeouts.ingest}/${s.timeouts.query}/${s.timeouts.lint}/${s.timeouts.init}/${s.timeouts.format}`).onChange(async (v) => {
+        const parsed = parseTimeoutString(v);
+        if (parsed) {
+          s.timeouts = { ...s.timeouts, ...parsed };
           await this.plugin.saveSettings();
         }
       })
@@ -20271,6 +20273,15 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           );
         }
       }
+      new import_obsidian3.Setting(containerEl).setName(T.settings.structuredRetries_name).setDesc(T.settings.structuredRetries_desc).addText(
+        (t) => t.setPlaceholder("1").setValue(String(s.nativeAgent.structuredRetries)).onChange(async (v) => {
+          const n = Number(v);
+          if (!Number.isFinite(n) || n < 0 || n > 3)
+            return;
+          s.nativeAgent.structuredRetries = Math.floor(n);
+          await this.plugin.saveSettings();
+        })
+      );
       const proxy = eff.proxy;
       new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
       new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_enabled_name).setDesc(T.settings.proxy_enabled_desc).addToggle(
@@ -20388,8 +20399,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   ingestBtn;
   lintBtn;
   formatBtn;
+  reinitBtn;
   formatPreviewSection = null;
-  fixChatEl = null;
   lastContext = null;
   // Chat state
   chatSection = null;
@@ -20406,11 +20417,14 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   chatStartTs = 0;
   lastUserMessage = "";
   startTs = 0;
+  lastTokPerSec;
+  resultSpeedEl = null;
   toolCount = 0;
   stepCount = 0;
   progressEl = null;
   progressTotal = 0;
   progressDone = 0;
+  progressPhaseEl = null;
   tickHandle = null;
   currentToolStep = null;
   currentToolStartedAt = 0;
@@ -20418,6 +20432,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   assistantBuffer = "";
   reasoningBlock = null;
   reasoningBuffer = "";
+  assistantRafHandle = null;
+  reasoningRafHandle = null;
   getViewType() {
     return AI_WIKI_VIEW_TYPE;
   }
@@ -20448,6 +20464,16 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
       const refreshBtn = domainRow.createEl("button", { text: "\u21BB", attr: { title: T.view.refreshTitle } });
       refreshBtn.addEventListener("click", () => void this.refreshDomains());
+      this.reinitBtn = domainRow.createEl("button", {
+        attr: { title: T.view.reinitTitle }
+      });
+      (0, import_obsidian4.setIcon)(this.reinitBtn, "recycle");
+      this.reinitBtn.disabled = true;
+      this.reinitBtn.addEventListener("click", () => void this.runReinit());
+      this.domainSelect.addEventListener("change", () => {
+        if (this.reinitBtn)
+          this.reinitBtn.disabled = !this.domainSelect.value;
+      });
       const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
       this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
       this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
@@ -20502,6 +20528,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     const resultH4 = resultHeader.createEl("h4", { cls: "ai-wiki-progress-title" });
     this.resultToggle = resultH4.createSpan({ cls: "ai-wiki-progress-arrow", text: "\u25B6" });
     resultH4.appendText(` ${T.view.result}`);
+    this.resultSpeedEl = resultH4.createSpan({ cls: "muted ai-wiki-result-speed" });
     resultHeader.addEventListener("click", () => this.toggleResult());
     this.finalEl = this.resultSection.createDiv("ai-wiki-final ai-wiki-hidden");
     registerLinkHandler(this.finalEl, this.app);
@@ -20523,6 +20550,14 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       window.clearTimeout(this.tickHandle);
     if (this.chatTickHandle !== null)
       window.clearTimeout(this.chatTickHandle);
+    if (this.assistantRafHandle !== null) {
+      window.cancelAnimationFrame(this.assistantRafHandle);
+      this.assistantRafHandle = null;
+    }
+    if (this.reasoningRafHandle !== null) {
+      window.cancelAnimationFrame(this.reasoningRafHandle);
+      this.reasoningRafHandle = null;
+    }
     if (this.plugin.controller.isBusy()) {
       new BusyCloseModal(this.app, () => this.plugin.controller.cancelCurrent()).open();
     }
@@ -20545,6 +20580,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     if (previous && Array.from(this.domainSelect.options).some((o) => o.value === previous)) {
       this.domainSelect.value = previous;
     }
+    if (this.reinitBtn)
+      this.reinitBtn.disabled = !this.domainSelect.value;
   }
   openAddDomain() {
     const cwd = this.plugin.controller.cwdOrEmpty();
@@ -20582,6 +20619,38 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       })();
     }).open();
   }
+  async runReinit() {
+    if (!this.domainSelect)
+      return;
+    const domainId = this.domainSelect.value;
+    if (!domainId)
+      return;
+    let entry;
+    try {
+      const domains = await this.plugin.controller.loadDomains();
+      entry = domains.find((d) => d.id === domainId);
+    } catch {
+      return;
+    }
+    if (!entry)
+      return;
+    const sourcePaths = entry.source_paths ?? [];
+    if (sourcePaths.length === 0) {
+      new import_obsidian4.Notice(i18n().view.reinitNoSources);
+      return;
+    }
+    const T = i18n().modal;
+    const mdFiles = this.app.vault.getFiles().filter(
+      (f) => f.extension === "md" && sourcePaths.some((p) => f.path.startsWith(p))
+    );
+    const body = T.reinitConfirmBody(entry.id, mdFiles.length, sourcePaths.length);
+    new ConfirmModal(
+      this.app,
+      T.reinitConfirmTitle,
+      [body],
+      () => void this.plugin.controller.init(entry.id, false, sourcePaths, true)
+    ).open();
+  }
   submitQuery(save) {
     const q = this.queryInput.value.trim();
     if (!q) {
@@ -20611,8 +20680,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.lintBtn.disabled = true;
     if (this.formatBtn)
       this.formatBtn.disabled = true;
-    this.fixChatEl?.remove();
-    this.fixChatEl = null;
+    if (this.reinitBtn)
+      this.reinitBtn.disabled = true;
     this.chatSection?.remove();
     this.chatSection = null;
     this.lastContext = null;
@@ -20624,6 +20693,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.toolCount = 0;
     this.stepCount = 0;
     this.progressEl = null;
+    this.progressPhaseEl = null;
     this.progressTotal = 0;
     this.progressDone = 0;
     this.currentToolStep = null;
@@ -20631,6 +20701,16 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.assistantBuffer = "";
     this.reasoningBlock = null;
     this.reasoningBuffer = "";
+    if (this.assistantRafHandle !== null) {
+      window.cancelAnimationFrame(this.assistantRafHandle);
+      this.assistantRafHandle = null;
+    }
+    if (this.reasoningRafHandle !== null) {
+      window.cancelAnimationFrame(this.reasoningRafHandle);
+      this.reasoningRafHandle = null;
+    }
+    this.lastTokPerSec = void 0;
+    this.resultSpeedEl?.setText("");
     this.stepsOpen = true;
     this.stepsEl.removeClass("ai-wiki-hidden");
     this.progressToggle.setText("\u25BC");
@@ -20654,10 +20734,21 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     if (ev.kind === "init_start") {
       this.progressTotal = ev.totalFiles;
       this.progressDone = 0;
-      const step = this.stepsEl.createDiv("ai-wiki-step ai-wiki-progress");
-      step.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F4C2}");
-      this.progressEl = step.createSpan({ cls: "ai-wiki-progress-text" });
-      this.progressEl.setText(`0 / ${ev.totalFiles} \u0444\u0430\u0439\u043B\u043E\u0432`);
+      if (this.progressEl) {
+        this.progressEl.setText(`0 / ${ev.totalFiles} \u0444\u0430\u0439\u043B\u043E\u0432`);
+        if (this.progressPhaseEl) {
+          const label = ev.phase === "ingest" ? "Ingesting files\u2026" : "Analysing files\u2026";
+          this.progressPhaseEl.setText(label);
+        }
+      } else {
+        const step = this.stepsEl.createDiv("ai-wiki-step ai-wiki-progress");
+        step.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F4C2}");
+        const label = ev.phase === "ingest" ? "Ingesting files\u2026" : "Analysing files\u2026";
+        this.progressPhaseEl = step.createSpan({ cls: "ai-wiki-progress-phase" });
+        this.progressPhaseEl.setText(label);
+        this.progressEl = step.createSpan({ cls: "ai-wiki-progress-text" });
+        this.progressEl.setText(`0 / ${ev.totalFiles} \u0444\u0430\u0439\u043B\u043E\u0432`);
+      }
       this.scrollSteps();
       return;
     }
@@ -20686,13 +20777,22 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       void this.refreshDomains();
       return;
     }
-    this.stepCount++;
+    if (ev.kind !== "assistant_text")
+      this.stepCount++;
     if (ev.kind === "tool_use") {
       this.toolCount++;
       this.assistantBlock = null;
       this.assistantBuffer = "";
       this.reasoningBlock = null;
       this.reasoningBuffer = "";
+      if (this.assistantRafHandle !== null) {
+        window.cancelAnimationFrame(this.assistantRafHandle);
+        this.assistantRafHandle = null;
+      }
+      if (this.reasoningRafHandle !== null) {
+        window.cancelAnimationFrame(this.reasoningRafHandle);
+        this.reasoningRafHandle = null;
+      }
       const step = this.stepsEl.createDiv("ai-wiki-step");
       const head = step.createDiv("ai-wiki-step-head");
       head.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F527}");
@@ -20734,9 +20834,15 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
           this.reasoningBlock.createSpan({ cls: "ai-wiki-reasoning-text" });
         }
         this.reasoningBuffer += ev.delta;
-        const span = this.reasoningBlock.querySelector(".ai-wiki-reasoning-text");
-        if (span)
-          span.setText(truncate(this.reasoningBuffer, ASSISTANT_TEXT_MAX));
+        if (!this.reasoningRafHandle) {
+          this.reasoningRafHandle = window.requestAnimationFrame(() => {
+            this.reasoningRafHandle = null;
+            const span = this.reasoningBlock?.querySelector(".ai-wiki-reasoning-text");
+            if (span)
+              span.setText(truncate(this.reasoningBuffer, ASSISTANT_TEXT_MAX));
+            this.scrollSteps();
+          });
+        }
       } else {
         if (!this.assistantBlock) {
           this.assistantBlock = this.stepsEl.createDiv("ai-wiki-step assistant");
@@ -20744,11 +20850,16 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
           this.assistantBlock.createSpan({ cls: "ai-wiki-assistant-text" });
         }
         this.assistantBuffer += ev.delta;
-        const span = this.assistantBlock.querySelector(".ai-wiki-assistant-text");
-        if (span)
-          span.setText(truncate(this.assistantBuffer, ASSISTANT_TEXT_MAX));
+        if (!this.assistantRafHandle) {
+          this.assistantRafHandle = window.requestAnimationFrame(() => {
+            this.assistantRafHandle = null;
+            const span = this.assistantBlock?.querySelector(".ai-wiki-assistant-text");
+            if (span)
+              span.setText(truncate(this.assistantBuffer, ASSISTANT_TEXT_MAX));
+            this.scrollSteps();
+          });
+        }
       }
-      this.scrollSteps();
     } else if (ev.kind === "system") {
       const step = this.stepsEl.createDiv("ai-wiki-step");
       const head = step.createDiv("ai-wiki-step-head");
@@ -20760,6 +20871,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.scrollSteps();
     } else if (ev.kind === "result") {
       this.assistantBlock = null;
+      if (ev.outputTokens !== void 0 && ev.durationMs > 0) {
+        this.lastTokPerSec = Math.round(ev.outputTokens / (ev.durationMs / 1e3));
+      }
     } else if (ev.kind === "eval_result") {
       const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
       el.setText(`[eval: ${ev.score}/10] ${ev.reasoning}`);
@@ -20834,13 +20948,14 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.ingestBtn.disabled = false;
     this.lintBtn.disabled = false;
     this.formatBtn.disabled = false;
-    this.fixChatEl?.remove();
-    this.fixChatEl = null;
+    if (this.reinitBtn)
+      this.reinitBtn.disabled = !(this.domainSelect && this.domainSelect.value);
     if (this.tickHandle !== null) {
       window.clearTimeout(this.tickHandle);
       this.tickHandle = null;
     }
     this.updateMetrics();
+    this.resultSpeedEl?.setText(this.lastTokPerSec !== void 0 ? ` ${this.lastTokPerSec} tok/s` : "");
     this.finalEl.empty();
     if (entry.finalText) {
       const comp = new import_obsidian4.Component();
@@ -21190,7 +21305,7 @@ function translateSystemEvent(message) {
 
 // src/controller.ts
 var import_obsidian7 = require("obsidian");
-var import_path_browserify7 = __toESM(require_path_browserify(), 1);
+var import_path_browserify6 = __toESM(require_path_browserify(), 1);
 
 // src/source-paths.ts
 var import_path_browserify = __toESM(require_path_browserify(), 1);
@@ -21209,6 +21324,17 @@ function consolidateSourcePaths(existing, newPath, vaultRoot) {
 }
 
 // src/domain.ts
+function migrateDomainsV2(domains) {
+  let migrated = false;
+  for (const d of domains) {
+    if (d.analyzed_sources !== void 0 && !d.analyzed_sources_v2) {
+      d.analyzed_sources = [];
+      d.analyzed_sources_v2 = true;
+      migrated = true;
+    }
+  }
+  return { domains, migrated };
+}
 function validateDomainId(id) {
   if (!id)
     return "ID \u0434\u043E\u043C\u0435\u043D\u0430 \u043F\u0443\u0441\u0442";
@@ -21253,15 +21379,45 @@ var import_path_browserify2 = __toESM(require_path_browserify(), 1);
 var base_default = "\u0422\u044B \u2014 wiki-\u0430\u0433\u0435\u043D\u0442. \u0421\u043B\u0435\u0434\u0443\u0439 \u044D\u0442\u0438\u043C \u043F\u0440\u0430\u0432\u0438\u043B\u0430\u043C \u043D\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043C\u043E \u043E\u0442 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.\n\n## \u0414\u043E\u0441\u0442\u043E\u0432\u0435\u0440\u043D\u043E\u0441\u0442\u044C\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430.\n\u041D\u0435 \u0432\u044B\u0434\u0443\u043C\u044B\u0432\u0430\u0439 \u0444\u0430\u043A\u0442\u044B, \u043A\u043E\u0442\u043E\u0440\u044B\u0445 \u043D\u0435\u0442 \u0432 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0435.\n\u0415\u0441\u043B\u0438 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E \u2014 \u0441\u043A\u0430\u0436\u0438 \u043E\u0431 \u044D\u0442\u043E\u043C \u043F\u0440\u044F\u043C\u043E.\n\n## \u0424\u043E\u0440\u043C\u0430\u0442\n\u0412\u043E\u0437\u0432\u0440\u0430\u0449\u0430\u0439 \u0440\u043E\u0432\u043D\u043E \u0442\u043E, \u0447\u0442\u043E \u0437\u0430\u043F\u0440\u043E\u0448\u0435\u043D\u043E.\n\u0415\u0441\u043B\u0438 \u043E\u0436\u0438\u0434\u0430\u0435\u0442\u0441\u044F JSON \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON, \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439 \u0432\u043E\u043A\u0440\u0443\u0433.\n\u0415\u0441\u043B\u0438 \u043E\u0436\u0438\u0434\u0430\u0435\u0442\u0441\u044F \u0442\u0435\u043A\u0441\u0442 \u2014 \u0431\u0435\u0437 \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u043C\u0435\u0442\u043E\u043A \u0438 \u0442\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0445 \u0430\u0440\u0442\u0435\u0444\u0430\u043A\u0442\u043E\u0432.\n\n## \u041C\u0438\u043D\u0438\u043C\u0430\u043B\u0438\u0437\u043C\n\u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u0442\u043E, \u043E \u0447\u0451\u043C \u043D\u0435 \u043F\u0440\u043E\u0441\u0438\u043B\u0438.\n\u041D\u0435 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0438\u0440\u0443\u0439 \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u044B\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F, \u0435\u0441\u043B\u0438 \u044D\u0442\u043E \u043D\u0435 \u0447\u0430\u0441\u0442\u044C \u0437\u0430\u0434\u0430\u0447\u0438.\n";
 
 // src/phases/llm-utils.ts
+function stripThinking(text) {
+  return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+}
+function parseStructured(fullText) {
+  const text = fullText.trim();
+  try {
+    return JSON.parse(text);
+  } catch {
+  }
+  const stripped = stripFences(stripThinking(text));
+  try {
+    return JSON.parse(stripped);
+  } catch {
+  }
+  const match = stripped.match(/\{[\s\S]*\}/);
+  if (!match)
+    throw new Error("No JSON object found");
+  return JSON.parse(match[0]);
+}
+function stripFences(text) {
+  const fenced = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/i);
+  return fenced ? fenced[1].trim() : text;
+}
 function extractStreamDeltas(chunk) {
   const delta = chunk.choices[0]?.delta;
   const rawReasoning = delta?.reasoning;
+  const usage = chunk.usage;
+  const outputTokens = typeof usage?.completion_tokens === "number" ? usage.completion_tokens : void 0;
   return {
     reasoning: typeof rawReasoning === "string" ? rawReasoning : "",
-    content: typeof delta?.content === "string" ? delta.content : ""
+    content: typeof delta?.content === "string" ? delta.content : "",
+    outputTokens
   };
 }
-function buildChatParams(model, messages, opts) {
+function extractUsage(resp) {
+  const tok = resp.usage?.completion_tokens;
+  return typeof tok === "number" ? tok : void 0;
+}
+function buildChatParams(model, messages, opts, stream = false) {
   let msgs = prependBaseContract(messages);
   msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
   const params = { model, messages: msgs };
@@ -21273,6 +21429,11 @@ function buildChatParams(model, messages, opts) {
     params.top_p = opts.topP;
   if (opts.numCtx != null)
     params.num_ctx = opts.numCtx;
+  if (stream)
+    params.stream_options = { include_usage: true };
+  if (opts.jsonMode === "json_object") {
+    params.response_format = { type: "json_object" };
+  }
   return params;
 }
 function prependBaseContract(messages) {
@@ -21286,6 +21447,73 @@ ${existing}` };
     return updated;
   }
   return [{ role: "system", content: base_default }, ...messages];
+}
+var JSON_MODE_KEYWORDS = ["response_format", "json_object", "json mode", "unsupported"];
+function isJsonModeError(e) {
+  if (!e || typeof e !== "object")
+    return false;
+  const status = e.status;
+  if (status !== 400 && status !== 422)
+    return false;
+  const msg = String(e.message ?? "").toLowerCase();
+  return JSON_MODE_KEYWORDS.some((kw) => msg.includes(kw));
+}
+function hasContentDelta(chunk) {
+  const c = chunk.choices?.[0]?.delta?.content;
+  return typeof c === "string" && c.length > 0;
+}
+function stripResponseFormat(params) {
+  const next = { ...params };
+  delete next.response_format;
+  return next;
+}
+function wrapWithJsonFallback(inner) {
+  const create = (params, callOpts) => {
+    const hasRf = params.response_format !== void 0;
+    const isStream = params.stream === true;
+    if (!hasRf) {
+      return inner.chat.completions.create(params, callOpts);
+    }
+    if (!isStream) {
+      return (async () => {
+        try {
+          return await inner.chat.completions.create(params, callOpts);
+        } catch (e) {
+          if (!isJsonModeError(e))
+            throw e;
+          return inner.chat.completions.create(stripResponseFormat(params), callOpts);
+        }
+      })();
+    }
+    return (async () => {
+      let upstream;
+      try {
+        upstream = await inner.chat.completions.create(params, callOpts);
+      } catch (e) {
+        if (!isJsonModeError(e))
+          throw e;
+        return inner.chat.completions.create(stripResponseFormat(params), callOpts);
+      }
+      async function* gated() {
+        let seenContent = false;
+        try {
+          for await (const chunk of upstream) {
+            if (hasContentDelta(chunk))
+              seenContent = true;
+            yield chunk;
+          }
+        } catch (e) {
+          if (seenContent || !isJsonModeError(e))
+            throw e;
+          const retry = await inner.chat.completions.create(stripResponseFormat(params), callOpts);
+          for await (const c of retry)
+            yield c;
+        }
+      }
+      return gated();
+    })();
+  };
+  return { chat: { completions: { create } } };
 }
 function injectSystemPrompt(messages, systemPrompt) {
   if (!systemPrompt)
@@ -21305,7 +21533,7 @@ ${section}` };
 }
 
 // prompts/ingest.md
-var ingest_default = '\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0441\u0438\u043D\u0442\u0435\u0437\u0430 wiki-\u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0418\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439/\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n\n\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:\n{{entity_types_block}}\n{{lang_notes}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- CREATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 wiki, \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 >= min_mentions_for_page\n- UPDATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2192 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E, \u041D\u0415 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E\n- SKIP: \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u043E \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0435\u0441\u0442\u044C\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043A\u043E\u043D\u0444\u0438\u0433\u0438/SQL \u043C\u043E\u0436\u043D\u043E \u0446\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445.\n- \u041F\u0443\u0442\u044C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0434\u043E\u043B\u0436\u0435\u043D \u043D\u0430\u0447\u0438\u043D\u0430\u0442\u044C\u0441\u044F \u0441 "{{wiki_path}}/"\n- Frontmatter \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- wiki_sources: \u043A\u0430\u0436\u0434\u044B\u0439 \u044D\u043B\u0435\u043C\u0435\u043D\u0442 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 [[path/to/source]], \u0442\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 Links \u0432 Obsidian\n- \u0420\u0430\u0437\u0434\u0435\u043B "## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438" \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D \u0434\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0444\u0438\u043A\u0441\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 "## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439" \u0441 \u0434\u0430\u0442\u043E\u0439 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u043C\n- "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438" \u2014 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043A \u0441\u0432\u044F\u0437\u044F\u043C\n{{schema_block}}\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432, \u0431\u0435\u0437 \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n[{"path":"{{wiki_path}}/EntityName.md","content":"---\\nwiki_sources: [\\"[[{{source_path}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncont\u0435\u043D\u0442..."}]\n';
+var ingest_default = '\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0441\u0438\u043D\u0442\u0435\u0437\u0430 wiki-\u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0418\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439/\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n\n\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:\n{{entity_types_block}}\n{{lang_notes}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- CREATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 wiki, \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 >= min_mentions_for_page\n- UPDATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2192 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E, \u041D\u0415 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E\n- SKIP: \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u043E \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0435\u0441\u0442\u044C\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043A\u043E\u043D\u0444\u0438\u0433\u0438/SQL \u043C\u043E\u0436\u043D\u043E \u0446\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445.\n- \u041F\u0443\u0442\u044C \u0441\u0442\u0430\u0442\u044C\u0438 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u0435\u0442\u0441\u044F \u0442\u0438\u043F\u043E\u043C \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u2014 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u043E\u0447\u043D\u044B\u0439 \u0448\u0430\u0431\u043B\u043E\u043D \u0438\u0437 \u0441\u0435\u043A\u0446\u0438\u0438 \xAB\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410\xBB (\u0432\u044B\u0448\u0435, \u0434\u043E \u0431\u043B\u043E\u043A\u0430 \u041F\u0420\u0410\u0412\u0418\u041B\u0410), \u043F\u043E\u0434\u0441\u0442\u0430\u0432\u0438\u0432 \u0438\u043C\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0432\u043C\u0435\u0441\u0442\u043E <EntityName>\n- \u0415\u0441\u043B\u0438 \u0442\u0438\u043F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u043D\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0451\u043D \u0438\u043B\u0438 \u0443 \u0434\u043E\u043C\u0435\u043D\u0430 \u043D\u0435\u0442 entity_types \u2192 \u043F\u0443\u0442\u044C \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E: {{wiki_path}}/<EntityName>.md\n- Frontmatter \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- wiki_sources: \u043A\u0430\u0436\u0434\u044B\u0439 \u044D\u043B\u0435\u043C\u0435\u043D\u0442 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 [[path/to/source]], \u0442\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 Links \u0432 Obsidian\n- \u0420\u0430\u0437\u0434\u0435\u043B "## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438" \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D \u0434\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0444\u0438\u043A\u0441\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 "## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439" \u0441 \u0434\u0430\u0442\u043E\u0439 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u043C\n- "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438" \u2014 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043A \u0441\u0432\u044F\u0437\u044F\u043C\n{{schema_block}}\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432, \u0431\u0435\u0437 \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n[{"path":"{{wiki_path}}/EntityName.md","content":"---\\nwiki_sources: [\\"[[{{source_path}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncont\u0435\u043D\u0442..."}]\n';
 
 // src/phases/template.ts
 function render(template, vars) {
@@ -21428,10 +21656,11 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
     return;
   }
-  const wikiRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
+  const domainRoot = wikiVaultPath;
+  const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${wikiRoot}/_wiki_schema.md`),
-    tryRead(vaultTools, `${wikiRoot}/_index.md`)
+    tryRead(vaultTools, `${schemaRoot}/_wiki_schema.md`),
+    tryRead(vaultTools, `${domainRoot}/_index.md`)
   ]);
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
   const existingPages = await vaultTools.readAll(existingPaths.filter((f) => !f.endsWith("_index.md")));
@@ -21447,19 +21676,22 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     schemaContent,
     indexContent
   );
-  const params = buildChatParams(model, messages, opts);
+  const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
+  let outputTokens = 0;
   try {
     const stream = await llm.chat.completions.create(
       { ...params, stream: true },
       { signal }
     );
     for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
+      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (reasoning)
         yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
       if (content)
         fullText += content;
+      if (tok !== void 0)
+        outputTokens += tok;
     }
   } catch (e) {
     if (signal.aborted || e.name === "AbortError")
@@ -21468,6 +21700,9 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
       { ...params, stream: false }
     );
     fullText = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp);
+    if (tok !== void 0)
+      outputTokens += tok;
   }
   if (signal.aborted)
     return;
@@ -21491,8 +21726,8 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   const resultText = buildIngestSummary(domain.id, sourceVaultPath, written, pages.length);
   yield { kind: "assistant_text", delta: resultText };
   if (written.length > 0) {
-    await appendLog(vaultTools, wikiRoot, sourceVaultPath, domain.id, written);
-    await updateIndex(vaultTools, wikiRoot, written);
+    await appendLog(vaultTools, domainRoot, sourceVaultPath, domain.id, written);
+    await updateIndex(vaultTools, domainRoot, written);
     const backlinkToday = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
     const existingArticles = parseWikiArticlesFromFm(sourceContent);
@@ -21513,7 +21748,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     const parentPath = extractParentSourcePath(absSource, vaultRoot);
     yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
   }
-  yield { kind: "result", durationMs: Date.now() - start, text: resultText };
+  yield { kind: "result", durationMs: Date.now() - start, text: resultText, outputTokens: outputTokens || void 0 };
 }
 function buildIngestSummary(domainId, sourcePath, written, total) {
   const src = sourcePath.split("/").pop() ?? sourcePath;
@@ -21597,22 +21832,26 @@ function extractParentSourcePath(absSource, vaultRoot) {
   const rel = (0, import_path_browserify2.relative)(vaultRoot, clamped);
   return (rel || ".") + "/";
 }
-function buildEntityTypesBlock(domain) {
+function buildEntityTypesBlock(domain, wikiVaultPath) {
   if (!domain.entity_types?.length)
     return "";
-  return domain.entity_types.map((et) => [
-    `### \u0422\u0438\u043F: ${et.type}`,
-    `\u041E\u043F\u0438\u0441\u0430\u043D\u0438\u0435: ${et.description}`,
-    `\u041A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430: ${et.extraction_cues.join(", ")}`,
-    et.min_mentions_for_page != null ? `\u041C\u0438\u043D. \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B: ${et.min_mentions_for_page}` : "",
-    et.wiki_subfolder ? `\u041F\u043E\u0434\u043F\u0430\u043F\u043A\u0430 \u0432 wiki: ${et.wiki_subfolder}` : ""
-  ].filter(Boolean).join("\n")).join("\n\n");
+  return domain.entity_types.map((et) => {
+    const pathTemplate = et.wiki_subfolder ? `${wikiVaultPath}/${et.wiki_subfolder}/<EntityName>.md` : `${wikiVaultPath}/<EntityName>.md`;
+    return [
+      `### \u0422\u0438\u043F: ${et.type}`,
+      `\u041E\u043F\u0438\u0441\u0430\u043D\u0438\u0435: ${et.description}`,
+      `\u041A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430: ${et.extraction_cues.join(", ")}`,
+      et.min_mentions_for_page != null ? `\u041C\u0438\u043D. \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B: ${et.min_mentions_for_page}` : "",
+      et.wiki_subfolder ? `\u041F\u043E\u0434\u043F\u0430\u043F\u043A\u0430 \u0432 wiki: ${et.wiki_subfolder}` : "",
+      `\u041F\u0443\u0442\u044C \u0434\u043B\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0435\u0439 \u044D\u0442\u043E\u0433\u043E \u0442\u0438\u043F\u0430: ${pathTemplate}`
+    ].filter(Boolean).join("\n");
+  }).join("\n\n");
 }
 function buildIngestMessages(sourcePath, sourceContent, domain, wikiVaultPath, existingPages, schemaContent, indexContent) {
   const existing = existingPages.size > 0 ? [...existingPages.entries()].map(([p, c]) => `${p}:
-${c.slice(0, 400)}`).join("\n\n") : "\u041D\u0435\u0442.";
+${c}`).join("\n\n") : "\u041D\u0435\u0442.";
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const entityTypesBlock = buildEntityTypesBlock(domain);
+  const entityTypesBlock = buildEntityTypesBlock(domain, wikiVaultPath);
   const langNotes = domain.language_notes ? `\u042F\u0437\u044B\u043A\u043E\u0432\u044B\u0435 \u043F\u0440\u0430\u0432\u0438\u043B\u0430: ${domain.language_notes}` : "";
   const systemContent = render(ingest_default, {
     domain_name: domain.name,
@@ -21621,7 +21860,7 @@ ${c.slice(0, 400)}`).join("\n\n") : "\u041D\u0435\u0442.";
     wiki_path: wikiVaultPath,
     today,
     schema_block: schemaContent ? `\u041A\u041E\u041D\u0412\u0415\u041D\u0426\u0418\u0418 (_wiki_schema.md):
-${schemaContent.slice(0, 2e3)}` : "",
+${schemaContent}` : "",
     source_path: sourcePath
   });
   return [
@@ -21633,17 +21872,4256 @@ ${schemaContent.slice(0, 2e3)}` : "",
         `Wiki-\u043F\u0430\u043F\u043A\u0430: ${wikiVaultPath}`,
         ``,
         `\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A: ${sourcePath}`,
-        sourceContent.slice(0, 8e3),
+        sourceContent,
         ``,
         `\u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B:
 ${existing}`,
         indexContent ? `
 \u0418\u043D\u0434\u0435\u043A\u0441 wiki (_index.md):
-${indexContent.slice(0, 2e3)}` : ""
+${indexContent}` : ""
       ].filter(Boolean).join("\n")
     }
   ];
 }
+
+// src/structural-error-counter.ts
+var Counter = class {
+  stats = { failed: 0, retried: 0, ok: 0 };
+  listeners = /* @__PURE__ */ new Set();
+  record(succeeded, retryAttempt) {
+    if (succeeded === null)
+      return;
+    if (!succeeded)
+      this.stats.failed++;
+    else if (retryAttempt > 0)
+      this.stats.retried++;
+    else
+      this.stats.ok++;
+    const snap = { ...this.stats };
+    for (const fn of this.listeners)
+      fn(snap);
+  }
+  subscribe(fn) {
+    this.listeners.add(fn);
+    return () => {
+      this.listeners.delete(fn);
+    };
+  }
+  get() {
+    return { ...this.stats };
+  }
+  reset() {
+    this.stats = { failed: 0, retried: 0, ok: 0 };
+  }
+};
+var structuralErrorCounter = new Counter();
+
+// src/phases/parse-with-retry.ts
+var StructuredValidationError = class extends Error {
+  constructor(callSite, attempts, lastError) {
+    super(`[${callSite}] structural validation failed after ${attempts} attempt(s): ${lastError.message}`);
+    this.callSite = callSite;
+    this.attempts = attempts;
+    this.lastError = lastError;
+    this.name = "StructuredValidationError";
+  }
+};
+function formatZodFeedback(err, raw) {
+  if (err === null) {
+    return [
+      "Previous response was not valid JSON.",
+      `Raw output (truncated):`,
+      raw.slice(0, 2e3),
+      "",
+      "Return ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary."
+    ].join("\n");
+  }
+  const bullets = err.issues.slice(0, 20).map((i) => {
+    const path2 = i.path.length ? i.path.join(".") : "(root)";
+    return `- ${path2}: ${i.message}`;
+  }).join("\n");
+  return [
+    "Previous response failed validation:",
+    bullets,
+    "",
+    "Return ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary."
+  ].join("\n");
+}
+async function streamOnce(llm, model, messages, opts, signal) {
+  const params = buildChatParams(model, messages, opts, true);
+  let fullText = "";
+  let outputTokens = 0;
+  try {
+    const stream = await llm.chat.completions.create(
+      { ...params, stream: true },
+      { signal }
+    );
+    for await (const chunk of stream) {
+      const { content, outputTokens: tok } = extractStreamDeltas(chunk);
+      if (content)
+        fullText += content;
+      if (tok !== void 0)
+        outputTokens += tok;
+    }
+    return { fullText, outputTokens };
+  } catch (e) {
+    if (signal.aborted || e.name === "AbortError")
+      throw e;
+    const params2 = buildChatParams(model, messages, opts);
+    const resp = await llm.chat.completions.create(
+      { ...params2, stream: false },
+      { signal }
+    );
+    const text = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp);
+    return { fullText: text, outputTokens: tok ?? 0 };
+  }
+}
+async function parseWithRetry(args) {
+  const { llm, model, baseMessages, opts, schema, maxRetries, callSite, signal, onEvent } = args;
+  let messages = baseMessages;
+  let totalTokens = 0;
+  let lastError = new Error("no attempts");
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (signal.aborted) {
+      const err = new Error("aborted");
+      err.name = "AbortError";
+      throw err;
+    }
+    const { fullText, outputTokens } = await streamOnce(llm, model, messages, opts, signal);
+    totalTokens += outputTokens;
+    let raw;
+    try {
+      raw = parseStructured(fullText);
+    } catch (e) {
+      lastError = e;
+      const isLast2 = attempt === maxRetries;
+      const ev2 = {
+        kind: "structural_error",
+        callSite,
+        errorType: "json_parse",
+        retryAttempt: attempt,
+        succeeded: isLast2 ? false : null,
+        message: lastError.message
+      };
+      onEvent(ev2);
+      structuralErrorCounter.record(ev2.succeeded, attempt);
+      if (isLast2)
+        throw new StructuredValidationError(callSite, attempt + 1, lastError);
+      const feedback2 = formatZodFeedback(null, fullText);
+      messages = [
+        ...messages,
+        { role: "assistant", content: fullText },
+        { role: "user", content: feedback2 }
+      ];
+      continue;
+    }
+    const parsed = schema.safeParse(raw);
+    if (parsed.success) {
+      if (attempt > 0) {
+        const ev2 = {
+          kind: "structural_error",
+          callSite,
+          errorType: "schema_validate",
+          retryAttempt: attempt,
+          succeeded: true,
+          message: "retry succeeded"
+        };
+        onEvent(ev2);
+      }
+      structuralErrorCounter.record(true, attempt);
+      return { value: parsed.data, outputTokens: totalTokens, fullText };
+    }
+    lastError = parsed.error;
+    const isLast = attempt === maxRetries;
+    const feedback = formatZodFeedback(parsed.error, fullText);
+    const ev = {
+      kind: "structural_error",
+      callSite,
+      errorType: "schema_validate",
+      retryAttempt: attempt,
+      succeeded: isLast ? false : null,
+      message: feedback
+    };
+    onEvent(ev);
+    structuralErrorCounter.record(ev.succeeded, attempt);
+    if (isLast)
+      throw new StructuredValidationError(callSite, attempt + 1, lastError);
+    messages = [
+      ...messages,
+      { role: "assistant", content: fullText },
+      { role: "user", content: feedback }
+    ];
+  }
+  throw new StructuredValidationError(callSite, maxRetries + 1, lastError);
+}
+
+// node_modules/zod/v3/external.js
+var external_exports = {};
+__export(external_exports, {
+  BRAND: () => BRAND,
+  DIRTY: () => DIRTY,
+  EMPTY_PATH: () => EMPTY_PATH,
+  INVALID: () => INVALID,
+  NEVER: () => NEVER,
+  OK: () => OK,
+  ParseStatus: () => ParseStatus,
+  Schema: () => ZodType,
+  ZodAny: () => ZodAny,
+  ZodArray: () => ZodArray,
+  ZodBigInt: () => ZodBigInt,
+  ZodBoolean: () => ZodBoolean,
+  ZodBranded: () => ZodBranded,
+  ZodCatch: () => ZodCatch,
+  ZodDate: () => ZodDate,
+  ZodDefault: () => ZodDefault,
+  ZodDiscriminatedUnion: () => ZodDiscriminatedUnion,
+  ZodEffects: () => ZodEffects,
+  ZodEnum: () => ZodEnum,
+  ZodError: () => ZodError,
+  ZodFirstPartyTypeKind: () => ZodFirstPartyTypeKind,
+  ZodFunction: () => ZodFunction,
+  ZodIntersection: () => ZodIntersection,
+  ZodIssueCode: () => ZodIssueCode,
+  ZodLazy: () => ZodLazy,
+  ZodLiteral: () => ZodLiteral,
+  ZodMap: () => ZodMap,
+  ZodNaN: () => ZodNaN,
+  ZodNativeEnum: () => ZodNativeEnum,
+  ZodNever: () => ZodNever,
+  ZodNull: () => ZodNull,
+  ZodNullable: () => ZodNullable,
+  ZodNumber: () => ZodNumber,
+  ZodObject: () => ZodObject,
+  ZodOptional: () => ZodOptional,
+  ZodParsedType: () => ZodParsedType,
+  ZodPipeline: () => ZodPipeline,
+  ZodPromise: () => ZodPromise,
+  ZodReadonly: () => ZodReadonly,
+  ZodRecord: () => ZodRecord,
+  ZodSchema: () => ZodType,
+  ZodSet: () => ZodSet,
+  ZodString: () => ZodString,
+  ZodSymbol: () => ZodSymbol,
+  ZodTransformer: () => ZodEffects,
+  ZodTuple: () => ZodTuple,
+  ZodType: () => ZodType,
+  ZodUndefined: () => ZodUndefined,
+  ZodUnion: () => ZodUnion,
+  ZodUnknown: () => ZodUnknown,
+  ZodVoid: () => ZodVoid,
+  addIssueToContext: () => addIssueToContext,
+  any: () => anyType,
+  array: () => arrayType,
+  bigint: () => bigIntType,
+  boolean: () => booleanType,
+  coerce: () => coerce,
+  custom: () => custom,
+  date: () => dateType,
+  datetimeRegex: () => datetimeRegex,
+  defaultErrorMap: () => en_default,
+  discriminatedUnion: () => discriminatedUnionType,
+  effect: () => effectsType,
+  enum: () => enumType,
+  function: () => functionType,
+  getErrorMap: () => getErrorMap,
+  getParsedType: () => getParsedType,
+  instanceof: () => instanceOfType,
+  intersection: () => intersectionType,
+  isAborted: () => isAborted,
+  isAsync: () => isAsync,
+  isDirty: () => isDirty,
+  isValid: () => isValid,
+  late: () => late,
+  lazy: () => lazyType,
+  literal: () => literalType,
+  makeIssue: () => makeIssue,
+  map: () => mapType,
+  nan: () => nanType,
+  nativeEnum: () => nativeEnumType,
+  never: () => neverType,
+  null: () => nullType,
+  nullable: () => nullableType,
+  number: () => numberType,
+  object: () => objectType,
+  objectUtil: () => objectUtil,
+  oboolean: () => oboolean,
+  onumber: () => onumber,
+  optional: () => optionalType,
+  ostring: () => ostring,
+  pipeline: () => pipelineType,
+  preprocess: () => preprocessType,
+  promise: () => promiseType,
+  quotelessJson: () => quotelessJson,
+  record: () => recordType,
+  set: () => setType,
+  setErrorMap: () => setErrorMap,
+  strictObject: () => strictObjectType,
+  string: () => stringType,
+  symbol: () => symbolType,
+  transformer: () => effectsType,
+  tuple: () => tupleType,
+  undefined: () => undefinedType,
+  union: () => unionType,
+  unknown: () => unknownType,
+  util: () => util,
+  void: () => voidType
+});
+
+// node_modules/zod/v3/helpers/util.js
+var util;
+(function(util2) {
+  util2.assertEqual = (_) => {
+  };
+  function assertIs(_arg) {
+  }
+  util2.assertIs = assertIs;
+  function assertNever3(_x) {
+    throw new Error();
+  }
+  util2.assertNever = assertNever3;
+  util2.arrayToEnum = (items) => {
+    const obj = {};
+    for (const item of items) {
+      obj[item] = item;
+    }
+    return obj;
+  };
+  util2.getValidEnumValues = (obj) => {
+    const validKeys = util2.objectKeys(obj).filter((k) => typeof obj[obj[k]] !== "number");
+    const filtered = {};
+    for (const k of validKeys) {
+      filtered[k] = obj[k];
+    }
+    return util2.objectValues(filtered);
+  };
+  util2.objectValues = (obj) => {
+    return util2.objectKeys(obj).map(function(e) {
+      return obj[e];
+    });
+  };
+  util2.objectKeys = typeof Object.keys === "function" ? (obj) => Object.keys(obj) : (object) => {
+    const keys = [];
+    for (const key in object) {
+      if (Object.prototype.hasOwnProperty.call(object, key)) {
+        keys.push(key);
+      }
+    }
+    return keys;
+  };
+  util2.find = (arr, checker) => {
+    for (const item of arr) {
+      if (checker(item))
+        return item;
+    }
+    return void 0;
+  };
+  util2.isInteger = typeof Number.isInteger === "function" ? (val) => Number.isInteger(val) : (val) => typeof val === "number" && Number.isFinite(val) && Math.floor(val) === val;
+  function joinValues(array, separator = " | ") {
+    return array.map((val) => typeof val === "string" ? `'${val}'` : val).join(separator);
+  }
+  util2.joinValues = joinValues;
+  util2.jsonStringifyReplacer = (_, value) => {
+    if (typeof value === "bigint") {
+      return value.toString();
+    }
+    return value;
+  };
+})(util || (util = {}));
+var objectUtil;
+(function(objectUtil2) {
+  objectUtil2.mergeShapes = (first, second) => {
+    return {
+      ...first,
+      ...second
+      // second overwrites first
+    };
+  };
+})(objectUtil || (objectUtil = {}));
+var ZodParsedType = util.arrayToEnum([
+  "string",
+  "nan",
+  "number",
+  "integer",
+  "float",
+  "boolean",
+  "date",
+  "bigint",
+  "symbol",
+  "function",
+  "undefined",
+  "null",
+  "array",
+  "object",
+  "unknown",
+  "promise",
+  "void",
+  "never",
+  "map",
+  "set"
+]);
+var getParsedType = (data) => {
+  const t = typeof data;
+  switch (t) {
+    case "undefined":
+      return ZodParsedType.undefined;
+    case "string":
+      return ZodParsedType.string;
+    case "number":
+      return Number.isNaN(data) ? ZodParsedType.nan : ZodParsedType.number;
+    case "boolean":
+      return ZodParsedType.boolean;
+    case "function":
+      return ZodParsedType.function;
+    case "bigint":
+      return ZodParsedType.bigint;
+    case "symbol":
+      return ZodParsedType.symbol;
+    case "object":
+      if (Array.isArray(data)) {
+        return ZodParsedType.array;
+      }
+      if (data === null) {
+        return ZodParsedType.null;
+      }
+      if (data.then && typeof data.then === "function" && data.catch && typeof data.catch === "function") {
+        return ZodParsedType.promise;
+      }
+      if (typeof Map !== "undefined" && data instanceof Map) {
+        return ZodParsedType.map;
+      }
+      if (typeof Set !== "undefined" && data instanceof Set) {
+        return ZodParsedType.set;
+      }
+      if (typeof Date !== "undefined" && data instanceof Date) {
+        return ZodParsedType.date;
+      }
+      return ZodParsedType.object;
+    default:
+      return ZodParsedType.unknown;
+  }
+};
+
+// node_modules/zod/v3/ZodError.js
+var ZodIssueCode = util.arrayToEnum([
+  "invalid_type",
+  "invalid_literal",
+  "custom",
+  "invalid_union",
+  "invalid_union_discriminator",
+  "invalid_enum_value",
+  "unrecognized_keys",
+  "invalid_arguments",
+  "invalid_return_type",
+  "invalid_date",
+  "invalid_string",
+  "too_small",
+  "too_big",
+  "invalid_intersection_types",
+  "not_multiple_of",
+  "not_finite"
+]);
+var quotelessJson = (obj) => {
+  const json = JSON.stringify(obj, null, 2);
+  return json.replace(/"([^"]+)":/g, "$1:");
+};
+var ZodError = class _ZodError extends Error {
+  get errors() {
+    return this.issues;
+  }
+  constructor(issues) {
+    super();
+    this.issues = [];
+    this.addIssue = (sub) => {
+      this.issues = [...this.issues, sub];
+    };
+    this.addIssues = (subs = []) => {
+      this.issues = [...this.issues, ...subs];
+    };
+    const actualProto = new.target.prototype;
+    if (Object.setPrototypeOf) {
+      Object.setPrototypeOf(this, actualProto);
+    } else {
+      this.__proto__ = actualProto;
+    }
+    this.name = "ZodError";
+    this.issues = issues;
+  }
+  format(_mapper) {
+    const mapper = _mapper || function(issue) {
+      return issue.message;
+    };
+    const fieldErrors = { _errors: [] };
+    const processError = (error) => {
+      for (const issue of error.issues) {
+        if (issue.code === "invalid_union") {
+          issue.unionErrors.map(processError);
+        } else if (issue.code === "invalid_return_type") {
+          processError(issue.returnTypeError);
+        } else if (issue.code === "invalid_arguments") {
+          processError(issue.argumentsError);
+        } else if (issue.path.length === 0) {
+          fieldErrors._errors.push(mapper(issue));
+        } else {
+          let curr = fieldErrors;
+          let i = 0;
+          while (i < issue.path.length) {
+            const el = issue.path[i];
+            const terminal = i === issue.path.length - 1;
+            if (!terminal) {
+              curr[el] = curr[el] || { _errors: [] };
+            } else {
+              curr[el] = curr[el] || { _errors: [] };
+              curr[el]._errors.push(mapper(issue));
+            }
+            curr = curr[el];
+            i++;
+          }
+        }
+      }
+    };
+    processError(this);
+    return fieldErrors;
+  }
+  static assert(value) {
+    if (!(value instanceof _ZodError)) {
+      throw new Error(`Not a ZodError: ${value}`);
+    }
+  }
+  toString() {
+    return this.message;
+  }
+  get message() {
+    return JSON.stringify(this.issues, util.jsonStringifyReplacer, 2);
+  }
+  get isEmpty() {
+    return this.issues.length === 0;
+  }
+  flatten(mapper = (issue) => issue.message) {
+    const fieldErrors = {};
+    const formErrors = [];
+    for (const sub of this.issues) {
+      if (sub.path.length > 0) {
+        const firstEl = sub.path[0];
+        fieldErrors[firstEl] = fieldErrors[firstEl] || [];
+        fieldErrors[firstEl].push(mapper(sub));
+      } else {
+        formErrors.push(mapper(sub));
+      }
+    }
+    return { formErrors, fieldErrors };
+  }
+  get formErrors() {
+    return this.flatten();
+  }
+};
+ZodError.create = (issues) => {
+  const error = new ZodError(issues);
+  return error;
+};
+
+// node_modules/zod/v3/locales/en.js
+var errorMap = (issue, _ctx) => {
+  let message;
+  switch (issue.code) {
+    case ZodIssueCode.invalid_type:
+      if (issue.received === ZodParsedType.undefined) {
+        message = "Required";
+      } else {
+        message = `Expected ${issue.expected}, received ${issue.received}`;
+      }
+      break;
+    case ZodIssueCode.invalid_literal:
+      message = `Invalid literal value, expected ${JSON.stringify(issue.expected, util.jsonStringifyReplacer)}`;
+      break;
+    case ZodIssueCode.unrecognized_keys:
+      message = `Unrecognized key(s) in object: ${util.joinValues(issue.keys, ", ")}`;
+      break;
+    case ZodIssueCode.invalid_union:
+      message = `Invalid input`;
+      break;
+    case ZodIssueCode.invalid_union_discriminator:
+      message = `Invalid discriminator value. Expected ${util.joinValues(issue.options)}`;
+      break;
+    case ZodIssueCode.invalid_enum_value:
+      message = `Invalid enum value. Expected ${util.joinValues(issue.options)}, received '${issue.received}'`;
+      break;
+    case ZodIssueCode.invalid_arguments:
+      message = `Invalid function arguments`;
+      break;
+    case ZodIssueCode.invalid_return_type:
+      message = `Invalid function return type`;
+      break;
+    case ZodIssueCode.invalid_date:
+      message = `Invalid date`;
+      break;
+    case ZodIssueCode.invalid_string:
+      if (typeof issue.validation === "object") {
+        if ("includes" in issue.validation) {
+          message = `Invalid input: must include "${issue.validation.includes}"`;
+          if (typeof issue.validation.position === "number") {
+            message = `${message} at one or more positions greater than or equal to ${issue.validation.position}`;
+          }
+        } else if ("startsWith" in issue.validation) {
+          message = `Invalid input: must start with "${issue.validation.startsWith}"`;
+        } else if ("endsWith" in issue.validation) {
+          message = `Invalid input: must end with "${issue.validation.endsWith}"`;
+        } else {
+          util.assertNever(issue.validation);
+        }
+      } else if (issue.validation !== "regex") {
+        message = `Invalid ${issue.validation}`;
+      } else {
+        message = "Invalid";
+      }
+      break;
+    case ZodIssueCode.too_small:
+      if (issue.type === "array")
+        message = `Array must contain ${issue.exact ? "exactly" : issue.inclusive ? `at least` : `more than`} ${issue.minimum} element(s)`;
+      else if (issue.type === "string")
+        message = `String must contain ${issue.exact ? "exactly" : issue.inclusive ? `at least` : `over`} ${issue.minimum} character(s)`;
+      else if (issue.type === "number")
+        message = `Number must be ${issue.exact ? `exactly equal to ` : issue.inclusive ? `greater than or equal to ` : `greater than `}${issue.minimum}`;
+      else if (issue.type === "bigint")
+        message = `Number must be ${issue.exact ? `exactly equal to ` : issue.inclusive ? `greater than or equal to ` : `greater than `}${issue.minimum}`;
+      else if (issue.type === "date")
+        message = `Date must be ${issue.exact ? `exactly equal to ` : issue.inclusive ? `greater than or equal to ` : `greater than `}${new Date(Number(issue.minimum))}`;
+      else
+        message = "Invalid input";
+      break;
+    case ZodIssueCode.too_big:
+      if (issue.type === "array")
+        message = `Array must contain ${issue.exact ? `exactly` : issue.inclusive ? `at most` : `less than`} ${issue.maximum} element(s)`;
+      else if (issue.type === "string")
+        message = `String must contain ${issue.exact ? `exactly` : issue.inclusive ? `at most` : `under`} ${issue.maximum} character(s)`;
+      else if (issue.type === "number")
+        message = `Number must be ${issue.exact ? `exactly` : issue.inclusive ? `less than or equal to` : `less than`} ${issue.maximum}`;
+      else if (issue.type === "bigint")
+        message = `BigInt must be ${issue.exact ? `exactly` : issue.inclusive ? `less than or equal to` : `less than`} ${issue.maximum}`;
+      else if (issue.type === "date")
+        message = `Date must be ${issue.exact ? `exactly` : issue.inclusive ? `smaller than or equal to` : `smaller than`} ${new Date(Number(issue.maximum))}`;
+      else
+        message = "Invalid input";
+      break;
+    case ZodIssueCode.custom:
+      message = `Invalid input`;
+      break;
+    case ZodIssueCode.invalid_intersection_types:
+      message = `Intersection results could not be merged`;
+      break;
+    case ZodIssueCode.not_multiple_of:
+      message = `Number must be a multiple of ${issue.multipleOf}`;
+      break;
+    case ZodIssueCode.not_finite:
+      message = "Number must be finite";
+      break;
+    default:
+      message = _ctx.defaultError;
+      util.assertNever(issue);
+  }
+  return { message };
+};
+var en_default = errorMap;
+
+// node_modules/zod/v3/errors.js
+var overrideErrorMap = en_default;
+function setErrorMap(map) {
+  overrideErrorMap = map;
+}
+function getErrorMap() {
+  return overrideErrorMap;
+}
+
+// node_modules/zod/v3/helpers/parseUtil.js
+var makeIssue = (params) => {
+  const { data, path: path2, errorMaps, issueData } = params;
+  const fullPath = [...path2, ...issueData.path || []];
+  const fullIssue = {
+    ...issueData,
+    path: fullPath
+  };
+  if (issueData.message !== void 0) {
+    return {
+      ...issueData,
+      path: fullPath,
+      message: issueData.message
+    };
+  }
+  let errorMessage = "";
+  const maps = errorMaps.filter((m) => !!m).slice().reverse();
+  for (const map of maps) {
+    errorMessage = map(fullIssue, { data, defaultError: errorMessage }).message;
+  }
+  return {
+    ...issueData,
+    path: fullPath,
+    message: errorMessage
+  };
+};
+var EMPTY_PATH = [];
+function addIssueToContext(ctx, issueData) {
+  const overrideMap = getErrorMap();
+  const issue = makeIssue({
+    issueData,
+    data: ctx.data,
+    path: ctx.path,
+    errorMaps: [
+      ctx.common.contextualErrorMap,
+      // contextual error map is first priority
+      ctx.schemaErrorMap,
+      // then schema-bound map if available
+      overrideMap,
+      // then global override map
+      overrideMap === en_default ? void 0 : en_default
+      // then global default map
+    ].filter((x) => !!x)
+  });
+  ctx.common.issues.push(issue);
+}
+var ParseStatus = class _ParseStatus {
+  constructor() {
+    this.value = "valid";
+  }
+  dirty() {
+    if (this.value === "valid")
+      this.value = "dirty";
+  }
+  abort() {
+    if (this.value !== "aborted")
+      this.value = "aborted";
+  }
+  static mergeArray(status, results) {
+    const arrayValue = [];
+    for (const s of results) {
+      if (s.status === "aborted")
+        return INVALID;
+      if (s.status === "dirty")
+        status.dirty();
+      arrayValue.push(s.value);
+    }
+    return { status: status.value, value: arrayValue };
+  }
+  static async mergeObjectAsync(status, pairs) {
+    const syncPairs = [];
+    for (const pair of pairs) {
+      const key = await pair.key;
+      const value = await pair.value;
+      syncPairs.push({
+        key,
+        value
+      });
+    }
+    return _ParseStatus.mergeObjectSync(status, syncPairs);
+  }
+  static mergeObjectSync(status, pairs) {
+    const finalObject = {};
+    for (const pair of pairs) {
+      const { key, value } = pair;
+      if (key.status === "aborted")
+        return INVALID;
+      if (value.status === "aborted")
+        return INVALID;
+      if (key.status === "dirty")
+        status.dirty();
+      if (value.status === "dirty")
+        status.dirty();
+      if (key.value !== "__proto__" && (typeof value.value !== "undefined" || pair.alwaysSet)) {
+        finalObject[key.value] = value.value;
+      }
+    }
+    return { status: status.value, value: finalObject };
+  }
+};
+var INVALID = Object.freeze({
+  status: "aborted"
+});
+var DIRTY = (value) => ({ status: "dirty", value });
+var OK = (value) => ({ status: "valid", value });
+var isAborted = (x) => x.status === "aborted";
+var isDirty = (x) => x.status === "dirty";
+var isValid = (x) => x.status === "valid";
+var isAsync = (x) => typeof Promise !== "undefined" && x instanceof Promise;
+
+// node_modules/zod/v3/helpers/errorUtil.js
+var errorUtil;
+(function(errorUtil2) {
+  errorUtil2.errToObj = (message) => typeof message === "string" ? { message } : message || {};
+  errorUtil2.toString = (message) => typeof message === "string" ? message : message?.message;
+})(errorUtil || (errorUtil = {}));
+
+// node_modules/zod/v3/types.js
+var ParseInputLazyPath = class {
+  constructor(parent, value, path2, key) {
+    this._cachedPath = [];
+    this.parent = parent;
+    this.data = value;
+    this._path = path2;
+    this._key = key;
+  }
+  get path() {
+    if (!this._cachedPath.length) {
+      if (Array.isArray(this._key)) {
+        this._cachedPath.push(...this._path, ...this._key);
+      } else {
+        this._cachedPath.push(...this._path, this._key);
+      }
+    }
+    return this._cachedPath;
+  }
+};
+var handleResult = (ctx, result) => {
+  if (isValid(result)) {
+    return { success: true, data: result.value };
+  } else {
+    if (!ctx.common.issues.length) {
+      throw new Error("Validation failed but no issues detected.");
+    }
+    return {
+      success: false,
+      get error() {
+        if (this._error)
+          return this._error;
+        const error = new ZodError(ctx.common.issues);
+        this._error = error;
+        return this._error;
+      }
+    };
+  }
+};
+function processCreateParams(params) {
+  if (!params)
+    return {};
+  const { errorMap: errorMap2, invalid_type_error, required_error, description } = params;
+  if (errorMap2 && (invalid_type_error || required_error)) {
+    throw new Error(`Can't use "invalid_type_error" or "required_error" in conjunction with custom error map.`);
+  }
+  if (errorMap2)
+    return { errorMap: errorMap2, description };
+  const customMap = (iss, ctx) => {
+    const { message } = params;
+    if (iss.code === "invalid_enum_value") {
+      return { message: message ?? ctx.defaultError };
+    }
+    if (typeof ctx.data === "undefined") {
+      return { message: message ?? required_error ?? ctx.defaultError };
+    }
+    if (iss.code !== "invalid_type")
+      return { message: ctx.defaultError };
+    return { message: message ?? invalid_type_error ?? ctx.defaultError };
+  };
+  return { errorMap: customMap, description };
+}
+var ZodType = class {
+  get description() {
+    return this._def.description;
+  }
+  _getType(input) {
+    return getParsedType(input.data);
+  }
+  _getOrReturnCtx(input, ctx) {
+    return ctx || {
+      common: input.parent.common,
+      data: input.data,
+      parsedType: getParsedType(input.data),
+      schemaErrorMap: this._def.errorMap,
+      path: input.path,
+      parent: input.parent
+    };
+  }
+  _processInputParams(input) {
+    return {
+      status: new ParseStatus(),
+      ctx: {
+        common: input.parent.common,
+        data: input.data,
+        parsedType: getParsedType(input.data),
+        schemaErrorMap: this._def.errorMap,
+        path: input.path,
+        parent: input.parent
+      }
+    };
+  }
+  _parseSync(input) {
+    const result = this._parse(input);
+    if (isAsync(result)) {
+      throw new Error("Synchronous parse encountered promise.");
+    }
+    return result;
+  }
+  _parseAsync(input) {
+    const result = this._parse(input);
+    return Promise.resolve(result);
+  }
+  parse(data, params) {
+    const result = this.safeParse(data, params);
+    if (result.success)
+      return result.data;
+    throw result.error;
+  }
+  safeParse(data, params) {
+    const ctx = {
+      common: {
+        issues: [],
+        async: params?.async ?? false,
+        contextualErrorMap: params?.errorMap
+      },
+      path: params?.path || [],
+      schemaErrorMap: this._def.errorMap,
+      parent: null,
+      data,
+      parsedType: getParsedType(data)
+    };
+    const result = this._parseSync({ data, path: ctx.path, parent: ctx });
+    return handleResult(ctx, result);
+  }
+  "~validate"(data) {
+    const ctx = {
+      common: {
+        issues: [],
+        async: !!this["~standard"].async
+      },
+      path: [],
+      schemaErrorMap: this._def.errorMap,
+      parent: null,
+      data,
+      parsedType: getParsedType(data)
+    };
+    if (!this["~standard"].async) {
+      try {
+        const result = this._parseSync({ data, path: [], parent: ctx });
+        return isValid(result) ? {
+          value: result.value
+        } : {
+          issues: ctx.common.issues
+        };
+      } catch (err) {
+        if (err?.message?.toLowerCase()?.includes("encountered")) {
+          this["~standard"].async = true;
+        }
+        ctx.common = {
+          issues: [],
+          async: true
+        };
+      }
+    }
+    return this._parseAsync({ data, path: [], parent: ctx }).then((result) => isValid(result) ? {
+      value: result.value
+    } : {
+      issues: ctx.common.issues
+    });
+  }
+  async parseAsync(data, params) {
+    const result = await this.safeParseAsync(data, params);
+    if (result.success)
+      return result.data;
+    throw result.error;
+  }
+  async safeParseAsync(data, params) {
+    const ctx = {
+      common: {
+        issues: [],
+        contextualErrorMap: params?.errorMap,
+        async: true
+      },
+      path: params?.path || [],
+      schemaErrorMap: this._def.errorMap,
+      parent: null,
+      data,
+      parsedType: getParsedType(data)
+    };
+    const maybeAsyncResult = this._parse({ data, path: ctx.path, parent: ctx });
+    const result = await (isAsync(maybeAsyncResult) ? maybeAsyncResult : Promise.resolve(maybeAsyncResult));
+    return handleResult(ctx, result);
+  }
+  refine(check, message) {
+    const getIssueProperties = (val) => {
+      if (typeof message === "string" || typeof message === "undefined") {
+        return { message };
+      } else if (typeof message === "function") {
+        return message(val);
+      } else {
+        return message;
+      }
+    };
+    return this._refinement((val, ctx) => {
+      const result = check(val);
+      const setError = () => ctx.addIssue({
+        code: ZodIssueCode.custom,
+        ...getIssueProperties(val)
+      });
+      if (typeof Promise !== "undefined" && result instanceof Promise) {
+        return result.then((data) => {
+          if (!data) {
+            setError();
+            return false;
+          } else {
+            return true;
+          }
+        });
+      }
+      if (!result) {
+        setError();
+        return false;
+      } else {
+        return true;
+      }
+    });
+  }
+  refinement(check, refinementData) {
+    return this._refinement((val, ctx) => {
+      if (!check(val)) {
+        ctx.addIssue(typeof refinementData === "function" ? refinementData(val, ctx) : refinementData);
+        return false;
+      } else {
+        return true;
+      }
+    });
+  }
+  _refinement(refinement) {
+    return new ZodEffects({
+      schema: this,
+      typeName: ZodFirstPartyTypeKind.ZodEffects,
+      effect: { type: "refinement", refinement }
+    });
+  }
+  superRefine(refinement) {
+    return this._refinement(refinement);
+  }
+  constructor(def) {
+    this.spa = this.safeParseAsync;
+    this._def = def;
+    this.parse = this.parse.bind(this);
+    this.safeParse = this.safeParse.bind(this);
+    this.parseAsync = this.parseAsync.bind(this);
+    this.safeParseAsync = this.safeParseAsync.bind(this);
+    this.spa = this.spa.bind(this);
+    this.refine = this.refine.bind(this);
+    this.refinement = this.refinement.bind(this);
+    this.superRefine = this.superRefine.bind(this);
+    this.optional = this.optional.bind(this);
+    this.nullable = this.nullable.bind(this);
+    this.nullish = this.nullish.bind(this);
+    this.array = this.array.bind(this);
+    this.promise = this.promise.bind(this);
+    this.or = this.or.bind(this);
+    this.and = this.and.bind(this);
+    this.transform = this.transform.bind(this);
+    this.brand = this.brand.bind(this);
+    this.default = this.default.bind(this);
+    this.catch = this.catch.bind(this);
+    this.describe = this.describe.bind(this);
+    this.pipe = this.pipe.bind(this);
+    this.readonly = this.readonly.bind(this);
+    this.isNullable = this.isNullable.bind(this);
+    this.isOptional = this.isOptional.bind(this);
+    this["~standard"] = {
+      version: 1,
+      vendor: "zod",
+      validate: (data) => this["~validate"](data)
+    };
+  }
+  optional() {
+    return ZodOptional.create(this, this._def);
+  }
+  nullable() {
+    return ZodNullable.create(this, this._def);
+  }
+  nullish() {
+    return this.nullable().optional();
+  }
+  array() {
+    return ZodArray.create(this);
+  }
+  promise() {
+    return ZodPromise.create(this, this._def);
+  }
+  or(option) {
+    return ZodUnion.create([this, option], this._def);
+  }
+  and(incoming) {
+    return ZodIntersection.create(this, incoming, this._def);
+  }
+  transform(transform) {
+    return new ZodEffects({
+      ...processCreateParams(this._def),
+      schema: this,
+      typeName: ZodFirstPartyTypeKind.ZodEffects,
+      effect: { type: "transform", transform }
+    });
+  }
+  default(def) {
+    const defaultValueFunc = typeof def === "function" ? def : () => def;
+    return new ZodDefault({
+      ...processCreateParams(this._def),
+      innerType: this,
+      defaultValue: defaultValueFunc,
+      typeName: ZodFirstPartyTypeKind.ZodDefault
+    });
+  }
+  brand() {
+    return new ZodBranded({
+      typeName: ZodFirstPartyTypeKind.ZodBranded,
+      type: this,
+      ...processCreateParams(this._def)
+    });
+  }
+  catch(def) {
+    const catchValueFunc = typeof def === "function" ? def : () => def;
+    return new ZodCatch({
+      ...processCreateParams(this._def),
+      innerType: this,
+      catchValue: catchValueFunc,
+      typeName: ZodFirstPartyTypeKind.ZodCatch
+    });
+  }
+  describe(description) {
+    const This = this.constructor;
+    return new This({
+      ...this._def,
+      description
+    });
+  }
+  pipe(target) {
+    return ZodPipeline.create(this, target);
+  }
+  readonly() {
+    return ZodReadonly.create(this);
+  }
+  isOptional() {
+    return this.safeParse(void 0).success;
+  }
+  isNullable() {
+    return this.safeParse(null).success;
+  }
+};
+var cuidRegex = /^c[^\s-]{8,}$/i;
+var cuid2Regex = /^[0-9a-z]+$/;
+var ulidRegex = /^[0-9A-HJKMNP-TV-Z]{26}$/i;
+var uuidRegex = /^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/i;
+var nanoidRegex = /^[a-z0-9_-]{21}$/i;
+var jwtRegex = /^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]*$/;
+var durationRegex = /^[-+]?P(?!$)(?:(?:[-+]?\d+Y)|(?:[-+]?\d+[.,]\d+Y$))?(?:(?:[-+]?\d+M)|(?:[-+]?\d+[.,]\d+M$))?(?:(?:[-+]?\d+W)|(?:[-+]?\d+[.,]\d+W$))?(?:(?:[-+]?\d+D)|(?:[-+]?\d+[.,]\d+D$))?(?:T(?=[\d+-])(?:(?:[-+]?\d+H)|(?:[-+]?\d+[.,]\d+H$))?(?:(?:[-+]?\d+M)|(?:[-+]?\d+[.,]\d+M$))?(?:[-+]?\d+(?:[.,]\d+)?S)?)??$/;
+var emailRegex = /^(?!\.)(?!.*\.\.)([A-Z0-9_'+\-\.]*)[A-Z0-9_+-]@([A-Z0-9][A-Z0-9\-]*\.)+[A-Z]{2,}$/i;
+var _emojiRegex = `^(\\p{Extended_Pictographic}|\\p{Emoji_Component})+$`;
+var emojiRegex;
+var ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$/;
+var ipv4CidrRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\/(3[0-2]|[12]?[0-9])$/;
+var ipv6Regex = /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/;
+var ipv6CidrRegex = /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$/;
+var base64Regex = /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/;
+var base64urlRegex = /^([0-9a-zA-Z-_]{4})*(([0-9a-zA-Z-_]{2}(==)?)|([0-9a-zA-Z-_]{3}(=)?))?$/;
+var dateRegexSource = `((\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-((0[13578]|1[02])-(0[1-9]|[12]\\d|3[01])|(0[469]|11)-(0[1-9]|[12]\\d|30)|(02)-(0[1-9]|1\\d|2[0-8])))`;
+var dateRegex = new RegExp(`^${dateRegexSource}$`);
+function timeRegexSource(args) {
+  let secondsRegexSource = `[0-5]\\d`;
+  if (args.precision) {
+    secondsRegexSource = `${secondsRegexSource}\\.\\d{${args.precision}}`;
+  } else if (args.precision == null) {
+    secondsRegexSource = `${secondsRegexSource}(\\.\\d+)?`;
+  }
+  const secondsQuantifier = args.precision ? "+" : "?";
+  return `([01]\\d|2[0-3]):[0-5]\\d(:${secondsRegexSource})${secondsQuantifier}`;
+}
+function timeRegex(args) {
+  return new RegExp(`^${timeRegexSource(args)}$`);
+}
+function datetimeRegex(args) {
+  let regex = `${dateRegexSource}T${timeRegexSource(args)}`;
+  const opts = [];
+  opts.push(args.local ? `Z?` : `Z`);
+  if (args.offset)
+    opts.push(`([+-]\\d{2}:?\\d{2})`);
+  regex = `${regex}(${opts.join("|")})`;
+  return new RegExp(`^${regex}$`);
+}
+function isValidIP(ip, version) {
+  if ((version === "v4" || !version) && ipv4Regex.test(ip)) {
+    return true;
+  }
+  if ((version === "v6" || !version) && ipv6Regex.test(ip)) {
+    return true;
+  }
+  return false;
+}
+function isValidJWT(jwt, alg) {
+  if (!jwtRegex.test(jwt))
+    return false;
+  try {
+    const [header] = jwt.split(".");
+    if (!header)
+      return false;
+    const base64 = header.replace(/-/g, "+").replace(/_/g, "/").padEnd(header.length + (4 - header.length % 4) % 4, "=");
+    const decoded = JSON.parse(atob(base64));
+    if (typeof decoded !== "object" || decoded === null)
+      return false;
+    if ("typ" in decoded && decoded?.typ !== "JWT")
+      return false;
+    if (!decoded.alg)
+      return false;
+    if (alg && decoded.alg !== alg)
+      return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+function isValidCidr(ip, version) {
+  if ((version === "v4" || !version) && ipv4CidrRegex.test(ip)) {
+    return true;
+  }
+  if ((version === "v6" || !version) && ipv6CidrRegex.test(ip)) {
+    return true;
+  }
+  return false;
+}
+var ZodString = class _ZodString extends ZodType {
+  _parse(input) {
+    if (this._def.coerce) {
+      input.data = String(input.data);
+    }
+    const parsedType = this._getType(input);
+    if (parsedType !== ZodParsedType.string) {
+      const ctx2 = this._getOrReturnCtx(input);
+      addIssueToContext(ctx2, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.string,
+        received: ctx2.parsedType
+      });
+      return INVALID;
+    }
+    const status = new ParseStatus();
+    let ctx = void 0;
+    for (const check of this._def.checks) {
+      if (check.kind === "min") {
+        if (input.data.length < check.value) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.too_small,
+            minimum: check.value,
+            type: "string",
+            inclusive: true,
+            exact: false,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "max") {
+        if (input.data.length > check.value) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.too_big,
+            maximum: check.value,
+            type: "string",
+            inclusive: true,
+            exact: false,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "length") {
+        const tooBig = input.data.length > check.value;
+        const tooSmall = input.data.length < check.value;
+        if (tooBig || tooSmall) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          if (tooBig) {
+            addIssueToContext(ctx, {
+              code: ZodIssueCode.too_big,
+              maximum: check.value,
+              type: "string",
+              inclusive: true,
+              exact: true,
+              message: check.message
+            });
+          } else if (tooSmall) {
+            addIssueToContext(ctx, {
+              code: ZodIssueCode.too_small,
+              minimum: check.value,
+              type: "string",
+              inclusive: true,
+              exact: true,
+              message: check.message
+            });
+          }
+          status.dirty();
+        }
+      } else if (check.kind === "email") {
+        if (!emailRegex.test(input.data)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            validation: "email",
+            code: ZodIssueCode.invalid_string,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "emoji") {
+        if (!emojiRegex) {
+          emojiRegex = new RegExp(_emojiRegex, "u");
+        }
+        if (!emojiRegex.test(input.data)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            validation: "emoji",
+            code: ZodIssueCode.invalid_string,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "uuid") {
+        if (!uuidRegex.test(input.data)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            validation: "uuid",
+            code: ZodIssueCode.invalid_string,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "nanoid") {
+        if (!nanoidRegex.test(input.data)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            validation: "nanoid",
+            code: ZodIssueCode.invalid_string,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "cuid") {
+        if (!cuidRegex.test(input.data)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            validation: "cuid",
+            code: ZodIssueCode.invalid_string,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "cuid2") {
+        if (!cuid2Regex.test(input.data)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            validation: "cuid2",
+            code: ZodIssueCode.invalid_string,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "ulid") {
+        if (!ulidRegex.test(input.data)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            validation: "ulid",
+            code: ZodIssueCode.invalid_string,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "url") {
+        try {
+          new URL(input.data);
+        } catch {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            validation: "url",
+            code: ZodIssueCode.invalid_string,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "regex") {
+        check.regex.lastIndex = 0;
+        const testResult = check.regex.test(input.data);
+        if (!testResult) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            validation: "regex",
+            code: ZodIssueCode.invalid_string,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "trim") {
+        input.data = input.data.trim();
+      } else if (check.kind === "includes") {
+        if (!input.data.includes(check.value, check.position)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.invalid_string,
+            validation: { includes: check.value, position: check.position },
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "toLowerCase") {
+        input.data = input.data.toLowerCase();
+      } else if (check.kind === "toUpperCase") {
+        input.data = input.data.toUpperCase();
+      } else if (check.kind === "startsWith") {
+        if (!input.data.startsWith(check.value)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.invalid_string,
+            validation: { startsWith: check.value },
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "endsWith") {
+        if (!input.data.endsWith(check.value)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.invalid_string,
+            validation: { endsWith: check.value },
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "datetime") {
+        const regex = datetimeRegex(check);
+        if (!regex.test(input.data)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.invalid_string,
+            validation: "datetime",
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "date") {
+        const regex = dateRegex;
+        if (!regex.test(input.data)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.invalid_string,
+            validation: "date",
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "time") {
+        const regex = timeRegex(check);
+        if (!regex.test(input.data)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.invalid_string,
+            validation: "time",
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "duration") {
+        if (!durationRegex.test(input.data)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            validation: "duration",
+            code: ZodIssueCode.invalid_string,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "ip") {
+        if (!isValidIP(input.data, check.version)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            validation: "ip",
+            code: ZodIssueCode.invalid_string,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "jwt") {
+        if (!isValidJWT(input.data, check.alg)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            validation: "jwt",
+            code: ZodIssueCode.invalid_string,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "cidr") {
+        if (!isValidCidr(input.data, check.version)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            validation: "cidr",
+            code: ZodIssueCode.invalid_string,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "base64") {
+        if (!base64Regex.test(input.data)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            validation: "base64",
+            code: ZodIssueCode.invalid_string,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "base64url") {
+        if (!base64urlRegex.test(input.data)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            validation: "base64url",
+            code: ZodIssueCode.invalid_string,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else {
+        util.assertNever(check);
+      }
+    }
+    return { status: status.value, value: input.data };
+  }
+  _regex(regex, validation, message) {
+    return this.refinement((data) => regex.test(data), {
+      validation,
+      code: ZodIssueCode.invalid_string,
+      ...errorUtil.errToObj(message)
+    });
+  }
+  _addCheck(check) {
+    return new _ZodString({
+      ...this._def,
+      checks: [...this._def.checks, check]
+    });
+  }
+  email(message) {
+    return this._addCheck({ kind: "email", ...errorUtil.errToObj(message) });
+  }
+  url(message) {
+    return this._addCheck({ kind: "url", ...errorUtil.errToObj(message) });
+  }
+  emoji(message) {
+    return this._addCheck({ kind: "emoji", ...errorUtil.errToObj(message) });
+  }
+  uuid(message) {
+    return this._addCheck({ kind: "uuid", ...errorUtil.errToObj(message) });
+  }
+  nanoid(message) {
+    return this._addCheck({ kind: "nanoid", ...errorUtil.errToObj(message) });
+  }
+  cuid(message) {
+    return this._addCheck({ kind: "cuid", ...errorUtil.errToObj(message) });
+  }
+  cuid2(message) {
+    return this._addCheck({ kind: "cuid2", ...errorUtil.errToObj(message) });
+  }
+  ulid(message) {
+    return this._addCheck({ kind: "ulid", ...errorUtil.errToObj(message) });
+  }
+  base64(message) {
+    return this._addCheck({ kind: "base64", ...errorUtil.errToObj(message) });
+  }
+  base64url(message) {
+    return this._addCheck({
+      kind: "base64url",
+      ...errorUtil.errToObj(message)
+    });
+  }
+  jwt(options) {
+    return this._addCheck({ kind: "jwt", ...errorUtil.errToObj(options) });
+  }
+  ip(options) {
+    return this._addCheck({ kind: "ip", ...errorUtil.errToObj(options) });
+  }
+  cidr(options) {
+    return this._addCheck({ kind: "cidr", ...errorUtil.errToObj(options) });
+  }
+  datetime(options) {
+    if (typeof options === "string") {
+      return this._addCheck({
+        kind: "datetime",
+        precision: null,
+        offset: false,
+        local: false,
+        message: options
+      });
+    }
+    return this._addCheck({
+      kind: "datetime",
+      precision: typeof options?.precision === "undefined" ? null : options?.precision,
+      offset: options?.offset ?? false,
+      local: options?.local ?? false,
+      ...errorUtil.errToObj(options?.message)
+    });
+  }
+  date(message) {
+    return this._addCheck({ kind: "date", message });
+  }
+  time(options) {
+    if (typeof options === "string") {
+      return this._addCheck({
+        kind: "time",
+        precision: null,
+        message: options
+      });
+    }
+    return this._addCheck({
+      kind: "time",
+      precision: typeof options?.precision === "undefined" ? null : options?.precision,
+      ...errorUtil.errToObj(options?.message)
+    });
+  }
+  duration(message) {
+    return this._addCheck({ kind: "duration", ...errorUtil.errToObj(message) });
+  }
+  regex(regex, message) {
+    return this._addCheck({
+      kind: "regex",
+      regex,
+      ...errorUtil.errToObj(message)
+    });
+  }
+  includes(value, options) {
+    return this._addCheck({
+      kind: "includes",
+      value,
+      position: options?.position,
+      ...errorUtil.errToObj(options?.message)
+    });
+  }
+  startsWith(value, message) {
+    return this._addCheck({
+      kind: "startsWith",
+      value,
+      ...errorUtil.errToObj(message)
+    });
+  }
+  endsWith(value, message) {
+    return this._addCheck({
+      kind: "endsWith",
+      value,
+      ...errorUtil.errToObj(message)
+    });
+  }
+  min(minLength, message) {
+    return this._addCheck({
+      kind: "min",
+      value: minLength,
+      ...errorUtil.errToObj(message)
+    });
+  }
+  max(maxLength, message) {
+    return this._addCheck({
+      kind: "max",
+      value: maxLength,
+      ...errorUtil.errToObj(message)
+    });
+  }
+  length(len, message) {
+    return this._addCheck({
+      kind: "length",
+      value: len,
+      ...errorUtil.errToObj(message)
+    });
+  }
+  /**
+   * Equivalent to `.min(1)`
+   */
+  nonempty(message) {
+    return this.min(1, errorUtil.errToObj(message));
+  }
+  trim() {
+    return new _ZodString({
+      ...this._def,
+      checks: [...this._def.checks, { kind: "trim" }]
+    });
+  }
+  toLowerCase() {
+    return new _ZodString({
+      ...this._def,
+      checks: [...this._def.checks, { kind: "toLowerCase" }]
+    });
+  }
+  toUpperCase() {
+    return new _ZodString({
+      ...this._def,
+      checks: [...this._def.checks, { kind: "toUpperCase" }]
+    });
+  }
+  get isDatetime() {
+    return !!this._def.checks.find((ch) => ch.kind === "datetime");
+  }
+  get isDate() {
+    return !!this._def.checks.find((ch) => ch.kind === "date");
+  }
+  get isTime() {
+    return !!this._def.checks.find((ch) => ch.kind === "time");
+  }
+  get isDuration() {
+    return !!this._def.checks.find((ch) => ch.kind === "duration");
+  }
+  get isEmail() {
+    return !!this._def.checks.find((ch) => ch.kind === "email");
+  }
+  get isURL() {
+    return !!this._def.checks.find((ch) => ch.kind === "url");
+  }
+  get isEmoji() {
+    return !!this._def.checks.find((ch) => ch.kind === "emoji");
+  }
+  get isUUID() {
+    return !!this._def.checks.find((ch) => ch.kind === "uuid");
+  }
+  get isNANOID() {
+    return !!this._def.checks.find((ch) => ch.kind === "nanoid");
+  }
+  get isCUID() {
+    return !!this._def.checks.find((ch) => ch.kind === "cuid");
+  }
+  get isCUID2() {
+    return !!this._def.checks.find((ch) => ch.kind === "cuid2");
+  }
+  get isULID() {
+    return !!this._def.checks.find((ch) => ch.kind === "ulid");
+  }
+  get isIP() {
+    return !!this._def.checks.find((ch) => ch.kind === "ip");
+  }
+  get isCIDR() {
+    return !!this._def.checks.find((ch) => ch.kind === "cidr");
+  }
+  get isBase64() {
+    return !!this._def.checks.find((ch) => ch.kind === "base64");
+  }
+  get isBase64url() {
+    return !!this._def.checks.find((ch) => ch.kind === "base64url");
+  }
+  get minLength() {
+    let min = null;
+    for (const ch of this._def.checks) {
+      if (ch.kind === "min") {
+        if (min === null || ch.value > min)
+          min = ch.value;
+      }
+    }
+    return min;
+  }
+  get maxLength() {
+    let max = null;
+    for (const ch of this._def.checks) {
+      if (ch.kind === "max") {
+        if (max === null || ch.value < max)
+          max = ch.value;
+      }
+    }
+    return max;
+  }
+};
+ZodString.create = (params) => {
+  return new ZodString({
+    checks: [],
+    typeName: ZodFirstPartyTypeKind.ZodString,
+    coerce: params?.coerce ?? false,
+    ...processCreateParams(params)
+  });
+};
+function floatSafeRemainder(val, step) {
+  const valDecCount = (val.toString().split(".")[1] || "").length;
+  const stepDecCount = (step.toString().split(".")[1] || "").length;
+  const decCount = valDecCount > stepDecCount ? valDecCount : stepDecCount;
+  const valInt = Number.parseInt(val.toFixed(decCount).replace(".", ""));
+  const stepInt = Number.parseInt(step.toFixed(decCount).replace(".", ""));
+  return valInt % stepInt / 10 ** decCount;
+}
+var ZodNumber = class _ZodNumber extends ZodType {
+  constructor() {
+    super(...arguments);
+    this.min = this.gte;
+    this.max = this.lte;
+    this.step = this.multipleOf;
+  }
+  _parse(input) {
+    if (this._def.coerce) {
+      input.data = Number(input.data);
+    }
+    const parsedType = this._getType(input);
+    if (parsedType !== ZodParsedType.number) {
+      const ctx2 = this._getOrReturnCtx(input);
+      addIssueToContext(ctx2, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.number,
+        received: ctx2.parsedType
+      });
+      return INVALID;
+    }
+    let ctx = void 0;
+    const status = new ParseStatus();
+    for (const check of this._def.checks) {
+      if (check.kind === "int") {
+        if (!util.isInteger(input.data)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.invalid_type,
+            expected: "integer",
+            received: "float",
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "min") {
+        const tooSmall = check.inclusive ? input.data < check.value : input.data <= check.value;
+        if (tooSmall) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.too_small,
+            minimum: check.value,
+            type: "number",
+            inclusive: check.inclusive,
+            exact: false,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "max") {
+        const tooBig = check.inclusive ? input.data > check.value : input.data >= check.value;
+        if (tooBig) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.too_big,
+            maximum: check.value,
+            type: "number",
+            inclusive: check.inclusive,
+            exact: false,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "multipleOf") {
+        if (floatSafeRemainder(input.data, check.value) !== 0) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.not_multiple_of,
+            multipleOf: check.value,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "finite") {
+        if (!Number.isFinite(input.data)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.not_finite,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else {
+        util.assertNever(check);
+      }
+    }
+    return { status: status.value, value: input.data };
+  }
+  gte(value, message) {
+    return this.setLimit("min", value, true, errorUtil.toString(message));
+  }
+  gt(value, message) {
+    return this.setLimit("min", value, false, errorUtil.toString(message));
+  }
+  lte(value, message) {
+    return this.setLimit("max", value, true, errorUtil.toString(message));
+  }
+  lt(value, message) {
+    return this.setLimit("max", value, false, errorUtil.toString(message));
+  }
+  setLimit(kind, value, inclusive, message) {
+    return new _ZodNumber({
+      ...this._def,
+      checks: [
+        ...this._def.checks,
+        {
+          kind,
+          value,
+          inclusive,
+          message: errorUtil.toString(message)
+        }
+      ]
+    });
+  }
+  _addCheck(check) {
+    return new _ZodNumber({
+      ...this._def,
+      checks: [...this._def.checks, check]
+    });
+  }
+  int(message) {
+    return this._addCheck({
+      kind: "int",
+      message: errorUtil.toString(message)
+    });
+  }
+  positive(message) {
+    return this._addCheck({
+      kind: "min",
+      value: 0,
+      inclusive: false,
+      message: errorUtil.toString(message)
+    });
+  }
+  negative(message) {
+    return this._addCheck({
+      kind: "max",
+      value: 0,
+      inclusive: false,
+      message: errorUtil.toString(message)
+    });
+  }
+  nonpositive(message) {
+    return this._addCheck({
+      kind: "max",
+      value: 0,
+      inclusive: true,
+      message: errorUtil.toString(message)
+    });
+  }
+  nonnegative(message) {
+    return this._addCheck({
+      kind: "min",
+      value: 0,
+      inclusive: true,
+      message: errorUtil.toString(message)
+    });
+  }
+  multipleOf(value, message) {
+    return this._addCheck({
+      kind: "multipleOf",
+      value,
+      message: errorUtil.toString(message)
+    });
+  }
+  finite(message) {
+    return this._addCheck({
+      kind: "finite",
+      message: errorUtil.toString(message)
+    });
+  }
+  safe(message) {
+    return this._addCheck({
+      kind: "min",
+      inclusive: true,
+      value: Number.MIN_SAFE_INTEGER,
+      message: errorUtil.toString(message)
+    })._addCheck({
+      kind: "max",
+      inclusive: true,
+      value: Number.MAX_SAFE_INTEGER,
+      message: errorUtil.toString(message)
+    });
+  }
+  get minValue() {
+    let min = null;
+    for (const ch of this._def.checks) {
+      if (ch.kind === "min") {
+        if (min === null || ch.value > min)
+          min = ch.value;
+      }
+    }
+    return min;
+  }
+  get maxValue() {
+    let max = null;
+    for (const ch of this._def.checks) {
+      if (ch.kind === "max") {
+        if (max === null || ch.value < max)
+          max = ch.value;
+      }
+    }
+    return max;
+  }
+  get isInt() {
+    return !!this._def.checks.find((ch) => ch.kind === "int" || ch.kind === "multipleOf" && util.isInteger(ch.value));
+  }
+  get isFinite() {
+    let max = null;
+    let min = null;
+    for (const ch of this._def.checks) {
+      if (ch.kind === "finite" || ch.kind === "int" || ch.kind === "multipleOf") {
+        return true;
+      } else if (ch.kind === "min") {
+        if (min === null || ch.value > min)
+          min = ch.value;
+      } else if (ch.kind === "max") {
+        if (max === null || ch.value < max)
+          max = ch.value;
+      }
+    }
+    return Number.isFinite(min) && Number.isFinite(max);
+  }
+};
+ZodNumber.create = (params) => {
+  return new ZodNumber({
+    checks: [],
+    typeName: ZodFirstPartyTypeKind.ZodNumber,
+    coerce: params?.coerce || false,
+    ...processCreateParams(params)
+  });
+};
+var ZodBigInt = class _ZodBigInt extends ZodType {
+  constructor() {
+    super(...arguments);
+    this.min = this.gte;
+    this.max = this.lte;
+  }
+  _parse(input) {
+    if (this._def.coerce) {
+      try {
+        input.data = BigInt(input.data);
+      } catch {
+        return this._getInvalidInput(input);
+      }
+    }
+    const parsedType = this._getType(input);
+    if (parsedType !== ZodParsedType.bigint) {
+      return this._getInvalidInput(input);
+    }
+    let ctx = void 0;
+    const status = new ParseStatus();
+    for (const check of this._def.checks) {
+      if (check.kind === "min") {
+        const tooSmall = check.inclusive ? input.data < check.value : input.data <= check.value;
+        if (tooSmall) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.too_small,
+            type: "bigint",
+            minimum: check.value,
+            inclusive: check.inclusive,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "max") {
+        const tooBig = check.inclusive ? input.data > check.value : input.data >= check.value;
+        if (tooBig) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.too_big,
+            type: "bigint",
+            maximum: check.value,
+            inclusive: check.inclusive,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "multipleOf") {
+        if (input.data % check.value !== BigInt(0)) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.not_multiple_of,
+            multipleOf: check.value,
+            message: check.message
+          });
+          status.dirty();
+        }
+      } else {
+        util.assertNever(check);
+      }
+    }
+    return { status: status.value, value: input.data };
+  }
+  _getInvalidInput(input) {
+    const ctx = this._getOrReturnCtx(input);
+    addIssueToContext(ctx, {
+      code: ZodIssueCode.invalid_type,
+      expected: ZodParsedType.bigint,
+      received: ctx.parsedType
+    });
+    return INVALID;
+  }
+  gte(value, message) {
+    return this.setLimit("min", value, true, errorUtil.toString(message));
+  }
+  gt(value, message) {
+    return this.setLimit("min", value, false, errorUtil.toString(message));
+  }
+  lte(value, message) {
+    return this.setLimit("max", value, true, errorUtil.toString(message));
+  }
+  lt(value, message) {
+    return this.setLimit("max", value, false, errorUtil.toString(message));
+  }
+  setLimit(kind, value, inclusive, message) {
+    return new _ZodBigInt({
+      ...this._def,
+      checks: [
+        ...this._def.checks,
+        {
+          kind,
+          value,
+          inclusive,
+          message: errorUtil.toString(message)
+        }
+      ]
+    });
+  }
+  _addCheck(check) {
+    return new _ZodBigInt({
+      ...this._def,
+      checks: [...this._def.checks, check]
+    });
+  }
+  positive(message) {
+    return this._addCheck({
+      kind: "min",
+      value: BigInt(0),
+      inclusive: false,
+      message: errorUtil.toString(message)
+    });
+  }
+  negative(message) {
+    return this._addCheck({
+      kind: "max",
+      value: BigInt(0),
+      inclusive: false,
+      message: errorUtil.toString(message)
+    });
+  }
+  nonpositive(message) {
+    return this._addCheck({
+      kind: "max",
+      value: BigInt(0),
+      inclusive: true,
+      message: errorUtil.toString(message)
+    });
+  }
+  nonnegative(message) {
+    return this._addCheck({
+      kind: "min",
+      value: BigInt(0),
+      inclusive: true,
+      message: errorUtil.toString(message)
+    });
+  }
+  multipleOf(value, message) {
+    return this._addCheck({
+      kind: "multipleOf",
+      value,
+      message: errorUtil.toString(message)
+    });
+  }
+  get minValue() {
+    let min = null;
+    for (const ch of this._def.checks) {
+      if (ch.kind === "min") {
+        if (min === null || ch.value > min)
+          min = ch.value;
+      }
+    }
+    return min;
+  }
+  get maxValue() {
+    let max = null;
+    for (const ch of this._def.checks) {
+      if (ch.kind === "max") {
+        if (max === null || ch.value < max)
+          max = ch.value;
+      }
+    }
+    return max;
+  }
+};
+ZodBigInt.create = (params) => {
+  return new ZodBigInt({
+    checks: [],
+    typeName: ZodFirstPartyTypeKind.ZodBigInt,
+    coerce: params?.coerce ?? false,
+    ...processCreateParams(params)
+  });
+};
+var ZodBoolean = class extends ZodType {
+  _parse(input) {
+    if (this._def.coerce) {
+      input.data = Boolean(input.data);
+    }
+    const parsedType = this._getType(input);
+    if (parsedType !== ZodParsedType.boolean) {
+      const ctx = this._getOrReturnCtx(input);
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.boolean,
+        received: ctx.parsedType
+      });
+      return INVALID;
+    }
+    return OK(input.data);
+  }
+};
+ZodBoolean.create = (params) => {
+  return new ZodBoolean({
+    typeName: ZodFirstPartyTypeKind.ZodBoolean,
+    coerce: params?.coerce || false,
+    ...processCreateParams(params)
+  });
+};
+var ZodDate = class _ZodDate extends ZodType {
+  _parse(input) {
+    if (this._def.coerce) {
+      input.data = new Date(input.data);
+    }
+    const parsedType = this._getType(input);
+    if (parsedType !== ZodParsedType.date) {
+      const ctx2 = this._getOrReturnCtx(input);
+      addIssueToContext(ctx2, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.date,
+        received: ctx2.parsedType
+      });
+      return INVALID;
+    }
+    if (Number.isNaN(input.data.getTime())) {
+      const ctx2 = this._getOrReturnCtx(input);
+      addIssueToContext(ctx2, {
+        code: ZodIssueCode.invalid_date
+      });
+      return INVALID;
+    }
+    const status = new ParseStatus();
+    let ctx = void 0;
+    for (const check of this._def.checks) {
+      if (check.kind === "min") {
+        if (input.data.getTime() < check.value) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.too_small,
+            message: check.message,
+            inclusive: true,
+            exact: false,
+            minimum: check.value,
+            type: "date"
+          });
+          status.dirty();
+        }
+      } else if (check.kind === "max") {
+        if (input.data.getTime() > check.value) {
+          ctx = this._getOrReturnCtx(input, ctx);
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.too_big,
+            message: check.message,
+            inclusive: true,
+            exact: false,
+            maximum: check.value,
+            type: "date"
+          });
+          status.dirty();
+        }
+      } else {
+        util.assertNever(check);
+      }
+    }
+    return {
+      status: status.value,
+      value: new Date(input.data.getTime())
+    };
+  }
+  _addCheck(check) {
+    return new _ZodDate({
+      ...this._def,
+      checks: [...this._def.checks, check]
+    });
+  }
+  min(minDate, message) {
+    return this._addCheck({
+      kind: "min",
+      value: minDate.getTime(),
+      message: errorUtil.toString(message)
+    });
+  }
+  max(maxDate, message) {
+    return this._addCheck({
+      kind: "max",
+      value: maxDate.getTime(),
+      message: errorUtil.toString(message)
+    });
+  }
+  get minDate() {
+    let min = null;
+    for (const ch of this._def.checks) {
+      if (ch.kind === "min") {
+        if (min === null || ch.value > min)
+          min = ch.value;
+      }
+    }
+    return min != null ? new Date(min) : null;
+  }
+  get maxDate() {
+    let max = null;
+    for (const ch of this._def.checks) {
+      if (ch.kind === "max") {
+        if (max === null || ch.value < max)
+          max = ch.value;
+      }
+    }
+    return max != null ? new Date(max) : null;
+  }
+};
+ZodDate.create = (params) => {
+  return new ZodDate({
+    checks: [],
+    coerce: params?.coerce || false,
+    typeName: ZodFirstPartyTypeKind.ZodDate,
+    ...processCreateParams(params)
+  });
+};
+var ZodSymbol = class extends ZodType {
+  _parse(input) {
+    const parsedType = this._getType(input);
+    if (parsedType !== ZodParsedType.symbol) {
+      const ctx = this._getOrReturnCtx(input);
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.symbol,
+        received: ctx.parsedType
+      });
+      return INVALID;
+    }
+    return OK(input.data);
+  }
+};
+ZodSymbol.create = (params) => {
+  return new ZodSymbol({
+    typeName: ZodFirstPartyTypeKind.ZodSymbol,
+    ...processCreateParams(params)
+  });
+};
+var ZodUndefined = class extends ZodType {
+  _parse(input) {
+    const parsedType = this._getType(input);
+    if (parsedType !== ZodParsedType.undefined) {
+      const ctx = this._getOrReturnCtx(input);
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.undefined,
+        received: ctx.parsedType
+      });
+      return INVALID;
+    }
+    return OK(input.data);
+  }
+};
+ZodUndefined.create = (params) => {
+  return new ZodUndefined({
+    typeName: ZodFirstPartyTypeKind.ZodUndefined,
+    ...processCreateParams(params)
+  });
+};
+var ZodNull = class extends ZodType {
+  _parse(input) {
+    const parsedType = this._getType(input);
+    if (parsedType !== ZodParsedType.null) {
+      const ctx = this._getOrReturnCtx(input);
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.null,
+        received: ctx.parsedType
+      });
+      return INVALID;
+    }
+    return OK(input.data);
+  }
+};
+ZodNull.create = (params) => {
+  return new ZodNull({
+    typeName: ZodFirstPartyTypeKind.ZodNull,
+    ...processCreateParams(params)
+  });
+};
+var ZodAny = class extends ZodType {
+  constructor() {
+    super(...arguments);
+    this._any = true;
+  }
+  _parse(input) {
+    return OK(input.data);
+  }
+};
+ZodAny.create = (params) => {
+  return new ZodAny({
+    typeName: ZodFirstPartyTypeKind.ZodAny,
+    ...processCreateParams(params)
+  });
+};
+var ZodUnknown = class extends ZodType {
+  constructor() {
+    super(...arguments);
+    this._unknown = true;
+  }
+  _parse(input) {
+    return OK(input.data);
+  }
+};
+ZodUnknown.create = (params) => {
+  return new ZodUnknown({
+    typeName: ZodFirstPartyTypeKind.ZodUnknown,
+    ...processCreateParams(params)
+  });
+};
+var ZodNever = class extends ZodType {
+  _parse(input) {
+    const ctx = this._getOrReturnCtx(input);
+    addIssueToContext(ctx, {
+      code: ZodIssueCode.invalid_type,
+      expected: ZodParsedType.never,
+      received: ctx.parsedType
+    });
+    return INVALID;
+  }
+};
+ZodNever.create = (params) => {
+  return new ZodNever({
+    typeName: ZodFirstPartyTypeKind.ZodNever,
+    ...processCreateParams(params)
+  });
+};
+var ZodVoid = class extends ZodType {
+  _parse(input) {
+    const parsedType = this._getType(input);
+    if (parsedType !== ZodParsedType.undefined) {
+      const ctx = this._getOrReturnCtx(input);
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.void,
+        received: ctx.parsedType
+      });
+      return INVALID;
+    }
+    return OK(input.data);
+  }
+};
+ZodVoid.create = (params) => {
+  return new ZodVoid({
+    typeName: ZodFirstPartyTypeKind.ZodVoid,
+    ...processCreateParams(params)
+  });
+};
+var ZodArray = class _ZodArray extends ZodType {
+  _parse(input) {
+    const { ctx, status } = this._processInputParams(input);
+    const def = this._def;
+    if (ctx.parsedType !== ZodParsedType.array) {
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.array,
+        received: ctx.parsedType
+      });
+      return INVALID;
+    }
+    if (def.exactLength !== null) {
+      const tooBig = ctx.data.length > def.exactLength.value;
+      const tooSmall = ctx.data.length < def.exactLength.value;
+      if (tooBig || tooSmall) {
+        addIssueToContext(ctx, {
+          code: tooBig ? ZodIssueCode.too_big : ZodIssueCode.too_small,
+          minimum: tooSmall ? def.exactLength.value : void 0,
+          maximum: tooBig ? def.exactLength.value : void 0,
+          type: "array",
+          inclusive: true,
+          exact: true,
+          message: def.exactLength.message
+        });
+        status.dirty();
+      }
+    }
+    if (def.minLength !== null) {
+      if (ctx.data.length < def.minLength.value) {
+        addIssueToContext(ctx, {
+          code: ZodIssueCode.too_small,
+          minimum: def.minLength.value,
+          type: "array",
+          inclusive: true,
+          exact: false,
+          message: def.minLength.message
+        });
+        status.dirty();
+      }
+    }
+    if (def.maxLength !== null) {
+      if (ctx.data.length > def.maxLength.value) {
+        addIssueToContext(ctx, {
+          code: ZodIssueCode.too_big,
+          maximum: def.maxLength.value,
+          type: "array",
+          inclusive: true,
+          exact: false,
+          message: def.maxLength.message
+        });
+        status.dirty();
+      }
+    }
+    if (ctx.common.async) {
+      return Promise.all([...ctx.data].map((item, i) => {
+        return def.type._parseAsync(new ParseInputLazyPath(ctx, item, ctx.path, i));
+      })).then((result2) => {
+        return ParseStatus.mergeArray(status, result2);
+      });
+    }
+    const result = [...ctx.data].map((item, i) => {
+      return def.type._parseSync(new ParseInputLazyPath(ctx, item, ctx.path, i));
+    });
+    return ParseStatus.mergeArray(status, result);
+  }
+  get element() {
+    return this._def.type;
+  }
+  min(minLength, message) {
+    return new _ZodArray({
+      ...this._def,
+      minLength: { value: minLength, message: errorUtil.toString(message) }
+    });
+  }
+  max(maxLength, message) {
+    return new _ZodArray({
+      ...this._def,
+      maxLength: { value: maxLength, message: errorUtil.toString(message) }
+    });
+  }
+  length(len, message) {
+    return new _ZodArray({
+      ...this._def,
+      exactLength: { value: len, message: errorUtil.toString(message) }
+    });
+  }
+  nonempty(message) {
+    return this.min(1, message);
+  }
+};
+ZodArray.create = (schema, params) => {
+  return new ZodArray({
+    type: schema,
+    minLength: null,
+    maxLength: null,
+    exactLength: null,
+    typeName: ZodFirstPartyTypeKind.ZodArray,
+    ...processCreateParams(params)
+  });
+};
+function deepPartialify(schema) {
+  if (schema instanceof ZodObject) {
+    const newShape = {};
+    for (const key in schema.shape) {
+      const fieldSchema = schema.shape[key];
+      newShape[key] = ZodOptional.create(deepPartialify(fieldSchema));
+    }
+    return new ZodObject({
+      ...schema._def,
+      shape: () => newShape
+    });
+  } else if (schema instanceof ZodArray) {
+    return new ZodArray({
+      ...schema._def,
+      type: deepPartialify(schema.element)
+    });
+  } else if (schema instanceof ZodOptional) {
+    return ZodOptional.create(deepPartialify(schema.unwrap()));
+  } else if (schema instanceof ZodNullable) {
+    return ZodNullable.create(deepPartialify(schema.unwrap()));
+  } else if (schema instanceof ZodTuple) {
+    return ZodTuple.create(schema.items.map((item) => deepPartialify(item)));
+  } else {
+    return schema;
+  }
+}
+var ZodObject = class _ZodObject extends ZodType {
+  constructor() {
+    super(...arguments);
+    this._cached = null;
+    this.nonstrict = this.passthrough;
+    this.augment = this.extend;
+  }
+  _getCached() {
+    if (this._cached !== null)
+      return this._cached;
+    const shape = this._def.shape();
+    const keys = util.objectKeys(shape);
+    this._cached = { shape, keys };
+    return this._cached;
+  }
+  _parse(input) {
+    const parsedType = this._getType(input);
+    if (parsedType !== ZodParsedType.object) {
+      const ctx2 = this._getOrReturnCtx(input);
+      addIssueToContext(ctx2, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.object,
+        received: ctx2.parsedType
+      });
+      return INVALID;
+    }
+    const { status, ctx } = this._processInputParams(input);
+    const { shape, keys: shapeKeys } = this._getCached();
+    const extraKeys = [];
+    if (!(this._def.catchall instanceof ZodNever && this._def.unknownKeys === "strip")) {
+      for (const key in ctx.data) {
+        if (!shapeKeys.includes(key)) {
+          extraKeys.push(key);
+        }
+      }
+    }
+    const pairs = [];
+    for (const key of shapeKeys) {
+      const keyValidator = shape[key];
+      const value = ctx.data[key];
+      pairs.push({
+        key: { status: "valid", value: key },
+        value: keyValidator._parse(new ParseInputLazyPath(ctx, value, ctx.path, key)),
+        alwaysSet: key in ctx.data
+      });
+    }
+    if (this._def.catchall instanceof ZodNever) {
+      const unknownKeys = this._def.unknownKeys;
+      if (unknownKeys === "passthrough") {
+        for (const key of extraKeys) {
+          pairs.push({
+            key: { status: "valid", value: key },
+            value: { status: "valid", value: ctx.data[key] }
+          });
+        }
+      } else if (unknownKeys === "strict") {
+        if (extraKeys.length > 0) {
+          addIssueToContext(ctx, {
+            code: ZodIssueCode.unrecognized_keys,
+            keys: extraKeys
+          });
+          status.dirty();
+        }
+      } else if (unknownKeys === "strip") {
+      } else {
+        throw new Error(`Internal ZodObject error: invalid unknownKeys value.`);
+      }
+    } else {
+      const catchall = this._def.catchall;
+      for (const key of extraKeys) {
+        const value = ctx.data[key];
+        pairs.push({
+          key: { status: "valid", value: key },
+          value: catchall._parse(
+            new ParseInputLazyPath(ctx, value, ctx.path, key)
+            //, ctx.child(key), value, getParsedType(value)
+          ),
+          alwaysSet: key in ctx.data
+        });
+      }
+    }
+    if (ctx.common.async) {
+      return Promise.resolve().then(async () => {
+        const syncPairs = [];
+        for (const pair of pairs) {
+          const key = await pair.key;
+          const value = await pair.value;
+          syncPairs.push({
+            key,
+            value,
+            alwaysSet: pair.alwaysSet
+          });
+        }
+        return syncPairs;
+      }).then((syncPairs) => {
+        return ParseStatus.mergeObjectSync(status, syncPairs);
+      });
+    } else {
+      return ParseStatus.mergeObjectSync(status, pairs);
+    }
+  }
+  get shape() {
+    return this._def.shape();
+  }
+  strict(message) {
+    errorUtil.errToObj;
+    return new _ZodObject({
+      ...this._def,
+      unknownKeys: "strict",
+      ...message !== void 0 ? {
+        errorMap: (issue, ctx) => {
+          const defaultError = this._def.errorMap?.(issue, ctx).message ?? ctx.defaultError;
+          if (issue.code === "unrecognized_keys")
+            return {
+              message: errorUtil.errToObj(message).message ?? defaultError
+            };
+          return {
+            message: defaultError
+          };
+        }
+      } : {}
+    });
+  }
+  strip() {
+    return new _ZodObject({
+      ...this._def,
+      unknownKeys: "strip"
+    });
+  }
+  passthrough() {
+    return new _ZodObject({
+      ...this._def,
+      unknownKeys: "passthrough"
+    });
+  }
+  // const AugmentFactory =
+  //   <Def extends ZodObjectDef>(def: Def) =>
+  //   <Augmentation extends ZodRawShape>(
+  //     augmentation: Augmentation
+  //   ): ZodObject<
+  //     extendShape<ReturnType<Def["shape"]>, Augmentation>,
+  //     Def["unknownKeys"],
+  //     Def["catchall"]
+  //   > => {
+  //     return new ZodObject({
+  //       ...def,
+  //       shape: () => ({
+  //         ...def.shape(),
+  //         ...augmentation,
+  //       }),
+  //     }) as any;
+  //   };
+  extend(augmentation) {
+    return new _ZodObject({
+      ...this._def,
+      shape: () => ({
+        ...this._def.shape(),
+        ...augmentation
+      })
+    });
+  }
+  /**
+   * Prior to zod@1.0.12 there was a bug in the
+   * inferred type of merged objects. Please
+   * upgrade if you are experiencing issues.
+   */
+  merge(merging) {
+    const merged = new _ZodObject({
+      unknownKeys: merging._def.unknownKeys,
+      catchall: merging._def.catchall,
+      shape: () => ({
+        ...this._def.shape(),
+        ...merging._def.shape()
+      }),
+      typeName: ZodFirstPartyTypeKind.ZodObject
+    });
+    return merged;
+  }
+  // merge<
+  //   Incoming extends AnyZodObject,
+  //   Augmentation extends Incoming["shape"],
+  //   NewOutput extends {
+  //     [k in keyof Augmentation | keyof Output]: k extends keyof Augmentation
+  //       ? Augmentation[k]["_output"]
+  //       : k extends keyof Output
+  //       ? Output[k]
+  //       : never;
+  //   },
+  //   NewInput extends {
+  //     [k in keyof Augmentation | keyof Input]: k extends keyof Augmentation
+  //       ? Augmentation[k]["_input"]
+  //       : k extends keyof Input
+  //       ? Input[k]
+  //       : never;
+  //   }
+  // >(
+  //   merging: Incoming
+  // ): ZodObject<
+  //   extendShape<T, ReturnType<Incoming["_def"]["shape"]>>,
+  //   Incoming["_def"]["unknownKeys"],
+  //   Incoming["_def"]["catchall"],
+  //   NewOutput,
+  //   NewInput
+  // > {
+  //   const merged: any = new ZodObject({
+  //     unknownKeys: merging._def.unknownKeys,
+  //     catchall: merging._def.catchall,
+  //     shape: () =>
+  //       objectUtil.mergeShapes(this._def.shape(), merging._def.shape()),
+  //     typeName: ZodFirstPartyTypeKind.ZodObject,
+  //   }) as any;
+  //   return merged;
+  // }
+  setKey(key, schema) {
+    return this.augment({ [key]: schema });
+  }
+  // merge<Incoming extends AnyZodObject>(
+  //   merging: Incoming
+  // ): //ZodObject<T & Incoming["_shape"], UnknownKeys, Catchall> = (merging) => {
+  // ZodObject<
+  //   extendShape<T, ReturnType<Incoming["_def"]["shape"]>>,
+  //   Incoming["_def"]["unknownKeys"],
+  //   Incoming["_def"]["catchall"]
+  // > {
+  //   // const mergedShape = objectUtil.mergeShapes(
+  //   //   this._def.shape(),
+  //   //   merging._def.shape()
+  //   // );
+  //   const merged: any = new ZodObject({
+  //     unknownKeys: merging._def.unknownKeys,
+  //     catchall: merging._def.catchall,
+  //     shape: () =>
+  //       objectUtil.mergeShapes(this._def.shape(), merging._def.shape()),
+  //     typeName: ZodFirstPartyTypeKind.ZodObject,
+  //   }) as any;
+  //   return merged;
+  // }
+  catchall(index) {
+    return new _ZodObject({
+      ...this._def,
+      catchall: index
+    });
+  }
+  pick(mask) {
+    const shape = {};
+    for (const key of util.objectKeys(mask)) {
+      if (mask[key] && this.shape[key]) {
+        shape[key] = this.shape[key];
+      }
+    }
+    return new _ZodObject({
+      ...this._def,
+      shape: () => shape
+    });
+  }
+  omit(mask) {
+    const shape = {};
+    for (const key of util.objectKeys(this.shape)) {
+      if (!mask[key]) {
+        shape[key] = this.shape[key];
+      }
+    }
+    return new _ZodObject({
+      ...this._def,
+      shape: () => shape
+    });
+  }
+  /**
+   * @deprecated
+   */
+  deepPartial() {
+    return deepPartialify(this);
+  }
+  partial(mask) {
+    const newShape = {};
+    for (const key of util.objectKeys(this.shape)) {
+      const fieldSchema = this.shape[key];
+      if (mask && !mask[key]) {
+        newShape[key] = fieldSchema;
+      } else {
+        newShape[key] = fieldSchema.optional();
+      }
+    }
+    return new _ZodObject({
+      ...this._def,
+      shape: () => newShape
+    });
+  }
+  required(mask) {
+    const newShape = {};
+    for (const key of util.objectKeys(this.shape)) {
+      if (mask && !mask[key]) {
+        newShape[key] = this.shape[key];
+      } else {
+        const fieldSchema = this.shape[key];
+        let newField = fieldSchema;
+        while (newField instanceof ZodOptional) {
+          newField = newField._def.innerType;
+        }
+        newShape[key] = newField;
+      }
+    }
+    return new _ZodObject({
+      ...this._def,
+      shape: () => newShape
+    });
+  }
+  keyof() {
+    return createZodEnum(util.objectKeys(this.shape));
+  }
+};
+ZodObject.create = (shape, params) => {
+  return new ZodObject({
+    shape: () => shape,
+    unknownKeys: "strip",
+    catchall: ZodNever.create(),
+    typeName: ZodFirstPartyTypeKind.ZodObject,
+    ...processCreateParams(params)
+  });
+};
+ZodObject.strictCreate = (shape, params) => {
+  return new ZodObject({
+    shape: () => shape,
+    unknownKeys: "strict",
+    catchall: ZodNever.create(),
+    typeName: ZodFirstPartyTypeKind.ZodObject,
+    ...processCreateParams(params)
+  });
+};
+ZodObject.lazycreate = (shape, params) => {
+  return new ZodObject({
+    shape,
+    unknownKeys: "strip",
+    catchall: ZodNever.create(),
+    typeName: ZodFirstPartyTypeKind.ZodObject,
+    ...processCreateParams(params)
+  });
+};
+var ZodUnion = class extends ZodType {
+  _parse(input) {
+    const { ctx } = this._processInputParams(input);
+    const options = this._def.options;
+    function handleResults(results) {
+      for (const result of results) {
+        if (result.result.status === "valid") {
+          return result.result;
+        }
+      }
+      for (const result of results) {
+        if (result.result.status === "dirty") {
+          ctx.common.issues.push(...result.ctx.common.issues);
+          return result.result;
+        }
+      }
+      const unionErrors = results.map((result) => new ZodError(result.ctx.common.issues));
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_union,
+        unionErrors
+      });
+      return INVALID;
+    }
+    if (ctx.common.async) {
+      return Promise.all(options.map(async (option) => {
+        const childCtx = {
+          ...ctx,
+          common: {
+            ...ctx.common,
+            issues: []
+          },
+          parent: null
+        };
+        return {
+          result: await option._parseAsync({
+            data: ctx.data,
+            path: ctx.path,
+            parent: childCtx
+          }),
+          ctx: childCtx
+        };
+      })).then(handleResults);
+    } else {
+      let dirty = void 0;
+      const issues = [];
+      for (const option of options) {
+        const childCtx = {
+          ...ctx,
+          common: {
+            ...ctx.common,
+            issues: []
+          },
+          parent: null
+        };
+        const result = option._parseSync({
+          data: ctx.data,
+          path: ctx.path,
+          parent: childCtx
+        });
+        if (result.status === "valid") {
+          return result;
+        } else if (result.status === "dirty" && !dirty) {
+          dirty = { result, ctx: childCtx };
+        }
+        if (childCtx.common.issues.length) {
+          issues.push(childCtx.common.issues);
+        }
+      }
+      if (dirty) {
+        ctx.common.issues.push(...dirty.ctx.common.issues);
+        return dirty.result;
+      }
+      const unionErrors = issues.map((issues2) => new ZodError(issues2));
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_union,
+        unionErrors
+      });
+      return INVALID;
+    }
+  }
+  get options() {
+    return this._def.options;
+  }
+};
+ZodUnion.create = (types, params) => {
+  return new ZodUnion({
+    options: types,
+    typeName: ZodFirstPartyTypeKind.ZodUnion,
+    ...processCreateParams(params)
+  });
+};
+var getDiscriminator = (type) => {
+  if (type instanceof ZodLazy) {
+    return getDiscriminator(type.schema);
+  } else if (type instanceof ZodEffects) {
+    return getDiscriminator(type.innerType());
+  } else if (type instanceof ZodLiteral) {
+    return [type.value];
+  } else if (type instanceof ZodEnum) {
+    return type.options;
+  } else if (type instanceof ZodNativeEnum) {
+    return util.objectValues(type.enum);
+  } else if (type instanceof ZodDefault) {
+    return getDiscriminator(type._def.innerType);
+  } else if (type instanceof ZodUndefined) {
+    return [void 0];
+  } else if (type instanceof ZodNull) {
+    return [null];
+  } else if (type instanceof ZodOptional) {
+    return [void 0, ...getDiscriminator(type.unwrap())];
+  } else if (type instanceof ZodNullable) {
+    return [null, ...getDiscriminator(type.unwrap())];
+  } else if (type instanceof ZodBranded) {
+    return getDiscriminator(type.unwrap());
+  } else if (type instanceof ZodReadonly) {
+    return getDiscriminator(type.unwrap());
+  } else if (type instanceof ZodCatch) {
+    return getDiscriminator(type._def.innerType);
+  } else {
+    return [];
+  }
+};
+var ZodDiscriminatedUnion = class _ZodDiscriminatedUnion extends ZodType {
+  _parse(input) {
+    const { ctx } = this._processInputParams(input);
+    if (ctx.parsedType !== ZodParsedType.object) {
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.object,
+        received: ctx.parsedType
+      });
+      return INVALID;
+    }
+    const discriminator = this.discriminator;
+    const discriminatorValue = ctx.data[discriminator];
+    const option = this.optionsMap.get(discriminatorValue);
+    if (!option) {
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_union_discriminator,
+        options: Array.from(this.optionsMap.keys()),
+        path: [discriminator]
+      });
+      return INVALID;
+    }
+    if (ctx.common.async) {
+      return option._parseAsync({
+        data: ctx.data,
+        path: ctx.path,
+        parent: ctx
+      });
+    } else {
+      return option._parseSync({
+        data: ctx.data,
+        path: ctx.path,
+        parent: ctx
+      });
+    }
+  }
+  get discriminator() {
+    return this._def.discriminator;
+  }
+  get options() {
+    return this._def.options;
+  }
+  get optionsMap() {
+    return this._def.optionsMap;
+  }
+  /**
+   * The constructor of the discriminated union schema. Its behaviour is very similar to that of the normal z.union() constructor.
+   * However, it only allows a union of objects, all of which need to share a discriminator property. This property must
+   * have a different value for each object in the union.
+   * @param discriminator the name of the discriminator property
+   * @param types an array of object schemas
+   * @param params
+   */
+  static create(discriminator, options, params) {
+    const optionsMap = /* @__PURE__ */ new Map();
+    for (const type of options) {
+      const discriminatorValues = getDiscriminator(type.shape[discriminator]);
+      if (!discriminatorValues.length) {
+        throw new Error(`A discriminator value for key \`${discriminator}\` could not be extracted from all schema options`);
+      }
+      for (const value of discriminatorValues) {
+        if (optionsMap.has(value)) {
+          throw new Error(`Discriminator property ${String(discriminator)} has duplicate value ${String(value)}`);
+        }
+        optionsMap.set(value, type);
+      }
+    }
+    return new _ZodDiscriminatedUnion({
+      typeName: ZodFirstPartyTypeKind.ZodDiscriminatedUnion,
+      discriminator,
+      options,
+      optionsMap,
+      ...processCreateParams(params)
+    });
+  }
+};
+function mergeValues(a, b) {
+  const aType = getParsedType(a);
+  const bType = getParsedType(b);
+  if (a === b) {
+    return { valid: true, data: a };
+  } else if (aType === ZodParsedType.object && bType === ZodParsedType.object) {
+    const bKeys = util.objectKeys(b);
+    const sharedKeys = util.objectKeys(a).filter((key) => bKeys.indexOf(key) !== -1);
+    const newObj = { ...a, ...b };
+    for (const key of sharedKeys) {
+      const sharedValue = mergeValues(a[key], b[key]);
+      if (!sharedValue.valid) {
+        return { valid: false };
+      }
+      newObj[key] = sharedValue.data;
+    }
+    return { valid: true, data: newObj };
+  } else if (aType === ZodParsedType.array && bType === ZodParsedType.array) {
+    if (a.length !== b.length) {
+      return { valid: false };
+    }
+    const newArray = [];
+    for (let index = 0; index < a.length; index++) {
+      const itemA = a[index];
+      const itemB = b[index];
+      const sharedValue = mergeValues(itemA, itemB);
+      if (!sharedValue.valid) {
+        return { valid: false };
+      }
+      newArray.push(sharedValue.data);
+    }
+    return { valid: true, data: newArray };
+  } else if (aType === ZodParsedType.date && bType === ZodParsedType.date && +a === +b) {
+    return { valid: true, data: a };
+  } else {
+    return { valid: false };
+  }
+}
+var ZodIntersection = class extends ZodType {
+  _parse(input) {
+    const { status, ctx } = this._processInputParams(input);
+    const handleParsed = (parsedLeft, parsedRight) => {
+      if (isAborted(parsedLeft) || isAborted(parsedRight)) {
+        return INVALID;
+      }
+      const merged = mergeValues(parsedLeft.value, parsedRight.value);
+      if (!merged.valid) {
+        addIssueToContext(ctx, {
+          code: ZodIssueCode.invalid_intersection_types
+        });
+        return INVALID;
+      }
+      if (isDirty(parsedLeft) || isDirty(parsedRight)) {
+        status.dirty();
+      }
+      return { status: status.value, value: merged.data };
+    };
+    if (ctx.common.async) {
+      return Promise.all([
+        this._def.left._parseAsync({
+          data: ctx.data,
+          path: ctx.path,
+          parent: ctx
+        }),
+        this._def.right._parseAsync({
+          data: ctx.data,
+          path: ctx.path,
+          parent: ctx
+        })
+      ]).then(([left, right]) => handleParsed(left, right));
+    } else {
+      return handleParsed(this._def.left._parseSync({
+        data: ctx.data,
+        path: ctx.path,
+        parent: ctx
+      }), this._def.right._parseSync({
+        data: ctx.data,
+        path: ctx.path,
+        parent: ctx
+      }));
+    }
+  }
+};
+ZodIntersection.create = (left, right, params) => {
+  return new ZodIntersection({
+    left,
+    right,
+    typeName: ZodFirstPartyTypeKind.ZodIntersection,
+    ...processCreateParams(params)
+  });
+};
+var ZodTuple = class _ZodTuple extends ZodType {
+  _parse(input) {
+    const { status, ctx } = this._processInputParams(input);
+    if (ctx.parsedType !== ZodParsedType.array) {
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.array,
+        received: ctx.parsedType
+      });
+      return INVALID;
+    }
+    if (ctx.data.length < this._def.items.length) {
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.too_small,
+        minimum: this._def.items.length,
+        inclusive: true,
+        exact: false,
+        type: "array"
+      });
+      return INVALID;
+    }
+    const rest = this._def.rest;
+    if (!rest && ctx.data.length > this._def.items.length) {
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.too_big,
+        maximum: this._def.items.length,
+        inclusive: true,
+        exact: false,
+        type: "array"
+      });
+      status.dirty();
+    }
+    const items = [...ctx.data].map((item, itemIndex) => {
+      const schema = this._def.items[itemIndex] || this._def.rest;
+      if (!schema)
+        return null;
+      return schema._parse(new ParseInputLazyPath(ctx, item, ctx.path, itemIndex));
+    }).filter((x) => !!x);
+    if (ctx.common.async) {
+      return Promise.all(items).then((results) => {
+        return ParseStatus.mergeArray(status, results);
+      });
+    } else {
+      return ParseStatus.mergeArray(status, items);
+    }
+  }
+  get items() {
+    return this._def.items;
+  }
+  rest(rest) {
+    return new _ZodTuple({
+      ...this._def,
+      rest
+    });
+  }
+};
+ZodTuple.create = (schemas, params) => {
+  if (!Array.isArray(schemas)) {
+    throw new Error("You must pass an array of schemas to z.tuple([ ... ])");
+  }
+  return new ZodTuple({
+    items: schemas,
+    typeName: ZodFirstPartyTypeKind.ZodTuple,
+    rest: null,
+    ...processCreateParams(params)
+  });
+};
+var ZodRecord = class _ZodRecord extends ZodType {
+  get keySchema() {
+    return this._def.keyType;
+  }
+  get valueSchema() {
+    return this._def.valueType;
+  }
+  _parse(input) {
+    const { status, ctx } = this._processInputParams(input);
+    if (ctx.parsedType !== ZodParsedType.object) {
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.object,
+        received: ctx.parsedType
+      });
+      return INVALID;
+    }
+    const pairs = [];
+    const keyType = this._def.keyType;
+    const valueType = this._def.valueType;
+    for (const key in ctx.data) {
+      pairs.push({
+        key: keyType._parse(new ParseInputLazyPath(ctx, key, ctx.path, key)),
+        value: valueType._parse(new ParseInputLazyPath(ctx, ctx.data[key], ctx.path, key)),
+        alwaysSet: key in ctx.data
+      });
+    }
+    if (ctx.common.async) {
+      return ParseStatus.mergeObjectAsync(status, pairs);
+    } else {
+      return ParseStatus.mergeObjectSync(status, pairs);
+    }
+  }
+  get element() {
+    return this._def.valueType;
+  }
+  static create(first, second, third) {
+    if (second instanceof ZodType) {
+      return new _ZodRecord({
+        keyType: first,
+        valueType: second,
+        typeName: ZodFirstPartyTypeKind.ZodRecord,
+        ...processCreateParams(third)
+      });
+    }
+    return new _ZodRecord({
+      keyType: ZodString.create(),
+      valueType: first,
+      typeName: ZodFirstPartyTypeKind.ZodRecord,
+      ...processCreateParams(second)
+    });
+  }
+};
+var ZodMap = class extends ZodType {
+  get keySchema() {
+    return this._def.keyType;
+  }
+  get valueSchema() {
+    return this._def.valueType;
+  }
+  _parse(input) {
+    const { status, ctx } = this._processInputParams(input);
+    if (ctx.parsedType !== ZodParsedType.map) {
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.map,
+        received: ctx.parsedType
+      });
+      return INVALID;
+    }
+    const keyType = this._def.keyType;
+    const valueType = this._def.valueType;
+    const pairs = [...ctx.data.entries()].map(([key, value], index) => {
+      return {
+        key: keyType._parse(new ParseInputLazyPath(ctx, key, ctx.path, [index, "key"])),
+        value: valueType._parse(new ParseInputLazyPath(ctx, value, ctx.path, [index, "value"]))
+      };
+    });
+    if (ctx.common.async) {
+      const finalMap = /* @__PURE__ */ new Map();
+      return Promise.resolve().then(async () => {
+        for (const pair of pairs) {
+          const key = await pair.key;
+          const value = await pair.value;
+          if (key.status === "aborted" || value.status === "aborted") {
+            return INVALID;
+          }
+          if (key.status === "dirty" || value.status === "dirty") {
+            status.dirty();
+          }
+          finalMap.set(key.value, value.value);
+        }
+        return { status: status.value, value: finalMap };
+      });
+    } else {
+      const finalMap = /* @__PURE__ */ new Map();
+      for (const pair of pairs) {
+        const key = pair.key;
+        const value = pair.value;
+        if (key.status === "aborted" || value.status === "aborted") {
+          return INVALID;
+        }
+        if (key.status === "dirty" || value.status === "dirty") {
+          status.dirty();
+        }
+        finalMap.set(key.value, value.value);
+      }
+      return { status: status.value, value: finalMap };
+    }
+  }
+};
+ZodMap.create = (keyType, valueType, params) => {
+  return new ZodMap({
+    valueType,
+    keyType,
+    typeName: ZodFirstPartyTypeKind.ZodMap,
+    ...processCreateParams(params)
+  });
+};
+var ZodSet = class _ZodSet extends ZodType {
+  _parse(input) {
+    const { status, ctx } = this._processInputParams(input);
+    if (ctx.parsedType !== ZodParsedType.set) {
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.set,
+        received: ctx.parsedType
+      });
+      return INVALID;
+    }
+    const def = this._def;
+    if (def.minSize !== null) {
+      if (ctx.data.size < def.minSize.value) {
+        addIssueToContext(ctx, {
+          code: ZodIssueCode.too_small,
+          minimum: def.minSize.value,
+          type: "set",
+          inclusive: true,
+          exact: false,
+          message: def.minSize.message
+        });
+        status.dirty();
+      }
+    }
+    if (def.maxSize !== null) {
+      if (ctx.data.size > def.maxSize.value) {
+        addIssueToContext(ctx, {
+          code: ZodIssueCode.too_big,
+          maximum: def.maxSize.value,
+          type: "set",
+          inclusive: true,
+          exact: false,
+          message: def.maxSize.message
+        });
+        status.dirty();
+      }
+    }
+    const valueType = this._def.valueType;
+    function finalizeSet(elements2) {
+      const parsedSet = /* @__PURE__ */ new Set();
+      for (const element of elements2) {
+        if (element.status === "aborted")
+          return INVALID;
+        if (element.status === "dirty")
+          status.dirty();
+        parsedSet.add(element.value);
+      }
+      return { status: status.value, value: parsedSet };
+    }
+    const elements = [...ctx.data.values()].map((item, i) => valueType._parse(new ParseInputLazyPath(ctx, item, ctx.path, i)));
+    if (ctx.common.async) {
+      return Promise.all(elements).then((elements2) => finalizeSet(elements2));
+    } else {
+      return finalizeSet(elements);
+    }
+  }
+  min(minSize, message) {
+    return new _ZodSet({
+      ...this._def,
+      minSize: { value: minSize, message: errorUtil.toString(message) }
+    });
+  }
+  max(maxSize, message) {
+    return new _ZodSet({
+      ...this._def,
+      maxSize: { value: maxSize, message: errorUtil.toString(message) }
+    });
+  }
+  size(size, message) {
+    return this.min(size, message).max(size, message);
+  }
+  nonempty(message) {
+    return this.min(1, message);
+  }
+};
+ZodSet.create = (valueType, params) => {
+  return new ZodSet({
+    valueType,
+    minSize: null,
+    maxSize: null,
+    typeName: ZodFirstPartyTypeKind.ZodSet,
+    ...processCreateParams(params)
+  });
+};
+var ZodFunction = class _ZodFunction extends ZodType {
+  constructor() {
+    super(...arguments);
+    this.validate = this.implement;
+  }
+  _parse(input) {
+    const { ctx } = this._processInputParams(input);
+    if (ctx.parsedType !== ZodParsedType.function) {
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.function,
+        received: ctx.parsedType
+      });
+      return INVALID;
+    }
+    function makeArgsIssue(args, error) {
+      return makeIssue({
+        data: args,
+        path: ctx.path,
+        errorMaps: [ctx.common.contextualErrorMap, ctx.schemaErrorMap, getErrorMap(), en_default].filter((x) => !!x),
+        issueData: {
+          code: ZodIssueCode.invalid_arguments,
+          argumentsError: error
+        }
+      });
+    }
+    function makeReturnsIssue(returns, error) {
+      return makeIssue({
+        data: returns,
+        path: ctx.path,
+        errorMaps: [ctx.common.contextualErrorMap, ctx.schemaErrorMap, getErrorMap(), en_default].filter((x) => !!x),
+        issueData: {
+          code: ZodIssueCode.invalid_return_type,
+          returnTypeError: error
+        }
+      });
+    }
+    const params = { errorMap: ctx.common.contextualErrorMap };
+    const fn = ctx.data;
+    if (this._def.returns instanceof ZodPromise) {
+      const me = this;
+      return OK(async function(...args) {
+        const error = new ZodError([]);
+        const parsedArgs = await me._def.args.parseAsync(args, params).catch((e) => {
+          error.addIssue(makeArgsIssue(args, e));
+          throw error;
+        });
+        const result = await Reflect.apply(fn, this, parsedArgs);
+        const parsedReturns = await me._def.returns._def.type.parseAsync(result, params).catch((e) => {
+          error.addIssue(makeReturnsIssue(result, e));
+          throw error;
+        });
+        return parsedReturns;
+      });
+    } else {
+      const me = this;
+      return OK(function(...args) {
+        const parsedArgs = me._def.args.safeParse(args, params);
+        if (!parsedArgs.success) {
+          throw new ZodError([makeArgsIssue(args, parsedArgs.error)]);
+        }
+        const result = Reflect.apply(fn, this, parsedArgs.data);
+        const parsedReturns = me._def.returns.safeParse(result, params);
+        if (!parsedReturns.success) {
+          throw new ZodError([makeReturnsIssue(result, parsedReturns.error)]);
+        }
+        return parsedReturns.data;
+      });
+    }
+  }
+  parameters() {
+    return this._def.args;
+  }
+  returnType() {
+    return this._def.returns;
+  }
+  args(...items) {
+    return new _ZodFunction({
+      ...this._def,
+      args: ZodTuple.create(items).rest(ZodUnknown.create())
+    });
+  }
+  returns(returnType) {
+    return new _ZodFunction({
+      ...this._def,
+      returns: returnType
+    });
+  }
+  implement(func) {
+    const validatedFunc = this.parse(func);
+    return validatedFunc;
+  }
+  strictImplement(func) {
+    const validatedFunc = this.parse(func);
+    return validatedFunc;
+  }
+  static create(args, returns, params) {
+    return new _ZodFunction({
+      args: args ? args : ZodTuple.create([]).rest(ZodUnknown.create()),
+      returns: returns || ZodUnknown.create(),
+      typeName: ZodFirstPartyTypeKind.ZodFunction,
+      ...processCreateParams(params)
+    });
+  }
+};
+var ZodLazy = class extends ZodType {
+  get schema() {
+    return this._def.getter();
+  }
+  _parse(input) {
+    const { ctx } = this._processInputParams(input);
+    const lazySchema = this._def.getter();
+    return lazySchema._parse({ data: ctx.data, path: ctx.path, parent: ctx });
+  }
+};
+ZodLazy.create = (getter, params) => {
+  return new ZodLazy({
+    getter,
+    typeName: ZodFirstPartyTypeKind.ZodLazy,
+    ...processCreateParams(params)
+  });
+};
+var ZodLiteral = class extends ZodType {
+  _parse(input) {
+    if (input.data !== this._def.value) {
+      const ctx = this._getOrReturnCtx(input);
+      addIssueToContext(ctx, {
+        received: ctx.data,
+        code: ZodIssueCode.invalid_literal,
+        expected: this._def.value
+      });
+      return INVALID;
+    }
+    return { status: "valid", value: input.data };
+  }
+  get value() {
+    return this._def.value;
+  }
+};
+ZodLiteral.create = (value, params) => {
+  return new ZodLiteral({
+    value,
+    typeName: ZodFirstPartyTypeKind.ZodLiteral,
+    ...processCreateParams(params)
+  });
+};
+function createZodEnum(values, params) {
+  return new ZodEnum({
+    values,
+    typeName: ZodFirstPartyTypeKind.ZodEnum,
+    ...processCreateParams(params)
+  });
+}
+var ZodEnum = class _ZodEnum extends ZodType {
+  _parse(input) {
+    if (typeof input.data !== "string") {
+      const ctx = this._getOrReturnCtx(input);
+      const expectedValues = this._def.values;
+      addIssueToContext(ctx, {
+        expected: util.joinValues(expectedValues),
+        received: ctx.parsedType,
+        code: ZodIssueCode.invalid_type
+      });
+      return INVALID;
+    }
+    if (!this._cache) {
+      this._cache = new Set(this._def.values);
+    }
+    if (!this._cache.has(input.data)) {
+      const ctx = this._getOrReturnCtx(input);
+      const expectedValues = this._def.values;
+      addIssueToContext(ctx, {
+        received: ctx.data,
+        code: ZodIssueCode.invalid_enum_value,
+        options: expectedValues
+      });
+      return INVALID;
+    }
+    return OK(input.data);
+  }
+  get options() {
+    return this._def.values;
+  }
+  get enum() {
+    const enumValues = {};
+    for (const val of this._def.values) {
+      enumValues[val] = val;
+    }
+    return enumValues;
+  }
+  get Values() {
+    const enumValues = {};
+    for (const val of this._def.values) {
+      enumValues[val] = val;
+    }
+    return enumValues;
+  }
+  get Enum() {
+    const enumValues = {};
+    for (const val of this._def.values) {
+      enumValues[val] = val;
+    }
+    return enumValues;
+  }
+  extract(values, newDef = this._def) {
+    return _ZodEnum.create(values, {
+      ...this._def,
+      ...newDef
+    });
+  }
+  exclude(values, newDef = this._def) {
+    return _ZodEnum.create(this.options.filter((opt) => !values.includes(opt)), {
+      ...this._def,
+      ...newDef
+    });
+  }
+};
+ZodEnum.create = createZodEnum;
+var ZodNativeEnum = class extends ZodType {
+  _parse(input) {
+    const nativeEnumValues = util.getValidEnumValues(this._def.values);
+    const ctx = this._getOrReturnCtx(input);
+    if (ctx.parsedType !== ZodParsedType.string && ctx.parsedType !== ZodParsedType.number) {
+      const expectedValues = util.objectValues(nativeEnumValues);
+      addIssueToContext(ctx, {
+        expected: util.joinValues(expectedValues),
+        received: ctx.parsedType,
+        code: ZodIssueCode.invalid_type
+      });
+      return INVALID;
+    }
+    if (!this._cache) {
+      this._cache = new Set(util.getValidEnumValues(this._def.values));
+    }
+    if (!this._cache.has(input.data)) {
+      const expectedValues = util.objectValues(nativeEnumValues);
+      addIssueToContext(ctx, {
+        received: ctx.data,
+        code: ZodIssueCode.invalid_enum_value,
+        options: expectedValues
+      });
+      return INVALID;
+    }
+    return OK(input.data);
+  }
+  get enum() {
+    return this._def.values;
+  }
+};
+ZodNativeEnum.create = (values, params) => {
+  return new ZodNativeEnum({
+    values,
+    typeName: ZodFirstPartyTypeKind.ZodNativeEnum,
+    ...processCreateParams(params)
+  });
+};
+var ZodPromise = class extends ZodType {
+  unwrap() {
+    return this._def.type;
+  }
+  _parse(input) {
+    const { ctx } = this._processInputParams(input);
+    if (ctx.parsedType !== ZodParsedType.promise && ctx.common.async === false) {
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.promise,
+        received: ctx.parsedType
+      });
+      return INVALID;
+    }
+    const promisified = ctx.parsedType === ZodParsedType.promise ? ctx.data : Promise.resolve(ctx.data);
+    return OK(promisified.then((data) => {
+      return this._def.type.parseAsync(data, {
+        path: ctx.path,
+        errorMap: ctx.common.contextualErrorMap
+      });
+    }));
+  }
+};
+ZodPromise.create = (schema, params) => {
+  return new ZodPromise({
+    type: schema,
+    typeName: ZodFirstPartyTypeKind.ZodPromise,
+    ...processCreateParams(params)
+  });
+};
+var ZodEffects = class extends ZodType {
+  innerType() {
+    return this._def.schema;
+  }
+  sourceType() {
+    return this._def.schema._def.typeName === ZodFirstPartyTypeKind.ZodEffects ? this._def.schema.sourceType() : this._def.schema;
+  }
+  _parse(input) {
+    const { status, ctx } = this._processInputParams(input);
+    const effect = this._def.effect || null;
+    const checkCtx = {
+      addIssue: (arg) => {
+        addIssueToContext(ctx, arg);
+        if (arg.fatal) {
+          status.abort();
+        } else {
+          status.dirty();
+        }
+      },
+      get path() {
+        return ctx.path;
+      }
+    };
+    checkCtx.addIssue = checkCtx.addIssue.bind(checkCtx);
+    if (effect.type === "preprocess") {
+      const processed = effect.transform(ctx.data, checkCtx);
+      if (ctx.common.async) {
+        return Promise.resolve(processed).then(async (processed2) => {
+          if (status.value === "aborted")
+            return INVALID;
+          const result = await this._def.schema._parseAsync({
+            data: processed2,
+            path: ctx.path,
+            parent: ctx
+          });
+          if (result.status === "aborted")
+            return INVALID;
+          if (result.status === "dirty")
+            return DIRTY(result.value);
+          if (status.value === "dirty")
+            return DIRTY(result.value);
+          return result;
+        });
+      } else {
+        if (status.value === "aborted")
+          return INVALID;
+        const result = this._def.schema._parseSync({
+          data: processed,
+          path: ctx.path,
+          parent: ctx
+        });
+        if (result.status === "aborted")
+          return INVALID;
+        if (result.status === "dirty")
+          return DIRTY(result.value);
+        if (status.value === "dirty")
+          return DIRTY(result.value);
+        return result;
+      }
+    }
+    if (effect.type === "refinement") {
+      const executeRefinement = (acc) => {
+        const result = effect.refinement(acc, checkCtx);
+        if (ctx.common.async) {
+          return Promise.resolve(result);
+        }
+        if (result instanceof Promise) {
+          throw new Error("Async refinement encountered during synchronous parse operation. Use .parseAsync instead.");
+        }
+        return acc;
+      };
+      if (ctx.common.async === false) {
+        const inner = this._def.schema._parseSync({
+          data: ctx.data,
+          path: ctx.path,
+          parent: ctx
+        });
+        if (inner.status === "aborted")
+          return INVALID;
+        if (inner.status === "dirty")
+          status.dirty();
+        executeRefinement(inner.value);
+        return { status: status.value, value: inner.value };
+      } else {
+        return this._def.schema._parseAsync({ data: ctx.data, path: ctx.path, parent: ctx }).then((inner) => {
+          if (inner.status === "aborted")
+            return INVALID;
+          if (inner.status === "dirty")
+            status.dirty();
+          return executeRefinement(inner.value).then(() => {
+            return { status: status.value, value: inner.value };
+          });
+        });
+      }
+    }
+    if (effect.type === "transform") {
+      if (ctx.common.async === false) {
+        const base = this._def.schema._parseSync({
+          data: ctx.data,
+          path: ctx.path,
+          parent: ctx
+        });
+        if (!isValid(base))
+          return INVALID;
+        const result = effect.transform(base.value, checkCtx);
+        if (result instanceof Promise) {
+          throw new Error(`Asynchronous transform encountered during synchronous parse operation. Use .parseAsync instead.`);
+        }
+        return { status: status.value, value: result };
+      } else {
+        return this._def.schema._parseAsync({ data: ctx.data, path: ctx.path, parent: ctx }).then((base) => {
+          if (!isValid(base))
+            return INVALID;
+          return Promise.resolve(effect.transform(base.value, checkCtx)).then((result) => ({
+            status: status.value,
+            value: result
+          }));
+        });
+      }
+    }
+    util.assertNever(effect);
+  }
+};
+ZodEffects.create = (schema, effect, params) => {
+  return new ZodEffects({
+    schema,
+    typeName: ZodFirstPartyTypeKind.ZodEffects,
+    effect,
+    ...processCreateParams(params)
+  });
+};
+ZodEffects.createWithPreprocess = (preprocess, schema, params) => {
+  return new ZodEffects({
+    schema,
+    effect: { type: "preprocess", transform: preprocess },
+    typeName: ZodFirstPartyTypeKind.ZodEffects,
+    ...processCreateParams(params)
+  });
+};
+var ZodOptional = class extends ZodType {
+  _parse(input) {
+    const parsedType = this._getType(input);
+    if (parsedType === ZodParsedType.undefined) {
+      return OK(void 0);
+    }
+    return this._def.innerType._parse(input);
+  }
+  unwrap() {
+    return this._def.innerType;
+  }
+};
+ZodOptional.create = (type, params) => {
+  return new ZodOptional({
+    innerType: type,
+    typeName: ZodFirstPartyTypeKind.ZodOptional,
+    ...processCreateParams(params)
+  });
+};
+var ZodNullable = class extends ZodType {
+  _parse(input) {
+    const parsedType = this._getType(input);
+    if (parsedType === ZodParsedType.null) {
+      return OK(null);
+    }
+    return this._def.innerType._parse(input);
+  }
+  unwrap() {
+    return this._def.innerType;
+  }
+};
+ZodNullable.create = (type, params) => {
+  return new ZodNullable({
+    innerType: type,
+    typeName: ZodFirstPartyTypeKind.ZodNullable,
+    ...processCreateParams(params)
+  });
+};
+var ZodDefault = class extends ZodType {
+  _parse(input) {
+    const { ctx } = this._processInputParams(input);
+    let data = ctx.data;
+    if (ctx.parsedType === ZodParsedType.undefined) {
+      data = this._def.defaultValue();
+    }
+    return this._def.innerType._parse({
+      data,
+      path: ctx.path,
+      parent: ctx
+    });
+  }
+  removeDefault() {
+    return this._def.innerType;
+  }
+};
+ZodDefault.create = (type, params) => {
+  return new ZodDefault({
+    innerType: type,
+    typeName: ZodFirstPartyTypeKind.ZodDefault,
+    defaultValue: typeof params.default === "function" ? params.default : () => params.default,
+    ...processCreateParams(params)
+  });
+};
+var ZodCatch = class extends ZodType {
+  _parse(input) {
+    const { ctx } = this._processInputParams(input);
+    const newCtx = {
+      ...ctx,
+      common: {
+        ...ctx.common,
+        issues: []
+      }
+    };
+    const result = this._def.innerType._parse({
+      data: newCtx.data,
+      path: newCtx.path,
+      parent: {
+        ...newCtx
+      }
+    });
+    if (isAsync(result)) {
+      return result.then((result2) => {
+        return {
+          status: "valid",
+          value: result2.status === "valid" ? result2.value : this._def.catchValue({
+            get error() {
+              return new ZodError(newCtx.common.issues);
+            },
+            input: newCtx.data
+          })
+        };
+      });
+    } else {
+      return {
+        status: "valid",
+        value: result.status === "valid" ? result.value : this._def.catchValue({
+          get error() {
+            return new ZodError(newCtx.common.issues);
+          },
+          input: newCtx.data
+        })
+      };
+    }
+  }
+  removeCatch() {
+    return this._def.innerType;
+  }
+};
+ZodCatch.create = (type, params) => {
+  return new ZodCatch({
+    innerType: type,
+    typeName: ZodFirstPartyTypeKind.ZodCatch,
+    catchValue: typeof params.catch === "function" ? params.catch : () => params.catch,
+    ...processCreateParams(params)
+  });
+};
+var ZodNaN = class extends ZodType {
+  _parse(input) {
+    const parsedType = this._getType(input);
+    if (parsedType !== ZodParsedType.nan) {
+      const ctx = this._getOrReturnCtx(input);
+      addIssueToContext(ctx, {
+        code: ZodIssueCode.invalid_type,
+        expected: ZodParsedType.nan,
+        received: ctx.parsedType
+      });
+      return INVALID;
+    }
+    return { status: "valid", value: input.data };
+  }
+};
+ZodNaN.create = (params) => {
+  return new ZodNaN({
+    typeName: ZodFirstPartyTypeKind.ZodNaN,
+    ...processCreateParams(params)
+  });
+};
+var BRAND = Symbol("zod_brand");
+var ZodBranded = class extends ZodType {
+  _parse(input) {
+    const { ctx } = this._processInputParams(input);
+    const data = ctx.data;
+    return this._def.type._parse({
+      data,
+      path: ctx.path,
+      parent: ctx
+    });
+  }
+  unwrap() {
+    return this._def.type;
+  }
+};
+var ZodPipeline = class _ZodPipeline extends ZodType {
+  _parse(input) {
+    const { status, ctx } = this._processInputParams(input);
+    if (ctx.common.async) {
+      const handleAsync = async () => {
+        const inResult = await this._def.in._parseAsync({
+          data: ctx.data,
+          path: ctx.path,
+          parent: ctx
+        });
+        if (inResult.status === "aborted")
+          return INVALID;
+        if (inResult.status === "dirty") {
+          status.dirty();
+          return DIRTY(inResult.value);
+        } else {
+          return this._def.out._parseAsync({
+            data: inResult.value,
+            path: ctx.path,
+            parent: ctx
+          });
+        }
+      };
+      return handleAsync();
+    } else {
+      const inResult = this._def.in._parseSync({
+        data: ctx.data,
+        path: ctx.path,
+        parent: ctx
+      });
+      if (inResult.status === "aborted")
+        return INVALID;
+      if (inResult.status === "dirty") {
+        status.dirty();
+        return {
+          status: "dirty",
+          value: inResult.value
+        };
+      } else {
+        return this._def.out._parseSync({
+          data: inResult.value,
+          path: ctx.path,
+          parent: ctx
+        });
+      }
+    }
+  }
+  static create(a, b) {
+    return new _ZodPipeline({
+      in: a,
+      out: b,
+      typeName: ZodFirstPartyTypeKind.ZodPipeline
+    });
+  }
+};
+var ZodReadonly = class extends ZodType {
+  _parse(input) {
+    const result = this._def.innerType._parse(input);
+    const freeze = (data) => {
+      if (isValid(data)) {
+        data.value = Object.freeze(data.value);
+      }
+      return data;
+    };
+    return isAsync(result) ? result.then((data) => freeze(data)) : freeze(result);
+  }
+  unwrap() {
+    return this._def.innerType;
+  }
+};
+ZodReadonly.create = (type, params) => {
+  return new ZodReadonly({
+    innerType: type,
+    typeName: ZodFirstPartyTypeKind.ZodReadonly,
+    ...processCreateParams(params)
+  });
+};
+function cleanParams(params, data) {
+  const p = typeof params === "function" ? params(data) : typeof params === "string" ? { message: params } : params;
+  const p2 = typeof p === "string" ? { message: p } : p;
+  return p2;
+}
+function custom(check, _params = {}, fatal) {
+  if (check)
+    return ZodAny.create().superRefine((data, ctx) => {
+      const r = check(data);
+      if (r instanceof Promise) {
+        return r.then((r2) => {
+          if (!r2) {
+            const params = cleanParams(_params, data);
+            const _fatal = params.fatal ?? fatal ?? true;
+            ctx.addIssue({ code: "custom", ...params, fatal: _fatal });
+          }
+        });
+      }
+      if (!r) {
+        const params = cleanParams(_params, data);
+        const _fatal = params.fatal ?? fatal ?? true;
+        ctx.addIssue({ code: "custom", ...params, fatal: _fatal });
+      }
+      return;
+    });
+  return ZodAny.create();
+}
+var late = {
+  object: ZodObject.lazycreate
+};
+var ZodFirstPartyTypeKind;
+(function(ZodFirstPartyTypeKind2) {
+  ZodFirstPartyTypeKind2["ZodString"] = "ZodString";
+  ZodFirstPartyTypeKind2["ZodNumber"] = "ZodNumber";
+  ZodFirstPartyTypeKind2["ZodNaN"] = "ZodNaN";
+  ZodFirstPartyTypeKind2["ZodBigInt"] = "ZodBigInt";
+  ZodFirstPartyTypeKind2["ZodBoolean"] = "ZodBoolean";
+  ZodFirstPartyTypeKind2["ZodDate"] = "ZodDate";
+  ZodFirstPartyTypeKind2["ZodSymbol"] = "ZodSymbol";
+  ZodFirstPartyTypeKind2["ZodUndefined"] = "ZodUndefined";
+  ZodFirstPartyTypeKind2["ZodNull"] = "ZodNull";
+  ZodFirstPartyTypeKind2["ZodAny"] = "ZodAny";
+  ZodFirstPartyTypeKind2["ZodUnknown"] = "ZodUnknown";
+  ZodFirstPartyTypeKind2["ZodNever"] = "ZodNever";
+  ZodFirstPartyTypeKind2["ZodVoid"] = "ZodVoid";
+  ZodFirstPartyTypeKind2["ZodArray"] = "ZodArray";
+  ZodFirstPartyTypeKind2["ZodObject"] = "ZodObject";
+  ZodFirstPartyTypeKind2["ZodUnion"] = "ZodUnion";
+  ZodFirstPartyTypeKind2["ZodDiscriminatedUnion"] = "ZodDiscriminatedUnion";
+  ZodFirstPartyTypeKind2["ZodIntersection"] = "ZodIntersection";
+  ZodFirstPartyTypeKind2["ZodTuple"] = "ZodTuple";
+  ZodFirstPartyTypeKind2["ZodRecord"] = "ZodRecord";
+  ZodFirstPartyTypeKind2["ZodMap"] = "ZodMap";
+  ZodFirstPartyTypeKind2["ZodSet"] = "ZodSet";
+  ZodFirstPartyTypeKind2["ZodFunction"] = "ZodFunction";
+  ZodFirstPartyTypeKind2["ZodLazy"] = "ZodLazy";
+  ZodFirstPartyTypeKind2["ZodLiteral"] = "ZodLiteral";
+  ZodFirstPartyTypeKind2["ZodEnum"] = "ZodEnum";
+  ZodFirstPartyTypeKind2["ZodEffects"] = "ZodEffects";
+  ZodFirstPartyTypeKind2["ZodNativeEnum"] = "ZodNativeEnum";
+  ZodFirstPartyTypeKind2["ZodOptional"] = "ZodOptional";
+  ZodFirstPartyTypeKind2["ZodNullable"] = "ZodNullable";
+  ZodFirstPartyTypeKind2["ZodDefault"] = "ZodDefault";
+  ZodFirstPartyTypeKind2["ZodCatch"] = "ZodCatch";
+  ZodFirstPartyTypeKind2["ZodPromise"] = "ZodPromise";
+  ZodFirstPartyTypeKind2["ZodBranded"] = "ZodBranded";
+  ZodFirstPartyTypeKind2["ZodPipeline"] = "ZodPipeline";
+  ZodFirstPartyTypeKind2["ZodReadonly"] = "ZodReadonly";
+})(ZodFirstPartyTypeKind || (ZodFirstPartyTypeKind = {}));
+var instanceOfType = (cls, params = {
+  message: `Input not instance of ${cls.name}`
+}) => custom((data) => data instanceof cls, params);
+var stringType = ZodString.create;
+var numberType = ZodNumber.create;
+var nanType = ZodNaN.create;
+var bigIntType = ZodBigInt.create;
+var booleanType = ZodBoolean.create;
+var dateType = ZodDate.create;
+var symbolType = ZodSymbol.create;
+var undefinedType = ZodUndefined.create;
+var nullType = ZodNull.create;
+var anyType = ZodAny.create;
+var unknownType = ZodUnknown.create;
+var neverType = ZodNever.create;
+var voidType = ZodVoid.create;
+var arrayType = ZodArray.create;
+var objectType = ZodObject.create;
+var strictObjectType = ZodObject.strictCreate;
+var unionType = ZodUnion.create;
+var discriminatedUnionType = ZodDiscriminatedUnion.create;
+var intersectionType = ZodIntersection.create;
+var tupleType = ZodTuple.create;
+var recordType = ZodRecord.create;
+var mapType = ZodMap.create;
+var setType = ZodSet.create;
+var functionType = ZodFunction.create;
+var lazyType = ZodLazy.create;
+var literalType = ZodLiteral.create;
+var enumType = ZodEnum.create;
+var nativeEnumType = ZodNativeEnum.create;
+var promiseType = ZodPromise.create;
+var effectsType = ZodEffects.create;
+var optionalType = ZodOptional.create;
+var nullableType = ZodNullable.create;
+var preprocessType = ZodEffects.createWithPreprocess;
+var pipelineType = ZodPipeline.create;
+var ostring = () => stringType().optional();
+var onumber = () => numberType().optional();
+var oboolean = () => booleanType().optional();
+var coerce = {
+  string: (arg) => ZodString.create({ ...arg, coerce: true }),
+  number: (arg) => ZodNumber.create({ ...arg, coerce: true }),
+  boolean: (arg) => ZodBoolean.create({
+    ...arg,
+    coerce: true
+  }),
+  bigint: (arg) => ZodBigInt.create({ ...arg, coerce: true }),
+  date: (arg) => ZodDate.create({ ...arg, coerce: true })
+};
+var NEVER = INVALID;
+
+// src/phases/zod-schemas.ts
+var EntityTypeSchema = external_exports.object({
+  type: external_exports.string().min(1),
+  description: external_exports.string(),
+  extraction_cues: external_exports.array(external_exports.string()),
+  min_mentions_for_page: external_exports.number().optional(),
+  wiki_subfolder: external_exports.string().optional()
+});
+var DomainEntrySchema = external_exports.object({
+  reasoning: external_exports.string(),
+  id: external_exports.string().min(1),
+  name: external_exports.string(),
+  wiki_folder: external_exports.string().min(1),
+  entity_types: external_exports.array(EntityTypeSchema),
+  language_notes: external_exports.string()
+});
+var EntityTypesDeltaSchema = external_exports.object({
+  reasoning: external_exports.string(),
+  entity_types: external_exports.array(EntityTypeSchema).optional(),
+  language_notes: external_exports.string().optional()
+});
+var SeedsSchema = external_exports.object({
+  reasoning: external_exports.string().optional(),
+  seeds: external_exports.array(external_exports.string())
+});
 
 // prompts/query.md
 var query_default = "\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u043F\u043E wiki-\u0431\u0430\u0437\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u0411\u0443\u0434\u044C \u0442\u043E\u0447\u0435\u043D \u0438 \u043B\u0430\u043A\u043E\u043D\u0438\u0447\u0435\u043D.\n\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 WikiLinks [[\u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435]] \u043F\u0440\u0438 \u0441\u0441\u044B\u043B\u043A\u0430\u0445 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0437 \u0438\u043D\u0434\u0435\u043A\u0441\u0430.\n{{entity_types_block}}\n{{schema_block}}\n{{index_block}}\n";
@@ -21732,7 +26210,6 @@ function checkGraphStructure(graph, hubThreshold) {
 }
 
 // src/phases/query.ts
-var MAX_CONTEXT_CHARS = 8e4;
 var META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}) {
   const question = args[0]?.trim();
@@ -21750,22 +26227,25 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
     return;
   }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
-  const wikiRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
+  const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
   yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
   const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
   const [indexContent, schemaContent] = await Promise.all([
-    tryRead2(vaultTools, `${wikiRoot}/_index.md`),
-    tryRead2(vaultTools, `${wikiRoot}/_wiki_schema.md`)
+    tryRead2(vaultTools, `${wikiVaultPath}/_index.md`),
+    tryRead2(vaultTools, `${schemaRoot}/_wiki_schema.md`)
   ]);
   const pages = await vaultTools.readAll(files);
   const start = Date.now();
+  let outputTokens = 0;
   const graph = buildWikiGraph(pages);
   const allPageIds = [...pages.keys()].map(pageId);
   let seeds = keywordSeeds(question, pages);
   if (seeds.length === 0) {
-    seeds = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, signal);
+    const seedRes = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal);
+    seeds = seedRes.seeds;
+    outputTokens += seedRes.outputTokens;
   }
   if (signal.aborted)
     return;
@@ -21774,17 +26254,17 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   }
   const seedSet = new Set(seeds);
   const selectedIds = bfsExpand(seeds, graph, graphDepth);
-  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, MAX_CONTEXT_CHARS);
+  const contextBlock = buildContextBlock(pages, seedSet, selectedIds);
   const entityTypesBlock = buildEntityTypesBlock2(domain);
   const systemPrompt = render(query_default, {
     domain_name: domain.name,
     entity_types_block: entityTypesBlock,
     schema_block: schemaContent ? `
 \u041A\u043E\u043D\u0432\u0435\u043D\u0446\u0438\u0438 (_wiki_schema.md):
-${schemaContent.slice(0, 2e3)}` : "",
+${schemaContent}` : "",
     index_block: indexContent ? `
 \u0412\u0438\u043A\u0438-\u0438\u043D\u0434\u0435\u043A\u0441 (_index.md):
-${indexContent.slice(0, 3e3)}` : ""
+${indexContent}` : ""
   });
   const messages = [
     { role: "system", content: systemPrompt },
@@ -21793,7 +26273,7 @@ ${indexContent.slice(0, 3e3)}` : ""
 Wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B:
 ${contextBlock}` }
   ];
-  const params = buildChatParams(model, messages, opts);
+  const params = buildChatParams(model, messages, opts, true);
   let answer = "";
   try {
     const stream = await llm.chat.completions.create(
@@ -21801,13 +26281,15 @@ ${contextBlock}` }
       { signal }
     );
     for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
+      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (reasoning)
         yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
       if (content) {
         answer += content;
         yield { kind: "assistant_text", delta: content };
       }
+      if (tok !== void 0)
+        outputTokens += tok;
     }
   } catch (e) {
     if (signal.aborted || e.name === "AbortError")
@@ -21816,6 +26298,9 @@ ${contextBlock}` }
       { ...params, stream: false }
     );
     answer = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp);
+    if (tok !== void 0)
+      outputTokens += tok;
     if (answer)
       yield { kind: "assistant_text", delta: answer };
   }
@@ -21843,13 +26328,13 @@ ${contextBlock}` }
       yield { kind: "tool_result", ok: true };
       yield { kind: "result", durationMs: Date.now() - start, text: `\u0421\u043E\u0437\u0434\u0430\u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430: ${savePath}
 
-${answer}` };
+${answer}`, outputTokens: outputTokens || void 0 };
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: e.message };
-      yield { kind: "result", durationMs: Date.now() - start, text: answer };
+      yield { kind: "result", durationMs: Date.now() - start, text: answer, outputTokens: outputTokens || void 0 };
     }
   } else {
-    yield { kind: "result", durationMs: Date.now() - start, text: answer };
+    yield { kind: "result", durationMs: Date.now() - start, text: answer, outputTokens: outputTokens || void 0 };
   }
 }
 async function tryRead2(vaultTools, path2) {
@@ -21872,38 +26357,45 @@ function keywordSeeds(question, pages) {
   }
   return seeds;
 }
-async function llmSelectSeeds(question, indexContent, allPageIds, llm, model, signal) {
+async function llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal) {
+  const example = JSON.stringify({
+    reasoning: "PageA matches keyword X; PageB referenced by index.",
+    seeds: ["PageA", "PageB"]
+  }, null, 2);
   const prompt = [
     `Question: "${question}"`,
     `Available wiki pages: ${allPageIds.join(", ")}`,
     indexContent ? `
 Index:
-${indexContent.slice(0, 3e3)}` : "",
+${indexContent}` : "",
     `
-Return JSON only: {"seeds": ["PageA", "PageB"]} \u2014 most relevant page names (bare names, no path, no .md).`
+Return JSON only matching this shape (most relevant page names \u2014 bare names, no path, no .md):`,
+    `
+## Output JSON Example`,
+    example
   ].filter(Boolean).join("\n");
+  const messages = [
+    { role: "user", content: prompt }
+  ];
   try {
-    const resp = await llm.chat.completions.create(
-      {
-        model,
-        messages: [{ role: "user", content: prompt }],
-        stream: false
-      },
-      { signal }
-    );
-    const text = resp.choices[0]?.message?.content ?? "";
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match)
-      return [];
-    const parsed = JSON.parse(match[0]);
-    if (!Array.isArray(parsed.seeds))
-      return [];
-    return parsed.seeds.filter((s) => typeof s === "string");
+    const r = await parseWithRetry({
+      llm,
+      model,
+      baseMessages: messages,
+      opts,
+      schema: SeedsSchema,
+      maxRetries: opts.structuredRetries ?? 1,
+      callSite: "query.seeds",
+      signal,
+      onEvent: () => {
+      }
+    });
+    return { seeds: r.value.seeds, outputTokens: r.outputTokens };
   } catch {
-    return [];
+    return { seeds: [], outputTokens: 0 };
   }
 }
-function buildContextBlock(pages, seeds, selectedIds, maxChars) {
+function buildContextBlock(pages, seeds, selectedIds) {
   const seedPages = [];
   const bfsPages = [];
   for (const [path2, content] of pages) {
@@ -21918,18 +26410,10 @@ function buildContextBlock(pages, seeds, selectedIds, maxChars) {
   const ordered = [...seedPages, ...bfsPages];
   let block = "";
   for (const [p, c] of ordered) {
-    const chunk = `--- ${p} ---
+    block += `--- ${p} ---
 ${c}
 
 `;
-    if (block.length + chunk.length > maxChars)
-      break;
-    block += chunk;
-  }
-  if (block.length === 0 && ordered.length > 0) {
-    const [p, c] = ordered[0];
-    block = `--- ${p} ---
-${c}`.slice(0, maxChars) + "\n[...truncated]";
   }
   return block;
 }
@@ -21947,7 +26431,7 @@ ${types}${notes}`;
 var import_path_browserify4 = __toESM(require_path_browserify(), 1);
 
 // prompts/lint.md
-var lint_default = "\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0412\u044B\u044F\u0432\u043B\u044F\u0439: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442.\n\u0412\u0435\u0440\u043D\u0438 \u043A\u0440\u0430\u0442\u043A\u0438\u0439 \u043E\u0442\u0447\u0451\u0442 \u0432 markdown.\n{{entity_types_block}}\n";
+var lint_default = "\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0412\u044B\u044F\u0432\u043B\u044F\u0439: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442.\n\u0412\u0435\u0440\u043D\u0438 **JSON** \u0441 \u043F\u043E\u043B\u0435\u043C `reasoning` \u043F\u0435\u0440\u0432\u044B\u043C, \u0437\u0430\u0442\u0435\u043C `entity_types` \u0438 `language_notes`.\n{{entity_types_block}}\n";
 
 // src/phases/lint.ts
 var META_FILES2 = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
@@ -21960,6 +26444,7 @@ async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal
   }
   const start = Date.now();
   const reportParts = [];
+  let outputTokens = 0;
   for (const domain of targets) {
     if (signal.aborted)
       return;
@@ -21977,7 +26462,7 @@ Wiki folder outside vault \u2014 skipped.`);
     const pages = await vaultTools.readAll(files);
     const graph = buildWikiGraph(pages);
     const structuralIssues = checkStructure(pages);
-    const graphIssues = checkGraphStructure(graph, hubThreshold).slice(0, 8e3);
+    const graphIssues = checkGraphStructure(graph, hubThreshold);
     const allIssues = [structuralIssues, graphIssues].filter(Boolean).join("\n");
     const entityTypesBlock = buildEntityTypesBlock3(domain);
     yield { kind: "assistant_text", delta: `Evaluating domain "${domain.id}" quality...
@@ -21999,11 +26484,11 @@ ${allIssues || "\u041D\u0435\u0442."}`,
           "",
           `Wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B:
 ${[...pages.entries()].map(([p, c]) => `--- ${p} ---
-${c.slice(0, 500)}`).join("\n\n")}`
+${c}`).join("\n\n")}`
         ].join("\n")
       }
     ];
-    const params = buildChatParams(model, messages, opts);
+    const params = buildChatParams(model, messages, opts, true);
     let llmReport = "";
     try {
       const stream = await llm.chat.completions.create(
@@ -22011,13 +26496,15 @@ ${c.slice(0, 500)}`).join("\n\n")}`
         { signal }
       );
       for await (const chunk of stream) {
-        const { reasoning, content } = extractStreamDeltas(chunk);
+        const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
         if (reasoning)
           yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
         if (content) {
           llmReport += content;
           yield { kind: "assistant_text", delta: content };
         }
+        if (tok !== void 0)
+          outputTokens += tok;
       }
     } catch (e) {
       if (signal.aborted || e.name === "AbortError")
@@ -22026,6 +26513,9 @@ ${c.slice(0, 500)}`).join("\n\n")}`
         { ...params, stream: false }
       );
       llmReport = resp.choices[0]?.message?.content ?? "";
+      const tok = extractUsage(resp);
+      if (tok !== void 0)
+        outputTokens += tok;
       if (llmReport)
         yield { kind: "assistant_text", delta: llmReport };
     }
@@ -22039,7 +26529,9 @@ ${allIssues}
     yield { kind: "assistant_text", delta: `
 Actualizing domain config for "${domain.id}"...
 ` };
-    const patch = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
+    const patchRes = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
+    outputTokens += patchRes.outputTokens;
+    const patch = patchRes.patch;
     if (patch) {
       const diffReport = computeEntityDiff(domain.entity_types ?? [], patch.entity_types ?? domain.entity_types ?? []);
       reportParts.push(diffReport);
@@ -22051,7 +26543,7 @@ Actualizing domain config for "${domain.id}"...
 Applying fixes for "${domain.id}"...
 ` };
     const fixMessages = buildFixMessages(domain, wikiVaultPath, pages, allIssues, entityTypesBlock, llmReport);
-    const fixParams = buildChatParams(model, fixMessages, opts);
+    const fixParams = buildChatParams(model, fixMessages, opts, true);
     let fixFullText = "";
     try {
       const fixStream = await llm.chat.completions.create(
@@ -22059,9 +26551,11 @@ Applying fixes for "${domain.id}"...
         { signal }
       );
       for await (const chunk of fixStream) {
-        const { content } = extractStreamDeltas(chunk);
+        const { content, outputTokens: tok } = extractStreamDeltas(chunk);
         if (content)
           fixFullText += content;
+        if (tok !== void 0)
+          outputTokens += tok;
       }
     } catch (e) {
       if (signal.aborted || e.name === "AbortError")
@@ -22070,6 +26564,9 @@ Applying fixes for "${domain.id}"...
         { ...fixParams, stream: false }
       );
       fixFullText = resp.choices[0]?.message?.content ?? "";
+      const tok = extractUsage(resp);
+      if (tok !== void 0)
+        outputTokens += tok;
     }
     const fixedPages = parseJsonPages(fixFullText);
     const writtenPaths = [];
@@ -22133,8 +26630,17 @@ ${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
     if (backlinks.size > 0) {
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
     }
+    const indexPath = `${wikiVaultPath}/_index.md`;
+    const indexLinks = files.map((f) => `- [[${(0, import_path_browserify4.basename)(f, ".md")}]]`).join("\n");
+    try {
+      await vaultTools.write(indexPath, `# Wiki Index
+
+${indexLinks}
+`);
+    } catch {
+    }
   }
-  yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n") };
+  yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n"), outputTokens: outputTokens || void 0 };
 }
 function checkStructure(pages) {
   const issues = [];
@@ -22215,7 +26721,7 @@ async function actualizeDomainConfig(domain, pages, llm, model, opts, signal) {
     language_notes: domain.language_notes ?? ""
   }, null, 2);
   const pagesSnippet = [...pages.entries()].map(([p, c]) => `${p}:
-${c.slice(0, 300)}`).join("\n\n");
+${c}`).join("\n\n");
   const messages = [
     {
       role: "system",
@@ -22249,181 +26755,42 @@ ${c.slice(0, 300)}`).join("\n\n");
       ].join("\n")
     }
   ];
-  const params = buildChatParams(model, messages, opts);
-  let fullText = "";
+  const systemContent = messages[0].content + `
+
+## Output JSON Example
+
+` + JSON.stringify({
+    reasoning: "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u043B Process, \u0434\u043E\u0431\u0430\u0432\u0438\u043B Contract \u043F\u043E \u043D\u043E\u0432\u044B\u043C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430\u043C.",
+    entity_types: [
+      { type: "Process", description: "\u0411\u0438\u0437\u043D\u0435\u0441-\u043F\u0440\u043E\u0446\u0435\u0441\u0441", extraction_cues: ["BPMN", "workflow"], wiki_subfolder: "processes" },
+      { type: "Contract", description: "\u0414\u043E\u0433\u043E\u0432\u043E\u0440/SLA", extraction_cues: ["SLA", "\u0434\u043E\u0433\u043E\u0432\u043E\u0440"], wiki_subfolder: "contracts" }
+    ],
+    language_notes: "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u044C \u0440\u0443\u0441\u0441\u043A\u0438\u0439 \u0434\u043B\u044F \u0431\u0438\u0437\u043D\u0435\u0441-\u0442\u0435\u0440\u043C\u0438\u043D\u043E\u0432."
+  }, null, 2);
+  messages[0] = { role: "system", content: systemContent };
+  const collected = [];
   try {
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false },
-      { signal }
-    );
-    fullText = resp.choices[0]?.message?.content ?? "";
-  } catch {
-    return null;
-  }
-  try {
-    const match = fullText.match(/\{[\s\S]*\}/);
-    if (!match)
-      return null;
-    const parsed = JSON.parse(match[0]);
+    const r = await parseWithRetry({
+      llm,
+      model,
+      baseMessages: messages,
+      opts,
+      schema: EntityTypesDeltaSchema,
+      maxRetries: opts.structuredRetries ?? 1,
+      callSite: "lint.patch",
+      signal,
+      onEvent: (e) => collected.push(e)
+    });
+    const parsed = r.value;
     const patch = {};
     if (Array.isArray(parsed.entity_types))
       patch.entity_types = parsed.entity_types;
     if (typeof parsed.language_notes === "string")
       patch.language_notes = parsed.language_notes;
-    return Object.keys(patch).length > 0 ? patch : null;
+    return { patch: Object.keys(patch).length > 0 ? patch : null, outputTokens: r.outputTokens };
   } catch {
-    return null;
+    return { patch: null, outputTokens: 0 };
   }
-}
-
-// src/phases/fix.ts
-var import_path_browserify5 = __toESM(require_path_browserify(), 1);
-
-// prompts/fix.md
-var fix_default = '\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n{{fix_instruction}}\n\n{{entity_types_block}}\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432 \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 (\u0435\u0441\u043B\u0438 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0430\u0441\u044C \u2014 \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0430\u0439):\n[{"path":"{{wiki_path}}/EntityName.md","content":"\u043F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B"}]\n\u0414\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u044B\u0435 \u043F\u0443\u0442\u0438 wiki: {{wiki_path}}/\n\u0414\u0430\u0442\u0430: {{today}}\n';
-
-// src/phases/fix.ts
-var META_FILES3 = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
-async function* runFix(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}, lintReport, userInstruction) {
-  const domainId = args[0];
-  const domain = domainId ? domains.find((d) => d.id === domainId) : domains[0];
-  if (!domain) {
-    yield { kind: "error", message: domainId ? `Domain "${domainId}" not found.` : "No domains configured." };
-    return;
-  }
-  const absWiki = (0, import_path_browserify5.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
-  const wikiVaultPath = vaultTools.toVaultPath(absWiki);
-  if (!wikiVaultPath) {
-    yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
-    return;
-  }
-  yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
-  const allFiles = await vaultTools.listFiles(wikiVaultPath);
-  const files = allFiles.filter((f) => !META_FILES3.some((m) => f.endsWith(m)));
-  yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
-  if (files.length === 0) {
-    const start2 = Date.now();
-    yield { kind: "result", durationMs: Date.now() - start2, text: "No wiki pages to fix." };
-    return;
-  }
-  const pages = await vaultTools.readAll(files);
-  const structuralIssues = checkStructure(pages);
-  const entityTypesBlock = domain.entity_types?.length ? domain.entity_types.map((et) => `- ${et.type}: ${et.description}`).join("\n") : "";
-  yield { kind: "assistant_text", delta: `Fixing wiki pages for domain "${domain.id}"...
-` };
-  const start = Date.now();
-  const messages = buildFixMessages2(domain, wikiVaultPath, pages, structuralIssues, entityTypesBlock, lintReport, userInstruction);
-  const params = buildChatParams(model, messages, opts);
-  let fullText = "";
-  try {
-    const stream = await llm.chat.completions.create(
-      { ...params, stream: true },
-      { signal }
-    );
-    for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
-      if (reasoning)
-        yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-      if (content) {
-        fullText += content;
-        yield { kind: "assistant_text", delta: content };
-      }
-    }
-  } catch (e) {
-    if (signal.aborted || e.name === "AbortError")
-      return;
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false }
-    );
-    fullText = resp.choices[0]?.message?.content ?? "";
-    if (fullText)
-      yield { kind: "assistant_text", delta: fullText };
-  }
-  if (signal.aborted)
-    return;
-  const fixedPages = parseJsonPages(fullText);
-  const writtenPaths = [];
-  const errors = [];
-  for (const page of fixedPages) {
-    if (!(0, import_path_browserify5.normalize)(page.path).startsWith(wikiVaultPath + "/")) {
-      yield { kind: "tool_use", name: "Write", input: { path: page.path } };
-      yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
-      errors.push(`${page.path}: blocked, outside wiki folder`);
-      continue;
-    }
-    yield { kind: "tool_use", name: "Write", input: { path: page.path } };
-    try {
-      await vaultTools.write(page.path, page.content);
-      writtenPaths.push(page.path);
-      yield { kind: "tool_result", ok: true };
-    } catch (e) {
-      errors.push(`${page.path}: ${e.message}`);
-      yield { kind: "tool_result", ok: false, preview: e.message };
-    }
-  }
-  const summary = buildFixSummary(domain.id, writtenPaths, errors, structuralIssues, lintReport);
-  yield { kind: "result", durationMs: Date.now() - start, text: summary };
-}
-function buildFixSummary(domainId, writtenPaths, errors, structuralIssues, lintReport) {
-  const lines = [];
-  const source = lintReport ? "lint-\u043E\u0442\u0447\u0451\u0442\u0430" : "\u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u043E\u0433\u043E \u0430\u043D\u0430\u043B\u0438\u0437\u0430";
-  if (writtenPaths.length > 0) {
-    lines.push(`\u0418\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E ${writtenPaths.length} \u0441\u0442\u0440. \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${domainId}\xBB \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 ${source}:`);
-    for (const p of writtenPaths) {
-      const name = p.split("/").pop() ?? p;
-      lines.push(`  \u2022 ${name}`);
-    }
-  } else {
-    lines.push(`\u0414\u043E\u043C\u0435\u043D \xAB${domainId}\xBB: \u043F\u0440\u0430\u0432\u043A\u0438 \u043D\u0435 \u043F\u043E\u0442\u0440\u0435\u0431\u043E\u0432\u0430\u043B\u0438\u0441\u044C (\u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 ${source}).`);
-  }
-  if (errors.length > 0) {
-    lines.push(`
-\u041E\u0448\u0438\u0431\u043A\u0438 \u0437\u0430\u043F\u0438\u0441\u0438 (${errors.length}):`);
-    for (const e of errors)
-      lines.push(`  \u2716 ${e}`);
-  }
-  if (structuralIssues) {
-    lines.push(`
-\u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B:
-${structuralIssues}`);
-  } else {
-    lines.push("\n\u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0445 \u043F\u0440\u043E\u0431\u043B\u0435\u043C \u043D\u0435 \u043E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u043E.");
-  }
-  return lines.join("\n");
-}
-function buildFixMessages2(domain, wikiVaultPath, pages, structuralIssues, entityTypesBlock, lintReport, userInstruction) {
-  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const pagesBlock = [...pages.entries()].map(([p, c]) => `--- ${p} ---
-${c}`).join("\n\n");
-  const fixInstruction = userInstruction ? `\u0412\u044B\u043F\u043E\u043B\u043D\u0438 \u0437\u0430\u0434\u0430\u0447\u0443 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F. \u0412\u0435\u0440\u043D\u0438 \u0442\u043E\u043B\u044C\u043A\u043E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.` : `\u0418\u0441\u043F\u0440\u0430\u0432\u044C \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B \u0432 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430\u0445 \u0438 \u0432\u0435\u0440\u043D\u0438 \u0442\u043E\u043B\u044C\u043A\u043E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.`;
-  const systemContent = render(fix_default, {
-    domain_name: domain.name,
-    fix_instruction: fixInstruction,
-    entity_types_block: entityTypesBlock ? `\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419:
-${entityTypesBlock}
-` : "",
-    wiki_path: wikiVaultPath,
-    today
-  });
-  return [
-    { role: "system", content: systemContent },
-    {
-      role: "user",
-      content: [
-        userInstruction ? `\u0417\u0410\u0414\u0410\u0427\u0410:
-${userInstruction}` : "",
-        lintReport ? `
-\u041E\u0422\u0427\u0401\u0422 LINT:
-${lintReport}` : "",
-        structuralIssues ? `
-\u0421\u0422\u0420\u0423\u041A\u0422\u0423\u0420\u041D\u042B\u0415 \u041F\u0420\u041E\u0411\u041B\u0415\u041C\u042B:
-${structuralIssues}` : "",
-        `
-WIKI-\u0421\u0422\u0420\u0410\u041D\u0418\u0426\u042B \u0434\u043E\u043C\u0435\u043D\u0430 ${domain.id}:
-${pagesBlock}`
-      ].filter(Boolean).join("\n")
-    }
-  ];
 }
 
 // prompts/chat.md
@@ -22440,21 +26807,24 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
     { role: "system", content: systemContent },
     ...history.map((m) => ({ role: m.role, content: m.content }))
   ];
-  const params = buildChatParams(model, messages, opts);
+  const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
+  let outputTokens = 0;
   try {
     const stream = await llm.chat.completions.create(
       { ...params, stream: true },
       { signal }
     );
     for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
+      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (reasoning)
         yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
       if (content) {
         fullText += content;
         yield { kind: "assistant_text", delta: content };
       }
+      if (tok !== void 0)
+        outputTokens += tok;
     }
   } catch (e) {
     if (signal.aborted || e.name === "AbortError")
@@ -22463,31 +26833,91 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
       { ...params, stream: false }
     );
     fullText = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp);
+    if (tok !== void 0)
+      outputTokens += tok;
     if (fullText)
       yield { kind: "assistant_text", delta: fullText };
   }
   if (signal.aborted)
     return;
-  yield { kind: "result", durationMs: Date.now() - start, text: fullText };
+  yield { kind: "result", durationMs: Date.now() - start, text: fullText, outputTokens: outputTokens || void 0 };
 }
 
 // templates/_wiki_schema.md
 var wiki_schema_default = '# Wiki Schema\n\n## \u042F\u0437\u044B\u043A \u0438 \u0441\u0442\u0438\u043B\u044C\n- \u041E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u044F\u0437\u044B\u043A: \u0440\u0443\u0441\u0441\u043A\u0438\u0439\n- \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u043D\u0435 \u043F\u0435\u0440\u0435\u0432\u043E\u0434\u0438\u0442\u044C: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML\n- \u0418\u043C\u0435\u043D\u0430 \u0441\u0438\u0441\u0442\u0435\u043C \u2014 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 (RT.DataExporter, CRM B2C, \u0426\u0425\u0414)\n- \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B \u0440\u0430\u0441\u0448\u0438\u0444\u0440\u043E\u0432\u044B\u0432\u0430\u0442\u044C \u043F\u0440\u0438 \u043F\u0435\u0440\u0432\u043E\u043C \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0438 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435\n- \u0421\u0442\u0438\u043B\u044C: \u043D\u0435\u0439\u0442\u0440\u0430\u043B\u044C\u043D\u044B\u0439, \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0432\u043D\u044B\u0439, \u0431\u0435\u0437 \u043E\u0446\u0435\u043D\u043E\u0447\u043D\u044B\u0445 \u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: "\u041E\u0447\u0435\u0432\u0438\u0434\u043D\u043E, \u0447\u0442\u043E...", "\u041B\u0443\u0447\u0448\u0438\u0439 \u0441\u043F\u043E\u0441\u043E\u0431...", \u043C\u0435\u0441\u0442\u043E\u0438\u043C\u0435\u043D\u0438\u044F "\u044F", "\u043C\u044B", "\u043D\u0430\u0448"\n\n## \u0418\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u043E\u0432 \u0438 \u043F\u0430\u043F\u043E\u043A\n- \u0424\u0430\u0439\u043B\u044B: kebab-case, \u043A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u0430, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432 \u0438 \u0441\u043F\u0435\u0446\u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432 \u043A\u0440\u043E\u043C\u0435 \u0434\u0435\u0444\u0438\u0441\u0430\n  - \u041F\u0440\u0438\u043C\u0435\u0440\u044B: `\u0432\u0435\u0440\u0441\u0438\u043E\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435-scd.md`, `clickhouse-\u043E\u0431\u0437\u043E\u0440.md`\n- \u041F\u0430\u043F\u043A\u0438 \u0434\u043E\u043C\u0435\u043D\u043E\u0432: \u043D\u0438\u0436\u043D\u0438\u0439 \u0440\u0435\u0433\u0438\u0441\u0442\u0440, \u043B\u0430\u0442\u0438\u043D\u0438\u0446\u0430 (`\u0438\u0438/`, `\u0431\u0430\u0437\u044B-\u0434\u0430\u043D\u043D\u044B\u0445/`)\n- \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1: \u0440\u0443\u0441\u0441\u043A\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435; \u0442\u0435\u0445\u0442\u0435\u0440\u043C\u0438\u043D \u0432 \u0441\u043A\u043E\u0431\u043A\u0430\u0445 \u043F\u0440\u0438 \u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E\u0441\u0442\u0438\n\n## \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u043F\u043E\u0440\u044F\u0434\u043E\u043A)\n1. Frontmatter (YAML)\n2. \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1\n3. \u0412\u0432\u043E\u0434\u043D\u044B\u0439 \u0430\u0431\u0437\u0430\u0446 \u2014 1-3 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0431\u0435\u0437 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0430, \u0441\u0440\u0430\u0437\u0443 \u043F\u043E\u0441\u043B\u0435 H1\n4. `## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438` \u2014 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0438 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u044B\n\n## \u041E\u043F\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B\n- `## \u041F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435 [\u0414\u043E\u043C\u0435\u043D]`\n- `## \u041F\u0440\u0438\u043C\u0435\u0440\u044B`\n- `## \u041E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F`\n- `## Best Practices`\n- `## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438` \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u043D\u0443\u0436\u0435\u043D \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043A \u0441\u0432\u044F\u0437\u044F\u043C; \u0431\u0435\u0437 \u043E\u043F\u0438\u0441\u0430\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u0440\u0430\u0437\u0434\u0435\u043B \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C\n- `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n\n## Frontmatter\n\n| \u041F\u043E\u043B\u0435 | \u041F\u0440\u0430\u0432\u0438\u043B\u043E |\n|------|---------|\n| `wiki_sources` | \u041C\u0430\u0441\u0441\u0438\u0432 \u0440\u0435\u0430\u043B\u044C\u043D\u044B\u0445 \u043F\u0443\u0442\u0435\u0439 \u043E\u0442 \u043A\u043E\u0440\u043D\u044F \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F. \u0422\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u043D\u044B\u0435 \u0444\u0430\u0439\u043B\u044B. \u041F\u0440\u0438 UPDATE \u2014 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0442\u044C, \u043D\u0435 \u0443\u0434\u0430\u043B\u044F\u0442\u044C. \u0422\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0432 Obsidian: **Links** (\u043D\u0435 list/text) \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0442\u043E\u0433\u0434\u0430 \u0441\u0441\u044B\u043B\u043A\u0438 \u0443\u0447\u0430\u0441\u0442\u0432\u0443\u044E\u0442 \u0432 Graph View. \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 `[[page-name]]`: `["[[page-a]]", "[[page-b]]"] |\n| `wiki_updated` | YYYY-MM-DD |\n| `wiki_status` | `stub` (<2 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432, <10 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439) / `developing` (\u22652 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430, \u226510 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439, \u043E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B \u0437\u0430\u043F\u043E\u043B\u043D\u0435\u043D\u044B) / `mature` (\u22654 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430, \u0432\u0441\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B) |\n| `wiki_type` | \u0422\u0438\u043F \u0444\u0430\u0439\u043B\u0430: `page \\| index \\| log \\| schema`. \u0422\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u0444\u0430\u0439\u043B\u043E\u0432 (`_index.md`, `_log.md`, `_wiki_schema.md`). \u041E\u0431\u044B\u0447\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u043D\u0435 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u044E\u0442 \u044D\u0442\u043E \u043F\u043E\u043B\u0435. |\n| `tags` | \u0418\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 \u0438\u0437 tag-hierarchy.json |\n| `aliases` | \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B, \u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u0438\u0435 \u0432\u0430\u0440\u0438\u0430\u043D\u0442\u044B, \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B |\n| `wiki_outgoing_links` | \u041C\u0430\u0441\u0441\u0438\u0432 WikiLinks \u043D\u0430 \u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B. \u0422\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0432 Obsidian: **Links** (\u043D\u0435 list/text) \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0442\u043E\u0433\u0434\u0430 \u0441\u0441\u044B\u043B\u043A\u0438 \u0443\u0447\u0430\u0441\u0442\u0432\u0443\u044E\u0442 \u0432 Graph View. \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 `[[page-name]]`: `["[[page-a]]", "[[page-b]]"]`. \u041F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C. |\n| `wiki_external_links` | \u041C\u0430\u0441\u0441\u0438\u0432 \u0432\u043D\u0435\u0448\u043D\u0438\u0445 URL (`http://` \u0438\u043B\u0438 `https://`). \u041D\u0435 \u0444\u043E\u0440\u043C\u0438\u0440\u0443\u044E\u0442 \u0433\u0440\u0430\u0444 Obsidian \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0441\u043F\u0440\u0430\u0432\u043E\u0447\u043D\u044B\u0435 \u0440\u0435\u0441\u0443\u0440\u0441\u044B \u0438 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430\u0446\u0438\u044F. |\n\n## WikiLinks\n- \u0421\u0441\u044B\u043B\u0430\u0442\u044C\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0447\u0435\u0440\u0435\u0437 `[[\u0438\u043C\u044F-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B]]`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: \u043C\u0451\u0440\u0442\u0432\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438, \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0444\u0430\u0439\u043B\u044B \u0432\u043D\u0435 `!Wiki/`\n\n## \u041A\u043E\u043D\u0442\u0435\u043D\u0442\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u2014 \u043F\u0435\u0440\u0435\u0440\u0430\u0431\u043E\u0442\u0430\u0442\u044C \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432\n- \u0414\u043E\u0441\u043B\u043E\u0432\u043D\u044B\u0435 \u0446\u0438\u0442\u0430\u0442\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445 (SQL, \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438)\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u0434\u0430\u0442\u0443 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0432 `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: placeholder-\u0442\u0435\u043A\u0441\u0442 (TODO, "\u0441\u043C. \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A"), \u043F\u0443\u0441\u0442\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B, \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438\n- \u0422\u0430\u0431\u043B\u0438\u0446\u044B: markdown \u0441 \u0432\u044B\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u043D\u0438\u0435\u043C (`| \u041F\u0430\u0440\u0430\u043C\u0435\u0442\u0440 | \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u0435 |` + `|----------|----------|`)\n- \u041A\u043E\u0434\u043E\u0432\u044B\u0435 \u0431\u043B\u043E\u043A\u0438: \u0432\u0441\u0435\u0433\u0434\u0430 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u044F\u0437\u044B\u043A (` ```sql `, ` ```yaml `, ` ```json `)\n';
 
 // prompts/init.md
-var init_default = '\u0422\u044B \u2014 \u0430\u0440\u0445\u0438\u0442\u0435\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439. \u0421\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0439 \u0437\u0430\u043F\u0438\u0441\u044C \u0434\u043E\u043C\u0435\u043D\u0430 \u0434\u043B\u044F domain-map.json.\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0435\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B:\n{\n  "id": "{{domain_id}}",\n  "name": "\u0427\u0435\u043B\u043E\u0432\u0435\u043A\u043E\u0447\u0438\u0442\u0430\u0435\u043C\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435",\n  "wiki_folder": "vaults/{{vault_name}}/!Wiki/{{domain_id}}",\n  "source_paths": [],\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"{{domain_id}}/..."}],\n  "language_notes": ""\n}\n{{schema_block}}\n{{index_block}}\n';
+var init_default = '\u0422\u044B \u2014 \u0430\u0440\u0445\u0438\u0442\u0435\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439. \u0421\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0439 \u0437\u0430\u043F\u0438\u0441\u044C \u0434\u043E\u043C\u0435\u043D\u0430 \u0434\u043B\u044F domain-map.json.\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0435\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B:\n{\n  "id": "{{domain_id}}",\n  "name": "\u0427\u0435\u043B\u043E\u0432\u0435\u043A\u043E\u0447\u0438\u0442\u0430\u0435\u043C\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435",\n  "wiki_folder": "vaults/{{vault_name}}/!Wiki/{{domain_id}}",\n  "source_paths": [],\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"{{domain_id}}/..."}],\n  "language_notes": ""\n}\n{{schema_block}}\n{{index_block}}\n\n\u0412\u043A\u043B\u044E\u0447\u0438 \u043F\u043E\u043B\u0435 `reasoning` \u043F\u0435\u0440\u0432\u044B\u043C \u0432 JSON-\u043E\u0442\u0432\u0435\u0442\u0435: \u043F\u043E\u0448\u0430\u0433\u043E\u0432\u043E\u0435 \u043E\u0431\u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B \u0434\u043E\u043C\u0435\u043D\u0430.\n\n## Output JSON Example\n\n{\n  "reasoning": "\u041F\u0440\u043E\u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043B \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438. \u0412\u044B\u044F\u0432\u0438\u043B \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438: Process, ServiceContract, Customer.",\n  "id": "{{domain_id}}",\n  "name": "Telecom Operations",\n  "wiki_folder": "{{domain_id}}",\n  "entity_types": [\n    {\n      "type": "Process",\n      "description": "\u0411\u0438\u0437\u043D\u0435\u0441-\u043F\u0440\u043E\u0446\u0435\u0441\u0441 \u0438\u043B\u0438 \u0448\u0430\u0433 workflow",\n      "extraction_cues": ["BPMN", "workflow", "\u043F\u0440\u043E\u0446\u0435\u0441\u0441"],\n      "min_mentions_for_page": 1,\n      "wiki_subfolder": "processes"\n    }\n  ],\n  "language_notes": "\u0421\u043C\u0435\u0441\u044C \u0440\u0443\u0441\u0441\u043A\u043E\u0433\u043E/\u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u043E\u0433\u043E; \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0439 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 product-\u0438\u043C\u0451\u043D."\n}\n';
+
+// prompts/init-incremental.md
+var init_incremental_default = '\u0422\u044B \u2014 \u0430\u043D\u0430\u043B\u0438\u0442\u0438\u043A wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439. \u041E\u0431\u043D\u043E\u0432\u0438 \u0441\u043F\u0438\u0441\u043E\u043A entity_types \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043D\u043E\u0432\u043E\u0433\u043E \u0444\u0430\u0439\u043B\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430.\n\n\u0422\u0435\u0431\u0435 \u0434\u0430\u043D:\n- \u0421\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u043E\u0434\u043D\u043E\u0433\u043E \u0444\u0430\u0439\u043B\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430\n- \u0422\u0435\u043A\u0443\u0449\u0438\u0439 \u0441\u043F\u0438\u0441\u043E\u043A entity_types (JSON)\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0435\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B:\n{\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"..."}],\n  "language_notes": "..."\n}\n\n\u041F\u0440\u0430\u0432\u0438\u043B\u0430:\n- `entity_types`: \u0434\u043E\u0431\u0430\u0432\u044C \u043D\u043E\u0432\u044B\u0435 \u0442\u0438\u043F\u044B, \u0443\u0442\u043E\u0447\u043D\u0438 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435. \u041D\u0435 \u043C\u0435\u043D\u044F\u0439 \u043F\u043E\u043B\u0435 `type` (id). \u0415\u0441\u043B\u0438 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439 \u043D\u0435\u0442 \u2014 \u0432\u0435\u0440\u043D\u0438 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0441\u043F\u0438\u0441\u043E\u043A \u0431\u0435\u0437 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439.\n- `language_notes`: \u043E\u0431\u043D\u043E\u0432\u0438 \u0435\u0441\u043B\u0438 \u0444\u0430\u0439\u043B \u043F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u0435\u0442 \u043D\u043E\u0432\u044B\u0435 \u044F\u0437\u044B\u043A\u043E\u0432\u044B\u0435 \u043A\u043E\u043D\u0432\u0435\u043D\u0446\u0438\u0438. \u0415\u0441\u043B\u0438 \u043D\u0435\u0447\u0435\u0433\u043E \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u2014 \u043F\u0440\u043E\u043F\u0443\u0441\u0442\u0438 \u043F\u043E\u043B\u0435.\n- \u041D\u0438\u043A\u0430\u043A\u0438\u0445 \u0434\u0440\u0443\u0433\u0438\u0445 \u043F\u043E\u043B\u0435\u0439. \u041D\u0438\u043A\u0430\u043A\u0438\u0445 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439. \u0422\u043E\u043B\u044C\u043A\u043E JSON.\n\n\u0412\u043A\u043B\u044E\u0447\u0438 \u043F\u043E\u043B\u0435 `reasoning` \u043F\u0435\u0440\u0432\u044B\u043C \u0432 JSON-\u043E\u0442\u0432\u0435\u0442\u0435: \u043E\u0431\u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0435\u043C\u044B\u0445 \u0438\u043B\u0438 \u0438\u0437\u043C\u0435\u043D\u044F\u0435\u043C\u044B\u0445 entity_types.\n\n## Output JSON Example\n\n{\n  "reasoning": "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u043B \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0439 Process, \u0434\u043E\u0431\u0430\u0432\u0438\u043B \u043D\u043E\u0432\u044B\u0439 Contract \u043F\u043E \u043D\u0430\u0439\u0434\u0435\u043D\u043D\u044B\u043C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430\u043C SLA.",\n  "entity_types": [\n    {\n      "type": "Process",\n      "description": "\u0411\u0438\u0437\u043D\u0435\u0441-\u043F\u0440\u043E\u0446\u0435\u0441\u0441",\n      "extraction_cues": ["BPMN", "\u043F\u0440\u043E\u0446\u0435\u0441\u0441"]\n    },\n    {\n      "type": "Contract",\n      "description": "\u0414\u043E\u0433\u043E\u0432\u043E\u0440 \u043E\u043A\u0430\u0437\u0430\u043D\u0438\u044F \u0443\u0441\u043B\u0443\u0433 / SLA",\n      "extraction_cues": ["SLA", "\u0434\u043E\u0433\u043E\u0432\u043E\u0440", "\u0441\u043E\u0433\u043B\u0430\u0448\u0435\u043D\u0438\u0435"],\n      "wiki_subfolder": "contracts"\n    }\n  ],\n  "language_notes": "\u0414\u043E\u0433\u043E\u0432\u043E\u0440\u043D\u044B\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u2014 \u043D\u0430 \u0440\u0443\u0441\u0441\u043A\u043E\u043C."\n}\n';
 
 // src/phases/init.ts
+function mergeEntityTypes(current, incoming) {
+  const map = new Map(current.map((e) => [e.type, e]));
+  for (const e of incoming)
+    map.set(e.type, e);
+  return [...map.values()];
+}
 async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal, opts = {}, onFileError) {
   const domainId = args[0];
   const dryRun = args.includes("--dry-run");
   const sourcesIdx = args.indexOf("--sources");
   const sourcePaths = sourcesIdx >= 0 ? args.slice(sourcesIdx + 1) : [];
+  const force = args.includes("--force");
   if (!domainId) {
     yield { kind: "error", message: "init: domain id required" };
     return;
   }
   const existing = domains.find((d) => d.id === domainId);
+  if (force) {
+    if (!existing) {
+      yield { kind: "error", message: `force: domain not found: "${domainId}"` };
+      return;
+    }
+    if (dryRun) {
+      yield { kind: "error", message: "force: dry-run not supported" };
+      return;
+    }
+    const effectiveSources = sourcePaths.length ? sourcePaths : existing.source_paths ?? [];
+    if (!effectiveSources.length) {
+      yield { kind: "error", message: "force: no sources to re-analyze" };
+      return;
+    }
+    yield { kind: "assistant_text", delta: `Re-init: wiping ${domainWikiFolder(existing.wiki_folder)}...
+` };
+    yield { kind: "tool_use", name: "WipeDomain", input: { folder: existing.wiki_folder } };
+    const wiped = await wipeDomainFolder(vaultTools, existing.wiki_folder);
+    yield { kind: "tool_result", ok: true };
+    yield { kind: "assistant_text", delta: `removed ${wiped.length} files
+` };
+    yield {
+      kind: "domain_updated",
+      domainId,
+      patch: { entity_types: [], analyzed_sources: [], language_notes: "" }
+    };
+    if (signal.aborted)
+      return;
+    existing.entity_types = [];
+    existing.analyzed_sources = [];
+    existing.language_notes = "";
+    yield* runInitWithSources(
+      domainId,
+      effectiveSources,
+      false,
+      vaultTools,
+      llm,
+      model,
+      domains,
+      vaultName,
+      signal,
+      opts,
+      onFileError,
+      true
+    );
+    return;
+  }
   if (sourcePaths.length) {
     yield* runInitWithSources(
       domainId,
@@ -22513,22 +26943,24 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
   const wikiRootGuess = `!Wiki`;
   await ensureRootFiles(vaultTools, wikiRootGuess);
   const start = Date.now();
+  let outputTokens = 0;
   const allFiles = await vaultTools.listFiles("");
   const sampleFiles = allFiles.slice(0, 5);
   const samples = await vaultTools.readAll(sampleFiles);
+  const existingDomain = domains.find((d) => d.id === domainId);
   const [schemaContent, indexContent] = await Promise.all([
     tryRead3(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
-    tryRead3(vaultTools, `${wikiRootGuess}/_index.md`)
+    existingDomain ? tryRead3(vaultTools, `${domainWikiFolder(existingDomain.wiki_folder)}/_index.md`) : Promise.resolve("")
   ]);
   const systemContent = render(init_default, {
     domain_id: domainId,
     vault_name: vaultName,
     schema_block: schemaContent ? `
 \u041A\u043E\u043D\u0432\u0435\u043D\u0446\u0438\u0438 \u0432\u0438\u043A\u0438 (_wiki_schema.md):
-${schemaContent.slice(0, 1500)}` : "",
+${schemaContent}` : "",
     index_block: indexContent ? `
 \u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0430\u044F \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 (_index.md):
-${indexContent.slice(0, 1e3)}` : ""
+${indexContent}` : ""
   });
   const messages = [
     { role: "system", content: systemContent },
@@ -22540,44 +26972,49 @@ ${indexContent.slice(0, 1e3)}` : ""
         "",
         `\u041F\u0440\u0438\u043C\u0435\u0440\u044B \u0444\u0430\u0439\u043B\u043E\u0432 vault:`,
         [...samples.entries()].map(([p, c]) => `${p}:
-${c.slice(0, 400)}`).join("\n\n")
+${c}`).join("\n\n")
       ].join("\n")
     }
   ];
-  const params = buildChatParams(model, messages, opts);
-  let fullText = "";
+  const collected = [];
+  let parsed;
   try {
-    const stream = await llm.chat.completions.create(
-      { ...params, stream: true },
-      { signal }
-    );
-    for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
-      if (reasoning)
-        yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-      if (content) {
-        fullText += content;
-        yield { kind: "assistant_text", delta: content };
-      }
-    }
+    const r = await parseWithRetry({
+      llm,
+      model,
+      baseMessages: messages,
+      opts,
+      schema: DomainEntrySchema,
+      maxRetries: opts.structuredRetries ?? 1,
+      callSite: "init.bootstrap",
+      signal,
+      onEvent: (e) => collected.push(e)
+    });
+    parsed = r.value;
+    outputTokens += r.outputTokens;
+    if (r.fullText)
+      yield { kind: "assistant_text", delta: r.fullText };
   } catch (e) {
-    if (signal.aborted || e.name === "AbortError")
+    for (const ev of collected)
+      yield ev;
+    if (e.name === "AbortError" || signal.aborted)
       return;
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false }
-    );
-    fullText = resp.choices[0]?.message?.content ?? "";
-    if (fullText)
-      yield { kind: "assistant_text", delta: fullText };
+    yield { kind: "error", message: `Failed to parse domain entry: ${e.message}` };
+    return;
   }
+  for (const ev of collected)
+    yield ev;
   if (signal.aborted)
     return;
   let entry;
   try {
-    const match = fullText.match(/\{[\s\S]*\}/);
-    if (!match)
-      throw new Error("No JSON object found in LLM response");
-    entry = JSON.parse(match[0]);
+    entry = {
+      id: parsed.id,
+      name: parsed.name,
+      wiki_folder: parsed.wiki_folder,
+      entity_types: parsed.entity_types,
+      language_notes: parsed.language_notes
+    };
     const vaultPrefix = `vaults/${vaultName}/`;
     if (entry.wiki_folder?.startsWith(vaultPrefix)) {
       entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
@@ -22588,7 +27025,7 @@ ${c.slice(0, 400)}`).join("\n\n")
     if (!entry.id || !entry.wiki_folder)
       throw new Error("Missing required fields");
   } catch (e) {
-    yield { kind: "error", message: `Failed to parse domain entry: ${e.message}` };
+    yield { kind: "error", message: `Failed to build domain entry: ${e.message}` };
     return;
   }
   if (dryRun) {
@@ -22598,7 +27035,8 @@ ${c.slice(0, 400)}`).join("\n\n")
       text: `Dry run \u2014 domain entry:
 \`\`\`json
 ${JSON.stringify(entry, null, 2)}
-\`\`\``
+\`\`\``,
+      outputTokens: outputTokens || void 0
     };
     return;
   }
@@ -22609,146 +27047,248 @@ ${JSON.stringify(entry, null, 2)}
     yield { kind: "domain_created", entry };
   }
   yield { kind: "tool_result", ok: true };
-  await appendLog2(vaultTools, wikiRootGuess, domainId);
+  await appendLog2(vaultTools, domainWikiFolder(entry.wiki_folder), domainId);
   yield {
     kind: "result",
     durationMs: Date.now() - start,
-    text: `Domain "${domainId}" initialised. Edit entity_types in plugin settings to refine extraction.`
+    text: `Domain "${domainId}" initialised. Edit entity_types in plugin settings to refine extraction.`,
+    outputTokens: outputTokens || void 0
   };
 }
-async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError) {
+async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, force = false) {
   const start = Date.now();
+  let outputTokens = 0;
   const wikiRootGuess = `!Wiki`;
   await ensureRootFiles(vaultTools, wikiRootGuess);
-  const allVaultFiles = await vaultTools.listFiles("");
-  const sourceFiles = allVaultFiles.filter(
-    (f) => f.endsWith(".md") && sourcePaths.some((sp) => f.startsWith(sp))
-  );
+  const sourceFileLists = await Promise.all(sourcePaths.map((sp) => vaultTools.listFiles(sp)));
+  const sourceFiles = [...new Set(sourceFileLists.flat())].filter((f) => f.endsWith(".md"));
   if (!sourceFiles.length) {
     yield { kind: "error", message: `No .md files found in source paths: ${sourcePaths.join(", ")}` };
     return;
   }
-  yield { kind: "init_start", totalFiles: sourceFiles.length };
-  yield { kind: "assistant_text", delta: `Analysing ${sourceFiles.length} source files for domain "${domainId}"...
-` };
-  const sampleFiles = sourceFiles.slice(0, 10);
-  const samples = await vaultTools.readAll(sampleFiles);
+  const existing = domains.find((d) => d.id === domainId);
+  const isResuming = !force && existing?.analyzed_sources !== void 0;
+  const alreadyAnalyzed = new Set(force ? [] : existing?.analyzed_sources ?? []);
+  const toAnalyze = isResuming ? sourceFiles.filter((f) => !alreadyAnalyzed.has(f)) : sourceFiles;
+  yield { kind: "init_start", totalFiles: toAnalyze.length };
+  if (toAnalyze.length === 0) {
+    yield {
+      kind: "result",
+      durationMs: Date.now() - start,
+      text: `Domain "${domainId}": no new sources to process.`,
+      outputTokens: outputTokens || void 0
+    };
+    return;
+  }
   const [schemaContent, indexContent] = await Promise.all([
     tryRead3(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
     tryRead3(vaultTools, `${wikiRootGuess}/_index.md`)
   ]);
-  const existing = domains.find((d) => d.id === domainId);
-  const systemContent = render(init_default, {
-    domain_id: domainId,
-    vault_name: vaultName,
-    schema_block: schemaContent ? `
-\u041A\u043E\u043D\u0432\u0435\u043D\u0446\u0438\u0438 \u0432\u0438\u043A\u0438 (_wiki_schema.md):
-${schemaContent.slice(0, 1500)}` : "",
-    index_block: indexContent ? `
-\u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0430\u044F \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 (_index.md):
-${indexContent.slice(0, 1e3)}` : ""
-  });
-  const messages = [
-    { role: "system", content: systemContent },
-    {
-      role: "user",
-      content: [
-        `Domain ID: ${domainId}`,
-        `Vault name: ${vaultName}`,
-        `Source paths: ${sourcePaths.join(", ")}`,
-        "",
-        `\u041F\u0440\u0438\u043C\u0435\u0440\u044B \u0444\u0430\u0439\u043B\u043E\u0432 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432:`,
-        [...samples.entries()].map(([p, c]) => `${p}:
-${c.slice(0, 400)}`).join("\n\n")
-      ].join("\n")
-    }
-  ];
-  const params = buildChatParams(model, messages, opts);
-  let fullText = "";
-  try {
-    const stream = await llm.chat.completions.create(
-      { ...params, stream: true },
-      { signal }
-    );
-    for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
-      if (reasoning)
-        yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-      if (content) {
-        fullText += content;
-        yield { kind: "assistant_text", delta: content };
-      }
-    }
-  } catch (e) {
-    if (signal.aborted || e.name === "AbortError")
-      return;
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false }
-    );
-    fullText = resp.choices[0]?.message?.content ?? "";
-    if (fullText)
-      yield { kind: "assistant_text", delta: fullText };
-  }
-  if (signal.aborted)
-    return;
-  let entry;
-  try {
-    const match = fullText.match(/\{[\s\S]*\}/);
-    if (!match)
-      throw new Error("No JSON object found in LLM response");
-    entry = JSON.parse(match[0]);
-    const vaultPrefix = `vaults/${vaultName}/`;
-    if (entry.wiki_folder?.startsWith(vaultPrefix)) {
-      entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
-    }
-    if (entry.wiki_folder?.startsWith("!Wiki/")) {
-      entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
-    }
-    if (!entry.id || !entry.wiki_folder)
-      throw new Error("Missing required fields");
-  } catch (e) {
-    yield { kind: "error", message: `Failed to parse domain entry: ${e.message}` };
-    return;
-  }
-  const updatedDomain = {
-    ...existing ?? { id: domainId, name: domainId, wiki_folder: entry.wiki_folder },
-    entity_types: entry.entity_types,
-    language_notes: entry.language_notes,
-    source_paths: sourcePaths
-  };
-  if (dryRun) {
-    yield {
-      kind: "result",
-      durationMs: Date.now() - start,
-      text: `Dry run \u2014 domain entry:
-\`\`\`json
-${JSON.stringify(entry, null, 2)}
-\`\`\``
-    };
-    return;
-  }
-  yield { kind: "tool_use", name: existing ? "UpdateDomain" : "SaveDomain", input: { id: domainId } };
-  if (existing) {
-    yield { kind: "domain_updated", domainId, patch: { entity_types: entry.entity_types, language_notes: entry.language_notes } };
-  } else {
-    yield { kind: "domain_created", entry: { ...entry, source_paths: sourcePaths } };
-  }
-  yield { kind: "tool_result", ok: true };
-  yield { kind: "assistant_text", delta: `
-Creating wiki pages from ${sourceFiles.length} source files...
-` };
-  for (let i = 0; i < sourceFiles.length; i++) {
+  let currentDomain = existing ?? null;
+  for (let i = 0; i < toAnalyze.length; i++) {
     if (signal.aborted)
       return;
-    const file = sourceFiles[i];
-    yield { kind: "file_start", file, index: i, total: sourceFiles.length };
+    const file = toAnalyze[i];
+    yield { kind: "file_start", file, index: i, total: toAnalyze.length };
+    let fileContent;
+    try {
+      fileContent = await vaultTools.read(file);
+    } catch {
+      yield { kind: "assistant_text", delta: `\u26A0 ${file}: \u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u0444\u0430\u0439\u043B, \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u043C
+` };
+      yield { kind: "file_done", file };
+      continue;
+    }
+    yield { kind: "assistant_text", delta: `\u2139 ${file}: ${fileContent.length} chars
+` };
+    if (i === 0 && !isResuming) {
+      const systemContent = render(init_default, {
+        domain_id: domainId,
+        vault_name: vaultName,
+        schema_block: schemaContent ? `
+\u041A\u043E\u043D\u0432\u0435\u043D\u0446\u0438\u0438 \u0432\u0438\u043A\u0438 (_wiki_schema.md):
+${schemaContent}` : "",
+        index_block: indexContent ? `
+\u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0430\u044F \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 (_index.md):
+${indexContent}` : ""
+      });
+      const messages = [
+        { role: "system", content: systemContent },
+        { role: "user", content: `Domain ID: ${domainId}
+Vault name: ${vaultName}
+Source paths: ${sourcePaths.join(", ")}
+
+${file}:
+${fileContent}` }
+      ];
+      const collected = [];
+      let parsed;
+      try {
+        const r = await parseWithRetry({
+          llm,
+          model,
+          baseMessages: messages,
+          opts,
+          schema: DomainEntrySchema,
+          maxRetries: opts.structuredRetries ?? 1,
+          callSite: "init.bootstrap",
+          signal,
+          onEvent: (e) => collected.push(e)
+        });
+        parsed = r.value;
+        outputTokens += r.outputTokens;
+        if (r.fullText)
+          yield { kind: "assistant_text", delta: r.fullText };
+      } catch (e) {
+        for (const ev of collected)
+          yield ev;
+        if (e.name === "AbortError" || signal.aborted)
+          return;
+        yield { kind: "assistant_text", delta: `\u26A0 ${file}: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON, \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u043C bootstrap (${e.message})
+` };
+        yield { kind: "file_done", file };
+        continue;
+      }
+      for (const ev of collected)
+        yield ev;
+      if (signal.aborted)
+        return;
+      let entry;
+      try {
+        entry = {
+          id: parsed.id,
+          name: parsed.name,
+          wiki_folder: parsed.wiki_folder,
+          entity_types: parsed.entity_types,
+          language_notes: parsed.language_notes
+        };
+        const vaultPrefix = `vaults/${vaultName}/`;
+        if (entry.wiki_folder?.startsWith(vaultPrefix))
+          entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
+        if (entry.wiki_folder?.startsWith("!Wiki/"))
+          entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
+        if (!entry.id || !entry.wiki_folder)
+          throw new Error("Missing required fields");
+      } catch {
+        yield { kind: "assistant_text", delta: `\u26A0 ${file}: bootstrap \u043F\u043E\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u0435 entry \u0443\u043F\u0430\u043B\u043E, \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u043C
+` };
+        yield { kind: "file_done", file };
+        continue;
+      }
+      if (dryRun) {
+        yield {
+          kind: "result",
+          durationMs: Date.now() - start,
+          text: `Dry run \u2014 domain entry:
+\`\`\`json
+${JSON.stringify(entry, null, 2)}
+\`\`\``,
+          outputTokens: outputTokens || void 0
+        };
+        return;
+      }
+      currentDomain = {
+        ...existing ?? { id: domainId, name: entry.name },
+        wiki_folder: entry.wiki_folder,
+        entity_types: entry.entity_types,
+        language_notes: entry.language_notes,
+        source_paths: sourcePaths,
+        analyzed_sources: [],
+        analyzed_sources_v2: true
+      };
+      yield { kind: "tool_use", name: existing ? "UpdateDomain" : "SaveDomain", input: { id: domainId } };
+      if (existing) {
+        yield {
+          kind: "domain_updated",
+          domainId,
+          patch: {
+            entity_types: currentDomain.entity_types,
+            language_notes: currentDomain.language_notes,
+            wiki_folder: currentDomain.wiki_folder,
+            analyzed_sources: []
+          }
+        };
+      } else {
+        yield { kind: "domain_created", entry: currentDomain };
+      }
+      yield { kind: "tool_result", ok: true };
+    } else {
+      const currentEntityTypes = currentDomain?.entity_types ?? [];
+      const messages = [
+        { role: "system", content: init_incremental_default },
+        { role: "user", content: `\u0422\u0435\u043A\u0443\u0449\u0438\u0435 entity_types:
+${JSON.stringify(currentEntityTypes, null, 2)}
+
+\u0424\u0430\u0439\u043B: ${file}
+
+${fileContent}` }
+      ];
+      const collected = [];
+      let parsed;
+      try {
+        const r = await parseWithRetry({
+          llm,
+          model,
+          baseMessages: messages,
+          opts,
+          schema: EntityTypesDeltaSchema,
+          maxRetries: opts.structuredRetries ?? 1,
+          callSite: "init.delta",
+          signal,
+          onEvent: (e) => collected.push(e)
+        });
+        parsed = r.value;
+        outputTokens += r.outputTokens;
+      } catch (e) {
+        for (const ev of collected)
+          yield ev;
+        if (e.name === "AbortError" || signal.aborted)
+          return;
+        yield { kind: "assistant_text", delta: `\u26A0 ${file}: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON, \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u043C (${e.message})
+` };
+        yield { kind: "file_done", file };
+        continue;
+      }
+      for (const ev of collected)
+        yield ev;
+      if (signal.aborted)
+        return;
+      const delta = { entity_types: parsed.entity_types, language_notes: parsed.language_notes };
+      if (!currentDomain) {
+        yield { kind: "file_done", file };
+        continue;
+      }
+      const mergedTypes = mergeEntityTypes(currentDomain.entity_types ?? [], delta.entity_types ?? []);
+      currentDomain = {
+        ...currentDomain,
+        entity_types: mergedTypes,
+        language_notes: delta.language_notes ?? currentDomain.language_notes,
+        analyzed_sources_v2: true
+      };
+      yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
+      yield {
+        kind: "domain_updated",
+        domainId,
+        patch: {
+          entity_types: currentDomain.entity_types,
+          language_notes: currentDomain.language_notes
+        }
+      };
+      yield { kind: "tool_result", ok: true };
+    }
+    if (signal.aborted)
+      return;
+    if (!currentDomain) {
+      yield { kind: "file_done", file };
+      continue;
+    }
     let retried = false;
     let done = false;
     while (!done) {
       let hadError = false;
       let caughtErr = null;
       try {
-        for await (const ev of runIngest([file], vaultTools, llm, model, [updatedDomain], vaultTools.vaultRoot, signal, opts)) {
+        for await (const ev of runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts)) {
           yield ev;
         }
         done = true;
@@ -22768,14 +27308,43 @@ Creating wiki pages from ${sourceFiles.length} source files...
         done = true;
       }
     }
+    if (signal.aborted)
+      return;
+    currentDomain = {
+      ...currentDomain,
+      analyzed_sources: [...currentDomain.analyzed_sources ?? [], file]
+    };
+    yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
+    yield {
+      kind: "domain_updated",
+      domainId,
+      patch: { analyzed_sources: currentDomain.analyzed_sources }
+    };
+    yield { kind: "tool_result", ok: true };
     yield { kind: "file_done", file };
+  }
+  if (!currentDomain) {
+    yield { kind: "error", message: `init --sources: \u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0437\u0434\u0430\u0442\u044C \u0434\u043E\u043C\u0435\u043D \u0438\u0437 \u0444\u0430\u0439\u043B\u043E\u0432` };
+    return;
   }
   await appendLog2(vaultTools, wikiRootGuess, domainId);
   yield {
     kind: "result",
     durationMs: Date.now() - start,
-    text: `Domain "${domainId}" initialised from ${sourceFiles.length} source files.`
+    text: `Domain "${domainId}" initialised from ${toAnalyze.length} source files.`,
+    outputTokens: outputTokens || void 0
   };
+}
+async function wipeDomainFolder(vaultTools, wikiFolder) {
+  const root = domainWikiFolder(wikiFolder);
+  const files = await vaultTools.listFiles(root);
+  for (const f of files) {
+    try {
+      await vaultTools.remove(f);
+    } catch {
+    }
+  }
+  return files;
 }
 async function appendLog2(vaultTools, wikiRoot, domainId) {
   const logPath = `${wikiRoot}/_log.md`;
@@ -22799,15 +27368,15 @@ async function tryRead3(vaultTools, path2) {
 }
 async function ensureRootFiles(vaultTools, wikiRoot) {
   const schema = `${wikiRoot}/_wiki_schema.md`;
-  const index = `${wikiRoot}/_index.md`;
-  const log = `${wikiRoot}/_log.md`;
+  const legacyIndex = `${wikiRoot}/_index.md`;
+  const legacyLog = `${wikiRoot}/_log.md`;
   try {
     if (!await vaultTools.exists(schema))
       await vaultTools.write(schema, wiki_schema_default);
-    if (!await vaultTools.exists(index))
-      await vaultTools.write(index, "# Wiki Index\n");
-    if (!await vaultTools.exists(log))
-      await vaultTools.write(log, "# Wiki Log\n");
+    if (await vaultTools.exists(legacyIndex))
+      await vaultTools.remove(legacyIndex);
+    if (await vaultTools.exists(legacyLog))
+      await vaultTools.remove(legacyLog);
   } catch {
   }
 }
@@ -23138,8 +27707,9 @@ ${original}`;
   ];
   yield { kind: "assistant_text", delta: `\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u0430 ${filePath}...
 ` };
-  const baseParams = { ...buildChatParams(model, messages, opts), response_format: { type: "json_object" } };
+  const baseParams = { ...buildChatParams(model, messages, opts, true), response_format: { type: "json_object" } };
   let lastFinishReason = null;
+  let outputTokens = 0;
   async function* callOnce(p) {
     let acc = "";
     lastFinishReason = null;
@@ -23149,13 +27719,15 @@ ${original}`;
         { signal }
       );
       for await (const chunk of stream) {
-        const { reasoning, content } = extractStreamDeltas(chunk);
+        const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
         if (reasoning)
           yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
         if (content) {
           acc += content;
           yield { kind: "assistant_text", delta: content };
         }
+        if (tok !== void 0)
+          outputTokens += tok;
         const fr = chunk.choices[0]?.finish_reason;
         if (fr)
           lastFinishReason = fr;
@@ -23167,6 +27739,9 @@ ${original}`;
         { ...p, stream: false }
       );
       acc = resp.choices[0]?.message?.content ?? "";
+      const tok = extractUsage(resp);
+      if (tok !== void 0)
+        outputTokens += tok;
       lastFinishReason = resp.choices[0]?.finish_reason ?? null;
     }
     return acc;
@@ -23178,7 +27753,7 @@ ${original}`;
   const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
   if (!parsed && truncated) {
     yield { kind: "error", message: "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 \u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442 (claude-agent: env CLAUDE_CODE_MAX_OUTPUT_TOKENS \u0432 iclaude.sh; native-agent: Settings \u2192 per-operation \u2192 format \u2192 maxTokens)" };
-    yield { kind: "result", durationMs: Date.now() - start, text: "" };
+    yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
     return;
   }
   if (!parsed) {
@@ -23188,7 +27763,7 @@ ${original}`;
       { role: "user", content: userContent },
       ...chatHistory.map((m) => ({ role: m.role, content: m.content }))
     ];
-    const retryParams = { ...buildChatParams(model, retryMessages, opts), response_format: { type: "json_object" } };
+    const retryParams = { ...buildChatParams(model, retryMessages, opts, true), response_format: { type: "json_object" } };
     fullText = yield* callOnce(retryParams);
     if (signal.aborted)
       return;
@@ -23198,7 +27773,7 @@ ${original}`;
     const retryTruncated = lastFinishReason === "length" || looksTruncated(fullText);
     const msg = retryTruncated ? "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 (\u043F\u043E\u0441\u043B\u0435 retry) \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 \u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442 (claude-agent: env CLAUDE_CODE_MAX_OUTPUT_TOKENS \u0432 iclaude.sh; native-agent: Settings \u2192 per-operation \u2192 format \u2192 maxTokens)" : "Format: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON (\u043F\u043E\u0441\u043B\u0435 retry)";
     yield { kind: "error", message: msg };
-    yield { kind: "result", durationMs: Date.now() - start, text: "" };
+    yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
     return;
   }
   const lastSlash = filePath.lastIndexOf("/");
@@ -23219,7 +27794,7 @@ ${original}`;
 \u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043D\u044B\u0435: ${tokenList}`
       }
     ];
-    const restoreParams = { ...buildChatParams(model, restoreMessages, opts), response_format: { type: "json_object" } };
+    const restoreParams = { ...buildChatParams(model, restoreMessages, opts, true), response_format: { type: "json_object" } };
     const fullText2 = yield* callOnce(restoreParams);
     if (!signal.aborted) {
       const parsed2 = extractJsonObject(fullText2);
@@ -23227,10 +27802,10 @@ ${original}`;
         finalFormatted = parsed2.formatted;
         finalReport = parsed2.report;
       }
-      const missing2 = missingTokensWithContext(original, finalFormatted);
-      if (missing2.length > 0) {
-        finalFormatted = appendMissingLines(finalFormatted, missing2);
-      }
+    }
+    const missing2 = missingTokensWithContext(original, finalFormatted);
+    if (missing2.length > 0) {
+      finalFormatted = appendMissingLines(finalFormatted, missing2);
     }
   }
   try {
@@ -23241,32 +27816,33 @@ ${original}`;
   }
   const missingFinal = missingTokensWithContext(original, finalFormatted);
   yield { kind: "format_preview", tempPath, report: finalReport, missingTokens: missingFinal };
-  yield { kind: "result", durationMs: Date.now() - start, text: finalReport };
+  yield { kind: "result", durationMs: Date.now() - start, text: finalReport, outputTokens: outputTokens || void 0 };
 }
 
 // src/agent-runner.ts
 var AgentRunner = class {
   constructor(llm, settings, vaultTools, vaultName, domains) {
-    this.llm = llm;
     this.settings = settings;
     this.vaultTools = vaultTools;
     this.vaultName = vaultName;
     this.domains = domains;
+    this.llm = wrapWithJsonFallback(llm);
   }
+  llm;
   buildOptsFor(op) {
-    const key = op === "query-save" ? "query" : op === "fix" || op === "chat" ? "lint" : op;
+    const key = op === "query-save" ? "query" : op === "chat" ? "lint" : op;
     const s = this.settings;
+    const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
     if (s.backend === "claude-agent") {
       const c2 = s.claudeAgent.perOperation ? s.claudeAgent.operations[key] : void 0;
-      if (c2)
-        return { model: c2.model, opts: { systemPrompt: s.systemPrompt } };
-      return { model: s.claudeAgent.model, opts: { systemPrompt: s.systemPrompt } };
+      const model = c2 ? c2.model : s.claudeAgent.model;
+      return { model, opts: { systemPrompt: s.systemPrompt, structuredRetries } };
     }
     const na = s.nativeAgent;
     const c = na.perOperation ? na.operations[key] : void 0;
     if (c)
-      return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
-    return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt } };
+      return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
+    return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
   }
   async writeDevLog(_vaultRoot, entry) {
     if (!this.settings.devMode?.enabled)
@@ -23298,9 +27874,6 @@ var AgentRunner = class {
         break;
       case "lint":
         yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, opts);
-        break;
-      case "fix":
-        yield* runFix(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, req.context, req.instruction);
         break;
       case "chat": {
         const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
@@ -23436,6 +28009,9 @@ var VaultTools = class {
   async mkdir(vaultPath) {
     return this.adapter.mkdir(vaultPath);
   }
+  async remove(vaultPath) {
+    await this.adapter.remove?.(vaultPath);
+  }
   toVaultPath(absolutePath) {
     const base = this.basePath.endsWith("/") ? this.basePath : this.basePath + "/";
     if (!absolutePath.startsWith(base))
@@ -23446,7 +28022,7 @@ var VaultTools = class {
 
 // src/claude-cli-client.ts
 var import_child_process = require("child_process");
-var import_path_browserify6 = __toESM(require_path_browserify(), 1);
+var import_path_browserify5 = __toESM(require_path_browserify(), 1);
 
 // src/stream.ts
 var PREVIEW_MAX = 200;
@@ -23529,11 +28105,14 @@ function mapResult(obj) {
     const errMsg = typeof obj.result === "string" ? obj.result : typeof obj.error === "string" ? obj.error : "claude error";
     return { kind: "error", message: errMsg };
   }
+  const usage = isRecord(obj.usage) ? obj.usage : null;
+  const outputTokens = typeof usage?.output_tokens === "number" ? usage.output_tokens : void 0;
   return {
     kind: "result",
     durationMs: Number(obj.duration_ms ?? 0),
     usdCost: typeof obj.total_cost_usd === "number" ? obj.total_cost_usd : void 0,
-    text: typeof obj.result === "string" ? obj.result : ""
+    text: typeof obj.result === "string" ? obj.result : "",
+    outputTokens
   };
 }
 function truncate2(s, n) {
@@ -23574,7 +28153,7 @@ var ClaudeCliClient = class {
     try {
       const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
       if (isLargeUser) {
-        const tmpUsrFile = (0, import_path_browserify6.join)(this.cfg.tmpDir, `ai-wiki-usr-${id}.txt`);
+        const tmpUsrFile = (0, import_path_browserify5.join)(this.cfg.tmpDir, `ai-wiki-usr-${id}.txt`);
         const wrapped = `<user_input>
 ${userText}
 </user_input>`;
@@ -23593,7 +28172,7 @@ ${userText}
       if (!isResume && systemContent) {
         const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
         if (isLargeSys) {
-          const tmpSysFile = (0, import_path_browserify6.join)(this.cfg.tmpDir, `ai-wiki-sys-${id}.txt`);
+          const tmpSysFile = (0, import_path_browserify5.join)(this.cfg.tmpDir, `ai-wiki-sys-${id}.txt`);
           await this.cfg.tmpWrite(tmpSysFile, systemContent);
           tmpFiles.push(tmpSysFile);
           args.push("--system-prompt-file", tmpSysFile);
@@ -30346,8 +34925,8 @@ var Webhooks = class extends APIResource {
     for (const signature of signatures) {
       try {
         const signatureBytes = Buffer.from(signature, "base64");
-        const isValid = await crypto.subtle.verify("HMAC", key, signatureBytes, new TextEncoder().encode(signedPayload));
-        if (isValid) {
+        const isValid2 = await crypto.subtle.verify("HMAC", key, signatureBytes, new TextEncoder().encode(signedPayload));
+        if (isValid2) {
           return;
         }
       } catch {
@@ -31030,6 +35609,9 @@ var DomainStore = class {
         d.wiki_folder = d.wiki_folder.slice("!Wiki/".length);
       }
     }
+    const { migrated } = migrateDomainsV2(domains);
+    if (migrated)
+      await this.save(domains);
     return domains;
   }
   async save(domains) {
@@ -31046,9 +35628,9 @@ var DomainStore = class {
 
 // src/controller.ts
 function toVaultPath(vaultDir, savedPath) {
-  const abs = (0, import_path_browserify7.isAbsolute)(savedPath) ? savedPath : (0, import_path_browserify7.join)(vaultDir, savedPath);
-  const rel = (0, import_path_browserify7.relative)(vaultDir, abs);
-  if (rel.startsWith("..") || (0, import_path_browserify7.isAbsolute)(rel))
+  const abs = (0, import_path_browserify6.isAbsolute)(savedPath) ? savedPath : (0, import_path_browserify6.join)(vaultDir, savedPath);
+  const rel = (0, import_path_browserify6.relative)(vaultDir, abs);
+  if (rel.startsWith("..") || (0, import_path_browserify6.isAbsolute)(rel))
     return null;
   return rel;
 }
@@ -31078,6 +35660,7 @@ var WikiController = class {
   _chatSessionId;
   _currentClaudeClient = null;
   _pendingFormat = null;
+  _currentLogMeta = null;
   isBusy() {
     return this.current !== null;
   }
@@ -31236,9 +35819,6 @@ var WikiController = class {
     const args = domain === "all" ? [] : [domain];
     await this.dispatch("lint", args);
   }
-  async fix(domainId, lintReport, instruction) {
-    await this.dispatch("fix", [domainId], domainId, lintReport, instruction);
-  }
   async chat(operation, domainId, context, history, newMessage) {
     const chatMessages = [...history, { role: "user", content: newMessage }];
     await this.dispatchChat(operation, domainId, context, chatMessages);
@@ -31342,8 +35922,12 @@ var WikiController = class {
     });
     this.activeView()?.finishChat({ role: "assistant", content: finalText }, status !== "done");
   }
-  async init(domain, dryRun, sourcePaths) {
-    const args = dryRun ? [domain, "--dry-run"] : [domain];
+  async init(domain, dryRun, sourcePaths, force) {
+    const args = [domain];
+    if (dryRun)
+      args.push("--dry-run");
+    if (force)
+      args.push("--force");
     if (sourcePaths?.length)
       args.push("--sources", ...sourcePaths);
     const onFileError = sourcePaths?.length ? (file, err, canRetry) => {
@@ -31427,9 +36011,9 @@ var WikiController = class {
     const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm;
     if (s.backend === "claude-agent") {
-      const manifestDir = this.plugin.manifest.dir ?? (0, import_path_browserify7.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
+      const manifestDir = this.plugin.manifest.dir ?? (0, import_path_browserify6.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
       const pluginDir = this.app.vault.adapter.getFullPath(manifestDir);
-      const tmpDir = (0, import_path_browserify7.join)(pluginDir, "tmp");
+      const tmpDir = (0, import_path_browserify6.join)(pluginDir, "tmp");
       const tmpDirRelative = tmpDir.startsWith(base) ? tmpDir.slice(base.length).replace(/^\//, "") : tmpDir;
       if (base) {
         try {
@@ -31496,18 +36080,24 @@ var WikiController = class {
   async logEvent(_vaultRoot, sessionId, op, domainId, ev) {
     if (!this.plugin.settings.agentLogEnabled)
       return;
+    if (ev.kind === "assistant_text")
+      return;
     const adapter = this.app.vault.adapter;
     const dir = "!Logs";
     const path2 = `${dir}/agent.jsonl`;
     try {
       if (!await adapter.exists(dir))
         await adapter.mkdir(dir);
+      const extra = ev.kind === "result" && ev.outputTokens !== void 0 && ev.durationMs > 0 ? { tokPerSec: Math.round(ev.outputTokens / (ev.durationMs / 1e3)) } : {};
       const line = JSON.stringify({
         ts: (/* @__PURE__ */ new Date()).toISOString(),
         session: sessionId,
         op,
         domainId,
-        event: ev
+        backend: this._currentLogMeta?.backend,
+        model: this._currentLogMeta?.model,
+        event: ev,
+        ...extra
       }) + "\n";
       if (await adapter.exists(path2))
         await adapter.append(path2, line);
@@ -31533,6 +36123,11 @@ var WikiController = class {
         return;
       if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local))
         return;
+      const opKey2 = op === "query-save" ? "query" : op;
+      this._currentLogMeta = {
+        backend: eff.backend,
+        model: eff.backend === "claude-agent" ? eff.claudeAgent.perOperation ? eff.claudeAgent.operations[opKey2].model : eff.claudeAgent.model : eff.nativeAgent.perOperation ? eff.nativeAgent.operations[opKey2].model : eff.nativeAgent.model
+      };
     }
     await this.ensureView();
     const view = this.activeView();
@@ -31606,6 +36201,7 @@ var WikiController = class {
       this.current = null;
       this.onBusyChange?.();
       this.currentOp = null;
+      this._currentLogMeta = null;
     }
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
     const entry = {
@@ -31723,6 +36319,20 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
           void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
+    if (!import_obsidian8.Platform.isMobile) {
+      const statusBar = this.addStatusBarItem();
+      statusBar.setText("schema: 0/0");
+      statusBar.setAttribute("aria-label", "validation: 0 ok, 0 retried, 0 failed");
+      const unsub = structuralErrorCounter.subscribe((s) => {
+        const total = s.failed + s.retried + s.ok;
+        statusBar.setText(`schema: ${s.failed}/${total}`);
+        statusBar.setAttribute(
+          "aria-label",
+          `validation: ${s.ok} ok, ${s.retried} retried, ${s.failed} failed`
+        );
+      });
+      this.register(() => unsub());
+    }
     const T = i18n();
     this.addCommand({
       id: "open-panel",

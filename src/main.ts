@@ -8,6 +8,7 @@ import { QueryModal, DomainModal } from "./modals";
 import { i18n } from "./i18n";
 import { DomainStore } from "./domain-store";
 import { LocalConfigStore } from "./local-config";
+import { structuralErrorCounter } from "./structural-error-counter";
 
 export default class LlmWikiPlugin extends Plugin {
   settings!: LlmWikiPluginSettings;
@@ -36,6 +37,21 @@ export default class LlmWikiPlugin extends Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
+
+    if (!Platform.isMobile) {
+      const statusBar = this.addStatusBarItem();
+      statusBar.setText("schema: 0/0");
+      statusBar.setAttribute("aria-label", "validation: 0 ok, 0 retried, 0 failed");
+      const unsub = structuralErrorCounter.subscribe((s) => {
+        const total = s.failed + s.retried + s.ok;
+        statusBar.setText(`schema: ${s.failed}/${total}`);
+        statusBar.setAttribute(
+          "aria-label",
+          `validation: ${s.ok} ok, ${s.retried} retried, ${s.failed} failed`,
+        );
+      });
+      this.register(() => unsub());
+    }
 
     const T = i18n();
 

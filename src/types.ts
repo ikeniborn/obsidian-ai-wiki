@@ -6,7 +6,6 @@ export type WikiOperation =
   | "query"
   | "query-save"
   | "lint"
-  | "fix"
   | "chat"
   | "init"
   | "format";
@@ -43,20 +42,27 @@ export type RunEvent =
   | { kind: "tool_use"; name: string; input: unknown }
   | { kind: "tool_result"; ok: boolean; preview?: string }
   | { kind: "assistant_text"; delta: string; isReasoning?: boolean }
-  | { kind: "result"; durationMs: number; usdCost?: number; text: string }
+  | { kind: "result"; durationMs: number; usdCost?: number; text: string; outputTokens?: number }
   | { kind: "error"; message: string }
   | { kind: "exit"; code: number }
   | { kind: "ask_user"; question: string; options: string[]; toolUseId: string }
   | { kind: "domain_created"; entry: DomainEntry }
   | { kind: "source_path_added"; domainId: string; path: string }
-  | { kind: "domain_updated"; domainId: string; patch: { entity_types?: EntityType[]; language_notes?: string } }
+  | { kind: "domain_updated"; domainId: string; patch: { entity_types?: EntityType[]; language_notes?: string; wiki_folder?: string; analyzed_sources?: string[] } }
   | { kind: "eval_result"; score: number; reasoning: string }
-  | { kind: "init_start"; totalFiles: number }
-  | { kind: "file_start"; file: string; index: number; total: number }
-  | { kind: "file_done"; file: string }
+  | { kind: "init_start"; totalFiles: number; phase?: "analysis" | "ingest" }
+  | { kind: "file_start"; file: string; index: number; total: number; phase?: "analysis" | "ingest" }
+  | { kind: "file_done"; file: string; phase?: "analysis" | "ingest" }
   | { kind: "format_preview"; tempPath: string; report: string; missingTokens: { token: string; context: string }[] }
   | { kind: "format_applied"; path: string }
-  | { kind: "format_cancelled" };
+  | { kind: "format_cancelled" }
+  | { kind: "structural_error";
+      callSite: "init.bootstrap" | "init.delta" | "lint.patch" | "query.seeds";
+      errorType: "json_parse" | "schema_validate";
+      retryAttempt: number;
+      succeeded: boolean | null;
+      message: string;
+    };
 
 export interface RunHistoryEntry {
   id: string;
@@ -76,6 +82,8 @@ export interface LlmCallOptions {
   topP?: number | null;
   systemPrompt?: string;
   numCtx?: number | null;
+  jsonMode?: "json_object" | false;
+  structuredRetries?: number;
 }
 
 /** Минимальный интерфейс OpenAI-клиента, используемый фазами. */
@@ -119,7 +127,6 @@ export interface LlmWikiPluginSettings {
     ingest: number;
     query: number;
     lint: number;
-    fix: number;
     init: number;
     format: number;
   };
@@ -139,6 +146,7 @@ export interface LlmWikiPluginSettings {
     numCtx: number | null;
     perOperation: boolean;
     operations: OpMap<NativeOperationConfig>;
+    structuredRetries: number;
   };
   devMode: {
     enabled: boolean;
@@ -154,7 +162,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   historyLimit: 20,
   graphDepth: 1,
   hubThreshold: 20,
-  timeouts: { ingest: 300, query: 300, lint: 900, fix: 900, init: 3600, format: 600 },
+  timeouts: { ingest: 300, query: 300, lint: 900, init: 3600, format: 600 },
   history: [],
   claudeAgent: {
     model: "sonnet",
@@ -183,6 +191,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
       init:   { model: "llama3.2", maxTokens: 8192, temperature: 0.2 },
       format: { model: "llama3.2", maxTokens: 32768, temperature: 0.2 },
     },
+    structuredRetries: 1,
   },
   devMode: {
     enabled: false,
