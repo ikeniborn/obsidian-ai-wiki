@@ -62,6 +62,13 @@ export type RunEvent =
       retryAttempt: number;
       succeeded: boolean | null;
       message: string;
+    }
+  | {
+      kind: "graph_stats";
+      seeds: string[];
+      expanded: number;
+      total: number;
+      fromCache: boolean;
     };
 
 export interface RunHistoryEntry {
@@ -121,6 +128,8 @@ export interface LlmWikiPluginSettings {
   historyLimit: number;
   graphDepth: number;
   hubThreshold: number;
+  seedTopK: number;
+  seedMinScore: number;
   timeouts: {
     ingest: number;
     query: number;
@@ -159,6 +168,8 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   historyLimit: 20,
   graphDepth: 1,
   hubThreshold: 20,
+  seedTopK: 5,
+  seedMinScore: 0.1,
   timeouts: { ingest: 300, query: 300, lint: 900, init: 3600, format: 600 },
   history: [],
   claudeAgent: {
