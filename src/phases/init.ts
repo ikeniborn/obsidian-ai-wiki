@@ -256,36 +256,33 @@ async function* runInitWithSources(
         { role: "user", content: `Domain ID: ${domainId}\nVault name: ${vaultName}\nSource paths: ${sourcePaths.join(", ")}\n\n${file}:\n${fileContent}` },
       ];
 
-      let fullText = "";
+      const collected: RunEvent[] = [];
+      let parsed: { id: string; name: string; wiki_folder: string; entity_types: EntityType[]; language_notes: string };
       try {
-        const params = buildChatParams(model, messages, opts, true);
-        const stream = await llm.chat.completions.create(
-          { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-          { signal },
-        );
-        for await (const chunk of stream) {
-          const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
-          if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-          if (content) { fullText += content; yield { kind: "assistant_text", delta: content }; }
-          if (tok !== undefined) outputTokens += tok;
-        }
+        const r = await parseWithRetry({
+          llm, model, baseMessages: messages, opts,
+          schema: DomainEntrySchema,
+          maxRetries: opts.structuredRetries ?? 1,
+          callSite: "init.bootstrap",
+          signal,
+          onEvent: (e) => collected.push(e),
+        });
+        parsed = r.value;
+        outputTokens += r.outputTokens;
+        if (r.fullText) yield { kind: "assistant_text", delta: r.fullText };
       } catch (e) {
-        if (signal.aborted || (e as Error).name === "AbortError") return;
-        const params = buildChatParams(model, messages, opts);
-        const resp = await llm.chat.completions.create(
-          { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-        );
-        fullText = resp.choices[0]?.message?.content ?? "";
-        const tok = extractUsage(resp);
-        if (tok !== undefined) outputTokens += tok;
-        if (fullText) yield { kind: "assistant_text", delta: fullText };
+        for (const ev of collected) yield ev;
+        if ((e as Error).name === "AbortError" || signal.aborted) return;
+        yield { kind: "assistant_text", delta: `⚠ ${file}: LLM вернул невалидный JSON, пропускаем bootstrap (${(e as Error).message})\n` };
+        yield { kind: "file_done", file };
+        continue;
       }
+      for (const ev of collected) yield ev;
 
       if (signal.aborted) return;
 
       let entry: DomainEntry;
       try {
-        const parsed = parseStructured(fullText) as DomainEntryResponse;
         entry = {
           id: parsed.id,
           name: parsed.name,
@@ -298,7 +295,7 @@ async function* runInitWithSources(
         if (entry.wiki_folder?.startsWith("!Wiki/")) entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
         if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
       } catch {
-        yield { kind: "assistant_text", delta: `⚠ ${file}: LLM вернул невалидный JSON, пропускаем bootstrap\n` };
+        yield { kind: "assistant_text", delta: `⚠ ${file}: bootstrap построение entry упало, пропускаем\n` };
         yield { kind: "file_done", file };
         continue;
       }

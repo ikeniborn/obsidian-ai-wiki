@@ -282,6 +282,7 @@ describe("mergeEntityTypes", () => {
 
 describe("runInitWithSources — Phase 1 bootstrap", () => {
   const bootstrapDomainJson = JSON.stringify({
+    reasoning: "",
     id: "testdomain",
     name: "Test Domain",
     wiki_folder: "testdomain",
@@ -352,6 +353,7 @@ describe("runInitWithSources — Phase 1 bootstrap", () => {
 
 describe("runInitWithSources — Phase 1 incremental", () => {
   const bootstrapJson = JSON.stringify({
+    reasoning: "",
     id: "dom",
     name: "Dom",
     wiki_folder: "dom",
@@ -439,6 +441,7 @@ describe("runInitWithSources — Phase 1 incremental", () => {
 
 describe("runInitWithSources — error handling", () => {
   const bootstrapJson = JSON.stringify({
+    reasoning: "",
     id: "dom",
     name: "Dom",
     wiki_folder: "dom",
@@ -513,6 +516,7 @@ describe("runInitWithSources — error handling", () => {
 
 describe("runInitWithSources — resume logic", () => {
   const bootstrapJson = JSON.stringify({
+    reasoning: "",
     id: "dom",
     name: "Dom",
     wiki_folder: "dom",
@@ -593,6 +597,7 @@ describe("runInitWithSources — resume logic", () => {
 
 describe("runInitWithSources — per-file pipeline", () => {
   const bootstrapJson = JSON.stringify({
+    reasoning: "",
     id: "dom",
     name: "Dom",
     wiki_folder: "dom",
