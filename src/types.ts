@@ -55,7 +55,14 @@ export type RunEvent =
   | { kind: "file_done"; file: string; phase?: "analysis" | "ingest" }
   | { kind: "format_preview"; tempPath: string; report: string; missingTokens: { token: string; context: string }[] }
   | { kind: "format_applied"; path: string }
-  | { kind: "format_cancelled" };
+  | { kind: "format_cancelled" }
+  | { kind: "structural_error";
+      callSite: "init.bootstrap" | "init.delta" | "lint.patch" | "query.seeds";
+      errorType: "json_parse" | "schema_validate";
+      retryAttempt: number;
+      succeeded: boolean | null;
+      message: string;
+    };
 
 export interface RunHistoryEntry {
   id: string;
@@ -76,6 +83,7 @@ export interface LlmCallOptions {
   systemPrompt?: string;
   numCtx?: number | null;
   jsonMode?: "json_object" | false;
+  structuredRetries?: number;
 }
 
 /** Минимальный интерфейс OpenAI-клиента, используемый фазами. */
@@ -138,6 +146,7 @@ export interface LlmWikiPluginSettings {
     numCtx: number | null;
     perOperation: boolean;
     operations: OpMap<NativeOperationConfig>;
+    structuredRetries: number;
   };
   devMode: {
     enabled: boolean;
@@ -182,6 +191,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
       init:   { model: "llama3.2", maxTokens: 8192, temperature: 0.2 },
       format: { model: "llama3.2", maxTokens: 32768, temperature: 0.2 },
     },
+    structuredRetries: 1,
   },
   devMode: {
     enabled: false,
