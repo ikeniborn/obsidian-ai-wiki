@@ -84,7 +84,8 @@ const en = {
   },
   view: {
     refreshTitle: "Refresh domains",
-    reinitTitle: "Re-init selected domain",
+    reinitTitle: "Re-init domain (wipe + rebuild)",
+    reinitNoSources: "Domain has no source_paths — re-init not possible",
     addDomain: "Add domain",
     sectionCreate: "Create",
     sectionDomain: "Fill / Maintain",
@@ -177,9 +178,7 @@ const en = {
       `Found ${files} .md files in ${folders} folder(s). Run init to analyze sources and create wiki pages?`,
     reinitConfirmTitle: "Re-init — confirm",
     reinitConfirmBody: (id: string, files: number, srcCount: number) =>
-      `Domain «${id}». ${files} md-files across ${srcCount} source paths. Re-run init?`,
-    reinitConfirmBodyNoSources: (id: string) =>
-      `Domain «${id}». No source paths — only metadata refresh (entity_types, language_notes).`,
+      `Domain «${id}»: entire wiki folder will be deleted and rebuilt from ${files} md-files (${srcCount} source paths). Continue?`,
     fileErrorTitle: "Error processing file",
     fileErrorSkip: "Skip",
     fileErrorRetry: "Retry",
@@ -289,7 +288,8 @@ const ru: I18n = {
   },
   view: {
     refreshTitle: "Обновить домены",
-    reinitTitle: "Повторный init выбранного домена",
+    reinitTitle: "Переинициализация домена (wipe + заново)",
+    reinitNoSources: "У домена нет source_paths — re-init невозможен",
     addDomain: "Добавить домен",
     sectionCreate: "Создание",
     sectionDomain: "Наполнение / Актуализация",
@@ -382,9 +382,7 @@ const ru: I18n = {
       `Найдено ${files} .md файлов в ${folders} папках. Запустить init для анализа источников и создания wiki-страниц?`,
     reinitConfirmTitle: "Re-init — подтвердите",
     reinitConfirmBody: (id: string, files: number, srcCount: number) =>
-      `Домен «${id}». ${files} md-файлов в ${srcCount} sourcePaths. Запустить повторный init?`,
-    reinitConfirmBodyNoSources: (id: string) =>
-      `Домен «${id}». sourcePaths пусты — будут обновлены только метаданные (entity_types, language_notes).`,
+      `Домен «${id}»: будет удалена вся вики-папка домена и пересобрана из ${files} md-файлов (${srcCount} sourcePaths). Продолжить?`,
     fileErrorTitle: "Ошибка при обработке файла",
     fileErrorSkip: "Пропустить",
     fileErrorRetry: "Повторить",
@@ -492,7 +490,8 @@ const es: I18n = {
   },
   view: {
     refreshTitle: "Actualizar dominios",
-    reinitTitle: "Re-init del dominio seleccionado",
+    reinitTitle: "Re-init del dominio (borrar + reconstruir)",
+    reinitNoSources: "El dominio no tiene source_paths — re-init imposible",
     addDomain: "Añadir dominio",
     sectionCreate: "Crear",
     sectionDomain: "Rellenar / Mantener",
@@ -585,9 +584,7 @@ const es: I18n = {
       `Se encontraron ${files} archivos .md en ${folders} carpeta(s). ¿Ejecutar init para analizar fuentes y crear páginas wiki?`,
     reinitConfirmTitle: "Re-init — confirmar",
     reinitConfirmBody: (id: string, files: number, srcCount: number) =>
-      `Dominio «${id}». ${files} archivos md en ${srcCount} rutas fuente. ¿Re-ejecutar init?`,
-    reinitConfirmBodyNoSources: (id: string) =>
-      `Dominio «${id}». Sin rutas fuente — solo refresco de metadatos (entity_types, language_notes).`,
+      `Dominio «${id}»: se borrará toda la carpeta wiki del dominio y se reconstruirá desde ${files} archivos md (${srcCount} rutas fuente). ¿Continuar?`,
     fileErrorTitle: "Error al procesar archivo",
     fileErrorSkip: "Saltar",
     fileErrorRetry: "Reintentar",

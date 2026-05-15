@@ -1,4 +1,4 @@
-import { App, ItemView, Modal, WorkspaceLeaf, MarkdownRenderer, Component, Notice, Platform } from "obsidian";
+import { App, ItemView, Modal, WorkspaceLeaf, MarkdownRenderer, Component, Notice, Platform, setIcon } from "obsidian";
 import { AddDomainModal, BusyCloseModal, ConfirmModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
@@ -121,9 +121,9 @@ export class LlmWikiView extends ItemView {
       const refreshBtn = domainRow.createEl("button", { text: "↻", attr: { title: T.view.refreshTitle } });
       refreshBtn.addEventListener("click", () => void this.refreshDomains());
       this.reinitBtn = domainRow.createEl("button", {
-        text: "⟳",
         attr: { title: T.view.reinitTitle },
       });
+      setIcon(this.reinitBtn, "recycle");
       this.reinitBtn.disabled = true;
       this.reinitBtn.addEventListener("click", () => void this.runReinit());
       this.domainSelect.addEventListener("change", () => {
@@ -290,29 +290,23 @@ export class LlmWikiView extends ItemView {
     }
     if (!entry) return;
 
-    const T = i18n().modal;
-    const sourcePaths = entry.sourcePaths ?? [];
-    const hasSources = sourcePaths.length > 0;
-
-    let body: string;
-    if (hasSources) {
-      const mdFiles = this.app.vault.getFiles().filter(
-        (f) => f.extension === "md" && sourcePaths.some((p) => f.path.startsWith(p)),
-      );
-      body = T.reinitConfirmBody(entry.id, mdFiles.length, sourcePaths.length);
-    } else {
-      body = T.reinitConfirmBodyNoSources(entry.id);
+    const sourcePaths = entry.source_paths ?? [];
+    if (sourcePaths.length === 0) {
+      new Notice(i18n().view.reinitNoSources);
+      return;
     }
+
+    const T = i18n().modal;
+    const mdFiles = this.app.vault.getFiles().filter(
+      (f) => f.extension === "md" && sourcePaths.some((p) => f.path.startsWith(p)),
+    );
+    const body = T.reinitConfirmBody(entry.id, mdFiles.length, sourcePaths.length);
 
     new ConfirmModal(
       this.app,
       T.reinitConfirmTitle,
       [body],
-      () => void this.plugin.controller.init(
-        entry!.id,
-        false,
-        hasSources ? sourcePaths : undefined,
-      ),
+      () => void this.plugin.controller.init(entry!.id, false, sourcePaths, true),
     ).open();
   }
 
