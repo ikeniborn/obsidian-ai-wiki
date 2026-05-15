@@ -239,15 +239,21 @@ export function extractParentSourcePath(
   return (rel || ".") + "/";
 }
 
-function buildEntityTypesBlock(domain: DomainEntry): string {
+export function buildEntityTypesBlock(domain: DomainEntry, wikiVaultPath: string): string {
   if (!domain.entity_types?.length) return "";
-  return domain.entity_types.map((et) => [
-    `### Тип: ${et.type}`,
-    `Описание: ${et.description}`,
-    `Ключевые слова: ${et.extraction_cues.join(", ")}`,
-    et.min_mentions_for_page != null ? `Мин. упоминаний для страницы: ${et.min_mentions_for_page}` : "",
-    et.wiki_subfolder ? `Подпапка в wiki: ${et.wiki_subfolder}` : "",
-  ].filter(Boolean).join("\n")).join("\n\n");
+  return domain.entity_types.map((et) => {
+    const pathTemplate = et.wiki_subfolder
+      ? `${wikiVaultPath}/${et.wiki_subfolder}/<EntityName>.md`
+      : `${wikiVaultPath}/<EntityName>.md`;
+    return [
+      `### Тип: ${et.type}`,
+      `Описание: ${et.description}`,
+      `Ключевые слова: ${et.extraction_cues.join(", ")}`,
+      et.min_mentions_for_page != null ? `Мин. упоминаний для страницы: ${et.min_mentions_for_page}` : "",
+      et.wiki_subfolder ? `Подпапка в wiki: ${et.wiki_subfolder}` : "",
+      `Путь для сущностей этого типа: ${pathTemplate}`,
+    ].filter(Boolean).join("\n");
+  }).join("\n\n");
 }
 
 function buildIngestMessages(
@@ -264,7 +270,7 @@ function buildIngestMessages(
     : "Нет.";
 
   const today = new Date().toISOString().slice(0, 10);
-  const entityTypesBlock = buildEntityTypesBlock(domain);
+  const entityTypesBlock = buildEntityTypesBlock(domain, wikiVaultPath);
   const langNotes = domain.language_notes ? `Языковые правила: ${domain.language_notes}` : "";
 
   const systemContent = render(ingestTemplate, {

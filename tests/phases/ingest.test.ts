@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runIngest } from "../../src/phases/ingest";
+import { runIngest, buildEntityTypesBlock } from "../../src/phases/ingest";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
@@ -274,5 +274,32 @@ describe("runIngest", () => {
         (e.preview as string)?.includes("backlink write failed"),
     );
     expect(failEvent).toBeDefined();
+  });
+});
+
+describe("buildEntityTypesBlock — path templates", () => {
+  it("emits subfolder path for entity with wiki_subfolder", () => {
+    const domain: DomainEntry = {
+      id: "ии", name: "ИИ", wiki_folder: "ии",
+      entity_types: [{ type: "Технология", description: "d", extraction_cues: ["c"], wiki_subfolder: "Технологии" }],
+    };
+    const block = buildEntityTypesBlock(domain, "!Wiki/ии");
+    expect(block).toContain("Путь для сущностей этого типа: !Wiki/ии/Технологии/<EntityName>.md");
+  });
+
+  it("emits root path for entity without wiki_subfolder", () => {
+    const domain: DomainEntry = {
+      id: "ии", name: "ИИ", wiki_folder: "ии",
+      entity_types: [{ type: "Концепция", description: "d", extraction_cues: ["c"] }],
+    };
+    const block = buildEntityTypesBlock(domain, "!Wiki/ии");
+    expect(block).toContain("Путь для сущностей этого типа: !Wiki/ии/<EntityName>.md");
+    expect(block).not.toMatch(/!Wiki\/ии\/\//);
+  });
+
+  it("empty entity_types → no path lines", () => {
+    const domain: DomainEntry = { id: "ии", name: "ИИ", wiki_folder: "ии", entity_types: [] };
+    const block = buildEntityTypesBlock(domain, "!Wiki/ии");
+    expect(block).not.toContain("Путь для сущностей этого типа");
   });
 });
