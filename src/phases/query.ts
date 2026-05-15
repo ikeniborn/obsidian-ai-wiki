@@ -8,7 +8,9 @@ import { SeedsSchema } from "./zod-schemas";
 import queryTemplate from "../../prompts/query.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
-import { pageId, buildWikiGraph, bfsExpand } from "../wiki-graph";
+import { pageId, bfsExpand } from "../wiki-graph";
+import { graphCache } from "../wiki-graph-cache";
+import { selectSeeds } from "../wiki-seeds";
 
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
@@ -23,6 +25,8 @@ export async function* runQuery(
   signal: AbortSignal,
   graphDepth: number = 1,
   opts: LlmCallOptions = {},
+  seedTopK: number = 5,
+  seedMinScore: number = 0.1,
 ): AsyncGenerator<RunEvent> {
   const question = args[0]?.trim();
   if (!question) {
@@ -59,9 +63,11 @@ export async function* runQuery(
   let outputTokens = 0;
 
   // Graph-filtered context
-  const graph = buildWikiGraph(pages);
+  const { graph, fromCache } = graphCache.get(domain.id, pages);
   const allPageIds = [...pages.keys()].map(pageId);
-  let seeds = keywordSeeds(question, pages);
+  const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
+  const minScore = Math.max(0, Math.min(1, seedMinScore));
+  let seeds = selectSeeds(question, pages, topK, minScore);
   if (seeds.length === 0) {
     const seedRes = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal);
     seeds = seedRes.seeds;
@@ -73,6 +79,7 @@ export async function* runQuery(
   }
   const seedSet = new Set(seeds);
   const selectedIds = bfsExpand(seeds, graph, graphDepth);
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: pages.size, fromCache };
   const contextBlock = buildContextBlock(pages, seedSet, selectedIds);
 
   const entityTypesBlock = buildEntityTypesBlock(domain);
@@ -147,19 +154,6 @@ export async function* runQuery(
 
 async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
   try { return await vaultTools.read(path); } catch { return ""; }
-}
-
-function keywordSeeds(question: string, pages: Map<string, string>): string[] {
-  const words = question.split(/\W+/).filter((w) => w.length > 3).map((w) => w.toLowerCase());
-  if (words.length === 0) return [];
-  const seeds: string[] = [];
-  for (const path of pages.keys()) {
-    const id = pageId(path);
-    if (words.some((w) => id.toLowerCase().includes(w))) {
-      seeds.push(id);
-    }
-  }
-  return seeds;
 }
 
 async function llmSelectSeeds(

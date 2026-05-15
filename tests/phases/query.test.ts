@@ -101,6 +101,29 @@ describe("runQuery", () => {
     expect(savedPath).toMatch(/\.md$/);
   });
 
+  it("emits graph_stats event with correct shape", async () => {
+    const adapter = mockAdapter({
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Alpha.md", "!Wiki/work/Beta.md"], folders: [] }),
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p.endsWith("Alpha.md")) return "alpha content";
+        if (p.endsWith("Beta.md")) return "beta [[Alpha]]";
+        return "";
+      }),
+      exists: vi.fn().mockResolvedValue(true),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const events = await collect(
+      runQuery(["alpha"], false, vt, makeLlm("answer"), "model", [domain], VAULT_ROOT,
+        new AbortController().signal, 1, {}, 5, 0.05),
+    );
+    const stats = events.find((e: any) => e.kind === "graph_stats") as any;
+    expect(stats).toBeDefined();
+    expect(stats.seeds).toContain("Alpha");
+    expect(stats.total).toBe(2);
+    expect(stats.expanded).toBeGreaterThanOrEqual(stats.seeds.length);
+    expect(typeof stats.fromCache).toBe("boolean");
+  });
+
   it("excludes pages not reached by BFS when keyword seed found (graphDepth=0)", async () => {
     const adapter = mockAdapter({
       list: vi.fn().mockResolvedValue({
