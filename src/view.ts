@@ -46,6 +46,7 @@ export class LlmWikiView extends ItemView {
   private ingestBtn?: HTMLButtonElement;
   private lintBtn?: HTMLButtonElement;
   private formatBtn?: HTMLButtonElement;
+  private reinitBtn?: HTMLButtonElement;
   private formatPreviewSection: HTMLElement | null = null;
   private lastContext: { operation: WikiOperation; domainId: string | undefined; report: string } | null = null;
   // Chat state
@@ -119,6 +120,15 @@ export class LlmWikiView extends ItemView {
       this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
       const refreshBtn = domainRow.createEl("button", { text: "↻", attr: { title: T.view.refreshTitle } });
       refreshBtn.addEventListener("click", () => void this.refreshDomains());
+      this.reinitBtn = domainRow.createEl("button", {
+        text: "⟳",
+        attr: { title: T.view.reinitTitle },
+      });
+      this.reinitBtn.disabled = true;
+      this.reinitBtn.addEventListener("click", () => void this.runReinit());
+      this.domainSelect.addEventListener("change", () => {
+        if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect!.value;
+      });
 
       const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
       this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
