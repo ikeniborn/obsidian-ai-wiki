@@ -16,3 +16,23 @@
 - Никаких других полей. Никаких пояснений. Только JSON.
 
 Включи поле `reasoning` первым в JSON-ответе: обоснование добавляемых или изменяемых entity_types.
+
+## Output JSON Example
+
+{
+  "reasoning": "Сохранил существующий Process, добавил новый Contract по найденным страницам SLA.",
+  "entity_types": [
+    {
+      "type": "Process",
+      "description": "Бизнес-процесс",
+      "extraction_cues": ["BPMN", "процесс"]
+    },
+    {
+      "type": "Contract",
+      "description": "Договор оказания услуг / SLA",
+      "extraction_cues": ["SLA", "договор", "соглашение"],
+      "wiki_subfolder": "contracts"
+    }
+  ],
+  "language_notes": "Договорные термины — на русском."
+}

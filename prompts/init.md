@@ -12,3 +12,22 @@
 {{index_block}}
 
 Включи поле `reasoning` первым в JSON-ответе: пошаговое обоснование выбранной структуры домена.
+
+## Output JSON Example
+
+{
+  "reasoning": "Проанализировал источники. Выявил сущности: Process, ServiceContract, Customer.",
+  "id": "{{domain_id}}",
+  "name": "Telecom Operations",
+  "wiki_folder": "{{domain_id}}",
+  "entity_types": [
+    {
+      "type": "Process",
+      "description": "Бизнес-процесс или шаг workflow",
+      "extraction_cues": ["BPMN", "workflow", "процесс"],
+      "min_mentions_for_page": 1,
+      "wiki_subfolder": "processes"
+    }
+  ],
+  "language_notes": "Смесь русского/английского; сохраняй оригинальное написание product-имён."
+}
