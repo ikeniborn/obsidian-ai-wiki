@@ -79,6 +79,8 @@ const en = {
     graphDepth_desc: "Query: hops from seed pages. 0 = seeds only, max sensible: 3.",
     hubThreshold_name: "Hub threshold",
     hubThreshold_desc: "Lint: pages with more outgoing links than this are flagged as hub nodes.",
+    structuredRetries_name: "Structured output retries",
+    structuredRetries_desc: "Retries on schema validation failure (0-3, default 1). Higher values improve success rate on weaker models at cost of latency/tokens.",
   },
   view: {
     refreshTitle: "Refresh domains",
@@ -282,6 +284,8 @@ const ru: I18n = {
     graphDepth_desc: "Query: шагов от seed-страниц. 0 = только seeds, разумный максимум: 3.",
     hubThreshold_name: "Порог хаба",
     hubThreshold_desc: "Lint: страницы с бо́льшим числом исходящих ссылок помечаются как hub.",
+    structuredRetries_name: "Повторы при ошибке схемы",
+    structuredRetries_desc: "Сколько раз повторить вызов LLM при невалидной структуре ответа (0-3, по умолчанию 1). Выше — надёжнее на слабых моделях, дороже по токенам.",
   },
   view: {
     refreshTitle: "Обновить домены",
@@ -483,6 +487,8 @@ const es: I18n = {
     graphDepth_desc: "Query: saltos desde páginas semilla. 0 = solo semillas, máx recomendado: 3.",
     hubThreshold_name: "Umbral de hub",
     hubThreshold_desc: "Lint: páginas con más enlaces salientes que este valor se marcan como hub.",
+    structuredRetries_name: "Structured output retries",
+    structuredRetries_desc: "Retries on schema validation failure (0-3, default 1). Higher values improve success rate on weaker models at cost of latency/tokens.",
   },
   view: {
     refreshTitle: "Actualizar dominios",

@@ -381,6 +381,20 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         }
       }
 
+      new Setting(containerEl)
+        .setName(T.settings.structuredRetries_name)
+        .setDesc(T.settings.structuredRetries_desc)
+        .addText((t) =>
+          t.setPlaceholder("1")
+            .setValue(String(s.nativeAgent.structuredRetries))
+            .onChange(async (v) => {
+              const n = Number(v);
+              if (!Number.isFinite(n) || n < 0 || n > 3) return;
+              s.nativeAgent.structuredRetries = Math.floor(n);
+              await this.plugin.saveSettings();
+            }),
+        );
+
       // ── Proxy section (native-agent only) ───────────────────────────────────
       const proxy = eff.proxy;
       new Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
