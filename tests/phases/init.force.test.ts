@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
-import { wipeDomainFolder, runInitWithSources } from "../../src/phases/init";
+import { wipeDomainFolder, runInitWithSources, runInit } from "../../src/phases/init";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
 
@@ -149,5 +149,86 @@ describe("wipeDomainFolder", () => {
     const removed = await wipeDomainFolder(vt, "ai");
     expect(calls).toBe(2);
     expect(removed.sort()).toEqual(["!Wiki/ai/a.md", "!Wiki/ai/b.md"].sort());
+  });
+});
+
+describe("runInit --force dispatch", () => {
+  function mkArgs(...a: string[]) { return a; }
+
+  it("--force without existing domain → error 'force: domain not found'", async () => {
+    const vt = new VaultTools(mockAdapter(), "");
+    const llm = makeMultiLlm(["{}"]);
+    const signal = new AbortController().signal;
+    const events = await collect(runInit(mkArgs("ghost", "--force"), vt, llm, "x", [], "vault", signal));
+    expect(events.some((e) => e.kind === "error" && /force: domain not found/.test(e.message))).toBe(true);
+  });
+
+  it("--force + --dry-run → error 'force: dry-run not supported'", async () => {
+    const existing: DomainEntry = { id: "ai", name: "AI", wiki_folder: "ai", source_paths: ["docs"] };
+    const vt = new VaultTools(mockAdapter(), "");
+    const llm = makeMultiLlm(["{}"]);
+    const signal = new AbortController().signal;
+    const events = await collect(runInit(mkArgs("ai", "--force", "--dry-run"), vt, llm, "x", [existing], "vault", signal));
+    expect(events.some((e) => e.kind === "error" && /force: dry-run not supported/.test(e.message))).toBe(true);
+  });
+
+  it("--force without --sources, source_paths empty → error 'force: no sources'", async () => {
+    const existing: DomainEntry = { id: "ai", name: "AI", wiki_folder: "ai", source_paths: [] };
+    const vt = new VaultTools(mockAdapter(), "");
+    const llm = makeMultiLlm(["{}"]);
+    const signal = new AbortController().signal;
+    const events = await collect(runInit(mkArgs("ai", "--force"), vt, llm, "x", [existing], "vault", signal));
+    expect(events.some((e) => e.kind === "error" && /force: no sources to re-analyze/.test(e.message))).toBe(true);
+  });
+
+  it("--force calls wipe and resets entity_types/analyzed_sources/language_notes in first domain_updated", async () => {
+    const files = ["docs/a.md", "!Wiki/ai/old.md"];
+    const adapter = mockAdapter({
+      list: vi.fn().mockImplementation(async (p: string) => {
+        if (p === "docs") return { files: ["docs/a.md"], folders: [] };
+        if (p === "!Wiki/ai") return { files: ["!Wiki/ai/old.md"], folders: [] };
+        return { files: [], folders: [] };
+      }),
+      read: vi.fn().mockResolvedValue("body"),
+    });
+    const vt = new VaultTools(adapter, "");
+    const existing: DomainEntry = {
+      id: "ai", name: "AI", wiki_folder: "ai",
+      source_paths: ["docs"],
+      analyzed_sources: ["docs/a.md"],
+      entity_types: [{ type: "stale", description: "x", examples: [] }],
+      language_notes: "stale",
+    };
+    const llm = makeMultiLlm([
+      JSON.stringify({ id: "ai", name: "AI", wiki_folder: "ai", entity_types: [{ type: "fresh", description: "f", examples: [] }], language_notes: "fresh" }),
+    ]);
+    const signal = new AbortController().signal;
+    const events = await collect(runInit(["ai", "--force"], vt, llm, "x", [existing], "vault", signal));
+    expect(adapter.remove).toHaveBeenCalledWith("!Wiki/ai/old.md");
+    const resetEvent = events.find((e) => e.kind === "domain_updated"
+      && (e as { patch: { entity_types?: unknown[] } }).patch.entity_types?.length === 0
+      && (e as { patch: { analyzed_sources?: unknown[] } }).patch.analyzed_sources?.length === 0,
+    );
+    expect(resetEvent).toBeDefined();
+  });
+
+  it("--force with explicit --sources uses passed paths, not entry.source_paths", async () => {
+    const adapter = mockAdapter({
+      list: vi.fn().mockImplementation(async (p: string) => {
+        if (p === "alt") return { files: ["alt/x.md"], folders: [] };
+        return { files: [], folders: [] };
+      }),
+      read: vi.fn().mockResolvedValue("body"),
+    });
+    const vt = new VaultTools(adapter, "");
+    const existing: DomainEntry = {
+      id: "ai", name: "AI", wiki_folder: "ai", source_paths: ["docs"],
+    };
+    const llm = makeMultiLlm([
+      JSON.stringify({ id: "ai", name: "AI", wiki_folder: "ai", entity_types: [], language_notes: "" }),
+    ]);
+    const signal = new AbortController().signal;
+    const events = await collect(runInit(["ai", "--force", "--sources", "alt"], vt, llm, "x", [existing], "vault", signal));
+    expect(events.some((e) => e.kind === "init_start" && (e as { totalFiles: number }).totalFiles === 1)).toBe(true);
   });
 });

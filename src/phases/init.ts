@@ -33,12 +33,52 @@ export async function* runInit(
   const sourcesIdx = args.indexOf("--sources");
   const sourcePaths = sourcesIdx >= 0 ? args.slice(sourcesIdx + 1) : [];
 
+  const force = args.includes("--force");
+
   if (!domainId) {
     yield { kind: "error", message: "init: domain id required" };
     return;
   }
 
   const existing = domains.find((d) => d.id === domainId);
+
+  if (force) {
+    if (!existing) {
+      yield { kind: "error", message: `force: domain not found: "${domainId}"` };
+      return;
+    }
+    if (dryRun) {
+      yield { kind: "error", message: "force: dry-run not supported" };
+      return;
+    }
+    const effectiveSources = sourcePaths.length ? sourcePaths : (existing.source_paths ?? []);
+    if (!effectiveSources.length) {
+      yield { kind: "error", message: "force: no sources to re-analyze" };
+      return;
+    }
+
+    yield { kind: "assistant_text", delta: `Re-init: wiping ${domainWikiFolder(existing.wiki_folder)}...\n` };
+    yield { kind: "tool_use", name: "WipeDomain", input: { folder: existing.wiki_folder } };
+    const wiped = await wipeDomainFolder(vaultTools, existing.wiki_folder);
+    yield { kind: "tool_result", ok: true };
+    yield { kind: "assistant_text", delta: `removed ${wiped.length} files\n` };
+
+    yield {
+      kind: "domain_updated", domainId,
+      patch: { entity_types: [], analyzed_sources: [], language_notes: "" },
+    };
+
+    if (signal.aborted) return;
+
+    existing.entity_types = [];
+    existing.analyzed_sources = [];
+    existing.language_notes = "";
+
+    yield* runInitWithSources(
+      domainId, effectiveSources, false, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, true,
+    );
+    return;
+  }
 
   if (sourcePaths.length) {
     yield* runInitWithSources(
