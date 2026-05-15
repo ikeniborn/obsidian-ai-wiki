@@ -236,6 +236,7 @@ export class LlmWikiView extends ItemView {
     if (previous && Array.from(this.domainSelect.options).some((o) => o.value === previous)) {
       this.domainSelect.value = previous;
     }
+    if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect.value;
   }
 
   private openAddDomain(): void {
@@ -295,6 +296,7 @@ export class LlmWikiView extends ItemView {
     if (this.ingestBtn) this.ingestBtn.disabled = true;
     if (this.lintBtn) this.lintBtn.disabled = true;
     if (this.formatBtn) this.formatBtn.disabled = true;
+    if (this.reinitBtn) this.reinitBtn.disabled = true;
     this.chatSection?.remove();
     this.chatSection = null;
     this.lastContext = null;
@@ -564,6 +566,7 @@ export class LlmWikiView extends ItemView {
     this.ingestBtn.disabled = false;
     this.lintBtn.disabled = false;
     this.formatBtn.disabled = false;
+    if (this.reinitBtn) this.reinitBtn.disabled = !(this.domainSelect && this.domainSelect.value);
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
     this.updateMetrics();
     if (this.lastTokPerSec !== undefined) {
