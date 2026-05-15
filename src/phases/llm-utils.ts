@@ -64,12 +64,7 @@ export function buildChatParams(
   if (opts.numCtx != null) params.num_ctx = opts.numCtx;
   if (stream) params.stream_options = { include_usage: true };
 
-  if (responseSchema && opts.jsonMode === "json_schema") {
-    params.response_format = {
-      type: "json_schema",
-      json_schema: { name: responseSchema.name, schema: responseSchema.schema, strict: true },
-    };
-  } else if (opts.jsonMode === "json_object") {
+  if (opts.jsonMode === "json_object") {
     params.response_format = { type: "json_object" };
   }
 

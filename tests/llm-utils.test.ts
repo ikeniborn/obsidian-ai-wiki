@@ -115,13 +115,6 @@ describe("buildChatParams — response_format", () => {
     { role: "user", content: "q" },
   ];
 
-  it("sets response_format json_schema when jsonMode=json_schema and schema provided", () => {
-    const schema = { name: "test_schema", schema: { type: "object", properties: { x: { type: "string" } }, required: ["x"], additionalProperties: false } };
-    const params = buildChatParams("m", messages, { jsonMode: "json_schema" }, schema);
-    expect((params.response_format as { type: string }).type).toBe("json_schema");
-    expect((params.response_format as { json_schema: { name: string } }).json_schema.name).toBe("test_schema");
-  });
-
   it("sets response_format json_object when jsonMode=json_object", () => {
     const params = buildChatParams("m", messages, { jsonMode: "json_object" });
     expect((params.response_format as { type: string }).type).toBe("json_object");
