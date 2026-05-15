@@ -100,7 +100,6 @@ export async function parseWithRetry<T>(args: ParseWithRetryArgs<T>): Promise<Pa
   let messages: OpenAI.Chat.ChatCompletionMessageParam[] = baseMessages;
   let totalTokens = 0;
   let lastError: Error = new Error("no attempts");
-  let lastText = "";
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (signal.aborted) {
@@ -108,16 +107,8 @@ export async function parseWithRetry<T>(args: ParseWithRetryArgs<T>): Promise<Pa
       err.name = "AbortError";
       throw err;
     }
-    let fullText = "";
-    let outputTokens = 0;
-    try {
-      ({ fullText, outputTokens } = await streamOnce(llm, model, messages, opts, signal));
-    } catch (e) {
-      if (signal.aborted || (e as Error).name === "AbortError") throw e;
-      throw e;
-    }
+    const { fullText, outputTokens } = await streamOnce(llm, model, messages, opts, signal);
     totalTokens += outputTokens;
-    lastText = fullText;
 
     let raw: unknown;
     try {
