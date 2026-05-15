@@ -25,19 +25,20 @@ export class AgentRunner {
   private buildOptsFor(op: RunRequest["operation"]): { model: string; opts: LlmCallOptions } {
     const key = (op === "query-save" ? "query" : op === "chat" ? "lint" : op) as OpKey;
     const s = this.settings;
+    const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
 
     if (s.backend === "claude-agent") {
       // claude-agent: maxTokens задаётся на уровне iclaude.sh (env CLAUDE_CODE_MAX_OUTPUT_TOKENS),
       // плагин его не плумит — параметр был бы избыточным.
       const c = s.claudeAgent.perOperation ? s.claudeAgent.operations[key] : undefined;
-      if (c) return { model: c.model, opts: { systemPrompt: s.systemPrompt } };
-      return { model: s.claudeAgent.model, opts: { systemPrompt: s.systemPrompt } };
+      const model = c ? c.model : s.claudeAgent.model;
+      return { model, opts: { systemPrompt: s.systemPrompt, structuredRetries } };
     }
 
     const na = s.nativeAgent;
     const c = na.perOperation ? na.operations[key] : undefined;
-    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object" } };
-    return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object" } };
+    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
+    return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
   }
 
   private async writeDevLog(_vaultRoot: string, entry: {
