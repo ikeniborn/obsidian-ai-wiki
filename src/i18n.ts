@@ -82,6 +82,7 @@ const en = {
   },
   view: {
     refreshTitle: "Refresh domains",
+    reinitTitle: "Re-init selected domain",
     addDomain: "Add domain",
     sectionCreate: "Create",
     sectionDomain: "Fill / Maintain",
@@ -172,6 +173,11 @@ const en = {
     initConfirmTitle: "Start domain initialization?",
     initConfirmBody: (files: number, folders: number) =>
       `Found ${files} .md files in ${folders} folder(s). Run init to analyze sources and create wiki pages?`,
+    reinitConfirmTitle: "Re-init — confirm",
+    reinitConfirmBody: (id: string, files: number, srcCount: number) =>
+      `Domain «${id}». ${files} md-files across ${srcCount} source paths. Re-run init?`,
+    reinitConfirmBodyNoSources: (id: string) =>
+      `Domain «${id}». No source paths — only metadata refresh (entity_types, language_notes).`,
     fileErrorTitle: "Error processing file",
     fileErrorSkip: "Skip",
     fileErrorRetry: "Retry",
@@ -279,6 +285,7 @@ const ru: I18n = {
   },
   view: {
     refreshTitle: "Обновить домены",
+    reinitTitle: "Повторный init выбранного домена",
     addDomain: "Добавить домен",
     sectionCreate: "Создание",
     sectionDomain: "Наполнение / Актуализация",
@@ -369,6 +376,11 @@ const ru: I18n = {
     initConfirmTitle: "Запустить инициализацию домена?",
     initConfirmBody: (files: number, folders: number) =>
       `Найдено ${files} .md файлов в ${folders} папках. Запустить init для анализа источников и создания wiki-страниц?`,
+    reinitConfirmTitle: "Re-init — подтвердите",
+    reinitConfirmBody: (id: string, files: number, srcCount: number) =>
+      `Домен «${id}». ${files} md-файлов в ${srcCount} sourcePaths. Запустить повторный init?`,
+    reinitConfirmBodyNoSources: (id: string) =>
+      `Домен «${id}». sourcePaths пусты — будут обновлены только метаданные (entity_types, language_notes).`,
     fileErrorTitle: "Ошибка при обработке файла",
     fileErrorSkip: "Пропустить",
     fileErrorRetry: "Повторить",
@@ -474,6 +486,7 @@ const es: I18n = {
   },
   view: {
     refreshTitle: "Actualizar dominios",
+    reinitTitle: "Re-init del dominio seleccionado",
     addDomain: "Añadir dominio",
     sectionCreate: "Crear",
     sectionDomain: "Rellenar / Mantener",
@@ -564,6 +577,11 @@ const es: I18n = {
     initConfirmTitle: "¿Iniciar inicialización del dominio?",
     initConfirmBody: (files: number, folders: number) =>
       `Se encontraron ${files} archivos .md en ${folders} carpeta(s). ¿Ejecutar init para analizar fuentes y crear páginas wiki?`,
+    reinitConfirmTitle: "Re-init — confirmar",
+    reinitConfirmBody: (id: string, files: number, srcCount: number) =>
+      `Dominio «${id}». ${files} archivos md en ${srcCount} rutas fuente. ¿Re-ejecutar init?`,
+    reinitConfirmBodyNoSources: (id: string) =>
+      `Dominio «${id}». Sin rutas fuente — solo refresco de metadatos (entity_types, language_notes).`,
     fileErrorTitle: "Error al procesar archivo",
     fileErrorSkip: "Saltar",
     fileErrorRetry: "Reintentar",
