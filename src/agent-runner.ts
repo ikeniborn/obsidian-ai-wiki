@@ -8,15 +8,19 @@ import { runEvaluator } from "./phases/evaluator";
 import { runFormat } from "./phases/format";
 import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, OpKey, RunEvent, RunRequest } from "./types";
 import type { VaultTools } from "./vault-tools";
+import { wrapWithJsonFallback } from "./phases/llm-utils";
 
 export class AgentRunner {
+  private llm: LlmClient;
   constructor(
-    private llm: LlmClient,
+    llm: LlmClient,
     private settings: LlmWikiPluginSettings,
     private vaultTools: VaultTools,
     private vaultName: string,
     private domains: DomainEntry[],
-  ) {}
+  ) {
+    this.llm = wrapWithJsonFallback(llm);
+  }
 
   private buildOptsFor(op: RunRequest["operation"]): { model: string; opts: LlmCallOptions } {
     const key = (op === "query-save" ? "query" : op === "chat" ? "lint" : op) as OpKey;
@@ -31,10 +35,9 @@ export class AgentRunner {
     }
 
     const na = s.nativeAgent;
-    const jsonMode: "json_object" | false = na.structuredOutput === "none" ? false : "json_object";
     const c = na.perOperation ? na.operations[key] : undefined;
-    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode } };
-    return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode } };
+    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object" } };
+    return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object" } };
   }
 
   private async writeDevLog(_vaultRoot: string, entry: {
