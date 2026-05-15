@@ -1,7 +1,7 @@
 import type OpenAI from "openai";
 import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, extractUsage } from "./llm-utils";
 import formatTemplate from "../../prompts/format.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
@@ -79,9 +79,10 @@ export async function* runFormat(
 
   yield { kind: "assistant_text", delta: `Анализ файла ${filePath}...\n` };
 
-  const baseParams = { ...buildChatParams(model, messages, opts), response_format: { type: "json_object" } };
+  const baseParams = { ...buildChatParams(model, messages, opts, undefined, true), response_format: { type: "json_object" } };
 
   let lastFinishReason: string | null = null;
+  let outputTokens = 0;
 
   async function* callOnce(p: Record<string, unknown>): AsyncGenerator<RunEvent, string> {
     let acc = "";
@@ -92,9 +93,10 @@ export async function* runFormat(
         { signal },
       );
       for await (const chunk of stream) {
-        const { reasoning, content } = extractStreamDeltas(chunk);
+        const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
         if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
         if (content) { acc += content; yield { kind: "assistant_text", delta: content }; }
+        if (tok !== undefined) outputTokens += tok;
         const fr = chunk.choices[0]?.finish_reason;
         if (fr) lastFinishReason = fr;
       }
@@ -104,6 +106,8 @@ export async function* runFormat(
         { ...p, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
       );
       acc = resp.choices[0]?.message?.content ?? "";
+      const tok = extractUsage(resp);
+      if (tok !== undefined) outputTokens += tok;
       lastFinishReason = resp.choices[0]?.finish_reason ?? null;
     }
     return acc;
@@ -116,7 +120,7 @@ export async function* runFormat(
   const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
   if (!parsed && truncated) {
     yield { kind: "error", message: "Format: ответ обрезан по лимиту вывода модели — сократите страницу или увеличьте лимит (claude-agent: env CLAUDE_CODE_MAX_OUTPUT_TOKENS в iclaude.sh; native-agent: Settings → per-operation → format → maxTokens)" };
-    yield { kind: "result", durationMs: Date.now() - start, text: "" };
+    yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
     return;
   }
   if (!parsed) {
@@ -126,7 +130,7 @@ export async function* runFormat(
       { role: "user", content: userContent } as OpenAI.Chat.ChatCompletionMessageParam,
       ...chatHistory.map((m) => ({ role: m.role, content: m.content } as OpenAI.Chat.ChatCompletionMessageParam)),
     ];
-    const retryParams = { ...buildChatParams(model, retryMessages, opts), response_format: { type: "json_object" } };
+    const retryParams = { ...buildChatParams(model, retryMessages, opts, undefined, true), response_format: { type: "json_object" } };
     fullText = yield* callOnce(retryParams);
     if (signal.aborted) return;
     parsed = extractJsonObject(fullText);
@@ -137,7 +141,7 @@ export async function* runFormat(
       ? "Format: ответ обрезан по лимиту вывода модели (после retry) — сократите страницу или увеличьте лимит (claude-agent: env CLAUDE_CODE_MAX_OUTPUT_TOKENS в iclaude.sh; native-agent: Settings → per-operation → format → maxTokens)"
       : "Format: LLM вернул невалидный JSON (после retry)";
     yield { kind: "error", message: msg };
-    yield { kind: "result", durationMs: Date.now() - start, text: "" };
+    yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
     return;
   }
 
@@ -161,7 +165,7 @@ export async function* runFormat(
         content: `ВОССТАНОВИ ТОКЕНЫ: следующие значения из оригинала отсутствуют в форматированном тексте. Верни полный JSON {report, formatted} где formatted содержит все перечисленные токены без изменения форматирования остального текста.\nПропущенные: ${tokenList}`,
       },
     ];
-    const restoreParams = { ...buildChatParams(model, restoreMessages, opts), response_format: { type: "json_object" } };
+    const restoreParams = { ...buildChatParams(model, restoreMessages, opts, undefined, true), response_format: { type: "json_object" } };
     const fullText2 = yield* callOnce(restoreParams);
     if (!signal.aborted) {
       const parsed2 = extractJsonObject(fullText2);
@@ -185,5 +189,5 @@ export async function* runFormat(
 
   const missingFinal = missingTokensWithContext(original, finalFormatted);
   yield { kind: "format_preview", tempPath, report: finalReport, missingTokens: missingFinal };
-  yield { kind: "result", durationMs: Date.now() - start, text: finalReport };
+  yield { kind: "result", durationMs: Date.now() - start, text: finalReport, outputTokens: outputTokens || undefined };
 }

@@ -27,16 +27,25 @@ export function parseStructured(fullText: string): unknown {
   return JSON.parse(match[0]);
 }
 
-/** Извлекает reasoning и content из одного streaming-чанка.
+/** Извлекает reasoning, content и usage.completion_tokens из одного streaming-чанка.
  *  Reasoning-модели (minimax, o1 и др.) возвращают думающий текст в нестандартном поле delta.reasoning.
- *  Модели без поддержки reasoning возвращают пустую строку — ошибок не возникает. */
-export function extractStreamDeltas(chunk: OpenAI.Chat.ChatCompletionChunk): { reasoning: string; content: string } {
+ *  outputTokens приходит только в финальном чанке при stream_options.include_usage=true. */
+export function extractStreamDeltas(chunk: OpenAI.Chat.ChatCompletionChunk): { reasoning: string; content: string; outputTokens?: number } {
   const delta = chunk.choices[0]?.delta;
   const rawReasoning = (delta as Record<string, unknown> | undefined)?.reasoning;
+  const usage = (chunk as unknown as { usage?: { completion_tokens?: number } }).usage;
+  const outputTokens = typeof usage?.completion_tokens === "number" ? usage.completion_tokens : undefined;
   return {
     reasoning: typeof rawReasoning === "string" ? rawReasoning : "",
     content: typeof delta?.content === "string" ? delta.content : "",
+    outputTokens,
   };
+}
+
+/** Извлекает completion_tokens из non-stream ответа OpenAI. */
+export function extractUsage(resp: OpenAI.Chat.ChatCompletion): number | undefined {
+  const tok = resp.usage?.completion_tokens;
+  return typeof tok === "number" ? tok : undefined;
 }
 
 export function buildChatParams(
@@ -44,6 +53,7 @@ export function buildChatParams(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   opts: LlmCallOptions,
   responseSchema?: StructuredOutputSchema,
+  stream: boolean = false,
 ): Record<string, unknown> {
   let msgs = prependBaseContract(messages);
   msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
@@ -52,6 +62,7 @@ export function buildChatParams(
   if (opts.maxTokens != null) params.max_tokens = opts.maxTokens;
   if (opts.topP != null) params.top_p = opts.topP;
   if (opts.numCtx != null) params.num_ctx = opts.numCtx;
+  if (stream) params.stream_options = { include_usage: true };
 
   if (responseSchema && opts.jsonMode === "json_schema") {
     params.response_format = {

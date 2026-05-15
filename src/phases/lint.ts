@@ -3,7 +3,7 @@ import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, parseStructured } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured } from "./llm-utils";
 import { ENTITY_TYPES_DELTA_SCHEMA, type EntityTypesDeltaResponse } from "./schemas";
 import { parseJsonPages } from "./ingest";
 import lintTemplate from "../../prompts/lint.md";
@@ -37,6 +37,7 @@ export async function* runLint(
 
   const start = Date.now();
   const reportParts: string[] = [];
+  let outputTokens = 0;
 
   for (const domain of targets) {
     if (signal.aborted) return;
@@ -81,7 +82,7 @@ export async function* runLint(
       },
     ];
 
-    const params = buildChatParams(model, messages, opts);
+    const params = buildChatParams(model, messages, opts, undefined, true);
     let llmReport = "";
     try {
       const stream = await llm.chat.completions.create(
@@ -89,9 +90,10 @@ export async function* runLint(
         { signal },
       );
       for await (const chunk of stream) {
-        const { reasoning, content } = extractStreamDeltas(chunk);
+        const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
         if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
         if (content) { llmReport += content; yield { kind: "assistant_text", delta: content }; }
+        if (tok !== undefined) outputTokens += tok;
       }
     } catch (e) {
       if (signal.aborted || (e as Error).name === "AbortError") return;
@@ -99,6 +101,8 @@ export async function* runLint(
         { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
       );
       llmReport = resp.choices[0]?.message?.content ?? "";
+      const tok = extractUsage(resp);
+      if (tok !== undefined) outputTokens += tok;
       if (llmReport) yield { kind: "assistant_text", delta: llmReport };
     }
 
@@ -106,7 +110,9 @@ export async function* runLint(
 
     if (signal.aborted) return;
     yield { kind: "assistant_text", delta: `\nActualizing domain config for "${domain.id}"...\n` };
-    const patch = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
+    const patchRes = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
+    outputTokens += patchRes.outputTokens;
+    const patch = patchRes.patch;
     if (patch) {
       const diffReport = computeEntityDiff(domain.entity_types ?? [], patch.entity_types ?? domain.entity_types ?? []);
       reportParts.push(diffReport);
@@ -116,7 +122,7 @@ export async function* runLint(
     if (signal.aborted) return;
     yield { kind: "assistant_text", delta: `\nApplying fixes for "${domain.id}"...\n` };
     const fixMessages = buildFixMessages(domain, wikiVaultPath, pages, allIssues, entityTypesBlock, llmReport);
-    const fixParams = buildChatParams(model, fixMessages, opts);
+    const fixParams = buildChatParams(model, fixMessages, opts, undefined, true);
     let fixFullText = "";
     try {
       const fixStream = await llm.chat.completions.create(
@@ -124,8 +130,9 @@ export async function* runLint(
         { signal },
       );
       for await (const chunk of fixStream) {
-        const { content } = extractStreamDeltas(chunk);
+        const { content, outputTokens: tok } = extractStreamDeltas(chunk);
         if (content) fixFullText += content;
+        if (tok !== undefined) outputTokens += tok;
       }
     } catch (e) {
       if (signal.aborted || (e as Error).name === "AbortError") return;
@@ -133,6 +140,8 @@ export async function* runLint(
         { ...fixParams, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
       );
       fixFullText = resp.choices[0]?.message?.content ?? "";
+      const tok = extractUsage(resp);
+      if (tok !== undefined) outputTokens += tok;
     }
 
     const fixedPages = parseJsonPages(fixFullText);
@@ -206,7 +215,7 @@ export async function* runLint(
     } catch { /* не критично */ }
   }
 
-  yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n") };
+  yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n"), outputTokens: outputTokens || undefined };
 }
 
 export function checkStructure(pages: Map<string, string>): string {
@@ -289,7 +298,7 @@ async function actualizeDomainConfig(
   model: string,
   opts: LlmCallOptions,
   signal: AbortSignal,
-): Promise<{ entity_types?: EntityType[]; language_notes?: string } | null> {
+): Promise<{ patch: { entity_types?: EntityType[]; language_notes?: string } | null; outputTokens: number }> {
   const currentConfig = JSON.stringify({
     entity_types: domain.entity_types ?? [],
     language_notes: domain.language_notes ?? "",
@@ -336,14 +345,17 @@ async function actualizeDomainConfig(
   const schema = opts.jsonMode === "json_schema" ? ENTITY_TYPES_DELTA_SCHEMA : undefined;
   const params = buildChatParams(model, messages, opts, schema);
   let fullText = "";
+  let outputTokens = 0;
   try {
     const resp = await llm.chat.completions.create(
       { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
       { signal },
     );
     fullText = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp);
+    if (tok !== undefined) outputTokens += tok;
   } catch {
-    return null;
+    return { patch: null, outputTokens };
   }
 
   try {
@@ -351,8 +363,8 @@ async function actualizeDomainConfig(
     const patch: { entity_types?: EntityType[]; language_notes?: string } = {};
     if (Array.isArray(parsed.entity_types)) patch.entity_types = parsed.entity_types as EntityType[];
     if (typeof parsed.language_notes === "string") patch.language_notes = parsed.language_notes;
-    return Object.keys(patch).length > 0 ? patch : null;
+    return { patch: Object.keys(patch).length > 0 ? patch : null, outputTokens };
   } catch {
-    return null;
+    return { patch: null, outputTokens };
   }
 }

@@ -1,7 +1,7 @@
 import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types";
-import { buildChatParams, extractStreamDeltas } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, extractUsage } from "./llm-utils";
 import chatTemplate from "../../prompts/chat.md";
 import { render } from "./template";
 
@@ -28,8 +28,9 @@ export async function* runLintChat(
     ...history.map((m) => ({ role: m.role, content: m.content } as OpenAI.Chat.ChatCompletionMessageParam)),
   ];
 
-  const params = buildChatParams(model, messages, opts);
+  const params = buildChatParams(model, messages, opts, undefined, true);
   let fullText = "";
+  let outputTokens = 0;
 
   try {
     const stream = await llm.chat.completions.create(
@@ -37,9 +38,10 @@ export async function* runLintChat(
       { signal },
     );
     for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
+      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
       if (content) { fullText += content; yield { kind: "assistant_text", delta: content }; }
+      if (tok !== undefined) outputTokens += tok;
     }
   } catch (e) {
     if (signal.aborted || (e as Error).name === "AbortError") return;
@@ -47,9 +49,11 @@ export async function* runLintChat(
       { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
     );
     fullText = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp);
+    if (tok !== undefined) outputTokens += tok;
     if (fullText) yield { kind: "assistant_text", delta: fullText };
   }
 
   if (signal.aborted) return;
-  yield { kind: "result", durationMs: Date.now() - start, text: fullText };
+  yield { kind: "result", durationMs: Date.now() - start, text: fullText, outputTokens: outputTokens || undefined };
 }

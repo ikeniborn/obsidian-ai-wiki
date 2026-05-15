@@ -3,7 +3,7 @@ import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, extractUsage } from "./llm-utils";
 import ingestTemplate from "../../prompts/ingest.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
@@ -73,18 +73,20 @@ export async function* runIngest(
     sourceVaultPath, sourceContent, domain, wikiVaultPath,
     existingPages, schemaContent, indexContent,
   );
-  const params = buildChatParams(model, messages, opts);
+  const params = buildChatParams(model, messages, opts, undefined, true);
 
   let fullText = "";
+  let outputTokens = 0;
   try {
     const stream = await llm.chat.completions.create(
       { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
       { signal },
     );
     for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
+      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
       if (content) fullText += content;
+      if (tok !== undefined) outputTokens += tok;
     }
   } catch (e) {
     if (signal.aborted || (e as Error).name === "AbortError") return;
@@ -92,6 +94,8 @@ export async function* runIngest(
       { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
     );
     fullText = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp);
+    if (tok !== undefined) outputTokens += tok;
   }
 
   if (signal.aborted) return;
@@ -143,7 +147,7 @@ export async function* runIngest(
     yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
   }
 
-  yield { kind: "result", durationMs: Date.now() - start, text: resultText };
+  yield { kind: "result", durationMs: Date.now() - start, text: resultText, outputTokens: outputTokens || undefined };
 }
 
 function buildIngestSummary(domainId: string, sourcePath: string, written: string[], total: number): string {

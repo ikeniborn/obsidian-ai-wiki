@@ -2,7 +2,7 @@ import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient, OnFileError } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, parseStructured } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured } from "./llm-utils";
 import {
   DOMAIN_ENTRY_SCHEMA, ENTITY_TYPES_DELTA_SCHEMA,
   type DomainEntryResponse, type EntityTypesDeltaResponse,
@@ -62,6 +62,7 @@ export async function* runInit(
   await ensureRootFiles(vaultTools, wikiRootGuess);
 
   const start = Date.now();
+  let outputTokens = 0;
 
   const allFiles = await vaultTools.listFiles("");
   const sampleFiles = allFiles.slice(0, 5);
@@ -96,7 +97,7 @@ export async function* runInit(
   ];
 
   const schema = opts.jsonMode === "json_schema" ? DOMAIN_ENTRY_SCHEMA : undefined;
-  const params = buildChatParams(model, messages, opts, schema);
+  const params = buildChatParams(model, messages, opts, schema, true);
   let fullText = "";
   try {
     const stream = await llm.chat.completions.create(
@@ -104,9 +105,10 @@ export async function* runInit(
       { signal },
     );
     for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
+      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
       if (content) { fullText += content; yield { kind: "assistant_text", delta: content }; }
+      if (tok !== undefined) outputTokens += tok;
     }
   } catch (e) {
     if (signal.aborted || (e as Error).name === "AbortError") return;
@@ -114,6 +116,8 @@ export async function* runInit(
       { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
     );
     fullText = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp);
+    if (tok !== undefined) outputTokens += tok;
     if (fullText) yield { kind: "assistant_text", delta: fullText };
   }
 
@@ -149,6 +153,7 @@ export async function* runInit(
       kind: "result",
       durationMs: Date.now() - start,
       text: `Dry run — domain entry:\n\`\`\`json\n${JSON.stringify(entry, null, 2)}\n\`\`\``,
+      outputTokens: outputTokens || undefined,
     };
     return;
   }
@@ -167,6 +172,7 @@ export async function* runInit(
     kind: "result",
     durationMs: Date.now() - start,
     text: `Domain "${domainId}" initialised. Edit entity_types in plugin settings to refine extraction.`,
+    outputTokens: outputTokens || undefined,
   };
 }
 
@@ -184,6 +190,7 @@ async function* runInitWithSources(
   onFileError: OnFileError | undefined,
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
+  let outputTokens = 0;
   const wikiRootGuess = `!Wiki`;
 
   await ensureRootFiles(vaultTools, wikiRootGuess);
@@ -259,15 +266,16 @@ async function* runInitWithSources(
       let fullText = "";
       const bootstrapSchema = opts.jsonMode === "json_schema" ? DOMAIN_ENTRY_SCHEMA : undefined;
       try {
-        const params = buildChatParams(model, messages, opts, bootstrapSchema);
+        const params = buildChatParams(model, messages, opts, bootstrapSchema, true);
         const stream = await llm.chat.completions.create(
           { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
           { signal },
         );
         for await (const chunk of stream) {
-          const { reasoning, content } = extractStreamDeltas(chunk);
+          const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
           if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
           if (content) { fullText += content; yield { kind: "assistant_text", delta: content }; }
+          if (tok !== undefined) outputTokens += tok;
         }
       } catch (e) {
         if (signal.aborted || (e as Error).name === "AbortError") return;
@@ -276,6 +284,8 @@ async function* runInitWithSources(
           { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
         );
         fullText = resp.choices[0]?.message?.content ?? "";
+        const tok = extractUsage(resp);
+        if (tok !== undefined) outputTokens += tok;
         if (fullText) yield { kind: "assistant_text", delta: fullText };
       }
 
@@ -306,6 +316,7 @@ async function* runInitWithSources(
           kind: "result",
           durationMs: Date.now() - start,
           text: `Dry run — domain entry:\n\`\`\`json\n${JSON.stringify(entry, null, 2)}\n\`\`\``,
+          outputTokens: outputTokens || undefined,
         };
         return;
       }
@@ -344,15 +355,16 @@ async function* runInitWithSources(
       let fullText = "";
       const deltaSchema = opts.jsonMode === "json_schema" ? ENTITY_TYPES_DELTA_SCHEMA : undefined;
       try {
-        const params = buildChatParams(model, messages, opts, deltaSchema);
+        const params = buildChatParams(model, messages, opts, deltaSchema, true);
         const stream = await llm.chat.completions.create(
           { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
           { signal },
         );
         for await (const chunk of stream) {
-          const { reasoning, content } = extractStreamDeltas(chunk);
+          const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
           if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
           if (content) { fullText += content; }
+          if (tok !== undefined) outputTokens += tok;
         }
       } catch (e) {
         if (signal.aborted || (e as Error).name === "AbortError") return;
@@ -361,6 +373,8 @@ async function* runInitWithSources(
           { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
         );
         fullText = resp.choices[0]?.message?.content ?? "";
+        const tok = extractUsage(resp);
+        if (tok !== undefined) outputTokens += tok;
       }
 
       if (signal.aborted) return;
@@ -456,6 +470,7 @@ async function* runInitWithSources(
     kind: "result",
     durationMs: Date.now() - start,
     text: `Domain "${domainId}" initialised from ${sourceFiles.length} source files.`,
+    outputTokens: outputTokens || undefined,
   };
 }
 

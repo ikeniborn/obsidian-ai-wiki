@@ -21322,12 +21322,19 @@ function parseStructured(fullText) {
 function extractStreamDeltas(chunk) {
   const delta = chunk.choices[0]?.delta;
   const rawReasoning = delta?.reasoning;
+  const usage = chunk.usage;
+  const outputTokens = typeof usage?.completion_tokens === "number" ? usage.completion_tokens : void 0;
   return {
     reasoning: typeof rawReasoning === "string" ? rawReasoning : "",
-    content: typeof delta?.content === "string" ? delta.content : ""
+    content: typeof delta?.content === "string" ? delta.content : "",
+    outputTokens
   };
 }
-function buildChatParams(model, messages, opts, responseSchema) {
+function extractUsage(resp) {
+  const tok = resp.usage?.completion_tokens;
+  return typeof tok === "number" ? tok : void 0;
+}
+function buildChatParams(model, messages, opts, responseSchema, stream = false) {
   let msgs = prependBaseContract(messages);
   msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
   const params = { model, messages: msgs };
@@ -21339,6 +21346,8 @@ function buildChatParams(model, messages, opts, responseSchema) {
     params.top_p = opts.topP;
   if (opts.numCtx != null)
     params.num_ctx = opts.numCtx;
+  if (stream)
+    params.stream_options = { include_usage: true };
   if (responseSchema && opts.jsonMode === "json_schema") {
     params.response_format = {
       type: "json_schema",
@@ -21522,19 +21531,22 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     schemaContent,
     indexContent
   );
-  const params = buildChatParams(model, messages, opts);
+  const params = buildChatParams(model, messages, opts, void 0, true);
   let fullText = "";
+  let outputTokens = 0;
   try {
     const stream = await llm.chat.completions.create(
       { ...params, stream: true },
       { signal }
     );
     for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
+      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (reasoning)
         yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
       if (content)
         fullText += content;
+      if (tok !== void 0)
+        outputTokens += tok;
     }
   } catch (e) {
     if (signal.aborted || e.name === "AbortError")
@@ -21543,6 +21555,9 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
       { ...params, stream: false }
     );
     fullText = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp);
+    if (tok !== void 0)
+      outputTokens += tok;
   }
   if (signal.aborted)
     return;
@@ -21588,7 +21603,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     const parentPath = extractParentSourcePath(absSource, vaultRoot);
     yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
   }
-  yield { kind: "result", durationMs: Date.now() - start, text: resultText };
+  yield { kind: "result", durationMs: Date.now() - start, text: resultText, outputTokens: outputTokens || void 0 };
 }
 function buildIngestSummary(domainId, sourcePath, written, total) {
   const src = sourcePath.split("/").pop() ?? sourcePath;
@@ -21890,11 +21905,14 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   ]);
   const pages = await vaultTools.readAll(files);
   const start = Date.now();
+  let outputTokens = 0;
   const graph = buildWikiGraph(pages);
   const allPageIds = [...pages.keys()].map(pageId);
   let seeds = keywordSeeds(question, pages);
   if (seeds.length === 0) {
-    seeds = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal);
+    const seedRes = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal);
+    seeds = seedRes.seeds;
+    outputTokens += seedRes.outputTokens;
   }
   if (signal.aborted)
     return;
@@ -21922,7 +21940,7 @@ ${indexContent}` : ""
 Wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B:
 ${contextBlock}` }
   ];
-  const params = buildChatParams(model, messages, opts);
+  const params = buildChatParams(model, messages, opts, void 0, true);
   let answer = "";
   try {
     const stream = await llm.chat.completions.create(
@@ -21930,13 +21948,15 @@ ${contextBlock}` }
       { signal }
     );
     for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
+      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (reasoning)
         yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
       if (content) {
         answer += content;
         yield { kind: "assistant_text", delta: content };
       }
+      if (tok !== void 0)
+        outputTokens += tok;
     }
   } catch (e) {
     if (signal.aborted || e.name === "AbortError")
@@ -21945,6 +21965,9 @@ ${contextBlock}` }
       { ...params, stream: false }
     );
     answer = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp);
+    if (tok !== void 0)
+      outputTokens += tok;
     if (answer)
       yield { kind: "assistant_text", delta: answer };
   }
@@ -21972,13 +21995,13 @@ ${contextBlock}` }
       yield { kind: "tool_result", ok: true };
       yield { kind: "result", durationMs: Date.now() - start, text: `\u0421\u043E\u0437\u0434\u0430\u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430: ${savePath}
 
-${answer}` };
+${answer}`, outputTokens: outputTokens || void 0 };
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: e.message };
-      yield { kind: "result", durationMs: Date.now() - start, text: answer };
+      yield { kind: "result", durationMs: Date.now() - start, text: answer, outputTokens: outputTokens || void 0 };
     }
   } else {
-    yield { kind: "result", durationMs: Date.now() - start, text: answer };
+    yield { kind: "result", durationMs: Date.now() - start, text: answer, outputTokens: outputTokens || void 0 };
   }
 }
 async function tryRead2(vaultTools, path2) {
@@ -22022,10 +22045,12 @@ Return JSON only: {"seeds": ["PageA", "PageB"]} \u2014 most relevant page names 
       { signal }
     );
     const text = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp) ?? 0;
     const parsed = parseStructured(text);
-    return Array.isArray(parsed.seeds) ? parsed.seeds.filter((s) => typeof s === "string") : [];
+    const seeds = Array.isArray(parsed.seeds) ? parsed.seeds.filter((s) => typeof s === "string") : [];
+    return { seeds, outputTokens: tok };
   } catch {
-    return [];
+    return { seeds: [], outputTokens: 0 };
   }
 }
 function buildContextBlock(pages, seeds, selectedIds) {
@@ -22077,6 +22102,7 @@ async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal
   }
   const start = Date.now();
   const reportParts = [];
+  let outputTokens = 0;
   for (const domain of targets) {
     if (signal.aborted)
       return;
@@ -22120,7 +22146,7 @@ ${c}`).join("\n\n")}`
         ].join("\n")
       }
     ];
-    const params = buildChatParams(model, messages, opts);
+    const params = buildChatParams(model, messages, opts, void 0, true);
     let llmReport = "";
     try {
       const stream = await llm.chat.completions.create(
@@ -22128,13 +22154,15 @@ ${c}`).join("\n\n")}`
         { signal }
       );
       for await (const chunk of stream) {
-        const { reasoning, content } = extractStreamDeltas(chunk);
+        const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
         if (reasoning)
           yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
         if (content) {
           llmReport += content;
           yield { kind: "assistant_text", delta: content };
         }
+        if (tok !== void 0)
+          outputTokens += tok;
       }
     } catch (e) {
       if (signal.aborted || e.name === "AbortError")
@@ -22143,6 +22171,9 @@ ${c}`).join("\n\n")}`
         { ...params, stream: false }
       );
       llmReport = resp.choices[0]?.message?.content ?? "";
+      const tok = extractUsage(resp);
+      if (tok !== void 0)
+        outputTokens += tok;
       if (llmReport)
         yield { kind: "assistant_text", delta: llmReport };
     }
@@ -22156,7 +22187,9 @@ ${allIssues}
     yield { kind: "assistant_text", delta: `
 Actualizing domain config for "${domain.id}"...
 ` };
-    const patch = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
+    const patchRes = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
+    outputTokens += patchRes.outputTokens;
+    const patch = patchRes.patch;
     if (patch) {
       const diffReport = computeEntityDiff(domain.entity_types ?? [], patch.entity_types ?? domain.entity_types ?? []);
       reportParts.push(diffReport);
@@ -22168,7 +22201,7 @@ Actualizing domain config for "${domain.id}"...
 Applying fixes for "${domain.id}"...
 ` };
     const fixMessages = buildFixMessages(domain, wikiVaultPath, pages, allIssues, entityTypesBlock, llmReport);
-    const fixParams = buildChatParams(model, fixMessages, opts);
+    const fixParams = buildChatParams(model, fixMessages, opts, void 0, true);
     let fixFullText = "";
     try {
       const fixStream = await llm.chat.completions.create(
@@ -22176,9 +22209,11 @@ Applying fixes for "${domain.id}"...
         { signal }
       );
       for await (const chunk of fixStream) {
-        const { content } = extractStreamDeltas(chunk);
+        const { content, outputTokens: tok } = extractStreamDeltas(chunk);
         if (content)
           fixFullText += content;
+        if (tok !== void 0)
+          outputTokens += tok;
       }
     } catch (e) {
       if (signal.aborted || e.name === "AbortError")
@@ -22187,6 +22222,9 @@ Applying fixes for "${domain.id}"...
         { ...fixParams, stream: false }
       );
       fixFullText = resp.choices[0]?.message?.content ?? "";
+      const tok = extractUsage(resp);
+      if (tok !== void 0)
+        outputTokens += tok;
     }
     const fixedPages = parseJsonPages(fixFullText);
     const writtenPaths = [];
@@ -22260,7 +22298,7 @@ ${indexLinks}
     } catch {
     }
   }
-  yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n") };
+  yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n"), outputTokens: outputTokens || void 0 };
 }
 function checkStructure(pages) {
   const issues = [];
@@ -22378,14 +22416,18 @@ ${c}`).join("\n\n");
   const schema = opts.jsonMode === "json_schema" ? ENTITY_TYPES_DELTA_SCHEMA : void 0;
   const params = buildChatParams(model, messages, opts, schema);
   let fullText = "";
+  let outputTokens = 0;
   try {
     const resp = await llm.chat.completions.create(
       { ...params, stream: false },
       { signal }
     );
     fullText = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp);
+    if (tok !== void 0)
+      outputTokens += tok;
   } catch {
-    return null;
+    return { patch: null, outputTokens };
   }
   try {
     const parsed = parseStructured(fullText);
@@ -22394,9 +22436,9 @@ ${c}`).join("\n\n");
       patch.entity_types = parsed.entity_types;
     if (typeof parsed.language_notes === "string")
       patch.language_notes = parsed.language_notes;
-    return Object.keys(patch).length > 0 ? patch : null;
+    return { patch: Object.keys(patch).length > 0 ? patch : null, outputTokens };
   } catch {
-    return null;
+    return { patch: null, outputTokens };
   }
 }
 
@@ -22414,21 +22456,24 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
     { role: "system", content: systemContent },
     ...history.map((m) => ({ role: m.role, content: m.content }))
   ];
-  const params = buildChatParams(model, messages, opts);
+  const params = buildChatParams(model, messages, opts, void 0, true);
   let fullText = "";
+  let outputTokens = 0;
   try {
     const stream = await llm.chat.completions.create(
       { ...params, stream: true },
       { signal }
     );
     for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
+      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (reasoning)
         yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
       if (content) {
         fullText += content;
         yield { kind: "assistant_text", delta: content };
       }
+      if (tok !== void 0)
+        outputTokens += tok;
     }
   } catch (e) {
     if (signal.aborted || e.name === "AbortError")
@@ -22437,12 +22482,15 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
       { ...params, stream: false }
     );
     fullText = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp);
+    if (tok !== void 0)
+      outputTokens += tok;
     if (fullText)
       yield { kind: "assistant_text", delta: fullText };
   }
   if (signal.aborted)
     return;
-  yield { kind: "result", durationMs: Date.now() - start, text: fullText };
+  yield { kind: "result", durationMs: Date.now() - start, text: fullText, outputTokens: outputTokens || void 0 };
 }
 
 // templates/_wiki_schema.md
@@ -22496,6 +22544,7 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
   const wikiRootGuess = `!Wiki`;
   await ensureRootFiles(vaultTools, wikiRootGuess);
   const start = Date.now();
+  let outputTokens = 0;
   const allFiles = await vaultTools.listFiles("");
   const sampleFiles = allFiles.slice(0, 5);
   const samples = await vaultTools.readAll(sampleFiles);
@@ -22529,7 +22578,7 @@ ${c}`).join("\n\n")
     }
   ];
   const schema = opts.jsonMode === "json_schema" ? DOMAIN_ENTRY_SCHEMA : void 0;
-  const params = buildChatParams(model, messages, opts, schema);
+  const params = buildChatParams(model, messages, opts, schema, true);
   let fullText = "";
   try {
     const stream = await llm.chat.completions.create(
@@ -22537,13 +22586,15 @@ ${c}`).join("\n\n")
       { signal }
     );
     for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
+      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (reasoning)
         yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
       if (content) {
         fullText += content;
         yield { kind: "assistant_text", delta: content };
       }
+      if (tok !== void 0)
+        outputTokens += tok;
     }
   } catch (e) {
     if (signal.aborted || e.name === "AbortError")
@@ -22552,6 +22603,9 @@ ${c}`).join("\n\n")
       { ...params, stream: false }
     );
     fullText = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp);
+    if (tok !== void 0)
+      outputTokens += tok;
     if (fullText)
       yield { kind: "assistant_text", delta: fullText };
   }
@@ -22587,7 +22641,8 @@ ${c}`).join("\n\n")
       text: `Dry run \u2014 domain entry:
 \`\`\`json
 ${JSON.stringify(entry, null, 2)}
-\`\`\``
+\`\`\``,
+      outputTokens: outputTokens || void 0
     };
     return;
   }
@@ -22602,11 +22657,13 @@ ${JSON.stringify(entry, null, 2)}
   yield {
     kind: "result",
     durationMs: Date.now() - start,
-    text: `Domain "${domainId}" initialised. Edit entity_types in plugin settings to refine extraction.`
+    text: `Domain "${domainId}" initialised. Edit entity_types in plugin settings to refine extraction.`,
+    outputTokens: outputTokens || void 0
   };
 }
 async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError) {
   const start = Date.now();
+  let outputTokens = 0;
   const wikiRootGuess = `!Wiki`;
   await ensureRootFiles(vaultTools, wikiRootGuess);
   const sourceFileLists = await Promise.all(sourcePaths.map((sp) => vaultTools.listFiles(sp)));
@@ -22673,19 +22730,21 @@ ${fileContent}`
       let fullText = "";
       const bootstrapSchema = opts.jsonMode === "json_schema" ? DOMAIN_ENTRY_SCHEMA : void 0;
       try {
-        const params = buildChatParams(model, messages, opts, bootstrapSchema);
+        const params = buildChatParams(model, messages, opts, bootstrapSchema, true);
         const stream = await llm.chat.completions.create(
           { ...params, stream: true },
           { signal }
         );
         for await (const chunk of stream) {
-          const { reasoning, content } = extractStreamDeltas(chunk);
+          const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
           if (reasoning)
             yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
           if (content) {
             fullText += content;
             yield { kind: "assistant_text", delta: content };
           }
+          if (tok !== void 0)
+            outputTokens += tok;
         }
       } catch (e) {
         if (signal.aborted || e.name === "AbortError")
@@ -22695,6 +22754,9 @@ ${fileContent}`
           { ...params, stream: false }
         );
         fullText = resp.choices[0]?.message?.content ?? "";
+        const tok = extractUsage(resp);
+        if (tok !== void 0)
+          outputTokens += tok;
         if (fullText)
           yield { kind: "assistant_text", delta: fullText };
       }
@@ -22730,7 +22792,8 @@ ${fileContent}`
           text: `Dry run \u2014 domain entry:
 \`\`\`json
 ${JSON.stringify(entry, null, 2)}
-\`\`\``
+\`\`\``,
+          outputTokens: outputTokens || void 0
         };
         return;
       }
@@ -22770,18 +22833,20 @@ ${fileContent}`
       let fullText = "";
       const deltaSchema = opts.jsonMode === "json_schema" ? ENTITY_TYPES_DELTA_SCHEMA : void 0;
       try {
-        const params = buildChatParams(model, messages, opts, deltaSchema);
+        const params = buildChatParams(model, messages, opts, deltaSchema, true);
         const stream = await llm.chat.completions.create(
           { ...params, stream: true },
           { signal }
         );
         for await (const chunk of stream) {
-          const { reasoning, content } = extractStreamDeltas(chunk);
+          const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
           if (reasoning)
             yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
           if (content) {
             fullText += content;
           }
+          if (tok !== void 0)
+            outputTokens += tok;
         }
       } catch (e) {
         if (signal.aborted || e.name === "AbortError")
@@ -22791,6 +22856,9 @@ ${fileContent}`
           { ...params, stream: false }
         );
         fullText = resp.choices[0]?.message?.content ?? "";
+        const tok = extractUsage(resp);
+        if (tok !== void 0)
+          outputTokens += tok;
       }
       if (signal.aborted)
         return;
@@ -22879,7 +22947,8 @@ Creating wiki pages from ${sourceFiles.length} source files...
   yield {
     kind: "result",
     durationMs: Date.now() - start,
-    text: `Domain "${domainId}" initialised from ${sourceFiles.length} source files.`
+    text: `Domain "${domainId}" initialised from ${sourceFiles.length} source files.`,
+    outputTokens: outputTokens || void 0
   };
 }
 async function appendLog2(vaultTools, wikiRoot, domainId) {
@@ -23243,8 +23312,9 @@ ${original}`;
   ];
   yield { kind: "assistant_text", delta: `\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u0430 ${filePath}...
 ` };
-  const baseParams = { ...buildChatParams(model, messages, opts), response_format: { type: "json_object" } };
+  const baseParams = { ...buildChatParams(model, messages, opts, void 0, true), response_format: { type: "json_object" } };
   let lastFinishReason = null;
+  let outputTokens = 0;
   async function* callOnce(p) {
     let acc = "";
     lastFinishReason = null;
@@ -23254,13 +23324,15 @@ ${original}`;
         { signal }
       );
       for await (const chunk of stream) {
-        const { reasoning, content } = extractStreamDeltas(chunk);
+        const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
         if (reasoning)
           yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
         if (content) {
           acc += content;
           yield { kind: "assistant_text", delta: content };
         }
+        if (tok !== void 0)
+          outputTokens += tok;
         const fr = chunk.choices[0]?.finish_reason;
         if (fr)
           lastFinishReason = fr;
@@ -23272,6 +23344,9 @@ ${original}`;
         { ...p, stream: false }
       );
       acc = resp.choices[0]?.message?.content ?? "";
+      const tok = extractUsage(resp);
+      if (tok !== void 0)
+        outputTokens += tok;
       lastFinishReason = resp.choices[0]?.finish_reason ?? null;
     }
     return acc;
@@ -23283,7 +23358,7 @@ ${original}`;
   const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
   if (!parsed && truncated) {
     yield { kind: "error", message: "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 \u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442 (claude-agent: env CLAUDE_CODE_MAX_OUTPUT_TOKENS \u0432 iclaude.sh; native-agent: Settings \u2192 per-operation \u2192 format \u2192 maxTokens)" };
-    yield { kind: "result", durationMs: Date.now() - start, text: "" };
+    yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
     return;
   }
   if (!parsed) {
@@ -23293,7 +23368,7 @@ ${original}`;
       { role: "user", content: userContent },
       ...chatHistory.map((m) => ({ role: m.role, content: m.content }))
     ];
-    const retryParams = { ...buildChatParams(model, retryMessages, opts), response_format: { type: "json_object" } };
+    const retryParams = { ...buildChatParams(model, retryMessages, opts, void 0, true), response_format: { type: "json_object" } };
     fullText = yield* callOnce(retryParams);
     if (signal.aborted)
       return;
@@ -23303,7 +23378,7 @@ ${original}`;
     const retryTruncated = lastFinishReason === "length" || looksTruncated(fullText);
     const msg = retryTruncated ? "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 (\u043F\u043E\u0441\u043B\u0435 retry) \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 \u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442 (claude-agent: env CLAUDE_CODE_MAX_OUTPUT_TOKENS \u0432 iclaude.sh; native-agent: Settings \u2192 per-operation \u2192 format \u2192 maxTokens)" : "Format: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON (\u043F\u043E\u0441\u043B\u0435 retry)";
     yield { kind: "error", message: msg };
-    yield { kind: "result", durationMs: Date.now() - start, text: "" };
+    yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
     return;
   }
   const lastSlash = filePath.lastIndexOf("/");
@@ -23324,7 +23399,7 @@ ${original}`;
 \u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043D\u044B\u0435: ${tokenList}`
       }
     ];
-    const restoreParams = { ...buildChatParams(model, restoreMessages, opts), response_format: { type: "json_object" } };
+    const restoreParams = { ...buildChatParams(model, restoreMessages, opts, void 0, true), response_format: { type: "json_object" } };
     const fullText2 = yield* callOnce(restoreParams);
     if (!signal.aborted) {
       const parsed2 = extractJsonObject(fullText2);
@@ -23346,7 +23421,7 @@ ${original}`;
   }
   const missingFinal = missingTokensWithContext(original, finalFormatted);
   yield { kind: "format_preview", tempPath, report: finalReport, missingTokens: missingFinal };
-  yield { kind: "result", durationMs: Date.now() - start, text: finalReport };
+  yield { kind: "result", durationMs: Date.now() - start, text: finalReport, outputTokens: outputTokens || void 0 };
 }
 
 // src/agent-runner.ts

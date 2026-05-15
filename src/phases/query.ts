@@ -2,7 +2,7 @@ import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, parseStructured } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured } from "./llm-utils";
 import { SEEDS_SCHEMA, type SeedsResponse } from "./schemas";
 import queryTemplate from "../../prompts/query.md";
 import { render } from "./template";
@@ -55,13 +55,16 @@ export async function* runQuery(
   const pages = await vaultTools.readAll(files);
 
   const start = Date.now();
+  let outputTokens = 0;
 
   // Graph-filtered context
   const graph = buildWikiGraph(pages);
   const allPageIds = [...pages.keys()].map(pageId);
   let seeds = keywordSeeds(question, pages);
   if (seeds.length === 0) {
-    seeds = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal);
+    const seedRes = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal);
+    seeds = seedRes.seeds;
+    outputTokens += seedRes.outputTokens;
   }
   if (signal.aborted) return;
   if (seeds.length === 0) {
@@ -85,7 +88,7 @@ export async function* runQuery(
     { role: "user", content: `Вопрос: ${question}\n\nWiki-страницы:\n${contextBlock}` },
   ];
 
-  const params = buildChatParams(model, messages, opts);
+  const params = buildChatParams(model, messages, opts, undefined, true);
   let answer = "";
   try {
     const stream = await llm.chat.completions.create(
@@ -93,9 +96,10 @@ export async function* runQuery(
       { signal },
     );
     for await (const chunk of stream) {
-      const { reasoning, content } = extractStreamDeltas(chunk);
+      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
       if (content) { answer += content; yield { kind: "assistant_text", delta: content }; }
+      if (tok !== undefined) outputTokens += tok;
     }
   } catch (e) {
     if (signal.aborted || (e as Error).name === "AbortError") return;
@@ -103,6 +107,8 @@ export async function* runQuery(
       { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
     );
     answer = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp);
+    if (tok !== undefined) outputTokens += tok;
     if (answer) yield { kind: "assistant_text", delta: answer };
   }
 
@@ -128,13 +134,13 @@ export async function* runQuery(
     try {
       await vaultTools.write(savePath, pageContent);
       yield { kind: "tool_result", ok: true };
-      yield { kind: "result", durationMs: Date.now() - start, text: `Создана страница: ${savePath}\n\n${answer}` };
+      yield { kind: "result", durationMs: Date.now() - start, text: `Создана страница: ${savePath}\n\n${answer}`, outputTokens: outputTokens || undefined };
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: (e as Error).message };
-      yield { kind: "result", durationMs: Date.now() - start, text: answer };
+      yield { kind: "result", durationMs: Date.now() - start, text: answer, outputTokens: outputTokens || undefined };
     }
   } else {
-    yield { kind: "result", durationMs: Date.now() - start, text: answer };
+    yield { kind: "result", durationMs: Date.now() - start, text: answer, outputTokens: outputTokens || undefined };
   }
 }
 
@@ -163,7 +169,7 @@ async function llmSelectSeeds(
   model: string,
   opts: LlmCallOptions,
   signal: AbortSignal,
-): Promise<string[]> {
+): Promise<{ seeds: string[]; outputTokens: number }> {
   const prompt = [
     `Question: "${question}"`,
     `Available wiki pages: ${allPageIds.join(", ")}`,
@@ -183,10 +189,12 @@ async function llmSelectSeeds(
       { signal },
     );
     const text = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp) ?? 0;
     const parsed = parseStructured(text) as SeedsResponse;
-    return Array.isArray(parsed.seeds) ? parsed.seeds.filter((s): s is string => typeof s === "string") : [];
+    const seeds = Array.isArray(parsed.seeds) ? parsed.seeds.filter((s): s is string => typeof s === "string") : [];
+    return { seeds, outputTokens: tok };
   } catch {
-    return [];
+    return { seeds: [], outputTokens: 0 };
   }
 }
 

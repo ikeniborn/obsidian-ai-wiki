@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildChatParams, stripThinking, parseStructured } from "../src/phases/llm-utils";
+import { buildChatParams, stripThinking, parseStructured, extractStreamDeltas, extractUsage } from "../src/phases/llm-utils";
 import type OpenAI from "openai";
 import baseContract from "../prompts/base.md";
 
@@ -130,5 +130,56 @@ describe("buildChatParams — response_format", () => {
   it("no response_format when jsonMode absent", () => {
     const params = buildChatParams("m", messages, {});
     expect(params.response_format).toBeUndefined();
+  });
+});
+
+describe("buildChatParams — stream_options.include_usage", () => {
+  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [{ role: "user", content: "q" }];
+
+  it("adds stream_options.include_usage when stream=true", () => {
+    const params = buildChatParams("m", messages, {}, undefined, true);
+    expect(params.stream_options).toEqual({ include_usage: true });
+  });
+
+  it("omits stream_options when stream=false (default)", () => {
+    const params = buildChatParams("m", messages, {});
+    expect(params.stream_options).toBeUndefined();
+  });
+});
+
+describe("extractStreamDeltas — usage", () => {
+  it("returns outputTokens from chunk.usage.completion_tokens", () => {
+    const chunk = {
+      choices: [{ delta: { content: "x" }, index: 0, finish_reason: null }],
+      usage: { completion_tokens: 123, prompt_tokens: 10, total_tokens: 133 },
+    } as unknown as OpenAI.Chat.ChatCompletionChunk;
+    const r = extractStreamDeltas(chunk);
+    expect(r.outputTokens).toBe(123);
+    expect(r.content).toBe("x");
+  });
+
+  it("returns undefined outputTokens when usage absent", () => {
+    const chunk = {
+      choices: [{ delta: { content: "y" }, index: 0, finish_reason: null }],
+    } as unknown as OpenAI.Chat.ChatCompletionChunk;
+    const r = extractStreamDeltas(chunk);
+    expect(r.outputTokens).toBeUndefined();
+  });
+});
+
+describe("extractUsage — non-stream", () => {
+  it("returns completion_tokens from response.usage", () => {
+    const resp = {
+      choices: [{ message: { content: "x", role: "assistant" }, finish_reason: "stop", index: 0 }],
+      usage: { completion_tokens: 42, prompt_tokens: 10, total_tokens: 52 },
+    } as unknown as OpenAI.Chat.ChatCompletion;
+    expect(extractUsage(resp)).toBe(42);
+  });
+
+  it("returns undefined when usage absent", () => {
+    const resp = {
+      choices: [{ message: { content: "x", role: "assistant" }, finish_reason: "stop", index: 0 }],
+    } as unknown as OpenAI.Chat.ChatCompletion;
+    expect(extractUsage(resp)).toBeUndefined();
   });
 });
