@@ -305,8 +305,10 @@ export class WikiController {
     this.activeView()?.finishChat({ role: "assistant", content: finalText }, status !== "done");
   }
 
-  async init(domain: string, dryRun: boolean, sourcePaths?: string[]): Promise<void> {
-    const args = dryRun ? [domain, "--dry-run"] : [domain];
+  async init(domain: string, dryRun: boolean, sourcePaths?: string[], force?: boolean): Promise<void> {
+    const args: string[] = [domain];
+    if (dryRun) args.push("--dry-run");
+    if (force) args.push("--force");
     if (sourcePaths?.length) args.push("--sources", ...sourcePaths);
     const onFileError: OnFileError | undefined = sourcePaths?.length
       ? (file, err, canRetry) => {
