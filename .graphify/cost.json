@@ -91,8 +91,20 @@
       "input_tokens": 67519,
       "output_tokens": 0,
       "files": 9
+    },
+    {
+      "date": "2026-05-15T06:48:24.936351+00:00",
+      "input_tokens": 40000,
+      "output_tokens": 5225,
+      "files": 117
+    },
+    {
+      "date": "2026-05-15T09:06:40.964185+00:00",
+      "input_tokens": 75000,
+      "output_tokens": 3411,
+      "files": 21
     }
   ],
-  "total_input_tokens": 76719,
-  "total_output_tokens": 2100
+  "total_input_tokens": 191719,
+  "total_output_tokens": 10736
 }

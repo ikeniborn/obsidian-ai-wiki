@@ -30,13 +30,17 @@
 - [[per-device-settings]] — `документация/паттерны/per-device-settings.md`
 - [[reasoning-first-json]] — `документация/паттерны/reasoning-first-json.md`
 
-#### спецификации (6)
+#### спецификации (8)
 - [[agent-base-contract]] — `документация/спецификации/agent-base-contract.md`
 - [[format-operation-design]] — `документация/спецификации/format-operation-design.md`
 - [[claude-agent-backend-design]] — `документация/спецификации/claude-agent-backend-design.md`
 - [[audit-fix-design]] — `документация/спецификации/audit-fix-design.md`
 - [[generation-speed-design]] — `документация/спецификации/generation-speed-design.md`
 - [[remove-content-truncation-design]] — `документация/спецификации/remove-content-truncation-design.md`
+- [[init-stability-design]] — `документация/спецификации/init-stability-design.md`
+- [[reinit-button-design]] — `документация/спецификации/reinit-button-design.md`
 
-#### планы (1)
+#### планы (3)
 - [[generation-speed-plan]] — `документация/планы/generation-speed-plan.md`
+- [[init-stability-plan]] — `документация/планы/init-stability-plan.md`
+- [[reinit-button-plan]] — `документация/планы/reinit-button-plan.md`

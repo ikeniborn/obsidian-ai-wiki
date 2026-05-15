@@ -143,3 +143,25 @@
 **Примечание:** prompts/ вне source_paths["docs"], обработаны по содержимому как документация домена
 
 ---
+
+## 2026-05-15T11:57:00
+
+**Операция:** ingest
+**Источники:**
+- `docs/superpowers/specs/2026-05-15-init-stability-design.md`
+- `docs/superpowers/specs/2026-05-15-reinit-button-design.md`
+- `docs/superpowers/plans/2026-05-15-init-stability-design.md`
+- `docs/superpowers/plans/2026-05-15-reinit-button.md`
+
+**Домен:** документация
+
+**Затронуто страниц:** 4
+
+- СОЗДАНА: `документация/спецификации/init-stability-design.md` (mature) — спека трёх блоков init: auto-fallback structured output (json_object с retry без response_format), размещение статей по wiki_subfolder через path-шаблоны в prompt'е, per-file pipeline (analyze + ingest в одном цикле), миграция analyzed_sources_v2
+- СОЗДАНА: `документация/спецификации/reinit-button-design.md` (mature) — UI-спека кнопки ⟳ в domainRow: вызов controller.init для выбранного домена с сохранёнными sourcePaths, ConfirmModal с подсчётом md-файлов, disabled-синхронизация во всех переходах (change/refreshDomains/setRunning/finish), 4 i18n-ключа
+- СОЗДАНА: `документация/планы/init-stability-plan.md` (mature) — 12 задач реализации init-stability: типы, llm-utils (parseStructured fences, wrapWithJsonFallback, isJsonModeError), agent-runner, settings, ingest path templates, DomainStore миграция migrateDomainsV2, rewrite runInitWithSources, тесты. F-003: миграция перенесена в DomainStore.load() из spec'овой loadSettings
+- СОЗДАНА: `документация/планы/reinit-button-plan.md` (mature) — 5 задач реализации reinit-button: i18n (en/ru/es), поле reinitBtn в view.ts, disabled-sync, метод runReinit с loadDomains+ConfirmModal+controller.init, patch-bump 0.1.96→0.1.97
+
+**Обновлено:** index.md (спецификации 6→8, планы 1→3), log.md
+
+---
