@@ -81,7 +81,6 @@ export interface LlmCallOptions {
   maxTokens?: number;
   topP?: number | null;
   systemPrompt?: string;
-  numCtx?: number | null;
   jsonMode?: "json_object" | false;
   structuredRetries?: number;
 }
@@ -118,7 +117,6 @@ export interface NativeOperationConfig {
 export interface LlmWikiPluginSettings {
   backend: "claude-agent" | "native-agent";
   systemPrompt: string;
-  maxTokens: number;
   agentLogEnabled: boolean;
   historyLimit: number;
   graphDepth: number;
@@ -141,9 +139,9 @@ export interface LlmWikiPluginSettings {
     baseUrl: string;
     apiKey: string;
     model: string;
+    maxTokens: number;
     temperature: number;
     topP: number | null;
-    numCtx: number | null;
     perOperation: boolean;
     operations: OpMap<NativeOperationConfig>;
     structuredRetries: number;
@@ -157,7 +155,6 @@ export interface LlmWikiPluginSettings {
 export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   backend: "claude-agent",
   systemPrompt: "",
-  maxTokens: 4096,
   agentLogEnabled: false,
   historyLimit: 20,
   graphDepth: 1,
@@ -180,9 +177,9 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     baseUrl: "http://localhost:11434/v1",
     apiKey: "ollama",
     model: "llama3.2",
+    maxTokens: 4096,
     temperature: 0.2,
     topP: null,
-    numCtx: null,
     perOperation: false,
     operations: {
       ingest: { model: "llama3.2", maxTokens: 4096, temperature: 0.2 },
