@@ -18849,7 +18849,6 @@ var import_obsidian8 = require("obsidian");
 var DEFAULT_SETTINGS = {
   backend: "claude-agent",
   systemPrompt: "",
-  maxTokens: 4096,
   agentLogEnabled: false,
   historyLimit: 20,
   graphDepth: 1,
@@ -18872,9 +18871,9 @@ var DEFAULT_SETTINGS = {
     baseUrl: "http://localhost:11434/v1",
     apiKey: "ollama",
     model: "llama3.2",
+    maxTokens: 4096,
     temperature: 0.2,
     topP: null,
-    numCtx: null,
     perOperation: false,
     operations: {
       ingest: { model: "llama3.2", maxTokens: 4096, temperature: 0.2 },
@@ -18937,8 +18936,6 @@ var en = {
     temperature_desc: "0.0\u20131.0.",
     topP_name: "Top-p",
     topP_desc: "0.0\u20131.0, or empty \u2014 disable.",
-    numCtx_name: "Context window",
-    numCtx_desc: "Context size (num_ctx). Empty \u2014 model default.",
     allowedTools_name: "Allowed tools",
     allowedTools_desc: "Comma-separated list passed to --tools. Empty \u2014 no restriction.",
     perOperation_name: "Per-operation models",
@@ -19136,8 +19133,6 @@ var ru = {
     temperature_desc: "0.0\u20131.0.",
     topP_name: "Top-p",
     topP_desc: "0.0\u20131.0, \u0438\u043B\u0438 \u043F\u0443\u0441\u0442\u043E \u2014 \u043E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u044C.",
-    numCtx_name: "\u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u0435 \u043E\u043A\u043D\u043E",
-    numCtx_desc: "\u0420\u0430\u0437\u043C\u0435\u0440 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 (num_ctx). \u041F\u0443\u0441\u0442\u043E \u2014 \u0434\u0435\u0444\u043E\u043B\u0442 \u043C\u043E\u0434\u0435\u043B\u0438.",
     allowedTools_name: "\u0420\u0430\u0437\u0440\u0435\u0448\u0451\u043D\u043D\u044B\u0435 \u0438\u043D\u0441\u0442\u0440\u0443\u043C\u0435\u043D\u0442\u044B",
     allowedTools_desc: "\u0421\u043F\u0438\u0441\u043E\u043A \u0447\u0435\u0440\u0435\u0437 \u0437\u0430\u043F\u044F\u0442\u0443\u044E \u0434\u043B\u044F --tools. \u041F\u0443\u0441\u0442\u043E \u2014 \u0431\u0435\u0437 \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u0439.",
     perOperation_name: "\u041C\u043E\u0434\u0435\u043B\u0438 \u043F\u043E \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044F\u043C",
@@ -19335,8 +19330,6 @@ var es = {
     temperature_desc: "0.0\u20131.0.",
     topP_name: "Top-p",
     topP_desc: "0.0\u20131.0, o vac\xEDo \u2014 desactivar.",
-    numCtx_name: "Ventana de contexto",
-    numCtx_desc: "Tama\xF1o del contexto (num_ctx). Vac\xEDo \u2014 valor por defecto del modelo.",
     allowedTools_name: "Herramientas permitidas",
     allowedTools_desc: "Lista separada por comas para --tools. Vac\xEDo \u2014 sin restricci\xF3n.",
     perOperation_name: "Modelos por operaci\xF3n",
@@ -20018,8 +20011,7 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       apiKey: this.plugin.settings.nativeAgent.apiKey,
       model: this.plugin.settings.nativeAgent.model,
       temperature: this.plugin.settings.nativeAgent.temperature,
-      topP: this.plugin.settings.nativeAgent.topP,
-      numCtx: this.plugin.settings.nativeAgent.numCtx
+      topP: this.plugin.settings.nativeAgent.topP
     };
     await this.patchLocal({ nativeAgent: { ...cur, ...patch } });
   }
@@ -20056,18 +20048,6 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       });
       return t;
     });
-    const isPerOp = eff.backend === "claude-agent" ? s.claudeAgent.perOperation : s.nativeAgent.perOperation;
-    if (!isPerOp && eff.backend !== "claude-agent") {
-      new import_obsidian3.Setting(containerEl).setName(T.settings.maxTokens_name).setDesc(T.settings.maxTokens_desc).addText(
-        (t) => t.setPlaceholder("4096").setValue(String(s.maxTokens)).onChange(async (v) => {
-          const n = Number(v);
-          if (Number.isFinite(n) && n > 0) {
-            s.maxTokens = Math.floor(n);
-            await this.plugin.saveSettings();
-          }
-        })
-      );
-    }
     new import_obsidian3.Setting(containerEl).setName(T.settings.timeouts_name).setDesc(T.settings.timeouts_desc).addText(
       (t) => t.setValue(`${s.timeouts.ingest}/${s.timeouts.query}/${s.timeouts.lint}/${s.timeouts.init}/${s.timeouts.format}`).onChange(async (v) => {
         const parsed = parseTimeoutString(v);
@@ -20208,16 +20188,13 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
             await this.patchLocalNative({ model: v.trim() });
           })
         );
-        new import_obsidian3.Setting(containerEl).setName(T.settings.numCtx_name).setDesc(T.settings.numCtx_desc).addText(
-          (t) => t.setPlaceholder("(\u0434\u0435\u0444\u043E\u043B\u0442 \u043C\u043E\u0434\u0435\u043B\u0438)").setValue(eff.nativeAgent.numCtx != null ? String(eff.nativeAgent.numCtx) : "").onChange(async (v) => {
-            const trimmed = v.trim();
-            if (!trimmed) {
-              await this.patchLocalNative({ numCtx: null });
-              return;
+        new import_obsidian3.Setting(containerEl).setName(T.settings.maxTokens_name).setDesc(T.settings.maxTokens_desc).addText(
+          (t) => t.setPlaceholder("4096").setValue(String(s.nativeAgent.maxTokens)).onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n > 0) {
+              s.nativeAgent.maxTokens = Math.floor(n);
+              await this.plugin.saveSettings();
             }
-            const n = Number(trimmed);
-            if (Number.isFinite(n) && n > 0)
-              await this.patchLocalNative({ numCtx: Math.floor(n) });
           })
         );
         new import_obsidian3.Setting(containerEl).setName(T.settings.temperature_name).setDesc(T.settings.temperature_desc).addText(
@@ -21427,8 +21404,6 @@ function buildChatParams(model, messages, opts, stream = false) {
     params.max_tokens = opts.maxTokens;
   if (opts.topP != null)
     params.top_p = opts.topP;
-  if (opts.numCtx != null)
-    params.num_ctx = opts.numCtx;
   if (stream)
     params.stream_options = { include_usage: true };
   if (opts.jsonMode === "json_object") {
@@ -27841,8 +27816,8 @@ var AgentRunner = class {
     const na = s.nativeAgent;
     const c = na.perOperation ? na.operations[key] : void 0;
     if (c)
-      return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
-    return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
+      return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
+    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
   }
   async writeDevLog(_vaultRoot, entry) {
     if (!this.settings.devMode?.enabled)
@@ -36279,7 +36254,13 @@ var LocalConfigStore = class {
     }
     try {
       const raw = await adapter.read(p);
-      this.cache = { ...DEFAULTS, ...JSON.parse(raw) };
+      const parsed = JSON.parse(raw);
+      if (parsed.nativeAgent && "numCtx" in parsed.nativeAgent) {
+        const na = { ...parsed.nativeAgent };
+        delete na.numCtx;
+        parsed.nativeAgent = na;
+      }
+      this.cache = { ...DEFAULTS, ...parsed };
     } catch {
       this.cache = { ...DEFAULTS };
     }
@@ -36457,8 +36438,26 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
     };
     if (!data?.systemPrompt && (caData.systemPrompt || naData.systemPrompt))
       this.settings.systemPrompt = caData.systemPrompt ?? naData.systemPrompt;
-    if (!data?.maxTokens && (caData.maxTokens || naData.maxTokens))
-      this.settings.maxTokens = caData.maxTokens ?? naData.maxTokens;
+    let schemaV3Dirty = false;
+    const legacyTop = typeof data?.maxTokens === "number" ? data.maxTokens : void 0;
+    const legacyCA = typeof caData.maxTokens === "number" ? caData.maxTokens : void 0;
+    const legacyNA = typeof naData.maxTokens === "number" ? naData.maxTokens : void 0;
+    const naAlreadySet = legacyNA !== void 0;
+    if (!naAlreadySet) {
+      const legacy = legacyTop ?? legacyCA;
+      if (legacy !== void 0) {
+        this.settings.nativeAgent.maxTokens = legacy;
+        schemaV3Dirty = true;
+      }
+    }
+    if ("maxTokens" in this.settings) {
+      delete this.settings.maxTokens;
+      schemaV3Dirty = true;
+    }
+    if ("numCtx" in this.settings.nativeAgent) {
+      delete this.settings.nativeAgent.numCtx;
+      schemaV3Dirty = true;
+    }
     if (data?.backend === "claude-code") {
       this.settings.backend = "claude-agent";
       if (data && data.model && !this.settings.claudeAgent.model)
@@ -36502,7 +36501,7 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
         claudeCleanup = true;
       }
     }
-    if (formatMaxTokensMigrated || claudeCleanup)
+    if (formatMaxTokensMigrated || claudeCleanup || schemaV3Dirty)
       await this.saveData(this.settings);
   }
   async saveSettings() {
@@ -36558,8 +36557,7 @@ async function migrateToLocalV1(plugin, localConfigStore) {
       apiKey: s.nativeAgent.apiKey,
       model: s.nativeAgent.model,
       temperature: s.nativeAgent.temperature,
-      topP: s.nativeAgent.topP,
-      numCtx: s.nativeAgent.numCtx
+      topP: s.nativeAgent.topP
     },
     claudeAgent: {
       model: s.claudeAgent.model,
