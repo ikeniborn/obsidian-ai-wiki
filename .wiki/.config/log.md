@@ -187,3 +187,27 @@
 **Обновлено:** index.md (счётчики: компоненты 5→7, паттерны 5→6, планы 3→4)
 
 **Следующий шаг:** lint документация после реализации плана; ingest спецификации docs/superpowers/specs/2026-05-15-structured-output-resilience-design.md для дополнения контекста
+
+## 2026-05-15 — ingest (reinit-force: spec, plan, TODO)
+
+**Операция:** ingest
+**Домен:** документация
+**Источники:**
+- `docs/TODO.md` (roadmap, item 5 — re-init wipe + rebuild)
+- `docs/superpowers/specs/2026-05-15-reinit-force-design.md`
+- `docs/superpowers/plans/2026-05-15-reinit-force-design.md`
+
+**Создано страниц:** 2
+- `документация/спецификации/reinit-force-design.md` (mature) — флаг `--force` для init: wipe wiki-папки + сброс entity_types/analyzed_sources/language_notes + recycle-иконка
+- `документация/планы/reinit-force-plan.md` (mature) — TDD-декомпозиция: 7 задач (wipeDomainFolder helper, force param в runInitWithSources, --force dispatch в runInit, controller signature, view snake_case + recycle icon, i18n en/ru/es, manual verification)
+
+**Обновлено страниц:** 1
+- `документация/операции/init-operation.md` — добавлен раздел «Флаги CLI» с описанием `--dry-run` / `--sources` / `--force`; обновлены wiki_sources, теги, связанные страницы
+
+**Не создано:**
+- Для `docs/TODO.md` отдельная страница не создаётся — это roadmap-tracker, item 5 уже покрыт страницами reinit-force-* (синтез вместо дублирования)
+- Для helper `wipeDomainFolder` — описан внутри `reinit-force-design.md`, отдельная страница нецелесообразна (одна функция, тесно связанная с фазой)
+
+**Обновлено:** index.md (спецификации 8→9, планы 4→5), log.md
+
+**Следующий шаг:** после реализации (commits по плану) — запустить `/llm-wiki lint документация` для проверки актуальности

@@ -4,6 +4,7 @@ wiki_sources:
   - README.md
   - prompts/init.md
   - prompts/init-incremental.md
+  - docs/superpowers/specs/2026-05-15-reinit-force-design.md
 wiki_updated: 2026-05-15
 wiki_domain: документация
 wiki_outgoing_links:
@@ -11,7 +12,8 @@ wiki_outgoing_links:
   - "[[поток-выполнения-операции]]"
   - "[[wiki-controller]]"
   - "[[reasoning-first-json]]"
-tags: [операция, init, домен, инициализация]
+  - "[[reinit-force-design]]"
+tags: [операция, init, домен, инициализация, force]
 aliases: ["init operation", "инициализация домена"]
 ---
 
@@ -79,6 +81,14 @@ aliases: ["init operation", "инициализация домена"]
 
 Паттерн ответа: [[reasoning-first-json]].
 
+## Флаги CLI
+
+| Флаг | Назначение |
+|---|---|
+| `--dry-run` | Запуск без записи на диск (preview изменений) |
+| `--sources <p1> <p2> ...` | Явный список путей источников; иначе берутся из `entry.source_paths` |
+| `--force` | Полная переинициализация: wipe wiki-папки домена + сброс `entity_types`/`analyzed_sources`/`language_notes` + повторный bootstrap+delta+ingest. См. [[reinit-force-design]]. Несовместим с `--dry-run`; требует существующий домен и непустые `source_paths` |
+
 ## Ограничения платформы
 
 Только desktop.
@@ -89,3 +99,5 @@ aliases: ["init operation", "инициализация домена"]
 - [[поток-выполнения-операции]]
 - [[wiki-controller]]
 - [[reasoning-first-json]]
+- [[reinit-force-design]] — флаг `--force` (wipe + rebuild)
+- [[reinit-button-design]] — UI-кнопка re-init

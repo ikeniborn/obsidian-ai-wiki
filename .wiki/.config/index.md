@@ -33,7 +33,7 @@
 - [[reasoning-first-json]] — `документация/паттерны/reasoning-first-json.md`
 - [[structured-output-retry]] — `документация/паттерны/structured-output-retry.md`
 
-#### спецификации (8)
+#### спецификации (9)
 - [[agent-base-contract]] — `документация/спецификации/agent-base-contract.md`
 - [[format-operation-design]] — `документация/спецификации/format-operation-design.md`
 - [[claude-agent-backend-design]] — `документация/спецификации/claude-agent-backend-design.md`
@@ -42,9 +42,11 @@
 - [[remove-content-truncation-design]] — `документация/спецификации/remove-content-truncation-design.md`
 - [[init-stability-design]] — `документация/спецификации/init-stability-design.md`
 - [[reinit-button-design]] — `документация/спецификации/reinit-button-design.md`
+- [[reinit-force-design]] — `документация/спецификации/reinit-force-design.md`
 
-#### планы (4)
+#### планы (5)
 - [[generation-speed-plan]] — `документация/планы/generation-speed-plan.md`
 - [[init-stability-plan]] — `документация/планы/init-stability-plan.md`
 - [[reinit-button-plan]] — `документация/планы/reinit-button-plan.md`
+- [[reinit-force-plan]] — `документация/планы/reinit-force-plan.md`
 - [[structured-output-resilience-plan]] — `документация/планы/structured-output-resilience-plan.md`

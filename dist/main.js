@@ -18983,7 +18983,8 @@ var en = {
   },
   view: {
     refreshTitle: "Refresh domains",
-    reinitTitle: "Re-init selected domain",
+    reinitTitle: "Re-init domain (wipe + rebuild)",
+    reinitNoSources: "Domain has no source_paths \u2014 re-init not possible",
     addDomain: "Add domain",
     sectionCreate: "Create",
     sectionDomain: "Fill / Maintain",
@@ -19074,8 +19075,7 @@ var en = {
     initConfirmTitle: "Start domain initialization?",
     initConfirmBody: (files, folders) => `Found ${files} .md files in ${folders} folder(s). Run init to analyze sources and create wiki pages?`,
     reinitConfirmTitle: "Re-init \u2014 confirm",
-    reinitConfirmBody: (id, files, srcCount) => `Domain \xAB${id}\xBB. ${files} md-files across ${srcCount} source paths. Re-run init?`,
-    reinitConfirmBodyNoSources: (id) => `Domain \xAB${id}\xBB. No source paths \u2014 only metadata refresh (entity_types, language_notes).`,
+    reinitConfirmBody: (id, files, srcCount) => `Domain \xAB${id}\xBB: entire wiki folder will be deleted and rebuilt from ${files} md-files (${srcCount} source paths). Continue?`,
     fileErrorTitle: "Error processing file",
     fileErrorSkip: "Skip",
     fileErrorRetry: "Retry",
@@ -19182,7 +19182,8 @@ var ru = {
   },
   view: {
     refreshTitle: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D\u044B",
-    reinitTitle: "\u041F\u043E\u0432\u0442\u043E\u0440\u043D\u044B\u0439 init \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0433\u043E \u0434\u043E\u043C\u0435\u043D\u0430",
+    reinitTitle: "\u041F\u0435\u0440\u0435\u0438\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F \u0434\u043E\u043C\u0435\u043D\u0430 (wipe + \u0437\u0430\u043D\u043E\u0432\u043E)",
+    reinitNoSources: "\u0423 \u0434\u043E\u043C\u0435\u043D\u0430 \u043D\u0435\u0442 source_paths \u2014 re-init \u043D\u0435\u0432\u043E\u0437\u043C\u043E\u0436\u0435\u043D",
     addDomain: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D",
     sectionCreate: "\u0421\u043E\u0437\u0434\u0430\u043D\u0438\u0435",
     sectionDomain: "\u041D\u0430\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u0435 / \u0410\u043A\u0442\u0443\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F",
@@ -19273,8 +19274,7 @@ var ru = {
     initConfirmTitle: "\u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C \u0438\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044E \u0434\u043E\u043C\u0435\u043D\u0430?",
     initConfirmBody: (files, folders) => `\u041D\u0430\u0439\u0434\u0435\u043D\u043E ${files} .md \u0444\u0430\u0439\u043B\u043E\u0432 \u0432 ${folders} \u043F\u0430\u043F\u043A\u0430\u0445. \u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C init \u0434\u043B\u044F \u0430\u043D\u0430\u043B\u0438\u0437\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432 \u0438 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446?`,
     reinitConfirmTitle: "Re-init \u2014 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435",
-    reinitConfirmBody: (id, files, srcCount) => `\u0414\u043E\u043C\u0435\u043D \xAB${id}\xBB. ${files} md-\u0444\u0430\u0439\u043B\u043E\u0432 \u0432 ${srcCount} sourcePaths. \u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u044B\u0439 init?`,
-    reinitConfirmBodyNoSources: (id) => `\u0414\u043E\u043C\u0435\u043D \xAB${id}\xBB. sourcePaths \u043F\u0443\u0441\u0442\u044B \u2014 \u0431\u0443\u0434\u0443\u0442 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u043C\u0435\u0442\u0430\u0434\u0430\u043D\u043D\u044B\u0435 (entity_types, language_notes).`,
+    reinitConfirmBody: (id, files, srcCount) => `\u0414\u043E\u043C\u0435\u043D \xAB${id}\xBB: \u0431\u0443\u0434\u0435\u0442 \u0443\u0434\u0430\u043B\u0435\u043D\u0430 \u0432\u0441\u044F \u0432\u0438\u043A\u0438-\u043F\u0430\u043F\u043A\u0430 \u0434\u043E\u043C\u0435\u043D\u0430 \u0438 \u043F\u0435\u0440\u0435\u0441\u043E\u0431\u0440\u0430\u043D\u0430 \u0438\u0437 ${files} md-\u0444\u0430\u0439\u043B\u043E\u0432 (${srcCount} sourcePaths). \u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C?`,
     fileErrorTitle: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u0438 \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u043A\u0435 \u0444\u0430\u0439\u043B\u0430",
     fileErrorSkip: "\u041F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C",
     fileErrorRetry: "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C",
@@ -19381,7 +19381,8 @@ var es = {
   },
   view: {
     refreshTitle: "Actualizar dominios",
-    reinitTitle: "Re-init del dominio seleccionado",
+    reinitTitle: "Re-init del dominio (borrar + reconstruir)",
+    reinitNoSources: "El dominio no tiene source_paths \u2014 re-init imposible",
     addDomain: "A\xF1adir dominio",
     sectionCreate: "Crear",
     sectionDomain: "Rellenar / Mantener",
@@ -19472,8 +19473,7 @@ var es = {
     initConfirmTitle: "\xBFIniciar inicializaci\xF3n del dominio?",
     initConfirmBody: (files, folders) => `Se encontraron ${files} archivos .md en ${folders} carpeta(s). \xBFEjecutar init para analizar fuentes y crear p\xE1ginas wiki?`,
     reinitConfirmTitle: "Re-init \u2014 confirmar",
-    reinitConfirmBody: (id, files, srcCount) => `Dominio \xAB${id}\xBB. ${files} archivos md en ${srcCount} rutas fuente. \xBFRe-ejecutar init?`,
-    reinitConfirmBodyNoSources: (id) => `Dominio \xAB${id}\xBB. Sin rutas fuente \u2014 solo refresco de metadatos (entity_types, language_notes).`,
+    reinitConfirmBody: (id, files, srcCount) => `Dominio \xAB${id}\xBB: se borrar\xE1 toda la carpeta wiki del dominio y se reconstruir\xE1 desde ${files} archivos md (${srcCount} rutas fuente). \xBFContinuar?`,
     fileErrorTitle: "Error al procesar archivo",
     fileErrorSkip: "Saltar",
     fileErrorRetry: "Reintentar",
@@ -20465,9 +20465,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       const refreshBtn = domainRow.createEl("button", { text: "\u21BB", attr: { title: T.view.refreshTitle } });
       refreshBtn.addEventListener("click", () => void this.refreshDomains());
       this.reinitBtn = domainRow.createEl("button", {
-        text: "\u27F3",
         attr: { title: T.view.reinitTitle }
       });
+      (0, import_obsidian4.setIcon)(this.reinitBtn, "recycle");
       this.reinitBtn.disabled = true;
       this.reinitBtn.addEventListener("click", () => void this.runReinit());
       this.domainSelect.addEventListener("change", () => {
@@ -20634,27 +20634,21 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     }
     if (!entry)
       return;
-    const T = i18n().modal;
-    const sourcePaths = entry.sourcePaths ?? [];
-    const hasSources = sourcePaths.length > 0;
-    let body;
-    if (hasSources) {
-      const mdFiles = this.app.vault.getFiles().filter(
-        (f) => f.extension === "md" && sourcePaths.some((p) => f.path.startsWith(p))
-      );
-      body = T.reinitConfirmBody(entry.id, mdFiles.length, sourcePaths.length);
-    } else {
-      body = T.reinitConfirmBodyNoSources(entry.id);
+    const sourcePaths = entry.source_paths ?? [];
+    if (sourcePaths.length === 0) {
+      new import_obsidian4.Notice(i18n().view.reinitNoSources);
+      return;
     }
+    const T = i18n().modal;
+    const mdFiles = this.app.vault.getFiles().filter(
+      (f) => f.extension === "md" && sourcePaths.some((p) => f.path.startsWith(p))
+    );
+    const body = T.reinitConfirmBody(entry.id, mdFiles.length, sourcePaths.length);
     new ConfirmModal(
       this.app,
       T.reinitConfirmTitle,
       [body],
-      () => void this.plugin.controller.init(
-        entry.id,
-        false,
-        hasSources ? sourcePaths : void 0
-      )
+      () => void this.plugin.controller.init(entry.id, false, sourcePaths, true)
     ).open();
   }
   submitQuery(save) {
@@ -26871,11 +26865,59 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
   const dryRun = args.includes("--dry-run");
   const sourcesIdx = args.indexOf("--sources");
   const sourcePaths = sourcesIdx >= 0 ? args.slice(sourcesIdx + 1) : [];
+  const force = args.includes("--force");
   if (!domainId) {
     yield { kind: "error", message: "init: domain id required" };
     return;
   }
   const existing = domains.find((d) => d.id === domainId);
+  if (force) {
+    if (!existing) {
+      yield { kind: "error", message: `force: domain not found: "${domainId}"` };
+      return;
+    }
+    if (dryRun) {
+      yield { kind: "error", message: "force: dry-run not supported" };
+      return;
+    }
+    const effectiveSources = sourcePaths.length ? sourcePaths : existing.source_paths ?? [];
+    if (!effectiveSources.length) {
+      yield { kind: "error", message: "force: no sources to re-analyze" };
+      return;
+    }
+    yield { kind: "assistant_text", delta: `Re-init: wiping ${domainWikiFolder(existing.wiki_folder)}...
+` };
+    yield { kind: "tool_use", name: "WipeDomain", input: { folder: existing.wiki_folder } };
+    const wiped = await wipeDomainFolder(vaultTools, existing.wiki_folder);
+    yield { kind: "tool_result", ok: true };
+    yield { kind: "assistant_text", delta: `removed ${wiped.length} files
+` };
+    yield {
+      kind: "domain_updated",
+      domainId,
+      patch: { entity_types: [], analyzed_sources: [], language_notes: "" }
+    };
+    if (signal.aborted)
+      return;
+    existing.entity_types = [];
+    existing.analyzed_sources = [];
+    existing.language_notes = "";
+    yield* runInitWithSources(
+      domainId,
+      effectiveSources,
+      false,
+      vaultTools,
+      llm,
+      model,
+      domains,
+      vaultName,
+      signal,
+      opts,
+      onFileError,
+      true
+    );
+    return;
+  }
   if (sourcePaths.length) {
     yield* runInitWithSources(
       domainId,
@@ -27013,7 +27055,7 @@ ${JSON.stringify(entry, null, 2)}
     outputTokens: outputTokens || void 0
   };
 }
-async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError) {
+async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, force = false) {
   const start = Date.now();
   let outputTokens = 0;
   const wikiRootGuess = `!Wiki`;
@@ -27025,8 +27067,8 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
     return;
   }
   const existing = domains.find((d) => d.id === domainId);
-  const isResuming = existing?.analyzed_sources !== void 0;
-  const alreadyAnalyzed = new Set(existing?.analyzed_sources ?? []);
+  const isResuming = !force && existing?.analyzed_sources !== void 0;
+  const alreadyAnalyzed = new Set(force ? [] : existing?.analyzed_sources ?? []);
   const toAnalyze = isResuming ? sourceFiles.filter((f) => !alreadyAnalyzed.has(f)) : sourceFiles;
   yield { kind: "init_start", totalFiles: toAnalyze.length };
   if (toAnalyze.length === 0) {
@@ -27292,6 +27334,17 @@ ${fileContent}` }
     text: `Domain "${domainId}" initialised from ${toAnalyze.length} source files.`,
     outputTokens: outputTokens || void 0
   };
+}
+async function wipeDomainFolder(vaultTools, wikiFolder) {
+  const root = domainWikiFolder(wikiFolder);
+  const files = await vaultTools.listFiles(root);
+  for (const f of files) {
+    try {
+      await vaultTools.remove(f);
+    } catch {
+    }
+  }
+  return files;
 }
 async function appendLog2(vaultTools, wikiRoot, domainId) {
   const logPath = `${wikiRoot}/_log.md`;
@@ -35869,8 +35922,12 @@ var WikiController = class {
     });
     this.activeView()?.finishChat({ role: "assistant", content: finalText }, status !== "done");
   }
-  async init(domain, dryRun, sourcePaths) {
-    const args = dryRun ? [domain, "--dry-run"] : [domain];
+  async init(domain, dryRun, sourcePaths, force) {
+    const args = [domain];
+    if (dryRun)
+      args.push("--dry-run");
+    if (force)
+      args.push("--force");
     if (sourcePaths?.length)
       args.push("--sources", ...sourcePaths);
     const onFileError = sourcePaths?.length ? (file, err, canRetry) => {
