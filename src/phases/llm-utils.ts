@@ -61,7 +61,6 @@ export function buildChatParams(
   if (opts.temperature !== undefined) params.temperature = opts.temperature;
   if (opts.maxTokens != null) params.max_tokens = opts.maxTokens;
   if (opts.topP != null) params.top_p = opts.topP;
-  if (opts.numCtx != null) params.num_ctx = opts.numCtx;
   if (stream) params.stream_options = { include_usage: true };
 
   if (opts.jsonMode === "json_object") {
