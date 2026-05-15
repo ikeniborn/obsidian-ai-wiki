@@ -1,5 +1,6 @@
 import type { Vault } from "obsidian";
 import type { DomainEntry } from "./domain";
+import { migrateDomainsV2 } from "./domain";
 
 const FILE_PATH = "!Wiki/_domain.json";
 const TMP_PATH = `${FILE_PATH}.tmp`;
@@ -29,6 +30,8 @@ export class DomainStore {
         d.wiki_folder = d.wiki_folder.slice("!Wiki/".length);
       }
     }
+    const { migrated } = migrateDomainsV2(domains);
+    if (migrated) await this.save(domains);
     return domains;
   }
 
