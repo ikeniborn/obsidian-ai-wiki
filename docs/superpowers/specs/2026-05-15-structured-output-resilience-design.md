@@ -2,6 +2,31 @@
 title: Structured Output Resilience (zod + retry + telemetry)
 date: 2026-05-15
 status: draft
+review:
+  spec_hash: ed099c0483dd2be6
+  last_run: 2026-05-15
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "### Call-site замена"
+      section_hash: e5fec0cac806e810
+      text: "Финальный API orchestrator (onEvent callback vs async generator) откладывается на plan-этап — нет DoD в спеке."
+      verdict: fixed
+      verdict_at: 2026-05-15
+    - id: F-002
+      phase: clarity
+      severity: WARNING
+      section: "### Settings"
+      section_hash: 144bbf741cdc3a52
+      text: "Рассогласование пути доступа: orchestrator читает opts.structuredRetries (LlmCallOptions), но §Settings размещает поле в nativeAgent.structuredRetries. Не задано, как opts получает значение."
+      verdict: fixed
+      verdict_at: 2026-05-15
 ---
 
 # Structured Output Resilience
@@ -242,10 +267,13 @@ if (entry.wiki_folder?.startsWith(`vaults/${vaultName}/`)) ...
 Aналогично для init.ts:289 (init.bootstrap), init.ts:378 (init.delta),
 lint.ts:359 (lint.patch), query.ts:190 (query.seeds).
 
-Note: orchestrator принимает callback `onEvent`, но генераторы должны
-yield-ить события. Решение: orchestrator возвращает накопленный массив событий
-в результате, либо принимает async generator. Финальный API уточняется в plan
-при первой реализации (init.bootstrap), затем тиражируется.
+**Финальный API**: `parseWithRetry` принимает callback `onEvent: (ev: RunEvent) => void` —
+вызывается синхронно на каждом structural_error/retry/итоговом исходе. Phase-генератор
+передаёт коллектор-callback, который пушит события в локальный массив; после
+`await parseWithRetry(...)` генератор делает `yield* collected`. Pattern
+не меняет существующую async-generator архитектуру phases и сохраняет ordering
+событий относительно ingest/file_done/result. Возврат массива из orchestrator
+отклонён — теряется потоковость retry-emit при долгих stream-attempt'ах.
 
 ### Telemetry — RunEvent
 
@@ -324,14 +352,27 @@ this.register(() => unsub());
 
 ### Settings
 
-`src/types.ts`:
+`src/types.ts` — два изменения:
 
 ```ts
+// 1. Расширение LlmCallOptions (передаётся в orchestrator через opts):
+export interface LlmCallOptions {
+  ...
+  structuredRetries?: number;  // optional override на per-call уровне
+}
+
+// 2. Источник истины — settings:
 nativeAgent: {
   ...,
   structuredRetries: number;  // default 1, range 0-3
 }
 ```
+
+Резолв значения: `agent-runner.buildOptsFor()` читает
+`settings.nativeAgent.structuredRetries ?? 1` и кладёт в возвращаемый
+`opts.structuredRetries`. Orchestrator берёт `opts.structuredRetries ?? 1`.
+Для claude-agent ветки `buildOptsFor` поле выставляется аналогично
+(см. §Применимость к backends — возможно отключение через 0).
 
 `src/settings.ts` — number input в существующей nativeAgent-секции:
 - label: "Structured output retries"

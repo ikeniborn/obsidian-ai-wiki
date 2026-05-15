@@ -2,6 +2,15 @@
 title: Re-init button in side panel
 date: 2026-05-15
 status: draft
+review:
+  spec_hash: a608236bc9f11d81
+  last_run: 2026-05-15
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings: []
 ---
 
 # Re-init button in side panel
