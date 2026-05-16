@@ -636,6 +636,8 @@ export class LlmWikiView extends ItemView {
     if (this.reinitBtn) this.reinitBtn.disabled = !(this.domainSelect && this.domainSelect.value);
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
     this.updateMetrics();
+    const totalDur = ((entry.finishedAt - entry.startedAt) / 1000).toFixed(1);
+    this.progressCount.setText(`${totalDur}s`);
     this.resultSpeedEl?.setText(this.lastTokPerSec !== undefined ? ` ${this.lastTokPerSec} tok/s` : "");
     this.finalEl.empty();
     if (entry.finalText) {
