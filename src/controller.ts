@@ -208,6 +208,11 @@ export class WikiController {
     await this.dispatchChat(operation, domainId, context, chatMessages);
   }
 
+  async lintApplyFromChat(domainId: string | undefined, lintReport: string, history: ChatMessage[], newMessage: string): Promise<void> {
+    const chatMessages: ChatMessage[] = [...history, { role: "user", content: newMessage }];
+    await this.dispatch("lint-chat", [], domainId, lintReport, undefined, undefined, chatMessages);
+  }
+
   private async dispatchChat(operation: WikiOperation, domainId: string | undefined, context: string, chatMessages: ChatMessage[]): Promise<void> {
     if (this.isBusy()) { new Notice(i18n().ctrl.operationRunning); return; }
     if (Platform.isMobile && operation !== "query" && operation !== "query-save") {
@@ -504,7 +509,7 @@ export class WikiController {
     } catch { /* не блокируем операцию */ }
   }
 
-  private async dispatch(op: WikiOperation, args: string[], domainId?: string, context?: string, instruction?: string, onFileError?: OnFileError): Promise<void> {
+  private async dispatch(op: WikiOperation, args: string[], domainId?: string, context?: string, instruction?: string, onFileError?: OnFileError, chatMessages?: ChatMessage[]): Promise<void> {
     if (this.isBusy()) {
       new Notice(i18n().ctrl.operationRunning);
       return;
@@ -522,7 +527,7 @@ export class WikiController {
       const eff = resolveEffective(this.plugin.settings, local);
       if (eff.backend === "native-agent" && !this.requireNativeAgent(eff)) return;
       if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local)) return;
-      const opKey = (op === "query-save" ? "query" : op) as import("./types").OpKey;
+      const opKey = (op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op) as import("./types").OpKey;
       this._currentLogMeta = {
         backend: eff.backend,
         model: eff.backend === "claude-agent"
@@ -560,10 +565,10 @@ export class WikiController {
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
     view.setRunning(op, args);
 
-    const opKey = op === "query-save" ? "query" : op;
+    const opKey = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
     const timeoutMs = this.plugin.settings.timeouts[opKey as keyof typeof this.plugin.settings.timeouts] * 1000;
-    const chatMessages = op === "format" ? this._pendingFormat?.chat : undefined;
-    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages });
+    const resolvedChatMessages = op === "format" ? this._pendingFormat?.chat : chatMessages;
+    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages: resolvedChatMessages });
 
     try {
       for await (const ev of runGen) {
@@ -607,7 +612,7 @@ export class WikiController {
       this._currentLogMeta = null;
     }
     if (status === "done") {
-      const mutatesWiki = op === "ingest" || op === "lint" || op === "query-save" || op === "init";
+      const mutatesWiki = op === "ingest" || op === "lint" || op === "lint-chat" || op === "query-save" || op === "init";
       if (mutatesWiki) {
         const targets = domainId ? [domainId] : (await this.domainStore.load()).map((d) => d.id);
         for (const id of targets) graphCache.invalidate(id);
