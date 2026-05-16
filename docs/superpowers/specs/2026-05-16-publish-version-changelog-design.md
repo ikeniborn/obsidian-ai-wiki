@@ -2,6 +2,47 @@
 title: publish-version skill — changelog analysis before release
 date: 2026-05-16
 status: approved
+review:
+  spec_hash: 9b4adc46e7ce79b8
+  last_run: 2026-05-16
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  section_hashes:
+    "## Цель": c75c4ae6e6d09e97
+    "## Изменения в структуре навыка": effcd84af3955050
+    "## Шаг 0a — найти точку отсчёта": f37f13d7e1f190ea
+    "## Шаг 0b — собрать изменения": 230d2cc63f00bcd7
+    "## Шаг 0c — draft changelog и согласование": 1d6d111e8858b9e2
+    "## Шаг 4.5 — обновить CHANGELOG.md (новый, перед коммитом)": 5e7d8e717a52f088
+    "## Шаг 5 — формат коммита (изменён)": ca766f6e96542fc4
+    "## Итоговый summary (обновлён)": df9ae95e2d325fea
+    "## Что не меняется": 246a4c95f4779100
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "## Шаг 0b — собрать изменения"
+      section_hash: 230d2cc63f00bcd7
+      text: >
+        "по одной теме" — критерий дедупликации не определён. Нет правила, по которому Claude решает,
+        что два коммита одного скоупа — «одна тема». Можно исправить: добавить конкретное правило
+        (например, «одинаковый scope И совпадение ≥2 слов в subject → объединить»).
+      verdict: fixed
+      verdict_at: 2026-05-16
+    - id: F-002
+      phase: clarity
+      severity: WARNING
+      section: "## Шаг 5 — формат коммита (изменён)"
+      section_hash: ca766f6e96542fc4
+      text: >
+        "краткое описание главной темы релиза" — нет критерия выбора. Если в changelog несколько
+        feat — как Claude выбирает «главную»? Вариант: «первый feat из списка» или «тема с наибольшим
+        числом связанных коммитов».
+      verdict: fixed
+      verdict_at: 2026-05-16
 ---
 
 # publish-version: changelog analysis before release
@@ -42,7 +83,7 @@ git log <hash>..HEAD --oneline
 - `fix` → раздел «Исправления»
 - `refactor`, `perf` → раздел «Прочее»
 
-Дедупликация: несколько коммитов одного скоупа по одной теме объединять в один пункт.
+Дедупликация: если два коммита имеют одинаковый `scope` И совпадают ≥2 значимых слова в subject — объединять в один пункт, оставляя наиболее полное описание.
 
 ## Шаг 0c — draft changelog и согласование
 
@@ -108,7 +149,7 @@ chore(release): X.Y.NEW — <однострочный summary>
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 ```
 
-`summary` — краткое описание главной темы релиза (одна фраза).
+`summary` — subject первого `feat` из согласованного changelog; если `feat` нет — первый `fix`; если нет ни того ни другого — «minor improvements».
 
 Файлы в коммите: `package.json src/manifest.json manifest.json dist/manifest.json dist/main.js CHANGELOG.md`.
 
