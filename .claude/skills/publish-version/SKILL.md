@@ -119,6 +119,8 @@ npm run build
 
 ### 4.5. Обновить CHANGELOG.md
 
+Используй текст из changelog, согласованного на шаге 0c — без изменений.
+
 Prepend новую секцию в начало `CHANGELOG.md`:
 
 ```markdown
