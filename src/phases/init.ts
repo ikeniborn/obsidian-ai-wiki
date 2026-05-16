@@ -331,6 +331,10 @@ export async function* runInitWithSources(
         if (entry.wiki_folder?.startsWith(vaultPrefix)) entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
         if (entry.wiki_folder?.startsWith("!Wiki/")) entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
         if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
+        // На reinit (force=true) wiki_folder уже зафиксирован — LLM не должен его менять.
+        if (force && existing) {
+          entry.wiki_folder = existing.wiki_folder;
+        }
       } catch {
         yield { kind: "assistant_text", delta: `⚠ ${file}: bootstrap построение entry упало, пропускаем\n` };
         yield { kind: "file_done", file };

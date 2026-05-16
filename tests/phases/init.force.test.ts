@@ -90,6 +90,28 @@ describe("runInitWithSources force", () => {
     expect(firstUpdate?.patch.analyzed_sources).toEqual([]);
   });
 
+  it("preserves existing.wiki_folder on reinit (force=true)", async () => {
+    const files = ["docs/a.md"];
+    const adapter = adapterWithSourceFiles(files);
+    const vt = new VaultTools(adapter, "");
+    const existing: DomainEntry = {
+      id: "adm", name: "ADM", wiki_folder: "adm",
+      source_paths: ["docs"],
+      analyzed_sources: [],
+      entity_types: [],
+      language_notes: "old",
+    };
+    // LLM returns a nested wiki_folder "adm/adm" — should be ignored on force reinit
+    const llm = makeMultiLlm([
+      validBootstrapResponse("adm", "adm/adm"),
+      JSON.stringify({ reasoning: "r", seeds: [] }),
+    ]);
+    const signal = new AbortController().signal;
+    const events = await collect(runInitWithSources("adm", ["docs"], false, vt, llm, "x", [existing], "vault", signal, {}, undefined, true));
+    const updated = events.find((e) => e.kind === "domain_updated") as { patch: Record<string, unknown> } | undefined;
+    expect(updated?.patch.wiki_folder).toBe("adm");
+  });
+
   it("force=true without existing domain falls through to bootstrap path", async () => {
     const files = ["docs/a.md"];
     const adapter = adapterWithSourceFiles(files);
