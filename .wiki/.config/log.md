@@ -256,3 +256,19 @@
 **Пропущено:** прочие сущности CLAUDE.md (WikiController, AgentRunner, ClaudeCliClient, LlmWikiView, parseStreamLine, single-flight, stream-json) — уже покрыты mature-страницами без нового материала.
 
 **Следующий шаг:** при необходимости поднять wiki-graph-cache и wiki-seeds из stub → developing после ingest реальных файлов src/wiki-graph-cache.ts и src/wiki-seeds.ts.
+
+## 2026-05-16 — ingest mobile-domain-selector
+
+- Операция: ingest
+- Источники:
+  - `docs/TODO.md` (items 6-7: mobile domain selector + native agent on mobile)
+  - `docs/superpowers/specs/2026-05-16-mobile-domain-selector-design.md`
+  - `docs/superpowers/plans/2026-05-16-mobile-domain-selector.md`
+- Домен: документация
+- Создано: 2
+  - `документация/спецификации/mobile-domain-selector-design.md` (спецификация)
+  - `документация/планы/mobile-domain-selector-plan.md` (план)
+- Обновлено: 1
+  - `документация/компоненты/llm-wiki-view.md` (добавлен раздел Mobile domain selector planned, расширены wiki_sources, теги)
+- Пропущено: 0
+- Замечания: TODO.md (roadmap) — отдельной страницы не создано (роадмап-документ); item 7 (native agent на mobile) — out of scope этой ingestion, отмечен как follow-up в spec.

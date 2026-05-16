@@ -18986,6 +18986,7 @@ var en = {
   },
   view: {
     refreshTitle: "Refresh domains",
+    mobileWaiting: "\u23F3 Waiting for LLM response\u2026",
     reinitTitle: "Re-init domain (wipe + rebuild)",
     reinitNoSources: "Domain has no source_paths \u2014 re-init not possible",
     addDomain: "Add domain",
@@ -19188,6 +19189,7 @@ var ru = {
   },
   view: {
     refreshTitle: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D\u044B",
+    mobileWaiting: "\u23F3 \u041E\u0436\u0438\u0434\u0430\u043D\u0438\u0435 \u043E\u0442\u0432\u0435\u0442\u0430 \u043E\u0442 LLM\u2026",
     reinitTitle: "\u041F\u0435\u0440\u0435\u0438\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F \u0434\u043E\u043C\u0435\u043D\u0430 (wipe + \u0437\u0430\u043D\u043E\u0432\u043E)",
     reinitNoSources: "\u0423 \u0434\u043E\u043C\u0435\u043D\u0430 \u043D\u0435\u0442 source_paths \u2014 re-init \u043D\u0435\u0432\u043E\u0437\u043C\u043E\u0436\u0435\u043D",
     addDomain: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D",
@@ -19390,6 +19392,7 @@ var es = {
   },
   view: {
     refreshTitle: "Actualizar dominios",
+    mobileWaiting: "\u23F3 Esperando respuesta del LLM\u2026",
     reinitTitle: "Re-init del dominio (borrar + reconstruir)",
     reinitNoSources: "El dominio no tiene source_paths \u2014 re-init imposible",
     addDomain: "A\xF1adir dominio",
@@ -20434,6 +20437,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   toolCount = 0;
   stepCount = 0;
   progressEl = null;
+  mobileWaitingEl = null;
   progressTotal = 0;
   progressDone = 0;
   progressPhaseEl = null;
@@ -20712,6 +20716,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.toolCount = 0;
     this.stepCount = 0;
     this.progressEl = null;
+    this.mobileWaitingEl = null;
     this.progressPhaseEl = null;
     this.progressTotal = 0;
     this.progressDone = 0;
@@ -20739,8 +20744,17 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.tickHandle = null;
     }
     this.scheduleMetricsTick();
+    if (import_obsidian4.Platform.isMobile) {
+      const placeholder = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step-pending");
+      placeholder.setText(i18n().view.mobileWaiting);
+      this.mobileWaitingEl = placeholder;
+    }
   }
   appendEvent(ev) {
+    if (this.mobileWaitingEl) {
+      this.mobileWaitingEl.remove();
+      this.mobileWaitingEl = null;
+    }
     if (ev.kind === "format_preview") {
       this.renderFormatPreview(ev.tempPath, ev.report, ev.missingTokens);
       return;
@@ -27325,6 +27339,9 @@ ${fileContent}` }
           entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
         if (!entry.id || !entry.wiki_folder)
           throw new Error("Missing required fields");
+        if (force && existing) {
+          entry.wiki_folder = existing.wiki_folder;
+        }
       } catch {
         yield { kind: "assistant_text", delta: `\u26A0 ${file}: bootstrap \u043F\u043E\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u0435 entry \u0443\u043F\u0430\u043B\u043E, \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u043C
 ` };
@@ -35732,6 +35749,50 @@ var mobileFetch = async (input, init) => {
   return new Response(r.text, { status: r.status, headers: r.headers });
 };
 
+// src/mobile-llm-wrap.ts
+function wrapMobileNoStream(inner) {
+  const create = async (params, callOpts) => {
+    if (params.stream !== true) {
+      return inner.chat.completions.create(params, callOpts);
+    }
+    const noStreamParams = { ...params, stream: false };
+    delete noStreamParams.stream_options;
+    const resp = await inner.chat.completions.create(
+      noStreamParams,
+      callOpts
+    );
+    return completionToAsyncIterable(resp);
+  };
+  return { chat: { completions: { create } } };
+}
+async function* completionToAsyncIterable(c) {
+  const choice = c.choices[0];
+  const content = typeof choice?.message?.content === "string" ? choice.message.content : "";
+  const reasoning = choice?.message?.reasoning;
+  if (reasoning) {
+    yield mkChunk(c, { reasoning });
+  }
+  if (content) {
+    yield mkChunk(c, { content });
+  }
+  yield mkChunk(c, {}, choice?.finish_reason ?? "stop", c.usage ?? null);
+}
+function mkChunk(base, delta, finish_reason = null, usage = null) {
+  return {
+    id: base.id,
+    object: "chat.completion.chunk",
+    created: base.created,
+    model: base.model,
+    choices: [{
+      index: 0,
+      delta,
+      finish_reason,
+      logprobs: null
+    }],
+    usage: usage ?? void 0
+  };
+}
+
 // src/domain-store.ts
 var FILE_PATH = "!Wiki/_domain.json";
 var TMP_PATH = `${FILE_PATH}.tmp`;
@@ -36223,13 +36284,14 @@ var WikiController = class {
           new import_obsidian7.Notice(i18n().settings.proxy_invalid(e.message));
         }
       }
-      llm = new OpenAI({
+      const openaiClient = new OpenAI({
         baseURL: s.nativeAgent.baseUrl,
         apiKey: s.nativeAgent.apiKey,
         timeout: maxTimeoutSec * 1e3,
         dangerouslyAllowBrowser: true,
         fetch: import_obsidian7.Platform.isMobile ? mobileFetch : proxyFetch ?? void 0
       });
+      llm = import_obsidian7.Platform.isMobile ? wrapMobileNoStream(openaiClient) : openaiClient;
     }
     return new AgentRunner(llm, s, vaultTools, vaultName, domains);
   }

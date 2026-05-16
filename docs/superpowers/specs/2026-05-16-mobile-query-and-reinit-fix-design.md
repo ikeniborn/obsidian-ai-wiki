@@ -1,6 +1,15 @@
 ---
 state: draft
 date: 2026-05-16
+review:
+  spec_hash: e977842b57acbe29
+  last_run: 2026-05-16
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings: []
 ---
 
 # Mobile query streaming + reinit nested folder — design

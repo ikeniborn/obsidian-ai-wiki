@@ -35,7 +35,7 @@
 - [[reasoning-first-json]] — `документация/паттерны/reasoning-first-json.md`
 - [[structured-output-retry]] — `документация/паттерны/structured-output-retry.md`
 
-#### спецификации (10)
+#### спецификации (11)
 - [[agent-base-contract]] — `документация/спецификации/agent-base-contract.md`
 - [[format-operation-design]] — `документация/спецификации/format-operation-design.md`
 - [[claude-agent-backend-design]] — `документация/спецификации/claude-agent-backend-design.md`
@@ -46,11 +46,13 @@
 - [[reinit-button-design]] — `документация/спецификации/reinit-button-design.md`
 - [[reinit-force-design]] — `документация/спецификации/reinit-force-design.md`
 - [[max-tokens-relocate-design]] — `документация/спецификации/max-tokens-relocate-design.md`
+- [[mobile-domain-selector-design]] — `документация/спецификации/mobile-domain-selector-design.md`
 
-#### планы (6)
+#### планы (7)
 - [[generation-speed-plan]] — `документация/планы/generation-speed-plan.md`
 - [[init-stability-plan]] — `документация/планы/init-stability-plan.md`
 - [[reinit-button-plan]] — `документация/планы/reinit-button-plan.md`
 - [[reinit-force-plan]] — `документация/планы/reinit-force-plan.md`
 - [[structured-output-resilience-plan]] — `документация/планы/structured-output-resilience-plan.md`
 - [[max-tokens-relocate-plan]] — `документация/планы/max-tokens-relocate-plan.md`
+- [[mobile-domain-selector-plan]] — `документация/планы/mobile-domain-selector-plan.md`
