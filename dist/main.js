@@ -18853,6 +18853,8 @@ var DEFAULT_SETTINGS = {
   historyLimit: 20,
   graphDepth: 1,
   hubThreshold: 20,
+  seedTopK: 5,
+  seedMinScore: 0.1,
   timeouts: { ingest: 300, query: 300, lint: 900, init: 3600, format: 600 },
   history: [],
   claudeAgent: {
@@ -18975,6 +18977,10 @@ var en = {
     graphDepth_desc: "Query: hops from seed pages. 0 = seeds only, max sensible: 3.",
     hubThreshold_name: "Hub threshold",
     hubThreshold_desc: "Lint: pages with more outgoing links than this are flagged as hub nodes.",
+    seedTopK_name: "Seed top-K",
+    seedTopK_desc: "Maximum seed pages selected by keyword score (1\u201350).",
+    seedMinScore_name: "Seed min score",
+    seedMinScore_desc: "Minimum Jaccard score for a page to be considered a seed (0.0\u20131.0).",
     structuredRetries_name: "Structured output retries",
     structuredRetries_desc: "Retries on schema validation failure (0-3, default 1). Higher values improve success rate on weaker models at cost of latency/tokens."
   },
@@ -19172,6 +19178,10 @@ var ru = {
     graphDepth_desc: "Query: \u0448\u0430\u0433\u043E\u0432 \u043E\u0442 seed-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. 0 = \u0442\u043E\u043B\u044C\u043A\u043E seeds, \u0440\u0430\u0437\u0443\u043C\u043D\u044B\u0439 \u043C\u0430\u043A\u0441\u0438\u043C\u0443\u043C: 3.",
     hubThreshold_name: "\u041F\u043E\u0440\u043E\u0433 \u0445\u0430\u0431\u0430",
     hubThreshold_desc: "Lint: \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0441 \u0431\u043E\u0301\u043B\u044C\u0448\u0438\u043C \u0447\u0438\u0441\u043B\u043E\u043C \u0438\u0441\u0445\u043E\u0434\u044F\u0449\u0438\u0445 \u0441\u0441\u044B\u043B\u043E\u043A \u043F\u043E\u043C\u0435\u0447\u0430\u044E\u0442\u0441\u044F \u043A\u0430\u043A hub.",
+    seedTopK_name: "Seed top-K",
+    seedTopK_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C seed-\u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043F\u043E keyword-score (1\u201350).",
+    seedMinScore_name: "\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u044B\u0439 score seed",
+    seedMinScore_desc: "\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u044B\u0439 Jaccard score, \u0447\u0442\u043E\u0431\u044B \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 \u043F\u043E\u043F\u0430\u043B\u0430 \u0432 seeds (0.0\u20131.0).",
     structuredRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u043F\u0440\u0438 \u043E\u0448\u0438\u0431\u043A\u0435 \u0441\u0445\u0435\u043C\u044B",
     structuredRetries_desc: "\u0421\u043A\u043E\u043B\u044C\u043A\u043E \u0440\u0430\u0437 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u0432\u044B\u0437\u043E\u0432 LLM \u043F\u0440\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0435 \u043E\u0442\u0432\u0435\u0442\u0430 (0-3, \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 1). \u0412\u044B\u0448\u0435 \u2014 \u043D\u0430\u0434\u0451\u0436\u043D\u0435\u0435 \u043D\u0430 \u0441\u043B\u0430\u0431\u044B\u0445 \u043C\u043E\u0434\u0435\u043B\u044F\u0445, \u0434\u043E\u0440\u043E\u0436\u0435 \u043F\u043E \u0442\u043E\u043A\u0435\u043D\u0430\u043C."
   },
@@ -19369,6 +19379,10 @@ var es = {
     graphDepth_desc: "Query: saltos desde p\xE1ginas semilla. 0 = solo semillas, m\xE1x recomendado: 3.",
     hubThreshold_name: "Umbral de hub",
     hubThreshold_desc: "Lint: p\xE1ginas con m\xE1s enlaces salientes que este valor se marcan como hub.",
+    seedTopK_name: "Top-K semillas",
+    seedTopK_desc: "M\xE1ximo de p\xE1ginas semilla por puntuaci\xF3n de palabras clave (1\u201350).",
+    seedMinScore_name: "Puntuaci\xF3n m\xEDnima semilla",
+    seedMinScore_desc: "Puntuaci\xF3n Jaccard m\xEDnima para considerar una p\xE1gina como semilla (0.0\u20131.0).",
     structuredRetries_name: "Structured output retries",
     structuredRetries_desc: "Retries on schema validation failure (0-3, default 1). Higher values improve success rate on weaker models at cost of latency/tokens."
   },
@@ -20311,6 +20325,24 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         }
       })
     );
+    new import_obsidian3.Setting(containerEl).setName(T.settings.seedTopK_name).setDesc(T.settings.seedTopK_desc).addText(
+      (t) => t.setPlaceholder("5").setValue(String(s.seedTopK)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isInteger(n) && n >= 1 && n <= 50) {
+          s.seedTopK = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName(T.settings.seedMinScore_name).setDesc(T.settings.seedMinScore_desc).addText(
+      (t) => t.setPlaceholder("0.1").setValue(String(s.seedMinScore)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isFinite(n) && n >= 0 && n <= 1) {
+          s.seedMinScore = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
     if (!import_obsidian3.Platform.isMobile) {
       new import_obsidian3.Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
       new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_enabled_name).setDesc(T.settings.devMode_enabled_desc).addToggle(
@@ -20741,6 +20773,16 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       if (this.progressEl) {
         this.progressEl.setText(`${this.progressDone} / ${this.progressTotal} \u0444\u0430\u0439\u043B\u043E\u0432`);
       }
+      this.scrollSteps();
+      return;
+    }
+    if (ev.kind === "graph_stats") {
+      const cacheHint = ev.fromCache ? " (cache hit)" : "";
+      const preview = ev.seeds.slice(0, 3).join(", ");
+      const extra = ev.seeds.length > 3 ? `, \u2026+${ev.seeds.length - 3}` : "";
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      step.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F310}");
+      step.createSpan({ cls: "ai-wiki-step-name" }).setText(`\u0413\u0440\u0430\u0444: ${ev.seeds.length} seeds [${preview}${extra}] \u2192 ${ev.expanded} / ${ev.total} \u0441\u0442\u0440\u0430\u043D\u0438\u0446${cacheHint}`);
       this.scrollSteps();
       return;
     }
@@ -26184,9 +26226,144 @@ function checkGraphStructure(graph, hubThreshold) {
   return issues.join("\n");
 }
 
+// src/wiki-graph-cache.ts
+function hashPages(pages) {
+  const parts = [];
+  const keys = [...pages.keys()].sort();
+  for (const k of keys)
+    parts.push(`${k}:${pages.get(k).length}`);
+  return parts.join("|");
+}
+var GraphCache = class {
+  store = /* @__PURE__ */ new Map();
+  get(domainId, pages) {
+    const hash = hashPages(pages);
+    const hit = this.store.get(domainId);
+    if (hit && hit.hash === hash)
+      return { graph: hit.graph, fromCache: true };
+    const graph = buildWikiGraph(pages);
+    this.store.set(domainId, { hash, graph });
+    return { graph, fromCache: false };
+  }
+  invalidate(domainId) {
+    this.store.delete(domainId);
+  }
+  clear() {
+    this.store.clear();
+  }
+};
+var graphCache = new GraphCache();
+
+// src/wiki-seeds.ts
+var STOP_WORDS = /* @__PURE__ */ new Set([
+  // EN
+  "the",
+  "and",
+  "for",
+  "are",
+  "was",
+  "were",
+  "with",
+  "that",
+  "this",
+  "from",
+  "have",
+  "has",
+  "had",
+  "but",
+  "not",
+  "you",
+  "your",
+  "our",
+  "their",
+  "his",
+  "her",
+  "its",
+  "into",
+  "about",
+  "what",
+  "which",
+  "when",
+  "where",
+  "how",
+  "here",
+  // RU
+  "\u0447\u0442\u043E",
+  "\u043A\u0430\u043A",
+  "\u0434\u043B\u044F",
+  "\u0438\u043B\u0438",
+  "\u044D\u0442\u043E",
+  "\u043F\u0440\u0438",
+  "\u0431\u0435\u0437",
+  "\u0442\u043E\u0442",
+  "\u0435\u0433\u043E",
+  "\u043E\u043D\u0430",
+  "\u043E\u043D\u0438",
+  "\u0431\u044B\u043B",
+  "\u0431\u044B\u043B\u0430",
+  "\u0431\u044B\u0442\u044C",
+  "\u0442\u043E\u0436\u0435",
+  "\u0442\u0430\u043A\u0436\u0435",
+  "\u0435\u0441\u043B\u0438",
+  "\u0442\u043E\u0433\u0434\u0430",
+  "\u043F\u043E\u0442\u043E\u043C",
+  "\u043A\u043E\u0433\u0434\u0430",
+  "\u043E\u0447\u0435\u043D\u044C",
+  "\u0431\u043E\u043B\u0435\u0435",
+  "\u043C\u0435\u043D\u0435\u0435",
+  "\u043D\u0435\u0442",
+  "\u0443\u0436\u0435",
+  "\u0435\u0449\u0451",
+  "\u0435\u0449\u0435"
+]);
+var CONTENT_CAP = 200;
+function tokenize(s) {
+  const out = /* @__PURE__ */ new Set();
+  if (!s)
+    return out;
+  for (const raw of s.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
+    if (raw.length <= 2)
+      continue;
+    if (STOP_WORDS.has(raw))
+      continue;
+    out.add(raw);
+  }
+  return out;
+}
+function scoreSeed(questionTokens, pageIdValue, content) {
+  if (questionTokens.size === 0)
+    return 0;
+  const head = content.slice(0, CONTENT_CAP);
+  const p = tokenize(pageIdValue);
+  for (const t of tokenize(head))
+    p.add(t);
+  if (p.size === 0)
+    return 0;
+  let inter = 0;
+  for (const t of questionTokens)
+    if (p.has(t))
+      inter++;
+  const union = questionTokens.size + p.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+function selectSeeds(question, pages, topK, minScore) {
+  const q = tokenize(question);
+  if (q.size === 0)
+    return [];
+  const scored = [];
+  for (const [path2, content] of pages) {
+    const id = pageId(path2);
+    const score = scoreSeed(q, id, content);
+    if (score >= minScore && score > 0)
+      scored.push({ id, score });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, topK).map((x) => x.id);
+}
+
 // src/phases/query.ts
 var META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
-async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}) {
+async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1) {
   const question = args[0]?.trim();
   if (!question) {
     yield { kind: "error", message: "query: question required" };
@@ -26214,9 +26391,11 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   const pages = await vaultTools.readAll(files);
   const start = Date.now();
   let outputTokens = 0;
-  const graph = buildWikiGraph(pages);
+  const { graph, fromCache } = graphCache.get(domain.id, pages);
   const allPageIds = [...pages.keys()].map(pageId);
-  let seeds = keywordSeeds(question, pages);
+  const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
+  const minScore = Math.max(0, Math.min(1, seedMinScore));
+  let seeds = selectSeeds(question, pages, topK, minScore);
   if (seeds.length === 0) {
     const seedRes = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal);
     seeds = seedRes.seeds;
@@ -26229,6 +26408,7 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   }
   const seedSet = new Set(seeds);
   const selectedIds = bfsExpand(seeds, graph, graphDepth);
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: pages.size, fromCache };
   const contextBlock = buildContextBlock(pages, seedSet, selectedIds);
   const entityTypesBlock = buildEntityTypesBlock2(domain);
   const systemPrompt = render(query_default, {
@@ -26318,19 +26498,6 @@ async function tryRead2(vaultTools, path2) {
   } catch {
     return "";
   }
-}
-function keywordSeeds(question, pages) {
-  const words = question.split(/\W+/).filter((w) => w.length > 3).map((w) => w.toLowerCase());
-  if (words.length === 0)
-    return [];
-  const seeds = [];
-  for (const path2 of pages.keys()) {
-    const id = pageId(path2);
-    if (words.some((w) => id.toLowerCase().includes(w))) {
-      seeds.push(id);
-    }
-  }
-  return seeds;
 }
 async function llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal) {
   const example = JSON.stringify({
@@ -26435,7 +26602,7 @@ Wiki folder outside vault \u2014 skipped.`);
     const files = allFiles.filter((f) => !META_FILES2.some((m) => f.endsWith(m)));
     yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
     const pages = await vaultTools.readAll(files);
-    const graph = buildWikiGraph(pages);
+    const { graph } = graphCache.get(domain.id, pages);
     const structuralIssues = checkStructure(pages);
     const graphIssues = checkGraphStructure(graph, hubThreshold);
     const allIssues = [structuralIssues, graphIssues].filter(Boolean).join("\n");
@@ -27532,7 +27699,7 @@ function escapeRawControlsInStrings(src) {
   }
   return out;
 }
-var STOP_WORDS = /* @__PURE__ */ new Set([
+var STOP_WORDS2 = /* @__PURE__ */ new Set([
   "The",
   "This",
   "That",
@@ -27554,7 +27721,7 @@ function significantTokens(text) {
   for (const m of residual.matchAll(/\b\d+(?:\.\d+)?\b/g))
     out.add(m[0]);
   for (const m of residual.matchAll(/\b[A-Z][A-Za-z0-9-]{2,}/g)) {
-    if (!STOP_WORDS.has(m[0]))
+    if (!STOP_WORDS2.has(m[0]))
       out.add(m[0]);
   }
   for (const m of residual.matchAll(/\b[A-Z]{2,}\b/g))
@@ -27842,10 +28009,10 @@ var AgentRunner = class {
         yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
         break;
       case "query":
-        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts);
+        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore);
         break;
       case "query-save":
-        yield* runQuery(req.args, true, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts);
+        yield* runQuery(req.args, true, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore);
         break;
       case "lint":
         yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, opts);
@@ -36177,6 +36344,14 @@ var WikiController = class {
       this.onBusyChange?.();
       this.currentOp = null;
       this._currentLogMeta = null;
+    }
+    if (status === "done") {
+      const mutatesWiki = op === "ingest" || op === "lint" || op === "query-save" || op === "init";
+      if (mutatesWiki) {
+        const targets = domainId ? [domainId] : (await this.domainStore.load()).map((d) => d.id);
+        for (const id of targets)
+          graphCache.invalidate(id);
+      }
     }
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
     const entry = {

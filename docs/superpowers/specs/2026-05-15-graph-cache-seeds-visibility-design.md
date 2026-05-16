@@ -1,3 +1,22 @@
+---
+review:
+  spec_hash: c79f21787a61abc3
+  last_run: 2026-05-15
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: INFO
+      section: "Out of Scope"
+      text: "Word 'fast' used as adjective without metric in Out-of-Scope rationale."
+      verdict: fixed
+      verdict_at: 2026-05-15
+---
+
 # Graph Cache, Smarter Seeds, Visibility
 
 **Date:** 2026-05-15
@@ -300,7 +319,7 @@ None. Ready for review.
 ## Out of Scope
 
 - Persistent (on-disk) graph cache.
-- Embedding-based seed similarity (would require an embedding model; current keyword approach is deterministic, offline, fast).
+- Embedding-based seed similarity (would require an embedding model and runtime inference; current keyword approach is deterministic, offline, and has O(pages × tokens) cost with no network dependency).
 - Distance-based context trimming (rank expanded pages by hops from seed, drop tail to fit token budget).
 - Graph visualization in the side panel.
 

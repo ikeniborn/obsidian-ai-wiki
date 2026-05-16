@@ -2,7 +2,8 @@
 wiki_status: stub
 wiki_sources:
   - README.md
-wiki_updated: 2026-05-14
+  - CLAUDE.md
+wiki_updated: 2026-05-16
 wiki_domain: документация
 tags: [операция, query, ответ, wikilinks]
 ---
@@ -34,7 +35,15 @@ tags: [операция, query, ответ, wikilinks]
 
 Работает и на desktop, и на mobile (единственная операция, полностью поддерживаемая на мобильных).
 
+## Контекст для LLM
+
+- Перед вызовом LLM фаза `query` обращается к [[wiki-graph-cache]] (`graphCache.get(domain)`) для получения графа страниц домена.
+- Затем вызывает [[wiki-seeds]] (`selectSeeds()`), который выбирает наиболее релевантные seed-страницы по Jaccard-метрике.
+- В RunEvent поток эмитится событие `graph_stats` со статистикой выбранных seed-ов.
+
 ## Связанные страницы
 
 - [[поток-выполнения-операции]]
 - [[wiki-controller]]
+- [[wiki-graph-cache]]
+- [[wiki-seeds]]

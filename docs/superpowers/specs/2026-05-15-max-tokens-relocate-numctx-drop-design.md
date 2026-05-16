@@ -1,3 +1,15 @@
+---
+review:
+  spec_hash: 2b94558aab9d2a75
+  last_run: 2026-05-15
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings: []
+---
+
 # max_tokens перенос + numCtx удаление
 
 Schema v3: `maxTokens` becomes native-only field under `nativeAgent.maxTokens`. Top-level `s.maxTokens` removed. `numCtx` removed entirely (Ollama-specific param ignored by OpenAI-compat route).
