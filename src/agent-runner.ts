@@ -3,6 +3,7 @@ import { runIngest } from "./phases/ingest";
 import { runQuery } from "./phases/query";
 import { runLint } from "./phases/lint";
 import { runLintChat } from "./phases/chat";
+import { runLintFixChat } from "./phases/lint-chat";
 import { runInit } from "./phases/init";
 import { runEvaluator } from "./phases/evaluator";
 import { runFormat } from "./phases/format";
@@ -23,7 +24,7 @@ export class AgentRunner {
   }
 
   private buildOptsFor(op: RunRequest["operation"]): { model: string; opts: LlmCallOptions } {
-    const key = (op === "query-save" ? "query" : op === "chat" ? "lint" : op) as OpKey;
+    const key = (op === "query-save" ? "query" : op === "chat" || op === "lint-chat" ? "lint" : op) as OpKey;
     const s = this.settings;
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
 
@@ -89,6 +90,11 @@ export class AgentRunner {
           req.chatMessages ?? [],
           req.operationHeader ?? "",
         );
+        break;
+      }
+      case "lint-chat": {
+        const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : undefined;
+        yield* runLintFixChat(req, this.vaultTools, vaultRoot, domain, this.llm, model, opts, req.signal);
         break;
       }
       case "init":

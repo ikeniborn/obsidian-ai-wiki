@@ -132,6 +132,31 @@ describe("AgentRunner", () => {
     expect(events[0]).toMatchObject({ kind: "system" });
   });
 
+  it("routes lint-chat to runLintFixChat and yields result", async () => {
+    const vt = new VaultTools(mockAdapter(), "/vault");
+    const runner = new AgentRunner(
+      makeLlm(JSON.stringify({ summary: "fixed", pages: [] })),
+      baseSettings,
+      vt,
+      "TestVault",
+      [],
+    );
+    const events = await collect(
+      runner.run({
+        operation: "lint-chat",
+        args: [],
+        cwd: "/vault",
+        signal: new AbortController().signal,
+        timeoutMs: 5000,
+        domainId: undefined,
+        context: "lint report",
+        chatMessages: [{ role: "user", content: "fix it" }],
+      }),
+    );
+    const result = events.find((e) => e.kind === "result");
+    expect(result).toBeDefined();
+  });
+
   it("emits structural_error + error events when init LLM returns invalid JSON for all retries", async () => {
     const settings: LlmWikiPluginSettings = {
       ...DEFAULT_SETTINGS,
