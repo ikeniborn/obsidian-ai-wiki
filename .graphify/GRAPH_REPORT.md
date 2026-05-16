@@ -1,469 +1,109 @@
-# Graph Report - .  (2026-05-16)
+# Graph Report - src  (2026-05-17)
 
 ## Corpus Check
-- 274 files · ~0 words
+- 9 files · ~0 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1469 nodes · 2617 edges · 136 communities (85 shown, 51 thin omitted)
-- Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 76 edges (avg confidence: 0.82)
+- 173 nodes · 271 edges · 15 communities (7 shown, 8 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 4 edges (avg confidence: 0.78)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
-- [[_COMMUNITY_Init Phase + Tests|Init Phase + Tests]]
-- [[_COMMUNITY_CLI Client + Stream Parser|CLI Client + Stream Parser]]
-- [[_COMMUNITY_Mobile Compat + Controller|Mobile Compat + Controller]]
-- [[_COMMUNITY_Raw Frontmatter + Ingest|Raw Frontmatter + Ingest]]
-- [[_COMMUNITY_AgentRunner Orchestrator|AgentRunner Orchestrator]]
-- [[_COMMUNITY_DSPy Optimizer + Scripts|DSPy Optimizer + Scripts]]
-- [[_COMMUNITY_AgentRunner + Domain Events|AgentRunner + Domain Events]]
-- [[_COMMUNITY_Lint Helpers + Issues|Lint Helpers + Issues]]
-- [[_COMMUNITY_Settings + Integration Tests|Settings + Integration Tests]]
-- [[_COMMUNITY_LlmWikiView UI|LlmWikiView UI]]
-- [[_COMMUNITY_Structured Validation Errors|Structured Validation Errors]]
-- [[_COMMUNITY_Wiki Controller|Wiki Controller]]
-- [[_COMMUNITY_Domain Map  Entity Types Schema|Domain Map / Entity Types Schema]]
-- [[_COMMUNITY_DSPy Optimizer Tests|DSPy Optimizer Tests]]
-- [[_COMMUNITY_Format Utilities|Format Utilities]]
-- [[_COMMUNITY_Init Helpers|Init Helpers]]
-- [[_COMMUNITY_LLM Utils + Chat Params|LLM Utils + Chat Params]]
-- [[_COMMUNITY_Source Paths + Domain Store|Source Paths + Domain Store]]
-- [[_COMMUNITY_Init Message Builders|Init Message Builders]]
-- [[_COMMUNITY_Phase Modules (evaltemplatechatformatingest)|Phase Modules (eval/template/chat/format/ingest)]]
-- [[_COMMUNITY_Lint Tests|Lint Tests]]
-- [[_COMMUNITY_View Modals|View Modals]]
-- [[_COMMUNITY_Vault Tools + Init Thinking|Vault Tools + Init Thinking]]
-- [[_COMMUNITY_Modals + I18n|Modals + I18n]]
-- [[_COMMUNITY_Build Pipeline + Fixtures|Build Pipeline + Fixtures]]
-- [[_COMMUNITY_Main Entry + I18n + Modals|Main Entry + I18n + Modals]]
-- [[_COMMUNITY_Main Migration Tests|Main Migration Tests]]
-- [[_COMMUNITY_Format Tests|Format Tests]]
-- [[_COMMUNITY_Effective Settings + Local Config|Effective Settings + Local Config]]
-- [[_COMMUNITY_Ingest Tests|Ingest Tests]]
-- [[_COMMUNITY_Image Path Extraction|Image Path Extraction]]
-- [[_COMMUNITY_DSPy Backend Adapter|DSPy Backend Adapter]]
-- [[_COMMUNITY_Wiki Graph (BFS Seeds)|Wiki Graph (BFS Seeds)]]
-- [[_COMMUNITY_Domain Store Tests|Domain Store Tests]]
-- [[_COMMUNITY_Settings Tab|Settings Tab]]
-- [[_COMMUNITY_Query Tests|Query Tests]]
-- [[_COMMUNITY_Proxy Module|Proxy Module]]
-- [[_COMMUNITY_DSPy Loader + Optimizer Lib|DSPy Loader + Optimizer Lib]]
-- [[_COMMUNITY_Test Adapter Helpers|Test Adapter Helpers]]
-- [[_COMMUNITY_DSPy README  Docs|DSPy README / Docs]]
-- [[_COMMUNITY_File Error Modal|File Error Modal]]
-- [[_COMMUNITY_Obsidian CLA + BRAT|Obsidian CLA + BRAT]]
-- [[_COMMUNITY_Zod Runtime Schemas|Zod Runtime Schemas]]
-- [[_COMMUNITY_Lint Thinking Tests|Lint Thinking Tests]]
-- [[_COMMUNITY_Proxy Helpers|Proxy Helpers]]
-- [[_COMMUNITY_Controller Mobile Tests|Controller Mobile Tests]]
-- [[_COMMUNITY_Test Helpers (bfslintquery)|Test Helpers (bfs/lint/query)]]
-- [[_COMMUNITY_MIPROv2 Optimization|MIPROv2 Optimization]]
-- [[_COMMUNITY_Controller Format Tests|Controller Format Tests]]
-- [[_COMMUNITY_Legacy JSON Schemas|Legacy JSON Schemas]]
-- [[_COMMUNITY_main-mobile.test.ts|main-mobile.test.ts]]
-- [[_COMMUNITY_raw-frontmatter tests|raw-frontmatter tests]]
-- [[_COMMUNITY_migration.test.ts|migration.test.ts]]
-- [[_COMMUNITY_no-fs-imports.test.ts|no-fs-imports.test.ts]]
-- [[_COMMUNITY_ClaudeCodeLM|ClaudeCodeLM]]
-- [[_COMMUNITY_DomainEntry|DomainEntry]]
-- [[_COMMUNITY_wiki-path.ts|wiki-path.ts]]
-- [[_COMMUNITY_vitest.config.ts|vitest.config.ts]]
-- [[_COMMUNITY_init-args.test.ts|init-args.test.ts]]
-- [[_COMMUNITY_ClaudeCliClient class|ClaudeCliClient class]]
-- [[_COMMUNITY_libbackend.py|lib/backend.py]]
-- [[_COMMUNITY_Obsidian Graph View|Obsidian Graph View]]
-- [[_COMMUNITY_format-migration.test.ts|format-migration.test.ts]]
-- [[_COMMUNITY_domain.test.ts — validateDomainId tests|domain.test.ts — validateDomainId tests]]
-- [[_COMMUNITY_applyDomainEvent|applyDomainEvent]]
-- [[_COMMUNITY_domainWikiFolder|domainWikiFolder]]
-- [[_COMMUNITY_buildProxyUrl|buildProxyUrl]]
-- [[_COMMUNITY_historyLimit|historyLimit]]
-- [[_COMMUNITY_Obsidian Developer Docs|Obsidian Developer Docs]]
-- [[_COMMUNITY_loadFixture|loadFixture]]
-- [[_COMMUNITY_tests for VaultTools (TS)|tests for VaultTools (TS)]]
-- [[_COMMUNITY_format-migration.test.ts — settings migr|format-migration.test.ts — settings migr]]
-- [[_COMMUNITY_effective-settings.test.ts — resolveEffe|effective-settings.test.ts — resolveEffe]]
-- [[_COMMUNITY_mobileFetch function|mobileFetch function]]
-- [[_COMMUNITY_test_writer (write_optimized tests)|test_writer (write_optimized tests)]]
-- [[_COMMUNITY_VaultAdapter|VaultAdapter]]
-- [[_COMMUNITY_EffectiveSettings|EffectiveSettings]]
-- [[_COMMUNITY_resolveEffective|resolveEffective]]
-- [[_COMMUNITY_test_signature (make_signature tests)|test_signature (make_signature tests)]]
-- [[_COMMUNITY_test_loader (load_examples tests)|test_loader (load_examples tests)]]
-- [[_COMMUNITY_vitest.setup.ts|vitest.setup.ts]]
-- [[_COMMUNITY_esbuild.config.mjs|esbuild.config.mjs]]
-- [[_COMMUNITY___init__.py|__init__.py]]
-- [[_COMMUNITY___init__.py|__init__.py]]
-- [[_COMMUNITY_md-modules.d.ts|md-modules.d.ts]]
-- [[_COMMUNITY_AgentRunner integration tests (JS)|AgentRunner integration tests (JS)]]
-- [[_COMMUNITY_tests for parseEvalResponse|tests for parseEvalResponse]]
-- [[_COMMUNITY_runLint (test .js)|runLint (test .js)]]
-- [[_COMMUNITY_runQuery (test .js)|runQuery (test .js)]]
-- [[_COMMUNITY_runInit (test .js)|runInit (test .js)]]
-- [[_COMMUNITY_scriptsdspylib__init__.py|scripts/dspy/lib/__init__.py]]
-- [[_COMMUNITY_scriptsdspytests__init__.py|scripts/dspy/tests/__init__.py]]
-- [[_COMMUNITY_test_optimizer (run_mipro  call_evaluat|test_optimizer (run_mipro / call_evaluat]]
-- [[_COMMUNITY_mobileFetch|mobileFetch]]
-- [[_COMMUNITY_shouldBypass|shouldBypass]]
-- [[_COMMUNITY_parseNoProxy|parseNoProxy]]
-- [[_COMMUNITY_maskProxyUrl|maskProxyUrl]]
-- [[_COMMUNITY_EntityType|EntityType]]
-- [[_COMMUNITY_AddDomainInput|AddDomainInput]]
-- [[_COMMUNITY_validateDomainId|validateDomainId]]
-- [[_COMMUNITY_md-modules.d.ts|md-modules.d.ts]]
-- [[_COMMUNITY_i18n|i18n]]
-- [[_COMMUNITY_DomainCorruptError|DomainCorruptError]]
-- [[_COMMUNITY_format-sample.md (fixture)|format-sample.md (fixture)]]
-- [[_COMMUNITY_scriptsdspyCLAUDE|scripts/dspy/CLAUDE.md]]
-- [[_COMMUNITY_esbuild.config.mjs|esbuild.config.mjs]]
-- [[_COMMUNITY_vitest.setup.ts|vitest.setup.ts]]
-- [[_COMMUNITY_md-modules.d.ts|md-modules.d.ts]]
-- [[_COMMUNITY___init__.py|__init__.py]]
-- [[_COMMUNITY___init__.py|__init__.py]]
-- [[_COMMUNITY_extractStreamDeltas|extractStreamDeltas]]
-- [[_COMMUNITY_DomainEntry|DomainEntry]]
-- [[_COMMUNITY_Community 122|Community 122]]
-- [[_COMMUNITY_Community 124|Community 124]]
-- [[_COMMUNITY_Community 125|Community 125]]
-- [[_COMMUNITY_Community 126|Community 126]]
-- [[_COMMUNITY_Community 132|Community 132]]
-- [[_COMMUNITY_Community 133|Community 133]]
-- [[_COMMUNITY_Community 134|Community 134]]
-- [[_COMMUNITY_Community 135|Community 135]]
+- [[_COMMUNITY_View UI Layer|View UI Layer]]
+- [[_COMMUNITY_Core Plugin Modules|Core Plugin Modules]]
+- [[_COMMUNITY_AgentRunner Operations|AgentRunner Operations]]
+- [[_COMMUNITY_WikiController Methods|WikiController Methods]]
+- [[_COMMUNITY_Zod Schema Definitions|Zod Schema Definitions]]
+- [[_COMMUNITY_AgentRunner Class|AgentRunner Class]]
+- [[_COMMUNITY_Cache & Single-Flight|Cache & Single-Flight]]
+- [[_COMMUNITY_Question Modal|Question Modal]]
+- [[_COMMUNITY_Core Types|Core Types]]
+- [[_COMMUNITY_Format Apply|Format Apply]]
+- [[_COMMUNITY_LLM Call Options|LLM Call Options]]
+- [[_COMMUNITY_View Entry|View Entry]]
+- [[_COMMUNITY_Domain Entry Schema|Domain Entry Schema]]
+- [[_COMMUNITY_Seeds Schema|Seeds Schema]]
+- [[_COMMUNITY_Entity Types Delta|Entity Types Delta]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `VaultTools` - 54 edges
-2. `DomainEntry` - 44 edges
-3. `LlmWikiView` - 35 edges
-4. `WikiController` - 34 edges
-5. `I18n` - 30 edges
-6. `LlmClient` - 26 edges
-7. `VaultAdapter` - 23 edges
-8. `buildChatParams()` - 21 edges
-9. `RunEvent` - 18 edges
-10. `extractUsage()` - 17 edges
+1. `LlmWikiView` - 34 edges
+2. `WikiController` - 28 edges
+3. `AgentRunner` - 8 edges
+4. `WikiController.dispatch` - 7 edges
+5. `RunEvent` - 6 edges
+6. `AgentRunner.run` - 6 edges
+7. `parseWithRetry` - 6 edges
+8. `runLintFixChat` - 6 edges
+9. `registerLinkHandler()` - 5 edges
+10. `WikiController.dispatchChat` - 5 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `prompts/ingest.md` --references--> `runIngest`  [EXTRACTED]
-  prompts/ingest.md → src/phases/ingest.ts
-- `requestUrl()` --calls--> `mobileFetch()`  [INFERRED]
-  vitest.mock.ts → src/mobile-fetch.ts
-- `DSPy Prompt Optimizer README` --references--> `Evaluator Prompt Template`  [EXTRACTED]
-  scripts/dspy/README.md → prompts/evaluator.md
-- `query.test` --references--> `bfsExpand`  [INFERRED]
-  tests/phases/query.test.ts → src/wiki-graph.ts
-- `lint.test` --references--> `checkGraphStructure`  [INFERRED]
-  tests/phases/lint.test.ts → src/wiki-graph.ts
+- `LintChatSchema (Zod)` --conceptually_related_to--> `lint-chat prompt template`  [INFERRED]
+  src/phases/zod-schemas.ts → prompts/lint-chat.md
+- `runLintFixChat` --references--> `lint-chat prompt template`  [EXTRACTED]
+  src/phases/lint-chat.ts → prompts/lint-chat.md
+- `lint-chat prompt template` --semantically_similar_to--> `lint prompt template`  [INFERRED] [semantically similar]
+  prompts/lint-chat.md → prompts/lint.md
+- `WikiController` --shares_data_with--> `RunHistoryEntry`  [EXTRACTED]
+  src/controller.ts → src/types.ts
+- `WikiController.dispatch` --calls--> `LlmWikiView.setRunning`  [EXTRACTED]
+  src/controller.ts → src/view.ts
 
 ## Hyperedges (group relationships)
-- **Domain CRUD Operations — applyDomainEvent, DomainStore, validateDomainId** — apply_domain_event, domain_store, validate_domain_id [INFERRED 0.85]
-- **ClaudeCliClient Large Payload Handling — tmpWrite, tmpRemove, large_payload_file_strategy** — claude_cli_client, large_payload_file_strategy, session_resume_strategy [INFERRED 0.85]
-- **Parallel JS/TS test duplication across all phases** — phases_ingest_js_runingest, phases_ingest_ts_runingest, phases_init_js_runinit, phases_init_ts_runinit [INFERRED 0.85]
-- **DSPy optimization pipeline: loader → optimizer → writer** — loader_load_examples, optimizer_run_mipro, optimize_main [EXTRACTED 1.00]
-- **Settings Resolution Chain** — local_config_localconfigstore, effective_settings_resolveeffective, effective_settings_effectivesettings [EXTRACTED 1.00]
-- **Domain persist event flow** — types_runevent, domain_applyevent, domain_store_class, view_llmwikiview [INFERRED 0.85]
-- **DSPy MIPROv2 optimization pipeline: dev.jsonl → loader → optimizer → writer** — dspy_dev_jsonl, dspy_load_examples, dspy_run_mipro, dspy_write_optimized, dspy_optimize_py [EXTRACTED 1.00]
-- **Backend selection: DSPY_BACKEND env selects between Ollama and ClaudeCodeLM via make_lm** — dspy_dspy_backend_env, dspy_make_lm, dspy_claudecodelm [EXTRACTED 1.00]
-- **Placeholder preservation: template syntax + restore_placeholders survive MIPROv2 rewriting** — dspy_placeholder_syntax, dspy_restore_placeholders, dspy_miprov2 [EXTRACTED 1.00]
-- **DSPy optimization pipeline: evaluator prompt + operation prompts + dev log form closed feedback loop** — dspy_readme, prompt_evaluator, prompt_ingest, prompt_ingest_optimized, concept_dspy_miprov2 [EXTRACTED 0.95]
+- **Controller → AgentRunner → View event streaming loop** — controller_dispatch, agent_runner_run, view_appendevent [EXTRACTED 1.00]
+- **lint-chat fix pipeline: runLintFixChat → parseWithRetry → LintChatSchema** — lint_chat_runlintfixchat, parse_retry_parsewithretry, zod_schemas_lintchatschema [EXTRACTED 1.00]
+- **Structured output retry pattern: parseWithRetry + Zod schemas + structural_error RunEvent** — parse_retry_parsewithretry, zod_schemas_domainentryschema, types_runevent [INFERRED 0.85]
 
-## Communities (136 total, 51 thin omitted)
+## Communities (15 total, 8 thin omitted)
 
-### Community 0 - "Init Phase + Tests"
-Cohesion: 0.05
-Nodes (19): toVaultPath(), WikiController, I18n, buildProxyUrl(), createProxyDispatcher(), createProxyFetch(), maskProxyUrl(), parseNoProxy() (+11 more)
-
-### Community 1 - "CLI Client + Stream Parser"
-Cohesion: 0.05
-Nodes (52): allPageIds, buildContextBlock(), contextBlock, entityTypesBlock, files, graph, { graph, fromCache }, keywordSeeds() (+44 more)
-
-### Community 2 - "Mobile Compat + Controller"
-Cohesion: 0.06
-Nodes (59): mergeEntityTypes(), ac, adapter, bootstrapDomainJson, bootstrapJson, bootstrapUpdate, clearEvent, collect() (+51 more)
-
-### Community 3 - "Raw Frontmatter + Ingest"
+### Community 0 - "View UI Layer"
 Cohesion: 0.08
-Nodes (38): ClaudeCliClient, ClaudeCliConfig, isRecord(), mapAssistant(), mapResult(), mapUserToolResult(), parseStreamLine(), truncate() (+30 more)
+Nodes (6): LlmWikiView, registerLinkHandler(), sanitizeLinks(), summariseInput(), translateSystemEvent(), truncate()
 
-### Community 4 - "AgentRunner Orchestrator"
-Cohesion: 0.06
-Nodes (30): AbstractInputSuggest, activeDocument, App, __clearNotices(), __clearRequestUrlCalls(), createMockAdapter(), ItemView, makeEl() (+22 more)
-
-### Community 5 - "DSPy Optimizer + Scripts"
-Cohesion: 0.07
-Nodes (42): absWiki, appendLog(), backlinkToday, buildEntityTypesBlock(), buildIngestMessages(), buildIngestSummary(), detectDomain(), domain (+34 more)
-
-### Community 6 - "AgentRunner + Domain Events"
-Cohesion: 0.05
-Nodes (47): Что умеет, 1. Требования, Команды, Справочник настроек, Общие (оба бэкенда), Синхронизация, 1. Install Ollama, 1. Установите Ollama (+39 more)
-
-### Community 7 - "Lint Helpers + Issues"
+### Community 1 - "Core Plugin Modules"
 Cohesion: 0.1
-Nodes (38): baseParams, extractImagePaths(), lastSlash, messages, missing1, missing2, missingFinal, parsed (+30 more)
+Nodes (30): files, messages, META_FILES, pagesBlock, start, systemContent, wikiVaultPath, CallSite (+22 more)
 
-### Community 8 - "Settings + Integration Tests"
-Cohesion: 0.11
-Nodes (19): _get(), main(), load_examples(), Читает JSONL-лог dev-режима, возвращает dict operation → list[entry].     Отфиль, write_optimized(), LocalConfigStore, adapter, makePlugin() (+11 more)
-
-### Community 9 - "LlmWikiView UI"
-Cohesion: 0.06
-Nodes (29): absWiki, allIssues, backlinks, { content, outputTokens: tok }, diffReport, entityTypesBlock, existingArticles, files (+21 more)
-
-### Community 10 - "Structured Validation Errors"
+### Community 2 - "AgentRunner Operations"
 Cohesion: 0.08
-Nodes (29): ClaudeCodeLM: DSPy-compatible adapter for Claude CLI, DSPy MIPROv2: automated prompt optimization via Optuna, Prompt placeholder syntax: {{variable}} for runtime template substitution, DSPy Prompt Optimizer README, Компоненты, Тесты, Быстрый старт, Бэкенды (+21 more)
+Nodes (32): AgentRunner.buildOptsFor, AgentRunner.run, AgentRunner.runOperation, AgentRunner.writeDevLog, WikiController.buildAgentRunner, WikiController.dispatch, WikiController.dispatchChat, WikiController.format (+24 more)
 
-### Community 11 - "Wiki Controller"
-Cohesion: 0.07
-Nodes (20): StructuredValidationError, ac, baseArgs, calls, ev, events, fail, fb (+12 more)
-
-### Community 12 - "Domain Map / Entity Types Schema"
-Cohesion: 0.07
-Nodes (28): AgentRunner class, agent-runner.integration.test.ts — AgentRunner integration tests, applyDomainEvent function, apply-domain-event.test.ts — applyDomainEvent tests, Backlinks frontmatter (wiki_added, wiki_updated, wiki_articles) written to raw source after ingest, controller-build-fail.test.ts — buildAgentRunner failure notice test, controller-log-adapter.test.ts — vault adapter logEvent tests, detectDomain function (+20 more)
-
-### Community 13 - "DSPy Optimizer Tests"
-Cohesion: 0.1
-Nodes (9): AddDomainModal, attachFolderDropdown(), EditDomainModal, FileErrorModal, domain, m, makeFileErrorModal(), makeModal() (+1 more)
-
-### Community 14 - "Format Utilities"
-Cohesion: 0.08
-Nodes (23): alreadyAnalyzed, appendLog(), collected, delta, dryRun, existing, existingDomain, force (+15 more)
-
-### Community 15 - "Init Helpers"
-Cohesion: 0.1
-Nodes (28): domain-map.json record schema, entity_types definition, entity_types, incremental entity_types update pattern, language_notes, init-incremental.md prompt, entity_types incremental update rule, wiki knowledge base analyst role (+20 more)
-
-### Community 16 - "LLM Utils + Chat Params"
-Cohesion: 0.2
-Nodes (22): actualizeDomainConfig(), buildChatParams(), extractStreamDeltas(), extractUsage(), hasContentDelta(), injectSystemPrompt(), isJsonModeError(), JSON_MODE_KEYWORDS (+14 more)
-
-### Community 17 - "Source Paths + Domain Store"
-Cohesion: 0.16
-Nodes (16): call_evaluator(), restore_placeholders(), run_mipro(), make_signature(), MockLM, test_call_evaluator_clamps_score(), test_call_evaluator_parses_score(), test_call_evaluator_renders_template_vars() (+8 more)
-
-### Community 18 - "Init Message Builders"
-Cohesion: 0.1
-Nodes (7): AddDomainInput, EntityType, BusyCloseModal, ConfirmModal, DomainModal, FolderInputSuggest, QueryModal
-
-### Community 19 - "Phase Modules (eval/template/chat/format/ingest)"
-Cohesion: 0.15
-Nodes (21): adapter, collect(), configJson, createMock, dom, domain, domainA, domainB (+13 more)
-
-### Community 20 - "Lint Tests"
+### Community 3 - "WikiController Methods"
 Cohesion: 0.14
-Nodes (9): applyDomainEvent(), DomainPersistEvent, migrateDomainsV2(), validateDomainId(), consolidateSourcePaths(), base, input, result (+1 more)
+Nodes (3): patchWikiFields(), toVaultPath(), WikiController
 
-### Community 21 - "View Modals"
-Cohesion: 0.08
-Nodes (22): Поток выполнения, Ключевые файлы, Ключевые файлы, Управление процессом, Управление процессом, Версионирование, Версионирование, Architecture (+14 more)
-
-### Community 22 - "Vault Tools + Init Thinking"
-Cohesion: 0.19
-Nodes (15): DomainEntry, ChatMessage, ClaudeOperationConfig, DEFAULT_SETTINGS, LlmCallOptions, LlmWikiPluginSettings, NativeOperationConfig, OnFileError (+7 more)
-
-### Community 23 - "Modals + I18n"
-Cohesion: 0.13
-Nodes (14): EffectiveSettings, resolveEffective(), en, es, locales, ru, DEFAULTS, LocalConfig (+6 more)
-
-### Community 24 - "Build Pipeline + Fixtures"
-Cohesion: 0.12
-Nodes (22): AgentRunner, ClaudeCliClient, esbuild.config.mjs, tests/fixtures/stream-ingest.jsonl, iclaude.sh, LlmWikiView, main.ts, tests/fixtures/mock-iclaude.sh (+14 more)
-
-### Community 25 - "Main Entry + I18n + Modals"
-Cohesion: 0.14
-Nodes (5): makeLlmNonStreaming(), mockAdapter(), VaultAdapter, VaultTools, mockAdapter()
-
-### Community 26 - "Main Migration Tests"
-Cohesion: 0.19
-Nodes (18): adapter, blocks, callArgs, collect(), create, ctrl, history, json (+10 more)
-
-### Community 27 - "Format Tests"
-Cohesion: 0.17
-Nodes (14): adapter, baseSettings, collect(), ctrl, err, json, llm, makeLlm() (+6 more)
-
-### Community 28 - "Effective Settings + Local Config"
-Cohesion: 0.12
-Nodes (13): LlmWikiPlugin, migrateLegacyData(), migrateToLocalV1(), adapter, dms, existing, lcs, local (+5 more)
-
-### Community 29 - "Ingest Tests"
-Cohesion: 0.12
-Nodes (12): adapter, adapterWithSourceFiles(), created, existing, files, firstUpdate, initStart, llm (+4 more)
-
-### Community 30 - "Image Path Extraction"
-Cohesion: 0.23
-Nodes (13): adapter, collect(), domain, domainWithoutPath, ev, failEvent, llmResponse, makeLlm() (+5 more)
-
-### Community 31 - "DSPy Backend Adapter"
-Cohesion: 0.21
-Nodes (10): ClaudeCodeLM, make_lm(), DSPy-совместимый LM через claude CLI. Не требует API-ключа., Создаёт LM-объект по DSPY_BACKEND из env. Вызывается после load_dotenv()., test_call_with_messages(), test_call_with_prompt_string(), test_flatten_combines_messages(), test_make_lm_claude_code() (+2 more)
-
-### Community 32 - "Wiki Graph (BFS Seeds)"
-Cohesion: 0.13
-Nodes (16): analyzed_sources_v2 marker + one-time migration, Per-file sequential init pipeline (analyze+ingest), migrateDomainsV2 (analyzed_sources_v2 marker), DomainStore (atomic load/save with migration), runFormat, buildEntityTypesBlock (ingest path templates), detectDomain, parseJsonPages (+8 more)
-
-### Community 33 - "Domain Store Tests"
-Cohesion: 0.23
-Nodes (8): DomainCorruptError, DomainStore, adapter, calls, makeVault(), sampleDomain, store, stored
-
-### Community 34 - "Settings Tab"
-Cohesion: 0.26
-Nodes (11): adapter, collect(), createMock, domain, llm, makeLlm(), mockAdapter(), result (+3 more)
-
-### Community 35 - "Query Tests"
-Cohesion: 0.22
-Nodes (6): EvalResult, messages, params, parseEvalResponse(), userContent, render()
-
-### Community 36 - "Proxy Module"
-Cohesion: 0.23
-Nodes (12): build(), DOMAIN, domain2, invalidateSpy, makeApp(), makeDomainStore(), makeLocalConfigStore(), makePlugin() (+4 more)
-
-### Community 37 - "DSPy Loader + Optimizer Lib"
-Cohesion: 0.18
-Nodes (7): wrapMobileNoStream(), LlmClient, callArgs, completion, createMock, inner, wrapped
-
-### Community 38 - "Test Adapter Helpers"
-Cohesion: 0.18
-Nodes (12): dev.jsonl (JSONL dev log), load_examples(), lib/loader.py, make_signature(), MIPROv2, optimize.py (CLI entry point), lib/optimizer.py, {{placeholder}} template syntax (+4 more)
-
-### Community 39 - "DSPy README / Docs"
-Cohesion: 0.18
-Nodes (9): ctx, domain, events, { llm, getCapturedMessages }, makeAdapterWithPages(), mockAdapter(), noisePages, pages (+1 more)
-
-### Community 40 - "File Error Modal"
-Cohesion: 0.17
-Nodes (10): Architecture, ClaudeCodeLM, code:bash (make sync          # uv sync — install/update dependencies), code:bash (uv run optimize.py \), code:block3 (dev.jsonl → loader.py → optimizer.py (MIPROv2 + LLM evaluato), code:json ({"operation": "ingest", "userMessage": "...", "result": "...), code:block5 (claude -- --print --dangerously-skip-permissions --model {mo), Commands (+2 more)
-
-### Community 41 - "Obsidian CLA + BRAT"
-Cohesion: 0.17
-Nodes (8): adapter, domain, events, llm, updates, VALID_PATCH_JSON, vt, withTypes
-
-### Community 42 - "Zod Runtime Schemas"
-Cohesion: 0.24
-Nodes (8): DomainEntryResponse, DomainEntrySchema, EntityTypeSchema, EntityTypesDeltaResponse, EntityTypesDeltaSchema, SeedsResponse, SeedsSchema, r
-
-### Community 43 - "Lint Thinking Tests"
-Cohesion: 0.24
-Nodes (11): Dynalist, Inc. (Obsidian), BRAT Plugin (Beta Reviewer's Auto-update Tool), Obsidian Contributor License Agreement, CLA Copyright License Grant, CLA Patent License Grant, community-css-theme.json, Community Plugin Submission Process, community-plugins.json (+3 more)
-
-### Community 44 - "Proxy Helpers"
+### Community 4 - "Zod Schema Definitions"
 Cohesion: 0.2
-Nodes (9): Структура, Таблицы, Изображения, Код, Стиль, Жёсткие запреты, Format Schema (правила форматирования не-wiki страниц), Frontmatter (+1 more)
+Nodes (9): DomainEntryResponse, DomainEntrySchema, EntityTypeSchema, EntityTypesDeltaResponse, EntityTypesDeltaSchema, LintChatResponse, LintChatSchema, SeedsResponse (+1 more)
 
-### Community 46 - "Test Helpers (bfs/lint/query)"
-Cohesion: 0.22
-Nodes (8): Язык и стиль, Именование файлов и папок, Структура страницы (обязательный порядок), Опциональные разделы, Контент, Frontmatter, Wiki Schema, WikiLinks
+### Community 6 - "Cache & Single-Flight"
+Cohesion: 0.33
+Nodes (6): AgentRunner, WikiController cache invalidation on mutating ops, WikiController single-flight guard, WikiController, LlmClient (interface), LlmWikiPluginSettings
 
-### Community 47 - "MIPROv2 Optimization"
-Cohesion: 0.22
-Nodes (8): About this repo, Announcing the First Public Release of your Plugin/Theme, Community Plugin, Community Plugins format, Community Theme, How community plugins are pulled, Policies, Submit your plugin or theme
-
-### Community 48 - "Controller Format Tests"
-Cohesion: 0.25
-Nodes (9): buildProxyUrl function, createProxyDispatcher function, createProxyFetch function, maskProxyUrl function, Mobile compatibility guard (no top-level node:* imports), no-fs-imports.test.ts — mobile hot path guard, parseNoProxy function, proxy.test.ts — proxy utility function tests (+1 more)
-
-### Community 49 - "Legacy JSON Schemas"
-Cohesion: 0.46
-Nodes (6): buildSpy, ctrl, makeApp(), makeLocalConfigStore(), makePlugin(), plugin
-
-### Community 50 - "main-mobile.test.ts"
-Cohesion: 0.32
-Nodes (8): lint.test, query.test, wiki-graph.test, bfsExpand, buildWikiGraph, checkGraphStructure, pageId, WikiGraph
-
-### Community 51 - "raw-frontmatter tests"
-Cohesion: 0.29
-Nodes (8): MIPROv2 prompt optimization pattern, load_examples, optimize.py main(), call_evaluator, restore_placeholders, run_mipro, make_signature, WikiOperation (DSPy Signature)
-
-### Community 52 - "migration.test.ts"
+### Community 8 - "Core Types"
 Cohesion: 0.67
-Nodes (5): build(), makeApp(), makeDomainStore(), makeLocalConfigStore(), makePlugin()
-
-### Community 54 - "ClaudeCodeLM"
-Cohesion: 0.29
-Nodes (7): DOMAIN_ENTRY_SCHEMA, DomainEntryResponse, ENTITY_TYPES_DELTA_SCHEMA, EntityTypesDeltaResponse, SEEDS_SCHEMA, SeedsResponse, StructuredOutputSchema
-
-### Community 55 - "DomainEntry"
-Cohesion: 0.6
-Nodes (4): makePlugin(), plugin, { plugin, registered }, setupPlugin()
-
-### Community 56 - "wiki-path.ts"
-Cohesion: 0.53
-Nodes (4): lines, MOBILE_HOT_PATH_FILES, offending, src
-
-### Community 57 - "vitest.config.ts"
-Cohesion: 0.47
-Nodes (4): migrateDomainWikiFolder(), changed, domains, makeDomain()
-
-### Community 58 - "init-args.test.ts"
-Cohesion: 0.53
-Nodes (6): raw-frontmatter tests, hasFrontmatterField(), parseWikiArticlesFromFm(), parseWikiSourcesFromFm(), raw-frontmatter utility, upsertRawFrontmatter()
-
-### Community 59 - "ClaudeCliClient class"
-Cohesion: 0.5
-Nodes (5): ClaudeCodeLM, dspy.BaseLM, make_lm(), DSPY_BACKEND env var, test_backend (ClaudeCodeLM / make_lm tests)
-
-### Community 63 - "domain.test.ts — validateDomainId tests"
-Cohesion: 0.5
-Nodes (3): Достоверность, Минимализм, Формат
-
-### Community 64 - "applyDomainEvent"
-Cohesion: 0.5
-Nodes (4): ClaudeCliClient class, claude-cli-client.test.ts — ClaudeCliClient streaming/spawn tests, Large payload file strategy (>256KB uses tmp files), Session resume strategy (--resume flag, skip --system-prompt)
-
-### Community 65 - "domainWikiFolder"
-Cohesion: 0.5
-Nodes (4): lib/backend.py, ClaudeCodeLM, DSPY_BACKEND env var, make_lm()
-
-### Community 66 - "buildProxyUrl"
-Cohesion: 0.83
-Nodes (4): Obsidian Graph View, Obsidian October 2021 Event, Obsidian Graph View UI — Dark Theme Screenshot, Obsidian Graph View UI — Light Theme Screenshot
-
-### Community 68 - "Obsidian Developer Docs"
-Cohesion: 0.67
-Nodes (3): DomainEntry, DomainStore, runLintChat
-
-### Community 69 - "loadFixture"
-Cohesion: 1.0
-Nodes (3): domain.test.ts — validateDomainId tests, domain.test.js — JS duplicate of validateDomainId tests, validateDomainId function
-
-### Community 71 - "format-migration.test.ts — settings migr"
-Cohesion: 0.67
-Nodes (3): domainWikiFolder, domainWikiFolder (test), WIKI_ROOT constant (!Wiki)
-
-### Community 72 - "effective-settings.test.ts — resolveEffe"
-Cohesion: 0.67
-Nodes (3): buildProxyUrl, createProxyDispatcher, createProxyFetch
-
-### Community 73 - "mobileFetch function"
-Cohesion: 0.67
-Nodes (3): applyDomainEvent, consolidateSourcePaths, consolidateSourcePaths (test)
-
-### Community 74 - "test_writer (write_optimized tests)"
-Cohesion: 0.67
-Nodes (3): historyLimit, settings.ts, tests/settings.test.ts
-
-### Community 75 - "VaultAdapter"
-Cohesion: 0.67
-Nodes (3): Obsidian Developer Docs, Plugin Guidelines (docs.obsidian.md), Plugin Review Guidelines
+Nodes (3): ChatMessage, RunRequest, WikiOperation (union type)
 
 ## Knowledge Gaps
-- **433 isolated node(s):** `calls`, `unsub`, `internal`, `sampleDomain`, `vaultFiles` (+428 more)
+- **47 isolated node(s):** `WikiDomain`, `OpMap`, `ClaudeOperationConfig`, `NativeOperationConfig`, `DEFAULT_SETTINGS` (+42 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **51 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **8 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `LocalConfigStore` connect `Settings + Integration Tests` to `Vault Tools + Init Thinking`, `Modals + I18n`?**
-  _High betweenness centrality (0.091) - this node is a cross-community bridge._
-- **Why does `main()` connect `Settings + Integration Tests` to `Source Paths + Domain Store`, `DSPy Backend Adapter`?**
-  _High betweenness centrality (0.083) - this node is a cross-community bridge._
-- **Why does `DomainEntry` connect `Vault Tools + Init Thinking` to `CLI Client + Stream Parser`, `Mobile Compat + Controller`, `DSPy Optimizer + Scripts`, `LlmWikiView UI`, `DSPy Optimizer Tests`, `Format Utilities`, `Init Message Builders`, `Phase Modules (eval/template/chat/format/ingest)`, `Lint Tests`, `Modals + I18n`, `Effective Settings + Local Config`, `Ingest Tests`, `Image Path Extraction`, `Domain Store Tests`, `Settings Tab`, `Proxy Module`, `DSPy README / Docs`, `Obsidian CLA + BRAT`, `migration.test.ts`, `vitest.config.ts`?**
-  _High betweenness centrality (0.060) - this node is a cross-community bridge._
-- **What connects `calls`, `unsub`, `internal` to the rest of the system?**
-  _433 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Init Phase + Tests` be split into smaller, more focused modules?**
-  _Cohesion score 0.05 - nodes in this community are weakly interconnected._
-- **Should `CLI Client + Stream Parser` be split into smaller, more focused modules?**
-  _Cohesion score 0.05 - nodes in this community are weakly interconnected._
-- **Should `Mobile Compat + Controller` be split into smaller, more focused modules?**
-  _Cohesion score 0.06 - nodes in this community are weakly interconnected._
+- **Why does `LlmWikiView` connect `View UI Layer` to `Core Plugin Modules`?**
+  _High betweenness centrality (0.224) - this node is a cross-community bridge._
+- **Why does `WikiController` connect `WikiController Methods` to `Core Plugin Modules`?**
+  _High betweenness centrality (0.128) - this node is a cross-community bridge._
+- **Why does `AgentRunner` connect `AgentRunner Class` to `Core Plugin Modules`?**
+  _High betweenness centrality (0.049) - this node is a cross-community bridge._
+- **What connects `WikiDomain`, `OpMap`, `ClaudeOperationConfig` to the rest of the system?**
+  _47 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `View UI Layer` be split into smaller, more focused modules?**
+  _Cohesion score 0.08 - nodes in this community are weakly interconnected._
+- **Should `Core Plugin Modules` be split into smaller, more focused modules?**
+  _Cohesion score 0.1 - nodes in this community are weakly interconnected._
+- **Should `AgentRunner Operations` be split into smaller, more focused modules?**
+  _Cohesion score 0.08 - nodes in this community are weakly interconnected._
