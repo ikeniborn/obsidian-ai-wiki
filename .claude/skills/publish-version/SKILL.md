@@ -172,9 +172,10 @@ CI (`ci: auto-release on manifest version bump`) подхватывает изм
 
 ```
 Версия: X.Y.OLD → X.Y.NEW
-Файлы: package.json, src/manifest.json, main.js
-Коммит: chore: bump version to X.Y.NEW, build
-CI: авторелиз запущен (manifest version bump)
+Changelog: <N> изменений согласовано
+Файлы: package.json, src/manifest.json, main.js, CHANGELOG.md
+Коммит: chore(release): X.Y.NEW — <summary>
+CI: авторелиз запущен
 ```
 
 ## Частые ошибки
@@ -187,3 +188,6 @@ CI: авторелиз запущен (manifest version bump)
 | Изменил `minAppVersion` | Не трогать — только при явном использовании нового Obsidian API |
 | Тесты падали, но продолжил | Релиз с багами — исправить тесты сначала |
 | Minor/major через этот навык | Только patch; minor/major — вручную |
+| Нет коммитов feat/fix/refactor/perf | Навык предупредит и спросит о продолжении |
+| Не дождался подтверждения changelog | Шаг 0c требует явного «ок» перед шагом 1 |
+| Не включил CHANGELOG.md в коммит | Шесть файлов: добавить CHANGELOG.md в `git add` |
