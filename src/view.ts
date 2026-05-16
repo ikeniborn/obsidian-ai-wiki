@@ -650,7 +650,7 @@ export class LlmWikiView extends ItemView {
       this.resultOpen = true;
       this.resultToggle.setText("▼");
 
-      const CHAT_OPS: WikiOperation[] = ["lint", "ingest", "query", "query-save"];
+      const CHAT_OPS: WikiOperation[] = ["lint", "lint-chat", "ingest", "query", "query-save"];
       if (CHAT_OPS.includes(entry.operation) && entry.status === "done" && entry.finalText) {
         this.lastContext = {
           operation: entry.operation,
@@ -687,13 +687,23 @@ export class LlmWikiView extends ItemView {
       this.chatInputEl!.value = "";
       this.addChatBubble("user", text);
       this.lastUserMessage = text;
-      void this.plugin.controller.chat(
-        this.lastContext.operation,
-        this.lastContext.domainId,
-        this.lastContext.report,
-        this.chatHistory,
-        text,
-      );
+      const ctx = this.lastContext;
+      if (ctx.operation === "lint" || ctx.operation === "lint-chat") {
+        void this.plugin.controller.lintApplyFromChat(
+          ctx.domainId,
+          ctx.report,
+          this.chatHistory,
+          text,
+        );
+      } else {
+        void this.plugin.controller.chat(
+          ctx.operation,
+          ctx.domainId,
+          ctx.report,
+          this.chatHistory,
+          text,
+        );
+      }
     };
     this.chatSendBtn.addEventListener("click", submit);
   }
