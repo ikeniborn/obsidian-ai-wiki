@@ -1,3 +1,15 @@
+---
+review:
+  spec_hash: 48169eb70ab7cc05
+  last_run: 2026-05-16
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings: []
+---
+
 # Mobile domain selector — design
 
 ## Problem
@@ -96,6 +108,7 @@ if (!isMobile) {
 - `refreshDomains` уже идемпотентен и guard'ит `if (!this.domainSelect) return` — работает на обеих ветках.
 - `setRunning`, `onTimerTick`, прочие методы обращаются к `reinitBtn`/`ingestBtn`/`lintBtn`/`formatBtn` через `if (...)`; на mobile они `null` → no-op.
 - `openAddDomain` / `runReinit` доступны только через desktop-кнопки → не вызываются на mobile.
+- `finish()` присваивает `.disabled = false` для `initBtn`/`ingestBtn`/`lintBtn`/`formatBtn` без guard'а. На mobile эти поля `undefined` → TypeError при завершении query. Добавить `if (this.xxxBtn)` guard перед каждым присваиванием (зеркалит стиль `setRunning` lines 329-333).
 
 ## i18n
 
