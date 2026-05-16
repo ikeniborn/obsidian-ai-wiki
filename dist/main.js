@@ -18991,6 +18991,7 @@ var en = {
     addDomain: "Add domain",
     sectionCreate: "Create",
     sectionDomain: "Fill / Maintain",
+    sectionDomainMobile: "Domain",
     sectionQuery: "Query",
     ingest: "Ingest",
     lint: "Lint",
@@ -19192,6 +19193,7 @@ var ru = {
     addDomain: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D",
     sectionCreate: "\u0421\u043E\u0437\u0434\u0430\u043D\u0438\u0435",
     sectionDomain: "\u041D\u0430\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u0435 / \u0410\u043A\u0442\u0443\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F",
+    sectionDomainMobile: "\u0414\u043E\u043C\u0435\u043D",
     sectionQuery: "\u0417\u0430\u043F\u0440\u043E\u0441",
     ingest: "Ingest",
     lint: "Lint",
@@ -19393,6 +19395,7 @@ var es = {
     addDomain: "A\xF1adir dominio",
     sectionCreate: "Crear",
     sectionDomain: "Rellenar / Mantener",
+    sectionDomainMobile: "Dominio",
     sectionQuery: "Consulta",
     ingest: "Ingest",
     lint: "Lint",
@@ -20467,48 +20470,10 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.initBtn = createRow.createEl("button", { text: T.view.init, cls: "ai-wiki-init-btn" });
       this.initBtn.addEventListener("click", () => this.openAddDomain());
       root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionDomain });
-      const domainBox = root.createDiv("ai-wiki-domain");
-      const domainRow = domainBox.createDiv("ai-wiki-domain-row");
-      domainRow.createSpan({ cls: "muted", text: "Domain:" });
-      this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
-      const refreshBtn = domainRow.createEl("button", { text: "\u21BB", attr: { title: T.view.refreshTitle } });
-      refreshBtn.addEventListener("click", () => void this.refreshDomains());
-      this.reinitBtn = domainRow.createEl("button", {
-        attr: { title: T.view.reinitTitle }
-      });
-      (0, import_obsidian4.setIcon)(this.reinitBtn, "recycle");
-      this.reinitBtn.disabled = true;
-      this.reinitBtn.addEventListener("click", () => void this.runReinit());
-      this.domainSelect.addEventListener("change", () => {
-        if (this.reinitBtn)
-          this.reinitBtn.disabled = !this.domainSelect.value;
-      });
-      const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
-      this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
-      this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
-      this.formatBtn = actionRow.createEl("button", { text: T.view.format });
-      this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
-      this.ingestBtn.addEventListener("click", () => {
-        const file = this.plugin.app.workspace.getActiveFile();
-        if (!file) {
-          new import_obsidian4.Notice(i18n().view.noActiveFile);
-          return;
-        }
-        const domainId = this.domainSelect.value || void 0;
-        new ConfirmModal(this.plugin.app, "Ingest \u2014 confirm", [
-          `File: ${file.name}`,
-          "Claude will read the file, extract entities and update domain wiki pages."
-        ], () => void this.plugin.controller.ingestActive(domainId)).open();
-      });
-      this.lintBtn.addEventListener("click", () => {
-        const d = this.domainSelect.value;
-        const domainLabel = d ? `\xAB${d}\xBB` : "all wiki";
-        new ConfirmModal(this.plugin.app, "Lint \u2014 confirm", [
-          `Domain: ${domainLabel}`,
-          "Claude will check wiki pages for quality and update entity_types."
-        ], () => void this.plugin.controller.lint(d || "all")).open();
-      });
-      void this.refreshDomains();
+      this.buildDomainRow(root, { withActions: true });
+    } else {
+      root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionDomainMobile });
+      this.buildDomainRow(root, { withActions: false });
     }
     root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionQuery });
     const ask = root.createDiv("ai-wiki-ask");
@@ -20570,6 +20535,51 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     if (this.plugin.controller.isBusy()) {
       new BusyCloseModal(this.app, () => this.plugin.controller.cancelCurrent()).open();
     }
+  }
+  buildDomainRow(parent, opts) {
+    const T = i18n();
+    const domainBox = parent.createDiv("ai-wiki-domain");
+    const domainRow = domainBox.createDiv("ai-wiki-domain-row");
+    domainRow.createSpan({ cls: "muted", text: "Domain:" });
+    this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
+    const refreshBtn = domainRow.createEl("button", { text: "\u21BB", attr: { title: T.view.refreshTitle } });
+    refreshBtn.addEventListener("click", () => void this.refreshDomains());
+    if (opts.withActions) {
+      this.reinitBtn = domainRow.createEl("button", { attr: { title: T.view.reinitTitle } });
+      (0, import_obsidian4.setIcon)(this.reinitBtn, "recycle");
+      this.reinitBtn.disabled = true;
+      this.reinitBtn.addEventListener("click", () => void this.runReinit());
+      this.domainSelect.addEventListener("change", () => {
+        if (this.reinitBtn)
+          this.reinitBtn.disabled = !this.domainSelect.value;
+      });
+      const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
+      this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
+      this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
+      this.formatBtn = actionRow.createEl("button", { text: T.view.format });
+      this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
+      this.ingestBtn.addEventListener("click", () => {
+        const file = this.plugin.app.workspace.getActiveFile();
+        if (!file) {
+          new import_obsidian4.Notice(i18n().view.noActiveFile);
+          return;
+        }
+        const domainId = this.domainSelect.value || void 0;
+        new ConfirmModal(this.plugin.app, "Ingest \u2014 confirm", [
+          `File: ${file.name}`,
+          "Claude will read the file, extract entities and update domain wiki pages."
+        ], () => void this.plugin.controller.ingestActive(domainId)).open();
+      });
+      this.lintBtn.addEventListener("click", () => {
+        const d = this.domainSelect.value;
+        const domainLabel = d ? `\xAB${d}\xBB` : "all wiki";
+        new ConfirmModal(this.plugin.app, "Lint \u2014 confirm", [
+          `Domain: ${domainLabel}`,
+          "Claude will check wiki pages for quality and update entity_types."
+        ], () => void this.plugin.controller.lint(d || "all")).open();
+      });
+    }
+    void this.refreshDomains();
   }
   async refreshDomains() {
     if (!this.domainSelect)
@@ -20963,10 +20973,14 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.cancelBtn.disabled = true;
     this.askBtn.disabled = false;
     this.askSaveBtn.disabled = false;
-    this.initBtn.disabled = false;
-    this.ingestBtn.disabled = false;
-    this.lintBtn.disabled = false;
-    this.formatBtn.disabled = false;
+    if (this.initBtn)
+      this.initBtn.disabled = false;
+    if (this.ingestBtn)
+      this.ingestBtn.disabled = false;
+    if (this.lintBtn)
+      this.lintBtn.disabled = false;
+    if (this.formatBtn)
+      this.formatBtn.disabled = false;
     if (this.reinitBtn)
       this.reinitBtn.disabled = !(this.domainSelect && this.domainSelect.value);
     if (this.tickHandle !== null) {
