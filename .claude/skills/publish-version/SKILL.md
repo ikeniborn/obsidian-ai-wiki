@@ -145,18 +145,20 @@ Prepend новую секцию в начало `CHANGELOG.md`:
 
 ### 5. Закоммитить (git-workflow)
 
-Коммит по шаблону из истории проекта:
-
 ```bash
-git add package.json src/manifest.json manifest.json dist/manifest.json dist/main.js
-git commit -m "chore: bump version to X.Y.NEW, build
+git add package.json src/manifest.json manifest.json dist/manifest.json dist/main.js CHANGELOG.md
+git commit -m "chore(release): X.Y.NEW — <summary>
+
+<полный changelog из шага 0c>
 
 🤖 Generated with Claude Code
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ```
 
-**Только эти пять файлов.** Не включать другие изменения в релизный коммит.
+Где `<summary>` — subject первого `feat` из согласованного changelog; если `feat` нет — первый `fix`; если нет ни того ни другого — «minor improvements».
+
+**Только эти шесть файлов.** Не включать другие изменения в релизный коммит.
 
 ### 6. Push → CI авторелиз
 
