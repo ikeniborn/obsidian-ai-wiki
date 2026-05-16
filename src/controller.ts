@@ -11,6 +11,7 @@ import { ClaudeCliClient } from "./claude-cli-client";
 import OpenAI from "openai";
 import { createProxyFetch, parseNoProxy, shouldBypass, maskProxyUrl } from "./proxy";
 import { mobileFetch } from "./mobile-fetch";
+import { wrapMobileNoStream } from "./mobile-llm-wrap";
 import { i18n } from "./i18n";
 import { resolveEffective } from "./effective-settings";
 import { applyDomainEvent } from "./domain";
@@ -464,13 +465,16 @@ export class WikiController {
         }
       }
 
-      llm = new OpenAI({
+      const openaiClient = new OpenAI({
         baseURL: s.nativeAgent.baseUrl,
         apiKey: s.nativeAgent.apiKey,
         timeout: maxTimeoutSec * 1000,
         dangerouslyAllowBrowser: true,
         fetch: Platform.isMobile ? mobileFetch : (proxyFetch ?? undefined),
       });
+      llm = (Platform.isMobile
+        ? wrapMobileNoStream(openaiClient as unknown as import("./types").LlmClient)
+        : openaiClient) as unknown as import("./types").LlmClient;
     }
 
     return new AgentRunner(llm, s, vaultTools, vaultName, domains);
