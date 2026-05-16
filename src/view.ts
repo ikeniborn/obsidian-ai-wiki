@@ -617,10 +617,10 @@ export class LlmWikiView extends ItemView {
     this.cancelBtn.disabled = true;
     this.askBtn.disabled = false;
     this.askSaveBtn.disabled = false;
-    this.initBtn.disabled = false;
-    this.ingestBtn.disabled = false;
-    this.lintBtn.disabled = false;
-    this.formatBtn.disabled = false;
+    if (this.initBtn) this.initBtn.disabled = false;
+    if (this.ingestBtn) this.ingestBtn.disabled = false;
+    if (this.lintBtn) this.lintBtn.disabled = false;
+    if (this.formatBtn) this.formatBtn.disabled = false;
     if (this.reinitBtn) this.reinitBtn.disabled = !(this.domainSelect && this.domainSelect.value);
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
     this.updateMetrics();
