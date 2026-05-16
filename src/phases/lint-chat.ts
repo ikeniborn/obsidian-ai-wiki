@@ -69,7 +69,7 @@ export async function* runLintFixChat(
   const parsed = result.value;
 
   // 4. Write pages
-  for (const page of parsed.pages) {
+  for (const page of parsed.pages ?? []) {
     yield { kind: "tool_use", name: "Write", input: { path: page.path } };
     if (!page.path.startsWith(wikiVaultPath + "/")) {
       yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
