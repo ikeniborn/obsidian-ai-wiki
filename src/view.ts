@@ -114,45 +114,7 @@ export class LlmWikiView extends ItemView {
 
       // 2+3. Наполнение / Актуализация
       root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionDomain });
-      const domainBox = root.createDiv("ai-wiki-domain");
-      const domainRow = domainBox.createDiv("ai-wiki-domain-row");
-      domainRow.createSpan({ cls: "muted", text: "Domain:" });
-      this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
-      const refreshBtn = domainRow.createEl("button", { text: "↻", attr: { title: T.view.refreshTitle } });
-      refreshBtn.addEventListener("click", () => void this.refreshDomains());
-      this.reinitBtn = domainRow.createEl("button", {
-        attr: { title: T.view.reinitTitle },
-      });
-      setIcon(this.reinitBtn, "recycle");
-      this.reinitBtn.disabled = true;
-      this.reinitBtn.addEventListener("click", () => void this.runReinit());
-      this.domainSelect.addEventListener("change", () => {
-        if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect!.value;
-      });
-
-      const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
-      this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
-      this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
-      this.formatBtn = actionRow.createEl("button", { text: T.view.format });
-      this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
-      this.ingestBtn.addEventListener("click", () => {
-        const file = this.plugin.app.workspace.getActiveFile();
-        if (!file) { new Notice(i18n().view.noActiveFile); return; }
-        const domainId = this.domainSelect.value || undefined;
-        new ConfirmModal(this.plugin.app, "Ingest — confirm", [
-          `File: ${file.name}`,
-          "Claude will read the file, extract entities and update domain wiki pages.",
-        ], () => void this.plugin.controller.ingestActive(domainId)).open();
-      });
-      this.lintBtn.addEventListener("click", () => {
-        const d = this.domainSelect.value;
-        const domainLabel = d ? `«${d}»` : "all wiki";
-        new ConfirmModal(this.plugin.app, "Lint — confirm", [
-          `Domain: ${domainLabel}`,
-          "Claude will check wiki pages for quality and update entity_types.",
-        ], () => void this.plugin.controller.lint(d || "all")).open();
-      });
-      void this.refreshDomains();
+      this.buildDomainRow(root as HTMLElement, { withActions: true });
     }
 
     // 4. Запрос
@@ -220,6 +182,51 @@ export class LlmWikiView extends ItemView {
     if (this.plugin.controller.isBusy()) {
       new BusyCloseModal(this.app, () => this.plugin.controller.cancelCurrent()).open();
     }
+  }
+
+  private buildDomainRow(parent: HTMLElement, opts: { withActions: boolean }): void {
+    const T = i18n();
+    const domainBox = parent.createDiv("ai-wiki-domain");
+    const domainRow = domainBox.createDiv("ai-wiki-domain-row");
+    domainRow.createSpan({ cls: "muted", text: "Domain:" });
+    this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
+    const refreshBtn = domainRow.createEl("button", { text: "↻", attr: { title: T.view.refreshTitle } });
+    refreshBtn.addEventListener("click", () => void this.refreshDomains());
+
+    if (opts.withActions) {
+      this.reinitBtn = domainRow.createEl("button", { attr: { title: T.view.reinitTitle } });
+      setIcon(this.reinitBtn, "recycle");
+      this.reinitBtn.disabled = true;
+      this.reinitBtn.addEventListener("click", () => void this.runReinit());
+      this.domainSelect.addEventListener("change", () => {
+        if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect!.value;
+      });
+
+      const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
+      this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
+      this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
+      this.formatBtn = actionRow.createEl("button", { text: T.view.format });
+      this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
+      this.ingestBtn.addEventListener("click", () => {
+        const file = this.plugin.app.workspace.getActiveFile();
+        if (!file) { new Notice(i18n().view.noActiveFile); return; }
+        const domainId = this.domainSelect!.value || undefined;
+        new ConfirmModal(this.plugin.app, "Ingest — confirm", [
+          `File: ${file.name}`,
+          "Claude will read the file, extract entities and update domain wiki pages.",
+        ], () => void this.plugin.controller.ingestActive(domainId)).open();
+      });
+      this.lintBtn.addEventListener("click", () => {
+        const d = this.domainSelect!.value;
+        const domainLabel = d ? `«${d}»` : "all wiki";
+        new ConfirmModal(this.plugin.app, "Lint — confirm", [
+          `Domain: ${domainLabel}`,
+          "Claude will check wiki pages for quality and update entity_types.",
+        ], () => void this.plugin.controller.lint(d || "all")).open();
+      });
+    }
+
+    void this.refreshDomains();
   }
 
   private async refreshDomains(): Promise<void> {
