@@ -34,7 +34,7 @@ git log <hash>..HEAD --oneline
 ```
 
 Фильтр включения: строки с префиксом `feat|fix|refactor|perf`.  
-Фильтр исключения: `chore`, `docs`, `test`, `ci`, строки `up`, `build`.
+Фильтр исключения: коммиты с типом или scope `chore`, `docs`, `test`, `ci`, `build`; строки, содержащие только `up` или `build` в subject.
 
 Группировать по типу:
 - `feat` → раздел «Новое»
@@ -46,6 +46,8 @@ git log <hash>..HEAD --oneline
 **Single-entry guard:** если нет коммитов с типами `feat/fix/refactor/perf` — предупредить пользователя и спросить, продолжать ли.
 
 ### 0c. Draft changelog и согласование
+
+Сначала вычисли tentative-версию: прочитай `package.json` → возьми `version` → инкрементируй patch. Не записывай файлы — только вычисли номер для заголовка changelog.
 
 Claude формирует changelog:
 
