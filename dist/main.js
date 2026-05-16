@@ -21002,6 +21002,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.tickHandle = null;
     }
     this.updateMetrics();
+    const totalDur = ((entry.finishedAt - entry.startedAt) / 1e3).toFixed(1);
+    this.progressCount.setText(`${totalDur}s`);
     this.resultSpeedEl?.setText(this.lastTokPerSec !== void 0 ? ` ${this.lastTokPerSec} tok/s` : "");
     this.finalEl.empty();
     if (entry.finalText) {
@@ -21013,7 +21015,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.finalEl.removeClass("ai-wiki-hidden");
       this.resultOpen = true;
       this.resultToggle.setText("\u25BC");
-      const CHAT_OPS = ["lint", "ingest", "query", "query-save"];
+      const CHAT_OPS = ["lint", "lint-chat", "ingest", "query", "query-save"];
       if (CHAT_OPS.includes(entry.operation) && entry.status === "done" && entry.finalText) {
         this.lastContext = {
           operation: entry.operation,
@@ -21048,13 +21050,23 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.chatInputEl.value = "";
       this.addChatBubble("user", text);
       this.lastUserMessage = text;
-      void this.plugin.controller.chat(
-        this.lastContext.operation,
-        this.lastContext.domainId,
-        this.lastContext.report,
-        this.chatHistory,
-        text
-      );
+      const ctx = this.lastContext;
+      if (ctx.operation === "lint" || ctx.operation === "lint-chat") {
+        void this.plugin.controller.lintApplyFromChat(
+          ctx.domainId,
+          ctx.report,
+          this.chatHistory,
+          text
+        );
+      } else {
+        void this.plugin.controller.chat(
+          ctx.operation,
+          ctx.domainId,
+          ctx.report,
+          this.chatHistory,
+          text
+        );
+      }
     };
     this.chatSendBtn.addEventListener("click", submit);
   }
@@ -26167,6 +26179,13 @@ var SeedsSchema = external_exports.object({
   reasoning: external_exports.string().optional(),
   seeds: external_exports.array(external_exports.string())
 });
+var LintChatSchema = external_exports.object({
+  summary: external_exports.string(),
+  pages: external_exports.array(external_exports.object({
+    path: external_exports.string(),
+    content: external_exports.string()
+  })).default([])
+});
 
 // prompts/query.md
 var query_default = "\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u043F\u043E wiki-\u0431\u0430\u0437\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u0411\u0443\u0434\u044C \u0442\u043E\u0447\u0435\u043D \u0438 \u043B\u0430\u043A\u043E\u043D\u0438\u0447\u0435\u043D.\n\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 WikiLinks [[\u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435]] \u043F\u0440\u0438 \u0441\u0441\u044B\u043B\u043A\u0430\u0445 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0437 \u0438\u043D\u0434\u0435\u043A\u0441\u0430.\n{{entity_types_block}}\n{{schema_block}}\n{{index_block}}\n";
@@ -26601,7 +26620,7 @@ ${types}${notes}`;
 var import_path_browserify4 = __toESM(require_path_browserify(), 1);
 
 // prompts/lint.md
-var lint_default = "\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0412\u044B\u044F\u0432\u043B\u044F\u0439: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442.\n\u0412\u0435\u0440\u043D\u0438 **JSON** \u0441 \u043F\u043E\u043B\u0435\u043C `reasoning` \u043F\u0435\u0440\u0432\u044B\u043C, \u0437\u0430\u0442\u0435\u043C `entity_types` \u0438 `language_notes`.\n{{entity_types_block}}\n";
+var lint_default = "\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0412\u044B\u044F\u0432\u043B\u044F\u0439: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442, \u0431\u0438\u0442\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438.\n\u0412\u0435\u0440\u043D\u0438 \u0440\u0430\u0437\u0432\u0451\u0440\u043D\u0443\u0442\u044B\u0439 \u0430\u043D\u0430\u043B\u0438\u0437 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 Markdown.\n{{entity_types_block}}\n";
 
 // src/phases/lint.ts
 var META_FILES2 = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
@@ -27012,6 +27031,63 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
   if (signal.aborted)
     return;
   yield { kind: "result", durationMs: Date.now() - start, text: fullText, outputTokens: outputTokens || void 0 };
+}
+
+// prompts/lint-chat.md
+var lint_chat_default = '\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041F\u0440\u0438\u043C\u0438 \u0437\u0430\u0434\u0430\u043D\u0438\u0435 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F \u0438 lint-\u043E\u0442\u0447\u0451\u0442, \u0438\u0441\u043F\u0440\u0430\u0432\u044C \u0443\u043A\u0430\u0437\u0430\u043D\u043D\u044B\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B \u0432 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430\u0445.\n\n\u0412\u0435\u0440\u043D\u0438 JSON:\n{"summary":"## markdown \u0447\u0442\u043E \u0441\u0434\u0435\u043B\u0430\u043D\u043E","pages":[{"path":"...","content":"..."}]}\n\u0415\u0441\u043B\u0438 \u043F\u0440\u0430\u0432\u043E\u043A \u043D\u0435\u0442 \u2014 pages \u043F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432, summary \u2014 \u0442\u0435\u043A\u0441\u0442\u043E\u0432\u044B\u0439 \u043E\u0442\u0432\u0435\u0442.\n\nLINT-\u041E\u0422\u0427\u0401\u0422:\n{{lint_report}}\n\n\u0421\u0422\u0420\u0410\u041D\u0418\u0426\u042B \u0414\u041E\u041C\u0415\u041D\u0410:\n{{pages_block}}\n';
+
+// src/phases/lint-chat.ts
+var META_FILES3 = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
+async function* runLintFixChat(req, vaultTools, _vaultRoot, domain, llm, model, opts, signal) {
+  const start = Date.now();
+  if (!domain) {
+    yield { kind: "error", message: "lint-chat requires a domain" };
+    yield { kind: "result", durationMs: Date.now() - start, text: "" };
+    return;
+  }
+  const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
+  const allFiles = await vaultTools.listFiles(wikiVaultPath);
+  const files = allFiles.filter((f) => !META_FILES3.some((m) => f.endsWith(m)));
+  const pages = await vaultTools.readAll(files);
+  const pagesBlock = [...pages.entries()].map(([p, c]) => `--- ${p} ---
+${c}`).join("\n\n");
+  const systemContent = render(lint_chat_default, {
+    domain_name: domain.name,
+    lint_report: req.context ?? "",
+    pages_block: pagesBlock
+  });
+  const chatMessages = req.chatMessages ?? [];
+  const messages = [
+    { role: "system", content: systemContent },
+    ...chatMessages.map((m) => ({ role: m.role, content: m.content }))
+  ];
+  const result = await parseWithRetry({
+    llm,
+    model,
+    baseMessages: messages,
+    opts: { ...opts, jsonMode: "json_object" },
+    schema: LintChatSchema,
+    maxRetries: opts.structuredRetries ?? 1,
+    callSite: "lint-chat.fix",
+    signal,
+    onEvent: (_ev) => {
+    }
+  });
+  const parsed = result.value;
+  for (const page of parsed.pages ?? []) {
+    yield { kind: "tool_use", name: "Write", input: { path: page.path } };
+    if (!page.path.startsWith(wikiVaultPath + "/")) {
+      yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
+      continue;
+    }
+    try {
+      await vaultTools.write(page.path, page.content);
+      yield { kind: "tool_result", ok: true };
+    } catch (e) {
+      yield { kind: "tool_result", ok: false, preview: e.message };
+    }
+  }
+  yield { kind: "result", durationMs: Date.now() - start, text: parsed.summary, outputTokens: result.outputTokens || void 0 };
 }
 
 // templates/_wiki_schema.md
@@ -28003,7 +28079,7 @@ var AgentRunner = class {
   }
   llm;
   buildOptsFor(op) {
-    const key = op === "query-save" ? "query" : op === "chat" ? "lint" : op;
+    const key = op === "query-save" ? "query" : op === "chat" || op === "lint-chat" ? "lint" : op;
     const s = this.settings;
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
     if (s.backend === "claude-agent") {
@@ -28060,6 +28136,11 @@ var AgentRunner = class {
           req.chatMessages ?? [],
           req.operationHeader ?? ""
         );
+        break;
+      }
+      case "lint-chat": {
+        const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
+        yield* runLintFixChat(req, this.vaultTools, vaultRoot, domain, this.llm, model, opts, req.signal);
         break;
       }
       case "init":
@@ -36040,6 +36121,10 @@ var WikiController = class {
     const chatMessages = [...history, { role: "user", content: newMessage }];
     await this.dispatchChat(operation, domainId, context, chatMessages);
   }
+  async lintApplyFromChat(domainId, lintReport, history, newMessage) {
+    const chatMessages = [...history, { role: "user", content: newMessage }];
+    await this.dispatch("lint-chat", [], domainId, lintReport, void 0, void 0, chatMessages);
+  }
   async dispatchChat(operation, domainId, context, chatMessages) {
     if (this.isBusy()) {
       new import_obsidian7.Notice(i18n().ctrl.operationRunning);
@@ -36324,7 +36409,7 @@ var WikiController = class {
     } catch {
     }
   }
-  async dispatch(op, args, domainId, context, instruction, onFileError) {
+  async dispatch(op, args, domainId, context, instruction, onFileError, chatMessages) {
     if (this.isBusy()) {
       new import_obsidian7.Notice(i18n().ctrl.operationRunning);
       return;
@@ -36341,7 +36426,7 @@ var WikiController = class {
         return;
       if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local))
         return;
-      const opKey2 = op === "query-save" ? "query" : op;
+      const opKey2 = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
       this._currentLogMeta = {
         backend: eff.backend,
         model: eff.backend === "claude-agent" ? eff.claudeAgent.perOperation ? eff.claudeAgent.operations[opKey2].model : eff.claudeAgent.model : eff.nativeAgent.perOperation ? eff.nativeAgent.operations[opKey2].model : eff.nativeAgent.model
@@ -36371,10 +36456,10 @@ var WikiController = class {
     let status = "done";
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
     view.setRunning(op, args);
-    const opKey = op === "query-save" ? "query" : op;
+    const opKey = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
     const timeoutMs = this.plugin.settings.timeouts[opKey] * 1e3;
-    const chatMessages = op === "format" ? this._pendingFormat?.chat : void 0;
-    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages });
+    const resolvedChatMessages = op === "format" ? this._pendingFormat?.chat : chatMessages;
+    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages: resolvedChatMessages });
     try {
       for await (const ev of runGen) {
         await this.logEvent(vaultRoot, sessionId, op, domainId, ev);
@@ -36422,7 +36507,7 @@ var WikiController = class {
       this._currentLogMeta = null;
     }
     if (status === "done") {
-      const mutatesWiki = op === "ingest" || op === "lint" || op === "query-save" || op === "init";
+      const mutatesWiki = op === "ingest" || op === "lint" || op === "lint-chat" || op === "query-save" || op === "init";
       if (mutatesWiki) {
         const targets = domainId ? [domainId] : (await this.domainStore.load()).map((d) => d.id);
         for (const id of targets)
