@@ -115,6 +115,9 @@ export class LlmWikiView extends ItemView {
       // 2+3. Наполнение / Актуализация
       root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionDomain });
       this.buildDomainRow(root as HTMLElement, { withActions: true });
+    } else {
+      root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionDomainMobile });
+      this.buildDomainRow(root as HTMLElement, { withActions: false });
     }
 
     // 4. Запрос
