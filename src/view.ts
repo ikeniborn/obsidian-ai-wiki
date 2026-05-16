@@ -69,6 +69,7 @@ export class LlmWikiView extends ItemView {
   private toolCount = 0;
   private stepCount = 0;
   private progressEl: HTMLElement | null = null;
+  private mobileWaitingEl: HTMLElement | null = null;
   private progressTotal = 0;
   private progressDone = 0;
   private progressPhaseEl: HTMLElement | null = null;
@@ -354,6 +355,7 @@ export class LlmWikiView extends ItemView {
     this.toolCount = 0;
     this.stepCount = 0;
     this.progressEl = null;
+    this.mobileWaitingEl = null;
     this.progressPhaseEl = null;
     this.progressTotal = 0;
     this.progressDone = 0;
@@ -378,9 +380,19 @@ export class LlmWikiView extends ItemView {
     this.updateMetrics();
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
     this.scheduleMetricsTick();
+    if (Platform.isMobile) {
+      // Streaming недоступен на mobile — показываем спиннер, чтобы UI не выглядел замёрзшим.
+      const placeholder = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step-pending");
+      placeholder.setText(i18n().view.mobileWaiting);
+      this.mobileWaitingEl = placeholder;
+    }
   }
 
   appendEvent(ev: RunEvent): void {
+    if (this.mobileWaitingEl) {
+      this.mobileWaitingEl.remove();
+      this.mobileWaitingEl = null;
+    }
     if (ev.kind === "format_preview") {
       this.renderFormatPreview(ev.tempPath, ev.report, ev.missingTokens);
       return;
