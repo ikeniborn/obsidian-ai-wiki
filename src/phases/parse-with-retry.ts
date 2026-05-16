@@ -8,7 +8,7 @@ import {
 import { structuralErrorCounter } from "../structural-error-counter";
 
 export type CallSite =
-  | "init.bootstrap" | "init.delta" | "lint.patch" | "query.seeds";
+  | "init.bootstrap" | "init.delta" | "lint.patch" | "lint-chat.fix" | "query.seeds";
 
 export class StructuredValidationError extends Error {
   constructor(

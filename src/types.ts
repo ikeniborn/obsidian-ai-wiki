@@ -6,6 +6,7 @@ export type WikiOperation =
   | "query"
   | "query-save"
   | "lint"
+  | "lint-chat"
   | "chat"
   | "init"
   | "format";
@@ -57,7 +58,7 @@ export type RunEvent =
   | { kind: "format_applied"; path: string }
   | { kind: "format_cancelled" }
   | { kind: "structural_error";
-      callSite: "init.bootstrap" | "init.delta" | "lint.patch" | "query.seeds";
+      callSite: "init.bootstrap" | "init.delta" | "lint.patch" | "lint-chat.fix" | "query.seeds";
       errorType: "json_parse" | "schema_validate";
       retryAttempt: number;
       succeeded: boolean | null;
