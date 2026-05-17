@@ -124,8 +124,16 @@ export function __setRequestUrlResponse(r: typeof __requestUrlResponse): void {
   __requestUrlResponse = r;
 }
 export function __clearRequestUrlCalls(): void { __requestUrlCalls.length = 0; }
+
+let __requestUrlDelayMs = 0;
+export function __setRequestUrlDelay(ms: number): void { __requestUrlDelayMs = ms; }
+export function __resetRequestUrlDelay(): void { __requestUrlDelayMs = 0; }
+
 export async function requestUrl(param: any) {
   __requestUrlCalls.push(param);
+  if (__requestUrlDelayMs > 0) {
+    await new Promise((r) => setTimeout(r, __requestUrlDelayMs));
+  }
   return __requestUrlResponse;
 }
 
