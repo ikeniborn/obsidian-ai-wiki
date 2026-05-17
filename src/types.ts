@@ -91,6 +91,7 @@ export interface LlmCallOptions {
   systemPrompt?: string;
   jsonMode?: "json_object" | false;
   structuredRetries?: number;
+  thinkingBudgetTokens?: number;
 }
 
 /** Минимальный интерфейс OpenAI-клиента, используемый фазами. */
@@ -114,12 +115,14 @@ export type OpMap<T> = Record<OpKey, T>;
 
 export interface ClaudeOperationConfig {
   model: string;
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
 }
 
 export interface NativeOperationConfig {
   model: string;
   maxTokens: number;
   temperature: number;
+  thinkingBudgetTokens?: number;
 }
 
 export interface LlmWikiPluginSettings {
@@ -143,6 +146,7 @@ export interface LlmWikiPluginSettings {
     model: string;
     allowedTools: string;
     perOperation: boolean;
+    effort?: "low" | "medium" | "high" | "xhigh" | "max";
     operations: OpMap<ClaudeOperationConfig>;
   };
   nativeAgent: {
@@ -155,6 +159,7 @@ export interface LlmWikiPluginSettings {
     perOperation: boolean;
     operations: OpMap<NativeOperationConfig>;
     structuredRetries: number;
+    thinkingBudgetTokens?: number;
   };
   devMode: {
     enabled: boolean;
