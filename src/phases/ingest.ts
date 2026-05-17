@@ -214,21 +214,6 @@ async function appendLog(
   } catch { /* не критично */ }
 }
 
-async function updateIndex(vaultTools: VaultTools, wikiRoot: string, written: string[]): Promise<void> {
-  const indexPath = `${wikiRoot}/_index.md`;
-  try {
-    const existing = await tryRead(vaultTools, indexPath);
-    const newLinks = written.map((p) => {
-      const name = p.split("/").pop()?.replace(/\.md$/, "") ?? p;
-      return `- [[${name}]]`;
-    }).join("\n");
-    const updated = existing
-      ? existing + "\n" + newLinks
-      : `# Wiki Index\n\n${newLinks}`;
-    await vaultTools.write(indexPath, updated);
-  } catch { /* не критично */ }
-}
-
 async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
   try { return await vaultTools.read(path); } catch { return ""; }
 }
