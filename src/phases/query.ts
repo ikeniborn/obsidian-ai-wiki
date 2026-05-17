@@ -11,6 +11,7 @@ import { domainWikiFolder } from "../wiki-path";
 import { pageId, bfsExpand } from "../wiki-graph";
 import { graphCache } from "../wiki-graph-cache";
 import { selectSeeds } from "../wiki-seeds";
+import { parseIndexAnnotations } from "../wiki-index";
 
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
@@ -69,14 +70,15 @@ export async function* runQuery(
   // Graph-filtered context
   const { graph, fromCache } = graphCache.get(domain.id, pages);
   const allPageIds = [...pages.keys()].map(pageId);
+  const indexAnnotations = parseIndexAnnotations(indexContent);
   const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
   const minScore = Math.max(0, Math.min(1, seedMinScore));
-  let seeds = selectSeeds(question, pages, topK, minScore);
+  let seeds = selectSeeds(question, pages, topK, minScore, indexAnnotations);
   if (seeds.length === 0) {
     if (signal.aborted) return;
     yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allPageIds.length } };
     const seedOpts = { ...opts, thinkingBudgetTokens: undefined };
-    const seedRes = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, seedOpts, signal);
+    const seedRes = await llmSelectSeeds(question, indexAnnotations, allPageIds, llm, model, seedOpts, signal);
     seeds = seedRes.seeds;
     outputTokens += seedRes.outputTokens;
     yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
@@ -167,7 +169,7 @@ async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
 
 async function llmSelectSeeds(
   question: string,
-  indexContent: string,
+  indexAnnotations: Map<string, string>,
   allPageIds: string[],
   llm: LlmClient,
   model: string,
@@ -178,10 +180,17 @@ async function llmSelectSeeds(
     reasoning: "PageA matches keyword X; PageB referenced by index.",
     seeds: ["PageA", "PageB"],
   }, null, 2);
+  const annotatedLines: string[] = [];
+  const unindexedIds: string[] = [];
+  for (const id of allPageIds) {
+    const ann = indexAnnotations?.get(id);
+    if (ann) annotatedLines.push(`${id}: ${ann}`);
+    else unindexedIds.push(id);
+  }
   const prompt = [
     `Question: "${question}"`,
-    `Available wiki pages: ${allPageIds.join(", ")}`,
-    indexContent ? `\nIndex:\n${indexContent}` : "",
+    `Wiki index with annotations:\n${annotatedLines.join("\n")}`,
+    unindexedIds.length ? `Pages not yet indexed: ${unindexedIds.join(", ")}` : "",
     `\nReturn JSON only matching this shape (most relevant page names — bare names, no path, no .md):`,
     `\n## Output JSON Example`,
     example,

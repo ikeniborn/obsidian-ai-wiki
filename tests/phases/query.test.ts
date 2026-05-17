@@ -127,6 +127,39 @@ describe("runQuery", () => {
     expect(typeof stats.fromCache).toBe("boolean");
   });
 
+  it("parses _index.md annotations and passes them to selectSeeds (Jaccard finds seed, no LLM seed call)", async () => {
+    // DeepSeek.md content has some text; _index.md has annotation matching question tokens
+    const adapter = mockAdapter({
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/DeepSeek.md"], folders: [] }),
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p.endsWith("DeepSeek.md")) return "# DeepSeek\nA language model.";
+        if (p.endsWith("_index.md")) return "DeepSeek: быстрая языковая модель";
+        return "";
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm("DeepSeek is a fast model.");
+    await collect(
+      runQuery(
+        ["deepseek модель"],
+        false,
+        vt,
+        llm,
+        "model",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+        1,   // graphDepth
+        {},  // opts
+        5,   // seedTopK
+        0.0, // seedMinScore — low threshold so Jaccard hits
+      ),
+    );
+    // LLM should be called exactly ONCE (main answer only), NOT twice (seed LLM call skipped)
+    const createMock = llm.chat.completions.create as ReturnType<typeof vi.fn>;
+    expect(createMock).toHaveBeenCalledTimes(1);
+  });
+
   it("excludes pages not reached by BFS when keyword seed found (graphDepth=0)", async () => {
     const adapter = mockAdapter({
       list: vi.fn().mockResolvedValue({
