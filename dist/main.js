@@ -28160,7 +28160,8 @@ var AgentRunner = class {
   }
   async *run(req) {
     const { model, opts } = this.buildOptsFor(req.operation);
-    yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}` };
+    const baseUrlHint = this.settings.backend === "native-agent" ? ` @ ${this.settings.nativeAgent.baseUrl}` : "";
+    yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}${baseUrlHint}` };
     if (req.signal.aborted)
       return;
     const vaultRoot = req.cwd ?? "";
@@ -35809,26 +35810,36 @@ var mobileFetch = async (input, init) => {
   if (init?.signal?.aborted)
     throw new DOMException("Aborted", "AbortError");
   let url;
-  if (typeof input === "string") {
+  if (typeof input === "string")
     url = input;
-  } else if (input instanceof URL) {
+  else if (input instanceof URL)
     url = input.toString();
-  } else {
+  else
     url = input.url;
-  }
   const body = init?.body;
   if (body != null && typeof body !== "string") {
     throw new Error("mobileFetch: only string body supported");
   }
-  const r = await (0, import_obsidian6.requestUrl)({
+  const requestPromise = (0, import_obsidian6.requestUrl)({
     url,
     method: init?.method ?? "GET",
     headers: init?.headers,
     body: body ?? void 0,
     throw: false
   });
+  const r = init?.signal ? await Promise.race([requestPromise, abortRace(init.signal)]) : await requestPromise;
   return new Response(r.text, { status: r.status, headers: r.headers });
 };
+function abortRace(signal) {
+  return new Promise((_, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const handler = () => reject(new DOMException("Aborted", "AbortError"));
+    signal.addEventListener("abort", handler, { once: true });
+  });
+}
 
 // src/mobile-llm-wrap.ts
 function wrapMobileNoStream(inner) {
@@ -36458,6 +36469,11 @@ var WikiController = class {
     view.setRunning(op, args);
     const opKey = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
     const timeoutMs = this.plugin.settings.timeouts[opKey] * 1e3;
+    let timedOut = false;
+    const timeoutId = timeoutMs > 0 ? window.setTimeout(() => {
+      timedOut = true;
+      ctrl.abort();
+    }, timeoutMs) : null;
     const resolvedChatMessages = op === "format" ? this._pendingFormat?.chat : chatMessages;
     const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages: resolvedChatMessages });
     try {
@@ -36501,10 +36517,22 @@ var WikiController = class {
       finalText = i18n().ctrl.errorPrefix(err.message);
       await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
     } finally {
+      if (timeoutId !== null)
+        window.clearTimeout(timeoutId);
       this.current = null;
       this.onBusyChange?.();
       this.currentOp = null;
       this._currentLogMeta = null;
+    }
+    if (ctrl.signal.aborted && status === "done" && !finalText) {
+      if (timedOut) {
+        status = "error";
+        finalText = `Timeout after ${Math.round(timeoutMs / 1e3)}s \u2014 check LLM backend URL`;
+        this.activeView()?.appendEvent({ kind: "error", message: finalText });
+        await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
+      } else {
+        status = "cancelled";
+      }
     }
     if (status === "done") {
       const mutatesWiki = op === "ingest" || op === "lint" || op === "lint-chat" || op === "query-save" || op === "init";
