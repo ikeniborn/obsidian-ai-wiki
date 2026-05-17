@@ -18893,6 +18893,7 @@ var DEFAULT_SETTINGS = {
 };
 
 // src/settings.ts
+var import_child_process = require("child_process");
 var import_obsidian3 = require("obsidian");
 
 // src/modals.ts
@@ -19995,9 +19996,8 @@ function resolveEffective(s, l) {
 
 // src/settings.ts
 async function checkClaudeAvailability(iclaudePath) {
-  const { spawn: spawn2 } = await import("child_process");
   await new Promise((resolve, reject) => {
-    const child = spawn2(iclaudePath, [
+    const child = (0, import_child_process.spawn)(iclaudePath, [
       "--",
       "-p",
       "\u041F\u0440\u0438\u0432\u0435\u0442, AI Wiki! \u041F\u043E\u0440\u0430\u0431\u043E\u0442\u0430\u0435\u043C?",
@@ -20005,9 +20005,7 @@ async function checkClaudeAvailability(iclaudePath) {
       "stream-json",
       "--verbose",
       "--disable-slash-commands",
-      "--dangerously-skip-permissions",
-      "--model",
-      "haiku"
+      "--dangerously-skip-permissions"
     ], { stdio: ["ignore", "pipe", "pipe"] });
     const timeout = window.setTimeout(() => {
       child.kill("SIGTERM");
@@ -20232,18 +20230,16 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           await this.patchLocalClaude({ allowedTools: v.trim() });
         })
       );
-      if (!s.claudeAgent.perOperation) {
-        new import_obsidian3.Setting(containerEl).setName("Effort level").setDesc("\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u0440\u0430\u0437\u043C\u044B\u0448\u043B\u0435\u043D\u0438\u044F Claude (--effort). \u041F\u0443\u0441\u0442\u043E = \u0431\u0435\u0437 thinking.").addDropdown((d) => {
-          d.addOption("", "\u041E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E");
-          for (const lv of ["low", "medium", "high", "xhigh", "max"])
-            d.addOption(lv, lv);
-          d.setValue(eff.claudeAgent.effort ?? "");
-          d.onChange(async (v) => {
-            await this.patchLocalClaude({ effort: v || void 0 });
-          });
-          return d;
+      new import_obsidian3.Setting(containerEl).setName("Effort level").setDesc("\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u0440\u0430\u0437\u043C\u044B\u0448\u043B\u0435\u043D\u0438\u044F Claude (--effort). \u041F\u0443\u0441\u0442\u043E = \u0431\u0435\u0437 thinking. \u0412 per-op \u0440\u0435\u0436\u0438\u043C\u0435 \u2014 \u0433\u043B\u043E\u0431\u0430\u043B\u044C\u043D\u044B\u0439 fallback.").addDropdown((d) => {
+        d.addOption("", "\u041E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E");
+        for (const lv of ["low", "medium", "high", "xhigh", "max"])
+          d.addOption(lv, lv);
+        d.setValue(eff.claudeAgent.effort ?? "");
+        d.onChange(async (v) => {
+          await this.patchLocalClaude({ effort: v || void 0 });
         });
-      }
+        return d;
+      });
       new import_obsidian3.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
         (t) => t.setValue(s.claudeAgent.perOperation).onChange(async (v) => {
           s.claudeAgent.perOperation = v;
@@ -28408,7 +28404,7 @@ var VaultTools = class {
 };
 
 // src/claude-cli-client.ts
-var import_child_process = require("child_process");
+var import_child_process2 = require("child_process");
 var import_path_browserify5 = __toESM(require_path_browserify(), 1);
 
 // src/stream.ts
@@ -28587,7 +28583,7 @@ ${userText}
     return { [Symbol.asyncIterator]: () => this._generate(args, signal, timeoutSec, tmpFiles) };
   }
   async *_generate(args, signal, timeoutSec, tmpFiles) {
-    const child = (0, import_child_process.spawn)(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
+    const child = (0, import_child_process2.spawn)(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
     if (!child.stdout || !child.stderr)
       throw new Error("spawn: missing stdio");
     const stderrChunks = [];
@@ -36472,7 +36468,8 @@ var WikiController = class {
       }
       const fullAdapter = this.app.vault.adapter;
       const claudeEff = s.claudeAgent;
-      const effort = claudeEff.perOperation && opKey ? claudeEff.operations[opKey]?.effort ?? claudeEff.effort : claudeEff.effort;
+      const normalizedOpKey = opKey === "chat" || opKey === "lint-chat" ? "lint" : opKey === "query-save" ? "query" : opKey;
+      const effort = claudeEff.perOperation && normalizedOpKey ? claudeEff.operations[normalizedOpKey]?.effort ?? claudeEff.effort : claudeEff.effort;
       const client = new ClaudeCliClient({
         iclaudePath: local.iclaudePath,
         model: claudeEff.model,
