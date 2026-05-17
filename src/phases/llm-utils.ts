@@ -67,6 +67,10 @@ export function buildChatParams(
     params.response_format = { type: "json_object" };
   }
 
+  if (opts.thinkingBudgetTokens && opts.thinkingBudgetTokens > 0) {
+    params.thinking = { type: "enabled", budget_tokens: opts.thinkingBudgetTokens };
+  }
+
   return params;
 }
 
