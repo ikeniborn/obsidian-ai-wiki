@@ -234,7 +234,7 @@ export class WikiController {
 
     let agentRunner: AgentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId);
+      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat");
     } catch (e) {
       new Notice(i18n().ctrl.errorPrefix((e as Error).message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -395,7 +395,7 @@ export class WikiController {
     return true;
   }
 
-  private async buildAgentRunner(vaultRoot: string, resumeSessionId?: string): Promise<AgentRunner> {
+  private async buildAgentRunner(vaultRoot: string, resumeSessionId?: string, opKey?: string): Promise<AgentRunner> {
     const adapter = this.app.vault.adapter as unknown as VaultAdapter;
     const base = this.cwdOrEmpty();
     const vaultTools = new VaultTools(adapter, base);
@@ -427,9 +427,15 @@ export class WikiController {
 
       interface InternalAdapter { remove(p: string): Promise<void>; }
       const fullAdapter = this.app.vault.adapter as unknown as InternalAdapter;
+      const claudeEff = s.claudeAgent;
+      const effort = claudeEff.perOperation && opKey
+        ? (claudeEff.operations[opKey as import("./types").OpKey]?.effort ?? claudeEff.effort)
+        : claudeEff.effort;
       const client = new ClaudeCliClient({
-        ...s.claudeAgent,
         iclaudePath: local.iclaudePath,
+        model: claudeEff.model,
+        allowedTools: claudeEff.allowedTools,
+        effort,
         requestTimeoutSec: maxTimeoutSec,
         cwd: vaultRoot,
         tmpDir,
@@ -541,10 +547,11 @@ export class WikiController {
     if (!view) return;
 
     const vaultRoot = this.cwdOrEmpty();
+    const opKey = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
 
     let agentRunner: AgentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot);
+      agentRunner = await this.buildAgentRunner(vaultRoot, undefined, opKey);
     } catch (e) {
       new Notice(i18n().ctrl.errorPrefix((e as Error).message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -564,8 +571,6 @@ export class WikiController {
 
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
     view.setRunning(op, args);
-
-    const opKey = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
     const timeoutMs = this.plugin.settings.timeouts[opKey as keyof typeof this.plugin.settings.timeouts] * 1000;
     let timedOut = false;
     const timeoutId = timeoutMs > 0
