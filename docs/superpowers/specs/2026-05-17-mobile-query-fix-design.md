@@ -12,12 +12,11 @@
 
 **Подтверждённый сценарий:** `baseUrl = https://homelab.ikeniborn.ru/v1`. Сервер недоступен с мобильного устройства (LAN/VPN/сеть) или SSL-ошибка. `requestUrl` зависает на TCP-соединении.
 
-**Два кодовых бага:**
+**Три кодовых бага:**
 
 1. `mobileFetch` не пробрасывает `AbortSignal` в `requestUrl` — зависший запрос нельзя прервать.
 2. `dispatch` не устанавливает таймаут на `ctrl` — операция висит вечно независимо от `timeoutMs`.
-
-**Следствие:** Ошибка никогда не всплывает → `catch` в `dispatch` не срабатывает → `agent.jsonl` не получает запись об ошибке → диагностика невозможна.
+3. При abort (таймаут или кнопка Cancel) `runQuery` возвращается без ошибки (`signal.aborted` → silent return), пользователь видит пустой результат вместо сообщения об ошибке.
 
 ---
 
@@ -28,7 +27,7 @@
 | Файл | Изменение |
 |---|---|
 | `src/mobile-fetch.ts` | `Promise.race` с AbortSignal watcher |
-| `src/controller.ts` | `setTimeout → ctrl.abort()` в `dispatch`; force-логирование ошибок |
+| `src/controller.ts` | Таймаут в `dispatch`; detect timeout-abort → показать ошибку + логировать |
 | `src/agent-runner.ts` | Добавить `baseUrl` в системное событие для диагностики |
 
 ---
@@ -80,46 +79,46 @@ function abortRace(signal: AbortSignal): Promise<never> {
 
 `requestUrl` продолжает выполняться в фоне (нельзя прервать), но цепочка обещаний разблокируется немедленно при abort.
 
-### 2. `controller.ts` — Таймаут в `dispatch`
+### 2. `controller.ts` — Таймаут + показ ошибки при abort
 
-`timeoutMs` вычисляется после `const ctrl = new AbortController()` (строки 554 и 568 в текущем коде). Таймер устанавливается **после** вычисления `timeoutMs`, перед `const runGen = agentRunner.run(...)`:
+`timeoutMs` вычисляется после `const ctrl = new AbortController()` (строки 554 и 568). Добавить флаг `timedOut` и таймер **после** вычисления `timeoutMs`, перед `const runGen = agentRunner.run(...)`:
 
 ```typescript
-// после: const timeoutMs = this.plugin.settings.timeouts[...] * 1000;
+let timedOut = false;
 const timeoutId = timeoutMs > 0
-  ? window.setTimeout(() => ctrl.abort(), timeoutMs)
+  ? window.setTimeout(() => { timedOut = true; ctrl.abort(); }, timeoutMs)
   : null;
 ```
 
-В `finally` (уже существует, добавить одну строку):
+В `finally`:
 
 ```typescript
 if (timeoutId !== null) window.clearTimeout(timeoutId);
 ```
 
-### 3. `controller.ts` — Force-логирование ошибок
-
-`logEvent` получает необязательный параметр `force?: boolean`:
+После `for await` loop, перед `finish(entry)` — detect silent abort:
 
 ```typescript
-private async logEvent(..., ev: RunEvent, force?: boolean): Promise<void> {
-  if (!force && !this.plugin.settings.agentLogEnabled) return;
-  // остальное без изменений
+// runQuery (и другие фазы) при abort возвращаются без ошибки.
+// Восстанавливаем статус вручную.
+if (ctrl.signal.aborted && status === "done" && !finalText) {
+  if (timedOut) {
+    status = "error";
+    finalText = `Timeout after ${Math.round(timeoutMs / 1000)}s — check LLM backend URL`;
+    this.activeView()?.appendEvent({ kind: "error", message: finalText });
+    await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
+  } else {
+    // явная отмена пользователем
+    status = "cancelled";
+  }
 }
 ```
 
-Вызовы старта, финиша и ошибок используют `force=true`:
+**Важно:** `logEvent` здесь вызывается без изменений — пишет в `agent.jsonl` только если `agentLogEnabled` включён (существующее поведение, не меняем).
 
-```typescript
-await this.logEvent(vaultRoot, sessionId, op, domainId, startEvent, true);
-// ...
-await this.logEvent(vaultRoot, sessionId, op, domainId, errorEvent, true);
-await this.logEvent(vaultRoot, sessionId, op, domainId, finishEvent, true);
-```
+### 3. `agent-runner.ts` — baseUrl в системном событии
 
-### 4. `agent-runner.ts` — baseUrl в системном событии
-
-В `buildOptsFor` — нет. В `run()`:
+В методе `run()`, при формировании первого `system`-события:
 
 ```typescript
 const baseUrlHint = this.settings.backend === "native-agent"
@@ -128,7 +127,7 @@ const baseUrlHint = this.settings.backend === "native-agent"
 yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}${baseUrlHint}` };
 ```
 
-Это позволяет сразу видеть в `agent.jsonl` и в Progress, какой URL используется.
+Позволяет сразу видеть в `agent.jsonl` и в Progress, какой URL используется. Упрощает диагностику "не тот `baseUrl`".
 
 ---
 
@@ -136,7 +135,7 @@ yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"
 
 ```
 dispatch()
-  → setTimeout(timeoutMs, ctrl.abort)
+  → setTimeout(timeoutMs, ctrl.abort + timedOut=true)
   → agentRunner.run()
       → yield system ("native-agent / model @ https://homelab...")
       → runQuery()
@@ -146,11 +145,15 @@ dispatch()
                   → openaiClient.create(noStream)
                       → mobileFetch()
                           → Promise.race([requestUrl(...), abortRace(signal)])
-                          ← AbortError при signal.abort() (таймаут или кнопка Cancel)
-  ← AbortError propagates через chain
-  → catch(err): logEvent(agent.jsonl, error, force=true)
-  → view.appendEvent({ kind: "error" })
+                          ← AbortError при signal.abort()
+          ← runQuery: signal.aborted → return (silent)
+  ← for-await loop ends normally, finalText=""
+  → detect: ctrl.signal.aborted && !finalText && timedOut
+      → status="error", finalText="Timeout after Xs — check LLM backend URL"
+      → view.appendEvent({ kind: "error" })
+      → logEvent(agent.jsonl, error)  [если agentLogEnabled]
   → finally: clearTimeout(timeoutId)
+  → finish(entry) — показывает ошибку пользователю
 ```
 
 ---
@@ -159,18 +162,28 @@ dispatch()
 
 | Сценарий | До фикса | После фикса |
 |---|---|---|
-| Сервер недоступен, TCP timeout | Вечный hang | AbortError через `timeoutMs`, запись в agent.jsonl |
-| SSL ошибка | Hang или тихий fail | AbortError или HTTP error, запись в agent.jsonl |
-| Пользователь нажимает Cancel | Не работает (requestUrl продолжает) | AbortError немедленно |
-| agentLogEnabled = false | Ошибки не логируются | Старт/финиш/ошибки всегда логируются |
+| Сервер недоступен, TCP timeout | Вечный hang | Ошибка через `timeoutMs` сек, сообщение пользователю, лог (если включён) |
+| SSL / HTTP ошибка (не hang) | Тихий fail | Ошибка всплывает через обычный catch, показывается и логируется |
+| Пользователь нажимает Cancel | requestUrl продолжает, нет feedback | AbortError немедленно, статус "cancelled" |
+| agentLogEnabled = false | — | Логирование не меняется — только если включён |
 
 ---
 
 ## Testing
 
-- `tests/mobile-fetch.test.ts` — новый: тест AbortSignal через Promise.race (мок `requestUrl`)
-- `tests/agent-runner.integration.test.ts` — добавить проверку baseUrl в system event
-- Ручное тестирование: запустить query с недоступным baseUrl → должен завершиться с ошибкой через `timeoutMs`
+**Unit:**
+- `tests/mobile-fetch.test.ts` — новый файл:
+  - Тест: AbortSignal уже aborted → немедленный AbortError
+  - Тест: AbortSignal срабатывает после старта `requestUrl` (мок с задержкой) → AbortError через race
+  - Тест: успешный запрос без signal → Response с нужными полями
+
+**Integration:**
+- `tests/agent-runner.integration.test.ts` — проверить что system event содержит baseUrl для native-agent
+
+**Ручное тестирование (мобильное):**
+- Настроить `baseUrl` на недоступный хост → query → должен завершиться с ошибкой "Timeout after Xs" через `timeoutMs` секунд
+- Настроить корректный `baseUrl` → query → должен работать как на десктопе (шаги Glob → LLM ответ → результат)
+- Нажать Cancel во время запроса → должен отмениться немедленно, статус "cancelled"
 
 ---
 
@@ -179,3 +192,4 @@ dispatch()
 - Исправление сетевой конфигурации (это задача пользователя — настроить доступный `baseUrl`)
 - Прерывание `requestUrl` изнутри (API Obsidian не поддерживает)
 - Поддержка других мобильных операций (ingest, lint) — они намеренно заблокированы
+- `dispatchChat` — аналогичная проблема, отдельная задача
