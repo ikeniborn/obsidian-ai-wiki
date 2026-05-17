@@ -84,7 +84,7 @@ describe("selectSeeds", () => {
     expect(r).toContain("Gamma");
   });
 
-  it("caps content tokenization to first 200 chars", () => {
+  it("caps content tokenization to first 500 chars", () => {
     const big = new Map([["wiki/Big.md", "irrelevant ".repeat(50) + "needle"]]);
     expect(selectSeeds("needle", big, 10, 0)).toEqual([]);
   });
