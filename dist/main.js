@@ -20086,13 +20086,11 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         }
       })
     );
-    if (!import_obsidian3.Platform.isMobile) {
-      new import_obsidian3.Setting(containerEl).setName(T.settings.agentLog_name).setDesc(T.settings.agentLog_desc).addToggle(
-        (t) => t.setValue(eff.agentLogEnabled).onChange(async (v) => {
-          await this.patchLocal({ agentLogEnabled: v });
-        })
-      );
-    }
+    new import_obsidian3.Setting(containerEl).setName(T.settings.agentLog_name).setDesc(T.settings.agentLog_desc).addToggle(
+      (t) => t.setValue(eff.agentLogEnabled).onChange(async (v) => {
+        await this.patchLocal({ agentLogEnabled: v });
+      })
+    );
     new import_obsidian3.Setting(containerEl).setName(T.settings.domains_heading).setHeading();
     const domains = this.cachedDomains;
     if (domains.length === 0) {
