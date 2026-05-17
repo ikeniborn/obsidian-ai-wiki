@@ -5,7 +5,7 @@ import { PassThrough } from "node:stream";
 vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 
 import { spawn } from "node:child_process";
-import { ClaudeCliClient } from "../src/claude-cli-client";
+import { ClaudeCliClient, type ClaudeCliConfig } from "../src/claude-cli-client";
 
 function makeMockProcess(lines: string[]) {
   const stdout = new PassThrough();
@@ -319,5 +319,30 @@ describe("ClaudeCliClient", () => {
     expect(args).toContain("--system-prompt");
     const pIdx = args.indexOf("-p");
     expect(args[pIdx + 1]).toBe("первый вопрос");
+  });
+
+  it("ClaudeCliConfig accepts effort field", () => {
+    const testCfg: ClaudeCliConfig = {
+      iclaudePath: "/usr/bin/claude",
+      model: "sonnet",
+      requestTimeoutSec: 300,
+      tmpDir: "/tmp",
+      tmpWrite: async () => {},
+      tmpRemove: () => {},
+      effort: "high",
+    };
+    expect(testCfg.effort).toBe("high");
+  });
+
+  it("ClaudeCliConfig effort is optional", () => {
+    const testCfg: ClaudeCliConfig = {
+      iclaudePath: "/usr/bin/claude",
+      model: "sonnet",
+      requestTimeoutSec: 300,
+      tmpDir: "/tmp",
+      tmpWrite: async () => {},
+      tmpRemove: () => {},
+    };
+    expect(testCfg.effort).toBeUndefined();
   });
 });

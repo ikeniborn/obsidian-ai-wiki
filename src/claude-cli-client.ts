@@ -14,6 +14,7 @@ export interface ClaudeCliConfig {
   resumeSessionId?: string;
   tmpWrite: (absPath: string, content: string) => Promise<void>;
   tmpRemove: (absPath: string) => void;
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
 }
 
 const SIGTERM_GRACE_MS = 3000;
@@ -60,9 +61,10 @@ export class ClaudeCliClient implements LlmClient {
     const args: string[] = [];
     args.push("--");
 
-    // --model и --resume идут после -- как claude-флаги (не iclaude-флаги),
+    // --model, --effort и --resume идут после -- как claude-флаги (не iclaude-флаги),
     // чтобы iclaude.sh не вызывал save_model_to_config и не мутировал .claude_config
     if (model) args.push("--model", model);
+    if (this.cfg.effort) args.push("--effort", this.cfg.effort);
     if (isResume) {
       args.push("--resume", this.cfg.resumeSessionId!);
     }
