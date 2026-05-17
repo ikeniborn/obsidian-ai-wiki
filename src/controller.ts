@@ -567,6 +567,10 @@ export class WikiController {
 
     const opKey = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
     const timeoutMs = this.plugin.settings.timeouts[opKey as keyof typeof this.plugin.settings.timeouts] * 1000;
+    let timedOut = false;
+    const timeoutId = timeoutMs > 0
+      ? window.setTimeout(() => { timedOut = true; ctrl.abort(); }, timeoutMs)
+      : null;
     const resolvedChatMessages = op === "format" ? this._pendingFormat?.chat : chatMessages;
     const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages: resolvedChatMessages });
 
@@ -606,10 +610,21 @@ export class WikiController {
       finalText = i18n().ctrl.errorPrefix((err as Error).message);
       await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
     } finally {
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
       this.current = null;
       this.onBusyChange?.();
       this.currentOp = null;
       this._currentLogMeta = null;
+    }
+    if (ctrl.signal.aborted && status === "done" && !finalText) {
+      if (timedOut) {
+        status = "error";
+        finalText = `Timeout after ${Math.round(timeoutMs / 1000)}s — check LLM backend URL`;
+        this.activeView()?.appendEvent({ kind: "error", message: finalText });
+        await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
+      } else {
+        status = "cancelled";
+      }
     }
     if (status === "done") {
       const mutatesWiki = op === "ingest" || op === "lint" || op === "lint-chat" || op === "query-save" || op === "init";
