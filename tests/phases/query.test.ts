@@ -57,7 +57,7 @@ describe("runQuery", () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
-      read: vi.fn().mockResolvedValue("# Page\n\nSome fact."),
+      read: vi.fn().mockResolvedValue("# Page\n\nThis is the answer to everything."),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const events = await collect(
@@ -80,16 +80,19 @@ describe("runQuery", () => {
   it("saves answer page when save=true", async () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
-      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
-      read: vi.fn().mockResolvedValue(""),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Topic.md"], folders: [] }),
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p.includes("Topic.md")) return "topic details description";
+        return "";
+      }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     await collect(
       runQuery(
-        ["What is X?"],
+        ["What is topic?"],
         true,
         vt,
-        makeLlm("X is Y."),
+        makeLlm("Topic is something."),
         "model",
         [domain],
         VAULT_ROOT,

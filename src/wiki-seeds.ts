@@ -36,8 +36,7 @@ export function scoreSeed(
   if (p.size === 0) return 0;
   let inter = 0;
   for (const t of questionTokens) if (p.has(t)) inter++;
-  const union = questionTokens.size + p.size - inter;
-  return union === 0 ? 0 : inter / union;
+  return inter / questionTokens.size;
 }
 
 export function selectSeeds(

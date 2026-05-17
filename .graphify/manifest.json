@@ -208,8 +208,8 @@
     "hash": "1189091f79ebe4ef8d53e1eec8c492d0"
   },
   "tests/phases/query.test.ts": {
-    "mtime": 1778963534.7850442,
-    "hash": "27663e0b2f14d555d491917a810ee208"
+    "mtime": 1779044628.7062361,
+    "hash": "6b9b28963a419c23f318cacdf8481b27"
   },
   "tests/phases/ingest.test.js": {
     "mtime": 1777576293.2092216,
@@ -356,8 +356,8 @@
     "hash": "156c8f54c389d3cb9a2da901a0743a08"
   },
   "src/wiki-seeds.ts": {
-    "mtime": 1778963534.7843838,
-    "hash": "0bd459cd0b70a9d5b9fa374795c6de1a"
+    "mtime": 1779044478.3249645,
+    "hash": "de9097ef72ae6cdff0d264fe5651ea68"
   },
   "src/domain.ts": {
     "mtime": 1778865732.5267062,
@@ -432,8 +432,8 @@
     "hash": "5afb45f826ca1a1d6bd03fade3dc8d48"
   },
   "src/phases/query.ts": {
-    "mtime": 1779023037.4100134,
-    "hash": "48e2f968a86b68f9c4cb34329d17d4d2"
+    "mtime": 1779044517.6825137,
+    "hash": "3fe171fa678ea8ae66ed41c03d35a4d3"
   },
   "src/phases/parse-with-retry.ts": {
     "mtime": 1778964900.3387325,
@@ -472,8 +472,8 @@
     "hash": "eea6b9feee565d34bd9a69ffddc9f3e8"
   },
   "src/phases/llm-utils.ts": {
-    "mtime": 1779037659.2416575,
-    "hash": "349419b5410894753ad3a3be5ddd5605"
+    "mtime": 1779044643.6620634,
+    "hash": "82c70e3e80e9c3b87e118f6fd39d63c0"
   },
   "src/phases/evaluator.ts": {
     "mtime": 1778679172.6390789,

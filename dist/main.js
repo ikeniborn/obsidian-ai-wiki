@@ -21577,7 +21577,7 @@ function stripFences(text) {
 }
 function extractStreamDeltas(chunk) {
   const delta = chunk.choices[0]?.delta;
-  const rawReasoning = delta?.reasoning;
+  const rawReasoning = delta?.reasoning ?? delta?.reasoning_content;
   const usage = chunk.usage;
   const outputTokens = typeof usage?.completion_tokens === "number" ? usage.completion_tokens : void 0;
   return {
@@ -21607,6 +21607,9 @@ function buildChatParams(model, messages, opts, stream = false) {
   }
   if (opts.thinkingBudgetTokens && opts.thinkingBudgetTokens > 0) {
     params.thinking = { type: "enabled", budget_tokens: opts.thinkingBudgetTokens };
+    delete params.response_format;
+    delete params.temperature;
+    delete params.top_p;
   }
   return params;
 }
@@ -26507,8 +26510,7 @@ function scoreSeed(questionTokens, pageIdValue, content) {
   for (const t of questionTokens)
     if (p.has(t))
       inter++;
-  const union = questionTokens.size + p.size - inter;
-  return union === 0 ? 0 : inter / union;
+  return inter / questionTokens.size;
 }
 function selectSeeds(question, pages, topK, minScore) {
   const q = tokenize(question);
@@ -26570,7 +26572,8 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
     if (signal.aborted)
       return;
     yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allPageIds.length } };
-    const seedRes = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal);
+    const seedOpts = { ...opts, thinkingBudgetTokens: void 0 };
+    const seedRes = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, seedOpts, signal);
     seeds = seedRes.seeds;
     outputTokens += seedRes.outputTokens;
     yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
@@ -26578,12 +26581,13 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   if (signal.aborted)
     return;
   if (seeds.length === 0) {
-    seeds = allPageIds;
+    yield { kind: "error", message: "No relevant pages found for this query." };
+    return;
   }
   const seedSet = new Set(seeds);
   const selectedIds = bfsExpand(seeds, graph, graphDepth);
   yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: pages.size, fromCache };
-  const contextBlock = buildContextBlock(pages, seedSet, selectedIds);
+  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);
   const entityTypesBlock = buildEntityTypesBlock2(domain);
   const systemPrompt = render(query_default, {
     domain_name: domain.name,
@@ -26711,7 +26715,7 @@ Return JSON only matching this shape (most relevant page names \u2014 bare names
     return { seeds: [], outputTokens: 0 };
   }
 }
-function buildContextBlock(pages, seeds, selectedIds) {
+function buildContextBlock(pages, seeds, selectedIds, maxPages) {
   const seedPages = [];
   const bfsPages = [];
   for (const [path2, content] of pages) {
@@ -26723,7 +26727,8 @@ function buildContextBlock(pages, seeds, selectedIds) {
     else
       bfsPages.push([path2, content]);
   }
-  const ordered = [...seedPages, ...bfsPages];
+  const bfsCap = Math.max(0, maxPages - seedPages.length);
+  const ordered = [...seedPages, ...bfsPages.slice(0, bfsCap)];
   let block = "";
   for (const [p, c] of ordered) {
     block += `--- ${p} ---

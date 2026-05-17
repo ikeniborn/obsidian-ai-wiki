@@ -75,19 +75,21 @@ export async function* runQuery(
   if (seeds.length === 0) {
     if (signal.aborted) return;
     yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allPageIds.length } };
-    const seedRes = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal);
+    const seedOpts = { ...opts, thinkingBudgetTokens: undefined };
+    const seedRes = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, seedOpts, signal);
     seeds = seedRes.seeds;
     outputTokens += seedRes.outputTokens;
     yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
   }
   if (signal.aborted) return;
   if (seeds.length === 0) {
-    seeds = allPageIds;
+    yield { kind: "error", message: "No relevant pages found for this query." };
+    return;
   }
   const seedSet = new Set(seeds);
   const selectedIds = bfsExpand(seeds, graph, graphDepth);
   yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: pages.size, fromCache };
-  const contextBlock = buildContextBlock(pages, seedSet, selectedIds);
+  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);
 
   const entityTypesBlock = buildEntityTypesBlock(domain);
 
@@ -208,6 +210,7 @@ function buildContextBlock(
   pages: Map<string, string>,
   seeds: Set<string>,
   selectedIds: Set<string>,
+  maxPages: number,
 ): string {
   const seedPages: [string, string][] = [];
   const bfsPages: [string, string][] = [];
@@ -217,7 +220,8 @@ function buildContextBlock(
     if (seeds.has(id)) seedPages.push([path, content]);
     else bfsPages.push([path, content]);
   }
-  const ordered = [...seedPages, ...bfsPages];
+  const bfsCap = Math.max(0, maxPages - seedPages.length);
+  const ordered = [...seedPages, ...bfsPages.slice(0, bfsCap)];
   let block = "";
   for (const [p, c] of ordered) {
     block += `--- ${p} ---\n${c}\n\n`;
