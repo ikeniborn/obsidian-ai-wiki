@@ -7,6 +7,54 @@ import { i18n } from "./i18n";
 import { resolveEffective } from "./effective-settings";
 import type { LocalConfig } from "./local-config";
 
+async function checkClaudeAvailability(iclaudePath: string): Promise<void> {
+  const { spawn } = await import("child_process");
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(iclaudePath, [
+      "--", "-p", "Привет, AI Wiki! Поработаем?",
+      "--output-format", "stream-json", "--verbose",
+      "--disable-slash-commands", "--dangerously-skip-permissions",
+      "--model", "haiku",
+    ], { stdio: ["ignore", "pipe", "pipe"] });
+
+    const timeout = window.setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("Timeout 30s"));
+    }, 30_000);
+
+    child.on("error", err => { clearTimeout(timeout); reject(err); });
+    child.on("close", code => {
+      clearTimeout(timeout);
+      if (code === 0) resolve();
+      else reject(new Error(`exit code ${code}`));
+    });
+  });
+}
+
+async function checkNativeAvailability(baseUrl: string, apiKey: string, model: string): Promise<void> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 30_000);
+  try {
+    const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: "Привет, AI Wiki! Поработаем?" }],
+        max_tokens: 50,
+        stream: false,
+      }),
+      signal: controller.signal,
+    });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      throw new Error(`HTTP ${resp.status}: ${text.slice(0, 200)}`);
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export function parseTimeoutString(v: string): { ingest: number; query: number; lint: number; init: number; format: number } | null {
   const parts = v.split("/").map((x) => Number(x.trim()));
   if (parts.length === 5 && parts.every((n) => Number.isFinite(n) && n > 0)) {
@@ -208,7 +256,21 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             .onChange(async (v) => {
               await this.patchLocal({ iclaudePath: v.trim() });
             }),
-        );
+        )
+        .addButton(b => {
+          b.setButtonText("Проверить").onClick(async () => {
+            b.setButtonText("Проверка…").setDisabled(true);
+            try {
+              await checkClaudeAvailability(this.localCache.iclaudePath);
+              new Notice("✅ Claude доступен");
+            } catch (e) {
+              new Notice(`❌ ${(e as Error).message}`);
+            } finally {
+              b.setButtonText("Проверить").setDisabled(false);
+            }
+          });
+          return b;
+        });
 
       if (!s.claudeAgent.perOperation) {
         new Setting(containerEl)
@@ -303,6 +365,25 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             .setValue(eff.nativeAgent.apiKey)
             .onChange(async (v) => { await this.patchLocalNative({ apiKey: v.trim() }); }),
         );
+
+      new Setting(containerEl)
+        .setName("Проверить соединение")
+        .setDesc("Отправляет тестовый промпт к endpoint для проверки доступности.")
+        .addButton(b => {
+          b.setButtonText("Проверить").onClick(async () => {
+            b.setButtonText("Проверка…").setDisabled(true);
+            const na = eff.nativeAgent;
+            try {
+              await checkNativeAvailability(na.baseUrl, na.apiKey, na.model);
+              new Notice("✅ Модель отвечает");
+            } catch (e) {
+              new Notice(`❌ ${(e as Error).message}`);
+            } finally {
+              b.setButtonText("Проверить").setDisabled(false);
+            }
+          });
+          return b;
+        });
 
       if (!s.nativeAgent.perOperation) {
         new Setting(containerEl)
