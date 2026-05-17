@@ -428,8 +428,11 @@ export class WikiController {
       interface InternalAdapter { remove(p: string): Promise<void>; }
       const fullAdapter = this.app.vault.adapter as unknown as InternalAdapter;
       const claudeEff = s.claudeAgent;
-      const effort = claudeEff.perOperation && opKey
-        ? (claudeEff.operations[opKey as import("./types").OpKey]?.effort ?? claudeEff.effort)
+      const normalizedOpKey = opKey === "chat" || opKey === "lint-chat" ? "lint"
+        : opKey === "query-save" ? "query"
+        : opKey;
+      const effort = claudeEff.perOperation && normalizedOpKey
+        ? (claudeEff.operations[normalizedOpKey as import("./types").OpKey]?.effort ?? claudeEff.effort)
         : claudeEff.effort;
       const client = new ClaudeCliClient({
         iclaudePath: local.iclaudePath,

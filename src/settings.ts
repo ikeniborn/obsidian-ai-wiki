@@ -1,3 +1,4 @@
+import { spawn } from "child_process";
 import { App, Notice, Platform, PluginSettingTab, Setting } from "obsidian";
 import { ConfirmModal, EditDomainModal } from "./modals";
 import type LlmWikiPlugin from "./main";
@@ -8,13 +9,11 @@ import { resolveEffective } from "./effective-settings";
 import type { LocalConfig } from "./local-config";
 
 async function checkClaudeAvailability(iclaudePath: string): Promise<void> {
-  const { spawn } = await import("child_process");
   await new Promise<void>((resolve, reject) => {
     const child = spawn(iclaudePath, [
       "--", "-p", "Привет, AI Wiki! Поработаем?",
       "--output-format", "stream-json", "--verbose",
       "--disable-slash-commands", "--dangerously-skip-permissions",
-      "--model", "haiku",
     ], { stdio: ["ignore", "pipe", "pipe"] });
 
     const timeout = window.setTimeout(() => {
@@ -292,20 +291,18 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             .onChange(async (v) => { await this.patchLocalClaude({ allowedTools: v.trim() }); }),
         );
 
-      if (!s.claudeAgent.perOperation) {
-        new Setting(containerEl)
-          .setName("Effort level")
-          .setDesc("Уровень размышления Claude (--effort). Пусто = без thinking.")
-          .addDropdown(d => {
-            d.addOption("", "Отключено");
-            for (const lv of ["low", "medium", "high", "xhigh", "max"] as const) d.addOption(lv, lv);
-            d.setValue(eff.claudeAgent.effort ?? "");
-            d.onChange(async v => {
-              await this.patchLocalClaude({ effort: (v || undefined) as typeof eff.claudeAgent.effort });
-            });
-            return d;
+      new Setting(containerEl)
+        .setName("Effort level")
+        .setDesc("Уровень размышления Claude (--effort). Пусто = без thinking. В per-op режиме — глобальный fallback.")
+        .addDropdown(d => {
+          d.addOption("", "Отключено");
+          for (const lv of ["low", "medium", "high", "xhigh", "max"] as const) d.addOption(lv, lv);
+          d.setValue(eff.claudeAgent.effort ?? "");
+          d.onChange(async v => {
+            await this.patchLocalClaude({ effort: (v || undefined) as typeof eff.claudeAgent.effort });
           });
-      }
+          return d;
+        });
 
       new Setting(containerEl)
         .setName(T.settings.perOperation_name)

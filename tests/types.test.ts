@@ -24,6 +24,4 @@ it("LlmCallOptions accepts thinkingBudgetTokens", () => {
 it("DEFAULT_SETTINGS has no effort or thinkingBudgetTokens", () => {
   expect(DEFAULT_SETTINGS.claudeAgent.effort).toBeUndefined();
   expect(DEFAULT_SETTINGS.nativeAgent.thinkingBudgetTokens).toBeUndefined();
-  expect((DEFAULT_SETTINGS.claudeAgent as any).effort).toBeUndefined();
-  expect((DEFAULT_SETTINGS.nativeAgent as any).thinkingBudgetTokens).toBeUndefined();
 });
