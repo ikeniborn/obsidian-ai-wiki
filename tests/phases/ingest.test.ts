@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runIngest, buildEntityTypesBlock } from "../../src/phases/ingest";
+import { runIngest, buildEntityTypesBlock, parseJsonPages } from "../../src/phases/ingest";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
@@ -240,6 +240,32 @@ describe("runIngest", () => {
     expect(rawCall).toBeUndefined();
   });
 
+  it("calls write on _index.md with annotation after page write", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llmResponse = JSON.stringify([
+      { path: "!Wiki/work/Entity.md", content: "# Entity\n\nFact.", annotation: "описание сущности" },
+    ]);
+    await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt,
+        makeLlm(llmResponse),
+        "llama3.2",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+      ),
+    );
+    const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls;
+    const indexWrite = writeCalls.find((c: [string, string]) => c[0].endsWith("_index.md"));
+    expect(indexWrite).toBeDefined();
+    expect(indexWrite![1]).toContain("Entity: описание сущности");
+  });
+
   it("does not fail ingest when raw file backlink write throws", async () => {
     const adapter = mockAdapter({
       read: vi.fn().mockResolvedValue("source text"),
@@ -274,6 +300,21 @@ describe("runIngest", () => {
         (e.preview as string)?.includes("backlink write failed"),
     );
     expect(failEvent).toBeDefined();
+  });
+});
+
+describe("parseJsonPages with annotation", () => {
+  it("extracts annotation field when present", () => {
+    const json = JSON.stringify([
+      { path: "wiki/A.md", content: "# A", annotation: "описание A" },
+    ]);
+    const pages = parseJsonPages(json);
+    expect(pages[0].annotation).toBe("описание A");
+  });
+
+  it("annotation is undefined when absent", () => {
+    const json = JSON.stringify([{ path: "wiki/A.md", content: "# A" }]);
+    expect(parseJsonPages(json)[0].annotation).toBeUndefined();
   });
 });
 

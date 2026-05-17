@@ -8,6 +8,8 @@ import ingestTemplate from "../../prompts/ingest.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField } from "../utils/raw-frontmatter";
+import { upsertIndexAnnotation } from "../wiki-index";
+import { pageId } from "../wiki-graph";
 
 export async function* runIngest(
   args: string[],
@@ -113,6 +115,11 @@ export async function* runIngest(
       await vaultTools.write(page.path, page.content);
       written.push(page.path);
       yield { kind: "tool_result", ok: true };
+      if (page.annotation) {
+        try {
+          await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation);
+        } catch { /* non-critical */ }
+      }
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: (e as Error).message };
     }
@@ -123,7 +130,6 @@ export async function* runIngest(
 
   if (written.length > 0) {
     await appendLog(vaultTools, domainRoot, sourceVaultPath, domain.id, written);
-    await updateIndex(vaultTools, domainRoot, written);
 
     const backlinkToday = new Date().toISOString().slice(0, 10);
     const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
@@ -174,18 +180,18 @@ export function detectDomain(absFilePath: string, domains: DomainEntry[], vaultR
   return domains[0] ?? null;
 }
 
-export function parseJsonPages(text: string): Array<{ path: string; content: string }> {
+export function parseJsonPages(text: string): Array<{ path: string; content: string; annotation?: string }> {
   const match = text.match(/\[[\s\S]*\]/);
   if (!match) return [];
   try {
     const arr: unknown = JSON.parse(match[0]);
     if (!Array.isArray(arr)) return [];
     return (arr as unknown[]).filter(
-      (x): x is { path: string; content: string } =>
+      (x): x is { path: string; content: string; annotation?: string } =>
         x !== null &&
         typeof x === "object" &&
-        typeof x.path === "string" &&
-        typeof x.content === "string",
+        typeof (x as { path?: unknown }).path === "string" &&
+        typeof (x as { content?: unknown }).content === "string",
     );
   } catch {
     return [];
