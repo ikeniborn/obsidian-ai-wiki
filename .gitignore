@@ -1,6 +1,7 @@
 .superpowers/
 .worktrees/
 .claude/plans/
+.graphify/cache/
 node_modules/
 main.js
 *.log

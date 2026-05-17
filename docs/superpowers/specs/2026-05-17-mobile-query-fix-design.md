@@ -1,3 +1,22 @@
+---
+review:
+  spec_hash: "940bbe4b810c27db"
+  last_run: "2026-05-17"
+  phases:
+    structure:   {status: passed}
+    coverage:    {status: passed}
+    clarity:     {status: passed}
+    consistency: {status: passed}
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: INFO
+      section: "Testing"
+      section_hash: "5c99d71167aea72d"
+      text: "\"мок с задержкой\" без указания конкретного значения — тест-имплементация варьируется"
+      verdict: fixed
+      verdict_at: "2026-05-17"
+---
 # Mobile Query Fix — Design Spec
 
 **Date:** 2026-05-17  
@@ -174,7 +193,7 @@ dispatch()
 **Unit:**
 - `tests/mobile-fetch.test.ts` — новый файл:
   - Тест: AbortSignal уже aborted → немедленный AbortError
-  - Тест: AbortSignal срабатывает после старта `requestUrl` (мок с задержкой) → AbortError через race
+  - Тест: AbortSignal срабатывает после старта `requestUrl` (мок с задержкой 50 мс) → AbortError через race
   - Тест: успешный запрос без signal → Response с нужными полями
 
 **Integration:**

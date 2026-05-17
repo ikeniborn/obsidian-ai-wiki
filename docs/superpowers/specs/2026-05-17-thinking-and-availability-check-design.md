@@ -2,6 +2,39 @@
 title: Thinking budget + availability check
 date: 2026-05-17
 status: approved
+review:
+  spec_hash: 1fc3e9a9009b7bf3
+  last_run: 2026-05-17
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: structure
+      severity: WARNING
+      section: "### UI в `src/settings.ts`"
+      section_hash: "145a8ac1f614440c"
+      text: "Дублирующийся заголовок — встречается дважды: под Фича 1 и Фича 2"
+      verdict: fixed
+      verdict_at: 2026-05-17
+    - id: F-002
+      phase: coverage
+      severity: CRITICAL
+      section: "### Изменения в `src/controller.ts`"
+      section_hash: "07af71e5304cfc99"
+      text: "Противоречие: начало секции показывало получение effort через runner.buildOptsFor(), блок «Конкретно» — controller читает напрямую. Параллельно §agent-runner.ts декларировал сигнатуру с полем effort."
+      verdict: fixed
+      verdict_at: 2026-05-17
+    - id: F-003
+      phase: clarity
+      severity: WARNING
+      section: "# Thinking budget & availability check"
+      section_hash: "1fc3e9a9009b7bf3"
+      text: "Интро называет нативную настройку 'budget_tokens' (API-поле), а в коде она везде thinkingBudgetTokens. Для claude-agent 'effort' — единое имя на всех уровнях; для native-agent — асимметрия."
+      verdict: accepted
+      verdict_at: 2026-05-17
 ---
 
 # Thinking budget & availability check
@@ -87,8 +120,7 @@ if (this.cfg.effort) args.push("--effort", this.cfg.effort);
 // claude-agent
 const c = s.claudeAgent.perOperation ? s.claudeAgent.operations[key] : undefined;
 const model = c?.model ?? s.claudeAgent.model;
-const effort = c?.effort ?? s.claudeAgent.effort;
-return { model, effort, opts: { systemPrompt: s.systemPrompt, structuredRetries } };
+return { model, opts: { systemPrompt: s.systemPrompt, structuredRetries } };
 
 // native-agent
 const c = na.perOperation ? na.operations[key] : undefined;
@@ -97,20 +129,11 @@ if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.t
 return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
 ```
 
-Сигнатура `buildOptsFor()` возвращает `{ model: string; effort?: string; opts: LlmCallOptions }`.
+Сигнатура `buildOptsFor()` возвращает `{ model: string; opts: LlmCallOptions }`. Поле `effort` не возвращается — `controller.ts` читает его напрямую из settings (см. ниже).
 
 ### Изменения в `src/controller.ts`
 
-При создании `ClaudeCliClient` добавить поле `effort` из результата `buildOptsFor()`:
-
-```typescript
-const { model, effort, opts } = runner.buildOptsFor(operation);
-const client = new ClaudeCliClient({ ..., effort });
-```
-
-> Примечание: `buildOptsFor()` сейчас приватный метод. Нужно вынести логику построения `ClaudeCliConfig` в `controller.ts`, либо сделать метод внутренне доступным через рефактор. Предпочтительно: `AgentRunner` получает `effort` при создании `ClaudeCliClient` в `controller.ts` до передачи в `AgentRunner`, либо `controller.ts` сам читает effort из settings при построении `ClaudeCliConfig`.
-
-**Конкретно:** `controller.ts` уже читает `eff.backend` и строит `ClaudeCliConfig` напрямую. Добавить туда же:
+`controller.ts` уже читает `eff.backend` и строит `ClaudeCliConfig` напрямую. Добавить туда же чтение `effort`:
 
 ```typescript
 const claudeEff = s.claudeAgent;
@@ -120,7 +143,7 @@ const effort = claudeEff.perOperation
 // затем передать в ClaudeCliConfig
 ```
 
-### UI в `src/settings.ts`
+### UI: effort в `src/settings.ts`
 
 **Claude-agent — глобальный effort (dropdown, только если `!perOperation`):**
 
@@ -249,7 +272,7 @@ async function checkNativeAvailability(baseUrl: string, apiKey: string, model: s
 }
 ```
 
-### UI в `src/settings.ts`
+### UI: кнопки проверки в `src/settings.ts`
 
 **Claude-agent — кнопка добавляется к setting iclaudePath (`.addButton()`):**
 
@@ -308,8 +331,8 @@ new Setting(containerEl)
 | `src/local-config.ts` | `LocalConfig.claudeAgent.effort` |
 | `src/phases/llm-utils.ts` | `buildChatParams()` — добавить `thinking` поле |
 | `src/claude-cli-client.ts` | `ClaudeCliConfig.effort`, `_create()` — `--effort` arg |
-| `src/agent-runner.ts` | `buildOptsFor()` — извлечение effort и thinkingBudgetTokens |
-| `src/controller.ts` | Передача `effort` в `ClaudeCliConfig` при построении клиента |
+| `src/agent-runner.ts` | `buildOptsFor()` — извлечение thinkingBudgetTokens |
+| `src/controller.ts` | Чтение `effort` из settings, передача в `ClaudeCliConfig` |
 | `src/settings.ts` | Dropdown effort (claude), text thinkingBudgetTokens (native), кнопки проверки |
 
 ---
