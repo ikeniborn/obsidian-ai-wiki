@@ -115,7 +115,10 @@ export class AgentRunner {
 
   async *run(req: RunRequest): AsyncGenerator<RunEvent, void, void> {
     const { model, opts } = this.buildOptsFor(req.operation);
-    yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}` };
+    const baseUrlHint = this.settings.backend === "native-agent"
+      ? ` @ ${this.settings.nativeAgent.baseUrl}`
+      : "";
+    yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}${baseUrlHint}` };
 
     if (req.signal.aborted) return;
 

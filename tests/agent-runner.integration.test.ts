@@ -181,4 +181,29 @@ describe("AgentRunner", () => {
     expect(err).toBeDefined();
     expect(structuralErrorCounter.get().failed).toBe(1);
   });
+
+  it("system event содержит baseUrl для native-agent backend", async () => {
+    const settingsWithUrl: LlmWikiPluginSettings = {
+      ...baseSettings,
+      backend: "native-agent",
+      nativeAgent: {
+        ...DEFAULT_SETTINGS.nativeAgent,
+        baseUrl: "https://homelab.example.com/v1",
+      },
+    };
+    const vt = new VaultTools(mockAdapter(), "/vault");
+    const runner = new AgentRunner(makeLlm("[]"), settingsWithUrl, vt, "TestVault", []);
+    const events = await collect(
+      runner.run({
+        operation: "query",
+        args: ["test"],
+        cwd: "/vault",
+        signal: new AbortController().signal,
+        timeoutMs: 10_000,
+      }),
+    );
+    const systemEv = events[0] as { kind: string; message: string };
+    expect(systemEv.kind).toBe("system");
+    expect(systemEv.message).toContain("https://homelab.example.com/v1");
+  });
 });
