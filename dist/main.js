@@ -19994,6 +19994,61 @@ function resolveEffective(s, l) {
 }
 
 // src/settings.ts
+async function checkClaudeAvailability(iclaudePath) {
+  const { spawn: spawn2 } = await import("child_process");
+  await new Promise((resolve, reject) => {
+    const child = spawn2(iclaudePath, [
+      "--",
+      "-p",
+      "\u041F\u0440\u0438\u0432\u0435\u0442, AI Wiki! \u041F\u043E\u0440\u0430\u0431\u043E\u0442\u0430\u0435\u043C?",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--disable-slash-commands",
+      "--dangerously-skip-permissions",
+      "--model",
+      "haiku"
+    ], { stdio: ["ignore", "pipe", "pipe"] });
+    const timeout = window.setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("Timeout 30s"));
+    }, 3e4);
+    child.on("error", (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      if (code === 0)
+        resolve();
+      else
+        reject(new Error(`exit code ${code}`));
+    });
+  });
+}
+async function checkNativeAvailability(baseUrl, apiKey, model) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 3e4);
+  try {
+    const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: "\u041F\u0440\u0438\u0432\u0435\u0442, AI Wiki! \u041F\u043E\u0440\u0430\u0431\u043E\u0442\u0430\u0435\u043C?" }],
+        max_tokens: 50,
+        stream: false
+      }),
+      signal: controller.signal
+    });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      throw new Error(`HTTP ${resp.status}: ${text.slice(0, 200)}`);
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 function parseTimeoutString(v) {
   const parts = v.split("/").map((x) => Number(x.trim()));
   if (parts.length === 5 && parts.every((n) => Number.isFinite(n) && n > 0)) {
@@ -20151,7 +20206,20 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         (t) => t.setPlaceholder("/home/user/Documents/Project/iclaude/iclaude.sh").setValue(this.localCache.iclaudePath).onChange(async (v) => {
           await this.patchLocal({ iclaudePath: v.trim() });
         })
-      );
+      ).addButton((b) => {
+        b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").onClick(async () => {
+          b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430\u2026").setDisabled(true);
+          try {
+            await checkClaudeAvailability(this.localCache.iclaudePath);
+            new import_obsidian3.Notice("\u2705 Claude \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D");
+          } catch (e) {
+            new import_obsidian3.Notice(`\u274C ${e.message}`);
+          } finally {
+            b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").setDisabled(false);
+          }
+        });
+        return b;
+      });
       if (!s.claudeAgent.perOperation) {
         new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_claude).addText(
           (t) => t.setPlaceholder("").setValue(eff.claudeAgent.model).onChange(async (v) => {
@@ -20164,6 +20232,18 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           await this.patchLocalClaude({ allowedTools: v.trim() });
         })
       );
+      if (!s.claudeAgent.perOperation) {
+        new import_obsidian3.Setting(containerEl).setName("Effort level").setDesc("\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u0440\u0430\u0437\u043C\u044B\u0448\u043B\u0435\u043D\u0438\u044F Claude (--effort). \u041F\u0443\u0441\u0442\u043E = \u0431\u0435\u0437 thinking.").addDropdown((d) => {
+          d.addOption("", "\u041E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E");
+          for (const lv of ["low", "medium", "high", "xhigh", "max"])
+            d.addOption(lv, lv);
+          d.setValue(eff.claudeAgent.effort ?? "");
+          d.onChange(async (v) => {
+            await this.patchLocalClaude({ effort: v || void 0 });
+          });
+          return d;
+        });
+      }
       new import_obsidian3.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
         (t) => t.setValue(s.claudeAgent.perOperation).onChange(async (v) => {
           s.claudeAgent.perOperation = v;
@@ -20187,6 +20267,17 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
               await this.plugin.saveSettings();
             })
           );
+          new import_obsidian3.Setting(containerEl).setName("Effort level").addDropdown((d) => {
+            d.addOption("", "\u0423\u043D\u0430\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u044C");
+            for (const lv of ["low", "medium", "high", "xhigh", "max"])
+              d.addOption(lv, lv);
+            d.setValue(s.claudeAgent.operations[key].effort ?? "");
+            d.onChange(async (v) => {
+              s.claudeAgent.operations[key].effort = v || void 0;
+              await this.plugin.saveSettings();
+            });
+            return d;
+          });
         }
       }
     } else {
@@ -20200,6 +20291,21 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           await this.patchLocalNative({ apiKey: v.trim() });
         })
       );
+      new import_obsidian3.Setting(containerEl).setName("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u0435").setDesc("\u041E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u0442 \u0442\u0435\u0441\u0442\u043E\u0432\u044B\u0439 \u043F\u0440\u043E\u043C\u043F\u0442 \u043A endpoint \u0434\u043B\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E\u0441\u0442\u0438.").addButton((b) => {
+        b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").onClick(async () => {
+          b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430\u2026").setDisabled(true);
+          const na = eff.nativeAgent;
+          try {
+            await checkNativeAvailability(na.baseUrl, na.apiKey, na.model);
+            new import_obsidian3.Notice("\u2705 \u041C\u043E\u0434\u0435\u043B\u044C \u043E\u0442\u0432\u0435\u0447\u0430\u0435\u0442");
+          } catch (e) {
+            new import_obsidian3.Notice(`\u274C ${e.message}`);
+          } finally {
+            b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").setDisabled(false);
+          }
+        });
+        return b;
+      });
       if (!s.nativeAgent.perOperation) {
         new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native).addText(
           (t) => t.setPlaceholder("llama3.2").setValue(eff.nativeAgent.model).onChange(async (v) => {
@@ -20213,6 +20319,13 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
               s.nativeAgent.maxTokens = Math.floor(n);
               await this.plugin.saveSettings();
             }
+          })
+        );
+        new import_obsidian3.Setting(containerEl).setName("Thinking budget tokens").setDesc("\u041C\u0430\u043A\u0441. \u0442\u043E\u043A\u0435\u043D\u044B \u0434\u043B\u044F \u0440\u0430\u0437\u043C\u044B\u0448\u043B\u0435\u043D\u0438\u044F. 0 \u0438\u043B\u0438 \u043F\u0443\u0441\u0442\u043E = \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E.").addText(
+          (t) => t.setPlaceholder("0").setValue(String(s.nativeAgent.thinkingBudgetTokens ?? 0)).onChange(async (v) => {
+            const n = Number(v);
+            s.nativeAgent.thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : void 0;
+            await this.plugin.saveSettings();
           })
         );
         new import_obsidian3.Setting(containerEl).setName(T.settings.temperature_name).setDesc(T.settings.temperature_desc).addText(
@@ -20255,6 +20368,13 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
                 s.nativeAgent.operations[key].maxTokens = Math.floor(n);
                 await this.plugin.saveSettings();
               }
+            })
+          );
+          new import_obsidian3.Setting(containerEl).setName("Thinking budget tokens").addText(
+            (t) => t.setPlaceholder("0").setValue(String(s.nativeAgent.operations[key].thinkingBudgetTokens ?? 0)).onChange(async (v) => {
+              const n = Number(v);
+              s.nativeAgent.operations[key].thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : void 0;
+              await this.plugin.saveSettings();
             })
           );
           new import_obsidian3.Setting(containerEl).setName(T.settings.opTemperature_name).setDesc(T.settings.opTemperature_desc).addText(
@@ -21488,6 +21608,9 @@ function buildChatParams(model, messages, opts, stream = false) {
     params.stream_options = { include_usage: true };
   if (opts.jsonMode === "json_object") {
     params.response_format = { type: "json_object" };
+  }
+  if (opts.thinkingBudgetTokens && opts.thinkingBudgetTokens > 0) {
+    params.thinking = { type: "enabled", budget_tokens: opts.thinkingBudgetTokens };
   }
   return params;
 }
@@ -28097,9 +28220,10 @@ var AgentRunner = class {
     }
     const na = s.nativeAgent;
     const c = na.perOperation ? na.operations[key] : void 0;
+    const budgetTokens = c?.thinkingBudgetTokens ?? na.thinkingBudgetTokens;
     if (c)
-      return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
-    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
+      return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
+    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
   }
   async writeDevLog(_vaultRoot, entry) {
     if (!this.settings.devMode?.enabled)
@@ -28410,6 +28534,8 @@ var ClaudeCliClient = class {
     args.push("--");
     if (model)
       args.push("--model", model);
+    if (this.cfg.effort)
+      args.push("--effort", this.cfg.effort);
     if (isResume) {
       args.push("--resume", this.cfg.resumeSessionId);
     }
@@ -36168,7 +36294,7 @@ var WikiController = class {
     const vaultRoot = this.cwdOrEmpty();
     let agentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId);
+      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat");
     } catch (e) {
       new import_obsidian7.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -36321,7 +36447,7 @@ var WikiController = class {
     }
     return true;
   }
-  async buildAgentRunner(vaultRoot, resumeSessionId) {
+  async buildAgentRunner(vaultRoot, resumeSessionId, opKey) {
     const adapter = this.app.vault.adapter;
     const base = this.cwdOrEmpty();
     const vaultTools = new VaultTools(adapter, base);
@@ -36345,9 +36471,13 @@ var WikiController = class {
         }
       }
       const fullAdapter = this.app.vault.adapter;
+      const claudeEff = s.claudeAgent;
+      const effort = claudeEff.perOperation && opKey ? claudeEff.operations[opKey]?.effort ?? claudeEff.effort : claudeEff.effort;
       const client = new ClaudeCliClient({
-        ...s.claudeAgent,
         iclaudePath: local.iclaudePath,
+        model: claudeEff.model,
+        allowedTools: claudeEff.allowedTools,
+        effort,
         requestTimeoutSec: maxTimeoutSec,
         cwd: vaultRoot,
         tmpDir,
@@ -36456,9 +36586,10 @@ var WikiController = class {
     if (!view)
       return;
     const vaultRoot = this.cwdOrEmpty();
+    const opKey = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
     let agentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot);
+      agentRunner = await this.buildAgentRunner(vaultRoot, void 0, opKey);
     } catch (e) {
       new import_obsidian7.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -36475,7 +36606,6 @@ var WikiController = class {
     let status = "done";
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
     view.setRunning(op, args);
-    const opKey = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
     const timeoutMs = this.plugin.settings.timeouts[opKey] * 1e3;
     let timedOut = false;
     const timeoutId = timeoutMs > 0 ? window.setTimeout(() => {
