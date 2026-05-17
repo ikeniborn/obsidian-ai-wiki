@@ -33,6 +33,7 @@ export const LintChatSchema = z.object({
   pages: z.array(z.object({
     path: z.string(),
     content: z.string(),
+    annotation: z.string().optional(),
   })).default([]),
 });
 

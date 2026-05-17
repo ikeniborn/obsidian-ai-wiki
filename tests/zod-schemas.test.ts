@@ -20,4 +20,19 @@ describe("LintChatSchema", () => {
   it("rejects missing summary", () => {
     expect(() => LintChatSchema.parse({ pages: [] })).toThrow();
   });
+
+  it("accepts pages with annotation field", () => {
+    const input = {
+      summary: "done",
+      pages: [{ path: "a/B.md", content: "# B", annotation: "описание страницы" }],
+    };
+    const result = LintChatSchema.safeParse(input);
+    expect(result.success).toBe(true);
+    expect(result.data?.pages[0].annotation).toBe("описание страницы");
+  });
+
+  it("accepts pages without annotation (optional)", () => {
+    const input = { summary: "done", pages: [{ path: "a/B.md", content: "# B" }] };
+    expect(LintChatSchema.safeParse(input).success).toBe(true);
+  });
 });
