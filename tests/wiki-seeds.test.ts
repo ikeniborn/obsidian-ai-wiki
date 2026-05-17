@@ -89,3 +89,67 @@ describe("selectSeeds", () => {
     expect(selectSeeds("needle", big, 10, 0)).toEqual([]);
   });
 });
+
+describe("bodyContent (internal via scoreSeed)", () => {
+  it("skips YAML frontmatter and reads body", () => {
+    const q = tokenize("deepseek модель");
+    const content = "---\nwiki_sources: []\nwiki_updated: 2026-05-01\n---\nDeepSeek языковая модель.";
+    const score = scoreSeed(q, "Other", content);
+    expect(score).toBeGreaterThan(0);
+  });
+
+  it("returns 0 when keyword is only in frontmatter YAML", () => {
+    const q = tokenize("wiki_sources");
+    const content = "---\nwiki_sources: [note.md]\n---\nBody text here.";
+    const score = scoreSeed(q, "Other", content);
+    expect(score).toBe(0);
+  });
+});
+
+describe("parseFmKeywords (internal via scoreSeed)", () => {
+  it("boosts score via wiki_keywords in frontmatter", () => {
+    const q = tokenize("deepseek инференс");
+    const content = "---\nwiki_keywords: [deepseek, инференс, облако]\n---\n# Page\nКонтент.";
+    const score = scoreSeed(q, "Other", content);
+    expect(score).toBeGreaterThan(0);
+  });
+
+  it("is case-insensitive for wiki_keywords", () => {
+    const q = tokenize("DeepSeek");
+    const content = "---\nwiki_keywords: [deepseek]\n---\n# Page";
+    const score = scoreSeed(q, "Other", content);
+    expect(score).toBeGreaterThan(0);
+  });
+});
+
+describe("scoreSeed with annotation", () => {
+  it("uses annotation text for scoring", () => {
+    const q = tokenize("кластеризация данных");
+    const content = "---\n---\n# Clustering\nAlgorithm.";
+    const score = scoreSeed(q, "Clustering", content, "алгоритм кластеризации данных без учителя");
+    expect(score).toBeGreaterThan(0);
+  });
+
+  it("without annotation behaves same as before for non-frontmatter content", () => {
+    const q = tokenize("alpha beta");
+    expect(scoreSeed(q, "alpha", "beta")).toBeCloseTo(1, 5);
+  });
+});
+
+describe("selectSeeds with indexAnnotations", () => {
+  const pages = new Map([
+    ["wiki/Alpha.md", "# Alpha\nalpha content here"],
+    ["wiki/Beta.md", "# Beta\nbeta unrelated"],
+  ]);
+
+  it("uses annotation from indexAnnotations map", () => {
+    const annotations = new Map([["Alpha", "альфа-частица физика ядро"]]);
+    const r = selectSeeds("альфа физика", pages, 10, 0.1, annotations);
+    expect(r).toContain("Alpha");
+  });
+
+  it("works without indexAnnotations (backward compat)", () => {
+    const r = selectSeeds("alpha content", pages, 10, 0);
+    expect(r).toContain("Alpha");
+  });
+});

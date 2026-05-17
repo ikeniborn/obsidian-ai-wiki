@@ -11,7 +11,7 @@ const STOP_WORDS = new Set([
   "когда", "очень", "более", "менее", "нет", "уже", "ещё", "еще",
 ]);
 
-const CONTENT_CAP = 200;
+const BODY_CAP = 500;
 
 export function tokenize(s: string): Set<string> {
   const out = new Set<string>();
@@ -24,15 +24,30 @@ export function tokenize(s: string): Set<string> {
   return out;
 }
 
+function bodyContent(content: string): string {
+  const m = content.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)/);
+  return (m ? m[1] : content).slice(0, BODY_CAP);
+}
+
+function parseFmKeywords(content: string): Set<string> {
+  const m = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!m) return new Set();
+  const kw = m[1].match(/wiki_keywords:\s*\[(.*?)\]/);
+  if (!kw) return new Set();
+  return new Set(kw[1].split(",").map((s) => s.trim().replace(/['"]/g, "").toLowerCase()));
+}
+
 export function scoreSeed(
   questionTokens: Set<string>,
   pageIdValue: string,
   content: string,
+  annotation?: string,
 ): number {
   if (questionTokens.size === 0) return 0;
-  const head = content.slice(0, CONTENT_CAP);
   const p = tokenize(pageIdValue);
-  for (const t of tokenize(head)) p.add(t);
+  for (const t of parseFmKeywords(content)) p.add(t);
+  for (const t of tokenize(bodyContent(content))) p.add(t);
+  if (annotation) for (const t of tokenize(annotation)) p.add(t);
   if (p.size === 0) return 0;
   let inter = 0;
   for (const t of questionTokens) if (p.has(t)) inter++;
@@ -44,13 +59,15 @@ export function selectSeeds(
   pages: Map<string, string>,
   topK: number,
   minScore: number,
+  indexAnnotations?: Map<string, string>,
 ): string[] {
   const q = tokenize(question);
   if (q.size === 0) return [];
   const scored: { id: string; score: number }[] = [];
   for (const [path, content] of pages) {
     const id = pageId(path);
-    const score = scoreSeed(q, id, content);
+    const annotation = indexAnnotations?.get(id);
+    const score = scoreSeed(q, id, content, annotation);
     if (score >= minScore && score > 0) scored.push({ id, score });
   }
   scored.sort((a, b) => b.score - a.score);
