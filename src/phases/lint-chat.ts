@@ -7,6 +7,8 @@ import { LintChatSchema } from "./zod-schemas";
 import lintChatTemplate from "../../prompts/lint-chat.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
+import { upsertIndexAnnotation } from "../wiki-index";
+import { pageId } from "../wiki-graph";
 
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
@@ -80,6 +82,12 @@ export async function* runLintFixChat(
       yield { kind: "tool_result", ok: true };
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: (e as Error).message };
+      continue;
+    }
+    if (page.annotation) {
+      try {
+        await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation);
+      } catch { /* non-critical */ }
     }
   }
 

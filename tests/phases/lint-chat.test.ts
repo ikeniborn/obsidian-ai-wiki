@@ -10,6 +10,7 @@ function makeVaultTools(pages: Record<string, string> = {}) {
   return {
     listFiles: vi.fn(async () => Object.keys(pages)),
     readAll: vi.fn(async (files: string[]) => new Map(files.map((f) => [f, pages[f] ?? ""]))),
+    read: vi.fn(async (_p: string) => { throw new Error("not found"); }),
     write: vi.fn(async () => {}),
     toVaultPath: vi.fn((p: string) => p),
   };
@@ -102,5 +103,38 @@ describe("runLintFixChat", () => {
     const blocked = events.filter((e) => e.kind === "tool_result" && !e.ok);
     expect(blocked).toHaveLength(1);
     expect(vaultTools.write).not.toHaveBeenCalled();
+  });
+
+  it("calls upsertIndexAnnotation for pages that have annotation", async () => {
+    const wikiPath = "!Wiki/test";
+    const pages = { [`${wikiPath}/MyPage.md`]: "# MyPage\nOld" };
+    const vaultTools = makeVaultTools(pages);
+    const llmResponse = {
+      summary: "done",
+      pages: [{ path: `${wikiPath}/MyPage.md`, content: "# MyPage\nFixed", annotation: "summary of MyPage" }],
+    };
+    const llm = makeLlm(llmResponse) as any;
+
+    const req: RunRequest = {
+      operation: "lint-chat",
+      args: [],
+      cwd: "/vault",
+      signal: makeSignal(),
+      timeoutMs: 30000,
+      domainId: "test",
+      context: "report",
+      chatMessages: [{ role: "user", content: "fix it" }],
+    };
+    const domain = { id: "test", name: "Test", wiki_folder: "test", entity_types: [], language_notes: "", source_paths: [] };
+
+    for await (const _ of runLintFixChat(req, vaultTools as any, "/vault", domain, llm, "model", {}, makeSignal())) {
+      // drain
+    }
+
+    const writeCalls = (vaultTools.write as ReturnType<typeof vi.fn>).mock.calls;
+    const indexCall = writeCalls.find(([p]: [string]) => p.endsWith("_index.md"));
+    expect(indexCall).toBeDefined();
+    expect(indexCall![0]).toBe(`${wikiPath}/_index.md`);
+    expect(indexCall![1]).toContain("MyPage: summary of MyPage");
   });
 });
