@@ -230,6 +230,21 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             .onChange(async (v) => { await this.patchLocalClaude({ allowedTools: v.trim() }); }),
         );
 
+      if (!s.claudeAgent.perOperation) {
+        new Setting(containerEl)
+          .setName("Effort level")
+          .setDesc("Уровень размышления Claude (--effort). Пусто = без thinking.")
+          .addDropdown(d => {
+            d.addOption("", "Отключено");
+            for (const lv of ["low", "medium", "high", "xhigh", "max"] as const) d.addOption(lv, lv);
+            d.setValue(eff.claudeAgent.effort ?? "");
+            d.onChange(async v => {
+              await this.patchLocalClaude({ effort: (v || undefined) as typeof eff.claudeAgent.effort });
+            });
+            return d;
+          });
+      }
+
       new Setting(containerEl)
         .setName(T.settings.perOperation_name)
         .setDesc(T.settings.perOperation_desc)
@@ -255,6 +270,19 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               t.setValue(s.claudeAgent.operations[key].model)
                 .onChange(async (v) => { s.claudeAgent.operations[key].model = v.trim(); await this.plugin.saveSettings(); }),
             );
+          new Setting(containerEl)
+            .setName("Effort level")
+            .addDropdown(d => {
+              d.addOption("", "Унаследовать");
+              for (const lv of ["low", "medium", "high", "xhigh", "max"] as const) d.addOption(lv, lv);
+              d.setValue(s.claudeAgent.operations[key].effort ?? "");
+              d.onChange(async v => {
+                type OpEffort = (typeof s.claudeAgent.operations)[OpKey]["effort"];
+                s.claudeAgent.operations[key].effort = (v || undefined) as OpEffort;
+                await this.plugin.saveSettings();
+              });
+              return d;
+            });
         }
       }
     } else {
@@ -299,6 +327,19 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                   await this.plugin.saveSettings();
                 }
               }),
+          );
+
+        new Setting(containerEl)
+          .setName("Thinking budget tokens")
+          .setDesc("Макс. токены для размышления. 0 или пусто = отключено.")
+          .addText(t =>
+            t.setPlaceholder("0")
+              .setValue(String(s.nativeAgent.thinkingBudgetTokens ?? 0))
+              .onChange(async v => {
+                const n = Number(v);
+                s.nativeAgent.thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
+                await this.plugin.saveSettings();
+              })
           );
 
         new Setting(containerEl)
@@ -350,6 +391,17 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                   const n = Number(v);
                   if (Number.isFinite(n) && n > 0) { s.nativeAgent.operations[key].maxTokens = Math.floor(n); await this.plugin.saveSettings(); }
                 }),
+            );
+          new Setting(containerEl)
+            .setName("Thinking budget tokens")
+            .addText(t =>
+              t.setPlaceholder("0")
+                .setValue(String(s.nativeAgent.operations[key].thinkingBudgetTokens ?? 0))
+                .onChange(async v => {
+                  const n = Number(v);
+                  s.nativeAgent.operations[key].thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
+                  await this.plugin.saveSettings();
+                })
             );
           new Setting(containerEl)
             .setName(T.settings.opTemperature_name)
