@@ -26429,11 +26429,17 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
   const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
+  if (signal.aborted)
+    return;
   const [indexContent, schemaContent] = await Promise.all([
     tryRead2(vaultTools, `${wikiVaultPath}/_index.md`),
     tryRead2(vaultTools, `${schemaRoot}/_wiki_schema.md`)
   ]);
+  yield { kind: "tool_use", name: "Read", input: { files: files.length } };
   const pages = await vaultTools.readAll(files);
+  yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
+  if (signal.aborted)
+    return;
   const start = Date.now();
   let outputTokens = 0;
   const { graph, fromCache } = graphCache.get(domain.id, pages);
@@ -26442,9 +26448,13 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   const minScore = Math.max(0, Math.min(1, seedMinScore));
   let seeds = selectSeeds(question, pages, topK, minScore);
   if (seeds.length === 0) {
+    if (signal.aborted)
+      return;
+    yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allPageIds.length } };
     const seedRes = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal);
     seeds = seedRes.seeds;
     outputTokens += seedRes.outputTokens;
+    yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
   }
   if (signal.aborted)
     return;
