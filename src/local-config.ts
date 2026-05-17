@@ -15,6 +15,7 @@ export interface LocalConfig {
   claudeAgent?: {
     model: string;
     allowedTools: string;
+    effort?: "low" | "medium" | "high" | "xhigh" | "max";
   };
   nativeAgent?: {
     baseUrl: string;

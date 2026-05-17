@@ -62,3 +62,21 @@ describe("LocalConfigStore", () => {
     expect((await store.load()).iclaudePath).toBe("/new");
   });
 });
+
+describe("LocalConfig.claudeAgent effort field", () => {
+  it("LocalConfig.claudeAgent accepts effort field", () => {
+    const lc: typeof import("../src/local-config").LocalConfig = {
+      iclaudePath: "/usr/bin/claude",
+      claudeAgent: { model: "sonnet", allowedTools: "", effort: "high" },
+    };
+    expect(lc.claudeAgent?.effort).toBe("high");
+  });
+
+  it("LocalConfig.claudeAgent effort is optional", () => {
+    const lc: typeof import("../src/local-config").LocalConfig = {
+      iclaudePath: "/usr/bin/claude",
+      claudeAgent: { model: "sonnet", allowedTools: "" },
+    };
+    expect(lc.claudeAgent?.effort).toBeUndefined();
+  });
+});
