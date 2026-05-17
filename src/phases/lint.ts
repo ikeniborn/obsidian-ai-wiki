@@ -1,4 +1,4 @@
-import { join, basename } from "path-browserify";
+import { join } from "path-browserify";
 import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
@@ -11,8 +11,9 @@ import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm } from "../utils/raw-frontmatter";
-import { checkGraphStructure } from "../wiki-graph";
+import { checkGraphStructure, pageId } from "../wiki-graph";
 import { graphCache } from "../wiki-graph-cache";
+import { upsertIndexAnnotation } from "../wiki-index";
 
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
@@ -159,6 +160,11 @@ export async function* runLint(
         await vaultTools.write(page.path, page.content);
         writtenPaths.push(page.path);
         yield { kind: "tool_result", ok: true };
+        if (page.annotation) {
+          try {
+            await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation);
+          } catch { /* non-critical */ }
+        }
       } catch (e) {
         yield { kind: "tool_result", ok: false, preview: (e as Error).message };
       }
@@ -208,13 +214,6 @@ export async function* runLint(
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
     }
 
-    const indexPath = `${wikiVaultPath}/_index.md`;
-    const indexLinks = files
-      .map((f) => `- [[${basename(f, ".md")}]]`)
-      .join("\n");
-    try {
-      await vaultTools.write(indexPath, `# Wiki Index\n\n${indexLinks}\n`);
-    } catch { /* не критично */ }
   }
 
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n"), outputTokens: outputTokens || undefined };
