@@ -525,7 +525,9 @@ export class LlmWikiView extends ItemView {
           if (this.assistantBlock) {
             this.stepsEl.insertBefore(this.reasoningBlock, this.assistantBlock);
           }
-          this.reasoningBlock.createSpan({ cls: "ai-wiki-step-icon" }).setText("🧠");
+          const rHead = this.reasoningBlock.createDiv("ai-wiki-step-head");
+          rHead.createSpan({ cls: "ai-wiki-step-icon" }).setText("🧠");
+          rHead.createSpan({ cls: "ai-wiki-step-name muted" }).setText(i18n().view.analysing);
           this.reasoningBlock.createSpan({ cls: "ai-wiki-reasoning-text" });
         }
         this.reasoningBuffer += ev.delta;
@@ -540,7 +542,9 @@ export class LlmWikiView extends ItemView {
       } else {
         if (!this.assistantBlock) {
           this.assistantBlock = this.stepsEl.createDiv("ai-wiki-step assistant");
-          this.assistantBlock.createSpan({ cls: "ai-wiki-step-icon" }).setText("💬");
+          const aHead = this.assistantBlock.createDiv("ai-wiki-step-head");
+          aHead.createSpan({ cls: "ai-wiki-step-icon" }).setText("💬");
+          aHead.createSpan({ cls: "ai-wiki-step-name muted" }).setText(i18n().view.formingResponse);
           this.assistantBlock.createSpan({ cls: "ai-wiki-assistant-text" });
         }
         this.assistantBuffer += ev.delta;

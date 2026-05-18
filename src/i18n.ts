@@ -87,6 +87,8 @@ const en = {
   view: {
     refreshTitle: "Refresh domains",
     mobileWaiting: "⏳ Waiting for LLM response…",
+    analysing: "Analysing…",
+    formingResponse: "Forming response…",
     reinitTitle: "Re-init domain (wipe + rebuild)",
     reinitNoSources: "Domain has no source_paths — re-init not possible",
     addDomain: "Add domain",
@@ -300,6 +302,8 @@ const ru: I18n = {
   view: {
     refreshTitle: "Обновить домены",
     mobileWaiting: "⏳ Ожидание ответа от LLM…",
+    analysing: "Анализирует…",
+    formingResponse: "Формирует ответ…",
     reinitTitle: "Переинициализация домена (wipe + заново)",
     reinitNoSources: "У домена нет source_paths — re-init невозможен",
     addDomain: "Добавить домен",
@@ -511,6 +515,8 @@ const es: I18n = {
   view: {
     refreshTitle: "Actualizar dominios",
     mobileWaiting: "⏳ Esperando respuesta del LLM…",
+    analysing: "Analizando…",
+    formingResponse: "Formando respuesta…",
     reinitTitle: "Re-init del dominio (borrar + reconstruir)",
     reinitNoSources: "El dominio no tiene source_paths — re-init imposible",
     addDomain: "Añadir dominio",
