@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runLint } from "../../src/phases/lint";
+import { runLint, checkStructure } from "../../src/phases/lint";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
@@ -331,5 +331,16 @@ describe("runLint", () => {
     const userContent = streamCall?.[0]?.messages?.find((m: any) => m.role === "user")?.content ?? "";
     // Orphan has no links in or out → checkGraphStructure adds "isolated node" to allIssues
     expect(userContent).toContain("isolated node");
+  });
+});
+
+describe("checkStructure", () => {
+  it("reports each dead link at most once per file even when repeated", () => {
+    const pages = new Map([
+      ["wiki/A.md", "---\n---\n# A\n\n[[Missing]] and [[Missing]] again."],
+    ]);
+    const result = checkStructure(pages);
+    const matches = result.match(/dead link \[\[Missing\]\]/g) ?? [];
+    expect(matches.length).toBe(1);
   });
 });

@@ -246,7 +246,7 @@ export function checkStructure(pages: Map<string, string>): string {
     if (!content.startsWith("---")) {
       issues.push(`- ${path}: missing frontmatter`);
     }
-    const links = [...content.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1]);
+    const links = [...new Set([...content.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1]))];
     for (const link of links) {
       const linked = [...pages.keys()].some((p) => p.endsWith(`${link}.md`));
       if (!linked) issues.push(`- ${path}: dead link [[${link}]]`);
