@@ -4,7 +4,7 @@ import type { DomainEntry } from "./domain";
 import { LlmWikiSettingTab } from "./settings";
 import { AI_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { WikiController } from "./controller";
-import { QueryModal, DomainModal, ShellConsentModal } from "./modals";
+import { QueryModal, DomainModal } from "./modals";
 import { i18n } from "./i18n";
 import { DomainStore } from "./domain-store";
 import { LocalConfigStore } from "./local-config";
@@ -120,17 +120,6 @@ export default class LlmWikiPlugin extends Plugin {
 
     this.settingTab = new LlmWikiSettingTab(this.app, this);
     this.addSettingTab(this.settingTab);
-
-    this.app.workspace.onLayoutReady?.(() => {
-      if (
-        this.settings.backend === "claude-agent" &&
-        !this.settings.shellConsentGiven
-      ) {
-        void this.localConfigStore.load().then((local) => {
-          new ShellConsentModal(this.app, this, local.iclaudePath ?? "").open();
-        });
-      }
-    });
 
     console.debug("[ai-wiki] loaded");
   }
@@ -308,6 +297,16 @@ export async function migrateLegacyData(
       await localConfigStore.save({ iclaudePath: ca.iclaudePath });
     }
     delete ca.iclaudePath;
+    dirty = true;
+  }
+
+  // Migrate shellConsentGiven from data.json → local.json (one-shot)
+  if (data.shellConsentGiven === true) {
+    const localCur = await localConfigStore.load();
+    if (!localCur.shellConsentGiven) {
+      await localConfigStore.save({ shellConsentGiven: true });
+    }
+    delete data.shellConsentGiven;
     dirty = true;
   }
 
