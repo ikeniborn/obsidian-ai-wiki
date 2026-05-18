@@ -169,11 +169,33 @@ export default class LlmWikiPlugin extends Plugin {
       history: (data?.history as RunHistoryEntry[]) ?? [],
     } as LlmWikiPluginSettings;
 
-    // Миграция: поля, перенесённые с per-backend уровня на top-level (schema v2)
+    // Schema v2: systemPrompt promoted to top-level
     if (!data?.systemPrompt && (caData.systemPrompt || naData.systemPrompt))
       this.settings.systemPrompt = (caData.systemPrompt ?? naData.systemPrompt) as string;
-    if (!data?.maxTokens && (caData.maxTokens || naData.maxTokens))
-      this.settings.maxTokens = (caData.maxTokens ?? naData.maxTokens) as number;
+
+    // Schema v3: maxTokens moves to nativeAgent.maxTokens; numCtx dropped
+    let schemaV3Dirty = false;
+    const legacyTop = typeof data?.maxTokens === "number" ? (data.maxTokens as number) : undefined;
+    const legacyCA = typeof caData.maxTokens === "number" ? (caData.maxTokens as number) : undefined;
+    const legacyNA = typeof naData.maxTokens === "number" ? (naData.maxTokens as number) : undefined;
+    const naAlreadySet = legacyNA !== undefined;
+    if (!naAlreadySet) {
+      const legacy = legacyTop ?? legacyCA;
+      if (legacy !== undefined) {
+        this.settings.nativeAgent.maxTokens = legacy;
+        schemaV3Dirty = true;
+      }
+    }
+    // Strip top-level maxTokens if it was carried over by spread
+    if ("maxTokens" in this.settings) {
+      delete (this.settings as unknown as Record<string, unknown>).maxTokens;
+      schemaV3Dirty = true;
+    }
+    // Strip nativeAgent.numCtx if it was carried over by spread
+    if ("numCtx" in this.settings.nativeAgent) {
+      delete (this.settings.nativeAgent as unknown as Record<string, unknown>).numCtx;
+      schemaV3Dirty = true;
+    }
 
     // Миграция с claude-code backend
     if ((data?.backend as string) === "claude-code") {
@@ -228,7 +250,7 @@ export default class LlmWikiPlugin extends Plugin {
     for (const k of Object.keys(ca)) {
       if ("maxTokens" in ca[k]) { delete ca[k].maxTokens; claudeCleanup = true; }
     }
-    if (formatMaxTokensMigrated || claudeCleanup) await this.saveData(this.settings);
+    if (formatMaxTokensMigrated || claudeCleanup || schemaV3Dirty) await this.saveData(this.settings);
   }
 
   async saveSettings(): Promise<void> {
@@ -297,7 +319,6 @@ export async function migrateToLocalV1(
       model: s.nativeAgent.model,
       temperature: s.nativeAgent.temperature,
       topP: s.nativeAgent.topP,
-      numCtx: s.nativeAgent.numCtx,
     },
     claudeAgent: {
       model: s.claudeAgent.model,

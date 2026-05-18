@@ -3,6 +3,7 @@ import { runIngest } from "./phases/ingest";
 import { runQuery } from "./phases/query";
 import { runLint } from "./phases/lint";
 import { runLintChat } from "./phases/chat";
+import { runLintFixChat } from "./phases/lint-chat";
 import { runInit } from "./phases/init";
 import { runEvaluator } from "./phases/evaluator";
 import { runFormat } from "./phases/format";
@@ -23,7 +24,7 @@ export class AgentRunner {
   }
 
   private buildOptsFor(op: RunRequest["operation"]): { model: string; opts: LlmCallOptions } {
-    const key = (op === "query-save" ? "query" : op === "chat" ? "lint" : op) as OpKey;
+    const key = (op === "query-save" ? "query" : op === "chat" || op === "lint-chat" ? "lint" : op) as OpKey;
     const s = this.settings;
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
 
@@ -37,8 +38,9 @@ export class AgentRunner {
 
     const na = s.nativeAgent;
     const c = na.perOperation ? na.operations[key] : undefined;
-    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
-    return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
+    const budgetTokens = c?.thinkingBudgetTokens ?? na.thinkingBudgetTokens;
+    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
+    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
   }
 
   private async writeDevLog(_vaultRoot: string, entry: {
@@ -73,10 +75,10 @@ export class AgentRunner {
         yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
         break;
       case "query":
-        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts);
+        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore);
         break;
       case "query-save":
-        yield* runQuery(req.args, true, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts);
+        yield* runQuery(req.args, true, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore);
         break;
       case "lint":
         yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, opts);
@@ -89,6 +91,11 @@ export class AgentRunner {
           req.chatMessages ?? [],
           req.operationHeader ?? "",
         );
+        break;
+      }
+      case "lint-chat": {
+        const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : undefined;
+        yield* runLintFixChat(req, this.vaultTools, vaultRoot, domain, this.llm, model, opts, req.signal);
         break;
       }
       case "init":
@@ -109,7 +116,10 @@ export class AgentRunner {
 
   async *run(req: RunRequest): AsyncGenerator<RunEvent, void, void> {
     const { model, opts } = this.buildOptsFor(req.operation);
-    yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}` };
+    const baseUrlHint = this.settings.backend === "native-agent"
+      ? ` @ ${this.settings.nativeAgent.baseUrl}`
+      : "";
+    yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}${baseUrlHint}` };
 
     if (req.signal.aborted) return;
 

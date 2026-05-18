@@ -69,6 +69,7 @@ export class LlmWikiView extends ItemView {
   private toolCount = 0;
   private stepCount = 0;
   private progressEl: HTMLElement | null = null;
+  private mobileWaitingEl: HTMLElement | null = null;
   private progressTotal = 0;
   private progressDone = 0;
   private progressPhaseEl: HTMLElement | null = null;
@@ -114,45 +115,10 @@ export class LlmWikiView extends ItemView {
 
       // 2+3. Наполнение / Актуализация
       root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionDomain });
-      const domainBox = root.createDiv("ai-wiki-domain");
-      const domainRow = domainBox.createDiv("ai-wiki-domain-row");
-      domainRow.createSpan({ cls: "muted", text: "Domain:" });
-      this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
-      const refreshBtn = domainRow.createEl("button", { text: "↻", attr: { title: T.view.refreshTitle } });
-      refreshBtn.addEventListener("click", () => void this.refreshDomains());
-      this.reinitBtn = domainRow.createEl("button", {
-        attr: { title: T.view.reinitTitle },
-      });
-      setIcon(this.reinitBtn, "recycle");
-      this.reinitBtn.disabled = true;
-      this.reinitBtn.addEventListener("click", () => void this.runReinit());
-      this.domainSelect.addEventListener("change", () => {
-        if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect!.value;
-      });
-
-      const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
-      this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
-      this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
-      this.formatBtn = actionRow.createEl("button", { text: T.view.format });
-      this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
-      this.ingestBtn.addEventListener("click", () => {
-        const file = this.plugin.app.workspace.getActiveFile();
-        if (!file) { new Notice(i18n().view.noActiveFile); return; }
-        const domainId = this.domainSelect.value || undefined;
-        new ConfirmModal(this.plugin.app, "Ingest — confirm", [
-          `File: ${file.name}`,
-          "Claude will read the file, extract entities and update domain wiki pages.",
-        ], () => void this.plugin.controller.ingestActive(domainId)).open();
-      });
-      this.lintBtn.addEventListener("click", () => {
-        const d = this.domainSelect.value;
-        const domainLabel = d ? `«${d}»` : "all wiki";
-        new ConfirmModal(this.plugin.app, "Lint — confirm", [
-          `Domain: ${domainLabel}`,
-          "Claude will check wiki pages for quality and update entity_types.",
-        ], () => void this.plugin.controller.lint(d || "all")).open();
-      });
-      void this.refreshDomains();
+      this.buildDomainRow(root as HTMLElement, { withActions: true });
+    } else {
+      root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionDomainMobile });
+      this.buildDomainRow(root as HTMLElement, { withActions: false });
     }
 
     // 4. Запрос
@@ -220,6 +186,51 @@ export class LlmWikiView extends ItemView {
     if (this.plugin.controller.isBusy()) {
       new BusyCloseModal(this.app, () => this.plugin.controller.cancelCurrent()).open();
     }
+  }
+
+  private buildDomainRow(parent: HTMLElement, opts: { withActions: boolean }): void {
+    const T = i18n();
+    const domainBox = parent.createDiv("ai-wiki-domain");
+    const domainRow = domainBox.createDiv("ai-wiki-domain-row");
+    domainRow.createSpan({ cls: "muted", text: "Domain:" });
+    this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
+    const refreshBtn = domainRow.createEl("button", { text: "↻", attr: { title: T.view.refreshTitle } });
+    refreshBtn.addEventListener("click", () => void this.refreshDomains());
+
+    if (opts.withActions) {
+      this.reinitBtn = domainRow.createEl("button", { attr: { title: T.view.reinitTitle } });
+      setIcon(this.reinitBtn, "recycle");
+      this.reinitBtn.disabled = true;
+      this.reinitBtn.addEventListener("click", () => void this.runReinit());
+      this.domainSelect.addEventListener("change", () => {
+        if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect!.value;
+      });
+
+      const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
+      this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
+      this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
+      this.formatBtn = actionRow.createEl("button", { text: T.view.format });
+      this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
+      this.ingestBtn.addEventListener("click", () => {
+        const file = this.plugin.app.workspace.getActiveFile();
+        if (!file) { new Notice(i18n().view.noActiveFile); return; }
+        const domainId = this.domainSelect!.value || undefined;
+        new ConfirmModal(this.plugin.app, "Ingest — confirm", [
+          `File: ${file.name}`,
+          "Claude will read the file, extract entities and update domain wiki pages.",
+        ], () => void this.plugin.controller.ingestActive(domainId)).open();
+      });
+      this.lintBtn.addEventListener("click", () => {
+        const d = this.domainSelect!.value;
+        const domainLabel = d ? `«${d}»` : "all wiki";
+        new ConfirmModal(this.plugin.app, "Lint — confirm", [
+          `Domain: ${domainLabel}`,
+          "Claude will check wiki pages for quality and update entity_types.",
+        ], () => void this.plugin.controller.lint(d || "all")).open();
+      });
+    }
+
+    void this.refreshDomains();
   }
 
   private async refreshDomains(): Promise<void> {
@@ -344,6 +355,7 @@ export class LlmWikiView extends ItemView {
     this.toolCount = 0;
     this.stepCount = 0;
     this.progressEl = null;
+    this.mobileWaitingEl = null;
     this.progressPhaseEl = null;
     this.progressTotal = 0;
     this.progressDone = 0;
@@ -368,9 +380,19 @@ export class LlmWikiView extends ItemView {
     this.updateMetrics();
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
     this.scheduleMetricsTick();
+    if (Platform.isMobile) {
+      // Streaming недоступен на mobile — показываем спиннер, чтобы UI не выглядел замёрзшим.
+      const placeholder = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step-pending");
+      placeholder.setText(i18n().view.mobileWaiting);
+      this.mobileWaitingEl = placeholder;
+    }
   }
 
   appendEvent(ev: RunEvent): void {
+    if (this.mobileWaitingEl) {
+      this.mobileWaitingEl.remove();
+      this.mobileWaitingEl = null;
+    }
     if (ev.kind === "format_preview") {
       this.renderFormatPreview(ev.tempPath, ev.report, ev.missingTokens);
       return;
@@ -414,6 +436,17 @@ export class LlmWikiView extends ItemView {
       if (this.progressEl) {
         this.progressEl.setText(`${this.progressDone} / ${this.progressTotal} файлов`);
       }
+      this.scrollSteps();
+      return;
+    }
+    if (ev.kind === "graph_stats") {
+      const cacheHint = ev.fromCache ? " (cache hit)" : "";
+      const preview = ev.seeds.slice(0, 3).join(", ");
+      const extra = ev.seeds.length > 3 ? `, …+${ev.seeds.length - 3}` : "";
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      step.createSpan({ cls: "ai-wiki-step-icon" }).setText("🌐");
+      step.createSpan({ cls: "ai-wiki-step-name" })
+        .setText(`Граф: ${ev.seeds.length} seeds [${preview}${extra}] → ${ev.expanded} / ${ev.total} страниц${cacheHint}`);
       this.scrollSteps();
       return;
     }
@@ -596,13 +629,15 @@ export class LlmWikiView extends ItemView {
     this.cancelBtn.disabled = true;
     this.askBtn.disabled = false;
     this.askSaveBtn.disabled = false;
-    this.initBtn.disabled = false;
-    this.ingestBtn.disabled = false;
-    this.lintBtn.disabled = false;
-    this.formatBtn.disabled = false;
+    if (this.initBtn) this.initBtn.disabled = false;
+    if (this.ingestBtn) this.ingestBtn.disabled = false;
+    if (this.lintBtn) this.lintBtn.disabled = false;
+    if (this.formatBtn) this.formatBtn.disabled = false;
     if (this.reinitBtn) this.reinitBtn.disabled = !(this.domainSelect && this.domainSelect.value);
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
     this.updateMetrics();
+    const totalDur = ((entry.finishedAt - entry.startedAt) / 1000).toFixed(1);
+    this.progressCount.setText(`${totalDur}s`);
     this.resultSpeedEl?.setText(this.lastTokPerSec !== undefined ? ` ${this.lastTokPerSec} tok/s` : "");
     this.finalEl.empty();
     if (entry.finalText) {
@@ -615,7 +650,7 @@ export class LlmWikiView extends ItemView {
       this.resultOpen = true;
       this.resultToggle.setText("▼");
 
-      const CHAT_OPS: WikiOperation[] = ["lint", "ingest", "query", "query-save"];
+      const CHAT_OPS: WikiOperation[] = ["lint", "lint-chat", "ingest", "query", "query-save"];
       if (CHAT_OPS.includes(entry.operation) && entry.status === "done" && entry.finalText) {
         this.lastContext = {
           operation: entry.operation,
@@ -652,13 +687,23 @@ export class LlmWikiView extends ItemView {
       this.chatInputEl!.value = "";
       this.addChatBubble("user", text);
       this.lastUserMessage = text;
-      void this.plugin.controller.chat(
-        this.lastContext.operation,
-        this.lastContext.domainId,
-        this.lastContext.report,
-        this.chatHistory,
-        text,
-      );
+      const ctx = this.lastContext;
+      if (ctx.operation === "lint" || ctx.operation === "lint-chat") {
+        void this.plugin.controller.lintApplyFromChat(
+          ctx.domainId,
+          ctx.report,
+          this.chatHistory,
+          text,
+        );
+      } else {
+        void this.plugin.controller.chat(
+          ctx.operation,
+          ctx.domainId,
+          ctx.report,
+          this.chatHistory,
+          text,
+        );
+      }
     };
     this.chatSendBtn.addEventListener("click", submit);
   }

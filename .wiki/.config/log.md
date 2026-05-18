@@ -211,3 +211,89 @@
 **Обновлено:** index.md (спецификации 8→9, планы 4→5), log.md
 
 **Следующий шаг:** после реализации (commits по плану) — запустить `/llm-wiki lint документация` для проверки актуальности
+
+---
+
+## 2026-05-15 — ingest (max_tokens relocate + numCtx drop)
+
+**Операция:** ingest
+**Домен:** документация
+**Источники:**
+- `docs/superpowers/specs/2026-05-15-max-tokens-relocate-numctx-drop-design.md`
+- `docs/superpowers/plans/2026-05-15-max-tokens-relocate-numctx-drop.md`
+- `README.md`
+- `docs/TODO.md`
+- `docs/README.ru.md`
+
+**Создано страниц:** 2
+- `документация/спецификации/max-tokens-relocate-design.md` (mature) — schema v3: top-level `maxTokens` → `nativeAgent.maxTokens`; `numCtx` удалён из `LlmCallOptions`, `nativeAgent`, `LocalConfig`, UI и i18n; контракт миграции data.json
+- `документация/планы/max-tokens-relocate-plan.md` (mature) — 9 задач TDD-реализации: types/local-config/llm-utils/agent-runner/i18n/settings UI/main.ts migration/тесты/version bump 0.1.99→0.1.100
+
+**Обновлено страниц:** 1
+- `документация/компоненты/agent-runner.md` — добавлен раздел «Build options (native, schema v3)»: `na.maxTokens` вместо `s.maxTokens`, `numCtx` удалён; источник + дата обновлены
+
+**Не создано (синтез вместо дублирования):**
+- `README.md` / `docs/README.ru.md` — RU/EN-мирроры уже покрыты предыдущими ingest (см. 2026-05-14T00:00:00); поле `Max tokens` уже описано в Settings reference. После v0.1.100 README потребует уточнения (Max tokens теперь native-only, num_ctx удалён), но это правка README, не вики
+- `docs/TODO.md` — roadmap-tracker; item 4 (примеры native/claude в README) и item 6 (выбор домена на мобильном) ещё не реализованы; item 5 покрыт reinit-force-* страницами
+
+**Обновлено:** index.md (спецификации 9→10, планы 5→6), log.md
+
+
+## 2026-05-16 — ingest CLAUDE.md
+
+**Операция:** ingest
+**Домен:** документация
+**Источник:** CLAUDE.md (корень репозитория, project instructions)
+
+**Создано страниц:** 2
+- документация/компоненты/wiki-graph-cache.md (stub) — GraphCache: in-memory per-domain hash-keyed кеш графа wiki
+- документация/компоненты/wiki-seeds.md (stub) — selectSeeds: Jaccard-ранжирование seed-страниц для query
+
+**Обновлено страниц:** 2
+- документация/операции/query-operation.md — добавлены секция "Контекст для LLM" (graphCache + selectSeeds + graph_stats), новый wiki_source
+- документация/операции/поток-выполнения-операции.md — добавлена секция "Graph cache в query/lint", новый wiki_source
+
+**Пропущено:** прочие сущности CLAUDE.md (WikiController, AgentRunner, ClaudeCliClient, LlmWikiView, parseStreamLine, single-flight, stream-json) — уже покрыты mature-страницами без нового материала.
+
+**Следующий шаг:** при необходимости поднять wiki-graph-cache и wiki-seeds из stub → developing после ingest реальных файлов src/wiki-graph-cache.ts и src/wiki-seeds.ts.
+
+## 2026-05-16 — ingest mobile-domain-selector
+
+- Операция: ingest
+- Источники:
+  - `docs/TODO.md` (items 6-7: mobile domain selector + native agent on mobile)
+  - `docs/superpowers/specs/2026-05-16-mobile-domain-selector-design.md`
+  - `docs/superpowers/plans/2026-05-16-mobile-domain-selector.md`
+- Домен: документация
+- Создано: 2
+  - `документация/спецификации/mobile-domain-selector-design.md` (спецификация)
+  - `документация/планы/mobile-domain-selector-plan.md` (план)
+- Обновлено: 1
+  - `документация/компоненты/llm-wiki-view.md` (добавлен раздел Mobile domain selector planned, расширены wiki_sources, теги)
+- Пропущено: 0
+- Замечания: TODO.md (roadmap) — отдельной страницы не создано (роадмап-документ); item 7 (native agent на mobile) — out of scope этой ingestion, отмечен как follow-up в spec.
+
+## 2026-05-17 — ingest mobile-query-seed-design (spec + plan + prompts)
+
+**Операция:** ingest (batch)  
+**Домен:** документация  
+**Источники:**
+  - `docs/superpowers/specs/2026-05-17-mobile-query-seed-design.md`
+  - `docs/superpowers/plans/2026-05-17-mobile-query-seed-design.md`
+  - `prompts/ingest.md`
+  - `prompts/lint.md`
+  - `prompts/init.md`
+  - `prompts/init-incremental.md`
+
+**Создано:** 3
+  - `документация/спецификации/mobile-query-seed-design.md` (спецификация)
+  - `документация/планы/mobile-query-seed-plan.md` (план)
+  - `документация/компоненты/wiki-index.md` (компонент)
+
+**Обновлено:** 5
+  - `документация/компоненты/wiki-seeds.md` — алгоритм Jaccard: bodyContent(500), parseFmKeywords, scoreSeed/selectSeeds с annotation
+  - `документация/операции/query-operation.md` — поток parseIndexAnnotations → selectSeeds, Jaccard-first + LLM fallback
+  - `документация/операции/ingest-operation.md` — parseJsonPages с annotation?, upsertIndexAnnotation per page
+  - `документация/операции/lint-operation.md` — upsertIndexAnnotation, удалён flat index rewrite, annotation в промпте
+
+**Пропущено:** 0

@@ -57,7 +57,7 @@ describe("runQuery", () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
-      read: vi.fn().mockResolvedValue("# Page\n\nSome fact."),
+      read: vi.fn().mockResolvedValue("# Page\n\nThis is the answer to everything."),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const events = await collect(
@@ -80,16 +80,19 @@ describe("runQuery", () => {
   it("saves answer page when save=true", async () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
-      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
-      read: vi.fn().mockResolvedValue(""),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Topic.md"], folders: [] }),
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p.includes("Topic.md")) return "topic details description";
+        return "";
+      }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     await collect(
       runQuery(
-        ["What is X?"],
+        ["What is topic?"],
         true,
         vt,
-        makeLlm("X is Y."),
+        makeLlm("Topic is something."),
         "model",
         [domain],
         VAULT_ROOT,
@@ -99,6 +102,62 @@ describe("runQuery", () => {
     expect(adapter.write).toHaveBeenCalled();
     const [savedPath] = (adapter.write as any).mock.calls[0];
     expect(savedPath).toMatch(/\.md$/);
+  });
+
+  it("emits graph_stats event with correct shape", async () => {
+    const adapter = mockAdapter({
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Alpha.md", "!Wiki/work/Beta.md"], folders: [] }),
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p.endsWith("Alpha.md")) return "alpha content";
+        if (p.endsWith("Beta.md")) return "beta [[Alpha]]";
+        return "";
+      }),
+      exists: vi.fn().mockResolvedValue(true),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const events = await collect(
+      runQuery(["alpha"], false, vt, makeLlm("answer"), "model", [domain], VAULT_ROOT,
+        new AbortController().signal, 1, {}, 5, 0.05),
+    );
+    const stats = events.find((e: any) => e.kind === "graph_stats") as any;
+    expect(stats).toBeDefined();
+    expect(stats.seeds).toContain("Alpha");
+    expect(stats.total).toBe(2);
+    expect(stats.expanded).toBeGreaterThanOrEqual(stats.seeds.length);
+    expect(typeof stats.fromCache).toBe("boolean");
+  });
+
+  it("parses _index.md annotations and passes them to selectSeeds (Jaccard finds seed, no LLM seed call)", async () => {
+    // DeepSeek.md content has some text; _index.md has annotation matching question tokens
+    const adapter = mockAdapter({
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/DeepSeek.md"], folders: [] }),
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p.endsWith("DeepSeek.md")) return "# DeepSeek\nA language model.";
+        if (p.endsWith("_index.md")) return "DeepSeek: быстрая языковая модель";
+        return "";
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm("DeepSeek is a fast model.");
+    await collect(
+      runQuery(
+        ["deepseek модель"],
+        false,
+        vt,
+        llm,
+        "model",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+        1,   // graphDepth
+        {},  // opts
+        5,   // seedTopK
+        0.0, // seedMinScore — low threshold so Jaccard hits
+      ),
+    );
+    // LLM should be called exactly ONCE (main answer only), NOT twice (seed LLM call skipped)
+    const createMock = llm.chat.completions.create as ReturnType<typeof vi.fn>;
+    expect(createMock).toHaveBeenCalledTimes(1);
   });
 
   it("excludes pages not reached by BFS when keyword seed found (graphDepth=0)", async () => {

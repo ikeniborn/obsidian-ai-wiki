@@ -11,6 +11,7 @@ import { ClaudeCliClient } from "./claude-cli-client";
 import OpenAI from "openai";
 import { createProxyFetch, parseNoProxy, shouldBypass, maskProxyUrl } from "./proxy";
 import { mobileFetch } from "./mobile-fetch";
+import { wrapMobileNoStream } from "./mobile-llm-wrap";
 import { i18n } from "./i18n";
 import { resolveEffective } from "./effective-settings";
 import { applyDomainEvent } from "./domain";
@@ -21,6 +22,7 @@ import type { LlmWikiPluginSettings } from "./types";
 import { FileErrorModal, ConfirmModal } from "./modals";
 import { domainWikiFolder } from "./wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm } from "./utils/raw-frontmatter";
+import { graphCache } from "./wiki-graph-cache";
 
 function toVaultPath(vaultDir: string, savedPath: string): string | null {
   const abs = isAbsolute(savedPath) ? savedPath : join(vaultDir, savedPath);
@@ -206,6 +208,11 @@ export class WikiController {
     await this.dispatchChat(operation, domainId, context, chatMessages);
   }
 
+  async lintApplyFromChat(domainId: string | undefined, lintReport: string, history: ChatMessage[], newMessage: string): Promise<void> {
+    const chatMessages: ChatMessage[] = [...history, { role: "user", content: newMessage }];
+    await this.dispatch("lint-chat", [], domainId, lintReport, undefined, undefined, chatMessages);
+  }
+
   private async dispatchChat(operation: WikiOperation, domainId: string | undefined, context: string, chatMessages: ChatMessage[]): Promise<void> {
     if (this.isBusy()) { new Notice(i18n().ctrl.operationRunning); return; }
     if (Platform.isMobile && operation !== "query" && operation !== "query-save") {
@@ -227,7 +234,7 @@ export class WikiController {
 
     let agentRunner: AgentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId);
+      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat");
     } catch (e) {
       new Notice(i18n().ctrl.errorPrefix((e as Error).message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -388,7 +395,7 @@ export class WikiController {
     return true;
   }
 
-  private async buildAgentRunner(vaultRoot: string, resumeSessionId?: string): Promise<AgentRunner> {
+  private async buildAgentRunner(vaultRoot: string, resumeSessionId?: string, opKey?: string): Promise<AgentRunner> {
     const adapter = this.app.vault.adapter as unknown as VaultAdapter;
     const base = this.cwdOrEmpty();
     const vaultTools = new VaultTools(adapter, base);
@@ -420,9 +427,18 @@ export class WikiController {
 
       interface InternalAdapter { remove(p: string): Promise<void>; }
       const fullAdapter = this.app.vault.adapter as unknown as InternalAdapter;
+      const claudeEff = s.claudeAgent;
+      const normalizedOpKey = opKey === "chat" || opKey === "lint-chat" ? "lint"
+        : opKey === "query-save" ? "query"
+        : opKey;
+      const effort = claudeEff.perOperation && normalizedOpKey
+        ? (claudeEff.operations[normalizedOpKey as import("./types").OpKey]?.effort ?? claudeEff.effort)
+        : claudeEff.effort;
       const client = new ClaudeCliClient({
-        ...s.claudeAgent,
         iclaudePath: local.iclaudePath,
+        model: claudeEff.model,
+        allowedTools: claudeEff.allowedTools,
+        effort,
         requestTimeoutSec: maxTimeoutSec,
         cwd: vaultRoot,
         tmpDir,
@@ -463,13 +479,16 @@ export class WikiController {
         }
       }
 
-      llm = new OpenAI({
+      const openaiClient = new OpenAI({
         baseURL: s.nativeAgent.baseUrl,
         apiKey: s.nativeAgent.apiKey,
         timeout: maxTimeoutSec * 1000,
         dangerouslyAllowBrowser: true,
         fetch: Platform.isMobile ? mobileFetch : (proxyFetch ?? undefined),
       });
+      llm = (Platform.isMobile
+        ? wrapMobileNoStream(openaiClient as unknown as import("./types").LlmClient)
+        : openaiClient) as unknown as import("./types").LlmClient;
     }
 
     return new AgentRunner(llm, s, vaultTools, vaultName, domains);
@@ -499,7 +518,7 @@ export class WikiController {
     } catch { /* не блокируем операцию */ }
   }
 
-  private async dispatch(op: WikiOperation, args: string[], domainId?: string, context?: string, instruction?: string, onFileError?: OnFileError): Promise<void> {
+  private async dispatch(op: WikiOperation, args: string[], domainId?: string, context?: string, instruction?: string, onFileError?: OnFileError, chatMessages?: ChatMessage[]): Promise<void> {
     if (this.isBusy()) {
       new Notice(i18n().ctrl.operationRunning);
       return;
@@ -517,7 +536,7 @@ export class WikiController {
       const eff = resolveEffective(this.plugin.settings, local);
       if (eff.backend === "native-agent" && !this.requireNativeAgent(eff)) return;
       if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local)) return;
-      const opKey = (op === "query-save" ? "query" : op) as import("./types").OpKey;
+      const opKey = (op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op) as import("./types").OpKey;
       this._currentLogMeta = {
         backend: eff.backend,
         model: eff.backend === "claude-agent"
@@ -531,10 +550,11 @@ export class WikiController {
     if (!view) return;
 
     const vaultRoot = this.cwdOrEmpty();
+    const opKey = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
 
     let agentRunner: AgentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot);
+      agentRunner = await this.buildAgentRunner(vaultRoot, undefined, opKey);
     } catch (e) {
       new Notice(i18n().ctrl.errorPrefix((e as Error).message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -554,11 +574,13 @@ export class WikiController {
 
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
     view.setRunning(op, args);
-
-    const opKey = op === "query-save" ? "query" : op;
     const timeoutMs = this.plugin.settings.timeouts[opKey as keyof typeof this.plugin.settings.timeouts] * 1000;
-    const chatMessages = op === "format" ? this._pendingFormat?.chat : undefined;
-    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages });
+    let timedOut = false;
+    const timeoutId = timeoutMs > 0
+      ? window.setTimeout(() => { timedOut = true; ctrl.abort(); }, timeoutMs)
+      : null;
+    const resolvedChatMessages = op === "format" ? this._pendingFormat?.chat : chatMessages;
+    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages: resolvedChatMessages });
 
     try {
       for await (const ev of runGen) {
@@ -596,10 +618,28 @@ export class WikiController {
       finalText = i18n().ctrl.errorPrefix((err as Error).message);
       await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
     } finally {
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
       this.current = null;
       this.onBusyChange?.();
       this.currentOp = null;
       this._currentLogMeta = null;
+    }
+    if (ctrl.signal.aborted && status === "done" && !finalText) {
+      if (timedOut) {
+        status = "error";
+        finalText = `Timeout after ${Math.round(timeoutMs / 1000)}s — check LLM backend URL`;
+        this.activeView()?.appendEvent({ kind: "error", message: finalText });
+        await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
+      } else {
+        status = "cancelled";
+      }
+    }
+    if (status === "done") {
+      const mutatesWiki = op === "ingest" || op === "lint" || op === "lint-chat" || op === "query-save" || op === "init";
+      if (mutatesWiki) {
+        const targets = domainId ? [domainId] : (await this.domainStore.load()).map((d) => d.id);
+        for (const id of targets) graphCache.invalidate(id);
+      }
     }
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
 

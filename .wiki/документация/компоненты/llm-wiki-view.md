@@ -4,9 +4,11 @@ wiki_sources:
   - docs/architecture/README.md
   - docs/architecture/overview.yaml
   - src/view.ts
-wiki_updated: 2026-05-14
+  - docs/superpowers/specs/2026-05-16-mobile-domain-selector-design.md
+  - docs/superpowers/plans/2026-05-16-mobile-domain-selector.md
+wiki_updated: 2026-05-16
 wiki_domain: документация
-tags: [компонент, view, ui, obsidian, security]
+tags: [компонент, view, ui, obsidian, security, mobile, i18n]
 ---
 
 # LlmWikiView
@@ -52,6 +54,10 @@ function sanitizeLinks(el: HTMLElement): void {
 
 На mobile не создаются элементы: `domainSelect`, `initBtn`, `ingestBtn`, `lintBtn`, `formatBtn`. Весь код использует optional chaining (`this.formatBtn?.disabled = true`). Секции «Создание домена» и «Наполнение/Актуализация» обёрнуты `if (!Platform.isMobile)`. На mobile остаются только Query-блок, чат и история.
 
+### Mobile domain selector (planned)
+
+По [[mobile-domain-selector-design]] / [[mobile-domain-selector-plan]] mobile-ветка получает упрощённый блок выбора домена: только `select` + refresh, без reinit/ingest/lint/format. Реализация через приватный helper `buildDomainRow(parent, { withActions })` — desktop вызывает с `withActions: true`, mobile с `false`. Дополнительно `finish()` получает guard'ы (`if (this.xxxBtn) ...`) против TypeError на mobile, где соответствующие поля `undefined`. Новый i18n-ключ `view.sectionDomainMobile` (`Domain` / `Домен` / `Dominio`).
+
 ## Format preview
 
 При событии `format_preview` вызывается `renderFormatPreview(tempPath, report, missingTokens)`:
@@ -79,3 +85,5 @@ function sanitizeLinks(el: HTMLElement): void {
 - [[async-generator-events]]
 - [[fix-operation]]
 - [[generation-speed-design]]
+- [[mobile-domain-selector-design]]
+- [[mobile-domain-selector-plan]]

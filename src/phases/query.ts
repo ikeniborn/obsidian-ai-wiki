@@ -8,7 +8,10 @@ import { SeedsSchema } from "./zod-schemas";
 import queryTemplate from "../../prompts/query.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
-import { pageId, buildWikiGraph, bfsExpand } from "../wiki-graph";
+import { pageId, bfsExpand } from "../wiki-graph";
+import { graphCache } from "../wiki-graph-cache";
+import { selectSeeds } from "../wiki-seeds";
+import { parseIndexAnnotations } from "../wiki-index";
 
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
@@ -23,6 +26,8 @@ export async function* runQuery(
   signal: AbortSignal,
   graphDepth: number = 1,
   opts: LlmCallOptions = {},
+  seedTopK: number = 5,
+  seedMinScore: number = 0.1,
 ): AsyncGenerator<RunEvent> {
   const question = args[0]?.trim();
   if (!question) {
@@ -47,33 +52,46 @@ export async function* runQuery(
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
   const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
+  if (signal.aborted) return;
 
   const [indexContent, schemaContent] = await Promise.all([
     tryRead(vaultTools, `${wikiVaultPath}/_index.md`),
     tryRead(vaultTools, `${schemaRoot}/_wiki_schema.md`),
   ]);
 
+  yield { kind: "tool_use", name: "Read", input: { files: files.length } };
   const pages = await vaultTools.readAll(files);
+  yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
+  if (signal.aborted) return;
 
   const start = Date.now();
   let outputTokens = 0;
 
   // Graph-filtered context
-  const graph = buildWikiGraph(pages);
+  const { graph, fromCache } = graphCache.get(domain.id, pages);
   const allPageIds = [...pages.keys()].map(pageId);
-  let seeds = keywordSeeds(question, pages);
+  const indexAnnotations = parseIndexAnnotations(indexContent);
+  const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
+  const minScore = Math.max(0, Math.min(1, seedMinScore));
+  let seeds = selectSeeds(question, pages, topK, minScore, indexAnnotations);
   if (seeds.length === 0) {
-    const seedRes = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal);
+    if (signal.aborted) return;
+    yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allPageIds.length } };
+    const seedOpts = { ...opts, thinkingBudgetTokens: undefined };
+    const seedRes = await llmSelectSeeds(question, indexAnnotations, allPageIds, llm, model, seedOpts, signal);
     seeds = seedRes.seeds;
     outputTokens += seedRes.outputTokens;
+    yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
   }
   if (signal.aborted) return;
   if (seeds.length === 0) {
-    seeds = allPageIds;
+    yield { kind: "error", message: "No relevant pages found for this query." };
+    return;
   }
   const seedSet = new Set(seeds);
   const selectedIds = bfsExpand(seeds, graph, graphDepth);
-  const contextBlock = buildContextBlock(pages, seedSet, selectedIds);
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: pages.size, fromCache };
+  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);
 
   const entityTypesBlock = buildEntityTypesBlock(domain);
 
@@ -149,22 +167,9 @@ async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
   try { return await vaultTools.read(path); } catch { return ""; }
 }
 
-function keywordSeeds(question: string, pages: Map<string, string>): string[] {
-  const words = question.split(/\W+/).filter((w) => w.length > 3).map((w) => w.toLowerCase());
-  if (words.length === 0) return [];
-  const seeds: string[] = [];
-  for (const path of pages.keys()) {
-    const id = pageId(path);
-    if (words.some((w) => id.toLowerCase().includes(w))) {
-      seeds.push(id);
-    }
-  }
-  return seeds;
-}
-
 async function llmSelectSeeds(
   question: string,
-  indexContent: string,
+  indexAnnotations: Map<string, string>,
   allPageIds: string[],
   llm: LlmClient,
   model: string,
@@ -175,10 +180,17 @@ async function llmSelectSeeds(
     reasoning: "PageA matches keyword X; PageB referenced by index.",
     seeds: ["PageA", "PageB"],
   }, null, 2);
+  const annotatedLines: string[] = [];
+  const unindexedIds: string[] = [];
+  for (const id of allPageIds) {
+    const ann = indexAnnotations?.get(id);
+    if (ann) annotatedLines.push(`${id}: ${ann}`);
+    else unindexedIds.push(id);
+  }
   const prompt = [
     `Question: "${question}"`,
-    `Available wiki pages: ${allPageIds.join(", ")}`,
-    indexContent ? `\nIndex:\n${indexContent}` : "",
+    `Wiki index with annotations:\n${annotatedLines.join("\n")}`,
+    unindexedIds.length ? `Pages not yet indexed: ${unindexedIds.join(", ")}` : "",
     `\nReturn JSON only matching this shape (most relevant page names — bare names, no path, no .md):`,
     `\n## Output JSON Example`,
     example,
@@ -207,6 +219,7 @@ function buildContextBlock(
   pages: Map<string, string>,
   seeds: Set<string>,
   selectedIds: Set<string>,
+  maxPages: number,
 ): string {
   const seedPages: [string, string][] = [];
   const bfsPages: [string, string][] = [];
@@ -216,7 +229,8 @@ function buildContextBlock(
     if (seeds.has(id)) seedPages.push([path, content]);
     else bfsPages.push([path, content]);
   }
-  const ordered = [...seedPages, ...bfsPages];
+  const bfsCap = Math.max(0, maxPages - seedPages.length);
+  const ordered = [...seedPages, ...bfsPages.slice(0, bfsCap)];
   let block = "";
   for (const [p, c] of ordered) {
     block += `--- ${p} ---\n${c}\n\n`;

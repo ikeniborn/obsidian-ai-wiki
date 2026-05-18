@@ -13,11 +13,13 @@
 - Путь статьи определяется типом сущности — используй точный шаблон из секции «ТИПЫ СУЩНОСТЕЙ ДОМЕНА» (выше, до блока ПРАВИЛА), подставив имя сущности вместо <EntityName>
 - Если тип сущности не определён или у домена нет entity_types → путь по умолчанию: {{wiki_path}}/<EntityName>.md
 - Frontmatter обязателен: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature
+- wiki_keywords: [5-10 ключевых токенов домена, строчные, дефис-вместо-пробела]
 - wiki_sources: каждый элемент обязательно в формате [[path/to/source]], тип свойства Links в Obsidian
 - Раздел "## Основные характеристики" обязателен для каждой страницы
 - При добавлении из нового источника — фиксировать в "## История изменений" с датой и источником
 - "## Связанные концепции" — создавать только при наличии пояснительного контекста к связям
+- Для каждой страницы добавь поле "annotation" в JSON: одно предложение — описание сущности для поиска по смыслу
 {{schema_block}}
 
 Верни ТОЛЬКО JSON-массив, без другого текста:
-[{"path":"{{wiki_path}}/EntityName.md","content":"---\nwiki_sources: [\"[[{{source_path}}]]\"]\nwiki_updated: {{today}}\nwiki_status: stub\ntags: []\nwiki_outgoing_links: []\n---\n# EntityName\n\ncontент..."}]
+[{"path":"{{wiki_path}}/EntityName.md","content":"---\nwiki_sources: [\"[[{{source_path}}]]\"]\nwiki_updated: {{today}}\nwiki_status: stub\nwiki_keywords: [токен1, токен2]\ntags: []\nwiki_outgoing_links: []\n---\n# EntityName\n\ncontент...","annotation":"Краткое описание сущности для контекстного поиска"}]

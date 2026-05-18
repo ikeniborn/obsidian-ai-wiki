@@ -1,3 +1,4 @@
+import { spawn } from "child_process";
 import { App, Notice, Platform, PluginSettingTab, Setting } from "obsidian";
 import { ConfirmModal, EditDomainModal } from "./modals";
 import type LlmWikiPlugin from "./main";
@@ -6,6 +7,52 @@ import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
 import { resolveEffective } from "./effective-settings";
 import type { LocalConfig } from "./local-config";
+
+async function checkClaudeAvailability(iclaudePath: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(iclaudePath, [
+      "--", "-p", "Привет, AI Wiki! Поработаем?",
+      "--output-format", "stream-json", "--verbose",
+      "--disable-slash-commands", "--dangerously-skip-permissions",
+    ], { stdio: ["ignore", "pipe", "pipe"] });
+
+    const timeout = window.setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("Timeout 30s"));
+    }, 30_000);
+
+    child.on("error", err => { clearTimeout(timeout); reject(err); });
+    child.on("close", code => {
+      clearTimeout(timeout);
+      if (code === 0) resolve();
+      else reject(new Error(`exit code ${code}`));
+    });
+  });
+}
+
+async function checkNativeAvailability(baseUrl: string, apiKey: string, model: string): Promise<void> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 30_000);
+  try {
+    const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: "Привет, AI Wiki! Поработаем?" }],
+        max_tokens: 50,
+        stream: false,
+      }),
+      signal: controller.signal,
+    });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      throw new Error(`HTTP ${resp.status}: ${text.slice(0, 200)}`);
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export function parseTimeoutString(v: string): { ingest: number; query: number; lint: number; init: number; format: number } | null {
   const parts = v.split("/").map((x) => Number(x.trim()));
@@ -50,7 +97,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       model: this.plugin.settings.nativeAgent.model,
       temperature: this.plugin.settings.nativeAgent.temperature,
       topP: this.plugin.settings.nativeAgent.topP,
-      numCtx: this.plugin.settings.nativeAgent.numCtx,
     };
     await this.patchLocal({ nativeAgent: { ...cur, ...patch } });
   }
@@ -96,21 +142,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         return t;
       });
 
-    const isPerOp = eff.backend === "claude-agent" ? s.claudeAgent.perOperation : s.nativeAgent.perOperation;
-    if (!isPerOp && eff.backend !== "claude-agent") {
-      new Setting(containerEl)
-        .setName(T.settings.maxTokens_name)
-        .setDesc(T.settings.maxTokens_desc)
-        .addText((t) =>
-          t.setPlaceholder("4096")
-            .setValue(String(s.maxTokens))
-            .onChange(async (v) => {
-              const n = Number(v);
-              if (Number.isFinite(n) && n > 0) { s.maxTokens = Math.floor(n); await this.plugin.saveSettings(); }
-            }),
-        );
-    }
-
     new Setting(containerEl)
       .setName(T.settings.timeouts_name)
       .setDesc(T.settings.timeouts_desc)
@@ -136,15 +167,13 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           }),
       );
 
-    if (!Platform.isMobile) {
-      new Setting(containerEl)
-        .setName(T.settings.agentLog_name)
-        .setDesc(T.settings.agentLog_desc)
-        .addToggle((t) =>
-          t.setValue(eff.agentLogEnabled)
-            .onChange(async (v) => { await this.patchLocal({ agentLogEnabled: v }); }),
-        );
-    }
+    new Setting(containerEl)
+      .setName(T.settings.agentLog_name)
+      .setDesc(T.settings.agentLog_desc)
+      .addToggle((t) =>
+        t.setValue(eff.agentLogEnabled)
+          .onChange(async (v) => { await this.patchLocal({ agentLogEnabled: v }); }),
+      );
 
     // ── Domains ───────────────────────────────────────────────────────────────
     new Setting(containerEl).setName(T.settings.domains_heading).setHeading();
@@ -226,7 +255,21 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             .onChange(async (v) => {
               await this.patchLocal({ iclaudePath: v.trim() });
             }),
-        );
+        )
+        .addButton(b => {
+          b.setButtonText("Проверить").onClick(async () => {
+            b.setButtonText("Проверка…").setDisabled(true);
+            try {
+              await checkClaudeAvailability(this.localCache.iclaudePath);
+              new Notice("✅ Claude доступен");
+            } catch (e) {
+              new Notice(`❌ ${(e as Error).message}`);
+            } finally {
+              b.setButtonText("Проверить").setDisabled(false);
+            }
+          });
+          return b;
+        });
 
       if (!s.claudeAgent.perOperation) {
         new Setting(containerEl)
@@ -247,6 +290,19 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             .setValue(eff.claudeAgent.allowedTools)
             .onChange(async (v) => { await this.patchLocalClaude({ allowedTools: v.trim() }); }),
         );
+
+      new Setting(containerEl)
+        .setName("Effort level")
+        .setDesc("Уровень размышления Claude (--effort). Пусто = без thinking. В per-op режиме — глобальный fallback.")
+        .addDropdown(d => {
+          d.addOption("", "Отключено");
+          for (const lv of ["low", "medium", "high", "xhigh", "max"] as const) d.addOption(lv, lv);
+          d.setValue(eff.claudeAgent.effort ?? "");
+          d.onChange(async v => {
+            await this.patchLocalClaude({ effort: (v || undefined) as typeof eff.claudeAgent.effort });
+          });
+          return d;
+        });
 
       new Setting(containerEl)
         .setName(T.settings.perOperation_name)
@@ -273,6 +329,19 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               t.setValue(s.claudeAgent.operations[key].model)
                 .onChange(async (v) => { s.claudeAgent.operations[key].model = v.trim(); await this.plugin.saveSettings(); }),
             );
+          new Setting(containerEl)
+            .setName("Effort level")
+            .addDropdown(d => {
+              d.addOption("", "Унаследовать");
+              for (const lv of ["low", "medium", "high", "xhigh", "max"] as const) d.addOption(lv, lv);
+              d.setValue(s.claudeAgent.operations[key].effort ?? "");
+              d.onChange(async v => {
+                type OpEffort = (typeof s.claudeAgent.operations)[OpKey]["effort"];
+                s.claudeAgent.operations[key].effort = (v || undefined) as OpEffort;
+                await this.plugin.saveSettings();
+              });
+              return d;
+            });
         }
       }
     } else {
@@ -294,6 +363,25 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             .onChange(async (v) => { await this.patchLocalNative({ apiKey: v.trim() }); }),
         );
 
+      new Setting(containerEl)
+        .setName("Проверить соединение")
+        .setDesc("Отправляет тестовый промпт к endpoint для проверки доступности.")
+        .addButton(b => {
+          b.setButtonText("Проверить").onClick(async () => {
+            b.setButtonText("Проверка…").setDisabled(true);
+            const na = eff.nativeAgent;
+            try {
+              await checkNativeAvailability(na.baseUrl, na.apiKey, na.model);
+              new Notice("✅ Модель отвечает");
+            } catch (e) {
+              new Notice(`❌ ${(e as Error).message}`);
+            } finally {
+              b.setButtonText("Проверить").setDisabled(false);
+            }
+          });
+          return b;
+        });
+
       if (!s.nativeAgent.perOperation) {
         new Setting(containerEl)
           .setName(T.settings.model_name)
@@ -305,17 +393,31 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           );
 
         new Setting(containerEl)
-          .setName(T.settings.numCtx_name)
-          .setDesc(T.settings.numCtx_desc)
+          .setName(T.settings.maxTokens_name)
+          .setDesc(T.settings.maxTokens_desc)
           .addText((t) =>
-            t.setPlaceholder("(дефолт модели)")
-              .setValue(eff.nativeAgent.numCtx != null ? String(eff.nativeAgent.numCtx) : "")
+            t.setPlaceholder("4096")
+              .setValue(String(s.nativeAgent.maxTokens))
               .onChange(async (v) => {
-                const trimmed = v.trim();
-                if (!trimmed) { await this.patchLocalNative({ numCtx: null }); return; }
-                const n = Number(trimmed);
-                if (Number.isFinite(n) && n > 0) await this.patchLocalNative({ numCtx: Math.floor(n) });
+                const n = Number(v);
+                if (Number.isFinite(n) && n > 0) {
+                  s.nativeAgent.maxTokens = Math.floor(n);
+                  await this.plugin.saveSettings();
+                }
               }),
+          );
+
+        new Setting(containerEl)
+          .setName("Thinking budget tokens")
+          .setDesc("Макс. токены для размышления. 0 или пусто = отключено.")
+          .addText(t =>
+            t.setPlaceholder("0")
+              .setValue(String(s.nativeAgent.thinkingBudgetTokens ?? 0))
+              .onChange(async v => {
+                const n = Number(v);
+                s.nativeAgent.thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
+                await this.plugin.saveSettings();
+              })
           );
 
         new Setting(containerEl)
@@ -367,6 +469,17 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                   const n = Number(v);
                   if (Number.isFinite(n) && n > 0) { s.nativeAgent.operations[key].maxTokens = Math.floor(n); await this.plugin.saveSettings(); }
                 }),
+            );
+          new Setting(containerEl)
+            .setName("Thinking budget tokens")
+            .addText(t =>
+              t.setPlaceholder("0")
+                .setValue(String(s.nativeAgent.operations[key].thinkingBudgetTokens ?? 0))
+                .onChange(async v => {
+                  const n = Number(v);
+                  s.nativeAgent.operations[key].thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
+                  await this.plugin.saveSettings();
+                })
             );
           new Setting(containerEl)
             .setName(T.settings.opTemperature_name)
@@ -475,6 +588,36 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             const n = Number(v);
             if (Number.isInteger(n) && n > 0) {
               s.hubThreshold = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName(T.settings.seedTopK_name)
+      .setDesc(T.settings.seedTopK_desc)
+      .addText((t) =>
+        t.setPlaceholder("5")
+          .setValue(String(s.seedTopK))
+          .onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isInteger(n) && n >= 1 && n <= 50) {
+              s.seedTopK = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName(T.settings.seedMinScore_name)
+      .setDesc(T.settings.seedMinScore_desc)
+      .addText((t) =>
+        t.setPlaceholder("0.1")
+          .setValue(String(s.seedMinScore))
+          .onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n >= 0 && n <= 1) {
+              s.seedMinScore = n;
               await this.plugin.saveSettings();
             }
           }),

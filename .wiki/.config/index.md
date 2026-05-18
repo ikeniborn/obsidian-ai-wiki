@@ -6,7 +6,7 @@
 
 ### документация
 
-#### компоненты (7)
+#### компоненты (10)
 - [[wiki-controller]] — `документация/компоненты/wiki-controller.md`
 - [[agent-runner]] — `документация/компоненты/agent-runner.md`
 - [[claude-cli-client]] — `документация/компоненты/claude-cli-client.md`
@@ -14,6 +14,9 @@
 - [[format-utils]] — `документация/компоненты/format-utils.md`
 - [[parse-with-retry]] — `документация/компоненты/parse-with-retry.md`
 - [[structural-error-counter]] — `документация/компоненты/structural-error-counter.md`
+- [[wiki-graph-cache]] — `документация/компоненты/wiki-graph-cache.md`
+- [[wiki-seeds]] — `документация/компоненты/wiki-seeds.md`
+- [[wiki-index]] — `документация/компоненты/wiki-index.md`
 
 #### операции (8)
 - [[format-operation]] — `документация/операции/format-operation.md`
@@ -33,7 +36,7 @@
 - [[reasoning-first-json]] — `документация/паттерны/reasoning-first-json.md`
 - [[structured-output-retry]] — `документация/паттерны/structured-output-retry.md`
 
-#### спецификации (9)
+#### спецификации (12)
 - [[agent-base-contract]] — `документация/спецификации/agent-base-contract.md`
 - [[format-operation-design]] — `документация/спецификации/format-operation-design.md`
 - [[claude-agent-backend-design]] — `документация/спецификации/claude-agent-backend-design.md`
@@ -43,10 +46,16 @@
 - [[init-stability-design]] — `документация/спецификации/init-stability-design.md`
 - [[reinit-button-design]] — `документация/спецификации/reinit-button-design.md`
 - [[reinit-force-design]] — `документация/спецификации/reinit-force-design.md`
+- [[max-tokens-relocate-design]] — `документация/спецификации/max-tokens-relocate-design.md`
+- [[mobile-domain-selector-design]] — `документация/спецификации/mobile-domain-selector-design.md`
+- [[mobile-query-seed-design]] — `документация/спецификации/mobile-query-seed-design.md`
 
-#### планы (5)
+#### планы (8)
 - [[generation-speed-plan]] — `документация/планы/generation-speed-plan.md`
 - [[init-stability-plan]] — `документация/планы/init-stability-plan.md`
 - [[reinit-button-plan]] — `документация/планы/reinit-button-plan.md`
 - [[reinit-force-plan]] — `документация/планы/reinit-force-plan.md`
 - [[structured-output-resilience-plan]] — `документация/планы/structured-output-resilience-plan.md`
+- [[max-tokens-relocate-plan]] — `документация/планы/max-tokens-relocate-plan.md`
+- [[mobile-domain-selector-plan]] — `документация/планы/mobile-domain-selector-plan.md`
+- [[mobile-query-seed-plan]] — `документация/планы/mobile-query-seed-plan.md`

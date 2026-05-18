@@ -15,6 +15,7 @@ export interface LocalConfig {
   claudeAgent?: {
     model: string;
     allowedTools: string;
+    effort?: "low" | "medium" | "high" | "xhigh" | "max";
   };
   nativeAgent?: {
     baseUrl: string;
@@ -22,7 +23,6 @@ export interface LocalConfig {
     model: string;
     temperature: number;
     topP: number | null;
-    numCtx: number | null;
   };
   proxy?: ProxyConfig;
   migrated_v1?: boolean;
@@ -51,7 +51,13 @@ export class LocalConfigStore {
     }
     try {
       const raw = await adapter.read(p);
-      this.cache = { ...DEFAULTS, ...(JSON.parse(raw) as Partial<LocalConfig>) };
+      const parsed = JSON.parse(raw) as Partial<LocalConfig> & { nativeAgent?: Record<string, unknown> };
+      if (parsed.nativeAgent && "numCtx" in parsed.nativeAgent) {
+        const na = { ...parsed.nativeAgent };
+        delete na.numCtx;
+        parsed.nativeAgent = na as LocalConfig["nativeAgent"];
+      }
+      this.cache = { ...DEFAULTS, ...parsed };
     } catch {
       this.cache = { ...DEFAULTS };
     }

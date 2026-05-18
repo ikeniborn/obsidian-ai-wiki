@@ -132,7 +132,7 @@ describe("migrateToLocalV1", () => {
         backend: "native-agent",
         nativeAgent: {
           baseUrl: "https://x/v1", apiKey: "secret", model: "m",
-          temperature: 0.2, topP: null, numCtx: null,
+          temperature: 0.2, topP: null,
           perOperation: false, operations: {},
         },
         claudeAgent: { model: "sonnet", allowedTools: "", perOperation: false, operations: {} },

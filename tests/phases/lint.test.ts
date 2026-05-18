@@ -256,7 +256,7 @@ describe("runLint", () => {
     expect(ev.patch.language_notes).toBe("Updated notes.");
   });
 
-  it("rebuilds _index.md in domain folder after lint run", async () => {
+  it("does not rewrite _index.md with flat links after fix phase", async () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockResolvedValue({
@@ -270,10 +270,28 @@ describe("runLint", () => {
       runLint(["work"], vt, makeLlm("No issues."), "model", [domain], VAULT_ROOT, new AbortController().signal),
     );
     const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
-    const indexWrite = writeCalls.find(([path]) => path === "!Wiki/work/_index.md");
-    expect(indexWrite).toBeDefined();
-    expect(indexWrite![1]).toContain("[[Entity]]");
-    expect(indexWrite![1]).toContain("[[Concept]]");
+    const flatIndexWrite = writeCalls.find(
+      ([path, content]) => path === "!Wiki/work/_index.md" && (content as string).includes("- [["),
+    );
+    expect(flatIndexWrite).toBeUndefined();
+  });
+
+  it("second runLint call hits GraphCache for the same domain", async () => {
+    const { graphCache } = await import("../../src/wiki-graph-cache");
+    graphCache.clear();
+    const adapter = {
+      read: vi.fn().mockResolvedValue("---\n---\n# X"),
+      write: vi.fn().mockResolvedValue(undefined),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/X.md"], folders: [] }),
+      exists: vi.fn().mockResolvedValue(true),
+      mkdir: vi.fn().mockResolvedValue(undefined),
+    } as any;
+    const vt = new (await import("../../src/vault-tools")).VaultTools(adapter, "/v");
+    const llm = makeLlm("[]");
+    const dom = { id: "work", name: "Work", wiki_folder: "work", source_paths: [] };
+    await collect(runLint([], vt, llm, "model", [dom], "/v", new AbortController().signal, 20, {}));
+    const pages = new Map([["!Wiki/work/X.md", "---\n---\n# X"]]);
+    expect(graphCache.get("work", pages).fromCache).toBe(true);
   });
 
   it("includes isolated node graph issue in LLM prompt", async () => {

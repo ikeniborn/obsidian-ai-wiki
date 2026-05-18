@@ -6,6 +6,7 @@ export type WikiOperation =
   | "query"
   | "query-save"
   | "lint"
+  | "lint-chat"
   | "chat"
   | "init"
   | "format";
@@ -57,11 +58,18 @@ export type RunEvent =
   | { kind: "format_applied"; path: string }
   | { kind: "format_cancelled" }
   | { kind: "structural_error";
-      callSite: "init.bootstrap" | "init.delta" | "lint.patch" | "query.seeds";
+      callSite: "init.bootstrap" | "init.delta" | "lint.patch" | "lint-chat.fix" | "query.seeds";
       errorType: "json_parse" | "schema_validate";
       retryAttempt: number;
       succeeded: boolean | null;
       message: string;
+    }
+  | {
+      kind: "graph_stats";
+      seeds: string[];
+      expanded: number;
+      total: number;
+      fromCache: boolean;
     };
 
 export interface RunHistoryEntry {
@@ -81,9 +89,9 @@ export interface LlmCallOptions {
   maxTokens?: number;
   topP?: number | null;
   systemPrompt?: string;
-  numCtx?: number | null;
   jsonMode?: "json_object" | false;
   structuredRetries?: number;
+  thinkingBudgetTokens?: number;
 }
 
 /** Минимальный интерфейс OpenAI-клиента, используемый фазами. */
@@ -107,22 +115,25 @@ export type OpMap<T> = Record<OpKey, T>;
 
 export interface ClaudeOperationConfig {
   model: string;
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
 }
 
 export interface NativeOperationConfig {
   model: string;
   maxTokens: number;
   temperature: number;
+  thinkingBudgetTokens?: number;
 }
 
 export interface LlmWikiPluginSettings {
   backend: "claude-agent" | "native-agent";
   systemPrompt: string;
-  maxTokens: number;
   agentLogEnabled: boolean;
   historyLimit: number;
   graphDepth: number;
   hubThreshold: number;
+  seedTopK: number;
+  seedMinScore: number;
   timeouts: {
     ingest: number;
     query: number;
@@ -135,18 +146,20 @@ export interface LlmWikiPluginSettings {
     model: string;
     allowedTools: string;
     perOperation: boolean;
+    effort?: "low" | "medium" | "high" | "xhigh" | "max";
     operations: OpMap<ClaudeOperationConfig>;
   };
   nativeAgent: {
     baseUrl: string;
     apiKey: string;
     model: string;
+    maxTokens: number;
     temperature: number;
     topP: number | null;
-    numCtx: number | null;
     perOperation: boolean;
     operations: OpMap<NativeOperationConfig>;
     structuredRetries: number;
+    thinkingBudgetTokens?: number;
   };
   devMode: {
     enabled: boolean;
@@ -157,11 +170,12 @@ export interface LlmWikiPluginSettings {
 export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   backend: "claude-agent",
   systemPrompt: "",
-  maxTokens: 4096,
   agentLogEnabled: false,
   historyLimit: 20,
   graphDepth: 1,
   hubThreshold: 20,
+  seedTopK: 5,
+  seedMinScore: 0.1,
   timeouts: { ingest: 300, query: 300, lint: 900, init: 3600, format: 600 },
   history: [],
   claudeAgent: {
@@ -180,9 +194,9 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     baseUrl: "http://localhost:11434/v1",
     apiKey: "ollama",
     model: "llama3.2",
+    maxTokens: 4096,
     temperature: 0.2,
     topP: null,
-    numCtx: null,
     perOperation: false,
     operations: {
       ingest: { model: "llama3.2", maxTokens: 4096, temperature: 0.2 },

@@ -36,3 +36,7 @@
   ],
   "language_notes": "Договорные термины — на русском."
 }
+
+## Wiki Page Conventions
+
+Wiki-страницы используют поле `wiki_keywords` во frontmatter (5-10 токенов, строчные, дефис-вместо-пробела). Учитывай это при определении extraction_cues в entity_types.

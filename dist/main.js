@@ -18849,11 +18849,12 @@ var import_obsidian8 = require("obsidian");
 var DEFAULT_SETTINGS = {
   backend: "claude-agent",
   systemPrompt: "",
-  maxTokens: 4096,
   agentLogEnabled: false,
   historyLimit: 20,
   graphDepth: 1,
   hubThreshold: 20,
+  seedTopK: 5,
+  seedMinScore: 0.1,
   timeouts: { ingest: 300, query: 300, lint: 900, init: 3600, format: 600 },
   history: [],
   claudeAgent: {
@@ -18872,9 +18873,9 @@ var DEFAULT_SETTINGS = {
     baseUrl: "http://localhost:11434/v1",
     apiKey: "ollama",
     model: "llama3.2",
+    maxTokens: 4096,
     temperature: 0.2,
     topP: null,
-    numCtx: null,
     perOperation: false,
     operations: {
       ingest: { model: "llama3.2", maxTokens: 4096, temperature: 0.2 },
@@ -18892,6 +18893,7 @@ var DEFAULT_SETTINGS = {
 };
 
 // src/settings.ts
+var import_child_process = require("child_process");
 var import_obsidian3 = require("obsidian");
 
 // src/modals.ts
@@ -18937,8 +18939,6 @@ var en = {
     temperature_desc: "0.0\u20131.0.",
     topP_name: "Top-p",
     topP_desc: "0.0\u20131.0, or empty \u2014 disable.",
-    numCtx_name: "Context window",
-    numCtx_desc: "Context size (num_ctx). Empty \u2014 model default.",
     allowedTools_name: "Allowed tools",
     allowedTools_desc: "Comma-separated list passed to --tools. Empty \u2014 no restriction.",
     perOperation_name: "Per-operation models",
@@ -18978,16 +18978,22 @@ var en = {
     graphDepth_desc: "Query: hops from seed pages. 0 = seeds only, max sensible: 3.",
     hubThreshold_name: "Hub threshold",
     hubThreshold_desc: "Lint: pages with more outgoing links than this are flagged as hub nodes.",
+    seedTopK_name: "Seed top-K",
+    seedTopK_desc: "Maximum seed pages selected by keyword score (1\u201350).",
+    seedMinScore_name: "Seed min score",
+    seedMinScore_desc: "Minimum Jaccard score for a page to be considered a seed (0.0\u20131.0).",
     structuredRetries_name: "Structured output retries",
     structuredRetries_desc: "Retries on schema validation failure (0-3, default 1). Higher values improve success rate on weaker models at cost of latency/tokens."
   },
   view: {
     refreshTitle: "Refresh domains",
+    mobileWaiting: "\u23F3 Waiting for LLM response\u2026",
     reinitTitle: "Re-init domain (wipe + rebuild)",
     reinitNoSources: "Domain has no source_paths \u2014 re-init not possible",
     addDomain: "Add domain",
     sectionCreate: "Create",
     sectionDomain: "Fill / Maintain",
+    sectionDomainMobile: "Domain",
     sectionQuery: "Query",
     ingest: "Ingest",
     lint: "Lint",
@@ -19136,8 +19142,6 @@ var ru = {
     temperature_desc: "0.0\u20131.0.",
     topP_name: "Top-p",
     topP_desc: "0.0\u20131.0, \u0438\u043B\u0438 \u043F\u0443\u0441\u0442\u043E \u2014 \u043E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u044C.",
-    numCtx_name: "\u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u0435 \u043E\u043A\u043D\u043E",
-    numCtx_desc: "\u0420\u0430\u0437\u043C\u0435\u0440 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 (num_ctx). \u041F\u0443\u0441\u0442\u043E \u2014 \u0434\u0435\u0444\u043E\u043B\u0442 \u043C\u043E\u0434\u0435\u043B\u0438.",
     allowedTools_name: "\u0420\u0430\u0437\u0440\u0435\u0448\u0451\u043D\u043D\u044B\u0435 \u0438\u043D\u0441\u0442\u0440\u0443\u043C\u0435\u043D\u0442\u044B",
     allowedTools_desc: "\u0421\u043F\u0438\u0441\u043E\u043A \u0447\u0435\u0440\u0435\u0437 \u0437\u0430\u043F\u044F\u0442\u0443\u044E \u0434\u043B\u044F --tools. \u041F\u0443\u0441\u0442\u043E \u2014 \u0431\u0435\u0437 \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u0439.",
     perOperation_name: "\u041C\u043E\u0434\u0435\u043B\u0438 \u043F\u043E \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044F\u043C",
@@ -19177,16 +19181,22 @@ var ru = {
     graphDepth_desc: "Query: \u0448\u0430\u0433\u043E\u0432 \u043E\u0442 seed-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. 0 = \u0442\u043E\u043B\u044C\u043A\u043E seeds, \u0440\u0430\u0437\u0443\u043C\u043D\u044B\u0439 \u043C\u0430\u043A\u0441\u0438\u043C\u0443\u043C: 3.",
     hubThreshold_name: "\u041F\u043E\u0440\u043E\u0433 \u0445\u0430\u0431\u0430",
     hubThreshold_desc: "Lint: \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0441 \u0431\u043E\u0301\u043B\u044C\u0448\u0438\u043C \u0447\u0438\u0441\u043B\u043E\u043C \u0438\u0441\u0445\u043E\u0434\u044F\u0449\u0438\u0445 \u0441\u0441\u044B\u043B\u043E\u043A \u043F\u043E\u043C\u0435\u0447\u0430\u044E\u0442\u0441\u044F \u043A\u0430\u043A hub.",
+    seedTopK_name: "Seed top-K",
+    seedTopK_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C seed-\u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043F\u043E keyword-score (1\u201350).",
+    seedMinScore_name: "\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u044B\u0439 score seed",
+    seedMinScore_desc: "\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u044B\u0439 Jaccard score, \u0447\u0442\u043E\u0431\u044B \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 \u043F\u043E\u043F\u0430\u043B\u0430 \u0432 seeds (0.0\u20131.0).",
     structuredRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u043F\u0440\u0438 \u043E\u0448\u0438\u0431\u043A\u0435 \u0441\u0445\u0435\u043C\u044B",
     structuredRetries_desc: "\u0421\u043A\u043E\u043B\u044C\u043A\u043E \u0440\u0430\u0437 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u0432\u044B\u0437\u043E\u0432 LLM \u043F\u0440\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0435 \u043E\u0442\u0432\u0435\u0442\u0430 (0-3, \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 1). \u0412\u044B\u0448\u0435 \u2014 \u043D\u0430\u0434\u0451\u0436\u043D\u0435\u0435 \u043D\u0430 \u0441\u043B\u0430\u0431\u044B\u0445 \u043C\u043E\u0434\u0435\u043B\u044F\u0445, \u0434\u043E\u0440\u043E\u0436\u0435 \u043F\u043E \u0442\u043E\u043A\u0435\u043D\u0430\u043C."
   },
   view: {
     refreshTitle: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D\u044B",
+    mobileWaiting: "\u23F3 \u041E\u0436\u0438\u0434\u0430\u043D\u0438\u0435 \u043E\u0442\u0432\u0435\u0442\u0430 \u043E\u0442 LLM\u2026",
     reinitTitle: "\u041F\u0435\u0440\u0435\u0438\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F \u0434\u043E\u043C\u0435\u043D\u0430 (wipe + \u0437\u0430\u043D\u043E\u0432\u043E)",
     reinitNoSources: "\u0423 \u0434\u043E\u043C\u0435\u043D\u0430 \u043D\u0435\u0442 source_paths \u2014 re-init \u043D\u0435\u0432\u043E\u0437\u043C\u043E\u0436\u0435\u043D",
     addDomain: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D",
     sectionCreate: "\u0421\u043E\u0437\u0434\u0430\u043D\u0438\u0435",
     sectionDomain: "\u041D\u0430\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u0435 / \u0410\u043A\u0442\u0443\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F",
+    sectionDomainMobile: "\u0414\u043E\u043C\u0435\u043D",
     sectionQuery: "\u0417\u0430\u043F\u0440\u043E\u0441",
     ingest: "Ingest",
     lint: "Lint",
@@ -19335,8 +19345,6 @@ var es = {
     temperature_desc: "0.0\u20131.0.",
     topP_name: "Top-p",
     topP_desc: "0.0\u20131.0, o vac\xEDo \u2014 desactivar.",
-    numCtx_name: "Ventana de contexto",
-    numCtx_desc: "Tama\xF1o del contexto (num_ctx). Vac\xEDo \u2014 valor por defecto del modelo.",
     allowedTools_name: "Herramientas permitidas",
     allowedTools_desc: "Lista separada por comas para --tools. Vac\xEDo \u2014 sin restricci\xF3n.",
     perOperation_name: "Modelos por operaci\xF3n",
@@ -19376,16 +19384,22 @@ var es = {
     graphDepth_desc: "Query: saltos desde p\xE1ginas semilla. 0 = solo semillas, m\xE1x recomendado: 3.",
     hubThreshold_name: "Umbral de hub",
     hubThreshold_desc: "Lint: p\xE1ginas con m\xE1s enlaces salientes que este valor se marcan como hub.",
+    seedTopK_name: "Top-K semillas",
+    seedTopK_desc: "M\xE1ximo de p\xE1ginas semilla por puntuaci\xF3n de palabras clave (1\u201350).",
+    seedMinScore_name: "Puntuaci\xF3n m\xEDnima semilla",
+    seedMinScore_desc: "Puntuaci\xF3n Jaccard m\xEDnima para considerar una p\xE1gina como semilla (0.0\u20131.0).",
     structuredRetries_name: "Structured output retries",
     structuredRetries_desc: "Retries on schema validation failure (0-3, default 1). Higher values improve success rate on weaker models at cost of latency/tokens."
   },
   view: {
     refreshTitle: "Actualizar dominios",
+    mobileWaiting: "\u23F3 Esperando respuesta del LLM\u2026",
     reinitTitle: "Re-init del dominio (borrar + reconstruir)",
     reinitNoSources: "El dominio no tiene source_paths \u2014 re-init imposible",
     addDomain: "A\xF1adir dominio",
     sectionCreate: "Crear",
     sectionDomain: "Rellenar / Mantener",
+    sectionDomainMobile: "Dominio",
     sectionQuery: "Consulta",
     ingest: "Ingest",
     lint: "Lint",
@@ -19981,6 +19995,58 @@ function resolveEffective(s, l) {
 }
 
 // src/settings.ts
+async function checkClaudeAvailability(iclaudePath) {
+  await new Promise((resolve, reject) => {
+    const child = (0, import_child_process.spawn)(iclaudePath, [
+      "--",
+      "-p",
+      "\u041F\u0440\u0438\u0432\u0435\u0442, AI Wiki! \u041F\u043E\u0440\u0430\u0431\u043E\u0442\u0430\u0435\u043C?",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--disable-slash-commands",
+      "--dangerously-skip-permissions"
+    ], { stdio: ["ignore", "pipe", "pipe"] });
+    const timeout = window.setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("Timeout 30s"));
+    }, 3e4);
+    child.on("error", (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      if (code === 0)
+        resolve();
+      else
+        reject(new Error(`exit code ${code}`));
+    });
+  });
+}
+async function checkNativeAvailability(baseUrl, apiKey, model) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 3e4);
+  try {
+    const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: "\u041F\u0440\u0438\u0432\u0435\u0442, AI Wiki! \u041F\u043E\u0440\u0430\u0431\u043E\u0442\u0430\u0435\u043C?" }],
+        max_tokens: 50,
+        stream: false
+      }),
+      signal: controller.signal
+    });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      throw new Error(`HTTP ${resp.status}: ${text.slice(0, 200)}`);
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 function parseTimeoutString(v) {
   const parts = v.split("/").map((x) => Number(x.trim()));
   if (parts.length === 5 && parts.every((n) => Number.isFinite(n) && n > 0)) {
@@ -20018,8 +20084,7 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       apiKey: this.plugin.settings.nativeAgent.apiKey,
       model: this.plugin.settings.nativeAgent.model,
       temperature: this.plugin.settings.nativeAgent.temperature,
-      topP: this.plugin.settings.nativeAgent.topP,
-      numCtx: this.plugin.settings.nativeAgent.numCtx
+      topP: this.plugin.settings.nativeAgent.topP
     };
     await this.patchLocal({ nativeAgent: { ...cur, ...patch } });
   }
@@ -20056,18 +20121,6 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       });
       return t;
     });
-    const isPerOp = eff.backend === "claude-agent" ? s.claudeAgent.perOperation : s.nativeAgent.perOperation;
-    if (!isPerOp && eff.backend !== "claude-agent") {
-      new import_obsidian3.Setting(containerEl).setName(T.settings.maxTokens_name).setDesc(T.settings.maxTokens_desc).addText(
-        (t) => t.setPlaceholder("4096").setValue(String(s.maxTokens)).onChange(async (v) => {
-          const n = Number(v);
-          if (Number.isFinite(n) && n > 0) {
-            s.maxTokens = Math.floor(n);
-            await this.plugin.saveSettings();
-          }
-        })
-      );
-    }
     new import_obsidian3.Setting(containerEl).setName(T.settings.timeouts_name).setDesc(T.settings.timeouts_desc).addText(
       (t) => t.setValue(`${s.timeouts.ingest}/${s.timeouts.query}/${s.timeouts.lint}/${s.timeouts.init}/${s.timeouts.format}`).onChange(async (v) => {
         const parsed = parseTimeoutString(v);
@@ -20086,13 +20139,11 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         }
       })
     );
-    if (!import_obsidian3.Platform.isMobile) {
-      new import_obsidian3.Setting(containerEl).setName(T.settings.agentLog_name).setDesc(T.settings.agentLog_desc).addToggle(
-        (t) => t.setValue(eff.agentLogEnabled).onChange(async (v) => {
-          await this.patchLocal({ agentLogEnabled: v });
-        })
-      );
-    }
+    new import_obsidian3.Setting(containerEl).setName(T.settings.agentLog_name).setDesc(T.settings.agentLog_desc).addToggle(
+      (t) => t.setValue(eff.agentLogEnabled).onChange(async (v) => {
+        await this.patchLocal({ agentLogEnabled: v });
+      })
+    );
     new import_obsidian3.Setting(containerEl).setName(T.settings.domains_heading).setHeading();
     const domains = this.cachedDomains;
     if (domains.length === 0) {
@@ -20153,7 +20204,20 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         (t) => t.setPlaceholder("/home/user/Documents/Project/iclaude/iclaude.sh").setValue(this.localCache.iclaudePath).onChange(async (v) => {
           await this.patchLocal({ iclaudePath: v.trim() });
         })
-      );
+      ).addButton((b) => {
+        b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").onClick(async () => {
+          b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430\u2026").setDisabled(true);
+          try {
+            await checkClaudeAvailability(this.localCache.iclaudePath);
+            new import_obsidian3.Notice("\u2705 Claude \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D");
+          } catch (e) {
+            new import_obsidian3.Notice(`\u274C ${e.message}`);
+          } finally {
+            b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").setDisabled(false);
+          }
+        });
+        return b;
+      });
       if (!s.claudeAgent.perOperation) {
         new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_claude).addText(
           (t) => t.setPlaceholder("").setValue(eff.claudeAgent.model).onChange(async (v) => {
@@ -20166,6 +20230,16 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           await this.patchLocalClaude({ allowedTools: v.trim() });
         })
       );
+      new import_obsidian3.Setting(containerEl).setName("Effort level").setDesc("\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u0440\u0430\u0437\u043C\u044B\u0448\u043B\u0435\u043D\u0438\u044F Claude (--effort). \u041F\u0443\u0441\u0442\u043E = \u0431\u0435\u0437 thinking. \u0412 per-op \u0440\u0435\u0436\u0438\u043C\u0435 \u2014 \u0433\u043B\u043E\u0431\u0430\u043B\u044C\u043D\u044B\u0439 fallback.").addDropdown((d) => {
+        d.addOption("", "\u041E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E");
+        for (const lv of ["low", "medium", "high", "xhigh", "max"])
+          d.addOption(lv, lv);
+        d.setValue(eff.claudeAgent.effort ?? "");
+        d.onChange(async (v) => {
+          await this.patchLocalClaude({ effort: v || void 0 });
+        });
+        return d;
+      });
       new import_obsidian3.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
         (t) => t.setValue(s.claudeAgent.perOperation).onChange(async (v) => {
           s.claudeAgent.perOperation = v;
@@ -20189,6 +20263,17 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
               await this.plugin.saveSettings();
             })
           );
+          new import_obsidian3.Setting(containerEl).setName("Effort level").addDropdown((d) => {
+            d.addOption("", "\u0423\u043D\u0430\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u044C");
+            for (const lv of ["low", "medium", "high", "xhigh", "max"])
+              d.addOption(lv, lv);
+            d.setValue(s.claudeAgent.operations[key].effort ?? "");
+            d.onChange(async (v) => {
+              s.claudeAgent.operations[key].effort = v || void 0;
+              await this.plugin.saveSettings();
+            });
+            return d;
+          });
         }
       }
     } else {
@@ -20202,22 +20287,41 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           await this.patchLocalNative({ apiKey: v.trim() });
         })
       );
+      new import_obsidian3.Setting(containerEl).setName("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u0435").setDesc("\u041E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u0442 \u0442\u0435\u0441\u0442\u043E\u0432\u044B\u0439 \u043F\u0440\u043E\u043C\u043F\u0442 \u043A endpoint \u0434\u043B\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E\u0441\u0442\u0438.").addButton((b) => {
+        b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").onClick(async () => {
+          b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430\u2026").setDisabled(true);
+          const na = eff.nativeAgent;
+          try {
+            await checkNativeAvailability(na.baseUrl, na.apiKey, na.model);
+            new import_obsidian3.Notice("\u2705 \u041C\u043E\u0434\u0435\u043B\u044C \u043E\u0442\u0432\u0435\u0447\u0430\u0435\u0442");
+          } catch (e) {
+            new import_obsidian3.Notice(`\u274C ${e.message}`);
+          } finally {
+            b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").setDisabled(false);
+          }
+        });
+        return b;
+      });
       if (!s.nativeAgent.perOperation) {
         new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native).addText(
           (t) => t.setPlaceholder("llama3.2").setValue(eff.nativeAgent.model).onChange(async (v) => {
             await this.patchLocalNative({ model: v.trim() });
           })
         );
-        new import_obsidian3.Setting(containerEl).setName(T.settings.numCtx_name).setDesc(T.settings.numCtx_desc).addText(
-          (t) => t.setPlaceholder("(\u0434\u0435\u0444\u043E\u043B\u0442 \u043C\u043E\u0434\u0435\u043B\u0438)").setValue(eff.nativeAgent.numCtx != null ? String(eff.nativeAgent.numCtx) : "").onChange(async (v) => {
-            const trimmed = v.trim();
-            if (!trimmed) {
-              await this.patchLocalNative({ numCtx: null });
-              return;
+        new import_obsidian3.Setting(containerEl).setName(T.settings.maxTokens_name).setDesc(T.settings.maxTokens_desc).addText(
+          (t) => t.setPlaceholder("4096").setValue(String(s.nativeAgent.maxTokens)).onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n > 0) {
+              s.nativeAgent.maxTokens = Math.floor(n);
+              await this.plugin.saveSettings();
             }
-            const n = Number(trimmed);
-            if (Number.isFinite(n) && n > 0)
-              await this.patchLocalNative({ numCtx: Math.floor(n) });
+          })
+        );
+        new import_obsidian3.Setting(containerEl).setName("Thinking budget tokens").setDesc("\u041C\u0430\u043A\u0441. \u0442\u043E\u043A\u0435\u043D\u044B \u0434\u043B\u044F \u0440\u0430\u0437\u043C\u044B\u0448\u043B\u0435\u043D\u0438\u044F. 0 \u0438\u043B\u0438 \u043F\u0443\u0441\u0442\u043E = \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E.").addText(
+          (t) => t.setPlaceholder("0").setValue(String(s.nativeAgent.thinkingBudgetTokens ?? 0)).onChange(async (v) => {
+            const n = Number(v);
+            s.nativeAgent.thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : void 0;
+            await this.plugin.saveSettings();
           })
         );
         new import_obsidian3.Setting(containerEl).setName(T.settings.temperature_name).setDesc(T.settings.temperature_desc).addText(
@@ -20260,6 +20364,13 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
                 s.nativeAgent.operations[key].maxTokens = Math.floor(n);
                 await this.plugin.saveSettings();
               }
+            })
+          );
+          new import_obsidian3.Setting(containerEl).setName("Thinking budget tokens").addText(
+            (t) => t.setPlaceholder("0").setValue(String(s.nativeAgent.operations[key].thinkingBudgetTokens ?? 0)).onChange(async (v) => {
+              const n = Number(v);
+              s.nativeAgent.operations[key].thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : void 0;
+              await this.plugin.saveSettings();
             })
           );
           new import_obsidian3.Setting(containerEl).setName(T.settings.opTemperature_name).setDesc(T.settings.opTemperature_desc).addText(
@@ -20330,6 +20441,24 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         const n = Number(v);
         if (Number.isInteger(n) && n > 0) {
           s.hubThreshold = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName(T.settings.seedTopK_name).setDesc(T.settings.seedTopK_desc).addText(
+      (t) => t.setPlaceholder("5").setValue(String(s.seedTopK)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isInteger(n) && n >= 1 && n <= 50) {
+          s.seedTopK = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName(T.settings.seedMinScore_name).setDesc(T.settings.seedMinScore_desc).addText(
+      (t) => t.setPlaceholder("0.1").setValue(String(s.seedMinScore)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isFinite(n) && n >= 0 && n <= 1) {
+          s.seedMinScore = n;
           await this.plugin.saveSettings();
         }
       })
@@ -20422,6 +20551,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   toolCount = 0;
   stepCount = 0;
   progressEl = null;
+  mobileWaitingEl = null;
   progressTotal = 0;
   progressDone = 0;
   progressPhaseEl = null;
@@ -20458,48 +20588,10 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.initBtn = createRow.createEl("button", { text: T.view.init, cls: "ai-wiki-init-btn" });
       this.initBtn.addEventListener("click", () => this.openAddDomain());
       root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionDomain });
-      const domainBox = root.createDiv("ai-wiki-domain");
-      const domainRow = domainBox.createDiv("ai-wiki-domain-row");
-      domainRow.createSpan({ cls: "muted", text: "Domain:" });
-      this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
-      const refreshBtn = domainRow.createEl("button", { text: "\u21BB", attr: { title: T.view.refreshTitle } });
-      refreshBtn.addEventListener("click", () => void this.refreshDomains());
-      this.reinitBtn = domainRow.createEl("button", {
-        attr: { title: T.view.reinitTitle }
-      });
-      (0, import_obsidian4.setIcon)(this.reinitBtn, "recycle");
-      this.reinitBtn.disabled = true;
-      this.reinitBtn.addEventListener("click", () => void this.runReinit());
-      this.domainSelect.addEventListener("change", () => {
-        if (this.reinitBtn)
-          this.reinitBtn.disabled = !this.domainSelect.value;
-      });
-      const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
-      this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
-      this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
-      this.formatBtn = actionRow.createEl("button", { text: T.view.format });
-      this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
-      this.ingestBtn.addEventListener("click", () => {
-        const file = this.plugin.app.workspace.getActiveFile();
-        if (!file) {
-          new import_obsidian4.Notice(i18n().view.noActiveFile);
-          return;
-        }
-        const domainId = this.domainSelect.value || void 0;
-        new ConfirmModal(this.plugin.app, "Ingest \u2014 confirm", [
-          `File: ${file.name}`,
-          "Claude will read the file, extract entities and update domain wiki pages."
-        ], () => void this.plugin.controller.ingestActive(domainId)).open();
-      });
-      this.lintBtn.addEventListener("click", () => {
-        const d = this.domainSelect.value;
-        const domainLabel = d ? `\xAB${d}\xBB` : "all wiki";
-        new ConfirmModal(this.plugin.app, "Lint \u2014 confirm", [
-          `Domain: ${domainLabel}`,
-          "Claude will check wiki pages for quality and update entity_types."
-        ], () => void this.plugin.controller.lint(d || "all")).open();
-      });
-      void this.refreshDomains();
+      this.buildDomainRow(root, { withActions: true });
+    } else {
+      root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionDomainMobile });
+      this.buildDomainRow(root, { withActions: false });
     }
     root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionQuery });
     const ask = root.createDiv("ai-wiki-ask");
@@ -20561,6 +20653,51 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     if (this.plugin.controller.isBusy()) {
       new BusyCloseModal(this.app, () => this.plugin.controller.cancelCurrent()).open();
     }
+  }
+  buildDomainRow(parent, opts) {
+    const T = i18n();
+    const domainBox = parent.createDiv("ai-wiki-domain");
+    const domainRow = domainBox.createDiv("ai-wiki-domain-row");
+    domainRow.createSpan({ cls: "muted", text: "Domain:" });
+    this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
+    const refreshBtn = domainRow.createEl("button", { text: "\u21BB", attr: { title: T.view.refreshTitle } });
+    refreshBtn.addEventListener("click", () => void this.refreshDomains());
+    if (opts.withActions) {
+      this.reinitBtn = domainRow.createEl("button", { attr: { title: T.view.reinitTitle } });
+      (0, import_obsidian4.setIcon)(this.reinitBtn, "recycle");
+      this.reinitBtn.disabled = true;
+      this.reinitBtn.addEventListener("click", () => void this.runReinit());
+      this.domainSelect.addEventListener("change", () => {
+        if (this.reinitBtn)
+          this.reinitBtn.disabled = !this.domainSelect.value;
+      });
+      const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
+      this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
+      this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
+      this.formatBtn = actionRow.createEl("button", { text: T.view.format });
+      this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
+      this.ingestBtn.addEventListener("click", () => {
+        const file = this.plugin.app.workspace.getActiveFile();
+        if (!file) {
+          new import_obsidian4.Notice(i18n().view.noActiveFile);
+          return;
+        }
+        const domainId = this.domainSelect.value || void 0;
+        new ConfirmModal(this.plugin.app, "Ingest \u2014 confirm", [
+          `File: ${file.name}`,
+          "Claude will read the file, extract entities and update domain wiki pages."
+        ], () => void this.plugin.controller.ingestActive(domainId)).open();
+      });
+      this.lintBtn.addEventListener("click", () => {
+        const d = this.domainSelect.value;
+        const domainLabel = d ? `\xAB${d}\xBB` : "all wiki";
+        new ConfirmModal(this.plugin.app, "Lint \u2014 confirm", [
+          `Domain: ${domainLabel}`,
+          "Claude will check wiki pages for quality and update entity_types."
+        ], () => void this.plugin.controller.lint(d || "all")).open();
+      });
+    }
+    void this.refreshDomains();
   }
   async refreshDomains() {
     if (!this.domainSelect)
@@ -20693,6 +20830,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.toolCount = 0;
     this.stepCount = 0;
     this.progressEl = null;
+    this.mobileWaitingEl = null;
     this.progressPhaseEl = null;
     this.progressTotal = 0;
     this.progressDone = 0;
@@ -20720,8 +20858,17 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.tickHandle = null;
     }
     this.scheduleMetricsTick();
+    if (import_obsidian4.Platform.isMobile) {
+      const placeholder = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step-pending");
+      placeholder.setText(i18n().view.mobileWaiting);
+      this.mobileWaitingEl = placeholder;
+    }
   }
   appendEvent(ev) {
+    if (this.mobileWaitingEl) {
+      this.mobileWaitingEl.remove();
+      this.mobileWaitingEl = null;
+    }
     if (ev.kind === "format_preview") {
       this.renderFormatPreview(ev.tempPath, ev.report, ev.missingTokens);
       return;
@@ -20764,6 +20911,16 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       if (this.progressEl) {
         this.progressEl.setText(`${this.progressDone} / ${this.progressTotal} \u0444\u0430\u0439\u043B\u043E\u0432`);
       }
+      this.scrollSteps();
+      return;
+    }
+    if (ev.kind === "graph_stats") {
+      const cacheHint = ev.fromCache ? " (cache hit)" : "";
+      const preview = ev.seeds.slice(0, 3).join(", ");
+      const extra = ev.seeds.length > 3 ? `, \u2026+${ev.seeds.length - 3}` : "";
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      step.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F310}");
+      step.createSpan({ cls: "ai-wiki-step-name" }).setText(`\u0413\u0440\u0430\u0444: ${ev.seeds.length} seeds [${preview}${extra}] \u2192 ${ev.expanded} / ${ev.total} \u0441\u0442\u0440\u0430\u043D\u0438\u0446${cacheHint}`);
       this.scrollSteps();
       return;
     }
@@ -20944,10 +21101,14 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.cancelBtn.disabled = true;
     this.askBtn.disabled = false;
     this.askSaveBtn.disabled = false;
-    this.initBtn.disabled = false;
-    this.ingestBtn.disabled = false;
-    this.lintBtn.disabled = false;
-    this.formatBtn.disabled = false;
+    if (this.initBtn)
+      this.initBtn.disabled = false;
+    if (this.ingestBtn)
+      this.ingestBtn.disabled = false;
+    if (this.lintBtn)
+      this.lintBtn.disabled = false;
+    if (this.formatBtn)
+      this.formatBtn.disabled = false;
     if (this.reinitBtn)
       this.reinitBtn.disabled = !(this.domainSelect && this.domainSelect.value);
     if (this.tickHandle !== null) {
@@ -20955,6 +21116,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.tickHandle = null;
     }
     this.updateMetrics();
+    const totalDur = ((entry.finishedAt - entry.startedAt) / 1e3).toFixed(1);
+    this.progressCount.setText(`${totalDur}s`);
     this.resultSpeedEl?.setText(this.lastTokPerSec !== void 0 ? ` ${this.lastTokPerSec} tok/s` : "");
     this.finalEl.empty();
     if (entry.finalText) {
@@ -20966,7 +21129,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.finalEl.removeClass("ai-wiki-hidden");
       this.resultOpen = true;
       this.resultToggle.setText("\u25BC");
-      const CHAT_OPS = ["lint", "ingest", "query", "query-save"];
+      const CHAT_OPS = ["lint", "lint-chat", "ingest", "query", "query-save"];
       if (CHAT_OPS.includes(entry.operation) && entry.status === "done" && entry.finalText) {
         this.lastContext = {
           operation: entry.operation,
@@ -21001,13 +21164,23 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.chatInputEl.value = "";
       this.addChatBubble("user", text);
       this.lastUserMessage = text;
-      void this.plugin.controller.chat(
-        this.lastContext.operation,
-        this.lastContext.domainId,
-        this.lastContext.report,
-        this.chatHistory,
-        text
-      );
+      const ctx = this.lastContext;
+      if (ctx.operation === "lint" || ctx.operation === "lint-chat") {
+        void this.plugin.controller.lintApplyFromChat(
+          ctx.domainId,
+          ctx.report,
+          this.chatHistory,
+          text
+        );
+      } else {
+        void this.plugin.controller.chat(
+          ctx.operation,
+          ctx.domainId,
+          ctx.report,
+          this.chatHistory,
+          text
+        );
+      }
     };
     this.chatSendBtn.addEventListener("click", submit);
   }
@@ -21404,7 +21577,7 @@ function stripFences(text) {
 }
 function extractStreamDeltas(chunk) {
   const delta = chunk.choices[0]?.delta;
-  const rawReasoning = delta?.reasoning;
+  const rawReasoning = delta?.reasoning ?? delta?.reasoning_content;
   const usage = chunk.usage;
   const outputTokens = typeof usage?.completion_tokens === "number" ? usage.completion_tokens : void 0;
   return {
@@ -21427,12 +21600,16 @@ function buildChatParams(model, messages, opts, stream = false) {
     params.max_tokens = opts.maxTokens;
   if (opts.topP != null)
     params.top_p = opts.topP;
-  if (opts.numCtx != null)
-    params.num_ctx = opts.numCtx;
   if (stream)
     params.stream_options = { include_usage: true };
   if (opts.jsonMode === "json_object") {
     params.response_format = { type: "json_object" };
+  }
+  if (opts.thinkingBudgetTokens && opts.thinkingBudgetTokens > 0) {
+    params.thinking = { type: "enabled", budget_tokens: opts.thinkingBudgetTokens };
+    delete params.response_format;
+    delete params.temperature;
+    delete params.top_p;
   }
   return params;
 }
@@ -26122,6 +26299,13 @@ var SeedsSchema = external_exports.object({
   reasoning: external_exports.string().optional(),
   seeds: external_exports.array(external_exports.string())
 });
+var LintChatSchema = external_exports.object({
+  summary: external_exports.string(),
+  pages: external_exports.array(external_exports.object({
+    path: external_exports.string(),
+    content: external_exports.string()
+  })).default([])
+});
 
 // prompts/query.md
 var query_default = "\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u043F\u043E wiki-\u0431\u0430\u0437\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u0411\u0443\u0434\u044C \u0442\u043E\u0447\u0435\u043D \u0438 \u043B\u0430\u043A\u043E\u043D\u0438\u0447\u0435\u043D.\n\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 WikiLinks [[\u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435]] \u043F\u0440\u0438 \u0441\u0441\u044B\u043B\u043A\u0430\u0445 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0437 \u0438\u043D\u0434\u0435\u043A\u0441\u0430.\n{{entity_types_block}}\n{{schema_block}}\n{{index_block}}\n";
@@ -26209,9 +26393,143 @@ function checkGraphStructure(graph, hubThreshold) {
   return issues.join("\n");
 }
 
+// src/wiki-graph-cache.ts
+function hashPages(pages) {
+  const parts = [];
+  const keys = [...pages.keys()].sort();
+  for (const k of keys)
+    parts.push(`${k}:${pages.get(k).length}`);
+  return parts.join("|");
+}
+var GraphCache = class {
+  store = /* @__PURE__ */ new Map();
+  get(domainId, pages) {
+    const hash = hashPages(pages);
+    const hit = this.store.get(domainId);
+    if (hit && hit.hash === hash)
+      return { graph: hit.graph, fromCache: true };
+    const graph = buildWikiGraph(pages);
+    this.store.set(domainId, { hash, graph });
+    return { graph, fromCache: false };
+  }
+  invalidate(domainId) {
+    this.store.delete(domainId);
+  }
+  clear() {
+    this.store.clear();
+  }
+};
+var graphCache = new GraphCache();
+
+// src/wiki-seeds.ts
+var STOP_WORDS = /* @__PURE__ */ new Set([
+  // EN
+  "the",
+  "and",
+  "for",
+  "are",
+  "was",
+  "were",
+  "with",
+  "that",
+  "this",
+  "from",
+  "have",
+  "has",
+  "had",
+  "but",
+  "not",
+  "you",
+  "your",
+  "our",
+  "their",
+  "his",
+  "her",
+  "its",
+  "into",
+  "about",
+  "what",
+  "which",
+  "when",
+  "where",
+  "how",
+  "here",
+  // RU
+  "\u0447\u0442\u043E",
+  "\u043A\u0430\u043A",
+  "\u0434\u043B\u044F",
+  "\u0438\u043B\u0438",
+  "\u044D\u0442\u043E",
+  "\u043F\u0440\u0438",
+  "\u0431\u0435\u0437",
+  "\u0442\u043E\u0442",
+  "\u0435\u0433\u043E",
+  "\u043E\u043D\u0430",
+  "\u043E\u043D\u0438",
+  "\u0431\u044B\u043B",
+  "\u0431\u044B\u043B\u0430",
+  "\u0431\u044B\u0442\u044C",
+  "\u0442\u043E\u0436\u0435",
+  "\u0442\u0430\u043A\u0436\u0435",
+  "\u0435\u0441\u043B\u0438",
+  "\u0442\u043E\u0433\u0434\u0430",
+  "\u043F\u043E\u0442\u043E\u043C",
+  "\u043A\u043E\u0433\u0434\u0430",
+  "\u043E\u0447\u0435\u043D\u044C",
+  "\u0431\u043E\u043B\u0435\u0435",
+  "\u043C\u0435\u043D\u0435\u0435",
+  "\u043D\u0435\u0442",
+  "\u0443\u0436\u0435",
+  "\u0435\u0449\u0451",
+  "\u0435\u0449\u0435"
+]);
+var CONTENT_CAP = 200;
+function tokenize(s) {
+  const out = /* @__PURE__ */ new Set();
+  if (!s)
+    return out;
+  for (const raw of s.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
+    if (raw.length <= 2)
+      continue;
+    if (STOP_WORDS.has(raw))
+      continue;
+    out.add(raw);
+  }
+  return out;
+}
+function scoreSeed(questionTokens, pageIdValue, content) {
+  if (questionTokens.size === 0)
+    return 0;
+  const head = content.slice(0, CONTENT_CAP);
+  const p = tokenize(pageIdValue);
+  for (const t of tokenize(head))
+    p.add(t);
+  if (p.size === 0)
+    return 0;
+  let inter = 0;
+  for (const t of questionTokens)
+    if (p.has(t))
+      inter++;
+  return inter / questionTokens.size;
+}
+function selectSeeds(question, pages, topK, minScore) {
+  const q = tokenize(question);
+  if (q.size === 0)
+    return [];
+  const scored = [];
+  for (const [path2, content] of pages) {
+    const id = pageId(path2);
+    const score = scoreSeed(q, id, content);
+    if (score >= minScore && score > 0)
+      scored.push({ id, score });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, topK).map((x) => x.id);
+}
+
 // src/phases/query.ts
 var META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
-async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}) {
+async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1) {
   const question = args[0]?.trim();
   if (!question) {
     yield { kind: "error", message: "query: question required" };
@@ -26232,29 +26550,44 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
   const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
+  if (signal.aborted)
+    return;
   const [indexContent, schemaContent] = await Promise.all([
     tryRead2(vaultTools, `${wikiVaultPath}/_index.md`),
     tryRead2(vaultTools, `${schemaRoot}/_wiki_schema.md`)
   ]);
+  yield { kind: "tool_use", name: "Read", input: { files: files.length } };
   const pages = await vaultTools.readAll(files);
+  yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
+  if (signal.aborted)
+    return;
   const start = Date.now();
   let outputTokens = 0;
-  const graph = buildWikiGraph(pages);
+  const { graph, fromCache } = graphCache.get(domain.id, pages);
   const allPageIds = [...pages.keys()].map(pageId);
-  let seeds = keywordSeeds(question, pages);
+  const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
+  const minScore = Math.max(0, Math.min(1, seedMinScore));
+  let seeds = selectSeeds(question, pages, topK, minScore);
   if (seeds.length === 0) {
-    const seedRes = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal);
+    if (signal.aborted)
+      return;
+    yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allPageIds.length } };
+    const seedOpts = { ...opts, thinkingBudgetTokens: void 0 };
+    const seedRes = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, seedOpts, signal);
     seeds = seedRes.seeds;
     outputTokens += seedRes.outputTokens;
+    yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
   }
   if (signal.aborted)
     return;
   if (seeds.length === 0) {
-    seeds = allPageIds;
+    yield { kind: "error", message: "No relevant pages found for this query." };
+    return;
   }
   const seedSet = new Set(seeds);
   const selectedIds = bfsExpand(seeds, graph, graphDepth);
-  const contextBlock = buildContextBlock(pages, seedSet, selectedIds);
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: pages.size, fromCache };
+  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);
   const entityTypesBlock = buildEntityTypesBlock2(domain);
   const systemPrompt = render(query_default, {
     domain_name: domain.name,
@@ -26344,19 +26677,6 @@ async function tryRead2(vaultTools, path2) {
     return "";
   }
 }
-function keywordSeeds(question, pages) {
-  const words = question.split(/\W+/).filter((w) => w.length > 3).map((w) => w.toLowerCase());
-  if (words.length === 0)
-    return [];
-  const seeds = [];
-  for (const path2 of pages.keys()) {
-    const id = pageId(path2);
-    if (words.some((w) => id.toLowerCase().includes(w))) {
-      seeds.push(id);
-    }
-  }
-  return seeds;
-}
 async function llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal) {
   const example = JSON.stringify({
     reasoning: "PageA matches keyword X; PageB referenced by index.",
@@ -26395,7 +26715,7 @@ Return JSON only matching this shape (most relevant page names \u2014 bare names
     return { seeds: [], outputTokens: 0 };
   }
 }
-function buildContextBlock(pages, seeds, selectedIds) {
+function buildContextBlock(pages, seeds, selectedIds, maxPages) {
   const seedPages = [];
   const bfsPages = [];
   for (const [path2, content] of pages) {
@@ -26407,7 +26727,8 @@ function buildContextBlock(pages, seeds, selectedIds) {
     else
       bfsPages.push([path2, content]);
   }
-  const ordered = [...seedPages, ...bfsPages];
+  const bfsCap = Math.max(0, maxPages - seedPages.length);
+  const ordered = [...seedPages, ...bfsPages.slice(0, bfsCap)];
   let block = "";
   for (const [p, c] of ordered) {
     block += `--- ${p} ---
@@ -26431,7 +26752,7 @@ ${types}${notes}`;
 var import_path_browserify4 = __toESM(require_path_browserify(), 1);
 
 // prompts/lint.md
-var lint_default = "\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0412\u044B\u044F\u0432\u043B\u044F\u0439: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442.\n\u0412\u0435\u0440\u043D\u0438 **JSON** \u0441 \u043F\u043E\u043B\u0435\u043C `reasoning` \u043F\u0435\u0440\u0432\u044B\u043C, \u0437\u0430\u0442\u0435\u043C `entity_types` \u0438 `language_notes`.\n{{entity_types_block}}\n";
+var lint_default = "\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0412\u044B\u044F\u0432\u043B\u044F\u0439: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442, \u0431\u0438\u0442\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438.\n\u0412\u0435\u0440\u043D\u0438 \u0440\u0430\u0437\u0432\u0451\u0440\u043D\u0443\u0442\u044B\u0439 \u0430\u043D\u0430\u043B\u0438\u0437 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 Markdown.\n{{entity_types_block}}\n";
 
 // src/phases/lint.ts
 var META_FILES2 = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
@@ -26460,7 +26781,7 @@ Wiki folder outside vault \u2014 skipped.`);
     const files = allFiles.filter((f) => !META_FILES2.some((m) => f.endsWith(m)));
     yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
     const pages = await vaultTools.readAll(files);
-    const graph = buildWikiGraph(pages);
+    const { graph } = graphCache.get(domain.id, pages);
     const structuralIssues = checkStructure(pages);
     const graphIssues = checkGraphStructure(graph, hubThreshold);
     const allIssues = [structuralIssues, graphIssues].filter(Boolean).join("\n");
@@ -26844,6 +27165,63 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
   yield { kind: "result", durationMs: Date.now() - start, text: fullText, outputTokens: outputTokens || void 0 };
 }
 
+// prompts/lint-chat.md
+var lint_chat_default = '\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041F\u0440\u0438\u043C\u0438 \u0437\u0430\u0434\u0430\u043D\u0438\u0435 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F \u0438 lint-\u043E\u0442\u0447\u0451\u0442, \u0438\u0441\u043F\u0440\u0430\u0432\u044C \u0443\u043A\u0430\u0437\u0430\u043D\u043D\u044B\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B \u0432 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430\u0445.\n\n\u0412\u0435\u0440\u043D\u0438 JSON:\n{"summary":"## markdown \u0447\u0442\u043E \u0441\u0434\u0435\u043B\u0430\u043D\u043E","pages":[{"path":"...","content":"..."}]}\n\u0415\u0441\u043B\u0438 \u043F\u0440\u0430\u0432\u043E\u043A \u043D\u0435\u0442 \u2014 pages \u043F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432, summary \u2014 \u0442\u0435\u043A\u0441\u0442\u043E\u0432\u044B\u0439 \u043E\u0442\u0432\u0435\u0442.\n\nLINT-\u041E\u0422\u0427\u0401\u0422:\n{{lint_report}}\n\n\u0421\u0422\u0420\u0410\u041D\u0418\u0426\u042B \u0414\u041E\u041C\u0415\u041D\u0410:\n{{pages_block}}\n';
+
+// src/phases/lint-chat.ts
+var META_FILES3 = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
+async function* runLintFixChat(req, vaultTools, _vaultRoot, domain, llm, model, opts, signal) {
+  const start = Date.now();
+  if (!domain) {
+    yield { kind: "error", message: "lint-chat requires a domain" };
+    yield { kind: "result", durationMs: Date.now() - start, text: "" };
+    return;
+  }
+  const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
+  const allFiles = await vaultTools.listFiles(wikiVaultPath);
+  const files = allFiles.filter((f) => !META_FILES3.some((m) => f.endsWith(m)));
+  const pages = await vaultTools.readAll(files);
+  const pagesBlock = [...pages.entries()].map(([p, c]) => `--- ${p} ---
+${c}`).join("\n\n");
+  const systemContent = render(lint_chat_default, {
+    domain_name: domain.name,
+    lint_report: req.context ?? "",
+    pages_block: pagesBlock
+  });
+  const chatMessages = req.chatMessages ?? [];
+  const messages = [
+    { role: "system", content: systemContent },
+    ...chatMessages.map((m) => ({ role: m.role, content: m.content }))
+  ];
+  const result = await parseWithRetry({
+    llm,
+    model,
+    baseMessages: messages,
+    opts: { ...opts, jsonMode: "json_object" },
+    schema: LintChatSchema,
+    maxRetries: opts.structuredRetries ?? 1,
+    callSite: "lint-chat.fix",
+    signal,
+    onEvent: (_ev) => {
+    }
+  });
+  const parsed = result.value;
+  for (const page of parsed.pages ?? []) {
+    yield { kind: "tool_use", name: "Write", input: { path: page.path } };
+    if (!page.path.startsWith(wikiVaultPath + "/")) {
+      yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
+      continue;
+    }
+    try {
+      await vaultTools.write(page.path, page.content);
+      yield { kind: "tool_result", ok: true };
+    } catch (e) {
+      yield { kind: "tool_result", ok: false, preview: e.message };
+    }
+  }
+  yield { kind: "result", durationMs: Date.now() - start, text: parsed.summary, outputTokens: result.outputTokens || void 0 };
+}
+
 // templates/_wiki_schema.md
 var wiki_schema_default = '# Wiki Schema\n\n## \u042F\u0437\u044B\u043A \u0438 \u0441\u0442\u0438\u043B\u044C\n- \u041E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u044F\u0437\u044B\u043A: \u0440\u0443\u0441\u0441\u043A\u0438\u0439\n- \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u043D\u0435 \u043F\u0435\u0440\u0435\u0432\u043E\u0434\u0438\u0442\u044C: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML\n- \u0418\u043C\u0435\u043D\u0430 \u0441\u0438\u0441\u0442\u0435\u043C \u2014 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 (RT.DataExporter, CRM B2C, \u0426\u0425\u0414)\n- \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B \u0440\u0430\u0441\u0448\u0438\u0444\u0440\u043E\u0432\u044B\u0432\u0430\u0442\u044C \u043F\u0440\u0438 \u043F\u0435\u0440\u0432\u043E\u043C \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0438 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435\n- \u0421\u0442\u0438\u043B\u044C: \u043D\u0435\u0439\u0442\u0440\u0430\u043B\u044C\u043D\u044B\u0439, \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0432\u043D\u044B\u0439, \u0431\u0435\u0437 \u043E\u0446\u0435\u043D\u043E\u0447\u043D\u044B\u0445 \u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: "\u041E\u0447\u0435\u0432\u0438\u0434\u043D\u043E, \u0447\u0442\u043E...", "\u041B\u0443\u0447\u0448\u0438\u0439 \u0441\u043F\u043E\u0441\u043E\u0431...", \u043C\u0435\u0441\u0442\u043E\u0438\u043C\u0435\u043D\u0438\u044F "\u044F", "\u043C\u044B", "\u043D\u0430\u0448"\n\n## \u0418\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u043E\u0432 \u0438 \u043F\u0430\u043F\u043E\u043A\n- \u0424\u0430\u0439\u043B\u044B: kebab-case, \u043A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u0430, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432 \u0438 \u0441\u043F\u0435\u0446\u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432 \u043A\u0440\u043E\u043C\u0435 \u0434\u0435\u0444\u0438\u0441\u0430\n  - \u041F\u0440\u0438\u043C\u0435\u0440\u044B: `\u0432\u0435\u0440\u0441\u0438\u043E\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435-scd.md`, `clickhouse-\u043E\u0431\u0437\u043E\u0440.md`\n- \u041F\u0430\u043F\u043A\u0438 \u0434\u043E\u043C\u0435\u043D\u043E\u0432: \u043D\u0438\u0436\u043D\u0438\u0439 \u0440\u0435\u0433\u0438\u0441\u0442\u0440, \u043B\u0430\u0442\u0438\u043D\u0438\u0446\u0430 (`\u0438\u0438/`, `\u0431\u0430\u0437\u044B-\u0434\u0430\u043D\u043D\u044B\u0445/`)\n- \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1: \u0440\u0443\u0441\u0441\u043A\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435; \u0442\u0435\u0445\u0442\u0435\u0440\u043C\u0438\u043D \u0432 \u0441\u043A\u043E\u0431\u043A\u0430\u0445 \u043F\u0440\u0438 \u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E\u0441\u0442\u0438\n\n## \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u043F\u043E\u0440\u044F\u0434\u043E\u043A)\n1. Frontmatter (YAML)\n2. \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1\n3. \u0412\u0432\u043E\u0434\u043D\u044B\u0439 \u0430\u0431\u0437\u0430\u0446 \u2014 1-3 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0431\u0435\u0437 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0430, \u0441\u0440\u0430\u0437\u0443 \u043F\u043E\u0441\u043B\u0435 H1\n4. `## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438` \u2014 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0438 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u044B\n\n## \u041E\u043F\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B\n- `## \u041F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435 [\u0414\u043E\u043C\u0435\u043D]`\n- `## \u041F\u0440\u0438\u043C\u0435\u0440\u044B`\n- `## \u041E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F`\n- `## Best Practices`\n- `## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438` \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u043D\u0443\u0436\u0435\u043D \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043A \u0441\u0432\u044F\u0437\u044F\u043C; \u0431\u0435\u0437 \u043E\u043F\u0438\u0441\u0430\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u0440\u0430\u0437\u0434\u0435\u043B \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C\n- `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n\n## Frontmatter\n\n| \u041F\u043E\u043B\u0435 | \u041F\u0440\u0430\u0432\u0438\u043B\u043E |\n|------|---------|\n| `wiki_sources` | \u041C\u0430\u0441\u0441\u0438\u0432 \u0440\u0435\u0430\u043B\u044C\u043D\u044B\u0445 \u043F\u0443\u0442\u0435\u0439 \u043E\u0442 \u043A\u043E\u0440\u043D\u044F \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F. \u0422\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u043D\u044B\u0435 \u0444\u0430\u0439\u043B\u044B. \u041F\u0440\u0438 UPDATE \u2014 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0442\u044C, \u043D\u0435 \u0443\u0434\u0430\u043B\u044F\u0442\u044C. \u0422\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0432 Obsidian: **Links** (\u043D\u0435 list/text) \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0442\u043E\u0433\u0434\u0430 \u0441\u0441\u044B\u043B\u043A\u0438 \u0443\u0447\u0430\u0441\u0442\u0432\u0443\u044E\u0442 \u0432 Graph View. \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 `[[page-name]]`: `["[[page-a]]", "[[page-b]]"] |\n| `wiki_updated` | YYYY-MM-DD |\n| `wiki_status` | `stub` (<2 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432, <10 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439) / `developing` (\u22652 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430, \u226510 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439, \u043E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B \u0437\u0430\u043F\u043E\u043B\u043D\u0435\u043D\u044B) / `mature` (\u22654 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430, \u0432\u0441\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B) |\n| `wiki_type` | \u0422\u0438\u043F \u0444\u0430\u0439\u043B\u0430: `page \\| index \\| log \\| schema`. \u0422\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u0444\u0430\u0439\u043B\u043E\u0432 (`_index.md`, `_log.md`, `_wiki_schema.md`). \u041E\u0431\u044B\u0447\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u043D\u0435 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u044E\u0442 \u044D\u0442\u043E \u043F\u043E\u043B\u0435. |\n| `tags` | \u0418\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 \u0438\u0437 tag-hierarchy.json |\n| `aliases` | \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B, \u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u0438\u0435 \u0432\u0430\u0440\u0438\u0430\u043D\u0442\u044B, \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B |\n| `wiki_outgoing_links` | \u041C\u0430\u0441\u0441\u0438\u0432 WikiLinks \u043D\u0430 \u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B. \u0422\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0432 Obsidian: **Links** (\u043D\u0435 list/text) \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0442\u043E\u0433\u0434\u0430 \u0441\u0441\u044B\u043B\u043A\u0438 \u0443\u0447\u0430\u0441\u0442\u0432\u0443\u044E\u0442 \u0432 Graph View. \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 `[[page-name]]`: `["[[page-a]]", "[[page-b]]"]`. \u041F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C. |\n| `wiki_external_links` | \u041C\u0430\u0441\u0441\u0438\u0432 \u0432\u043D\u0435\u0448\u043D\u0438\u0445 URL (`http://` \u0438\u043B\u0438 `https://`). \u041D\u0435 \u0444\u043E\u0440\u043C\u0438\u0440\u0443\u044E\u0442 \u0433\u0440\u0430\u0444 Obsidian \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0441\u043F\u0440\u0430\u0432\u043E\u0447\u043D\u044B\u0435 \u0440\u0435\u0441\u0443\u0440\u0441\u044B \u0438 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430\u0446\u0438\u044F. |\n\n## WikiLinks\n- \u0421\u0441\u044B\u043B\u0430\u0442\u044C\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0447\u0435\u0440\u0435\u0437 `[[\u0438\u043C\u044F-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B]]`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: \u043C\u0451\u0440\u0442\u0432\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438, \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0444\u0430\u0439\u043B\u044B \u0432\u043D\u0435 `!Wiki/`\n\n## \u041A\u043E\u043D\u0442\u0435\u043D\u0442\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u2014 \u043F\u0435\u0440\u0435\u0440\u0430\u0431\u043E\u0442\u0430\u0442\u044C \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432\n- \u0414\u043E\u0441\u043B\u043E\u0432\u043D\u044B\u0435 \u0446\u0438\u0442\u0430\u0442\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445 (SQL, \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438)\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u0434\u0430\u0442\u0443 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0432 `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: placeholder-\u0442\u0435\u043A\u0441\u0442 (TODO, "\u0441\u043C. \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A"), \u043F\u0443\u0441\u0442\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B, \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438\n- \u0422\u0430\u0431\u043B\u0438\u0446\u044B: markdown \u0441 \u0432\u044B\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u043D\u0438\u0435\u043C (`| \u041F\u0430\u0440\u0430\u043C\u0435\u0442\u0440 | \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u0435 |` + `|----------|----------|`)\n- \u041A\u043E\u0434\u043E\u0432\u044B\u0435 \u0431\u043B\u043E\u043A\u0438: \u0432\u0441\u0435\u0433\u0434\u0430 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u044F\u0437\u044B\u043A (` ```sql `, ` ```yaml `, ` ```json `)\n';
 
@@ -27169,6 +27547,9 @@ ${fileContent}` }
           entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
         if (!entry.id || !entry.wiki_folder)
           throw new Error("Missing required fields");
+        if (force && existing) {
+          entry.wiki_folder = existing.wiki_folder;
+        }
       } catch {
         yield { kind: "assistant_text", delta: `\u26A0 ${file}: bootstrap \u043F\u043E\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u0435 entry \u0443\u043F\u0430\u043B\u043E, \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u043C
 ` };
@@ -27557,7 +27938,7 @@ function escapeRawControlsInStrings(src) {
   }
   return out;
 }
-var STOP_WORDS = /* @__PURE__ */ new Set([
+var STOP_WORDS2 = /* @__PURE__ */ new Set([
   "The",
   "This",
   "That",
@@ -27579,7 +27960,7 @@ function significantTokens(text) {
   for (const m of residual.matchAll(/\b\d+(?:\.\d+)?\b/g))
     out.add(m[0]);
   for (const m of residual.matchAll(/\b[A-Z][A-Za-z0-9-]{2,}/g)) {
-    if (!STOP_WORDS.has(m[0]))
+    if (!STOP_WORDS2.has(m[0]))
       out.add(m[0]);
   }
   for (const m of residual.matchAll(/\b[A-Z]{2,}\b/g))
@@ -27830,7 +28211,7 @@ var AgentRunner = class {
   }
   llm;
   buildOptsFor(op) {
-    const key = op === "query-save" ? "query" : op === "chat" ? "lint" : op;
+    const key = op === "query-save" ? "query" : op === "chat" || op === "lint-chat" ? "lint" : op;
     const s = this.settings;
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
     if (s.backend === "claude-agent") {
@@ -27840,9 +28221,10 @@ var AgentRunner = class {
     }
     const na = s.nativeAgent;
     const c = na.perOperation ? na.operations[key] : void 0;
+    const budgetTokens = c?.thinkingBudgetTokens ?? na.thinkingBudgetTokens;
     if (c)
-      return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
-    return { model: na.model, opts: { maxTokens: s.maxTokens, temperature: na.temperature, topP: na.topP, numCtx: na.numCtx, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
+      return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
+    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
   }
   async writeDevLog(_vaultRoot, entry) {
     if (!this.settings.devMode?.enabled)
@@ -27867,10 +28249,10 @@ var AgentRunner = class {
         yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
         break;
       case "query":
-        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts);
+        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore);
         break;
       case "query-save":
-        yield* runQuery(req.args, true, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts);
+        yield* runQuery(req.args, true, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore);
         break;
       case "lint":
         yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, opts);
@@ -27887,6 +28269,11 @@ var AgentRunner = class {
           req.chatMessages ?? [],
           req.operationHeader ?? ""
         );
+        break;
+      }
+      case "lint-chat": {
+        const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
+        yield* runLintFixChat(req, this.vaultTools, vaultRoot, domain, this.llm, model, opts, req.signal);
         break;
       }
       case "init":
@@ -27906,7 +28293,8 @@ var AgentRunner = class {
   }
   async *run(req) {
     const { model, opts } = this.buildOptsFor(req.operation);
-    yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}` };
+    const baseUrlHint = this.settings.backend === "native-agent" ? ` @ ${this.settings.nativeAgent.baseUrl}` : "";
+    yield { kind: "system", message: `${this.settings.backend} / ${model || "claude"}${baseUrlHint}` };
     if (req.signal.aborted)
       return;
     const vaultRoot = req.cwd ?? "";
@@ -28021,7 +28409,7 @@ var VaultTools = class {
 };
 
 // src/claude-cli-client.ts
-var import_child_process = require("child_process");
+var import_child_process2 = require("child_process");
 var import_path_browserify5 = __toESM(require_path_browserify(), 1);
 
 // src/stream.ts
@@ -28147,6 +28535,8 @@ var ClaudeCliClient = class {
     args.push("--");
     if (model)
       args.push("--model", model);
+    if (this.cfg.effort)
+      args.push("--effort", this.cfg.effort);
     if (isResume) {
       args.push("--resume", this.cfg.resumeSessionId);
     }
@@ -28198,7 +28588,7 @@ ${userText}
     return { [Symbol.asyncIterator]: () => this._generate(args, signal, timeoutSec, tmpFiles) };
   }
   async *_generate(args, signal, timeoutSec, tmpFiles) {
-    const child = (0, import_child_process.spawn)(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
+    const child = (0, import_child_process2.spawn)(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
     if (!child.stdout || !child.stderr)
       throw new Error("spawn: missing stdio");
     const stderrChunks = [];
@@ -35555,26 +35945,80 @@ var mobileFetch = async (input, init) => {
   if (init?.signal?.aborted)
     throw new DOMException("Aborted", "AbortError");
   let url;
-  if (typeof input === "string") {
+  if (typeof input === "string")
     url = input;
-  } else if (input instanceof URL) {
+  else if (input instanceof URL)
     url = input.toString();
-  } else {
+  else
     url = input.url;
-  }
   const body = init?.body;
   if (body != null && typeof body !== "string") {
     throw new Error("mobileFetch: only string body supported");
   }
-  const r = await (0, import_obsidian6.requestUrl)({
+  const requestPromise = (0, import_obsidian6.requestUrl)({
     url,
     method: init?.method ?? "GET",
     headers: init?.headers,
     body: body ?? void 0,
     throw: false
   });
+  const r = init?.signal ? await Promise.race([requestPromise, abortRace(init.signal)]) : await requestPromise;
   return new Response(r.text, { status: r.status, headers: r.headers });
 };
+function abortRace(signal) {
+  return new Promise((_, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const handler = () => reject(new DOMException("Aborted", "AbortError"));
+    signal.addEventListener("abort", handler, { once: true });
+  });
+}
+
+// src/mobile-llm-wrap.ts
+function wrapMobileNoStream(inner) {
+  const create = async (params, callOpts) => {
+    if (params.stream !== true) {
+      return inner.chat.completions.create(params, callOpts);
+    }
+    const noStreamParams = { ...params, stream: false };
+    delete noStreamParams.stream_options;
+    const resp = await inner.chat.completions.create(
+      noStreamParams,
+      callOpts
+    );
+    return completionToAsyncIterable(resp);
+  };
+  return { chat: { completions: { create } } };
+}
+async function* completionToAsyncIterable(c) {
+  const choice = c.choices[0];
+  const content = typeof choice?.message?.content === "string" ? choice.message.content : "";
+  const reasoning = choice?.message?.reasoning;
+  if (reasoning) {
+    yield mkChunk(c, { reasoning });
+  }
+  if (content) {
+    yield mkChunk(c, { content });
+  }
+  yield mkChunk(c, {}, choice?.finish_reason ?? "stop", c.usage ?? null);
+}
+function mkChunk(base, delta, finish_reason = null, usage = null) {
+  return {
+    id: base.id,
+    object: "chat.completion.chunk",
+    created: base.created,
+    model: base.model,
+    choices: [{
+      index: 0,
+      delta,
+      finish_reason,
+      logprobs: null
+    }],
+    usage: usage ?? void 0
+  };
+}
 
 // src/domain-store.ts
 var FILE_PATH = "!Wiki/_domain.json";
@@ -35823,6 +36267,10 @@ var WikiController = class {
     const chatMessages = [...history, { role: "user", content: newMessage }];
     await this.dispatchChat(operation, domainId, context, chatMessages);
   }
+  async lintApplyFromChat(domainId, lintReport, history, newMessage) {
+    const chatMessages = [...history, { role: "user", content: newMessage }];
+    await this.dispatch("lint-chat", [], domainId, lintReport, void 0, void 0, chatMessages);
+  }
   async dispatchChat(operation, domainId, context, chatMessages) {
     if (this.isBusy()) {
       new import_obsidian7.Notice(i18n().ctrl.operationRunning);
@@ -35847,7 +36295,7 @@ var WikiController = class {
     const vaultRoot = this.cwdOrEmpty();
     let agentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId);
+      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat");
     } catch (e) {
       new import_obsidian7.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -36000,7 +36448,7 @@ var WikiController = class {
     }
     return true;
   }
-  async buildAgentRunner(vaultRoot, resumeSessionId) {
+  async buildAgentRunner(vaultRoot, resumeSessionId, opKey) {
     const adapter = this.app.vault.adapter;
     const base = this.cwdOrEmpty();
     const vaultTools = new VaultTools(adapter, base);
@@ -36024,9 +36472,14 @@ var WikiController = class {
         }
       }
       const fullAdapter = this.app.vault.adapter;
+      const claudeEff = s.claudeAgent;
+      const normalizedOpKey = opKey === "chat" || opKey === "lint-chat" ? "lint" : opKey === "query-save" ? "query" : opKey;
+      const effort = claudeEff.perOperation && normalizedOpKey ? claudeEff.operations[normalizedOpKey]?.effort ?? claudeEff.effort : claudeEff.effort;
       const client = new ClaudeCliClient({
-        ...s.claudeAgent,
         iclaudePath: local.iclaudePath,
+        model: claudeEff.model,
+        allowedTools: claudeEff.allowedTools,
+        effort,
         requestTimeoutSec: maxTimeoutSec,
         cwd: vaultRoot,
         tmpDir,
@@ -36067,13 +36520,14 @@ var WikiController = class {
           new import_obsidian7.Notice(i18n().settings.proxy_invalid(e.message));
         }
       }
-      llm = new OpenAI({
+      const openaiClient = new OpenAI({
         baseURL: s.nativeAgent.baseUrl,
         apiKey: s.nativeAgent.apiKey,
         timeout: maxTimeoutSec * 1e3,
         dangerouslyAllowBrowser: true,
         fetch: import_obsidian7.Platform.isMobile ? mobileFetch : proxyFetch ?? void 0
       });
+      llm = import_obsidian7.Platform.isMobile ? wrapMobileNoStream(openaiClient) : openaiClient;
     }
     return new AgentRunner(llm, s, vaultTools, vaultName, domains);
   }
@@ -36106,7 +36560,7 @@ var WikiController = class {
     } catch {
     }
   }
-  async dispatch(op, args, domainId, context, instruction, onFileError) {
+  async dispatch(op, args, domainId, context, instruction, onFileError, chatMessages) {
     if (this.isBusy()) {
       new import_obsidian7.Notice(i18n().ctrl.operationRunning);
       return;
@@ -36123,7 +36577,7 @@ var WikiController = class {
         return;
       if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local))
         return;
-      const opKey2 = op === "query-save" ? "query" : op;
+      const opKey2 = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
       this._currentLogMeta = {
         backend: eff.backend,
         model: eff.backend === "claude-agent" ? eff.claudeAgent.perOperation ? eff.claudeAgent.operations[opKey2].model : eff.claudeAgent.model : eff.nativeAgent.perOperation ? eff.nativeAgent.operations[opKey2].model : eff.nativeAgent.model
@@ -36134,9 +36588,10 @@ var WikiController = class {
     if (!view)
       return;
     const vaultRoot = this.cwdOrEmpty();
+    const opKey = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
     let agentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot);
+      agentRunner = await this.buildAgentRunner(vaultRoot, void 0, opKey);
     } catch (e) {
       new import_obsidian7.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -36153,10 +36608,14 @@ var WikiController = class {
     let status = "done";
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
     view.setRunning(op, args);
-    const opKey = op === "query-save" ? "query" : op;
     const timeoutMs = this.plugin.settings.timeouts[opKey] * 1e3;
-    const chatMessages = op === "format" ? this._pendingFormat?.chat : void 0;
-    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages });
+    let timedOut = false;
+    const timeoutId = timeoutMs > 0 ? window.setTimeout(() => {
+      timedOut = true;
+      ctrl.abort();
+    }, timeoutMs) : null;
+    const resolvedChatMessages = op === "format" ? this._pendingFormat?.chat : chatMessages;
+    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages: resolvedChatMessages });
     try {
       for await (const ev of runGen) {
         await this.logEvent(vaultRoot, sessionId, op, domainId, ev);
@@ -36198,10 +36657,30 @@ var WikiController = class {
       finalText = i18n().ctrl.errorPrefix(err.message);
       await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
     } finally {
+      if (timeoutId !== null)
+        window.clearTimeout(timeoutId);
       this.current = null;
       this.onBusyChange?.();
       this.currentOp = null;
       this._currentLogMeta = null;
+    }
+    if (ctrl.signal.aborted && status === "done" && !finalText) {
+      if (timedOut) {
+        status = "error";
+        finalText = `Timeout after ${Math.round(timeoutMs / 1e3)}s \u2014 check LLM backend URL`;
+        this.activeView()?.appendEvent({ kind: "error", message: finalText });
+        await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "error", message: finalText });
+      } else {
+        status = "cancelled";
+      }
+    }
+    if (status === "done") {
+      const mutatesWiki = op === "ingest" || op === "lint" || op === "lint-chat" || op === "query-save" || op === "init";
+      if (mutatesWiki) {
+        const targets = domainId ? [domainId] : (await this.domainStore.load()).map((d) => d.id);
+        for (const id of targets)
+          graphCache.invalidate(id);
+      }
     }
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `finish status=${status} durationMs=${Date.now() - startedAt}` });
     const entry = {
@@ -36279,7 +36758,13 @@ var LocalConfigStore = class {
     }
     try {
       const raw = await adapter.read(p);
-      this.cache = { ...DEFAULTS, ...JSON.parse(raw) };
+      const parsed = JSON.parse(raw);
+      if (parsed.nativeAgent && "numCtx" in parsed.nativeAgent) {
+        const na = { ...parsed.nativeAgent };
+        delete na.numCtx;
+        parsed.nativeAgent = na;
+      }
+      this.cache = { ...DEFAULTS, ...parsed };
     } catch {
       this.cache = { ...DEFAULTS };
     }
@@ -36457,8 +36942,26 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
     };
     if (!data?.systemPrompt && (caData.systemPrompt || naData.systemPrompt))
       this.settings.systemPrompt = caData.systemPrompt ?? naData.systemPrompt;
-    if (!data?.maxTokens && (caData.maxTokens || naData.maxTokens))
-      this.settings.maxTokens = caData.maxTokens ?? naData.maxTokens;
+    let schemaV3Dirty = false;
+    const legacyTop = typeof data?.maxTokens === "number" ? data.maxTokens : void 0;
+    const legacyCA = typeof caData.maxTokens === "number" ? caData.maxTokens : void 0;
+    const legacyNA = typeof naData.maxTokens === "number" ? naData.maxTokens : void 0;
+    const naAlreadySet = legacyNA !== void 0;
+    if (!naAlreadySet) {
+      const legacy = legacyTop ?? legacyCA;
+      if (legacy !== void 0) {
+        this.settings.nativeAgent.maxTokens = legacy;
+        schemaV3Dirty = true;
+      }
+    }
+    if ("maxTokens" in this.settings) {
+      delete this.settings.maxTokens;
+      schemaV3Dirty = true;
+    }
+    if ("numCtx" in this.settings.nativeAgent) {
+      delete this.settings.nativeAgent.numCtx;
+      schemaV3Dirty = true;
+    }
     if (data?.backend === "claude-code") {
       this.settings.backend = "claude-agent";
       if (data && data.model && !this.settings.claudeAgent.model)
@@ -36502,7 +37005,7 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
         claudeCleanup = true;
       }
     }
-    if (formatMaxTokensMigrated || claudeCleanup)
+    if (formatMaxTokensMigrated || claudeCleanup || schemaV3Dirty)
       await this.saveData(this.settings);
   }
   async saveSettings() {
@@ -36558,8 +37061,7 @@ async function migrateToLocalV1(plugin, localConfigStore) {
       apiKey: s.nativeAgent.apiKey,
       model: s.nativeAgent.model,
       temperature: s.nativeAgent.temperature,
-      topP: s.nativeAgent.topP,
-      numCtx: s.nativeAgent.numCtx
+      topP: s.nativeAgent.topP
     },
     claudeAgent: {
       model: s.claudeAgent.model,

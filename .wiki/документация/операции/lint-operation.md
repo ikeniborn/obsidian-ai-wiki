@@ -3,13 +3,15 @@ wiki_status: developing
 wiki_sources:
   - README.md
   - prompts/lint.md
-wiki_updated: 2026-05-15
+wiki_updated: 2026-05-17
 wiki_domain: документация
+wiki_keywords: [lint, audit, quality, upsertIndexAnnotation, annotation, wiki-keywords, fix]
 wiki_outgoing_links:
   - "[[fix-operation]]"
   - "[[поток-выполнения-операции]]"
   - "[[wiki-controller]]"
   - "[[reasoning-first-json]]"
+  - "[[wiki-index]]"
 tags: [операция, lint, качество, аудит]
 aliases: ["lint operation", "аудит вики"]
 ---
@@ -48,9 +50,22 @@ aliases: ["lint operation", "аудит вики"]
 
 Результат используется для уточнения `entity_types` домена по итогам lint-анализа. Паттерн ответа: [[reasoning-first-json]].
 
+## Обновление индекса
+
+После каждой исправленной страницы вызывается `upsertIndexAnnotation` ([[wiki-index]]) — добавляет/обновляет `PageId: annotation` в `_index.md`. Ранее `lint.ts` перезаписывал `_index.md` плоским списком `- [[...]]`; этот блок удалён.
+
+LLM возвращает JSON-массив с полями `path`, `content`, `annotation`:
+- `wiki_keywords` — добавлять/обновлять во frontmatter.
+- `annotation` — одно предложение, описание для поиска.
+
 ## Ограничения платформы
 
 Только desktop.
+
+## История изменений
+
+- **2026-05-15** — создана страница (README.md, prompts/lint.md).
+- **2026-05-17** — обновлено по [[mobile-query-seed-design]]: upsertIndexAnnotation per fixed page, удалён flat index rewrite, добавлено описание annotation в промпте.
 
 ## Связанные страницы
 
@@ -58,3 +73,5 @@ aliases: ["lint operation", "аудит вики"]
 - [[поток-выполнения-операции]]
 - [[wiki-controller]]
 - [[reasoning-first-json]]
+- [[wiki-index]]
+- [[mobile-query-seed-design]]

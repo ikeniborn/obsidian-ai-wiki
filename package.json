@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-llm-wiki",
-	"version": "0.1.99",
+	"version": "0.1.107",
 	"private": true,
 	"type": "module",
 	"scripts": {

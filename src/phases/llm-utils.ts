@@ -33,7 +33,8 @@ function stripFences(text: string): string {
  *  outputTokens приходит только в финальном чанке при stream_options.include_usage=true. */
 export function extractStreamDeltas(chunk: OpenAI.Chat.ChatCompletionChunk): { reasoning: string; content: string; outputTokens?: number } {
   const delta = chunk.choices[0]?.delta;
-  const rawReasoning = (delta as Record<string, unknown> | undefined)?.reasoning;
+  const rawReasoning = (delta as Record<string, unknown> | undefined)?.reasoning
+    ?? (delta as Record<string, unknown> | undefined)?.reasoning_content;
   const usage = (chunk as unknown as { usage?: { completion_tokens?: number } }).usage;
   const outputTokens = typeof usage?.completion_tokens === "number" ? usage.completion_tokens : undefined;
   return {
@@ -61,11 +62,17 @@ export function buildChatParams(
   if (opts.temperature !== undefined) params.temperature = opts.temperature;
   if (opts.maxTokens != null) params.max_tokens = opts.maxTokens;
   if (opts.topP != null) params.top_p = opts.topP;
-  if (opts.numCtx != null) params.num_ctx = opts.numCtx;
   if (stream) params.stream_options = { include_usage: true };
 
   if (opts.jsonMode === "json_object") {
     params.response_format = { type: "json_object" };
+  }
+
+  if (opts.thinkingBudgetTokens && opts.thinkingBudgetTokens > 0) {
+    params.thinking = { type: "enabled", budget_tokens: opts.thinkingBudgetTokens };
+    delete params.response_format;
+    delete params.temperature;
+    delete params.top_p;
   }
 
   return params;

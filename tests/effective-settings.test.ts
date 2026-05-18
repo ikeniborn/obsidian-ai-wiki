@@ -23,7 +23,6 @@ describe("resolveEffective", () => {
         model: "m",
         temperature: 0.5,
         topP: null,
-        numCtx: null,
       },
     });
     expect(eff.nativeAgent.baseUrl).toBe("https://x/v1");

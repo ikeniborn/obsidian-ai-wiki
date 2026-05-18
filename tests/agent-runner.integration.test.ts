@@ -132,6 +132,31 @@ describe("AgentRunner", () => {
     expect(events[0]).toMatchObject({ kind: "system" });
   });
 
+  it("routes lint-chat to runLintFixChat and yields result", async () => {
+    const vt = new VaultTools(mockAdapter(), "/vault");
+    const runner = new AgentRunner(
+      makeLlm(JSON.stringify({ summary: "fixed", pages: [] })),
+      baseSettings,
+      vt,
+      "TestVault",
+      [],
+    );
+    const events = await collect(
+      runner.run({
+        operation: "lint-chat",
+        args: [],
+        cwd: "/vault",
+        signal: new AbortController().signal,
+        timeoutMs: 5000,
+        domainId: undefined,
+        context: "lint report",
+        chatMessages: [{ role: "user", content: "fix it" }],
+      }),
+    );
+    const result = events.find((e) => e.kind === "result");
+    expect(result).toBeDefined();
+  });
+
   it("emits structural_error + error events when init LLM returns invalid JSON for all retries", async () => {
     const settings: LlmWikiPluginSettings = {
       ...DEFAULT_SETTINGS,
@@ -155,5 +180,88 @@ describe("AgentRunner", () => {
     expect(structErr).toBeDefined();
     expect(err).toBeDefined();
     expect(structuralErrorCounter.get().failed).toBe(1);
+  });
+
+  it("passes global thinkingBudgetTokens to opts when native-agent and no per-op", async () => {
+    const settings: LlmWikiPluginSettings = {
+      ...DEFAULT_SETTINGS,
+      backend: "native-agent",
+      nativeAgent: {
+        ...DEFAULT_SETTINGS.nativeAgent,
+        thinkingBudgetTokens: 8000,
+        perOperation: false,
+      },
+    };
+    const vt = new VaultTools(mockAdapter(), "/vault");
+    let capturedParams: unknown = null;
+    const llm: LlmClient = {
+      chat: {
+        completions: {
+          create: vi.fn(async (params: unknown) => {
+            capturedParams = params;
+            return streamFromText("[]") as never;
+          }) as never,
+        },
+      },
+    } as unknown as LlmClient;
+    const runner = new AgentRunner(llm, settings, vt, "TestVault", []);
+    await collect(runner.run({ operation: "init", args: ["new-domain"], cwd: "/vault", signal: new AbortController().signal, timeoutMs: 10_000 }));
+    expect((capturedParams as Record<string, unknown>)?.thinking).toEqual({ type: "enabled", budget_tokens: 8000 });
+  });
+
+  it("passes per-op thinkingBudgetTokens to opts when native-agent and per-op override set", async () => {
+    const settings: LlmWikiPluginSettings = {
+      ...DEFAULT_SETTINGS,
+      backend: "native-agent",
+      nativeAgent: {
+        ...DEFAULT_SETTINGS.nativeAgent,
+        thinkingBudgetTokens: 8000,
+        perOperation: true,
+        operations: {
+          ...DEFAULT_SETTINGS.nativeAgent.operations,
+          init: { model: "llama3.2", maxTokens: 8192, temperature: 0.2, thinkingBudgetTokens: 16000 },
+        },
+      },
+    };
+    const vt = new VaultTools(mockAdapter(), "/vault");
+    let capturedParams: unknown = null;
+    const llm: LlmClient = {
+      chat: {
+        completions: {
+          create: vi.fn(async (params: unknown) => {
+            capturedParams = params;
+            return streamFromText("[]") as never;
+          }) as never,
+        },
+      },
+    } as unknown as LlmClient;
+    const runner = new AgentRunner(llm, settings, vt, "TestVault", []);
+    await collect(runner.run({ operation: "init", args: ["new-domain"], cwd: "/vault", signal: new AbortController().signal, timeoutMs: 10_000 }));
+    expect((capturedParams as Record<string, unknown>)?.thinking).toEqual({ type: "enabled", budget_tokens: 16000 });
+  });
+
+  it("system event содержит baseUrl для native-agent backend", async () => {
+    const settingsWithUrl: LlmWikiPluginSettings = {
+      ...baseSettings,
+      backend: "native-agent",
+      nativeAgent: {
+        ...DEFAULT_SETTINGS.nativeAgent,
+        baseUrl: "https://homelab.example.com/v1",
+      },
+    };
+    const vt = new VaultTools(mockAdapter(), "/vault");
+    const runner = new AgentRunner(makeLlm("[]"), settingsWithUrl, vt, "TestVault", []);
+    const events = await collect(
+      runner.run({
+        operation: "query",
+        args: ["test"],
+        cwd: "/vault",
+        signal: new AbortController().signal,
+        timeoutMs: 10_000,
+      }),
+    );
+    const systemEv = events[0] as { kind: string; message: string };
+    expect(systemEv.kind).toBe("system");
+    expect(systemEv.message).toContain("https://homelab.example.com/v1");
   });
 });

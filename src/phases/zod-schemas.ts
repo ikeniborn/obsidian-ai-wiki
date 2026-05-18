@@ -28,6 +28,16 @@ export const SeedsSchema = z.object({
   seeds: z.array(z.string()),
 });
 
+export const LintChatSchema = z.object({
+  summary: z.string(),
+  pages: z.array(z.object({
+    path: z.string(),
+    content: z.string(),
+    annotation: z.string().optional(),
+  })).default([]),
+});
+
 export type DomainEntryResponse = z.infer<typeof DomainEntrySchema>;
 export type EntityTypesDeltaResponse = z.infer<typeof EntityTypesDeltaSchema>;
 export type SeedsResponse = z.infer<typeof SeedsSchema>;
+export type LintChatResponse = z.infer<typeof LintChatSchema>;

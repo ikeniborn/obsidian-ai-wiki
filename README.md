@@ -1,206 +1,221 @@
 # AI Wiki — Obsidian Plugin
 
+[Русская версия →](docs/README.ru.md)
+
 Automatically builds and maintains a knowledge-base wiki from your notes using an LLM backend.
 
-**Key features:**
-- **Offline-first** — works with Ollama or any OpenAI-compatible server; data never leaves your machine
-- **Compounding knowledge** — each Ingest enriches the wiki; links and pages accumulate automatically
-- **Real-time transparency** — agent step progress visible live in the sidebar panel
+**Why AI Wiki:**
+- **Offline by default** — Ollama or any OpenAI-compatible server; data never leaves your machine
+- **Compounding** — each Ingest enriches the base; links and pages accumulate automatically
+- **Transparency** — agent step progress visible live in the sidebar panel
 - **Dual backends** — Native Agent (Ollama / OpenAI) and Claude Agent; switchable in settings
 
-**Operations:** Ingest · Query · Lint · Fix · Init · Format · Chat
+> Supported backends: **Ollama / OpenAI-compatible** (no cloud) · **Claude Agent** (Anthropic)
 
-**Requirements:** Obsidian 1.4+, desktop (mobile: Query only). For Claude Agent: [iclaude](https://github.com/ikeniborn/iclaude) CLI.
+## What it does
 
----
+- **Ingest** — parses a note, extracts entities (people, technologies, processes, terms), creates and updates wiki pages
+- **Query** — answers a question against the knowledge base; optionally saves the answer as a new page with `[[WikiLinks]]`
+- **Lint** — checks wiki-domain quality, finds incomplete and outdated pages
+- **Fix** — sidebar action after Lint: takes an instruction, passes it to the model, updates pages
+- **Init** — initializes a new domain from scratch (folder structure, `_schema.md`, `_index.md`)
+- **Format** — analyzes an open markdown page (outside wiki domains), proposes formatting edits (frontmatter, headings, tables, mermaid, image captions). Preview is saved to `!Temp/`. Clarification via chat, **Apply**/**Cancel** buttons. Hard invariant: must not add/remove facts or distort meaning — only rephrase for clarity
+- **Chat** — interactive chat in the sidebar panel; available after Lint and Query to refine results
 
-# AI Wiki — плагин Obsidian
+Fix, Format and Chat are launched from sidebar buttons, not the Command Palette.
 
-Автоматически строит и пополняет wiki-базу знаний из ваших заметок с помощью LLM.
+Progress of every operation is visible live in the Obsidian sidebar panel.
 
-**Почему AI Wiki:**
-- **Офлайн по умолчанию** — Ollama или любой OpenAI-compatible сервер; данные не покидают машину
-- **Компаундируется** — каждый Ingest обогащает базу; связи и страницы накапливаются сами
-- **Прозрачность** — прогресс шагов агента виден в реальном времени в боковой панели
-- **Два бэкенда** — Native Agent (Ollama / OpenAI) и Claude Agent; переключаются в настройках
-
-> Поддерживаемые бэкенды: **Ollama / OpenAI-compatible** (без облака) · **Claude Agent** (Anthropic)
-
-## Что умеет
-
-- **Ingest** — разбирает заметку, извлекает сущности (люди, технологии, процессы, термины), создаёт и обновляет wiki-страницы
-- **Query** — отвечает на вопрос по базе знаний; опционально сохраняет ответ как новую страницу с `[[WikiLinks]]`
-- **Lint** — проверяет качество wiki-домена, находит неполные и устаревшие страницы
-- **Fix** — применяет исправления по отчёту Lint: принимает инструкцию, передаёт модели, обновляет страницы. Запускается из панели после Lint.
-- **Init** — инициализирует новый домен с нуля (структура папок, `_schema.md`, `_index.md`)
-- **Format** — анализирует открытую markdown-страницу (вне wiki-доменов), предлагает правки форматирования (frontmatter, заголовки, таблицы, mermaid, описания изображений). Preview сохраняется в `!Temp/`. Уточнение через чат, кнопки **Apply**/**Cancel**. Жёсткий инвариант: запрещено добавлять/удалять факты или искажать смысл — только перефраз для ясности.
-- **Chat** — интерактивный чат в боковой панели; доступен после Lint и Query для уточнения результатов.
-
-Fix, Format и Chat запускаются кнопками в боковой панели, а не через Command Palette.
-
-Прогресс каждой операции виден в реальном времени в боковой панели Obsidian.
-
-> **Мобильная версия:** на мобильных устройствах работает только Query. Ingest, Lint и Init — только desktop. Бэкенд Claude Agent на мобильном автоматически переключается на Native Agent.
+> **Mobile:** only Query works on mobile devices. Ingest, Lint, and Init are desktop-only. The Claude Agent backend on mobile automatically falls back to Native Agent.
 
 ---
 
-## Быстрый старт: Native Agent (Ollama)
+## Quick start: Native Agent (Ollama)
 
-Не требует внешних аккаунтов — LLM работает локально.
+Requires no external accounts — the LLM runs locally.
 
-### 1. Установите Ollama
+### 1. Install Ollama
 
-Скачайте с [ollama.com](https://ollama.com) и запустите:
+Download from [ollama.com](https://ollama.com) and run:
 
 ```bash
 ollama pull llama3.2
 ```
 
-### 2. Установите плагин
+### 2. Install the plugin
 
-Скопируйте папку плагина в vault:
+Copy the plugin folder into your vault:
 
 ```bash
-# вариант — симлинк для разработки
+# option — symlink for development
 ln -s /path/to/obsidian-llm-wiki ~/.config/obsidian/Plugins/obsidian-llm-wiki
 ```
 
-Или скопируйте папку вручную в `<vault>/.obsidian/plugins/obsidian-llm-wiki/`.
+Or copy the folder manually to `<vault>/.obsidian/plugins/obsidian-llm-wiki/`.
 
-### 3. Включите плагин
+### 3. Enable the plugin
 
-Obsidian → Settings → Community plugins → найти «AI Wiki» → включить.
+Obsidian → Settings → Community plugins → find "AI Wiki" → enable.
 
-### 4. Настройте
+### 4. Configure
 
 Settings → AI Wiki:
 
-| Параметр | Значение |
+| Setting | Value |
 |---|---|
 | Backend | Native Agent (OpenAI-compatible) |
 | Base URL | `http://localhost:11434/v1` |
 | API Key | `ollama` |
-| Модель | `llama3.2` |
+| Model | `llama3.2` |
 | Temperature | `0.2` |
 | Max tokens | `4096` |
 
-### 5. Создайте домен
+### 5. Create a domain
 
-Домен — это пара «папка с источниками → папка wiki». Команда:
+A domain is a pair of "sources folder → wiki folder". Command:
 
-`Command Palette` → `AI Wiki: Init домена` → введите имя домена (например, `work`) → снимите флаг Dry Run → запустите.
+`Command Palette` → `AI Wiki: Init домена` → enter domain name (e.g. `work`) → uncheck Dry Run → run.
 
-Плагин создаст структуру папок и служебные файлы (`_schema.md`, `_index.md`).
+The plugin creates the folder structure and service files (`_schema.md`, `_index.md`).
 
-### 6. Первый Ingest
+### 6. First Ingest
 
-1. Откройте любую заметку в Obsidian
+1. Open any note in Obsidian
 2. `Command Palette` → `AI Wiki: Ingestion активного файла`
-3. Следите за прогрессом в боковой панели
-4. После завершения — новые wiki-страницы появятся в папке домена
+3. Watch progress in the sidebar panel
+4. When complete — new wiki pages appear in the domain folder
 
 ---
 
-## Быстрый старт: Claude Agent
+## Quick start: Claude Agent
 
-Для пользователей с установленным [Claude Code CLI](https://claude.ai/code).
+For users with [Claude Code CLI](https://claude.ai/code) installed.
 
-### 1. Требования
+### 1. Requirements
 
-- Установленный `iclaude.sh` / `iclaude` / `claude` (Claude Code CLI)
-- Скилл `llm-wiki` в директории `<repo>/.claude-isolated/skills/llm-wiki/`
+- Installed `iclaude.sh` / `iclaude` / `claude` (Claude Code CLI)
 
-### 2. Установите плагин
+### 2. Install the plugin
 
-Аналогично шагам 2–3 секции Native Agent выше.
+Same as steps 2–3 of the Native Agent section above.
 
-### 3. Настройте
+### 3. Configure
 
 Settings → AI Wiki:
 
-| Параметр | Значение |
+| Setting | Value |
 |---|---|
 | Backend | Claude Agent |
-| Путь к Claude Code | `/home/user/Documents/Project/iclaude/iclaude.sh` |
-| Путь к навыку llm-wiki | `/home/user/Documents/Project/iclaude/.claude-isolated/skills/llm-wiki` |
-| Модель | `sonnet` |
-| Таймауты | `300/300/900/3600` |
+| Path to Claude Code | `/home/user/Documents/Project/iclaude/iclaude.sh` |
+| Model | `sonnet` |
+| Timeouts (seconds) | `300/300/900/3600/600` |
 
-### 4. Первый Ingest
+### 4. First Ingest
 
-Аналогично шагу 6 секции Native Agent выше.
-
----
-
-## Команды
-
-Все команды доступны через `Command Palette` (Ctrl+P / Cmd+P). Fix, Format и Chat — кнопки в боковой панели.
-
-| Команда | Действие | Результат |
-|---|---|---|
-| `AI Wiki: Открыть панель` | Показать боковую панель | Живой лог операций, история |
-| `AI Wiki: Ingestion активного файла` | Извлечь сущности из текущей заметки | Новые/обновлённые wiki-страницы *(только desktop)* |
-| `AI Wiki: Запрос` | Задать вопрос по базе знаний | Ответ в панели с `[[WikiLinks]]` |
-| `AI Wiki: Запрос и сохранить как страницу` | Вопрос + сохранить ответ | Новая wiki-страница, открывается автоматически |
-| `AI Wiki: Lint домена` | Проверить качество wiki | Отчёт о проблемах в панели *(только desktop)* |
-| `AI Wiki: Init домена` | Инициализировать новый домен | Структура wiki-папок и служебные файлы *(только desktop)* |
-| `AI Wiki: Отмена операции` | Остановить текущую операцию | SIGTERM → SIGKILL через 3с |
+Same as step 6 of the Native Agent section above.
 
 ---
 
-## Справочник настроек
+## Commands
 
-### Общие (оба бэкенда)
+All commands are available via `Command Palette` (Ctrl+P / Cmd+P). Fix, Format, and Chat are sidebar buttons.
 
-| Параметр | Описание | По умолчанию |
+| Command | Action | Result |
 |---|---|---|
-| Backend | `claude-agent` или `native-agent` | `claude-agent` |
-| Лимит истории | Максимум записей в истории панели | `20` |
-| Лог агента | Включить запись JSONL-лога агента; путь фиксирован в коде | выкл |
+| `AI Wiki: Открыть панель` | Show the sidebar panel | Live operation log, history |
+| `AI Wiki: Ingestion активного файла` | Extract entities from current note | New/updated wiki pages *(desktop only)* |
+| `AI Wiki: Запрос` | Ask a question against the knowledge base | Answer in panel with `[[WikiLinks]]` |
+| `AI Wiki: Запрос и сохранить как страницу` | Question + save the answer | New wiki page, opens automatically |
+| `AI Wiki: Lint домена` | Check wiki quality | Issue report in panel *(desktop only)* |
+| `AI Wiki: Init домена` | Initialize a new domain | Wiki folder structure and service files *(desktop only)* |
+| `AI Wiki: Отмена операции` | Stop the current operation | SIGTERM → SIGKILL after 3s |
 
-### Native Agent
+---
 
-| Параметр | Описание | По умолчанию |
+## Settings reference
+
+### General (both backends)
+
+| Setting | Description | Default |
 |---|---|---|
-| Base URL | OpenAI-compatible endpoint | `http://localhost:11434/v1` |
-| API Key | `ollama` для Ollama; `sk-...` для OpenAI | `ollama` |
-| Модель | Имя модели: `llama3.2`, `mistral`, `gpt-4o`... | `llama3.2` |
-| Temperature | `0.0`–`1.0`. Низкая (`0.1`–`0.3`) = точные факты | `0.2` |
-| Max tokens | Макс. токенов в ответе; ≥ 4096 для wiki-страниц | `4096` |
-| Top-p | Nucleus sampling `0.0`–`1.0`; пусто = отключено | — |
-| Request timeout (сек) | Таймаут HTTP; для больших моделей Ollama ≥ 300 | `300` |
-| num_ctx | Размер контекста (только Ollama); пусто = дефолт модели | — |
-| System prompt | Системный промпт; перезаписывает встроенный при изменении | встроенный |
+| User prompt | Appended to the system prompt of every operation | empty |
+| Max tokens | Max tokens in response. Recommended ≥ 4096. Shown when per-operation is off and backend is native-agent | `4096` |
+| Timeouts (seconds) | `ingest/query/lint/init/format`, slash-separated | `300/300/900/3600/600` |
+| History limit | Max operations in sidebar history | `20` |
+| Agent log (JSONL) | Log agent events to `<vault>/!Logs/agent.jsonl` (desktop only) | off |
+
+### Domains
+
+List of created domains with **Edit** / **Delete** buttons. Domain map stored in `!Wiki/_domain.json`.
+
+### Backend selector
+
+| Setting | Description | Default |
+|---|---|---|
+| Backend | `claude-agent` or `native-agent` (desktop). Mobile is forced to native-agent | `claude-agent` |
 
 ### Claude Agent
 
-| Параметр | Описание | По умолчанию |
+| Setting | Description | Default |
 |---|---|---|
-| Путь к Claude Code | Полный путь к `iclaude.sh` / `iclaude` / `claude` | — |
-| Путь к навыку llm-wiki | Полный путь к папке навыка (содержит `shared/domain-map-*.json`) | — |
-| Allowed tools | Список через запятую | `Read,Edit,Write,Glob,Grep` |
-| Модель | Пресет (`opus`/`sonnet`/`haiku`) или произвольный ID (`claude-opus-4-7`) | дефолт claude |
-| Таймауты | `ingest/query/lint/init` в секундах через `/` | `300/300/900/3600` |
-| Показывать raw JSON | Отображать сырые JSON-события в панели | выкл |
+| Path to Claude Code | Full absolute path to `iclaude.sh` / `iclaude` / `claude` | — |
+| Model | Preset (`opus`/`sonnet`/`haiku`) or explicit ID (`claude-opus-4-7`). Shown when per-operation is off | claude default |
+| Allowed tools | Comma-separated list passed to `--tools`. Empty = no restriction | `Read,Edit,Write,Glob,Grep` |
+| Per-operation models | Toggle. When on, configure model per operation (ingest/query/lint/init/format) | off |
+| Per-operation: Model | Model name for the specific operation | — |
+
+### Native Agent
+
+| Setting | Description | Default |
+|---|---|---|
+| Base URL | OpenAI-compatible endpoint. Ollama: `http://localhost:11434/v1` | `http://localhost:11434/v1` |
+| API key | `ollama` for Ollama; `sk-...` for OpenAI | `ollama` |
+| Model | Model name (`llama3.2`, `mistral`, `gpt-4o`, …). Shown when per-operation is off | `llama3.2` |
+| Context window (num_ctx) | Context size (Ollama only). Empty = model default | — |
+| Temperature | `0.0`–`1.0`. Low (`0.1`–`0.3`) = precise facts | `0.2` |
+| Per-operation models | Toggle (desktop only). When on, configure `model`/`maxTokens`/`temperature` per operation | off |
+| Per-operation: Max tokens | Per-op max tokens. Defaults: ingest/query `4096`, lint/init `8192`, format `32768` | — |
+| Per-operation: Temperature | Per-op temperature (0–2) | `0.2` |
+| Structured output retries | Retries on schema validation failure (0–3). Higher = better success on weak models at cost of latency/tokens | `1` |
+
+### Proxy (native-agent only)
+
+| Setting | Description | Default |
+|---|---|---|
+| Use proxy | Route native-agent traffic through HTTP/HTTPS proxy. Not supported on mobile | off |
+| Proxy URL | `http://proxy.example.com:8080` or `https://…` | — |
+| Username | Optional, for basic-auth proxies | — |
+| Password | Optional, stored locally in `local.json` | — |
+| No-proxy hosts | CSV; supports exact host and `*.suffix`. Example: `localhost,127.0.0.1,*.internal` | — |
+
+Proxy applies to native-agent only. Claude Agent uses its own configuration.
 
 ### Graph
 
-| Параметр | Описание | По умолчанию |
+| Setting | Description | Default |
 |---|---|---|
-| graphDepth | Глубина обхода графа при построении контекста запроса | `1` |
-| hubThreshold | Минимальная степень узла для признания «хабом» | `20` |
+| BFS depth (graphDepth) | Query: hops from seed pages. `0` = seeds only, max sensible `3` | `1` |
+| Hub threshold (hubThreshold) | Lint: pages with more outgoing links than this are flagged as hubs | `20` |
+
+### Dev mode (desktop only)
+
+| Setting | Description | Default |
+|---|---|---|
+| Dev mode | Enable dev logger and evaluator after each operation | off |
+| Evaluator model | Model name for the evaluator (same backend) | — |
 
 ---
 
-## Синхронизация
+## Sync
 
-Файл `<plugin-dir>/local.json` хранит machine-specific путь до `iclaude.sh`. При использовании Obsidian Sync / git / Syncthing для папки `.obsidian/plugins/obsidian-llm-wiki/` исключите `local.json` из синка, иначе путь будет перезаписан на других машинах.
+The `<plugin-dir>/local.json` file stores the machine-specific path to `iclaude.sh`. If you sync the `.obsidian/plugins/obsidian-llm-wiki/` folder with Obsidian Sync / git / Syncthing, exclude `local.json` from the sync — otherwise the path will be overwritten on other machines.
 
-Карта доменов хранится в `!Wiki/_domain.json` (внутри vault) и нормально синхронизируется вместе с заметками.
+The domain map is stored in `!Wiki/_domain.json` (inside the vault) and syncs normally with your notes.
 
 ---
 
-## Документация
+## Documentation
 
-- [docs/dev.md](docs/dev.md) — сборка, установка, smoke-test чеклист для разработчиков
-- [docs/publishing.md](docs/publishing.md) — публикация релиза
+- [docs/dev.md](docs/dev.md) — build, install, smoke-test checklist for developers
+- [docs/publishing.md](docs/publishing.md) — release publishing
+- [docs/README.ru.md](docs/README.ru.md) — Russian version of this README
