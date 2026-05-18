@@ -36,7 +36,6 @@ function registerLinkHandler(el: HTMLElement, app: App): void {
 }
 
 const PREVIEW_INLINE = 140;
-const ASSISTANT_TEXT_MAX = 600;
 
 export class LlmWikiView extends ItemView {
   private state: ViewState = "idle";
@@ -524,7 +523,7 @@ export class LlmWikiView extends ItemView {
           this.reasoningRafHandle = window.requestAnimationFrame(() => {
             this.reasoningRafHandle = null;
             const span = this.reasoningBlock?.querySelector<HTMLElement>(".ai-wiki-reasoning-text");
-            if (span) span.setText(truncate(this.reasoningBuffer, ASSISTANT_TEXT_MAX));
+            if (span) span.setText(this.reasoningBuffer);
             this.scrollSteps();
           });
         }
@@ -539,7 +538,7 @@ export class LlmWikiView extends ItemView {
           this.assistantRafHandle = window.requestAnimationFrame(() => {
             this.assistantRafHandle = null;
             const span = this.assistantBlock?.querySelector<HTMLElement>(".ai-wiki-assistant-text");
-            if (span) span.setText(truncate(this.assistantBuffer, ASSISTANT_TEXT_MAX));
+            if (span) span.setText(this.assistantBuffer);
             this.scrollSteps();
           });
         }
