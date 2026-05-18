@@ -54,6 +54,20 @@ function makeLlmSequence(responses: string[]): LlmClient {
   } as unknown as LlmClient;
 }
 
+function makeLlmTruncated(): LlmClient {
+  return {
+    chat: {
+      completions: {
+        create: vi.fn().mockResolvedValue({
+          [Symbol.asyncIterator]: async function* () {
+            yield { choices: [{ delta: { content: "not json {" }, finish_reason: "length" }] };
+          },
+        }),
+      },
+    },
+  } as unknown as LlmClient;
+}
+
 describe("runFormat", () => {
   it("парсит JSON, пишет temp, эмитит format_preview", async () => {
     const formatted = "---\ntags: [db]\n---\n\n# Заметка про ClickHouse\n\nClickHouse 23.8 SQL-диалект https://clickhouse.com/docs `insertBatch`. Яндекс. Replicated движок.";
@@ -247,5 +261,29 @@ describe("runFormat", () => {
     const written = (adapter.write as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
     expect(written).toContain("<!-- restored-lines: token loss after retry -->");
     expect(written).toContain("https://clickhouse.com/docs");
+  });
+
+  it("truncation error — claude-agent hint", async () => {
+    const adapter = mockAdapter({ [FILE]: SAMPLE });
+    const vt = new VaultTools(adapter, VAULT);
+    const events = await collect(
+      runFormat([FILE], vt, makeLlmTruncated(), "model", false, [], new AbortController().signal, {}, "claude-agent"),
+    );
+    const err = events.find((e: unknown) => (e as { kind: string }).kind === "error") as { message: string } | undefined;
+    expect(err).toBeDefined();
+    expect(err!.message).toContain("CLAUDE_CODE_MAX_OUTPUT_TOKENS");
+    expect(err!.message).not.toContain("Settings →");
+  });
+
+  it("truncation error — native-agent hint", async () => {
+    const adapter = mockAdapter({ [FILE]: SAMPLE });
+    const vt = new VaultTools(adapter, VAULT);
+    const events = await collect(
+      runFormat([FILE], vt, makeLlmTruncated(), "model", false, [], new AbortController().signal, {}, "native-agent"),
+    );
+    const err = events.find((e: unknown) => (e as { kind: string }).kind === "error") as { message: string } | undefined;
+    expect(err).toBeDefined();
+    expect(err!.message).toContain("Settings →");
+    expect(err!.message).not.toContain("CLAUDE_CODE_MAX_OUTPUT_TOKENS");
   });
 });

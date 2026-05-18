@@ -17,6 +17,12 @@ function extractImagePaths(md: string): string[] {
   return out;
 }
 
+function truncationHint(backend: "claude-agent" | "native-agent"): string {
+  return backend === "claude-agent"
+    ? "увеличьте лимит: env CLAUDE_CODE_MAX_OUTPUT_TOKENS в iclaude.sh"
+    : "увеличьте лимит: Settings → per-operation → format → maxTokens";
+}
+
 export async function* runFormat(
   args: string[],
   vaultTools: VaultTools,
@@ -26,6 +32,7 @@ export async function* runFormat(
   chatHistory: ChatMessage[],
   signal: AbortSignal,
   opts: LlmCallOptions = {},
+  backend: "claude-agent" | "native-agent" = "native-agent",
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
   const filePath = args[0];
@@ -119,7 +126,7 @@ export async function* runFormat(
   let parsed = extractJsonObject(fullText);
   const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
   if (!parsed && truncated) {
-    yield { kind: "error", message: "Format: ответ обрезан по лимиту вывода модели — сократите страницу или увеличьте лимит (claude-agent: env CLAUDE_CODE_MAX_OUTPUT_TOKENS в iclaude.sh; native-agent: Settings → per-operation → format → maxTokens)" };
+    yield { kind: "error", message: `Format: ответ обрезан по лимиту вывода модели — сократите страницу или ${truncationHint(backend)}` };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
     return;
   }
@@ -138,7 +145,7 @@ export async function* runFormat(
   if (!parsed) {
     const retryTruncated = lastFinishReason === "length" || looksTruncated(fullText);
     const msg = retryTruncated
-      ? "Format: ответ обрезан по лимиту вывода модели (после retry) — сократите страницу или увеличьте лимит (claude-agent: env CLAUDE_CODE_MAX_OUTPUT_TOKENS в iclaude.sh; native-agent: Settings → per-operation → format → maxTokens)"
+      ? `Format: ответ обрезан по лимиту вывода модели (после retry) — сократите страницу или ${truncationHint(backend)}`
       : "Format: LLM вернул невалидный JSON (после retry)";
     yield { kind: "error", message: msg };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
