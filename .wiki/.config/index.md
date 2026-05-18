@@ -36,7 +36,7 @@
 - [[reasoning-first-json]] — `документация/паттерны/reasoning-first-json.md`
 - [[structured-output-retry]] — `документация/паттерны/structured-output-retry.md`
 
-#### спецификации (12)
+#### спецификации (13)
 - [[agent-base-contract]] — `документация/спецификации/agent-base-contract.md`
 - [[format-operation-design]] — `документация/спецификации/format-operation-design.md`
 - [[claude-agent-backend-design]] — `документация/спецификации/claude-agent-backend-design.md`
@@ -49,8 +49,9 @@
 - [[max-tokens-relocate-design]] — `документация/спецификации/max-tokens-relocate-design.md`
 - [[mobile-domain-selector-design]] — `документация/спецификации/mobile-domain-selector-design.md`
 - [[mobile-query-seed-design]] — `документация/спецификации/mobile-query-seed-design.md`
+- [[security-audit-fixes-design]] — `документация/спецификации/security-audit-fixes-design.md`
 
-#### планы (8)
+#### планы (9)
 - [[generation-speed-plan]] — `документация/планы/generation-speed-plan.md`
 - [[init-stability-plan]] — `документация/планы/init-stability-plan.md`
 - [[reinit-button-plan]] — `документация/планы/reinit-button-plan.md`
@@ -59,3 +60,4 @@
 - [[max-tokens-relocate-plan]] — `документация/планы/max-tokens-relocate-plan.md`
 - [[mobile-domain-selector-plan]] — `документация/планы/mobile-domain-selector-plan.md`
 - [[mobile-query-seed-plan]] — `документация/планы/mobile-query-seed-plan.md`
+- [[security-audit-fixes-plan]] — `документация/планы/security-audit-fixes-plan.md`

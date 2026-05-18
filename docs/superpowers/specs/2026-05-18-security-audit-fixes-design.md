@@ -1,3 +1,29 @@
+---
+review:
+  spec_hash: 7d2a9978dcc7e2ff
+  last_run: "2026-05-18"
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  section_hashes:
+    context:   7953436f6df8945b
+    finding1:  5f17319f1ba62131
+    finding2:  ce9450b3ac6a63de
+    files:     1c34178df3a7fce0
+    success:   92fe952013ab39f8
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: success
+      section_hash: b0e52d14fc2487ef
+      text: "Success Criteria упоминает `getMarkdownFiles()` — это Вариант A, который не был выбран. Вариант B использует getFolderByPath. Критерий вводит в заблуждение."
+      verdict: fixed
+      verdict_at: "2026-05-18"
+---
+
 # Security Audit Fixes — Design Spec
 
 **Date:** 2026-05-18  
@@ -120,7 +146,7 @@ On "cancel": closes modal, consent remains false.
 ```ts
 this.app.workspace.onLayoutReady(() => {
   if (
-    this.settings.backend === "claude-cli" &&
+    this.settings.backend === "claude-agent" &&
     !this.settings.shellConsentGiven
   ) {
     new ShellConsentModal(this.app, this).open();
@@ -128,16 +154,16 @@ this.app.workspace.onLayoutReady(() => {
 });
 ```
 
-**Guard in `controller.ts`** — at the start of the private `run()` method (all public methods `ingest/query/lint/init/format` funnel through it), before any spawn:
+**Guard in `controller.ts`** — inside the existing `const local = ...` block in both `dispatch()` and `dispatchChat()`, after the `requireClaudeAgent` guard:
 
 ```ts
-if (this.plugin.settings.backend === "claude-cli" && !this.plugin.settings.shellConsentGiven) {
-  new Notice(i18n().notices.shellConsentRequired);
+if (eff.backend === "claude-agent" && !this.plugin.settings.shellConsentGiven) {
+  new Notice(i18n().ctrl.shellConsentRequired);
   return;
 }
 ```
 
-Add `shellConsentRequired` string to i18n.
+Add `shellConsentRequired` string to `i18n().ctrl` section.
 
 ### 2d. README Security section
 
@@ -167,9 +193,9 @@ Add a `## Security` section to `README.md` covering:
 
 ## Success Criteria
 
-- `vault.getFiles()` / `getMarkdownFiles()` — zero occurrences in `view.ts`
+- `vault.getFiles()` — zero occurrences in `view.ts` (replaced by `collectMdInPaths` via `getFolderByPath`)
 - `child_process` import — only in `claude-cli-client.ts` (not in `settings.ts`)
 - Path validation throws on empty / relative / traversal paths
-- First run with `backend = "claude-cli"` shows consent modal
+- First run with `backend = "claude-agent"` shows consent modal
 - Operations without consent return early with Notice
 - README has Security section

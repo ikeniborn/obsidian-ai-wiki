@@ -297,3 +297,21 @@
   - `документация/операции/lint-operation.md` — upsertIndexAnnotation, удалён flat index rewrite, annotation в промпте
 
 **Пропущено:** 0
+
+## 2026-05-18 — ingest security-audit-fixes (spec + plan)
+
+**Операция:** ingest (batch)
+**Домен:** документация
+**Источники:**
+  - `docs/superpowers/specs/2026-05-18-security-audit-fixes-design.md`
+  - `docs/superpowers/plans/2026-05-18-security-audit-fixes.md`
+  - `README.md`
+
+**Создано:** 2
+  - `документация/спецификации/security-audit-fixes-design.md` (mature) — два замечания review bot: Finding 1 (vault enumeration → collectMdInPaths+walkFolder), Finding 2 (shell execution → probe-spawn→fs.access, validateIclaudePath, ShellConsentModal с onLayoutReady + controller guard, README Security)
+  - `документация/планы/security-audit-fixes-plan.md` (mature) — 5 TDD-задач: Task 1 (getFiles→helpers), Task 2 (settings.ts no spawn), Task 3 (validateIclaudePath), Task 4 (consent modal+guard), Task 5 (README)
+
+**Обновлено:** index.md (спецификации 12→13, планы 8→9), log.md
+
+**Пропущено:** README.md — Security section уже присутствует в README (реализована Task 5), содержимое покрыто в обеих wiki-страницах
+
