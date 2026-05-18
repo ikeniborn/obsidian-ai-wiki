@@ -17,6 +17,25 @@ import { upsertIndexAnnotation } from "../wiki-index";
 
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
+async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
+  try { return await vaultTools.read(path); } catch { return ""; }
+}
+
+async function appendLintLog(
+  vaultTools: VaultTools,
+  wikiVaultPath: string,
+  domainId: string,
+  fixedCount: number,
+): Promise<void> {
+  const logPath = `${wikiVaultPath}/_log.md`;
+  const today = new Date().toISOString().slice(0, 10);
+  const entry = `\n## ${today} — lint — ${domainId}\n- Исправлено страниц: ${fixedCount}\n`;
+  try {
+    const existing = await tryRead(vaultTools, logPath);
+    await vaultTools.write(logPath, existing + entry);
+  } catch { /* non-critical */ }
+}
+
 export async function* runLint(
   args: string[],
   vaultTools: VaultTools,
@@ -177,6 +196,8 @@ export async function* runLint(
         } catch { /* non-critical */ }
       }
     }
+
+    await appendLintLog(vaultTools, wikiVaultPath, domain.id, writtenPaths.length);
 
     const backlinks = new Map<string, Set<string>>();
     for (const [wikiPath, wikiContent] of pages) {

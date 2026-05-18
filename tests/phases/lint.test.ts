@@ -276,6 +276,28 @@ describe("runLint", () => {
     expect(flatIndexWrite).toBeUndefined();
   });
 
+  it("appends lint entry to _log.md after fix pass", async () => {
+    let logContent = "";
+    const adapter = mockAdapter({
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/work/_log.md") return Promise.resolve(logContent);
+        return Promise.resolve("---\nwiki_status: stub\n---\n# Page");
+      }),
+      write: vi.fn().mockImplementation((path: string, content: string) => {
+        if (path === "!Wiki/work/_log.md") logContent = content;
+        return Promise.resolve();
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    await collect(
+      runLint(["work"], vt, makeLlm("No issues."), "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    expect(logContent).toContain("## ");
+    expect(logContent).toContain("lint");
+    expect(logContent).toContain("work");
+  });
+
   it("second runLint call hits GraphCache for the same domain", async () => {
     const { graphCache } = await import("../../src/wiki-graph-cache");
     graphCache.clear();
