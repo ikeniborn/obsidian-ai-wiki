@@ -287,3 +287,22 @@
   display: flex;
   justify-content: flex-end;
 }
+
+/* Copy button on chat messages */
+.ai-wiki-chat-msg {
+  position: relative;
+}
+.ai-wiki-copy-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+}
+.ai-wiki-chat-msg:hover .ai-wiki-copy-btn {
+  opacity: 1;
+}

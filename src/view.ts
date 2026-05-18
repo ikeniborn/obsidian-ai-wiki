@@ -733,6 +733,13 @@ export class LlmWikiView extends ItemView {
       void MarkdownRenderer.render(this.app, text, el, "", comp).then(() => sanitizeLinks(el));
       registerLinkHandler(el, this.app);
     }
+    const copyBtn = el.createEl("button", { cls: "ai-wiki-copy-btn", attr: { "aria-label": "Copy" } });
+    setIcon(copyBtn, "copy");
+    copyBtn.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(text);
+      setIcon(copyBtn, "check");
+      window.setTimeout(() => setIcon(copyBtn, "copy"), 1500);
+    });
     el.scrollIntoView({ block: "end" });
     return el;
   }
