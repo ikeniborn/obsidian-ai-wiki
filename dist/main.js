@@ -280,7 +280,7 @@ var require_path_browserify = __commonJS({
           return "//";
         return path2.slice(0, end);
       },
-      basename: function basename3(path2, ext) {
+      basename: function basename2(path2, ext) {
         if (ext !== void 0 && typeof ext !== "string")
           throw new TypeError('"ext" argument must be a string');
         assertPath(path2);
@@ -21546,7 +21546,7 @@ function applyDomainEvent(domains, ev, opts) {
 }
 
 // src/phases/ingest.ts
-var import_path_browserify2 = __toESM(require_path_browserify(), 1);
+var import_path_browserify3 = __toESM(require_path_browserify(), 1);
 
 // prompts/base.md
 var base_default = "\u0422\u044B \u2014 wiki-\u0430\u0433\u0435\u043D\u0442. \u0421\u043B\u0435\u0434\u0443\u0439 \u044D\u0442\u0438\u043C \u043F\u0440\u0430\u0432\u0438\u043B\u0430\u043C \u043D\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043C\u043E \u043E\u0442 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.\n\n## \u0414\u043E\u0441\u0442\u043E\u0432\u0435\u0440\u043D\u043E\u0441\u0442\u044C\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430.\n\u041D\u0435 \u0432\u044B\u0434\u0443\u043C\u044B\u0432\u0430\u0439 \u0444\u0430\u043A\u0442\u044B, \u043A\u043E\u0442\u043E\u0440\u044B\u0445 \u043D\u0435\u0442 \u0432 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0435.\n\u0415\u0441\u043B\u0438 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E \u2014 \u0441\u043A\u0430\u0436\u0438 \u043E\u0431 \u044D\u0442\u043E\u043C \u043F\u0440\u044F\u043C\u043E.\n\n## \u0424\u043E\u0440\u043C\u0430\u0442\n\u0412\u043E\u0437\u0432\u0440\u0430\u0449\u0430\u0439 \u0440\u043E\u0432\u043D\u043E \u0442\u043E, \u0447\u0442\u043E \u0437\u0430\u043F\u0440\u043E\u0448\u0435\u043D\u043E.\n\u0415\u0441\u043B\u0438 \u043E\u0436\u0438\u0434\u0430\u0435\u0442\u0441\u044F JSON \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON, \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439 \u0432\u043E\u043A\u0440\u0443\u0433.\n\u0415\u0441\u043B\u0438 \u043E\u0436\u0438\u0434\u0430\u0435\u0442\u0441\u044F \u0442\u0435\u043A\u0441\u0442 \u2014 \u0431\u0435\u0437 \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u043C\u0435\u0442\u043E\u043A \u0438 \u0442\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0445 \u0430\u0440\u0442\u0435\u0444\u0430\u043A\u0442\u043E\u0432.\n\n## \u041C\u0438\u043D\u0438\u043C\u0430\u043B\u0438\u0437\u043C\n\u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u0442\u043E, \u043E \u0447\u0451\u043C \u043D\u0435 \u043F\u0440\u043E\u0441\u0438\u043B\u0438.\n\u041D\u0435 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0438\u0440\u0443\u0439 \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u044B\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F, \u0435\u0441\u043B\u0438 \u044D\u0442\u043E \u043D\u0435 \u0447\u0430\u0441\u0442\u044C \u0437\u0430\u0434\u0430\u0447\u0438.\n";
@@ -21710,7 +21710,7 @@ ${section}` };
 }
 
 // prompts/ingest.md
-var ingest_default = '\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0441\u0438\u043D\u0442\u0435\u0437\u0430 wiki-\u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0418\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439/\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n\n\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:\n{{entity_types_block}}\n{{lang_notes}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- CREATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 wiki, \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 >= min_mentions_for_page\n- UPDATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2192 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E, \u041D\u0415 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E\n- SKIP: \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u043E \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0435\u0441\u0442\u044C\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043A\u043E\u043D\u0444\u0438\u0433\u0438/SQL \u043C\u043E\u0436\u043D\u043E \u0446\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445.\n- \u041F\u0443\u0442\u044C \u0441\u0442\u0430\u0442\u044C\u0438 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u0435\u0442\u0441\u044F \u0442\u0438\u043F\u043E\u043C \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u2014 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u043E\u0447\u043D\u044B\u0439 \u0448\u0430\u0431\u043B\u043E\u043D \u0438\u0437 \u0441\u0435\u043A\u0446\u0438\u0438 \xAB\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410\xBB (\u0432\u044B\u0448\u0435, \u0434\u043E \u0431\u043B\u043E\u043A\u0430 \u041F\u0420\u0410\u0412\u0418\u041B\u0410), \u043F\u043E\u0434\u0441\u0442\u0430\u0432\u0438\u0432 \u0438\u043C\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0432\u043C\u0435\u0441\u0442\u043E <EntityName>\n- \u0415\u0441\u043B\u0438 \u0442\u0438\u043F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u043D\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0451\u043D \u0438\u043B\u0438 \u0443 \u0434\u043E\u043C\u0435\u043D\u0430 \u043D\u0435\u0442 entity_types \u2192 \u043F\u0443\u0442\u044C \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E: {{wiki_path}}/<EntityName>.md\n- Frontmatter \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- wiki_sources: \u043A\u0430\u0436\u0434\u044B\u0439 \u044D\u043B\u0435\u043C\u0435\u043D\u0442 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 [[path/to/source]], \u0442\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 Links \u0432 Obsidian\n- \u0420\u0430\u0437\u0434\u0435\u043B "## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438" \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D \u0434\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0444\u0438\u043A\u0441\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 "## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439" \u0441 \u0434\u0430\u0442\u043E\u0439 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u043C\n- "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438" \u2014 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043A \u0441\u0432\u044F\u0437\u044F\u043C\n{{schema_block}}\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432, \u0431\u0435\u0437 \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n[{"path":"{{wiki_path}}/EntityName.md","content":"---\\nwiki_sources: [\\"[[{{source_path}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncont\u0435\u043D\u0442..."}]\n';
+var ingest_default = '\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0441\u0438\u043D\u0442\u0435\u0437\u0430 wiki-\u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0418\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439/\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n\n\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:\n{{entity_types_block}}\n{{lang_notes}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- CREATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 wiki, \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 >= min_mentions_for_page\n- UPDATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2192 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E, \u041D\u0415 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E\n- SKIP: \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u043E \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0435\u0441\u0442\u044C\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043A\u043E\u043D\u0444\u0438\u0433\u0438/SQL \u043C\u043E\u0436\u043D\u043E \u0446\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445.\n- \u041F\u0443\u0442\u044C \u0441\u0442\u0430\u0442\u044C\u0438 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u0435\u0442\u0441\u044F \u0442\u0438\u043F\u043E\u043C \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u2014 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u043E\u0447\u043D\u044B\u0439 \u0448\u0430\u0431\u043B\u043E\u043D \u0438\u0437 \u0441\u0435\u043A\u0446\u0438\u0438 \xAB\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410\xBB (\u0432\u044B\u0448\u0435, \u0434\u043E \u0431\u043B\u043E\u043A\u0430 \u041F\u0420\u0410\u0412\u0418\u041B\u0410), \u043F\u043E\u0434\u0441\u0442\u0430\u0432\u0438\u0432 \u0438\u043C\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0432\u043C\u0435\u0441\u0442\u043E <EntityName>\n- \u0415\u0441\u043B\u0438 \u0442\u0438\u043F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u043D\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0451\u043D \u0438\u043B\u0438 \u0443 \u0434\u043E\u043C\u0435\u043D\u0430 \u043D\u0435\u0442 entity_types \u2192 \u043F\u0443\u0442\u044C \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E: {{wiki_path}}/<EntityName>.md\n- Frontmatter \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- wiki_keywords: [5-10 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0445 \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u0434\u043E\u043C\u0435\u043D\u0430, \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0434\u0435\u0444\u0438\u0441-\u0432\u043C\u0435\u0441\u0442\u043E-\u043F\u0440\u043E\u0431\u0435\u043B\u0430]\n- wiki_sources: \u043A\u0430\u0436\u0434\u044B\u0439 \u044D\u043B\u0435\u043C\u0435\u043D\u0442 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 [[path/to/source]], \u0442\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 Links \u0432 Obsidian\n- \u0420\u0430\u0437\u0434\u0435\u043B "## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438" \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D \u0434\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0444\u0438\u043A\u0441\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 "## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439" \u0441 \u0434\u0430\u0442\u043E\u0439 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u043C\n- "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438" \u2014 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043A \u0441\u0432\u044F\u0437\u044F\u043C\n- \u0414\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0434\u043E\u0431\u0430\u0432\u044C \u043F\u043E\u043B\u0435 "annotation" \u0432 JSON: \u043E\u0434\u043D\u043E \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u2014 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430 \u043F\u043E \u0441\u043C\u044B\u0441\u043B\u0443\n{{schema_block}}\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432, \u0431\u0435\u0437 \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n[{"path":"{{wiki_path}}/EntityName.md","content":"---\\nwiki_sources: [\\"[[{{source_path}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\nwiki_keywords: [\u0442\u043E\u043A\u0435\u043D1, \u0442\u043E\u043A\u0435\u043D2]\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncont\u0435\u043D\u0442...","annotation":"\u041A\u0440\u0430\u0442\u043A\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u0433\u043E \u043F\u043E\u0438\u0441\u043A\u0430"}]\n';
 
 // src/phases/template.ts
 function render(template, vars) {
@@ -21800,6 +21800,122 @@ function hasFrontmatterField(content, field) {
   return new RegExp(`^${field}:`, "m").test(fmMatch[1]);
 }
 
+// src/wiki-index.ts
+function parseIndexAnnotations(content) {
+  const map = /* @__PURE__ */ new Map();
+  for (const line of content.split("\n")) {
+    const idx = line.indexOf(":");
+    if (idx <= 0)
+      continue;
+    const key = line.slice(0, idx).trim();
+    const value = line.slice(idx + 1).trim();
+    if (key && value)
+      map.set(key, value);
+  }
+  return map;
+}
+async function upsertIndexAnnotation(vaultTools, wikiFolder, pid, annotation) {
+  const indexPath = `${wikiFolder}/_index.md`;
+  let content = "";
+  try {
+    content = await vaultTools.read(indexPath);
+  } catch {
+  }
+  const escaped = pid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`^${escaped}:.*$`, "m");
+  const newLine = `${pid}: ${annotation}`;
+  if (pattern.test(content)) {
+    content = content.replace(pattern, newLine);
+  } else {
+    content = content ? `${content}
+${newLine}` : newLine;
+  }
+  await vaultTools.write(indexPath, content);
+}
+
+// src/wiki-graph.ts
+var import_path_browserify2 = __toESM(require_path_browserify(), 1);
+function pageId(vaultPath) {
+  return (0, import_path_browserify2.basename)(vaultPath, ".md");
+}
+function buildWikiGraph(pages) {
+  const graph = /* @__PURE__ */ new Map();
+  for (const vaultPath of pages.keys()) {
+    graph.set(pageId(vaultPath), /* @__PURE__ */ new Set());
+  }
+  for (const [vaultPath, content] of pages) {
+    const src = pageId(vaultPath);
+    for (const match of content.matchAll(/\[\[([^\]|#]+)/g)) {
+      const tgt = match[1].trim();
+      if (tgt)
+        graph.get(src).add(tgt);
+    }
+  }
+  return graph;
+}
+function bfsExpand(seeds, graph, depth) {
+  if (seeds.length === 0)
+    return /* @__PURE__ */ new Set();
+  const reverse = /* @__PURE__ */ new Map();
+  for (const [src, targets] of graph) {
+    for (const tgt of targets) {
+      if (!reverse.has(tgt))
+        reverse.set(tgt, /* @__PURE__ */ new Set());
+      reverse.get(tgt).add(src);
+    }
+  }
+  const visited = new Set(seeds);
+  let frontier = new Set(seeds);
+  for (let hop = 0; hop < depth; hop++) {
+    const next = /* @__PURE__ */ new Set();
+    for (const node of frontier) {
+      for (const neighbor of graph.get(node) ?? []) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          next.add(neighbor);
+        }
+      }
+      for (const neighbor of reverse.get(node) ?? []) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          next.add(neighbor);
+        }
+      }
+    }
+    if (next.size === 0)
+      break;
+    frontier = next;
+  }
+  return visited;
+}
+function checkGraphStructure(graph, hubThreshold) {
+  const inDegree = /* @__PURE__ */ new Map();
+  for (const node of graph.keys()) {
+    if (!inDegree.has(node))
+      inDegree.set(node, 0);
+    for (const tgt of graph.get(node)) {
+      inDegree.set(tgt, (inDegree.get(tgt) ?? 0) + 1);
+    }
+  }
+  const issues = [];
+  for (const [node, neighbors] of graph) {
+    const outDeg = neighbors.size;
+    const inDeg = inDegree.get(node) ?? 0;
+    if (inDeg === 0 && outDeg === 0) {
+      issues.push(`- ${node}: isolated node (no links in or out)`);
+    }
+    if (outDeg > hubThreshold) {
+      issues.push(`- ${node}: hub node (${outDeg} outgoing links)`);
+    }
+    for (const tgt of neighbors) {
+      if (graph.has(tgt) && !graph.get(tgt).has(node)) {
+        issues.push(`- ${node} \u2192 [[${tgt}]] not reciprocated`);
+      }
+    }
+  }
+  return issues.join("\n");
+}
+
 // src/phases/ingest.ts
 async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}) {
   const filePath = args[0];
@@ -21807,7 +21923,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     yield { kind: "error", message: "ingest: file path required" };
     return;
   }
-  const absSource = (0, import_path_browserify2.isAbsolute)(filePath) ? filePath : (0, import_path_browserify2.join)(vaultRoot, filePath);
+  const absSource = (0, import_path_browserify3.isAbsolute)(filePath) ? filePath : (0, import_path_browserify3.join)(vaultRoot, filePath);
   const sourceVaultPath = vaultTools.toVaultPath(absSource);
   if (!sourceVaultPath) {
     yield { kind: "error", message: `Source file ${filePath} is outside the vault.` };
@@ -21827,7 +21943,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     yield { kind: "error", message: "No domain found for this file. Configure domain-map." };
     return;
   }
-  const absWiki = (0, import_path_browserify2.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+  const absWiki = (0, import_path_browserify3.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
     yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
@@ -21896,6 +22012,12 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
       await vaultTools.write(page.path, page.content);
       written.push(page.path);
       yield { kind: "tool_result", ok: true };
+      if (page.annotation) {
+        try {
+          await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation);
+        } catch {
+        }
+      }
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: e.message };
     }
@@ -21904,7 +22026,6 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   yield { kind: "assistant_text", delta: resultText };
   if (written.length > 0) {
     await appendLog(vaultTools, domainRoot, sourceVaultPath, domain.id, written);
-    await updateIndex(vaultTools, domainRoot, written);
     const backlinkToday = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
     const existingArticles = parseWikiArticlesFromFm(sourceContent);
@@ -21942,7 +22063,7 @@ function buildIngestSummary(domainId, sourcePath, written, total) {
 function detectDomain(absFilePath, domains, vaultRoot) {
   for (const d of domains) {
     const matched = d.source_paths?.some((sp) => {
-      const abs = (0, import_path_browserify2.isAbsolute)(sp) ? sp : (0, import_path_browserify2.join)(vaultRoot, sp);
+      const abs = (0, import_path_browserify3.isAbsolute)(sp) ? sp : (0, import_path_browserify3.join)(vaultRoot, sp);
       return absFilePath.startsWith(abs);
     });
     if (matched)
@@ -21980,21 +22101,6 @@ async function appendLog(vaultTools, wikiRoot, sourcePath, domainId, written) {
   } catch {
   }
 }
-async function updateIndex(vaultTools, wikiRoot, written) {
-  const indexPath = `${wikiRoot}/_index.md`;
-  try {
-    const existing = await tryRead(vaultTools, indexPath);
-    const newLinks = written.map((p) => {
-      const name = p.split("/").pop()?.replace(/\.md$/, "") ?? p;
-      return `- [[${name}]]`;
-    }).join("\n");
-    const updated = existing ? existing + "\n" + newLinks : `# Wiki Index
-
-${newLinks}`;
-    await vaultTools.write(indexPath, updated);
-  } catch {
-  }
-}
 async function tryRead(vaultTools, path2) {
   try {
     return await vaultTools.read(path2);
@@ -22003,10 +22109,10 @@ async function tryRead(vaultTools, path2) {
   }
 }
 function extractParentSourcePath(absSource, vaultRoot) {
-  const parentAbs = (0, import_path_browserify2.dirname)(absSource);
+  const parentAbs = (0, import_path_browserify3.dirname)(absSource);
   const normedVault = vaultRoot.endsWith("/") ? vaultRoot : vaultRoot + "/";
   const clamped = (parentAbs + "/").startsWith(normedVault) ? parentAbs : vaultRoot;
-  const rel = (0, import_path_browserify2.relative)(vaultRoot, clamped);
+  const rel = (0, import_path_browserify3.relative)(vaultRoot, clamped);
   return (rel || ".") + "/";
 }
 function buildEntityTypesBlock(domain, wikiVaultPath) {
@@ -26303,95 +26409,13 @@ var LintChatSchema = external_exports.object({
   summary: external_exports.string(),
   pages: external_exports.array(external_exports.object({
     path: external_exports.string(),
-    content: external_exports.string()
+    content: external_exports.string(),
+    annotation: external_exports.string().optional()
   })).default([])
 });
 
 // prompts/query.md
 var query_default = "\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u043F\u043E wiki-\u0431\u0430\u0437\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u0411\u0443\u0434\u044C \u0442\u043E\u0447\u0435\u043D \u0438 \u043B\u0430\u043A\u043E\u043D\u0438\u0447\u0435\u043D.\n\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 WikiLinks [[\u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435]] \u043F\u0440\u0438 \u0441\u0441\u044B\u043B\u043A\u0430\u0445 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0437 \u0438\u043D\u0434\u0435\u043A\u0441\u0430.\n{{entity_types_block}}\n{{schema_block}}\n{{index_block}}\n";
-
-// src/wiki-graph.ts
-var import_path_browserify3 = __toESM(require_path_browserify(), 1);
-function pageId(vaultPath) {
-  return (0, import_path_browserify3.basename)(vaultPath, ".md");
-}
-function buildWikiGraph(pages) {
-  const graph = /* @__PURE__ */ new Map();
-  for (const vaultPath of pages.keys()) {
-    graph.set(pageId(vaultPath), /* @__PURE__ */ new Set());
-  }
-  for (const [vaultPath, content] of pages) {
-    const src = pageId(vaultPath);
-    for (const match of content.matchAll(/\[\[([^\]|#]+)/g)) {
-      const tgt = match[1].trim();
-      if (tgt)
-        graph.get(src).add(tgt);
-    }
-  }
-  return graph;
-}
-function bfsExpand(seeds, graph, depth) {
-  if (seeds.length === 0)
-    return /* @__PURE__ */ new Set();
-  const reverse = /* @__PURE__ */ new Map();
-  for (const [src, targets] of graph) {
-    for (const tgt of targets) {
-      if (!reverse.has(tgt))
-        reverse.set(tgt, /* @__PURE__ */ new Set());
-      reverse.get(tgt).add(src);
-    }
-  }
-  const visited = new Set(seeds);
-  let frontier = new Set(seeds);
-  for (let hop = 0; hop < depth; hop++) {
-    const next = /* @__PURE__ */ new Set();
-    for (const node of frontier) {
-      for (const neighbor of graph.get(node) ?? []) {
-        if (!visited.has(neighbor)) {
-          visited.add(neighbor);
-          next.add(neighbor);
-        }
-      }
-      for (const neighbor of reverse.get(node) ?? []) {
-        if (!visited.has(neighbor)) {
-          visited.add(neighbor);
-          next.add(neighbor);
-        }
-      }
-    }
-    if (next.size === 0)
-      break;
-    frontier = next;
-  }
-  return visited;
-}
-function checkGraphStructure(graph, hubThreshold) {
-  const inDegree = /* @__PURE__ */ new Map();
-  for (const node of graph.keys()) {
-    if (!inDegree.has(node))
-      inDegree.set(node, 0);
-    for (const tgt of graph.get(node)) {
-      inDegree.set(tgt, (inDegree.get(tgt) ?? 0) + 1);
-    }
-  }
-  const issues = [];
-  for (const [node, neighbors] of graph) {
-    const outDeg = neighbors.size;
-    const inDeg = inDegree.get(node) ?? 0;
-    if (inDeg === 0 && outDeg === 0) {
-      issues.push(`- ${node}: isolated node (no links in or out)`);
-    }
-    if (outDeg > hubThreshold) {
-      issues.push(`- ${node}: hub node (${outDeg} outgoing links)`);
-    }
-    for (const tgt of neighbors) {
-      if (graph.has(tgt) && !graph.get(tgt).has(node)) {
-        issues.push(`- ${node} \u2192 [[${tgt}]] not reciprocated`);
-      }
-    }
-  }
-  return issues.join("\n");
-}
 
 // src/wiki-graph-cache.ts
 function hashPages(pages) {
@@ -26483,7 +26507,7 @@ var STOP_WORDS = /* @__PURE__ */ new Set([
   "\u0435\u0449\u0451",
   "\u0435\u0449\u0435"
 ]);
-var CONTENT_CAP = 200;
+var BODY_CAP = 500;
 function tokenize(s) {
   const out = /* @__PURE__ */ new Set();
   if (!s)
@@ -26497,13 +26521,30 @@ function tokenize(s) {
   }
   return out;
 }
-function scoreSeed(questionTokens, pageIdValue, content) {
+function bodyContent(content) {
+  const m = content.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)/);
+  return (m ? m[1] : content).slice(0, BODY_CAP);
+}
+function parseFmKeywords(content) {
+  const m = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!m)
+    return /* @__PURE__ */ new Set();
+  const kw = m[1].match(/wiki_keywords:\s*\[(.*?)\]/);
+  if (!kw)
+    return /* @__PURE__ */ new Set();
+  return new Set(kw[1].split(",").map((s) => s.trim().replace(/['"]/g, "").toLowerCase()));
+}
+function scoreSeed(questionTokens, pageIdValue, content, annotation) {
   if (questionTokens.size === 0)
     return 0;
-  const head = content.slice(0, CONTENT_CAP);
   const p = tokenize(pageIdValue);
-  for (const t of tokenize(head))
+  for (const t of parseFmKeywords(content))
     p.add(t);
+  for (const t of tokenize(bodyContent(content)))
+    p.add(t);
+  if (annotation)
+    for (const t of tokenize(annotation))
+      p.add(t);
   if (p.size === 0)
     return 0;
   let inter = 0;
@@ -26512,14 +26553,15 @@ function scoreSeed(questionTokens, pageIdValue, content) {
       inter++;
   return inter / questionTokens.size;
 }
-function selectSeeds(question, pages, topK, minScore) {
+function selectSeeds(question, pages, topK, minScore, indexAnnotations) {
   const q = tokenize(question);
   if (q.size === 0)
     return [];
   const scored = [];
   for (const [path2, content] of pages) {
     const id = pageId(path2);
-    const score = scoreSeed(q, id, content);
+    const annotation = indexAnnotations?.get(id);
+    const score = scoreSeed(q, id, content, annotation);
     if (score >= minScore && score > 0)
       scored.push({ id, score });
   }
@@ -26565,15 +26607,16 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   let outputTokens = 0;
   const { graph, fromCache } = graphCache.get(domain.id, pages);
   const allPageIds = [...pages.keys()].map(pageId);
+  const indexAnnotations = parseIndexAnnotations(indexContent);
   const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
   const minScore = Math.max(0, Math.min(1, seedMinScore));
-  let seeds = selectSeeds(question, pages, topK, minScore);
+  let seeds = selectSeeds(question, pages, topK, minScore, indexAnnotations);
   if (seeds.length === 0) {
     if (signal.aborted)
       return;
     yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allPageIds.length } };
     const seedOpts = { ...opts, thinkingBudgetTokens: void 0 };
-    const seedRes = await llmSelectSeeds(question, indexContent, allPageIds, llm, model, seedOpts, signal);
+    const seedRes = await llmSelectSeeds(question, indexAnnotations, allPageIds, llm, model, seedOpts, signal);
     seeds = seedRes.seeds;
     outputTokens += seedRes.outputTokens;
     yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
@@ -26677,17 +26720,25 @@ async function tryRead2(vaultTools, path2) {
     return "";
   }
 }
-async function llmSelectSeeds(question, indexContent, allPageIds, llm, model, opts, signal) {
+async function llmSelectSeeds(question, indexAnnotations, allPageIds, llm, model, opts, signal) {
   const example = JSON.stringify({
     reasoning: "PageA matches keyword X; PageB referenced by index.",
     seeds: ["PageA", "PageB"]
   }, null, 2);
+  const annotatedLines = [];
+  const unindexedIds = [];
+  for (const id of allPageIds) {
+    const ann = indexAnnotations?.get(id);
+    if (ann)
+      annotatedLines.push(`${id}: ${ann}`);
+    else
+      unindexedIds.push(id);
+  }
   const prompt = [
     `Question: "${question}"`,
-    `Available wiki pages: ${allPageIds.join(", ")}`,
-    indexContent ? `
-Index:
-${indexContent}` : "",
+    `Wiki index with annotations:
+${annotatedLines.join("\n")}`,
+    unindexedIds.length ? `Pages not yet indexed: ${unindexedIds.join(", ")}` : "",
     `
 Return JSON only matching this shape (most relevant page names \u2014 bare names, no path, no .md):`,
     `
@@ -26752,7 +26803,7 @@ ${types}${notes}`;
 var import_path_browserify4 = __toESM(require_path_browserify(), 1);
 
 // prompts/lint.md
-var lint_default = "\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0412\u044B\u044F\u0432\u043B\u044F\u0439: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442, \u0431\u0438\u0442\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438.\n\u0412\u0435\u0440\u043D\u0438 \u0440\u0430\u0437\u0432\u0451\u0440\u043D\u0443\u0442\u044B\u0439 \u0430\u043D\u0430\u043B\u0438\u0437 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 Markdown.\n{{entity_types_block}}\n";
+var lint_default = '\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0412\u044B\u044F\u0432\u043B\u044F\u0439: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442, \u0431\u0438\u0442\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438.\n\u0412\u0435\u0440\u043D\u0438 \u0440\u0430\u0437\u0432\u0451\u0440\u043D\u0443\u0442\u044B\u0439 \u0430\u043D\u0430\u043B\u0438\u0437 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 Markdown.\n{{entity_types_block}}\n\n\u041F\u0440\u0438 \u0432\u043E\u0437\u0432\u0440\u0430\u0442\u0435 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 JSON-\u043C\u0430\u0441\u0441\u0438\u0432 \u0441 \u043F\u043E\u043B\u044F\u043C\u0438 path, content, annotation:\n- wiki_keywords: \u0434\u043E\u0431\u0430\u0432\u044C \u0438\u043B\u0438 \u043E\u0431\u043D\u043E\u0432\u0438 \u0432 frontmatter (5-10 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0445 \u0442\u043E\u043A\u0435\u043D\u043E\u0432, \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0434\u0435\u0444\u0438\u0441-\u0432\u043C\u0435\u0441\u0442\u043E-\u043F\u0440\u043E\u0431\u0435\u043B\u0430)\n- "annotation": \u043E\u0434\u043D\u043E \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u2014 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430 \u043F\u043E \u0441\u043C\u044B\u0441\u043B\u0443\n';
 
 // src/phases/lint.ts
 var META_FILES2 = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
@@ -26902,6 +26953,12 @@ Applying fixes for "${domain.id}"...
         await vaultTools.write(page.path, page.content);
         writtenPaths.push(page.path);
         yield { kind: "tool_result", ok: true };
+        if (page.annotation) {
+          try {
+            await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation);
+          } catch {
+          }
+        }
       } catch (e) {
         yield { kind: "tool_result", ok: false, preview: e.message };
       }
@@ -26950,15 +27007,6 @@ ${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
     }
     if (backlinks.size > 0) {
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
-    }
-    const indexPath = `${wikiVaultPath}/_index.md`;
-    const indexLinks = files.map((f) => `- [[${(0, import_path_browserify4.basename)(f, ".md")}]]`).join("\n");
-    try {
-      await vaultTools.write(indexPath, `# Wiki Index
-
-${indexLinks}
-`);
-    } catch {
     }
   }
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n"), outputTokens: outputTokens || void 0 };
@@ -27217,6 +27265,13 @@ ${c}`).join("\n\n");
       yield { kind: "tool_result", ok: true };
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: e.message };
+      continue;
+    }
+    if (page.annotation) {
+      try {
+        await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation);
+      } catch {
+      }
     }
   }
   yield { kind: "result", durationMs: Date.now() - start, text: parsed.summary, outputTokens: result.outputTokens || void 0 };
@@ -27226,10 +27281,10 @@ ${c}`).join("\n\n");
 var wiki_schema_default = '# Wiki Schema\n\n## \u042F\u0437\u044B\u043A \u0438 \u0441\u0442\u0438\u043B\u044C\n- \u041E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u044F\u0437\u044B\u043A: \u0440\u0443\u0441\u0441\u043A\u0438\u0439\n- \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u043D\u0435 \u043F\u0435\u0440\u0435\u0432\u043E\u0434\u0438\u0442\u044C: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML\n- \u0418\u043C\u0435\u043D\u0430 \u0441\u0438\u0441\u0442\u0435\u043C \u2014 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 (RT.DataExporter, CRM B2C, \u0426\u0425\u0414)\n- \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B \u0440\u0430\u0441\u0448\u0438\u0444\u0440\u043E\u0432\u044B\u0432\u0430\u0442\u044C \u043F\u0440\u0438 \u043F\u0435\u0440\u0432\u043E\u043C \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0438 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435\n- \u0421\u0442\u0438\u043B\u044C: \u043D\u0435\u0439\u0442\u0440\u0430\u043B\u044C\u043D\u044B\u0439, \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0432\u043D\u044B\u0439, \u0431\u0435\u0437 \u043E\u0446\u0435\u043D\u043E\u0447\u043D\u044B\u0445 \u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: "\u041E\u0447\u0435\u0432\u0438\u0434\u043D\u043E, \u0447\u0442\u043E...", "\u041B\u0443\u0447\u0448\u0438\u0439 \u0441\u043F\u043E\u0441\u043E\u0431...", \u043C\u0435\u0441\u0442\u043E\u0438\u043C\u0435\u043D\u0438\u044F "\u044F", "\u043C\u044B", "\u043D\u0430\u0448"\n\n## \u0418\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u043E\u0432 \u0438 \u043F\u0430\u043F\u043E\u043A\n- \u0424\u0430\u0439\u043B\u044B: kebab-case, \u043A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u0430, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432 \u0438 \u0441\u043F\u0435\u0446\u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432 \u043A\u0440\u043E\u043C\u0435 \u0434\u0435\u0444\u0438\u0441\u0430\n  - \u041F\u0440\u0438\u043C\u0435\u0440\u044B: `\u0432\u0435\u0440\u0441\u0438\u043E\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435-scd.md`, `clickhouse-\u043E\u0431\u0437\u043E\u0440.md`\n- \u041F\u0430\u043F\u043A\u0438 \u0434\u043E\u043C\u0435\u043D\u043E\u0432: \u043D\u0438\u0436\u043D\u0438\u0439 \u0440\u0435\u0433\u0438\u0441\u0442\u0440, \u043B\u0430\u0442\u0438\u043D\u0438\u0446\u0430 (`\u0438\u0438/`, `\u0431\u0430\u0437\u044B-\u0434\u0430\u043D\u043D\u044B\u0445/`)\n- \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1: \u0440\u0443\u0441\u0441\u043A\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435; \u0442\u0435\u0445\u0442\u0435\u0440\u043C\u0438\u043D \u0432 \u0441\u043A\u043E\u0431\u043A\u0430\u0445 \u043F\u0440\u0438 \u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E\u0441\u0442\u0438\n\n## \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u043F\u043E\u0440\u044F\u0434\u043E\u043A)\n1. Frontmatter (YAML)\n2. \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1\n3. \u0412\u0432\u043E\u0434\u043D\u044B\u0439 \u0430\u0431\u0437\u0430\u0446 \u2014 1-3 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0431\u0435\u0437 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0430, \u0441\u0440\u0430\u0437\u0443 \u043F\u043E\u0441\u043B\u0435 H1\n4. `## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438` \u2014 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0438 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u044B\n\n## \u041E\u043F\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B\n- `## \u041F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435 [\u0414\u043E\u043C\u0435\u043D]`\n- `## \u041F\u0440\u0438\u043C\u0435\u0440\u044B`\n- `## \u041E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F`\n- `## Best Practices`\n- `## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438` \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u043D\u0443\u0436\u0435\u043D \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043A \u0441\u0432\u044F\u0437\u044F\u043C; \u0431\u0435\u0437 \u043E\u043F\u0438\u0441\u0430\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u0440\u0430\u0437\u0434\u0435\u043B \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C\n- `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n\n## Frontmatter\n\n| \u041F\u043E\u043B\u0435 | \u041F\u0440\u0430\u0432\u0438\u043B\u043E |\n|------|---------|\n| `wiki_sources` | \u041C\u0430\u0441\u0441\u0438\u0432 \u0440\u0435\u0430\u043B\u044C\u043D\u044B\u0445 \u043F\u0443\u0442\u0435\u0439 \u043E\u0442 \u043A\u043E\u0440\u043D\u044F \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F. \u0422\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u043D\u044B\u0435 \u0444\u0430\u0439\u043B\u044B. \u041F\u0440\u0438 UPDATE \u2014 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0442\u044C, \u043D\u0435 \u0443\u0434\u0430\u043B\u044F\u0442\u044C. \u0422\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0432 Obsidian: **Links** (\u043D\u0435 list/text) \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0442\u043E\u0433\u0434\u0430 \u0441\u0441\u044B\u043B\u043A\u0438 \u0443\u0447\u0430\u0441\u0442\u0432\u0443\u044E\u0442 \u0432 Graph View. \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 `[[page-name]]`: `["[[page-a]]", "[[page-b]]"] |\n| `wiki_updated` | YYYY-MM-DD |\n| `wiki_status` | `stub` (<2 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432, <10 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439) / `developing` (\u22652 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430, \u226510 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439, \u043E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B \u0437\u0430\u043F\u043E\u043B\u043D\u0435\u043D\u044B) / `mature` (\u22654 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430, \u0432\u0441\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B) |\n| `wiki_type` | \u0422\u0438\u043F \u0444\u0430\u0439\u043B\u0430: `page \\| index \\| log \\| schema`. \u0422\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u0444\u0430\u0439\u043B\u043E\u0432 (`_index.md`, `_log.md`, `_wiki_schema.md`). \u041E\u0431\u044B\u0447\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u043D\u0435 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u044E\u0442 \u044D\u0442\u043E \u043F\u043E\u043B\u0435. |\n| `tags` | \u0418\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 \u0438\u0437 tag-hierarchy.json |\n| `aliases` | \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B, \u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u0438\u0435 \u0432\u0430\u0440\u0438\u0430\u043D\u0442\u044B, \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B |\n| `wiki_outgoing_links` | \u041C\u0430\u0441\u0441\u0438\u0432 WikiLinks \u043D\u0430 \u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B. \u0422\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0432 Obsidian: **Links** (\u043D\u0435 list/text) \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0442\u043E\u0433\u0434\u0430 \u0441\u0441\u044B\u043B\u043A\u0438 \u0443\u0447\u0430\u0441\u0442\u0432\u0443\u044E\u0442 \u0432 Graph View. \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 `[[page-name]]`: `["[[page-a]]", "[[page-b]]"]`. \u041F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C. |\n| `wiki_external_links` | \u041C\u0430\u0441\u0441\u0438\u0432 \u0432\u043D\u0435\u0448\u043D\u0438\u0445 URL (`http://` \u0438\u043B\u0438 `https://`). \u041D\u0435 \u0444\u043E\u0440\u043C\u0438\u0440\u0443\u044E\u0442 \u0433\u0440\u0430\u0444 Obsidian \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0441\u043F\u0440\u0430\u0432\u043E\u0447\u043D\u044B\u0435 \u0440\u0435\u0441\u0443\u0440\u0441\u044B \u0438 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430\u0446\u0438\u044F. |\n\n## WikiLinks\n- \u0421\u0441\u044B\u043B\u0430\u0442\u044C\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0447\u0435\u0440\u0435\u0437 `[[\u0438\u043C\u044F-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B]]`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: \u043C\u0451\u0440\u0442\u0432\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438, \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0444\u0430\u0439\u043B\u044B \u0432\u043D\u0435 `!Wiki/`\n\n## \u041A\u043E\u043D\u0442\u0435\u043D\u0442\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u2014 \u043F\u0435\u0440\u0435\u0440\u0430\u0431\u043E\u0442\u0430\u0442\u044C \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432\n- \u0414\u043E\u0441\u043B\u043E\u0432\u043D\u044B\u0435 \u0446\u0438\u0442\u0430\u0442\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445 (SQL, \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438)\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u0434\u0430\u0442\u0443 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0432 `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: placeholder-\u0442\u0435\u043A\u0441\u0442 (TODO, "\u0441\u043C. \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A"), \u043F\u0443\u0441\u0442\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B, \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438\n- \u0422\u0430\u0431\u043B\u0438\u0446\u044B: markdown \u0441 \u0432\u044B\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u043D\u0438\u0435\u043C (`| \u041F\u0430\u0440\u0430\u043C\u0435\u0442\u0440 | \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u0435 |` + `|----------|----------|`)\n- \u041A\u043E\u0434\u043E\u0432\u044B\u0435 \u0431\u043B\u043E\u043A\u0438: \u0432\u0441\u0435\u0433\u0434\u0430 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u044F\u0437\u044B\u043A (` ```sql `, ` ```yaml `, ` ```json `)\n';
 
 // prompts/init.md
-var init_default = '\u0422\u044B \u2014 \u0430\u0440\u0445\u0438\u0442\u0435\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439. \u0421\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0439 \u0437\u0430\u043F\u0438\u0441\u044C \u0434\u043E\u043C\u0435\u043D\u0430 \u0434\u043B\u044F domain-map.json.\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0435\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B:\n{\n  "id": "{{domain_id}}",\n  "name": "\u0427\u0435\u043B\u043E\u0432\u0435\u043A\u043E\u0447\u0438\u0442\u0430\u0435\u043C\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435",\n  "wiki_folder": "vaults/{{vault_name}}/!Wiki/{{domain_id}}",\n  "source_paths": [],\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"{{domain_id}}/..."}],\n  "language_notes": ""\n}\n{{schema_block}}\n{{index_block}}\n\n\u0412\u043A\u043B\u044E\u0447\u0438 \u043F\u043E\u043B\u0435 `reasoning` \u043F\u0435\u0440\u0432\u044B\u043C \u0432 JSON-\u043E\u0442\u0432\u0435\u0442\u0435: \u043F\u043E\u0448\u0430\u0433\u043E\u0432\u043E\u0435 \u043E\u0431\u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B \u0434\u043E\u043C\u0435\u043D\u0430.\n\n## Output JSON Example\n\n{\n  "reasoning": "\u041F\u0440\u043E\u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043B \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438. \u0412\u044B\u044F\u0432\u0438\u043B \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438: Process, ServiceContract, Customer.",\n  "id": "{{domain_id}}",\n  "name": "Telecom Operations",\n  "wiki_folder": "{{domain_id}}",\n  "entity_types": [\n    {\n      "type": "Process",\n      "description": "\u0411\u0438\u0437\u043D\u0435\u0441-\u043F\u0440\u043E\u0446\u0435\u0441\u0441 \u0438\u043B\u0438 \u0448\u0430\u0433 workflow",\n      "extraction_cues": ["BPMN", "workflow", "\u043F\u0440\u043E\u0446\u0435\u0441\u0441"],\n      "min_mentions_for_page": 1,\n      "wiki_subfolder": "processes"\n    }\n  ],\n  "language_notes": "\u0421\u043C\u0435\u0441\u044C \u0440\u0443\u0441\u0441\u043A\u043E\u0433\u043E/\u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u043E\u0433\u043E; \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0439 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 product-\u0438\u043C\u0451\u043D."\n}\n';
+var init_default = '\u0422\u044B \u2014 \u0430\u0440\u0445\u0438\u0442\u0435\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439. \u0421\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0439 \u0437\u0430\u043F\u0438\u0441\u044C \u0434\u043E\u043C\u0435\u043D\u0430 \u0434\u043B\u044F domain-map.json.\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0435\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B:\n{\n  "id": "{{domain_id}}",\n  "name": "\u0427\u0435\u043B\u043E\u0432\u0435\u043A\u043E\u0447\u0438\u0442\u0430\u0435\u043C\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435",\n  "wiki_folder": "vaults/{{vault_name}}/!Wiki/{{domain_id}}",\n  "source_paths": [],\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"{{domain_id}}/..."}],\n  "language_notes": ""\n}\n{{schema_block}}\n{{index_block}}\n\n\u0412\u043A\u043B\u044E\u0447\u0438 \u043F\u043E\u043B\u0435 `reasoning` \u043F\u0435\u0440\u0432\u044B\u043C \u0432 JSON-\u043E\u0442\u0432\u0435\u0442\u0435: \u043F\u043E\u0448\u0430\u0433\u043E\u0432\u043E\u0435 \u043E\u0431\u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B \u0434\u043E\u043C\u0435\u043D\u0430.\n\n## Output JSON Example\n\n{\n  "reasoning": "\u041F\u0440\u043E\u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043B \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438. \u0412\u044B\u044F\u0432\u0438\u043B \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438: Process, ServiceContract, Customer.",\n  "id": "{{domain_id}}",\n  "name": "Telecom Operations",\n  "wiki_folder": "{{domain_id}}",\n  "entity_types": [\n    {\n      "type": "Process",\n      "description": "\u0411\u0438\u0437\u043D\u0435\u0441-\u043F\u0440\u043E\u0446\u0435\u0441\u0441 \u0438\u043B\u0438 \u0448\u0430\u0433 workflow",\n      "extraction_cues": ["BPMN", "workflow", "\u043F\u0440\u043E\u0446\u0435\u0441\u0441"],\n      "min_mentions_for_page": 1,\n      "wiki_subfolder": "processes"\n    }\n  ],\n  "language_notes": "\u0421\u043C\u0435\u0441\u044C \u0440\u0443\u0441\u0441\u043A\u043E\u0433\u043E/\u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u043E\u0433\u043E; \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0439 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 product-\u0438\u043C\u0451\u043D."\n}\n\n## Wiki Page Conventions\n\n\u0421\u0442\u0440\u0430\u043D\u0438\u0446\u044B wiki \u0434\u043E\u043B\u0436\u043D\u044B \u0438\u043C\u0435\u0442\u044C frontmatter \u0441 \u043F\u043E\u043B\u044F\u043C\u0438:\n- wiki_keywords: [5-10 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0445 \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u0434\u043E\u043C\u0435\u043D\u0430, \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0434\u0435\u0444\u0438\u0441-\u0432\u043C\u0435\u0441\u0442\u043E-\u043F\u0440\u043E\u0431\u0435\u043B\u0430]\n';
 
 // prompts/init-incremental.md
-var init_incremental_default = '\u0422\u044B \u2014 \u0430\u043D\u0430\u043B\u0438\u0442\u0438\u043A wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439. \u041E\u0431\u043D\u043E\u0432\u0438 \u0441\u043F\u0438\u0441\u043E\u043A entity_types \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043D\u043E\u0432\u043E\u0433\u043E \u0444\u0430\u0439\u043B\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430.\n\n\u0422\u0435\u0431\u0435 \u0434\u0430\u043D:\n- \u0421\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u043E\u0434\u043D\u043E\u0433\u043E \u0444\u0430\u0439\u043B\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430\n- \u0422\u0435\u043A\u0443\u0449\u0438\u0439 \u0441\u043F\u0438\u0441\u043E\u043A entity_types (JSON)\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0435\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B:\n{\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"..."}],\n  "language_notes": "..."\n}\n\n\u041F\u0440\u0430\u0432\u0438\u043B\u0430:\n- `entity_types`: \u0434\u043E\u0431\u0430\u0432\u044C \u043D\u043E\u0432\u044B\u0435 \u0442\u0438\u043F\u044B, \u0443\u0442\u043E\u0447\u043D\u0438 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435. \u041D\u0435 \u043C\u0435\u043D\u044F\u0439 \u043F\u043E\u043B\u0435 `type` (id). \u0415\u0441\u043B\u0438 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439 \u043D\u0435\u0442 \u2014 \u0432\u0435\u0440\u043D\u0438 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0441\u043F\u0438\u0441\u043E\u043A \u0431\u0435\u0437 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439.\n- `language_notes`: \u043E\u0431\u043D\u043E\u0432\u0438 \u0435\u0441\u043B\u0438 \u0444\u0430\u0439\u043B \u043F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u0435\u0442 \u043D\u043E\u0432\u044B\u0435 \u044F\u0437\u044B\u043A\u043E\u0432\u044B\u0435 \u043A\u043E\u043D\u0432\u0435\u043D\u0446\u0438\u0438. \u0415\u0441\u043B\u0438 \u043D\u0435\u0447\u0435\u0433\u043E \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u2014 \u043F\u0440\u043E\u043F\u0443\u0441\u0442\u0438 \u043F\u043E\u043B\u0435.\n- \u041D\u0438\u043A\u0430\u043A\u0438\u0445 \u0434\u0440\u0443\u0433\u0438\u0445 \u043F\u043E\u043B\u0435\u0439. \u041D\u0438\u043A\u0430\u043A\u0438\u0445 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439. \u0422\u043E\u043B\u044C\u043A\u043E JSON.\n\n\u0412\u043A\u043B\u044E\u0447\u0438 \u043F\u043E\u043B\u0435 `reasoning` \u043F\u0435\u0440\u0432\u044B\u043C \u0432 JSON-\u043E\u0442\u0432\u0435\u0442\u0435: \u043E\u0431\u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0435\u043C\u044B\u0445 \u0438\u043B\u0438 \u0438\u0437\u043C\u0435\u043D\u044F\u0435\u043C\u044B\u0445 entity_types.\n\n## Output JSON Example\n\n{\n  "reasoning": "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u043B \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0439 Process, \u0434\u043E\u0431\u0430\u0432\u0438\u043B \u043D\u043E\u0432\u044B\u0439 Contract \u043F\u043E \u043D\u0430\u0439\u0434\u0435\u043D\u043D\u044B\u043C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430\u043C SLA.",\n  "entity_types": [\n    {\n      "type": "Process",\n      "description": "\u0411\u0438\u0437\u043D\u0435\u0441-\u043F\u0440\u043E\u0446\u0435\u0441\u0441",\n      "extraction_cues": ["BPMN", "\u043F\u0440\u043E\u0446\u0435\u0441\u0441"]\n    },\n    {\n      "type": "Contract",\n      "description": "\u0414\u043E\u0433\u043E\u0432\u043E\u0440 \u043E\u043A\u0430\u0437\u0430\u043D\u0438\u044F \u0443\u0441\u043B\u0443\u0433 / SLA",\n      "extraction_cues": ["SLA", "\u0434\u043E\u0433\u043E\u0432\u043E\u0440", "\u0441\u043E\u0433\u043B\u0430\u0448\u0435\u043D\u0438\u0435"],\n      "wiki_subfolder": "contracts"\n    }\n  ],\n  "language_notes": "\u0414\u043E\u0433\u043E\u0432\u043E\u0440\u043D\u044B\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u2014 \u043D\u0430 \u0440\u0443\u0441\u0441\u043A\u043E\u043C."\n}\n';
+var init_incremental_default = '\u0422\u044B \u2014 \u0430\u043D\u0430\u043B\u0438\u0442\u0438\u043A wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439. \u041E\u0431\u043D\u043E\u0432\u0438 \u0441\u043F\u0438\u0441\u043E\u043A entity_types \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043D\u043E\u0432\u043E\u0433\u043E \u0444\u0430\u0439\u043B\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430.\n\n\u0422\u0435\u0431\u0435 \u0434\u0430\u043D:\n- \u0421\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u043E\u0434\u043D\u043E\u0433\u043E \u0444\u0430\u0439\u043B\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430\n- \u0422\u0435\u043A\u0443\u0449\u0438\u0439 \u0441\u043F\u0438\u0441\u043E\u043A entity_types (JSON)\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0435\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B:\n{\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"..."}],\n  "language_notes": "..."\n}\n\n\u041F\u0440\u0430\u0432\u0438\u043B\u0430:\n- `entity_types`: \u0434\u043E\u0431\u0430\u0432\u044C \u043D\u043E\u0432\u044B\u0435 \u0442\u0438\u043F\u044B, \u0443\u0442\u043E\u0447\u043D\u0438 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435. \u041D\u0435 \u043C\u0435\u043D\u044F\u0439 \u043F\u043E\u043B\u0435 `type` (id). \u0415\u0441\u043B\u0438 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439 \u043D\u0435\u0442 \u2014 \u0432\u0435\u0440\u043D\u0438 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0441\u043F\u0438\u0441\u043E\u043A \u0431\u0435\u0437 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439.\n- `language_notes`: \u043E\u0431\u043D\u043E\u0432\u0438 \u0435\u0441\u043B\u0438 \u0444\u0430\u0439\u043B \u043F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u0435\u0442 \u043D\u043E\u0432\u044B\u0435 \u044F\u0437\u044B\u043A\u043E\u0432\u044B\u0435 \u043A\u043E\u043D\u0432\u0435\u043D\u0446\u0438\u0438. \u0415\u0441\u043B\u0438 \u043D\u0435\u0447\u0435\u0433\u043E \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u2014 \u043F\u0440\u043E\u043F\u0443\u0441\u0442\u0438 \u043F\u043E\u043B\u0435.\n- \u041D\u0438\u043A\u0430\u043A\u0438\u0445 \u0434\u0440\u0443\u0433\u0438\u0445 \u043F\u043E\u043B\u0435\u0439. \u041D\u0438\u043A\u0430\u043A\u0438\u0445 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439. \u0422\u043E\u043B\u044C\u043A\u043E JSON.\n\n\u0412\u043A\u043B\u044E\u0447\u0438 \u043F\u043E\u043B\u0435 `reasoning` \u043F\u0435\u0440\u0432\u044B\u043C \u0432 JSON-\u043E\u0442\u0432\u0435\u0442\u0435: \u043E\u0431\u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0435\u043C\u044B\u0445 \u0438\u043B\u0438 \u0438\u0437\u043C\u0435\u043D\u044F\u0435\u043C\u044B\u0445 entity_types.\n\n## Output JSON Example\n\n{\n  "reasoning": "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u043B \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0439 Process, \u0434\u043E\u0431\u0430\u0432\u0438\u043B \u043D\u043E\u0432\u044B\u0439 Contract \u043F\u043E \u043D\u0430\u0439\u0434\u0435\u043D\u043D\u044B\u043C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430\u043C SLA.",\n  "entity_types": [\n    {\n      "type": "Process",\n      "description": "\u0411\u0438\u0437\u043D\u0435\u0441-\u043F\u0440\u043E\u0446\u0435\u0441\u0441",\n      "extraction_cues": ["BPMN", "\u043F\u0440\u043E\u0446\u0435\u0441\u0441"]\n    },\n    {\n      "type": "Contract",\n      "description": "\u0414\u043E\u0433\u043E\u0432\u043E\u0440 \u043E\u043A\u0430\u0437\u0430\u043D\u0438\u044F \u0443\u0441\u043B\u0443\u0433 / SLA",\n      "extraction_cues": ["SLA", "\u0434\u043E\u0433\u043E\u0432\u043E\u0440", "\u0441\u043E\u0433\u043B\u0430\u0448\u0435\u043D\u0438\u0435"],\n      "wiki_subfolder": "contracts"\n    }\n  ],\n  "language_notes": "\u0414\u043E\u0433\u043E\u0432\u043E\u0440\u043D\u044B\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u2014 \u043D\u0430 \u0440\u0443\u0441\u0441\u043A\u043E\u043C."\n}\n\n## Wiki Page Conventions\n\nWiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u044E\u0442 \u043F\u043E\u043B\u0435 `wiki_keywords` \u0432\u043E frontmatter (5-10 \u0442\u043E\u043A\u0435\u043D\u043E\u0432, \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0434\u0435\u0444\u0438\u0441-\u0432\u043C\u0435\u0441\u0442\u043E-\u043F\u0440\u043E\u0431\u0435\u043B\u0430). \u0423\u0447\u0438\u0442\u044B\u0432\u0430\u0439 \u044D\u0442\u043E \u043F\u0440\u0438 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u0438 extraction_cues \u0432 entity_types.\n';
 
 // src/phases/init.ts
 function mergeEntityTypes(current, incoming) {
