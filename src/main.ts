@@ -126,7 +126,9 @@ export default class LlmWikiPlugin extends Plugin {
         this.settings.backend === "claude-agent" &&
         !this.settings.shellConsentGiven
       ) {
-        new ShellConsentModal(this.app, this).open();
+        void this.localConfigStore.load().then((local) => {
+          new ShellConsentModal(this.app, this, local.iclaudePath ?? "").open();
+        });
       }
     });
 

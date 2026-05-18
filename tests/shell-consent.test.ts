@@ -19,7 +19,7 @@ describe("ShellConsentModal", () => {
       settings: { shellConsentGiven: false },
       saveSettings,
     } as any;
-    const modal = new ShellConsentModal({} as any, plugin);
+    const modal = new ShellConsentModal({} as any, plugin, "/usr/bin/claude");
     await (modal as any).enable();
     expect(plugin.settings.shellConsentGiven).toBe(true);
     expect(saveSettings).toHaveBeenCalledOnce();
@@ -30,7 +30,7 @@ describe("ShellConsentModal", () => {
       settings: { shellConsentGiven: false },
       saveSettings: vi.fn(),
     } as any;
-    const modal = new ShellConsentModal({} as any, plugin);
+    const modal = new ShellConsentModal({} as any, plugin, "/usr/bin/claude");
     (modal as any).close = vi.fn();
     (modal as any).cancel();
     expect(plugin.settings.shellConsentGiven).toBe(false);

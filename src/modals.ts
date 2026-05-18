@@ -510,18 +510,21 @@ export class EditDomainModal extends Modal {
 
 
 export class ShellConsentModal extends Modal {
-  constructor(app: App, private plugin: import("./main").default) {
+  constructor(
+    app: App,
+    private plugin: import("./main").default,
+    private iclaudePath: string,
+  ) {
     super(app);
   }
 
   onOpen(): void {
     const T = i18n().modal;
-    const iclaudePath = "(configure path in settings)";
     const { contentEl } = this;
     contentEl.createEl("h3", { text: T.shellConsentTitle });
-    contentEl.createEl("p", { text: T.shellConsentBody(iclaudePath), cls: "ai-wiki-consent-body" });
+    contentEl.createEl("p", { text: T.shellConsentBody(this.iclaudePath), cls: "ai-wiki-consent-body" });
     new Setting(contentEl)
-      .addButton((b) => b.setButtonText(i18n().modal.cancel).onClick(() => this.cancel()))
+      .addButton((b) => b.setButtonText(T.cancel).onClick(() => this.cancel()))
       .addButton((b) =>
         b.setButtonText(T.shellConsentEnable).setCta().onClick(() => void this.enable()),
       );
