@@ -19,7 +19,7 @@ import type { DomainStore } from "./domain-store";
 import { DomainCorruptError } from "./domain-store";
 import type { LocalConfig, LocalConfigStore } from "./local-config";
 import type { LlmWikiPluginSettings } from "./types";
-import { FileErrorModal, ConfirmModal } from "./modals";
+import { FileErrorModal, ConfirmModal, ShellConsentModal } from "./modals";
 import { domainWikiFolder } from "./wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
@@ -224,8 +224,10 @@ export class WikiController {
       const eff = resolveEffective(this.plugin.settings, local);
       if (eff.backend === "native-agent" && !this.requireNativeAgent(eff)) return;
       if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local)) return;
-      if (eff.backend === "claude-agent" && !this.plugin.settings.shellConsentGiven) {
-        new Notice(i18n().ctrl.shellConsentRequired);
+      if (eff.backend === "claude-agent" && !local.shellConsentGiven) {
+        new ShellConsentModal(this.app, local.iclaudePath ?? "", async () => {
+          await this.localConfigStore.save({ shellConsentGiven: true });
+        }).open();
         return;
       }
     }
@@ -540,8 +542,10 @@ export class WikiController {
       const eff = resolveEffective(this.plugin.settings, local);
       if (eff.backend === "native-agent" && !this.requireNativeAgent(eff)) return;
       if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local)) return;
-      if (eff.backend === "claude-agent" && !this.plugin.settings.shellConsentGiven) {
-        new Notice(i18n().ctrl.shellConsentRequired);
+      if (eff.backend === "claude-agent" && !local.shellConsentGiven) {
+        new ShellConsentModal(this.app, local.iclaudePath ?? "", async () => {
+          await this.localConfigStore.save({ shellConsentGiven: true });
+        }).open();
         return;
       }
       const opKey = (op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op) as import("./types").OpKey;
