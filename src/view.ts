@@ -16,8 +16,8 @@ export function collectMdInPaths(vault: Vault, sourcePaths: string[]): TFile[] {
 
 export function walkFolder(folder: TFolder, out: TFile[]): void {
   for (const child of folder.children) {
-    if ("extension" in child && (child as TFile).extension === "md") out.push(child as TFile);
-    else if ("children" in child) walkFolder(child as TFolder, out);
+    if ("children" in child) walkFolder(child as TFolder, out);
+    else if ("extension" in child && (child as TFile).extension === "md") out.push(child as TFile);
   }
 }
 
