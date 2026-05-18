@@ -144,7 +144,6 @@ const en = {
     errorPrefix: (msg: string) => `Error: ${msg}`,
     mobileNotAvailable: "Operation not available on mobile",
     configureCloudLlm: "Configure cloud LLM (baseUrl + apiKey) in settings",
-    shellConsentRequired: "Shell execution consent required — see plugin settings",
   },
   cmd: {
     openPanel: "Open panel",
@@ -358,7 +357,6 @@ const ru: I18n = {
     errorPrefix: (msg: string) => `Ошибка: ${msg}`,
     mobileNotAvailable: "Операция недоступна на мобильном устройстве",
     configureCloudLlm: "Настройте cloud LLM (baseUrl + apiKey) в настройках",
-    shellConsentRequired: "Требуется согласие на запуск внешнего процесса — откройте настройки плагина",
   },
   cmd: {
     openPanel: "Открыть панель",
@@ -570,7 +568,6 @@ const es: I18n = {
     errorPrefix: (msg: string) => `Error: ${msg}`,
     mobileNotAvailable: "Operación no disponible en móvil",
     configureCloudLlm: "Configura cloud LLM (baseUrl + apiKey) en los ajustes",
-    shellConsentRequired: "Se requiere consentimiento para ejecutar el proceso externo — abra los ajustes del plugin",
   },
   cmd: {
     openPanel: "Abrir panel",
