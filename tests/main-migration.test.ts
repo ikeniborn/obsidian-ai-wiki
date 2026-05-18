@@ -101,6 +101,42 @@ describe("migrateLegacyData", () => {
     expect(plugin.saveData.mock.calls.length).toBe(saveCallsAfter1);
   });
 
+  it("migrates shellConsentGiven=true to local.json when not already set", async () => {
+    const adapter = {
+      exists: vi.fn().mockResolvedValue(false),
+      read: vi.fn(), write: vi.fn(),
+      rename: vi.fn(), remove: vi.fn(), mkdir: vi.fn(),
+    };
+    const plugin = makePlugin({ shellConsentGiven: true }, adapter);
+    const { DomainStore } = await import("../src/domain-store");
+    const { LocalConfigStore } = await import("../src/local-config");
+    const localStore = new LocalConfigStore(plugin);
+    vi.spyOn(localStore, "load").mockResolvedValue({} as any);
+    const saveSpy = vi.spyOn(localStore, "save").mockResolvedValue(undefined);
+    await migrateLegacyData(plugin, new DomainStore({ adapter } as any), localStore);
+    expect(saveSpy).toHaveBeenCalledWith({ shellConsentGiven: true });
+    expect(plugin.getStored().shellConsentGiven).toBeUndefined();
+    expect(plugin.saveData).toHaveBeenCalled();
+  });
+
+  it("skips save but still deletes shellConsentGiven when already set in local.json", async () => {
+    const adapter = {
+      exists: vi.fn().mockResolvedValue(false),
+      read: vi.fn(), write: vi.fn(),
+      rename: vi.fn(), remove: vi.fn(), mkdir: vi.fn(),
+    };
+    const plugin = makePlugin({ shellConsentGiven: true }, adapter);
+    const { DomainStore } = await import("../src/domain-store");
+    const { LocalConfigStore } = await import("../src/local-config");
+    const localStore = new LocalConfigStore(plugin);
+    vi.spyOn(localStore, "load").mockResolvedValue({ shellConsentGiven: true } as any);
+    const saveSpy = vi.spyOn(localStore, "save").mockResolvedValue(undefined);
+    await migrateLegacyData(plugin, new DomainStore({ adapter } as any), localStore);
+    expect(saveSpy).not.toHaveBeenCalled();
+    expect(plugin.getStored().shellConsentGiven).toBeUndefined();
+    expect(plugin.saveData).toHaveBeenCalled();
+  });
+
   it("handles null/empty data without errors", async () => {
     const adapter = {
       exists: vi.fn().mockResolvedValue(false),
