@@ -151,18 +151,18 @@ var require_path_browserify = __commonJS({
         assertPath(path2);
         if (path2.length === 0)
           return ".";
-        var isAbsolute4 = path2.charCodeAt(0) === 47;
+        var isAbsolute5 = path2.charCodeAt(0) === 47;
         var trailingSeparator = path2.charCodeAt(path2.length - 1) === 47;
-        path2 = normalizeStringPosix(path2, !isAbsolute4);
-        if (path2.length === 0 && !isAbsolute4)
+        path2 = normalizeStringPosix(path2, !isAbsolute5);
+        if (path2.length === 0 && !isAbsolute5)
           path2 = ".";
         if (path2.length > 0 && trailingSeparator)
           path2 += "/";
-        if (isAbsolute4)
+        if (isAbsolute5)
           return "/" + path2;
         return path2;
       },
-      isAbsolute: function isAbsolute4(path2) {
+      isAbsolute: function isAbsolute5(path2) {
         assertPath(path2);
         return path2.length > 0 && path2.charCodeAt(0) === 47;
       },
@@ -387,9 +387,9 @@ var require_path_browserify = __commonJS({
         if (path2.length === 0)
           return ret;
         var code = path2.charCodeAt(0);
-        var isAbsolute4 = code === 47;
+        var isAbsolute5 = code === 47;
         var start;
-        if (isAbsolute4) {
+        if (isAbsolute5) {
           ret.root = "/";
           start = 1;
         } else {
@@ -427,13 +427,13 @@ var require_path_browserify = __commonJS({
         preDotState === 0 || // The (right-most) trimmed path component is exactly '..'
         preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
           if (end !== -1) {
-            if (startPart === 0 && isAbsolute4)
+            if (startPart === 0 && isAbsolute5)
               ret.base = ret.name = path2.slice(1, end);
             else
               ret.base = ret.name = path2.slice(startPart, end);
           }
         } else {
-          if (startPart === 0 && isAbsolute4) {
+          if (startPart === 0 && isAbsolute5) {
             ret.name = path2.slice(1, startDot);
             ret.base = path2.slice(1, end);
           } else {
@@ -444,7 +444,7 @@ var require_path_browserify = __commonJS({
         }
         if (startPart > 0)
           ret.dir = path2.slice(0, startPart - 1);
-        else if (isAbsolute4)
+        else if (isAbsolute5)
           ret.dir = "/";
         return ret;
       },
@@ -5894,7 +5894,7 @@ var require_client_h1 = __commonJS({
       kResume,
       kHTTPContext
     } = require_symbols();
-    var constants = require_constants2();
+    var constants2 = require_constants2();
     var EMPTY_BUF = Buffer.alloc(0);
     var FastBuffer = Buffer[Symbol.species];
     var addListener = util2.addListener;
@@ -5966,7 +5966,7 @@ var require_client_h1 = __commonJS({
       constructor(client, socket, { exports: exports3 }) {
         assert(Number.isFinite(client[kMaxHeadersSize]) && client[kMaxHeadersSize] > 0);
         this.llhttp = exports3;
-        this.ptr = this.llhttp.llhttp_alloc(constants.TYPE.RESPONSE);
+        this.ptr = this.llhttp.llhttp_alloc(constants2.TYPE.RESPONSE);
         this.client = client;
         this.socket = socket;
         this.timeout = null;
@@ -6061,19 +6061,19 @@ var require_client_h1 = __commonJS({
             currentBufferRef = null;
           }
           const offset = llhttp.llhttp_get_error_pos(this.ptr) - currentBufferPtr;
-          if (ret === constants.ERROR.PAUSED_UPGRADE) {
+          if (ret === constants2.ERROR.PAUSED_UPGRADE) {
             this.onUpgrade(data.slice(offset));
-          } else if (ret === constants.ERROR.PAUSED) {
+          } else if (ret === constants2.ERROR.PAUSED) {
             this.paused = true;
             socket.unshift(data.slice(offset));
-          } else if (ret !== constants.ERROR.OK) {
+          } else if (ret !== constants2.ERROR.OK) {
             const ptr = llhttp.llhttp_get_error_reason(this.ptr);
             let message = "";
             if (ptr) {
               const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
               message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
             }
-            throw new HTTPParserError(message, constants.ERROR[ret], data.slice(offset));
+            throw new HTTPParserError(message, constants2.ERROR[ret], data.slice(offset));
           }
         } catch (err) {
           util2.destroy(socket, err);
@@ -6248,7 +6248,7 @@ var require_client_h1 = __commonJS({
           socket[kBlocking] = false;
           client[kResume]();
         }
-        return pause ? constants.ERROR.PAUSED : 0;
+        return pause ? constants2.ERROR.PAUSED : 0;
       }
       onBody(buf) {
         const { client, socket, statusCode, maxResponseSize } = this;
@@ -6270,7 +6270,7 @@ var require_client_h1 = __commonJS({
         }
         this.bytesRead += buf.length;
         if (request.onData(buf) === false) {
-          return constants.ERROR.PAUSED;
+          return constants2.ERROR.PAUSED;
         }
       }
       onMessageComplete() {
@@ -6305,13 +6305,13 @@ var require_client_h1 = __commonJS({
         if (socket[kWriting]) {
           assert(client[kRunning] === 0);
           util2.destroy(socket, new InformationalError("reset"));
-          return constants.ERROR.PAUSED;
+          return constants2.ERROR.PAUSED;
         } else if (!shouldKeepAlive) {
           util2.destroy(socket, new InformationalError("reset"));
-          return constants.ERROR.PAUSED;
+          return constants2.ERROR.PAUSED;
         } else if (socket[kReset] && client[kRunning] === 0) {
           util2.destroy(socket, new InformationalError("reset"));
-          return constants.ERROR.PAUSED;
+          return constants2.ERROR.PAUSED;
         } else if (client[kPipelining] == null || client[kPipelining] === 1) {
           setImmediate(() => client[kResume]());
         } else {
@@ -18893,7 +18893,7 @@ var DEFAULT_SETTINGS = {
 };
 
 // src/settings.ts
-var import_child_process = require("child_process");
+var import_promises = require("fs/promises");
 var import_obsidian3 = require("obsidian");
 
 // src/modals.ts
@@ -18988,6 +18988,8 @@ var en = {
   view: {
     refreshTitle: "Refresh domains",
     mobileWaiting: "\u23F3 Waiting for LLM response\u2026",
+    analysing: "Analysing\u2026",
+    formingResponse: "Forming response\u2026",
     reinitTitle: "Re-init domain (wipe + rebuild)",
     reinitNoSources: "Domain has no source_paths \u2014 re-init not possible",
     addDomain: "Add domain",
@@ -19032,7 +19034,8 @@ var en = {
     operationInProgress: "Operation already in progress",
     stepsCount: (n, s) => `${n} steps \xB7 ${s}s`,
     starting: "Starting",
-    initialising: "Initialising"
+    initialising: "Initialising",
+    selectDomainFirst: "Select a domain first"
   },
   ctrl: {
     cancelling: "Cancelling\u2026",
@@ -19081,7 +19084,7 @@ var en = {
     initConfirmTitle: "Start domain initialization?",
     initConfirmBody: (files, folders) => `Found ${files} .md files in ${folders} folder(s). Run init to analyze sources and create wiki pages?`,
     reinitConfirmTitle: "Re-init \u2014 confirm",
-    reinitConfirmBody: (id, files, srcCount) => `Domain \xAB${id}\xBB: entire wiki folder will be deleted and rebuilt from ${files} md-files (${srcCount} source paths). Continue?`,
+    reinitConfirmBody: (id, wikiFiles, srcFiles, srcCount) => `Domain \xAB${id}\xBB: ${wikiFiles} wiki files will be deleted and rebuilt from ${srcFiles} md-files (${srcCount} source paths). Continue?`,
     fileErrorTitle: "Error processing file",
     fileErrorSkip: "Skip",
     fileErrorRetry: "Retry",
@@ -19101,7 +19104,12 @@ var en = {
     busyCloseTitle: "Operation in progress",
     busyCloseBody: "Abort the operation or leave it running in the background?",
     busyCloseAbort: "Abort operation",
-    busyCloseLeave: "Leave in background"
+    busyCloseLeave: "Leave in background",
+    shellConsentTitle: "\u26A0 Shell Execution Notice",
+    shellConsentBody: (iclaudePath) => `This plugin runs an external process:
+  ${iclaudePath}
+with your operating system user's permissions. This is required for AI Wiki to function. Review the path above, then confirm to enable.`,
+    shellConsentEnable: "I understand, enable"
   }
 };
 var ru = {
@@ -19191,6 +19199,8 @@ var ru = {
   view: {
     refreshTitle: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D\u044B",
     mobileWaiting: "\u23F3 \u041E\u0436\u0438\u0434\u0430\u043D\u0438\u0435 \u043E\u0442\u0432\u0435\u0442\u0430 \u043E\u0442 LLM\u2026",
+    analysing: "\u0410\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0435\u0442\u2026",
+    formingResponse: "\u0424\u043E\u0440\u043C\u0438\u0440\u0443\u0435\u0442 \u043E\u0442\u0432\u0435\u0442\u2026",
     reinitTitle: "\u041F\u0435\u0440\u0435\u0438\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F \u0434\u043E\u043C\u0435\u043D\u0430 (wipe + \u0437\u0430\u043D\u043E\u0432\u043E)",
     reinitNoSources: "\u0423 \u0434\u043E\u043C\u0435\u043D\u0430 \u043D\u0435\u0442 source_paths \u2014 re-init \u043D\u0435\u0432\u043E\u0437\u043C\u043E\u0436\u0435\u043D",
     addDomain: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D",
@@ -19235,7 +19245,8 @@ var ru = {
     operationInProgress: "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F",
     stepsCount: (n, s) => `${n} \u0448\u0430\u0433\u043E\u0432 \xB7 ${s}\u0441`,
     starting: "\u0417\u0430\u043F\u0443\u0441\u043A",
-    initialising: "\u0418\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F"
+    initialising: "\u0418\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F",
+    selectDomainFirst: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0434\u043E\u043C\u0435\u043D"
   },
   ctrl: {
     cancelling: "\u041E\u0442\u043C\u0435\u043D\u0430\u2026",
@@ -19284,7 +19295,7 @@ var ru = {
     initConfirmTitle: "\u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C \u0438\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044E \u0434\u043E\u043C\u0435\u043D\u0430?",
     initConfirmBody: (files, folders) => `\u041D\u0430\u0439\u0434\u0435\u043D\u043E ${files} .md \u0444\u0430\u0439\u043B\u043E\u0432 \u0432 ${folders} \u043F\u0430\u043F\u043A\u0430\u0445. \u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C init \u0434\u043B\u044F \u0430\u043D\u0430\u043B\u0438\u0437\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432 \u0438 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446?`,
     reinitConfirmTitle: "Re-init \u2014 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435",
-    reinitConfirmBody: (id, files, srcCount) => `\u0414\u043E\u043C\u0435\u043D \xAB${id}\xBB: \u0431\u0443\u0434\u0435\u0442 \u0443\u0434\u0430\u043B\u0435\u043D\u0430 \u0432\u0441\u044F \u0432\u0438\u043A\u0438-\u043F\u0430\u043F\u043A\u0430 \u0434\u043E\u043C\u0435\u043D\u0430 \u0438 \u043F\u0435\u0440\u0435\u0441\u043E\u0431\u0440\u0430\u043D\u0430 \u0438\u0437 ${files} md-\u0444\u0430\u0439\u043B\u043E\u0432 (${srcCount} sourcePaths). \u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C?`,
+    reinitConfirmBody: (id, wikiFiles, srcFiles, srcCount) => `\u0414\u043E\u043C\u0435\u043D \xAB${id}\xBB: \u0431\u0443\u0434\u0435\u0442 \u0443\u0434\u0430\u043B\u0435\u043D\u043E ${wikiFiles} wiki-\u0444\u0430\u0439\u043B\u043E\u0432 \u0438 \u043F\u0435\u0440\u0435\u0441\u043E\u0431\u0440\u0430\u043D\u043E \u0438\u0437 ${srcFiles} md-\u0444\u0430\u0439\u043B\u043E\u0432 (${srcCount} sourcePaths). \u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C?`,
     fileErrorTitle: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u0438 \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u043A\u0435 \u0444\u0430\u0439\u043B\u0430",
     fileErrorSkip: "\u041F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C",
     fileErrorRetry: "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C",
@@ -19304,7 +19315,12 @@ var ru = {
     busyCloseTitle: "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F",
     busyCloseBody: "\u041F\u0440\u0435\u0440\u0432\u0430\u0442\u044C \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044E \u0438\u043B\u0438 \u043E\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0442\u044C\u0441\u044F \u0432 \u0444\u043E\u043D\u0435?",
     busyCloseAbort: "\u041F\u0440\u0435\u0440\u0432\u0430\u0442\u044C \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044E",
-    busyCloseLeave: "\u041E\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u0432 \u0444\u043E\u043D\u0435"
+    busyCloseLeave: "\u041E\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u0432 \u0444\u043E\u043D\u0435",
+    shellConsentTitle: "\u26A0 \u0417\u0430\u043F\u0443\u0441\u043A \u0432\u043D\u0435\u0448\u043D\u0435\u0433\u043E \u043F\u0440\u043E\u0446\u0435\u0441\u0441\u0430",
+    shellConsentBody: (iclaudePath) => `\u041F\u043B\u0430\u0433\u0438\u043D \u0437\u0430\u043F\u0443\u0441\u043A\u0430\u0435\u0442 \u0432\u043D\u0435\u0448\u043D\u0438\u0439 \u043F\u0440\u043E\u0446\u0435\u0441\u0441:
+  ${iclaudePath}
+\u0441 \u043F\u0440\u0430\u0432\u0430\u043C\u0438 \u0432\u0430\u0448\u0435\u0433\u043E \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u0433\u043E \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F. \u042D\u0442\u043E \u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E \u0434\u043B\u044F \u0440\u0430\u0431\u043E\u0442\u044B AI Wiki. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043F\u0443\u0442\u044C \u0432\u044B\u0448\u0435, \u0437\u0430\u0442\u0435\u043C \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435 \u0432\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435.`,
+    shellConsentEnable: "\u041F\u043E\u043D\u0438\u043C\u0430\u044E, \u0432\u043A\u043B\u044E\u0447\u0438\u0442\u044C"
   }
 };
 var es = {
@@ -19394,6 +19410,8 @@ var es = {
   view: {
     refreshTitle: "Actualizar dominios",
     mobileWaiting: "\u23F3 Esperando respuesta del LLM\u2026",
+    analysing: "Analizando\u2026",
+    formingResponse: "Formando respuesta\u2026",
     reinitTitle: "Re-init del dominio (borrar + reconstruir)",
     reinitNoSources: "El dominio no tiene source_paths \u2014 re-init imposible",
     addDomain: "A\xF1adir dominio",
@@ -19438,7 +19456,8 @@ var es = {
     operationInProgress: "Operaci\xF3n ya en curso",
     stepsCount: (n, s) => `${n} pasos \xB7 ${s}s`,
     starting: "Iniciando",
-    initialising: "Inicializando"
+    initialising: "Inicializando",
+    selectDomainFirst: "Selecciona un dominio primero"
   },
   ctrl: {
     cancelling: "Cancelando\u2026",
@@ -19487,7 +19506,7 @@ var es = {
     initConfirmTitle: "\xBFIniciar inicializaci\xF3n del dominio?",
     initConfirmBody: (files, folders) => `Se encontraron ${files} archivos .md en ${folders} carpeta(s). \xBFEjecutar init para analizar fuentes y crear p\xE1ginas wiki?`,
     reinitConfirmTitle: "Re-init \u2014 confirmar",
-    reinitConfirmBody: (id, files, srcCount) => `Dominio \xAB${id}\xBB: se borrar\xE1 toda la carpeta wiki del dominio y se reconstruir\xE1 desde ${files} archivos md (${srcCount} rutas fuente). \xBFContinuar?`,
+    reinitConfirmBody: (id, wikiFiles, srcFiles, srcCount) => `Dominio \xAB${id}\xBB: se borrar\xE1n ${wikiFiles} archivos wiki y se reconstruir\xE1n desde ${srcFiles} archivos md (${srcCount} rutas fuente). \xBFContinuar?`,
     fileErrorTitle: "Error al procesar archivo",
     fileErrorSkip: "Saltar",
     fileErrorRetry: "Reintentar",
@@ -19507,7 +19526,12 @@ var es = {
     busyCloseTitle: "Operaci\xF3n en curso",
     busyCloseBody: "\xBFAbortar la operaci\xF3n o dejarla ejecutarse en segundo plano?",
     busyCloseAbort: "Abortar operaci\xF3n",
-    busyCloseLeave: "Dejar en segundo plano"
+    busyCloseLeave: "Dejar en segundo plano",
+    shellConsentTitle: "\u26A0 Ejecuci\xF3n de proceso externo",
+    shellConsentBody: (iclaudePath) => `Este plugin ejecuta un proceso externo:
+  ${iclaudePath}
+con los permisos de su usuario del sistema operativo. Es necesario para que AI Wiki funcione. Revise la ruta y confirme para habilitar.`,
+    shellConsentEnable: "Entiendo, habilitar"
   }
 };
 var locales = { ru, es };
@@ -19981,6 +20005,32 @@ var EditDomainModal = class extends import_obsidian2.Modal {
     this.contentEl.empty();
   }
 };
+var ShellConsentModal = class extends import_obsidian2.Modal {
+  constructor(app, iclaudePath, onEnable) {
+    super(app);
+    this.iclaudePath = iclaudePath;
+    this.onEnable = onEnable;
+  }
+  onOpen() {
+    const T = i18n().modal;
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: T.shellConsentTitle });
+    contentEl.createEl("p", { text: T.shellConsentBody(this.iclaudePath), cls: "ai-wiki-consent-body" });
+    new import_obsidian2.Setting(contentEl).addButton((b) => b.setButtonText(T.cancel).onClick(() => this.cancel())).addButton(
+      (b) => b.setButtonText(T.shellConsentEnable).setCta().onClick(() => void this.enable())
+    );
+  }
+  cancel() {
+    this.close();
+  }
+  async enable() {
+    await this.onEnable();
+    this.close();
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
 
 // src/effective-settings.ts
 function resolveEffective(s, l) {
@@ -19996,33 +20046,7 @@ function resolveEffective(s, l) {
 
 // src/settings.ts
 async function checkClaudeAvailability(iclaudePath) {
-  await new Promise((resolve, reject) => {
-    const child = (0, import_child_process.spawn)(iclaudePath, [
-      "--",
-      "-p",
-      "\u041F\u0440\u0438\u0432\u0435\u0442, AI Wiki! \u041F\u043E\u0440\u0430\u0431\u043E\u0442\u0430\u0435\u043C?",
-      "--output-format",
-      "stream-json",
-      "--verbose",
-      "--disable-slash-commands",
-      "--dangerously-skip-permissions"
-    ], { stdio: ["ignore", "pipe", "pipe"] });
-    const timeout = window.setTimeout(() => {
-      child.kill("SIGTERM");
-      reject(new Error("Timeout 30s"));
-    }, 3e4);
-    child.on("error", (err) => {
-      clearTimeout(timeout);
-      reject(err);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timeout);
-      if (code === 0)
-        resolve();
-      else
-        reject(new Error(`exit code ${code}`));
-    });
-  });
+  await (0, import_promises.access)(iclaudePath, import_promises.constants.X_OK);
 }
 async function checkNativeAvailability(baseUrl, apiKey, model) {
   const controller = new AbortController();
@@ -20486,6 +20510,31 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
 
 // src/view.ts
 var import_obsidian4 = require("obsidian");
+
+// src/wiki-path.ts
+var WIKI_ROOT = "!Wiki";
+function domainWikiFolder(subfolder) {
+  return `${WIKI_ROOT}/${subfolder}`;
+}
+
+// src/view.ts
+function collectMdInPaths(vault, sourcePaths) {
+  const result = [];
+  for (const p of sourcePaths) {
+    const folder = vault.getFolderByPath(p);
+    if (folder)
+      walkFolder(folder, result);
+  }
+  return result;
+}
+function walkFolder(folder, out) {
+  for (const child of folder.children) {
+    if ("children" in child)
+      walkFolder(child, out);
+    else if ("extension" in child && child.extension === "md")
+      out.push(child);
+  }
+}
 var AI_WIKI_VIEW_TYPE = "ai-wiki-view";
 function registerLinkHandler(el, app) {
   el.addEventListener("click", (e) => {
@@ -20499,7 +20548,6 @@ function registerLinkHandler(el, app) {
   });
 }
 var PREVIEW_INLINE = 140;
-var ASSISTANT_TEXT_MAX = 600;
 var LlmWikiView = class extends import_obsidian4.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
@@ -20564,6 +20612,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   reasoningBuffer = "";
   assistantRafHandle = null;
   reasoningRafHandle = null;
+  waitingStep = null;
+  waitingTickHandle = null;
+  waitingStartedAt = 0;
   getViewType() {
     return AI_WIKI_VIEW_TYPE;
   }
@@ -20642,6 +20693,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       window.clearTimeout(this.tickHandle);
     if (this.chatTickHandle !== null)
       window.clearTimeout(this.chatTickHandle);
+    this.stopWaiting();
     if (this.assistantRafHandle !== null) {
       window.cancelAnimationFrame(this.assistantRafHandle);
       this.assistantRafHandle = null;
@@ -20739,10 +20791,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
           return;
         }
         const T = i18n().modal;
-        const allFiles = this.app.vault.getFiles();
-        const mdFiles = allFiles.filter(
-          (f) => f.extension === "md" && input.sourcePaths.some((p) => f.path.startsWith(p))
-        );
+        const mdFiles = collectMdInPaths(this.app.vault, input.sourcePaths);
         if (!mdFiles.length) {
           void this.plugin.controller.init(input.id, false);
           return;
@@ -20777,10 +20826,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       return;
     }
     const T = i18n().modal;
-    const mdFiles = this.app.vault.getFiles().filter(
-      (f) => f.extension === "md" && sourcePaths.some((p) => f.path.startsWith(p))
-    );
-    const body = T.reinitConfirmBody(entry.id, mdFiles.length, sourcePaths.length);
+    const mdFiles = collectMdInPaths(this.app.vault, sourcePaths);
+    const wikiFiles = collectMdInPaths(this.app.vault, [domainWikiFolder(entry.wiki_folder)]);
+    const body = T.reinitConfirmBody(entry.id, wikiFiles.length, mdFiles.length, sourcePaths.length);
     new ConfirmModal(
       this.app,
       T.reinitConfirmTitle,
@@ -20857,6 +20905,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       window.clearTimeout(this.tickHandle);
       this.tickHandle = null;
     }
+    this.stopWaiting();
     this.scheduleMetricsTick();
     if (import_obsidian4.Platform.isMobile) {
       const placeholder = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step-pending");
@@ -20937,6 +20986,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     if (ev.kind !== "assistant_text")
       this.stepCount++;
     if (ev.kind === "tool_use") {
+      this.stopWaiting();
       this.toolCount++;
       this.assistantBlock = null;
       this.assistantBuffer = "";
@@ -20976,18 +21026,22 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
         }
         this.currentToolStep = null;
       }
+      this.startWaiting();
     } else if (ev.kind === "ask_user") {
       const el = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step--ask");
       el.createSpan({ text: "\u23F3 Waiting for answer\u2026" });
       return;
     } else if (ev.kind === "assistant_text") {
+      this.stopWaiting();
       if (ev.isReasoning) {
         if (!this.reasoningBlock) {
           this.reasoningBlock = this.stepsEl.createDiv("ai-wiki-step reasoning");
           if (this.assistantBlock) {
             this.stepsEl.insertBefore(this.reasoningBlock, this.assistantBlock);
           }
-          this.reasoningBlock.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F9E0}");
+          const rHead = this.reasoningBlock.createDiv("ai-wiki-step-head");
+          rHead.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F9E0}");
+          rHead.createSpan({ cls: "ai-wiki-step-name muted" }).setText(i18n().view.analysing);
           this.reasoningBlock.createSpan({ cls: "ai-wiki-reasoning-text" });
         }
         this.reasoningBuffer += ev.delta;
@@ -20996,14 +21050,16 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
             this.reasoningRafHandle = null;
             const span = this.reasoningBlock?.querySelector(".ai-wiki-reasoning-text");
             if (span)
-              span.setText(truncate(this.reasoningBuffer, ASSISTANT_TEXT_MAX));
+              span.setText(this.reasoningBuffer);
             this.scrollSteps();
           });
         }
       } else {
         if (!this.assistantBlock) {
           this.assistantBlock = this.stepsEl.createDiv("ai-wiki-step assistant");
-          this.assistantBlock.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F4AC}");
+          const aHead = this.assistantBlock.createDiv("ai-wiki-step-head");
+          aHead.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F4AC}");
+          aHead.createSpan({ cls: "ai-wiki-step-name muted" }).setText(i18n().view.formingResponse);
           this.assistantBlock.createSpan({ cls: "ai-wiki-assistant-text" });
         }
         this.assistantBuffer += ev.delta;
@@ -21012,7 +21068,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
             this.assistantRafHandle = null;
             const span = this.assistantBlock?.querySelector(".ai-wiki-assistant-text");
             if (span)
-              span.setText(truncate(this.assistantBuffer, ASSISTANT_TEXT_MAX));
+              span.setText(this.assistantBuffer);
             this.scrollSteps();
           });
         }
@@ -21024,9 +21080,11 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       head.createSpan({ cls: "ai-wiki-step-name muted" }).setText(translateSystemEvent(ev.message));
       this.scrollSteps();
     } else if (ev.kind === "error") {
+      this.stopWaiting();
       this.stepsEl.createDiv("ai-wiki-step err").setText(`\u2717 ${ev.message}`);
       this.scrollSteps();
     } else if (ev.kind === "result") {
+      this.stopWaiting();
       this.assistantBlock = null;
       if (ev.outputTokens !== void 0 && ev.durationMs > 0) {
         this.lastTokPerSec = Math.round(ev.outputTokens / (ev.durationMs / 1e3));
@@ -21166,8 +21224,13 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.lastUserMessage = text;
       const ctx = this.lastContext;
       if (ctx.operation === "lint" || ctx.operation === "lint-chat") {
+        const domainId = (ctx.domainId ?? this.domainSelect?.value) || void 0;
+        if (!domainId) {
+          new import_obsidian4.Notice(i18n().view.selectDomainFirst ?? "Select a domain first");
+          return;
+        }
         void this.plugin.controller.lintApplyFromChat(
-          ctx.domainId,
+          domainId,
           ctx.report,
           this.chatHistory,
           text
@@ -21194,6 +21257,13 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       void import_obsidian4.MarkdownRenderer.render(this.app, text, el, "", comp).then(() => sanitizeLinks(el));
       registerLinkHandler(el, this.app);
     }
+    const copyBtn = el.createEl("button", { cls: "ai-wiki-copy-btn", attr: { "aria-label": "Copy" } });
+    (0, import_obsidian4.setIcon)(copyBtn, "copy");
+    copyBtn.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(text);
+      (0, import_obsidian4.setIcon)(copyBtn, "check");
+      window.setTimeout(() => (0, import_obsidian4.setIcon)(copyBtn, "copy"), 1500);
+    });
     el.scrollIntoView({ block: "end" });
     return el;
   }
@@ -21322,6 +21392,34 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   }
   scrollSteps() {
     this.stepsEl.scrollTop = this.stepsEl.scrollHeight;
+  }
+  startWaiting() {
+    this.stopWaiting();
+    this.waitingStartedAt = Date.now();
+    this.waitingStep = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step--waiting");
+    this.waitingStep.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u23F3");
+    this.waitingStep.createSpan({ cls: "ai-wiki-waiting-text" }).setText("0.0s");
+    this.scrollSteps();
+    this.scheduleWaitingTick();
+  }
+  stopWaiting() {
+    if (this.waitingTickHandle !== null) {
+      window.clearTimeout(this.waitingTickHandle);
+      this.waitingTickHandle = null;
+    }
+    this.waitingStep?.remove();
+    this.waitingStep = null;
+  }
+  scheduleWaitingTick() {
+    this.waitingTickHandle = window.setTimeout(() => {
+      if (!this.waitingStep)
+        return;
+      const s = ((Date.now() - this.waitingStartedAt) / 1e3).toFixed(1);
+      const span = this.waitingStep.querySelector(".ai-wiki-waiting-text");
+      if (span)
+        span.setText(`${s}s`);
+      this.scheduleWaitingTick();
+    }, 100);
   }
   statusLabel(entry) {
     const dur = ((entry.finishedAt - entry.startedAt) / 1e3).toFixed(1);
@@ -21715,12 +21813,6 @@ var ingest_default = '\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u
 // src/phases/template.ts
 function render(template, vars) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
-}
-
-// src/wiki-path.ts
-var WIKI_ROOT = "!Wiki";
-function domainWikiFolder(subfolder) {
-  return `${WIKI_ROOT}/${subfolder}`;
 }
 
 // src/utils/raw-frontmatter.ts
@@ -26807,6 +26899,26 @@ var lint_default = '\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u04
 
 // src/phases/lint.ts
 var META_FILES2 = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
+async function tryRead3(vaultTools, path2) {
+  try {
+    return await vaultTools.read(path2);
+  } catch {
+    return "";
+  }
+}
+async function appendLintLog(vaultTools, wikiVaultPath, domainId, fixedCount) {
+  const logPath = `${wikiVaultPath}/_log.md`;
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const entry = `
+## ${today} \u2014 lint \u2014 ${domainId}
+- \u0418\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u0441\u0442\u0440\u0430\u043D\u0438\u0446: ${fixedCount}
+`;
+  try {
+    const existing = await tryRead3(vaultTools, logPath);
+    await vaultTools.write(logPath, existing + entry);
+  } catch {
+  }
+}
 async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal, hubThreshold = 20, opts = {}) {
   const domainId = args[0];
   const targets = domainId ? domains.filter((d) => d.id === domainId) : domains;
@@ -26973,6 +27085,7 @@ ${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
         }
       }
     }
+    await appendLintLog(vaultTools, wikiVaultPath, domain.id, writtenPaths.length);
     const backlinks = /* @__PURE__ */ new Map();
     for (const [wikiPath, wikiContent] of pages) {
       for (const src of parseWikiSourcesFromFm(wikiContent)) {
@@ -27017,7 +27130,7 @@ function checkStructure(pages) {
     if (!content.startsWith("---")) {
       issues.push(`- ${path2}: missing frontmatter`);
     }
-    const links = [...content.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1]);
+    const links = [...new Set([...content.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1]))];
     for (const link of links) {
       const linked = [...pages.keys()].some((p) => p.endsWith(`${link}.md`));
       if (!linked)
@@ -27382,8 +27495,8 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
   const samples = await vaultTools.readAll(sampleFiles);
   const existingDomain = domains.find((d) => d.id === domainId);
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead3(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
-    existingDomain ? tryRead3(vaultTools, `${domainWikiFolder(existingDomain.wiki_folder)}/_index.md`) : Promise.resolve("")
+    tryRead4(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
+    existingDomain ? tryRead4(vaultTools, `${domainWikiFolder(existingDomain.wiki_folder)}/_index.md`) : Promise.resolve("")
   ]);
   const systemContent = render(init_default, {
     domain_id: domainId,
@@ -27514,8 +27627,8 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
     return;
   }
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead3(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
-    tryRead3(vaultTools, `${wikiRootGuess}/_index.md`)
+    tryRead4(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
+    tryRead4(vaultTools, `${wikiRootGuess}/_index.md`)
   ]);
   let currentDomain = existing ?? null;
   for (let i = 0; i < toAnalyze.length; i++) {
@@ -27790,12 +27903,12 @@ async function appendLog2(vaultTools, wikiRoot, domainId) {
 - \u0414\u043E\u043C\u0435\u043D \u0441\u043E\u0437\u0434\u0430\u043D
 `;
   try {
-    const existing = await tryRead3(vaultTools, logPath);
+    const existing = await tryRead4(vaultTools, logPath);
     await vaultTools.write(logPath, existing + entry);
   } catch {
   }
 }
-async function tryRead3(vaultTools, path2) {
+async function tryRead4(vaultTools, path2) {
   try {
     return await vaultTools.read(path2);
   } catch {
@@ -28096,7 +28209,10 @@ function extractImagePaths(md) {
   }
   return out;
 }
-async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, signal, opts = {}) {
+function truncationHint(backend) {
+  return backend === "claude-agent" ? "\u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442: env CLAUDE_CODE_MAX_OUTPUT_TOKENS \u0432 iclaude.sh" : "\u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442: Settings \u2192 per-operation \u2192 format \u2192 maxTokens";
+}
+async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, signal, opts = {}, backend = "native-agent") {
   const start = Date.now();
   const filePath = args[0];
   if (!filePath) {
@@ -28188,7 +28304,7 @@ ${original}`;
   let parsed = extractJsonObject(fullText);
   const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
   if (!parsed && truncated) {
-    yield { kind: "error", message: "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 \u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442 (claude-agent: env CLAUDE_CODE_MAX_OUTPUT_TOKENS \u0432 iclaude.sh; native-agent: Settings \u2192 per-operation \u2192 format \u2192 maxTokens)" };
+    yield { kind: "error", message: `Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 ${truncationHint(backend)}` };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
     return;
   }
@@ -28207,7 +28323,7 @@ ${original}`;
   }
   if (!parsed) {
     const retryTruncated = lastFinishReason === "length" || looksTruncated(fullText);
-    const msg = retryTruncated ? "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 (\u043F\u043E\u0441\u043B\u0435 retry) \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 \u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442 (claude-agent: env CLAUDE_CODE_MAX_OUTPUT_TOKENS \u0432 iclaude.sh; native-agent: Settings \u2192 per-operation \u2192 format \u2192 maxTokens)" : "Format: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON (\u043F\u043E\u0441\u043B\u0435 retry)";
+    const msg = retryTruncated ? `Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 (\u043F\u043E\u0441\u043B\u0435 retry) \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 ${truncationHint(backend)}` : "Format: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON (\u043F\u043E\u0441\u043B\u0435 retry)";
     yield { kind: "error", message: msg };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
     return;
@@ -28336,7 +28452,7 @@ var AgentRunner = class {
         break;
       case "format": {
         const hasVision = this.settings.backend === "claude-agent";
-        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts);
+        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend);
         break;
       }
       default: {
@@ -28464,7 +28580,7 @@ var VaultTools = class {
 };
 
 // src/claude-cli-client.ts
-var import_child_process2 = require("child_process");
+var import_child_process = require("child_process");
 var import_path_browserify5 = __toESM(require_path_browserify(), 1);
 
 // src/stream.ts
@@ -28564,6 +28680,14 @@ function truncate2(s, n) {
 
 // src/claude-cli-client.ts
 var SIGTERM_GRACE_MS = 3e3;
+function validateIclaudePath(p) {
+  if (!p)
+    throw new Error("iclaudePath is empty");
+  if (!(0, import_path_browserify5.isAbsolute)(p))
+    throw new Error(`iclaudePath must be absolute: "${p}"`);
+  if (p.split("/").includes(".."))
+    throw new Error(`iclaudePath contains path traversal: "${p}"`);
+}
 var ClaudeCliClient = class {
   constructor(cfg) {
     this.cfg = cfg;
@@ -28643,7 +28767,8 @@ ${userText}
     return { [Symbol.asyncIterator]: () => this._generate(args, signal, timeoutSec, tmpFiles) };
   }
   async *_generate(args, signal, timeoutSec, tmpFiles) {
-    const child = (0, import_child_process2.spawn)(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
+    validateIclaudePath(this.cfg.iclaudePath);
+    const child = (0, import_child_process.spawn)(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
     if (!child.stdout || !child.stderr)
       throw new Error("spawn: missing stdio");
     const stderrChunks = [];
@@ -36342,6 +36467,12 @@ var WikiController = class {
         return;
       if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local))
         return;
+      if (eff.backend === "claude-agent" && !local.shellConsentGiven) {
+        new ShellConsentModal(this.app, local.iclaudePath ?? "", async () => {
+          await this.localConfigStore.save({ shellConsentGiven: true });
+        }).open();
+        return;
+      }
     }
     await this.ensureView();
     const view = this.activeView();
@@ -36632,6 +36763,12 @@ var WikiController = class {
         return;
       if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local))
         return;
+      if (eff.backend === "claude-agent" && !local.shellConsentGiven) {
+        new ShellConsentModal(this.app, local.iclaudePath ?? "", async () => {
+          await this.localConfigStore.save({ shellConsentGiven: true });
+        }).open();
+        return;
+      }
       const opKey2 = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
       this._currentLogMeta = {
         backend: eff.backend,
@@ -37099,6 +37236,14 @@ async function migrateLegacyData(plugin, domainStore, localConfigStore) {
       await localConfigStore.save({ iclaudePath: ca.iclaudePath });
     }
     delete ca.iclaudePath;
+    dirty = true;
+  }
+  if (data.shellConsentGiven === true) {
+    const localCur = await localConfigStore.load();
+    if (!localCur.shellConsentGiven) {
+      await localConfigStore.save({ shellConsentGiven: true });
+    }
+    delete data.shellConsentGiven;
     dirty = true;
   }
   if (dirty)
