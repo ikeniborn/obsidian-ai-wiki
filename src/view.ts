@@ -4,6 +4,7 @@ import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
 import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
+import { domainWikiFolder } from "./wiki-path";
 
 export function collectMdInPaths(vault: Vault, sourcePaths: string[]): TFile[] {
   const result: TFile[] = [];
@@ -324,7 +325,8 @@ export class LlmWikiView extends ItemView {
 
     const T = i18n().modal;
     const mdFiles = collectMdInPaths(this.app.vault, sourcePaths);
-    const body = T.reinitConfirmBody(entry.id, mdFiles.length, sourcePaths.length);
+    const wikiFiles = collectMdInPaths(this.app.vault, [domainWikiFolder(entry.wiki_folder)]);
+    const body = T.reinitConfirmBody(entry.id, wikiFiles.length, mdFiles.length, sourcePaths.length);
 
     new ConfirmModal(
       this.app,

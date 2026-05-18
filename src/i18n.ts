@@ -183,8 +183,8 @@ const en = {
     initConfirmBody: (files: number, folders: number) =>
       `Found ${files} .md files in ${folders} folder(s). Run init to analyze sources and create wiki pages?`,
     reinitConfirmTitle: "Re-init — confirm",
-    reinitConfirmBody: (id: string, files: number, srcCount: number) =>
-      `Domain «${id}»: entire wiki folder will be deleted and rebuilt from ${files} md-files (${srcCount} source paths). Continue?`,
+    reinitConfirmBody: (id: string, wikiFiles: number, srcFiles: number, srcCount: number) =>
+      `Domain «${id}»: ${wikiFiles} wiki files will be deleted and rebuilt from ${srcFiles} md-files (${srcCount} source paths). Continue?`,
     fileErrorTitle: "Error processing file",
     fileErrorSkip: "Skip",
     fileErrorRetry: "Retry",
@@ -397,8 +397,8 @@ const ru: I18n = {
     initConfirmBody: (files: number, folders: number) =>
       `Найдено ${files} .md файлов в ${folders} папках. Запустить init для анализа источников и создания wiki-страниц?`,
     reinitConfirmTitle: "Re-init — подтвердите",
-    reinitConfirmBody: (id: string, files: number, srcCount: number) =>
-      `Домен «${id}»: будет удалена вся вики-папка домена и пересобрана из ${files} md-файлов (${srcCount} sourcePaths). Продолжить?`,
+    reinitConfirmBody: (id: string, wikiFiles: number, srcFiles: number, srcCount: number) =>
+      `Домен «${id}»: будет удалено ${wikiFiles} wiki-файлов и пересобрано из ${srcFiles} md-файлов (${srcCount} sourcePaths). Продолжить?`,
     fileErrorTitle: "Ошибка при обработке файла",
     fileErrorSkip: "Пропустить",
     fileErrorRetry: "Повторить",
@@ -609,8 +609,8 @@ const es: I18n = {
     initConfirmBody: (files: number, folders: number) =>
       `Se encontraron ${files} archivos .md en ${folders} carpeta(s). ¿Ejecutar init para analizar fuentes y crear páginas wiki?`,
     reinitConfirmTitle: "Re-init — confirmar",
-    reinitConfirmBody: (id: string, files: number, srcCount: number) =>
-      `Dominio «${id}»: se borrará toda la carpeta wiki del dominio y se reconstruirá desde ${files} archivos md (${srcCount} rutas fuente). ¿Continuar?`,
+    reinitConfirmBody: (id: string, wikiFiles: number, srcFiles: number, srcCount: number) =>
+      `Dominio «${id}»: se borrarán ${wikiFiles} archivos wiki y se reconstruirán desde ${srcFiles} archivos md (${srcCount} rutas fuente). ¿Continuar?`,
     fileErrorTitle: "Error al procesar archivo",
     fileErrorSkip: "Saltar",
     fileErrorRetry: "Reintentar",
