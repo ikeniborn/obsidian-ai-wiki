@@ -1,5 +1,5 @@
 import { spawn } from "child_process";
-import { join } from "path-browserify";
+import { join, isAbsolute } from "path-browserify";
 import type OpenAI from "openai";
 import { parseStreamLine } from "./stream";
 import type { LlmClient } from "./types";
@@ -18,6 +18,12 @@ export interface ClaudeCliConfig {
 }
 
 const SIGTERM_GRACE_MS = 3000;
+
+export function validateIclaudePath(p: string): void {
+  if (!p) throw new Error("iclaudePath is empty");
+  if (!isAbsolute(p)) throw new Error(`iclaudePath must be absolute: "${p}"`);
+  if (p.includes("..")) throw new Error(`iclaudePath contains path traversal: "${p}"`);
+}
 
 export class ClaudeCliClient implements LlmClient {
   /** Session ID of the last completed turn, populated from the system init event. */
@@ -127,6 +133,7 @@ export class ClaudeCliClient implements LlmClient {
     timeoutSec: number,
     tmpFiles: string[],
   ): AsyncGenerator<OpenAI.Chat.ChatCompletionChunk> {
+    validateIclaudePath(this.cfg.iclaudePath);
     const child = spawn(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || undefined });
     if (!child.stdout || !child.stderr) throw new Error("spawn: missing stdio");
     const stderrChunks: Buffer[] = [];
