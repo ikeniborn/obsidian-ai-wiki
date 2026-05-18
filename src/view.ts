@@ -1,9 +1,25 @@
-import { App, ItemView, Modal, WorkspaceLeaf, MarkdownRenderer, Component, Notice, Platform, setIcon } from "obsidian";
+import { App, ItemView, Modal, TFile, TFolder, Vault, WorkspaceLeaf, MarkdownRenderer, Component, Notice, Platform, setIcon } from "obsidian";
 import { AddDomainModal, BusyCloseModal, ConfirmModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
 import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
+
+export function collectMdInPaths(vault: Vault, sourcePaths: string[]): TFile[] {
+  const result: TFile[] = [];
+  for (const p of sourcePaths) {
+    const folder = vault.getFolderByPath(p);
+    if (folder) walkFolder(folder, result);
+  }
+  return result;
+}
+
+export function walkFolder(folder: TFolder, out: TFile[]): void {
+  for (const child of folder.children) {
+    if ("extension" in child && (child as TFile).extension === "md") out.push(child as TFile);
+    else if ("children" in child) walkFolder(child as TFolder, out);
+  }
+}
 
 export const AI_WIKI_VIEW_TYPE = "ai-wiki-view";
 
@@ -266,11 +282,7 @@ export class LlmWikiView extends ItemView {
         }
 
         const T = i18n().modal;
-        const allFiles = this.app.vault.getFiles();
-        const mdFiles = allFiles.filter(
-          (f) => f.extension === "md" &&
-            input.sourcePaths.some((p) => f.path.startsWith(p)),
-        );
+        const mdFiles = collectMdInPaths(this.app.vault, input.sourcePaths);
 
         if (!mdFiles.length) {
           void this.plugin.controller.init(input.id, false);
@@ -308,9 +320,7 @@ export class LlmWikiView extends ItemView {
     }
 
     const T = i18n().modal;
-    const mdFiles = this.app.vault.getFiles().filter(
-      (f) => f.extension === "md" && sourcePaths.some((p) => f.path.startsWith(p)),
-    );
+    const mdFiles = collectMdInPaths(this.app.vault, sourcePaths);
     const body = T.reinitConfirmBody(entry.id, mdFiles.length, sourcePaths.length);
 
     new ConfirmModal(
