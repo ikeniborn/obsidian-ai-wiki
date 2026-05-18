@@ -97,6 +97,9 @@ export class LlmWikiView extends ItemView {
   private reasoningBuffer = "";
   private assistantRafHandle: number | null = null;
   private reasoningRafHandle: number | null = null;
+  private waitingStep: HTMLElement | null = null;
+  private waitingTickHandle: ReturnType<typeof window.setTimeout> | null = null;
+  private waitingStartedAt = 0;
 
   constructor(leaf: WorkspaceLeaf, private plugin: LlmWikiPlugin) {
     super(leaf);
@@ -190,6 +193,7 @@ export class LlmWikiView extends ItemView {
   onClose(): void {
     if (this.tickHandle !== null) window.clearTimeout(this.tickHandle);
     if (this.chatTickHandle !== null) window.clearTimeout(this.chatTickHandle);
+    this.stopWaiting();
     if (this.assistantRafHandle !== null) {
       window.cancelAnimationFrame(this.assistantRafHandle);
       this.assistantRafHandle = null;
@@ -388,6 +392,7 @@ export class LlmWikiView extends ItemView {
     this.progressToggle.setText("▼");
     this.updateMetrics();
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
+    this.stopWaiting();
     this.scheduleMetricsTick();
     if (Platform.isMobile) {
       // Streaming недоступен на mobile — показываем спиннер, чтобы UI не выглядел замёрзшим.
@@ -467,6 +472,7 @@ export class LlmWikiView extends ItemView {
     if (ev.kind === "domain_updated") { void this.refreshDomains(); return; }
     if (ev.kind !== "assistant_text") this.stepCount++;
     if (ev.kind === "tool_use") {
+      this.stopWaiting();
       this.toolCount++;
       this.assistantBlock = null;
       this.assistantBuffer = "";
@@ -504,11 +510,13 @@ export class LlmWikiView extends ItemView {
         }
         this.currentToolStep = null;
       }
+      this.startWaiting();
     } else if (ev.kind === "ask_user") {
       const el = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step--ask");
       el.createSpan({ text: "⏳ Waiting for answer…" });
       return;
     } else if (ev.kind === "assistant_text") {
+      this.stopWaiting();
       if (ev.isReasoning) {
         if (!this.reasoningBlock) {
           this.reasoningBlock = this.stepsEl.createDiv("ai-wiki-step reasoning");
@@ -550,9 +558,11 @@ export class LlmWikiView extends ItemView {
       head.createSpan({ cls: "ai-wiki-step-name muted" }).setText(translateSystemEvent(ev.message));
       this.scrollSteps();
     } else if (ev.kind === "error") {
+      this.stopWaiting();
       this.stepsEl.createDiv("ai-wiki-step err").setText(`✗ ${ev.message}`);
       this.scrollSteps();
     } else if (ev.kind === "result") {
+      this.stopWaiting();
       this.assistantBlock = null;
       if (ev.outputTokens !== undefined && ev.durationMs > 0) {
         this.lastTokPerSec = Math.round(ev.outputTokens / (ev.durationMs / 1000));
@@ -869,6 +879,35 @@ export class LlmWikiView extends ItemView {
 
   private scrollSteps(): void {
     this.stepsEl.scrollTop = this.stepsEl.scrollHeight;
+  }
+
+  private startWaiting(): void {
+    this.stopWaiting();
+    this.waitingStartedAt = Date.now();
+    this.waitingStep = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step--waiting");
+    this.waitingStep.createSpan({ cls: "ai-wiki-step-icon" }).setText("⏳");
+    this.waitingStep.createSpan({ cls: "ai-wiki-waiting-text" }).setText("0.0s");
+    this.scrollSteps();
+    this.scheduleWaitingTick();
+  }
+
+  private stopWaiting(): void {
+    if (this.waitingTickHandle !== null) {
+      window.clearTimeout(this.waitingTickHandle);
+      this.waitingTickHandle = null;
+    }
+    this.waitingStep?.remove();
+    this.waitingStep = null;
+  }
+
+  private scheduleWaitingTick(): void {
+    this.waitingTickHandle = window.setTimeout(() => {
+      if (!this.waitingStep) return;
+      const s = ((Date.now() - this.waitingStartedAt) / 1000).toFixed(1);
+      const span = this.waitingStep.querySelector<HTMLElement>(".ai-wiki-waiting-text");
+      if (span) span.setText(`${s}s`);
+      this.scheduleWaitingTick();
+    }, 100);
   }
 
   private statusLabel(entry: RunHistoryEntry): string {
