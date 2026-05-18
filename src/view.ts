@@ -699,8 +699,13 @@ export class LlmWikiView extends ItemView {
       this.lastUserMessage = text;
       const ctx = this.lastContext;
       if (ctx.operation === "lint" || ctx.operation === "lint-chat") {
+        const domainId = (ctx.domainId ?? this.domainSelect?.value) || undefined;
+        if (!domainId) {
+          new Notice(i18n().view.selectDomainFirst ?? "Select a domain first");
+          return;
+        }
         void this.plugin.controller.lintApplyFromChat(
-          ctx.domainId,
+          domainId,
           ctx.report,
           this.chatHistory,
           text,

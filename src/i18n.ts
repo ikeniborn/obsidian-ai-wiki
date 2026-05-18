@@ -132,6 +132,7 @@ const en = {
     stepsCount: (n: number, s: string) => `${n} steps · ${s}s`,
     starting: "Starting",
     initialising: "Initialising",
+    selectDomainFirst: "Select a domain first",
   },
   ctrl: {
     cancelling: "Cancelling…",
@@ -345,6 +346,7 @@ const ru: I18n = {
     stepsCount: (n: number, s: string) => `${n} шагов · ${s}с`,
     starting: "Запуск",
     initialising: "Инициализация",
+    selectDomainFirst: "Выберите домен",
   },
   ctrl: {
     cancelling: "Отмена…",
@@ -556,6 +558,7 @@ const es: I18n = {
     stepsCount: (n: number, s: string) => `${n} pasos · ${s}s`,
     starting: "Iniciando",
     initialising: "Inicializando",
+    selectDomainFirst: "Selecciona un dominio primero",
   },
   ctrl: {
     cancelling: "Cancelando…",
