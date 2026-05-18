@@ -272,3 +272,28 @@
   - `документация/компоненты/llm-wiki-view.md` (добавлен раздел Mobile domain selector planned, расширены wiki_sources, теги)
 - Пропущено: 0
 - Замечания: TODO.md (roadmap) — отдельной страницы не создано (роадмап-документ); item 7 (native agent на mobile) — out of scope этой ingestion, отмечен как follow-up в spec.
+
+## 2026-05-17 — ingest mobile-query-seed-design (spec + plan + prompts)
+
+**Операция:** ingest (batch)  
+**Домен:** документация  
+**Источники:**
+  - `docs/superpowers/specs/2026-05-17-mobile-query-seed-design.md`
+  - `docs/superpowers/plans/2026-05-17-mobile-query-seed-design.md`
+  - `prompts/ingest.md`
+  - `prompts/lint.md`
+  - `prompts/init.md`
+  - `prompts/init-incremental.md`
+
+**Создано:** 3
+  - `документация/спецификации/mobile-query-seed-design.md` (спецификация)
+  - `документация/планы/mobile-query-seed-plan.md` (план)
+  - `документация/компоненты/wiki-index.md` (компонент)
+
+**Обновлено:** 5
+  - `документация/компоненты/wiki-seeds.md` — алгоритм Jaccard: bodyContent(500), parseFmKeywords, scoreSeed/selectSeeds с annotation
+  - `документация/операции/query-operation.md` — поток parseIndexAnnotations → selectSeeds, Jaccard-first + LLM fallback
+  - `документация/операции/ingest-operation.md` — parseJsonPages с annotation?, upsertIndexAnnotation per page
+  - `документация/операции/lint-operation.md` — upsertIndexAnnotation, удалён flat index rewrite, annotation в промпте
+
+**Пропущено:** 0
