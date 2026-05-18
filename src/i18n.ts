@@ -143,6 +143,7 @@ const en = {
     errorPrefix: (msg: string) => `Error: ${msg}`,
     mobileNotAvailable: "Operation not available on mobile",
     configureCloudLlm: "Configure cloud LLM (baseUrl + apiKey) in settings",
+    shellConsentRequired: "Shell execution consent required — see plugin settings",
   },
   cmd: {
     openPanel: "Open panel",
@@ -203,6 +204,10 @@ const en = {
     busyCloseBody: "Abort the operation or leave it running in the background?",
     busyCloseAbort: "Abort operation",
     busyCloseLeave: "Leave in background",
+    shellConsentTitle: "⚠ Shell Execution Notice",
+    shellConsentBody: (iclaudePath: string) =>
+      `This plugin runs an external process:\n  ${iclaudePath}\nwith your operating system user's permissions. This is required for AI Wiki to function. Review the path above, then confirm to enable.`,
+    shellConsentEnable: "I understand, enable",
   },
 };
 
@@ -351,6 +356,7 @@ const ru: I18n = {
     errorPrefix: (msg: string) => `Ошибка: ${msg}`,
     mobileNotAvailable: "Операция недоступна на мобильном устройстве",
     configureCloudLlm: "Настройте cloud LLM (baseUrl + apiKey) в настройках",
+    shellConsentRequired: "Требуется согласие на запуск внешнего процесса — откройте настройки плагина",
   },
   cmd: {
     openPanel: "Открыть панель",
@@ -411,6 +417,10 @@ const ru: I18n = {
     busyCloseBody: "Прервать операцию или оставить выполняться в фоне?",
     busyCloseAbort: "Прервать операцию",
     busyCloseLeave: "Оставить в фоне",
+    shellConsentTitle: "⚠ Запуск внешнего процесса",
+    shellConsentBody: (iclaudePath: string) =>
+      `Плагин запускает внешний процесс:\n  ${iclaudePath}\nс правами вашего системного пользователя. Это необходимо для работы AI Wiki. Проверьте путь выше, затем подтвердите включение.`,
+    shellConsentEnable: "Понимаю, включить",
   },
 };
 
@@ -557,6 +567,7 @@ const es: I18n = {
     errorPrefix: (msg: string) => `Error: ${msg}`,
     mobileNotAvailable: "Operación no disponible en móvil",
     configureCloudLlm: "Configura cloud LLM (baseUrl + apiKey) en los ajustes",
+    shellConsentRequired: "Se requiere consentimiento para ejecutar el proceso externo — abra los ajustes del plugin",
   },
   cmd: {
     openPanel: "Abrir panel",
@@ -617,6 +628,10 @@ const es: I18n = {
     busyCloseBody: "¿Abortar la operación o dejarla ejecutarse en segundo plano?",
     busyCloseAbort: "Abortar operación",
     busyCloseLeave: "Dejar en segundo plano",
+    shellConsentTitle: "⚠ Ejecución de proceso externo",
+    shellConsentBody: (iclaudePath: string) =>
+      `Este plugin ejecuta un proceso externo:\n  ${iclaudePath}\ncon los permisos de su usuario del sistema operativo. Es necesario para que AI Wiki funcione. Revise la ruta y confirme para habilitar.`,
+    shellConsentEnable: "Entiendo, habilitar",
   },
 };
 

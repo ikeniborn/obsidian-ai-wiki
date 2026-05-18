@@ -224,6 +224,10 @@ export class WikiController {
       const eff = resolveEffective(this.plugin.settings, local);
       if (eff.backend === "native-agent" && !this.requireNativeAgent(eff)) return;
       if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local)) return;
+      if (eff.backend === "claude-agent" && !this.plugin.settings.shellConsentGiven) {
+        new Notice(i18n().ctrl.shellConsentRequired);
+        return;
+      }
     }
 
     await this.ensureView();
@@ -536,6 +540,10 @@ export class WikiController {
       const eff = resolveEffective(this.plugin.settings, local);
       if (eff.backend === "native-agent" && !this.requireNativeAgent(eff)) return;
       if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local)) return;
+      if (eff.backend === "claude-agent" && !this.plugin.settings.shellConsentGiven) {
+        new Notice(i18n().ctrl.shellConsentRequired);
+        return;
+      }
       const opKey = (op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op) as import("./types").OpKey;
       this._currentLogMeta = {
         backend: eff.backend,
