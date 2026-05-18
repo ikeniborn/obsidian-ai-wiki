@@ -512,8 +512,8 @@ export class EditDomainModal extends Modal {
 export class ShellConsentModal extends Modal {
   constructor(
     app: App,
-    private plugin: import("./main").default,
     private iclaudePath: string,
+    private onEnable: () => Promise<void>,
   ) {
     super(app);
   }
@@ -535,8 +535,7 @@ export class ShellConsentModal extends Modal {
   }
 
   async enable(): Promise<void> {
-    this.plugin.settings.shellConsentGiven = true;
-    await this.plugin.saveSettings();
+    await this.onEnable();
     this.close();
   }
 
