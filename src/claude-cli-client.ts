@@ -22,7 +22,7 @@ const SIGTERM_GRACE_MS = 3000;
 export function validateIclaudePath(p: string): void {
   if (!p) throw new Error("iclaudePath is empty");
   if (!isAbsolute(p)) throw new Error(`iclaudePath must be absolute: "${p}"`);
-  if (p.includes("..")) throw new Error(`iclaudePath contains path traversal: "${p}"`);
+  if (p.split("/").includes("..")) throw new Error(`iclaudePath contains path traversal: "${p}"`);
 }
 
 export class ClaudeCliClient implements LlmClient {

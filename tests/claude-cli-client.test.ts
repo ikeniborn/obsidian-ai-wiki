@@ -371,4 +371,8 @@ describe("validateIclaudePath", () => {
   it("does not throw for path with home directory", () => {
     expect(() => validateIclaudePath("/home/user/iclaude.sh")).not.toThrow();
   });
+
+  it("does not throw for path whose filename contains .. as substring", () => {
+    expect(() => validateIclaudePath("/usr/bin/my..tool")).not.toThrow();
+  });
 });
