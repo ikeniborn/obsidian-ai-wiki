@@ -26,6 +26,7 @@ export interface LocalConfig {
   };
   proxy?: ProxyConfig;
   migrated_v1?: boolean;
+  shellConsentGiven?: boolean;
 }
 
 const DEFAULTS: LocalConfig = { iclaudePath: "" };

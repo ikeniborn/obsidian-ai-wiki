@@ -1,39 +1,25 @@
 import { describe, it, expect, vi } from "vitest";
 import { ShellConsentModal } from "../src/modals";
-import { DEFAULT_SETTINGS } from "../src/types";
-
-describe("DEFAULT_SETTINGS.shellConsentGiven", () => {
-  it("defaults to false", () => {
-    expect(DEFAULT_SETTINGS.shellConsentGiven).toBe(false);
-  });
-});
 
 describe("ShellConsentModal", () => {
   it("is exported from modals.ts", () => {
     expect(ShellConsentModal).toBeDefined();
   });
 
-  it("sets shellConsentGiven=true and saves when enable() is called", async () => {
-    const saveSettings = vi.fn().mockResolvedValue(undefined);
-    const plugin = {
-      settings: { shellConsentGiven: false },
-      saveSettings,
-    } as any;
-    const modal = new ShellConsentModal({} as any, plugin, "/usr/bin/claude");
+  it("calls onEnable callback and closes when enable() is called", async () => {
+    const onEnable = vi.fn().mockResolvedValue(undefined);
+    const modal = new ShellConsentModal({} as any, "/usr/bin/claude", onEnable);
+    (modal as any).close = vi.fn();
     await (modal as any).enable();
-    expect(plugin.settings.shellConsentGiven).toBe(true);
-    expect(saveSettings).toHaveBeenCalledOnce();
+    expect(onEnable).toHaveBeenCalledOnce();
+    expect((modal as any).close).toHaveBeenCalled();
   });
 
-  it("does not change shellConsentGiven when cancel() is called", () => {
-    const plugin = {
-      settings: { shellConsentGiven: false },
-      saveSettings: vi.fn(),
-    } as any;
-    const modal = new ShellConsentModal({} as any, plugin, "/usr/bin/claude");
+  it("does not call onEnable when cancel() is called", () => {
+    const onEnable = vi.fn();
+    const modal = new ShellConsentModal({} as any, "/usr/bin/claude", onEnable);
     (modal as any).close = vi.fn();
     (modal as any).cancel();
-    expect(plugin.settings.shellConsentGiven).toBe(false);
-    expect(plugin.saveSettings).not.toHaveBeenCalled();
+    expect(onEnable).not.toHaveBeenCalled();
   });
 });

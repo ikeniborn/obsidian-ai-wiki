@@ -165,7 +165,6 @@ export interface LlmWikiPluginSettings {
     enabled: boolean;
     evaluatorModel: string;
   };
-  shellConsentGiven: boolean;
 }
 
 export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
@@ -212,5 +211,4 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     enabled: false,
     evaluatorModel: "sonnet",
   },
-  shellConsentGiven: false,
 };
