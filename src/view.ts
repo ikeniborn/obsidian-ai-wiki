@@ -479,11 +479,6 @@ export class LlmWikiView extends ItemView {
     if (ev.kind === "tool_use") {
       this.stopWaiting();
       this.toolCount++;
-      this.assistantBuffer = "";
-      if (this.assistantRenderHandle !== null) {
-        window.clearTimeout(this.assistantRenderHandle);
-        this.assistantRenderHandle = null;
-      }
       this.reasoningBlock = null;
       this.reasoningBuffer = "";
       if (this.reasoningRafHandle !== null) {
@@ -500,6 +495,8 @@ export class LlmWikiView extends ItemView {
       this.currentToolStep = step;
       this.currentToolStartedAt = Date.now();
       this.scrollSteps();
+      this.liveStatusIconEl?.setText("🔧");
+      this.liveStatusTextEl?.setText(`${ev.name}  ${summariseInput(ev.input)}`);
     } else if (ev.kind === "tool_result") {
       const step = this.currentToolStep;
       if (step) {
