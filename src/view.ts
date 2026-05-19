@@ -868,22 +868,6 @@ export class LlmWikiView extends ItemView {
     this.stepsEl.scrollTop = this.stepsEl.scrollHeight;
   }
 
-  private scheduleAssistantRender(): void {
-    if (this.assistantRenderHandle !== null) return;
-    this.assistantRenderHandle = window.setTimeout(() => {
-      this.assistantRenderHandle = null;
-      if (!this.assistantBuffer) return;
-      this.finalEl.empty();
-      if (!this.assistantFinalComp) {
-        this.assistantFinalComp = new Component();
-        this.assistantFinalComp.load();
-      }
-      void MarkdownRenderer.render(
-        this.app, this.assistantBuffer, this.finalEl, "", this.assistantFinalComp
-      ).then(() => sanitizeLinks(this.finalEl));
-    }, 150);
-  }
-
   private startWaiting(): void {
     this.stopWaiting();
     this.waitingStartedAt = Date.now();
