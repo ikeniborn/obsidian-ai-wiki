@@ -11,7 +11,7 @@
 - SKIP: слишком мало упоминаний или информация уже есть
 - Синтез, не копирование. Технические конфиги/SQL можно цитировать в code-блоках.
 - Путь статьи определяется типом сущности — используй точный шаблон из секции «ТИПЫ СУЩНОСТЕЙ ДОМЕНА» (выше, до блока ПРАВИЛА), подставив имя сущности вместо <EntityName>
-- Если тип сущности не определён или у домена нет entity_types → путь по умолчанию: {{wiki_path}}/<EntityName>.md
+- Если тип сущности не определён или у домена нет entity_types → путь по умолчанию: {{wiki_path}}/entities/<EntityName>.md
 - Frontmatter обязателен: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature
 - wiki_keywords: [5-10 ключевых токенов домена, строчные, дефис-вместо-пробела]
 - wiki_sources: каждый элемент обязательно в формате [[path/to/source]], тип свойства Links в Obsidian
@@ -26,4 +26,4 @@
 Можно:  !Wiki/os/network/NFS.md
 
 Верни ТОЛЬКО JSON-массив, без другого текста:
-[{"path":"{{wiki_path}}/EntityName.md","content":"---\nwiki_sources: [\"[[{{source_path}}]]\"]\nwiki_updated: {{today}}\nwiki_status: stub\nwiki_keywords: [токен1, токен2]\ntags: []\nwiki_outgoing_links: []\n---\n# EntityName\n\ncontент...","annotation":"Краткое описание сущности для контекстного поиска"}]
+[{"path":"{{wiki_path}}/entities/EntityName.md","content":"---\nwiki_sources: [\"[[{{source_path}}]]\"]\nwiki_updated: {{today}}\nwiki_status: stub\nwiki_keywords: [токен1, токен2]\ntags: []\nwiki_outgoing_links: []\n---\n# EntityName\n\ncontент...","annotation":"Краткое описание сущности для контекстного поиска"}]
