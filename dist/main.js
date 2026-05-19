@@ -20994,6 +20994,10 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.stopWaiting();
       this.toolCount++;
       this.assistantBuffer = "";
+      if (this.assistantRenderHandle !== null) {
+        window.clearTimeout(this.assistantRenderHandle);
+        this.assistantRenderHandle = null;
+      }
       this.reasoningBlock = null;
       this.reasoningBuffer = "";
       if (this.reasoningRafHandle !== null) {
