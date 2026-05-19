@@ -92,16 +92,15 @@ export class LlmWikiView extends ItemView {
   private tickHandle: ReturnType<typeof window.setTimeout> | null = null;
   private currentToolStep: HTMLElement | null = null;
   private currentToolStartedAt = 0;
-  private assistantStarted = false;
-  private assistantBuffer = "";
-  private assistantRenderHandle: ReturnType<typeof window.setTimeout> | null = null;
-  private assistantFinalComp: Component | null = null;
   private reasoningBlock: HTMLElement | null = null;
   private reasoningBuffer = "";
   private reasoningRafHandle: number | null = null;
   private waitingStep: HTMLElement | null = null;
   private waitingTickHandle: ReturnType<typeof window.setTimeout> | null = null;
   private waitingStartedAt = 0;
+  private liveStatusSection: HTMLElement | null = null;
+  private liveStatusIconEl: HTMLElement | null = null;
+  private liveStatusTextEl: HTMLElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, private plugin: LlmWikiPlugin) {
     super(leaf);
@@ -166,6 +165,10 @@ export class LlmWikiView extends ItemView {
 
     this.stepsEl = root.createDiv("ai-wiki-steps");
     this.stepsEl.addClass("ai-wiki-hidden");
+
+    this.liveStatusSection = root.createDiv("ai-wiki-live-status ai-wiki-hidden");
+    this.liveStatusIconEl = this.liveStatusSection.createSpan("ai-wiki-live-status-icon");
+    this.liveStatusTextEl = this.liveStatusSection.createSpan("ai-wiki-live-status-text");
 
     this.resultSection = root.createDiv("ai-wiki-result-section ai-wiki-hidden");
     const resultHeader = this.resultSection.createDiv("ai-wiki-progress-header");
