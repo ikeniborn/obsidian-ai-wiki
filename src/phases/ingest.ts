@@ -6,7 +6,7 @@ import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas, extractUsage } from "./llm-utils";
 import ingestTemplate from "../../prompts/ingest.md";
 import { render } from "./template";
-import { domainWikiFolder } from "../wiki-path";
+import { domainWikiFolder, validateArticlePath } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField } from "../utils/raw-frontmatter";
 import { upsertIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
@@ -102,7 +102,37 @@ export async function* runIngest(
 
   if (signal.aborted) return;
 
-  const pages = parseJsonPages(fullText);
+  let pages = parseJsonPages(fullText);
+
+  // --- Path validation + one retry ---
+  const { valid, invalid } = splitByPathValidity(pages, wikiVaultPath);
+  if (invalid.length > 0) {
+    yield {
+      kind: "assistant_text",
+      delta: `⚠ Пути нарушают правило 4 сегментов, запрашиваю исправление: ${invalid.map((p) => p.path).join(", ")}\n`,
+    };
+    const retryText = await retryInvalidPaths(llm, model, messages, invalid, signal, opts);
+    if (retryText && !signal.aborted) {
+      const retried = parseJsonPages(retryText);
+      const { valid: retriedValid, invalid: retriedInvalid } = splitByPathValidity(retried, wikiVaultPath);
+      // Emit ok:false for paths still invalid after retry
+      for (const p of retriedInvalid) {
+        yield { kind: "tool_use", name: "Write", input: { path: p.path } };
+        yield { kind: "tool_result", ok: false, preview: `Path violates 4-level rule (!Wiki/<d>/<e>/<f>.md): ${p.path}` };
+      }
+      pages = [...valid, ...retriedValid];
+    } else {
+      // No retry text (aborted or error) — skip all invalid
+      for (const p of invalid) {
+        yield { kind: "tool_use", name: "Write", input: { path: p.path } };
+        yield { kind: "tool_result", ok: false, preview: `Path violates 4-level rule (!Wiki/<d>/<e>/<f>.md): ${p.path}` };
+      }
+      pages = valid;
+    }
+  } else {
+    pages = valid;
+  }
+
   const written: string[] = [];
   for (const page of pages) {
     if (!page.path.startsWith(wikiVaultPath + "/")) {
@@ -228,6 +258,58 @@ export function extractParentSourcePath(
   const clamped = (parentAbs + "/").startsWith(normedVault) ? parentAbs : vaultRoot;
   const rel = relative(vaultRoot, clamped);
   return (rel || ".") + "/";
+}
+
+function splitByPathValidity(
+  pages: Array<{ path: string; content: string; annotation?: string }>,
+  wikiVaultPath: string,
+): {
+  valid: Array<{ path: string; content: string; annotation?: string }>;
+  invalid: Array<{ path: string; content: string; annotation?: string }>;
+} {
+  const valid: typeof pages = [];
+  const invalid: typeof pages = [];
+  for (const p of pages) {
+    if (validateArticlePath(p.path, wikiVaultPath)) {
+      valid.push(p);
+    } else {
+      invalid.push(p);
+    }
+  }
+  return { valid, invalid };
+}
+
+async function retryInvalidPaths(
+  llm: LlmClient,
+  model: string,
+  originalMessages: OpenAI.Chat.ChatCompletionMessageParam[],
+  invalidPages: Array<{ path: string; content: string; annotation?: string }>,
+  signal: AbortSignal,
+  opts: LlmCallOptions,
+): Promise<string> {
+  const invalidList = invalidPages.map((p) => p.path).join(", ");
+  const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    ...originalMessages,
+    {
+      role: "user",
+      content: `Пути нарушают правило 4 сегментов (!Wiki/<d>/<e>/<f>.md): ${invalidList}. Верни исправленный JSON-массив только для этих страниц.`,
+    },
+  ];
+  const retryParams = buildChatParams(model, retryMessages, opts, false);
+  try {
+    let text = "";
+    const stream = await llm.chat.completions.create(
+      { ...retryParams, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
+      { signal },
+    );
+    for await (const chunk of stream) {
+      const { content } = extractStreamDeltas(chunk);
+      if (content) text += content;
+    }
+    return text;
+  } catch {
+    return "";
+  }
 }
 
 export function buildEntityTypesBlock(domain: DomainEntry, wikiVaultPath: string): string {

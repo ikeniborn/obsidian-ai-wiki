@@ -3,6 +3,7 @@ import { runIngest, buildEntityTypesBlock, parseJsonPages } from "../../src/phas
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
+import { validateArticlePath } from "../../src/wiki-path";
 
 function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
   return {
@@ -65,7 +66,7 @@ describe("runIngest", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const llmResponse = JSON.stringify([
-      { path: "!Wiki/work/Entity.md", content: "# Entity\n\nFact." },
+      { path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact." },
     ]);
     const events = await collect(
       runIngest(
@@ -79,7 +80,7 @@ describe("runIngest", () => {
       ),
     );
     expect(events.some((e: any) => e.kind === "result")).toBe(true);
-    expect(adapter.write).toHaveBeenCalledWith("!Wiki/work/Entity.md", "# Entity\n\nFact.");
+    expect(adapter.write).toHaveBeenCalledWith("!Wiki/work/entities/Entity.md", "# Entity\n\nFact.");
   });
 
   it("yields source_path_added when new parent folder encountered", async () => {
@@ -90,7 +91,7 @@ describe("runIngest", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const llmResponse = JSON.stringify([
-      { path: "!Wiki/work/Entity.md", content: "# Entity" },
+      { path: "!Wiki/work/entities/Entity.md", content: "# Entity" },
     ]);
     const events = await collect(
       runIngest(
@@ -116,7 +117,7 @@ describe("runIngest", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const llmResponse = JSON.stringify([
-      { path: "!Wiki/work/Entity.md", content: "# Entity" },
+      { path: "!Wiki/work/entities/Entity.md", content: "# Entity" },
     ]);
     const events = await collect(
       runIngest(
@@ -161,7 +162,7 @@ describe("runIngest", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const llmResponse = JSON.stringify([
-      { path: "!Wiki/work/Entity.md", content: "# Entity\n\nFact." },
+      { path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact." },
     ]);
     await collect(
       runIngest(
@@ -182,19 +183,19 @@ describe("runIngest", () => {
     expect(writtenContent).toContain("wiki_added:");
     expect(writtenContent).toContain("wiki_updated:");
     expect(writtenContent).toContain("wiki_articles:");
-    expect(writtenContent).toContain("[[!Wiki/work/Entity.md]]");
+    expect(writtenContent).toContain("[[!Wiki/work/entities/Entity.md]]");
   });
 
   it("preserves wiki_added and unions wiki_articles on repeated ingest", async () => {
     const existingFm =
-      '---\nwiki_added: 2026-01-01\nwiki_updated: 2026-01-01\nwiki_articles:\n  - "[[!Wiki/work/Old.md]]"\n---\nsource text';
+      '---\nwiki_added: 2026-01-01\nwiki_updated: 2026-01-01\nwiki_articles:\n  - "[[!Wiki/work/entities/Old.md]]"\n---\nsource text';
     const adapter = mockAdapter({
       read: vi.fn().mockResolvedValue(existingFm),
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const llmResponse = JSON.stringify([
-      { path: "!Wiki/work/New.md", content: "# New" },
+      { path: "!Wiki/work/entities/New.md", content: "# New" },
     ]);
     await collect(
       runIngest(
@@ -213,8 +214,8 @@ describe("runIngest", () => {
     expect(rawCall).toBeDefined();
     const writtenContent = rawCall![1] as string;
     expect(writtenContent).toContain("wiki_added: 2026-01-01"); // preserved
-    expect(writtenContent).toContain("[[!Wiki/work/Old.md]]");  // union
-    expect(writtenContent).toContain("[[!Wiki/work/New.md]]");  // union
+    expect(writtenContent).toContain("[[!Wiki/work/entities/Old.md]]");  // union
+    expect(writtenContent).toContain("[[!Wiki/work/entities/New.md]]");  // union
   });
 
   it("does not write backlinks when no wiki pages were written", async () => {
@@ -247,7 +248,7 @@ describe("runIngest", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const llmResponse = JSON.stringify([
-      { path: "!Wiki/work/Entity.md", content: "# Entity\n\nFact.", annotation: "описание сущности" },
+      { path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact.", annotation: "описание сущности" },
     ]);
     await collect(
       runIngest(
@@ -263,7 +264,7 @@ describe("runIngest", () => {
     const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls;
     const indexWrite = writeCalls.find((c: [string, string]) => c[0].endsWith("_index.md"));
     expect(indexWrite).toBeDefined();
-    expect(indexWrite![1]).toContain("Entity: [[Entity]] Entity.md | описание сущности");
+    expect(indexWrite![1]).toContain("Entity: [[Entity]] entities/Entity.md | описание сущности");
   });
 
   it("does not fail ingest when raw file backlink write throws", async () => {
@@ -279,7 +280,7 @@ describe("runIngest", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const llmResponse = JSON.stringify([
-      { path: "!Wiki/work/Entity.md", content: "# Entity" },
+      { path: "!Wiki/work/entities/Entity.md", content: "# Entity" },
     ]);
     const events = await collect(
       runIngest(
@@ -342,5 +343,139 @@ describe("buildEntityTypesBlock — path templates", () => {
     const domain: DomainEntry = { id: "ии", name: "ИИ", wiki_folder: "ии", entity_types: [] };
     const block = buildEntityTypesBlock(domain, "!Wiki/ии");
     expect(block).not.toContain("Путь для сущностей этого типа");
+  });
+});
+
+describe("runIngest path validation", () => {
+  it("skips invalid path and emits tool_result ok:false", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    // Domain wiki_folder "work" → wikiVaultPath = "!Wiki/work"
+    // Invalid: domain appears twice in path
+    const llmResponse = JSON.stringify([
+      { path: "!Wiki/work/work/entity/Page.md", content: "# Page" },
+    ]);
+    const events = await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt,
+        makeLlm(llmResponse),
+        "llama3.2",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+      ),
+    );
+    // Page must NOT be written
+    const writeCall = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([path]: [string]) => path === "!Wiki/work/work/entity/Page.md",
+    );
+    expect(writeCall).toBeUndefined();
+    // Must emit tool_result ok:false for that path
+    const failResult = events.find(
+      (e: any) => e.kind === "tool_result" && e.ok === false && (e.preview as string)?.includes("4-level"),
+    );
+    expect(failResult).toBeDefined();
+  });
+
+  it("retries with feedback when invalid paths returned first", async () => {
+    // First call returns invalid path; second call (retry) returns corrected path
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+
+    const badResponse = JSON.stringify([
+      { path: "!Wiki/work/work/entity/Page.md", content: "# Page bad" },
+    ]);
+    const goodResponse = JSON.stringify([
+      { path: "!Wiki/work/entity/Page.md", content: "# Page good" },
+    ]);
+
+    let callCount = 0;
+    const llm: LlmClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(() => {
+            callCount++;
+            const text = callCount === 1 ? badResponse : goodResponse;
+            const fakeStream = {
+              [Symbol.asyncIterator]: async function* () {
+                yield { choices: [{ delta: { content: text } }] };
+              },
+            };
+            return Promise.resolve(fakeStream);
+          }),
+        },
+      },
+    } as unknown as LlmClient;
+
+    const events = await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt,
+        llm,
+        "llama3.2",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+      ),
+    );
+
+    // Corrected page must be written
+    const writeCall = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([path]: [string]) => path === "!Wiki/work/entity/Page.md",
+    );
+    expect(writeCall).toBeDefined();
+    // LLM called twice (original + retry)
+    expect(callCount).toBe(2);
+  });
+
+  it("does not retry twice (retry flag prevents second retry)", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+
+    const badResponse = JSON.stringify([
+      { path: "!Wiki/work/work/entity/Page.md", content: "# Page bad" },
+    ]);
+
+    let callCount = 0;
+    const llm: LlmClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(() => {
+            callCount++;
+            const fakeStream = {
+              [Symbol.asyncIterator]: async function* () {
+                yield { choices: [{ delta: { content: badResponse } }] };
+              },
+            };
+            return Promise.resolve(fakeStream);
+          }),
+        },
+      },
+    } as unknown as LlmClient;
+
+    await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt,
+        llm,
+        "llama3.2",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+      ),
+    );
+
+    // Should call LLM at most twice (original + one retry)
+    expect(callCount).toBeLessThanOrEqual(2);
   });
 });
