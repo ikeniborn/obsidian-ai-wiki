@@ -535,20 +535,11 @@ export class LlmWikiView extends ItemView {
             this.scrollSteps();
           });
         }
+        this.liveStatusIconEl?.setText("🧠");
+        this.liveStatusTextEl?.setText("Analysing...");
       } else {
-        if (!this.assistantStarted) {
-          this.assistantStarted = true;
-          this.stepsOpen = false;
-          this.stepsEl.addClass("ai-wiki-hidden");
-          this.progressToggle.setText("▶");
-          this.reasoningBlock?.addClass("reasoning--collapsed");
-          this.resultSection.removeClass("ai-wiki-hidden");
-          this.resultOpen = true;
-          this.resultToggle.setText("▼");
-          this.finalEl.removeClass("ai-wiki-hidden");
-        }
-        this.assistantBuffer += ev.delta;
-        this.scheduleAssistantRender();
+        this.liveStatusIconEl?.setText("💬");
+        this.liveStatusTextEl?.setText("Forming response...");
       }
     } else if (ev.kind === "system") {
       const step = this.stepsEl.createDiv("ai-wiki-step");
