@@ -900,6 +900,8 @@ export class LlmWikiView extends ItemView {
     this.waitingStep.createSpan({ cls: "ai-wiki-waiting-text" }).setText("0.0s");
     this.scrollSteps();
     this.scheduleWaitingTick();
+    this.liveStatusIconEl?.setText("⏳");
+    this.liveStatusTextEl?.setText("0.0s");
   }
 
   private stopWaiting(): void {
@@ -917,6 +919,7 @@ export class LlmWikiView extends ItemView {
       const s = ((Date.now() - this.waitingStartedAt) / 1000).toFixed(1);
       const span = this.waitingStep.querySelector<HTMLElement>(".ai-wiki-waiting-text");
       if (span) span.setText(`${s}s`);
+      this.liveStatusTextEl?.setText(`${s}s`);
       this.scheduleWaitingTick();
     }, 100);
   }
