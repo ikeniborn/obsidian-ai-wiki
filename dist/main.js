@@ -20606,11 +20606,12 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   tickHandle = null;
   currentToolStep = null;
   currentToolStartedAt = 0;
-  assistantBlock = null;
+  assistantStarted = false;
   assistantBuffer = "";
+  assistantRenderHandle = null;
+  assistantFinalComp = null;
   reasoningBlock = null;
   reasoningBuffer = "";
-  assistantRafHandle = null;
   reasoningRafHandle = null;
   waitingStep = null;
   waitingTickHandle = null;
@@ -20694,10 +20695,12 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     if (this.chatTickHandle !== null)
       window.clearTimeout(this.chatTickHandle);
     this.stopWaiting();
-    if (this.assistantRafHandle !== null) {
-      window.cancelAnimationFrame(this.assistantRafHandle);
-      this.assistantRafHandle = null;
+    if (this.assistantRenderHandle !== null) {
+      window.clearTimeout(this.assistantRenderHandle);
+      this.assistantRenderHandle = null;
     }
+    this.assistantFinalComp?.unload();
+    this.assistantFinalComp = null;
     if (this.reasoningRafHandle !== null) {
       window.cancelAnimationFrame(this.reasoningRafHandle);
       this.reasoningRafHandle = null;
@@ -20883,14 +20886,16 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.progressTotal = 0;
     this.progressDone = 0;
     this.currentToolStep = null;
-    this.assistantBlock = null;
+    this.assistantStarted = false;
     this.assistantBuffer = "";
+    if (this.assistantRenderHandle !== null) {
+      window.clearTimeout(this.assistantRenderHandle);
+      this.assistantRenderHandle = null;
+    }
+    this.assistantFinalComp?.unload();
+    this.assistantFinalComp = null;
     this.reasoningBlock = null;
     this.reasoningBuffer = "";
-    if (this.assistantRafHandle !== null) {
-      window.cancelAnimationFrame(this.assistantRafHandle);
-      this.assistantRafHandle = null;
-    }
     if (this.reasoningRafHandle !== null) {
       window.cancelAnimationFrame(this.reasoningRafHandle);
       this.reasoningRafHandle = null;
@@ -20988,14 +20993,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     if (ev.kind === "tool_use") {
       this.stopWaiting();
       this.toolCount++;
-      this.assistantBlock = null;
       this.assistantBuffer = "";
       this.reasoningBlock = null;
       this.reasoningBuffer = "";
-      if (this.assistantRafHandle !== null) {
-        window.cancelAnimationFrame(this.assistantRafHandle);
-        this.assistantRafHandle = null;
-      }
       if (this.reasoningRafHandle !== null) {
         window.cancelAnimationFrame(this.reasoningRafHandle);
         this.reasoningRafHandle = null;
@@ -21036,9 +21036,6 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       if (ev.isReasoning) {
         if (!this.reasoningBlock) {
           this.reasoningBlock = this.stepsEl.createDiv("ai-wiki-step reasoning");
-          if (this.assistantBlock) {
-            this.stepsEl.insertBefore(this.reasoningBlock, this.assistantBlock);
-          }
           const rHead = this.reasoningBlock.createDiv("ai-wiki-step-head");
           rHead.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F9E0}");
           rHead.createSpan({ cls: "ai-wiki-step-name muted" }).setText(i18n().view.analysing);
@@ -21055,23 +21052,19 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
           });
         }
       } else {
-        if (!this.assistantBlock) {
-          this.assistantBlock = this.stepsEl.createDiv("ai-wiki-step assistant");
-          const aHead = this.assistantBlock.createDiv("ai-wiki-step-head");
-          aHead.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F4AC}");
-          aHead.createSpan({ cls: "ai-wiki-step-name muted" }).setText(i18n().view.formingResponse);
-          this.assistantBlock.createSpan({ cls: "ai-wiki-assistant-text" });
+        if (!this.assistantStarted) {
+          this.assistantStarted = true;
+          this.stepsOpen = false;
+          this.stepsEl.addClass("ai-wiki-hidden");
+          this.progressToggle.setText("\u25B6");
+          this.reasoningBlock?.addClass("reasoning--collapsed");
+          this.resultSection.removeClass("ai-wiki-hidden");
+          this.resultOpen = true;
+          this.resultToggle.setText("\u25BC");
+          this.finalEl.removeClass("ai-wiki-hidden");
         }
         this.assistantBuffer += ev.delta;
-        if (!this.assistantRafHandle) {
-          this.assistantRafHandle = window.requestAnimationFrame(() => {
-            this.assistantRafHandle = null;
-            const span = this.assistantBlock?.querySelector(".ai-wiki-assistant-text");
-            if (span)
-              span.setText(this.assistantBuffer);
-            this.scrollSteps();
-          });
-        }
+        this.scheduleAssistantRender();
       }
     } else if (ev.kind === "system") {
       const step = this.stepsEl.createDiv("ai-wiki-step");
@@ -21085,7 +21078,6 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.scrollSteps();
     } else if (ev.kind === "result") {
       this.stopWaiting();
-      this.assistantBlock = null;
       if (ev.outputTokens !== void 0 && ev.durationMs > 0) {
         this.lastTokPerSec = Math.round(ev.outputTokens / (ev.durationMs / 1e3));
       }
@@ -21177,6 +21169,12 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     const totalDur = ((entry.finishedAt - entry.startedAt) / 1e3).toFixed(1);
     this.progressCount.setText(`${totalDur}s`);
     this.resultSpeedEl?.setText(this.lastTokPerSec !== void 0 ? ` ${this.lastTokPerSec} tok/s` : "");
+    if (this.assistantRenderHandle !== null) {
+      window.clearTimeout(this.assistantRenderHandle);
+      this.assistantRenderHandle = null;
+    }
+    this.assistantFinalComp?.unload();
+    this.assistantFinalComp = null;
     this.finalEl.empty();
     if (entry.finalText) {
       const comp = new import_obsidian4.Component();
@@ -21392,6 +21390,27 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   }
   scrollSteps() {
     this.stepsEl.scrollTop = this.stepsEl.scrollHeight;
+  }
+  scheduleAssistantRender() {
+    if (this.assistantRenderHandle !== null)
+      return;
+    this.assistantRenderHandle = window.setTimeout(() => {
+      this.assistantRenderHandle = null;
+      if (!this.assistantBuffer)
+        return;
+      this.finalEl.empty();
+      if (!this.assistantFinalComp) {
+        this.assistantFinalComp = new import_obsidian4.Component();
+        this.assistantFinalComp.load();
+      }
+      void import_obsidian4.MarkdownRenderer.render(
+        this.app,
+        this.assistantBuffer,
+        this.finalEl,
+        "",
+        this.assistantFinalComp
+      ).then(() => sanitizeLinks(this.finalEl));
+    }, 150);
   }
   startWaiting() {
     this.stopWaiting();
@@ -21900,13 +21919,16 @@ function parseIndexAnnotations(content) {
     if (idx <= 0)
       continue;
     const key = line.slice(0, idx).trim();
-    const value = line.slice(idx + 1).trim();
-    if (key && value)
-      map.set(key, value);
+    const raw = line.slice(idx + 1).trim();
+    if (!key || !raw)
+      continue;
+    const pipeIdx = raw.indexOf(" | ");
+    const value = pipeIdx >= 0 ? raw.slice(pipeIdx + 3).trim() : raw;
+    map.set(key, value);
   }
   return map;
 }
-async function upsertIndexAnnotation(vaultTools, wikiFolder, pid, annotation) {
+async function upsertIndexAnnotation(vaultTools, wikiFolder, pid, annotation, fullPath) {
   const indexPath = `${wikiFolder}/_index.md`;
   let content = "";
   try {
@@ -21915,7 +21937,14 @@ async function upsertIndexAnnotation(vaultTools, wikiFolder, pid, annotation) {
   }
   const escaped = pid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const pattern = new RegExp(`^${escaped}:.*$`, "m");
-  const newLine = `${pid}: ${annotation}`;
+  let newLine;
+  if (fullPath) {
+    const prefix = wikiFolder + "/";
+    const relativePath = fullPath.startsWith(prefix) ? fullPath.slice(prefix.length) : fullPath;
+    newLine = `${pid}: [[${pid}]] ${relativePath} | ${annotation}`;
+  } else {
+    newLine = `${pid}: ${annotation}`;
+  }
   if (pattern.test(content)) {
     content = content.replace(pattern, newLine);
   } else {
@@ -22106,7 +22135,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
       yield { kind: "tool_result", ok: true };
       if (page.annotation) {
         try {
-          await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation);
+          await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation, page.path);
         } catch {
         }
       }
@@ -27067,7 +27096,7 @@ Applying fixes for "${domain.id}"...
         yield { kind: "tool_result", ok: true };
         if (page.annotation) {
           try {
-            await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation);
+            await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation, page.path);
           } catch {
           }
         }
@@ -27382,7 +27411,7 @@ ${c}`).join("\n\n");
     }
     if (page.annotation) {
       try {
-        await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation);
+        await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation, page.path);
       } catch {
       }
     }

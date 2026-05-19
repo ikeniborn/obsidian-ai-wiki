@@ -56,10 +56,10 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
-.ai-wiki-step.assistant { display: flex; gap: 6px; align-items: flex-start; padding: 4px 0; }
-.ai-wiki-assistant-text { white-space: pre-wrap; word-break: break-word; color: var(--text-normal); }
 .ai-wiki-step.reasoning { display: flex; gap: 6px; align-items: flex-start; padding: 4px 0; opacity: 0.6; }
 .ai-wiki-reasoning-text { white-space: pre-wrap; word-break: break-word; font-style: italic; color: var(--text-muted); font-size: 0.88em; }
+.reasoning--collapsed .ai-wiki-reasoning-text { display: none; }
+.reasoning--collapsed .ai-wiki-step-name::after { content: " (collapsed)"; font-size: 0.8em; opacity: 0.6; }
 .ai-wiki-step.muted, .muted { color: var(--text-muted); }
 .ai-wiki-step.err { color: var(--text-error); }
 

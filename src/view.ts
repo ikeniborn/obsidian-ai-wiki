@@ -92,11 +92,12 @@ export class LlmWikiView extends ItemView {
   private tickHandle: ReturnType<typeof window.setTimeout> | null = null;
   private currentToolStep: HTMLElement | null = null;
   private currentToolStartedAt = 0;
-  private assistantBlock: HTMLElement | null = null;
+  private assistantStarted = false;
   private assistantBuffer = "";
+  private assistantRenderHandle: ReturnType<typeof window.setTimeout> | null = null;
+  private assistantFinalComp: Component | null = null;
   private reasoningBlock: HTMLElement | null = null;
   private reasoningBuffer = "";
-  private assistantRafHandle: number | null = null;
   private reasoningRafHandle: number | null = null;
   private waitingStep: HTMLElement | null = null;
   private waitingTickHandle: ReturnType<typeof window.setTimeout> | null = null;
@@ -195,10 +196,12 @@ export class LlmWikiView extends ItemView {
     if (this.tickHandle !== null) window.clearTimeout(this.tickHandle);
     if (this.chatTickHandle !== null) window.clearTimeout(this.chatTickHandle);
     this.stopWaiting();
-    if (this.assistantRafHandle !== null) {
-      window.cancelAnimationFrame(this.assistantRafHandle);
-      this.assistantRafHandle = null;
+    if (this.assistantRenderHandle !== null) {
+      window.clearTimeout(this.assistantRenderHandle);
+      this.assistantRenderHandle = null;
     }
+    this.assistantFinalComp?.unload();
+    this.assistantFinalComp = null;
     if (this.reasoningRafHandle !== null) {
       window.cancelAnimationFrame(this.reasoningRafHandle);
       this.reasoningRafHandle = null;
@@ -375,14 +378,16 @@ export class LlmWikiView extends ItemView {
     this.progressTotal = 0;
     this.progressDone = 0;
     this.currentToolStep = null;
-    this.assistantBlock = null;
+    this.assistantStarted = false;
     this.assistantBuffer = "";
+    if (this.assistantRenderHandle !== null) {
+      window.clearTimeout(this.assistantRenderHandle);
+      this.assistantRenderHandle = null;
+    }
+    this.assistantFinalComp?.unload();
+    this.assistantFinalComp = null;
     this.reasoningBlock = null;
     this.reasoningBuffer = "";
-    if (this.assistantRafHandle !== null) {
-      window.cancelAnimationFrame(this.assistantRafHandle);
-      this.assistantRafHandle = null;
-    }
     if (this.reasoningRafHandle !== null) {
       window.cancelAnimationFrame(this.reasoningRafHandle);
       this.reasoningRafHandle = null;
@@ -476,14 +481,9 @@ export class LlmWikiView extends ItemView {
     if (ev.kind === "tool_use") {
       this.stopWaiting();
       this.toolCount++;
-      this.assistantBlock = null;
       this.assistantBuffer = "";
       this.reasoningBlock = null;
       this.reasoningBuffer = "";
-      if (this.assistantRafHandle !== null) {
-        window.cancelAnimationFrame(this.assistantRafHandle);
-        this.assistantRafHandle = null;
-      }
       if (this.reasoningRafHandle !== null) {
         window.cancelAnimationFrame(this.reasoningRafHandle);
         this.reasoningRafHandle = null;
@@ -522,9 +522,6 @@ export class LlmWikiView extends ItemView {
       if (ev.isReasoning) {
         if (!this.reasoningBlock) {
           this.reasoningBlock = this.stepsEl.createDiv("ai-wiki-step reasoning");
-          if (this.assistantBlock) {
-            this.stepsEl.insertBefore(this.reasoningBlock, this.assistantBlock);
-          }
           const rHead = this.reasoningBlock.createDiv("ai-wiki-step-head");
           rHead.createSpan({ cls: "ai-wiki-step-icon" }).setText("🧠");
           rHead.createSpan({ cls: "ai-wiki-step-name muted" }).setText(i18n().view.analysing);
@@ -540,22 +537,19 @@ export class LlmWikiView extends ItemView {
           });
         }
       } else {
-        if (!this.assistantBlock) {
-          this.assistantBlock = this.stepsEl.createDiv("ai-wiki-step assistant");
-          const aHead = this.assistantBlock.createDiv("ai-wiki-step-head");
-          aHead.createSpan({ cls: "ai-wiki-step-icon" }).setText("💬");
-          aHead.createSpan({ cls: "ai-wiki-step-name muted" }).setText(i18n().view.formingResponse);
-          this.assistantBlock.createSpan({ cls: "ai-wiki-assistant-text" });
+        if (!this.assistantStarted) {
+          this.assistantStarted = true;
+          this.stepsOpen = false;
+          this.stepsEl.addClass("ai-wiki-hidden");
+          this.progressToggle.setText("▶");
+          this.reasoningBlock?.addClass("reasoning--collapsed");
+          this.resultSection.removeClass("ai-wiki-hidden");
+          this.resultOpen = true;
+          this.resultToggle.setText("▼");
+          this.finalEl.removeClass("ai-wiki-hidden");
         }
         this.assistantBuffer += ev.delta;
-        if (!this.assistantRafHandle) {
-          this.assistantRafHandle = window.requestAnimationFrame(() => {
-            this.assistantRafHandle = null;
-            const span = this.assistantBlock?.querySelector<HTMLElement>(".ai-wiki-assistant-text");
-            if (span) span.setText(this.assistantBuffer);
-            this.scrollSteps();
-          });
-        }
+        this.scheduleAssistantRender();
       }
     } else if (ev.kind === "system") {
       const step = this.stepsEl.createDiv("ai-wiki-step");
@@ -569,7 +563,6 @@ export class LlmWikiView extends ItemView {
       this.scrollSteps();
     } else if (ev.kind === "result") {
       this.stopWaiting();
-      this.assistantBlock = null;
       if (ev.outputTokens !== undefined && ev.durationMs > 0) {
         this.lastTokPerSec = Math.round(ev.outputTokens / (ev.durationMs / 1000));
       }
@@ -664,6 +657,12 @@ export class LlmWikiView extends ItemView {
     const totalDur = ((entry.finishedAt - entry.startedAt) / 1000).toFixed(1);
     this.progressCount.setText(`${totalDur}s`);
     this.resultSpeedEl?.setText(this.lastTokPerSec !== undefined ? ` ${this.lastTokPerSec} tok/s` : "");
+    if (this.assistantRenderHandle !== null) {
+      window.clearTimeout(this.assistantRenderHandle);
+      this.assistantRenderHandle = null;
+    }
+    this.assistantFinalComp?.unload();
+    this.assistantFinalComp = null;
     this.finalEl.empty();
     if (entry.finalText) {
       const comp = new Component();
@@ -885,6 +884,22 @@ export class LlmWikiView extends ItemView {
 
   private scrollSteps(): void {
     this.stepsEl.scrollTop = this.stepsEl.scrollHeight;
+  }
+
+  private scheduleAssistantRender(): void {
+    if (this.assistantRenderHandle !== null) return;
+    this.assistantRenderHandle = window.setTimeout(() => {
+      this.assistantRenderHandle = null;
+      if (!this.assistantBuffer) return;
+      this.finalEl.empty();
+      if (!this.assistantFinalComp) {
+        this.assistantFinalComp = new Component();
+        this.assistantFinalComp.load();
+      }
+      void MarkdownRenderer.render(
+        this.app, this.assistantBuffer, this.finalEl, "", this.assistantFinalComp
+      ).then(() => sanitizeLinks(this.finalEl));
+    }, 150);
   }
 
   private startWaiting(): void {
