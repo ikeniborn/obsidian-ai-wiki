@@ -9,7 +9,7 @@ import initTemplate from "../../prompts/init.md";
 import initIncrementalTemplate from "../../prompts/init-incremental.md";
 import { render } from "./template";
 import { runIngest } from "./ingest";
-import { domainWikiFolder } from "../wiki-path";
+import { domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder } from "../wiki-path";
 
 export function mergeEntityTypes(current: EntityType[], incoming: EntityType[]): EntityType[] {
   const map = new Map(current.map(e => [e.type, e]));
@@ -166,12 +166,9 @@ export async function* runInit(
       entity_types: parsed.entity_types,
       language_notes: parsed.language_notes,
     } as DomainEntry;
-    const vaultPrefix = `vaults/${vaultName}/`;
-    if (entry.wiki_folder?.startsWith(vaultPrefix)) {
-      entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
-    }
-    if (entry.wiki_folder?.startsWith("!Wiki/")) {
-      entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
+    entry.wiki_folder = sanitizeWikiFolder(entry.wiki_folder ?? "");
+    for (const et of entry.entity_types ?? []) {
+      if (et.wiki_subfolder) et.wiki_subfolder = sanitizeWikiSubfolder(et.wiki_subfolder);
     }
     if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
   } catch (e) {
@@ -327,9 +324,10 @@ export async function* runInitWithSources(
           entity_types: parsed.entity_types,
           language_notes: parsed.language_notes,
         } as DomainEntry;
-        const vaultPrefix = `vaults/${vaultName}/`;
-        if (entry.wiki_folder?.startsWith(vaultPrefix)) entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
-        if (entry.wiki_folder?.startsWith("!Wiki/")) entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
+        entry.wiki_folder = sanitizeWikiFolder(entry.wiki_folder ?? "");
+        for (const et of entry.entity_types ?? []) {
+          if (et.wiki_subfolder) et.wiki_subfolder = sanitizeWikiSubfolder(et.wiki_subfolder);
+        }
         if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
         // На reinit (force=true) wiki_folder уже зафиксирован — LLM не должен его менять.
         if (force && existing) {

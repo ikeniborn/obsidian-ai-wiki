@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { runInit, mergeEntityTypes } from "../../src/phases/init";
+import { sanitizeWikiFolder, sanitizeWikiSubfolder } from "../../src/wiki-path";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
@@ -815,5 +816,17 @@ describe("runInitWithSources — per-file pipeline", () => {
     const result = events.find((e: any) => e.kind === "result") as any;
     expect(result).toBeDefined();
     expect(result.text).toContain("no new sources");
+  });
+});
+
+describe("sanitizeWikiFolder applied in init bootstrap", () => {
+  it("returns last segment when wiki_folder contains slash", () => {
+    expect(sanitizeWikiFolder("os/network")).toBe("network");
+    expect(sanitizeWikiFolder("vaults/MyVault/!Wiki/os")).toBe("os");
+  });
+
+  it("sanitizeWikiSubfolder strips domain prefix", () => {
+    expect(sanitizeWikiSubfolder("os/network")).toBe("network");
+    expect(sanitizeWikiSubfolder("processes")).toBe("processes");
   });
 });
