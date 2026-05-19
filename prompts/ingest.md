@@ -21,5 +21,9 @@
 - Для каждой страницы добавь поле "annotation" в JSON: одно предложение — описание сущности для поиска по смыслу
 {{schema_block}}
 
+ПРАВИЛО ПУТЕЙ: путь каждой статьи = !Wiki/<domain>/<entity>/<Article>.md — ровно 4 сегмента.
+Нельзя: !Wiki/os/os/network/NFS.md (домен дважды), !Wiki/os/network/nfs/NFS.md (5 сегментов).
+Можно:  !Wiki/os/network/NFS.md
+
 Верни ТОЛЬКО JSON-массив, без другого текста:
 [{"path":"{{wiki_path}}/EntityName.md","content":"---\nwiki_sources: [\"[[{{source_path}}]]\"]\nwiki_updated: {{today}}\nwiki_status: stub\nwiki_keywords: [токен1, токен2]\ntags: []\nwiki_outgoing_links: []\n---\n# EntityName\n\ncontент...","annotation":"Краткое описание сущности для контекстного поиска"}]

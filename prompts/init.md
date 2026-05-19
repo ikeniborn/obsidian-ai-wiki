@@ -32,6 +32,9 @@
   "language_notes": "Смесь русского/английского; сохраняй оригинальное написание product-имён."
 }
 
+ПРАВИЛО wiki_subfolder: одно слово, без слэшей, без domain_id.
+Нельзя: "os/network", "os_network". Можно: "network", "processes", "protocols".
+
 ## Wiki Page Conventions
 
 Страницы wiki должны иметь frontmatter с полями:
