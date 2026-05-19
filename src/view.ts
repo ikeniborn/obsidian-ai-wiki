@@ -381,14 +381,6 @@ export class LlmWikiView extends ItemView {
     this.progressTotal = 0;
     this.progressDone = 0;
     this.currentToolStep = null;
-    this.assistantStarted = false;
-    this.assistantBuffer = "";
-    if (this.assistantRenderHandle !== null) {
-      window.clearTimeout(this.assistantRenderHandle);
-      this.assistantRenderHandle = null;
-    }
-    this.assistantFinalComp?.unload();
-    this.assistantFinalComp = null;
     this.reasoningBlock = null;
     this.reasoningBuffer = "";
     if (this.reasoningRafHandle !== null) {
@@ -403,6 +395,9 @@ export class LlmWikiView extends ItemView {
     this.updateMetrics();
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
     this.stopWaiting();
+    this.liveStatusSection?.removeClass("ai-wiki-hidden");
+    this.liveStatusIconEl?.setText("");
+    this.liveStatusTextEl?.setText("");
     this.scheduleMetricsTick();
     if (Platform.isMobile) {
       // Streaming недоступен на mobile — показываем спиннер, чтобы UI не выглядел замёрзшим.
