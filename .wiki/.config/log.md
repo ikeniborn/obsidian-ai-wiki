@@ -315,3 +315,82 @@
 
 **Пропущено:** README.md — Security section уже присутствует в README (реализована Task 5), содержимое покрыто в обеих wiki-страницах
 
+---
+
+## 2026-05-18 — ingest lint-ux-fixes (spec + plan)
+
+**Операция:** ingest (batch)
+**Домен:** документация
+**Источники:**
+  - `docs/superpowers/specs/2026-05-18-lint-ux-fixes-design.md`
+  - `docs/superpowers/plans/2026-05-18-lint-ux-fixes.md`
+
+**Создано:** 2
+  - `документация/спецификации/lint-ux-fixes-design.md` (mature) — пять независимых UX-фиксов: Fix 1 (appendLintLog в _log.md), Fix 2 (dedup dead-links через new Set), Fix 3 (lint-chat domain fallback + i18n selectDomainFirst), Fix 4 (copy button на чат-сообщениях, hover-reveal CSS), Fix 5 (убрать ASSISTANT_TEXT_MAX + waiting indicator tool_result→tool_use/assistant_text)
+  - `документация/планы/lint-ux-fixes-plan.md` (mature) — 6 TDD-задач: Task 1 (appendLintLog), Task 2 (checkStructure dedup), Task 3 (i18n + domain fallback), Task 4 (copy btn CSS+TS), Task 5a (ASSISTANT_TEXT_MAX), Task 5b (waiting indicator поля+методы+wiring)
+
+**Обновлено:** index.md (спецификации 13→14, планы 9→10), log.md
+
+---
+
+## 2026-05-18 — ingest README.md + docs/TODO.md
+
+**Операция:** ingest  
+**Домен:** документация  
+**Источники:**
+  - `README.md`
+  - `docs/TODO.md`
+
+**Создано страниц:** 2
+  - `документация/компоненты/settings.md` (developing) — полный справочник настроек плагина: General, Domains, Backend selector, Claude Agent (включая shellConsentGiven), Native Agent (per-operation, structured output retries), Proxy, Graph, Dev mode
+  - `документация/паттерны/shell-consent.md` (stub) — паттерн первого запуска: модальный диалог согласия перед spawn внешнего процесса, флаг `shellConsentGiven` в data.json, механизм отзыва
+
+**Обновлено страниц:** 2
+  - `документация/операции/lint-operation.md` — добавлен раздел «Известные проблемы» с TODO-пунктами 9/10/13/14 (статусы `[v]`/`[>]`): деdup dead-links (исправлено, коммит cddfb51), lint-chat ошибка, неполный прогресс + waiting indicator, lint не пишет в log/index
+  - `документация/компоненты/llm-wiki-view.md` — добавлены разделы: copy-to-clipboard кнопка на чат-пузырях (коммит ba9f192), waiting indicator между tool_result и следующим LLM-событием (коммит 5547cc2)
+
+**Не создано (уже покрыто):**
+  - Операции (ingest/query/lint/init/chat/format) — покрыты в предыдущих ingest
+  - TODO items 9–14 на уровне спецификаций — покрыты `lint-ux-fixes-design.md` и `security-audit-fixes-design.md`
+  - Security section README — покрыта `security-audit-fixes-design.md`
+
+**Обновлено:** index.md (компоненты 10→11, паттерны 6→7), log.md
+
+---
+
+## 2026-05-19 — ingest README.md + docs/ + prompts/
+
+**Операция:** ingest  
+**Домен:** документация  
+**Источники:**
+  - `README.md`
+  - `docs/superpowers/specs/2026-05-19-live-response-ux-design.md`
+  - `docs/superpowers/plans/2026-05-19-live-response-ux.md`
+  - `docs/superpowers/specs/2026-05-19-live-status-ux-design.md`
+  - `docs/superpowers/plans/2026-05-19-live-status-ux.md`
+  - `docs/superpowers/specs/2026-05-19-index-path-annotation-design.md`
+  - `docs/superpowers/plans/2026-05-19-index-path-annotation.md`
+  - `docs/superpowers/specs/2026-05-19-wiki-path-hierarchy-design.md`
+  - `docs/superpowers/plans/2026-05-19-wiki-path-hierarchy.md`
+  - `docs/superpowers/specs/2026-05-19-agent-stability-audit-design.md`
+  - `prompts/ingest.md` (ПРАВИЛО ПУТЕЙ уже добавлено)
+  - `prompts/init.md` (ПРАВИЛО wiki_subfolder)
+
+**Создано страниц:** 9
+  - `документация/спецификации/live-response-ux-design.md` (mature) — streaming assistant_text в Result section, scheduleAssistantRender(), авто-коллапс Progress
+  - `документация/планы/live-response-ux-plan.md` (mature) — 9 tasks; реализован v0.1.110, заменён live-status-ux
+  - `документация/спецификации/live-status-ux-design.md` (mature) — Status-блок вместо streaming; Progress остаётся открытым; liveStatusSection/IconEl/TextEl
+  - `документация/планы/live-status-ux-plan.md` (mature) — 10 tasks; реализован v0.1.111
+  - `документация/спецификации/index-path-annotation-design.md` (mature) — новый формат `pid: [[pid]] path | annotation`, backward compat
+  - `документация/планы/index-path-annotation-plan.md` (mature) — 5 TDD-задач; реализован v0.1.109
+  - `документация/спецификации/wiki-path-hierarchy-design.md` (mature) — sanitize/validate функции, retry в ingest
+  - `документация/планы/wiki-path-hierarchy-plan.md` (mature) — 4 TDD-задачи (wiki-path.ts, init, ingest, prompts)
+  - `документация/спецификации/agent-stability-audit-design.md` (mature) — Zod схемы для page-arrays, lint merge assess+fix, format Zod
+
+**Обновлено страниц:** 3
+  - `документация/компоненты/llm-wiki-view.md` — добавлены разделы Live Response UX (v0.1.110) и Live Status UX (v0.1.111) с таблицей Status по событиям
+  - `документация/компоненты/wiki-index.md` — обновлён API (fullPath param), новый формат _index.md, backward compat, история изменений
+  - `документация/операции/lint-operation.md` — добавлен раздел agent-stability-audit (planned merge assess+fix, LintOutputSchema, UI-прогресс)
+
+**Обновлено:** index.md (спецификации 14→19, планы 10→14), log.md
+

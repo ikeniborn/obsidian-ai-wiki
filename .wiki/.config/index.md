@@ -6,7 +6,7 @@
 
 ### документация
 
-#### компоненты (10)
+#### компоненты (11)
 - [[wiki-controller]] — `документация/компоненты/wiki-controller.md`
 - [[agent-runner]] — `документация/компоненты/agent-runner.md`
 - [[claude-cli-client]] — `документация/компоненты/claude-cli-client.md`
@@ -17,6 +17,7 @@
 - [[wiki-graph-cache]] — `документация/компоненты/wiki-graph-cache.md`
 - [[wiki-seeds]] — `документация/компоненты/wiki-seeds.md`
 - [[wiki-index]] — `документация/компоненты/wiki-index.md`
+- [[settings]] — `документация/компоненты/settings.md`
 
 #### операции (8)
 - [[format-operation]] — `документация/операции/format-operation.md`
@@ -28,15 +29,16 @@
 - [[init-operation]] — `документация/операции/init-operation.md`
 - [[chat-operation]] — `документация/операции/chat-operation.md`
 
-#### паттерны (6)
+#### паттерны (7)
 - [[single-flight-guard]] — `документация/паттерны/single-flight-guard.md`
 - [[async-generator-events]] — `документация/паттерны/async-generator-events.md`
 - [[backend-strategy]] — `документация/паттерны/backend-strategy.md`
 - [[per-device-settings]] — `документация/паттерны/per-device-settings.md`
 - [[reasoning-first-json]] — `документация/паттерны/reasoning-first-json.md`
 - [[structured-output-retry]] — `документация/паттерны/structured-output-retry.md`
+- [[shell-consent]] — `документация/паттерны/shell-consent.md`
 
-#### спецификации (13)
+#### спецификации (19)
 - [[agent-base-contract]] — `документация/спецификации/agent-base-contract.md`
 - [[format-operation-design]] — `документация/спецификации/format-operation-design.md`
 - [[claude-agent-backend-design]] — `документация/спецификации/claude-agent-backend-design.md`
@@ -50,8 +52,14 @@
 - [[mobile-domain-selector-design]] — `документация/спецификации/mobile-domain-selector-design.md`
 - [[mobile-query-seed-design]] — `документация/спецификации/mobile-query-seed-design.md`
 - [[security-audit-fixes-design]] — `документация/спецификации/security-audit-fixes-design.md`
+- [[lint-ux-fixes-design]] — `документация/спецификации/lint-ux-fixes-design.md`
+- [[live-response-ux-design]] — `документация/спецификации/live-response-ux-design.md`
+- [[live-status-ux-design]] — `документация/спецификации/live-status-ux-design.md`
+- [[index-path-annotation-design]] — `документация/спецификации/index-path-annotation-design.md`
+- [[wiki-path-hierarchy-design]] — `документация/спецификации/wiki-path-hierarchy-design.md`
+- [[agent-stability-audit-design]] — `документация/спецификации/agent-stability-audit-design.md`
 
-#### планы (9)
+#### планы (14)
 - [[generation-speed-plan]] — `документация/планы/generation-speed-plan.md`
 - [[init-stability-plan]] — `документация/планы/init-stability-plan.md`
 - [[reinit-button-plan]] — `документация/планы/reinit-button-plan.md`
@@ -61,3 +69,8 @@
 - [[mobile-domain-selector-plan]] — `документация/планы/mobile-domain-selector-plan.md`
 - [[mobile-query-seed-plan]] — `документация/планы/mobile-query-seed-plan.md`
 - [[security-audit-fixes-plan]] — `документация/планы/security-audit-fixes-plan.md`
+- [[lint-ux-fixes-plan]] — `документация/планы/lint-ux-fixes-plan.md`
+- [[live-response-ux-plan]] — `документация/планы/live-response-ux-plan.md`
+- [[live-status-ux-plan]] — `документация/планы/live-status-ux-plan.md`
+- [[index-path-annotation-plan]] — `документация/планы/index-path-annotation-plan.md`
+- [[wiki-path-hierarchy-plan]] — `документация/планы/wiki-path-hierarchy-plan.md`

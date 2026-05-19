@@ -3,7 +3,6 @@ import { runIngest, buildEntityTypesBlock, parseJsonPages } from "../../src/phas
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
-import { validateArticlePath } from "../../src/wiki-path";
 
 function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
   return {

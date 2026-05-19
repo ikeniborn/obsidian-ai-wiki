@@ -6,7 +6,12 @@ wiki_sources:
   - src/view.ts
   - docs/superpowers/specs/2026-05-16-mobile-domain-selector-design.md
   - docs/superpowers/plans/2026-05-16-mobile-domain-selector.md
-wiki_updated: 2026-05-16
+  - docs/TODO.md
+  - "[[docs/superpowers/specs/2026-05-19-live-response-ux-design.md]]"
+  - "[[docs/superpowers/plans/2026-05-19-live-response-ux.md]]"
+  - "[[docs/superpowers/specs/2026-05-19-live-status-ux-design.md]]"
+  - "[[docs/superpowers/plans/2026-05-19-live-status-ux.md]]"
+wiki_updated: 2026-05-19
 wiki_domain: документация
 tags: [компонент, view, ui, obsidian, security, mobile, i18n]
 ---
@@ -78,6 +83,33 @@ function sanitizeLinks(el: HTMLElement): void {
 
 Поток: `appendEvent(result)` → вычислить `lastTokPerSec` → `finish()` записывает оба места → `setRunning()` сбрасывает. Значение НЕ хранится в `RunHistoryEntry`.
 
+## Copy-to-clipboard (v, коммит ba9f192)
+
+На каждом чат-пузыре (`addChatBubble`) добавлена кнопка копирования в буфер обмена. При нажатии копирует текстовое содержимое пузыря через `navigator.clipboard.writeText`. Кнопка отображается в правом верхнем углу пузыря.
+
+## Waiting indicator между tool_result и LLM-событием (v, коммит 5547cc2)
+
+В прогрессе между событием `tool_result` и следующим LLM-ответом отображается индикатор ожидания — показывает пользователю, что процесс активен и ждёт ответа от модели. Решает UX-проблему: без индикатора прогресс-секция выглядела «замёрзшей» на предыдущем шаге.
+
+## Live Response UX (v0.1.110)
+
+По [[live-response-ux-design]]: первый non-reasoning `assistant_text` → авто-коллапс Progress, коллапс reasoning-блока с `(collapsed)`, открытие Result section со streaming markdown через `MarkdownRenderer`. Debounce 150ms (`scheduleAssistantRender()`).
+
+## Live Status UX (v0.1.111)
+
+По [[live-status-ux-design]]: заменяет live-response-ux. Progress остаётся открытым. Компактный **Status-блок** (`.ai-wiki-live-status`) под стepsEl показывает текущую активность одной строкой:
+
+| Событие | Иконка | Текст |
+|---|---|---|
+| tool_use | 🔧 | `{name}  {arg}` |
+| waiting | ⏳ | `{elapsed}s` |
+| reasoning | 🧠 | `Analysing...` |
+| assistant_text | 💬 | `Forming response...` |
+| finish() | — | Status скрыт |
+
+Удалены: `assistantStarted`, `assistantBuffer`, `assistantRenderHandle`, `assistantFinalComp`, `scheduleAssistantRender()`.
+Добавлены: `liveStatusSection`, `liveStatusIconEl`, `liveStatusTextEl`.
+
 ## Связанные страницы
 
 - [[wiki-controller]]
@@ -87,3 +119,6 @@ function sanitizeLinks(el: HTMLElement): void {
 - [[generation-speed-design]]
 - [[mobile-domain-selector-design]]
 - [[mobile-domain-selector-plan]]
+- [[live-response-ux-design]]
+- [[live-status-ux-design]]
+- [[live-status-ux-plan]]

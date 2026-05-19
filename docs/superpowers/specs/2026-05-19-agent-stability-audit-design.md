@@ -2,6 +2,49 @@
 title: Agent Stability Audit — Zod+retry everywhere + CoT+Structured split
 date: 2026-05-19
 status: approved
+review:
+  spec_hash: 49ad7681ac415a09
+  last_run: 2026-05-19
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: pending }
+    consistency:  { status: pending }
+  section_hashes:
+    problem:        44e2d1e70b97b458
+    audit_table:    088d078ed36de433
+    design:         11109c9f72cd6f5b
+    design_1:       817ab1e8d68d0b4e
+    design_2:       a8ec3e2c5d0fb223
+    design_3:       35ada55fb3903ca2
+    design_4:       2bf8ecf8ac8a700b
+    design_5:       33fdb4596307be33
+    design_6:       a9f37371fc5632a1
+    impact_summary: a96c19dc890f32de
+    files_changed:  059b2a367c778631
+    out_of_scope:   48f02fdca3a3c4df
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: CRITICAL
+      section: Files Changed / Design §4
+      section_hash: "059b2a367c778631 / 2bf8ecf8ac8a700b"
+      text: >
+        §Files Changed said "replace custom retry with parseWithRetry" but §Design/4 says keep
+        callOnce loop. Fixed: §Files Changed and §Impact Summary updated to reflect actual change
+        (extractJsonObject → Zod, custom loop unchanged).
+      verdict: fixed
+      verdict_at: 2026-05-19
+    - id: F-002
+      phase: coverage
+      severity: WARNING
+      section: Design §2
+      section_hash: a8ec3e2c5d0fb223
+      text: >
+        "retained only as internal fallback utility" was ambiguous. Fixed: wording updated to
+        "kept for tests only (not on production path, not exported from phase modules)".
+      verdict: fixed
+      verdict_at: 2026-05-19
 ---
 
 # Agent Stability Audit: Zod + CoT+Structured
@@ -71,7 +114,7 @@ export const FormatOutputSchema = z.object({
 - Prompt updated to return `{reasoning, pages}` instead of raw array
 - `pages` validated by `WikiPagesOutputSchema` via `parseWithRetry` (buffers full response)
 - After parsing, `reasoning` yielded as `{ kind: "assistant_text", delta: result.reasoning, isReasoning: true }` before write loop
-- `parseJsonPages()` retained only as internal fallback utility for legacy fixtures/tests
+- `parseJsonPages()` kept for tests only (not on production path, not exported from phase modules)
 
 `callSite` value: `"ingest.pages"` (add to `CallSite` union in `parse-with-retry.ts`)
 
@@ -139,7 +182,7 @@ export type CallSite =
 |---|---|---|---|
 | ingest: parseWithRetry | 0 | WikiPagesOutputSchema | ✓ |
 | lint: merge assess+fix | −1 per domain | LintOutputSchema | ✓ |
-| format: parseWithRetry | 0 | FormatOutputSchema | ✓ (replaces custom) |
+| format: add Zod + structuralErrorCounter | 0 | FormatOutputSchema | — (custom loop kept) |
 | lint-fix UI progress | 0 | — | — |
 
 ## Files Changed
@@ -148,7 +191,7 @@ export type CallSite =
 - `src/phases/parse-with-retry.ts` — add 2 CallSite values
 - `src/phases/ingest.ts` — replace parseJsonPages with parseWithRetry
 - `src/phases/lint.ts` — merge assess+fix, add UI progress
-- `src/phases/format.ts` — replace custom retry with parseWithRetry
+- `src/phases/format.ts` — replace `extractJsonObject()` with `FormatOutputSchema.safeParse()`, add `structuralErrorCounter.record()` (custom retry loop unchanged)
 - `prompts/ingest.md` — return `{reasoning, pages}` JSON
 - `prompts/lint.md` — return `{reasoning, report, fixes}` JSON
 - `prompts/format.md` — no change (already requests `{report, formatted}`)

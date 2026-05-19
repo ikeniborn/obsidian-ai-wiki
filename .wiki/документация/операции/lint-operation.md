@@ -3,7 +3,9 @@ wiki_status: developing
 wiki_sources:
   - README.md
   - prompts/lint.md
-wiki_updated: 2026-05-17
+  - docs/TODO.md
+  - "[[docs/superpowers/specs/2026-05-19-agent-stability-audit-design.md]]"
+wiki_updated: 2026-05-19
 wiki_domain: документация
 wiki_keywords: [lint, audit, quality, upsertIndexAnnotation, annotation, wiki-keywords, fix]
 wiki_outgoing_links:
@@ -62,10 +64,29 @@ LLM возвращает JSON-массив с полями `path`, `content`, `a
 
 Только desktop.
 
+## Известные проблемы (docs/TODO.md, 2026-05-18)
+
+| # | Статус | Описание |
+|---|---|---|
+| 13 | `[>]` в работе | В боковой панели при lint отображается неполная информация в прогрессе — показывает ответ от предыдущего шага, не сигнализирует об ожидании ответа от LLM. Нужно отображать индикатор ожидания между `tool_result` и следующим LLM-событием. |
+| 14 | `[>]` в работе | Операция lint не дописывает записи в `log.md` и не обновляет `index.md`. Нужно проверить фазу lint и добавить вызовы append-to-log и update-index после завершения. |
+| 9 | `[v]` исправлено | После lint в результате дублировались ссылки на wiki-страницы. Исправлено (дедупликация dead-link отчётов per file в `checkStructure`, коммит cddfb51). |
+| 10 | `[>]` в работе | После lint при отправке запроса через чат получена ошибка. Требует диагностики в chat-фазе после lint-контекста. |
+
+## Agent Stability Audit: Merge assess+fix (planned)
+
+По [[agent-stability-audit-design]]: lint будет выполнять assess и fix в одном CoT+Structured вызове вместо двух раздельных. Новый `LintOutputSchema`:
+- `reasoning` — пошаговое обоснование
+- `report` — markdown-отчёт для пользователя (заменяет free-text assess)
+- `fixes` — JSON-массив страниц (заменяет второй вызов buildFixMessages)
+
+Итого: 3 LLM-вызова → 2. Добавится UI-прогресс в fix-loop (имя файла перед каждой записью). Промпт `prompts/lint.md` обновится для возврата `{reasoning, report, fixes}`.
+
 ## История изменений
 
 - **2026-05-15** — создана страница (README.md, prompts/lint.md).
 - **2026-05-17** — обновлено по [[mobile-query-seed-design]]: upsertIndexAnnotation per fixed page, удалён flat index rewrite, добавлено описание annotation в промпте.
+- **2026-05-19** — добавлен раздел agent-stability-audit (планируемый merge assess+fix).
 
 ## Связанные страницы
 
@@ -75,3 +96,4 @@ LLM возвращает JSON-массив с полями `path`, `content`, `a
 - [[reasoning-first-json]]
 - [[wiki-index]]
 - [[mobile-query-seed-design]]
+- [[agent-stability-audit-design]]
