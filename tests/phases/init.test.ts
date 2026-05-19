@@ -616,7 +616,7 @@ describe("runInitWithSources — per-file pipeline", () => {
   // Ingest returns a JSON array of { path, content } pages.
   // Path must start with `!Wiki/dom/`.
   function ingestPagesJson(name: string): string {
-    return JSON.stringify([{ path: `!Wiki/dom/${name}.md`, content: `# ${name}\nbody` }]);
+    return JSON.stringify([{ path: `!Wiki/dom/concepts/${name}.md`, content: `# ${name}\nbody` }]);
   }
 
   function makeOrderedLlm(events: string[][], onCall: (idx: number) => void): LlmClient {
@@ -676,7 +676,7 @@ describe("runInitWithSources — per-file pipeline", () => {
     );
 
     // The article A.md must have been written before the 3rd LLM call (incremental for b)
-    const writeAIdx = writeLog.findIndex((w) => w.startsWith("write:!Wiki/dom/A.md"));
+    const writeAIdx = writeLog.findIndex((w) => w.startsWith("write:!Wiki/dom/concepts/A.md"));
     expect(writeAIdx).toBeGreaterThanOrEqual(0);
     const writeACallCount = Number(writeLog[writeAIdx].split("@call=")[1]);
     // call=2 means after 2 LLM calls (bootstrap + ingest-a) — the 3rd call (incremental b) hasn't happened yet
@@ -709,7 +709,7 @@ describe("runInitWithSources — per-file pipeline", () => {
             // alternate: incremental → ingest pages
             const isIngest = String(userMsg).includes("Wiki schema") || String(userMsg).includes("!Wiki");
             const body = isIngest
-              ? JSON.stringify([{ path: `!Wiki/dom/X.md`, content: "x" }])
+              ? JSON.stringify([{ path: `!Wiki/dom/concepts/X.md`, content: "x" }])
               : incrementalJson;
             return Promise.resolve({
               [Symbol.asyncIterator]: async function* () {
@@ -750,7 +750,7 @@ describe("runInitWithSources — per-file pipeline", () => {
               });
             }
             const body =
-              idx === 0 ? bootstrapJson : JSON.stringify([{ path: "!Wiki/dom/A.md", content: "a" }]);
+              idx === 0 ? bootstrapJson : JSON.stringify([{ path: "!Wiki/dom/concepts/A.md", content: "a" }]);
             return Promise.resolve({
               [Symbol.asyncIterator]: async function* () {
                 yield { choices: [{ delta: { content: body } }] };
