@@ -135,6 +135,6 @@ describe("runLintFixChat", () => {
     const indexCall = writeCalls.find(([p]: [string]) => p.endsWith("_index.md"));
     expect(indexCall).toBeDefined();
     expect(indexCall![0]).toBe(`${wikiPath}/_index.md`);
-    expect(indexCall![1]).toContain("MyPage: summary of MyPage");
+    expect(indexCall![1]).toContain("MyPage: [[MyPage]] MyPage.md | summary of MyPage");
   });
 });

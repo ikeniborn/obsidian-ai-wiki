@@ -86,7 +86,7 @@ export async function* runLintFixChat(
     }
     if (page.annotation) {
       try {
-        await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation);
+        await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation, page.path);
       } catch { /* non-critical */ }
     }
   }

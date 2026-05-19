@@ -181,7 +181,7 @@ export async function* runLint(
         yield { kind: "tool_result", ok: true };
         if (page.annotation) {
           try {
-            await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation);
+            await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation, page.path);
           } catch { /* non-critical */ }
         }
       } catch (e) {
