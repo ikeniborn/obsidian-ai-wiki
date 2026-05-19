@@ -112,7 +112,8 @@ export async function* runIngest(
       delta: `⚠ Пути нарушают правило 4 сегментов, запрашиваю исправление: ${invalid.map((p) => p.path).join(", ")}\n`,
     };
     const retryText = await retryInvalidPaths(llm, model, messages, invalid, signal, opts);
-    if (retryText && !signal.aborted) {
+    if (signal.aborted) return;
+    if (retryText) {
       const retried = parseJsonPages(retryText);
       const { valid: retriedValid, invalid: retriedInvalid } = splitByPathValidity(retried, wikiVaultPath);
       // Emit ok:false for paths still invalid after retry
@@ -122,15 +123,13 @@ export async function* runIngest(
       }
       pages = [...valid, ...retriedValid];
     } else {
-      // No retry text (aborted or error) — skip all invalid
+      // No retry text (error) — skip all invalid
       for (const p of invalid) {
         yield { kind: "tool_use", name: "Write", input: { path: p.path } };
         yield { kind: "tool_result", ok: false, preview: `Path violates 4-level rule (!Wiki/<d>/<e>/<f>.md): ${p.path}` };
       }
       pages = valid;
     }
-  } else {
-    pages = valid;
   }
 
   const written: string[] = [];
@@ -270,7 +269,9 @@ function splitByPathValidity(
   const valid: typeof pages = [];
   const invalid: typeof pages = [];
   for (const p of pages) {
-    if (validateArticlePath(p.path, wikiVaultPath)) {
+    const filename = p.path.split("/").pop() ?? "";
+    const isSystemFile = filename.startsWith("_") && filename.endsWith(".md");
+    if (!isSystemFile && validateArticlePath(p.path, wikiVaultPath)) {
       valid.push(p);
     } else {
       invalid.push(p);

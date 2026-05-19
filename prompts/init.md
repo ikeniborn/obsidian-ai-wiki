@@ -5,7 +5,7 @@
   "name": "Человекочитаемое название",
   "wiki_folder": "vaults/{{vault_name}}/!Wiki/{{domain_id}}",
   "source_paths": [],
-  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"{{domain_id}}/..."}],
+  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"processes"}],
   "language_notes": ""
 }
 {{schema_block}}
