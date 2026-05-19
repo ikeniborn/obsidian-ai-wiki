@@ -33,6 +33,29 @@ describe("parseIndexAnnotations", () => {
     const map = parseIndexAnnotations(content);
     expect(map.get("Model")).toBe("fast: low-latency model");
   });
+
+  it("extracts annotation from new format (pid: [[pid]] path | annotation)", () => {
+    const content =
+      "metadata-driven-моделирование: [[metadata-driven-моделирование]] ии/концепции/metadata-driven-моделирование.md | Подход через YAML-модели";
+    const map = parseIndexAnnotations(content);
+    expect(map.get("metadata-driven-моделирование")).toBe("Подход через YAML-модели");
+  });
+
+  it("handles annotation containing pipe character after first ' | '", () => {
+    const content = "Page: [[Page]] domain/cat/page.md | annotation | with | pipes";
+    const map = parseIndexAnnotations(content);
+    expect(map.get("Page")).toBe("annotation | with | pipes");
+  });
+
+  it("old format entries still work alongside new format entries", () => {
+    const content = [
+      "OldPage: старая аннотация",
+      "NewPage: [[NewPage]] domain/cat/new-page.md | новая аннотация",
+    ].join("\n");
+    const map = parseIndexAnnotations(content);
+    expect(map.get("OldPage")).toBe("старая аннотация");
+    expect(map.get("NewPage")).toBe("новая аннотация");
+  });
 });
 
 describe("upsertIndexAnnotation", () => {
@@ -74,5 +97,52 @@ describe("upsertIndexAnnotation", () => {
     const { vt } = makeVaultTools("");
     await upsertIndexAnnotation(vt as unknown as VaultTools, "!Wiki/work", "P", "desc");
     expect((vt.write as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe("!Wiki/work/_index.md");
+  });
+
+  it("writes new format when fullPath provided", async () => {
+    const { vt, written } = makeVaultTools("");
+    await upsertIndexAnnotation(
+      vt as unknown as VaultTools,
+      "!Wiki/work",
+      "NewPage",
+      "описание страницы",
+      "!Wiki/work/domain/cat/new-page.md",
+    );
+    expect(written[0]).toBe("NewPage: [[NewPage]] domain/cat/new-page.md | описание страницы");
+  });
+
+  it("writes old format when fullPath absent", async () => {
+    const { vt, written } = makeVaultTools("");
+    await upsertIndexAnnotation(
+      vt as unknown as VaultTools,
+      "!Wiki/work",
+      "Page",
+      "аннотация",
+    );
+    expect(written[0]).toBe("Page: аннотация");
+  });
+
+  it("replaces existing entry with new format", async () => {
+    const { vt, written } = makeVaultTools("Page: старая аннотация");
+    await upsertIndexAnnotation(
+      vt as unknown as VaultTools,
+      "!Wiki/work",
+      "Page",
+      "новая аннотация",
+      "!Wiki/work/domain/cat/page.md",
+    );
+    expect(written[0]).toBe("Page: [[Page]] domain/cat/page.md | новая аннотация");
+  });
+
+  it("strips wikiFolder prefix from fullPath to produce relative path", async () => {
+    const { vt, written } = makeVaultTools("");
+    await upsertIndexAnnotation(
+      vt as unknown as VaultTools,
+      "/abs/vault",
+      "MyPage",
+      "desc",
+      "/abs/vault/sub/folder/my-page.md",
+    );
+    expect(written[0]).toBe("MyPage: [[MyPage]] sub/folder/my-page.md | desc");
   });
 });
