@@ -199,16 +199,13 @@ export class LlmWikiView extends ItemView {
     if (this.tickHandle !== null) window.clearTimeout(this.tickHandle);
     if (this.chatTickHandle !== null) window.clearTimeout(this.chatTickHandle);
     this.stopWaiting();
-    if (this.assistantRenderHandle !== null) {
-      window.clearTimeout(this.assistantRenderHandle);
-      this.assistantRenderHandle = null;
-    }
-    this.assistantFinalComp?.unload();
-    this.assistantFinalComp = null;
     if (this.reasoningRafHandle !== null) {
       window.cancelAnimationFrame(this.reasoningRafHandle);
       this.reasoningRafHandle = null;
     }
+    this.liveStatusSection = null;
+    this.liveStatusIconEl = null;
+    this.liveStatusTextEl = null;
     if (this.plugin.controller.isBusy()) {
       new BusyCloseModal(this.app, () => this.plugin.controller.cancelCurrent()).open();
     }
@@ -644,15 +641,10 @@ export class LlmWikiView extends ItemView {
     if (this.reinitBtn) this.reinitBtn.disabled = !(this.domainSelect && this.domainSelect.value);
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
     this.updateMetrics();
+    this.liveStatusSection?.addClass("ai-wiki-hidden");
     const totalDur = ((entry.finishedAt - entry.startedAt) / 1000).toFixed(1);
     this.progressCount.setText(`${totalDur}s`);
     this.resultSpeedEl?.setText(this.lastTokPerSec !== undefined ? ` ${this.lastTokPerSec} tok/s` : "");
-    if (this.assistantRenderHandle !== null) {
-      window.clearTimeout(this.assistantRenderHandle);
-      this.assistantRenderHandle = null;
-    }
-    this.assistantFinalComp?.unload();
-    this.assistantFinalComp = null;
     this.finalEl.empty();
     if (entry.finalText) {
       const comp = new Component();
