@@ -22,10 +22,8 @@ function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
 
 const VAULT_ROOT = "/vaults/Work";
 
-// parseWithRetry calls streaming first for all calls.
-// call 1: lint report — plain text
+// call 1: combined assess+fix (LintOutputSchema JSON)
 // call 2: actualizeDomainConfig via parseWithRetry — returns thinking-model output with <think> + real JSON patch
-// call 3: fix pass — plain text
 function makeLlmWithThinkingPatch(patchJson: string): LlmClient {
   let callCount = 0;
   return {
@@ -33,7 +31,9 @@ function makeLlmWithThinkingPatch(patchJson: string): LlmClient {
       completions: {
         create: vi.fn().mockImplementation((_params: any) => {
           const call = ++callCount;
-          const content = call === 2 ? patchJson : "Lint report: all good.";
+          const content = call === 2
+            ? patchJson
+            : JSON.stringify({ reasoning: "ok", report: "Lint report: all good.", fixes: [] });
           return Promise.resolve({
             [Symbol.asyncIterator]: async function* () {
               yield { choices: [{ delta: { content } }] };

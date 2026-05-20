@@ -3,10 +3,10 @@ import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, extractUsage } from "./llm-utils";
+import { buildChatParams } from "./llm-utils";
 import { parseWithRetry } from "./parse-with-retry";
-import { EntityTypesDeltaSchema } from "./zod-schemas";
-import { parseJsonPages } from "./ingest";
+import { EntityTypesDeltaSchema, LintOutputSchema } from "./zod-schemas";
+import type { LintOutput } from "./zod-schemas";
 import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
@@ -104,30 +104,32 @@ export async function* runLint(
       },
     ];
 
-    const params = buildChatParams(model, messages, opts, true);
-    let llmReport = "";
+    // Combined assess+fix call
+    const lintPwtEvents: RunEvent[] = [];
+    let lintResult: { value: LintOutput; outputTokens: number };
     try {
-      const stream = await llm.chat.completions.create(
-        { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-        { signal },
-      );
-      for await (const chunk of stream) {
-        const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
-        if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-        if (content) { llmReport += content; yield { kind: "assistant_text", delta: content }; }
-        if (tok !== undefined) outputTokens += tok;
-      }
+      lintResult = await parseWithRetry({
+        llm, model,
+        baseMessages: messages,
+        opts,
+        schema: LintOutputSchema,
+        maxRetries: opts.structuredRetries ?? 1,
+        callSite: "lint.fix",
+        signal,
+        onEvent: (ev) => lintPwtEvents.push(ev),
+      });
     } catch (e) {
       if (signal.aborted || (e as Error).name === "AbortError") return;
-      const resp = await llm.chat.completions.create(
-        { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-      );
-      llmReport = resp.choices[0]?.message?.content ?? "";
-      const tok = extractUsage(resp);
-      if (tok !== undefined) outputTokens += tok;
-      if (llmReport) yield { kind: "assistant_text", delta: llmReport };
+      for (const ev of lintPwtEvents) yield ev;
+      reportParts.push(`## ${domain.id}\nLLM validation failed: ${(e as Error).message}`);
+      continue;
     }
+    for (const ev of lintPwtEvents) yield ev;
+    if (signal.aborted) return;
+    outputTokens += lintResult.outputTokens;
 
+    const llmReport = lintResult.value.report;
+    yield { kind: "assistant_text", delta: llmReport };
     reportParts.push(`## ${domain.id}\n${allIssues ? `**Структурные проблемы:**\n${allIssues}\n\n` : ""}${llmReport}`);
 
     if (signal.aborted) return;
@@ -142,33 +144,11 @@ export async function* runLint(
     }
 
     if (signal.aborted) return;
-    yield { kind: "assistant_text", delta: `\nApplying fixes for "${domain.id}"...\n` };
-    const fixMessages = buildFixMessages(domain, wikiVaultPath, pages, allIssues, entityTypesBlock, llmReport);
-    const fixParams = buildChatParams(model, fixMessages, opts, true);
-    let fixFullText = "";
-    try {
-      const fixStream = await llm.chat.completions.create(
-        { ...fixParams, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-        { signal },
-      );
-      for await (const chunk of fixStream) {
-        const { content, outputTokens: tok } = extractStreamDeltas(chunk);
-        if (content) fixFullText += content;
-        if (tok !== undefined) outputTokens += tok;
-      }
-    } catch (e) {
-      if (signal.aborted || (e as Error).name === "AbortError") return;
-      const resp = await llm.chat.completions.create(
-        { ...fixParams, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-      );
-      fixFullText = resp.choices[0]?.message?.content ?? "";
-      const tok = extractUsage(resp);
-      if (tok !== undefined) outputTokens += tok;
-    }
 
-    const fixedPages = parseJsonPages(fixFullText);
+    const fixedPages = lintResult.value.fixes;
     const writtenPaths: string[] = [];
     for (const page of fixedPages) {
+      yield { kind: "assistant_text", delta: `  • ${page.path.split("/").pop()}...\n` };
       if (!page.path.startsWith(wikiVaultPath + "/")) {
         yield { kind: "tool_use", name: "Write", input: { path: page.path } };
         yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
@@ -277,40 +257,6 @@ function computeEntityDiff(oldTypes: EntityType[], newTypes: EntityType[]): stri
   removed.forEach((et) => lines.push(`- ✖ удалён: **${et.type}**`));
   modified.forEach((et) => lines.push(`- ✎ обновлён: **${et.type}**`));
   return lines.join("\n");
-}
-
-function buildFixMessages(
-  domain: DomainEntry,
-  wikiVaultPath: string,
-  pages: Map<string, string>,
-  allIssues: string,
-  entityTypesBlock: string,
-  lintReport: string,
-): OpenAI.Chat.ChatCompletionMessageParam[] {
-  const today = new Date().toISOString().slice(0, 10);
-  const pagesBlock = [...pages.entries()].map(([p, c]) => `--- ${p} ---\n${c}`).join("\n\n");
-  return [
-    {
-      role: "system",
-      content: [
-        `Ты — редактор wiki-базы знаний домена «${domain.name}».`,
-        `Исправь проблемы в wiki-страницах и верни только изменённые страницы.`,
-        `ПРАВИЛА: мёртвые ссылки [[X]] убери или замени; отсутствующий frontmatter добавь (wiki_updated: ${today}, wiki_status: stub); дублирование объедини; размытые определения уточни.`,
-        entityTypesBlock ? `\nТИПЫ СУЩНОСТЕЙ:\n${entityTypesBlock}` : "",
-        `\nВерни ТОЛЬКО JSON-массив изменённых страниц:`,
-        `[{"path":"${wikiVaultPath}/EntityName.md","content":"полный контент"}]`,
-      ].filter(Boolean).join("\n"),
-    },
-    {
-      role: "user",
-      content: [
-        `Домен: ${domain.id} (${domain.name})`,
-        allIssues ? `\nСтруктурные проблемы:\n${allIssues}` : "\nСтруктурных проблем не обнаружено.",
-        `\nОтчёт Lint (рекомендации):\n${lintReport}`,
-        `\nWiki-страницы:\n${pagesBlock}`,
-      ].join("\n"),
-    },
-  ];
 }
 
 async function actualizeDomainConfig(
