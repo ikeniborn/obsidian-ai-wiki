@@ -14,27 +14,11 @@ import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm }
 import { checkGraphStructure, pageId } from "../wiki-graph";
 import { graphCache } from "../wiki-graph-cache";
 import { upsertIndexAnnotation } from "../wiki-index";
+import { appendWikiLog } from "../wiki-log";
 
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
-async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
-  try { return await vaultTools.read(path); } catch { return ""; }
-}
 
-async function appendLintLog(
-  vaultTools: VaultTools,
-  wikiVaultPath: string,
-  domainId: string,
-  fixedCount: number,
-): Promise<void> {
-  const logPath = `${wikiVaultPath}/_log.md`;
-  const today = new Date().toISOString().slice(0, 10);
-  const entry = `\n## ${today} — lint — ${domainId}\n- Исправлено страниц: ${fixedCount}\n`;
-  try {
-    const existing = await tryRead(vaultTools, logPath);
-    await vaultTools.write(logPath, existing + entry);
-  } catch { /* non-critical */ }
-}
 
 export async function* runLint(
   args: string[],
@@ -177,7 +161,15 @@ export async function* runLint(
       }
     }
 
-    await appendLintLog(vaultTools, wikiVaultPath, domain.id, writtenPaths.length);
+    try {
+      await appendWikiLog(vaultTools, `${wikiVaultPath}/_log.md`, domain.id, {
+        op: "lint",
+        domainId: domain.id,
+        fixed: writtenPaths,
+        checkedCount: files.length,
+        outputTokens,
+      });
+    } catch { /* non-critical */ }
 
     const backlinks = new Map<string, Set<string>>();
     for (const [wikiPath, wikiContent] of pages) {
