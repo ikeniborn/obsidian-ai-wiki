@@ -320,7 +320,10 @@ describe("runFormat Zod validation", () => {
 
     expect(events.some((e: unknown) => (e as { kind: string }).kind === "format_preview")).toBe(true);
     const stats = structuralErrorCounter.get();
-    expect(stats.failed + stats.retried).toBeGreaterThan(0);
+    // format uses a custom retry loop (not parseWithRetry), so retried bucket stays 0;
+    // exactly one failure (call 1 bad JSON) and at least one success (call 2+ good)
+    expect(stats.failed).toBe(1);
+    expect(stats.ok).toBeGreaterThan(0);
   });
 
   it("emits error on Zod failure after retry", async () => {
