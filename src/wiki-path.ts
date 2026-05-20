@@ -22,7 +22,7 @@ export function validateArticlePath(path: string, wikiVaultPath: string): boolea
   if (
     path === `${wikiVaultPath}/_index.md` ||
     path === `${wikiVaultPath}/_log.md` ||
-    path === `${wikiVaultPath}/_wiki_schema.md`
+    path === `${wikiVaultPath}/.config/_wiki_schema.md`
   ) return true;
   const prefix = `${wikiVaultPath}/`;
   if (!path.startsWith(prefix)) return false;

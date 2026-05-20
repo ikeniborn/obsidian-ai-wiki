@@ -56,7 +56,7 @@ export async function* runQuery(
 
   const [indexContent, schemaContent] = await Promise.all([
     tryRead(vaultTools, `${wikiVaultPath}/_index.md`),
-    tryRead(vaultTools, `${schemaRoot}/_wiki_schema.md`),
+    tryRead(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`),
   ]);
 
   yield { kind: "tool_use", name: "Read", input: { files: files.length } };

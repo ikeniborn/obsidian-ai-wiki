@@ -74,7 +74,7 @@ describe("validateArticlePath", () => {
     expect(validateArticlePath("!Wiki/os/_log.md", wiki)).toBe(true);
   });
   it("valid: _wiki_schema.md exempt", () => {
-    expect(validateArticlePath("!Wiki/os/_wiki_schema.md", wiki)).toBe(true);
+    expect(validateArticlePath("!Wiki/os/.config/_wiki_schema.md", wiki)).toBe(true);
   });
   it("invalid: wrong domain prefix", () => {
     expect(validateArticlePath("!Wiki/other/network/NFS.md", wiki)).toBe(false);
