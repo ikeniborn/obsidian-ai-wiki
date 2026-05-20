@@ -37,7 +37,33 @@ export const LintChatSchema = z.object({
   })).default([]),
 });
 
+export const WikiPageSchema = z.object({
+  path: z.string(),
+  content: z.string(),
+  annotation: z.string().optional(),
+});
+
+export const WikiPagesOutputSchema = z.object({
+  reasoning: z.string(),
+  pages: z.array(WikiPageSchema),
+});
+
+export const LintOutputSchema = z.object({
+  reasoning: z.string(),
+  report: z.string(),
+  fixes: z.array(WikiPageSchema),
+});
+
+export const FormatOutputSchema = z.object({
+  report: z.string(),
+  formatted: z.string(),
+});
+
 export type DomainEntryResponse = z.infer<typeof DomainEntrySchema>;
 export type EntityTypesDeltaResponse = z.infer<typeof EntityTypesDeltaSchema>;
 export type SeedsResponse = z.infer<typeof SeedsSchema>;
 export type LintChatResponse = z.infer<typeof LintChatSchema>;
+export type WikiPageResponse = z.infer<typeof WikiPageSchema>;
+export type WikiPagesOutput = z.infer<typeof WikiPagesOutputSchema>;
+export type LintOutput = z.infer<typeof LintOutputSchema>;
+export type FormatOutput = z.infer<typeof FormatOutputSchema>;
