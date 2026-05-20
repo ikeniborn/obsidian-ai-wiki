@@ -3,7 +3,10 @@ import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, extractUsage } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas } from "./llm-utils";
+import { parseWithRetry } from "./parse-with-retry";
+import { WikiPagesOutputSchema } from "./zod-schemas";
+import type { WikiPagesOutput } from "./zod-schemas";
 import ingestTemplate from "../../prompts/ingest.md";
 import { render } from "./template";
 import { domainWikiFolder, validateArticlePath } from "../wiki-path";
@@ -75,34 +78,31 @@ export async function* runIngest(
     sourceVaultPath, sourceContent, domain, wikiVaultPath,
     existingPages, schemaContent, indexContent,
   );
-  const params = buildChatParams(model, messages, opts, true);
 
-  let fullText = "";
-  let outputTokens = 0;
+  const pwtEvents: RunEvent[] = [];
+  let parseResult: { value: WikiPagesOutput; outputTokens: number };
   try {
-    const stream = await llm.chat.completions.create(
-      { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-      { signal },
-    );
-    for await (const chunk of stream) {
-      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
-      if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-      if (content) fullText += content;
-      if (tok !== undefined) outputTokens += tok;
-    }
+    parseResult = await parseWithRetry({
+      llm, model, baseMessages: messages, opts,
+      schema: WikiPagesOutputSchema,
+      maxRetries: opts.structuredRetries ?? 1,
+      callSite: "ingest.pages",
+      signal,
+      onEvent: (ev) => pwtEvents.push(ev),
+    });
   } catch (e) {
     if (signal.aborted || (e as Error).name === "AbortError") return;
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-    );
-    fullText = resp.choices[0]?.message?.content ?? "";
-    const tok = extractUsage(resp);
-    if (tok !== undefined) outputTokens += tok;
+    for (const ev of pwtEvents) yield ev;
+    yield { kind: "error", message: `ingest: LLM output failed validation — ${(e as Error).message}` };
+    yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
+    return;
   }
-
+  for (const ev of pwtEvents) yield ev;
   if (signal.aborted) return;
 
-  let pages = parseJsonPages(fullText);
+  const outputTokens = parseResult.outputTokens;
+  yield { kind: "assistant_text", delta: parseResult.value.reasoning, isReasoning: true };
+  let pages = parseResult.value.pages;
 
   // --- Path validation + one retry ---
   const { valid, invalid } = splitByPathValidity(pages, wikiVaultPath);

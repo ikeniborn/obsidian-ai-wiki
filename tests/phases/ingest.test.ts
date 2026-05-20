@@ -45,7 +45,7 @@ describe("runIngest", () => {
   it("yields error when args is empty", async () => {
     const vt = new VaultTools(mockAdapter(), VAULT_ROOT);
     const events = await collect(
-      runIngest([], vt, makeLlm("[]"), "llama3.2", [domain], VAULT_ROOT, new AbortController().signal),
+      runIngest([], vt, makeLlm(JSON.stringify({ reasoning: "nothing to extract", pages: [] })), "llama3.2", [domain], VAULT_ROOT, new AbortController().signal),
     );
     expect(events.some((e: any) => e.kind === "error")).toBe(true);
   });
@@ -53,7 +53,7 @@ describe("runIngest", () => {
   it("yields error when source file is outside vault", async () => {
     const vt = new VaultTools(mockAdapter(), VAULT_ROOT);
     const events = await collect(
-      runIngest(["/external/file.md"], vt, makeLlm("[]"), "llama3.2", [domain], VAULT_ROOT, new AbortController().signal),
+      runIngest(["/external/file.md"], vt, makeLlm(JSON.stringify({ reasoning: "nothing to extract", pages: [] })), "llama3.2", [domain], VAULT_ROOT, new AbortController().signal),
     );
     expect(events.some((e: any) => e.kind === "error")).toBe(true);
   });
@@ -64,9 +64,10 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify([
-      { path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact." },
-    ]);
+    const llmResponse = JSON.stringify({
+      reasoning: "Extracted Entity.",
+      pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact." }],
+    });
     const events = await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
@@ -89,9 +90,10 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify([
-      { path: "!Wiki/work/entities/Entity.md", content: "# Entity" },
-    ]);
+    const llmResponse = JSON.stringify({
+      reasoning: "Extracted Entity.",
+      pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity" }],
+    });
     const events = await collect(
       runIngest(
         [`${VAULT_ROOT}/ИИ/subfolder/file.md`],
@@ -115,9 +117,10 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify([
-      { path: "!Wiki/work/entities/Entity.md", content: "# Entity" },
-    ]);
+    const llmResponse = JSON.stringify({
+      reasoning: "Extracted Entity.",
+      pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity" }],
+    });
     const events = await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
@@ -142,7 +145,7 @@ describe("runIngest", () => {
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
         vt,
-        makeLlm("[]"),
+        makeLlm(JSON.stringify({ reasoning: "nothing to extract", pages: [] })),
         "llama3.2",
         [domain],
         VAULT_ROOT,
@@ -160,9 +163,10 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify([
-      { path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact." },
-    ]);
+    const llmResponse = JSON.stringify({
+      reasoning: "Extracted Entity.",
+      pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact." }],
+    });
     await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
@@ -193,9 +197,10 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify([
-      { path: "!Wiki/work/entities/New.md", content: "# New" },
-    ]);
+    const llmResponse = JSON.stringify({
+      reasoning: "Extracted New.",
+      pages: [{ path: "!Wiki/work/entities/New.md", content: "# New" }],
+    });
     await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
@@ -227,7 +232,7 @@ describe("runIngest", () => {
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
         vt,
-        makeLlm("[]"),
+        makeLlm(JSON.stringify({ reasoning: "nothing to extract", pages: [] })),
         "llama3.2",
         [domain],
         VAULT_ROOT,
@@ -246,9 +251,10 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify([
-      { path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact.", annotation: "описание сущности" },
-    ]);
+    const llmResponse = JSON.stringify({
+      reasoning: "Extracted Entity.",
+      pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact.", annotation: "описание сущности" }],
+    });
     await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
@@ -278,9 +284,10 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify([
-      { path: "!Wiki/work/entities/Entity.md", content: "# Entity" },
-    ]);
+    const llmResponse = JSON.stringify({
+      reasoning: "Extracted Entity.",
+      pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity" }],
+    });
     const events = await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
@@ -345,6 +352,80 @@ describe("buildEntityTypesBlock — path templates", () => {
   });
 });
 
+describe("runIngest with WikiPagesOutputSchema format", () => {
+  it("writes pages from {reasoning, pages} response", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llmResponse = JSON.stringify({
+      reasoning: "Extracted one entity.",
+      pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact." }],
+    });
+    const events = await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt,
+        makeLlm(llmResponse),
+        "llama3.2",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+      ),
+    );
+    expect(adapter.write).toHaveBeenCalledWith("!Wiki/work/entities/Entity.md", "# Entity\n\nFact.");
+    expect(events.some((e: any) => e.kind === "result")).toBe(true);
+  });
+
+  it("yields reasoning as isReasoning assistant_text event", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llmResponse = JSON.stringify({
+      reasoning: "Two entities found.",
+      pages: [{ path: "!Wiki/work/entities/A.md", content: "# A" }],
+    });
+    const events = await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt,
+        makeLlm(llmResponse),
+        "llama3.2",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+      ),
+    );
+    const reasoningEv = events.find(
+      (e: any) => e.kind === "assistant_text" && e.isReasoning === true && e.delta === "Two entities found.",
+    );
+    expect(reasoningEv).toBeDefined();
+  });
+
+  it("yields error event and result on invalid JSON response", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const events = await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt,
+        makeLlm("not json at all"),
+        "llama3.2",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+      ),
+    );
+    expect(events.some((e: any) => e.kind === "error")).toBe(true);
+  });
+});
+
 describe("runIngest path validation", () => {
   it("skips invalid path and emits tool_result ok:false", async () => {
     const adapter = mockAdapter({
@@ -354,9 +435,10 @@ describe("runIngest path validation", () => {
     const vt = new VaultTools(adapter, VAULT_ROOT);
     // Domain wiki_folder "work" → wikiVaultPath = "!Wiki/work"
     // Invalid: domain appears twice in path
-    const llmResponse = JSON.stringify([
-      { path: "!Wiki/work/work/entity/Page.md", content: "# Page" },
-    ]);
+    const llmResponse = JSON.stringify({
+      reasoning: "Extracted Page.",
+      pages: [{ path: "!Wiki/work/work/entity/Page.md", content: "# Page" }],
+    });
     const events = await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
@@ -388,9 +470,10 @@ describe("runIngest path validation", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
 
-    const badResponse = JSON.stringify([
-      { path: "!Wiki/work/work/entity/Page.md", content: "# Page bad" },
-    ]);
+    const badResponse = JSON.stringify({
+      reasoning: "Extracted Page with bad path.",
+      pages: [{ path: "!Wiki/work/work/entity/Page.md", content: "# Page bad" }],
+    });
     const goodResponse = JSON.stringify([
       { path: "!Wiki/work/entity/Page.md", content: "# Page good" },
     ]);
@@ -441,7 +524,11 @@ describe("runIngest path validation", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
 
-    const badResponse = JSON.stringify([
+    const badResponseFirst = JSON.stringify({
+      reasoning: "Extracted Page with bad path.",
+      pages: [{ path: "!Wiki/work/work/entity/Page.md", content: "# Page bad" }],
+    });
+    const badResponseRetry = JSON.stringify([
       { path: "!Wiki/work/work/entity/Page.md", content: "# Page bad" },
     ]);
 
@@ -451,9 +538,10 @@ describe("runIngest path validation", () => {
         completions: {
           create: vi.fn().mockImplementation(() => {
             callCount++;
+            const text = callCount === 1 ? badResponseFirst : badResponseRetry;
             const fakeStream = {
               [Symbol.asyncIterator]: async function* () {
-                yield { choices: [{ delta: { content: badResponse } }] };
+                yield { choices: [{ delta: { content: text } }] };
               },
             };
             return Promise.resolve(fakeStream);

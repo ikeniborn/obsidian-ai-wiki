@@ -25,5 +25,5 @@
 Нельзя: !Wiki/os/os/network/NFS.md (домен дважды), !Wiki/os/network/nfs/NFS.md (5 сегментов).
 Можно:  !Wiki/os/network/NFS.md
 
-Верни ТОЛЬКО JSON-массив, без другого текста:
-[{"path":"{{wiki_path}}/entities/EntityName.md","content":"---\nwiki_sources: [\"[[{{source_path}}]]\"]\nwiki_updated: {{today}}\nwiki_status: stub\nwiki_keywords: [токен1, токен2]\ntags: []\nwiki_outgoing_links: []\n---\n# EntityName\n\ncontент...","annotation":"Краткое описание сущности для контекстного поиска"}]
+Верни ТОЛЬКО JSON-объект — никакого другого текста:
+{"reasoning":"Обоснование: какие сущности извлечены и почему","pages":[{"path":"{{wiki_path}}/entities/EntityName.md","content":"---\nwiki_sources: [\"[[{{source_path}}]]\"]\nwiki_updated: {{today}}\nwiki_status: stub\nwiki_keywords: [токен1, токен2]\ntags: []\nwiki_outgoing_links: []\n---\n# EntityName\n\ncontент...","annotation":"Краткое описание сущности для контекстного поиска"}]}
