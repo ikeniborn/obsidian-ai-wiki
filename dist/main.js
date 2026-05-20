@@ -20533,7 +20533,7 @@ function sanitizeWikiSubfolder(raw) {
   return raw.split("/").pop();
 }
 function validateArticlePath(path2, wikiVaultPath) {
-  if (path2 === `${wikiVaultPath}/_index.md` || path2 === `${wikiVaultPath}/_log.md` || path2 === `${wikiVaultPath}/_wiki_schema.md`)
+  if (path2 === `${wikiVaultPath}/_index.md` || path2 === `${wikiVaultPath}/_log.md` || path2 === `${wikiVaultPath}/.config/_wiki_schema.md`)
     return true;
   const prefix = `${wikiVaultPath}/`;
   if (!path2.startsWith(prefix))
@@ -21813,534 +21813,6 @@ ${section}` };
     return updated;
   }
   return [{ role: "system", content: section }, ...messages];
-}
-
-// prompts/ingest.md
-var ingest_default = '\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0441\u0438\u043D\u0442\u0435\u0437\u0430 wiki-\u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0418\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439/\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n\n\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:\n{{entity_types_block}}\n{{lang_notes}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- CREATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 wiki, \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 >= min_mentions_for_page\n- UPDATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2192 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E, \u041D\u0415 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E\n- SKIP: \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u043E \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0435\u0441\u0442\u044C\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043A\u043E\u043D\u0444\u0438\u0433\u0438/SQL \u043C\u043E\u0436\u043D\u043E \u0446\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445.\n- \u041F\u0443\u0442\u044C \u0441\u0442\u0430\u0442\u044C\u0438 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u0435\u0442\u0441\u044F \u0442\u0438\u043F\u043E\u043C \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u2014 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u043E\u0447\u043D\u044B\u0439 \u0448\u0430\u0431\u043B\u043E\u043D \u0438\u0437 \u0441\u0435\u043A\u0446\u0438\u0438 \xAB\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410\xBB (\u0432\u044B\u0448\u0435, \u0434\u043E \u0431\u043B\u043E\u043A\u0430 \u041F\u0420\u0410\u0412\u0418\u041B\u0410), \u043F\u043E\u0434\u0441\u0442\u0430\u0432\u0438\u0432 \u0438\u043C\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0432\u043C\u0435\u0441\u0442\u043E <EntityName>\n- \u0415\u0441\u043B\u0438 \u0442\u0438\u043F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u043D\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0451\u043D \u0438\u043B\u0438 \u0443 \u0434\u043E\u043C\u0435\u043D\u0430 \u043D\u0435\u0442 entity_types \u2192 \u043F\u0443\u0442\u044C \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- wiki_keywords: [5-10 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0445 \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u0434\u043E\u043C\u0435\u043D\u0430, \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0434\u0435\u0444\u0438\u0441-\u0432\u043C\u0435\u0441\u0442\u043E-\u043F\u0440\u043E\u0431\u0435\u043B\u0430]\n- wiki_sources: \u043A\u0430\u0436\u0434\u044B\u0439 \u044D\u043B\u0435\u043C\u0435\u043D\u0442 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 [[path/to/source]], \u0442\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 Links \u0432 Obsidian\n- \u0420\u0430\u0437\u0434\u0435\u043B "## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438" \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D \u0434\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0444\u0438\u043A\u0441\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 "## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439" \u0441 \u0434\u0430\u0442\u043E\u0439 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u043C\n- "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438" \u2014 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043A \u0441\u0432\u044F\u0437\u044F\u043C\n- \u0414\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0434\u043E\u0431\u0430\u0432\u044C \u043F\u043E\u043B\u0435 "annotation" \u0432 JSON: \u043E\u0434\u043D\u043E \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u2014 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430 \u043F\u043E \u0441\u043C\u044B\u0441\u043B\u0443\n{{schema_block}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u041E \u041F\u0423\u0422\u0415\u0419: \u043F\u0443\u0442\u044C \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0430\u0442\u044C\u0438 = !Wiki/<domain>/<entity>/<Article>.md \u2014 \u0440\u043E\u0432\u043D\u043E 4 \u0441\u0435\u0433\u043C\u0435\u043D\u0442\u0430.\n\u041D\u0435\u043B\u044C\u0437\u044F: !Wiki/os/os/network/NFS.md (\u0434\u043E\u043C\u0435\u043D \u0434\u0432\u0430\u0436\u0434\u044B), !Wiki/os/network/nfs/NFS.md (5 \u0441\u0435\u0433\u043C\u0435\u043D\u0442\u043E\u0432).\n\u041C\u043E\u0436\u043D\u043E:  !Wiki/os/network/NFS.md\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432, \u0431\u0435\u0437 \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n[{"path":"{{wiki_path}}/entities/EntityName.md","content":"---\\nwiki_sources: [\\"[[{{source_path}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\nwiki_keywords: [\u0442\u043E\u043A\u0435\u043D1, \u0442\u043E\u043A\u0435\u043D2]\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncont\u0435\u043D\u0442...","annotation":"\u041A\u0440\u0430\u0442\u043A\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u0433\u043E \u043F\u043E\u0438\u0441\u043A\u0430"}]\n';
-
-// src/phases/template.ts
-function render(template, vars) {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
-}
-
-// src/utils/raw-frontmatter.ts
-var FM_RE = /^---\n([\s\S]*?)\n---\n?/;
-function removeWikiFields(yaml) {
-  yaml = yaml.replace(/^wiki_added:[^\n]*\n?/m, "");
-  yaml = yaml.replace(/^wiki_updated:[^\n]*\n?/m, "");
-  yaml = yaml.replace(/^wiki_articles:[^\n]*\n(?:[ \t]+-[^\n]*\n?)*/m, "");
-  return yaml;
-}
-function buildWikiFields(fields) {
-  const lines = [];
-  if (fields.wiki_added !== void 0) {
-    lines.push(`wiki_added: ${fields.wiki_added}`);
-  }
-  lines.push(`wiki_updated: ${fields.wiki_updated}`);
-  if (fields.wiki_articles.length > 0) {
-    lines.push("wiki_articles:");
-    for (const a of fields.wiki_articles) {
-      lines.push(`  - "${a}"`);
-    }
-  }
-  return lines.join("\n");
-}
-function upsertRawFrontmatter(content, fields) {
-  const newFields = buildWikiFields(fields);
-  const match = FM_RE.exec(content);
-  if (match) {
-    let yaml = match[1];
-    let preservedWikiAdded;
-    if (fields.wiki_added === void 0) {
-      const addedMatch = /^wiki_added:[ \t]*(.+)$/m.exec(yaml);
-      if (addedMatch)
-        preservedWikiAdded = addedMatch[1].trim();
-    }
-    const cleaned = removeWikiFields(yaml).trimEnd();
-    let finalFields = newFields;
-    if (preservedWikiAdded !== void 0) {
-      finalFields = `wiki_added: ${preservedWikiAdded}
-${newFields}`;
-    }
-    const newYaml = cleaned ? `${cleaned}
-${finalFields}` : finalFields;
-    const rest = content.slice(match[0].length);
-    return `---
-${newYaml}
----
-${rest}`;
-  }
-  return `---
-${newFields}
----
-${content}`;
-}
-function parseWikiArticlesFromFm(content) {
-  const fmMatch = FM_RE.exec(content);
-  if (!fmMatch)
-    return [];
-  const match = /wiki_articles:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
-  if (!match)
-    return [];
-  return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
-}
-function parseWikiSourcesFromFm(content) {
-  const fmMatch = FM_RE.exec(content);
-  if (!fmMatch)
-    return [];
-  const match = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
-  if (!match)
-    return [];
-  return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
-}
-function hasFrontmatterField(content, field) {
-  const fmMatch = FM_RE.exec(content);
-  if (!fmMatch)
-    return false;
-  return new RegExp(`^${field}:`, "m").test(fmMatch[1]);
-}
-
-// src/wiki-index.ts
-function parseIndexAnnotations(content) {
-  const map = /* @__PURE__ */ new Map();
-  for (const line of content.split("\n")) {
-    const idx = line.indexOf(":");
-    if (idx <= 0)
-      continue;
-    const key = line.slice(0, idx).trim();
-    const raw = line.slice(idx + 1).trim();
-    if (!key || !raw)
-      continue;
-    const pipeIdx = raw.indexOf(" | ");
-    const value = pipeIdx >= 0 ? raw.slice(pipeIdx + 3).trim() : raw;
-    map.set(key, value);
-  }
-  return map;
-}
-async function upsertIndexAnnotation(vaultTools, wikiFolder, pid, annotation, fullPath) {
-  const indexPath = `${wikiFolder}/_index.md`;
-  let content = "";
-  try {
-    content = await vaultTools.read(indexPath);
-  } catch {
-  }
-  const escaped = pid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = new RegExp(`^${escaped}:.*$`, "m");
-  let newLine;
-  if (fullPath) {
-    const prefix = wikiFolder + "/";
-    const relativePath = fullPath.startsWith(prefix) ? fullPath.slice(prefix.length) : fullPath;
-    newLine = `${pid}: [[${pid}]] ${relativePath} | ${annotation}`;
-  } else {
-    newLine = `${pid}: ${annotation}`;
-  }
-  if (pattern.test(content)) {
-    content = content.replace(pattern, newLine);
-  } else {
-    content = content ? `${content}
-${newLine}` : newLine;
-  }
-  await vaultTools.write(indexPath, content);
-}
-
-// src/wiki-graph.ts
-var import_path_browserify2 = __toESM(require_path_browserify(), 1);
-function pageId(vaultPath) {
-  return (0, import_path_browserify2.basename)(vaultPath, ".md");
-}
-function buildWikiGraph(pages) {
-  const graph = /* @__PURE__ */ new Map();
-  for (const vaultPath of pages.keys()) {
-    graph.set(pageId(vaultPath), /* @__PURE__ */ new Set());
-  }
-  for (const [vaultPath, content] of pages) {
-    const src = pageId(vaultPath);
-    for (const match of content.matchAll(/\[\[([^\]|#]+)/g)) {
-      const tgt = match[1].trim();
-      if (tgt)
-        graph.get(src).add(tgt);
-    }
-  }
-  return graph;
-}
-function bfsExpand(seeds, graph, depth) {
-  if (seeds.length === 0)
-    return /* @__PURE__ */ new Set();
-  const reverse = /* @__PURE__ */ new Map();
-  for (const [src, targets] of graph) {
-    for (const tgt of targets) {
-      if (!reverse.has(tgt))
-        reverse.set(tgt, /* @__PURE__ */ new Set());
-      reverse.get(tgt).add(src);
-    }
-  }
-  const visited = new Set(seeds);
-  let frontier = new Set(seeds);
-  for (let hop = 0; hop < depth; hop++) {
-    const next = /* @__PURE__ */ new Set();
-    for (const node of frontier) {
-      for (const neighbor of graph.get(node) ?? []) {
-        if (!visited.has(neighbor)) {
-          visited.add(neighbor);
-          next.add(neighbor);
-        }
-      }
-      for (const neighbor of reverse.get(node) ?? []) {
-        if (!visited.has(neighbor)) {
-          visited.add(neighbor);
-          next.add(neighbor);
-        }
-      }
-    }
-    if (next.size === 0)
-      break;
-    frontier = next;
-  }
-  return visited;
-}
-function checkGraphStructure(graph, hubThreshold) {
-  const inDegree = /* @__PURE__ */ new Map();
-  for (const node of graph.keys()) {
-    if (!inDegree.has(node))
-      inDegree.set(node, 0);
-    for (const tgt of graph.get(node)) {
-      inDegree.set(tgt, (inDegree.get(tgt) ?? 0) + 1);
-    }
-  }
-  const issues = [];
-  for (const [node, neighbors] of graph) {
-    const outDeg = neighbors.size;
-    const inDeg = inDegree.get(node) ?? 0;
-    if (inDeg === 0 && outDeg === 0) {
-      issues.push(`- ${node}: isolated node (no links in or out)`);
-    }
-    if (outDeg > hubThreshold) {
-      issues.push(`- ${node}: hub node (${outDeg} outgoing links)`);
-    }
-    for (const tgt of neighbors) {
-      if (graph.has(tgt) && !graph.get(tgt).has(node)) {
-        issues.push(`- ${node} \u2192 [[${tgt}]] not reciprocated`);
-      }
-    }
-  }
-  return issues.join("\n");
-}
-
-// src/phases/ingest.ts
-async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}) {
-  const filePath = args[0];
-  if (!filePath) {
-    yield { kind: "error", message: "ingest: file path required" };
-    return;
-  }
-  const absSource = (0, import_path_browserify3.isAbsolute)(filePath) ? filePath : (0, import_path_browserify3.join)(vaultRoot, filePath);
-  const sourceVaultPath = vaultTools.toVaultPath(absSource);
-  if (!sourceVaultPath) {
-    yield { kind: "error", message: `Source file ${filePath} is outside the vault.` };
-    return;
-  }
-  yield { kind: "tool_use", name: "Read", input: { path: sourceVaultPath } };
-  let sourceContent;
-  try {
-    sourceContent = await vaultTools.read(sourceVaultPath);
-  } catch (e) {
-    yield { kind: "error", message: `Cannot read ${sourceVaultPath}: ${e.message}` };
-    return;
-  }
-  yield { kind: "tool_result", ok: true, preview: sourceContent.slice(0, 100) };
-  const domain = detectDomain(absSource, domains, vaultRoot);
-  if (!domain) {
-    yield { kind: "error", message: "No domain found for this file. Configure domain-map." };
-    return;
-  }
-  const absWiki = (0, import_path_browserify3.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
-  const wikiVaultPath = vaultTools.toVaultPath(absWiki);
-  if (!wikiVaultPath) {
-    yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
-    return;
-  }
-  const domainRoot = wikiVaultPath;
-  const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
-  const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${schemaRoot}/_wiki_schema.md`),
-    tryRead(vaultTools, `${domainRoot}/_index.md`)
-  ]);
-  const existingPaths = await vaultTools.listFiles(wikiVaultPath);
-  const existingPages = await vaultTools.readAll(existingPaths.filter((f) => !f.endsWith("_index.md")));
-  yield { kind: "assistant_text", delta: `Synthesizing wiki pages for domain "${domain.id}"...
-` };
-  const start = Date.now();
-  const messages = buildIngestMessages(
-    sourceVaultPath,
-    sourceContent,
-    domain,
-    wikiVaultPath,
-    existingPages,
-    schemaContent,
-    indexContent
-  );
-  const params = buildChatParams(model, messages, opts, true);
-  let fullText = "";
-  let outputTokens = 0;
-  try {
-    const stream = await llm.chat.completions.create(
-      { ...params, stream: true },
-      { signal }
-    );
-    for await (const chunk of stream) {
-      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
-      if (reasoning)
-        yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-      if (content)
-        fullText += content;
-      if (tok !== void 0)
-        outputTokens += tok;
-    }
-  } catch (e) {
-    if (signal.aborted || e.name === "AbortError")
-      return;
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false }
-    );
-    fullText = resp.choices[0]?.message?.content ?? "";
-    const tok = extractUsage(resp);
-    if (tok !== void 0)
-      outputTokens += tok;
-  }
-  if (signal.aborted)
-    return;
-  let pages = parseJsonPages(fullText);
-  const { valid, invalid } = splitByPathValidity(pages, wikiVaultPath);
-  if (invalid.length > 0) {
-    yield {
-      kind: "assistant_text",
-      delta: `\u26A0 \u041F\u0443\u0442\u0438 \u043D\u0430\u0440\u0443\u0448\u0430\u044E\u0442 \u043F\u0440\u0430\u0432\u0438\u043B\u043E 4 \u0441\u0435\u0433\u043C\u0435\u043D\u0442\u043E\u0432, \u0437\u0430\u043F\u0440\u0430\u0448\u0438\u0432\u0430\u044E \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435: ${invalid.map((p) => p.path).join(", ")}
-`
-    };
-    const retryText = await retryInvalidPaths(llm, model, messages, invalid, signal, opts);
-    if (signal.aborted)
-      return;
-    if (retryText) {
-      const retried = parseJsonPages(retryText);
-      const { valid: retriedValid, invalid: retriedInvalid } = splitByPathValidity(retried, wikiVaultPath);
-      for (const p of retriedInvalid) {
-        yield { kind: "tool_use", name: "Write", input: { path: p.path } };
-        yield { kind: "tool_result", ok: false, preview: `Path violates 4-level rule (!Wiki/<d>/<e>/<f>.md): ${p.path}` };
-      }
-      pages = [...valid, ...retriedValid];
-    } else {
-      for (const p of invalid) {
-        yield { kind: "tool_use", name: "Write", input: { path: p.path } };
-        yield { kind: "tool_result", ok: false, preview: `Path violates 4-level rule (!Wiki/<d>/<e>/<f>.md): ${p.path}` };
-      }
-      pages = valid;
-    }
-  }
-  const written = [];
-  for (const page of pages) {
-    if (!page.path.startsWith(wikiVaultPath + "/")) {
-      yield { kind: "tool_use", name: "Write", input: { path: page.path } };
-      yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
-      continue;
-    }
-    yield { kind: "tool_use", name: "Write", input: { path: page.path } };
-    try {
-      await vaultTools.write(page.path, page.content);
-      written.push(page.path);
-      yield { kind: "tool_result", ok: true };
-      if (page.annotation) {
-        try {
-          await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation, page.path);
-        } catch {
-        }
-      }
-    } catch (e) {
-      yield { kind: "tool_result", ok: false, preview: e.message };
-    }
-  }
-  const resultText = buildIngestSummary(domain.id, sourceVaultPath, written, pages.length);
-  yield { kind: "assistant_text", delta: resultText };
-  if (written.length > 0) {
-    await appendLog(vaultTools, domainRoot, sourceVaultPath, domain.id, written);
-    const backlinkToday = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-    const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
-    const existingArticles = parseWikiArticlesFromFm(sourceContent);
-    const writtenLinks = written.map((p) => `[[${p}]]`);
-    const mergedArticles = [.../* @__PURE__ */ new Set([...existingArticles, ...writtenLinks])];
-    const updatedSource = upsertRawFrontmatter(sourceContent, {
-      wiki_added: isFirstTime ? backlinkToday : void 0,
-      wiki_updated: backlinkToday,
-      wiki_articles: mergedArticles
-    });
-    yield { kind: "tool_use", name: "Write", input: { path: sourceVaultPath } };
-    try {
-      await vaultTools.write(sourceVaultPath, updatedSource);
-      yield { kind: "tool_result", ok: true, preview: `backlinks \u2192 ${sourceVaultPath}` };
-    } catch (e) {
-      yield { kind: "tool_result", ok: false, preview: `backlink write failed: ${e.message}` };
-    }
-    const parentPath = extractParentSourcePath(absSource, vaultRoot);
-    yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
-  }
-  yield { kind: "result", durationMs: Date.now() - start, text: resultText, outputTokens: outputTokens || void 0 };
-}
-function buildIngestSummary(domainId, sourcePath, written, total) {
-  const src = sourcePath.split("/").pop() ?? sourcePath;
-  if (written.length === 0) {
-    return `\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \xAB${src}\xBB \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u0430\u043D \u2014 \u043D\u043E\u0432\u044B\u0445 \u0438\u043B\u0438 \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043D\u0435\u0442.`;
-  }
-  const skipped = total - written.length;
-  const lines = [`\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \xAB${src}\xBB \u2192 \u0434\u043E\u043C\u0435\u043D \xAB${domainId}\xBB: \u0437\u0430\u043F\u0438\u0441\u0430\u043D\u043E ${written.length} \u0441\u0442\u0440.${skipped > 0 ? `, \u043E\u0448\u0438\u0431\u043E\u043A ${skipped}` : ""}`];
-  for (const p of written) {
-    lines.push(`  \u2022 ${p.split("/").pop()}`);
-  }
-  return lines.join("\n");
-}
-function detectDomain(absFilePath, domains, vaultRoot) {
-  for (const d of domains) {
-    const matched = d.source_paths?.some((sp) => {
-      const abs = (0, import_path_browserify3.isAbsolute)(sp) ? sp : (0, import_path_browserify3.join)(vaultRoot, sp);
-      return absFilePath.startsWith(abs);
-    });
-    if (matched)
-      return d;
-  }
-  return domains[0] ?? null;
-}
-function parseJsonPages(text) {
-  const match = text.match(/\[[\s\S]*\]/);
-  if (!match)
-    return [];
-  try {
-    const arr = JSON.parse(match[0]);
-    if (!Array.isArray(arr))
-      return [];
-    return arr.filter(
-      (x) => x !== null && typeof x === "object" && typeof x.path === "string" && typeof x.content === "string"
-    );
-  } catch {
-    return [];
-  }
-}
-async function appendLog(vaultTools, wikiRoot, sourcePath, domainId, written) {
-  const logPath = `${wikiRoot}/_log.md`;
-  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const entry = `
-## ${today} \u2014 ingest \u2014 ${domainId}
-- \u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A: ${sourcePath}
-- \u0421\u0442\u0440\u0430\u043D\u0438\u0446: ${written.map((p) => `
-  - ${p}`).join("")}
-`;
-  try {
-    const existing = await tryRead(vaultTools, logPath);
-    await vaultTools.write(logPath, existing + entry);
-  } catch {
-  }
-}
-async function tryRead(vaultTools, path2) {
-  try {
-    return await vaultTools.read(path2);
-  } catch {
-    return "";
-  }
-}
-function extractParentSourcePath(absSource, vaultRoot) {
-  const parentAbs = (0, import_path_browserify3.dirname)(absSource);
-  const normedVault = vaultRoot.endsWith("/") ? vaultRoot : vaultRoot + "/";
-  const clamped = (parentAbs + "/").startsWith(normedVault) ? parentAbs : vaultRoot;
-  const rel = (0, import_path_browserify3.relative)(vaultRoot, clamped);
-  return (rel || ".") + "/";
-}
-function splitByPathValidity(pages, wikiVaultPath) {
-  const valid = [];
-  const invalid = [];
-  for (const p of pages) {
-    const filename = p.path.split("/").pop() ?? "";
-    const isSystemFile = filename.startsWith("_") && filename.endsWith(".md");
-    if (!isSystemFile && validateArticlePath(p.path, wikiVaultPath)) {
-      valid.push(p);
-    } else {
-      invalid.push(p);
-    }
-  }
-  return { valid, invalid };
-}
-async function retryInvalidPaths(llm, model, originalMessages, invalidPages, signal, opts) {
-  const invalidList = invalidPages.map((p) => p.path).join(", ");
-  const retryMessages = [
-    ...originalMessages,
-    {
-      role: "user",
-      content: `\u041F\u0443\u0442\u0438 \u043D\u0430\u0440\u0443\u0448\u0430\u044E\u0442 \u043F\u0440\u0430\u0432\u0438\u043B\u043E 4 \u0441\u0435\u0433\u043C\u0435\u043D\u0442\u043E\u0432 (!Wiki/<d>/<e>/<f>.md): ${invalidList}. \u0412\u0435\u0440\u043D\u0438 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0439 JSON-\u043C\u0430\u0441\u0441\u0438\u0432 \u0442\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F \u044D\u0442\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446.`
-    }
-  ];
-  const retryParams = buildChatParams(model, retryMessages, opts, false);
-  try {
-    let text = "";
-    const stream = await llm.chat.completions.create(
-      { ...retryParams, stream: true },
-      { signal }
-    );
-    for await (const chunk of stream) {
-      const { content } = extractStreamDeltas(chunk);
-      if (content)
-        text += content;
-    }
-    return text;
-  } catch {
-    return "";
-  }
-}
-function buildEntityTypesBlock(domain, wikiVaultPath) {
-  if (!domain.entity_types?.length)
-    return "";
-  return domain.entity_types.map((et) => {
-    const pathTemplate = et.wiki_subfolder ? `${wikiVaultPath}/${et.wiki_subfolder}/<EntityName>.md` : `${wikiVaultPath}/<EntityName>.md`;
-    return [
-      `### \u0422\u0438\u043F: ${et.type}`,
-      `\u041E\u043F\u0438\u0441\u0430\u043D\u0438\u0435: ${et.description}`,
-      `\u041A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430: ${et.extraction_cues.join(", ")}`,
-      et.min_mentions_for_page != null ? `\u041C\u0438\u043D. \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B: ${et.min_mentions_for_page}` : "",
-      et.wiki_subfolder ? `\u041F\u043E\u0434\u043F\u0430\u043F\u043A\u0430 \u0432 wiki: ${et.wiki_subfolder}` : "",
-      `\u041F\u0443\u0442\u044C \u0434\u043B\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0435\u0439 \u044D\u0442\u043E\u0433\u043E \u0442\u0438\u043F\u0430: ${pathTemplate}`
-    ].filter(Boolean).join("\n");
-  }).join("\n\n");
-}
-function buildIngestMessages(sourcePath, sourceContent, domain, wikiVaultPath, existingPages, schemaContent, indexContent) {
-  const existing = existingPages.size > 0 ? [...existingPages.entries()].map(([p, c]) => `${p}:
-${c}`).join("\n\n") : "\u041D\u0435\u0442.";
-  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const entityTypesBlock = buildEntityTypesBlock(domain, wikiVaultPath);
-  const langNotes = domain.language_notes ? `\u042F\u0437\u044B\u043A\u043E\u0432\u044B\u0435 \u043F\u0440\u0430\u0432\u0438\u043B\u0430: ${domain.language_notes}` : "";
-  const systemContent = render(ingest_default, {
-    domain_name: domain.name,
-    entity_types_block: entityTypesBlock || "(\u043D\u0435 \u0437\u0430\u0434\u0430\u043D\u044B)",
-    lang_notes: langNotes,
-    wiki_path: wikiVaultPath,
-    today,
-    schema_block: schemaContent ? `\u041A\u041E\u041D\u0412\u0415\u041D\u0426\u0418\u0418 (_wiki_schema.md):
-${schemaContent}` : "",
-    source_path: sourcePath
-  });
-  return [
-    { role: "system", content: systemContent },
-    {
-      role: "user",
-      content: [
-        `\u0414\u043E\u043C\u0435\u043D: ${domain.id} (${domain.name})`,
-        `Wiki-\u043F\u0430\u043F\u043A\u0430: ${wikiVaultPath}`,
-        ``,
-        `\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A: ${sourcePath}`,
-        sourceContent,
-        ``,
-        `\u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B:
-${existing}`,
-        indexContent ? `
-\u0418\u043D\u0434\u0435\u043A\u0441 wiki (_index.md):
-${indexContent}` : ""
-      ].filter(Boolean).join("\n")
-    }
-  ];
 }
 
 // src/structural-error-counter.ts
@@ -26589,6 +26061,629 @@ var LintChatSchema = external_exports.object({
     annotation: external_exports.string().optional()
   })).default([])
 });
+var WikiPageSchema = external_exports.object({
+  path: external_exports.string(),
+  content: external_exports.string(),
+  annotation: external_exports.string().optional()
+});
+var WikiPagesOutputSchema = external_exports.object({
+  reasoning: external_exports.string(),
+  pages: external_exports.array(WikiPageSchema)
+});
+var LintOutputSchema = external_exports.object({
+  reasoning: external_exports.string(),
+  report: external_exports.string(),
+  fixes: external_exports.array(WikiPageSchema)
+});
+var FormatOutputSchema = external_exports.object({
+  report: external_exports.string(),
+  formatted: external_exports.string()
+});
+
+// prompts/ingest.md
+var ingest_default = '\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0441\u0438\u043D\u0442\u0435\u0437\u0430 wiki-\u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0418\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439/\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n\n\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:\n{{entity_types_block}}\n{{lang_notes}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- CREATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 wiki, \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 >= min_mentions_for_page\n- UPDATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2192 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E, \u041D\u0415 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E\n- SKIP: \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u043E \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0435\u0441\u0442\u044C\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043A\u043E\u043D\u0444\u0438\u0433\u0438/SQL \u043C\u043E\u0436\u043D\u043E \u0446\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445.\n- \u041F\u0443\u0442\u044C \u0441\u0442\u0430\u0442\u044C\u0438 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u0435\u0442\u0441\u044F \u0442\u0438\u043F\u043E\u043C \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u2014 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u043E\u0447\u043D\u044B\u0439 \u0448\u0430\u0431\u043B\u043E\u043D \u0438\u0437 \u0441\u0435\u043A\u0446\u0438\u0438 \xAB\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410\xBB (\u0432\u044B\u0448\u0435, \u0434\u043E \u0431\u043B\u043E\u043A\u0430 \u041F\u0420\u0410\u0412\u0418\u041B\u0410), \u043F\u043E\u0434\u0441\u0442\u0430\u0432\u0438\u0432 \u0438\u043C\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0432\u043C\u0435\u0441\u0442\u043E <EntityName>\n- \u0415\u0441\u043B\u0438 \u0442\u0438\u043F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u043D\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0451\u043D \u0438\u043B\u0438 \u0443 \u0434\u043E\u043C\u0435\u043D\u0430 \u043D\u0435\u0442 entity_types \u2192 \u043F\u0443\u0442\u044C \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- wiki_keywords: [5-10 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0445 \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u0434\u043E\u043C\u0435\u043D\u0430, \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0434\u0435\u0444\u0438\u0441-\u0432\u043C\u0435\u0441\u0442\u043E-\u043F\u0440\u043E\u0431\u0435\u043B\u0430]\n- wiki_sources: \u043A\u0430\u0436\u0434\u044B\u0439 \u044D\u043B\u0435\u043C\u0435\u043D\u0442 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 [[path/to/source]], \u0442\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 Links \u0432 Obsidian\n- \u0420\u0430\u0437\u0434\u0435\u043B "## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438" \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D \u0434\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0444\u0438\u043A\u0441\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 "## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439" \u0441 \u0434\u0430\u0442\u043E\u0439 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u043C\n- "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438" \u2014 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043A \u0441\u0432\u044F\u0437\u044F\u043C\n- \u0414\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0434\u043E\u0431\u0430\u0432\u044C \u043F\u043E\u043B\u0435 "annotation" \u0432 JSON: \u043E\u0434\u043D\u043E \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u2014 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430 \u043F\u043E \u0441\u043C\u044B\u0441\u043B\u0443\n{{schema_block}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u041E \u041F\u0423\u0422\u0415\u0419: \u043F\u0443\u0442\u044C \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0430\u0442\u044C\u0438 = !Wiki/<domain>/<entity>/<Article>.md \u2014 \u0440\u043E\u0432\u043D\u043E 4 \u0441\u0435\u0433\u043C\u0435\u043D\u0442\u0430.\n\u041D\u0435\u043B\u044C\u0437\u044F: !Wiki/os/os/network/NFS.md (\u0434\u043E\u043C\u0435\u043D \u0434\u0432\u0430\u0436\u0434\u044B), !Wiki/os/network/nfs/NFS.md (5 \u0441\u0435\u0433\u043C\u0435\u043D\u0442\u043E\u0432).\n\u041C\u043E\u0436\u043D\u043E:  !Wiki/os/network/NFS.md\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 \u2014 \u043D\u0438\u043A\u0430\u043A\u043E\u0433\u043E \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n{"reasoning":"\u041E\u0431\u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0435: \u043A\u0430\u043A\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437\u0432\u043B\u0435\u0447\u0435\u043D\u044B \u0438 \u043F\u043E\u0447\u0435\u043C\u0443","pages":[{"path":"{{wiki_path}}/entities/EntityName.md","content":"---\\nwiki_sources: [\\"[[{{source_path}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\nwiki_keywords: [\u0442\u043E\u043A\u0435\u043D1, \u0442\u043E\u043A\u0435\u043D2]\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncont\u0435\u043D\u0442...","annotation":"\u041A\u0440\u0430\u0442\u043A\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u0433\u043E \u043F\u043E\u0438\u0441\u043A\u0430"}]}\n';
+
+// src/phases/template.ts
+function render(template, vars) {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
+}
+
+// src/utils/raw-frontmatter.ts
+var FM_RE = /^---\n([\s\S]*?)\n---\n?/;
+function removeWikiFields(yaml) {
+  yaml = yaml.replace(/^wiki_added:[^\n]*\n?/m, "");
+  yaml = yaml.replace(/^wiki_updated:[^\n]*\n?/m, "");
+  yaml = yaml.replace(/^wiki_articles:[^\n]*\n(?:[ \t]+-[^\n]*\n?)*/m, "");
+  return yaml;
+}
+function buildWikiFields(fields) {
+  const lines = [];
+  if (fields.wiki_added !== void 0) {
+    lines.push(`wiki_added: ${fields.wiki_added}`);
+  }
+  lines.push(`wiki_updated: ${fields.wiki_updated}`);
+  if (fields.wiki_articles.length > 0) {
+    lines.push("wiki_articles:");
+    for (const a of fields.wiki_articles) {
+      lines.push(`  - "${a}"`);
+    }
+  }
+  return lines.join("\n");
+}
+function upsertRawFrontmatter(content, fields) {
+  const newFields = buildWikiFields(fields);
+  const match = FM_RE.exec(content);
+  if (match) {
+    let yaml = match[1];
+    let preservedWikiAdded;
+    if (fields.wiki_added === void 0) {
+      const addedMatch = /^wiki_added:[ \t]*(.+)$/m.exec(yaml);
+      if (addedMatch)
+        preservedWikiAdded = addedMatch[1].trim();
+    }
+    const cleaned = removeWikiFields(yaml).trimEnd();
+    let finalFields = newFields;
+    if (preservedWikiAdded !== void 0) {
+      finalFields = `wiki_added: ${preservedWikiAdded}
+${newFields}`;
+    }
+    const newYaml = cleaned ? `${cleaned}
+${finalFields}` : finalFields;
+    const rest = content.slice(match[0].length);
+    return `---
+${newYaml}
+---
+${rest}`;
+  }
+  return `---
+${newFields}
+---
+${content}`;
+}
+function parseWikiArticlesFromFm(content) {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch)
+    return [];
+  const match = /wiki_articles:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
+  if (!match)
+    return [];
+  return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
+}
+function parseWikiSourcesFromFm(content) {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch)
+    return [];
+  const match = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
+  if (!match)
+    return [];
+  return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
+}
+function hasFrontmatterField(content, field) {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch)
+    return false;
+  return new RegExp(`^${field}:`, "m").test(fmMatch[1]);
+}
+
+// src/wiki-index.ts
+function parseIndexAnnotations(content) {
+  const map = /* @__PURE__ */ new Map();
+  for (const line of content.split("\n")) {
+    const m = line.match(/^- \[\[([^\]]+)\]\] [^ ]+ — (.+)$/);
+    if (m)
+      map.set(m[1], m[2].trim());
+  }
+  return map;
+}
+function deriveSection(wikiFolder, fullPath) {
+  if (!fullPath)
+    return "general";
+  const prefix = wikiFolder + "/";
+  const rel = fullPath.startsWith(prefix) ? fullPath.slice(prefix.length) : fullPath;
+  const parts = rel.split("/");
+  return parts.length >= 2 ? parts[0] : "general";
+}
+function upsertInSection(content, section, pid, entryLine) {
+  if (!content.trim()) {
+    return `# Wiki Index
+
+## ${section}
+${entryLine}
+`;
+  }
+  const sectionHeader = `## ${section}`;
+  const escaped = pid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pidRe = new RegExp(`^- \\[\\[${escaped}\\]\\]`);
+  const lines = content.split("\n");
+  const sectionIdx = lines.findIndex((l) => l === sectionHeader);
+  if (sectionIdx === -1) {
+    return content.trimEnd() + `
+
+${sectionHeader}
+${entryLine}
+`;
+  }
+  const nextSection = lines.findIndex((l, i) => i > sectionIdx && l.startsWith("## "));
+  const sectionLines = nextSection === -1 ? lines.slice(sectionIdx + 1) : lines.slice(sectionIdx + 1, nextSection);
+  const pidIdx = sectionLines.findIndex((l) => pidRe.test(l));
+  if (pidIdx !== -1) {
+    const absIdx = sectionIdx + 1 + pidIdx;
+    return [...lines.slice(0, absIdx), entryLine, ...lines.slice(absIdx + 1)].join("\n");
+  }
+  const lastEntry = [...sectionLines].reduce((acc, l, i) => l.startsWith("- ") ? i : acc, -1);
+  const insertAfter = lastEntry === -1 ? sectionIdx : sectionIdx + 1 + lastEntry;
+  return [
+    ...lines.slice(0, insertAfter + 1),
+    entryLine,
+    ...lines.slice(insertAfter + 1)
+  ].join("\n");
+}
+async function upsertIndexAnnotation(vaultTools, wikiFolder, pid, annotation, fullPath) {
+  const indexPath = `${wikiFolder}/_index.md`;
+  let content = "";
+  try {
+    content = await vaultTools.read(indexPath);
+  } catch {
+  }
+  const section = deriveSection(wikiFolder, fullPath);
+  const prefix = wikiFolder + "/";
+  const relPath = fullPath ? fullPath.startsWith(prefix) ? fullPath.slice(prefix.length) : fullPath : pid;
+  const entryLine = `- [[${pid}]] ${relPath} \u2014 ${annotation}`;
+  await vaultTools.write(indexPath, upsertInSection(content, section, pid, entryLine));
+}
+
+// src/wiki-graph.ts
+var import_path_browserify2 = __toESM(require_path_browserify(), 1);
+function pageId(vaultPath) {
+  return (0, import_path_browserify2.basename)(vaultPath, ".md");
+}
+function buildWikiGraph(pages) {
+  const graph = /* @__PURE__ */ new Map();
+  for (const vaultPath of pages.keys()) {
+    graph.set(pageId(vaultPath), /* @__PURE__ */ new Set());
+  }
+  for (const [vaultPath, content] of pages) {
+    const src = pageId(vaultPath);
+    for (const match of content.matchAll(/\[\[([^\]|#]+)/g)) {
+      const tgt = match[1].trim();
+      if (tgt)
+        graph.get(src).add(tgt);
+    }
+  }
+  return graph;
+}
+function bfsExpand(seeds, graph, depth) {
+  if (seeds.length === 0)
+    return /* @__PURE__ */ new Set();
+  const reverse = /* @__PURE__ */ new Map();
+  for (const [src, targets] of graph) {
+    for (const tgt of targets) {
+      if (!reverse.has(tgt))
+        reverse.set(tgt, /* @__PURE__ */ new Set());
+      reverse.get(tgt).add(src);
+    }
+  }
+  const visited = new Set(seeds);
+  let frontier = new Set(seeds);
+  for (let hop = 0; hop < depth; hop++) {
+    const next = /* @__PURE__ */ new Set();
+    for (const node of frontier) {
+      for (const neighbor of graph.get(node) ?? []) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          next.add(neighbor);
+        }
+      }
+      for (const neighbor of reverse.get(node) ?? []) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          next.add(neighbor);
+        }
+      }
+    }
+    if (next.size === 0)
+      break;
+    frontier = next;
+  }
+  return visited;
+}
+function checkGraphStructure(graph, hubThreshold) {
+  const inDegree = /* @__PURE__ */ new Map();
+  for (const node of graph.keys()) {
+    if (!inDegree.has(node))
+      inDegree.set(node, 0);
+    for (const tgt of graph.get(node)) {
+      inDegree.set(tgt, (inDegree.get(tgt) ?? 0) + 1);
+    }
+  }
+  const issues = [];
+  for (const [node, neighbors] of graph) {
+    const outDeg = neighbors.size;
+    const inDeg = inDegree.get(node) ?? 0;
+    if (inDeg === 0 && outDeg === 0) {
+      issues.push(`- ${node}: isolated node (no links in or out)`);
+    }
+    if (outDeg > hubThreshold) {
+      issues.push(`- ${node}: hub node (${outDeg} outgoing links)`);
+    }
+    for (const tgt of neighbors) {
+      if (graph.has(tgt) && !graph.get(tgt).has(node)) {
+        issues.push(`- ${node} \u2192 [[${tgt}]] not reciprocated`);
+      }
+    }
+  }
+  return issues.join("\n");
+}
+
+// src/wiki-log.ts
+function ts() {
+  return (/* @__PURE__ */ new Date()).toISOString().slice(0, 19);
+}
+function buildEntry(domainId, event) {
+  const header = `## ${ts()} \u2014 ${event.op} \u2014 ${domainId}`;
+  const lines = [header];
+  if (event.op === "ingest") {
+    lines.push(`**\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A:** ${event.sourcePath}`);
+    lines.push(`**\u0422\u043E\u043A\u0435\u043D\u044B:** ${event.outputTokens}`);
+    lines.push("");
+    for (const e of event.entries) {
+      if (e.action === "\u0421\u041E\u0417\u0414\u0410\u041D\u0410") {
+        lines.push(`- \u0421\u041E\u0417\u0414\u0410\u041D\u0410: ${e.path} (${e.statusTo})`);
+      } else {
+        const status = e.statusFrom ? `${e.statusFrom}\u2192${e.statusTo}` : e.statusTo;
+        lines.push(`- \u041E\u0411\u041D\u041E\u0412\u041B\u0415\u041D\u0410: ${e.path} (${status})`);
+      }
+    }
+  } else if (event.op === "lint") {
+    lines.push(`**\u0422\u043E\u043A\u0435\u043D\u044B:** ${event.outputTokens}`);
+    lines.push(`**\u041F\u0440\u043E\u0432\u0435\u0440\u0435\u043D\u043E:** ${event.checkedCount} | **\u0418\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E:** ${event.fixed.length}`);
+    lines.push("");
+    for (const p of event.fixed)
+      lines.push(`- \u0418\u0421\u041F\u0420\u0410\u0412\u041B\u0415\u041D\u0410: ${p}`);
+  } else {
+    lines.push(`**\u0424\u0430\u0439\u043B:** ${event.filePath}`);
+    lines.push(`**\u0422\u043E\u043A\u0435\u043D\u044B:** ${event.outputTokens}`);
+    lines.push("");
+    for (const p of event.fixed)
+      lines.push(`- \u0418\u0421\u041F\u0420\u0410\u0412\u041B\u0415\u041D\u0410: ${p}`);
+  }
+  lines.push("", "---");
+  return "\n" + lines.join("\n") + "\n";
+}
+async function appendWikiLog(vaultTools, logPath, domainId, event) {
+  let existing = "";
+  try {
+    existing = await vaultTools.read(logPath);
+  } catch {
+  }
+  await vaultTools.write(logPath, existing + buildEntry(domainId, event));
+}
+
+// src/phases/ingest.ts
+function parseWikiStatus(content) {
+  const m = /^---\n[\s\S]*?^wiki_status:[ \t]*(.+)$/m.exec(content);
+  return m ? m[1].trim() : "unknown";
+}
+async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}) {
+  const filePath = args[0];
+  if (!filePath) {
+    yield { kind: "error", message: "ingest: file path required" };
+    return;
+  }
+  const absSource = (0, import_path_browserify3.isAbsolute)(filePath) ? filePath : (0, import_path_browserify3.join)(vaultRoot, filePath);
+  const sourceVaultPath = vaultTools.toVaultPath(absSource);
+  if (!sourceVaultPath) {
+    yield { kind: "error", message: `Source file ${filePath} is outside the vault.` };
+    return;
+  }
+  yield { kind: "tool_use", name: "Read", input: { path: sourceVaultPath } };
+  let sourceContent;
+  try {
+    sourceContent = await vaultTools.read(sourceVaultPath);
+  } catch (e) {
+    yield { kind: "error", message: `Cannot read ${sourceVaultPath}: ${e.message}` };
+    return;
+  }
+  yield { kind: "tool_result", ok: true, preview: sourceContent.slice(0, 100) };
+  const domain = detectDomain(absSource, domains, vaultRoot);
+  if (!domain) {
+    yield { kind: "error", message: "No domain found for this file. Configure domain-map." };
+    return;
+  }
+  const absWiki = (0, import_path_browserify3.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+  const wikiVaultPath = vaultTools.toVaultPath(absWiki);
+  if (!wikiVaultPath) {
+    yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
+    return;
+  }
+  const domainRoot = wikiVaultPath;
+  const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
+  const [schemaContent, indexContent] = await Promise.all([
+    tryRead(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`),
+    tryRead(vaultTools, `${domainRoot}/_index.md`)
+  ]);
+  const existingPaths = await vaultTools.listFiles(wikiVaultPath);
+  const existingPages = await vaultTools.readAll(existingPaths.filter((f) => !f.endsWith("_index.md")));
+  yield { kind: "assistant_text", delta: `Synthesizing wiki pages for domain "${domain.id}"...
+` };
+  const start = Date.now();
+  const messages = buildIngestMessages(
+    sourceVaultPath,
+    sourceContent,
+    domain,
+    wikiVaultPath,
+    existingPages,
+    schemaContent,
+    indexContent
+  );
+  const pwtEvents = [];
+  let parseResult;
+  try {
+    parseResult = await parseWithRetry({
+      llm,
+      model,
+      baseMessages: messages,
+      opts,
+      schema: WikiPagesOutputSchema,
+      maxRetries: opts.structuredRetries ?? 1,
+      callSite: "ingest.pages",
+      signal,
+      onEvent: (ev) => pwtEvents.push(ev)
+    });
+  } catch (e) {
+    if (signal.aborted || e.name === "AbortError")
+      return;
+    for (const ev of pwtEvents)
+      yield ev;
+    yield { kind: "error", message: `ingest: LLM output failed validation \u2014 ${e.message}` };
+    yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
+    return;
+  }
+  for (const ev of pwtEvents)
+    yield ev;
+  if (signal.aborted)
+    return;
+  const outputTokens = parseResult.outputTokens;
+  yield { kind: "assistant_text", delta: parseResult.value.reasoning, isReasoning: true };
+  let pages = parseResult.value.pages;
+  const { valid, invalid } = splitByPathValidity(pages, wikiVaultPath);
+  if (invalid.length > 0) {
+    yield {
+      kind: "assistant_text",
+      delta: `\u26A0 \u041F\u0443\u0442\u0438 \u043D\u0430\u0440\u0443\u0448\u0430\u044E\u0442 \u043F\u0440\u0430\u0432\u0438\u043B\u043E 4 \u0441\u0435\u0433\u043C\u0435\u043D\u0442\u043E\u0432, \u0437\u0430\u043F\u0440\u0430\u0448\u0438\u0432\u0430\u044E \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435: ${invalid.map((p) => p.path).join(", ")}
+`
+    };
+    const retryText = await retryInvalidPaths(llm, model, messages, invalid, signal, opts);
+    if (signal.aborted)
+      return;
+    if (retryText) {
+      const retried = parseJsonPages(retryText);
+      const { valid: retriedValid, invalid: retriedInvalid } = splitByPathValidity(retried, wikiVaultPath);
+      for (const p of retriedInvalid) {
+        yield { kind: "tool_use", name: "Write", input: { path: p.path } };
+        yield { kind: "tool_result", ok: false, preview: `Path violates 4-level rule (!Wiki/<d>/<e>/<f>.md): ${p.path}` };
+      }
+      pages = [...valid, ...retriedValid];
+    } else {
+      for (const p of invalid) {
+        yield { kind: "tool_use", name: "Write", input: { path: p.path } };
+        yield { kind: "tool_result", ok: false, preview: `Path violates 4-level rule (!Wiki/<d>/<e>/<f>.md): ${p.path}` };
+      }
+      pages = valid;
+    }
+  }
+  const written = [];
+  const logEntries = [];
+  for (const page of pages) {
+    if (!page.path.startsWith(wikiVaultPath + "/")) {
+      yield { kind: "tool_use", name: "Write", input: { path: page.path } };
+      yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
+      continue;
+    }
+    let existingContent = null;
+    try {
+      existingContent = await vaultTools.read(page.path);
+    } catch {
+    }
+    yield { kind: "tool_use", name: "Write", input: { path: page.path } };
+    try {
+      await vaultTools.write(page.path, page.content);
+      written.push(page.path);
+      yield { kind: "tool_result", ok: true };
+      const relPath = page.path.startsWith(wikiVaultPath + "/") ? page.path.slice(wikiVaultPath.length + 1) : page.path;
+      const statusTo = parseWikiStatus(page.content);
+      if (existingContent === null) {
+        logEntries.push({ path: relPath, action: "\u0421\u041E\u0417\u0414\u0410\u041D\u0410", statusTo });
+      } else {
+        logEntries.push({ path: relPath, action: "\u041E\u0411\u041D\u041E\u0412\u041B\u0415\u041D\u0410", statusFrom: parseWikiStatus(existingContent), statusTo });
+      }
+      if (page.annotation) {
+        try {
+          await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation, page.path);
+        } catch {
+        }
+      }
+    } catch (e) {
+      yield { kind: "tool_result", ok: false, preview: e.message };
+    }
+  }
+  const resultText = buildIngestSummary(domain.id, sourceVaultPath, written, pages.length);
+  yield { kind: "assistant_text", delta: resultText };
+  if (written.length > 0) {
+    try {
+      await appendWikiLog(vaultTools, `${domainRoot}/_log.md`, domain.id, {
+        op: "ingest",
+        sourcePath: sourceVaultPath,
+        entries: logEntries,
+        outputTokens
+      });
+    } catch {
+    }
+    const backlinkToday = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
+    const existingArticles = parseWikiArticlesFromFm(sourceContent);
+    const writtenLinks = written.map((p) => `[[${p}]]`);
+    const mergedArticles = [.../* @__PURE__ */ new Set([...existingArticles, ...writtenLinks])];
+    const updatedSource = upsertRawFrontmatter(sourceContent, {
+      wiki_added: isFirstTime ? backlinkToday : void 0,
+      wiki_updated: backlinkToday,
+      wiki_articles: mergedArticles
+    });
+    yield { kind: "tool_use", name: "Write", input: { path: sourceVaultPath } };
+    try {
+      await vaultTools.write(sourceVaultPath, updatedSource);
+      yield { kind: "tool_result", ok: true, preview: `backlinks \u2192 ${sourceVaultPath}` };
+    } catch (e) {
+      yield { kind: "tool_result", ok: false, preview: `backlink write failed: ${e.message}` };
+    }
+    const parentPath = extractParentSourcePath(absSource, vaultRoot);
+    yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
+  }
+  yield { kind: "result", durationMs: Date.now() - start, text: resultText, outputTokens: outputTokens || void 0 };
+}
+function buildIngestSummary(domainId, sourcePath, written, total) {
+  const src = sourcePath.split("/").pop() ?? sourcePath;
+  if (written.length === 0) {
+    return `\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \xAB${src}\xBB \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u0430\u043D \u2014 \u043D\u043E\u0432\u044B\u0445 \u0438\u043B\u0438 \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043D\u0435\u0442.`;
+  }
+  const skipped = total - written.length;
+  const lines = [`\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \xAB${src}\xBB \u2192 \u0434\u043E\u043C\u0435\u043D \xAB${domainId}\xBB: \u0437\u0430\u043F\u0438\u0441\u0430\u043D\u043E ${written.length} \u0441\u0442\u0440.${skipped > 0 ? `, \u043E\u0448\u0438\u0431\u043E\u043A ${skipped}` : ""}`];
+  for (const p of written) {
+    lines.push(`  \u2022 ${p.split("/").pop()}`);
+  }
+  return lines.join("\n");
+}
+function detectDomain(absFilePath, domains, vaultRoot) {
+  for (const d of domains) {
+    const matched = d.source_paths?.some((sp) => {
+      const abs = (0, import_path_browserify3.isAbsolute)(sp) ? sp : (0, import_path_browserify3.join)(vaultRoot, sp);
+      return absFilePath.startsWith(abs);
+    });
+    if (matched)
+      return d;
+  }
+  return domains[0] ?? null;
+}
+function parseJsonPages(text) {
+  const match = text.match(/\[[\s\S]*\]/);
+  if (!match)
+    return [];
+  try {
+    const arr = JSON.parse(match[0]);
+    if (!Array.isArray(arr))
+      return [];
+    return arr.filter(
+      (x) => x !== null && typeof x === "object" && typeof x.path === "string" && typeof x.content === "string"
+    );
+  } catch {
+    return [];
+  }
+}
+async function tryRead(vaultTools, path2) {
+  try {
+    return await vaultTools.read(path2);
+  } catch {
+    return "";
+  }
+}
+function extractParentSourcePath(absSource, vaultRoot) {
+  const parentAbs = (0, import_path_browserify3.dirname)(absSource);
+  const normedVault = vaultRoot.endsWith("/") ? vaultRoot : vaultRoot + "/";
+  const clamped = (parentAbs + "/").startsWith(normedVault) ? parentAbs : vaultRoot;
+  const rel = (0, import_path_browserify3.relative)(vaultRoot, clamped);
+  return (rel || ".") + "/";
+}
+function splitByPathValidity(pages, wikiVaultPath) {
+  const valid = [];
+  const invalid = [];
+  for (const p of pages) {
+    const filename = p.path.split("/").pop() ?? "";
+    const isSystemFile = filename.startsWith("_") && filename.endsWith(".md");
+    if (!isSystemFile && validateArticlePath(p.path, wikiVaultPath)) {
+      valid.push(p);
+    } else {
+      invalid.push(p);
+    }
+  }
+  return { valid, invalid };
+}
+async function retryInvalidPaths(llm, model, originalMessages, invalidPages, signal, opts) {
+  const invalidList = invalidPages.map((p) => p.path).join(", ");
+  const retryMessages = [
+    ...originalMessages,
+    {
+      role: "user",
+      content: `\u041F\u0443\u0442\u0438 \u043D\u0430\u0440\u0443\u0448\u0430\u044E\u0442 \u043F\u0440\u0430\u0432\u0438\u043B\u043E 4 \u0441\u0435\u0433\u043C\u0435\u043D\u0442\u043E\u0432 (!Wiki/<d>/<e>/<f>.md): ${invalidList}. \u0412\u0435\u0440\u043D\u0438 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0439 JSON-\u043C\u0430\u0441\u0441\u0438\u0432 \u0442\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F \u044D\u0442\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446.`
+    }
+  ];
+  const retryParams = buildChatParams(model, retryMessages, opts, false);
+  try {
+    let text = "";
+    const stream = await llm.chat.completions.create(
+      { ...retryParams, stream: true },
+      { signal }
+    );
+    for await (const chunk of stream) {
+      const { content } = extractStreamDeltas(chunk);
+      if (content)
+        text += content;
+    }
+    return text;
+  } catch {
+    return "";
+  }
+}
+function buildEntityTypesBlock(domain, wikiVaultPath) {
+  if (!domain.entity_types?.length)
+    return "";
+  return domain.entity_types.map((et) => {
+    const pathTemplate = et.wiki_subfolder ? `${wikiVaultPath}/${et.wiki_subfolder}/<EntityName>.md` : `${wikiVaultPath}/<EntityName>.md`;
+    return [
+      `### \u0422\u0438\u043F: ${et.type}`,
+      `\u041E\u043F\u0438\u0441\u0430\u043D\u0438\u0435: ${et.description}`,
+      `\u041A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430: ${et.extraction_cues.join(", ")}`,
+      et.min_mentions_for_page != null ? `\u041C\u0438\u043D. \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B: ${et.min_mentions_for_page}` : "",
+      et.wiki_subfolder ? `\u041F\u043E\u0434\u043F\u0430\u043F\u043A\u0430 \u0432 wiki: ${et.wiki_subfolder}` : "",
+      `\u041F\u0443\u0442\u044C \u0434\u043B\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0435\u0439 \u044D\u0442\u043E\u0433\u043E \u0442\u0438\u043F\u0430: ${pathTemplate}`
+    ].filter(Boolean).join("\n");
+  }).join("\n\n");
+}
+function buildIngestMessages(sourcePath, sourceContent, domain, wikiVaultPath, existingPages, schemaContent, indexContent) {
+  const existing = existingPages.size > 0 ? [...existingPages.entries()].map(([p, c]) => `${p}:
+${c}`).join("\n\n") : "\u041D\u0435\u0442.";
+  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const entityTypesBlock = buildEntityTypesBlock(domain, wikiVaultPath);
+  const langNotes = domain.language_notes ? `\u042F\u0437\u044B\u043A\u043E\u0432\u044B\u0435 \u043F\u0440\u0430\u0432\u0438\u043B\u0430: ${domain.language_notes}` : "";
+  const systemContent = render(ingest_default, {
+    domain_name: domain.name,
+    entity_types_block: entityTypesBlock || "(\u043D\u0435 \u0437\u0430\u0434\u0430\u043D\u044B)",
+    lang_notes: langNotes,
+    wiki_path: wikiVaultPath,
+    today,
+    schema_block: schemaContent ? `\u041A\u041E\u041D\u0412\u0415\u041D\u0426\u0418\u0418 (_wiki_schema.md):
+${schemaContent}` : "",
+    source_path: sourcePath
+  });
+  return [
+    { role: "system", content: systemContent },
+    {
+      role: "user",
+      content: [
+        `\u0414\u043E\u043C\u0435\u043D: ${domain.id} (${domain.name})`,
+        `Wiki-\u043F\u0430\u043F\u043A\u0430: ${wikiVaultPath}`,
+        ``,
+        `\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A: ${sourcePath}`,
+        sourceContent,
+        ``,
+        `\u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B:
+${existing}`,
+        indexContent ? `
+\u0418\u043D\u0434\u0435\u043A\u0441 wiki (_index.md):
+${indexContent}` : ""
+      ].filter(Boolean).join("\n")
+    }
+  ];
+}
 
 // prompts/query.md
 var query_default = "\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u043F\u043E wiki-\u0431\u0430\u0437\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u0411\u0443\u0434\u044C \u0442\u043E\u0447\u0435\u043D \u0438 \u043B\u0430\u043A\u043E\u043D\u0438\u0447\u0435\u043D.\n\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 WikiLinks [[\u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435]] \u043F\u0440\u0438 \u0441\u0441\u044B\u043B\u043A\u0430\u0445 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0437 \u0438\u043D\u0434\u0435\u043A\u0441\u0430.\n{{entity_types_block}}\n{{schema_block}}\n{{index_block}}\n";
@@ -26772,7 +26867,7 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
     return;
   const [indexContent, schemaContent] = await Promise.all([
     tryRead2(vaultTools, `${wikiVaultPath}/_index.md`),
-    tryRead2(vaultTools, `${schemaRoot}/_wiki_schema.md`)
+    tryRead2(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`)
   ]);
   yield { kind: "tool_use", name: "Read", input: { files: files.length } };
   const pages = await vaultTools.readAll(files);
@@ -26979,30 +27074,10 @@ ${types}${notes}`;
 var import_path_browserify4 = __toESM(require_path_browserify(), 1);
 
 // prompts/lint.md
-var lint_default = '\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0412\u044B\u044F\u0432\u043B\u044F\u0439: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442, \u0431\u0438\u0442\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438.\n\u0412\u0435\u0440\u043D\u0438 \u0440\u0430\u0437\u0432\u0451\u0440\u043D\u0443\u0442\u044B\u0439 \u0430\u043D\u0430\u043B\u0438\u0437 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 Markdown.\n{{entity_types_block}}\n\n\u041F\u0440\u0438 \u0432\u043E\u0437\u0432\u0440\u0430\u0442\u0435 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 JSON-\u043C\u0430\u0441\u0441\u0438\u0432 \u0441 \u043F\u043E\u043B\u044F\u043C\u0438 path, content, annotation:\n- wiki_keywords: \u0434\u043E\u0431\u0430\u0432\u044C \u0438\u043B\u0438 \u043E\u0431\u043D\u043E\u0432\u0438 \u0432 frontmatter (5-10 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0445 \u0442\u043E\u043A\u0435\u043D\u043E\u0432, \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0434\u0435\u0444\u0438\u0441-\u0432\u043C\u0435\u0441\u0442\u043E-\u043F\u0440\u043E\u0431\u0435\u043B\u0430)\n- "annotation": \u043E\u0434\u043D\u043E \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u2014 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430 \u043F\u043E \u0441\u043C\u044B\u0441\u043B\u0443\n';
+var lint_default = '\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u0438 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0410\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0439 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u043E wiki: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442, \u0431\u0438\u0442\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438.\n\u041E\u0434\u043D\u043E\u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043F\u043E\u0434\u0433\u043E\u0442\u043E\u0432\u044C \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0435 \u0432\u0435\u0440\u0441\u0438\u0438 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446.\n{{entity_types_block}}\n\n\u041F\u0440\u0438 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0441\u0442\u0440\u0430\u043D\u0438\u0446:\n- wiki_keywords: \u0434\u043E\u0431\u0430\u0432\u044C \u0438\u043B\u0438 \u043E\u0431\u043D\u043E\u0432\u0438 \u0432 frontmatter (5-10 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0445 \u0442\u043E\u043A\u0435\u043D\u043E\u0432, \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0434\u0435\u0444\u0438\u0441-\u0432\u043C\u0435\u0441\u0442\u043E-\u043F\u0440\u043E\u0431\u0435\u043B\u0430)\n- "annotation": \u043E\u0434\u043D\u043E \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u2014 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430 \u043F\u043E \u0441\u043C\u044B\u0441\u043B\u0443\n- \u043C\u0451\u0440\u0442\u0432\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438 [[X]] \u0443\u0431\u0435\u0440\u0438 \u0438\u043B\u0438 \u0437\u0430\u043C\u0435\u043D\u0438; \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0439 frontmatter \u0434\u043E\u0431\u0430\u0432\u044C; \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0438\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 \u2014 \u043D\u0438\u043A\u0430\u043A\u043E\u0433\u043E \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n{"reasoning":"\u0446\u0435\u043F\u043E\u0447\u043A\u0430 \u0440\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439","report":"## \u041E\u0442\u0447\u0451\u0442 lint\\n\\n\u0410\u043D\u0430\u043B\u0438\u0437 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 Markdown...","fixes":[{"path":"!Wiki/domain/type/Entity.md","content":"\u043F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B","annotation":"\u043A\u0440\u0430\u0442\u043A\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435"}]}\n\n\u041F\u043E\u043B\u0435 `fixes` \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0422\u041E\u041B\u042C\u041A\u041E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0435\u0441\u043B\u0438 \u043F\u0440\u0430\u0432\u043E\u043A \u043D\u0435\u0442).\n\u041F\u043E\u043B\u0435 `report` \u2014 \u043F\u043E\u043B\u043D\u044B\u0439 markdown-\u043E\u0442\u0447\u0451\u0442 \u0434\u043B\u044F \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F.\n';
 
 // src/phases/lint.ts
 var META_FILES2 = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
-async function tryRead3(vaultTools, path2) {
-  try {
-    return await vaultTools.read(path2);
-  } catch {
-    return "";
-  }
-}
-async function appendLintLog(vaultTools, wikiVaultPath, domainId, fixedCount) {
-  const logPath = `${wikiVaultPath}/_log.md`;
-  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const entry = `
-## ${today} \u2014 lint \u2014 ${domainId}
-- \u0418\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u0441\u0442\u0440\u0430\u043D\u0438\u0446: ${fixedCount}
-`;
-  try {
-    const existing = await tryRead3(vaultTools, logPath);
-    await vaultTools.write(logPath, existing + entry);
-  } catch {
-  }
-}
 async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal, hubThreshold = 20, opts = {}) {
   const domainId = args[0];
   const targets = domainId ? domains.filter((d) => d.id === domainId) : domains;
@@ -27056,37 +27131,36 @@ ${c}`).join("\n\n")}`
         ].join("\n")
       }
     ];
-    const params = buildChatParams(model, messages, opts, true);
-    let llmReport = "";
+    const lintPwtEvents = [];
+    let lintResult;
     try {
-      const stream = await llm.chat.completions.create(
-        { ...params, stream: true },
-        { signal }
-      );
-      for await (const chunk of stream) {
-        const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
-        if (reasoning)
-          yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-        if (content) {
-          llmReport += content;
-          yield { kind: "assistant_text", delta: content };
-        }
-        if (tok !== void 0)
-          outputTokens += tok;
-      }
+      lintResult = await parseWithRetry({
+        llm,
+        model,
+        baseMessages: messages,
+        opts,
+        schema: LintOutputSchema,
+        maxRetries: opts.structuredRetries ?? 1,
+        callSite: "lint.fix",
+        signal,
+        onEvent: (ev) => lintPwtEvents.push(ev)
+      });
     } catch (e) {
       if (signal.aborted || e.name === "AbortError")
         return;
-      const resp = await llm.chat.completions.create(
-        { ...params, stream: false }
-      );
-      llmReport = resp.choices[0]?.message?.content ?? "";
-      const tok = extractUsage(resp);
-      if (tok !== void 0)
-        outputTokens += tok;
-      if (llmReport)
-        yield { kind: "assistant_text", delta: llmReport };
+      for (const ev of lintPwtEvents)
+        yield ev;
+      reportParts.push(`## ${domain.id}
+LLM validation failed: ${e.message}`);
+      continue;
     }
+    for (const ev of lintPwtEvents)
+      yield ev;
+    if (signal.aborted)
+      return;
+    outputTokens += lintResult.outputTokens;
+    const llmReport = lintResult.value.report;
+    yield { kind: "assistant_text", delta: llmReport };
     reportParts.push(`## ${domain.id}
 ${allIssues ? `**\u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B:**
 ${allIssues}
@@ -27107,38 +27181,11 @@ Actualizing domain config for "${domain.id}"...
     }
     if (signal.aborted)
       return;
-    yield { kind: "assistant_text", delta: `
-Applying fixes for "${domain.id}"...
-` };
-    const fixMessages = buildFixMessages(domain, wikiVaultPath, pages, allIssues, entityTypesBlock, llmReport);
-    const fixParams = buildChatParams(model, fixMessages, opts, true);
-    let fixFullText = "";
-    try {
-      const fixStream = await llm.chat.completions.create(
-        { ...fixParams, stream: true },
-        { signal }
-      );
-      for await (const chunk of fixStream) {
-        const { content, outputTokens: tok } = extractStreamDeltas(chunk);
-        if (content)
-          fixFullText += content;
-        if (tok !== void 0)
-          outputTokens += tok;
-      }
-    } catch (e) {
-      if (signal.aborted || e.name === "AbortError")
-        return;
-      const resp = await llm.chat.completions.create(
-        { ...fixParams, stream: false }
-      );
-      fixFullText = resp.choices[0]?.message?.content ?? "";
-      const tok = extractUsage(resp);
-      if (tok !== void 0)
-        outputTokens += tok;
-    }
-    const fixedPages = parseJsonPages(fixFullText);
+    const fixedPages = lintResult.value.fixes;
     const writtenPaths = [];
     for (const page of fixedPages) {
+      yield { kind: "assistant_text", delta: `  \u2022 ${page.path.split("/").pop()}...
+` };
       if (!page.path.startsWith(wikiVaultPath + "/")) {
         yield { kind: "tool_use", name: "Write", input: { path: page.path } };
         yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
@@ -27169,7 +27216,16 @@ ${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
         }
       }
     }
-    await appendLintLog(vaultTools, wikiVaultPath, domain.id, writtenPaths.length);
+    try {
+      await appendWikiLog(vaultTools, `${wikiVaultPath}/_log.md`, domain.id, {
+        op: "lint",
+        domainId: domain.id,
+        fixed: writtenPaths,
+        checkedCount: files.length,
+        outputTokens
+      });
+    } catch {
+    }
     const backlinks = /* @__PURE__ */ new Map();
     for (const [wikiPath, wikiContent] of pages) {
       for (const src of parseWikiSourcesFromFm(wikiContent)) {
@@ -27244,42 +27300,6 @@ function computeEntityDiff(oldTypes, newTypes) {
   removed.forEach((et) => lines.push(`- \u2716 \u0443\u0434\u0430\u043B\u0451\u043D: **${et.type}**`));
   modified.forEach((et) => lines.push(`- \u270E \u043E\u0431\u043D\u043E\u0432\u043B\u0451\u043D: **${et.type}**`));
   return lines.join("\n");
-}
-function buildFixMessages(domain, wikiVaultPath, pages, allIssues, entityTypesBlock, lintReport) {
-  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const pagesBlock = [...pages.entries()].map(([p, c]) => `--- ${p} ---
-${c}`).join("\n\n");
-  return [
-    {
-      role: "system",
-      content: [
-        `\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${domain.name}\xBB.`,
-        `\u0418\u0441\u043F\u0440\u0430\u0432\u044C \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B \u0432 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430\u0445 \u0438 \u0432\u0435\u0440\u043D\u0438 \u0442\u043E\u043B\u044C\u043A\u043E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.`,
-        `\u041F\u0420\u0410\u0412\u0418\u041B\u0410: \u043C\u0451\u0440\u0442\u0432\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438 [[X]] \u0443\u0431\u0435\u0440\u0438 \u0438\u043B\u0438 \u0437\u0430\u043C\u0435\u043D\u0438; \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0439 frontmatter \u0434\u043E\u0431\u0430\u0432\u044C (wiki_updated: ${today}, wiki_status: stub); \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0438; \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F \u0443\u0442\u043E\u0447\u043D\u0438.`,
-        entityTypesBlock ? `
-\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419:
-${entityTypesBlock}` : "",
-        `
-\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043C\u0430\u0441\u0441\u0438\u0432 \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446:`,
-        `[{"path":"${wikiVaultPath}/EntityName.md","content":"\u043F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442"}]`
-      ].filter(Boolean).join("\n")
-    },
-    {
-      role: "user",
-      content: [
-        `\u0414\u043E\u043C\u0435\u043D: ${domain.id} (${domain.name})`,
-        allIssues ? `
-\u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B:
-${allIssues}` : "\n\u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0445 \u043F\u0440\u043E\u0431\u043B\u0435\u043C \u043D\u0435 \u043E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u043E.",
-        `
-\u041E\u0442\u0447\u0451\u0442 Lint (\u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u0438):
-${lintReport}`,
-        `
-Wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B:
-${pagesBlock}`
-      ].join("\n")
-    }
-  ];
 }
 async function actualizeDomainConfig(domain, pages, llm, model, opts, signal) {
   const currentConfig = JSON.stringify({
@@ -27477,6 +27497,9 @@ ${c}`).join("\n\n");
 // templates/_wiki_schema.md
 var wiki_schema_default = '# Wiki Schema\n\n## \u042F\u0437\u044B\u043A \u0438 \u0441\u0442\u0438\u043B\u044C\n- \u041E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u044F\u0437\u044B\u043A: \u0440\u0443\u0441\u0441\u043A\u0438\u0439\n- \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u043D\u0435 \u043F\u0435\u0440\u0435\u0432\u043E\u0434\u0438\u0442\u044C: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML\n- \u0418\u043C\u0435\u043D\u0430 \u0441\u0438\u0441\u0442\u0435\u043C \u2014 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 (RT.DataExporter, CRM B2C, \u0426\u0425\u0414)\n- \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B \u0440\u0430\u0441\u0448\u0438\u0444\u0440\u043E\u0432\u044B\u0432\u0430\u0442\u044C \u043F\u0440\u0438 \u043F\u0435\u0440\u0432\u043E\u043C \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0438 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435\n- \u0421\u0442\u0438\u043B\u044C: \u043D\u0435\u0439\u0442\u0440\u0430\u043B\u044C\u043D\u044B\u0439, \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0432\u043D\u044B\u0439, \u0431\u0435\u0437 \u043E\u0446\u0435\u043D\u043E\u0447\u043D\u044B\u0445 \u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: "\u041E\u0447\u0435\u0432\u0438\u0434\u043D\u043E, \u0447\u0442\u043E...", "\u041B\u0443\u0447\u0448\u0438\u0439 \u0441\u043F\u043E\u0441\u043E\u0431...", \u043C\u0435\u0441\u0442\u043E\u0438\u043C\u0435\u043D\u0438\u044F "\u044F", "\u043C\u044B", "\u043D\u0430\u0448"\n\n## \u0418\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u043E\u0432 \u0438 \u043F\u0430\u043F\u043E\u043A\n- \u0424\u0430\u0439\u043B\u044B: kebab-case, \u043A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u0430, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432 \u0438 \u0441\u043F\u0435\u0446\u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432 \u043A\u0440\u043E\u043C\u0435 \u0434\u0435\u0444\u0438\u0441\u0430\n  - \u041F\u0440\u0438\u043C\u0435\u0440\u044B: `\u0432\u0435\u0440\u0441\u0438\u043E\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435-scd.md`, `clickhouse-\u043E\u0431\u0437\u043E\u0440.md`\n- \u041F\u0430\u043F\u043A\u0438 \u0434\u043E\u043C\u0435\u043D\u043E\u0432: \u043D\u0438\u0436\u043D\u0438\u0439 \u0440\u0435\u0433\u0438\u0441\u0442\u0440, \u043B\u0430\u0442\u0438\u043D\u0438\u0446\u0430 (`\u0438\u0438/`, `\u0431\u0430\u0437\u044B-\u0434\u0430\u043D\u043D\u044B\u0445/`)\n- \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1: \u0440\u0443\u0441\u0441\u043A\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435; \u0442\u0435\u0445\u0442\u0435\u0440\u043C\u0438\u043D \u0432 \u0441\u043A\u043E\u0431\u043A\u0430\u0445 \u043F\u0440\u0438 \u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E\u0441\u0442\u0438\n\n## \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u043F\u043E\u0440\u044F\u0434\u043E\u043A)\n1. Frontmatter (YAML)\n2. \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1\n3. \u0412\u0432\u043E\u0434\u043D\u044B\u0439 \u0430\u0431\u0437\u0430\u0446 \u2014 1-3 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0431\u0435\u0437 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0430, \u0441\u0440\u0430\u0437\u0443 \u043F\u043E\u0441\u043B\u0435 H1\n4. `## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438` \u2014 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0438 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u044B\n\n## \u041E\u043F\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B\n- `## \u041F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435 [\u0414\u043E\u043C\u0435\u043D]`\n- `## \u041F\u0440\u0438\u043C\u0435\u0440\u044B`\n- `## \u041E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F`\n- `## Best Practices`\n- `## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438` \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u043D\u0443\u0436\u0435\u043D \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043A \u0441\u0432\u044F\u0437\u044F\u043C; \u0431\u0435\u0437 \u043E\u043F\u0438\u0441\u0430\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u0440\u0430\u0437\u0434\u0435\u043B \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C\n- `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n\n## Frontmatter\n\n| \u041F\u043E\u043B\u0435 | \u041F\u0440\u0430\u0432\u0438\u043B\u043E |\n|------|---------|\n| `wiki_sources` | \u041C\u0430\u0441\u0441\u0438\u0432 \u0440\u0435\u0430\u043B\u044C\u043D\u044B\u0445 \u043F\u0443\u0442\u0435\u0439 \u043E\u0442 \u043A\u043E\u0440\u043D\u044F \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F. \u0422\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u043D\u044B\u0435 \u0444\u0430\u0439\u043B\u044B. \u041F\u0440\u0438 UPDATE \u2014 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0442\u044C, \u043D\u0435 \u0443\u0434\u0430\u043B\u044F\u0442\u044C. \u0422\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0432 Obsidian: **Links** (\u043D\u0435 list/text) \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0442\u043E\u0433\u0434\u0430 \u0441\u0441\u044B\u043B\u043A\u0438 \u0443\u0447\u0430\u0441\u0442\u0432\u0443\u044E\u0442 \u0432 Graph View. \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 `[[page-name]]`: `["[[page-a]]", "[[page-b]]"] |\n| `wiki_updated` | YYYY-MM-DD |\n| `wiki_status` | `stub` (<2 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432, <10 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439) / `developing` (\u22652 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430, \u226510 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439, \u043E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B \u0437\u0430\u043F\u043E\u043B\u043D\u0435\u043D\u044B) / `mature` (\u22654 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430, \u0432\u0441\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B) |\n| `wiki_type` | \u0422\u0438\u043F \u0444\u0430\u0439\u043B\u0430: `page \\| index \\| log \\| schema`. \u0422\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u0444\u0430\u0439\u043B\u043E\u0432 (`_index.md`, `_log.md`, `_wiki_schema.md`). \u041E\u0431\u044B\u0447\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u043D\u0435 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u044E\u0442 \u044D\u0442\u043E \u043F\u043E\u043B\u0435. |\n| `tags` | \u0418\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 \u0438\u0437 tag-hierarchy.json |\n| `aliases` | \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B, \u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u0438\u0435 \u0432\u0430\u0440\u0438\u0430\u043D\u0442\u044B, \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B |\n| `wiki_outgoing_links` | \u041C\u0430\u0441\u0441\u0438\u0432 WikiLinks \u043D\u0430 \u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B. \u0422\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0432 Obsidian: **Links** (\u043D\u0435 list/text) \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0442\u043E\u0433\u0434\u0430 \u0441\u0441\u044B\u043B\u043A\u0438 \u0443\u0447\u0430\u0441\u0442\u0432\u0443\u044E\u0442 \u0432 Graph View. \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 `[[page-name]]`: `["[[page-a]]", "[[page-b]]"]`. \u041F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C. |\n| `wiki_external_links` | \u041C\u0430\u0441\u0441\u0438\u0432 \u0432\u043D\u0435\u0448\u043D\u0438\u0445 URL (`http://` \u0438\u043B\u0438 `https://`). \u041D\u0435 \u0444\u043E\u0440\u043C\u0438\u0440\u0443\u044E\u0442 \u0433\u0440\u0430\u0444 Obsidian \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0441\u043F\u0440\u0430\u0432\u043E\u0447\u043D\u044B\u0435 \u0440\u0435\u0441\u0443\u0440\u0441\u044B \u0438 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430\u0446\u0438\u044F. |\n\n## WikiLinks\n- \u0421\u0441\u044B\u043B\u0430\u0442\u044C\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0447\u0435\u0440\u0435\u0437 `[[\u0438\u043C\u044F-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B]]`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: \u043C\u0451\u0440\u0442\u0432\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438, \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0444\u0430\u0439\u043B\u044B \u0432\u043D\u0435 `!Wiki/`\n\n## \u041A\u043E\u043D\u0442\u0435\u043D\u0442\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u2014 \u043F\u0435\u0440\u0435\u0440\u0430\u0431\u043E\u0442\u0430\u0442\u044C \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432\n- \u0414\u043E\u0441\u043B\u043E\u0432\u043D\u044B\u0435 \u0446\u0438\u0442\u0430\u0442\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445 (SQL, \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438)\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u0434\u0430\u0442\u0443 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0432 `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: placeholder-\u0442\u0435\u043A\u0441\u0442 (TODO, "\u0441\u043C. \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A"), \u043F\u0443\u0441\u0442\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B, \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438\n- \u0422\u0430\u0431\u043B\u0438\u0446\u044B: markdown \u0441 \u0432\u044B\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u043D\u0438\u0435\u043C (`| \u041F\u0430\u0440\u0430\u043C\u0435\u0442\u0440 | \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u0435 |` + `|----------|----------|`)\n- \u041A\u043E\u0434\u043E\u0432\u044B\u0435 \u0431\u043B\u043E\u043A\u0438: \u0432\u0441\u0435\u0433\u0434\u0430 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u044F\u0437\u044B\u043A (` ```sql `, ` ```yaml `, ` ```json `)\n';
 
+// templates/_format_schema.md
+var format_schema_default = "# Format Schema (\u043F\u0440\u0430\u0432\u0438\u043B\u0430 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F \u043D\u0435-wiki \u0441\u0442\u0440\u0430\u043D\u0438\u0446)\n\n## Frontmatter\n\n| \u041F\u043E\u043B\u0435 | \u041F\u0440\u0430\u0432\u0438\u043B\u043E |\n|------|---------|\n| `tags` | \u0418\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435, \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u0442\u0435\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0439 \u043A\u043B\u0430\u0441\u0441\u0438\u0444\u0438\u043A\u0430\u0446\u0438\u0438 |\n| `aliases` | \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B, \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B, \u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u0438\u0435 \u0432\u0430\u0440\u0438\u0430\u043D\u0442\u044B |\n| `created` | YYYY-MM-DD \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u0432 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0435 \u0438\u043B\u0438 \u043F\u0440\u0438 \u043F\u0435\u0440\u0432\u043E\u043C \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0438 |\n| `updated` | YYYY-MM-DD \u0442\u0435\u043A\u0443\u0449\u0430\u044F \u0434\u0430\u0442\u0430 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F |\n| `external_links` | \u041C\u0430\u0441\u0441\u0438\u0432 URL \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u0432 \u0442\u0435\u043B\u0435 \u0435\u0441\u0442\u044C `http(s)://` \u0441\u0441\u044B\u043B\u043A\u0438 |\n| `related` | \u041C\u0430\u0441\u0441\u0438\u0432 `[[wikilinks]]` \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u0432 \u0442\u0435\u043B\u0435 \u0443\u0436\u0435 \u0432\u0441\u0442\u0440\u0435\u0447\u0430\u044E\u0442\u0441\u044F \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0434\u0440\u0443\u0433\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B |\n\n\u041F\u043E\u043B\u044F `wiki_*` \u2014 \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0430\u0442\u044C \u0432 \u0432\u044B\u0432\u043E\u0434. \u041E\u043D\u0438 \u0443\u043F\u0440\u0430\u0432\u043B\u044F\u044E\u0442\u0441\u044F \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u043D\u043E \u0438 \u0431\u0443\u0434\u0443\u0442 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u044B \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.\n\n## \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430\n\n- H1 \u2014 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n- \u0412\u0432\u043E\u0434\u043D\u044B\u0439 \u0430\u0431\u0437\u0430\u0446 1-3 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0441\u0440\u0430\u0437\u0443 \u043F\u043E\u0441\u043B\u0435 H1, \u0431\u0435\u0437 \u043F\u043E\u0434\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0430\n- `##` \u0440\u0430\u0437\u0434\u0435\u043B\u044B \u043F\u043E \u043B\u043E\u0433\u0438\u043A\u0435 \u043A\u043E\u043D\u0442\u0435\u043D\u0442\u0430; \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u044F \u0431\u0435\u0437 \u0441\u043A\u0430\u0447\u043A\u043E\u0432 (H2 \u2192 H3 \u2192 H4)\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u044B \u043F\u0443\u0441\u0442\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B \u0438 placeholder-\u0442\u0435\u043A\u0441\u0442\n\n## \u0422\u0430\u0431\u043B\u0438\u0446\u044B\n\nMarkdown \u0441 \u0432\u044B\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u043D\u0438\u0435\u043C. \u041F\u0440\u0438\u043C\u0435\u043D\u044F\u0442\u044C \u043F\u0440\u0438 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0445 \u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u0435\u043D\u0438\u044F\u0445 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u043E\u0432/\u0441\u0440\u0430\u0432\u043D\u0435\u043D\u0438\u0439. \u041D\u0435 \u043F\u0440\u0435\u0432\u0440\u0430\u0449\u0430\u0442\u044C \u043F\u043E\u0432\u0435\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u0442\u0435\u043A\u0441\u0442 \u0432 \u0442\u0430\u0431\u043B\u0438\u0446\u044B.\n\n## Mermaid\n\n` ```mermaid ` \u0431\u043B\u043E\u043A\u0438 \u0434\u043B\u044F \u043F\u0440\u043E\u0446\u0435\u0441\u0441\u043E\u0432, \u043F\u043E\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u0435\u043B\u044C\u043D\u043E\u0441\u0442\u0435\u0439, \u0441\u0432\u044F\u0437\u0435\u0439.\n- \u041E\u043F\u0438\u0441\u0430\u043D\u043D\u044B\u0435 \u0432 \u0442\u0435\u043A\u0441\u0442\u0435 \u043F\u0440\u043E\u0446\u0435\u0441\u0441\u044B \u2192 flowchart/sequenceDiagram\n- \u0421\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u0441\u0445\u0435\u043C \u0438\u0437 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439 (\u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438 vision-backend) \u2192 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u0439 mermaid-\u0431\u043B\u043E\u043A \u043D\u0438\u0436\u0435 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u044F. \u0421\u0430\u043C\u043E \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u0442\u0441\u044F.\n\n## \u0418\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u044F\n\n- \u041A\u0430\u0436\u0434\u043E\u0439 \u043A\u0430\u0440\u0442\u0438\u043D\u043A\u0435 \u2014 \u043E\u043F\u0438\u0441\u0430\u0442\u0435\u043B\u044C\u043D\u0430\u044F \u043F\u043E\u0434\u043F\u0438\u0441\u044C \u043D\u0435\u043F\u043E\u0441\u0440\u0435\u0434\u0441\u0442\u0432\u0435\u043D\u043D\u043E \u043F\u043E\u0434 \u043D\u0435\u0439\n- \u041F\u0440\u0438 `has_vision=true`: \u0434\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E \u0442\u0435\u043A\u0441\u0442\u043E\u0432\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 (\u0442\u0430\u0431\u043B\u0438\u0446\u0430 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u043E\u0432, mermaid, \u0438\u043B\u0438 \u0441\u0432\u044F\u0437\u043D\u044B\u0439 \u0442\u0435\u043A\u0441\u0442)\n- \u041F\u0440\u0438 `has_vision=false`: \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u043C \u0442\u043E\u043B\u044C\u043A\u043E alt \u0438 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u043F\u043E\u0434\u043F\u0438\u0441\u0438; \u043D\u043E\u0432\u043E\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438 \u043D\u0435 \u0441\u043E\u0447\u0438\u043D\u044F\u0435\u043C\n\n## \u041A\u043E\u0434\n\nFenced blocks \u0432\u0441\u0435\u0433\u0434\u0430 \u0441 \u0443\u043A\u0430\u0437\u0430\u043D\u0438\u0435\u043C \u044F\u0437\u044B\u043A\u0430.\n\n## \u0421\u0442\u0438\u043B\u044C\n\n- \u041D\u0435\u0439\u0442\u0440\u0430\u043B\u044C\u043D\u044B\u0439, \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0432\u043D\u044B\u0439, \u0431\u0435\u0437 \u043E\u0446\u0435\u043D\u043E\u0447\u043D\u044B\u0445 \u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439\n- \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u2014 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 (SQL, API, LLM)\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: \xAB\u043E\u0447\u0435\u0432\u0438\u0434\u043D\u043E\xBB, \xAB\u043B\u0443\u0447\u0448\u0438\u0439 \u0441\u043F\u043E\u0441\u043E\u0431\xBB, \u043C\u0435\u0441\u0442\u043E\u0438\u043C\u0435\u043D\u0438\u044F \xAB\u044F/\u043C\u044B/\u043D\u0430\u0448\xBB\n\n## \u0416\u0451\u0441\u0442\u043A\u0438\u0435 \u0437\u0430\u043F\u0440\u0435\u0442\u044B\n\n- \u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0442\u044C \u0444\u0430\u043A\u0442\u044B, \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u0432 \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A\u0435 (\u0438\u0441\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435: \u0442\u0435\u043A\u0441\u0442\u043E\u0432\u043E\u0435 \u0438\u0437\u0432\u043B\u0435\u0447\u0435\u043D\u0438\u0435 \u0438\u0437 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439 \u043F\u0440\u0438 `has_vision=true`)\n- \u041D\u0435 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0444\u0430\u043A\u0442\u044B\n- \u041D\u0435 \u0438\u0441\u043A\u0430\u0436\u0430\u0442\u044C \u0441\u043C\u044B\u0441\u043B; \u043F\u0435\u0440\u0435\u0444\u0440\u0430\u0437 \u0434\u043B\u044F \u044F\u0441\u043D\u043E\u0441\u0442\u0438 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D\n- \u0412\u0441\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u044F\u0442\u044C \u0432 `report`\n";
+
 // prompts/init.md
 var init_default = '\u0422\u044B \u2014 \u0430\u0440\u0445\u0438\u0442\u0435\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439. \u0421\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0439 \u0437\u0430\u043F\u0438\u0441\u044C \u0434\u043E\u043C\u0435\u043D\u0430 \u0434\u043B\u044F domain-map.json.\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0435\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B:\n{\n  "id": "{{domain_id}}",\n  "name": "\u0427\u0435\u043B\u043E\u0432\u0435\u043A\u043E\u0447\u0438\u0442\u0430\u0435\u043C\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435",\n  "wiki_folder": "vaults/{{vault_name}}/!Wiki/{{domain_id}}",\n  "source_paths": [],\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"processes"}],\n  "language_notes": ""\n}\n{{schema_block}}\n{{index_block}}\n\n\u0412\u043A\u043B\u044E\u0447\u0438 \u043F\u043E\u043B\u0435 `reasoning` \u043F\u0435\u0440\u0432\u044B\u043C \u0432 JSON-\u043E\u0442\u0432\u0435\u0442\u0435: \u043F\u043E\u0448\u0430\u0433\u043E\u0432\u043E\u0435 \u043E\u0431\u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B \u0434\u043E\u043C\u0435\u043D\u0430.\n\n## Output JSON Example\n\n{\n  "reasoning": "\u041F\u0440\u043E\u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043B \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438. \u0412\u044B\u044F\u0432\u0438\u043B \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438: Process, ServiceContract, Customer.",\n  "id": "{{domain_id}}",\n  "name": "Telecom Operations",\n  "wiki_folder": "{{domain_id}}",\n  "entity_types": [\n    {\n      "type": "Process",\n      "description": "\u0411\u0438\u0437\u043D\u0435\u0441-\u043F\u0440\u043E\u0446\u0435\u0441\u0441 \u0438\u043B\u0438 \u0448\u0430\u0433 workflow",\n      "extraction_cues": ["BPMN", "workflow", "\u043F\u0440\u043E\u0446\u0435\u0441\u0441"],\n      "min_mentions_for_page": 1,\n      "wiki_subfolder": "processes"\n    }\n  ],\n  "language_notes": "\u0421\u043C\u0435\u0441\u044C \u0440\u0443\u0441\u0441\u043A\u043E\u0433\u043E/\u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u043E\u0433\u043E; \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0439 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 product-\u0438\u043C\u0451\u043D."\n}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u041E wiki_subfolder: \u043E\u0434\u043D\u043E \u0441\u043B\u043E\u0432\u043E, \u0431\u0435\u0437 \u0441\u043B\u044D\u0448\u0435\u0439, \u0431\u0435\u0437 domain_id.\n\u041D\u0435\u043B\u044C\u0437\u044F: "os/network", "os_network". \u041C\u043E\u0436\u043D\u043E: "network", "processes", "protocols".\n\n## Wiki Page Conventions\n\n\u0421\u0442\u0440\u0430\u043D\u0438\u0446\u044B wiki \u0434\u043E\u043B\u0436\u043D\u044B \u0438\u043C\u0435\u0442\u044C frontmatter \u0441 \u043F\u043E\u043B\u044F\u043C\u0438:\n- wiki_keywords: [5-10 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0445 \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u0434\u043E\u043C\u0435\u043D\u0430, \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0434\u0435\u0444\u0438\u0441-\u0432\u043C\u0435\u0441\u0442\u043E-\u043F\u0440\u043E\u0431\u0435\u043B\u0430]\n';
 
@@ -27579,8 +27602,8 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
   const samples = await vaultTools.readAll(sampleFiles);
   const existingDomain = domains.find((d) => d.id === domainId);
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead4(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
-    existingDomain ? tryRead4(vaultTools, `${domainWikiFolder(existingDomain.wiki_folder)}/_index.md`) : Promise.resolve("")
+    tryRead3(vaultTools, `${wikiRootGuess}/.config/_wiki_schema.md`),
+    existingDomain ? tryRead3(vaultTools, `${domainWikiFolder(existingDomain.wiki_folder)}/_index.md`) : Promise.resolve("")
   ]);
   const systemContent = render(init_default, {
     domain_id: domainId,
@@ -27675,7 +27698,7 @@ ${JSON.stringify(entry, null, 2)}
     yield { kind: "domain_created", entry };
   }
   yield { kind: "tool_result", ok: true };
-  await appendLog2(vaultTools, domainWikiFolder(entry.wiki_folder), domainId);
+  await appendLog(vaultTools, domainWikiFolder(entry.wiki_folder), domainId);
   yield {
     kind: "result",
     durationMs: Date.now() - start,
@@ -27709,8 +27732,8 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
     return;
   }
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead4(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
-    tryRead4(vaultTools, `${wikiRootGuess}/_index.md`)
+    tryRead3(vaultTools, `${wikiRootGuess}/.config/_wiki_schema.md`),
+    tryRead3(vaultTools, `${wikiRootGuess}/_index.md`)
   ]);
   let currentDomain = existing ?? null;
   for (let i = 0; i < toAnalyze.length; i++) {
@@ -27958,7 +27981,7 @@ ${fileContent}` }
     yield { kind: "error", message: `init --sources: \u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0437\u0434\u0430\u0442\u044C \u0434\u043E\u043C\u0435\u043D \u0438\u0437 \u0444\u0430\u0439\u043B\u043E\u0432` };
     return;
   }
-  await appendLog2(vaultTools, wikiRootGuess, domainId);
+  await appendLog(vaultTools, wikiRootGuess, domainId);
   yield {
     kind: "result",
     durationMs: Date.now() - start,
@@ -27977,7 +28000,7 @@ async function wipeDomainFolder(vaultTools, wikiFolder) {
   }
   return files;
 }
-async function appendLog2(vaultTools, wikiRoot, domainId) {
+async function appendLog(vaultTools, wikiRoot, domainId) {
   const logPath = `${wikiRoot}/_log.md`;
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const entry = `
@@ -27985,12 +28008,12 @@ async function appendLog2(vaultTools, wikiRoot, domainId) {
 - \u0414\u043E\u043C\u0435\u043D \u0441\u043E\u0437\u0434\u0430\u043D
 `;
   try {
-    const existing = await tryRead4(vaultTools, logPath);
+    const existing = await tryRead3(vaultTools, logPath);
     await vaultTools.write(logPath, existing + entry);
   } catch {
   }
 }
-async function tryRead4(vaultTools, path2) {
+async function tryRead3(vaultTools, path2) {
   try {
     return await vaultTools.read(path2);
   } catch {
@@ -27998,12 +28021,15 @@ async function tryRead4(vaultTools, path2) {
   }
 }
 async function ensureRootFiles(vaultTools, wikiRoot) {
-  const schema = `${wikiRoot}/_wiki_schema.md`;
+  const wikiSchema = `${wikiRoot}/.config/_wiki_schema.md`;
+  const formatSchema = `${wikiRoot}/.config/_format_schema.md`;
   const legacyIndex = `${wikiRoot}/_index.md`;
   const legacyLog = `${wikiRoot}/_log.md`;
   try {
-    if (!await vaultTools.exists(schema))
-      await vaultTools.write(schema, wiki_schema_default);
+    if (!await vaultTools.exists(wikiSchema))
+      await vaultTools.write(wikiSchema, wiki_schema_default);
+    if (!await vaultTools.exists(formatSchema))
+      await vaultTools.write(formatSchema, format_schema_default);
     if (await vaultTools.exists(legacyIndex))
       await vaultTools.remove(legacyIndex);
     if (await vaultTools.exists(legacyLog))
@@ -28049,51 +28075,7 @@ async function* runEvaluator(llm, model, operation, taskInput, result, signal, o
 // prompts/format.md
 var format_default = '\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 markdown-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0432\u043D\u0435 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439.\n\n\u0422\u0432\u043E\u044F \u0437\u0430\u0434\u0430\u0447\u0430 \u2014 \u043F\u0440\u043E\u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0438\u0442\u044C \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043F\u043E \u043F\u0440\u0430\u0432\u0438\u043B\u0430\u043C \u043D\u0438\u0436\u0435.\n\n\u0416\u0401\u0421\u0422\u041A\u0418\u0415 \u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- \u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u0438 \u043D\u0435 \u0443\u0434\u0430\u043B\u044F\u0439 \u0444\u0430\u043A\u0442\u044B, \u0438\u043C\u0435\u043D\u0430, \u0447\u0438\u0441\u043B\u0430, URL.\n- \u041D\u0435 \u0438\u0441\u043A\u0430\u0436\u0430\u0439 \u0441\u043C\u044B\u0441\u043B. \u041F\u0435\u0440\u0435\u0444\u0440\u0430\u0437 \u0434\u043B\u044F \u044F\u0441\u043D\u043E\u0441\u0442\u0438 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D.\n- \u0412\u0441\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u043E\u043F\u0438\u0448\u0438 \u0432 \u043F\u043E\u043B\u0435 report.\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410 \u0424\u041E\u0420\u041C\u0410\u0422\u0418\u0420\u041E\u0412\u0410\u041D\u0418\u042F:\n{{format_schema}}\n\nVISION: {{has_vision}}\n- \u041F\u0440\u0438 has_vision=true: \u0438\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u0441\u0445\u0435\u043C \u0438 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439, \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439 \u0442\u0430\u0431\u043B\u0438\u0446\u044B \u0438\u043B\u0438 mermaid-\u0431\u043B\u043E\u043A\u0438 \u043D\u0438\u0436\u0435 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u044F. \u0421\u0430\u043C\u043E \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0439.\n- \u041F\u0440\u0438 has_vision=false: \u0440\u0430\u0431\u043E\u0442\u0430\u0439 \u0442\u043E\u043B\u044C\u043A\u043E \u0441 alt-\u0442\u0435\u043A\u0441\u0442\u043E\u043C \u0438 \u043F\u043E\u0434\u043F\u0438\u0441\u044F\u043C\u0438, \u043D\u043E\u0432\u043E\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438 \u043D\u0435 \u0441\u043E\u0447\u0438\u043D\u044F\u0439.\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442. \u041D\u0438\u043A\u0430\u043A\u0438\u0445 \u043F\u0440\u0435\u0430\u043C\u0431\u0443\u043B, \u043D\u0438\u043A\u0430\u043A\u043E\u0439 \u043E\u0431\u0451\u0440\u0442\u043A\u0438 ```json```, \u043D\u0438\u043A\u0430\u043A\u0438\u0445 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u0432. \u041F\u0435\u0440\u0432\u044B\u0439 \u0441\u0438\u043C\u0432\u043E\u043B \u043E\u0442\u0432\u0435\u0442\u0430 \u2014 `{`, \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0439 \u2014 `}`.\n\n\u042D\u043A\u0440\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0432\u043D\u0443\u0442\u0440\u0438 \u0441\u0442\u0440\u043E\u043A JSON:\n- \u041A\u0430\u0436\u0434\u044B\u0439 \u043F\u0435\u0440\u0435\u0432\u043E\u0434 \u0441\u0442\u0440\u043E\u043A\u0438 \u0432\u043D\u0443\u0442\u0440\u0438 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u2014 `\\n` (\u0434\u0432\u0443\u0441\u0438\u043C\u0432\u043E\u043B\u044C\u043D\u0430\u044F \u043F\u043E\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u0435\u043B\u044C\u043D\u043E\u0441\u0442\u044C).\n- \u041A\u0430\u0436\u0434\u0430\u044F \u0434\u0432\u043E\u0439\u043D\u0430\u044F \u043A\u0430\u0432\u044B\u0447\u043A\u0430 \u2014 `\\"`.\n- \u041A\u0430\u0436\u0434\u044B\u0439 \u043E\u0431\u0440\u0430\u0442\u043D\u044B\u0439 \u0441\u043B\u044D\u0448 \u2014 `\\\\`.\n- \u041D\u0438\u043A\u0430\u043A\u0438\u0445 \u0441\u044B\u0440\u044B\u0445 control-chars.\n\n\u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430:\n\n{\n  "report": "<markdown \u043E\u0442\u0447\u0451\u0442 \u043E\u0431 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F\u0445, \u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u0435\u043D\u0438\u0435 \u043F\u043E \u043F\u0443\u043D\u043A\u0442\u0430\u043C>",\n  "formatted": "<\u043F\u043E\u043B\u043D\u044B\u0439 markdown \u043E\u0442\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B, \u0432\u043A\u043B\u044E\u0447\u0430\u044F frontmatter>"\n}\n\n\u0411\u044E\u0434\u0436\u0435\u0442: \u043F\u043E\u043B\u0435 formatted \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u0434\u043B\u0438\u043D\u043D\u044B\u043C. \u0415\u0441\u043B\u0438 \u043F\u0440\u0438\u0431\u043B\u0438\u0436\u0430\u0435\u0448\u044C\u0441\u044F \u043A \u043B\u0438\u043C\u0438\u0442\u0443 \u2014 \u0441\u043E\u043A\u0440\u0430\u0449\u0430\u0439 report, \u043D\u0435 formatted. \u041D\u0438\u043A\u043E\u0433\u0434\u0430 \u043D\u0435 \u043E\u0431\u0440\u044B\u0432\u0430\u0439 \u043E\u0442\u0432\u0435\u0442 \u043D\u0430 \u043F\u043E\u043B\u0443\u0441\u043B\u043E\u0432\u0435 \u2014 \u043B\u0443\u0447\u0448\u0435 \u043A\u043E\u0440\u043E\u0447\u0435, \u043D\u043E \u0432\u0430\u043B\u0438\u0434\u043D\u043E.\n';
 
-// templates/_format_schema.md
-var format_schema_default = "# Format Schema (\u043F\u0440\u0430\u0432\u0438\u043B\u0430 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F \u043D\u0435-wiki \u0441\u0442\u0440\u0430\u043D\u0438\u0446)\n\n## Frontmatter\n\n| \u041F\u043E\u043B\u0435 | \u041F\u0440\u0430\u0432\u0438\u043B\u043E |\n|------|---------|\n| `tags` | \u0418\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435, \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u0442\u0435\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0439 \u043A\u043B\u0430\u0441\u0441\u0438\u0444\u0438\u043A\u0430\u0446\u0438\u0438 |\n| `aliases` | \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B, \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B, \u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u0438\u0435 \u0432\u0430\u0440\u0438\u0430\u043D\u0442\u044B |\n| `created` | YYYY-MM-DD \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u0432 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0435 \u0438\u043B\u0438 \u043F\u0440\u0438 \u043F\u0435\u0440\u0432\u043E\u043C \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0438 |\n| `updated` | YYYY-MM-DD \u0442\u0435\u043A\u0443\u0449\u0430\u044F \u0434\u0430\u0442\u0430 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F |\n| `external_links` | \u041C\u0430\u0441\u0441\u0438\u0432 URL \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u0432 \u0442\u0435\u043B\u0435 \u0435\u0441\u0442\u044C `http(s)://` \u0441\u0441\u044B\u043B\u043A\u0438 |\n| `related` | \u041C\u0430\u0441\u0441\u0438\u0432 `[[wikilinks]]` \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u0432 \u0442\u0435\u043B\u0435 \u0443\u0436\u0435 \u0432\u0441\u0442\u0440\u0435\u0447\u0430\u044E\u0442\u0441\u044F \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0434\u0440\u0443\u0433\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B |\n\n\u041F\u043E\u043B\u044F `wiki_*` \u2014 \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0430\u0442\u044C \u0432 \u0432\u044B\u0432\u043E\u0434. \u041E\u043D\u0438 \u0443\u043F\u0440\u0430\u0432\u043B\u044F\u044E\u0442\u0441\u044F \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u043D\u043E \u0438 \u0431\u0443\u0434\u0443\u0442 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u044B \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.\n\n## \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430\n\n- H1 \u2014 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n- \u0412\u0432\u043E\u0434\u043D\u044B\u0439 \u0430\u0431\u0437\u0430\u0446 1-3 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0441\u0440\u0430\u0437\u0443 \u043F\u043E\u0441\u043B\u0435 H1, \u0431\u0435\u0437 \u043F\u043E\u0434\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0430\n- `##` \u0440\u0430\u0437\u0434\u0435\u043B\u044B \u043F\u043E \u043B\u043E\u0433\u0438\u043A\u0435 \u043A\u043E\u043D\u0442\u0435\u043D\u0442\u0430; \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u044F \u0431\u0435\u0437 \u0441\u043A\u0430\u0447\u043A\u043E\u0432 (H2 \u2192 H3 \u2192 H4)\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u044B \u043F\u0443\u0441\u0442\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B \u0438 placeholder-\u0442\u0435\u043A\u0441\u0442\n\n## \u0422\u0430\u0431\u043B\u0438\u0446\u044B\n\nMarkdown \u0441 \u0432\u044B\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u043D\u0438\u0435\u043C. \u041F\u0440\u0438\u043C\u0435\u043D\u044F\u0442\u044C \u043F\u0440\u0438 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0445 \u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u0435\u043D\u0438\u044F\u0445 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u043E\u0432/\u0441\u0440\u0430\u0432\u043D\u0435\u043D\u0438\u0439. \u041D\u0435 \u043F\u0440\u0435\u0432\u0440\u0430\u0449\u0430\u0442\u044C \u043F\u043E\u0432\u0435\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u0442\u0435\u043A\u0441\u0442 \u0432 \u0442\u0430\u0431\u043B\u0438\u0446\u044B.\n\n## Mermaid\n\n` ```mermaid ` \u0431\u043B\u043E\u043A\u0438 \u0434\u043B\u044F \u043F\u0440\u043E\u0446\u0435\u0441\u0441\u043E\u0432, \u043F\u043E\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u0435\u043B\u044C\u043D\u043E\u0441\u0442\u0435\u0439, \u0441\u0432\u044F\u0437\u0435\u0439.\n- \u041E\u043F\u0438\u0441\u0430\u043D\u043D\u044B\u0435 \u0432 \u0442\u0435\u043A\u0441\u0442\u0435 \u043F\u0440\u043E\u0446\u0435\u0441\u0441\u044B \u2192 flowchart/sequenceDiagram\n- \u0421\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u0441\u0445\u0435\u043C \u0438\u0437 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439 (\u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438 vision-backend) \u2192 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u0439 mermaid-\u0431\u043B\u043E\u043A \u043D\u0438\u0436\u0435 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u044F. \u0421\u0430\u043C\u043E \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u0442\u0441\u044F.\n\n## \u0418\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u044F\n\n- \u041A\u0430\u0436\u0434\u043E\u0439 \u043A\u0430\u0440\u0442\u0438\u043D\u043A\u0435 \u2014 \u043E\u043F\u0438\u0441\u0430\u0442\u0435\u043B\u044C\u043D\u0430\u044F \u043F\u043E\u0434\u043F\u0438\u0441\u044C \u043D\u0435\u043F\u043E\u0441\u0440\u0435\u0434\u0441\u0442\u0432\u0435\u043D\u043D\u043E \u043F\u043E\u0434 \u043D\u0435\u0439\n- \u041F\u0440\u0438 `has_vision=true`: \u0434\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E \u0442\u0435\u043A\u0441\u0442\u043E\u0432\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 (\u0442\u0430\u0431\u043B\u0438\u0446\u0430 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u043E\u0432, mermaid, \u0438\u043B\u0438 \u0441\u0432\u044F\u0437\u043D\u044B\u0439 \u0442\u0435\u043A\u0441\u0442)\n- \u041F\u0440\u0438 `has_vision=false`: \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u043C \u0442\u043E\u043B\u044C\u043A\u043E alt \u0438 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u043F\u043E\u0434\u043F\u0438\u0441\u0438; \u043D\u043E\u0432\u043E\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438 \u043D\u0435 \u0441\u043E\u0447\u0438\u043D\u044F\u0435\u043C\n\n## \u041A\u043E\u0434\n\nFenced blocks \u0432\u0441\u0435\u0433\u0434\u0430 \u0441 \u0443\u043A\u0430\u0437\u0430\u043D\u0438\u0435\u043C \u044F\u0437\u044B\u043A\u0430.\n\n## \u0421\u0442\u0438\u043B\u044C\n\n- \u041D\u0435\u0439\u0442\u0440\u0430\u043B\u044C\u043D\u044B\u0439, \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0432\u043D\u044B\u0439, \u0431\u0435\u0437 \u043E\u0446\u0435\u043D\u043E\u0447\u043D\u044B\u0445 \u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439\n- \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u2014 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 (SQL, API, LLM)\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: \xAB\u043E\u0447\u0435\u0432\u0438\u0434\u043D\u043E\xBB, \xAB\u043B\u0443\u0447\u0448\u0438\u0439 \u0441\u043F\u043E\u0441\u043E\u0431\xBB, \u043C\u0435\u0441\u0442\u043E\u0438\u043C\u0435\u043D\u0438\u044F \xAB\u044F/\u043C\u044B/\u043D\u0430\u0448\xBB\n\n## \u0416\u0451\u0441\u0442\u043A\u0438\u0435 \u0437\u0430\u043F\u0440\u0435\u0442\u044B\n\n- \u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0442\u044C \u0444\u0430\u043A\u0442\u044B, \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u0432 \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A\u0435 (\u0438\u0441\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435: \u0442\u0435\u043A\u0441\u0442\u043E\u0432\u043E\u0435 \u0438\u0437\u0432\u043B\u0435\u0447\u0435\u043D\u0438\u0435 \u0438\u0437 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439 \u043F\u0440\u0438 `has_vision=true`)\n- \u041D\u0435 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0444\u0430\u043A\u0442\u044B\n- \u041D\u0435 \u0438\u0441\u043A\u0430\u0436\u0430\u0442\u044C \u0441\u043C\u044B\u0441\u043B; \u043F\u0435\u0440\u0435\u0444\u0440\u0430\u0437 \u0434\u043B\u044F \u044F\u0441\u043D\u043E\u0441\u0442\u0438 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D\n- \u0412\u0441\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u044F\u0442\u044C \u0432 `report`\n";
-
 // src/phases/format-utils.ts
-function extractJsonObject(text) {
-  const cleaned = stripCodeFence(text);
-  const start = cleaned.indexOf("{");
-  if (start < 0)
-    return null;
-  let depth = 0;
-  let inString = false;
-  let escape2 = false;
-  for (let i = start; i < cleaned.length; i++) {
-    const ch = cleaned[i];
-    if (escape2) {
-      escape2 = false;
-      continue;
-    }
-    if (ch === "\\" && inString) {
-      escape2 = true;
-      continue;
-    }
-    if (ch === '"') {
-      inString = !inString;
-      continue;
-    }
-    if (inString)
-      continue;
-    if (ch === "{")
-      depth++;
-    else if (ch === "}") {
-      depth--;
-      if (depth === 0) {
-        const slice = cleaned.slice(start, i + 1);
-        const parsed = tryParseJson(slice);
-        if (!parsed)
-          return null;
-        if (typeof parsed.report !== "string" || typeof parsed.formatted !== "string")
-          return null;
-        return { report: parsed.report, formatted: parsed.formatted };
-      }
-    }
-  }
-  return null;
-}
 function looksTruncated(text) {
   const cleaned = stripCodeFence(text);
   const start = cleaned.indexOf("{");
@@ -28135,58 +28117,6 @@ function stripCodeFence(text) {
   if (fence)
     return fence[1];
   return text;
-}
-function tryParseJson(slice) {
-  try {
-    return JSON.parse(slice);
-  } catch {
-    try {
-      return JSON.parse(repairJson(slice));
-    } catch {
-      return null;
-    }
-  }
-}
-function repairJson(s) {
-  const noTrailing = s.replace(/,(\s*[}\]])/g, "$1");
-  return escapeRawControlsInStrings(noTrailing);
-}
-function escapeRawControlsInStrings(src) {
-  let out = "";
-  let inString = false;
-  let escape2 = false;
-  for (let i = 0; i < src.length; i++) {
-    const ch = src[i];
-    const code = ch.charCodeAt(0);
-    if (escape2) {
-      out += ch;
-      escape2 = false;
-      continue;
-    }
-    if (inString && ch === "\\") {
-      out += ch;
-      escape2 = true;
-      continue;
-    }
-    if (ch === '"') {
-      inString = !inString;
-      out += ch;
-      continue;
-    }
-    if (inString && code < 32) {
-      if (ch === "\n")
-        out += "\\n";
-      else if (ch === "\r")
-        out += "\\r";
-      else if (ch === "	")
-        out += "\\t";
-      else
-        out += `\\u${code.toString(16).padStart(4, "0")}`;
-      continue;
-    }
-    out += ch;
-  }
-  return out;
 }
 var STOP_WORDS2 = /* @__PURE__ */ new Set([
   "The",
@@ -28282,6 +28212,22 @@ function missingTokensWithContext(original, formatted) {
 }
 
 // src/phases/format.ts
+function parseFormatOutput(text) {
+  let raw;
+  try {
+    raw = parseStructured(text);
+  } catch {
+    structuralErrorCounter.record(false, 0);
+    return null;
+  }
+  const result = FormatOutputSchema.safeParse(raw);
+  if (result.success) {
+    structuralErrorCounter.record(true, 0);
+    return result.data;
+  }
+  structuralErrorCounter.record(false, 0);
+  return null;
+}
 function extractImagePaths(md) {
   const out = [];
   for (const m of md.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)) {
@@ -28308,7 +28254,7 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
     yield { kind: "error", message: `Format: cannot read ${filePath}` };
     return;
   }
-  const formatSchemaPath = `${WIKI_ROOT}/_format_schema.md`;
+  const formatSchemaPath = `${WIKI_ROOT}/.config/_format_schema.md`;
   let formatSchema;
   try {
     formatSchema = await vaultTools.read(formatSchemaPath);
@@ -28383,7 +28329,7 @@ ${original}`;
   let fullText = yield* callOnce(baseParams);
   if (signal.aborted)
     return;
-  let parsed = extractJsonObject(fullText);
+  let parsed = parseFormatOutput(fullText);
   const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
   if (!parsed && truncated) {
     yield { kind: "error", message: `Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 ${truncationHint(backend)}` };
@@ -28401,7 +28347,7 @@ ${original}`;
     fullText = yield* callOnce(retryParams);
     if (signal.aborted)
       return;
-    parsed = extractJsonObject(fullText);
+    parsed = parseFormatOutput(fullText);
   }
   if (!parsed) {
     const retryTruncated = lastFinishReason === "length" || looksTruncated(fullText);
@@ -28431,7 +28377,7 @@ ${original}`;
     const restoreParams = { ...buildChatParams(model, restoreMessages, opts, true), response_format: { type: "json_object" } };
     const fullText2 = yield* callOnce(restoreParams);
     if (!signal.aborted) {
-      const parsed2 = extractJsonObject(fullText2);
+      const parsed2 = parseFormatOutput(fullText2);
       if (parsed2) {
         finalFormatted = parsed2.formatted;
         finalReport = parsed2.report;
