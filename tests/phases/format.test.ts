@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { runFormat } from "../../src/phases/format";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient, ChatMessage } from "../../src/types";
+import { structuralErrorCounter } from "../../src/structural-error-counter";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -285,5 +286,52 @@ describe("runFormat", () => {
     expect(err).toBeDefined();
     expect(err!.message).toContain("Settings →");
     expect(err!.message).not.toContain("CLAUDE_CODE_MAX_OUTPUT_TOKENS");
+  });
+});
+
+describe("runFormat Zod validation", () => {
+  it("records structuralErrorCounter on Zod parse failure then retry succeeds", async () => {
+    structuralErrorCounter.reset();
+    const good = JSON.stringify({ report: "## ok", formatted: "---\n# Page" });
+    const bad = '{"report": "ok"}'; // missing `formatted` field
+    const adapter = mockAdapter({ [FILE]: SAMPLE });
+    const vt = new VaultTools(adapter, VAULT);
+
+    let callCount = 0;
+    const llm: LlmClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(() => {
+            callCount++;
+            const content = callCount === 1 ? bad : good;
+            return Promise.resolve({
+              [Symbol.asyncIterator]: async function* () {
+                yield { choices: [{ delta: { content }, finish_reason: null }] };
+              },
+            });
+          }),
+        },
+      },
+    } as unknown as LlmClient;
+
+    const events = await collect(
+      runFormat([FILE], vt, llm, "model", false, [], new AbortController().signal),
+    );
+
+    expect(events.some((e: unknown) => (e as { kind: string }).kind === "format_preview")).toBe(true);
+    const stats = structuralErrorCounter.get();
+    expect(stats.failed + stats.retried).toBeGreaterThan(0);
+  });
+
+  it("emits error on Zod failure after retry", async () => {
+    structuralErrorCounter.reset();
+    const bad = '{"report": "ok"}'; // missing `formatted` field
+    const adapter = mockAdapter({ [FILE]: SAMPLE });
+    const vt = new VaultTools(adapter, VAULT);
+
+    const events = await collect(
+      runFormat([FILE], vt, makeLlmSequence([bad, bad]), "model", false, [], new AbortController().signal),
+    );
+    expect(events.some((e: unknown) => (e as { kind: string }).kind === "error")).toBe(true);
   });
 });

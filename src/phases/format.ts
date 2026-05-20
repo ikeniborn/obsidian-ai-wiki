@@ -1,12 +1,31 @@
 import type OpenAI from "openai";
 import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, extractUsage } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured } from "./llm-utils";
 import formatTemplate from "../../prompts/format.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
-import { extractJsonObject, missingTokensWithContext, looksTruncated, appendMissingLines } from "./format-utils";
+import { missingTokensWithContext, looksTruncated, appendMissingLines } from "./format-utils";
 import { WIKI_ROOT } from "../wiki-path";
+import { FormatOutputSchema } from "./zod-schemas";
+import { structuralErrorCounter } from "../structural-error-counter";
+
+function parseFormatOutput(text: string): { report: string; formatted: string } | null {
+  let raw: unknown;
+  try {
+    raw = parseStructured(text);
+  } catch {
+    structuralErrorCounter.record(false, 0);
+    return null;
+  }
+  const result = FormatOutputSchema.safeParse(raw);
+  if (result.success) {
+    structuralErrorCounter.record(true, 0);
+    return result.data;
+  }
+  structuralErrorCounter.record(false, 0);
+  return null;
+}
 
 function extractImagePaths(md: string): string[] {
   const out: string[] = [];
@@ -123,7 +142,7 @@ export async function* runFormat(
   let fullText = yield* callOnce(baseParams);
   if (signal.aborted) return;
 
-  let parsed = extractJsonObject(fullText);
+  let parsed = parseFormatOutput(fullText);
   const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
   if (!parsed && truncated) {
     yield { kind: "error", message: `Format: ответ обрезан по лимиту вывода модели — сократите страницу или ${truncationHint(backend)}` };
@@ -140,7 +159,7 @@ export async function* runFormat(
     const retryParams = { ...buildChatParams(model, retryMessages, opts, true), response_format: { type: "json_object" } };
     fullText = yield* callOnce(retryParams);
     if (signal.aborted) return;
-    parsed = extractJsonObject(fullText);
+    parsed = parseFormatOutput(fullText);
   }
   if (!parsed) {
     const retryTruncated = lastFinishReason === "length" || looksTruncated(fullText);
@@ -175,7 +194,7 @@ export async function* runFormat(
     const restoreParams = { ...buildChatParams(model, restoreMessages, opts, true), response_format: { type: "json_object" } };
     const fullText2 = yield* callOnce(restoreParams);
     if (!signal.aborted) {
-      const parsed2 = extractJsonObject(fullText2);
+      const parsed2 = parseFormatOutput(fullText2);
       if (parsed2) {
         finalFormatted = parsed2.formatted;
         finalReport = parsed2.report;
