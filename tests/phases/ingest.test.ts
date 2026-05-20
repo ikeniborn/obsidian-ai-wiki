@@ -308,6 +308,22 @@ describe("runIngest", () => {
     );
     expect(failEvent).toBeDefined();
   });
+
+  it("reads wiki schema from .config/ subfolder", async () => {
+    let schemaReadPath = "";
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (path: string) => {
+        if (path.includes("_wiki_schema")) schemaReadPath = path;
+        return "";
+      }),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm(JSON.stringify({ reasoning: "x", pages: [] }));
+    await collect(runIngest([`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "model", [domain], VAULT_ROOT,
+      new AbortController().signal));
+    expect(schemaReadPath).toContain(".config/_wiki_schema.md");
+  });
 });
 
 describe("parseJsonPages with annotation", () => {

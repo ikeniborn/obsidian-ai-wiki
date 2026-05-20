@@ -276,6 +276,25 @@ describe("runFormat", () => {
     expect(err!.message).not.toContain("Settings →");
   });
 
+  it("reads format schema from .config/ subfolder", async () => {
+    let schemaReadPath = "";
+    const adapter = mockAdapter({
+      [`${VAULT}/.config/_format_schema.md`]: "schema content",
+      [`${VAULT}/${FILE}`]: "# Page\ncontent",
+    });
+    const origRead = adapter.read as ReturnType<typeof vi.fn>;
+    origRead.mockImplementation(async (path: string) => {
+      schemaReadPath = path;
+      if (path === `${VAULT}/.config/_format_schema.md`) return "schema content";
+      if (path === `${VAULT}/${FILE}`) return "# Page\ncontent";
+      return "";
+    });
+    const vt = new VaultTools(adapter, VAULT);
+    await collect(runFormat([`${VAULT}/${FILE}`], vt,
+      makeLlm('{"report":"ok","formatted":"# Page"}'), "model", false, [], new AbortController().signal));
+    expect(schemaReadPath).toContain(".config/_format_schema.md");
+  });
+
   it("truncation error — native-agent hint", async () => {
     const adapter = mockAdapter({ [FILE]: SAMPLE });
     const vt = new VaultTools(adapter, VAULT);

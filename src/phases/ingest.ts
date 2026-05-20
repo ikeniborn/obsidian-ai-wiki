@@ -64,7 +64,7 @@ export async function* runIngest(
   const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
 
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${schemaRoot}/_wiki_schema.md`),
+    tryRead(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`),
     tryRead(vaultTools, `${domainRoot}/_index.md`),
   ]);
 

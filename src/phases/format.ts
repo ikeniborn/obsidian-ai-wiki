@@ -68,7 +68,7 @@ export async function* runFormat(
     return;
   }
 
-  const formatSchemaPath = `${WIKI_ROOT}/_format_schema.md`;
+  const formatSchemaPath = `${WIKI_ROOT}/.config/_format_schema.md`;
   let formatSchema: string;
   try {
     formatSchema = await vaultTools.read(formatSchemaPath);

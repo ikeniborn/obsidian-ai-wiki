@@ -5,6 +5,7 @@ import { VaultTools } from "../vault-tools";
 import { parseWithRetry } from "./parse-with-retry";
 import { DomainEntrySchema, EntityTypesDeltaSchema } from "./zod-schemas";
 import schemaTemplate from "../../templates/_wiki_schema.md";
+import formatSchemaDefault from "../../templates/_format_schema.md";
 import initTemplate from "../../prompts/init.md";
 import initIncrementalTemplate from "../../prompts/init-incremental.md";
 import { render } from "./template";
@@ -106,7 +107,7 @@ export async function* runInit(
   const samples = await vaultTools.readAll(sampleFiles);
   const existingDomain = domains.find((d) => d.id === domainId);
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
+    tryRead(vaultTools, `${wikiRootGuess}/.config/_wiki_schema.md`),
     existingDomain
       ? tryRead(vaultTools, `${domainWikiFolder(existingDomain.wiki_folder)}/_index.md`)
       : Promise.resolve(""),
@@ -252,7 +253,7 @@ export async function* runInitWithSources(
   }
 
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
+    tryRead(vaultTools, `${wikiRootGuess}/.config/_wiki_schema.md`),
     tryRead(vaultTools, `${wikiRootGuess}/_index.md`),
   ]);
 
@@ -518,12 +519,14 @@ async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
 }
 
 async function ensureRootFiles(vaultTools: VaultTools, wikiRoot: string): Promise<void> {
-  const schema = `${wikiRoot}/_wiki_schema.md`;
-  const legacyIndex = `${wikiRoot}/_index.md`;
-  const legacyLog   = `${wikiRoot}/_log.md`;
+  const wikiSchema   = `${wikiRoot}/.config/_wiki_schema.md`;
+  const formatSchema = `${wikiRoot}/.config/_format_schema.md`;
+  const legacyIndex  = `${wikiRoot}/_index.md`;
+  const legacyLog    = `${wikiRoot}/_log.md`;
 
   try {
-    if (!(await vaultTools.exists(schema))) await vaultTools.write(schema, schemaTemplate);
+    if (!(await vaultTools.exists(wikiSchema)))   await vaultTools.write(wikiSchema, schemaTemplate);
+    if (!(await vaultTools.exists(formatSchema)))  await vaultTools.write(formatSchema, formatSchemaDefault);
     if (await vaultTools.exists(legacyIndex)) await vaultTools.remove(legacyIndex);
     if (await vaultTools.exists(legacyLog))   await vaultTools.remove(legacyLog);
   } catch { /* не блокируем init */ }
