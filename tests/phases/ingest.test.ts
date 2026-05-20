@@ -269,7 +269,7 @@ describe("runIngest", () => {
     const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls;
     const indexWrite = writeCalls.find((c: [string, string]) => c[0].endsWith("_index.md"));
     expect(indexWrite).toBeDefined();
-    expect(indexWrite![1]).toContain("Entity: [[Entity]] entities/Entity.md | описание сущности");
+    expect(indexWrite![1]).toContain("- [[Entity]] entities/Entity.md — описание сущности");
   });
 
   it("does not fail ingest when raw file backlink write throws", async () => {
