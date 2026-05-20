@@ -309,6 +309,37 @@ describe("runIngest", () => {
     expect(failEvent).toBeDefined();
   });
 
+  it("logs СОЗДАНА for new pages and ОБНОВЛЕНА for existing pages", async () => {
+    const existingContent = "---\nwiki_status: developing\n---\n# Existing";
+    const existingPaths = new Set(["!Wiki/work/компоненты/existing.md"]);
+    let logContent = "";
+
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "Sources/doc.md") return "source text";
+        if (existingPaths.has(path)) return existingContent;
+        if (path === "!Wiki/work/_log.md") return logContent;
+        throw new Error("not found");
+      }),
+      write: vi.fn().mockImplementation(async (path: string, content: string) => {
+        if (path === "!Wiki/work/_log.md") logContent = content;
+      }),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm(JSON.stringify({
+      reasoning: "x",
+      pages: [
+        { path: "!Wiki/work/компоненты/existing.md", content: "---\nwiki_status: mature\n---\n# Existing", annotation: "desc" },
+        { path: "!Wiki/work/компоненты/new-page.md", content: "---\nwiki_status: stub\n---\n# New", annotation: "new" },
+      ],
+    }));
+    await collect(runIngest([`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "model", [domain], VAULT_ROOT,
+      new AbortController().signal));
+    expect(logContent).toContain("ОБНОВЛЕНА: компоненты/existing.md (developing→mature)");
+    expect(logContent).toContain("СОЗДАНА: компоненты/new-page.md (stub)");
+  });
+
   it("reads wiki schema from .config/ subfolder", async () => {
     let schemaReadPath = "";
     const adapter = mockAdapter({

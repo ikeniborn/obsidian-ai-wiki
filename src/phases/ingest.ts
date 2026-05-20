@@ -13,6 +13,13 @@ import { domainWikiFolder, validateArticlePath } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField } from "../utils/raw-frontmatter";
 import { upsertIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
+import { appendWikiLog } from "../wiki-log";
+import type { IngestLogEntry } from "../wiki-log";
+
+function parseWikiStatus(content: string): string {
+  const m = /^---\n[\s\S]*?^wiki_status:[ \t]*(.+)$/m.exec(content);
+  return m ? m[1].trim() : "unknown";
+}
 
 export async function* runIngest(
   args: string[],
@@ -133,17 +140,33 @@ export async function* runIngest(
   }
 
   const written: string[] = [];
+  const logEntries: IngestLogEntry[] = [];
   for (const page of pages) {
     if (!page.path.startsWith(wikiVaultPath + "/")) {
       yield { kind: "tool_use", name: "Write", input: { path: page.path } };
       yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
       continue;
     }
+
+    let existingContent: string | null = null;
+    try { existingContent = await vaultTools.read(page.path); } catch { /* new page */ }
+
     yield { kind: "tool_use", name: "Write", input: { path: page.path } };
     try {
       await vaultTools.write(page.path, page.content);
       written.push(page.path);
       yield { kind: "tool_result", ok: true };
+
+      const relPath = page.path.startsWith(wikiVaultPath + "/")
+        ? page.path.slice(wikiVaultPath.length + 1)
+        : page.path;
+      const statusTo = parseWikiStatus(page.content);
+      if (existingContent === null) {
+        logEntries.push({ path: relPath, action: "СОЗДАНА", statusTo });
+      } else {
+        logEntries.push({ path: relPath, action: "ОБНОВЛЕНА", statusFrom: parseWikiStatus(existingContent), statusTo });
+      }
+
       if (page.annotation) {
         try {
           await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation, page.path);
@@ -158,7 +181,14 @@ export async function* runIngest(
   yield { kind: "assistant_text", delta: resultText };
 
   if (written.length > 0) {
-    await appendLog(vaultTools, domainRoot, sourceVaultPath, domain.id, written);
+    try {
+      await appendWikiLog(vaultTools, `${domainRoot}/_log.md`, domain.id, {
+        op: "ingest",
+        sourcePath: sourceVaultPath,
+        entries: logEntries,
+        outputTokens,
+      });
+    } catch { /* non-critical */ }
 
     const backlinkToday = new Date().toISOString().slice(0, 10);
     const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
@@ -227,21 +257,6 @@ export function parseJsonPages(text: string): Array<{ path: string; content: str
   }
 }
 
-async function appendLog(
-  vaultTools: VaultTools,
-  wikiRoot: string,
-  sourcePath: string,
-  domainId: string,
-  written: string[],
-): Promise<void> {
-  const logPath = `${wikiRoot}/_log.md`;
-  const today = new Date().toISOString().slice(0, 10);
-  const entry = `\n## ${today} — ingest — ${domainId}\n- Источник: ${sourcePath}\n- Страниц: ${written.map((p) => `\n  - ${p}`).join("")}\n`;
-  try {
-    const existing = await tryRead(vaultTools, logPath);
-    await vaultTools.write(logPath, existing + entry);
-  } catch { /* не критично */ }
-}
 
 async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
   try { return await vaultTools.read(path); } catch { return ""; }
