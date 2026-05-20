@@ -200,7 +200,7 @@ describe("runInit — ensureRootFiles", () => {
       runInit(["newdomain"], vt, makeLlm(validDomainJson), "model", [], "TestVault", new AbortController().signal),
     );
     const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
-    const schemaWrite = writeCalls.find(([path]) => path === "!Wiki/_wiki_schema.md");
+    const schemaWrite = writeCalls.find(([path]) => path === "!Wiki/.config/_wiki_schema.md");
     expect(schemaWrite).toBeUndefined(); // exists=true → not written
   });
 
