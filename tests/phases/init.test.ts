@@ -399,7 +399,7 @@ describe("runInitWithSources — Phase 1 incremental", () => {
   it("entity_types accumulate correctly — later files merge on top of earlier", async () => {
     const adapter = mockAdapterWithSources(sourceFiles);
     const vt = new VaultTools(adapter, "/vault");
-    const ingestEmpty = JSON.stringify([]);
+    const ingestEmpty = JSON.stringify({ reasoning: "ok", pages: [] });
     // Per-file pipeline: bootstrap(a), ingest(a), incremental(b), ingest(b), incremental(c), ingest(c)
     const events = await collect(
       runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, ingestEmpty, incrementalJson1, ingestEmpty, incrementalJson2, ingestEmpty]), "model", [], "TestVault", new AbortController().signal),
@@ -613,10 +613,10 @@ describe("runInitWithSources — per-file pipeline", () => {
     entity_types: [{ type: "person", description: "Person", extraction_cues: [] }],
   });
 
-  // Ingest returns a JSON array of { path, content } pages.
+  // Ingest returns WikiPagesOutputSchema format: { reasoning, pages }.
   // Path must start with `!Wiki/dom/`.
   function ingestPagesJson(name: string): string {
-    return JSON.stringify([{ path: `!Wiki/dom/concepts/${name}.md`, content: `# ${name}\nbody` }]);
+    return JSON.stringify({ reasoning: "Extracted entities.", pages: [{ path: `!Wiki/dom/concepts/${name}.md`, content: `# ${name}\nbody` }] });
   }
 
   function makeOrderedLlm(events: string[][], onCall: (idx: number) => void): LlmClient {
@@ -750,7 +750,7 @@ describe("runInitWithSources — per-file pipeline", () => {
               });
             }
             const body =
-              idx === 0 ? bootstrapJson : JSON.stringify([{ path: "!Wiki/dom/concepts/A.md", content: "a" }]);
+              idx === 0 ? bootstrapJson : JSON.stringify({ reasoning: "ok", pages: [{ path: "!Wiki/dom/concepts/A.md", content: "a" }] });
             return Promise.resolve({
               [Symbol.asyncIterator]: async function* () {
                 yield { choices: [{ delta: { content: body } }] };
