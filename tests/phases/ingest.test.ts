@@ -422,7 +422,11 @@ describe("runIngest with WikiPagesOutputSchema format", () => {
         new AbortController().signal,
       ),
     );
-    expect(events.some((e: any) => e.kind === "error")).toBe(true);
+    expect(events.some((e: any) => e.kind === "structural_error")).toBe(true);
+    const errorIdx = events.findIndex((e: any) => e.kind === "error");
+    const resultIdx = events.findIndex((e: any) => e.kind === "result");
+    expect(errorIdx).toBeGreaterThan(-1);
+    expect(resultIdx).toBeGreaterThan(errorIdx);
   });
 });
 
