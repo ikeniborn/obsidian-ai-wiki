@@ -321,15 +321,6 @@ export async function* runInitWithSources(
         analyzed_sources_v2: true,
       };
 
-      yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
-      yield {
-        kind: "domain_updated", domainId,
-        patch: {
-          entity_types: currentDomain.entity_types,
-          language_notes: currentDomain.language_notes,
-        },
-      };
-      yield { kind: "tool_result", ok: true };
     }
 
     if (signal.aborted) return;
@@ -372,7 +363,11 @@ export async function* runInitWithSources(
     yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
     yield {
       kind: "domain_updated", domainId,
-      patch: { analyzed_sources: currentDomain.analyzed_sources },
+      patch: {
+        entity_types: currentDomain.entity_types,
+        language_notes: currentDomain.language_notes,
+        analyzed_sources: currentDomain.analyzed_sources,
+      },
     };
     yield { kind: "tool_result", ok: true };
 
