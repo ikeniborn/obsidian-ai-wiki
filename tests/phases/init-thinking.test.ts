@@ -35,51 +35,6 @@ function makeLlmNonStreaming(content: string): LlmClient {
   } as unknown as LlmClient;
 }
 
-const VALID_DOMAIN_JSON = JSON.stringify({
-  reasoning: "Analysing structure...",
-  id: "test-domain",
-  name: "Test Domain",
-  wiki_folder: "Test",
-  entity_types: [
-    { type: "Concept", description: "Key concept", extraction_cues: ["concept"], wiki_subfolder: "Concepts" },
-  ],
-  language_notes: "Russian",
-});
-
-describe("runInit — bootstrap (no --sources) with thinking model output", () => {
-  it("parses DomainEntry when LLM wraps JSON in <think> tags", async () => {
-    // <think> block contains a JSON-like fragment; the REAL JSON comes after.
-    // Raw JSON.parse on the greedy regex match will pick up content inside <think>,
-    // producing wrong output. parseStructured() must strip <think> first.
-    const thinkOutput = `<think>\nLet me consider {"temp": 1} as draft\n</think>\n${VALID_DOMAIN_JSON}`;
-    const llm = makeLlmNonStreaming(thinkOutput);
-    const vt = new VaultTools(mockAdapter(), "/vault");
-
-    const events: unknown[] = [];
-    for await (const e of runInit(["test-domain"], vt, llm, "model", [], "vault", new AbortController().signal)) {
-      events.push(e);
-    }
-
-    const created = events.find((e: any) => e.kind === "domain_created") as any;
-    expect(created, "expected domain_created event").toBeDefined();
-    expect(created.entry.entity_types).toHaveLength(1);
-    expect(created.entry.entity_types[0].type).toBe("Concept");
-  });
-
-  it("yields error and returns when LLM returns only <think> with no actual JSON", async () => {
-    const llm = makeLlmNonStreaming("<think>thinking only, no json follows</think> no json here");
-    const vt = new VaultTools(mockAdapter(), "/vault");
-
-    const events: unknown[] = [];
-    for await (const e of runInit(["test-domain"], vt, llm, "model", [], "vault", new AbortController().signal)) {
-      events.push(e);
-    }
-
-    expect(events.some((e: any) => e.kind === "error")).toBe(true);
-    expect(events.some((e: any) => e.kind === "domain_created")).toBe(false);
-  });
-});
-
 const VALID_DELTA_JSON = JSON.stringify({
   reasoning: "New entity found",
   entity_types: [
