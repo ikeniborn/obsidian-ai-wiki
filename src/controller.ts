@@ -402,7 +402,12 @@ export class WikiController {
   }
 
   private async buildAgentRunner(vaultRoot: string, resumeSessionId?: string, opKey?: string): Promise<AgentRunner> {
-    const adapter = this.app.vault.adapter as unknown as VaultAdapter;
+    const rawAdapter = this.app.vault.adapter as unknown as VaultAdapter;
+    const vault = this.app.vault;
+    const adapter = Object.create(rawAdapter) as VaultAdapter;
+    adapter.mkdir = async (path: string) => {
+      try { await vault.createFolder(path); } catch { await rawAdapter.mkdir(path); }
+    };
     const base = this.cwdOrEmpty();
     const vaultTools = new VaultTools(adapter, base);
     const vaultName = this.app.vault.getName();

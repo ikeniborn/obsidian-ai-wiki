@@ -36275,7 +36275,16 @@ var WikiController = class {
     return true;
   }
   async buildAgentRunner(vaultRoot, resumeSessionId, opKey) {
-    const adapter = this.app.vault.adapter;
+    const rawAdapter = this.app.vault.adapter;
+    const vault = this.app.vault;
+    const adapter = Object.create(rawAdapter);
+    adapter.mkdir = async (path2) => {
+      try {
+        await vault.createFolder(path2);
+      } catch {
+        await rawAdapter.mkdir(path2);
+      }
+    };
     const base = this.cwdOrEmpty();
     const vaultTools = new VaultTools(adapter, base);
     const vaultName = this.app.vault.getName();
