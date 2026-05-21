@@ -27680,7 +27680,6 @@ ${fileContent}` }
     yield { kind: "error", message: `init --sources: \u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0437\u0434\u0430\u0442\u044C \u0434\u043E\u043C\u0435\u043D \u0438\u0437 \u0444\u0430\u0439\u043B\u043E\u0432` };
     return;
   }
-  await appendLog(vaultTools, wikiRootGuess, domainId);
   yield {
     kind: "result",
     durationMs: Date.now() - start,
@@ -27698,19 +27697,6 @@ async function wipeDomainFolder(vaultTools, wikiFolder) {
     }
   }
   return files;
-}
-async function appendLog(vaultTools, wikiRoot, domainId) {
-  const logPath = `${wikiRoot}/_log.md`;
-  const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const entry = `
-## ${today} \u2014 init \u2014 ${domainId}
-- \u0414\u043E\u043C\u0435\u043D \u0441\u043E\u0437\u0434\u0430\u043D
-`;
-  try {
-    const existing = await tryRead3(vaultTools, logPath);
-    await vaultTools.write(logPath, existing + entry);
-  } catch {
-  }
 }
 async function tryRead3(vaultTools, path2) {
   try {
@@ -28223,10 +28209,12 @@ var VaultTools = class {
     return this.adapter.read(vaultPath);
   }
   async write(vaultPath, content) {
-    const dir = vaultPath.split("/").slice(0, -1).join("/");
-    if (dir) {
-      const dirExists = await this.adapter.exists(dir);
-      if (!dirExists) await this.adapter.mkdir(dir);
+    const segments = vaultPath.split("/").slice(0, -1);
+    for (let i = 1; i <= segments.length; i++) {
+      const partial = segments.slice(0, i).join("/");
+      if (!await this.adapter.exists(partial)) {
+        await this.adapter.mkdir(partial);
+      }
     }
     await this.adapter.write(vaultPath, content);
   }
