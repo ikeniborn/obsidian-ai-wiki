@@ -18890,7 +18890,7 @@ var en = {
     historyLimit_name: "History limit",
     historyLimit_desc: "Maximum operations in the sidebar history.",
     agentLog_name: "Agent log (JSONL)",
-    agentLog_desc: "Log agent events to <vault>/!Logs/agent.jsonl. Folder is created automatically.",
+    agentLog_desc: "Log agent events to <vault>/!Wiki/.config/_agent.jsonl.",
     backend_name: "Backend",
     backend_desc: "Select the backend for operations.",
     claudeCodeAgent: "Claude Code agent",
@@ -19101,7 +19101,7 @@ var ru = {
     historyLimit_name: "\u041B\u0438\u043C\u0438\u0442 \u0438\u0441\u0442\u043E\u0440\u0438\u0438",
     historyLimit_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439 \u0432 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438.",
     agentLog_name: "\u041B\u043E\u0433 \u0430\u0433\u0435\u043D\u0442\u0430 (JSONL)",
-    agentLog_desc: "\u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u0441\u043E\u0431\u044B\u0442\u0438\u044F \u0430\u0433\u0435\u043D\u0442\u0430 \u0432 <vault>/!Logs/agent.jsonl. \u041F\u0430\u043F\u043A\u0430 \u0441\u043E\u0437\u0434\u0430\u0451\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.",
+    agentLog_desc: "\u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u0441\u043E\u0431\u044B\u0442\u0438\u044F \u0430\u0433\u0435\u043D\u0442\u0430 \u0432 <vault>/!Wiki/.config/_agent.jsonl.",
     backend_name: "Backend",
     backend_desc: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0431\u044D\u043A\u0435\u043D\u0434 \u0434\u043B\u044F \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439.",
     claudeCodeAgent: "Claude Code agent",
@@ -19312,7 +19312,7 @@ var es = {
     historyLimit_name: "L\xEDmite de historial",
     historyLimit_desc: "M\xE1ximo de operaciones en el historial del panel lateral.",
     agentLog_name: "Log del agente (JSONL)",
-    agentLog_desc: "Registra eventos del agente en <vault>/!Logs/agent.jsonl. La carpeta se crea autom\xE1ticamente.",
+    agentLog_desc: "Registra eventos del agente en <vault>/!Wiki/.config/_agent.jsonl.",
     backend_name: "Backend",
     backend_desc: "Selecciona el backend para las operaciones.",
     claudeCodeAgent: "Claude Code agent",
@@ -28093,10 +28093,12 @@ var AgentRunner = class {
   async writeDevLog(_vaultRoot, entry) {
     if (!this.settings.devMode?.enabled) return;
     const adapter = this.vaultTools.adapter;
-    const dir = "!Logs";
-    const path2 = `${dir}/dev.jsonl`;
+    const path2 = "!Wiki/.config/_dev.jsonl";
     try {
-      if (!await adapter.exists(dir)) await adapter.mkdir(dir);
+      if (!await adapter.exists("!Wiki")) await adapter.mkdir("!Wiki").catch(() => {
+      });
+      if (!await adapter.exists("!Wiki/.config")) await adapter.mkdir("!Wiki/.config").catch(() => {
+      });
       const line = JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), ...entry, eval: null }) + "\n";
       if (await adapter.exists(path2)) await adapter.append(path2, line);
       else await adapter.write(path2, line);
@@ -28188,7 +28190,7 @@ var AgentRunner = class {
   async updateDevLogEval(_vaultRoot, score, reasoning) {
     if (!this.settings.devMode?.enabled) return;
     const adapter = this.vaultTools.adapter;
-    const path2 = "!Logs/dev.jsonl";
+    const path2 = "!Wiki/.config/_dev.jsonl";
     try {
       if (!await adapter.exists(path2)) return;
       const content = await adapter.read(path2);
@@ -36381,10 +36383,12 @@ var WikiController = class {
     if (!this.plugin.settings.agentLogEnabled) return;
     if (ev.kind === "assistant_text") return;
     const adapter = this.app.vault.adapter;
-    const dir = "!Logs";
-    const path2 = `${dir}/agent.jsonl`;
+    const path2 = "!Wiki/.config/_agent.jsonl";
     try {
-      if (!await adapter.exists(dir)) await adapter.mkdir(dir);
+      if (!await adapter.exists("!Wiki")) await this.app.vault.createFolder("!Wiki").catch(() => {
+      });
+      if (!await adapter.exists("!Wiki/.config")) await this.app.vault.createFolder("!Wiki/.config").catch(() => {
+      });
       const extra = ev.kind === "result" && ev.outputTokens !== void 0 && ev.durationMs > 0 ? { tokPerSec: Math.round(ev.outputTokens / (ev.durationMs / 1e3)) } : {};
       const line = JSON.stringify({
         ts: (/* @__PURE__ */ new Date()).toISOString(),
