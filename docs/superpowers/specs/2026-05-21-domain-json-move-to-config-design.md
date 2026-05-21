@@ -1,3 +1,23 @@
+---
+review:
+  spec_hash: 135584ddd471bea4
+  last_run: 2026-05-21
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "tests/domain-store.test.ts"
+      section_hash: 00ab8260f650e1df
+      text: "«where applicable» заменено конкретными calls-массивами для каждого теста"
+      verdict: fixed
+      verdict_at: 2026-05-21
+---
+
 # Design: Move _domain.json to !Wiki/.config/
 
 Date: 2026-05-21
@@ -31,7 +51,28 @@ New `save()` sequence:
 Update all path assertions:
 - `"!Wiki/_domain.json"` → `"!Wiki/.config/_domain.json"`
 - `"!Wiki/_domain.json.tmp"` → `"!Wiki/.config/_domain.json.tmp"`
-- `calls` arrays: add `exists:!Wiki/.config` + `createFolder:!Wiki/.config` where applicable
+
+Test "creates !Wiki dir if missing" — expected `calls`:
+```
+"exists:!Wiki",
+"createFolder:!Wiki",
+"exists:!Wiki/.config",
+"createFolder:!Wiki/.config",
+"write:!Wiki/.config/_domain.json.tmp",
+"exists:!Wiki/.config/_domain.json",
+"rename:!Wiki/.config/_domain.json.tmp->!Wiki/.config/_domain.json",
+```
+
+Test "removes existing target before rename, no mkdir when dir exists" — expected `calls`:
+```
+"exists:!Wiki",
+"exists:!Wiki/.config",
+"write:!Wiki/.config/_domain.json.tmp",
+"exists:!Wiki/.config/_domain.json",
+"remove:!Wiki/.config/_domain.json",
+"rename:!Wiki/.config/_domain.json.tmp->!Wiki/.config/_domain.json",
+```
+(`vault.createFolder` still must not be called — both dirs exist)
 
 ### tests/main-migration.test.ts
 
