@@ -35899,7 +35899,8 @@ var DomainStore = class {
   }
   async save(domains) {
     const adapter = this.vault.adapter;
-    if (!await adapter.exists(WIKI_DIR)) await adapter.mkdir(WIKI_DIR);
+    if (!await adapter.exists(WIKI_DIR)) await this.vault.createFolder(WIKI_DIR).catch(() => {
+    });
     const body = JSON.stringify(domains, null, 2);
     await adapter.write(TMP_PATH, body);
     if (await adapter.exists(FILE_PATH)) await adapter.remove(FILE_PATH);

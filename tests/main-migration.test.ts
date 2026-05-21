@@ -6,11 +6,15 @@ function makePlugin(initial: any, adapter: Record<string, any>) {
   let stored = JSON.parse(JSON.stringify(initial));
   return {
     manifest: { dir: ".obsidian/plugins/ai-wiki", id: "ai-wiki" },
-    app: { vault: { adapter } },
+    app: { vault: { adapter, createFolder: vi.fn().mockResolvedValue(undefined) } },
     loadData: vi.fn().mockImplementation(async () => stored),
     saveData: vi.fn().mockImplementation(async (d: any) => { stored = d; }),
     getStored: () => stored,
   } as any;
+}
+
+function makeVaultObj(adapter: Record<string, any>): any {
+  return { adapter, createFolder: vi.fn().mockResolvedValue(undefined) };
 }
 
 const sampleDomain: DomainEntry = {
@@ -34,7 +38,7 @@ describe("migrateLegacyData", () => {
     const plugin = makePlugin({ domains: [sampleDomain] }, adapter);
     const { DomainStore } = await import("../src/domain-store");
     const { LocalConfigStore } = await import("../src/local-config");
-    await migrateLegacyData(plugin, new DomainStore({ adapter } as any), new LocalConfigStore(plugin));
+    await migrateLegacyData(plugin, new DomainStore(makeVaultObj(adapter)), new LocalConfigStore(plugin));
     expect(vaultFiles.has("!Wiki/_domain.json")).toBe(true);
     expect(JSON.parse(vaultFiles.get("!Wiki/_domain.json")!)).toEqual([sampleDomain]);
     expect(plugin.getStored().domains).toBeUndefined();
@@ -56,7 +60,7 @@ describe("migrateLegacyData", () => {
     const plugin = makePlugin({ domains: [sampleDomain] }, adapter);
     const { DomainStore } = await import("../src/domain-store");
     const { LocalConfigStore } = await import("../src/local-config");
-    await migrateLegacyData(plugin, new DomainStore({ adapter } as any), new LocalConfigStore(plugin));
+    await migrateLegacyData(plugin, new DomainStore(makeVaultObj(adapter)), new LocalConfigStore(plugin));
     expect(JSON.parse(vaultFiles.get("!Wiki/_domain.json")!)).toEqual(existing);
     expect(plugin.getStored().domains).toBeUndefined();
   });
@@ -73,7 +77,7 @@ describe("migrateLegacyData", () => {
     const { DomainStore } = await import("../src/domain-store");
     const { LocalConfigStore } = await import("../src/local-config");
     const localStore = new LocalConfigStore(plugin);
-    await migrateLegacyData(plugin, new DomainStore({ adapter } as any), localStore);
+    await migrateLegacyData(plugin, new DomainStore(makeVaultObj(adapter)), localStore);
     expect(plugin.getStored().claudeAgent.iclaudePath).toBeUndefined();
     expect((await localStore.load()).iclaudePath).toBe("/usr/local/bin/iclaude.sh");
   });
@@ -93,7 +97,7 @@ describe("migrateLegacyData", () => {
     const plugin = makePlugin({ domains: [sampleDomain] }, adapter);
     const { DomainStore } = await import("../src/domain-store");
     const { LocalConfigStore } = await import("../src/local-config");
-    const dms = new DomainStore({ adapter } as any);
+    const dms = new DomainStore(makeVaultObj(adapter));
     const lcs = new LocalConfigStore(plugin);
     await migrateLegacyData(plugin, dms, lcs);
     const saveCallsAfter1 = plugin.saveData.mock.calls.length;
@@ -113,7 +117,7 @@ describe("migrateLegacyData", () => {
     const localStore = new LocalConfigStore(plugin);
     vi.spyOn(localStore, "load").mockResolvedValue({} as any);
     const saveSpy = vi.spyOn(localStore, "save").mockResolvedValue(undefined);
-    await migrateLegacyData(plugin, new DomainStore({ adapter } as any), localStore);
+    await migrateLegacyData(plugin, new DomainStore(makeVaultObj(adapter)), localStore);
     expect(saveSpy).toHaveBeenCalledWith({ shellConsentGiven: true });
     expect(plugin.getStored().shellConsentGiven).toBeUndefined();
     expect(plugin.saveData).toHaveBeenCalled();
@@ -131,7 +135,7 @@ describe("migrateLegacyData", () => {
     const localStore = new LocalConfigStore(plugin);
     vi.spyOn(localStore, "load").mockResolvedValue({ shellConsentGiven: true } as any);
     const saveSpy = vi.spyOn(localStore, "save").mockResolvedValue(undefined);
-    await migrateLegacyData(plugin, new DomainStore({ adapter } as any), localStore);
+    await migrateLegacyData(plugin, new DomainStore(makeVaultObj(adapter)), localStore);
     expect(saveSpy).not.toHaveBeenCalled();
     expect(plugin.getStored().shellConsentGiven).toBeUndefined();
     expect(plugin.saveData).toHaveBeenCalled();
@@ -153,7 +157,7 @@ describe("migrateLegacyData", () => {
     const { LocalConfigStore } = await import("../src/local-config");
     await expect(migrateLegacyData(
       plugin,
-      new DomainStore({ adapter } as any),
+      new DomainStore(makeVaultObj(adapter)),
       new LocalConfigStore(plugin),
     )).resolves.toBeUndefined();
     expect(plugin.saveData).not.toHaveBeenCalled();

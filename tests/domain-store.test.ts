@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from "vitest";
 import { DomainStore, DomainCorruptError } from "../src/domain-store";
 import type { DomainEntry } from "../src/domain";
 
-function makeVault(adapter: Record<string, any>): any {
-  return { adapter };
+function makeVault(adapter: Record<string, any>, extra: Record<string, any> = {}): any {
+  return { adapter, createFolder: vi.fn().mockResolvedValue(undefined), ...extra };
 }
 
 const sampleDomain: DomainEntry = {
@@ -89,12 +89,14 @@ describe("DomainStore", () => {
           calls.push(`exists:${p}`);
           return false;
         }),
-        mkdir: vi.fn().mockImplementation(async (p: string) => { calls.push(`mkdir:${p}`); }),
         write: vi.fn().mockImplementation(async (p: string) => { calls.push(`write:${p}`); }),
         rename: vi.fn().mockImplementation(async (a: string, b: string) => { calls.push(`rename:${a}->${b}`); }),
         remove: vi.fn().mockImplementation(async (p: string) => { calls.push(`remove:${p}`); }),
       };
-      const store = new DomainStore(makeVault(adapter));
+      const vault = makeVault(adapter, {
+        createFolder: vi.fn().mockImplementation(async (p: string) => { calls.push(`createFolder:${p}`); }),
+      });
+      const store = new DomainStore(vault);
       await store.save([sampleDomain]);
       expect(adapter.write).toHaveBeenCalledWith(
         "!Wiki/_domain.json.tmp",
@@ -106,7 +108,7 @@ describe("DomainStore", () => {
       );
       expect(calls).toEqual([
         "exists:!Wiki",
-        "mkdir:!Wiki",
+        "createFolder:!Wiki",
         "write:!Wiki/_domain.json.tmp",
         "exists:!Wiki/_domain.json",
         "rename:!Wiki/_domain.json.tmp->!Wiki/_domain.json",
@@ -120,14 +122,14 @@ describe("DomainStore", () => {
           calls.push(`exists:${p}`);
           return true;
         }),
-        mkdir: vi.fn(),
         write: vi.fn().mockImplementation(async (p: string) => { calls.push(`write:${p}`); }),
         rename: vi.fn().mockImplementation(async (a: string, b: string) => { calls.push(`rename:${a}->${b}`); }),
         remove: vi.fn().mockImplementation(async (p: string) => { calls.push(`remove:${p}`); }),
       };
-      const store = new DomainStore(makeVault(adapter));
+      const vault = makeVault(adapter);
+      const store = new DomainStore(vault);
       await store.save([sampleDomain]);
-      expect(adapter.mkdir).not.toHaveBeenCalled();
+      expect(vault.createFolder).not.toHaveBeenCalled();
       expect(calls).toEqual([
         "exists:!Wiki",
         "write:!Wiki/_domain.json.tmp",
