@@ -379,8 +379,6 @@ export async function* runInitWithSources(
     return;
   }
 
-  await appendLog(vaultTools, wikiRootGuess, domainId);
-
   yield {
     kind: "result",
     durationMs: Date.now() - start,
@@ -396,16 +394,6 @@ export async function wipeDomainFolder(vaultTools: VaultTools, wikiFolder: strin
     try { await vaultTools.remove(f); } catch { /* skip locked */ }
   }
   return files;
-}
-
-async function appendLog(vaultTools: VaultTools, wikiRoot: string, domainId: string): Promise<void> {
-  const logPath = `${wikiRoot}/_log.md`;
-  const today = new Date().toISOString().slice(0, 10);
-  const entry = `\n## ${today} — init — ${domainId}\n- Домен создан\n`;
-  try {
-    const existing = await tryRead(vaultTools, logPath);
-    await vaultTools.write(logPath, existing + entry);
-  } catch { /* не критично */ }
 }
 
 async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
