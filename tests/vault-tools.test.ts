@@ -28,6 +28,18 @@ describe("VaultTools", () => {
     expect(adapter.write).toHaveBeenCalledWith("notes/sub/a.md", "content");
   });
 
+  it("write creates all ancestor dirs for deeply nested path", async () => {
+    const created: string[] = [];
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(false),
+      mkdir: vi.fn().mockImplementation(async (p: string) => { created.push(p); }),
+    });
+    const vt = new VaultTools(adapter, "/vault");
+    await vt.write("!Wiki/.config/_wiki_schema.md", "content");
+    expect(created).toEqual(["!Wiki", "!Wiki/.config"]);
+    expect(adapter.write).toHaveBeenCalledWith("!Wiki/.config/_wiki_schema.md", "content");
+  });
+
   it("write skips mkdir when dir exists", async () => {
     const adapter = mockAdapter({ exists: vi.fn().mockResolvedValue(true) });
     const vt = new VaultTools(adapter, "/vault");

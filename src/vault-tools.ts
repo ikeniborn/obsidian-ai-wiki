@@ -23,10 +23,12 @@ export class VaultTools {
   }
 
   async write(vaultPath: string, content: string): Promise<void> {
-    const dir = vaultPath.split("/").slice(0, -1).join("/");
-    if (dir) {
-      const dirExists = await this.adapter.exists(dir);
-      if (!dirExists) await this.adapter.mkdir(dir);
+    const segments = vaultPath.split("/").slice(0, -1);
+    for (let i = 1; i <= segments.length; i++) {
+      const partial = segments.slice(0, i).join("/");
+      if (!(await this.adapter.exists(partial))) {
+        await this.adapter.mkdir(partial);
+      }
     }
     await this.adapter.write(vaultPath, content);
   }
