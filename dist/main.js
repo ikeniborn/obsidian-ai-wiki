@@ -20533,7 +20533,7 @@ function sanitizeWikiSubfolder(raw) {
   return raw.split("/").pop();
 }
 function validateArticlePath(path2, wikiVaultPath) {
-  if (path2 === `${wikiVaultPath}/_index.md` || path2 === `${wikiVaultPath}/_log.md` || path2 === `${wikiVaultPath}/.config/_wiki_schema.md`)
+  if (path2 === `${wikiVaultPath}/_index.md` || path2 === `${wikiVaultPath}/_log.md` || path2 === `${wikiVaultPath}/.config/_wiki_schema.md` || path2 === `${wikiVaultPath}/.config/_format_schema.md`)
     return true;
   const prefix = `${wikiVaultPath}/`;
   if (!path2.startsWith(prefix))
@@ -27533,8 +27533,8 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
       yield { kind: "error", message: "force: dry-run not supported" };
       return;
     }
-    const effectiveSources = sourcePaths.length ? sourcePaths : existing.source_paths ?? [];
-    if (!effectiveSources.length) {
+    const effectiveSources2 = sourcePaths.length ? sourcePaths : existing.source_paths ?? [];
+    if (!effectiveSources2.length) {
       yield { kind: "error", message: "force: no sources to re-analyze" };
       return;
     }
@@ -27557,7 +27557,7 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
     existing.language_notes = "";
     yield* runInitWithSources(
       domainId,
-      effectiveSources,
+      effectiveSources2,
       false,
       vaultTools,
       llm,
@@ -27587,124 +27587,20 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
     );
     return;
   }
-  if (existing?.entity_types?.length) {
+  if (!existing) {
+    yield { kind: "error", message: `init: domain not found: "${domainId}" \u2014 add it in settings first` };
+    return;
+  }
+  if (existing.entity_types?.length) {
     yield { kind: "error", message: `Domain "${domainId}" already initialised. Use Lint to update entity_types.` };
     return;
   }
-  yield { kind: "assistant_text", delta: `Bootstrapping domain "${domainId}"...
-` };
-  const wikiRootGuess = `!Wiki`;
-  await ensureRootFiles(vaultTools, wikiRootGuess);
-  const start = Date.now();
-  let outputTokens = 0;
-  const allFiles = await vaultTools.listFiles("");
-  const sampleFiles = allFiles.slice(0, 5);
-  const samples = await vaultTools.readAll(sampleFiles);
-  const existingDomain = domains.find((d) => d.id === domainId);
-  const [schemaContent, indexContent] = await Promise.all([
-    tryRead3(vaultTools, `${wikiRootGuess}/.config/_wiki_schema.md`),
-    existingDomain ? tryRead3(vaultTools, `${domainWikiFolder(existingDomain.wiki_folder)}/_index.md`) : Promise.resolve("")
-  ]);
-  const systemContent = render(init_default, {
-    domain_id: domainId,
-    vault_name: vaultName,
-    schema_block: schemaContent ? `
-\u041A\u043E\u043D\u0432\u0435\u043D\u0446\u0438\u0438 \u0432\u0438\u043A\u0438 (_wiki_schema.md):
-${schemaContent}` : "",
-    index_block: indexContent ? `
-\u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0430\u044F \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 (_index.md):
-${indexContent}` : ""
-  });
-  const messages = [
-    { role: "system", content: systemContent },
-    {
-      role: "user",
-      content: [
-        `Domain ID: ${domainId}`,
-        `Vault name: ${vaultName}`,
-        "",
-        `\u041F\u0440\u0438\u043C\u0435\u0440\u044B \u0444\u0430\u0439\u043B\u043E\u0432 vault:`,
-        [...samples.entries()].map(([p, c]) => `${p}:
-${c}`).join("\n\n")
-      ].join("\n")
-    }
-  ];
-  const collected = [];
-  let parsed;
-  try {
-    const r = await parseWithRetry({
-      llm,
-      model,
-      baseMessages: messages,
-      opts,
-      schema: DomainEntrySchema,
-      maxRetries: opts.structuredRetries ?? 1,
-      callSite: "init.bootstrap",
-      signal,
-      onEvent: (e) => collected.push(e)
-    });
-    parsed = r.value;
-    outputTokens += r.outputTokens;
-    if (r.fullText)
-      yield { kind: "assistant_text", delta: r.fullText };
-  } catch (e) {
-    for (const ev of collected)
-      yield ev;
-    if (e.name === "AbortError" || signal.aborted)
-      return;
-    yield { kind: "error", message: `Failed to parse domain entry: ${e.message}` };
+  const effectiveSources = existing.source_paths ?? [];
+  if (!effectiveSources.length) {
+    yield { kind: "error", message: `init: no source_paths configured for "${domainId}" \u2014 add them in settings` };
     return;
   }
-  for (const ev of collected)
-    yield ev;
-  if (signal.aborted)
-    return;
-  let entry;
-  try {
-    entry = {
-      id: parsed.id,
-      name: parsed.name,
-      wiki_folder: parsed.wiki_folder,
-      entity_types: parsed.entity_types,
-      language_notes: parsed.language_notes
-    };
-    entry.wiki_folder = sanitizeWikiFolder(entry.wiki_folder ?? "");
-    for (const et of entry.entity_types ?? []) {
-      if (et.wiki_subfolder)
-        et.wiki_subfolder = sanitizeWikiSubfolder(et.wiki_subfolder);
-    }
-    if (!entry.id || !entry.wiki_folder)
-      throw new Error("Missing required fields");
-  } catch (e) {
-    yield { kind: "error", message: `Failed to build domain entry: ${e.message}` };
-    return;
-  }
-  if (dryRun) {
-    yield {
-      kind: "result",
-      durationMs: Date.now() - start,
-      text: `Dry run \u2014 domain entry:
-\`\`\`json
-${JSON.stringify(entry, null, 2)}
-\`\`\``,
-      outputTokens: outputTokens || void 0
-    };
-    return;
-  }
-  yield { kind: "tool_use", name: existing ? "UpdateDomain" : "SaveDomain", input: { id: entry.id } };
-  if (existing) {
-    yield { kind: "domain_updated", domainId: entry.id, patch: { entity_types: entry.entity_types, language_notes: entry.language_notes } };
-  } else {
-    yield { kind: "domain_created", entry };
-  }
-  yield { kind: "tool_result", ok: true };
-  await appendLog(vaultTools, domainWikiFolder(entry.wiki_folder), domainId);
-  yield {
-    kind: "result",
-    durationMs: Date.now() - start,
-    text: `Domain "${domainId}" initialised. Edit entity_types in plugin settings to refine extraction.`,
-    outputTokens: outputTokens || void 0
-  };
+  yield* runInitWithSources(domainId, effectiveSources, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError);
 }
 async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, force = false) {
   const start = Date.now();

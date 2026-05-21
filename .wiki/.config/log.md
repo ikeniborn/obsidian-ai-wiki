@@ -394,3 +394,39 @@
 
 **Обновлено:** index.md (спецификации 14→19, планы 10→14), log.md
 
+---
+
+## 2026-05-20 — ingest (prompts/ingest.md, prompts/lint.md)
+
+**Операция:** ingest
+**Домен:** документация
+**Источники:**
+- `prompts/ingest.md`
+- `prompts/lint.md`
+
+**Создано страниц:** 0
+
+**Обновлено страниц:** 2
+- `документация/операции/ingest-operation.md` — обновлён по agent-stability-audit-design: промпт теперь возвращает `{reasoning, pages}` вместо сырого массива; `parseJsonPages` заменена на `parseWithRetry(WikiPagesOutputSchema)`; добавлено правило путей (4 сегмента); обновлены wiki_keywords, wiki_sources, история изменений
+- `документация/операции/lint-operation.md` — обновлён по agent-stability-audit-design: промпт lint.md возвращает `{reasoning, report, fixes}` (combined assess+fix); раздел "Agent Stability Audit: Merge assess+fix" переведён из planned в реализовано; `buildFixMessages` удалена; обновлены wiki_keywords, wiki_sources, история изменений
+
+**Обновлено:** log.md
+
+---
+
+## 2026-05-20 — ingest (wiki-config-schema-log-index-design spec + TODO)
+
+**Операция:** ingest
+**Домен:** документация
+**Источники:**
+- `docs/superpowers/specs/2026-05-20-wiki-config-schema-log-index-design.md`
+- `docs/TODO.md`
+
+**Создано страниц:** 2
+- `документация/спецификации/wiki-config-schema-log-index-design.md` (mature) — три улучшения: config-layout (.config/), grouped Markdown index, enriched log format; новый модуль wiki-log.ts; wiki-index.ts перепись
+- `документация/компоненты/wiki-log.md` (developing) — appendWikiLog API, LogOperation/IngestLogEntry типы, формат записей ingest/lint/fix
+
+**Обновлено страниц:** 0
+
+**Обновлено:** index.md (компоненты 11→12, спецификации 19→20), log.md
+

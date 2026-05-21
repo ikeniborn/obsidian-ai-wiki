@@ -175,8 +175,21 @@
       "input_tokens": 0,
       "output_tokens": 0,
       "files": 30
+    },
+    {
+      "date": "2026-05-20T04:51:33.136086+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 6,
+      "note": "incremental update: agent-stability-audit"
+    },
+    {
+      "date": "2026-05-20T17:37:18.234844+00:00",
+      "input_tokens": 0,
+      "output_tokens": 65627,
+      "files": 8
     }
   ],
   "total_input_tokens": 340961,
-  "total_output_tokens": 23014
+  "total_output_tokens": 88641
 }

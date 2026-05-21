@@ -2,12 +2,13 @@
 wiki_status: developing
 wiki_sources:
   - README.md
-  - prompts/lint.md
+  - "[[prompts/lint.md]]"
   - docs/TODO.md
   - "[[docs/superpowers/specs/2026-05-19-agent-stability-audit-design.md]]"
-wiki_updated: 2026-05-19
+  - "[[docs/superpowers/plans/2026-05-19-agent-stability-audit.md]]"
+wiki_updated: 2026-05-20
 wiki_domain: документация
-wiki_keywords: [lint, audit, quality, upsertIndexAnnotation, annotation, wiki-keywords, fix]
+wiki_keywords: [lint, audit, quality, LintOutputSchema, parseWithRetry, upsertIndexAnnotation, annotation, reasoning-first-json, fix]
 wiki_outgoing_links:
   - "[[fix-operation]]"
   - "[[поток-выполнения-операции]]"
@@ -35,22 +36,26 @@ aliases: ["lint operation", "аудит вики"]
 
 ## LLM-промпт (lint.md)
 
-Промпт выступает в роли рецензента wiki-домена. Фокус: дублирование страниц, пробелы в покрытии, размытые определения, устаревший контент.
+Промпт выступает в роли рецензента wiki-домена. Фокус: дублирование страниц, пробелы в покрытии, размытые определения, устаревший контент, битые ссылки.
 
 Входные данные:
 - `{{domain_name}}` — название домена
 - `{{entity_types_block}}` — текущие entity_types из domain-map
 
-Выходной JSON (поле `reasoning` первым):
+Выходной JSON (после [[agent-stability-audit-design]], combined assess+fix):
 ```json
 {
-  "reasoning": "...",
-  "entity_types": [...],
-  "language_notes": "..."
+  "reasoning": "цепочка рассуждений",
+  "report": "## Отчёт lint\n\nАнализ качества в формате Markdown...",
+  "fixes": [{"path": "!Wiki/domain/type/Entity.md", "content": "полный контент исправленной страницы", "annotation": "краткое описание"}]
 }
 ```
 
-Результат используется для уточнения `entity_types` домена по итогам lint-анализа. Паттерн ответа: [[reasoning-first-json]].
+- `report` — полный markdown-отчёт для пользователя (выводится в боковую панель)
+- `fixes` — только изменённые страницы (пустой массив если правок нет)
+- `annotation` — одно предложение, описание сущности для поиска
+
+Валидируется через `parseWithRetry(LintOutputSchema)` (`callSite: "lint.fix"`). Паттерн ответа: [[reasoning-first-json]].
 
 ## Обновление индекса
 
@@ -73,20 +78,23 @@ LLM возвращает JSON-массив с полями `path`, `content`, `a
 | 9 | `[v]` исправлено | После lint в результате дублировались ссылки на wiki-страницы. Исправлено (дедупликация dead-link отчётов per file в `checkStructure`, коммит cddfb51). |
 | 10 | `[>]` в работе | После lint при отправке запроса через чат получена ошибка. Требует диагностики в chat-фазе после lint-контекста. |
 
-## Agent Stability Audit: Merge assess+fix (planned)
+## Agent Stability Audit: Merge assess+fix (реализовано)
 
-По [[agent-stability-audit-design]]: lint будет выполнять assess и fix в одном CoT+Structured вызове вместо двух раздельных. Новый `LintOutputSchema`:
+По [[agent-stability-audit-design]]: lint выполняет assess и fix в одном CoT+Structured вызове вместо двух раздельных. `LintOutputSchema`:
 - `reasoning` — пошаговое обоснование
 - `report` — markdown-отчёт для пользователя (заменяет free-text assess)
-- `fixes` — JSON-массив страниц (заменяет второй вызов buildFixMessages)
+- `fixes` — JSON-массив страниц `WikiPageSchema[]` (заменяет второй вызов buildFixMessages)
 
-Итого: 3 LLM-вызова → 2. Добавится UI-прогресс в fix-loop (имя файла перед каждой записью). Промпт `prompts/lint.md` обновится для возврата `{reasoning, report, fixes}`.
+Итого: 3 LLM-вызова → 2. UI-прогресс в fix-loop: перед записью каждой страницы отдаётся `assistant_text` с именем файла. Промпт `prompts/lint.md` обновлён для возврата `{reasoning, report, fixes}`.
+
+Функция `buildFixMessages` удалена из `src/phases/lint.ts`.
 
 ## История изменений
 
 - **2026-05-15** — создана страница (README.md, prompts/lint.md).
 - **2026-05-17** — обновлено по [[mobile-query-seed-design]]: upsertIndexAnnotation per fixed page, удалён flat index rewrite, добавлено описание annotation в промпте.
 - **2026-05-19** — добавлен раздел agent-stability-audit (планируемый merge assess+fix).
+- **2026-05-20** — обновлено по [[agent-stability-audit-design]]: промпт lint.md обновлён для возврата `{reasoning, report, fixes}`, merge assess+fix реализован через `parseWithRetry(LintOutputSchema)`.
 
 ## Связанные страницы
 

@@ -8,8 +8,8 @@ review:
   phases:
     structure:    { status: passed }
     coverage:     { status: passed }
-    clarity:      { status: pending }
-    consistency:  { status: pending }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
   section_hashes:
     problem:        44e2d1e70b97b458
     audit_table:    088d078ed36de433

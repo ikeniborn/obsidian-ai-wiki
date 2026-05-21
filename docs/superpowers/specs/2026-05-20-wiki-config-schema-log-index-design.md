@@ -1,3 +1,38 @@
+---
+review:
+  spec_hash: 1cca5b79b94622ff
+  last_run: 2026-05-20
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "### 2. Index Format — Grouped Markdown"
+      section_hash: 4c6320600ee439a2
+      text: '"Write back atomically" — нет определения техники (temp-file, O_ATOMIC и т.д.). Нет критерия приёмки.'
+      verdict: fixed
+      verdict_at: 2026-05-20
+    - id: F-002
+      phase: clarity
+      severity: WARNING
+      section: "### 2. Index Format — Grouped Markdown"
+      section_hash: 4c6320600ee439a2
+      text: "upsertIndexAnnotation: не указано куда вставляется новый блок `## section` если отсутствует (в конец файла? перед последним разделом?)."
+      verdict: fixed
+      verdict_at: 2026-05-20
+    - id: F-003
+      phase: clarity
+      severity: WARNING
+      section: "### 3. Log Format — Enriched, All Operations"
+      section_hash: 9dc977ce0b1a701a
+      text: 'Комментарий в сигнатуре `appendWikiLog`: `wikiVaultPath + "/_log.md"` — противоречит описанию выше (лог per-domain: `!Wiki/<domain>/_log.md`). Имя параметра вводит в заблуждение.'
+      verdict: fixed
+      verdict_at: 2026-05-20
+---
 # Wiki Config: Schema Centralization, Grouped Index, Enriched Log
 
 **Date:** 2026-05-20  
@@ -75,9 +110,9 @@ Per-domain `_index.md` changes from flat key-value to grouped Markdown.
 
 `upsertIndexAnnotation(vaultTools, wikiFolder, pid, annotation, fullPath?): Promise<void>`
 - Derive section from `fullPath`: extract subfolder between `wikiFolder/` and filename; fallback `general`
-- Find `## <section>` block in content; insert if missing (alphabetical section order not required)
+- Find `## <section>` block in content; if missing — append new `## <section>` block at end of file
 - Within section: replace line matching `[[pid]]`; append if not found
-- Write back atomically
+- Write back: read current content, apply changes in memory, write full string via `vaultTools.write(path, newContent)` (Obsidian vault write is atomic)
 
 ---
 
@@ -151,7 +186,7 @@ interface IngestLogEntry {
 
 export async function appendWikiLog(
   vaultTools: VaultTools,
-  logPath: string,       // absolute: wikiVaultPath + "/_log.md"
+  logPath: string,       // absolute path to domain log: wikiDomainPath + "/_log.md"
   domainId: string,
   event: LogOperation,
 ): Promise<void>

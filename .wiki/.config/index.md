@@ -6,7 +6,7 @@
 
 ### документация
 
-#### компоненты (11)
+#### компоненты (12)
 - [[wiki-controller]] — `документация/компоненты/wiki-controller.md`
 - [[agent-runner]] — `документация/компоненты/agent-runner.md`
 - [[claude-cli-client]] — `документация/компоненты/claude-cli-client.md`
@@ -18,6 +18,7 @@
 - [[wiki-seeds]] — `документация/компоненты/wiki-seeds.md`
 - [[wiki-index]] — `документация/компоненты/wiki-index.md`
 - [[settings]] — `документация/компоненты/settings.md`
+- [[wiki-log]] — `документация/компоненты/wiki-log.md`
 
 #### операции (8)
 - [[format-operation]] — `документация/операции/format-operation.md`
@@ -38,7 +39,7 @@
 - [[structured-output-retry]] — `документация/паттерны/structured-output-retry.md`
 - [[shell-consent]] — `документация/паттерны/shell-consent.md`
 
-#### спецификации (19)
+#### спецификации (20)
 - [[agent-base-contract]] — `документация/спецификации/agent-base-contract.md`
 - [[format-operation-design]] — `документация/спецификации/format-operation-design.md`
 - [[claude-agent-backend-design]] — `документация/спецификации/claude-agent-backend-design.md`
@@ -58,6 +59,7 @@
 - [[index-path-annotation-design]] — `документация/спецификации/index-path-annotation-design.md`
 - [[wiki-path-hierarchy-design]] — `документация/спецификации/wiki-path-hierarchy-design.md`
 - [[agent-stability-audit-design]] — `документация/спецификации/agent-stability-audit-design.md`
+- [[wiki-config-schema-log-index-design]] — `документация/спецификации/wiki-config-schema-log-index-design.md`
 
 #### планы (14)
 - [[generation-speed-plan]] — `документация/планы/generation-speed-plan.md`
