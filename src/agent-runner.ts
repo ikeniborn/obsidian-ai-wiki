@@ -162,7 +162,7 @@ export class AgentRunner {
   private async updateDevLogEval(_vaultRoot: string, score: number, reasoning: string): Promise<void> {
     if (!this.settings.devMode?.enabled) return;
     const adapter = this.vaultTools.adapter;
-    const path = "!Logs/dev.jsonl";
+    const path = "!Wiki/.config/_dev.jsonl";
     try {
       if (!(await adapter.exists(path))) return;
       const content = await adapter.read(path);
