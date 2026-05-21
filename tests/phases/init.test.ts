@@ -98,6 +98,66 @@ describe("runInit", () => {
     expect(events.some((e: any) => e.kind === "error")).toBe(true);
   });
 
+  it("yields error when domainId not found in domains", async () => {
+    const vt = new VaultTools(mockAdapter(), "/vault");
+    const events = await collect(
+      runInit(["unknown"], vt, makeLlm("{}"), "model", [], "TestVault", new AbortController().signal),
+    );
+    const err = events.find((e: any) => e.kind === "error") as any;
+    expect(err).toBeDefined();
+    expect(err.message).toContain("domain not found");
+  });
+
+  it("yields error when domain already initialised (has entity_types)", async () => {
+    const initialised: DomainEntry = {
+      id: "dom", name: "Dom", wiki_folder: "dom",
+      source_paths: ["src/docs"],
+      entity_types: [{ type: "concept", description: "c", extraction_cues: [] }],
+    };
+    const vt = new VaultTools(mockAdapter(), "/vault");
+    const events = await collect(
+      runInit(["dom"], vt, makeLlm("{}"), "model", [initialised], "TestVault", new AbortController().signal),
+    );
+    const err = events.find((e: any) => e.kind === "error") as any;
+    expect(err).toBeDefined();
+    expect(err.message).toContain("already initialised");
+  });
+
+  it("yields error when domain has no source_paths configured", async () => {
+    const noSources: DomainEntry = { id: "dom", name: "Dom", wiki_folder: "dom", source_paths: [] };
+    const vt = new VaultTools(mockAdapter(), "/vault");
+    const events = await collect(
+      runInit(["dom"], vt, makeLlm("{}"), "model", [noSources], "TestVault", new AbortController().signal),
+    );
+    const err = events.find((e: any) => e.kind === "error") as any;
+    expect(err).toBeDefined();
+    expect(err.message).toContain("no source_paths");
+  });
+
+  it("delegates to runInitWithSources when domain has source_paths — emits init_start", async () => {
+    const domainWithSources: DomainEntry = {
+      id: "dom", name: "Dom", wiki_folder: "dom",
+      source_paths: ["sources"],
+    };
+    const bootstrapJson = JSON.stringify({
+      reasoning: "", id: "dom", name: "Dom", wiki_folder: "dom",
+      source_paths: [], entity_types: [], language_notes: "",
+    });
+    const adapter = mockAdapter({
+      list: vi.fn().mockImplementation(async (path: string) =>
+        path === "sources" || path === ""
+          ? { files: ["sources/a.md"], folders: [] }
+          : { files: [], folders: [] },
+      ),
+      read: vi.fn().mockResolvedValue("content"),
+    });
+    const vt = new VaultTools(adapter, "/vault");
+    const events = await collect(
+      runInit(["dom"], vt, makeLlm(bootstrapJson), "model", [domainWithSources], "TestVault", new AbortController().signal),
+    );
+    expect(events.some((e: any) => e.kind === "init_start")).toBe(true);
+  });
+
   it("yields error when domain already exists", async () => {
     const vt = new VaultTools(mockAdapter(), "/vault");
     const events = await collect(
