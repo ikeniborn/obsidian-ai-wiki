@@ -407,16 +407,12 @@ async function ensureRootFiles(vaultTools: VaultTools, wikiRoot: string): Promis
   const legacyIndex  = `${wikiRoot}/_index.md`;
   const legacyLog    = `${wikiRoot}/_log.md`;
 
-  try { await vaultTools.mkdir(wikiRoot); } catch (e) { console.error("[ai-wiki] mkdir wikiRoot failed", e); }
-  try { await vaultTools.mkdir(configDir); } catch (e) { console.error("[ai-wiki] mkdir .config failed", e); }
+  try { await vaultTools.mkdir(wikiRoot); } catch { /* already exists */ }
+  try { await vaultTools.mkdir(configDir); } catch { /* already exists */ }
 
   try {
     if (!(await vaultTools.exists(wikiSchema)))   await vaultTools.write(wikiSchema, schemaTemplate);
-  } catch (e) { console.error("[ai-wiki] write wiki_schema failed", e); }
-  try {
     if (!(await vaultTools.exists(formatSchema)))  await vaultTools.write(formatSchema, formatSchemaDefault);
-  } catch (e) { console.error("[ai-wiki] write format_schema failed", e); }
-  try {
     if (await vaultTools.exists(legacyIndex)) await vaultTools.remove(legacyIndex);
     if (await vaultTools.exists(legacyLog))   await vaultTools.remove(legacyLog);
   } catch { /* не блокируем */ }

@@ -27713,25 +27713,15 @@ async function ensureRootFiles(vaultTools, wikiRoot) {
   const legacyLog = `${wikiRoot}/_log.md`;
   try {
     await vaultTools.mkdir(wikiRoot);
-  } catch (e) {
-    console.error("[ai-wiki] mkdir wikiRoot failed", e);
+  } catch {
   }
   try {
     await vaultTools.mkdir(configDir);
-  } catch (e) {
-    console.error("[ai-wiki] mkdir .config failed", e);
+  } catch {
   }
   try {
     if (!await vaultTools.exists(wikiSchema)) await vaultTools.write(wikiSchema, wiki_schema_default);
-  } catch (e) {
-    console.error("[ai-wiki] write wiki_schema failed", e);
-  }
-  try {
     if (!await vaultTools.exists(formatSchema)) await vaultTools.write(formatSchema, format_schema_default);
-  } catch (e) {
-    console.error("[ai-wiki] write format_schema failed", e);
-  }
-  try {
     if (await vaultTools.exists(legacyIndex)) await vaultTools.remove(legacyIndex);
     if (await vaultTools.exists(legacyLog)) await vaultTools.remove(legacyLog);
   } catch {
@@ -36298,19 +36288,9 @@ var WikiController = class {
     const vault = this.app.vault;
     const adapter = Object.create(rawAdapter);
     adapter.mkdir = async (path2) => {
-      console.log("[ai-wiki] mkdir:", path2);
       try {
         await vault.createFolder(path2);
-        console.log("[ai-wiki] createFolder OK:", path2);
-      } catch (e1) {
-        console.warn("[ai-wiki] createFolder failed:", path2, String(e1));
-        try {
-          await rawAdapter.mkdir(path2);
-          console.log("[ai-wiki] rawAdapter.mkdir OK:", path2);
-        } catch (e2) {
-          console.error("[ai-wiki] both mkdir failed:", path2, String(e2));
-          throw e2;
-        }
+      } catch {
       }
     };
     const base = this.cwdOrEmpty();

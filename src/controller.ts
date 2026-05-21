@@ -406,20 +406,7 @@ export class WikiController {
     const vault = this.app.vault;
     const adapter = Object.create(rawAdapter) as VaultAdapter;
     adapter.mkdir = async (path: string) => {
-      console.log("[ai-wiki] mkdir:", path);
-      try {
-        await vault.createFolder(path);
-        console.log("[ai-wiki] createFolder OK:", path);
-      } catch (e1) {
-        console.warn("[ai-wiki] createFolder failed:", path, String(e1));
-        try {
-          await rawAdapter.mkdir(path);
-          console.log("[ai-wiki] rawAdapter.mkdir OK:", path);
-        } catch (e2) {
-          console.error("[ai-wiki] both mkdir failed:", path, String(e2));
-          throw e2;
-        }
-      }
+      try { await vault.createFolder(path); } catch { /* already exists — fine */ }
     };
     const base = this.cwdOrEmpty();
     const vaultTools = new VaultTools(adapter, base);
