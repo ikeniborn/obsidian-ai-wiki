@@ -509,10 +509,10 @@ export class WikiController {
     if (!this.plugin.settings.agentLogEnabled) return;
     if (ev.kind === "assistant_text") return;
     const adapter = this.app.vault.adapter;
-    const dir = "!Logs";
-    const path = `${dir}/agent.jsonl`;
+    const path = "!Wiki/.config/_agent.jsonl";
     try {
-      if (!(await adapter.exists(dir))) await adapter.mkdir(dir);
+      if (!(await adapter.exists("!Wiki"))) await this.app.vault.createFolder("!Wiki").catch(() => {});
+      if (!(await adapter.exists("!Wiki/.config"))) await this.app.vault.createFolder("!Wiki/.config").catch(() => {});
       const extra = ev.kind === "result" && ev.outputTokens !== undefined && ev.durationMs > 0
         ? { tokPerSec: Math.round(ev.outputTokens / (ev.durationMs / 1000)) }
         : {};
