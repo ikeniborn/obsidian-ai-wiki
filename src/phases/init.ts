@@ -401,15 +401,23 @@ async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
 }
 
 async function ensureRootFiles(vaultTools: VaultTools, wikiRoot: string): Promise<void> {
-  const wikiSchema   = `${wikiRoot}/.config/_wiki_schema.md`;
-  const formatSchema = `${wikiRoot}/.config/_format_schema.md`;
+  const configDir    = `${wikiRoot}/.config`;
+  const wikiSchema   = `${configDir}/_wiki_schema.md`;
+  const formatSchema = `${configDir}/_format_schema.md`;
   const legacyIndex  = `${wikiRoot}/_index.md`;
   const legacyLog    = `${wikiRoot}/_log.md`;
 
+  try { await vaultTools.mkdir(wikiRoot); } catch (e) { console.error("[ai-wiki] mkdir wikiRoot failed", e); }
+  try { await vaultTools.mkdir(configDir); } catch (e) { console.error("[ai-wiki] mkdir .config failed", e); }
+
   try {
     if (!(await vaultTools.exists(wikiSchema)))   await vaultTools.write(wikiSchema, schemaTemplate);
+  } catch (e) { console.error("[ai-wiki] write wiki_schema failed", e); }
+  try {
     if (!(await vaultTools.exists(formatSchema)))  await vaultTools.write(formatSchema, formatSchemaDefault);
+  } catch (e) { console.error("[ai-wiki] write format_schema failed", e); }
+  try {
     if (await vaultTools.exists(legacyIndex)) await vaultTools.remove(legacyIndex);
     if (await vaultTools.exists(legacyLog))   await vaultTools.remove(legacyLog);
-  } catch { /* не блокируем init */ }
+  } catch { /* не блокируем */ }
 }
