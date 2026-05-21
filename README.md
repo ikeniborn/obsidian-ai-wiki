@@ -235,5 +235,4 @@ The domain map is stored in `!Wiki/_domain.json` (inside the vault) and syncs no
 ## Documentation
 
 - [docs/dev.md](docs/dev.md) — build, install, smoke-test checklist for developers
-- [docs/publishing.md](docs/publishing.md) — release publishing
 - [docs/README.ru.md](docs/README.ru.md) — Russian version of this README
