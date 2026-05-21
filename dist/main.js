@@ -36298,10 +36298,19 @@ var WikiController = class {
     const vault = this.app.vault;
     const adapter = Object.create(rawAdapter);
     adapter.mkdir = async (path2) => {
+      console.log("[ai-wiki] mkdir:", path2);
       try {
         await vault.createFolder(path2);
-      } catch {
-        await rawAdapter.mkdir(path2);
+        console.log("[ai-wiki] createFolder OK:", path2);
+      } catch (e1) {
+        console.warn("[ai-wiki] createFolder failed:", path2, String(e1));
+        try {
+          await rawAdapter.mkdir(path2);
+          console.log("[ai-wiki] rawAdapter.mkdir OK:", path2);
+        } catch (e2) {
+          console.error("[ai-wiki] both mkdir failed:", path2, String(e2));
+          throw e2;
+        }
       }
     };
     const base = this.cwdOrEmpty();
