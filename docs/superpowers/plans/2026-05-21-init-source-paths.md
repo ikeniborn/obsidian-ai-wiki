@@ -24,7 +24,7 @@
 **Files:**
 - Modify: `tests/phases/init.test.ts`
 
-- [ ] **Step 1: Add new describe block at the end of `describe("runInit", ...)`** (before the closing `});` of that block, after the existing `"yields error when domainId is empty"` test)
+- [x] **Step 1: Add new describe block at the end of `describe("runInit", ...)`** (before the closing `});` of that block, after the existing `"yields error when domainId is empty"` test)
 
 Insert after line 99 (inside the existing `describe("runInit", ...)` block, after the empty-domainId test):
 
@@ -90,7 +90,7 @@ Insert after line 99 (inside the existing `describe("runInit", ...)` block, afte
   });
 ```
 
-- [ ] **Step 2: Run new tests to verify they fail (implementation not yet changed)**
+- [x] **Step 2: Run new tests to verify they fail (implementation not yet changed)**
 
 ```bash
 npx vitest run tests/phases/init.test.ts 2>&1 | grep -E "(PASS|FAIL|✓|✗|×|domain not found|already initialised|no source_paths|init_start)"
@@ -98,7 +98,7 @@ npx vitest run tests/phases/init.test.ts 2>&1 | grep -E "(PASS|FAIL|✓|✗|×|d
 
 Expected: 4 new tests FAIL (old code does vault-sampling, not the new error messages / delegation).
 
-- [ ] **Step 3: Commit failing tests**
+- [x] **Step 3: Commit failing tests**
 
 ```bash
 git add tests/phases/init.test.ts
@@ -112,7 +112,7 @@ git commit -m "test(init): add failing tests for source_paths delegation path"
 **Files:**
 - Modify: `src/phases/init.ts:91–206`
 
-- [ ] **Step 1: Replace lines 91–206 in `runInit`**
+- [x] **Step 1: Replace lines 91–206 in `runInit`**
 
 Current code block to remove (lines 91–206, everything after the `if (sourcePaths.length)` guard through end of `runInit`):
 
@@ -155,7 +155,7 @@ Replace the entire block from line 91 to closing `}` of `runInit` with:
 
 The precise edit: in `src/phases/init.ts`, replace from the line `  if (existing?.entity_types?.length) {` (line 91) through the closing `}` of `runInit` (line 206) with the block above.
 
-- [ ] **Step 2: Run new tests to verify they now pass**
+- [x] **Step 2: Run new tests to verify they now pass**
 
 ```bash
 npx vitest run tests/phases/init.test.ts 2>&1 | grep -E "(PASS|FAIL|✓|✗|×)"
@@ -163,7 +163,7 @@ npx vitest run tests/phases/init.test.ts 2>&1 | grep -E "(PASS|FAIL|✓|✗|×)"
 
 Expected: 4 new tests PASS. Some old tests may now fail (vault-sampling tests — expected, handle in Task 3).
 
-- [ ] **Step 3: Commit implementation**
+- [x] **Step 3: Commit implementation**
 
 ```bash
 git add src/phases/init.ts
@@ -179,7 +179,7 @@ git commit -m "feat(init): replace vault-sampling bootstrap with source_paths de
 
 The tests below test the old vault-sampling bootstrap path (calling LLM without `--sources`). They must be deleted.
 
-- [ ] **Step 1: Delete these tests from `describe("runInit", ...)`**
+- [x] **Step 1: Delete these tests from `describe("runInit", ...)`**
 
 Delete the following test cases (they call `runInit` with no `--sources`, with empty domains `[]`, relying on old LLM bootstrap):
 
@@ -190,7 +190,7 @@ Delete the following test cases (they call `runInit` with no `--sources`, with e
 
 Delete the entire `describe("runInit — ensureRootFiles", ...)` block (5 tests). `ensureRootFiles` is now only called from `runInitWithSources`, which is already tested by the `--sources` path tests.
 
-- [ ] **Step 2: Run full init test suite to verify no regressions**
+- [x] **Step 2: Run full init test suite to verify no regressions**
 
 ```bash
 npx vitest run tests/phases/init.test.ts 2>&1 | tail -20
@@ -198,7 +198,7 @@ npx vitest run tests/phases/init.test.ts 2>&1 | tail -20
 
 Expected: all remaining tests PASS.
 
-- [ ] **Step 3: Run full test suite**
+- [x] **Step 3: Run full test suite**
 
 ```bash
 npm test 2>&1 | tail -30
@@ -206,7 +206,7 @@ npm test 2>&1 | tail -30
 
 Expected: all tests PASS.
 
-- [ ] **Step 4: Commit test cleanup**
+- [x] **Step 4: Commit test cleanup**
 
 ```bash
 git add tests/phases/init.test.ts
