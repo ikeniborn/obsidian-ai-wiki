@@ -35862,9 +35862,10 @@ function mkChunk(base, delta, finish_reason = null, usage = null) {
 }
 
 // src/domain-store.ts
-var FILE_PATH = "!Wiki/_domain.json";
+var FILE_PATH = "!Wiki/.config/_domain.json";
 var TMP_PATH = `${FILE_PATH}.tmp`;
 var WIKI_DIR = "!Wiki";
+var CONFIG_DIR = "!Wiki/.config";
 var DomainCorruptError = class extends Error {
   constructor(message) {
     super(message);
@@ -35900,6 +35901,8 @@ var DomainStore = class {
   async save(domains) {
     const adapter = this.vault.adapter;
     if (!await adapter.exists(WIKI_DIR)) await this.vault.createFolder(WIKI_DIR).catch(() => {
+    });
+    if (!await adapter.exists(CONFIG_DIR)) await this.vault.createFolder(CONFIG_DIR).catch(() => {
     });
     const body = JSON.stringify(domains, null, 2);
     await adapter.write(TMP_PATH, body);
@@ -36855,7 +36858,7 @@ async function migrateLegacyData(plugin, domainStore, localConfigStore) {
   let dirty = false;
   if (Array.isArray(data.domains)) {
     if (data.domains.length > 0) {
-      const vaultExists = await plugin.app.vault.adapter.exists("!Wiki/_domain.json");
+      const vaultExists = await plugin.app.vault.adapter.exists("!Wiki/.config/_domain.json");
       if (!vaultExists) {
         await domainStore.save(data.domains);
       }

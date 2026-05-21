@@ -281,7 +281,7 @@ export async function migrateLegacyData(
 
   if (Array.isArray(data.domains)) {
     if (data.domains.length > 0) {
-      const vaultExists = await plugin.app.vault.adapter.exists("!Wiki/_domain.json");
+      const vaultExists = await plugin.app.vault.adapter.exists("!Wiki/.config/_domain.json");
       if (!vaultExists) {
         await domainStore.save(data.domains as DomainEntry[]);
       }

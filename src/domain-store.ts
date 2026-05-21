@@ -2,9 +2,10 @@ import type { Vault } from "obsidian";
 import type { DomainEntry } from "./domain";
 import { migrateDomainsV2 } from "./domain";
 
-const FILE_PATH = "!Wiki/_domain.json";
+const FILE_PATH = "!Wiki/.config/_domain.json";
 const TMP_PATH = `${FILE_PATH}.tmp`;
 const WIKI_DIR = "!Wiki";
+const CONFIG_DIR = "!Wiki/.config";
 
 export class DomainCorruptError extends Error {
   constructor(message: string) {
@@ -38,6 +39,7 @@ export class DomainStore {
   async save(domains: DomainEntry[]): Promise<void> {
     const adapter = this.vault.adapter;
     if (!(await adapter.exists(WIKI_DIR))) await this.vault.createFolder(WIKI_DIR).catch(() => {});
+    if (!(await adapter.exists(CONFIG_DIR))) await this.vault.createFolder(CONFIG_DIR).catch(() => {});
     const body = JSON.stringify(domains, null, 2);
     await adapter.write(TMP_PATH, body);
     if (await adapter.exists(FILE_PATH)) await adapter.remove(FILE_PATH);
