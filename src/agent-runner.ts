@@ -53,10 +53,10 @@ export class AgentRunner {
   }): Promise<void> {
     if (!this.settings.devMode?.enabled) return;
     const adapter = this.vaultTools.adapter;
-    const dir = "!Logs";
-    const path = `${dir}/dev.jsonl`;
+    const path = "!Wiki/.config/_dev.jsonl";
     try {
-      if (!(await adapter.exists(dir))) await adapter.mkdir(dir);
+      if (!(await adapter.exists("!Wiki"))) await adapter.mkdir("!Wiki");
+      if (!(await adapter.exists("!Wiki/.config"))) await adapter.mkdir("!Wiki/.config");
       const line = JSON.stringify({ ts: new Date().toISOString(), ...entry, eval: null }) + "\n";
       if (await adapter.exists(path)) await adapter.append(path, line);
       else await adapter.write(path, line);
