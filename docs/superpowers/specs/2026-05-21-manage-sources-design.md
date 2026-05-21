@@ -1,3 +1,47 @@
+---
+review:
+  spec_hash: "f05cdcfe10d3a9bf"
+  last_run: "2026-05-21"
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: WARNING
+      section: "5. New Controller Methods — `controller.ts`"
+      section_hash: "43af2454cafd982a"
+      text: "`controller.init(original.id, false, paths)` called with 3-arg signature (§2 line 116, Data Flow line 267) but Files Changed lists only `updateDomainSources`/`cleanupRemovedSources` for controller.ts — init signature modification absent"
+      verdict: fixed
+      verdict_at: "2026-05-21"
+    - id: F-002
+      phase: clarity
+      severity: WARNING
+      section: "Error Handling"
+      section_hash: "f4537f6c81f1c80d"
+      text: '"catches per-file errors (logs, continues)" — log target undefined: no DoD for console.error vs Notice vs agent log'
+      verdict: fixed
+      verdict_at: "2026-05-21"
+    - id: F-003
+      phase: clarity
+      severity: WARNING
+      section: "5. New Controller Methods — `controller.ts`"
+      section_hash: "43af2454cafd982a"
+      text: "`parseWikiSources(content)` referenced inside `cleanupRemovedSources` but absent from Files Changed table — definition file unspecified"
+      verdict: fixed
+      verdict_at: "2026-05-21"
+    - id: F-004
+      phase: clarity
+      severity: INFO
+      section: "Files Changed"
+      section_hash: "049bc2ebbf0c5d00"
+      text: "`src/view.ts` appears twice in table (rows 1 and 6) with separate change descriptions — consider merging or adding note explaining the split"
+      verdict: fixed
+      verdict_at: "2026-05-21"
+---
+
 # Design: Manage Sources Button + Init Rename
 
 **Date:** 2026-05-21  
@@ -182,6 +226,12 @@ export class IngestScopeModal extends Modal {
 
 ### 5. New Controller Methods — `controller.ts`
 
+**`init` signature** — extend existing `init(domainId, reinit)` to accept optional `paths`:
+```typescript
+async init(domainId: string, reinit: boolean, paths?: string[]): Promise<void>
+```
+When `paths` is provided, pass it through `AgentRunner.run()` to the init phase as the ingest scope.
+
 **`updateDomainSources(domainId, sourcePaths)`** — saves updated source_paths to domain store:
 ```typescript
 async updateDomainSources(domainId: string, sourcePaths: string[]): Promise<void> {
@@ -216,9 +266,9 @@ async cleanupRemovedSources(domainId: string, removedPaths: string[]): Promise<n
 }
 ```
 
-`parseWikiSources(content)` — extracts `wiki_sources` YAML list from frontmatter (regex, same pattern used in `controller.ts:107`).
+`parseWikiSources(content)` — extracts `wiki_sources` YAML list from frontmatter (regex, same pattern used in `controller.ts:107`). Defined in `src/utils/vault-walk.ts` alongside `collectMdInPaths`.
 
-**Note:** `collectMdInPaths` and `walkFolder` must be extracted from `view.ts` to a shared utility file (e.g., `src/utils/vault-walk.ts`) since `controller.ts` cannot import from `view.ts` (circular dep risk).
+**Note:** `collectMdInPaths`, `walkFolder`, and `parseWikiSources` must be extracted from `view.ts` / defined in a shared utility file `src/utils/vault-walk.ts` since `controller.ts` cannot import from `view.ts` (circular dep risk).
 
 ### 6. i18n — `i18n.ts`
 
@@ -259,7 +309,7 @@ User clicks [⊕]
 
 ## Error Handling
 
-- `cleanupRemovedSources` catches per-file errors (logs, continues)
+- `cleanupRemovedSources` catches per-file errors (`console.error`, continues to next file)
 - `updateDomainSources` surfaces `DomainCorruptError` via existing pattern
 - `IngestScopeModal` "Skip" option — no ingest, no notice
 
@@ -279,9 +329,8 @@ User clicks [⊕]
 
 | File | Change |
 |------|--------|
-| `src/view.ts` | Add `addSourceBtn`, `openManageSources`, `handleManageSourcesResult` |
+| `src/view.ts` | Add `addSourceBtn`, `openManageSources`, `handleManageSourcesResult`; update import to use `vault-walk.ts` |
 | `src/modals.ts` | Add `ManageSourcesModal`, `IngestScopeModal` |
-| `src/controller.ts` | Add `updateDomainSources`, `cleanupRemovedSources` |
+| `src/controller.ts` | Add `updateDomainSources`, `cleanupRemovedSources`; extend `init` signature with optional `paths` |
 | `src/i18n.ts` | Rename `view.init`, add 6 new strings × 3 locales |
-| `src/utils/vault-walk.ts` | Extract `collectMdInPaths` + `walkFolder` from `view.ts` |
-| `src/view.ts` | Update import to use `vault-walk.ts` |
+| `src/utils/vault-walk.ts` | Extract `collectMdInPaths` + `walkFolder` from `view.ts`; add `parseWikiSources` |
