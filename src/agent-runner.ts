@@ -55,8 +55,8 @@ export class AgentRunner {
     const adapter = this.vaultTools.adapter;
     const path = "!Wiki/.config/_dev.jsonl";
     try {
-      if (!(await adapter.exists("!Wiki"))) await adapter.mkdir("!Wiki");
-      if (!(await adapter.exists("!Wiki/.config"))) await adapter.mkdir("!Wiki/.config");
+      if (!(await adapter.exists("!Wiki"))) await adapter.mkdir("!Wiki").catch(() => {});
+      if (!(await adapter.exists("!Wiki/.config"))) await adapter.mkdir("!Wiki/.config").catch(() => {});
       const line = JSON.stringify({ ts: new Date().toISOString(), ...entry, eval: null }) + "\n";
       if (await adapter.exists(path)) await adapter.append(path, line);
       else await adapter.write(path, line);
