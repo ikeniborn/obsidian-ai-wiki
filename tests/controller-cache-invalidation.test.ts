@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { WikiController } from "../src/controller";
 import { graphCache } from "../src/wiki-graph-cache";
 import type { DomainEntry } from "../src/domain";
@@ -114,6 +114,10 @@ function build(domains: DomainEntry[] = []) {
 describe("WikiController cache invalidation after mutating ops", () => {
   beforeEach(() => {
     graphCache.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   const DOMAIN: DomainEntry = {
