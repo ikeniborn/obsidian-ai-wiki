@@ -509,6 +509,80 @@ export class EditDomainModal extends Modal {
 }
 
 
+export class ManageSourcesModal extends Modal {
+  private sourcePathsList: string[];
+
+  constructor(
+    app: App,
+    private domain: DomainEntry,
+    private onSave: (result: { sourcePaths: string[] }) => void,
+  ) {
+    super(app);
+    this.sourcePathsList = [...(domain.source_paths ?? [])];
+  }
+
+  onOpen(): void {
+    const T = i18n().modal;
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: T.manageSourcesTitle(this.domain.id) });
+    const container = contentEl.createDiv();
+    this.renderSourcePaths(container);
+    new Setting(contentEl)
+      .addButton((b) => b.setButtonText(T.cancel).onClick(() => this.close()))
+      .addButton((b) => b.setButtonText(T.save).setCta().onClick(() => this.handleSave()));
+  }
+
+  private handleSave(): void {
+    this.close();
+    this.onSave({ sourcePaths: this.sourcePathsList.filter(Boolean) });
+  }
+
+  private renderSourcePaths(container: HTMLElement): void {
+    container.empty();
+    const T = i18n().modal;
+
+    const header = container.createDiv({ cls: "ai-wiki-sp-header" });
+    header.createEl("span", { text: T.sourcePathsLabel, cls: "ai-wiki-sp-label" });
+
+    const listEl = container.createDiv({ cls: "ai-wiki-sp-list" });
+    const rerender = () => {
+      listEl.empty();
+      this.sourcePathsList.forEach((p, i) => {
+        const row = listEl.createDiv({ cls: "ai-wiki-sp-row" });
+        row.createEl("span", { text: p, cls: "ai-wiki-sp-path", attr: { title: p } });
+        const removeBtn = row.createEl("button", { text: "×", cls: "ai-wiki-sp-remove" });
+        removeBtn.addEventListener("click", () => {
+          this.sourcePathsList.splice(i, 1);
+          rerender();
+        });
+      });
+    };
+    rerender();
+
+    const addRow = container.createDiv({ cls: "ai-wiki-sp-add-row" });
+    const input = addRow.createEl("input", {
+      cls: "ai-wiki-sp-input",
+      attr: { type: "text", placeholder: T.sourcePathsPlaceholder },
+    });
+
+    const addPath = (val?: string) => {
+      const v = val ?? input.value.trim();
+      if (!v || this.sourcePathsList.includes(v)) return;
+      this.sourcePathsList.push(v);
+      input.value = "";
+      rerender();
+    };
+
+    new FolderInputSuggest(this.app, input, addPath);
+
+    input.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "Enter") { e.preventDefault(); addPath(); }
+    });
+  }
+
+  onClose(): void { this.contentEl.empty(); }
+}
+
 export class ShellConsentModal extends Modal {
   constructor(
     app: App,
