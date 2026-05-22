@@ -227,6 +227,8 @@ export async function* runInitWithSources(
         entry.wiki_folder = sanitizeWikiFolder(entry.wiki_folder ?? "");
         for (const et of entry.entity_types ?? []) {
           if (et.wiki_subfolder) et.wiki_subfolder = sanitizeWikiSubfolder(et.wiki_subfolder);
+          // LLM sometimes echoes domain_id as wiki_subfolder → creates !Wiki/os/os paths
+          if (et.wiki_subfolder === domainId) et.wiki_subfolder = "";
         }
         if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
         // На reinit (force=true) wiki_folder уже зафиксирован — LLM не должен его менять.
