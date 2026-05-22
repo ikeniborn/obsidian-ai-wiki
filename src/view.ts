@@ -1,4 +1,4 @@
-import { App, ItemView, Modal, TFile, TFolder, Vault, WorkspaceLeaf, MarkdownRenderer, Component, Notice, Platform, setIcon } from "obsidian";
+import { App, ItemView, Modal, WorkspaceLeaf, MarkdownRenderer, Component, Notice, Platform, setIcon } from "obsidian";
 import { AddDomainModal, BusyCloseModal, ConfirmModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
@@ -6,21 +6,7 @@ import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
 import { domainWikiFolder } from "./wiki-path";
 
-export function collectMdInPaths(vault: Vault, sourcePaths: string[]): TFile[] {
-  const result: TFile[] = [];
-  for (const p of sourcePaths) {
-    const folder = vault.getFolderByPath(p);
-    if (folder) walkFolder(folder, result);
-  }
-  return result;
-}
-
-export function walkFolder(folder: TFolder, out: TFile[]): void {
-  for (const child of folder.children) {
-    if ("children" in child) walkFolder(child as TFolder, out);
-    else if ("extension" in child && (child as TFile).extension === "md") out.push(child as TFile);
-  }
-}
+export { collectMdInPaths, walkFolder } from "./utils/vault-walk";
 
 export const AI_WIKI_VIEW_TYPE = "ai-wiki-view";
 
