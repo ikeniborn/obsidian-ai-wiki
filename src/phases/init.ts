@@ -10,7 +10,7 @@ import initTemplate from "../../prompts/init.md";
 import initIncrementalTemplate from "../../prompts/init-incremental.md";
 import { render } from "./template";
 import { runIngest } from "./ingest";
-import { domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder } from "../wiki-path";
+import { domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath } from "../wiki-path";
 
 export function mergeEntityTypes(current: EntityType[], incoming: EntityType[]): EntityType[] {
   const map = new Map(current.map(e => [e.type, e]));
@@ -153,7 +153,7 @@ export async function* runInitWithSources(
 
   const [schemaContent, indexContent] = await Promise.all([
     tryRead(vaultTools, `${wikiRootGuess}/.config/_wiki_schema.md`),
-    tryRead(vaultTools, `${wikiRootGuess}/_index.md`),
+    tryRead(vaultTools, domainIndexPath(wikiRootGuess)),
   ]);
 
   let currentDomain: DomainEntry | null = existing ?? null;
