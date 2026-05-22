@@ -6,7 +6,8 @@ import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
 import { domainWikiFolder } from "./wiki-path";
 
-export { collectMdInPaths, walkFolder } from "./utils/vault-walk";
+import { collectMdInPaths, walkFolder } from "./utils/vault-walk";
+export { collectMdInPaths, walkFolder };
 
 export const AI_WIKI_VIEW_TYPE = "ai-wiki-view";
 
