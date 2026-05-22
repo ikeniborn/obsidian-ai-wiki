@@ -583,6 +583,41 @@ export class ManageSourcesModal extends Modal {
   onClose(): void { this.contentEl.empty(); }
 }
 
+export class IngestScopeModal extends Modal {
+  constructor(
+    app: App,
+    private addedCount: number,
+    private totalCount: number,
+    private onChoice: (scope: "new" | "all" | "skip") => void,
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    const T = i18n().modal;
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: T.ingestScopeTitle });
+    contentEl.createEl("p", { text: T.ingestScopeBody(this.addedCount, this.totalCount) });
+    new Setting(contentEl)
+      .addButton((b) =>
+        b.setButtonText(T.ingestScopeNew(this.addedCount)).setCta().onClick(() => this.pick("new")),
+      )
+      .addButton((b) =>
+        b.setButtonText(T.ingestScopeAll(this.totalCount)).onClick(() => this.pick("all")),
+      )
+      .addButton((b) =>
+        b.setButtonText(T.ingestScopeSkip).onClick(() => this.pick("skip")),
+      );
+  }
+
+  private pick(scope: "new" | "all" | "skip"): void {
+    this.close();
+    this.onChoice(scope);
+  }
+
+  onClose(): void { this.contentEl.empty(); }
+}
+
 export class ShellConsentModal extends Modal {
   constructor(
     app: App,
