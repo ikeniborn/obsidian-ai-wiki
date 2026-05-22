@@ -39,4 +39,5 @@
 
 ## Wiki Page Conventions
 
-Wiki-страницы используют поле `wiki_keywords` во frontmatter (5-10 токенов, строчные, дефис-вместо-пробела). Учитывай это при определении extraction_cues в entity_types.
+Wiki-страницы используют поле `tags` во frontmatter: иерархические теги из tag-hierarchy.json. Учитывай это при определении extraction_cues в entity_types.
+
