@@ -423,6 +423,8 @@ export class LlmWikiView extends ItemView {
     if (this.formatBtn) this.formatBtn.disabled = true;
     if (this.reinitBtn) this.reinitBtn.disabled = true;
     if (this.addSourceBtn) this.addSourceBtn.disabled = true;
+    if (this.openLogBtn) this.openLogBtn.disabled = true;
+    if (this.openIndexBtn) this.openIndexBtn.disabled = true;
     this.chatSection?.remove();
     this.chatSection = null;
     this.lastContext = null;
@@ -703,6 +705,8 @@ export class LlmWikiView extends ItemView {
     if (this.formatBtn) this.formatBtn.disabled = false;
     if (this.reinitBtn) this.reinitBtn.disabled = !(this.domainSelect && this.domainSelect.value);
     if (this.addSourceBtn) this.addSourceBtn.disabled = !(this.domainSelect && this.domainSelect.value);
+    if (this.openLogBtn) this.openLogBtn.disabled = !(this.domainSelect && this.domainSelect.value);
+    if (this.openIndexBtn) this.openIndexBtn.disabled = !(this.domainSelect && this.domainSelect.value);
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
     this.updateMetrics();
     this.liveStatusSection?.addClass("ai-wiki-hidden");
