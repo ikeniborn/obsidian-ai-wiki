@@ -91,6 +91,7 @@ const en = {
     formingResponse: "Forming response…",
     reinitTitle: "Re-init domain (wipe + rebuild)",
     reinitNoSources: "Domain has no source_paths — re-init not possible",
+    addSourceTitle: "Manage sources for domain",
     addDomain: "Add domain",
     sectionCreate: "Create",
     sectionDomain: "Fill / Maintain",
@@ -117,7 +118,7 @@ const en = {
     fixSend: "Send",
     chatLabel: "Chat",
     chatSend: "Send",
-    init: "Init new domain",
+    init: "Init",
     ask: "Ask",
     askAndSave: "Ask and save",
     cancel: "Cancel",
@@ -210,6 +211,13 @@ const en = {
     shellConsentBody: (iclaudePath: string) =>
       `This plugin runs an external process:\n  ${iclaudePath}\nwith your operating system user's permissions. This is required for AI Wiki to function. Review the path above, then confirm to enable.`,
     shellConsentEnable: "I understand, enable",
+    manageSourcesTitle: (id: string) => `Sources: «${id}»`,
+    ingestScopeTitle: "Sources saved — run ingest?",
+    ingestScopeBody: (added: number, total: number) =>
+      `Added ${added} new path(s). Ingest new only or all ${total} path(s)?`,
+    ingestScopeNew: (n: number) => `New only (${n})`,
+    ingestScopeAll: (n: number) => `All (${n})`,
+    ingestScopeSkip: "Skip",
   },
 };
 
@@ -306,6 +314,7 @@ const ru: I18n = {
     formingResponse: "Формирует ответ…",
     reinitTitle: "Переинициализация домена (wipe + заново)",
     reinitNoSources: "У домена нет source_paths — re-init невозможен",
+    addSourceTitle: "Управление источниками домена",
     addDomain: "Добавить домен",
     sectionCreate: "Создание",
     sectionDomain: "Наполнение / Актуализация",
@@ -332,7 +341,7 @@ const ru: I18n = {
     fixSend: "Отправить",
     chatLabel: "Чат",
     chatSend: "Отправить",
-    init: "Init — новый домен",
+    init: "Init",
     ask: "Спросить",
     askAndSave: "Спросить и сохранить",
     cancel: "Отмена",
@@ -425,6 +434,13 @@ const ru: I18n = {
     shellConsentBody: (iclaudePath: string) =>
       `Плагин запускает внешний процесс:\n  ${iclaudePath}\nс правами вашего системного пользователя. Это необходимо для работы AI Wiki. Проверьте путь выше, затем подтвердите включение.`,
     shellConsentEnable: "Понимаю, включить",
+    manageSourcesTitle: (id: string) => `Источники: «${id}»`,
+    ingestScopeTitle: "Источники сохранены — запустить ingest?",
+    ingestScopeBody: (added: number, total: number) =>
+      `Добавлено ${added} новых путей. Ingest только новых или всех ${total}?`,
+    ingestScopeNew: (n: number) => `Только новые (${n})`,
+    ingestScopeAll: (n: number) => `Все (${n})`,
+    ingestScopeSkip: "Пропустить",
   },
 };
 
@@ -519,6 +535,7 @@ const es: I18n = {
     formingResponse: "Formando respuesta…",
     reinitTitle: "Re-init del dominio (borrar + reconstruir)",
     reinitNoSources: "El dominio no tiene source_paths — re-init imposible",
+    addSourceTitle: "Gestionar fuentes del dominio",
     addDomain: "Añadir dominio",
     sectionCreate: "Crear",
     sectionDomain: "Rellenar / Mantener",
@@ -545,7 +562,7 @@ const es: I18n = {
     fixSend: "Enviar",
     chatLabel: "Chat",
     chatSend: "Enviar",
-    init: "Init — nuevo dominio",
+    init: "Init",
     ask: "Preguntar",
     askAndSave: "Preguntar y guardar",
     cancel: "Cancelar",
@@ -638,6 +655,13 @@ const es: I18n = {
     shellConsentBody: (iclaudePath: string) =>
       `Este plugin ejecuta un proceso externo:\n  ${iclaudePath}\ncon los permisos de su usuario del sistema operativo. Es necesario para que AI Wiki funcione. Revise la ruta y confirme para habilitar.`,
     shellConsentEnable: "Entiendo, habilitar",
+    manageSourcesTitle: (id: string) => `Fuentes: «${id}»`,
+    ingestScopeTitle: "Fuentes guardadas — ¿ejecutar ingest?",
+    ingestScopeBody: (added: number, total: number) =>
+      `Se añadieron ${added} ruta(s) nueva(s). ¿Ingest solo las nuevas o todas (${total})?`,
+    ingestScopeNew: (n: number) => `Solo nuevas (${n})`,
+    ingestScopeAll: (n: number) => `Todas (${n})`,
+    ingestScopeSkip: "Omitir",
   },
 };
 
