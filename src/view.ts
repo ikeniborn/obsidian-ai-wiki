@@ -274,7 +274,10 @@ export class LlmWikiView extends ItemView {
         const r = await this.plugin.controller.registerDomain(input);
         if (!r.ok) return;
         await this.refreshDomains();
-        if (this.domainSelect) this.domainSelect.value = input.id;
+        if (this.domainSelect) {
+          this.domainSelect.value = input.id;
+          this.domainSelect.dispatchEvent(new Event("change"));
+        }
 
         if (!input.sourcePaths.length) {
           void this.plugin.controller.init(input.id, false);
