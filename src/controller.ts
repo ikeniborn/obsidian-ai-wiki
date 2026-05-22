@@ -23,6 +23,7 @@ import { FileErrorModal, ConfirmModal, ShellConsentModal } from "./modals";
 import { domainWikiFolder } from "./wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
+import { collectMdInPaths, parseWikiSources } from "./utils/vault-walk";
 
 function toVaultPath(vaultDir: string, savedPath: string): string | null {
   const abs = isAbsolute(savedPath) ? savedPath : join(vaultDir, savedPath);
@@ -381,6 +382,37 @@ export class WikiController {
     await this.domainStore.save(next);
     new Notice(i18n().ctrl.domainAdded(id));
     return { ok: true };
+  }
+
+  async updateDomainSources(domainId: string, sourcePaths: string[]): Promise<void> {
+    const domains = await this.domainStore.load();
+    const next = domains.map((d) => d.id === domainId ? { ...d, source_paths: sourcePaths } : d);
+    await this.domainStore.save(next);
+  }
+
+  async cleanupRemovedSources(domainId: string, removedPaths: string[]): Promise<number> {
+    const domains = await this.domainStore.load();
+    const entry = domains.find((d) => d.id === domainId);
+    if (!entry) return 0;
+
+    const wikiFolder = domainWikiFolder(entry.wiki_folder);
+    const files = collectMdInPaths(this.app.vault, [wikiFolder]);
+
+    let deleted = 0;
+    for (const file of files) {
+      try {
+        const content = await this.app.vault.adapter.read(file.path);
+        const sources = parseWikiSources(content);
+        if (sources.length > 0 && sources.every((s) => removedPaths.some((r) => s.includes(r) || r.includes(s)))) {
+          await this.app.vault.adapter.remove(file.path);
+          deleted++;
+        }
+      } catch (e) {
+        console.error(`[ai-wiki] cleanupRemovedSources: error processing ${file.path}`, e);
+      }
+    }
+    if (deleted > 0) graphCache.invalidate(domainId);
+    return deleted;
   }
 
   private requireClaudeAgent(local: LocalConfig): string | null {
