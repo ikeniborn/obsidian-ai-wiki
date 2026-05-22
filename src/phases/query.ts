@@ -7,7 +7,8 @@ import { parseWithRetry } from "./parse-with-retry";
 import { SeedsSchema } from "./zod-schemas";
 import queryTemplate from "../../prompts/query.md";
 import { render } from "./template";
-import { domainWikiFolder } from "../wiki-path";
+import { domainWikiFolder, domainIndexPath } from "../wiki-path";
+import { ensureDomainConfig } from "../domain-config";
 import { pageId, bfsExpand } from "../wiki-graph";
 import { graphCache } from "../wiki-graph-cache";
 import { selectSeeds } from "../wiki-seeds";
@@ -48,6 +49,8 @@ export async function* runQuery(
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
   const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
 
+  await ensureDomainConfig(vaultTools, wikiVaultPath);
+
   yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
   const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
@@ -55,7 +58,7 @@ export async function* runQuery(
   if (signal.aborted) return;
 
   const [indexContent, schemaContent] = await Promise.all([
-    tryRead(vaultTools, `${wikiVaultPath}/_index.md`),
+    tryRead(vaultTools, domainIndexPath(wikiVaultPath)),
     tryRead(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`),
   ]);
 
