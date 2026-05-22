@@ -20,8 +20,8 @@ export function sanitizeWikiSubfolder(raw: string): string {
 
 export function validateArticlePath(path: string, wikiVaultPath: string): boolean {
   if (
-    path === `${wikiVaultPath}/_index.md` ||
-    path === `${wikiVaultPath}/_log.md` ||
+    path === `${wikiVaultPath}/.config/_index.md` ||
+    path === `${wikiVaultPath}/.config/_log.md` ||
     path === `${wikiVaultPath}/.config/_wiki_schema.md` ||
     path === `${wikiVaultPath}/.config/_format_schema.md`
   ) return true;
@@ -30,4 +30,16 @@ export function validateArticlePath(path: string, wikiVaultPath: string): boolea
   const remainder = path.slice(prefix.length);
   const segments = remainder.split("/");
   return segments.length === 2 && segments[1].endsWith(".md");
+}
+
+export function domainConfigDir(domainFolder: string): string {
+  return `${domainFolder}/.config`;
+}
+
+export function domainIndexPath(domainFolder: string): string {
+  return `${domainFolder}/.config/_index.md`;
+}
+
+export function domainLogPath(domainFolder: string): string {
+  return `${domainFolder}/.config/_log.md`;
 }

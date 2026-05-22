@@ -5,6 +5,9 @@ import {
   sanitizeWikiFolder,
   sanitizeWikiSubfolder,
   validateArticlePath,
+  domainConfigDir,
+  domainIndexPath,
+  domainLogPath,
 } from "../src/wiki-path";
 
 describe("WIKI_ROOT", () => {
@@ -67,11 +70,17 @@ describe("validateArticlePath", () => {
   it("invalid: 3 segments after domain (too deep)", () => {
     expect(validateArticlePath("!Wiki/os/network/nfs/NFS.md", wiki)).toBe(false);
   });
-  it("valid: _index.md exempt", () => {
-    expect(validateArticlePath("!Wiki/os/_index.md", wiki)).toBe(true);
+  it("valid: _index.md in .config exempt", () => {
+    expect(validateArticlePath("!Wiki/os/.config/_index.md", wiki)).toBe(true);
   });
-  it("valid: _log.md exempt", () => {
-    expect(validateArticlePath("!Wiki/os/_log.md", wiki)).toBe(true);
+  it("valid: _log.md in .config exempt", () => {
+    expect(validateArticlePath("!Wiki/os/.config/_log.md", wiki)).toBe(true);
+  });
+  it("invalid: _index.md at domain root no longer exempt", () => {
+    expect(validateArticlePath("!Wiki/os/_index.md", wiki)).toBe(false);
+  });
+  it("invalid: _log.md at domain root no longer exempt", () => {
+    expect(validateArticlePath("!Wiki/os/_log.md", wiki)).toBe(false);
   });
   it("valid: _wiki_schema.md exempt", () => {
     expect(validateArticlePath("!Wiki/os/.config/_wiki_schema.md", wiki)).toBe(true);
@@ -81,5 +90,23 @@ describe("validateArticlePath", () => {
   });
   it("invalid: only 1 segment after domain (no subfolder)", () => {
     expect(validateArticlePath("!Wiki/os/NFS.md", wiki)).toBe(false);
+  });
+});
+
+describe("domainConfigDir", () => {
+  it("appends /.config to domain folder", () => {
+    expect(domainConfigDir("!Wiki/ии")).toBe("!Wiki/ии/.config");
+  });
+});
+
+describe("domainIndexPath", () => {
+  it("returns .config/_index.md path", () => {
+    expect(domainIndexPath("!Wiki/ии")).toBe("!Wiki/ии/.config/_index.md");
+  });
+});
+
+describe("domainLogPath", () => {
+  it("returns .config/_log.md path", () => {
+    expect(domainLogPath("!Wiki/ии")).toBe("!Wiki/ии/.config/_log.md");
   });
 });
