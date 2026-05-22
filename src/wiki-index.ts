@@ -1,4 +1,5 @@
 import type { VaultTools } from "./vault-tools";
+import { domainIndexPath } from "./wiki-path";
 
 export function parseIndexAnnotations(content: string): Map<string, string> {
   const map = new Map<string, string>();
@@ -60,7 +61,7 @@ export async function upsertIndexAnnotation(
   annotation: string,
   fullPath?: string,
 ): Promise<void> {
-  const indexPath = `${wikiFolder}/_index.md`;
+  const indexPath = domainIndexPath(wikiFolder);
   let content = "";
   try { content = await vaultTools.read(indexPath); } catch { /* first write */ }
 
