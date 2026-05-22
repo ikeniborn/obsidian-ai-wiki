@@ -1,3 +1,4 @@
+import { domainLogPath } from "./wiki-path";
 import type { VaultTools } from "./vault-tools";
 
 export interface IngestLogEntry {
@@ -50,10 +51,11 @@ function buildEntry(domainId: string, event: LogOperation): string {
 
 export async function appendWikiLog(
   vaultTools: VaultTools,
-  logPath: string,
+  domainFolder: string,
   domainId: string,
   event: LogOperation,
 ): Promise<void> {
+  const logPath = domainLogPath(domainFolder);
   let existing = "";
   try { existing = await vaultTools.read(logPath); } catch { /* new file */ }
   await vaultTools.write(logPath, existing + buildEntry(domainId, event));

@@ -15,12 +15,12 @@ function makeVt(initial = ""): { vt: VaultTools; written: string[] } {
   return { vt, written };
 }
 
-const LOG_PATH = "!Wiki/work/_log.md";
+const DOMAIN_FOLDER = "!Wiki/work";
 
 describe("appendWikiLog — ingest", () => {
   it("writes ingest entry with СОЗДАНА line", async () => {
     const { vt, written } = makeVt();
-    await appendWikiLog(vt, LOG_PATH, "work", {
+    await appendWikiLog(vt, DOMAIN_FOLDER, "work", {
       op: "ingest",
       sourcePath: "docs/foo.md",
       entries: [{ path: "компоненты/foo.md", action: "СОЗДАНА", statusTo: "stub" }],
@@ -32,11 +32,13 @@ describe("appendWikiLog — ingest", () => {
     expect(written[0]).toContain("**Источник:** docs/foo.md");
     expect(written[0]).toContain("**Токены:** 100");
     expect(written[0]).toContain("---");
+    expect((vt.write as ReturnType<typeof vi.fn>).mock.calls[0][0])
+      .toBe("!Wiki/work/.config/_log.md");
   });
 
   it("writes ОБНОВЛЕНА with status transition", async () => {
     const { vt, written } = makeVt();
-    await appendWikiLog(vt, LOG_PATH, "work", {
+    await appendWikiLog(vt, DOMAIN_FOLDER, "work", {
       op: "ingest",
       sourcePath: "docs/bar.md",
       entries: [{ path: "ops/bar.md", action: "ОБНОВЛЕНА", statusFrom: "stub", statusTo: "developing" }],
@@ -47,7 +49,7 @@ describe("appendWikiLog — ingest", () => {
 
   it("appends to existing log content", async () => {
     const { vt, written } = makeVt("## prior entry\n---\n");
-    await appendWikiLog(vt, LOG_PATH, "work", {
+    await appendWikiLog(vt, DOMAIN_FOLDER, "work", {
       op: "ingest",
       sourcePath: "docs/x.md",
       entries: [],
@@ -61,7 +63,7 @@ describe("appendWikiLog — ingest", () => {
 describe("appendWikiLog — lint", () => {
   it("writes lint entry", async () => {
     const { vt, written } = makeVt();
-    await appendWikiLog(vt, LOG_PATH, "work", {
+    await appendWikiLog(vt, DOMAIN_FOLDER, "work", {
       op: "lint",
       domainId: "work",
       fixed: ["компоненты/foo.md", "ops/bar.md"],
@@ -78,7 +80,7 @@ describe("appendWikiLog — lint", () => {
 describe("appendWikiLog — fix", () => {
   it("writes fix entry", async () => {
     const { vt, written } = makeVt();
-    await appendWikiLog(vt, LOG_PATH, "work", {
+    await appendWikiLog(vt, DOMAIN_FOLDER, "work", {
       op: "fix",
       filePath: "компоненты/foo.md",
       fixed: ["компоненты/foo.md"],
