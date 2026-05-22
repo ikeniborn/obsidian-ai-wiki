@@ -20621,12 +20621,21 @@ function sanitizeWikiSubfolder(raw) {
   return raw.split("/").pop();
 }
 function validateArticlePath(path2, wikiVaultPath) {
-  if (path2 === `${wikiVaultPath}/_index.md` || path2 === `${wikiVaultPath}/_log.md` || path2 === `${wikiVaultPath}/.config/_wiki_schema.md` || path2 === `${wikiVaultPath}/.config/_format_schema.md`) return true;
+  if (path2 === `${wikiVaultPath}/.config/_index.md` || path2 === `${wikiVaultPath}/.config/_log.md` || path2 === `${wikiVaultPath}/.config/_wiki_schema.md` || path2 === `${wikiVaultPath}/.config/_format_schema.md`) return true;
   const prefix = `${wikiVaultPath}/`;
   if (!path2.startsWith(prefix)) return false;
   const remainder = path2.slice(prefix.length);
   const segments = remainder.split("/");
   return segments.length === 2 && segments[1].endsWith(".md");
+}
+function domainConfigDir(domainFolder) {
+  return `${domainFolder}/.config`;
+}
+function domainIndexPath(domainFolder) {
+  return `${domainFolder}/.config/_index.md`;
+}
+function domainLogPath(domainFolder) {
+  return `${domainFolder}/.config/_log.md`;
 }
 
 // src/utils/vault-walk.ts
@@ -20695,6 +20704,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   formatBtn;
   reinitBtn;
   addSourceBtn;
+  openLogBtn;
+  openIndexBtn;
+  domains = [];
   formatPreviewSection = null;
   lastContext = null;
   // Chat state
@@ -20841,9 +20853,29 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       (0, import_obsidian4.setIcon)(this.reinitBtn, "recycle");
       this.reinitBtn.disabled = true;
       this.reinitBtn.addEventListener("click", () => void this.runReinit());
+      this.openLogBtn = domainRow.createEl("button", { attr: { title: "Open _log.md" } });
+      (0, import_obsidian4.setIcon)(this.openLogBtn, "scroll-text");
+      this.openLogBtn.disabled = true;
+      this.openLogBtn.addEventListener("click", () => {
+        const domainId = this.domainSelect.value;
+        const domain = this.domains.find((d) => d.id === domainId);
+        if (!domain) return;
+        void this.app.workspace.openLinkText(domainLogPath(domainWikiFolder(domain.wiki_folder)), "", false);
+      });
+      this.openIndexBtn = domainRow.createEl("button", { attr: { title: "Open _index.md" } });
+      (0, import_obsidian4.setIcon)(this.openIndexBtn, "list");
+      this.openIndexBtn.disabled = true;
+      this.openIndexBtn.addEventListener("click", () => {
+        const domainId = this.domainSelect.value;
+        const domain = this.domains.find((d) => d.id === domainId);
+        if (!domain) return;
+        void this.app.workspace.openLinkText(domainIndexPath(domainWikiFolder(domain.wiki_folder)), "", false);
+      });
       this.domainSelect.addEventListener("change", () => {
         if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect.value;
         if (this.addSourceBtn) this.addSourceBtn.disabled = !this.domainSelect.value;
+        if (this.openLogBtn) this.openLogBtn.disabled = !this.domainSelect.value;
+        if (this.openIndexBtn) this.openIndexBtn.disabled = !this.domainSelect.value;
       });
       const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
       this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
@@ -20881,6 +20913,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     } catch {
       return;
     }
+    this.domains = domains;
     const previous = this.domainSelect.value;
     this.domainSelect.empty();
     const allOpt = this.domainSelect.createEl("option", { value: "", text: i18n().view.allDomains });
@@ -20893,6 +20926,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     }
     if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect.value;
     if (this.addSourceBtn) this.addSourceBtn.disabled = !this.domainSelect.value;
+    if (this.openLogBtn) this.openLogBtn.disabled = !this.domainSelect.value;
+    if (this.openIndexBtn) this.openIndexBtn.disabled = !this.domainSelect.value;
   }
   openAddDomain() {
     const cwd = this.plugin.controller.cwdOrEmpty();
@@ -26156,6 +26191,24 @@ function render(template, vars) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
 }
 
+// src/domain-config.ts
+async function ensureDomainConfig(vaultTools, domainFolder) {
+  try {
+    await vaultTools.mkdir(domainConfigDir(domainFolder));
+  } catch {
+  }
+  await migrateLegacy(vaultTools, `${domainFolder}/_index.md`, domainIndexPath(domainFolder));
+  await migrateLegacy(vaultTools, `${domainFolder}/_log.md`, domainLogPath(domainFolder));
+}
+async function migrateLegacy(vaultTools, oldPath, newPath) {
+  if (!await vaultTools.exists(oldPath)) return;
+  if (!await vaultTools.exists(newPath)) {
+    const content = await vaultTools.read(oldPath);
+    await vaultTools.write(newPath, content);
+  }
+  await vaultTools.remove(oldPath);
+}
+
 // src/utils/raw-frontmatter.ts
 var FM_RE = /^---\n([\s\S]*?)\n---\n?/;
 function removeWikiFields(yaml) {
@@ -26279,7 +26332,7 @@ ${entryLine}
   ].join("\n");
 }
 async function upsertIndexAnnotation(vaultTools, wikiFolder, pid, annotation, fullPath) {
-  const indexPath = `${wikiFolder}/_index.md`;
+  const indexPath = domainIndexPath(wikiFolder);
   let content = "";
   try {
     content = await vaultTools.read(indexPath);
@@ -26403,7 +26456,8 @@ function buildEntry(domainId, event) {
   lines.push("", "---");
   return "\n" + lines.join("\n") + "\n";
 }
-async function appendWikiLog(vaultTools, logPath, domainId, event) {
+async function appendWikiLog(vaultTools, domainFolder, domainId, event) {
+  const logPath = domainLogPath(domainFolder);
   let existing = "";
   try {
     existing = await vaultTools.read(logPath);
@@ -26451,9 +26505,10 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   }
   const domainRoot = wikiVaultPath;
   const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
+  await ensureDomainConfig(vaultTools, domainRoot);
   const [schemaContent, indexContent] = await Promise.all([
     tryRead(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`),
-    tryRead(vaultTools, `${domainRoot}/_index.md`)
+    tryRead(vaultTools, domainIndexPath(domainRoot))
   ]);
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
   const existingPages = await vaultTools.readAll(existingPaths.filter((f) => !f.endsWith("_index.md")));
@@ -26559,7 +26614,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   yield { kind: "assistant_text", delta: resultText };
   if (written.length > 0) {
     try {
-      await appendWikiLog(vaultTools, `${domainRoot}/_log.md`, domain.id, {
+      await appendWikiLog(vaultTools, domainRoot, domain.id, {
         op: "ingest",
         sourcePath: sourceVaultPath,
         entries: logEntries,
@@ -26885,13 +26940,14 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
   const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
+  await ensureDomainConfig(vaultTools, wikiVaultPath);
   yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
   const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
   if (signal.aborted) return;
   const [indexContent, schemaContent] = await Promise.all([
-    tryRead2(vaultTools, `${wikiVaultPath}/_index.md`),
+    tryRead2(vaultTools, domainIndexPath(wikiVaultPath)),
     tryRead2(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`)
   ]);
   yield { kind: "tool_use", name: "Read", input: { files: files.length } };
@@ -27107,6 +27163,7 @@ async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal
 Wiki folder outside vault \u2014 skipped.`);
       continue;
     }
+    await ensureDomainConfig(vaultTools, wikiVaultPath);
     yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
     const allFiles = await vaultTools.listFiles(wikiVaultPath);
     const files = allFiles.filter((f) => !META_FILES2.some((m) => f.endsWith(m)));
@@ -27220,7 +27277,7 @@ ${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
       }
     }
     try {
-      await appendWikiLog(vaultTools, `${wikiVaultPath}/_log.md`, domain.id, {
+      await appendWikiLog(vaultTools, wikiVaultPath, domain.id, {
         op: "lint",
         domainId: domain.id,
         fixed: writtenPaths,
@@ -27435,6 +27492,7 @@ async function* runLintFixChat(req, vaultTools, _vaultRoot, domain, llm, model, 
     return;
   }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
+  await ensureDomainConfig(vaultTools, wikiVaultPath);
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
   const files = allFiles.filter((f) => !META_FILES3.some((m) => f.endsWith(m)));
   const pages = await vaultTools.readAll(files);
@@ -27619,7 +27677,7 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
   }
   const [schemaContent, indexContent] = await Promise.all([
     tryRead3(vaultTools, `${wikiRootGuess}/.config/_wiki_schema.md`),
-    tryRead3(vaultTools, `${wikiRootGuess}/_index.md`)
+    tryRead3(vaultTools, domainIndexPath(wikiRootGuess))
   ]);
   let currentDomain = existing ?? null;
   for (let i = 0; i < toAnalyze.length; i++) {
