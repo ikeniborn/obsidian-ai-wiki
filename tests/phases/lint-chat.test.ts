@@ -13,6 +13,9 @@ function makeVaultTools(pages: Record<string, string> = {}) {
     read: vi.fn(async (_p: string) => { throw new Error("not found"); }),
     write: vi.fn(async () => {}),
     toVaultPath: vi.fn((p: string) => p),
+    exists: vi.fn(async () => false),
+    mkdir: vi.fn(async () => {}),
+    remove: vi.fn(async () => {}),
   };
 }
 
@@ -134,7 +137,7 @@ describe("runLintFixChat", () => {
     const writeCalls = (vaultTools.write as ReturnType<typeof vi.fn>).mock.calls;
     const indexCall = writeCalls.find(([p]: [string]) => p.endsWith("_index.md"));
     expect(indexCall).toBeDefined();
-    expect(indexCall![0]).toBe(`${wikiPath}/_index.md`);
+    expect(indexCall![0]).toBe(`${wikiPath}/.config/_index.md`);
     expect(indexCall![1]).toContain("- [[MyPage]] MyPage.md — summary of MyPage");
   });
 });

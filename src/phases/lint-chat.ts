@@ -9,6 +9,7 @@ import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
 import { upsertIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
+import { ensureDomainConfig } from "../domain-config";
 
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
@@ -31,6 +32,7 @@ export async function* runLintFixChat(
   }
 
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
+  await ensureDomainConfig(vaultTools, wikiVaultPath);
 
   // 1. Load domain pages
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
