@@ -15,6 +15,7 @@ import { checkGraphStructure, pageId } from "../wiki-graph";
 import { graphCache } from "../wiki-graph-cache";
 import { upsertIndexAnnotation } from "../wiki-index";
 import { appendWikiLog } from "../wiki-log";
+import { ensureDomainConfig } from "../domain-config";
 
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
@@ -54,6 +55,8 @@ export async function* runLint(
       reportParts.push(`## ${domain.id}\nWiki folder outside vault — skipped.`);
       continue;
     }
+
+    await ensureDomainConfig(vaultTools, wikiVaultPath);
 
     yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
     const allFiles = await vaultTools.listFiles(wikiVaultPath);
@@ -162,7 +165,7 @@ export async function* runLint(
     }
 
     try {
-      await appendWikiLog(vaultTools, `${wikiVaultPath}/_log.md`, domain.id, {
+      await appendWikiLog(vaultTools, wikiVaultPath, domain.id, {
         op: "lint",
         domainId: domain.id,
         fixed: writtenPaths,
