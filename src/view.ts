@@ -4,7 +4,7 @@ import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
 import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
-import { domainWikiFolder } from "./wiki-path";
+import { domainWikiFolder, domainLogPath, domainIndexPath } from "./wiki-path";
 
 import { collectMdInPaths, walkFolder } from "./utils/vault-walk";
 export { collectMdInPaths, walkFolder };
@@ -51,6 +51,9 @@ export class LlmWikiView extends ItemView {
   private formatBtn?: HTMLButtonElement;
   private reinitBtn?: HTMLButtonElement;
   private addSourceBtn?: HTMLButtonElement;
+  private openLogBtn?: HTMLButtonElement;
+  private openIndexBtn?: HTMLButtonElement;
+  private domains: DomainEntry[] = [];
   private formatPreviewSection: HTMLElement | null = null;
   private lastContext: { operation: WikiOperation; domainId: string | undefined; report: string } | null = null;
   // Chat state
@@ -217,9 +220,32 @@ export class LlmWikiView extends ItemView {
       setIcon(this.reinitBtn, "recycle");
       this.reinitBtn.disabled = true;
       this.reinitBtn.addEventListener("click", () => void this.runReinit());
+
+      this.openLogBtn = domainRow.createEl("button", { attr: { title: "Open _log.md" } });
+      setIcon(this.openLogBtn, "scroll-text");
+      this.openLogBtn.disabled = true;
+      this.openLogBtn.addEventListener("click", () => {
+        const domainId = this.domainSelect!.value;
+        const domain = this.domains.find((d) => d.id === domainId);
+        if (!domain) return;
+        void this.app.workspace.openLinkText(domainLogPath(domainWikiFolder(domain.wiki_folder)), "", false);
+      });
+
+      this.openIndexBtn = domainRow.createEl("button", { attr: { title: "Open _index.md" } });
+      setIcon(this.openIndexBtn, "list");
+      this.openIndexBtn.disabled = true;
+      this.openIndexBtn.addEventListener("click", () => {
+        const domainId = this.domainSelect!.value;
+        const domain = this.domains.find((d) => d.id === domainId);
+        if (!domain) return;
+        void this.app.workspace.openLinkText(domainIndexPath(domainWikiFolder(domain.wiki_folder)), "", false);
+      });
+
       this.domainSelect.addEventListener("change", () => {
         if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect!.value;
         if (this.addSourceBtn) this.addSourceBtn.disabled = !this.domainSelect!.value;
+        if (this.openLogBtn) this.openLogBtn.disabled = !this.domainSelect!.value;
+        if (this.openIndexBtn) this.openIndexBtn.disabled = !this.domainSelect!.value;
       });
 
       const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
@@ -253,6 +279,7 @@ export class LlmWikiView extends ItemView {
     if (!this.domainSelect) return;
     let domains: DomainEntry[];
     try { domains = await this.plugin.controller.loadDomains(); } catch { return; }
+    this.domains = domains;
     const previous = this.domainSelect.value;
     this.domainSelect.empty();
     const allOpt = this.domainSelect.createEl("option", { value: "", text: i18n().view.allDomains });
@@ -265,6 +292,8 @@ export class LlmWikiView extends ItemView {
     }
     if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect.value;
     if (this.addSourceBtn) this.addSourceBtn.disabled = !this.domainSelect.value;
+    if (this.openLogBtn) this.openLogBtn.disabled = !this.domainSelect.value;
+    if (this.openIndexBtn) this.openIndexBtn.disabled = !this.domainSelect.value;
   }
 
   private openAddDomain(): void {
