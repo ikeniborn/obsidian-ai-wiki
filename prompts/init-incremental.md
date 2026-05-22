@@ -39,5 +39,5 @@
 
 ## Wiki Page Conventions
 
-Wiki-страницы используют поле `tags` во frontmatter: иерархические теги из tag-hierarchy.json. Учитывай это при определении extraction_cues в entity_types.
+Wiki-страницы используют поле `tags` во frontmatter: иерархические теги (category/subcategory, строчные, через `/`, без `#`). LLM переиспользует теги из существующих страниц. Учитывай это при определении extraction_cues в entity_types.
 

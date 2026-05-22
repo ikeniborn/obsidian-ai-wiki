@@ -34,7 +34,7 @@
 
 ## Wiki Page Conventions
 
-Страницы wiki используют поле `tags` во frontmatter: иерархические теги из tag-hierarchy.json.
+Страницы wiki используют поле `tags` во frontmatter: иерархические теги (category/subcategory, строчные, через `/`, без `#`). При ingest LLM переиспользует теги из существующих страниц и создаёт новые по той же схеме.
 
 ПРАВИЛО wiki_subfolder: одно слово, без слэшей, без domain_id.
 Нельзя: "os/network", "os_network". Можно: "network", "processes", "protocols".
