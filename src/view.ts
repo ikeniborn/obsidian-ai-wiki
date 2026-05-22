@@ -1,5 +1,5 @@
 import { App, ItemView, Modal, WorkspaceLeaf, MarkdownRenderer, Component, Notice, Platform, setIcon } from "obsidian";
-import { AddDomainModal, BusyCloseModal, ConfirmModal } from "./modals";
+import { AddDomainModal, BusyCloseModal, ConfirmModal, ManageSourcesModal, IngestScopeModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
 import type { DomainEntry } from "./domain";
@@ -49,6 +49,7 @@ export class LlmWikiView extends ItemView {
   private lintBtn?: HTMLButtonElement;
   private formatBtn?: HTMLButtonElement;
   private reinitBtn?: HTMLButtonElement;
+  private addSourceBtn?: HTMLButtonElement;
   private formatPreviewSection: HTMLElement | null = null;
   private lastContext: { operation: WikiOperation; domainId: string | undefined; report: string } | null = null;
   // Chat state
@@ -207,12 +208,17 @@ export class LlmWikiView extends ItemView {
     refreshBtn.addEventListener("click", () => void this.refreshDomains());
 
     if (opts.withActions) {
+      this.addSourceBtn = domainRow.createEl("button", { attr: { title: T.view.addSourceTitle } });
+      setIcon(this.addSourceBtn, "folder-plus");
+      this.addSourceBtn.disabled = true;
+      this.addSourceBtn.addEventListener("click", () => void this.openManageSources());
       this.reinitBtn = domainRow.createEl("button", { attr: { title: T.view.reinitTitle } });
       setIcon(this.reinitBtn, "recycle");
       this.reinitBtn.disabled = true;
       this.reinitBtn.addEventListener("click", () => void this.runReinit());
       this.domainSelect.addEventListener("change", () => {
         if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect!.value;
+        if (this.addSourceBtn) this.addSourceBtn.disabled = !this.domainSelect!.value;
       });
 
       const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
@@ -257,6 +263,7 @@ export class LlmWikiView extends ItemView {
       this.domainSelect.value = previous;
     }
     if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect.value;
+    if (this.addSourceBtn) this.addSourceBtn.disabled = !this.domainSelect.value;
   }
 
   private openAddDomain(): void {
@@ -325,6 +332,42 @@ export class LlmWikiView extends ItemView {
     ).open();
   }
 
+  private async openManageSources(): Promise<void> {
+    const domainId = this.domainSelect!.value;
+    if (!domainId) return;
+    const domains = await this.plugin.controller.loadDomains();
+    const entry = domains.find((d) => d.id === domainId);
+    if (!entry) return;
+    new ManageSourcesModal(this.app, entry, (result) => {
+      void this.handleManageSourcesResult(entry, result);
+    }).open();
+  }
+
+  private async handleManageSourcesResult(
+    original: DomainEntry,
+    result: { sourcePaths: string[] },
+  ): Promise<void> {
+    const oldPaths = original.source_paths ?? [];
+    const newPaths = result.sourcePaths;
+    const added = newPaths.filter((p) => !oldPaths.includes(p));
+    const removed = oldPaths.filter((p) => !newPaths.includes(p));
+
+    await this.plugin.controller.updateDomainSources(original.id, newPaths);
+
+    if (removed.length > 0) {
+      const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
+      if (deleted > 0) new Notice(`Удалено статей: ${deleted}`);
+    }
+
+    if (added.length > 0) {
+      new IngestScopeModal(this.app, added.length, newPaths.length, (scope) => {
+        if (scope === "skip") return;
+        const paths = scope === "new" ? added : newPaths;
+        void this.plugin.controller.init(original.id, false, paths);
+      }).open();
+    }
+  }
+
   private submitQuery(save: boolean): void {
     const q = this.queryInput.value.trim();
     if (!q) { new Notice(i18n().view.enterQuestion); return; }
@@ -346,6 +389,7 @@ export class LlmWikiView extends ItemView {
     if (this.lintBtn) this.lintBtn.disabled = true;
     if (this.formatBtn) this.formatBtn.disabled = true;
     if (this.reinitBtn) this.reinitBtn.disabled = true;
+    if (this.addSourceBtn) this.addSourceBtn.disabled = true;
     this.chatSection?.remove();
     this.chatSection = null;
     this.lastContext = null;
@@ -625,6 +669,7 @@ export class LlmWikiView extends ItemView {
     if (this.lintBtn) this.lintBtn.disabled = false;
     if (this.formatBtn) this.formatBtn.disabled = false;
     if (this.reinitBtn) this.reinitBtn.disabled = !(this.domainSelect && this.domainSelect.value);
+    if (this.addSourceBtn) this.addSourceBtn.disabled = !(this.domainSelect && this.domainSelect.value);
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
     this.updateMetrics();
     this.liveStatusSection?.addClass("ai-wiki-hidden");
