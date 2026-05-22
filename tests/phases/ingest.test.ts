@@ -318,11 +318,11 @@ describe("runIngest", () => {
       read: vi.fn().mockImplementation(async (path: string) => {
         if (path === "Sources/doc.md") return "source text";
         if (existingPaths.has(path)) return existingContent;
-        if (path === "!Wiki/work/_log.md") return logContent;
+        if (path === "!Wiki/work/.config/_log.md") return logContent;
         throw new Error("not found");
       }),
       write: vi.fn().mockImplementation(async (path: string, content: string) => {
-        if (path === "!Wiki/work/_log.md") logContent = content;
+        if (path === "!Wiki/work/.config/_log.md") logContent = content;
       }),
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });

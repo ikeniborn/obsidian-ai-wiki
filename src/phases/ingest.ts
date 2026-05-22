@@ -9,7 +9,8 @@ import { WikiPagesOutputSchema } from "./zod-schemas";
 import type { WikiPagesOutput } from "./zod-schemas";
 import ingestTemplate from "../../prompts/ingest.md";
 import { render } from "./template";
-import { domainWikiFolder, validateArticlePath } from "../wiki-path";
+import { domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
+import { ensureDomainConfig } from "../domain-config";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField } from "../utils/raw-frontmatter";
 import { upsertIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
@@ -70,9 +71,11 @@ export async function* runIngest(
   const domainRoot = wikiVaultPath;
   const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
 
+  await ensureDomainConfig(vaultTools, domainRoot);
+
   const [schemaContent, indexContent] = await Promise.all([
     tryRead(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`),
-    tryRead(vaultTools, `${domainRoot}/_index.md`),
+    tryRead(vaultTools, domainIndexPath(domainRoot)),
   ]);
 
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
@@ -182,7 +185,7 @@ export async function* runIngest(
 
   if (written.length > 0) {
     try {
-      await appendWikiLog(vaultTools, `${domainRoot}/_log.md`, domain.id, {
+      await appendWikiLog(vaultTools, domainRoot, domain.id, {
         op: "ingest",
         sourcePath: sourceVaultPath,
         entries: logEntries,
