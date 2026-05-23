@@ -21519,8 +21519,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       } else {
         const comp = new import_obsidian4.Component();
         comp.load();
-        void import_obsidian4.MarkdownRenderer.render(this.app, msg.content, this.currentChatBubble, "", comp).then(() => sanitizeLinks(this.currentChatBubble));
-        registerLinkHandler(this.currentChatBubble, this.app);
+        const bubble = this.currentChatBubble;
+        void import_obsidian4.MarkdownRenderer.render(this.app, msg.content, bubble, "", comp).then(() => sanitizeLinks(bubble));
+        registerLinkHandler(bubble, this.app);
       }
       this.currentChatBubble = null;
     }

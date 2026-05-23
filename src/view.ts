@@ -899,8 +899,9 @@ export class LlmWikiView extends ItemView {
       } else {
         const comp = new Component();
         comp.load();
-        void MarkdownRenderer.render(this.app, msg.content, this.currentChatBubble, "", comp).then(() => sanitizeLinks(this.currentChatBubble!));
-        registerLinkHandler(this.currentChatBubble, this.app);
+        const bubble = this.currentChatBubble;
+        void MarkdownRenderer.render(this.app, msg.content, bubble, "", comp).then(() => sanitizeLinks(bubble));
+        registerLinkHandler(bubble, this.app);
       }
       this.currentChatBubble = null;
     }
