@@ -26273,15 +26273,6 @@ async function ensureDomainConfig(vaultTools, domainFolder) {
   }
   await migrateLegacy(vaultTools, `${domainFolder}/_index.md`, domainIndexPath(domainFolder));
   await migrateLegacy(vaultTools, `${domainFolder}/_log.md`, domainLogPath(domainFolder));
-  await reindex(vaultTools, domainIndexPath(domainFolder));
-  await reindex(vaultTools, domainLogPath(domainFolder));
-}
-async function reindex(vaultTools, vaultPath) {
-  if (!vaultTools.vault) return;
-  if (vaultTools.vault.getAbstractFileByPath(vaultPath)) return;
-  if (!await vaultTools.exists(vaultPath)) return;
-  const content = await vaultTools.read(vaultPath);
-  await vaultTools.write(vaultPath, content);
 }
 async function migrateLegacy(vaultTools, oldPath, newPath) {
   if (!await vaultTools.exists(oldPath)) return;

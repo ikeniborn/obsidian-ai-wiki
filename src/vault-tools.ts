@@ -44,7 +44,6 @@ export class VaultTools {
       if (indexed) {
         await this.vault.modify(indexed, content);
       } else {
-        // vault.create() checks index (not disk), so safe even if file exists on disk
         await this.vault.create(vaultPath, content);
       }
     } else {
