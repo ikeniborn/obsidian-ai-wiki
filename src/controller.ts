@@ -441,7 +441,7 @@ export class WikiController {
       try { await vault.createFolder(path); } catch { /* already exists — fine */ }
     };
     const base = this.cwdOrEmpty();
-    const vaultTools = new VaultTools(adapter, base);
+    const vaultTools = new VaultTools(adapter, base, vault);
     const vaultName = this.app.vault.getName();
     const domains = await this.domainStore.load();
     const local = await this.localConfigStore.load();

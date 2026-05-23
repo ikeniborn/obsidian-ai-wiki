@@ -1,3 +1,31 @@
+---
+review:
+  plan_hash: c023493353a40f56
+  spec_hash: 2ba878f0c1bec7ac
+  last_run: 2026-05-22
+  phases:
+    structure:     { status: passed }
+    coverage:      { status: passed }
+    dependencies:  { status: passed }
+    verifiability: { status: passed }
+    consistency:   { status: passed }
+  findings:
+    - id: F-001
+      severity: CRITICAL
+      phase: coverage
+      section: "§Architecture.3 (spec)"
+      section_hash: 8dda8d6229e26a6c
+      text: "`src/phases/init.ts` listed in spec callers table but no task in plan covers it"
+      verdict: fixed
+    - id: F-002
+      severity: WARNING
+      phase: consistency
+      section: "§Architecture.5 (spec)"
+      section_hash: 193c16c6d95b0251
+      text: "Spec uses `openLinkText(path, \"\", true)` (open in new leaf), Task 9 uses `false` (open in current leaf)"
+      verdict: open
+---
+
 # Domain .config Folder Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -251,30 +279,6 @@ npx vitest run tests/domain-config.test.ts
 Expected: FAIL — `Cannot find module '../src/domain-config'`.
 
 - [ ] **Step 3: Create `src/domain-config.ts`**
-
-```ts
-import type { VaultTools } from "./vault-tools";
-import { domainConfigDir, domainIndexPath, domainLogPath } from "./wiki-path";
-
-export async function ensureDomainConfig(vaultTools: VaultTools, domainFolder: string): Promise<void> {
-  try { await vaultTools.mkdir(domainConfigDir(domainFolder)); } catch { /* already exists */ }
-  await migrateLegacy(vaultTools, `${domainFolder}/_index.md`, domainIndexPath(domainFolder));
-  await migrateLegacy(vaultTools, `${domainFolder}/_log.md`, domainLogPath(domainFolder));
-}
-
-async function migrateLegacy(vaultTools: VaultTools, oldPath: string, newPath: string): Promise<void> {
-  if (!(await vaultTools.exists(oldPath))) return;
-  if (await vaultTools.exists(newPath)) {
-    await vaultTools.remove(newPath.replace("/.config/", "/").replace(".config/", ""));
-    // oldPath removal only — new already exists
-    await vaultTools.remove(oldPath);
-    return;
-  }
-  const content = await vaultTools.read(oldPath);
-  await vaultTools.write(newPath, content);
-  await vaultTools.remove(oldPath);
-}
-```
 
 ```ts
 import type { VaultTools } from "./vault-tools";
@@ -790,7 +794,55 @@ git commit -m "feat(view): add Open _log / Open _index buttons to domain row"
 
 ---
 
-### Task 10: Full test suite + version bump
+### Task 10: Update `phases/init.ts`
+
+**Files:**
+- Modify: `src/phases/init.ts`
+
+- [ ] **Step 1: Run existing init tests to establish baseline**
+
+```bash
+npx vitest run tests/phases/init.test.ts tests/phases/init.force.test.ts
+```
+
+Expected: all PASS.
+
+- [ ] **Step 2: Update import and `tryRead` call**
+
+In `src/phases/init.ts`, extend the import from `"../wiki-path"`:
+
+```ts
+import { domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath } from "../wiki-path";
+```
+
+Replace the hardcoded path in `tryRead`:
+
+```ts
+// Before:
+    tryRead(vaultTools, `${wikiRootGuess}/_index.md`),
+
+// After:
+    tryRead(vaultTools, domainIndexPath(wikiRootGuess)),
+```
+
+- [ ] **Step 3: Run init tests**
+
+```bash
+npx vitest run tests/phases/init.test.ts tests/phases/init.force.test.ts
+```
+
+Expected: all PASS.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/phases/init.ts
+git commit -m "feat(init): read _index from .config via domainIndexPath"
+```
+
+---
+
+### Task 11: Full test suite + version bump
 
 **Files:**
 - Modify: `package.json`, `src/manifest.json`

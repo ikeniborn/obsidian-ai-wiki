@@ -168,7 +168,7 @@ export interface LlmWikiPluginSettings {
 }
 
 export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
-  backend: "claude-agent",
+  backend: "native-agent",
   systemPrompt: "",
   agentLogEnabled: false,
   historyLimit: 20,

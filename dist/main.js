@@ -18816,7 +18816,7 @@ var import_obsidian8 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_SETTINGS = {
-  backend: "claude-agent",
+  backend: "native-agent",
   systemPrompt: "",
   agentLogEnabled: false,
   historyLimit: 20,
@@ -20303,12 +20303,22 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
     }
     new import_obsidian3.Setting(containerEl).setName(T.settings.h3_backend).setHeading();
     if (!import_obsidian3.Platform.isMobile) {
-      new import_obsidian3.Setting(containerEl).setName(T.settings.backend_name).setDesc(T.settings.backend_desc).addDropdown(
-        (d) => d.addOption("claude-agent", T.settings.claudeCodeAgent).addOption("native-agent", T.settings.nativeAgent).setValue(eff.backend).onChange(async (v) => {
+      new import_obsidian3.Setting(containerEl).setName(T.settings.backend_name).setDesc(T.settings.backend_desc).addDropdown((d) => {
+        let backendDd;
+        backendDd = d.addOption("claude-agent", T.settings.claudeCodeAgent).addOption("native-agent", T.settings.nativeAgent).setValue(eff.backend).onChange(async (v) => {
+          if (v === "claude-agent" && !this.localCache.shellConsentGiven) {
+            backendDd.setValue(eff.backend);
+            new ShellConsentModal(this.plugin.app, this.localCache.iclaudePath, async () => {
+              await this.patchLocal({ shellConsentGiven: true, backend: "claude-agent" });
+              this.display();
+            }).open();
+            return;
+          }
           await this.patchLocal({ backend: v });
           this.display();
-        })
-      );
+        });
+        return d;
+      });
     } else {
       const p = containerEl.createEl("p", {
         text: "Mobile: cloud LLM (native-agent) only. setup guide: ",
@@ -20704,8 +20714,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   formatBtn;
   reinitBtn;
   addSourceBtn;
-  openLogBtn;
-  openIndexBtn;
+  openLogLink;
+  openIndexLink;
   domains = [];
   formatPreviewSection = null;
   lastContext = null;
@@ -20853,30 +20863,69 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       (0, import_obsidian4.setIcon)(this.reinitBtn, "recycle");
       this.reinitBtn.disabled = true;
       this.reinitBtn.addEventListener("click", () => void this.runReinit());
-      this.openLogBtn = domainRow.createEl("button", { attr: { title: "Open _log.md" } });
-      (0, import_obsidian4.setIcon)(this.openLogBtn, "scroll-text");
-      this.openLogBtn.disabled = true;
-      this.openLogBtn.addEventListener("click", () => {
-        const domainId = this.domainSelect.value;
-        const domain = this.domains.find((d) => d.id === domainId);
-        if (!domain) return;
-        void this.app.workspace.openLinkText(domainLogPath(domainWikiFolder(domain.wiki_folder)), "", false);
+      this.openLogLink = domainRow.createEl("a", {
+        cls: "internal-link ai-wiki-domain-file-link",
+        attr: { title: "Open _log.md", "data-href": "" }
       });
-      this.openIndexBtn = domainRow.createEl("button", { attr: { title: "Open _index.md" } });
-      (0, import_obsidian4.setIcon)(this.openIndexBtn, "list");
-      this.openIndexBtn.disabled = true;
-      this.openIndexBtn.addEventListener("click", () => {
-        const domainId = this.domainSelect.value;
-        const domain = this.domains.find((d) => d.id === domainId);
-        if (!domain) return;
-        void this.app.workspace.openLinkText(domainIndexPath(domainWikiFolder(domain.wiki_folder)), "", false);
+      (0, import_obsidian4.setIcon)(this.openLogLink, "scroll-text");
+      this.openIndexLink = domainRow.createEl("a", {
+        cls: "internal-link ai-wiki-domain-file-link",
+        attr: { title: "Open _index.md", "data-href": "" }
       });
-      this.domainSelect.addEventListener("change", () => {
-        if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect.value;
-        if (this.addSourceBtn) this.addSourceBtn.disabled = !this.domainSelect.value;
-        if (this.openLogBtn) this.openLogBtn.disabled = !this.domainSelect.value;
-        if (this.openIndexBtn) this.openIndexBtn.disabled = !this.domainSelect.value;
+      (0, import_obsidian4.setIcon)(this.openIndexLink, "list");
+      domainRow.addEventListener("click", (e) => {
+        const a = e.target.closest("a.ai-wiki-domain-file-link");
+        if (!a) return;
+        e.preventDefault();
+        const href = a.getAttribute("data-href") ?? "";
+        if (!href) return;
+        void (async () => {
+          let f = this.app.vault.getAbstractFileByPath(href);
+          if (!f && await this.app.vault.adapter.exists(href)) {
+            const content = await this.app.vault.adapter.read(href);
+            const parentPath = href.substring(0, href.lastIndexOf("/"));
+            if (!this.app.vault.getAbstractFileByPath(parentPath)) {
+              try {
+                await this.app.vault.createFolder(parentPath);
+              } catch {
+              }
+            }
+            try {
+              f = await this.app.vault.create(href, content);
+              if (!f) f = this.app.vault.getAbstractFileByPath(href);
+            } catch {
+              f = this.app.vault.getAbstractFileByPath(href);
+            }
+            if (!f) {
+              new FileContentModal(this.app, href, content).open();
+              return;
+            }
+          }
+          if (f) {
+            void this.app.workspace.openLinkText(href, "", false);
+          } else {
+            const isLog = href.endsWith("_log.md");
+            new import_obsidian4.Notice(isLog ? "_log.md not found \u2014 run ingest or lint first." : "_index.md not found \u2014 run init first.");
+          }
+        })();
       });
+      const updateDomainLinks = () => {
+        const d = this.domains.find((x) => x.id === this.domainSelect.value);
+        const wikiFolder = d ? domainWikiFolder(d.wiki_folder) : "";
+        const logPath = d ? domainLogPath(wikiFolder) : "";
+        const indexPath = d ? domainIndexPath(wikiFolder) : "";
+        if (this.openLogLink) {
+          this.openLogLink.setAttribute("data-href", logPath);
+          this.openLogLink.toggleClass("is-unresolved", !d);
+        }
+        if (this.openIndexLink) {
+          this.openIndexLink.setAttribute("data-href", indexPath);
+          this.openIndexLink.toggleClass("is-unresolved", !d);
+        }
+        if (this.reinitBtn) this.reinitBtn.disabled = !d;
+        if (this.addSourceBtn) this.addSourceBtn.disabled = !d;
+      };
+      this.domainSelect.addEventListener("change", updateDomainLinks);
       const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
       this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
       this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
@@ -20926,8 +20975,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     }
     if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect.value;
     if (this.addSourceBtn) this.addSourceBtn.disabled = !this.domainSelect.value;
-    if (this.openLogBtn) this.openLogBtn.disabled = !this.domainSelect.value;
-    if (this.openIndexBtn) this.openIndexBtn.disabled = !this.domainSelect.value;
+    this.domainSelect.dispatchEvent(new Event("change"));
   }
   openAddDomain() {
     const cwd = this.plugin.controller.cwdOrEmpty();
@@ -21046,8 +21094,6 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     if (this.formatBtn) this.formatBtn.disabled = true;
     if (this.reinitBtn) this.reinitBtn.disabled = true;
     if (this.addSourceBtn) this.addSourceBtn.disabled = true;
-    if (this.openLogBtn) this.openLogBtn.disabled = true;
-    if (this.openIndexBtn) this.openIndexBtn.disabled = true;
     this.chatSection?.remove();
     this.chatSection = null;
     this.lastContext = null;
@@ -21317,8 +21363,6 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     if (this.formatBtn) this.formatBtn.disabled = false;
     if (this.reinitBtn) this.reinitBtn.disabled = !(this.domainSelect && this.domainSelect.value);
     if (this.addSourceBtn) this.addSourceBtn.disabled = !(this.domainSelect && this.domainSelect.value);
-    if (this.openLogBtn) this.openLogBtn.disabled = !(this.domainSelect && this.domainSelect.value);
-    if (this.openIndexBtn) this.openIndexBtn.disabled = !(this.domainSelect && this.domainSelect.value);
     if (this.tickHandle !== null) {
       window.clearTimeout(this.tickHandle);
       this.tickHandle = null;
@@ -21603,6 +21647,32 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       const modal = new WikiQuestionModal(this.app, question, options, resolve, reject);
       modal.open();
     });
+  }
+};
+var FileContentModal = class extends import_obsidian4.Modal {
+  constructor(app, filePath, content) {
+    super(app);
+    this.filePath = filePath;
+    this.content = content;
+  }
+  filePath;
+  content;
+  onOpen() {
+    this.titleEl.setText(this.filePath.split("/").pop() ?? this.filePath);
+    const btnRow = this.modalEl.createDiv({ cls: "modal-button-container" });
+    const openBtn = btnRow.createEl("button", { text: "Open in system editor" });
+    openBtn.addEventListener("click", () => {
+      const basePath = this.app.vault.adapter["basePath"] ?? "";
+      const absPath = basePath ? `${basePath}/${this.filePath}` : this.filePath;
+      require("electron").shell.openPath(absPath);
+    });
+    this.contentEl.style.cssText = "max-height: 60vh; overflow-y: auto;";
+    const comp = new import_obsidian4.Component();
+    comp.load();
+    void import_obsidian4.MarkdownRenderer.render(this.app, this.content, this.contentEl, this.filePath, comp);
+  }
+  onClose() {
+    this.contentEl.empty();
   }
 };
 var WikiQuestionModal = class extends import_obsidian4.Modal {
@@ -26203,6 +26273,15 @@ async function ensureDomainConfig(vaultTools, domainFolder) {
   }
   await migrateLegacy(vaultTools, `${domainFolder}/_index.md`, domainIndexPath(domainFolder));
   await migrateLegacy(vaultTools, `${domainFolder}/_log.md`, domainLogPath(domainFolder));
+  await reindex(vaultTools, domainIndexPath(domainFolder));
+  await reindex(vaultTools, domainLogPath(domainFolder));
+}
+async function reindex(vaultTools, vaultPath) {
+  if (!vaultTools.vault) return;
+  if (vaultTools.vault.getAbstractFileByPath(vaultPath)) return;
+  if (!await vaultTools.exists(vaultPath)) return;
+  const content = await vaultTools.read(vaultPath);
+  await vaultTools.write(vaultPath, content);
 }
 async function migrateLegacy(vaultTools, oldPath, newPath) {
   if (!await vaultTools.exists(oldPath)) return;
@@ -26945,44 +27024,78 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
   const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
   await ensureDomainConfig(vaultTools, wikiVaultPath);
-  yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
-  const allFiles = await vaultTools.listFiles(wikiVaultPath);
-  const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
-  yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
-  if (signal.aborted) return;
   const [indexContent, schemaContent] = await Promise.all([
     tryRead2(vaultTools, domainIndexPath(wikiVaultPath)),
     tryRead2(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`)
   ]);
-  yield { kind: "tool_use", name: "Read", input: { files: files.length } };
-  const pages = await vaultTools.readAll(files);
-  yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
   if (signal.aborted) return;
-  const start = Date.now();
-  let outputTokens = 0;
-  const { graph, fromCache } = graphCache.get(domain.id, pages);
-  const allPageIds = [...pages.keys()].map(pageId);
   const indexAnnotations = parseIndexAnnotations(indexContent);
   const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
   const minScore = Math.max(0, Math.min(1, seedMinScore));
-  let seeds = selectSeeds(question, pages, topK, minScore, indexAnnotations);
-  if (seeds.length === 0) {
+  const start = Date.now();
+  let outputTokens = 0;
+  const syntheticPages = new Map(
+    [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""])
+  );
+  let seeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+  if (seeds.length === 0 && indexAnnotations.size > 0) {
     if (signal.aborted) return;
-    yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allPageIds.length } };
+    const allAnnotatedIds = [...indexAnnotations.keys()];
+    yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allAnnotatedIds.length } };
     const seedOpts = { ...opts, thinkingBudgetTokens: void 0 };
-    const seedRes = await llmSelectSeeds(question, indexAnnotations, allPageIds, llm, model, seedOpts, signal);
+    const seedRes = await llmSelectSeeds(question, indexAnnotations, allAnnotatedIds, llm, model, seedOpts, signal);
     seeds = seedRes.seeds;
     outputTokens += seedRes.outputTokens;
     yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
   }
   if (signal.aborted) return;
+  yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
+  const allFiles = await vaultTools.listFiles(wikiVaultPath);
+  const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
+  yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
+  if (signal.aborted) return;
+  const idToPath = new Map(files.map((f) => [pageId(f), f]));
+  let pages;
+  let fromCache;
+  let selectedIds;
+  if (seeds.length > 0) {
+    const seedPaths = seeds.map((id) => idToPath.get(id)).filter((p) => !!p);
+    yield { kind: "tool_use", name: "Read", input: { files: seedPaths.length } };
+    pages = await vaultTools.readAll(seedPaths);
+    yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
+    fromCache = false;
+    selectedIds = new Set(seeds);
+    yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache };
+  } else {
+    yield { kind: "tool_use", name: "Read", input: { files: files.length } };
+    pages = await vaultTools.readAll(files);
+    yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
+    if (signal.aborted) return;
+    const graphResult = graphCache.get(domain.id, pages);
+    fromCache = graphResult.fromCache;
+    const allPageIds = [...pages.keys()].map(pageId);
+    seeds = selectSeeds(question, pages, topK, minScore, indexAnnotations);
+    if (seeds.length === 0) {
+      yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allPageIds.length } };
+      const seedOpts = { ...opts, thinkingBudgetTokens: void 0 };
+      const seedRes = await llmSelectSeeds(question, indexAnnotations, allPageIds, llm, model, seedOpts, signal);
+      seeds = seedRes.seeds;
+      outputTokens += seedRes.outputTokens;
+      yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
+    }
+    if (signal.aborted) return;
+    if (seeds.length === 0) {
+      yield { kind: "error", message: "No relevant pages found for this query." };
+      return;
+    }
+    selectedIds = bfsExpand(seeds, graphResult.graph, graphDepth);
+    yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: pages.size, fromCache };
+  }
   if (seeds.length === 0) {
     yield { kind: "error", message: "No relevant pages found for this query." };
     return;
   }
   const seedSet = new Set(seeds);
-  const selectedIds = bfsExpand(seeds, graph, graphDepth);
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: pages.size, fromCache };
   const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);
   const entityTypesBlock = buildEntityTypesBlock2(domain);
   const systemPrompt = render(query_default, {
@@ -28436,12 +28549,14 @@ var AgentRunner = class {
 
 // src/vault-tools.ts
 var VaultTools = class {
-  constructor(adapter, basePath) {
+  constructor(adapter, basePath, vault) {
     this.adapter = adapter;
     this.basePath = basePath;
+    this.vault = vault;
   }
   adapter;
   basePath;
+  vault;
   get vaultRoot() {
     return this.basePath;
   }
@@ -28464,7 +28579,16 @@ var VaultTools = class {
         }
       }
     }
-    await this.adapter.write(vaultPath, content);
+    if (this.vault) {
+      const indexed = this.vault.getAbstractFileByPath(vaultPath);
+      if (indexed) {
+        await this.vault.modify(indexed, content);
+      } else {
+        await this.vault.create(vaultPath, content);
+      }
+    } else {
+      await this.adapter.write(vaultPath, content);
+    }
   }
   async listFiles(vaultDir) {
     const exists = await this.adapter.exists(vaultDir);
@@ -36556,7 +36680,7 @@ var WikiController = class {
       }
     };
     const base = this.cwdOrEmpty();
-    const vaultTools = new VaultTools(adapter, base);
+    const vaultTools = new VaultTools(adapter, base, vault);
     const vaultName = this.app.vault.getName();
     const domains = await this.domainStore.load();
     const local = await this.localConfigStore.load();

@@ -16,6 +16,9 @@
 .ai-wiki-domain-select { flex: 1; min-width: 0; padding: 4px; }
 .ai-wiki-domain-actions { display: flex; gap: 6px; }
 .ai-wiki-domain-actions button { flex: 1; }
+.ai-wiki-domain-file-link { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 4px; color: var(--icon-color); opacity: var(--icon-opacity); cursor: pointer; flex-shrink: 0; }
+.ai-wiki-domain-file-link:hover { background: var(--background-modifier-hover); color: var(--text-normal); opacity: 1; }
+.ai-wiki-domain-file-link.is-unresolved { opacity: 0.35; pointer-events: none; }
 .ai-wiki-dryrun { color: var(--text-muted); font-size: 11px; display: inline-flex; align-items: center; gap: 3px; }
 
 /* 4. Запрос */

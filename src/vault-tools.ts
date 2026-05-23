@@ -8,10 +8,17 @@ export interface VaultAdapter {
   remove?(path: string): Promise<void>;
 }
 
+export interface VaultIndexer {
+  getAbstractFileByPath(path: string): { path: string } | null;
+  create(path: string, content: string): Promise<{ path: string }>;
+  modify(file: { path: string }, content: string): Promise<void>;
+}
+
 export class VaultTools {
   constructor(
     public readonly adapter: VaultAdapter,
     private basePath: string,
+    public readonly vault?: VaultIndexer,
   ) {}
 
   get vaultRoot(): string {
@@ -32,7 +39,17 @@ export class VaultTools {
         try { await this.adapter.mkdir(partial); } catch { }
       }
     }
-    await this.adapter.write(vaultPath, content);
+    if (this.vault) {
+      const indexed = this.vault.getAbstractFileByPath(vaultPath);
+      if (indexed) {
+        await this.vault.modify(indexed, content);
+      } else {
+        // vault.create() checks index (not disk), so safe even if file exists on disk
+        await this.vault.create(vaultPath, content);
+      }
+    } else {
+      await this.adapter.write(vaultPath, content);
+    }
   }
 
   async listFiles(vaultDir: string): Promise<string[]> {

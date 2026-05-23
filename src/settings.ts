@@ -1,6 +1,6 @@
 import { access, constants } from "node:fs/promises";
-import { App, Notice, Platform, PluginSettingTab, Setting } from "obsidian";
-import { ConfirmModal, EditDomainModal } from "./modals";
+import { App, DropdownComponent, Notice, Platform, PluginSettingTab, Setting } from "obsidian";
+import { ConfirmModal, EditDomainModal, ShellConsentModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { LlmWikiPluginSettings, OpKey } from "./types";
 import type { DomainEntry } from "./domain";
@@ -207,15 +207,26 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       new Setting(containerEl)
         .setName(T.settings.backend_name)
         .setDesc(T.settings.backend_desc)
-        .addDropdown((d) =>
-          d.addOption("claude-agent", T.settings.claudeCodeAgent)
+        .addDropdown((d) => {
+          let backendDd: DropdownComponent;
+          backendDd = d
+            .addOption("claude-agent", T.settings.claudeCodeAgent)
             .addOption("native-agent", T.settings.nativeAgent)
             .setValue(eff.backend)
             .onChange(async (v) => {
+              if (v === "claude-agent" && !this.localCache.shellConsentGiven) {
+                backendDd.setValue(eff.backend);
+                new ShellConsentModal(this.plugin.app, this.localCache.iclaudePath, async () => {
+                  await this.patchLocal({ shellConsentGiven: true, backend: "claude-agent" });
+                  this.display();
+                }).open();
+                return;
+              }
               await this.patchLocal({ backend: v as LlmWikiPluginSettings["backend"] });
               this.display();
-            }),
-        );
+            });
+          return d;
+        });
     } else {
       const p = containerEl.createEl("p", {
         text: "Mobile: cloud LLM (native-agent) only. setup guide: ",
