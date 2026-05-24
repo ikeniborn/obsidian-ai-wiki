@@ -3,19 +3,13 @@ import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient, OnFileError } from "../types";
 import { VaultTools } from "../vault-tools";
 import { parseWithRetry } from "./parse-with-retry";
-import { DomainEntrySchema, EntityTypesDeltaSchema } from "./zod-schemas";
+import { DomainEntrySchema } from "./zod-schemas";
 import schemaTemplate from "../../templates/_wiki_schema.md";
+import formatSchemaDefault from "../../templates/_format_schema.md";
 import initTemplate from "../../prompts/init.md";
-import initIncrementalTemplate from "../../prompts/init-incremental.md";
 import { render } from "./template";
 import { runIngest } from "./ingest";
-import { domainWikiFolder } from "../wiki-path";
-
-export function mergeEntityTypes(current: EntityType[], incoming: EntityType[]): EntityType[] {
-  const map = new Map(current.map(e => [e.type, e]));
-  for (const e of incoming) map.set(e.type, e);
-  return [...map.values()];
-}
+import { domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath } from "../wiki-path";
 
 export async function* runInit(
   args: string[],
@@ -87,124 +81,20 @@ export async function* runInit(
     return;
   }
 
-  if (existing?.entity_types?.length) {
+  if (!existing) {
+    yield { kind: "error", message: `init: domain not found: "${domainId}" — add it in settings first` };
+    return;
+  }
+  if (existing.entity_types?.length) {
     yield { kind: "error", message: `Domain "${domainId}" already initialised. Use Lint to update entity_types.` };
     return;
   }
-
-  yield { kind: "assistant_text", delta: `Bootstrapping domain "${domainId}"...\n` };
-
-  const wikiRootGuess = `!Wiki`;
-
-  await ensureRootFiles(vaultTools, wikiRootGuess);
-
-  const start = Date.now();
-  let outputTokens = 0;
-
-  const allFiles = await vaultTools.listFiles("");
-  const sampleFiles = allFiles.slice(0, 5);
-  const samples = await vaultTools.readAll(sampleFiles);
-  const existingDomain = domains.find((d) => d.id === domainId);
-  const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
-    existingDomain
-      ? tryRead(vaultTools, `${domainWikiFolder(existingDomain.wiki_folder)}/_index.md`)
-      : Promise.resolve(""),
-  ]);
-
-  const systemContent = render(initTemplate, {
-    domain_id: domainId,
-    vault_name: vaultName,
-    schema_block: schemaContent ? `\nКонвенции вики (_wiki_schema.md):\n${schemaContent}` : "",
-    index_block: indexContent ? `\nСуществующая структура (_index.md):\n${indexContent}` : "",
-  });
-
-  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    { role: "system", content: systemContent },
-    {
-      role: "user",
-      content: [
-        `Domain ID: ${domainId}`,
-        `Vault name: ${vaultName}`,
-        "",
-        `Примеры файлов vault:`,
-        [...samples.entries()].map(([p, c]) => `${p}:\n${c}`).join("\n\n"),
-      ].join("\n"),
-    },
-  ];
-
-  const collected: RunEvent[] = [];
-  let parsed: { id: string; name: string; wiki_folder: string; entity_types: EntityType[]; language_notes: string };
-  try {
-    const r = await parseWithRetry({
-      llm, model, baseMessages: messages, opts,
-      schema: DomainEntrySchema,
-      maxRetries: opts.structuredRetries ?? 1,
-      callSite: "init.bootstrap",
-      signal,
-      onEvent: (e) => collected.push(e),
-    });
-    parsed = r.value;
-    outputTokens += r.outputTokens;
-    if (r.fullText) yield { kind: "assistant_text", delta: r.fullText };
-  } catch (e) {
-    for (const ev of collected) yield ev;
-    if ((e as Error).name === "AbortError" || signal.aborted) return;
-    yield { kind: "error", message: `Failed to parse domain entry: ${(e as Error).message}` };
+  const effectiveSources = existing.source_paths ?? [];
+  if (!effectiveSources.length) {
+    yield { kind: "error", message: `init: no source_paths configured for "${domainId}" — add them in settings` };
     return;
   }
-  for (const ev of collected) yield ev;
-
-  if (signal.aborted) return;
-
-  let entry: DomainEntry;
-  try {
-    entry = {
-      id: parsed.id,
-      name: parsed.name,
-      wiki_folder: parsed.wiki_folder,
-      entity_types: parsed.entity_types,
-      language_notes: parsed.language_notes,
-    } as DomainEntry;
-    const vaultPrefix = `vaults/${vaultName}/`;
-    if (entry.wiki_folder?.startsWith(vaultPrefix)) {
-      entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
-    }
-    if (entry.wiki_folder?.startsWith("!Wiki/")) {
-      entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
-    }
-    if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
-  } catch (e) {
-    yield { kind: "error", message: `Failed to build domain entry: ${(e as Error).message}` };
-    return;
-  }
-
-  if (dryRun) {
-    yield {
-      kind: "result",
-      durationMs: Date.now() - start,
-      text: `Dry run — domain entry:\n\`\`\`json\n${JSON.stringify(entry, null, 2)}\n\`\`\``,
-      outputTokens: outputTokens || undefined,
-    };
-    return;
-  }
-
-  yield { kind: "tool_use", name: existing ? "UpdateDomain" : "SaveDomain", input: { id: entry.id } };
-  if (existing) {
-    yield { kind: "domain_updated", domainId: entry.id, patch: { entity_types: entry.entity_types, language_notes: entry.language_notes } };
-  } else {
-    yield { kind: "domain_created", entry };
-  }
-  yield { kind: "tool_result", ok: true };
-
-  await appendLog(vaultTools, domainWikiFolder(entry.wiki_folder), domainId);
-
-  yield {
-    kind: "result",
-    durationMs: Date.now() - start,
-    text: `Domain "${domainId}" initialised. Edit entity_types in plugin settings to refine extraction.`,
-    outputTokens: outputTokens || undefined,
-  };
+  yield* runInitWithSources(domainId, effectiveSources, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError);
 }
 
 export async function* runInitWithSources(
@@ -255,8 +145,8 @@ export async function* runInitWithSources(
   }
 
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${wikiRootGuess}/_wiki_schema.md`),
-    tryRead(vaultTools, `${wikiRootGuess}/_index.md`),
+    tryRead(vaultTools, `${wikiRootGuess}/.config/_wiki_schema.md`),
+    tryRead(vaultTools, domainIndexPath(wikiRootGuess)),
   ]);
 
   let currentDomain: DomainEntry | null = existing ?? null;
@@ -327,9 +217,12 @@ export async function* runInitWithSources(
           entity_types: parsed.entity_types,
           language_notes: parsed.language_notes,
         } as DomainEntry;
-        const vaultPrefix = `vaults/${vaultName}/`;
-        if (entry.wiki_folder?.startsWith(vaultPrefix)) entry.wiki_folder = entry.wiki_folder.slice(vaultPrefix.length);
-        if (entry.wiki_folder?.startsWith("!Wiki/")) entry.wiki_folder = entry.wiki_folder.slice("!Wiki/".length);
+        entry.wiki_folder = sanitizeWikiFolder(entry.wiki_folder ?? "");
+        for (const et of entry.entity_types ?? []) {
+          if (et.wiki_subfolder) et.wiki_subfolder = sanitizeWikiSubfolder(et.wiki_subfolder);
+          // LLM sometimes echoes domain_id as wiki_subfolder → creates !Wiki/os/os paths
+          if (et.wiki_subfolder === domainId) et.wiki_subfolder = "";
+        }
         if (!entry.id || !entry.wiki_folder) throw new Error("Missing required fields");
         // На reinit (force=true) wiki_folder уже зафиксирован — LLM не должен его менять.
         if (force && existing) {
@@ -377,61 +270,10 @@ export async function* runInitWithSources(
       }
       yield { kind: "tool_result", ok: true };
     } else {
-      // Incremental: delta entity_types
-      const currentEntityTypes = currentDomain?.entity_types ?? [];
-      const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-        { role: "system", content: initIncrementalTemplate },
-        { role: "user", content: `Текущие entity_types:\n${JSON.stringify(currentEntityTypes, null, 2)}\n\nФайл: ${file}\n\n${fileContent}` },
-      ];
-
-      const collected: RunEvent[] = [];
-      let parsed: { entity_types?: EntityType[]; language_notes?: string };
-      try {
-        const r = await parseWithRetry({
-          llm, model, baseMessages: messages, opts,
-          schema: EntityTypesDeltaSchema,
-          maxRetries: opts.structuredRetries ?? 1,
-          callSite: "init.delta",
-          signal,
-          onEvent: (e) => collected.push(e),
-        });
-        parsed = r.value;
-        outputTokens += r.outputTokens;
-      } catch (e) {
-        for (const ev of collected) yield ev;
-        if ((e as Error).name === "AbortError" || signal.aborted) return;
-        yield { kind: "assistant_text", delta: `⚠ ${file}: LLM вернул невалидный JSON, пропускаем (${(e as Error).message})\n` };
-        yield { kind: "file_done", file };
-        continue;
-      }
-      for (const ev of collected) yield ev;
-
-      if (signal.aborted) return;
-
-      const delta = { entity_types: parsed.entity_types, language_notes: parsed.language_notes };
-
       if (!currentDomain) {
         yield { kind: "file_done", file };
         continue;
       }
-
-      const mergedTypes = mergeEntityTypes(currentDomain.entity_types ?? [], delta.entity_types ?? []);
-      currentDomain = {
-        ...currentDomain,
-        entity_types: mergedTypes,
-        language_notes: delta.language_notes ?? currentDomain.language_notes,
-        analyzed_sources_v2: true,
-      };
-
-      yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
-      yield {
-        kind: "domain_updated", domainId,
-        patch: {
-          entity_types: currentDomain.entity_types,
-          language_notes: currentDomain.language_notes,
-        },
-      };
-      yield { kind: "tool_result", ok: true };
     }
 
     if (signal.aborted) return;
@@ -440,7 +282,7 @@ export async function* runInitWithSources(
       continue;
     }
 
-    // --- Step 2: Ingest (immediate write) ---
+    // --- Ingest: write pages + intercept domain_updated for entity_types propagation ---
     let retried = false;
     let done = false;
     while (!done) {
@@ -449,6 +291,9 @@ export async function* runInitWithSources(
       try {
         for await (const ev of runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts)) {
           yield ev;
+          if (ev.kind === "domain_updated" && ev.domainId === domainId) {
+            currentDomain = { ...currentDomain, ...ev.patch };
+          }
         }
         done = true;
       } catch (e) {
@@ -474,7 +319,11 @@ export async function* runInitWithSources(
     yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
     yield {
       kind: "domain_updated", domainId,
-      patch: { analyzed_sources: currentDomain.analyzed_sources },
+      patch: {
+        entity_types: currentDomain.entity_types,
+        language_notes: currentDomain.language_notes,
+        analyzed_sources: currentDomain.analyzed_sources,
+      },
     };
     yield { kind: "tool_result", ok: true };
 
@@ -485,8 +334,6 @@ export async function* runInitWithSources(
     yield { kind: "error", message: `init --sources: не удалось создать домен из файлов` };
     return;
   }
-
-  await appendLog(vaultTools, wikiRootGuess, domainId);
 
   yield {
     kind: "result",
@@ -505,28 +352,24 @@ export async function wipeDomainFolder(vaultTools: VaultTools, wikiFolder: strin
   return files;
 }
 
-async function appendLog(vaultTools: VaultTools, wikiRoot: string, domainId: string): Promise<void> {
-  const logPath = `${wikiRoot}/_log.md`;
-  const today = new Date().toISOString().slice(0, 10);
-  const entry = `\n## ${today} — init — ${domainId}\n- Домен создан\n`;
-  try {
-    const existing = await tryRead(vaultTools, logPath);
-    await vaultTools.write(logPath, existing + entry);
-  } catch { /* не критично */ }
-}
-
 async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
   try { return await vaultTools.read(path); } catch { return ""; }
 }
 
 async function ensureRootFiles(vaultTools: VaultTools, wikiRoot: string): Promise<void> {
-  const schema = `${wikiRoot}/_wiki_schema.md`;
-  const legacyIndex = `${wikiRoot}/_index.md`;
-  const legacyLog   = `${wikiRoot}/_log.md`;
+  const configDir    = `${wikiRoot}/.config`;
+  const wikiSchema   = `${configDir}/_wiki_schema.md`;
+  const formatSchema = `${configDir}/_format_schema.md`;
+  const legacyIndex  = `${wikiRoot}/_index.md`;
+  const legacyLog    = `${wikiRoot}/_log.md`;
+
+  try { await vaultTools.mkdir(wikiRoot); } catch { /* already exists */ }
+  try { await vaultTools.mkdir(configDir); } catch { /* already exists */ }
 
   try {
-    if (!(await vaultTools.exists(schema))) await vaultTools.write(schema, schemaTemplate);
+    if (!(await vaultTools.exists(wikiSchema)))   await vaultTools.write(wikiSchema, schemaTemplate);
+    if (!(await vaultTools.exists(formatSchema)))  await vaultTools.write(formatSchema, formatSchemaDefault);
     if (await vaultTools.exists(legacyIndex)) await vaultTools.remove(legacyIndex);
     if (await vaultTools.exists(legacyLog))   await vaultTools.remove(legacyLog);
-  } catch { /* не блокируем init */ }
+  } catch { /* не блокируем */ }
 }

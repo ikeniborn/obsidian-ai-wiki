@@ -7,7 +7,8 @@ import { parseWithRetry } from "./parse-with-retry";
 import { SeedsSchema } from "./zod-schemas";
 import queryTemplate from "../../prompts/query.md";
 import { render } from "./template";
-import { domainWikiFolder } from "../wiki-path";
+import { domainWikiFolder, domainIndexPath } from "../wiki-path";
+import { ensureDomainConfig } from "../domain-config";
 import { pageId, bfsExpand } from "../wiki-graph";
 import { graphCache } from "../wiki-graph-cache";
 import { selectSeeds } from "../wiki-seeds";
@@ -46,51 +47,94 @@ export async function* runQuery(
     return;
   }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
-  const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
 
+  await ensureDomainConfig(vaultTools, wikiVaultPath);
+
+  // Phase 1: read index (no full file scan yet)
+  const indexContent = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
+  if (signal.aborted) return;
+
+  const indexAnnotations = parseIndexAnnotations(indexContent);
+  const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
+  const minScore = Math.max(0, Math.min(1, seedMinScore));
+  const start = Date.now();
+  let outputTokens = 0;
+
+  // Phase 2: seed selection from index annotations (no file content needed)
+  // Synthetic pages: empty content so only pageId + annotation tokens score
+  const syntheticPages = new Map<string, string>(
+    [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""])
+  );
+  let seeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+
+  if (seeds.length === 0 && indexAnnotations.size > 0) {
+    if (signal.aborted) return;
+    const allAnnotatedIds = [...indexAnnotations.keys()];
+    yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allAnnotatedIds.length } };
+    const seedOpts = { ...opts, thinkingBudgetTokens: undefined };
+    const seedRes = await llmSelectSeeds(question, indexAnnotations, allAnnotatedIds, llm, model, seedOpts, signal);
+    seeds = seedRes.seeds;
+    outputTokens += seedRes.outputTokens;
+    yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
+  }
+  if (signal.aborted) return;
+
+  // Phase 3: glob (cheap — no content) + targeted read
   yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
   const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
   if (signal.aborted) return;
 
-  const [indexContent, schemaContent] = await Promise.all([
-    tryRead(vaultTools, `${wikiVaultPath}/_index.md`),
-    tryRead(vaultTools, `${schemaRoot}/_wiki_schema.md`),
-  ]);
+  const idToPath = new Map<string, string>(files.map((f) => [pageId(f), f]));
 
-  yield { kind: "tool_use", name: "Read", input: { files: files.length } };
-  const pages = await vaultTools.readAll(files);
-  yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
-  if (signal.aborted) return;
+  let pages: Map<string, string>;
+  let fromCache: boolean;
+  let selectedIds: Set<string>;
 
-  const start = Date.now();
-  let outputTokens = 0;
-
-  // Graph-filtered context
-  const { graph, fromCache } = graphCache.get(domain.id, pages);
-  const allPageIds = [...pages.keys()].map(pageId);
-  const indexAnnotations = parseIndexAnnotations(indexContent);
-  const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
-  const minScore = Math.max(0, Math.min(1, seedMinScore));
-  let seeds = selectSeeds(question, pages, topK, minScore, indexAnnotations);
-  if (seeds.length === 0) {
+  if (seeds.length > 0) {
+    // Targeted read: only seed files
+    const seedPaths = seeds.map((id) => idToPath.get(id)).filter((p): p is string => !!p);
+    yield { kind: "tool_use", name: "Read", input: { files: seedPaths.length } };
+    pages = await vaultTools.readAll(seedPaths);
+    yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
+    fromCache = false;
+    selectedIds = new Set(seeds);
+    yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache };
+  } else {
+    // Full fallback: read all + graph + BFS
+    yield { kind: "tool_use", name: "Read", input: { files: files.length } };
+    pages = await vaultTools.readAll(files);
+    yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
     if (signal.aborted) return;
-    yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allPageIds.length } };
-    const seedOpts = { ...opts, thinkingBudgetTokens: undefined };
-    const seedRes = await llmSelectSeeds(question, indexAnnotations, allPageIds, llm, model, seedOpts, signal);
-    seeds = seedRes.seeds;
-    outputTokens += seedRes.outputTokens;
-    yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
+
+    const graphResult = graphCache.get(domain.id, pages);
+    fromCache = graphResult.fromCache;
+    const allPageIds = [...pages.keys()].map(pageId);
+    seeds = selectSeeds(question, pages, topK, minScore, indexAnnotations);
+    if (seeds.length === 0) {
+      yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allPageIds.length } };
+      const seedOpts = { ...opts, thinkingBudgetTokens: undefined };
+      const seedRes = await llmSelectSeeds(question, indexAnnotations, allPageIds, llm, model, seedOpts, signal);
+      seeds = seedRes.seeds;
+      outputTokens += seedRes.outputTokens;
+      yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
+    }
+    if (signal.aborted) return;
+    if (seeds.length === 0) {
+      yield { kind: "error", message: "No relevant pages found for this query." };
+      return;
+    }
+    selectedIds = bfsExpand(seeds, graphResult.graph, graphDepth);
+    yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: pages.size, fromCache };
   }
-  if (signal.aborted) return;
+
   if (seeds.length === 0) {
     yield { kind: "error", message: "No relevant pages found for this query." };
     return;
   }
+
   const seedSet = new Set(seeds);
-  const selectedIds = bfsExpand(seeds, graph, graphDepth);
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: pages.size, fromCache };
   const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);
 
   const entityTypesBlock = buildEntityTypesBlock(domain);
@@ -98,7 +142,6 @@ export async function* runQuery(
   const systemPrompt = render(queryTemplate, {
     domain_name: domain.name,
     entity_types_block: entityTypesBlock,
-    schema_block: schemaContent ? `\nКонвенции (_wiki_schema.md):\n${schemaContent}` : "",
     index_block: indexContent ? `\nВики-индекс (_index.md):\n${indexContent}` : "",
   });
 

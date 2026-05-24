@@ -4,7 +4,6 @@ import type { DomainEntry, EntityType } from "./domain";
 export type WikiOperation =
   | "ingest"
   | "query"
-  | "query-save"
   | "lint"
   | "lint-chat"
   | "chat"
@@ -58,7 +57,7 @@ export type RunEvent =
   | { kind: "format_applied"; path: string }
   | { kind: "format_cancelled" }
   | { kind: "structural_error";
-      callSite: "init.bootstrap" | "init.delta" | "lint.patch" | "lint-chat.fix" | "query.seeds";
+      callSite: "init.bootstrap" | "init.delta" | "lint.patch" | "lint.fix" | "lint-chat.fix" | "query.seeds" | "ingest.pages" | "format.output";
       errorType: "json_parse" | "schema_validate";
       retryAttempt: number;
       succeeded: boolean | null;
@@ -168,7 +167,7 @@ export interface LlmWikiPluginSettings {
 }
 
 export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
-  backend: "claude-agent",
+  backend: "native-agent",
   systemPrompt: "",
   agentLogEnabled: false,
   historyLimit: 20,

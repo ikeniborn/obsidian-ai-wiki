@@ -297,3 +297,183 @@
   - `документация/операции/lint-operation.md` — upsertIndexAnnotation, удалён flat index rewrite, annotation в промпте
 
 **Пропущено:** 0
+
+## 2026-05-18 — ingest security-audit-fixes (spec + plan)
+
+**Операция:** ingest (batch)
+**Домен:** документация
+**Источники:**
+  - `docs/superpowers/specs/2026-05-18-security-audit-fixes-design.md`
+  - `docs/superpowers/plans/2026-05-18-security-audit-fixes.md`
+  - `README.md`
+
+**Создано:** 2
+  - `документация/спецификации/security-audit-fixes-design.md` (mature) — два замечания review bot: Finding 1 (vault enumeration → collectMdInPaths+walkFolder), Finding 2 (shell execution → probe-spawn→fs.access, validateIclaudePath, ShellConsentModal с onLayoutReady + controller guard, README Security)
+  - `документация/планы/security-audit-fixes-plan.md` (mature) — 5 TDD-задач: Task 1 (getFiles→helpers), Task 2 (settings.ts no spawn), Task 3 (validateIclaudePath), Task 4 (consent modal+guard), Task 5 (README)
+
+**Обновлено:** index.md (спецификации 12→13, планы 8→9), log.md
+
+**Пропущено:** README.md — Security section уже присутствует в README (реализована Task 5), содержимое покрыто в обеих wiki-страницах
+
+---
+
+## 2026-05-18 — ingest lint-ux-fixes (spec + plan)
+
+**Операция:** ingest (batch)
+**Домен:** документация
+**Источники:**
+  - `docs/superpowers/specs/2026-05-18-lint-ux-fixes-design.md`
+  - `docs/superpowers/plans/2026-05-18-lint-ux-fixes.md`
+
+**Создано:** 2
+  - `документация/спецификации/lint-ux-fixes-design.md` (mature) — пять независимых UX-фиксов: Fix 1 (appendLintLog в _log.md), Fix 2 (dedup dead-links через new Set), Fix 3 (lint-chat domain fallback + i18n selectDomainFirst), Fix 4 (copy button на чат-сообщениях, hover-reveal CSS), Fix 5 (убрать ASSISTANT_TEXT_MAX + waiting indicator tool_result→tool_use/assistant_text)
+  - `документация/планы/lint-ux-fixes-plan.md` (mature) — 6 TDD-задач: Task 1 (appendLintLog), Task 2 (checkStructure dedup), Task 3 (i18n + domain fallback), Task 4 (copy btn CSS+TS), Task 5a (ASSISTANT_TEXT_MAX), Task 5b (waiting indicator поля+методы+wiring)
+
+**Обновлено:** index.md (спецификации 13→14, планы 9→10), log.md
+
+---
+
+## 2026-05-18 — ingest README.md + docs/TODO.md
+
+**Операция:** ingest  
+**Домен:** документация  
+**Источники:**
+  - `README.md`
+  - `docs/TODO.md`
+
+**Создано страниц:** 2
+  - `документация/компоненты/settings.md` (developing) — полный справочник настроек плагина: General, Domains, Backend selector, Claude Agent (включая shellConsentGiven), Native Agent (per-operation, structured output retries), Proxy, Graph, Dev mode
+  - `документация/паттерны/shell-consent.md` (stub) — паттерн первого запуска: модальный диалог согласия перед spawn внешнего процесса, флаг `shellConsentGiven` в data.json, механизм отзыва
+
+**Обновлено страниц:** 2
+  - `документация/операции/lint-operation.md` — добавлен раздел «Известные проблемы» с TODO-пунктами 9/10/13/14 (статусы `[v]`/`[>]`): деdup dead-links (исправлено, коммит cddfb51), lint-chat ошибка, неполный прогресс + waiting indicator, lint не пишет в log/index
+  - `документация/компоненты/llm-wiki-view.md` — добавлены разделы: copy-to-clipboard кнопка на чат-пузырях (коммит ba9f192), waiting indicator между tool_result и следующим LLM-событием (коммит 5547cc2)
+
+**Не создано (уже покрыто):**
+  - Операции (ingest/query/lint/init/chat/format) — покрыты в предыдущих ingest
+  - TODO items 9–14 на уровне спецификаций — покрыты `lint-ux-fixes-design.md` и `security-audit-fixes-design.md`
+  - Security section README — покрыта `security-audit-fixes-design.md`
+
+**Обновлено:** index.md (компоненты 10→11, паттерны 6→7), log.md
+
+---
+
+## 2026-05-19 — ingest README.md + docs/ + prompts/
+
+**Операция:** ingest  
+**Домен:** документация  
+**Источники:**
+  - `README.md`
+  - `docs/superpowers/specs/2026-05-19-live-response-ux-design.md`
+  - `docs/superpowers/plans/2026-05-19-live-response-ux.md`
+  - `docs/superpowers/specs/2026-05-19-live-status-ux-design.md`
+  - `docs/superpowers/plans/2026-05-19-live-status-ux.md`
+  - `docs/superpowers/specs/2026-05-19-index-path-annotation-design.md`
+  - `docs/superpowers/plans/2026-05-19-index-path-annotation.md`
+  - `docs/superpowers/specs/2026-05-19-wiki-path-hierarchy-design.md`
+  - `docs/superpowers/plans/2026-05-19-wiki-path-hierarchy.md`
+  - `docs/superpowers/specs/2026-05-19-agent-stability-audit-design.md`
+  - `prompts/ingest.md` (ПРАВИЛО ПУТЕЙ уже добавлено)
+  - `prompts/init.md` (ПРАВИЛО wiki_subfolder)
+
+**Создано страниц:** 9
+  - `документация/спецификации/live-response-ux-design.md` (mature) — streaming assistant_text в Result section, scheduleAssistantRender(), авто-коллапс Progress
+  - `документация/планы/live-response-ux-plan.md` (mature) — 9 tasks; реализован v0.1.110, заменён live-status-ux
+  - `документация/спецификации/live-status-ux-design.md` (mature) — Status-блок вместо streaming; Progress остаётся открытым; liveStatusSection/IconEl/TextEl
+  - `документация/планы/live-status-ux-plan.md` (mature) — 10 tasks; реализован v0.1.111
+  - `документация/спецификации/index-path-annotation-design.md` (mature) — новый формат `pid: [[pid]] path | annotation`, backward compat
+  - `документация/планы/index-path-annotation-plan.md` (mature) — 5 TDD-задач; реализован v0.1.109
+  - `документация/спецификации/wiki-path-hierarchy-design.md` (mature) — sanitize/validate функции, retry в ingest
+  - `документация/планы/wiki-path-hierarchy-plan.md` (mature) — 4 TDD-задачи (wiki-path.ts, init, ingest, prompts)
+  - `документация/спецификации/agent-stability-audit-design.md` (mature) — Zod схемы для page-arrays, lint merge assess+fix, format Zod
+
+**Обновлено страниц:** 3
+  - `документация/компоненты/llm-wiki-view.md` — добавлены разделы Live Response UX (v0.1.110) и Live Status UX (v0.1.111) с таблицей Status по событиям
+  - `документация/компоненты/wiki-index.md` — обновлён API (fullPath param), новый формат _index.md, backward compat, история изменений
+  - `документация/операции/lint-operation.md` — добавлен раздел agent-stability-audit (planned merge assess+fix, LintOutputSchema, UI-прогресс)
+
+**Обновлено:** index.md (спецификации 14→19, планы 10→14), log.md
+
+---
+
+## 2026-05-20 — ingest (prompts/ingest.md, prompts/lint.md)
+
+**Операция:** ingest
+**Домен:** документация
+**Источники:**
+- `prompts/ingest.md`
+- `prompts/lint.md`
+
+**Создано страниц:** 0
+
+**Обновлено страниц:** 2
+- `документация/операции/ingest-operation.md` — обновлён по agent-stability-audit-design: промпт теперь возвращает `{reasoning, pages}` вместо сырого массива; `parseJsonPages` заменена на `parseWithRetry(WikiPagesOutputSchema)`; добавлено правило путей (4 сегмента); обновлены wiki_keywords, wiki_sources, история изменений
+- `документация/операции/lint-operation.md` — обновлён по agent-stability-audit-design: промпт lint.md возвращает `{reasoning, report, fixes}` (combined assess+fix); раздел "Agent Stability Audit: Merge assess+fix" переведён из planned в реализовано; `buildFixMessages` удалена; обновлены wiki_keywords, wiki_sources, история изменений
+
+**Обновлено:** log.md
+
+---
+
+## 2026-05-20 — ingest (wiki-config-schema-log-index-design spec + TODO)
+
+**Операция:** ingest
+**Домен:** документация
+**Источники:**
+- `docs/superpowers/specs/2026-05-20-wiki-config-schema-log-index-design.md`
+- `docs/TODO.md`
+
+**Создано страниц:** 2
+- `документация/спецификации/wiki-config-schema-log-index-design.md` (mature) — три улучшения: config-layout (.config/), grouped Markdown index, enriched log format; новый модуль wiki-log.ts; wiki-index.ts перепись
+- `документация/компоненты/wiki-log.md` (developing) — appendWikiLog API, LogOperation/IngestLogEntry типы, формат записей ingest/lint/fix
+
+**Обновлено страниц:** 0
+
+**Обновлено:** index.md (компоненты 11→12, спецификации 19→20), log.md
+
+---
+
+## 2026-05-23 — ingest docs/TODO.md (бэклог задач)
+
+**Операция:** ingest
+**Домен:** документация
+**Источник:** `docs/TODO.md`
+
+**Создано страниц:** 0
+
+**Обновлено страниц:** 5
+- `документация/операции/query-operation.md` — добавлен раздел «Варианты запуска (актуально)» (задача #30: убрать "Ask and save") и «Известные проблемы» (задачи #7, #30, #32); обновлены wiki_sources, wiki_updated
+- `документация/операции/lint-operation.md` — в таблицу «Известные проблемы» добавлены задачи #21 (lint-chat новый процесс неверно) и #22 (некорректная запись в лог); обновлены wiki_updated
+- `документация/операции/chat-operation.md` — добавлен раздел «Известные проблемы» (задачи #10, #21, #22); обновлены wiki_sources, wiki_updated
+- `документация/компоненты/llm-wiki-view.md` — добавлен раздел «Известные проблемы» (задачи #20, #23, #29, #31, #33); обновлены wiki_updated
+- `документация/компоненты/settings.md` — добавлен раздел «Известные проблемы» (задачи #12, #16, #27, #29); обновлены wiki_updated
+
+**Пропущено (уже покрыто ранее):**
+- Задачи 1–5, 8, 9, 13, 14, 17–19, 25, 28 — реализованы (`[v]`) или отражены в существующих wiki-страницах
+- Задача 24 (архитектура ecom1-agent/.wiki) — исследовательская задача, не создаёт wiki-сущности
+- Задача 26 (проверка prompt-architecture.md) — задача-ревью, не создаёт wiki-сущности
+- Задача 4 (README примеры) — вне scope документации wiki
+
+**Обновлено:** log.md
+
+---
+
+## 2026-05-24 — ingest docs/superpowers/specs/2026-05-23-ux-cleanup-design.md, docs/superpowers/plans/2026-05-23-ux-cleanup.md, docs/TODO.md
+
+**Операция:** ingest  
+**Домен:** документация  
+**Источники:**
+- `docs/superpowers/specs/2026-05-23-ux-cleanup-design.md`
+- `docs/superpowers/plans/2026-05-23-ux-cleanup.md`
+- `docs/TODO.md`
+
+**Создано страниц:** 2
+- `документация/спецификации/ux-cleanup-design.md` — UX Cleanup Design: consent per-switch (#29), удаление query-save (#30+), авто-коллапс Progress (#31)
+- `документация/планы/ux-cleanup-plan.md` — UX Cleanup Implementation Plan (8 задач, 10 файлов)
+
+**Обновлено страниц:** 5
+- `документация/компоненты/llm-wiki-view.md` — задачи #30, #31 отмечены как спец/план; добавлены ссылки [[ux-cleanup-design]], [[ux-cleanup-plan]]; wiki_sources дополнены
+- `документация/компоненты/settings.md` — задача #29 отмечена как спец/план; описание ShellConsent обновлено (per-switch вместо first-run); добавлены ссылки
+- `документация/паттерны/shell-consent.md` — переименован First-Run → Per-Switch; механизм обновлён: modal fires on every switch; добавлена история изменения
+- `документация/операции/query-operation.md` — удалено описание query-save; добавлен раздел «Удаление query-save (Task 30+)»; задача #30 отмечена реализованной в плане
+- `.config/index.md` — добавлены [[ux-cleanup-design]] и [[ux-cleanup-plan]]
+

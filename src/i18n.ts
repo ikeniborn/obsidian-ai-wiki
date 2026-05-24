@@ -20,7 +20,7 @@ const en = {
     historyLimit_name: "History limit",
     historyLimit_desc: "Maximum operations in the sidebar history.",
     agentLog_name: "Agent log (JSONL)",
-    agentLog_desc: "Log agent events to <vault>/!Logs/agent.jsonl. Folder is created automatically.",
+    agentLog_desc: "Log agent events to <vault>/!Wiki/.config/_agent.jsonl.",
     backend_name: "Backend",
     backend_desc: "Select the backend for operations.",
     claudeCodeAgent: "Claude Code agent",
@@ -87,8 +87,11 @@ const en = {
   view: {
     refreshTitle: "Refresh domains",
     mobileWaiting: "⏳ Waiting for LLM response…",
+    analysing: "Analysing…",
+    formingResponse: "Forming response…",
     reinitTitle: "Re-init domain (wipe + rebuild)",
     reinitNoSources: "Domain has no source_paths — re-init not possible",
+    addSourceTitle: "Manage sources for domain",
     addDomain: "Add domain",
     sectionCreate: "Create",
     sectionDomain: "Fill / Maintain",
@@ -115,9 +118,8 @@ const en = {
     fixSend: "Send",
     chatLabel: "Chat",
     chatSend: "Send",
-    init: "Init new domain",
+    init: "Init",
     ask: "Ask",
-    askAndSave: "Ask and save",
     cancel: "Cancel",
     result: "Result",
     history: "History",
@@ -132,6 +134,7 @@ const en = {
     stepsCount: (n: number, s: string) => `${n} steps · ${s}s`,
     starting: "Starting",
     initialising: "Initialising",
+    selectDomainFirst: "Select a domain first",
   },
   ctrl: {
     cancelling: "Cancelling…",
@@ -148,7 +151,6 @@ const en = {
     openPanel: "Open panel",
     ingestActive: "Ingest active file",
     query: "Query",
-    querySave: "Query and save as page",
     lint: "Lint domain",
     init: "Init domain",
     cancel: "Cancel operation",
@@ -181,8 +183,8 @@ const en = {
     initConfirmBody: (files: number, folders: number) =>
       `Found ${files} .md files in ${folders} folder(s). Run init to analyze sources and create wiki pages?`,
     reinitConfirmTitle: "Re-init — confirm",
-    reinitConfirmBody: (id: string, files: number, srcCount: number) =>
-      `Domain «${id}»: entire wiki folder will be deleted and rebuilt from ${files} md-files (${srcCount} source paths). Continue?`,
+    reinitConfirmBody: (id: string, wikiFiles: number, srcFiles: number, srcCount: number) =>
+      `Domain «${id}»: ${wikiFiles} wiki files will be deleted and rebuilt from ${srcFiles} md-files (${srcCount} source paths). Continue?`,
     fileErrorTitle: "Error processing file",
     fileErrorSkip: "Skip",
     fileErrorRetry: "Retry",
@@ -203,6 +205,17 @@ const en = {
     busyCloseBody: "Abort the operation or leave it running in the background?",
     busyCloseAbort: "Abort operation",
     busyCloseLeave: "Leave in background",
+    shellConsentTitle: "⚠ Shell Execution Notice",
+    shellConsentBody: (iclaudePath: string) =>
+      `This plugin runs an external process:\n  ${iclaudePath}\nwith your operating system user's permissions. This is required for AI Wiki to function. Review the path above, then confirm to enable.`,
+    shellConsentEnable: "I understand, enable",
+    manageSourcesTitle: (id: string) => `Sources: «${id}»`,
+    ingestScopeTitle: "Sources saved — run ingest?",
+    ingestScopeBody: (added: number, total: number) =>
+      `Added ${added} new path(s). Ingest new only or all ${total} path(s)?`,
+    ingestScopeNew: (n: number) => `New only (${n})`,
+    ingestScopeAll: (n: number) => `All (${n})`,
+    ingestScopeSkip: "Skip",
   },
 };
 
@@ -228,7 +241,7 @@ const ru: I18n = {
     historyLimit_name: "Лимит истории",
     historyLimit_desc: "Максимум операций в истории боковой панели.",
     agentLog_name: "Лог агента (JSONL)",
-    agentLog_desc: "Записывает события агента в <vault>/!Logs/agent.jsonl. Папка создаётся автоматически.",
+    agentLog_desc: "Записывает события агента в <vault>/!Wiki/.config/_agent.jsonl.",
     backend_name: "Backend",
     backend_desc: "Выберите бэкенд для выполнения операций.",
     claudeCodeAgent: "Claude Code agent",
@@ -295,8 +308,11 @@ const ru: I18n = {
   view: {
     refreshTitle: "Обновить домены",
     mobileWaiting: "⏳ Ожидание ответа от LLM…",
+    analysing: "Анализирует…",
+    formingResponse: "Формирует ответ…",
     reinitTitle: "Переинициализация домена (wipe + заново)",
     reinitNoSources: "У домена нет source_paths — re-init невозможен",
+    addSourceTitle: "Управление источниками домена",
     addDomain: "Добавить домен",
     sectionCreate: "Создание",
     sectionDomain: "Наполнение / Актуализация",
@@ -323,9 +339,8 @@ const ru: I18n = {
     fixSend: "Отправить",
     chatLabel: "Чат",
     chatSend: "Отправить",
-    init: "Init — новый домен",
+    init: "Init",
     ask: "Спросить",
-    askAndSave: "Спросить и сохранить",
     cancel: "Отмена",
     result: "Результат",
     history: "История",
@@ -340,6 +355,7 @@ const ru: I18n = {
     stepsCount: (n: number, s: string) => `${n} шагов · ${s}с`,
     starting: "Запуск",
     initialising: "Инициализация",
+    selectDomainFirst: "Выберите домен",
   },
   ctrl: {
     cancelling: "Отмена…",
@@ -356,7 +372,6 @@ const ru: I18n = {
     openPanel: "Открыть панель",
     ingestActive: "Ingestion активного файла",
     query: "Запрос",
-    querySave: "Запрос и сохранить как страницу",
     lint: "Lint домена",
     init: "Init домена",
     cancel: "Отмена операции",
@@ -389,8 +404,8 @@ const ru: I18n = {
     initConfirmBody: (files: number, folders: number) =>
       `Найдено ${files} .md файлов в ${folders} папках. Запустить init для анализа источников и создания wiki-страниц?`,
     reinitConfirmTitle: "Re-init — подтвердите",
-    reinitConfirmBody: (id: string, files: number, srcCount: number) =>
-      `Домен «${id}»: будет удалена вся вики-папка домена и пересобрана из ${files} md-файлов (${srcCount} sourcePaths). Продолжить?`,
+    reinitConfirmBody: (id: string, wikiFiles: number, srcFiles: number, srcCount: number) =>
+      `Домен «${id}»: будет удалено ${wikiFiles} wiki-файлов и пересобрано из ${srcFiles} md-файлов (${srcCount} sourcePaths). Продолжить?`,
     fileErrorTitle: "Ошибка при обработке файла",
     fileErrorSkip: "Пропустить",
     fileErrorRetry: "Повторить",
@@ -411,6 +426,17 @@ const ru: I18n = {
     busyCloseBody: "Прервать операцию или оставить выполняться в фоне?",
     busyCloseAbort: "Прервать операцию",
     busyCloseLeave: "Оставить в фоне",
+    shellConsentTitle: "⚠ Запуск внешнего процесса",
+    shellConsentBody: (iclaudePath: string) =>
+      `Плагин запускает внешний процесс:\n  ${iclaudePath}\nс правами вашего системного пользователя. Это необходимо для работы AI Wiki. Проверьте путь выше, затем подтвердите включение.`,
+    shellConsentEnable: "Понимаю, включить",
+    manageSourcesTitle: (id: string) => `Источники: «${id}»`,
+    ingestScopeTitle: "Источники сохранены — запустить ingest?",
+    ingestScopeBody: (added: number, total: number) =>
+      `Добавлено ${added} новых путей. Ingest только новых или всех ${total}?`,
+    ingestScopeNew: (n: number) => `Только новые (${n})`,
+    ingestScopeAll: (n: number) => `Все (${n})`,
+    ingestScopeSkip: "Пропустить",
   },
 };
 
@@ -434,7 +460,7 @@ const es: I18n = {
     historyLimit_name: "Límite de historial",
     historyLimit_desc: "Máximo de operaciones en el historial del panel lateral.",
     agentLog_name: "Log del agente (JSONL)",
-    agentLog_desc: "Registra eventos del agente en <vault>/!Logs/agent.jsonl. La carpeta se crea automáticamente.",
+    agentLog_desc: "Registra eventos del agente en <vault>/!Wiki/.config/_agent.jsonl.",
     backend_name: "Backend",
     backend_desc: "Selecciona el backend para las operaciones.",
     claudeCodeAgent: "Claude Code agent",
@@ -501,8 +527,11 @@ const es: I18n = {
   view: {
     refreshTitle: "Actualizar dominios",
     mobileWaiting: "⏳ Esperando respuesta del LLM…",
+    analysing: "Analizando…",
+    formingResponse: "Formando respuesta…",
     reinitTitle: "Re-init del dominio (borrar + reconstruir)",
     reinitNoSources: "El dominio no tiene source_paths — re-init imposible",
+    addSourceTitle: "Gestionar fuentes del dominio",
     addDomain: "Añadir dominio",
     sectionCreate: "Crear",
     sectionDomain: "Rellenar / Mantener",
@@ -529,9 +558,8 @@ const es: I18n = {
     fixSend: "Enviar",
     chatLabel: "Chat",
     chatSend: "Enviar",
-    init: "Init — nuevo dominio",
+    init: "Init",
     ask: "Preguntar",
-    askAndSave: "Preguntar y guardar",
     cancel: "Cancelar",
     result: "Resultado",
     history: "Historial",
@@ -546,6 +574,7 @@ const es: I18n = {
     stepsCount: (n: number, s: string) => `${n} pasos · ${s}s`,
     starting: "Iniciando",
     initialising: "Inicializando",
+    selectDomainFirst: "Selecciona un dominio primero",
   },
   ctrl: {
     cancelling: "Cancelando…",
@@ -562,7 +591,6 @@ const es: I18n = {
     openPanel: "Abrir panel",
     ingestActive: "Ingest del archivo activo",
     query: "Consulta",
-    querySave: "Consulta y guardar como página",
     lint: "Lint del dominio",
     init: "Init del dominio",
     cancel: "Cancelar operación",
@@ -595,8 +623,8 @@ const es: I18n = {
     initConfirmBody: (files: number, folders: number) =>
       `Se encontraron ${files} archivos .md en ${folders} carpeta(s). ¿Ejecutar init para analizar fuentes y crear páginas wiki?`,
     reinitConfirmTitle: "Re-init — confirmar",
-    reinitConfirmBody: (id: string, files: number, srcCount: number) =>
-      `Dominio «${id}»: se borrará toda la carpeta wiki del dominio y se reconstruirá desde ${files} archivos md (${srcCount} rutas fuente). ¿Continuar?`,
+    reinitConfirmBody: (id: string, wikiFiles: number, srcFiles: number, srcCount: number) =>
+      `Dominio «${id}»: se borrarán ${wikiFiles} archivos wiki y se reconstruirán desde ${srcFiles} archivos md (${srcCount} rutas fuente). ¿Continuar?`,
     fileErrorTitle: "Error al procesar archivo",
     fileErrorSkip: "Saltar",
     fileErrorRetry: "Reintentar",
@@ -617,6 +645,17 @@ const es: I18n = {
     busyCloseBody: "¿Abortar la operación o dejarla ejecutarse en segundo plano?",
     busyCloseAbort: "Abortar operación",
     busyCloseLeave: "Dejar en segundo plano",
+    shellConsentTitle: "⚠ Ejecución de proceso externo",
+    shellConsentBody: (iclaudePath: string) =>
+      `Este plugin ejecuta un proceso externo:\n  ${iclaudePath}\ncon los permisos de su usuario del sistema operativo. Es necesario para que AI Wiki funcione. Revise la ruta y confirme para habilitar.`,
+    shellConsentEnable: "Entiendo, habilitar",
+    manageSourcesTitle: (id: string) => `Fuentes: «${id}»`,
+    ingestScopeTitle: "Fuentes guardadas — ¿ejecutar ingest?",
+    ingestScopeBody: (added: number, total: number) =>
+      `Se añadieron ${added} ruta(s) nueva(s). ¿Ingest solo las nuevas o todas (${total})?`,
+    ingestScopeNew: (n: number) => `Solo nuevas (${n})`,
+    ingestScopeAll: (n: number) => `Todas (${n})`,
+    ingestScopeSkip: "Omitir",
   },
 };
 

@@ -1,9 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { AgentRunner } from "../src/agent-runner";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
 import type { RunEvent, LlmWikiPluginSettings, LlmClient } from "../src/types";
 import { DEFAULT_SETTINGS } from "../src/types";
-import { structuralErrorCounter } from "../src/structural-error-counter";
 import type OpenAI from "openai";
 
 function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
@@ -54,8 +53,6 @@ const baseSettings: LlmWikiPluginSettings = {
   ...DEFAULT_SETTINGS,
   backend: "native-agent",
 };
-
-beforeEach(() => structuralErrorCounter.reset());
 
 async function collect(gen: AsyncGenerator<RunEvent>): Promise<RunEvent[]> {
   const out: RunEvent[] = [];
@@ -155,89 +152,6 @@ describe("AgentRunner", () => {
     );
     const result = events.find((e) => e.kind === "result");
     expect(result).toBeDefined();
-  });
-
-  it("emits structural_error + error events when init LLM returns invalid JSON for all retries", async () => {
-    const settings: LlmWikiPluginSettings = {
-      ...DEFAULT_SETTINGS,
-      backend: "native-agent",
-      nativeAgent: { ...DEFAULT_SETTINGS.nativeAgent, structuredRetries: 1 },
-    };
-    const llm = makeLlmMulti(["not json at all", "still not json"]);
-    const vt = new VaultTools(mockAdapter(), "/vault");
-    const runner = new AgentRunner(llm, settings, vt, "TestVault", []);
-    const events = await collect(
-      runner.run({
-        operation: "init",
-        args: ["new-domain"],
-        cwd: "/vault",
-        signal: new AbortController().signal,
-        timeoutMs: 60_000,
-      }),
-    );
-    const structErr = events.find(e => e.kind === "structural_error" && e.succeeded === false);
-    const err = events.find(e => e.kind === "error");
-    expect(structErr).toBeDefined();
-    expect(err).toBeDefined();
-    expect(structuralErrorCounter.get().failed).toBe(1);
-  });
-
-  it("passes global thinkingBudgetTokens to opts when native-agent and no per-op", async () => {
-    const settings: LlmWikiPluginSettings = {
-      ...DEFAULT_SETTINGS,
-      backend: "native-agent",
-      nativeAgent: {
-        ...DEFAULT_SETTINGS.nativeAgent,
-        thinkingBudgetTokens: 8000,
-        perOperation: false,
-      },
-    };
-    const vt = new VaultTools(mockAdapter(), "/vault");
-    let capturedParams: unknown = null;
-    const llm: LlmClient = {
-      chat: {
-        completions: {
-          create: vi.fn(async (params: unknown) => {
-            capturedParams = params;
-            return streamFromText("[]") as never;
-          }) as never,
-        },
-      },
-    } as unknown as LlmClient;
-    const runner = new AgentRunner(llm, settings, vt, "TestVault", []);
-    await collect(runner.run({ operation: "init", args: ["new-domain"], cwd: "/vault", signal: new AbortController().signal, timeoutMs: 10_000 }));
-    expect((capturedParams as Record<string, unknown>)?.thinking).toEqual({ type: "enabled", budget_tokens: 8000 });
-  });
-
-  it("passes per-op thinkingBudgetTokens to opts when native-agent and per-op override set", async () => {
-    const settings: LlmWikiPluginSettings = {
-      ...DEFAULT_SETTINGS,
-      backend: "native-agent",
-      nativeAgent: {
-        ...DEFAULT_SETTINGS.nativeAgent,
-        thinkingBudgetTokens: 8000,
-        perOperation: true,
-        operations: {
-          ...DEFAULT_SETTINGS.nativeAgent.operations,
-          init: { model: "llama3.2", maxTokens: 8192, temperature: 0.2, thinkingBudgetTokens: 16000 },
-        },
-      },
-    };
-    const vt = new VaultTools(mockAdapter(), "/vault");
-    let capturedParams: unknown = null;
-    const llm: LlmClient = {
-      chat: {
-        completions: {
-          create: vi.fn(async (params: unknown) => {
-            capturedParams = params;
-            return streamFromText("[]") as never;
-          }) as never,
-        },
-      },
-    } as unknown as LlmClient;
-    const runner = new AgentRunner(llm, settings, vt, "TestVault", []);
-    await collect(runner.run({ operation: "init", args: ["new-domain"], cwd: "/vault", signal: new AbortController().signal, timeoutMs: 10_000 }));
-    expect((capturedParams as Record<string, unknown>)?.thinking).toEqual({ type: "enabled", budget_tokens: 16000 });
   });
 
   it("system event содержит baseUrl для native-agent backend", async () => {

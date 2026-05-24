@@ -30,3 +30,14 @@ describe("mobile hot path: controller/agent-runner have no top-level node:* impo
     });
   }
 });
+
+describe("settings.ts: no child_process import", () => {
+  it("settings.ts does not import from child_process", () => {
+    const src = readFileSync(join(process.cwd(), "src/settings.ts"), "utf-8");
+    const lines = src.split("\n");
+    const offending = lines.filter((l) =>
+      /^import\s.*from\s+["'](child_process|node:child_process)["']/.test(l),
+    );
+    expect(offending, `settings.ts imports from child_process: ${offending.join(", ")}`).toEqual([]);
+  });
+});

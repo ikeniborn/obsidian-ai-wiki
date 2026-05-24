@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   DomainEntrySchema, EntityTypesDeltaSchema, SeedsSchema,
+  WikiPageSchema, WikiPagesOutputSchema, LintOutputSchema, FormatOutputSchema,
 } from "../../src/phases/zod-schemas";
 
 const fx = (name: string) =>
@@ -64,5 +65,68 @@ describe("SeedsSchema", () => {
   it("parses without optional reasoning", () => {
     const r = SeedsSchema.safeParse({ seeds: ["x"] });
     expect(r.success).toBe(true);
+  });
+});
+
+describe("WikiPageSchema", () => {
+  it("accepts page with all fields", () => {
+    const result = WikiPageSchema.safeParse({ path: "a/b.md", content: "# B", annotation: "desc" });
+    expect(result.success).toBe(true);
+  });
+  it("accepts page without annotation", () => {
+    const result = WikiPageSchema.safeParse({ path: "a/b.md", content: "# B" });
+    expect(result.success).toBe(true);
+  });
+  it("rejects page missing content", () => {
+    const result = WikiPageSchema.safeParse({ path: "a/b.md" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("WikiPagesOutputSchema", () => {
+  it("accepts valid output", () => {
+    const result = WikiPagesOutputSchema.safeParse({
+      reasoning: "Extracted 2 entities.",
+      pages: [{ path: "!Wiki/d/e/A.md", content: "# A" }],
+    });
+    expect(result.success).toBe(true);
+  });
+  it("accepts empty pages array", () => {
+    const result = WikiPagesOutputSchema.safeParse({ reasoning: "nothing to extract", pages: [] });
+    expect(result.success).toBe(true);
+  });
+  it("rejects missing reasoning", () => {
+    const result = WikiPagesOutputSchema.safeParse({ pages: [] });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("LintOutputSchema", () => {
+  it("accepts valid output", () => {
+    const result = LintOutputSchema.safeParse({
+      reasoning: "Found 1 dead link.",
+      report: "## Lint Report\n- dead link in A.md",
+      fixes: [{ path: "!Wiki/d/e/A.md", content: "# A\nFixed." }],
+    });
+    expect(result.success).toBe(true);
+  });
+  it("accepts empty fixes", () => {
+    const result = LintOutputSchema.safeParse({ reasoning: "ok", report: "All good.", fixes: [] });
+    expect(result.success).toBe(true);
+  });
+  it("rejects missing report", () => {
+    const result = LintOutputSchema.safeParse({ reasoning: "ok", fixes: [] });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("FormatOutputSchema", () => {
+  it("accepts valid output", () => {
+    const result = FormatOutputSchema.safeParse({ report: "## Changes\n- added tags", formatted: "---\ntags: []\n---\n# Page" });
+    expect(result.success).toBe(true);
+  });
+  it("rejects missing formatted", () => {
+    const result = FormatOutputSchema.safeParse({ report: "ok" });
+    expect(result.success).toBe(false);
   });
 });

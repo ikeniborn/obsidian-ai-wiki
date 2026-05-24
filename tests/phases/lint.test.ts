@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runLint } from "../../src/phases/lint";
+import { runLint, checkStructure } from "../../src/phases/lint";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
@@ -15,17 +15,16 @@ function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
   };
 }
 
-function makeLlm(report: string, configJson = "{}"): LlmClient {
+function makeLlm(reportJson: string, configJson = "{}"): LlmClient {
   let callCount = 0;
   return {
     chat: {
       completions: {
         create: vi.fn().mockImplementation((_params: any) => {
           const call = ++callCount;
-          // call 1: lint report (streaming), call 2: actualizeDomainConfig (streaming via parseWithRetry),
-          // call 3: fix pass (streaming)
-          const isConfig = call === 2;
-          const content = isConfig ? configJson : report;
+          // call 1: combined assess+fix (LintOutputSchema JSON)
+          // call 2: actualizeDomainConfig (EntityTypesDeltaSchema JSON via parseWithRetry)
+          const content = call === 2 ? configJson : reportJson;
           return Promise.resolve({
             [Symbol.asyncIterator]: async function* () {
               yield { choices: [{ delta: { content } }] };
@@ -56,7 +55,7 @@ describe("runLint", () => {
   it("yields error when domains is empty", async () => {
     const vt = new VaultTools(mockAdapter(), VAULT_ROOT);
     const events = await collect(
-      runLint([], vt, makeLlm(""), "model", [], VAULT_ROOT, new AbortController().signal),
+      runLint([], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "", fixes: [] })), "model", [], VAULT_ROOT, new AbortController().signal),
     );
     expect(events.some((e: any) => e.kind === "error")).toBe(true);
   });
@@ -64,7 +63,7 @@ describe("runLint", () => {
   it("yields error when specified domain not found", async () => {
     const vt = new VaultTools(mockAdapter(), VAULT_ROOT);
     const events = await collect(
-      runLint(["unknown-domain"], vt, makeLlm(""), "model", [domain], VAULT_ROOT, new AbortController().signal),
+      runLint(["unknown-domain"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal),
     );
     expect(events.some((e: any) => e.kind === "error")).toBe(true);
   });
@@ -77,7 +76,7 @@ describe("runLint", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const events = await collect(
-      runLint(["work"], vt, makeLlm("No issues found."), "model", [domain], VAULT_ROOT, new AbortController().signal),
+      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues found.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal),
     );
     const result = events.find((e: any) => e.kind === "result") as any;
     expect(result).toBeDefined();
@@ -103,7 +102,7 @@ describe("runLint", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     await collect(
-      runLint([], vt, makeLlm("Lint OK"), "model", [domain], VAULT_ROOT, new AbortController().signal),
+      runLint([], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "Lint OK", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal),
     );
     const rawCall = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
       ([path]: [string]) => path === "Sources/raw.md",
@@ -133,7 +132,7 @@ describe("runLint", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const events = await collect(
-      runLint([], vt, makeLlm("Lint OK"), "model", [domain], VAULT_ROOT, new AbortController().signal),
+      runLint([], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "Lint OK", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal),
     );
     expect(events.some((e: any) => e.kind === "result")).toBe(true);
   });
@@ -171,7 +170,7 @@ describe("runLint", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     await collect(
-      runLint([], vt, makeLlm("Lint OK"), "model", [domainA, domainB], VAULT_ROOT, new AbortController().signal),
+      runLint([], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "Lint OK", fixes: [] })), "model", [domainA, domainB], VAULT_ROOT, new AbortController().signal),
     );
 
     expect(rawContent).toContain("[[!Wiki/A/EntityA.md]]");
@@ -206,7 +205,7 @@ describe("runLint", () => {
     });
 
     const fixLlm = makeLlm(
-      JSON.stringify([{ path: "!Wiki/work/Page.md", content: fixedContent }]),
+      JSON.stringify({ reasoning: "fix", report: "Fixed page.", fixes: [{ path: "!Wiki/work/Page.md", content: fixedContent }] }),
     );
     const vt = new VaultTools(adapter, VAULT_ROOT);
     await collect(
@@ -229,7 +228,7 @@ describe("runLint", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const events = await collect(
-      runLint([], vt, makeLlm("Lint OK"), "model", [domain], VAULT_ROOT, new AbortController().signal),
+      runLint([], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "Lint OK", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal),
     );
     const result = events.find((e: any) => e.kind === "result") as any;
     expect(result.text).not.toContain("Backlinks synced:");
@@ -247,7 +246,7 @@ describe("runLint", () => {
       language_notes: "Updated notes.",
     });
     const events = await collect(
-      runLint(["work"], vt, makeLlm("Report.", configJson), "model", [domain], VAULT_ROOT, new AbortController().signal),
+      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "Report.", fixes: [] }), configJson), "model", [domain], VAULT_ROOT, new AbortController().signal),
     );
     const ev = events.find((e: any) => e.kind === "domain_updated") as any;
     expect(ev).toBeDefined();
@@ -267,13 +266,35 @@ describe("runLint", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     await collect(
-      runLint(["work"], vt, makeLlm("No issues."), "model", [domain], VAULT_ROOT, new AbortController().signal),
+      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal),
     );
     const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
     const flatIndexWrite = writeCalls.find(
       ([path, content]) => path === "!Wiki/work/_index.md" && (content as string).includes("- [["),
     );
     expect(flatIndexWrite).toBeUndefined();
+  });
+
+  it("appends lint entry to _log.md after fix pass", async () => {
+    let logContent = "";
+    const adapter = mockAdapter({
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/work/.config/_log.md") return Promise.resolve(logContent);
+        return Promise.resolve("---\nwiki_status: stub\n---\n# Page");
+      }),
+      write: vi.fn().mockImplementation((path: string, content: string) => {
+        if (path === "!Wiki/work/.config/_log.md") logContent = content;
+        return Promise.resolve();
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    await collect(
+      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    expect(logContent).toContain("## ");
+    expect(logContent).toContain("lint");
+    expect(logContent).toContain("work");
   });
 
   it("second runLint call hits GraphCache for the same domain", async () => {
@@ -287,7 +308,7 @@ describe("runLint", () => {
       mkdir: vi.fn().mockResolvedValue(undefined),
     } as any;
     const vt = new (await import("../../src/vault-tools")).VaultTools(adapter, "/v");
-    const llm = makeLlm("[]");
+    const llm = makeLlm(JSON.stringify({ reasoning: "ok", report: "", fixes: [] }));
     const dom = { id: "work", name: "Work", wiki_folder: "work", source_paths: [] };
     await collect(runLint([], vt, llm, "model", [dom], "/v", new AbortController().signal, 20, {}));
     const pages = new Map([["!Wiki/work/X.md", "---\n---\n# X"]]);
@@ -300,7 +321,7 @@ describe("runLint", () => {
       read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Orphan\nNo links."),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llm = makeLlm("no issues");
+    const llm = makeLlm(JSON.stringify({ reasoning: "ok", report: "no issues", fixes: [] }));
     await collect(
       runLint(["work"], vt, llm, "model", [domain], VAULT_ROOT, new AbortController().signal),
     );
@@ -309,5 +330,191 @@ describe("runLint", () => {
     const userContent = streamCall?.[0]?.messages?.find((m: any) => m.role === "user")?.content ?? "";
     // Orphan has no links in or out → checkGraphStructure adds "isolated node" to allIssues
     expect(userContent).toContain("isolated node");
+  });
+
+  it("passes schema_block to LLM system message when schema file present", async () => {
+    const schemaContent = "# Wiki Schema\n- use lowercase tags";
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/.config/_wiki_schema.md") return Promise.resolve(schemaContent);
+        return Promise.resolve("---\ntags: []\n---\n# Page\n\nContent.");
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] }));
+    await collect(
+      runLint(["work"], vt, llm, "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    const createMock = llm.chat.completions.create as ReturnType<typeof vi.fn>;
+    const firstCall = createMock.mock.calls[0];
+    const systemMsg = firstCall?.[0]?.messages?.find((m: any) => m.role === "system");
+    expect(systemMsg?.content).toContain("Конвенции (_wiki_schema.md):");
+    expect(systemMsg?.content).toContain(schemaContent);
+  });
+
+  it("passes empty schema_block when schema file absent", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/.config/_wiki_schema.md") return Promise.reject(new Error("not found"));
+        return Promise.resolve("---\ntags: []\n---\n# Page\n\nContent.");
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] }));
+    await collect(
+      runLint(["work"], vt, llm, "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    const createMock = llm.chat.completions.create as ReturnType<typeof vi.fn>;
+    const firstCall = createMock.mock.calls[0];
+    const systemMsg = firstCall?.[0]?.messages?.find((m: any) => m.role === "system");
+    expect(systemMsg?.content).not.toContain("Конвенции (_wiki_schema.md):");
+  });
+});
+
+describe("runLint with merged assess+fix (LintOutputSchema)", () => {
+  it("writes pages from fixes field", async () => {
+    const wikiContent = "---\ntags: []\n---\n# Page\n\nContent with [[DeadLink]].";
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockImplementation((path: string) => {
+        if (path.includes("!Wiki")) {
+          return Promise.resolve({ files: ["!Wiki/work/Page.md"], folders: [] });
+        }
+        return Promise.resolve({ files: [], folders: [] });
+      }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/work/Page.md") return Promise.resolve(wikiContent);
+        return Promise.resolve("");
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+
+    let callCount = 0;
+    const llm: LlmClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(() => {
+            callCount++;
+            const content = callCount === 1
+              ? JSON.stringify({
+                  reasoning: "Found dead link.",
+                  report: "## Lint\n- dead link [[DeadLink]] in Page.md",
+                  fixes: [{ path: "!Wiki/work/Page.md", content: "---\ntags: []\n---\n# Page\n\nContent." }],
+                })
+              : JSON.stringify({ reasoning: "ok", entity_types: [] });
+            return Promise.resolve({
+              [Symbol.asyncIterator]: async function* () {
+                yield { choices: [{ delta: { content } }] };
+              },
+            });
+          }),
+        },
+      },
+    } as unknown as LlmClient;
+
+    const events = await collect(
+      runLint(["work"], vt, llm, "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+
+    expect(events.some((e: any) => e.kind === "result")).toBe(true);
+    const writeCall = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([path]: [string]) => path === "!Wiki/work/Page.md",
+    );
+    expect(writeCall).toBeDefined();
+    expect(callCount).toBe(2);
+  });
+
+  it("yields report as assistant_text before write loop", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+
+    const reportText = "## Lint\nNo issues.";
+    let callCount = 0;
+    const llm: LlmClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(() => {
+            callCount++;
+            const content = callCount === 1
+              ? JSON.stringify({ reasoning: "ok", report: reportText, fixes: [] })
+              : JSON.stringify({ reasoning: "ok", entity_types: [] });
+            return Promise.resolve({
+              [Symbol.asyncIterator]: async function* () {
+                yield { choices: [{ delta: { content } }] };
+              },
+            });
+          }),
+        },
+      },
+    } as unknown as LlmClient;
+
+    const events = await collect(
+      runLint(["work"], vt, llm, "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+
+    const reportEv = events.find(
+      (e: any) => e.kind === "assistant_text" && typeof e.delta === "string" && e.delta.includes("No issues"),
+    );
+    expect(reportEv).toBeDefined();
+  });
+
+  it("yields per-page progress assistant_text before each write", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+
+    let callCount = 0;
+    const llm: LlmClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(() => {
+            callCount++;
+            const content = callCount === 1
+              ? JSON.stringify({
+                  reasoning: "fix",
+                  report: "## Lint\n- fix Page.md",
+                  fixes: [{ path: "!Wiki/work/Page.md", content: "# Page\n\nFixed." }],
+                })
+              : JSON.stringify({ reasoning: "ok", entity_types: [] });
+            return Promise.resolve({
+              [Symbol.asyncIterator]: async function* () {
+                yield { choices: [{ delta: { content } }] };
+              },
+            });
+          }),
+        },
+      },
+    } as unknown as LlmClient;
+
+    const events = await collect(
+      runLint(["work"], vt, llm, "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+
+    const progressEv = events.find(
+      (e: any) => e.kind === "assistant_text" && typeof e.delta === "string" && e.delta.includes("Page.md"),
+    );
+    expect(progressEv).toBeDefined();
+  });
+});
+
+describe("checkStructure", () => {
+  it("reports each dead link at most once per file even when repeated", () => {
+    const pages = new Map([
+      ["wiki/A.md", "---\n---\n# A\n\n[[Missing]] and [[Missing]] again."],
+    ]);
+    const result = checkStructure(pages);
+    const matches = result.match(/dead link \[\[Missing\]\]/g) ?? [];
+    expect(matches.length).toBe(1);
   });
 });

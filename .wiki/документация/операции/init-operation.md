@@ -5,7 +5,7 @@ wiki_sources:
   - prompts/init.md
   - prompts/init-incremental.md
   - docs/superpowers/specs/2026-05-15-reinit-force-design.md
-wiki_updated: 2026-05-15
+wiki_updated: 2026-05-21
 wiki_domain: документация
 wiki_outgoing_links:
   - "[[ingest-operation]]"
@@ -81,12 +81,26 @@ aliases: ["init operation", "инициализация домена"]
 
 Паттерн ответа: [[reasoning-first-json]].
 
+## Поток выполнения (no-sources путь)
+
+Начиная с версии 0.1.113 `runInit` без `--sources` больше не делает vault-sampling (случайные файлы vault → LLM). Вместо этого:
+
+```
+domainId → найти в настройках
+  ↓ не найден       → error "domain not found — add it in settings first"
+  ↓ entity_types > 0 → error "already initialised. Use Lint"
+  ↓ source_paths пуст → error "no source_paths configured — add them in settings"
+  ↓ делегация        → runInitWithSources(existing.source_paths, ...)
+```
+
+Путь `--sources` и `--force` — без изменений.
+
 ## Флаги CLI
 
 | Флаг | Назначение |
 |---|---|
 | `--dry-run` | Запуск без записи на диск (preview изменений) |
-| `--sources <p1> <p2> ...` | Явный список путей источников; иначе берутся из `entry.source_paths` |
+| `--sources <p1> <p2> ...` | Явный список путей источников; иначе берутся из `entry.source_paths` настроек домена |
 | `--force` | Полная переинициализация: wipe wiki-папки домена + сброс `entity_types`/`analyzed_sources`/`language_notes` + повторный bootstrap+delta+ingest. См. [[reinit-force-design]]. Несовместим с `--dry-run`; требует существующий домен и непустые `source_paths` |
 
 ## Ограничения платформы

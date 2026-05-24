@@ -15,3 +15,5 @@ tmp/
 **/*.egg-info/
 **/__pycache__/**
 .worktrees/
+.worktrees
+.mcp.json

@@ -133,8 +133,100 @@
       "input_tokens": 0,
       "output_tokens": 0,
       "files": 7
+    },
+    {
+      "date": "2026-05-18T13:00:41.259188+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 57
+    },
+    {
+      "date": "2026-05-18T14:04:31.232092+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 150
+    },
+    {
+      "date": "2026-05-18T20:24:05.236091+00:00",
+      "input_tokens": 110510,
+      "output_tokens": 12278,
+      "files": 151
+    },
+    {
+      "date": "2026-05-18T21:16:21.254988+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 5
+    },
+    {
+      "date": "2026-05-19T17:19:31.555431+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 41
+    },
+    {
+      "date": "2026-05-19T20:34:02.825374+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 121
+    },
+    {
+      "date": "2026-05-19T20:40:40.699168+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 30
+    },
+    {
+      "date": "2026-05-20T04:51:33.136086+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 6,
+      "note": "incremental update: agent-stability-audit"
+    },
+    {
+      "date": "2026-05-20T17:37:18.234844+00:00",
+      "input_tokens": 0,
+      "output_tokens": 65627,
+      "files": 8
+    },
+    {
+      "date": "2026-05-21T05:05:02.387921+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 146
+    },
+    {
+      "date": "2026-05-21T13:24:29.202870+00:00",
+      "input_tokens": 0,
+      "output_tokens": 35178,
+      "files": 12
+    },
+    {
+      "date": "2026-05-22T20:27:25.876273+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 40
+    },
+    {
+      "date": "2026-05-24T04:51:42.393002+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 120
+    },
+    {
+      "date": "2026-05-24T10:18:06.017008+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 5
+    },
+    {
+      "date": "2026-05-24T14:06:48.700153+00:00",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "files": 3,
+      "type": "update"
     }
   ],
-  "total_input_tokens": 230451,
-  "total_output_tokens": 10736
+  "total_input_tokens": 340961,
+  "total_output_tokens": 123819
 }

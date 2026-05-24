@@ -1,9 +1,13 @@
 import { App, ItemView, Modal, WorkspaceLeaf, MarkdownRenderer, Component, Notice, Platform, setIcon } from "obsidian";
-import { AddDomainModal, BusyCloseModal, ConfirmModal } from "./modals";
+import { AddDomainModal, BusyCloseModal, ConfirmModal, ManageSourcesModal, IngestScopeModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
 import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
+import { domainWikiFolder, domainLogPath, domainIndexPath } from "./wiki-path";
+
+import { collectMdInPaths, walkFolder } from "./utils/vault-walk";
+export { collectMdInPaths, walkFolder };
 
 export const AI_WIKI_VIEW_TYPE = "ai-wiki-view";
 
@@ -20,7 +24,6 @@ function registerLinkHandler(el: HTMLElement, app: App): void {
 }
 
 const PREVIEW_INLINE = 140;
-const ASSISTANT_TEXT_MAX = 600;
 
 export class LlmWikiView extends ItemView {
   private state: ViewState = "idle";
@@ -40,13 +43,16 @@ export class LlmWikiView extends ItemView {
   private cancelBtn!: HTMLButtonElement;
   private queryInput!: HTMLTextAreaElement;
   private askBtn!: HTMLButtonElement;
-  private askSaveBtn!: HTMLButtonElement;
   private domainSelect?: HTMLSelectElement;
   private initBtn?: HTMLButtonElement;
   private ingestBtn?: HTMLButtonElement;
   private lintBtn?: HTMLButtonElement;
   private formatBtn?: HTMLButtonElement;
   private reinitBtn?: HTMLButtonElement;
+  private addSourceBtn?: HTMLButtonElement;
+  private openLogLink?: HTMLAnchorElement;
+  private openIndexLink?: HTMLAnchorElement;
+  private domains: DomainEntry[] = [];
   private formatPreviewSection: HTMLElement | null = null;
   private lastContext: { operation: WikiOperation; domainId: string | undefined; report: string } | null = null;
   // Chat state
@@ -76,12 +82,15 @@ export class LlmWikiView extends ItemView {
   private tickHandle: ReturnType<typeof window.setTimeout> | null = null;
   private currentToolStep: HTMLElement | null = null;
   private currentToolStartedAt = 0;
-  private assistantBlock: HTMLElement | null = null;
-  private assistantBuffer = "";
   private reasoningBlock: HTMLElement | null = null;
   private reasoningBuffer = "";
-  private assistantRafHandle: number | null = null;
   private reasoningRafHandle: number | null = null;
+  private waitingStep: HTMLElement | null = null;
+  private waitingTickHandle: ReturnType<typeof window.setTimeout> | null = null;
+  private waitingStartedAt = 0;
+  private liveStatusSection: HTMLElement | null = null;
+  private liveStatusIconEl: HTMLElement | null = null;
+  private liveStatusTextEl: HTMLElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, private plugin: LlmWikiPlugin) {
     super(leaf);
@@ -130,11 +139,9 @@ export class LlmWikiView extends ItemView {
     });
     const askRow = ask.createDiv("ai-wiki-ask-row");
     this.askBtn = askRow.createEl("button", { text: T.view.ask });
-    this.askSaveBtn = askRow.createEl("button", { text: T.view.askAndSave });
     this.cancelBtn = askRow.createEl("button", { text: T.view.cancel, cls: "mod-warning" });
     this.cancelBtn.disabled = true;
-    this.askBtn.addEventListener("click", () => this.submitQuery(false));
-    this.askSaveBtn.addEventListener("click", () => this.submitQuery(true));
+    this.askBtn.addEventListener("click", () => this.submitQuery());
     this.cancelBtn.addEventListener("click", () => this.plugin.controller.cancelCurrent());
 
     const progressHeader = root.createDiv("ai-wiki-progress-header");
@@ -146,6 +153,10 @@ export class LlmWikiView extends ItemView {
 
     this.stepsEl = root.createDiv("ai-wiki-steps");
     this.stepsEl.addClass("ai-wiki-hidden");
+
+    this.liveStatusSection = root.createDiv("ai-wiki-live-status ai-wiki-hidden");
+    this.liveStatusIconEl = this.liveStatusSection.createSpan("ai-wiki-live-status-icon");
+    this.liveStatusTextEl = this.liveStatusSection.createSpan("ai-wiki-live-status-text");
 
     this.resultSection = root.createDiv("ai-wiki-result-section ai-wiki-hidden");
     const resultHeader = this.resultSection.createDiv("ai-wiki-progress-header");
@@ -175,14 +186,14 @@ export class LlmWikiView extends ItemView {
   onClose(): void {
     if (this.tickHandle !== null) window.clearTimeout(this.tickHandle);
     if (this.chatTickHandle !== null) window.clearTimeout(this.chatTickHandle);
-    if (this.assistantRafHandle !== null) {
-      window.cancelAnimationFrame(this.assistantRafHandle);
-      this.assistantRafHandle = null;
-    }
+    this.stopWaiting();
     if (this.reasoningRafHandle !== null) {
       window.cancelAnimationFrame(this.reasoningRafHandle);
       this.reasoningRafHandle = null;
     }
+    this.liveStatusSection = null;
+    this.liveStatusIconEl = null;
+    this.liveStatusTextEl = null;
     if (this.plugin.controller.isBusy()) {
       new BusyCloseModal(this.app, () => this.plugin.controller.cancelCurrent()).open();
     }
@@ -196,15 +207,86 @@ export class LlmWikiView extends ItemView {
     this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
     const refreshBtn = domainRow.createEl("button", { text: "↻", attr: { title: T.view.refreshTitle } });
     refreshBtn.addEventListener("click", () => void this.refreshDomains());
+    this.domainSelect.addEventListener("change", () => {
+      void this.plugin.localConfigStore.save({ lastDomain: this.domainSelect!.value });
+    });
 
     if (opts.withActions) {
+      this.addSourceBtn = domainRow.createEl("button", { attr: { title: T.view.addSourceTitle } });
+      setIcon(this.addSourceBtn, "folder-plus");
+      this.addSourceBtn.disabled = true;
+      this.addSourceBtn.addEventListener("click", () => void this.openManageSources());
       this.reinitBtn = domainRow.createEl("button", { attr: { title: T.view.reinitTitle } });
       setIcon(this.reinitBtn, "recycle");
       this.reinitBtn.disabled = true;
       this.reinitBtn.addEventListener("click", () => void this.runReinit());
-      this.domainSelect.addEventListener("change", () => {
-        if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect!.value;
+
+      this.openLogLink = domainRow.createEl("a", {
+        cls: "internal-link ai-wiki-domain-file-link",
+        attr: { title: "Open _log.md", "data-href": "" },
       });
+      setIcon(this.openLogLink, "scroll-text");
+
+      this.openIndexLink = domainRow.createEl("a", {
+        cls: "internal-link ai-wiki-domain-file-link",
+        attr: { title: "Open _index.md", "data-href": "" },
+      });
+      setIcon(this.openIndexLink, "list");
+
+      domainRow.addEventListener("click", (e) => {
+        const a = (e.target as HTMLElement).closest("a.ai-wiki-domain-file-link");
+        if (!a) return;
+        e.preventDefault();
+        const href = a.getAttribute("data-href") ?? "";
+        if (!href) return;
+        void (async () => {
+          let f = this.app.vault.getAbstractFileByPath(href);
+          if (!f && await this.app.vault.adapter.exists(href)) {
+            const content = await this.app.vault.adapter.read(href);
+            // Ensure parent folder is in vault index before vault.create()
+            const parentPath = href.substring(0, href.lastIndexOf("/"));
+            if (!this.app.vault.getAbstractFileByPath(parentPath)) {
+              try { await this.app.vault.createFolder(parentPath); } catch { /* EEXIST OK */ }
+            }
+            try {
+              f = await this.app.vault.create(href, content);
+              if (!f) f = this.app.vault.getAbstractFileByPath(href);
+            } catch {
+              f = this.app.vault.getAbstractFileByPath(href);
+            }
+            if (!f) {
+              // vault indexing failed — show content in modal
+              new FileContentModal(this.app, href, content).open();
+              return;
+            }
+          }
+          if (f) {
+            void this.app.workspace.openLinkText(href, "", false);
+          } else {
+            const isLog = href.endsWith("_log.md");
+            new Notice(isLog ? "_log.md not found — run ingest or lint first." : "_index.md not found — run init first.");
+          }
+        })();
+      });
+
+      const updateDomainLinks = () => {
+        const d = this.domains.find((x) => x.id === this.domainSelect!.value);
+        const wikiFolder = d ? domainWikiFolder(d.wiki_folder) : "";
+        const logPath = d ? domainLogPath(wikiFolder) : "";
+        const indexPath = d ? domainIndexPath(wikiFolder) : "";
+        if (this.openLogLink) {
+          this.openLogLink.setAttribute("data-href", logPath);
+          this.openLogLink.toggleClass("is-unresolved", !d);
+        }
+        if (this.openIndexLink) {
+          this.openIndexLink.setAttribute("data-href", indexPath);
+          this.openIndexLink.toggleClass("is-unresolved", !d);
+        }
+        if (this.reinitBtn) this.reinitBtn.disabled = !d;
+        if (this.addSourceBtn) this.addSourceBtn.disabled = !d;
+      };
+
+      this.domainSelect.addEventListener("change", updateDomainLinks);
 
       const actionRow = domainBox.createDiv("ai-wiki-domain-actions");
       this.ingestBtn = actionRow.createEl("button", { text: T.view.ingest });
@@ -237,6 +319,7 @@ export class LlmWikiView extends ItemView {
     if (!this.domainSelect) return;
     let domains: DomainEntry[];
     try { domains = await this.plugin.controller.loadDomains(); } catch { return; }
+    this.domains = domains;
     const previous = this.domainSelect.value;
     this.domainSelect.empty();
     const allOpt = this.domainSelect.createEl("option", { value: "", text: i18n().view.allDomains });
@@ -244,10 +327,14 @@ export class LlmWikiView extends ItemView {
     for (const d of domains) {
       this.domainSelect.createEl("option", { value: d.id, text: d.name || d.id });
     }
-    if (previous && Array.from(this.domainSelect.options).some((o) => o.value === previous)) {
-      this.domainSelect.value = previous;
+    const restoreTarget = previous || (await this.plugin.localConfigStore.load()).lastDomain;
+    if (restoreTarget && Array.from(this.domainSelect.options).some((o) => o.value === restoreTarget)) {
+      this.domainSelect.value = restoreTarget;
     }
     if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect.value;
+    if (this.addSourceBtn) this.addSourceBtn.disabled = !this.domainSelect.value;
+    // trigger link update
+    this.domainSelect.dispatchEvent(new Event("change"));
   }
 
   private openAddDomain(): void {
@@ -258,7 +345,10 @@ export class LlmWikiView extends ItemView {
         const r = await this.plugin.controller.registerDomain(input);
         if (!r.ok) return;
         await this.refreshDomains();
-        if (this.domainSelect) this.domainSelect.value = input.id;
+        if (this.domainSelect) {
+          this.domainSelect.value = input.id;
+          this.domainSelect.dispatchEvent(new Event("change"));
+        }
 
         if (!input.sourcePaths.length) {
           void this.plugin.controller.init(input.id, false);
@@ -266,11 +356,7 @@ export class LlmWikiView extends ItemView {
         }
 
         const T = i18n().modal;
-        const allFiles = this.app.vault.getFiles();
-        const mdFiles = allFiles.filter(
-          (f) => f.extension === "md" &&
-            input.sourcePaths.some((p) => f.path.startsWith(p)),
-        );
+        const mdFiles = collectMdInPaths(this.app.vault, input.sourcePaths);
 
         if (!mdFiles.length) {
           void this.plugin.controller.init(input.id, false);
@@ -308,10 +394,9 @@ export class LlmWikiView extends ItemView {
     }
 
     const T = i18n().modal;
-    const mdFiles = this.app.vault.getFiles().filter(
-      (f) => f.extension === "md" && sourcePaths.some((p) => f.path.startsWith(p)),
-    );
-    const body = T.reinitConfirmBody(entry.id, mdFiles.length, sourcePaths.length);
+    const mdFiles = collectMdInPaths(this.app.vault, sourcePaths);
+    const wikiFiles = collectMdInPaths(this.app.vault, [domainWikiFolder(entry.wiki_folder)]);
+    const body = T.reinitConfirmBody(entry.id, wikiFiles.length, mdFiles.length, sourcePaths.length);
 
     new ConfirmModal(
       this.app,
@@ -321,11 +406,47 @@ export class LlmWikiView extends ItemView {
     ).open();
   }
 
-  private submitQuery(save: boolean): void {
+  private async openManageSources(): Promise<void> {
+    const domainId = this.domainSelect!.value;
+    if (!domainId) return;
+    const domains = await this.plugin.controller.loadDomains();
+    const entry = domains.find((d) => d.id === domainId);
+    if (!entry) return;
+    new ManageSourcesModal(this.app, entry, (result) => {
+      void this.handleManageSourcesResult(entry, result);
+    }).open();
+  }
+
+  private async handleManageSourcesResult(
+    original: DomainEntry,
+    result: { sourcePaths: string[] },
+  ): Promise<void> {
+    const oldPaths = original.source_paths ?? [];
+    const newPaths = result.sourcePaths;
+    const added = newPaths.filter((p) => !oldPaths.includes(p));
+    const removed = oldPaths.filter((p) => !newPaths.includes(p));
+
+    await this.plugin.controller.updateDomainSources(original.id, newPaths);
+
+    if (removed.length > 0) {
+      const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
+      if (deleted > 0) new Notice(`Удалено статей: ${deleted}`);
+    }
+
+    if (added.length > 0) {
+      new IngestScopeModal(this.app, added.length, newPaths.length, (scope) => {
+        if (scope === "skip") return;
+        const paths = scope === "new" ? added : newPaths;
+        void this.plugin.controller.init(original.id, false, paths);
+      }).open();
+    }
+  }
+
+  private submitQuery(): void {
     const q = this.queryInput.value.trim();
     if (!q) { new Notice(i18n().view.enterQuestion); return; }
     if (this.state === "running") { new Notice(i18n().view.operationInProgress); return; }
-    void this.plugin.controller.query(q, save, this.domainSelect?.value || undefined);
+    void this.plugin.controller.query(q, this.domainSelect?.value || undefined);
     this.queryInput.value = "";
   }
 
@@ -336,12 +457,12 @@ export class LlmWikiView extends ItemView {
     this.statusEl.setText(`▶ ${operation} ${args.join(" ")}`);
     this.cancelBtn.disabled = false;
     this.askBtn.disabled = true;
-    this.askSaveBtn.disabled = true;
     if (this.initBtn) this.initBtn.disabled = true;
     if (this.ingestBtn) this.ingestBtn.disabled = true;
     if (this.lintBtn) this.lintBtn.disabled = true;
     if (this.formatBtn) this.formatBtn.disabled = true;
     if (this.reinitBtn) this.reinitBtn.disabled = true;
+    if (this.addSourceBtn) this.addSourceBtn.disabled = true;
     this.chatSection?.remove();
     this.chatSection = null;
     this.lastContext = null;
@@ -360,14 +481,8 @@ export class LlmWikiView extends ItemView {
     this.progressTotal = 0;
     this.progressDone = 0;
     this.currentToolStep = null;
-    this.assistantBlock = null;
-    this.assistantBuffer = "";
     this.reasoningBlock = null;
     this.reasoningBuffer = "";
-    if (this.assistantRafHandle !== null) {
-      window.cancelAnimationFrame(this.assistantRafHandle);
-      this.assistantRafHandle = null;
-    }
     if (this.reasoningRafHandle !== null) {
       window.cancelAnimationFrame(this.reasoningRafHandle);
       this.reasoningRafHandle = null;
@@ -379,6 +494,10 @@ export class LlmWikiView extends ItemView {
     this.progressToggle.setText("▼");
     this.updateMetrics();
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
+    this.stopWaiting();
+    this.liveStatusSection?.removeClass("ai-wiki-hidden");
+    this.liveStatusIconEl?.setText("");
+    this.liveStatusTextEl?.setText("");
     this.scheduleMetricsTick();
     if (Platform.isMobile) {
       // Streaming недоступен на mobile — показываем спиннер, чтобы UI не выглядел замёрзшим.
@@ -444,9 +563,11 @@ export class LlmWikiView extends ItemView {
       const preview = ev.seeds.slice(0, 3).join(", ");
       const extra = ev.seeds.length > 3 ? `, …+${ev.seeds.length - 3}` : "";
       const step = this.stepsEl.createDiv("ai-wiki-step");
-      step.createSpan({ cls: "ai-wiki-step-icon" }).setText("🌐");
-      step.createSpan({ cls: "ai-wiki-step-name" })
+      const graphHead = step.createDiv("ai-wiki-step-head");
+      graphHead.createSpan({ cls: "ai-wiki-step-icon" }).setText("🌐");
+      graphHead.createSpan({ cls: "ai-wiki-step-name" })
         .setText(`Граф: ${ev.seeds.length} seeds [${preview}${extra}] → ${ev.expanded} / ${ev.total} страниц${cacheHint}`);
+      graphHead.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
       this.scrollSteps();
       return;
     }
@@ -458,15 +579,10 @@ export class LlmWikiView extends ItemView {
     if (ev.kind === "domain_updated") { void this.refreshDomains(); return; }
     if (ev.kind !== "assistant_text") this.stepCount++;
     if (ev.kind === "tool_use") {
+      this.stopWaiting();
       this.toolCount++;
-      this.assistantBlock = null;
-      this.assistantBuffer = "";
       this.reasoningBlock = null;
       this.reasoningBuffer = "";
-      if (this.assistantRafHandle !== null) {
-        window.cancelAnimationFrame(this.assistantRafHandle);
-        this.assistantRafHandle = null;
-      }
       if (this.reasoningRafHandle !== null) {
         window.cancelAnimationFrame(this.reasoningRafHandle);
         this.reasoningRafHandle = null;
@@ -481,6 +597,8 @@ export class LlmWikiView extends ItemView {
       this.currentToolStep = step;
       this.currentToolStartedAt = Date.now();
       this.scrollSteps();
+      this.liveStatusIconEl?.setText("🔧");
+      this.liveStatusTextEl?.setText(`${ev.name}  ${summariseInput(ev.input)}`);
     } else if (ev.kind === "tool_result") {
       const step = this.currentToolStep;
       if (step) {
@@ -495,18 +613,20 @@ export class LlmWikiView extends ItemView {
         }
         this.currentToolStep = null;
       }
+      this.startWaiting();
     } else if (ev.kind === "ask_user") {
       const el = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step--ask");
       el.createSpan({ text: "⏳ Waiting for answer…" });
       return;
     } else if (ev.kind === "assistant_text") {
+      this.stopWaiting();
       if (ev.isReasoning) {
         if (!this.reasoningBlock) {
           this.reasoningBlock = this.stepsEl.createDiv("ai-wiki-step reasoning");
-          if (this.assistantBlock) {
-            this.stepsEl.insertBefore(this.reasoningBlock, this.assistantBlock);
-          }
-          this.reasoningBlock.createSpan({ cls: "ai-wiki-step-icon" }).setText("🧠");
+          const rHead = this.reasoningBlock.createDiv("ai-wiki-step-head");
+          rHead.createSpan({ cls: "ai-wiki-step-icon" }).setText("🧠");
+          rHead.createSpan({ cls: "ai-wiki-step-name muted" }).setText(i18n().view.analysing);
+          rHead.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
           this.reasoningBlock.createSpan({ cls: "ai-wiki-reasoning-text" });
         }
         this.reasoningBuffer += ev.delta;
@@ -514,37 +634,29 @@ export class LlmWikiView extends ItemView {
           this.reasoningRafHandle = window.requestAnimationFrame(() => {
             this.reasoningRafHandle = null;
             const span = this.reasoningBlock?.querySelector<HTMLElement>(".ai-wiki-reasoning-text");
-            if (span) span.setText(truncate(this.reasoningBuffer, ASSISTANT_TEXT_MAX));
+            if (span) span.setText(this.reasoningBuffer);
             this.scrollSteps();
           });
         }
+        this.liveStatusIconEl?.setText("🧠");
+        this.liveStatusTextEl?.setText("Analysing...");
       } else {
-        if (!this.assistantBlock) {
-          this.assistantBlock = this.stepsEl.createDiv("ai-wiki-step assistant");
-          this.assistantBlock.createSpan({ cls: "ai-wiki-step-icon" }).setText("💬");
-          this.assistantBlock.createSpan({ cls: "ai-wiki-assistant-text" });
-        }
-        this.assistantBuffer += ev.delta;
-        if (!this.assistantRafHandle) {
-          this.assistantRafHandle = window.requestAnimationFrame(() => {
-            this.assistantRafHandle = null;
-            const span = this.assistantBlock?.querySelector<HTMLElement>(".ai-wiki-assistant-text");
-            if (span) span.setText(truncate(this.assistantBuffer, ASSISTANT_TEXT_MAX));
-            this.scrollSteps();
-          });
-        }
+        this.liveStatusIconEl?.setText("💬");
+        this.liveStatusTextEl?.setText("Forming response...");
       }
     } else if (ev.kind === "system") {
       const step = this.stepsEl.createDiv("ai-wiki-step");
       const head = step.createDiv("ai-wiki-step-head");
       head.createSpan({ cls: "ai-wiki-step-icon" }).setText("⚙");
       head.createSpan({ cls: "ai-wiki-step-name muted" }).setText(translateSystemEvent(ev.message));
+      head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
       this.scrollSteps();
     } else if (ev.kind === "error") {
+      this.stopWaiting();
       this.stepsEl.createDiv("ai-wiki-step err").setText(`✗ ${ev.message}`);
       this.scrollSteps();
     } else if (ev.kind === "result") {
-      this.assistantBlock = null;
+      this.stopWaiting();
       if (ev.outputTokens !== undefined && ev.durationMs > 0) {
         this.lastTokPerSec = Math.round(ev.outputTokens / (ev.durationMs / 1000));
       }
@@ -628,14 +740,15 @@ export class LlmWikiView extends ItemView {
     this.statusEl.setText(this.statusLabel(entry));
     this.cancelBtn.disabled = true;
     this.askBtn.disabled = false;
-    this.askSaveBtn.disabled = false;
     if (this.initBtn) this.initBtn.disabled = false;
     if (this.ingestBtn) this.ingestBtn.disabled = false;
     if (this.lintBtn) this.lintBtn.disabled = false;
     if (this.formatBtn) this.formatBtn.disabled = false;
     if (this.reinitBtn) this.reinitBtn.disabled = !(this.domainSelect && this.domainSelect.value);
+    if (this.addSourceBtn) this.addSourceBtn.disabled = !(this.domainSelect && this.domainSelect.value);
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
     this.updateMetrics();
+    this.liveStatusSection?.addClass("ai-wiki-hidden");
     const totalDur = ((entry.finishedAt - entry.startedAt) / 1000).toFixed(1);
     this.progressCount.setText(`${totalDur}s`);
     this.resultSpeedEl?.setText(this.lastTokPerSec !== undefined ? ` ${this.lastTokPerSec} tok/s` : "");
@@ -650,7 +763,7 @@ export class LlmWikiView extends ItemView {
       this.resultOpen = true;
       this.resultToggle.setText("▼");
 
-      const CHAT_OPS: WikiOperation[] = ["lint", "lint-chat", "ingest", "query", "query-save"];
+      const CHAT_OPS: WikiOperation[] = ["lint", "lint-chat", "ingest", "query"];
       if (CHAT_OPS.includes(entry.operation) && entry.status === "done" && entry.finalText) {
         this.lastContext = {
           operation: entry.operation,
@@ -662,6 +775,9 @@ export class LlmWikiView extends ItemView {
       }
     }
     this.renderHistory();
+    this.stepsOpen = false;
+    this.stepsEl.addClass("ai-wiki-hidden");
+    this.progressToggle.setText("▶");
   }
 
   private showChatSection(): void {
@@ -689,8 +805,13 @@ export class LlmWikiView extends ItemView {
       this.lastUserMessage = text;
       const ctx = this.lastContext;
       if (ctx.operation === "lint" || ctx.operation === "lint-chat") {
+        const domainId = (ctx.domainId ?? this.domainSelect?.value) || undefined;
+        if (!domainId) {
+          new Notice(i18n().view.selectDomainFirst ?? "Select a domain first");
+          return;
+        }
         void this.plugin.controller.lintApplyFromChat(
-          ctx.domainId,
+          domainId,
           ctx.report,
           this.chatHistory,
           text,
@@ -718,6 +839,13 @@ export class LlmWikiView extends ItemView {
       void MarkdownRenderer.render(this.app, text, el, "", comp).then(() => sanitizeLinks(el));
       registerLinkHandler(el, this.app);
     }
+    const copyBtn = el.createEl("button", { cls: "ai-wiki-copy-btn", attr: { "aria-label": "Copy" } });
+    setIcon(copyBtn, "copy");
+    copyBtn.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(text);
+      setIcon(copyBtn, "check");
+      window.setTimeout(() => setIcon(copyBtn, "copy"), 1500);
+    });
     el.scrollIntoView({ block: "end" });
     return el;
   }
@@ -777,8 +905,9 @@ export class LlmWikiView extends ItemView {
       } else {
         const comp = new Component();
         comp.load();
-        void MarkdownRenderer.render(this.app, msg.content, this.currentChatBubble, "", comp).then(() => sanitizeLinks(this.currentChatBubble!));
-        registerLinkHandler(this.currentChatBubble, this.app);
+        const bubble = this.currentChatBubble;
+        void MarkdownRenderer.render(this.app, msg.content, bubble, "", comp).then(() => sanitizeLinks(bubble));
+        registerLinkHandler(bubble, this.app);
       }
       this.currentChatBubble = null;
     }
@@ -850,6 +979,35 @@ export class LlmWikiView extends ItemView {
     this.stepsEl.scrollTop = this.stepsEl.scrollHeight;
   }
 
+  private startWaiting(): void {
+    this.stopWaiting();
+    this.waitingStartedAt = Date.now();
+    this.waitingStep = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step--waiting");
+    this.waitingStep.createSpan({ cls: "ai-wiki-step-icon" }).setText("⏳");
+    this.waitingStep.createSpan({ cls: "ai-wiki-waiting-text" }).setText("");
+    this.scrollSteps();
+    this.scheduleWaitingTick();
+  }
+
+  private stopWaiting(): void {
+    if (this.waitingTickHandle !== null) {
+      window.clearTimeout(this.waitingTickHandle);
+      this.waitingTickHandle = null;
+    }
+    this.waitingStep?.remove();
+    this.waitingStep = null;
+  }
+
+  private scheduleWaitingTick(): void {
+    this.waitingTickHandle = window.setTimeout(() => {
+      if (!this.waitingStep) return;
+      const s = ((Date.now() - this.waitingStartedAt) / 1000).toFixed(1);
+      const span = this.waitingStep.querySelector<HTMLElement>(".ai-wiki-waiting-text");
+      if (span) span.setText(`${s}s`);
+      this.scheduleWaitingTick();
+    }, 100);
+  }
+
   private statusLabel(entry: RunHistoryEntry): string {
     const dur = ((entry.finishedAt - entry.startedAt) / 1000).toFixed(1);
     const icon = entry.status === "done" ? "✓" : entry.status === "cancelled" ? "⛔" : "✗";
@@ -869,6 +1027,17 @@ export class LlmWikiView extends ItemView {
       const row = this.historyEl.createDiv("ai-wiki-history-row");
       row.createSpan().setText(this.statusLabel(it));
       row.createSpan({ cls: "muted" }).setText(` ${it.args.join(" ")}`);
+      if (it.operation === "query") {
+        const rerunBtn = row.createEl("button", { text: "↺", attr: { title: "Re-run" } });
+        rerunBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (!this.domainSelect) return;
+          this.domainSelect.value = it.domainId ?? "";
+          this.domainSelect.dispatchEvent(new Event("change"));
+          this.queryInput.value = it.args[0] ?? "";
+          this.submitQuery();
+        });
+      }
       row.addEventListener("click", () => {
         this.finalEl.empty();
         const comp = new Component();
@@ -888,6 +1057,28 @@ export class LlmWikiView extends ItemView {
       modal.open();
     });
   }
+}
+
+class FileContentModal extends Modal {
+  constructor(app: App, private filePath: string, private content: string) {
+    super(app);
+  }
+  onOpen(): void {
+    this.titleEl.setText(this.filePath.split("/").pop() ?? this.filePath);
+    const btnRow = this.modalEl.createDiv({ cls: "modal-button-container" });
+    const openBtn = btnRow.createEl("button", { text: "Open in system editor" });
+    openBtn.addEventListener("click", () => {
+      const basePath = (this.app.vault.adapter as Record<string, unknown>)["basePath"] as string ?? "";
+      const absPath = basePath ? `${basePath}/${this.filePath}` : this.filePath;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      (require("electron") as { shell: { openPath(p: string): void } }).shell.openPath(absPath);
+    });
+    this.contentEl.style.cssText = "max-height: 60vh; overflow-y: auto;";
+    const comp = new Component();
+    comp.load();
+    void MarkdownRenderer.render(this.app, this.content, this.contentEl, this.filePath, comp);
+  }
+  onClose(): void { this.contentEl.empty(); }
 }
 
 class WikiQuestionModal extends Modal {

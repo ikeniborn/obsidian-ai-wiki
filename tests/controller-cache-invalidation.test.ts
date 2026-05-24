@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { WikiController } from "../src/controller";
 import { graphCache } from "../src/wiki-graph-cache";
 import type { DomainEntry } from "../src/domain";
@@ -116,6 +116,10 @@ describe("WikiController cache invalidation after mutating ops", () => {
     graphCache.clear();
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   const DOMAIN: DomainEntry = {
     id: "ai",
     name: "AI",
@@ -139,15 +143,6 @@ describe("WikiController cache invalidation after mutating ops", () => {
     const invalidateSpy = vi.spyOn(graphCache, "invalidate");
 
     await priv.dispatch("lint", ["ai"], "ai");
-
-    expect(invalidateSpy).toHaveBeenCalledWith("ai");
-  });
-
-  it("invalidates graphCache for query-save with domainId", async () => {
-    const { priv } = build([DOMAIN]);
-    const invalidateSpy = vi.spyOn(graphCache, "invalidate");
-
-    await priv.dispatch("query-save", ["what is AI?"], "ai");
 
     expect(invalidateSpy).toHaveBeenCalledWith("ai");
   });

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { runFormat } from "../../src/phases/format";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient, ChatMessage } from "../../src/types";
+import { structuralErrorCounter } from "../../src/structural-error-counter";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -48,6 +49,20 @@ function makeLlmSequence(responses: string[]): LlmClient {
               yield { choices: [{ delta: { content: response }, finish_reason: null }] };
             },
           });
+        }),
+      },
+    },
+  } as unknown as LlmClient;
+}
+
+function makeLlmTruncated(): LlmClient {
+  return {
+    chat: {
+      completions: {
+        create: vi.fn().mockResolvedValue({
+          [Symbol.asyncIterator]: async function* () {
+            yield { choices: [{ delta: { content: "not json {" }, finish_reason: "length" }] };
+          },
         }),
       },
     },
@@ -247,5 +262,98 @@ describe("runFormat", () => {
     const written = (adapter.write as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
     expect(written).toContain("<!-- restored-lines: token loss after retry -->");
     expect(written).toContain("https://clickhouse.com/docs");
+  });
+
+  it("truncation error — claude-agent hint", async () => {
+    const adapter = mockAdapter({ [FILE]: SAMPLE });
+    const vt = new VaultTools(adapter, VAULT);
+    const events = await collect(
+      runFormat([FILE], vt, makeLlmTruncated(), "model", false, [], new AbortController().signal, {}, "claude-agent"),
+    );
+    const err = events.find((e: unknown) => (e as { kind: string }).kind === "error") as { message: string } | undefined;
+    expect(err).toBeDefined();
+    expect(err!.message).toContain("CLAUDE_CODE_MAX_OUTPUT_TOKENS");
+    expect(err!.message).not.toContain("Settings →");
+  });
+
+  it("reads format schema from .config/ subfolder", async () => {
+    let schemaReadPath = "";
+    const adapter = mockAdapter({
+      [`${VAULT}/.config/_format_schema.md`]: "schema content",
+      [`${VAULT}/${FILE}`]: "# Page\ncontent",
+    });
+    const origRead = adapter.read as ReturnType<typeof vi.fn>;
+    origRead.mockImplementation(async (path: string) => {
+      schemaReadPath = path;
+      if (path === `${VAULT}/.config/_format_schema.md`) return "schema content";
+      if (path === `${VAULT}/${FILE}`) return "# Page\ncontent";
+      return "";
+    });
+    const vt = new VaultTools(adapter, VAULT);
+    await collect(runFormat([`${VAULT}/${FILE}`], vt,
+      makeLlm('{"report":"ok","formatted":"# Page"}'), "model", false, [], new AbortController().signal));
+    expect(schemaReadPath).toContain(".config/_format_schema.md");
+  });
+
+  it("truncation error — native-agent hint", async () => {
+    const adapter = mockAdapter({ [FILE]: SAMPLE });
+    const vt = new VaultTools(adapter, VAULT);
+    const events = await collect(
+      runFormat([FILE], vt, makeLlmTruncated(), "model", false, [], new AbortController().signal, {}, "native-agent"),
+    );
+    const err = events.find((e: unknown) => (e as { kind: string }).kind === "error") as { message: string } | undefined;
+    expect(err).toBeDefined();
+    expect(err!.message).toContain("Settings →");
+    expect(err!.message).not.toContain("CLAUDE_CODE_MAX_OUTPUT_TOKENS");
+  });
+});
+
+describe("runFormat Zod validation", () => {
+  it("records structuralErrorCounter on Zod parse failure then retry succeeds", async () => {
+    structuralErrorCounter.reset();
+    const good = JSON.stringify({ report: "## ok", formatted: "---\n# Page" });
+    const bad = '{"report": "ok"}'; // missing `formatted` field
+    const adapter = mockAdapter({ [FILE]: SAMPLE });
+    const vt = new VaultTools(adapter, VAULT);
+
+    let callCount = 0;
+    const llm: LlmClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(() => {
+            callCount++;
+            const content = callCount === 1 ? bad : good;
+            return Promise.resolve({
+              [Symbol.asyncIterator]: async function* () {
+                yield { choices: [{ delta: { content }, finish_reason: null }] };
+              },
+            });
+          }),
+        },
+      },
+    } as unknown as LlmClient;
+
+    const events = await collect(
+      runFormat([FILE], vt, llm, "model", false, [], new AbortController().signal),
+    );
+
+    expect(events.some((e: unknown) => (e as { kind: string }).kind === "format_preview")).toBe(true);
+    const stats = structuralErrorCounter.get();
+    // format uses a custom retry loop (not parseWithRetry), so retried bucket stays 0;
+    // exactly one failure (call 1 bad JSON) and at least one success (call 2+ good)
+    expect(stats.failed).toBe(1);
+    expect(stats.ok).toBeGreaterThan(0);
+  });
+
+  it("emits error on Zod failure after retry", async () => {
+    structuralErrorCounter.reset();
+    const bad = '{"report": "ok"}'; // missing `formatted` field
+    const adapter = mockAdapter({ [FILE]: SAMPLE });
+    const vt = new VaultTools(adapter, VAULT);
+
+    const events = await collect(
+      runFormat([FILE], vt, makeLlmSequence([bad, bad]), "model", false, [], new AbortController().signal),
+    );
+    expect(events.some((e: unknown) => (e as { kind: string }).kind === "error")).toBe(true);
   });
 });

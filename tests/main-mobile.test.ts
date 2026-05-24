@@ -95,16 +95,16 @@ describe("onload — command registration gating", () => {
     const { plugin, registered } = setupPlugin();
     await plugin.onload();
     expect(registered).toEqual(
-      expect.arrayContaining(["open-panel", "ingest-current", "query", "query-save", "lint", "init", "cancel"]),
+      expect.arrayContaining(["open-panel", "ingest-current", "query", "lint", "init", "cancel"]),
     );
   });
 
-  it("mobile: registers only query/query-save/open-panel/cancel", async () => {
+  it("mobile: registers only query/open-panel/cancel", async () => {
     __setPlatformMobile(true);
     const { plugin, registered } = setupPlugin();
     await plugin.onload();
     expect(registered).toEqual(
-      expect.arrayContaining(["open-panel", "query", "query-save", "cancel"]),
+      expect.arrayContaining(["open-panel", "query", "cancel"]),
     );
     expect(registered).not.toContain("ingest-current");
     expect(registered).not.toContain("lint");

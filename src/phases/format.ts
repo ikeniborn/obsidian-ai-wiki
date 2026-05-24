@@ -1,12 +1,31 @@
 import type OpenAI from "openai";
 import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, extractUsage } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured } from "./llm-utils";
 import formatTemplate from "../../prompts/format.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
-import { extractJsonObject, missingTokensWithContext, looksTruncated, appendMissingLines } from "./format-utils";
+import { missingTokensWithContext, looksTruncated, appendMissingLines } from "./format-utils";
 import { WIKI_ROOT } from "../wiki-path";
+import { FormatOutputSchema } from "./zod-schemas";
+import { structuralErrorCounter } from "../structural-error-counter";
+
+function parseFormatOutput(text: string): { report: string; formatted: string } | null {
+  let raw: unknown;
+  try {
+    raw = parseStructured(text);
+  } catch {
+    structuralErrorCounter.record(false, 0);
+    return null;
+  }
+  const result = FormatOutputSchema.safeParse(raw);
+  if (result.success) {
+    structuralErrorCounter.record(true, 0);
+    return result.data;
+  }
+  structuralErrorCounter.record(false, 0);
+  return null;
+}
 
 function extractImagePaths(md: string): string[] {
   const out: string[] = [];
@@ -15,6 +34,12 @@ function extractImagePaths(md: string): string[] {
     if (!url.startsWith("http")) out.push(url);
   }
   return out;
+}
+
+function truncationHint(backend: "claude-agent" | "native-agent"): string {
+  return backend === "claude-agent"
+    ? "увеличьте лимит: env CLAUDE_CODE_MAX_OUTPUT_TOKENS в iclaude.sh"
+    : "увеличьте лимит: Settings → per-operation → format → maxTokens";
 }
 
 export async function* runFormat(
@@ -26,6 +51,7 @@ export async function* runFormat(
   chatHistory: ChatMessage[],
   signal: AbortSignal,
   opts: LlmCallOptions = {},
+  backend: "claude-agent" | "native-agent" = "native-agent",
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
   const filePath = args[0];
@@ -42,7 +68,7 @@ export async function* runFormat(
     return;
   }
 
-  const formatSchemaPath = `${WIKI_ROOT}/_format_schema.md`;
+  const formatSchemaPath = `${WIKI_ROOT}/.config/_format_schema.md`;
   let formatSchema: string;
   try {
     formatSchema = await vaultTools.read(formatSchemaPath);
@@ -116,10 +142,10 @@ export async function* runFormat(
   let fullText = yield* callOnce(baseParams);
   if (signal.aborted) return;
 
-  let parsed = extractJsonObject(fullText);
+  let parsed = parseFormatOutput(fullText);
   const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
   if (!parsed && truncated) {
-    yield { kind: "error", message: "Format: ответ обрезан по лимиту вывода модели — сократите страницу или увеличьте лимит (claude-agent: env CLAUDE_CODE_MAX_OUTPUT_TOKENS в iclaude.sh; native-agent: Settings → per-operation → format → maxTokens)" };
+    yield { kind: "error", message: `Format: ответ обрезан по лимиту вывода модели — сократите страницу или ${truncationHint(backend)}` };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
     return;
   }
@@ -133,12 +159,12 @@ export async function* runFormat(
     const retryParams = { ...buildChatParams(model, retryMessages, opts, true), response_format: { type: "json_object" } };
     fullText = yield* callOnce(retryParams);
     if (signal.aborted) return;
-    parsed = extractJsonObject(fullText);
+    parsed = parseFormatOutput(fullText);
   }
   if (!parsed) {
     const retryTruncated = lastFinishReason === "length" || looksTruncated(fullText);
     const msg = retryTruncated
-      ? "Format: ответ обрезан по лимиту вывода модели (после retry) — сократите страницу или увеличьте лимит (claude-agent: env CLAUDE_CODE_MAX_OUTPUT_TOKENS в iclaude.sh; native-agent: Settings → per-operation → format → maxTokens)"
+      ? `Format: ответ обрезан по лимиту вывода модели (после retry) — сократите страницу или ${truncationHint(backend)}`
       : "Format: LLM вернул невалидный JSON (после retry)";
     yield { kind: "error", message: msg };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
@@ -168,7 +194,7 @@ export async function* runFormat(
     const restoreParams = { ...buildChatParams(model, restoreMessages, opts, true), response_format: { type: "json_object" } };
     const fullText2 = yield* callOnce(restoreParams);
     if (!signal.aborted) {
-      const parsed2 = extractJsonObject(fullText2);
+      const parsed2 = parseFormatOutput(fullText2);
       if (parsed2) {
         finalFormatted = parsed2.formatted;
         finalReport = parsed2.report;

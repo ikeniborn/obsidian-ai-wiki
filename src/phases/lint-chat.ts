@@ -9,6 +9,7 @@ import { render } from "./template";
 import { domainWikiFolder } from "../wiki-path";
 import { upsertIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
+import { ensureDomainConfig } from "../domain-config";
 
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
@@ -31,6 +32,10 @@ export async function* runLintFixChat(
   }
 
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
+  await ensureDomainConfig(vaultTools, wikiVaultPath);
+
+  const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
+  const schemaContent = await tryRead(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`);
 
   // 1. Load domain pages
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
@@ -47,6 +52,7 @@ export async function* runLintFixChat(
     domain_name: domain.name,
     lint_report: req.context ?? "",
     pages_block: pagesBlock,
+    schema_block: schemaContent ? `\nКонвенции (_wiki_schema.md):\n${schemaContent}` : "",
   });
 
   const chatMessages = req.chatMessages ?? [];
@@ -86,11 +92,15 @@ export async function* runLintFixChat(
     }
     if (page.annotation) {
       try {
-        await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation);
+        await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation, page.path);
       } catch { /* non-critical */ }
     }
   }
 
   // 5. Emit result
   yield { kind: "result", durationMs: Date.now() - start, text: parsed.summary, outputTokens: result.outputTokens || undefined };
+}
+
+async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
+  try { return await vaultTools.read(path); } catch { return ""; }
 }

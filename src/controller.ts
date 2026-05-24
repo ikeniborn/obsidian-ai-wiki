@@ -19,10 +19,11 @@ import type { DomainStore } from "./domain-store";
 import { DomainCorruptError } from "./domain-store";
 import type { LocalConfig, LocalConfigStore } from "./local-config";
 import type { LlmWikiPluginSettings } from "./types";
-import { FileErrorModal, ConfirmModal } from "./modals";
+import { FileErrorModal, ConfirmModal, ShellConsentModal } from "./modals";
 import { domainWikiFolder } from "./wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
+import { collectMdInPaths, parseWikiSources } from "./utils/vault-walk";
 
 function toVaultPath(vaultDir: string, savedPath: string): string | null {
   const abs = isAbsolute(savedPath) ? savedPath : join(vaultDir, savedPath);
@@ -192,10 +193,9 @@ export class WikiController {
     await this.dispatch("ingest", [abs], domainId);
   }
 
-  async query(question: string, save: boolean, domainId?: string): Promise<void> {
+  async query(question: string, domainId?: string): Promise<void> {
     if (!question.trim()) return;
-    const op: WikiOperation = save ? "query-save" : "query";
-    await this.dispatch(op, [question.trim()], domainId);
+    await this.dispatch("query", [question.trim()], domainId);
   }
 
   async lint(domain: string): Promise<void> {
@@ -215,7 +215,7 @@ export class WikiController {
 
   private async dispatchChat(operation: WikiOperation, domainId: string | undefined, context: string, chatMessages: ChatMessage[]): Promise<void> {
     if (this.isBusy()) { new Notice(i18n().ctrl.operationRunning); return; }
-    if (Platform.isMobile && operation !== "query" && operation !== "query-save") {
+    if (Platform.isMobile && operation !== "query") {
       new Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
@@ -224,6 +224,12 @@ export class WikiController {
       const eff = resolveEffective(this.plugin.settings, local);
       if (eff.backend === "native-agent" && !this.requireNativeAgent(eff)) return;
       if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local)) return;
+      if (eff.backend === "claude-agent" && !local.shellConsentGiven) {
+        new ShellConsentModal(this.app, local.iclaudePath ?? "", async () => {
+          await this.localConfigStore.save({ shellConsentGiven: true });
+        }).open();
+        return;
+      }
     }
 
     await this.ensureView();
@@ -261,7 +267,6 @@ export class WikiController {
       lint: "Lint-проверка wiki",
       ingest: "Извлечение знаний (ingest)",
       query: "Ответ на запрос (query)",
-      "query-save": "Ответ на запрос с сохранением (query-save)",
     };
     const operationHeader = OPERATION_LABELS[operation] ?? operation;
 
@@ -377,6 +382,37 @@ export class WikiController {
     return { ok: true };
   }
 
+  async updateDomainSources(domainId: string, sourcePaths: string[]): Promise<void> {
+    const domains = await this.domainStore.load();
+    const next = domains.map((d) => d.id === domainId ? { ...d, source_paths: sourcePaths } : d);
+    await this.domainStore.save(next);
+  }
+
+  async cleanupRemovedSources(domainId: string, removedPaths: string[]): Promise<number> {
+    const domains = await this.domainStore.load();
+    const entry = domains.find((d) => d.id === domainId);
+    if (!entry) return 0;
+
+    const wikiFolder = domainWikiFolder(entry.wiki_folder);
+    const files = collectMdInPaths(this.app.vault, [wikiFolder]);
+
+    let deleted = 0;
+    for (const file of files) {
+      try {
+        const content = await this.app.vault.adapter.read(file.path);
+        const sources = parseWikiSources(content);
+        if (sources.length > 0 && sources.every((s) => removedPaths.some((r) => s.includes(r) || r.includes(s)))) {
+          await this.app.vault.adapter.remove(file.path);
+          deleted++;
+        }
+      } catch (e) {
+        console.error(`[ai-wiki] cleanupRemovedSources: error processing ${file.path}`, e);
+      }
+    }
+    if (deleted > 0) graphCache.invalidate(domainId);
+    return deleted;
+  }
+
   private requireClaudeAgent(local: LocalConfig): string | null {
     const { iclaudePath } = local;
     if (!iclaudePath) {
@@ -396,9 +432,14 @@ export class WikiController {
   }
 
   private async buildAgentRunner(vaultRoot: string, resumeSessionId?: string, opKey?: string): Promise<AgentRunner> {
-    const adapter = this.app.vault.adapter as unknown as VaultAdapter;
+    const rawAdapter = this.app.vault.adapter as unknown as VaultAdapter;
+    const vault = this.app.vault;
+    const adapter = Object.create(rawAdapter) as VaultAdapter;
+    adapter.mkdir = async (path: string) => {
+      try { await vault.createFolder(path); } catch { /* already exists — fine */ }
+    };
     const base = this.cwdOrEmpty();
-    const vaultTools = new VaultTools(adapter, base);
+    const vaultTools = new VaultTools(adapter, base, vault);
     const vaultName = this.app.vault.getName();
     const domains = await this.domainStore.load();
     const local = await this.localConfigStore.load();
@@ -429,7 +470,6 @@ export class WikiController {
       const fullAdapter = this.app.vault.adapter as unknown as InternalAdapter;
       const claudeEff = s.claudeAgent;
       const normalizedOpKey = opKey === "chat" || opKey === "lint-chat" ? "lint"
-        : opKey === "query-save" ? "query"
         : opKey;
       const effort = claudeEff.perOperation && normalizedOpKey
         ? (claudeEff.operations[normalizedOpKey as import("./types").OpKey]?.effort ?? claudeEff.effort)
@@ -498,10 +538,10 @@ export class WikiController {
     if (!this.plugin.settings.agentLogEnabled) return;
     if (ev.kind === "assistant_text") return;
     const adapter = this.app.vault.adapter;
-    const dir = "!Logs";
-    const path = `${dir}/agent.jsonl`;
+    const path = "!Wiki/.config/_agent.jsonl";
     try {
-      if (!(await adapter.exists(dir))) await adapter.mkdir(dir);
+      if (!(await adapter.exists("!Wiki"))) await this.app.vault.createFolder("!Wiki").catch(() => {});
+      if (!(await adapter.exists("!Wiki/.config"))) await this.app.vault.createFolder("!Wiki/.config").catch(() => {});
       const extra = ev.kind === "result" && ev.outputTokens !== undefined && ev.durationMs > 0
         ? { tokPerSec: Math.round(ev.outputTokens / (ev.durationMs / 1000)) }
         : {};
@@ -527,7 +567,7 @@ export class WikiController {
     // Новая операция делает предыдущий чат-контекст нерелевантным.
     this._chatSessionId = undefined;
 
-    if (Platform.isMobile && op !== "query" && op !== "query-save" && op !== "format") {
+    if (Platform.isMobile && op !== "query" && op !== "format") {
       new Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
@@ -536,7 +576,13 @@ export class WikiController {
       const eff = resolveEffective(this.plugin.settings, local);
       if (eff.backend === "native-agent" && !this.requireNativeAgent(eff)) return;
       if (eff.backend === "claude-agent" && !this.requireClaudeAgent(local)) return;
-      const opKey = (op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op) as import("./types").OpKey;
+      if (eff.backend === "claude-agent" && !local.shellConsentGiven) {
+        new ShellConsentModal(this.app, local.iclaudePath ?? "", async () => {
+          await this.localConfigStore.save({ shellConsentGiven: true });
+        }).open();
+        return;
+      }
+      const opKey = (op === "lint-chat" ? "lint" : op) as import("./types").OpKey;
       this._currentLogMeta = {
         backend: eff.backend,
         model: eff.backend === "claude-agent"
@@ -550,7 +596,7 @@ export class WikiController {
     if (!view) return;
 
     const vaultRoot = this.cwdOrEmpty();
-    const opKey = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
+    const opKey = op === "lint-chat" ? "lint" : op;
 
     let agentRunner: AgentRunner;
     try {
@@ -635,7 +681,7 @@ export class WikiController {
       }
     }
     if (status === "done") {
-      const mutatesWiki = op === "ingest" || op === "lint" || op === "lint-chat" || op === "query-save" || op === "init";
+      const mutatesWiki = op === "ingest" || op === "lint" || op === "lint-chat" || op === "init";
       if (mutatesWiki) {
         const targets = domainId ? [domainId] : (await this.domainStore.load()).map((d) => d.id);
         for (const id of targets) graphCache.invalidate(id);
@@ -661,13 +707,6 @@ export class WikiController {
     await this.plugin.saveSettings();
     await this.activeView()?.finish(entry);
 
-    if (op === "query-save" && status === "done" && !Platform.isMobile) {
-      const m = finalText.match(/Создана\s+страница:\s*([^\s`'"]+)/i);
-      if (m) {
-        const pathInVault = toVaultPath(vaultRoot, m[1]);
-        if (pathInVault) await this.app.workspace.openLinkText(pathInVault, "");
-      }
-    }
   }
 
   private collectStep(ev: RunEvent, steps: RunHistoryEntry["steps"]): void {

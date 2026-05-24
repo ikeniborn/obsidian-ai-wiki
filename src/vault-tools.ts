@@ -8,10 +8,17 @@ export interface VaultAdapter {
   remove?(path: string): Promise<void>;
 }
 
+export interface VaultIndexer {
+  getAbstractFileByPath(path: string): { path: string } | null;
+  create(path: string, content: string): Promise<{ path: string }>;
+  modify(file: { path: string }, content: string): Promise<void>;
+}
+
 export class VaultTools {
   constructor(
     public readonly adapter: VaultAdapter,
     private basePath: string,
+    public readonly vault?: VaultIndexer,
   ) {}
 
   get vaultRoot(): string {
@@ -23,12 +30,30 @@ export class VaultTools {
   }
 
   async write(vaultPath: string, content: string): Promise<void> {
-    const dir = vaultPath.split("/").slice(0, -1).join("/");
-    if (dir) {
-      const dirExists = await this.adapter.exists(dir);
-      if (!dirExists) await this.adapter.mkdir(dir);
+    const segments = vaultPath.split("/").slice(0, -1);
+    for (let i = 1; i <= segments.length; i++) {
+      const partial = segments.slice(0, i).join("/");
+      let exists = false;
+      try { exists = await this.adapter.exists(partial); } catch { }
+      if (!exists) {
+        try { await this.adapter.mkdir(partial); } catch { }
+      }
     }
-    await this.adapter.write(vaultPath, content);
+    if (this.vault) {
+      const indexed = this.vault.getAbstractFileByPath(vaultPath);
+      if (indexed) {
+        await this.vault.modify(indexed, content);
+      } else {
+        try {
+          await this.vault.create(vaultPath, content);
+        } catch {
+          // Obsidian doesn't index hidden dirs (.config) — vault.create() throws if file exists on disk
+          await this.adapter.write(vaultPath, content);
+        }
+      }
+    } else {
+      await this.adapter.write(vaultPath, content);
+    }
   }
 
   async listFiles(vaultDir: string): Promise<string[]> {

@@ -28,6 +28,33 @@ describe("VaultTools", () => {
     expect(adapter.write).toHaveBeenCalledWith("notes/sub/a.md", "content");
   });
 
+  it("write creates all ancestor dirs for deeply nested path", async () => {
+    const created: string[] = [];
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(false),
+      mkdir: vi.fn().mockImplementation(async (p: string) => { created.push(p); }),
+    });
+    const vt = new VaultTools(adapter, "/vault");
+    await vt.write("!Wiki/.config/_wiki_schema.md", "content");
+    expect(created).toEqual(["!Wiki", "!Wiki/.config"]);
+    expect(adapter.write).toHaveBeenCalledWith("!Wiki/.config/_wiki_schema.md", "content");
+  });
+
+  it("write continues creating dirs even if exists throws for one segment", async () => {
+    const created: string[] = [];
+    let call = 0;
+    const adapter = mockAdapter({
+      exists: vi.fn().mockImplementation(async () => { if (++call === 1) throw new Error("stat error"); return false; }),
+      mkdir: vi.fn().mockImplementation(async (p: string) => { created.push(p); }),
+    });
+    const vt = new VaultTools(adapter, "/vault");
+    await vt.write("!Wiki/.config/_wiki_schema.md", "content");
+    // first exists throws → treated as false → mkdir("!Wiki") called
+    // second exists returns false → mkdir("!Wiki/.config") called
+    expect(created).toEqual(["!Wiki", "!Wiki/.config"]);
+    expect(adapter.write).toHaveBeenCalledWith("!Wiki/.config/_wiki_schema.md", "content");
+  });
+
   it("write skips mkdir when dir exists", async () => {
     const adapter = mockAdapter({ exists: vi.fn().mockResolvedValue(true) });
     const vt = new VaultTools(adapter, "/vault");
@@ -76,5 +103,21 @@ describe("VaultTools", () => {
   it("vaultRoot returns the absolute vault base path", () => {
     const vt = new VaultTools(mockAdapter(), "/home/user/vault");
     expect(vt.vaultRoot).toBe("/home/user/vault");
+  });
+
+  it("write falls back to adapter.write when vault.create throws (hidden dir)", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      write: vi.fn().mockResolvedValue(undefined),
+    });
+    const vault = {
+      getAbstractFileByPath: vi.fn().mockReturnValue(null),
+      create: vi.fn().mockRejectedValue(new Error("File already exists")),
+      modify: vi.fn(),
+    };
+    const vt = new VaultTools(adapter, "/vault", vault);
+    await vt.write("!Wiki/.config/_log.md", "new content");
+    expect(vault.create).toHaveBeenCalledWith("!Wiki/.config/_log.md", "new content");
+    expect(adapter.write).toHaveBeenCalledWith("!Wiki/.config/_log.md", "new content");
   });
 });

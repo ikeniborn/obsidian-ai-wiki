@@ -61,6 +61,27 @@ describe("LocalConfigStore", () => {
     await store.save({ iclaudePath: "/new" });
     expect((await store.load()).iclaudePath).toBe("/new");
   });
+
+  it("save persists lastDomain and load returns it", async () => {
+    const adapter = {
+      exists: vi.fn().mockResolvedValue(false),
+      read: vi.fn(),
+      write: vi.fn().mockResolvedValue(undefined),
+    };
+    const store = new LocalConfigStore(makePlugin(adapter));
+    await store.save({ lastDomain: "ai" });
+    expect((await store.load()).lastDomain).toBe("ai");
+  });
+
+  it("lastDomain defaults to undefined when not in file", async () => {
+    const adapter = {
+      exists: vi.fn().mockResolvedValue(true),
+      read: vi.fn().mockResolvedValue(JSON.stringify({ iclaudePath: "/bin/iclaude.sh" })),
+      write: vi.fn(),
+    };
+    const store = new LocalConfigStore(makePlugin(adapter));
+    expect((await store.load()).lastDomain).toBeUndefined();
+  });
 });
 
 describe("LocalConfig.claudeAgent effort field", () => {

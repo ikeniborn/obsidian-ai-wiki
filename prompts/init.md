@@ -3,9 +3,9 @@
 {
   "id": "{{domain_id}}",
   "name": "Человекочитаемое название",
-  "wiki_folder": "vaults/{{vault_name}}/!Wiki/{{domain_id}}",
+  "wiki_folder": "{{domain_id}}",
   "source_paths": [],
-  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"{{domain_id}}/..."}],
+  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"processes"}],
   "language_notes": ""
 }
 {{schema_block}}
@@ -34,5 +34,8 @@
 
 ## Wiki Page Conventions
 
-Страницы wiki должны иметь frontmatter с полями:
-- wiki_keywords: [5-10 ключевых токенов домена, строчные, дефис-вместо-пробела]
+Страницы wiki используют поле `tags` во frontmatter: иерархические теги (category/subcategory, строчные, через `/`, без `#`). При ingest LLM переиспользует теги из существующих страниц и создаёт новые по той же схеме.
+
+ПРАВИЛО wiki_subfolder: одно слово, без слэшей, без domain_id.
+Нельзя: "os/network", "os_network". Можно: "network", "processes", "protocols".
+

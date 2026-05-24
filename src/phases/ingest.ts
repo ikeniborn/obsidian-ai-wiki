@@ -1,15 +1,27 @@
 import { isAbsolute, join, relative, dirname } from "path-browserify";
 import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
+import { mergeEntityTypes } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, extractUsage } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas } from "./llm-utils";
+import { parseWithRetry } from "./parse-with-retry";
+import { WikiPagesOutputSchema } from "./zod-schemas";
+import type { WikiPagesOutput } from "./zod-schemas";
 import ingestTemplate from "../../prompts/ingest.md";
 import { render } from "./template";
-import { domainWikiFolder } from "../wiki-path";
+import { domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
+import { ensureDomainConfig } from "../domain-config";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField } from "../utils/raw-frontmatter";
 import { upsertIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
+import { appendWikiLog } from "../wiki-log";
+import type { IngestLogEntry } from "../wiki-log";
+
+function parseWikiStatus(content: string): string {
+  const m = /^---\n[\s\S]*?^wiki_status:[ \t]*(.+)$/m.exec(content);
+  return m ? m[1].trim() : "unknown";
+}
 
 export async function* runIngest(
   args: string[],
@@ -60,9 +72,11 @@ export async function* runIngest(
   const domainRoot = wikiVaultPath;
   const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
 
+  await ensureDomainConfig(vaultTools, domainRoot);
+
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${schemaRoot}/_wiki_schema.md`),
-    tryRead(vaultTools, `${domainRoot}/_index.md`),
+    tryRead(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`),
+    tryRead(vaultTools, domainIndexPath(domainRoot)),
   ]);
 
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
@@ -75,49 +89,91 @@ export async function* runIngest(
     sourceVaultPath, sourceContent, domain, wikiVaultPath,
     existingPages, schemaContent, indexContent,
   );
-  const params = buildChatParams(model, messages, opts, true);
 
-  let fullText = "";
-  let outputTokens = 0;
+  const pwtEvents: RunEvent[] = [];
+  let parseResult: { value: WikiPagesOutput; outputTokens: number };
   try {
-    const stream = await llm.chat.completions.create(
-      { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
-      { signal },
-    );
-    for await (const chunk of stream) {
-      const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
-      if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
-      if (content) fullText += content;
-      if (tok !== undefined) outputTokens += tok;
-    }
+    parseResult = await parseWithRetry({
+      llm, model, baseMessages: messages, opts,
+      schema: WikiPagesOutputSchema,
+      maxRetries: opts.structuredRetries ?? 1,
+      callSite: "ingest.pages",
+      signal,
+      onEvent: (ev) => pwtEvents.push(ev),
+    });
   } catch (e) {
     if (signal.aborted || (e as Error).name === "AbortError") return;
-    const resp = await llm.chat.completions.create(
-      { ...params, stream: false } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-    );
-    fullText = resp.choices[0]?.message?.content ?? "";
-    const tok = extractUsage(resp);
-    if (tok !== undefined) outputTokens += tok;
+    for (const ev of pwtEvents) yield ev;
+    yield { kind: "error", message: `ingest: LLM output failed validation — ${(e as Error).message}` };
+    yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
+    return;
   }
-
+  for (const ev of pwtEvents) yield ev;
   if (signal.aborted) return;
 
-  const pages = parseJsonPages(fullText);
+  const outputTokens = parseResult.outputTokens;
+  yield { kind: "assistant_text", delta: parseResult.value.reasoning, isReasoning: true };
+  let pages = parseResult.value.pages;
+
+  // --- Path validation + one retry ---
+  const { valid, invalid } = splitByPathValidity(pages, wikiVaultPath);
+  if (invalid.length > 0) {
+    yield {
+      kind: "assistant_text",
+      delta: `⚠ Пути нарушают правило 4 сегментов, запрашиваю исправление: ${invalid.map((p) => p.path).join(", ")}\n`,
+    };
+    const retryText = await retryInvalidPaths(llm, model, messages, invalid, signal, opts);
+    if (signal.aborted) return;
+    if (retryText) {
+      const retried = parseJsonPages(retryText);
+      const { valid: retriedValid, invalid: retriedInvalid } = splitByPathValidity(retried, wikiVaultPath);
+      // Emit ok:false for paths still invalid after retry
+      for (const p of retriedInvalid) {
+        yield { kind: "tool_use", name: "Write", input: { path: p.path } };
+        yield { kind: "tool_result", ok: false, preview: `Path violates 4-level rule (!Wiki/<d>/<e>/<f>.md): ${p.path}` };
+      }
+      pages = [...valid, ...retriedValid];
+    } else {
+      // No retry text (error) — skip all invalid
+      for (const p of invalid) {
+        yield { kind: "tool_use", name: "Write", input: { path: p.path } };
+        yield { kind: "tool_result", ok: false, preview: `Path violates 4-level rule (!Wiki/<d>/<e>/<f>.md): ${p.path}` };
+      }
+      pages = valid;
+    }
+  }
+
   const written: string[] = [];
+  const logEntries: IngestLogEntry[] = [];
   for (const page of pages) {
     if (!page.path.startsWith(wikiVaultPath + "/")) {
       yield { kind: "tool_use", name: "Write", input: { path: page.path } };
       yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
       continue;
     }
+
+    let existingContent: string | null = null;
+    try { existingContent = await vaultTools.read(page.path); } catch { /* new page */ }
+
     yield { kind: "tool_use", name: "Write", input: { path: page.path } };
     try {
       await vaultTools.write(page.path, page.content);
       written.push(page.path);
       yield { kind: "tool_result", ok: true };
+
+      const relPath = page.path.startsWith(wikiVaultPath + "/")
+        ? page.path.slice(wikiVaultPath.length + 1)
+        : page.path;
+      const statusTo = parseWikiStatus(page.content);
+      if (existingContent === null) {
+        logEntries.push({ path: relPath, action: "СОЗДАНА", statusTo });
+      } else {
+        logEntries.push({ path: relPath, action: "ОБНОВЛЕНА", statusFrom: parseWikiStatus(existingContent), statusTo });
+      }
+
       if (page.annotation) {
         try {
-          await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation);
+          await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation, page.path);
         } catch { /* non-critical */ }
       }
     } catch (e) {
@@ -128,8 +184,21 @@ export async function* runIngest(
   const resultText = buildIngestSummary(domain.id, sourceVaultPath, written, pages.length);
   yield { kind: "assistant_text", delta: resultText };
 
+  const delta = parseResult.value.entity_types_delta;
+  if (delta?.length) {
+    const merged = mergeEntityTypes(domain.entity_types ?? [], delta);
+    yield { kind: "domain_updated", domainId: domain.id, patch: { entity_types: merged } };
+  }
+
   if (written.length > 0) {
-    await appendLog(vaultTools, domainRoot, sourceVaultPath, domain.id, written);
+    try {
+      await appendWikiLog(vaultTools, domainRoot, domain.id, {
+        op: "ingest",
+        sourcePath: sourceVaultPath,
+        entries: logEntries,
+        outputTokens,
+      });
+    } catch { /* non-critical */ }
 
     const backlinkToday = new Date().toISOString().slice(0, 10);
     const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
@@ -198,21 +267,6 @@ export function parseJsonPages(text: string): Array<{ path: string; content: str
   }
 }
 
-async function appendLog(
-  vaultTools: VaultTools,
-  wikiRoot: string,
-  sourcePath: string,
-  domainId: string,
-  written: string[],
-): Promise<void> {
-  const logPath = `${wikiRoot}/_log.md`;
-  const today = new Date().toISOString().slice(0, 10);
-  const entry = `\n## ${today} — ingest — ${domainId}\n- Источник: ${sourcePath}\n- Страниц: ${written.map((p) => `\n  - ${p}`).join("")}\n`;
-  try {
-    const existing = await tryRead(vaultTools, logPath);
-    await vaultTools.write(logPath, existing + entry);
-  } catch { /* не критично */ }
-}
 
 async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
   try { return await vaultTools.read(path); } catch { return ""; }
@@ -228,6 +282,60 @@ export function extractParentSourcePath(
   const clamped = (parentAbs + "/").startsWith(normedVault) ? parentAbs : vaultRoot;
   const rel = relative(vaultRoot, clamped);
   return (rel || ".") + "/";
+}
+
+function splitByPathValidity(
+  pages: Array<{ path: string; content: string; annotation?: string }>,
+  wikiVaultPath: string,
+): {
+  valid: Array<{ path: string; content: string; annotation?: string }>;
+  invalid: Array<{ path: string; content: string; annotation?: string }>;
+} {
+  const valid: typeof pages = [];
+  const invalid: typeof pages = [];
+  for (const p of pages) {
+    const filename = p.path.split("/").pop() ?? "";
+    const isSystemFile = filename.startsWith("_") && filename.endsWith(".md");
+    if (!isSystemFile && validateArticlePath(p.path, wikiVaultPath)) {
+      valid.push(p);
+    } else {
+      invalid.push(p);
+    }
+  }
+  return { valid, invalid };
+}
+
+async function retryInvalidPaths(
+  llm: LlmClient,
+  model: string,
+  originalMessages: OpenAI.Chat.ChatCompletionMessageParam[],
+  invalidPages: Array<{ path: string; content: string; annotation?: string }>,
+  signal: AbortSignal,
+  opts: LlmCallOptions,
+): Promise<string> {
+  const invalidList = invalidPages.map((p) => p.path).join(", ");
+  const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    ...originalMessages,
+    {
+      role: "user",
+      content: `Пути нарушают правило 4 сегментов (!Wiki/<d>/<e>/<f>.md): ${invalidList}. Верни исправленный JSON-массив только для этих страниц.`,
+    },
+  ];
+  const retryParams = buildChatParams(model, retryMessages, opts, false);
+  try {
+    let text = "";
+    const stream = await llm.chat.completions.create(
+      { ...retryParams, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
+      { signal },
+    );
+    for await (const chunk of stream) {
+      const { content } = extractStreamDeltas(chunk);
+      if (content) text += content;
+    }
+    return text;
+  } catch {
+    return "";
+  }
 }
 
 export function buildEntityTypesBlock(domain: DomainEntry, wikiVaultPath: string): string {

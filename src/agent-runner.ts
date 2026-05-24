@@ -24,7 +24,7 @@ export class AgentRunner {
   }
 
   private buildOptsFor(op: RunRequest["operation"]): { model: string; opts: LlmCallOptions } {
-    const key = (op === "query-save" ? "query" : op === "chat" || op === "lint-chat" ? "lint" : op) as OpKey;
+    const key = (op === "chat" || op === "lint-chat" ? "lint" : op) as OpKey;
     const s = this.settings;
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
 
@@ -53,10 +53,10 @@ export class AgentRunner {
   }): Promise<void> {
     if (!this.settings.devMode?.enabled) return;
     const adapter = this.vaultTools.adapter;
-    const dir = "!Logs";
-    const path = `${dir}/dev.jsonl`;
+    const path = "!Wiki/.config/_dev.jsonl";
     try {
-      if (!(await adapter.exists(dir))) await adapter.mkdir(dir);
+      if (!(await adapter.exists("!Wiki"))) await adapter.mkdir("!Wiki").catch(() => {});
+      if (!(await adapter.exists("!Wiki/.config"))) await adapter.mkdir("!Wiki/.config").catch(() => {});
       const line = JSON.stringify({ ts: new Date().toISOString(), ...entry, eval: null }) + "\n";
       if (await adapter.exists(path)) await adapter.append(path, line);
       else await adapter.write(path, line);
@@ -76,9 +76,6 @@ export class AgentRunner {
         break;
       case "query":
         yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore);
-        break;
-      case "query-save":
-        yield* runQuery(req.args, true, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore);
         break;
       case "lint":
         yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, opts);
@@ -103,7 +100,7 @@ export class AgentRunner {
         break;
       case "format": {
         const hasVision = this.settings.backend === "claude-agent";
-        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts);
+        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend);
         break;
       }
       default: {
@@ -162,7 +159,7 @@ export class AgentRunner {
   private async updateDevLogEval(_vaultRoot: string, score: number, reasoning: string): Promise<void> {
     if (!this.settings.devMode?.enabled) return;
     const adapter = this.vaultTools.adapter;
-    const path = "!Logs/dev.jsonl";
+    const path = "!Wiki/.config/_dev.jsonl";
     try {
       if (!(await adapter.exists(path))) return;
       const content = await adapter.read(path);

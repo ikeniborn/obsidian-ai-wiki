@@ -160,6 +160,23 @@ describe("runQuery", () => {
     expect(createMock).toHaveBeenCalledTimes(1);
   });
 
+  it("does not read _wiki_schema.md for query", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      read: vi.fn().mockResolvedValue("# Page\n\nContent."),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    await collect(
+      runQuery(["what is X?"], false, vt, makeLlm("answer"), "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    const readMock = adapter.read as ReturnType<typeof vi.fn>;
+    const schemaRead = readMock.mock.calls.find(([path]: [string]) =>
+      path.endsWith("_wiki_schema.md"),
+    );
+    expect(schemaRead).toBeUndefined();
+  });
+
   it("excludes pages not reached by BFS when keyword seed found (graphDepth=0)", async () => {
     const adapter = mockAdapter({
       list: vi.fn().mockResolvedValue({

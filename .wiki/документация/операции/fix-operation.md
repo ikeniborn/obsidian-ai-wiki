@@ -1,12 +1,13 @@
 ---
-wiki_status: developing
-wiki_sources:
-  - src/phases/fix.ts
-  - docs/architecture/README.md
-wiki_updated: 2026-05-13
+wiki_status: archived
+wiki_sources: []
+wiki_updated: 2026-05-19
 wiki_domain: документация
-tags: [операция, fix, security, path-validation]
+tags: [операция, fix, security, path-validation, archived]
 ---
+
+> **Archived.** `fix` operation removed from the plugin. `src/phases/fix.ts` no longer exists. Fix functionality was merged into the lint-chat flow (`src/phases/lint-chat.ts`).
+
 
 # Fix Operation
 

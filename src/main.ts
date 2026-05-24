@@ -75,13 +75,7 @@ export default class LlmWikiPlugin extends Plugin {
     this.addCommand({
       id: "query",
       name: T.cmd.query,
-      callback: () => new QueryModal(this.app, false, (q) => void this.controller.query(q, false)).open(),
-    });
-
-    this.addCommand({
-      id: "query-save",
-      name: T.cmd.querySave,
-      callback: () => new QueryModal(this.app, true, (q) => void this.controller.query(q, true)).open(),
+      callback: () => new QueryModal(this.app, (q) => void this.controller.query(q)).open(),
     });
 
     if (!Platform.isMobile) {
@@ -281,7 +275,7 @@ export async function migrateLegacyData(
 
   if (Array.isArray(data.domains)) {
     if (data.domains.length > 0) {
-      const vaultExists = await plugin.app.vault.adapter.exists("!Wiki/_domain.json");
+      const vaultExists = await plugin.app.vault.adapter.exists("!Wiki/.config/_domain.json");
       if (!vaultExists) {
         await domainStore.save(data.domains as DomainEntry[]);
       }
@@ -297,6 +291,16 @@ export async function migrateLegacyData(
       await localConfigStore.save({ iclaudePath: ca.iclaudePath });
     }
     delete ca.iclaudePath;
+    dirty = true;
+  }
+
+  // Migrate shellConsentGiven from data.json → local.json (one-shot)
+  if (data.shellConsentGiven === true) {
+    const localCur = await localConfigStore.load();
+    if (!localCur.shellConsentGiven) {
+      await localConfigStore.save({ shellConsentGiven: true });
+    }
+    delete data.shellConsentGiven;
     dirty = true;
   }
 

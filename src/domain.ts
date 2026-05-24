@@ -46,6 +46,12 @@ export function validateDomainId(id: string): string | null {
   return null;
 }
 
+export function mergeEntityTypes(current: EntityType[], incoming: EntityType[]): EntityType[] {
+  const map = new Map(current.map(e => [e.type, e]));
+  for (const e of incoming) map.set(e.type, e);
+  return [...map.values()];
+}
+
 type DomainPersistEvent = Extract<RunEvent, { kind: "domain_created" | "domain_updated" | "source_path_added" }>;
 
 export function applyDomainEvent(

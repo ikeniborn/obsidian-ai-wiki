@@ -1,6 +1,6 @@
-import { spawn } from "child_process";
-import { App, Notice, Platform, PluginSettingTab, Setting } from "obsidian";
-import { ConfirmModal, EditDomainModal } from "./modals";
+import { access, constants } from "node:fs/promises";
+import { App, DropdownComponent, Notice, Platform, PluginSettingTab, Setting } from "obsidian";
+import { ConfirmModal, EditDomainModal, ShellConsentModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { LlmWikiPluginSettings, OpKey } from "./types";
 import type { DomainEntry } from "./domain";
@@ -9,25 +9,7 @@ import { resolveEffective } from "./effective-settings";
 import type { LocalConfig } from "./local-config";
 
 async function checkClaudeAvailability(iclaudePath: string): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(iclaudePath, [
-      "--", "-p", "Привет, AI Wiki! Поработаем?",
-      "--output-format", "stream-json", "--verbose",
-      "--disable-slash-commands", "--dangerously-skip-permissions",
-    ], { stdio: ["ignore", "pipe", "pipe"] });
-
-    const timeout = window.setTimeout(() => {
-      child.kill("SIGTERM");
-      reject(new Error("Timeout 30s"));
-    }, 30_000);
-
-    child.on("error", err => { clearTimeout(timeout); reject(err); });
-    child.on("close", code => {
-      clearTimeout(timeout);
-      if (code === 0) resolve();
-      else reject(new Error(`exit code ${code}`));
-    });
-  });
+  await access(iclaudePath, constants.X_OK);
 }
 
 async function checkNativeAvailability(baseUrl: string, apiKey: string, model: string): Promise<void> {
@@ -225,15 +207,26 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       new Setting(containerEl)
         .setName(T.settings.backend_name)
         .setDesc(T.settings.backend_desc)
-        .addDropdown((d) =>
-          d.addOption("claude-agent", T.settings.claudeCodeAgent)
+        .addDropdown((d) => {
+          let backendDd: DropdownComponent;
+          backendDd = d
+            .addOption("claude-agent", T.settings.claudeCodeAgent)
             .addOption("native-agent", T.settings.nativeAgent)
             .setValue(eff.backend)
             .onChange(async (v) => {
+              if (v === "claude-agent") {
+                backendDd.setValue(eff.backend);
+                new ShellConsentModal(this.plugin.app, this.localCache.iclaudePath, async () => {
+                  await this.patchLocal({ shellConsentGiven: true, backend: "claude-agent" });
+                  this.display();
+                }).open();
+                return;
+              }
               await this.patchLocal({ backend: v as LlmWikiPluginSettings["backend"] });
               this.display();
-            }),
-        );
+            });
+          return d;
+        });
     } else {
       const p = containerEl.createEl("p", {
         text: "Mobile: cloud LLM (native-agent) only. setup guide: ",

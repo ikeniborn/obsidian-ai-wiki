@@ -5,7 +5,7 @@ import { PassThrough } from "node:stream";
 vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 
 import { spawn } from "node:child_process";
-import { ClaudeCliClient, type ClaudeCliConfig } from "../src/claude-cli-client";
+import { ClaudeCliClient, type ClaudeCliConfig, validateIclaudePath } from "../src/claude-cli-client";
 
 function makeMockProcess(lines: string[]) {
   const stdout = new PassThrough();
@@ -344,5 +344,35 @@ describe("ClaudeCliClient", () => {
       tmpRemove: () => {},
     };
     expect(testCfg.effort).toBeUndefined();
+  });
+});
+
+describe("validateIclaudePath", () => {
+  it("throws when path is empty string", () => {
+    expect(() => validateIclaudePath("")).toThrow("iclaudePath is empty");
+  });
+
+  it("throws when path is relative", () => {
+    expect(() => validateIclaudePath("bin/claude")).toThrow(
+      'iclaudePath must be absolute: "bin/claude"',
+    );
+  });
+
+  it("throws when path contains ..", () => {
+    expect(() => validateIclaudePath("/home/user/../claude")).toThrow(
+      'iclaudePath contains path traversal: "/home/user/../claude"',
+    );
+  });
+
+  it("does not throw for valid absolute path", () => {
+    expect(() => validateIclaudePath("/usr/bin/claude")).not.toThrow();
+  });
+
+  it("does not throw for path with home directory", () => {
+    expect(() => validateIclaudePath("/home/user/iclaude.sh")).not.toThrow();
+  });
+
+  it("does not throw for path whose filename contains .. as substring", () => {
+    expect(() => validateIclaudePath("/usr/bin/my..tool")).not.toThrow();
   });
 });

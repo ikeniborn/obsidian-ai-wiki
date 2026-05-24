@@ -30,6 +30,24 @@ Progress of every operation is visible live in the Obsidian sidebar panel.
 
 ---
 
+## Security
+
+### Shell Execution
+
+AI Wiki spawns an external process to run the Claude CLI backend:
+
+- **What is executed:** the absolute path you configure in Settings → Backend → "Path to Claude Code" (e.g. `/home/user/iclaude.sh`). The path is validated to be absolute and contain no traversal sequences before each spawn.
+- **Why it's required:** the Claude Agent backend works by calling `claude` / `iclaude.sh` as a subprocess. There is no alternative to `child_process.spawn` for this architecture.
+- **Your permissions:** the subprocess inherits your OS user's permissions — the same as running the Claude CLI manually in a terminal.
+- **How to review / change the path:** Settings → Backend Settings → "Path to Claude Code".
+- **First-run consent:** on first launch with `claude-agent` backend selected, a modal asks for explicit confirmation before any operation runs. You can revoke consent by removing `shellConsentGiven` from the plugin's `data.json`.
+
+### Vault Access
+
+The plugin reads only the folders you configure as "Source paths" for each domain. It does not enumerate your entire vault.
+
+---
+
 ## Quick start: Native Agent (Ollama)
 
 Requires no external accounts — the LLM runs locally.
@@ -217,5 +235,4 @@ The domain map is stored in `!Wiki/_domain.json` (inside the vault) and syncs no
 ## Documentation
 
 - [docs/dev.md](docs/dev.md) — build, install, smoke-test checklist for developers
-- [docs/publishing.md](docs/publishing.md) — release publishing
 - [docs/README.ru.md](docs/README.ru.md) — Russian version of this README
