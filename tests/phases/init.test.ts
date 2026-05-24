@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { runInit, mergeEntityTypes } from "../../src/phases/init";
+import { runInit } from "../../src/phases/init";
+import { mergeEntityTypes } from "../../src/domain";
 import { sanitizeWikiFolder, sanitizeWikiSubfolder } from "../../src/wiki-path";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";

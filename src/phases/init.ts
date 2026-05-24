@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
+import { mergeEntityTypes } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient, OnFileError } from "../types";
 import { VaultTools } from "../vault-tools";
 import { parseWithRetry } from "./parse-with-retry";
@@ -11,12 +12,6 @@ import initIncrementalTemplate from "../../prompts/init-incremental.md";
 import { render } from "./template";
 import { runIngest } from "./ingest";
 import { domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath } from "../wiki-path";
-
-export function mergeEntityTypes(current: EntityType[], incoming: EntityType[]): EntityType[] {
-  const map = new Map(current.map(e => [e.type, e]));
-  for (const e of incoming) map.set(e.type, e);
-  return [...map.values()];
-}
 
 export async function* runInit(
   args: string[],
