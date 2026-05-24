@@ -72,6 +72,8 @@ describe("LlmWikiView addSourceBtn disabled state", () => {
     (v as any).historyEl = { empty: vi.fn() };
     (v as any).historySection = { addClass: vi.fn(), removeClass: vi.fn() };
     (v as any).liveStatusSection = { addClass: vi.fn() };
+    (v as any).stepsEl = { addClass: vi.fn() };
+    (v as any).progressToggle = { setText: vi.fn() };
     (v as any).tickHandle = null;
 
     await v.finish(entry);
@@ -103,6 +105,8 @@ describe("LlmWikiView addSourceBtn disabled state", () => {
     (v as any).historyEl = { empty: vi.fn() };
     (v as any).historySection = { addClass: vi.fn(), removeClass: vi.fn() };
     (v as any).liveStatusSection = { addClass: vi.fn() };
+    (v as any).stepsEl = { addClass: vi.fn() };
+    (v as any).progressToggle = { setText: vi.fn() };
     (v as any).tickHandle = null;
 
     await v.finish(entry);

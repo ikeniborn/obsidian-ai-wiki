@@ -767,6 +767,9 @@ export class LlmWikiView extends ItemView {
       }
     }
     this.renderHistory();
+    this.stepsOpen = false;
+    this.stepsEl.addClass("ai-wiki-hidden");
+    this.progressToggle.setText("▶");
   }
 
   private showChatSection(): void {
