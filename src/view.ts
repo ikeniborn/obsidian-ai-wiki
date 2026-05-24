@@ -207,6 +207,9 @@ export class LlmWikiView extends ItemView {
     this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
     const refreshBtn = domainRow.createEl("button", { text: "↻", attr: { title: T.view.refreshTitle } });
     refreshBtn.addEventListener("click", () => void this.refreshDomains());
+    this.domainSelect.addEventListener("change", () => {
+      void this.plugin.localConfigStore.save({ lastDomain: this.domainSelect!.value });
+    });
 
     if (opts.withActions) {
       this.addSourceBtn = domainRow.createEl("button", { attr: { title: T.view.addSourceTitle } });
@@ -324,8 +327,9 @@ export class LlmWikiView extends ItemView {
     for (const d of domains) {
       this.domainSelect.createEl("option", { value: d.id, text: d.name || d.id });
     }
-    if (previous && Array.from(this.domainSelect.options).some((o) => o.value === previous)) {
-      this.domainSelect.value = previous;
+    const restoreTarget = previous || (await this.plugin.localConfigStore.load()).lastDomain;
+    if (restoreTarget && Array.from(this.domainSelect.options).some((o) => o.value === restoreTarget)) {
+      this.domainSelect.value = restoreTarget;
     }
     if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect.value;
     if (this.addSourceBtn) this.addSourceBtn.disabled = !this.domainSelect.value;
