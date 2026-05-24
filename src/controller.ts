@@ -193,10 +193,9 @@ export class WikiController {
     await this.dispatch("ingest", [abs], domainId);
   }
 
-  async query(question: string, save: boolean, domainId?: string): Promise<void> {
+  async query(question: string, domainId?: string): Promise<void> {
     if (!question.trim()) return;
-    const op: WikiOperation = save ? "query-save" : "query";
-    await this.dispatch(op, [question.trim()], domainId);
+    await this.dispatch("query", [question.trim()], domainId);
   }
 
   async lint(domain: string): Promise<void> {
@@ -216,7 +215,7 @@ export class WikiController {
 
   private async dispatchChat(operation: WikiOperation, domainId: string | undefined, context: string, chatMessages: ChatMessage[]): Promise<void> {
     if (this.isBusy()) { new Notice(i18n().ctrl.operationRunning); return; }
-    if (Platform.isMobile && operation !== "query" && operation !== "query-save") {
+    if (Platform.isMobile && operation !== "query") {
       new Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
@@ -268,7 +267,6 @@ export class WikiController {
       lint: "Lint-проверка wiki",
       ingest: "Извлечение знаний (ingest)",
       query: "Ответ на запрос (query)",
-      "query-save": "Ответ на запрос с сохранением (query-save)",
     };
     const operationHeader = OPERATION_LABELS[operation] ?? operation;
 
@@ -472,7 +470,6 @@ export class WikiController {
       const fullAdapter = this.app.vault.adapter as unknown as InternalAdapter;
       const claudeEff = s.claudeAgent;
       const normalizedOpKey = opKey === "chat" || opKey === "lint-chat" ? "lint"
-        : opKey === "query-save" ? "query"
         : opKey;
       const effort = claudeEff.perOperation && normalizedOpKey
         ? (claudeEff.operations[normalizedOpKey as import("./types").OpKey]?.effort ?? claudeEff.effort)
@@ -570,7 +567,7 @@ export class WikiController {
     // Новая операция делает предыдущий чат-контекст нерелевантным.
     this._chatSessionId = undefined;
 
-    if (Platform.isMobile && op !== "query" && op !== "query-save" && op !== "format") {
+    if (Platform.isMobile && op !== "query" && op !== "format") {
       new Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
@@ -585,7 +582,7 @@ export class WikiController {
         }).open();
         return;
       }
-      const opKey = (op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op) as import("./types").OpKey;
+      const opKey = (op === "lint-chat" ? "lint" : op) as import("./types").OpKey;
       this._currentLogMeta = {
         backend: eff.backend,
         model: eff.backend === "claude-agent"
@@ -599,7 +596,7 @@ export class WikiController {
     if (!view) return;
 
     const vaultRoot = this.cwdOrEmpty();
-    const opKey = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
+    const opKey = op === "lint-chat" ? "lint" : op;
 
     let agentRunner: AgentRunner;
     try {
@@ -684,7 +681,7 @@ export class WikiController {
       }
     }
     if (status === "done") {
-      const mutatesWiki = op === "ingest" || op === "lint" || op === "lint-chat" || op === "query-save" || op === "init";
+      const mutatesWiki = op === "ingest" || op === "lint" || op === "lint-chat" || op === "init";
       if (mutatesWiki) {
         const targets = domainId ? [domainId] : (await this.domainStore.load()).map((d) => d.id);
         for (const id of targets) graphCache.invalidate(id);
@@ -710,13 +707,6 @@ export class WikiController {
     await this.plugin.saveSettings();
     await this.activeView()?.finish(entry);
 
-    if (op === "query-save" && status === "done" && !Platform.isMobile) {
-      const m = finalText.match(/Создана\s+страница:\s*([^\s`'"]+)/i);
-      if (m) {
-        const pathInVault = toVaultPath(vaultRoot, m[1]);
-        if (pathInVault) await this.app.workspace.openLinkText(pathInVault, "");
-      }
-    }
   }
 
   private collectStep(ev: RunEvent, steps: RunHistoryEntry["steps"]): void {
