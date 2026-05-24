@@ -247,7 +247,7 @@ describe("runInitWithSources — Phase 1 bootstrap", () => {
   });
 });
 
-describe("runInitWithSources — Phase 1 incremental", () => {
+describe("runInitWithSources — Phase 1 incremental (entity types via ingest delta)", () => {
   const bootstrapJson = JSON.stringify({
     reasoning: "",
     id: "dom",
@@ -258,21 +258,25 @@ describe("runInitWithSources — Phase 1 incremental", () => {
     language_notes: "",
   });
 
-  const incrementalJson1 = JSON.stringify({
-    reasoning: "",
-    entity_types: [
+  // Ingest responses that carry entity_types_delta
+  const ingestWithPersonDelta = JSON.stringify({
+    reasoning: "ok",
+    pages: [],
+    entity_types_delta: [
       { type: "concept", description: "Refined concept", extraction_cues: ["refined"] },
       { type: "person", description: "A person", extraction_cues: ["person"] },
     ],
   });
 
-  const incrementalJson2 = JSON.stringify({
-    reasoning: "",
-    entity_types: [
+  const ingestWithPlaceDelta = JSON.stringify({
+    reasoning: "ok",
+    pages: [],
+    entity_types_delta: [
       { type: "place", description: "A place", extraction_cues: ["location"] },
     ],
-    language_notes: "Russian",
   });
+
+  const ingestEmpty = JSON.stringify({ reasoning: "ok", pages: [] });
 
   const sourceFiles = {
     "src/a.md": "content a",
@@ -280,42 +284,61 @@ describe("runInitWithSources — Phase 1 incremental", () => {
     "src/c.md": "content c",
   };
 
-  it("emits domain_updated after each incremental file with merged entity_types", async () => {
+  it("emits domain_updated with merged entity_types when ingest returns delta", async () => {
     const adapter = mockAdapterWithSources(sourceFiles);
     const vt = new VaultTools(adapter, "/vault");
+    // Call sequence for 3 files: bootstrap(a), ingest(a), ingest(b with person), ingest(c with place)
     const events = await collect(
-      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, incrementalJson1, incrementalJson2]), "model", [], "TestVault", new AbortController().signal),
+      runInit(
+        ["dom", "--sources", "src"],
+        vt,
+        makeMultiLlm([bootstrapJson, ingestEmpty, ingestWithPersonDelta, ingestWithPlaceDelta]),
+        "model", [], "TestVault", new AbortController().signal,
+      ),
     );
-    const updates = events.filter((e: any) => e.kind === "domain_updated" && e.patch?.entity_types) as any[];
-    // 2 incremental updates + final clear
+    const updates = events.filter(
+      (e: any) => e.kind === "domain_updated" && e.patch?.entity_types,
+    ) as any[];
+    // At minimum the loop-end domain_updated events for b and c (both have deltas intercepted)
     expect(updates.length).toBeGreaterThanOrEqual(2);
   });
 
   it("entity_types accumulate correctly — later files merge on top of earlier", async () => {
     const adapter = mockAdapterWithSources(sourceFiles);
     const vt = new VaultTools(adapter, "/vault");
-    const ingestEmpty = JSON.stringify({ reasoning: "ok", pages: [] });
-    // Per-file pipeline: bootstrap(a), ingest(a), incremental(b), ingest(b), incremental(c), ingest(c)
+    // Call sequence: bootstrap(a), ingest(a no-delta), ingest(b with person+refined-concept), ingest(c with place)
     const events = await collect(
-      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, ingestEmpty, incrementalJson1, ingestEmpty, incrementalJson2, ingestEmpty]), "model", [], "TestVault", new AbortController().signal),
+      runInit(
+        ["dom", "--sources", "src"],
+        vt,
+        makeMultiLlm([bootstrapJson, ingestEmpty, ingestWithPersonDelta, ingestWithPlaceDelta]),
+        "model", [], "TestVault", new AbortController().signal,
+      ),
     );
-    // Find last domain_updated with entity_types before clear (analyzed_sources: undefined)
-    const updatesWithTypes = events.filter((e: any) => e.kind === "domain_updated" && e.patch?.entity_types !== undefined) as any[];
+    // Find last domain_updated with entity_types (loop-end after c.md)
+    const updatesWithTypes = events.filter(
+      (e: any) => e.kind === "domain_updated" && e.patch?.entity_types !== undefined,
+    ) as any[];
     const last = updatesWithTypes[updatesWithTypes.length - 1];
     const types = last.patch.entity_types.map((e: any) => e.type);
     expect(types).toContain("concept");
     expect(types).toContain("person");
     expect(types).toContain("place");
-    // concept should be refined (from incrementalJson1)
+    // concept should be refined (from ingestWithPersonDelta)
     const concept = last.patch.entity_types.find((e: any) => e.type === "concept");
     expect(concept.description).toBe("Refined concept");
   });
 
-  it("emits file_start and file_done for each file (no phase field)", async () => {
+  it("emits file_start and file_done for each file", async () => {
     const adapter = mockAdapterWithSources(sourceFiles);
     const vt = new VaultTools(adapter, "/vault");
     const events = await collect(
-      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, incrementalJson1, incrementalJson2]), "model", [], "TestVault", new AbortController().signal),
+      runInit(
+        ["dom", "--sources", "src"],
+        vt,
+        makeMultiLlm([bootstrapJson, ingestEmpty, ingestEmpty, ingestEmpty]),
+        "model", [], "TestVault", new AbortController().signal,
+      ),
     );
     const fileStarts = events.filter((e: any) => e.kind === "file_start") as any[];
     const fileDones = events.filter((e: any) => e.kind === "file_done") as any[];
@@ -325,11 +348,16 @@ describe("runInitWithSources — Phase 1 incremental", () => {
     for (const fd of fileDones) expect(fd.phase).toBeUndefined();
   });
 
-  it("emits a single init_start (per-file pipeline, no separate ingest phase)", async () => {
+  it("emits a single init_start", async () => {
     const adapter = mockAdapterWithSources(sourceFiles);
     const vt = new VaultTools(adapter, "/vault");
     const events = await collect(
-      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, incrementalJson1, incrementalJson2]), "model", [], "TestVault", new AbortController().signal),
+      runInit(
+        ["dom", "--sources", "src"],
+        vt,
+        makeMultiLlm([bootstrapJson, ingestEmpty, ingestEmpty, ingestEmpty]),
+        "model", [], "TestVault", new AbortController().signal,
+      ),
     );
     const initStarts = events.filter((e: any) => e.kind === "init_start") as any[];
     expect(initStarts).toHaveLength(1);
@@ -369,20 +397,15 @@ describe("runInitWithSources — error handling", () => {
     expect(resultEvent).toBeDefined();
   });
 
-  it("skips file when LLM returns invalid JSON and does NOT add it to analyzed_sources", async () => {
-    const adapter = mockAdapterWithSources({ "src/a.md": "content a", "src/b.md": "content b" });
+  it("skips bootstrap file when LLM returns invalid JSON and does NOT emit domain_created", async () => {
+    const adapter = mockAdapterWithSources({ "src/a.md": "content a" });
     const vt = new VaultTools(adapter, "/vault");
     const invalidJson = "not json at all";
     const events = await collect(
-      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([bootstrapJson, invalidJson]), "model", [], "TestVault", new AbortController().signal),
+      runInit(["dom", "--sources", "src"], vt, makeMultiLlm([invalidJson]), "model", [], "TestVault", new AbortController().signal),
     );
-    const domainUpdatesWithSources = events.filter(
-      (e: any) => e.kind === "domain_updated" && Array.isArray(e.patch?.analyzed_sources)
-    ) as any[];
-    // b.md (invalid JSON) should NOT be in analyzed_sources
-    for (const upd of domainUpdatesWithSources) {
-      expect(upd.patch.analyzed_sources).not.toContain("src/b.md");
-    }
+    // Bootstrap failed — domain should not be created
+    expect(events.some((e: any) => e.kind === "domain_created")).toBe(false);
   });
 
   it("emits informational size log for every file processed", async () => {
@@ -553,14 +576,12 @@ describe("runInitWithSources — per-file pipeline", () => {
     });
     const vt = new VaultTools(adapter, "/vault");
 
-    // Calls expected: [0]=bootstrap(a), [1]=ingest(a), [2]=incremental(b), [3]=ingest(b), [4]=incremental(c), [5]=ingest(c)
+    // Calls: [0]=bootstrap(a), [1]=ingest(a), [2]=ingest(b), [3]=ingest(c)
     const llm = makeOrderedLlm(
       [
         [bootstrapJson],
         [ingestPagesJson("A")],
-        [incrementalJson],
         [ingestPagesJson("B")],
-        [incrementalJson],
         [ingestPagesJson("C")],
       ],
       (idx) => llmCallLog.push(idx),
@@ -570,11 +591,11 @@ describe("runInitWithSources — per-file pipeline", () => {
       runInit(["dom", "--sources", "src"], vt, llm, "model", [], "TestVault", new AbortController().signal),
     );
 
-    // The article A.md must have been written before the 3rd LLM call (incremental for b)
+    // The article A.md must have been written before the 3rd LLM call (ingest-b)
     const writeAIdx = writeLog.findIndex((w) => w.startsWith("write:!Wiki/dom/concepts/A.md"));
     expect(writeAIdx).toBeGreaterThanOrEqual(0);
     const writeACallCount = Number(writeLog[writeAIdx].split("@call=")[1]);
-    // call=2 means after 2 LLM calls (bootstrap + ingest-a) — the 3rd call (incremental b) hasn't happened yet
+    // call=2 means after 2 LLM calls (bootstrap + ingest-a) — the 3rd call (ingest-b) hasn't happened yet
     expect(writeACallCount).toBeLessThanOrEqual(2);
   });
 
@@ -601,11 +622,8 @@ describe("runInitWithSources — per-file pipeline", () => {
             // Record user message to identify which file was sent
             const userMsg = params.messages?.find((m: any) => m.role === "user")?.content ?? "";
             llmCalls.push(userMsg as string);
-            // alternate: incremental → ingest pages
-            const isIngest = String(userMsg).includes("Wiki schema") || String(userMsg).includes("!Wiki");
-            const body = isIngest
-              ? JSON.stringify([{ path: `!Wiki/dom/concepts/X.md`, content: "x" }])
-              : incrementalJson;
+            // All non-bootstrap calls are ingest calls — return valid ingest format
+            const body = JSON.stringify({ reasoning: "ok", pages: [{ path: `!Wiki/dom/concepts/X.md`, content: "x" }] });
             return Promise.resolve({
               [Symbol.asyncIterator]: async function* () {
                 yield { choices: [{ delta: { content: body } }] };
@@ -634,11 +652,11 @@ describe("runInitWithSources — per-file pipeline", () => {
         completions: {
           create: vi.fn().mockImplementation(() => {
             const idx = callIndex++;
-            // 0: bootstrap(a), 1: ingest(a), 2: incremental(b) — abort here AFTER returning JSON
+            // 0: bootstrap(a), 1: ingest(a), 2: ingest(b) — abort here AFTER returning JSON
             if (idx === 2) {
               return Promise.resolve({
                 [Symbol.asyncIterator]: async function* () {
-                  yield { choices: [{ delta: { content: incrementalJson } }] };
+                  yield { choices: [{ delta: { content: JSON.stringify({ reasoning: "ok", pages: [] }) } }] };
                   // After yielding the chunk, signal abort so the post-stream check returns
                   ac.abort();
                 },
@@ -711,6 +729,53 @@ describe("runInitWithSources — per-file pipeline", () => {
     const result = events.find((e: any) => e.kind === "result") as any;
     expect(result).toBeDefined();
     expect(result.text).toContain("no new sources");
+  });
+});
+
+describe("runInitWithSources — domain_updated intercept from ingest", () => {
+  const bootstrapJson = JSON.stringify({
+    reasoning: "",
+    id: "dom",
+    name: "Dom",
+    wiki_folder: "dom",
+    source_paths: [],
+    entity_types: [{ type: "concept", description: "Concept", extraction_cues: ["concept"] }],
+    language_notes: "",
+  });
+
+  it("intercepts domain_updated from ingest and merged entity_types visible in loop-end domain_updated", async () => {
+    // 2 source files: a.md (bootstrap + ingest-no-delta), b.md (ingest-with-delta)
+    // After b.md ingest: loop-end domain_updated should have both concept + person
+    const files = { "src/a.md": "content a", "src/b.md": "content b" };
+    const adapter = mockAdapterWithSources(files);
+    const vt = new VaultTools(adapter, "/vault");
+
+    const ingestEmpty = JSON.stringify({ reasoning: "ok", pages: [] });
+    const ingestWithDelta = JSON.stringify({
+      reasoning: "Found person type",
+      pages: [],
+      entity_types_delta: [
+        { type: "person", description: "A person", extraction_cues: ["person"] },
+      ],
+    });
+
+    // Call sequence: 0=bootstrap(a), 1=ingest(a), 2=ingest(b)
+    const llm = makeMultiLlm([bootstrapJson, ingestEmpty, ingestWithDelta]);
+
+    const events = await collect(
+      runInit(["dom", "--sources", "src"], vt, llm, "model", [], "TestVault", new AbortController().signal),
+    );
+
+    // Find all domain_updated events with entity_types
+    const allUpdates = events.filter(
+      (e: any) => e.kind === "domain_updated" && e.patch?.entity_types !== undefined,
+    ) as any[];
+    expect(allUpdates.length).toBeGreaterThan(0);
+    // The last one should have both concept (bootstrap) and person (from b's ingest delta)
+    const last = allUpdates[allUpdates.length - 1];
+    const types = last.patch.entity_types.map((t: any) => t.type);
+    expect(types).toContain("concept");
+    expect(types).toContain("person");
   });
 });
 

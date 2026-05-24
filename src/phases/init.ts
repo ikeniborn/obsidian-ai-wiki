@@ -1,14 +1,12 @@
 import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
-import { mergeEntityTypes } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient, OnFileError } from "../types";
 import { VaultTools } from "../vault-tools";
 import { parseWithRetry } from "./parse-with-retry";
-import { DomainEntrySchema, EntityTypesDeltaSchema } from "./zod-schemas";
+import { DomainEntrySchema } from "./zod-schemas";
 import schemaTemplate from "../../templates/_wiki_schema.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import initTemplate from "../../prompts/init.md";
-import initIncrementalTemplate from "../../prompts/init-incremental.md";
 import { render } from "./template";
 import { runIngest } from "./ingest";
 import { domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath } from "../wiki-path";
@@ -272,52 +270,10 @@ export async function* runInitWithSources(
       }
       yield { kind: "tool_result", ok: true };
     } else {
-      // Incremental: delta entity_types
-      const currentEntityTypes = currentDomain?.entity_types ?? [];
-      const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-        { role: "system", content: initIncrementalTemplate },
-        { role: "user", content: `Текущие entity_types:\n${JSON.stringify(currentEntityTypes, null, 2)}\n\nФайл: ${file}\n\n${fileContent}` },
-      ];
-
-      const collected: RunEvent[] = [];
-      let parsed: { entity_types?: EntityType[]; language_notes?: string };
-      try {
-        const r = await parseWithRetry({
-          llm, model, baseMessages: messages, opts,
-          schema: EntityTypesDeltaSchema,
-          maxRetries: opts.structuredRetries ?? 1,
-          callSite: "init.delta",
-          signal,
-          onEvent: (e) => collected.push(e),
-        });
-        parsed = r.value;
-        outputTokens += r.outputTokens;
-      } catch (e) {
-        for (const ev of collected) yield ev;
-        if ((e as Error).name === "AbortError" || signal.aborted) return;
-        yield { kind: "assistant_text", delta: `⚠ ${file}: LLM вернул невалидный JSON, пропускаем (${(e as Error).message})\n` };
-        yield { kind: "file_done", file };
-        continue;
-      }
-      for (const ev of collected) yield ev;
-
-      if (signal.aborted) return;
-
-      const delta = { entity_types: parsed.entity_types, language_notes: parsed.language_notes };
-
       if (!currentDomain) {
         yield { kind: "file_done", file };
         continue;
       }
-
-      const mergedTypes = mergeEntityTypes(currentDomain.entity_types ?? [], delta.entity_types ?? []);
-      currentDomain = {
-        ...currentDomain,
-        entity_types: mergedTypes,
-        language_notes: delta.language_notes ?? currentDomain.language_notes,
-        analyzed_sources_v2: true,
-      };
-
     }
 
     if (signal.aborted) return;
@@ -326,7 +282,7 @@ export async function* runInitWithSources(
       continue;
     }
 
-    // --- Step 2: Ingest (immediate write) ---
+    // --- Ingest: write pages + intercept domain_updated for entity_types propagation ---
     let retried = false;
     let done = false;
     while (!done) {
@@ -335,6 +291,9 @@ export async function* runInitWithSources(
       try {
         for await (const ev of runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts)) {
           yield ev;
+          if (ev.kind === "domain_updated" && ev.domainId === domainId) {
+            currentDomain = { ...currentDomain, ...ev.patch };
+          }
         }
         done = true;
       } catch (e) {
