@@ -1,3 +1,21 @@
+---
+review:
+  spec_hash: 239ec06c16ee20af
+  last_run: "2026-05-24"
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  section_hashes:
+    "## Problem": 4108e23cab2b3aa9
+    "## Root Cause": 3ba01558f3314152
+    "## Fix": 897e3b1f45b96704
+    "## Testing": 25e52eaceca4e816
+    "## Scope": bbbb1474547102fd
+  findings: []
+---
+
 # Design: Fix _log/_index not updated after init/ingest/lint (#35)
 
 **Date:** 2026-05-24
