@@ -1019,6 +1019,16 @@ export class LlmWikiView extends ItemView {
       const row = this.historyEl.createDiv("ai-wiki-history-row");
       row.createSpan().setText(this.statusLabel(it));
       row.createSpan({ cls: "muted" }).setText(` ${it.args.join(" ")}`);
+      if (it.operation === "query") {
+        const rerunBtn = row.createEl("button", { text: "↺", attr: { title: "Re-run" } });
+        rerunBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.domainSelect!.value = it.domainId ?? "";
+          this.domainSelect!.dispatchEvent(new Event("change"));
+          this.queryInput.value = it.args[0] ?? "";
+          this.submitQuery();
+        });
+      }
       row.addEventListener("click", () => {
         this.finalEl.empty();
         const comp = new Component();
