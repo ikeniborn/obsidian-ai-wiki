@@ -7,6 +7,6 @@
 
 LINT-ОТЧЁТ:
 {{lint_report}}
-
+{{schema_block}}
 СТРАНИЦЫ ДОМЕНА:
 {{pages_block}}
