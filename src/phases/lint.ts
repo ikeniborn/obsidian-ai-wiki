@@ -58,6 +58,9 @@ export async function* runLint(
 
     await ensureDomainConfig(vaultTools, wikiVaultPath);
 
+    const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
+    const schemaContent = await tryRead(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`);
+
     yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
     const allFiles = await vaultTools.listFiles(wikiVaultPath);
     const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
@@ -76,6 +79,7 @@ export async function* runLint(
     const systemContent = render(lintTemplate, {
       domain_name: domain.name,
       entity_types_block: entityTypesBlock ? `\nТИПЫ СУЩНОСТЕЙ ДОМЕНА:\n${entityTypesBlock}` : "",
+      schema_block: schemaContent ? `\nКонвенции (_wiki_schema.md):\n${schemaContent}` : "",
     });
 
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -252,6 +256,10 @@ function computeEntityDiff(oldTypes: EntityType[], newTypes: EntityType[]): stri
   removed.forEach((et) => lines.push(`- ✖ удалён: **${et.type}**`));
   modified.forEach((et) => lines.push(`- ✎ обновлён: **${et.type}**`));
   return lines.join("\n");
+}
+
+async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
+  try { return await vaultTools.read(path); } catch { return ""; }
 }
 
 async function actualizeDomainConfig(
