@@ -214,7 +214,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             .addOption("native-agent", T.settings.nativeAgent)
             .setValue(eff.backend)
             .onChange(async (v) => {
-              if (v === "claude-agent" && !this.localCache.shellConsentGiven) {
+              if (v === "claude-agent") {
                 backendDd.setValue(eff.backend);
                 new ShellConsentModal(this.plugin.app, this.localCache.iclaudePath, async () => {
                   await this.patchLocal({ shellConsentGiven: true, backend: "claude-agent" });
