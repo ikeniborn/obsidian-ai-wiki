@@ -1,114 +1,105 @@
-# CLAUDE.md
+# Before starting work
 
-## Overview
+- Run `lat search` to find sections relevant to your task. Read them to understand the design intent before writing code.
+- Run `lat expand` on user prompts to expand any `[[refs]]` — this resolves section names to file locations and provides context.
 
-Obsidian-плагин: выполняет wiki-операции (ingest/query/lint/fix/init/chat) через TypeScript-фазы с LLM-backend (`ClaudeCliClient` → `claude`/`iclaude.sh`), отображает прогресс в боковой панели в реальном времени.
+# Post-task checklist (REQUIRED — do not skip)
 
-## Commands
+After EVERY task, before responding to the user:
 
-```bash
-npm run build        # production build → main.js
-npm run dev          # watch mode (esbuild)
-npm test             # vitest (one-shot)
-npm run test:watch   # vitest watch
-```
+- [ ] Update `lat.md/` if you added or changed any functionality, architecture, tests, or behavior
+- [ ] Run `lat check` — all wiki links and code refs must pass
+- [ ] Do not skip these steps. Do not consider your task done until both are complete.
 
-### Install
+---
 
-```bash
-ln -s $(pwd)/dist ~/.config/obsidian/Plugins/obsidian-llm-wiki
-```
+# What is lat.md?
 
-### Run single test
+This project uses [lat.md](https://www.npmjs.com/package/lat.md) to maintain a structured knowledge graph of its architecture, design decisions, and test specs in the `lat.md/` directory. It is a set of cross-linked markdown files that describe **what** this project does and **why** — the domain concepts, key design decisions, business logic, and test specifications. Use it to ground your work in the actual architecture rather than guessing.
+
+# Commands
 
 ```bash
-npx vitest run tests/stream.test.ts
+lat locate "Section Name"      # find a section by name (exact, fuzzy)
+lat refs "file#Section"        # find what references a section
+lat search "natural language"  # semantic search across all sections
+lat expand "user prompt text"  # expand [[refs]] to resolved locations
+lat check                      # validate all links and code refs
 ```
 
-## Architecture
+Run `lat --help` when in doubt about available commands or options.
 
-### Поток выполнения
+If `lat search` fails because no API key is configured, explain to the user that semantic search requires a key provided via `LAT_LLM_KEY` (direct value), `LAT_LLM_KEY_FILE` (path to key file), or `LAT_LLM_KEY_HELPER` (command that prints the key). Supported key prefixes: `sk-...` (OpenAI) or `vck_...` (Vercel). If the user doesn't want to set it up, use `lat locate` for direct lookups instead.
 
-```
-Команда Obsidian / UI
-  → WikiController.run()       # single-flight guard, валидация путей
-  → AgentRunner.run()          # маршрутизация по операции в нужную фазу
-  → phase (ingest/query/…)     # TypeScript-фаза вызывает LlmClient
-                               # (query/lint используют graphCache.get; query вызывает selectSeeds и эмитит graph_stats)
-  → ClaudeCliClient.chat       # spawn iclaude.sh, stream-json stdout
-  → parseStreamLine()          # парсинг одной JSON-строки в RunEvent
-  → LlmWikiView.onEvent()      # рендер в боковой панели (live)
-```
+# Syntax primer
 
-### Ключевые файлы
+- **Section ids**: `lat.md/path/to/file#Heading#SubHeading` — full form uses project-root-relative path (e.g. `lat.md/tests/search#RAG Replay Tests`). Short form uses bare file name when unique (e.g. `search#RAG Replay Tests`, `cli#search#Indexing`).
+- **Wiki links**: `[[target]]` or `[[target|alias]]` — cross-references between sections. Can also reference source code: `[[src/foo.ts#myFunction]]`.
+- **Source code links**: Wiki links in `lat.md/` files can reference functions, classes, constants, and methods in TypeScript/JavaScript/Python/Rust/Go/C files. Use the full path: `[[src/config.ts#getConfigDir]]`, `[[src/server.ts#App#listen]]` (class method), `[[lib/utils.py#parse_args]]`, `[[src/lib.rs#Greeter#greet]]` (Rust impl method), `[[src/app.go#Greeter#Greet]]` (Go method), `[[src/app.h#Greeter]]` (C struct). `lat check` validates these exist.
+- **Code refs**: `// @lat: [[section-id]]` (JS/TS/Rust/Go/C) or `# @lat: [[section-id]]` (Python) — ties source code to concepts
 
-| Файл | Роль |
-|---|---|
-| `src/main.ts` | Точка входа, регистрация команд/view/настроек |
-| `src/controller.ts` | WikiController — single-flight, валидация cwd/iclaudePath |
-| `src/agent-runner.ts` | AgentRunner — маршрутизирует операцию в нужную фазу, dev-лог, evaluator |
-| `src/claude-cli-client.ts` | ClaudeCliClient — spawn iclaude.sh, OpenAI-совместимый LlmClient |
-| `src/stream.ts` | `parseStreamLine()` — парсинг одной JSON-строки в RunEvent |
-| `src/view.ts` | LlmWikiView (ItemView) — живой рендер шагов, метрик, истории |
-| `src/settings.ts` | Настройки + `autodetectCwd()` (обходит дерево вверх до 6 уровней) |
-| `src/types.ts` | Все TypeScript-типы: WikiOperation, RunEvent, LlmWikiPluginSettings |
-| `src/wiki-graph-cache.ts` | GraphCache — in-memory, per-domain, hash-keyed; invalidated controller-ом после writes |
-| `src/wiki-seeds.ts` | `selectSeeds()` — Jaccard на токенах pageId + первые 200 символов контента |
+# Test specs
 
-### Протокол stream-json (stdout iclaude)
+Key tests can be described as sections in `lat.md/` files (e.g. `tests.md`). Add frontmatter to require that every leaf section is referenced by a `// @lat:` or `# @lat:` comment in test code:
 
-Каждая строка stdout — один JSON-объект:
+```markdown
+---
+lat:
+  require-code-mention: true
+---
+# Tests
 
-```
-{ "type": "system",    "subtype": "init|error", "model": "...", "cwd": "..." }
-{ "type": "assistant", "message": { "content": [{ "type": "tool_use"|"text", ... }] } }
-{ "type": "user",      "message": { "content": [{ "type": "tool_result", "is_error": bool }] } }
-{ "type": "result",    "duration_ms": N, "total_cost_usd": N, "result": "...", "is_error": bool }
+Authentication and authorization test specifications.
+
+## User login
+
+Verify credential validation and error handling for the login endpoint.
+
+### Rejects expired tokens
+Tokens past their expiry timestamp are rejected with 401, even if otherwise valid.
+
+### Handles missing password
+Login request without a password field returns 400 with a descriptive error.
 ```
 
-Не-JSON строки (баннеры iclaude) игнорируются.
+Every section MUST have a description — at least one sentence explaining what the test verifies and why. Empty sections with just a heading are not acceptable. (This is a specific case of the general leading paragraph rule below.)
 
-### Управление процессом
+Each test in code should reference its spec with exactly one comment placed next to the relevant test — not at the top of the file:
 
-- `stdio: ["ignore", "pipe", "pipe"]` — stdin закрыт, stdout/stderr захвачены
-- Прерывание: SIGTERM → 3000ms grace → SIGKILL
-- Timeout: настраивается отдельно для каждой операции (ingest/query/lint/init)
-- Single-flight: одновременно только одна операция, остальные получают Notice
+```python
+# @lat: [[tests#User login#Rejects expired tokens]]
+def test_rejects_expired_tokens():
+    ...
 
-## Testing
-
-```
-tests/stream.test.ts                    # parseStreamLine() + fixture JSONL
-tests/settings.test.ts                  # autodetectCwd() walk up
-tests/claude-cli-client.test.ts         # ClaudeCliClient — streaming, abort, large payload, session resume
-tests/agent-runner.integration.test.ts  # AgentRunner с mock-адаптером
-tests/phases/                           # unit-тесты каждой фазы
-tests/fixtures/
-  stream-ingest.jsonl                   # эталонный JSONL для stream-тестов
-  mock-iclaude.sh                       # bash-mock: проигрывает JSONL с задержкой
+# @lat: [[tests#User login#Handles missing password]]
+def test_handles_missing_password():
+    ...
 ```
 
-Моки Obsidian API — `vitest.mock.ts` (корень проекта), подключаются автоматически через `vitest.config.ts`.
+Do not duplicate refs. One `@lat:` comment per spec section, placed at the test that covers it. `lat check` will flag any spec section not covered by a code reference, and any code reference pointing to a nonexistent section.
 
-## Build & Versioning
+# Section structure
 
-esbuild (`esbuild.config.mjs`): entrypoint `src/main.ts` → `main.js` (CJS, ES2022).
+Every section in `lat.md/` **must** have a leading paragraph — at least one sentence immediately after the heading, before any child headings or other block content. The first paragraph must be ≤250 characters (excluding `[[wiki link]]` content). This paragraph serves as the section's overview and is used in search results, command output, and RAG context — keeping it concise guarantees the section's essence is always captured.
 
-Внешние зависимости (не бандлятся): `obsidian`, `electron`, `node:child_process`, `node:readline`. `path-browserify` бандлится; `node:path` и `node:fs` удалены из external.
+```markdown
+# Good Section
 
-### Версионирование
+Brief overview of what this section documents and why it matters.
 
-Перед каждой сборкой автоматически поднимать patch-версию. Minor и major — только вручную.
+More detail can go in subsequent paragraphs, code blocks, or lists.
 
-1. Прочитать текущую версию из `package.json` (поле `version`)
-2. Инкрементировать patch: `X.Y.Z` → `X.Y.(Z+1)`
-3. Записать новую версию в `package.json` и `src/manifest.json`
-4. Запустить `npm run build`
+## Child heading
 
-## Rules
+Details about this child topic.
+```
 
-- **`iclaude.sh -p` — флаг занят**: `iclaude.sh` резервирует `-p`/`--proxy` для proxy URL. При spawn передавай флаги через `--`: сначала флаги iclaude.sh (`--no-proxy`, `--model`), затем `--`, затем флаги claude (`-p <prompt>`, `--output-format`). Нарушение → `exit 1` без stderr.
-- **single-flight**: `controller.ts` отклоняет параллельные запуски через `this._running` — параллельный spawn испортит stdout-поток.
-- **cwd**: файл для ingest/query должен находиться внутри cwd (проверка через `path.relative`).
-- **history**: хранится в настройках Obsidian, лимит `historyLimit` (default 20) — компромисс между UX и размером settings.json; превышение замедляет сохранение Obsidian.
-- **Домены**: единственный источник истины — union-тип `WikiDomain` в `src/types.ts` строка 8 (`"ии" | "ростелеком" | "базы-данных"`). При добавлении домена расширяй только его — все остальные места используют этот тип.
+```markdown
+# Bad Section
+
+## Child heading
+
+Details about this child topic.
+```
+
+The second example is invalid because `Bad Section` has no leading paragraph. `lat check` validates this rule and reports errors for missing or overly long leading paragraphs.

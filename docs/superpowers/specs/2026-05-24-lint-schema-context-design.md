@@ -1,3 +1,30 @@
+---
+review:
+  spec_hash: dcddee8351c90883
+  last_run: 2026-05-24
+  phases:
+    structure:   {status: passed}
+    coverage:    {status: passed}
+    clarity:     {status: passed}
+    consistency: {status: passed}
+  section_hashes:
+    Problem: b49c76532c46c785
+    Design: 24ce684da0b0ac88
+    Changes: be0130b7e24b2720
+    "Data flow (lint.ts)": 8d70c93d675a0bca
+    "schema_block format consistency": 205cd7925cbd27f3
+    Testing: 28161d9df4cdec97
+    "Out of scope": a6e481f52bfc0fe7
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "Changes"
+      section_hash: c4b07defc6b78fa8
+      text: "lint-chat.ts: 'Same pattern' не указывает точку вставки в поток функции. lint.ts явно: 'after ensureDomainConfig'. lint-chat.ts — нет такого anchor. Если lint-chat.ts имеет другую структуру, место вставки неопределено."
+      verdict: fixed
+      verdict_at: 2026-05-24
+---
 # Spec: lint schema context
 
 **Date:** 2026-05-24
@@ -34,7 +61,10 @@ Rule: **schema_block ↔ wiki modification**. `query` reads wiki, never modifies
 - Add `{{schema_block}}` after `{{entity_types_block}}`
 
 **`src/phases/lint-chat.ts`**
-- Same pattern: compute `schemaRoot`, read schema, pass `schema_block` to `render(lintChatTemplate, {...})`
+- Compute `schemaRoot` from `wikiVaultPath` (same formula as `lint.ts`)
+- Add `tryRead(vaultTools, \`${schemaRoot}/.config/_wiki_schema.md\`)` after `ensureDomainConfig` (before `listFiles`)
+- Pass `schema_block: schemaContent ? \`\nКонвенции (_wiki_schema.md):\n${schemaContent}\` : ""` to `render(lintChatTemplate, {...})`
+- Add local `tryRead` helper (identical to the one in `lint.ts`)
 
 **`prompts/lint-chat.md`**
 - Add `{{schema_block}}` (placement: before `LINT-ОТЧЁТ:` section)
