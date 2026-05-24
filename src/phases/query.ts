@@ -47,15 +47,11 @@ export async function* runQuery(
     return;
   }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
-  const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
 
   await ensureDomainConfig(vaultTools, wikiVaultPath);
 
-  // Phase 1: read index + schema (no full file scan yet)
-  const [indexContent, schemaContent] = await Promise.all([
-    tryRead(vaultTools, domainIndexPath(wikiVaultPath)),
-    tryRead(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`),
-  ]);
+  // Phase 1: read index (no full file scan yet)
+  const indexContent = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
   if (signal.aborted) return;
 
   const indexAnnotations = parseIndexAnnotations(indexContent);
@@ -146,7 +142,6 @@ export async function* runQuery(
   const systemPrompt = render(queryTemplate, {
     domain_name: domain.name,
     entity_types_block: entityTypesBlock,
-    schema_block: schemaContent ? `\nКонвенции (_wiki_schema.md):\n${schemaContent}` : "",
     index_block: indexContent ? `\nВики-индекс (_index.md):\n${indexContent}` : "",
   });
 
