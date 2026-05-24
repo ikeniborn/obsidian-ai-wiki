@@ -1,6 +1,7 @@
 import { isAbsolute, join, relative, dirname } from "path-browserify";
 import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
+import { mergeEntityTypes } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";
@@ -182,6 +183,12 @@ export async function* runIngest(
 
   const resultText = buildIngestSummary(domain.id, sourceVaultPath, written, pages.length);
   yield { kind: "assistant_text", delta: resultText };
+
+  const delta = parseResult.value.entity_types_delta;
+  if (delta?.length) {
+    const merged = mergeEntityTypes(domain.entity_types ?? [], delta);
+    yield { kind: "domain_updated", domainId: domain.id, patch: { entity_types: merged } };
+  }
 
   if (written.length > 0) {
     try {

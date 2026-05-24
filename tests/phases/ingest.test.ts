@@ -619,6 +619,66 @@ describe("runIngest path validation", () => {
   });
 });
 
+describe("runIngest — entity_types_delta", () => {
+  it("emits domain_updated with merged entity_types when LLM returns entity_types_delta", async () => {
+    const domainWithTypes: DomainEntry = {
+      id: "work",
+      name: "Work",
+      wiki_folder: "work",
+      source_paths: ["Sources/"],
+      entity_types: [
+        { type: "concept", description: "A concept", extraction_cues: ["concept"] },
+      ],
+    };
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llmResponse = JSON.stringify({
+      reasoning: "Found org type",
+      pages: [],
+      entity_types_delta: [
+        { type: "org", description: "Organisation", extraction_cues: ["company"] },
+      ],
+    });
+    const events = await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt, makeLlm(llmResponse), "llama3.2",
+        [domainWithTypes], VAULT_ROOT, new AbortController().signal,
+      ),
+    );
+    const update = events.find((e: any) => e.kind === "domain_updated") as any;
+    expect(update).toBeDefined();
+    expect(update.domainId).toBe("work");
+    const types = update.patch.entity_types.map((t: any) => t.type);
+    expect(types).toContain("concept");
+    expect(types).toContain("org");
+  });
+
+  it("does NOT emit domain_updated when LLM returns no entity_types_delta", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llmResponse = JSON.stringify({
+      reasoning: "No new types",
+      pages: [],
+    });
+    const events = await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt, makeLlm(llmResponse), "llama3.2",
+        [domain], VAULT_ROOT, new AbortController().signal,
+      ),
+    );
+    const update = events.find((e: any) => e.kind === "domain_updated");
+    expect(update).toBeUndefined();
+  });
+});
+
 describe("WikiPagesOutputSchema — entity_types_delta", () => {
   it("accepts response with entity_types_delta", () => {
     const input = {
