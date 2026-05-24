@@ -21623,9 +21623,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.historySection.removeClass("ai-wiki-hidden");
     for (const it of items) {
       const row = this.historyEl.createDiv("ai-wiki-history-row");
-      const label = row.createSpan({ cls: "ai-wiki-history-label" });
-      label.createSpan().setText(this.statusLabel(it));
-      label.createSpan({ cls: "muted" }).setText(` ${it.args.join(" ")}`);
+      row.createSpan().setText(this.statusLabel(it));
+      row.createSpan({ cls: "muted" }).setText(` ${it.args.join(" ")}`);
       if (it.operation === "query") {
         const rerunBtn = row.createEl("button", { text: "\u21BA", attr: { title: "Re-run" } });
         rerunBtn.addEventListener("click", (e) => {
