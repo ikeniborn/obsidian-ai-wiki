@@ -43,7 +43,6 @@ export class LlmWikiView extends ItemView {
   private cancelBtn!: HTMLButtonElement;
   private queryInput!: HTMLTextAreaElement;
   private askBtn!: HTMLButtonElement;
-  private askSaveBtn!: HTMLButtonElement;
   private domainSelect?: HTMLSelectElement;
   private initBtn?: HTMLButtonElement;
   private ingestBtn?: HTMLButtonElement;
@@ -140,11 +139,9 @@ export class LlmWikiView extends ItemView {
     });
     const askRow = ask.createDiv("ai-wiki-ask-row");
     this.askBtn = askRow.createEl("button", { text: T.view.ask });
-    this.askSaveBtn = askRow.createEl("button", { text: T.view.askAndSave });
     this.cancelBtn = askRow.createEl("button", { text: T.view.cancel, cls: "mod-warning" });
     this.cancelBtn.disabled = true;
-    this.askBtn.addEventListener("click", () => this.submitQuery(false));
-    this.askSaveBtn.addEventListener("click", () => this.submitQuery(true));
+    this.askBtn.addEventListener("click", () => this.submitQuery());
     this.cancelBtn.addEventListener("click", () => this.plugin.controller.cancelCurrent());
 
     const progressHeader = root.createDiv("ai-wiki-progress-header");
@@ -441,11 +438,11 @@ export class LlmWikiView extends ItemView {
     }
   }
 
-  private submitQuery(save: boolean): void {
+  private submitQuery(): void {
     const q = this.queryInput.value.trim();
     if (!q) { new Notice(i18n().view.enterQuestion); return; }
     if (this.state === "running") { new Notice(i18n().view.operationInProgress); return; }
-    void this.plugin.controller.query(q, save, this.domainSelect?.value || undefined);
+    void this.plugin.controller.query(q, this.domainSelect?.value || undefined);
     this.queryInput.value = "";
   }
 
@@ -456,7 +453,6 @@ export class LlmWikiView extends ItemView {
     this.statusEl.setText(`▶ ${operation} ${args.join(" ")}`);
     this.cancelBtn.disabled = false;
     this.askBtn.disabled = true;
-    this.askSaveBtn.disabled = true;
     if (this.initBtn) this.initBtn.disabled = true;
     if (this.ingestBtn) this.ingestBtn.disabled = true;
     if (this.lintBtn) this.lintBtn.disabled = true;
@@ -736,7 +732,6 @@ export class LlmWikiView extends ItemView {
     this.statusEl.setText(this.statusLabel(entry));
     this.cancelBtn.disabled = true;
     this.askBtn.disabled = false;
-    this.askSaveBtn.disabled = false;
     if (this.initBtn) this.initBtn.disabled = false;
     if (this.ingestBtn) this.ingestBtn.disabled = false;
     if (this.lintBtn) this.lintBtn.disabled = false;
@@ -760,7 +755,7 @@ export class LlmWikiView extends ItemView {
       this.resultOpen = true;
       this.resultToggle.setText("▼");
 
-      const CHAT_OPS: WikiOperation[] = ["lint", "lint-chat", "ingest", "query", "query-save"];
+      const CHAT_OPS: WikiOperation[] = ["lint", "lint-chat", "ingest", "query"];
       if (CHAT_OPS.includes(entry.operation) && entry.status === "done" && entry.finalText) {
         this.lastContext = {
           operation: entry.operation,
@@ -981,8 +976,6 @@ export class LlmWikiView extends ItemView {
     this.waitingStep.createSpan({ cls: "ai-wiki-waiting-text" }).setText("0.0s");
     this.scrollSteps();
     this.scheduleWaitingTick();
-    this.liveStatusIconEl?.setText("⏳");
-    this.liveStatusTextEl?.setText("0.0s");
   }
 
   private stopWaiting(): void {
@@ -1000,7 +993,6 @@ export class LlmWikiView extends ItemView {
       const s = ((Date.now() - this.waitingStartedAt) / 1000).toFixed(1);
       const span = this.waitingStep.querySelector<HTMLElement>(".ai-wiki-waiting-text");
       if (span) span.setText(`${s}s`);
-      this.liveStatusTextEl?.setText(`${s}s`);
       this.scheduleWaitingTick();
     }, 100);
   }

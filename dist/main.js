@@ -19578,18 +19578,16 @@ var ConfirmModal = class extends import_obsidian2.Modal {
   }
 };
 var QueryModal = class extends import_obsidian2.Modal {
-  constructor(app, save, onSubmit) {
+  constructor(app, onSubmit) {
     super(app);
-    this.save = save;
     this.onSubmit = onSubmit;
   }
-  save;
   onSubmit;
   question = "";
   onOpen() {
     const T = i18n().modal;
     const { contentEl } = this;
-    contentEl.createEl("h3", { text: this.save ? T.queryAndSave : T.query });
+    contentEl.createEl("h3", { text: T.query });
     const ta = contentEl.createEl("textarea", {
       cls: "ai-wiki-modal-input",
       attr: { rows: "5" },
@@ -20306,7 +20304,7 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       new import_obsidian3.Setting(containerEl).setName(T.settings.backend_name).setDesc(T.settings.backend_desc).addDropdown((d) => {
         let backendDd;
         backendDd = d.addOption("claude-agent", T.settings.claudeCodeAgent).addOption("native-agent", T.settings.nativeAgent).setValue(eff.backend).onChange(async (v) => {
-          if (v === "claude-agent" && !this.localCache.shellConsentGiven) {
+          if (v === "claude-agent") {
             backendDd.setValue(eff.backend);
             new ShellConsentModal(this.plugin.app, this.localCache.iclaudePath, async () => {
               await this.patchLocal({ shellConsentGiven: true, backend: "claude-agent" });
@@ -20706,7 +20704,6 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   cancelBtn;
   queryInput;
   askBtn;
-  askSaveBtn;
   domainSelect;
   initBtn;
   ingestBtn;
@@ -20792,11 +20789,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     });
     const askRow = ask.createDiv("ai-wiki-ask-row");
     this.askBtn = askRow.createEl("button", { text: T.view.ask });
-    this.askSaveBtn = askRow.createEl("button", { text: T.view.askAndSave });
     this.cancelBtn = askRow.createEl("button", { text: T.view.cancel, cls: "mod-warning" });
     this.cancelBtn.disabled = true;
-    this.askBtn.addEventListener("click", () => this.submitQuery(false));
-    this.askSaveBtn.addEventListener("click", () => this.submitQuery(true));
+    this.askBtn.addEventListener("click", () => this.submitQuery());
     this.cancelBtn.addEventListener("click", () => this.plugin.controller.cancelCurrent());
     const progressHeader = root.createDiv("ai-wiki-progress-header");
     const progressH4 = progressHeader.createEl("h4", { cls: "ai-wiki-progress-title" });
@@ -21067,7 +21062,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       }).open();
     }
   }
-  submitQuery(save) {
+  submitQuery() {
     const q = this.queryInput.value.trim();
     if (!q) {
       new import_obsidian4.Notice(i18n().view.enterQuestion);
@@ -21077,7 +21072,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       new import_obsidian4.Notice(i18n().view.operationInProgress);
       return;
     }
-    void this.plugin.controller.query(q, save, this.domainSelect?.value || void 0);
+    void this.plugin.controller.query(q, this.domainSelect?.value || void 0);
     this.queryInput.value = "";
   }
   setRunning(operation, args) {
@@ -21087,7 +21082,6 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.statusEl.setText(`\u25B6 ${operation} ${args.join(" ")}`);
     this.cancelBtn.disabled = false;
     this.askBtn.disabled = true;
-    this.askSaveBtn.disabled = true;
     if (this.initBtn) this.initBtn.disabled = true;
     if (this.ingestBtn) this.ingestBtn.disabled = true;
     if (this.lintBtn) this.lintBtn.disabled = true;
@@ -21356,7 +21350,6 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.statusEl.setText(this.statusLabel(entry));
     this.cancelBtn.disabled = true;
     this.askBtn.disabled = false;
-    this.askSaveBtn.disabled = false;
     if (this.initBtn) this.initBtn.disabled = false;
     if (this.ingestBtn) this.ingestBtn.disabled = false;
     if (this.lintBtn) this.lintBtn.disabled = false;
@@ -21382,7 +21375,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.finalEl.removeClass("ai-wiki-hidden");
       this.resultOpen = true;
       this.resultToggle.setText("\u25BC");
-      const CHAT_OPS = ["lint", "lint-chat", "ingest", "query", "query-save"];
+      const CHAT_OPS = ["lint", "lint-chat", "ingest", "query"];
       if (CHAT_OPS.includes(entry.operation) && entry.status === "done" && entry.finalText) {
         this.lastContext = {
           operation: entry.operation,
@@ -21592,8 +21585,6 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.waitingStep.createSpan({ cls: "ai-wiki-waiting-text" }).setText("0.0s");
     this.scrollSteps();
     this.scheduleWaitingTick();
-    this.liveStatusIconEl?.setText("\u23F3");
-    this.liveStatusTextEl?.setText("0.0s");
   }
   stopWaiting() {
     if (this.waitingTickHandle !== null) {
@@ -21609,7 +21600,6 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       const s = ((Date.now() - this.waitingStartedAt) / 1e3).toFixed(1);
       const span = this.waitingStep.querySelector(".ai-wiki-waiting-text");
       if (span) span.setText(`${s}s`);
-      this.liveStatusTextEl?.setText(`${s}s`);
       this.scheduleWaitingTick();
     }, 100);
   }
@@ -28410,7 +28400,7 @@ var AgentRunner = class {
   domains;
   llm;
   buildOptsFor(op) {
-    const key = op === "query-save" ? "query" : op === "chat" || op === "lint-chat" ? "lint" : op;
+    const key = op === "chat" || op === "lint-chat" ? "lint" : op;
     const s = this.settings;
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
     if (s.backend === "claude-agent") {
@@ -28446,9 +28436,6 @@ var AgentRunner = class {
         break;
       case "query":
         yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore);
-        break;
-      case "query-save":
-        yield* runQuery(req.args, true, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore);
         break;
       case "lint":
         yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, opts);
@@ -36259,12 +36246,6 @@ var DomainStore = class {
 };
 
 // src/controller.ts
-function toVaultPath(vaultDir, savedPath) {
-  const abs = (0, import_path_browserify6.isAbsolute)(savedPath) ? savedPath : (0, import_path_browserify6.join)(vaultDir, savedPath);
-  const rel = (0, import_path_browserify6.relative)(vaultDir, abs);
-  if (rel.startsWith("..") || (0, import_path_browserify6.isAbsolute)(rel)) return null;
-  return rel;
-}
 function patchWikiFields(originalContent, formattedContent) {
   const wikiUpdatedMatch = /^wiki_updated:[ \t]*(.+)$/m.exec(originalContent);
   if (!wikiUpdatedMatch) return formattedContent;
@@ -36443,10 +36424,9 @@ var WikiController = class {
     const abs = this.app.vault.adapter.getFullPath(file.path);
     await this.dispatch("ingest", [abs], domainId);
   }
-  async query(question, save, domainId) {
+  async query(question, domainId) {
     if (!question.trim()) return;
-    const op = save ? "query-save" : "query";
-    await this.dispatch(op, [question.trim()], domainId);
+    await this.dispatch("query", [question.trim()], domainId);
   }
   async lint(domain) {
     const args = domain === "all" ? [] : [domain];
@@ -36465,7 +36445,7 @@ var WikiController = class {
       new import_obsidian7.Notice(i18n().ctrl.operationRunning);
       return;
     }
-    if (import_obsidian7.Platform.isMobile && operation !== "query" && operation !== "query-save") {
+    if (import_obsidian7.Platform.isMobile && operation !== "query") {
       new import_obsidian7.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
@@ -36509,8 +36489,7 @@ var WikiController = class {
     const OPERATION_LABELS = {
       lint: "Lint-\u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 wiki",
       ingest: "\u0418\u0437\u0432\u043B\u0435\u0447\u0435\u043D\u0438\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 (ingest)",
-      query: "\u041E\u0442\u0432\u0435\u0442 \u043D\u0430 \u0437\u0430\u043F\u0440\u043E\u0441 (query)",
-      "query-save": "\u041E\u0442\u0432\u0435\u0442 \u043D\u0430 \u0437\u0430\u043F\u0440\u043E\u0441 \u0441 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435\u043C (query-save)"
+      query: "\u041E\u0442\u0432\u0435\u0442 \u043D\u0430 \u0437\u0430\u043F\u0440\u043E\u0441 (query)"
     };
     const operationHeader = OPERATION_LABELS[operation] ?? operation;
     const timeoutMs = this.plugin.settings.timeouts.lint * 1e3;
@@ -36694,7 +36673,7 @@ var WikiController = class {
       }
       const fullAdapter = this.app.vault.adapter;
       const claudeEff = s.claudeAgent;
-      const normalizedOpKey = opKey === "chat" || opKey === "lint-chat" ? "lint" : opKey === "query-save" ? "query" : opKey;
+      const normalizedOpKey = opKey === "chat" || opKey === "lint-chat" ? "lint" : opKey;
       const effort = claudeEff.perOperation && normalizedOpKey ? claudeEff.operations[normalizedOpKey]?.effort ?? claudeEff.effort : claudeEff.effort;
       const client = new ClaudeCliClient({
         iclaudePath: local.iclaudePath,
@@ -36783,7 +36762,7 @@ var WikiController = class {
       return;
     }
     this._chatSessionId = void 0;
-    if (import_obsidian7.Platform.isMobile && op !== "query" && op !== "query-save" && op !== "format") {
+    if (import_obsidian7.Platform.isMobile && op !== "query" && op !== "format") {
       new import_obsidian7.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
@@ -36798,7 +36777,7 @@ var WikiController = class {
         }).open();
         return;
       }
-      const opKey2 = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
+      const opKey2 = op === "lint-chat" ? "lint" : op;
       this._currentLogMeta = {
         backend: eff.backend,
         model: eff.backend === "claude-agent" ? eff.claudeAgent.perOperation ? eff.claudeAgent.operations[opKey2].model : eff.claudeAgent.model : eff.nativeAgent.perOperation ? eff.nativeAgent.operations[opKey2].model : eff.nativeAgent.model
@@ -36808,7 +36787,7 @@ var WikiController = class {
     const view = this.activeView();
     if (!view) return;
     const vaultRoot = this.cwdOrEmpty();
-    const opKey = op === "query-save" ? "query" : op === "lint-chat" ? "lint" : op;
+    const opKey = op === "lint-chat" ? "lint" : op;
     let agentRunner;
     try {
       agentRunner = await this.buildAgentRunner(vaultRoot, void 0, opKey);
@@ -36889,7 +36868,7 @@ var WikiController = class {
       }
     }
     if (status === "done") {
-      const mutatesWiki = op === "ingest" || op === "lint" || op === "lint-chat" || op === "query-save" || op === "init";
+      const mutatesWiki = op === "ingest" || op === "lint" || op === "lint-chat" || op === "init";
       if (mutatesWiki) {
         const targets = domainId ? [domainId] : (await this.domainStore.load()).map((d) => d.id);
         for (const id of targets) graphCache.invalidate(id);
@@ -36913,13 +36892,6 @@ var WikiController = class {
     }
     await this.plugin.saveSettings();
     await this.activeView()?.finish(entry);
-    if (op === "query-save" && status === "done" && !import_obsidian7.Platform.isMobile) {
-      const m = finalText.match(/Создана\s+страница:\s*([^\s`'"]+)/i);
-      if (m) {
-        const pathInVault = toVaultPath(vaultRoot, m[1]);
-        if (pathInVault) await this.app.workspace.openLinkText(pathInVault, "");
-      }
-    }
   }
   collectStep(ev, steps) {
     if (ev.kind === "tool_use") {
@@ -37046,12 +37018,7 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
     this.addCommand({
       id: "query",
       name: T.cmd.query,
-      callback: () => new QueryModal(this.app, false, (q) => void this.controller.query(q, false)).open()
-    });
-    this.addCommand({
-      id: "query-save",
-      name: T.cmd.querySave,
-      callback: () => new QueryModal(this.app, true, (q) => void this.controller.query(q, true)).open()
+      callback: () => new QueryModal(this.app, (q) => void this.controller.query(q)).open()
     });
     if (!import_obsidian8.Platform.isMobile) {
       this.addCommand({
