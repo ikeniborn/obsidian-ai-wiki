@@ -3,6 +3,7 @@ import { runIngest, buildEntityTypesBlock, parseJsonPages } from "../../src/phas
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
+import { WikiPagesOutputSchema } from "../../src/phases/zod-schemas";
 
 function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
   return {
@@ -615,5 +616,27 @@ describe("runIngest path validation", () => {
 
     // Should call LLM at most twice (original + one retry)
     expect(callCount).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("WikiPagesOutputSchema — entity_types_delta", () => {
+  it("accepts response with entity_types_delta", () => {
+    const input = {
+      reasoning: "Found new type",
+      pages: [],
+      entity_types_delta: [
+        { type: "org", description: "Organisation", extraction_cues: ["company", "org"] },
+      ],
+    };
+    const result = WikiPagesOutputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+    expect(result.data?.entity_types_delta).toHaveLength(1);
+  });
+
+  it("accepts response without entity_types_delta (backward compat)", () => {
+    const input = { reasoning: "ok", pages: [] };
+    const result = WikiPagesOutputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+    expect(result.data?.entity_types_delta).toBeUndefined();
   });
 });

@@ -46,6 +46,7 @@ export const WikiPageSchema = z.object({
 export const WikiPagesOutputSchema = z.object({
   reasoning: z.string(),
   pages: z.array(WikiPageSchema),
+  entity_types_delta: z.array(EntityTypeSchema).optional(),
 });
 
 export const LintOutputSchema = z.object({
