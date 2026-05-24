@@ -75,13 +75,7 @@ export default class LlmWikiPlugin extends Plugin {
     this.addCommand({
       id: "query",
       name: T.cmd.query,
-      callback: () => new QueryModal(this.app, false, (q) => void this.controller.query(q, false)).open(),
-    });
-
-    this.addCommand({
-      id: "query-save",
-      name: T.cmd.querySave,
-      callback: () => new QueryModal(this.app, true, (q) => void this.controller.query(q, true)).open(),
+      callback: () => new QueryModal(this.app, (q) => void this.controller.query(q)).open(),
     });
 
     if (!Platform.isMobile) {

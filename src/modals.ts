@@ -47,13 +47,13 @@ export class ConfirmModal extends Modal {
 
 export class QueryModal extends Modal {
   private question = "";
-  constructor(app: App, private save: boolean, private onSubmit: (q: string) => void) {
+  constructor(app: App, private onSubmit: (q: string) => void) {
     super(app);
   }
   onOpen(): void {
     const T = i18n().modal;
     const { contentEl } = this;
-    contentEl.createEl("h3", { text: this.save ? T.queryAndSave : T.query });
+    contentEl.createEl("h3", { text: T.query });
     const ta = contentEl.createEl("textarea", {
       cls: "ai-wiki-modal-input",
       attr: { rows: "5" },
