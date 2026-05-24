@@ -4,9 +4,9 @@
 Верни JSON:
 {"summary":"## markdown что сделано","pages":[{"path":"...","content":"...","annotation":"одно предложение — описание сущности для поиска по смыслу"}]}
 Если правок нет — pages пустой массив, summary — текстовый ответ.
+{{schema_block}}
 
 LINT-ОТЧЁТ:
 {{lint_report}}
-{{schema_block}}
 СТРАНИЦЫ ДОМЕНА:
 {{pages_block}}
