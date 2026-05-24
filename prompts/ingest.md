@@ -25,5 +25,11 @@
 Нельзя: !Wiki/os/os/network/NFS.md (домен дважды), !Wiki/os/network/nfs/NFS.md (5 сегментов).
 Можно:  !Wiki/os/network/NFS.md
 
+ОБОГАЩЕНИЕ ТИПОВ (entity_types_delta):
+Если при анализе источника ты обнаруживаешь:
+- новые типы сущностей (ключ type отсутствует в текущем списке выше), или
+- улучшения к существующим типам (более точное description или дополнительные extraction_cues для уже существующего ключа type) —
+добавь поле entity_types_delta в JSON-ответ. Если ничего нового — просто не включай это поле.
+
 Верни ТОЛЬКО JSON-объект — никакого другого текста:
-{"reasoning":"Обоснование: какие сущности извлечены и почему","pages":[{"path":"{{wiki_path}}/entities/EntityName.md","content":"---\nwiki_sources: [\"[[{{source_path}}]]\"]\nwiki_updated: {{today}}\nwiki_status: stub\ntags: []\nwiki_outgoing_links: []\n---\n# EntityName\n\ncontент...","annotation":"Краткое описание сущности для контекстного поиска"}]}
+{"reasoning":"Обоснование: какие сущности извлечены и почему","pages":[{"path":"{{wiki_path}}/entities/EntityName.md","content":"---\nwiki_sources: [\"[[{{source_path}}]]\"]\nwiki_updated: {{today}}\nwiki_status: stub\ntags: []\nwiki_outgoing_links: []\n---\n# EntityName\n\ncontент...","annotation":"Краткое описание сущности для контекстного поиска"}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}
