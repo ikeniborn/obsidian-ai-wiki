@@ -132,8 +132,8 @@
     "hash": "0f14c75e1c242940810cc905cc60c2fa"
   },
   "tests/vault-tools.test.ts": {
-    "mtime": 1779363976.4410775,
-    "hash": "7e15879b22ffe7487c8ca0cd3e0715c9"
+    "mtime": 1779629894.9620872,
+    "hash": "8cb475956245c3cb2d8107a53730f102"
   },
   "tests/controller-build-fail.test.ts": {
     "mtime": 1779363957.1652005,
@@ -444,8 +444,8 @@
     "hash": "63bef97cb310817c047f8076a5945d43"
   },
   "src/vault-tools.ts": {
-    "mtime": 1779517459.9751089,
-    "hash": "399fda4c6f85c79dfc4fd0328b8eb40f"
+    "mtime": 1779630039.709502,
+    "hash": "edb1ee45d111588b8d20d1adc204095e"
   },
   "src/local-config.ts": {
     "mtime": 1779616850.0025718,
@@ -488,8 +488,8 @@
     "hash": "206d324e5df282f5ff8c0dc719b5e301"
   },
   "src/view.ts": {
-    "mtime": 1779617149.1912491,
-    "hash": "2e34a281e7c84bc61eccc322a2191dcc"
+    "mtime": 1779626682.9363322,
+    "hash": "b403c547fb57228513df4f05015d0a78"
   },
   "src/stream.ts": {
     "mtime": 1779363957.164018,

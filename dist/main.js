@@ -28579,7 +28579,11 @@ var VaultTools = class {
       if (indexed) {
         await this.vault.modify(indexed, content);
       } else {
-        await this.vault.create(vaultPath, content);
+        try {
+          await this.vault.create(vaultPath, content);
+        } catch {
+          await this.adapter.write(vaultPath, content);
+        }
       }
     } else {
       await this.adapter.write(vaultPath, content);
