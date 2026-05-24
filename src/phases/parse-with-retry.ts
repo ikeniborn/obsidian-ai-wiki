@@ -8,7 +8,7 @@ import {
 import { structuralErrorCounter } from "../structural-error-counter";
 
 export type CallSite =
-  | "init.bootstrap" | "init.delta"
+  | "init.bootstrap"
   | "lint.patch" | "lint.fix" | "lint-chat.fix"
   | "query.seeds"
   | "ingest.pages"
