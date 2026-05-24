@@ -18990,7 +18990,6 @@ var en = {
     chatSend: "Send",
     init: "Init",
     ask: "Ask",
-    askAndSave: "Ask and save",
     cancel: "Cancel",
     result: "Result",
     history: "History",
@@ -19022,7 +19021,6 @@ var en = {
     openPanel: "Open panel",
     ingestActive: "Ingest active file",
     query: "Query",
-    querySave: "Query and save as page",
     lint: "Lint domain",
     init: "Init domain",
     cancel: "Cancel operation"
@@ -19208,7 +19206,6 @@ var ru = {
     chatSend: "\u041E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C",
     init: "Init",
     ask: "\u0421\u043F\u0440\u043E\u0441\u0438\u0442\u044C",
-    askAndSave: "\u0421\u043F\u0440\u043E\u0441\u0438\u0442\u044C \u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C",
     cancel: "\u041E\u0442\u043C\u0435\u043D\u0430",
     result: "\u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442",
     history: "\u0418\u0441\u0442\u043E\u0440\u0438\u044F",
@@ -19240,7 +19237,6 @@ var ru = {
     openPanel: "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u0430\u043D\u0435\u043B\u044C",
     ingestActive: "Ingestion \u0430\u043A\u0442\u0438\u0432\u043D\u043E\u0433\u043E \u0444\u0430\u0439\u043B\u0430",
     query: "\u0417\u0430\u043F\u0440\u043E\u0441",
-    querySave: "\u0417\u0430\u043F\u0440\u043E\u0441 \u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u043A\u0430\u043A \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443",
     lint: "Lint \u0434\u043E\u043C\u0435\u043D\u0430",
     init: "Init \u0434\u043E\u043C\u0435\u043D\u0430",
     cancel: "\u041E\u0442\u043C\u0435\u043D\u0430 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438"
@@ -19426,7 +19422,6 @@ var es = {
     chatSend: "Enviar",
     init: "Init",
     ask: "Preguntar",
-    askAndSave: "Preguntar y guardar",
     cancel: "Cancelar",
     result: "Resultado",
     history: "Historial",
@@ -19458,7 +19453,6 @@ var es = {
     openPanel: "Abrir panel",
     ingestActive: "Ingest del archivo activo",
     query: "Consulta",
-    querySave: "Consulta y guardar como p\xE1gina",
     lint: "Lint del dominio",
     init: "Init del dominio",
     cancel: "Cancelar operaci\xF3n"
@@ -21387,6 +21381,11 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       }
     }
     this.renderHistory();
+    if (this.stepsEl) {
+      this.stepsOpen = false;
+      this.stepsEl.addClass("ai-wiki-hidden");
+    }
+    if (this.progressToggle) this.progressToggle.setText("\u25B6");
   }
   showChatSection() {
     this.chatSection?.remove();

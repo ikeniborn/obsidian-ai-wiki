@@ -4,7 +4,10 @@ wiki_sources:
   - README.md
   - CLAUDE.md
   - "[[docs/superpowers/specs/2026-05-17-mobile-query-seed-design.md]]"
-wiki_updated: 2026-05-17
+  - docs/TODO.md
+  - docs/superpowers/specs/2026-05-23-ux-cleanup-design.md
+  - docs/superpowers/plans/2026-05-23-ux-cleanup.md
+wiki_updated: 2026-05-24
 wiki_domain: документация
 wiki_keywords: [query, seed, jaccard, index-annotations, mobile, bfsExpand, llmSelectSeeds]
 tags: [операция, query, ответ, wikilinks]
@@ -12,30 +15,48 @@ tags: [операция, query, ответ, wikilinks]
 
 # Query Operation
 
-Отвечает на вопрос пользователя по базе знаний wiki. Опционально сохраняет ответ как новую wiki-страницу с `[[WikiLinks]]`.
+Отвечает на вопрос пользователя по базе знаний wiki. Ответ включает `[[WikiLinks]]` на использованные страницы.
 
 ## Назначение
 
-Позволяет извлекать синтезированные знания из wiki без поиска по сотням исходных заметок. Ответ включает ссылки на использованные wiki-страницы.
+Позволяет извлекать синтезированные знания из wiki без поиска по сотням исходных заметок.
 
 ## Варианты запуска
 
 | Команда | Действие |
 |---|---|
 | `AI Wiki: Запрос` | Вопрос → ответ в боковой панели |
-| `AI Wiki: Запрос и сохранить как страницу` | Вопрос → ответ + автоматическое открытие новой wiki-страницы |
+| Кнопка **Ask** в боковой панели | То же (desktop и mobile) |
 
 ## UX-поток
 
-1. `Command Palette` → `AI Wiki: Запрос`.
+1. `Command Palette` → `AI Wiki: Запрос` или нажать **Ask** в боковой панели.
 2. Ввести вопрос.
 3. Агент читает релевантные wiki-страницы, при необходимости — первичные источники.
 4. Ответ отображается в боковой панели с `[[WikiLinks]]` на использованные страницы.
-5. Для `query-save` — новая страница создаётся и открывается автоматически.
+
+## Удаление query-save (Task 30+, [[ux-cleanup-design]])
+
+Операция `query-save` и кнопка "Ask and save" удалены из кодовой базы целиком. Удалены:
+- `| "query-save"` из `WikiOperation` union
+- addCommand `query-save` из `main.ts`
+- `askSaveBtn` из `LlmWikiView`
+- все ветки `query-save` в `controller.ts` и `agent-runner.ts`
+- ключ `querySave` из i18n
+
+Сигнатура `runQuery(args, save=false, ...)` сохранена без изменений.
 
 ## Ограничения платформы
 
-Работает и на desktop, и на mobile (единственная операция, полностью поддерживаемая на мобильных).
+Работает и на desktop, и на mobile. На мобильном — единственная доступная операция.
+
+## Известные проблемы (docs/TODO.md)
+
+| # | Статус | Описание |
+|---|---|---|
+| 7 | `[]` | Нативный агент не работает на мобильном при запуске query — при запросе ничего не происходит. Требует диагностики запуска native-agent на mobile. |
+| 30 | `[!]` → реализован [[ux-cleanup-plan]] | Кнопка "Ask and save" удалена из боковой панели. `query-save` операция полностью удалена из кодовой базы. |
+| 32 | `[]` | Добавить возможность повторно запускать query из истории (кнопка или действие на записи истории). |
 
 ## Контекст для LLM
 
@@ -69,3 +90,5 @@ tags: [операция, query, ответ, wikilinks]
 - [[wiki-seeds]]
 - [[wiki-index]]
 - [[mobile-query-seed-design]]
+- [[ux-cleanup-design]]
+- [[ux-cleanup-plan]]

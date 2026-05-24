@@ -11,7 +11,9 @@ wiki_sources:
   - "[[docs/superpowers/plans/2026-05-19-live-response-ux.md]]"
   - "[[docs/superpowers/specs/2026-05-19-live-status-ux-design.md]]"
   - "[[docs/superpowers/plans/2026-05-19-live-status-ux.md]]"
-wiki_updated: 2026-05-19
+  - docs/superpowers/specs/2026-05-23-ux-cleanup-design.md
+  - docs/superpowers/plans/2026-05-23-ux-cleanup.md
+wiki_updated: 2026-05-24
 wiki_domain: документация
 tags: [компонент, view, ui, obsidian, security, mobile, i18n]
 ---
@@ -110,6 +112,16 @@ function sanitizeLinks(el: HTMLElement): void {
 Удалены: `assistantStarted`, `assistantBuffer`, `assistantRenderHandle`, `assistantFinalComp`, `scheduleAssistantRender()`.
 Добавлены: `liveStatusSection`, `liveStatusIconEl`, `liveStatusTextEl`.
 
+## Известные проблемы (docs/TODO.md)
+
+| # | Статус | Описание |
+|---|---|---|
+| 20 | `[]` | Убрать отображение времени на каждом шаге прогресса — достаточно общего времени операции. |
+| 23 | `[!]` | При запуске операции шаг формирования response появляется в конце, а рассуждение — вверху записей. Пока не пошёл ответ — не показывать избыточные шаги. При генерации ответа сразу отображать в читаемом виде, а не в JSON. |
+| 30 | `[!]` → спец/план | Убрать кнопку "Ask and save" (`askSaveBtn`) из боковой панели; оставить только "Ask". Удалить `query-save` из `CHAT_OPS`. `submitQuery()` упростить (убрать `save` param). См. [[ux-cleanup-design]], [[ux-cleanup-plan]]. |
+| 31 | `[!]` → спец/план | После формирования результата автоматически сворачивать секцию Progress (`stepsOpen=false`, `ai-wiki-hidden`, toggle `▶`). При запуске — раскрывать. Реализация в `finish()`. См. [[ux-cleanup-design]], [[ux-cleanup-plan]]. |
+| 33 | `[]` | Добавить хранение последнего выбранного домена; при открытии показывать его. Сохранять в `local.json`. |
+
 ## Связанные страницы
 
 - [[wiki-controller]]
@@ -122,3 +134,5 @@ function sanitizeLinks(el: HTMLElement): void {
 - [[live-response-ux-design]]
 - [[live-status-ux-design]]
 - [[live-status-ux-plan]]
+- [[ux-cleanup-design]]
+- [[ux-cleanup-plan]]

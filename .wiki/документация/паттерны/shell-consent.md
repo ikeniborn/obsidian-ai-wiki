@@ -2,15 +2,16 @@
 wiki_status: stub
 wiki_sources:
   - README.md
-wiki_updated: 2026-05-18
+  - docs/superpowers/specs/2026-05-23-ux-cleanup-design.md
+wiki_updated: 2026-05-24
 wiki_domain: документация
 tags: [паттерн, безопасность, security, consent, shell]
 aliases: ["shellConsentGiven", "first-run consent", "согласие на shell"]
 ---
 
-# Shell Consent (First-Run)
+# Shell Consent (Per-Switch)
 
-Паттерн явного согласия пользователя перед первым выполнением shell-операции (spawn внешнего процесса).
+Паттерн явного согласия пользователя при каждом переключении бэкенда на `claude-agent` (spawn внешнего процесса).
 
 ## Назначение
 
@@ -18,10 +19,13 @@ aliases: ["shellConsentGiven", "first-run consent", "согласие на shell
 
 ## Механизм
 
-При первом запуске с бэкендом `claude-agent` (поле `shellConsentGiven` отсутствует в `data.json` плагина) отображается модальный диалог до выполнения любой операции.
+При **каждом** переключении dropdown бэкенда в `claude-agent` (`settings.ts`) отображается `ShellConsentModal` до применения выбора.
 
-- Пользователь подтверждает → `shellConsentGiven: true` записывается в `data.json`
-- Дальнейшие запуски — диалог не показывается
+- Пользователь подтверждает → `shellConsentGiven: true` в `LocalConfig`; выбор применяется.
+- `shellConsentGiven` используется `WikiController` как guard: отклоняет запуск операции если флаг не выставлен.
+- При переключении обратно на `native-agent` и повторном выборе `claude-agent` — модал появляется снова.
+
+**До Task 29 (изменение 2026-05-24):** условие содержало `&& !this.localCache.shellConsentGiven`, из-за чего модал показывался только один раз за сессию. Убранный guard сделал consent per-switch.
 
 ## Что выполняется
 
@@ -42,3 +46,4 @@ aliases: ["shellConsentGiven", "first-run consent", "согласие на shell
 - [[settings]]
 - [[wiki-controller]]
 - [[per-device-settings]]
+- [[ux-cleanup-design]]

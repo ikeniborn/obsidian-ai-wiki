@@ -39,7 +39,7 @@
 - [[structured-output-retry]] — `документация/паттерны/structured-output-retry.md`
 - [[shell-consent]] — `документация/паттерны/shell-consent.md`
 
-#### спецификации (20)
+#### спецификации (21)
 - [[agent-base-contract]] — `документация/спецификации/agent-base-contract.md`
 - [[format-operation-design]] — `документация/спецификации/format-operation-design.md`
 - [[claude-agent-backend-design]] — `документация/спецификации/claude-agent-backend-design.md`
@@ -60,8 +60,9 @@
 - [[wiki-path-hierarchy-design]] — `документация/спецификации/wiki-path-hierarchy-design.md`
 - [[agent-stability-audit-design]] — `документация/спецификации/agent-stability-audit-design.md`
 - [[wiki-config-schema-log-index-design]] — `документация/спецификации/wiki-config-schema-log-index-design.md`
+- [[ux-cleanup-design]] — `документация/спецификации/ux-cleanup-design.md`
 
-#### планы (14)
+#### планы (15)
 - [[generation-speed-plan]] — `документация/планы/generation-speed-plan.md`
 - [[init-stability-plan]] — `документация/планы/init-stability-plan.md`
 - [[reinit-button-plan]] — `документация/планы/reinit-button-plan.md`
@@ -76,3 +77,4 @@
 - [[live-status-ux-plan]] — `документация/планы/live-status-ux-plan.md`
 - [[index-path-annotation-plan]] — `документация/планы/index-path-annotation-plan.md`
 - [[wiki-path-hierarchy-plan]] — `документация/планы/wiki-path-hierarchy-plan.md`
+- [[ux-cleanup-plan]] — `документация/планы/ux-cleanup-plan.md`

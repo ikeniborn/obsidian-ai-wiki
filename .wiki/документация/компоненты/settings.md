@@ -2,7 +2,9 @@
 wiki_status: developing
 wiki_sources:
   - README.md
-wiki_updated: 2026-05-18
+  - docs/superpowers/specs/2026-05-23-ux-cleanup-design.md
+  - docs/superpowers/plans/2026-05-23-ux-cleanup.md
+wiki_updated: 2026-05-24
 wiki_domain: документация
 tags: [компонент, settings, настройки, конфигурация]
 aliases: ["настройки плагина", "plugin settings", "settings reference"]
@@ -42,7 +44,7 @@ aliases: ["настройки плагина", "plugin settings", "settings refe
 | Per-operation models | Переключатель. Когда включён — настраивается модель для каждой операции | выключен |
 | Per-operation: Model | Название модели для конкретной операции | — |
 
-Первый запуск с `claude-agent` backend показывает модальный диалог согласия перед выполнением операции. Отозвать согласие: удалить `shellConsentGiven` из `data.json` плагина. Подробнее: [[shell-consent]].
+При каждом переключении в `claude-agent` в dropdown настроек показывается модальный диалог согласия (Task 29, [[ux-cleanup-design]]). `shellConsentGiven` в `LocalConfig` остаётся и используется [[wiki-controller]] как guard во время операций. Отозвать: удалить `shellConsentGiven` из `data.json`. Подробнее: [[shell-consent]].
 
 ## Native Agent
 
@@ -84,9 +86,20 @@ Proxy применяется только к native-agent. Claude Agent испо
 | Dev mode | Включить dev-логгер и evaluator после каждой операции | выключен |
 | Evaluator model | Название модели для evaluator (тот же бэкенд) | — |
 
+## Известные проблемы (docs/TODO.md)
+
+| # | Статус | Описание |
+|---|---|---|
+| 12 | `[v]` | Добавлено управление max tokens через настройки для обоих бэкендов с учётом модели и per-operation. Кнопка проверки доступности (claude path и native endpoint) с прогрессом — реализовано. |
+| 16 | `[]` | Сообщение о максимальных токенах должно учитывать выбранный бэкенд, а не общее для всех бэкендов. |
+| 27 | `[]` | При обновлении плагина добавить проверку расхождения файлов `_format_schema.md` и `_wiki_schema.md` в `!Wiki/.config`; предупреждать при конфликте изменений пользователя. Включать информацию о всех изменениях в релизе. |
+| 29 | `[!]` → спец/план | Согласие показывать при каждом native→claude-agent переключении. Изменение: убрать `&& !this.localCache.shellConsentGiven` из `settings.ts`. См. [[ux-cleanup-design]], [[ux-cleanup-plan]]. |
+
 ## Связанные страницы
 
 - [[per-device-settings]]
 - [[shell-consent]]
 - [[backend-strategy]]
 - [[wiki-controller]]
+- [[ux-cleanup-design]]
+- [[ux-cleanup-plan]]
