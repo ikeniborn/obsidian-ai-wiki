@@ -141,7 +141,8 @@ flowchart LR
     PE2["evaluator"] --> EVAL["evaluator.md"]
 
     V_WIKI -->|schema_block| PI2
-    V_WIKI -->|schema_block| PQ2
+    V_WIKI -->|schema_block| PL2
+    V_WIKI -->|schema_block| PLC2
     V_IDX  -->|index_block| PQ2
     V_FMT  -->|format_schema| PF2
 
@@ -288,10 +289,10 @@ Phase 4: основной query-вызов (streaming, free text)
 | Операция | Промт | Переменные `render()` | Схема ответа |
 |---|---|---|---|
 | **ingest** | `ingest.md` + `base.md` | `domain_name`, `entity_types_block`, `lang_notes`, `wiki_path`, `today`, `schema_block`, `source_path` | `WikiPagesOutputSchema` `{reasoning, pages[{path,content,annotation}], entity_types_delta?}` |
-| **query** | `query.md` + `base.md` | `domain_name`, `entity_types_block`, `schema_block`, `index_block` | free text |
-| **lint** | `lint.md` + `base.md` | `domain_name`, `entity_types_block` | `LintOutputSchema` `{reasoning, report, fixes[]}` |
+| **query** | `query.md` + `base.md` | `domain_name`, `entity_types_block`, `index_block` | free text |
+| **lint** | `lint.md` + `base.md` | `domain_name`, `entity_types_block`, `schema_block` | `LintOutputSchema` `{reasoning, report, fixes[]}` |
 | **chat** | `chat.md` + `base.md` | `operation_header`, `context` | free text |
-| **lint-chat** | `lint-chat.md` + `base.md` | `domain_name`, `lint_report`, `pages_block` | `LintChatSchema` `{summary, pages[{path,content,annotation?}]}` |
+| **lint-chat** | `lint-chat.md` + `base.md` | `domain_name`, `lint_report`, `pages_block`, `schema_block` | `LintChatSchema` `{summary, pages[{path,content,annotation?}]}` |
 | **init** file 0 | `init.md` + `base.md` | `domain_id`, `vault_name`, `schema_block`, `index_block` | `DomainEntrySchema` `{reasoning,id,name,wiki_folder,entity_types,language_notes}` |
 | **format** | `format.md` + `base.md` | `format_schema`, `has_vision` | `FormatOutputSchema` `{report, formatted}` |
 | **evaluator** _(devMode)_ | `base.md` + `evaluator.md` | `operation`, `task_input`, `result` _(user role; base инжектируется как system через buildChatParams)_ | `{score:0-10, reasoning}` |
@@ -303,13 +304,13 @@ Phase 4: основной query-вызов (streaming, free text)
 | `base.md` | Все операции (system, prepend через `prependBaseContract`) | Базовый контракт: достоверность, формат, минимализм | Применяется ко ВСЕМ вызовам включая evaluator — `buildChatParams` всегда вставляет `base.md` в system |
 | `ingest.md` | `ingest` | Извлечение экземпляров сущностей из источника → wiki-страницы + обогащение `entity_types` через `entity_types_delta?` | Теперь возвращает `entity_types_delta?` — покрывает задачу `init-incremental.md`. |
 | `query.md` | `query`, `query-save` | Ответ на вопрос по wiki-индексу домена | Нет явного ограничения на длину ответа; при большом `index_block` контекст разрастается |
-| `lint.md` | `lint` | Анализ качества wiki + автоисправление страниц | Не получает `schema_block` — LLM не видит конвенции `_wiki_schema.md` при проверке |
+| `lint.md` | `lint` | Анализ качества wiki + автоисправление страниц | — |
 | `lint-chat.md` | `lint-chat` | Интерактивное исправление по lint-отчёту | Схема ответа не включала `annotation` — код (`lint-chat.ts`) ждал его, но LLM не возвращал. **Исправлено.** |
 | `chat.md` | `chat` | Свободный диалог по результатам операции | Не специфичен для домена: нет `entity_types_block`, `schema_block`. Контекст только через `{{context}}` |
 | `init.md` | `init`, файл 0 (bootstrap) | Создание полной записи домена (`entity_types`, `wiki_folder`, …) | В примере `wiki_folder` показывал `"{{domain_id}}"` вместо корректного формата. **Исправлено.** |
 | `format.md` | `format` | Форматирование произвольной markdown-страницы | Не связан с доменной wiki — намеренно. Дублирует часть правил из `_format_schema.md` |
 | `evaluator.md` | `agent-runner`, devMode | Оценка качества результата операции (score 0–10) | Рендерится в роль `user`, но `base.md` применяется как `system` через `buildChatParams`. Вызывается после каждой операции при devMode |
-| `_wiki_schema.md` | `init` (bundled), `ingest`/`query` (vault read) | Конвенции wiki-страниц: frontmatter, структура, стиль | Изменения в bundled-шаблоне не попадают в существующие vaults автоматически |
+| `_wiki_schema.md` | `init` (bundled), `ingest`/`lint`/`lint-chat` (vault read) | Конвенции wiki-страниц: frontmatter, структура, стиль | Изменения в bundled-шаблоне не попадают в существующие vaults автоматически |
 | `_format_schema.md` | `init` (bundled, записывается в vault), `format` (vault read) | Конвенции форматирования не-wiki страниц | При `init` пишется в vault как дефолт — изменения в `templates/` не обновляют существующие vaults |
 
 ## Замечания для архитектурного анализа
@@ -319,10 +320,6 @@ Phase 4: основной query-вызов (streaming, free text)
 `ingest.md` теперь выполняет обе задачи: извлекает экземпляры сущностей (объектный уровень) и опционально обогащает `entity_types` при обнаружении новых или улучшенных типов (мета-уровень).
 
 `init-incremental.md` удалён. `ingest.ts` эмитирует `domain_updated { entity_types }` когда LLM возвращает `entity_types_delta`. Контроллер сохраняет патч в `DomainStore` через существующий механизм `domain_updated` — изменений в контроллере не потребовалось.
-
-### lint.md — не получает schema_block
-
-В отличие от `ingest` и `query`, `lint.ts` не читает `.config/_wiki_schema.md` и не передаёт `schema_block` в промт. LLM проверяет wiki без знания конвенций.
 
 ### evaluator + base.md — не изолирован
 
