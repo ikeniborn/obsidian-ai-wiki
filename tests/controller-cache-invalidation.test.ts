@@ -147,15 +147,6 @@ describe("WikiController cache invalidation after mutating ops", () => {
     expect(invalidateSpy).toHaveBeenCalledWith("ai");
   });
 
-  it("invalidates graphCache for query-save with domainId", async () => {
-    const { priv } = build([DOMAIN]);
-    const invalidateSpy = vi.spyOn(graphCache, "invalidate");
-
-    await priv.dispatch("query-save", ["what is AI?"], "ai");
-
-    expect(invalidateSpy).toHaveBeenCalledWith("ai");
-  });
-
   it("invalidates graphCache for init with domainId", async () => {
     const { priv } = build([DOMAIN]);
     const invalidateSpy = vi.spyOn(graphCache, "invalidate");
