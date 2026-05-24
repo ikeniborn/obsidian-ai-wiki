@@ -1,7 +1,7 @@
 # Intent: lint schema context
 
 **Date:** 2026-05-24
-**Status:** draft
+**Status:** approved
 
 ## Objective
 `lint.ts` не читает `.config/_wiki_schema.md` и не передаёт `schema_block` в промпт — LLM проверяет вики без знания конвенций. Нужно исправить. Параллельно — проверить, задействована ли схема в `query.ts`: схема нужна только при изменении вики (ingest, lint, init), но не при запросах. Выявлено в ходе анализа пайплайна промптов агента.
