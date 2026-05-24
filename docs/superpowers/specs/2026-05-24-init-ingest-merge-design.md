@@ -3,6 +3,40 @@ title: init-incremental → ingest merge
 date: 2026-05-24
 status: draft
 intent: docs/superpowers/intents/2026-05-24-init-ingest-merge-intent.md
+review:
+  spec_hash: e9f2ee1f14c62c7d
+  last_run: 2026-05-24
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "## Changes / ### 2. `prompts/ingest.md`"
+      section_hash: d545c699c3e21ee1
+      text: >
+        "entity types not represented in the current entity_types list" is ambiguous.
+        Unclear whether ingest should (a) add only new type keys, or (b) also update
+        existing types (changed description/cues). The original init-incremental.md
+        allowed both: "add new types, refine existing ones." Spec should specify
+        which behavior is expected from ingest.
+      verdict: fixed
+      verdict_at: 2026-05-24
+    - id: F-002
+      phase: clarity
+      severity: INFO
+      section: "## Data Flow: domain_updated from ingest"
+      section_hash: 41c03e91d94758bd
+      text: >
+        Spec does not mention that init's loop-end `domain_updated` (always emitted,
+        includes analyzed_sources + entity_types) runs after the intercepted ingest
+        event. The double-emit is expected (second one includes analyzed_sources),
+        but the interaction is undocumented — may confuse implementers.
+      verdict: fixed
+      verdict_at: 2026-05-24
 ---
 
 # Design: init-incremental → ingest merge
@@ -51,7 +85,11 @@ export const WikiPagesOutputSchema = z.object({
 
 ### 2. `prompts/ingest.md`
 
-Add a section instructing the LLM to return `entity_types_delta` only when the source contains entity types not represented in the current `entity_types` list. If nothing new — omit the field. Format: same structure as `entity_types` entries.
+Add a section instructing the LLM to return `entity_types_delta` when it finds:
+- **new** entity types (type key absent from current list), or
+- **updates** to existing types (improved description or extraction_cues for an existing type key).
+
+If nothing new or changed — omit the field entirely. Same semantics as `init-incremental.md`. Format: same structure as `entity_types` entries.
 
 The `entity_types_block` variable already injects current types into the prompt — the LLM can compare against it.
 
@@ -135,6 +173,20 @@ runIngest(file) →
 Controller already persists `domain_updated` via `DomainStore.save()` — no controller changes.
 
 Within `runInitWithSources`, `domain_updated` from ingest is intercepted to keep `currentDomain` in sync across iterations.
+
+**Note: double-emit within init loop.** After the ingest call, init's loop-end always emits a second `domain_updated` that includes `analyzed_sources` (to mark the file as processed):
+
+```
+runIngest →
+  domain_updated { entity_types: merged }    ← from ingest (intercepted + yielded)
+  ...
+init loop-end →
+  domain_updated { entity_types: merged,     ← from init (includes analyzed_sources)
+                   language_notes: ...,
+                   analyzed_sources: [..., file] }
+```
+
+This is correct: `currentDomain` is updated by the intercept before the loop-end emit, so both events carry the same merged entity_types. The controller processes both; the second one adds `analyzed_sources`.
 
 ## Tests
 
