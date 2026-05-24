@@ -1023,8 +1023,9 @@ export class LlmWikiView extends ItemView {
         const rerunBtn = row.createEl("button", { text: "↺", attr: { title: "Re-run" } });
         rerunBtn.addEventListener("click", (e) => {
           e.stopPropagation();
-          this.domainSelect!.value = it.domainId ?? "";
-          this.domainSelect!.dispatchEvent(new Event("change"));
+          if (!this.domainSelect) return;
+          this.domainSelect.value = it.domainId ?? "";
+          this.domainSelect.dispatchEvent(new Event("change"));
           this.queryInput.value = it.args[0] ?? "";
           this.submitQuery();
         });
