@@ -4,7 +4,6 @@ import type { DomainEntry, EntityType } from "./domain";
 export type WikiOperation =
   | "ingest"
   | "query"
-  | "query-save"
   | "lint"
   | "lint-chat"
   | "chat"
