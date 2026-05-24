@@ -44,7 +44,12 @@ export class VaultTools {
       if (indexed) {
         await this.vault.modify(indexed, content);
       } else {
-        await this.vault.create(vaultPath, content);
+        try {
+          await this.vault.create(vaultPath, content);
+        } catch {
+          // Obsidian doesn't index hidden dirs (.config) — vault.create() throws if file exists on disk
+          await this.adapter.write(vaultPath, content);
+        }
       }
     } else {
       await this.adapter.write(vaultPath, content);

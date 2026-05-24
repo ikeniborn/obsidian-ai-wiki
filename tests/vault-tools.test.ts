@@ -104,4 +104,20 @@ describe("VaultTools", () => {
     const vt = new VaultTools(mockAdapter(), "/home/user/vault");
     expect(vt.vaultRoot).toBe("/home/user/vault");
   });
+
+  it("write falls back to adapter.write when vault.create throws (hidden dir)", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      write: vi.fn().mockResolvedValue(undefined),
+    });
+    const vault = {
+      getAbstractFileByPath: vi.fn().mockReturnValue(null),
+      create: vi.fn().mockRejectedValue(new Error("File already exists")),
+      modify: vi.fn(),
+    };
+    const vt = new VaultTools(adapter, "/vault", vault);
+    await vt.write("!Wiki/.config/_log.md", "new content");
+    expect(vault.create).toHaveBeenCalledWith("!Wiki/.config/_log.md", "new content");
+    expect(adapter.write).toHaveBeenCalledWith("!Wiki/.config/_log.md", "new content");
+  });
 });
