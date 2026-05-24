@@ -78,8 +78,10 @@
 .ai-wiki-chat-input-row { display: flex; gap: 6px; align-items: flex-end; }
 .ai-wiki-chat-input { flex: 1; resize: none; font-family: inherit; padding: 6px; }
 .ai-wiki-chat-send { flex: 0 0 auto; }
-.ai-wiki-history-row { padding: 3px 0; cursor: pointer; }
+.ai-wiki-history-row { display: flex; align-items: center; padding: 3px 0; cursor: pointer; }
 .ai-wiki-history-row:hover { background: var(--background-modifier-hover); }
+.ai-wiki-history-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-wiki-history-row button { flex: 0 0 auto; margin-left: 8px; padding: 1px 5px; font-size: 0.75em; line-height: 1.4; }
 
 /* ask_user step indicator */
 .ai-wiki-step--ask { color: var(--text-muted); font-style: italic; }

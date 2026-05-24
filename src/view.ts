@@ -566,6 +566,7 @@ export class LlmWikiView extends ItemView {
       step.createSpan({ cls: "ai-wiki-step-icon" }).setText("🌐");
       step.createSpan({ cls: "ai-wiki-step-name" })
         .setText(`Граф: ${ev.seeds.length} seeds [${preview}${extra}] → ${ev.expanded} / ${ev.total} страниц${cacheHint}`);
+      step.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
       this.scrollSteps();
       return;
     }
@@ -624,6 +625,7 @@ export class LlmWikiView extends ItemView {
           const rHead = this.reasoningBlock.createDiv("ai-wiki-step-head");
           rHead.createSpan({ cls: "ai-wiki-step-icon" }).setText("🧠");
           rHead.createSpan({ cls: "ai-wiki-step-name muted" }).setText(i18n().view.analysing);
+          rHead.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
           this.reasoningBlock.createSpan({ cls: "ai-wiki-reasoning-text" });
         }
         this.reasoningBuffer += ev.delta;
@@ -646,6 +648,7 @@ export class LlmWikiView extends ItemView {
       const head = step.createDiv("ai-wiki-step-head");
       head.createSpan({ cls: "ai-wiki-step-icon" }).setText("⚙");
       head.createSpan({ cls: "ai-wiki-step-name muted" }).setText(translateSystemEvent(ev.message));
+      head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
       this.scrollSteps();
     } else if (ev.kind === "error") {
       this.stopWaiting();
@@ -980,7 +983,7 @@ export class LlmWikiView extends ItemView {
     this.waitingStartedAt = Date.now();
     this.waitingStep = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step--waiting");
     this.waitingStep.createSpan({ cls: "ai-wiki-step-icon" }).setText("⏳");
-    this.waitingStep.createSpan({ cls: "ai-wiki-waiting-text" }).setText("0.0s");
+    this.waitingStep.createSpan({ cls: "ai-wiki-waiting-text" }).setText("");
     this.scrollSteps();
     this.scheduleWaitingTick();
   }
@@ -1021,8 +1024,9 @@ export class LlmWikiView extends ItemView {
     this.historySection.removeClass("ai-wiki-hidden");
     for (const it of items) {
       const row = this.historyEl.createDiv("ai-wiki-history-row");
-      row.createSpan().setText(this.statusLabel(it));
-      row.createSpan({ cls: "muted" }).setText(` ${it.args.join(" ")}`);
+      const label = row.createSpan({ cls: "ai-wiki-history-label" });
+      label.createSpan().setText(this.statusLabel(it));
+      label.createSpan({ cls: "muted" }).setText(` ${it.args.join(" ")}`);
       if (it.operation === "query") {
         const rerunBtn = row.createEl("button", { text: "↺", attr: { title: "Re-run" } });
         rerunBtn.addEventListener("click", (e) => {
