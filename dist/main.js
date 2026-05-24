@@ -20843,6 +20843,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.domainSelect = domainRow.createEl("select", { cls: "ai-wiki-domain-select" });
     const refreshBtn = domainRow.createEl("button", { text: "\u21BB", attr: { title: T.view.refreshTitle } });
     refreshBtn.addEventListener("click", () => void this.refreshDomains());
+    this.domainSelect.addEventListener("change", () => {
+      void this.plugin.localConfigStore.save({ lastDomain: this.domainSelect.value });
+    });
     if (opts.withActions) {
       this.addSourceBtn = domainRow.createEl("button", { attr: { title: T.view.addSourceTitle } });
       (0, import_obsidian4.setIcon)(this.addSourceBtn, "folder-plus");
@@ -20959,8 +20962,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     for (const d of domains) {
       this.domainSelect.createEl("option", { value: d.id, text: d.name || d.id });
     }
-    if (previous && Array.from(this.domainSelect.options).some((o) => o.value === previous)) {
-      this.domainSelect.value = previous;
+    const restoreTarget = previous || (await this.plugin.localConfigStore.load()).lastDomain;
+    if (restoreTarget && Array.from(this.domainSelect.options).some((o) => o.value === restoreTarget)) {
+      this.domainSelect.value = restoreTarget;
     }
     if (this.reinitBtn) this.reinitBtn.disabled = !this.domainSelect.value;
     if (this.addSourceBtn) this.addSourceBtn.disabled = !this.domainSelect.value;
@@ -21381,11 +21385,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       }
     }
     this.renderHistory();
-    if (this.stepsEl) {
-      this.stepsOpen = false;
-      this.stepsEl.addClass("ai-wiki-hidden");
-    }
-    if (this.progressToggle) this.progressToggle.setText("\u25B6");
+    this.stepsOpen = false;
+    this.stepsEl.addClass("ai-wiki-hidden");
+    this.progressToggle.setText("\u25B6");
   }
   showChatSection() {
     this.chatSection?.remove();
@@ -21620,6 +21622,17 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       const row = this.historyEl.createDiv("ai-wiki-history-row");
       row.createSpan().setText(this.statusLabel(it));
       row.createSpan({ cls: "muted" }).setText(` ${it.args.join(" ")}`);
+      if (it.operation === "query") {
+        const rerunBtn = row.createEl("button", { text: "\u21BA", attr: { title: "Re-run" } });
+        rerunBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (!this.domainSelect) return;
+          this.domainSelect.value = it.domainId ?? "";
+          this.domainSelect.dispatchEvent(new Event("change"));
+          this.queryInput.value = it.args[0] ?? "";
+          this.submitQuery();
+        });
+      }
       row.addEventListener("click", () => {
         this.finalEl.empty();
         const comp = new import_obsidian4.Component();
