@@ -21184,9 +21184,10 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       const preview = ev.seeds.slice(0, 3).join(", ");
       const extra = ev.seeds.length > 3 ? `, \u2026+${ev.seeds.length - 3}` : "";
       const step = this.stepsEl.createDiv("ai-wiki-step");
-      step.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F310}");
-      step.createSpan({ cls: "ai-wiki-step-name" }).setText(`\u0413\u0440\u0430\u0444: ${ev.seeds.length} seeds [${preview}${extra}] \u2192 ${ev.expanded} / ${ev.total} \u0441\u0442\u0440\u0430\u043D\u0438\u0446${cacheHint}`);
-      step.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
+      const graphHead = step.createDiv("ai-wiki-step-head");
+      graphHead.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F310}");
+      graphHead.createSpan({ cls: "ai-wiki-step-name" }).setText(`\u0413\u0440\u0430\u0444: ${ev.seeds.length} seeds [${preview}${extra}] \u2192 ${ev.expanded} / ${ev.total} \u0441\u0442\u0440\u0430\u043D\u0438\u0446${cacheHint}`);
+      graphHead.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
       this.scrollSteps();
       return;
     }

@@ -46,7 +46,7 @@
 .ai-wiki-step-icon { flex: 0 0 auto; }
 .ai-wiki-step-name { font-weight: 600; }
 .ai-wiki-step-arg { color: var(--text-normal); word-break: break-all; flex: 1; min-width: 0; }
-.ai-wiki-step-time { flex: 0 0 auto; font-size: 11px; }
+.ai-wiki-step-time { flex: 0 0 auto; font-size: 11px; margin-left: auto; }
 .ai-wiki-step-head.ok .ai-wiki-step-name { color: var(--text-success); }
 .ai-wiki-step-head.err .ai-wiki-step-name { color: var(--text-error); }
 .ai-wiki-step-preview {

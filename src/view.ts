@@ -563,10 +563,11 @@ export class LlmWikiView extends ItemView {
       const preview = ev.seeds.slice(0, 3).join(", ");
       const extra = ev.seeds.length > 3 ? `, …+${ev.seeds.length - 3}` : "";
       const step = this.stepsEl.createDiv("ai-wiki-step");
-      step.createSpan({ cls: "ai-wiki-step-icon" }).setText("🌐");
-      step.createSpan({ cls: "ai-wiki-step-name" })
+      const graphHead = step.createDiv("ai-wiki-step-head");
+      graphHead.createSpan({ cls: "ai-wiki-step-icon" }).setText("🌐");
+      graphHead.createSpan({ cls: "ai-wiki-step-name" })
         .setText(`Граф: ${ev.seeds.length} seeds [${preview}${extra}] → ${ev.expanded} / ${ev.total} страниц${cacheHint}`);
-      step.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
+      graphHead.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
       this.scrollSteps();
       return;
     }
