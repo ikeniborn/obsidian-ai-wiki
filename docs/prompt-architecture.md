@@ -361,12 +361,26 @@ Phase 4: основной query-вызов (streaming, free text)
 
 Сервис активен только при `backend = "native-agent"`. При `backend = "claude-agent"` `buildSimilarity()` возвращает `undefined`, фазы получают весь контент без фильтрации.
 
+### Прогресс-шаг выбора страниц
+
+После `selectRelevant()` фаза `ingest` эмитирует событие `info_text` (тип `RunEvent`):
+
+```typescript
+{ kind: "info_text", icon: "🔍" | "📋", summary: "N/M wiki-pages loaded (mode)", details: string[] }
+```
+
+`view.ts` рендерит его как отдельный step-item с иконкой и списком entity-names (значений `pageId(path)` для каждого выбранного файла). Иконка: `🔍` для embedding-режима, `📋` для jaccard.
+
 ### Настройки (`LocalConfig.nativeAgent`)
 
 | Поле | Тип | Назначение |
 |---|---|---|
-| `embeddingModel` | `string?` | Модель эмбеддингов; если не задана — используется `jaccard` |
+| `embeddingModel` | `string?` | Модель эмбеддингов. `undefined` = jaccard; `""` (пустая строка) = режим включён, модель не задана → jaccard до ввода имени; непустая строка = embedding-режим |
 | `embeddingDimensions` | `number?` | Число измерений; обязательно при `embeddingModel` |
 | `relevantPagesTopK` | `number?` | Максимум страниц в контексте (default: 15) |
+
+**Поведение UI-тоггла "Enable semantic similarity":**
+- Toggle OFF → `embeddingModel: undefined, embeddingDimensions: undefined`. Поля модели скрыты.
+- Toggle ON → `embeddingModel: ""` (sentinel). Поля "Embedding model" и "Embedding dimensions" появляются. Режим остаётся jaccard до ввода имени модели.
 
 Поля хранятся в `local.json` (не синхронизируются между устройствами).
