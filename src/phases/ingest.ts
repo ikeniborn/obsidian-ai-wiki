@@ -86,7 +86,12 @@ export async function* runIngest(
   if (similarity) {
     const annotations = cachedAnnotations ?? parseIndexAnnotations(indexContent);
     filteredPaths = await similarity.selectRelevant(sourceContent, annotations, existingPaths);
-    yield { kind: "assistant_text", delta: `Relevant pages: ${filteredPaths.length}/${existingPaths.length} selected via ${similarity.config.mode} similarity\n` };
+    yield {
+      kind: "info_text",
+      icon: similarity.config.mode === "embedding" ? "🔍" : "📋",
+      summary: `${filteredPaths.length}/${existingPaths.length} wiki-pages loaded (${similarity.config.mode})`,
+      details: filteredPaths.map((p) => pageId(p)),
+    };
   } else {
     filteredPaths = existingPaths.filter((f) => !f.endsWith("_index.md"));
   }
