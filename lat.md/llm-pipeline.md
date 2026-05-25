@@ -10,11 +10,9 @@ Also applies model params: `temperature`, `maxTokens`, `topP`, `response_format`
 
 ## Evaluator Prompt Pattern
 
-Only phase that sends no system message to `buildChatParams`. `prependBaseContract`
-creates `system = base.md` from scratch. The evaluator prompt (`evaluator.md`) renders
-into user role — unlike all other phases where the phase prompt is the system message.
+Only phase that sends no system message to `buildChatParams`. `prependBaseContract` creates `system = base.md` from scratch. `evaluator.md` renders into user role — unlike all other phases where the phase prompt is the system message.
 
-See [[src/phases/evaluator.ts#runEvaluator]].
+See `src/phases/evaluator.ts`.
 
 ## parseWithRetry
 
