@@ -65,6 +65,12 @@ Settings are split into two stores to avoid syncing secrets. `data.json` (synced
 
 `resolveEffective` merges both into a single `LlmWikiPluginSettings` for runtime use. See [[src/effective-settings.ts#resolveEffective]].
 
+## Storage Migration
+
+One-time migration that runs on plugin load to move `.config/` directories to `_config/`. Detects old layout by checking for `!Wiki/.config/_domain.json`, then copies all config files to the new paths and removes the old ones.
+
+Throws `StorageMigrationConflictError` if both `.config/` and `_config/` exist simultaneously, indicating an interrupted previous migration. See [[src/storage-migration.ts#runStorageMigration]].
+
 ## Run Events
 
 All operations communicate via `RunEvent` — a discriminated union emitted as an async generator stream. Events cover: LLM streaming deltas, tool calls, domain mutations, format previews, structural errors, graph stats, and final result.

@@ -1,11 +1,12 @@
 import type { Vault } from "obsidian";
 import type { DomainEntry } from "./domain";
 import { migrateDomainsV2 } from "./domain";
+import { WIKI_ROOT, GLOBAL_DOMAIN_PATH, GLOBAL_CONFIG_DIR } from "./wiki-path";
 
-const FILE_PATH = "!Wiki/.config/_domain.json";
+const FILE_PATH = GLOBAL_DOMAIN_PATH;
 const TMP_PATH = `${FILE_PATH}.tmp`;
-const WIKI_DIR = "!Wiki";
-const CONFIG_DIR = "!Wiki/.config";
+const WIKI_DIR = WIKI_ROOT;
+const CONFIG_DIR = GLOBAL_CONFIG_DIR;
 
 export class DomainCorruptError extends Error {
   constructor(message: string) {

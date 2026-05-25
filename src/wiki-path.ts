@@ -1,5 +1,12 @@
 export const WIKI_ROOT = "!Wiki";
 
+export const GLOBAL_CONFIG_DIR = `${WIKI_ROOT}/_config`;
+export const GLOBAL_DOMAIN_PATH = `${GLOBAL_CONFIG_DIR}/_domain.json`;
+export const GLOBAL_WIKI_SCHEMA_PATH = `${GLOBAL_CONFIG_DIR}/_wiki_schema.md`;
+export const GLOBAL_FORMAT_SCHEMA_PATH = `${GLOBAL_CONFIG_DIR}/_format_schema.md`;
+export const GLOBAL_AGENT_LOG_PATH = `${GLOBAL_CONFIG_DIR}/_agent.jsonl`;
+export const GLOBAL_DEV_LOG_PATH = `${GLOBAL_CONFIG_DIR}/_dev.jsonl`;
+
 export function domainWikiFolder(subfolder: string): string {
   return `${WIKI_ROOT}/${subfolder}`;
 }
@@ -20,26 +27,26 @@ export function sanitizeWikiSubfolder(raw: string): string {
 
 export function validateArticlePath(path: string, wikiVaultPath: string): boolean {
   if (
-    path === `${wikiVaultPath}/.config/_index.md` ||
-    path === `${wikiVaultPath}/.config/_log.md` ||
-    path === `${wikiVaultPath}/.config/_wiki_schema.md` ||
-    path === `${wikiVaultPath}/.config/_format_schema.md`
+    path === `${wikiVaultPath}/_config/_index.md` ||
+    path === `${wikiVaultPath}/_config/_log.md`
   ) return true;
   const prefix = `${wikiVaultPath}/`;
   if (!path.startsWith(prefix)) return false;
   const remainder = path.slice(prefix.length);
+  // Reject old .config paths and any paths with .config
+  if (remainder.includes(".config")) return false;
   const segments = remainder.split("/");
   return segments.length === 2 && segments[1].endsWith(".md");
 }
 
 export function domainConfigDir(domainFolder: string): string {
-  return `${domainFolder}/.config`;
+  return `${domainFolder}/_config`;
 }
 
 export function domainIndexPath(domainFolder: string): string {
-  return `${domainFolder}/.config/_index.md`;
+  return `${domainConfigDir(domainFolder)}/_index.md`;
 }
 
 export function domainLogPath(domainFolder: string): string {
-  return `${domainFolder}/.config/_log.md`;
+  return `${domainConfigDir(domainFolder)}/_log.md`;
 }

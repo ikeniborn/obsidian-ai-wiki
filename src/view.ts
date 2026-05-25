@@ -261,7 +261,10 @@ export class LlmWikiView extends ItemView {
             }
           }
           if (f) {
-            void this.app.workspace.openLinkText(href, "", false);
+            // Extract filename and domain folder for workspace.openLinkText
+            const filename = href.split("/").pop() ?? href;
+            const domainFolder = href.substring(0, href.lastIndexOf("/"));
+            void this.app.workspace.openLinkText(filename, domainFolder, false);
           } else {
             const isLog = href.endsWith("_log.md");
             new Notice(isLog ? "_log.md not found — run ingest or lint first." : "_index.md not found — run init first.");

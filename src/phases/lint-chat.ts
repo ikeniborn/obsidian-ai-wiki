@@ -6,12 +6,12 @@ import { parseWithRetry } from "./parse-with-retry";
 import { LintChatSchema } from "./zod-schemas";
 import lintChatTemplate from "../../prompts/lint-chat.md";
 import { render } from "./template";
-import { domainWikiFolder } from "../wiki-path";
+import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder } from "../wiki-path";
 import { upsertIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
 import { ensureDomainConfig } from "../domain-config";
 
-const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
+const META_FILES = ["_index.md", "_log.md"];
 
 export async function* runLintFixChat(
   req: RunRequest,
@@ -34,8 +34,7 @@ export async function* runLintFixChat(
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
   await ensureDomainConfig(vaultTools, wikiVaultPath);
 
-  const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
-  const schemaContent = await tryRead(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`);
+  const schemaContent = await tryRead(vaultTools, GLOBAL_WIKI_SCHEMA_PATH);
 
   // 1. Load domain pages
   const allFiles = await vaultTools.listFiles(wikiVaultPath);

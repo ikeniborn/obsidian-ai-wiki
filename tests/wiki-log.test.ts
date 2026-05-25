@@ -33,7 +33,7 @@ describe("appendWikiLog — ingest", () => {
     expect(written[0]).toContain("**Токены:** 100");
     expect(written[0]).toContain("---");
     expect((vt.write as ReturnType<typeof vi.fn>).mock.calls[0][0])
-      .toBe("!Wiki/work/.config/_log.md");
+      .toBe("!Wiki/work/_config/_log.md");
   });
 
   it("writes ОБНОВЛЕНА with status transition", async () => {

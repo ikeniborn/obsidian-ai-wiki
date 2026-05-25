@@ -6,7 +6,7 @@ import formatTemplate from "../../prompts/format.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
 import { missingTokensWithContext, looksTruncated, appendMissingLines } from "./format-utils";
-import { WIKI_ROOT } from "../wiki-path";
+import { GLOBAL_FORMAT_SCHEMA_PATH } from "../wiki-path";
 import { FormatOutputSchema } from "./zod-schemas";
 import { structuralErrorCounter } from "../structural-error-counter";
 
@@ -68,7 +68,7 @@ export async function* runFormat(
     return;
   }
 
-  const formatSchemaPath = `${WIKI_ROOT}/.config/_format_schema.md`;
+  const formatSchemaPath = GLOBAL_FORMAT_SCHEMA_PATH;
   let formatSchema: string;
   try {
     formatSchema = await vaultTools.read(formatSchemaPath);

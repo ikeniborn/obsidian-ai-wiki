@@ -18890,7 +18890,7 @@ var en = {
     historyLimit_name: "History limit",
     historyLimit_desc: "Maximum operations in the sidebar history.",
     agentLog_name: "Agent log (JSONL)",
-    agentLog_desc: "Log agent events to <vault>/!Wiki/.config/_agent.jsonl.",
+    agentLog_desc: "Log agent events to <vault>/!Wiki/_config/_agent.jsonl.",
     backend_name: "Backend",
     backend_desc: "Select the backend for operations.",
     claudeCodeAgent: "Claude Code agent",
@@ -19106,7 +19106,7 @@ var ru = {
     historyLimit_name: "\u041B\u0438\u043C\u0438\u0442 \u0438\u0441\u0442\u043E\u0440\u0438\u0438",
     historyLimit_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439 \u0432 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438.",
     agentLog_name: "\u041B\u043E\u0433 \u0430\u0433\u0435\u043D\u0442\u0430 (JSONL)",
-    agentLog_desc: "\u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u0441\u043E\u0431\u044B\u0442\u0438\u044F \u0430\u0433\u0435\u043D\u0442\u0430 \u0432 <vault>/!Wiki/.config/_agent.jsonl.",
+    agentLog_desc: "\u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u0441\u043E\u0431\u044B\u0442\u0438\u044F \u0430\u0433\u0435\u043D\u0442\u0430 \u0432 <vault>/!Wiki/_config/_agent.jsonl.",
     backend_name: "Backend",
     backend_desc: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0431\u044D\u043A\u0435\u043D\u0434 \u0434\u043B\u044F \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u044F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439.",
     claudeCodeAgent: "Claude Code agent",
@@ -19322,7 +19322,7 @@ var es = {
     historyLimit_name: "L\xEDmite de historial",
     historyLimit_desc: "M\xE1ximo de operaciones en el historial del panel lateral.",
     agentLog_name: "Log del agente (JSONL)",
-    agentLog_desc: "Registra eventos del agente en <vault>/!Wiki/.config/_agent.jsonl.",
+    agentLog_desc: "Registra eventos del agente en <vault>/!Wiki/_config/_agent.jsonl.",
     backend_name: "Backend",
     backend_desc: "Selecciona el backend para las operaciones.",
     claudeCodeAgent: "Claude Code agent",
@@ -20607,6 +20607,12 @@ var import_obsidian4 = require("obsidian");
 
 // src/wiki-path.ts
 var WIKI_ROOT = "!Wiki";
+var GLOBAL_CONFIG_DIR = `${WIKI_ROOT}/_config`;
+var GLOBAL_DOMAIN_PATH = `${GLOBAL_CONFIG_DIR}/_domain.json`;
+var GLOBAL_WIKI_SCHEMA_PATH = `${GLOBAL_CONFIG_DIR}/_wiki_schema.md`;
+var GLOBAL_FORMAT_SCHEMA_PATH = `${GLOBAL_CONFIG_DIR}/_format_schema.md`;
+var GLOBAL_AGENT_LOG_PATH = `${GLOBAL_CONFIG_DIR}/_agent.jsonl`;
+var GLOBAL_DEV_LOG_PATH = `${GLOBAL_CONFIG_DIR}/_dev.jsonl`;
 function domainWikiFolder(subfolder) {
   return `${WIKI_ROOT}/${subfolder}`;
 }
@@ -20623,21 +20629,22 @@ function sanitizeWikiSubfolder(raw) {
   return raw.split("/").pop();
 }
 function validateArticlePath(path2, wikiVaultPath) {
-  if (path2 === `${wikiVaultPath}/.config/_index.md` || path2 === `${wikiVaultPath}/.config/_log.md` || path2 === `${wikiVaultPath}/.config/_wiki_schema.md` || path2 === `${wikiVaultPath}/.config/_format_schema.md`) return true;
+  if (path2 === `${wikiVaultPath}/_config/_index.md` || path2 === `${wikiVaultPath}/_config/_log.md`) return true;
   const prefix = `${wikiVaultPath}/`;
   if (!path2.startsWith(prefix)) return false;
   const remainder = path2.slice(prefix.length);
+  if (remainder.includes(".config")) return false;
   const segments = remainder.split("/");
   return segments.length === 2 && segments[1].endsWith(".md");
 }
 function domainConfigDir(domainFolder) {
-  return `${domainFolder}/.config`;
+  return `${domainFolder}/_config`;
 }
 function domainIndexPath(domainFolder) {
-  return `${domainFolder}/.config/_index.md`;
+  return `${domainConfigDir(domainFolder)}/_index.md`;
 }
 function domainLogPath(domainFolder) {
-  return `${domainFolder}/.config/_log.md`;
+  return `${domainConfigDir(domainFolder)}/_log.md`;
 }
 
 // src/utils/vault-walk.ts
@@ -20894,7 +20901,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
             }
           }
           if (f) {
-            void this.app.workspace.openLinkText(href, "", false);
+            const filename = href.split("/").pop() ?? href;
+            const domainFolder = href.substring(0, href.lastIndexOf("/"));
+            void this.app.workspace.openLinkText(filename, domainFolder, false);
           } else {
             const isLog = href.endsWith("_log.md");
             new import_obsidian4.Notice(isLog ? "_log.md not found \u2014 run ingest or lint first." : "_index.md not found \u2014 run init first.");
@@ -26591,10 +26600,9 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     return;
   }
   const domainRoot = wikiVaultPath;
-  const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
   await ensureDomainConfig(vaultTools, domainRoot);
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`),
+    tryRead(vaultTools, GLOBAL_WIKI_SCHEMA_PATH),
     tryRead(vaultTools, domainIndexPath(domainRoot))
   ]);
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
@@ -27262,7 +27270,7 @@ var import_path_browserify4 = __toESM(require_path_browserify(), 1);
 var lint_default = '\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u0438 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0410\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0439 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u043E wiki: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442, \u0431\u0438\u0442\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438.\n\u041E\u0434\u043D\u043E\u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043F\u043E\u0434\u0433\u043E\u0442\u043E\u0432\u044C \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0435 \u0432\u0435\u0440\u0441\u0438\u0438 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446.\n{{entity_types_block}}\n{{schema_block}}\n\n\u041F\u0440\u0438 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0441\u0442\u0440\u0430\u043D\u0438\u0446:\n- tags: \u043F\u0440\u043E\u0432\u0435\u0440\u044C \u0438 \u043E\u0431\u043D\u043E\u0432\u0438 \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 (category/subcategory). \u041F\u0435\u0440\u0435\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u0435\u0433\u0438 \u0438\u0437 \u0434\u0440\u0443\u0433\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0434\u043E\u043C\u0435\u043D\u0430 (\u043F\u0435\u0440\u0435\u0434\u0430\u043D\u044B \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435). \u0424\u043E\u0440\u043C\u0430\u0442: \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0447\u0435\u0440\u0435\u0437 `/`, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432, \u0431\u0435\u0437 `#`\n- "annotation": \u043E\u0434\u043D\u043E \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u2014 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430 \u043F\u043E \u0441\u043C\u044B\u0441\u043B\u0443\n- \u043C\u0451\u0440\u0442\u0432\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438 [[X]] \u0443\u0431\u0435\u0440\u0438 \u0438\u043B\u0438 \u0437\u0430\u043C\u0435\u043D\u0438; \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0439 frontmatter \u0434\u043E\u0431\u0430\u0432\u044C; \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0438\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 \u2014 \u043D\u0438\u043A\u0430\u043A\u043E\u0433\u043E \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n{"reasoning":"\u0446\u0435\u043F\u043E\u0447\u043A\u0430 \u0440\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439","report":"## \u041E\u0442\u0447\u0451\u0442 lint\\n\\n\u0410\u043D\u0430\u043B\u0438\u0437 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 Markdown...","fixes":[{"path":"!Wiki/domain/type/Entity.md","content":"\u043F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B","annotation":"\u043A\u0440\u0430\u0442\u043A\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435"}]}\n\n\u041F\u043E\u043B\u0435 `fixes` \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0422\u041E\u041B\u042C\u041A\u041E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0435\u0441\u043B\u0438 \u043F\u0440\u0430\u0432\u043E\u043A \u043D\u0435\u0442).\n\u041F\u043E\u043B\u0435 `report` \u2014 \u043F\u043E\u043B\u043D\u044B\u0439 markdown-\u043E\u0442\u0447\u0451\u0442 \u0434\u043B\u044F \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F.\n';
 
 // src/phases/lint.ts
-var META_FILES2 = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
+var META_FILES2 = ["_index.md", "_log.md"];
 async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal, hubThreshold = 20, opts = {}) {
   const domainId = args[0];
   const targets = domainId ? domains.filter((d) => d.id === domainId) : domains;
@@ -27283,8 +27291,7 @@ Wiki folder outside vault \u2014 skipped.`);
       continue;
     }
     await ensureDomainConfig(vaultTools, wikiVaultPath);
-    const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
-    const schemaContent = await tryRead3(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`);
+    const schemaContent = await tryRead3(vaultTools, GLOBAL_WIKI_SCHEMA_PATH);
     yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
     const allFiles = await vaultTools.listFiles(wikiVaultPath);
     const files = allFiles.filter((f) => !META_FILES2.some((m) => f.endsWith(m)));
@@ -27614,7 +27621,7 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
 var lint_chat_default = '\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041F\u0440\u0438\u043C\u0438 \u0437\u0430\u0434\u0430\u043D\u0438\u0435 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F \u0438 lint-\u043E\u0442\u0447\u0451\u0442, \u0438\u0441\u043F\u0440\u0430\u0432\u044C \u0443\u043A\u0430\u0437\u0430\u043D\u043D\u044B\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B \u0432 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430\u0445.\n\n\u0412\u0435\u0440\u043D\u0438 JSON:\n{"summary":"## markdown \u0447\u0442\u043E \u0441\u0434\u0435\u043B\u0430\u043D\u043E","pages":[{"path":"...","content":"...","annotation":"\u043E\u0434\u043D\u043E \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u2014 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430 \u043F\u043E \u0441\u043C\u044B\u0441\u043B\u0443"}]}\n\u0415\u0441\u043B\u0438 \u043F\u0440\u0430\u0432\u043E\u043A \u043D\u0435\u0442 \u2014 pages \u043F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432, summary \u2014 \u0442\u0435\u043A\u0441\u0442\u043E\u0432\u044B\u0439 \u043E\u0442\u0432\u0435\u0442.\n{{schema_block}}\n\nLINT-\u041E\u0422\u0427\u0401\u0422:\n{{lint_report}}\n\u0421\u0422\u0420\u0410\u041D\u0418\u0426\u042B \u0414\u041E\u041C\u0415\u041D\u0410:\n{{pages_block}}\n';
 
 // src/phases/lint-chat.ts
-var META_FILES3 = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
+var META_FILES3 = ["_index.md", "_log.md"];
 async function* runLintFixChat(req, vaultTools, _vaultRoot, domain, llm, model, opts, signal) {
   const start = Date.now();
   if (!domain) {
@@ -27624,8 +27631,7 @@ async function* runLintFixChat(req, vaultTools, _vaultRoot, domain, llm, model, 
   }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
   await ensureDomainConfig(vaultTools, wikiVaultPath);
-  const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
-  const schemaContent = await tryRead4(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`);
+  const schemaContent = await tryRead4(vaultTools, GLOBAL_WIKI_SCHEMA_PATH);
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
   const files = allFiles.filter((f) => !META_FILES3.some((m) => f.endsWith(m)));
   const pages = await vaultTools.readAll(files);
@@ -27811,7 +27817,7 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
     return;
   }
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead5(vaultTools, `${wikiRootGuess}/.config/_wiki_schema.md`),
+    tryRead5(vaultTools, GLOBAL_WIKI_SCHEMA_PATH),
     tryRead5(vaultTools, domainIndexPath(wikiRootGuess))
   ]);
   let currentDomain = existing ?? null;
@@ -28025,9 +28031,8 @@ async function tryRead5(vaultTools, path2) {
   }
 }
 async function ensureRootFiles(vaultTools, wikiRoot) {
-  const configDir = `${wikiRoot}/.config`;
-  const wikiSchema = `${configDir}/_wiki_schema.md`;
-  const formatSchema = `${configDir}/_format_schema.md`;
+  const wikiSchema = GLOBAL_WIKI_SCHEMA_PATH;
+  const formatSchema = GLOBAL_FORMAT_SCHEMA_PATH;
   const legacyIndex = `${wikiRoot}/_index.md`;
   const legacyLog = `${wikiRoot}/_log.md`;
   try {
@@ -28035,7 +28040,7 @@ async function ensureRootFiles(vaultTools, wikiRoot) {
   } catch {
   }
   try {
-    await vaultTools.mkdir(configDir);
+    await vaultTools.mkdir(GLOBAL_CONFIG_DIR);
   } catch {
   }
   try {
@@ -28242,7 +28247,7 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
     yield { kind: "error", message: `Format: cannot read ${filePath}` };
     return;
   }
-  const formatSchemaPath = `${WIKI_ROOT}/.config/_format_schema.md`;
+  const formatSchemaPath = GLOBAL_FORMAT_SCHEMA_PATH;
   let formatSchema;
   try {
     formatSchema = await vaultTools.read(formatSchemaPath);
@@ -28412,11 +28417,11 @@ var AgentRunner = class {
   async writeDevLog(_vaultRoot, entry) {
     if (!this.settings.devMode?.enabled) return;
     const adapter = this.vaultTools.adapter;
-    const path2 = "!Wiki/.config/_dev.jsonl";
+    const path2 = GLOBAL_DEV_LOG_PATH;
     try {
       if (!await adapter.exists("!Wiki")) await adapter.mkdir("!Wiki").catch(() => {
       });
-      if (!await adapter.exists("!Wiki/.config")) await adapter.mkdir("!Wiki/.config").catch(() => {
+      if (!await adapter.exists("!Wiki/_config")) await adapter.mkdir("!Wiki/_config").catch(() => {
       });
       const line = JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), ...entry, eval: null }) + "\n";
       if (await adapter.exists(path2)) await adapter.append(path2, line);
@@ -28506,7 +28511,7 @@ var AgentRunner = class {
   async updateDevLogEval(_vaultRoot, score, reasoning) {
     if (!this.settings.devMode?.enabled) return;
     const adapter = this.vaultTools.adapter;
-    const path2 = "!Wiki/.config/_dev.jsonl";
+    const path2 = GLOBAL_DEV_LOG_PATH;
     try {
       if (!await adapter.exists(path2)) return;
       const content = await adapter.read(path2);
@@ -36195,10 +36200,10 @@ function mkChunk(base, delta, finish_reason = null, usage = null) {
 }
 
 // src/domain-store.ts
-var FILE_PATH = "!Wiki/.config/_domain.json";
+var FILE_PATH = GLOBAL_DOMAIN_PATH;
 var TMP_PATH = `${FILE_PATH}.tmp`;
-var WIKI_DIR = "!Wiki";
-var CONFIG_DIR = "!Wiki/.config";
+var WIKI_DIR = WIKI_ROOT;
+var CONFIG_DIR = GLOBAL_CONFIG_DIR;
 var DomainCorruptError = class extends Error {
   constructor(message) {
     super(message);
@@ -36733,11 +36738,11 @@ var WikiController = class {
     if (!this.plugin.settings.agentLogEnabled) return;
     if (ev.kind === "assistant_text") return;
     const adapter = this.app.vault.adapter;
-    const path2 = "!Wiki/.config/_agent.jsonl";
+    const path2 = GLOBAL_AGENT_LOG_PATH;
     try {
       if (!await adapter.exists("!Wiki")) await this.app.vault.createFolder("!Wiki").catch(() => {
       });
-      if (!await adapter.exists("!Wiki/.config")) await this.app.vault.createFolder("!Wiki/.config").catch(() => {
+      if (!await adapter.exists("!Wiki/_config")) await this.app.vault.createFolder("!Wiki/_config").catch(() => {
       });
       const extra = ev.kind === "result" && ev.outputTokens !== void 0 && ev.durationMs > 0 ? { tokPerSec: Math.round(ev.outputTokens / (ev.durationMs / 1e3)) } : {};
       const line = JSON.stringify({
@@ -36959,6 +36964,121 @@ var LocalConfigStore = class {
   }
 };
 
+// src/storage-migration.ts
+var OLD_GLOBAL_CONFIG = `${WIKI_ROOT}/.config`;
+var OLD_DOMAIN_PATH = `${OLD_GLOBAL_CONFIG}/_domain.json`;
+var StorageMigrationConflictError = class extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = "StorageMigrationConflictError";
+  }
+};
+async function runStorageMigration(vault) {
+  const adapter = vault.adapter;
+  if (!await adapter.exists(OLD_DOMAIN_PATH)) return;
+  if (await adapter.exists(GLOBAL_DOMAIN_PATH)) {
+    throw new StorageMigrationConflictError(
+      `Both ${OLD_GLOBAL_CONFIG} and ${GLOBAL_CONFIG_DIR} exist \u2014 interrupted migration. Remove one manually.`
+    );
+  }
+  await vault.createFolder(GLOBAL_CONFIG_DIR).catch(() => {
+  });
+  if (await adapter.exists(OLD_DOMAIN_PATH)) {
+    const content = await adapter.read(OLD_DOMAIN_PATH);
+    await adapter.write(GLOBAL_DOMAIN_PATH, content);
+  }
+  let domains = [];
+  if (await adapter.exists(GLOBAL_DOMAIN_PATH)) {
+    try {
+      domains = JSON.parse(await adapter.read(GLOBAL_DOMAIN_PATH));
+    } catch {
+    }
+  }
+  await pickAndWriteSchema(adapter, domains, "_wiki_schema.md", GLOBAL_WIKI_SCHEMA_PATH);
+  await pickAndWriteSchema(adapter, domains, "_format_schema.md", GLOBAL_FORMAT_SCHEMA_PATH);
+  for (const domain of domains) {
+    const oldConfig = `${WIKI_ROOT}/${domain.wiki_folder}/.config`;
+    const newConfig = `${WIKI_ROOT}/${domain.wiki_folder}/_config`;
+    const domainHasOldConfig = (await adapter.list(oldConfig)).files.length > 0;
+    if (!domainHasOldConfig) continue;
+    await vault.createFolder(newConfig).catch(() => {
+    });
+    for (const file of ["_index.md", "_log.md"]) {
+      const src = `${oldConfig}/${file}`;
+      if (await adapter.exists(src)) {
+        await adapter.write(`${newConfig}/${file}`, await adapter.read(src));
+      }
+    }
+    for (const [file, globalPath] of [
+      ["_agent.jsonl", GLOBAL_AGENT_LOG_PATH],
+      ["_dev.jsonl", GLOBAL_DEV_LOG_PATH]
+    ]) {
+      const src = `${oldConfig}/${file}`;
+      if (await adapter.exists(src)) {
+        await adapter.append(globalPath, await adapter.read(src));
+      }
+    }
+    await cleanDir(adapter, oldConfig, [
+      "_index.md",
+      "_log.md",
+      "_agent.jsonl",
+      "_dev.jsonl",
+      "_wiki_schema.md",
+      "_format_schema.md"
+    ]);
+  }
+  await cleanDir(adapter, OLD_GLOBAL_CONFIG, [
+    "_domain.json",
+    "_wiki_schema.md",
+    "_format_schema.md",
+    "_agent.jsonl",
+    "_dev.jsonl"
+  ]);
+}
+async function pickAndWriteSchema(adapter, domains, filename, dest) {
+  let bestContent = null;
+  let bestMtime = -1;
+  for (const domain of domains) {
+    const p = `${WIKI_ROOT}/${domain.wiki_folder}/.config/${filename}`;
+    if (!await adapter.exists(p)) continue;
+    const stat = await adapter.stat?.(p);
+    const mtime = stat?.mtime ?? 0;
+    if (mtime > bestMtime) {
+      bestMtime = mtime;
+      bestContent = await adapter.read(p);
+    }
+  }
+  if (bestContent === null) {
+    const globalOld = `${OLD_GLOBAL_CONFIG}/${filename}`;
+    if (await adapter.exists(globalOld)) {
+      bestContent = await adapter.read(globalOld);
+    }
+  }
+  if (bestContent === null) {
+    const bundled = `prompts/templates/${filename}`;
+    if (await adapter.exists(bundled)) {
+      bestContent = await adapter.read(bundled);
+    }
+  }
+  if (bestContent !== null) {
+    await adapter.write(dest, bestContent);
+  }
+}
+async function cleanDir(adapter, dir, knownFiles) {
+  for (const f of knownFiles) {
+    const p = `${dir}/${f}`;
+    if (await adapter.exists(p)) await adapter.remove(p);
+  }
+  try {
+    const listing = await adapter.list(dir);
+    if (listing.files.length === 0 && listing.folders.length === 0) {
+      await adapter.rmdir?.(dir, false).catch?.(() => {
+      });
+    }
+  } catch {
+  }
+}
+
 // src/main.ts
 var LlmWikiPlugin = class extends import_obsidian8.Plugin {
   settings;
@@ -36969,6 +37089,13 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
   async onload() {
     this.domainStore = new DomainStore(this.app.vault);
     this.localConfigStore = new LocalConfigStore(this);
+    try {
+      await runStorageMigration(this.app.vault);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      new import_obsidian8.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
+      console.error("[AI Wiki] storage migration error:", e);
+    }
     await migrateLegacyData(this, this.domainStore, this.localConfigStore);
     await this.loadSettings();
     await migrateToLocalV1(this, this.localConfigStore);
@@ -37200,7 +37327,7 @@ async function migrateLegacyData(plugin, domainStore, localConfigStore) {
   let dirty = false;
   if (Array.isArray(data.domains)) {
     if (data.domains.length > 0) {
-      const vaultExists = await plugin.app.vault.adapter.exists("!Wiki/.config/_domain.json");
+      const vaultExists = await plugin.app.vault.adapter.exists(GLOBAL_DOMAIN_PATH);
       if (!vaultExists) {
         await domainStore.save(data.domains);
       }

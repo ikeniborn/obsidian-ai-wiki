@@ -10,7 +10,7 @@ import { WikiPagesOutputSchema } from "./zod-schemas";
 import type { WikiPagesOutput } from "./zod-schemas";
 import ingestTemplate from "../../prompts/ingest.md";
 import { render } from "./template";
-import { domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
+import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField } from "../utils/raw-frontmatter";
 import { upsertIndexAnnotation } from "../wiki-index";
@@ -70,12 +70,11 @@ export async function* runIngest(
   }
 
   const domainRoot = wikiVaultPath;
-  const schemaRoot = wikiVaultPath.split("/").slice(0, -1).join("/");
 
   await ensureDomainConfig(vaultTools, domainRoot);
 
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${schemaRoot}/.config/_wiki_schema.md`),
+    tryRead(vaultTools, GLOBAL_WIKI_SCHEMA_PATH),
     tryRead(vaultTools, domainIndexPath(domainRoot)),
   ]);
 

@@ -39,18 +39,18 @@ describe("migrateLegacyData", () => {
     const { DomainStore } = await import("../src/domain-store");
     const { LocalConfigStore } = await import("../src/local-config");
     await migrateLegacyData(plugin, new DomainStore(makeVaultObj(adapter)), new LocalConfigStore(plugin));
-    expect(vaultFiles.has("!Wiki/.config/_domain.json")).toBe(true);
-    expect(JSON.parse(vaultFiles.get("!Wiki/.config/_domain.json")!)).toEqual([sampleDomain]);
+    expect(vaultFiles.has("!Wiki/_config/_domain.json")).toBe(true);
+    expect(JSON.parse(vaultFiles.get("!Wiki/_config/_domain.json")!)).toEqual([sampleDomain]);
     expect(plugin.getStored().domains).toBeUndefined();
   });
 
   it("does not overwrite existing vault file", async () => {
     const existing = [{ id: "existing", name: "E", wiki_folder: "e" }];
     const vaultFiles = new Map<string, string>([
-      ["!Wiki/.config/_domain.json", JSON.stringify(existing)],
+      ["!Wiki/_config/_domain.json", JSON.stringify(existing)],
     ]);
     const adapter = {
-      exists: vi.fn().mockImplementation(async (p: string) => vaultFiles.has(p) || p === "!Wiki" || p === "!Wiki/.config"),
+      exists: vi.fn().mockImplementation(async (p: string) => vaultFiles.has(p) || p === "!Wiki" || p === "!Wiki/_config"),
       read: vi.fn().mockImplementation(async (p: string) => vaultFiles.get(p)!),
       write: vi.fn().mockImplementation(async (p: string, c: string) => { vaultFiles.set(p, c); }),
       rename: vi.fn(),
@@ -61,7 +61,7 @@ describe("migrateLegacyData", () => {
     const { DomainStore } = await import("../src/domain-store");
     const { LocalConfigStore } = await import("../src/local-config");
     await migrateLegacyData(plugin, new DomainStore(makeVaultObj(adapter)), new LocalConfigStore(plugin));
-    expect(JSON.parse(vaultFiles.get("!Wiki/.config/_domain.json")!)).toEqual(existing);
+    expect(JSON.parse(vaultFiles.get("!Wiki/_config/_domain.json")!)).toEqual(existing);
     expect(plugin.getStored().domains).toBeUndefined();
   });
 

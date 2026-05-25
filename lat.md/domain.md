@@ -4,7 +4,7 @@ A domain is the unit of organization for a knowledge wiki. Each domain has an id
 
 ## DomainEntry
 
-Core domain record stored in `!Wiki/.config/_domain.json` via `DomainStore`. Fields: `id`, `name`, `wiki_folder`, `source_paths`, `entity_types`, `language_notes`, `analyzed_sources`.
+Core domain record stored in `!Wiki/_config/_domain.json` via `DomainStore`. Fields: `id`, `name`, `wiki_folder`, `source_paths`, `entity_types`, `language_notes`, `analyzed_sources`.
 
 See [[src/domain.ts#DomainEntry]], [[src/domain-store.ts#DomainStore]].
 
@@ -30,20 +30,22 @@ See [[src/domain.ts#applyDomainEvent]], [[src/types.ts#RunEvent]].
 
 ## Wiki Folder Layout
 
-All wiki artifacts live under `!Wiki/<wiki_folder>/`. The `.config/` subdirectory holds metadata files:
+All wiki artifacts live under `!Wiki/`. Global config lives in `!Wiki/_config/`; per-domain config in `!Wiki/<domain>/_config/`:
 
 ```
 !Wiki/
+  _config/                       — global config (all domains)
+    _domain.json                 — domain entries list
+    _wiki_schema.md              — LLM wiki conventions (shared)
+    _format_schema.md            — format conventions (shared)
+    _agent.jsonl                 — global operation log
+    _dev.jsonl                   — dev mode eval log
   <domain>/
-    .config/
-      _domain.json       — domain entries list
-      _wiki_schema.md    — LLM wiki conventions (vault copy)
-      _format_schema.md  — format conventions (vault copy)
-      _index.md          — page annotations index
-      _agent.jsonl       — operation log (if enabled)
-      _dev.jsonl         — dev mode eval log
+    _config/                     — per-domain config
+      _index.md                  — page annotations index
+      _log.md                    — ingest/lint operation log
     <EntityType>/
-      PageName.md        — wiki page
+      PageName.md                — wiki page
 ```
 
 See [[src/wiki-path.ts#domainWikiFolder]], [[src/wiki-path.ts#domainIndexPath]].
@@ -53,6 +55,6 @@ See [[src/wiki-path.ts#domainWikiFolder]], [[src/wiki-path.ts#domainIndexPath]].
 `_wiki_schema.md` and `_format_schema.md` exist in two places:
 
 - **Bundled** (`prompts/templates/`): used by init and as fallback.
-- **Vault copy** (`!Wiki/<domain>/.config/`): read at runtime by ingest, lint, lint-chat, format.
+- **Vault copy** (`!Wiki/_config/`): read at runtime by ingest, lint, lint-chat, format. Shared by all domains.
 
 Changes to the bundled template do not propagate to existing vaults automatically.

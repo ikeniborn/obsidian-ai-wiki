@@ -36,7 +36,7 @@ flowchart TD
     end
 
     NEW --> INIT
-    INIT -->|"DomainEntry, entity_types, _wiki_schema.md, _format_schema.md"| INGEST
+    INIT -->|"DomainEntry, entity_types, !Wiki/_config/_wiki_schema.md, !Wiki/_config/_format_schema.md"| INGEST
     INGEST -->|"wiki pages, _index.md"| QUERY
     INGEST -->|"wiki pages"| LINT
     LINT -->|"lint report"| LINTCHAT
@@ -70,7 +70,7 @@ flowchart TD
 
 | Операция | Требует | Производит |
 |---|---|---|
-| **init** | — | `DomainEntry`, `entity_types`, `_wiki_schema.md`, `_format_schema.md` |
+| **init** | — | `DomainEntry`, `entity_types`, `!Wiki/_config/_wiki_schema.md`, `!Wiki/_config/_format_schema.md` |
 | **ingest** | `DomainEntry`, `_wiki_schema.md` | wiki-страницы, `_index.md` (обновление), `analyzed_sources` |
 | **query / query-save** | `DomainEntry`, `_index.md`, wiki-страницы | ответ / `Q-*.md` |
 | **lint** | `DomainEntry`, wiki-страницы | lint-отчёт + `domain_updated` (entity_types) |
@@ -113,10 +113,10 @@ flowchart LR
         FMT_SCHEMA["_format_schema.md"]
     end
 
-    subgraph vault["vault runtime read"]
-        V_WIKI[".config/_wiki_schema.md"]
-        V_FMT[".config/_format_schema.md"]
-        V_IDX["_index.md"]
+    subgraph vault["vault runtime read (global + per-domain)"]
+        V_WIKI["!Wiki/_config/_wiki_schema.md (global)"]
+        V_FMT["!Wiki/_config/_format_schema.md (global)"]
+        V_IDX["<domain>/_config/_index.md"]
     end
 
     BASE["base.md system"]
@@ -310,8 +310,8 @@ Phase 4: основной query-вызов (streaming, free text)
 | `init.md` | `init`, файл 0 (bootstrap) | Создание полной записи домена (`entity_types`, `wiki_folder`, …) | В примере `wiki_folder` показывал `"{{domain_id}}"` вместо корректного формата. **Исправлено.** |
 | `format.md` | `format` | Форматирование произвольной markdown-страницы | Не связан с доменной wiki — намеренно. Дублирует часть правил из `_format_schema.md` |
 | `evaluator.md` | `agent-runner`, devMode | Оценка качества результата операции (score 0–10) | Рендерится в роль `user`, но `base.md` применяется как `system` через `buildChatParams`. Вызывается после каждой операции при devMode |
-| `_wiki_schema.md` | `init` (bundled), `ingest`/`lint`/`lint-chat` (vault read) | Конвенции wiki-страниц: frontmatter, структура, стиль | Изменения в bundled-шаблоне не попадают в существующие vaults автоматически |
-| `_format_schema.md` | `init` (bundled, записывается в vault), `format` (vault read) | Конвенции форматирования не-wiki страниц | При `init` пишется в vault как дефолт — изменения в `templates/` не обновляют существующие vaults |
+| `_wiki_schema.md` | `init` (bundled), `ingest`/`lint`/`lint-chat` (vault read) | Конвенции wiki-страниц: frontmatter, структура, стиль. Путь: `!Wiki/_config/_wiki_schema.md` (shared by all domains) | Изменения в bundled-шаблоне не попадают в существующие vaults автоматически |
+| `_format_schema.md` | `init` (bundled, записывается в vault), `format` (vault read) | Конвенции форматирования не-wiki страниц. Путь: `!Wiki/_config/_format_schema.md` (shared by all domains) | При `init` пишется в vault как дефолт — изменения в `templates/` не обновляют существующие vaults |
 
 ## Замечания для архитектурного анализа
 
