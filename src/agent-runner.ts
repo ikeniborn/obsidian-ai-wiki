@@ -47,11 +47,7 @@ export class AgentRunner {
 
   private buildSimilarity(): PageSimilarityService | undefined {
     if (this.settings.backend !== "native-agent") return undefined;
-    const na = this.settings.nativeAgent as typeof this.settings.nativeAgent & {
-      embeddingModel?: string;
-      embeddingDimensions?: number;
-      relevantPagesTopK?: number;
-    };
+    const na = this.settings.nativeAgent;
     return new PageSimilarityService({
       mode: na.embeddingModel ? "embedding" : "jaccard",
       model: na.embeddingModel,

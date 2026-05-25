@@ -159,6 +159,9 @@ export interface LlmWikiPluginSettings {
     operations: OpMap<NativeOperationConfig>;
     structuredRetries: number;
     thinkingBudgetTokens?: number;
+    embeddingModel?: string;
+    embeddingDimensions?: number;
+    relevantPagesTopK?: number;
   };
   devMode: {
     enabled: boolean;

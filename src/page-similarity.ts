@@ -134,10 +134,21 @@ export class PageSimilarityService {
     const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
     const pageVecs = new Map<string, Float32Array>();
 
+    // Load vectors from in-memory cache (populated by refreshCache)
+    if (this.cache && this.cache.model === model) {
+      for (let i = 0; i < pids.length; i++) {
+        const entry = this.cache.entries[pids[i]];
+        if (entry) {
+          pageVecs.set(pids[i], decodeVector(entry.vector));
+        }
+      }
+    }
+
     const batches: { pids: string[]; texts: string[] }[] = [];
     let cur: { pids: string[]; texts: string[] } = { pids: [], texts: [] };
     for (let i = 0; i < pids.length; i++) {
       if (!annotations[i]) continue;
+      if (pageVecs.has(pids[i])) continue;  // already have from cache
       cur.pids.push(pids[i]);
       cur.texts.push(annotations[i]);
       if (cur.pids.length >= EMBEDDING_BATCH_SIZE) {
