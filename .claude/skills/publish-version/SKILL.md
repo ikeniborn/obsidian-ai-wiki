@@ -37,9 +37,9 @@ git log <hash>..HEAD --oneline
 Фильтр исключения: коммиты с типом или scope `chore`, `docs`, `test`, `ci`, `build`; строки, содержащие только `up` или `build` в subject.
 
 Группировать по типу:
-- `feat` → раздел «Новое»
-- `fix` → раздел «Исправления»
-- `refactor`, `perf` → раздел «Прочее»
+- `feat` → раздел «New»
+- `fix` → раздел «Fixes»
+- `refactor`, `perf` → раздел «Other»
 
 Дедупликация: если два коммита имеют одинаковый `scope` И совпадают ≥2 значимых слова в subject — объединять в один пункт, оставляя наиболее полное описание.
 
@@ -54,21 +54,22 @@ Claude формирует changelog:
 ```markdown
 ## X.Y.NEW
 
-### Новое
-- feat(scope): описание
+### New
+- feat(scope): description
 
-### Исправления
-- fix(scope): описание
+### Fixes
+- fix(scope): description
 
-### Прочее
-- refactor(scope): описание
-- perf(scope): описание
+### Other
+- refactor(scope): description
+- perf(scope): description
 ```
 
 Правила формата:
 - Версия без префикса `v` (`X.Y.NEW`, не `vX.Y.NEW`).
 - Пустые разделы не выводить (без заголовка).
 - Описания — из сообщения коммита, без хэша.
+- **Весь changelog — только английский.** Заголовки разделов и описания пунктов.
 
 Claude показывает draft и ждёт явного подтверждения. Пользователь может удалять пункты, переформулировать, добавлять свои.
 
@@ -168,6 +169,27 @@ git push origin master
 
 CI (`ci: auto-release on manifest version bump`) подхватывает изменение `manifest.json` и создаёт GitHub Release автоматически.
 
+### 7. Перезаписать ноты релиза
+
+**Обязательный шаг.** CI генерирует ноты автоматически по PR-заголовкам — они не совпадают с согласованным changelog. Дождаться появления релиза (~30 сек), затем перезаписать:
+
+```bash
+# Подождать появления релиза
+sleep 30
+
+# Проверить что релиз создан
+gh release view X.Y.NEW
+
+# Перезаписать ноты
+gh release edit X.Y.NEW --notes "<полный changelog из шага 0c>
+
+**Full Changelog**: https://github.com/ikeniborn/obsidian-ai-wiki/compare/X.Y.OLD...X.Y.NEW"
+```
+
+Формат нот — тот же markdown, что в шаге 0c (разделы «Новое», «Исправления», «Прочее»).
+
+**Если `gh release view` возвращает ошибку** — CI ещё не завершился. Повторить через 15 сек.
+
 ## Итоговый summary
 
 ```
@@ -175,6 +197,7 @@ CI (`ci: auto-release on manifest version bump`) подхватывает изм
 Changelog: <N> изменений согласовано
 Файлы: package.json, src/manifest.json, manifest.json, dist/manifest.json, dist/main.js, CHANGELOG.md
 Коммит: chore(release): X.Y.NEW — <summary>
+GitHub Release: ноты перезаписаны вручную
 CI: авторелиз запущен
 ```
 
@@ -191,3 +214,6 @@ CI: авторелиз запущен
 | Нет коммитов feat/fix/refactor/perf | Показать предупреждение и спросить пользователя; не переходить к шагу 1 без явного ответа |
 | Не дождался подтверждения changelog | Вернуться к шагу 0c, показать draft, дождаться «ок» |
 | Не включил CHANGELOG.md в коммит | Шесть файлов: добавить CHANGELOG.md в `git add` |
+| Описания пунктов на русском | Язык описаний — только английский |
+| Не перезаписал ноты релиза | CI пишет автоноты по PR — всегда выполнять шаг 7 |
+| `gh release view` — ошибка сразу после push | CI ещё не завершился, подождать 15 сек и повторить |
