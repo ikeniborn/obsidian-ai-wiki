@@ -2,6 +2,47 @@
 title: Embedding UI fix + Ingest progress entity breakdown
 date: 2026-05-25
 status: approved
+review:
+  spec_hash: b095cedc581f9fdf
+  last_run: 2026-05-25
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: WARNING
+      section: "Block 1: Toggle fix + UI grouping (`src/settings.ts`)"
+      section_hash: 2e639512b0ab83c6
+      text: >
+        "No changes to `types.ts`" в §Block 1 (строка 34) противоречит §Block 2,
+        который добавляет `info_text` в `types.ts`. Формулировка должна уточнять,
+        что ограничение относится только к toggle-фиксу.
+      verdict: accepted
+      verdict_at: 2026-05-25
+    - id: F-002
+      phase: clarity
+      severity: INFO
+      section: "Block 2: New `info_text` event kind (`src/types.ts`, `src/view.ts`)"
+      section_hash: b2bb6afd9a0239fd
+      text: >
+        Нет DoD для CSS-класса и HTML-элемента step-item в view.ts.
+        Детали рендеринга оставлены на план — допустимо для спеки.
+      verdict: wontfix
+      verdict_at: 2026-05-25
+    - id: F-003
+      phase: clarity
+      severity: INFO
+      section: "Block 3: Entity breakdown in ingest progress (`src/phases/ingest.ts`, `src/phases/init.ts`)"
+      section_hash: bb5e2cbff4cc892a
+      text: >
+        Нет определённого поведения при topK > 15 (длинный список details).
+        Спека говорит «entity list is short» как обоснование no-collapsible,
+        но не задаёт fallback при большом K.
+      verdict: accepted
+      verdict_at: 2026-05-25
 ---
 
 # Embedding UI fix + Ingest progress entity breakdown
