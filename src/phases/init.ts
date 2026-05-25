@@ -9,7 +9,7 @@ import formatSchemaDefault from "../../templates/_format_schema.md";
 import initTemplate from "../../prompts/init.md";
 import { render } from "./template";
 import { runIngest } from "./ingest";
-import { domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath } from "../wiki-path";
+import { GLOBAL_CONFIG_DIR, GLOBAL_WIKI_SCHEMA_PATH, GLOBAL_FORMAT_SCHEMA_PATH, domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath } from "../wiki-path";
 
 export async function* runInit(
   args: string[],
@@ -145,7 +145,7 @@ export async function* runInitWithSources(
   }
 
   const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, `${wikiRootGuess}/.config/_wiki_schema.md`),
+    tryRead(vaultTools, GLOBAL_WIKI_SCHEMA_PATH),
     tryRead(vaultTools, domainIndexPath(wikiRootGuess)),
   ]);
 
@@ -357,14 +357,13 @@ async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
 }
 
 async function ensureRootFiles(vaultTools: VaultTools, wikiRoot: string): Promise<void> {
-  const configDir    = `${wikiRoot}/.config`;
-  const wikiSchema   = `${configDir}/_wiki_schema.md`;
-  const formatSchema = `${configDir}/_format_schema.md`;
+  const wikiSchema   = GLOBAL_WIKI_SCHEMA_PATH;
+  const formatSchema = GLOBAL_FORMAT_SCHEMA_PATH;
   const legacyIndex  = `${wikiRoot}/_index.md`;
   const legacyLog    = `${wikiRoot}/_log.md`;
 
   try { await vaultTools.mkdir(wikiRoot); } catch { /* already exists */ }
-  try { await vaultTools.mkdir(configDir); } catch { /* already exists */ }
+  try { await vaultTools.mkdir(GLOBAL_CONFIG_DIR); } catch { /* already exists */ }
 
   try {
     if (!(await vaultTools.exists(wikiSchema)))   await vaultTools.write(wikiSchema, schemaTemplate);

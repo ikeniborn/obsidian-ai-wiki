@@ -280,11 +280,11 @@ describe("runLint", () => {
     const adapter = mockAdapter({
       list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
       read: vi.fn().mockImplementation((path: string) => {
-        if (path === "!Wiki/work/.config/_log.md") return Promise.resolve(logContent);
+        if (path === "!Wiki/work/_config/_log.md") return Promise.resolve(logContent);
         return Promise.resolve("---\nwiki_status: stub\n---\n# Page");
       }),
       write: vi.fn().mockImplementation((path: string, content: string) => {
-        if (path === "!Wiki/work/.config/_log.md") logContent = content;
+        if (path === "!Wiki/work/_config/_log.md") logContent = content;
         return Promise.resolve();
       }),
     });
@@ -338,7 +338,7 @@ describe("runLint", () => {
       exists: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
       read: vi.fn().mockImplementation((path: string) => {
-        if (path === "!Wiki/.config/_wiki_schema.md") return Promise.resolve(schemaContent);
+        if (path === "!Wiki/_config/_wiki_schema.md") return Promise.resolve(schemaContent);
         return Promise.resolve("---\ntags: []\n---\n# Page\n\nContent.");
       }),
     });
@@ -359,7 +359,7 @@ describe("runLint", () => {
       exists: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
       read: vi.fn().mockImplementation((path: string) => {
-        if (path === "!Wiki/.config/_wiki_schema.md") return Promise.reject(new Error("not found"));
+        if (path === "!Wiki/_config/_wiki_schema.md") return Promise.reject(new Error("not found"));
         return Promise.resolve("---\ntags: []\n---\n# Page\n\nContent.");
       }),
     });

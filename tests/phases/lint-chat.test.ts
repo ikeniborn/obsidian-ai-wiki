@@ -137,7 +137,7 @@ describe("runLintFixChat", () => {
     const writeCalls = (vaultTools.write as ReturnType<typeof vi.fn>).mock.calls;
     const indexCall = writeCalls.find(([p]: [string]) => p.endsWith("_index.md"));
     expect(indexCall).toBeDefined();
-    expect(indexCall![0]).toBe(`${wikiPath}/.config/_index.md`);
+    expect(indexCall![0]).toBe(`${wikiPath}/_config/_index.md`);
     expect(indexCall![1]).toContain("- [[MyPage]] MyPage.md — summary of MyPage");
   });
 
@@ -147,7 +147,7 @@ describe("runLintFixChat", () => {
     const pages = { [`${wikiPath}/Page.md`]: "---\ntags: []\n---\n# Page" };
     const vaultTools = makeVaultTools(pages);
     (vaultTools.read as ReturnType<typeof vi.fn>).mockImplementation(async (path: string) => {
-      if (path === "!Wiki/.config/_wiki_schema.md") return schemaContent;
+      if (path === "!Wiki/_config/_wiki_schema.md") return schemaContent;
       throw new Error("not found");
     });
 
