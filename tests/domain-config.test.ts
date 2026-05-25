@@ -34,19 +34,19 @@ describe("ensureDomainConfig", () => {
   it("creates .config directory", async () => {
     const { vt, mkdirCalls } = makeVt();
     await ensureDomainConfig(vt, "!Wiki/ии");
-    expect(mkdirCalls).toContain("!Wiki/ии/.config");
+    expect(mkdirCalls).toContain("!Wiki/ии/_config");
   });
 
   it("migrates _index.md when old exists and new does not", async () => {
     const { vt, writeCalls, removeCalls } = makeVt({
       existsMap: {
         "!Wiki/ии/_index.md": true,
-        "!Wiki/ии/.config/_index.md": false,
+        "!Wiki/ии/_config/_index.md": false,
       },
       readMap: { "!Wiki/ии/_index.md": "# Index content" },
     });
     await ensureDomainConfig(vt, "!Wiki/ии");
-    expect(writeCalls).toContainEqual(["!Wiki/ии/.config/_index.md", "# Index content"]);
+    expect(writeCalls).toContainEqual(["!Wiki/ии/_config/_index.md", "# Index content"]);
     expect(removeCalls).toContain("!Wiki/ии/_index.md");
   });
 
@@ -54,12 +54,12 @@ describe("ensureDomainConfig", () => {
     const { vt, writeCalls, removeCalls } = makeVt({
       existsMap: {
         "!Wiki/ии/_log.md": true,
-        "!Wiki/ии/.config/_log.md": false,
+        "!Wiki/ии/_config/_log.md": false,
       },
       readMap: { "!Wiki/ии/_log.md": "## log entry" },
     });
     await ensureDomainConfig(vt, "!Wiki/ии");
-    expect(writeCalls).toContainEqual(["!Wiki/ии/.config/_log.md", "## log entry"]);
+    expect(writeCalls).toContainEqual(["!Wiki/ии/_config/_log.md", "## log entry"]);
     expect(removeCalls).toContain("!Wiki/ии/_log.md");
   });
 
@@ -67,7 +67,7 @@ describe("ensureDomainConfig", () => {
     const { vt, writeCalls, removeCalls } = makeVt({
       existsMap: {
         "!Wiki/ии/_index.md": true,
-        "!Wiki/ии/.config/_index.md": true,
+        "!Wiki/ии/_config/_index.md": true,
       },
     });
     await ensureDomainConfig(vt, "!Wiki/ии");

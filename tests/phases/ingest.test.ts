@@ -319,11 +319,11 @@ describe("runIngest", () => {
       read: vi.fn().mockImplementation(async (path: string) => {
         if (path === "Sources/doc.md") return "source text";
         if (existingPaths.has(path)) return existingContent;
-        if (path === "!Wiki/work/.config/_log.md") return logContent;
+        if (path === "!Wiki/work/_config/_log.md") return logContent;
         throw new Error("not found");
       }),
       write: vi.fn().mockImplementation(async (path: string, content: string) => {
-        if (path === "!Wiki/work/.config/_log.md") logContent = content;
+        if (path === "!Wiki/work/_config/_log.md") logContent = content;
       }),
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
@@ -354,7 +354,7 @@ describe("runIngest", () => {
     const llm = makeLlm(JSON.stringify({ reasoning: "x", pages: [] }));
     await collect(runIngest([`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "model", [domain], VAULT_ROOT,
       new AbortController().signal));
-    expect(schemaReadPath).toContain(".config/_wiki_schema.md");
+    expect(schemaReadPath).toContain("_config/_wiki_schema.md");
   });
 });
 

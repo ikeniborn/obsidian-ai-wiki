@@ -91,7 +91,7 @@ describe("upsertIndexAnnotation", () => {
   it("writes to correct path", async () => {
     const { vt } = makeVt();
     await upsertIndexAnnotation(vt, "!Wiki/work", "P", "d", "!Wiki/work/ops/p.md");
-    expect((vt.write as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe("!Wiki/work/.config/_index.md");
+    expect((vt.write as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe("!Wiki/work/_config/_index.md");
   });
 
   it("appends new entry to existing section", async () => {
