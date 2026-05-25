@@ -146,11 +146,13 @@ export class ClaudeCliClient implements LlmClient {
     if (signal?.aborted) { onAbort(); return; }
     signal?.addEventListener("abort", onAbort, { once: true });
 
-    const timeoutHandle = window.setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGTERM");
-      window.setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, SIGTERM_GRACE_MS);
-    }, timeoutSec * 1000);
+    const timeoutHandle = timeoutSec > 0
+      ? window.setTimeout(() => {
+          timedOut = true;
+          child.kill("SIGTERM");
+          window.setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, SIGTERM_GRACE_MS);
+        }, timeoutSec * 1000)
+      : null;
 
     let timedOut = false;
     const queue: OpenAI.Chat.ChatCompletionChunk[] = [];
@@ -216,7 +218,7 @@ export class ClaudeCliClient implements LlmClient {
         choices: [{ index: 0, delta: {} as OpenAI.Chat.ChatCompletionChunk.Choice.Delta, finish_reason: "stop" }],
       };
     } finally {
-      window.clearTimeout(timeoutHandle);
+      if (timeoutHandle !== null) window.clearTimeout(timeoutHandle);
       signal?.removeEventListener("abort", onAbort);
       for (const f of tmpFiles) { try { this.cfg.tmpRemove(f); } catch { /* already gone */ } }
       if (child.exitCode === null) {
