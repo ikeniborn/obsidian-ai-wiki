@@ -95,7 +95,7 @@ const devOffSettings: LlmWikiPluginSettings = {
 // ---------------------------------------------------------------------------
 
 describe("AgentRunner dev log — path validation", () => {
-  it("writeDevLog writes to !Wiki/.config/_dev.jsonl when devMode enabled", async () => {
+  it("writeDevLog writes to !Wiki/_config/_dev.jsonl when devMode enabled", async () => {
     const adapter = mockAdapter();
     const vt = new VaultTools(adapter, "/vault");
     const runner = new AgentRunner(makeLlm("The answer."), devOnSettings, vt, "TestVault", [testDomain]);
@@ -116,7 +116,7 @@ describe("AgentRunner dev log — path validation", () => {
     const appendPaths = (adapter.append as ReturnType<typeof vi.fn>).mock.calls.map(
       (c: unknown[]) => c[0] as string,
     );
-    expect([...writePaths, ...appendPaths]).toContain("!Wiki/.config/_dev.jsonl");
+    expect([...writePaths, ...appendPaths]).toContain("!Wiki/_config/_dev.jsonl");
   });
 
   it("writeDevLog does NOT write _dev.jsonl when devMode disabled", async () => {
@@ -140,10 +140,10 @@ describe("AgentRunner dev log — path validation", () => {
     const appendPaths = (adapter.append as ReturnType<typeof vi.fn>).mock.calls.map(
       (c: unknown[]) => c[0] as string,
     );
-    expect([...writePaths, ...appendPaths]).not.toContain("!Wiki/.config/_dev.jsonl");
+    expect([...writePaths, ...appendPaths]).not.toContain("!Wiki/_config/_dev.jsonl");
   });
 
-  it("updateDevLogEval patches last line of !Wiki/.config/_dev.jsonl with eval score", async () => {
+  it("updateDevLogEval patches last line of !Wiki/_config/_dev.jsonl with eval score", async () => {
     // createMockAdapter is stateful: write() stores data, read() retrieves it.
     // This lets writeDevLog write the file and updateDevLogEval read it back in one run.
     const statefulAdapter = createMockAdapter();
@@ -174,7 +174,7 @@ describe("AgentRunner dev log — path validation", () => {
       }),
     );
 
-    const written = statefulAdapter.files.get("!Wiki/.config/_dev.jsonl");
+    const written = statefulAdapter.files.get("!Wiki/_config/_dev.jsonl");
     expect(written).toBeDefined();
     const lastLine = written!.trimEnd().split("\n").at(-1)!;
     const parsed = JSON.parse(lastLine) as { eval: { score: number; reasoning: string } };

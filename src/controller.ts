@@ -20,7 +20,7 @@ import { DomainCorruptError } from "./domain-store";
 import type { LocalConfig, LocalConfigStore } from "./local-config";
 import type { LlmWikiPluginSettings } from "./types";
 import { FileErrorModal, ConfirmModal, ShellConsentModal } from "./modals";
-import { domainWikiFolder } from "./wiki-path";
+import { domainWikiFolder, GLOBAL_AGENT_LOG_PATH } from "./wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
 import { collectMdInPaths, parseWikiSources } from "./utils/vault-walk";
@@ -538,10 +538,10 @@ export class WikiController {
     if (!this.plugin.settings.agentLogEnabled) return;
     if (ev.kind === "assistant_text") return;
     const adapter = this.app.vault.adapter;
-    const path = "!Wiki/.config/_agent.jsonl";
+    const path = GLOBAL_AGENT_LOG_PATH;
     try {
       if (!(await adapter.exists("!Wiki"))) await this.app.vault.createFolder("!Wiki").catch(() => {});
-      if (!(await adapter.exists("!Wiki/.config"))) await this.app.vault.createFolder("!Wiki/.config").catch(() => {});
+      if (!(await adapter.exists("!Wiki/_config"))) await this.app.vault.createFolder("!Wiki/_config").catch(() => {});
       const extra = ev.kind === "result" && ev.outputTokens !== undefined && ev.durationMs > 0
         ? { tokPerSec: Math.round(ev.outputTokens / (ev.durationMs / 1000)) }
         : {};

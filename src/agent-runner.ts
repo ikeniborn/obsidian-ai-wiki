@@ -10,6 +10,7 @@ import { runFormat } from "./phases/format";
 import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, OpKey, RunEvent, RunRequest } from "./types";
 import type { VaultTools } from "./vault-tools";
 import { wrapWithJsonFallback } from "./phases/llm-utils";
+import { GLOBAL_DEV_LOG_PATH } from "./wiki-path";
 
 export class AgentRunner {
   private llm: LlmClient;
@@ -53,10 +54,10 @@ export class AgentRunner {
   }): Promise<void> {
     if (!this.settings.devMode?.enabled) return;
     const adapter = this.vaultTools.adapter;
-    const path = "!Wiki/.config/_dev.jsonl";
+    const path = GLOBAL_DEV_LOG_PATH;
     try {
       if (!(await adapter.exists("!Wiki"))) await adapter.mkdir("!Wiki").catch(() => {});
-      if (!(await adapter.exists("!Wiki/.config"))) await adapter.mkdir("!Wiki/.config").catch(() => {});
+      if (!(await adapter.exists("!Wiki/_config"))) await adapter.mkdir("!Wiki/_config").catch(() => {});
       const line = JSON.stringify({ ts: new Date().toISOString(), ...entry, eval: null }) + "\n";
       if (await adapter.exists(path)) await adapter.append(path, line);
       else await adapter.write(path, line);
@@ -159,7 +160,7 @@ export class AgentRunner {
   private async updateDevLogEval(_vaultRoot: string, score: number, reasoning: string): Promise<void> {
     if (!this.settings.devMode?.enabled) return;
     const adapter = this.vaultTools.adapter;
-    const path = "!Wiki/.config/_dev.jsonl";
+    const path = GLOBAL_DEV_LOG_PATH;
     try {
       if (!(await adapter.exists(path))) return;
       const content = await adapter.read(path);
