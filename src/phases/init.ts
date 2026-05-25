@@ -23,6 +23,7 @@ export async function* runInit(
   signal: AbortSignal,
   opts: LlmCallOptions = {},
   onFileError?: OnFileError,
+  similarity?: PageSimilarityService,
 ): AsyncGenerator<RunEvent> {
   const domainId = args[0];
   const dryRun = args.includes("--dry-run");
@@ -71,14 +72,14 @@ export async function* runInit(
     existing.language_notes = "";
 
     yield* runInitWithSources(
-      domainId, effectiveSources, false, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, true,
+      domainId, effectiveSources, false, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, true, similarity,
     );
     return;
   }
 
   if (sourcePaths.length) {
     yield* runInitWithSources(
-      domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError,
+      domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, false, similarity,
     );
     return;
   }
@@ -96,7 +97,7 @@ export async function* runInit(
     yield { kind: "error", message: `init: no source_paths configured for "${domainId}" — add them in settings` };
     return;
   }
-  yield* runInitWithSources(domainId, effectiveSources, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError);
+  yield* runInitWithSources(domainId, effectiveSources, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, false, similarity);
 }
 
 export async function* runInitWithSources(
