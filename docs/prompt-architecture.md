@@ -19,7 +19,7 @@ flowchart TD
     end
 
     subgraph s3["3) Работа с вики"]
-        QUERY["query / query-save"]
+        QUERY["query"]
         LINT["lint"]
     end
 
@@ -72,8 +72,8 @@ flowchart TD
 |---|---|---|
 | **init** | — | `DomainEntry`, `entity_types`, `!Wiki/_config/_wiki_schema.md`, `!Wiki/_config/_format_schema.md` |
 | **ingest** | `DomainEntry`, `_wiki_schema.md` | wiki-страницы, `_index.md` (обновление), `analyzed_sources` |
-| **query / query-save** | `DomainEntry`, `_index.md`, wiki-страницы | ответ / `Q-*.md` |
-| **lint** | `DomainEntry`, wiki-страницы | lint-отчёт + `domain_updated` (entity_types) |
+| **query** | `DomainEntry`, `_index.md`, wiki-страницы | ответ |
+| **lint** | `DomainEntry`, wiki-страницы | lint-отчёт + исправленные страницы + `domain_updated` (entity_types) |
 | **lint-chat** | `DomainEntry`, lint-отчёт, wiki-страницы | исправленные wiki-страницы |
 | **chat** | результат любой предыдущей операции | диалог |
 | **format** | произвольная страница, `_format_schema.md` | отформатированная страница |
@@ -88,7 +88,7 @@ flowchart TD
     AR --> OP{"operation"}
 
     OP -->|ingest| PI["phases/ingest.ts"]
-    OP -->|"query / query-save"| PQ["phases/query.ts"]
+    OP -->|query| PQ["phases/query.ts"]
     OP -->|lint| PL["phases/lint.ts"]
     OP -->|chat| PC["phases/chat.ts"]
     OP -->|lint-chat| PLC["phases/lint-chat.ts"]
@@ -116,7 +116,7 @@ flowchart LR
     subgraph vault["vault runtime read (global + per-domain)"]
         V_WIKI["!Wiki/_config/_wiki_schema.md (global)"]
         V_FMT["!Wiki/_config/_format_schema.md (global)"]
-        V_IDX["<domain>/_config/_index.md"]
+        V_IDX["domain/_config/_index.md"]
     end
 
     BASE["base.md system"]
@@ -173,19 +173,19 @@ flowchart TD
     MSGS["messages от фазы"]
 
     MSGS --> PBC["prependBaseContract"]
-    PBC -->|"system найден"| PREPEND["base.md + '\n\n' + existing system"]
+    PBC -->|"system найден"| PREPEND["base.md + newline + existing system"]
     PBC -->|"system не найден"| INSERT["новый system = base.md"]
 
     PREPEND --> ISP
     INSERT --> ISP
 
     ISP{"opts.systemPrompt?"}
-    ISP -->|да| INJECT["append '## Уточнение\n' + systemPrompt"]
+    ISP -->|да| INJECT["append Уточнение + systemPrompt"]
     ISP -->|нет| FINAL
 
     INJECT --> FINAL["финальный messages[]"]
 
-    FINAL --> PARAMS["buildChatParams: добавить model, temperature,\nmaxTokens, jsonMode, thinkingBudget,\nstream_options"]
+    FINAL --> PARAMS["buildChatParams: добавить model, temperature, maxTokens, jsonMode, thinkingBudget, stream_options"]
 
     classDef step fill:#89b4fa,color:#1e1e2e,stroke:#74c7ec
     classDef dec  fill:#f9e2af,color:#1e1e2e,stroke:#df8e1d
@@ -205,7 +205,7 @@ flowchart TD
 
 ## parseWithRetry: структурированный вывод с ретраем
 
-Все операции с JSON-схемой (`ingest`, `lint`, `init`, `query.seeds`, `format`) используют `parseWithRetry` из `phases/parse-with-retry.ts`:
+Все операции с JSON-схемой (`ingest`, `lint`, `lint-chat`, `init`, `query.seeds`, `format`) используют `parseWithRetry` из `phases/parse-with-retry.ts`:
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'background': '#1e1e2e', 'primaryColor': '#313244', 'primaryTextColor': '#cdd6f4', 'primaryBorderColor': '#89b4fa', 'lineColor': '#888888', 'secondaryColor': '#181825', 'tertiaryColor': '#45475a'}}}%%
@@ -219,7 +219,7 @@ flowchart TD
     ZOD -->|fail| ERR_ZOD["emit structural_error schema_validate"]
     ERR_JSON --> RETRY{"attempt < maxRetries?"}
     ERR_ZOD --> RETRY
-    RETRY -->|да| APPEND["append assistant+user feedback\n→ повтор с расширенным контекстом"]
+    RETRY -->|да| APPEND["append assistant+user feedback → повтор с расширенным контекстом"]
     RETRY -->|нет| THROW["throw StructuredValidationError"]
     APPEND --> CALL
 
@@ -265,7 +265,7 @@ Phase 4: основной query-вызов (streaming, free text)
 
 ### lint: actualizeDomainConfig
 
-После основного lint-вызова — отдельный вызов `actualizeDomainConfig`:
+После основного lint-вызова (единый CoT+Structured вызов через `parseWithRetry, LintOutputSchema`) — отдельный вызов `actualizeDomainConfig`:
 - анализирует реальный контент wiki vs текущий `entity_types`
 - возвращает дельту (`EntityTypesDeltaSchema`)
 - эмитирует `domain_updated` — контроллер сохраняет в domain-map
@@ -288,9 +288,9 @@ Phase 4: основной query-вызов (streaming, free text)
 
 | Операция | Промт | Переменные `render()` | Схема ответа |
 |---|---|---|---|
-| **ingest** | `ingest.md` + `base.md` | `domain_name`, `entity_types_block`, `lang_notes`, `wiki_path`, `today`, `schema_block`, `source_path` | `WikiPagesOutputSchema` `{reasoning, pages[{path,content,annotation}], entity_types_delta?}` |
+| **ingest** | `ingest.md` + `base.md` | `domain_name`, `entity_types_block`, `lang_notes`, `wiki_path`, `today`, `schema_block`, `source_path` | `WikiPagesOutputSchema` `{reasoning, pages[{path,content,annotation?}], entity_types_delta?}` |
 | **query** | `query.md` + `base.md` | `domain_name`, `entity_types_block`, `index_block` | free text |
-| **lint** | `lint.md` + `base.md` | `domain_name`, `entity_types_block`, `schema_block` | `LintOutputSchema` `{reasoning, report, fixes[]}` |
+| **lint** | `lint.md` + `base.md` | `domain_name`, `entity_types_block`, `schema_block` | `LintOutputSchema` `{reasoning, report, fixes[{path,content,annotation?}]}` |
 | **chat** | `chat.md` + `base.md` | `operation_header`, `context` | free text |
 | **lint-chat** | `lint-chat.md` + `base.md` | `domain_name`, `lint_report`, `pages_block`, `schema_block` | `LintChatSchema` `{summary, pages[{path,content,annotation?}]}` |
 | **init** file 0 | `init.md` + `base.md` | `domain_id`, `vault_name`, `schema_block`, `index_block` | `DomainEntrySchema` `{reasoning,id,name,wiki_folder,entity_types,language_notes}` |
@@ -302,24 +302,18 @@ Phase 4: основной query-вызов (streaming, free text)
 | Промт | Используется в | Задача | Проблемы / противоречия |
 |---|---|---|---|
 | `base.md` | Все операции (system, prepend через `prependBaseContract`) | Базовый контракт: достоверность, формат, минимализм | Применяется ко ВСЕМ вызовам включая evaluator — `buildChatParams` всегда вставляет `base.md` в system |
-| `ingest.md` | `ingest` | Извлечение экземпляров сущностей из источника → wiki-страницы + обогащение `entity_types` через `entity_types_delta?` | Теперь возвращает `entity_types_delta?` — покрывает задачу `init-incremental.md`. |
-| `query.md` | `query`, `query-save` | Ответ на вопрос по wiki-индексу домена | Нет явного ограничения на длину ответа; при большом `index_block` контекст разрастается |
-| `lint.md` | `lint` | Анализ качества wiki + автоисправление страниц | — |
-| `lint-chat.md` | `lint-chat` | Интерактивное исправление по lint-отчёту | Схема ответа не включала `annotation` — код (`lint-chat.ts`) ждал его, но LLM не возвращал. **Исправлено.** |
+| `ingest.md` | `ingest` | Извлечение экземпляров сущностей из источника → wiki-страницы + обогащение `entity_types` через `entity_types_delta?` | — |
+| `query.md` | `query` | Ответ на вопрос по wiki-индексу домена | Нет явного ограничения на длину ответа; при большом `index_block` контекст разрастается |
+| `lint.md` | `lint` | Единый CoT+Structured вызов: анализ качества wiki + автоисправление страниц в одном ответе | — |
+| `lint-chat.md` | `lint-chat` | Интерактивное исправление по lint-отчёту; читает `_wiki_schema.md` → `schema_block` | — |
 | `chat.md` | `chat` | Свободный диалог по результатам операции | Не специфичен для домена: нет `entity_types_block`, `schema_block`. Контекст только через `{{context}}` |
-| `init.md` | `init`, файл 0 (bootstrap) | Создание полной записи домена (`entity_types`, `wiki_folder`, …) | В примере `wiki_folder` показывал `"{{domain_id}}"` вместо корректного формата. **Исправлено.** |
+| `init.md` | `init`, файл 0 (bootstrap) | Создание полной записи домена (`entity_types`, `wiki_folder`, …) | — |
 | `format.md` | `format` | Форматирование произвольной markdown-страницы | Не связан с доменной wiki — намеренно. Дублирует часть правил из `_format_schema.md` |
 | `evaluator.md` | `agent-runner`, devMode | Оценка качества результата операции (score 0–10) | Рендерится в роль `user`, но `base.md` применяется как `system` через `buildChatParams`. Вызывается после каждой операции при devMode |
 | `_wiki_schema.md` | `init` (bundled), `ingest`/`lint`/`lint-chat` (vault read) | Конвенции wiki-страниц: frontmatter, структура, стиль. Путь: `!Wiki/_config/_wiki_schema.md` (shared by all domains) | Изменения в bundled-шаблоне не попадают в существующие vaults автоматически |
 | `_format_schema.md` | `init` (bundled, записывается в vault), `format` (vault read) | Конвенции форматирования не-wiki страниц. Путь: `!Wiki/_config/_format_schema.md` (shared by all domains) | При `init` пишется в vault как дефолт — изменения в `templates/` не обновляют существующие vaults |
 
 ## Замечания для архитектурного анализа
-
-### init-incremental vs ingest — реализовано
-
-`ingest.md` теперь выполняет обе задачи: извлекает экземпляры сущностей (объектный уровень) и опционально обогащает `entity_types` при обнаружении новых или улучшенных типов (мета-уровень).
-
-`init-incremental.md` удалён. `ingest.ts` эмитирует `domain_updated { entity_types }` когда LLM возвращает `entity_types_delta`. Контроллер сохраняет патч в `DomainStore` через существующий механизм `domain_updated` — изменений в контроллере не потребовалось.
 
 ### wrapWithJsonFallback — прозрачный retry без json_object
 
