@@ -341,7 +341,7 @@ describe("runIngest", () => {
     expect(logContent).toContain("СОЗДАНА: компоненты/new-page.md (stub)");
   });
 
-  it("reads wiki schema from .config/ subfolder", async () => {
+  it("reads wiki schema from global _config/ folder", async () => {
     let schemaReadPath = "";
     const adapter = mockAdapter({
       read: vi.fn().mockImplementation(async (path: string) => {

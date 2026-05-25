@@ -31,7 +31,7 @@ function makeVt(opts: {
 }
 
 describe("ensureDomainConfig", () => {
-  it("creates .config directory", async () => {
+  it("creates _config directory", async () => {
     const { vt, mkdirCalls } = makeVt();
     await ensureDomainConfig(vt, "!Wiki/ии");
     expect(mkdirCalls).toContain("!Wiki/ии/_config");

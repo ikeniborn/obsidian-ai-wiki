@@ -276,7 +276,7 @@ describe("runFormat", () => {
     expect(err!.message).not.toContain("Settings →");
   });
 
-  it("reads format schema from .config/ subfolder", async () => {
+  it("reads format schema from global _config/ folder", async () => {
     let schemaReadPath = "";
     const adapter = mockAdapter({
       [`${VAULT}/_config/_format_schema.md`]: "schema content",
