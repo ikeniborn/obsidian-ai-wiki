@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PageSimilarityService } from "../src/page-similarity";
+import { PageSimilarityService, encodeVector, decodeVector } from "../src/page-similarity";
 
 const makeService = (topK = 3) =>
   new PageSimilarityService({ mode: "jaccard", topK });
@@ -50,5 +50,18 @@ describe("PageSimilarityService (Jaccard)", () => {
     const svc = makeService(5);
     // Should resolve without error
     await expect(svc.refreshCache("domainRoot", {} as never, new Map())).resolves.toBeUndefined();
+  });
+});
+
+describe("vector encoding", () => {
+  it("round-trips Float32Array through base64", () => {
+    const vec = new Float32Array([0.1, 0.5, -0.3, 1.0]);
+    const encoded = encodeVector(vec);
+    const decoded = decodeVector(encoded);
+    expect(decoded.length).toBe(4);
+    // Float32 precision loss is acceptable
+    for (let i = 0; i < vec.length; i++) {
+      expect(decoded[i]).toBeCloseTo(vec[i], 4);
+    }
   });
 });
