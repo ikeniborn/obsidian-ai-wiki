@@ -49,7 +49,7 @@ export class AgentRunner {
     if (this.settings.backend !== "native-agent") return undefined;
     const na = this.settings.nativeAgent;
     return new PageSimilarityService({
-      mode: na.embeddingModel ? "embedding" : "jaccard",
+      mode: na.embeddingModel !== undefined ? "embedding" : "jaccard",
       model: na.embeddingModel,
       dimensions: na.embeddingDimensions,
       topK: na.relevantPagesTopK ?? 15,
