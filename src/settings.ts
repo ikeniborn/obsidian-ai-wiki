@@ -38,7 +38,7 @@ async function checkNativeAvailability(baseUrl: string, apiKey: string, model: s
 
 export function parseTimeoutString(v: string): { ingest: number; query: number; lint: number; init: number; format: number } | null {
   const parts = v.split("/").map((x) => Number(x.trim()));
-  if (parts.length === 5 && parts.every((n) => Number.isFinite(n) && n > 0)) {
+  if (parts.length === 5 && parts.every((n) => Number.isFinite(n) && n >= 0)) {
     return { ingest: parts[0], query: parts[1], lint: parts[2], init: parts[3], format: parts[4] };
   }
   return null;
