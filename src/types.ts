@@ -42,6 +42,7 @@ export type RunEvent =
   | { kind: "tool_use"; name: string; input: unknown }
   | { kind: "tool_result"; ok: boolean; preview?: string }
   | { kind: "assistant_text"; delta: string; isReasoning?: boolean }
+  | { kind: "info_text"; icon: string; summary: string; details?: string[] }
   | { kind: "result"; durationMs: number; usdCost?: number; text: string; outputTokens?: number }
   | { kind: "error"; message: string }
   | { kind: "exit"; code: number }
