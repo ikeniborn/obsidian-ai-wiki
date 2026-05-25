@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf, Platform } from "obsidian";
+import { Plugin, WorkspaceLeaf, Platform, Notice } from "obsidian";
 import { DEFAULT_SETTINGS, type LlmWikiPluginSettings, type RunHistoryEntry } from "./types";
 import type { DomainEntry } from "./domain";
 import { LlmWikiSettingTab } from "./settings";
@@ -9,6 +9,8 @@ import { i18n } from "./i18n";
 import { DomainStore } from "./domain-store";
 import { LocalConfigStore } from "./local-config";
 import { structuralErrorCounter } from "./structural-error-counter";
+import { runStorageMigration, StorageMigrationConflictError } from "./storage-migration";
+import { GLOBAL_DOMAIN_PATH } from "./wiki-path";
 
 export default class LlmWikiPlugin extends Plugin {
   settings!: LlmWikiPluginSettings;
@@ -20,6 +22,13 @@ export default class LlmWikiPlugin extends Plugin {
   async onload(): Promise<void> {
     this.domainStore = new DomainStore(this.app.vault);
     this.localConfigStore = new LocalConfigStore(this);
+    try {
+      await runStorageMigration(this.app.vault);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      new Notice(`AI Wiki: storage migration failed — ${msg}`, 0);
+      console.error("[AI Wiki] storage migration error:", e);
+    }
     await migrateLegacyData(this, this.domainStore, this.localConfigStore);
     await this.loadSettings();
     await migrateToLocalV1(this, this.localConfigStore);
@@ -275,7 +284,7 @@ export async function migrateLegacyData(
 
   if (Array.isArray(data.domains)) {
     if (data.domains.length > 0) {
-      const vaultExists = await plugin.app.vault.adapter.exists("!Wiki/.config/_domain.json");
+      const vaultExists = await plugin.app.vault.adapter.exists(GLOBAL_DOMAIN_PATH);
       if (!vaultExists) {
         await domainStore.save(data.domains as DomainEntry[]);
       }
