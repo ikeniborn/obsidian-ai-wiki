@@ -1,7 +1,7 @@
 # Intent: Ingest Progress — Create vs Update Labels
 
 **Date:** 2026-05-25
-**Status:** draft
+**Status:** approved
 
 ## Objective
 
@@ -22,24 +22,30 @@ Current ingest progress shows "Write" for every page — user cannot distinguish
 
 ## Strategic Context
 
-- Interacts with: `src/phases/ingest.ts` (detects write vs update), `src/types.ts#RunEvent` (event shape), controller (renders sidebar/logs)
+- Interacts with: `src/phases/ingest.ts`, `src/types.ts#RunEvent`, controller (renders sidebar/logs)
 - Priority trade-off: trust — user must understand what ingest did
 
 ## Constraints
 
 ### Steering (behavioral guidance)
-- Only change what is necessary: event label + render path
+- Only change what is necessary: event field + render path
 - Do not alter vault write logic or ingest LLM pipeline
 
 ### Hard (architectural enforcement)
-- `RunEvent` in `src/types.ts` may be extended with new variant or field
+- Extend existing `RunEvent` variant with a new field (not a new variant)
 - No breaking changes to existing event consumers
+- Controller determines create vs update by checking file existence before/after write — not `ingest.ts`
+
+## Approved Decisions
+
+- **RunEvent extension:** add field to existing event (e.g. `operation: "create" | "update"`) — no new variant
+- **Labels:** `Create` / `Update`
+- **Detection point:** controller checks vault file existence before the write, sets `operation` field accordingly
 
 ## Autonomy Zones
 
-- Full autonomy (reversible, low risk): reading ingest.ts to find write point, reading RunEvent shape
-- Guarded (log + confidence threshold): extending RunEvent — confirm shape before coding
-- Proposal-first (needs approval): UI label wording, RunEvent extension approach (new variant vs field on existing event), sidebar render location
+- Full autonomy (reversible, low risk): reading code, extending RunEvent field, updating render
+- Proposal-first (needs approval): any deviation from approved decisions above
 - No autonomy (human only): changing vault write logic
 
 ## Stop Rules
