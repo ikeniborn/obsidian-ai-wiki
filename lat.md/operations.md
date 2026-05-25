@@ -16,9 +16,9 @@ Delta is merged into domain config and emitted as `domain_updated`. See [[src/ph
 
 ### Page Similarity
 
-Selects which wiki pages are most relevant to a source file before passing context to the LLM. [[src/page-similarity.ts#PageSimilarityService]] implements two modes configured via `SimilarityConfig`.
+Selects seed wiki pages most relevant to a source file, then expands via BFS over the wiki graph before passing context to the LLM. [[src/page-similarity.ts#PageSimilarityService]] implements two modes configured via `SimilarityConfig`.
 
-In `jaccard` mode, Jaccard scoring over tokenized source content vs index annotations ranks candidates; top-K paths are returned. In `embedding` mode, vectors for all annotated pages are fetched from an OpenAI-compatible embeddings endpoint and cached in `_config/_embeddings.json` per domain. Cache entries are keyed by page ID and invalidated when annotation content changes. Falls back to Jaccard on API error. `refreshCache` is a no-op in Jaccard mode. See [[architecture#PageSimilarityService]].
+In `jaccard` mode, Jaccard scoring over tokenized source content vs index annotations ranks candidates; top-K paths are seeds. In `embedding` mode, vectors for all annotated pages are fetched from an OpenAI-compatible endpoint (no API key required for Ollama), cached in `_config/_embeddings.json` per domain, and scored by cosine similarity. Falls back to Jaccard on API error. After similarity selects seeds, ingest reads all non-meta pages, builds the graph cache, and BFS-expands from seed IDs — only the expanded subset is passed to the LLM. `refreshCache` updates the embedding cache after ingest writes pages. An `info_text` event reports how many pages were loaded vs total. See [[architecture#PageSimilarityService]].
 
 ### entity_types_delta
 
@@ -26,19 +26,19 @@ When the ingest LLM response includes `entity_types_delta`, the runner merges it
 
 ## Query
 
-Two-phase retrieval: seed selection from `_index.md` annotations, then BFS expansion over the wiki graph. Jaccard token scoring runs first; `llmSelectSeeds` is used as fallback only when Jaccard produces zero results.
+Two-phase retrieval: seed selection from `_index.md` annotations, then BFS expansion over the wiki graph. Similarity (embedding or Jaccard) selects seeds; graph traversal expands coverage.
 
 See [[src/phases/query.ts]], [[wiki-graph#Query Graph Traversal]].
 
 ### Seed Selection
 
-Seeds are wiki page IDs most relevant to the question. `selectSeeds` uses Jaccard similarity over tokenized question vs page content + index annotations.
+Seeds are wiki page IDs most relevant to the question. In `embedding` mode, `loadCache()` + `selectRelevant(question, ...)` uses cosine similarity. In `jaccard` mode, `selectSeeds` scores by token overlap.
 
-If Jaccard yields nothing, `llmSelectSeeds` asks the LLM to pick from all annotated page IDs. See [[src/wiki-seeds.ts#selectSeeds]], [[src/phases/query.ts#llmSelectSeeds]].
+If seed selection yields nothing, `llmSelectSeeds` asks the LLM to pick from all annotated page IDs. See [[src/wiki-seeds.ts#selectSeeds]], [[src/phases/query.ts#llmSelectSeeds]], [[src/page-similarity.ts#PageSimilarityService]].
 
 ### BFS Expansion
 
-From the seed set, BFS expands to neighbor pages within `graphDepth` hops. The graph is undirected — `A → [[B]]` allows traversal B→A. Hub pages are not excluded but flagged by `checkGraphStructure`.
+BFS always runs from the seed set — both when seeds come from similarity and from Jaccard. All wiki pages are read to build the graph; only BFS-expanded pages are passed to the LLM. The graph is undirected — `A → [[B]]` allows traversal B→A.
 
 See [[src/wiki-graph.ts#bfsExpand]], [[wiki-graph#Query Graph Traversal]].
 

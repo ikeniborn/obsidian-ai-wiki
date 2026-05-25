@@ -116,7 +116,7 @@ export class PageSimilarityService {
     queryTokens: Set<string>,
   ): Promise<string[]> {
     const { baseUrl, apiKey, model, topK } = this.config;
-    if (!baseUrl || !apiKey || !model) {
+    if (!baseUrl || !model) {
       return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
     }
 
@@ -196,6 +196,20 @@ export class PageSimilarityService {
     return scored.slice(0, topK).map((x) => x.path);
   }
 
+  async loadCache(domainRoot: string, vaultTools: VaultTools): Promise<void> {
+    if (this.config.mode !== "embedding") return;
+    if (this.cache) return;
+    const { model, dimensions } = this.config;
+    if (!model || !dimensions) return;
+    try {
+      const raw = await vaultTools.read(domainEmbeddingsPath(domainRoot));
+      const parsed = JSON.parse(raw) as EmbeddingCacheFile;
+      if (parsed.model === model && parsed.dimensions === dimensions) {
+        this.cache = parsed;
+      }
+    } catch { /* cache missing or unreadable — stay null */ }
+  }
+
   async refreshCache(
     domainRoot: string,
     vaultTools: VaultTools,
@@ -203,7 +217,7 @@ export class PageSimilarityService {
   ): Promise<void> {
     if (this.config.mode !== "embedding") return;
     const { baseUrl, apiKey, model, dimensions } = this.config;
-    if (!baseUrl || !apiKey || !model || !dimensions) return;
+    if (!baseUrl || !model || !dimensions) return;
 
     const cachePath = domainEmbeddingsPath(domainRoot);
     let cacheFile: EmbeddingCacheFile;

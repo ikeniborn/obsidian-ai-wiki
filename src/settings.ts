@@ -47,6 +47,8 @@ export function parseTimeoutString(v: string): { ingest: number; query: number; 
 export class LlmWikiSettingTab extends PluginSettingTab {
   private cachedDomains: DomainEntry[] = [];
   private localCache: LocalConfig = { iclaudePath: "" };
+  private _availableModels: string[] = [];
+  private get _chatModels() { return this._availableModels.filter((m) => !/embed|rerank|moderat/i.test(m)); }
 
   constructor(app: App, private plugin: LlmWikiPlugin) {
     super(app, plugin);
@@ -94,6 +96,48 @@ export class LlmWikiSettingTab extends PluginSettingTab {
   private async patchLocalProxy(patch: Partial<NonNullable<LocalConfig["proxy"]>>): Promise<void> {
     const cur = this.localCache.proxy ?? { enabled: false, url: "" };
     await this.patchLocal({ proxy: { ...cur, ...patch } });
+  }
+
+  private async fetchModels(): Promise<void> {
+    const na = this.localCache.nativeAgent;
+    if (!na?.baseUrl) { new Notice("Set Base URL first"); return; }
+    const url = `${na.baseUrl.replace(/\/$/, "")}/models`;
+    try {
+      const resp = await fetch(url, {
+        headers: { Authorization: `Bearer ${na.apiKey ?? ""}` },
+      });
+      if (!resp.ok) throw new Error(`${resp.status}`);
+      const json = await resp.json() as { data: { id: string }[] };
+      this._availableModels = json.data.map((m) => m.id).sort();
+      this.display();
+    } catch (e) {
+      new Notice(`Failed to fetch models: ${(e as Error).message}`);
+    }
+  }
+
+  private addModelControl(
+    s: Setting,
+    models: string[],
+    currentValue: string,
+    onChange: (v: string) => Promise<void>,
+  ): void {
+    s.addButton((b) =>
+      b.setIcon("refresh-cw").setTooltip("Fetch available models from base URL")
+        .onClick(() => { void this.fetchModels(); }),
+    );
+    if (models.length > 0) {
+      s.addDropdown((d) => {
+        if (!currentValue) d.addOption("", "— select —");
+        for (const m of models) d.addOption(m, m);
+        d.setValue(currentValue);
+        d.onChange((v) => { void onChange(v); });
+      });
+    } else {
+      s.addText((t) =>
+        t.setValue(currentValue)
+          .onChange((v) => { void onChange(v.trim()); }),
+      );
+    }
   }
 
   private render(): void {
@@ -376,14 +420,12 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         });
 
       if (!s.nativeAgent.perOperation) {
-        new Setting(containerEl)
-          .setName(T.settings.model_name)
-          .setDesc(T.settings.model_desc_native)
-          .addText((t) =>
-            t.setPlaceholder("llama3.2")
-              .setValue(eff.nativeAgent.model)
-              .onChange(async (v) => { await this.patchLocalNative({ model: v.trim() }); }),
-          );
+        this.addModelControl(
+          new Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
+          this._chatModels,
+          eff.nativeAgent.model,
+          async (v) => { await this.patchLocalNative({ model: v }); },
+        );
 
         new Setting(containerEl)
           .setName(T.settings.maxTokens_name)
@@ -446,13 +488,12 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         ];
         for (const { key, label } of ops) {
           new Setting(containerEl).setName(label).setHeading();
-          new Setting(containerEl)
-            .setName(T.settings.opModel_name)
-            .setDesc(T.settings.opModel_desc)
-            .addText((t) =>
-              t.setValue(s.nativeAgent.operations[key].model)
-                .onChange(async (v) => { s.nativeAgent.operations[key].model = v.trim(); await this.plugin.saveSettings(); }),
-            );
+          this.addModelControl(
+            new Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc),
+            this._chatModels,
+            s.nativeAgent.operations[key].model,
+            async (v) => { s.nativeAgent.operations[key].model = v; await this.plugin.saveSettings(); },
+          );
           new Setting(containerEl)
             .setName(T.settings.opMaxTokens_name)
             .setDesc(T.settings.opMaxTokens_desc)
@@ -501,20 +542,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             }),
         );
 
-      // Relevant pages top-K (always visible for native-agent)
-      new Setting(containerEl)
-        .setName("Relevant pages (top-K)")
-        .setDesc("Max wiki pages loaded per ingest call. Lower = faster, less context. Default: 15.")
-        .addText((t) =>
-          t.setPlaceholder("15")
-            .setValue(String(this.localCache.nativeAgent?.relevantPagesTopK ?? 15))
-            .onChange(async (v) => {
-              const n = Number(v);
-              if (Number.isFinite(n) && n > 0) {
-                await this.patchLocalNative({ relevantPagesTopK: Math.floor(n) });
-              }
-            }),
-        );
+      new Setting(containerEl).setName("Semantic Search").setHeading();
 
       new Setting(containerEl)
         .setName("Enable semantic similarity (embeddings)")
@@ -526,6 +554,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                 await this.patchLocalNative({ embeddingModel: undefined, embeddingDimensions: undefined });
                 this.display();
               } else {
+                await this.patchLocalNative({ embeddingModel: "" });
                 this.display();
               }
             }),
@@ -533,15 +562,26 @@ export class LlmWikiSettingTab extends PluginSettingTab {
 
       if (this.localCache.nativeAgent?.embeddingModel !== undefined) {
         new Setting(containerEl)
-          .setName("Embedding model")
-          .setDesc("Model name for embeddings, e.g. text-embedding-3-small")
+          .setName("Relevant pages (top-K)")
+          .setDesc("Max wiki pages loaded per ingest call. Lower = faster, less context. Default: 15.")
           .addText((t) =>
-            t.setPlaceholder("text-embedding-3-small")
-              .setValue(this.localCache.nativeAgent?.embeddingModel ?? "")
+            t.setPlaceholder("15")
+              .setValue(String(this.localCache.nativeAgent?.relevantPagesTopK ?? 15))
               .onChange(async (v) => {
-                await this.patchLocalNative({ embeddingModel: v.trim() || undefined });
+                const n = Number(v);
+                if (Number.isFinite(n) && n > 0) {
+                  await this.patchLocalNative({ relevantPagesTopK: Math.floor(n) });
+                }
               }),
           );
+
+        const embModels = this._availableModels.filter((m) => /embed/i.test(m));
+        this.addModelControl(
+          new Setting(containerEl).setName("Embedding model").setDesc("Model name for embeddings, e.g. text-embedding-3-small"),
+          embModels,
+          this.localCache.nativeAgent?.embeddingModel ?? "",
+          async (v) => { await this.patchLocalNative({ embeddingModel: v || undefined }); },
+        );
 
         new Setting(containerEl)
           .setName("Embedding dimensions")

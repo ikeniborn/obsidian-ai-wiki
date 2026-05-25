@@ -1,3 +1,23 @@
+---
+review:
+  spec_hash: 84194aca6b6e353a
+  last_run: 2026-05-25
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: INFO
+      section: "Changes/1"
+      section_hash: 55fb59fec7b02e33
+      text: "Hardcoded line numbers replaced with section heading references"
+      verdict: fixed
+      verdict_at: 2026-05-25
+---
+
 # Design: Fix evaluator + base.md documentation
 
 **Date:** 2026-05-25
@@ -20,12 +40,11 @@ renders into user role.
 
 ### 1. `docs/prompt-architecture.md`
 
-Remove section `### evaluator + base.md — не изолирован` (lines 318–320) entirely.
+Remove section `### evaluator + base.md — не изолирован` from `## Замечания для архитектурного анализа` entirely.
 All correct information is already present in:
-- Line 164 (note under "Промты по фазам" diagram)
-- Line 298 (table row for evaluator operation)
-- Line 304 (base.md row in comparison table)
-- Line 312 (evaluator.md row in comparison table)
+- Note under `## Промты по фазам` diagram
+- evaluator row in `## Контекст, инжектируемый в каждый промт` table
+- base.md and evaluator.md rows in `## Сравнительная таблица промтов`
 
 ### 2. `lat.md/llm-pipeline.md`
 

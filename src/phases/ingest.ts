@@ -14,7 +14,8 @@ import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, validateArticlePath, domainI
 import { ensureDomainConfig } from "../domain-config";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField } from "../utils/raw-frontmatter";
 import { upsertIndexAnnotation, parseIndexAnnotations } from "../wiki-index";
-import { pageId } from "../wiki-graph";
+import { pageId, bfsExpand } from "../wiki-graph";
+import { graphCache } from "../wiki-graph-cache";
 import type { PageSimilarityService } from "../page-similarity";
 import { appendWikiLog } from "../wiki-log";
 import type { IngestLogEntry } from "../wiki-log";
@@ -35,6 +36,7 @@ export async function* runIngest(
   opts: LlmCallOptions = {},
   similarity?: PageSimilarityService,
   cachedAnnotations?: Map<string, string>,
+  graphDepth: number = 1,
 ): AsyncGenerator<RunEvent> {
   const filePath = args[0];
   if (!filePath) {
@@ -82,15 +84,30 @@ export async function* runIngest(
   ]);
 
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
-  let filteredPaths: string[];
+  const nonMetaPaths = existingPaths.filter((f) => !f.endsWith("_index.md"));
+
+  let existingPages: Map<string, string>;
   if (similarity) {
+    await similarity.loadCache(domainRoot, vaultTools);
     const annotations = cachedAnnotations ?? parseIndexAnnotations(indexContent);
-    filteredPaths = await similarity.selectRelevant(sourceContent, annotations, existingPaths);
-    yield { kind: "assistant_text", delta: `Relevant pages: ${filteredPaths.length}/${existingPaths.length} selected via ${similarity.config.mode} similarity\n` };
+    const seedPaths = await similarity.selectRelevant(sourceContent, annotations, existingPaths);
+
+    // Build graph from all pages, BFS-expand from similarity seeds for full coverage
+    const allPages = await vaultTools.readAll(nonMetaPaths);
+    const { graph } = graphCache.get(domain.id, allPages);
+    const seedIds = seedPaths.map((p) => pageId(p));
+    const expandedIds = bfsExpand(seedIds, graph, graphDepth);
+    existingPages = new Map([...allPages].filter(([p]) => expandedIds.has(pageId(p))));
+
+    yield {
+      kind: "info_text",
+      icon: similarity.config.mode === "embedding" ? "🔍" : "📋",
+      summary: `${existingPages.size}/${nonMetaPaths.length} wiki-pages loaded (${similarity.config.mode}, bfs depth ${graphDepth})`,
+      details: seedIds,
+    };
   } else {
-    filteredPaths = existingPaths.filter((f) => !f.endsWith("_index.md"));
+    existingPages = await vaultTools.readAll(nonMetaPaths);
   }
-  const existingPages = await vaultTools.readAll(filteredPaths);
 
   yield { kind: "assistant_text", delta: `Synthesizing wiki pages for domain "${domain.id}"...\n` };
 
@@ -230,6 +247,14 @@ export async function* runIngest(
 
     const parentPath = extractParentSourcePath(absSource, vaultRoot);
     yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
+  }
+
+  if (similarity && written.length > 0) {
+    try {
+      const updatedIndex = await vaultTools.read(domainIndexPath(wikiVaultPath)).catch(() => "");
+      const updatedAnnotations = parseIndexAnnotations(updatedIndex);
+      await similarity.refreshCache(domainRoot, vaultTools, updatedAnnotations);
+    } catch { /* non-critical */ }
   }
 
   yield { kind: "result", durationMs: Date.now() - start, text: resultText, outputTokens: outputTokens || undefined };

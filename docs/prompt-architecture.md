@@ -72,7 +72,7 @@ flowchart TD
 |---|---|---|
 | **init** | — | `DomainEntry`, `entity_types`, `!Wiki/_config/_wiki_schema.md`, `!Wiki/_config/_format_schema.md` |
 | **ingest** | `DomainEntry`, `_wiki_schema.md` | wiki-страницы, `_index.md` (обновление), `analyzed_sources` |
-| **query** | `DomainEntry`, `_index.md`, wiki-страницы | ответ |
+| **query** | `DomainEntry`, `_index.md`, wiki-страницы | ответ (seeds via similarity/Jaccard → BFS → LLM-subset) |
 | **lint** | `DomainEntry`, wiki-страницы | lint-отчёт + исправленные страницы + `domain_updated` (entity_types) |
 | **lint-chat** | `DomainEntry`, lint-отчёт, wiki-страницы | исправленные wiki-страницы |
 | **chat** | результат любой предыдущей операции | диалог |
@@ -251,15 +251,22 @@ flowchart TD
 
 Некоторые фазы делают более одного LLM-вызова:
 
-### query: seed selection
+### query: seed selection + graph expansion
 
 ```
 Phase 1: читает _index.md (без файлов wiki)
-Phase 2: selectSeeds — Jaccard по токенам (без LLM)
+Phase 2: seed selection из аннотаций индекса (без чтения файлов)
+         embedding-режим → loadCache() + selectRelevant() (косинусное сходство)
+         jaccard-режим   → selectSeeds() (Jaccard по токенам)
          если seeds == 0 → llmSelectSeeds (parseWithRetry, SeedsSchema)
-Phase 3: читает только файлы-семена + BFS-расширение
-Phase 4: основной query-вызов (streaming, free text)
+         если seeds == 0 → error
+Phase 3: glob — список всех файлов домена
+Phase 4: readAll → все страницы домена → graphCache.get() → BFS от seeds
+         только BFS-expanded страницы передаются в контекст LLM (не все)
+Phase 5: основной query-вызов (streaming, free text)
 ```
+
+**Ключевое изменение (2026-05-26):** раньше при нахождении seeds читались только seed-файлы без BFS. Теперь всегда читаются все страницы для построения графа, BFS всегда запускается от seeds. LLM получает только BFS-expanded подмножество — similarity задаёт направление, граф обеспечивает покрытие.
 
 `llmSelectSeeds` вызывается без system-сообщения → `prependBaseContract` добавляет `base.md` как system.
 
@@ -328,7 +335,7 @@ Phase 4: основной query-вызов (streaming, free text)
 | Режим | Метод отбора | Требования |
 |---|---|---|
 | `jaccard` | Jaccard-оценка пересечения токенов source-файла и аннотаций из `_index.md` | — |
-| `embedding` | Косинусное сходство векторов через OpenAI-совместимый `/embeddings` endpoint | `embeddingModel`, `embeddingDimensions`, API-ключ |
+| `embedding` | Косинусное сходство векторов через OpenAI-совместимый `/embeddings` endpoint | `embeddingModel`, `embeddingDimensions`, `baseUrl`; API-ключ **опционален** (Ollama не требует) |
 
 В режиме `embedding` при недоступности API автоматически применяется Jaccard как fallback. Запросы к API выполняются батчами по 100 элементов.
 
@@ -346,7 +353,7 @@ Phase 4: основной query-вызов (streaming, free text)
 }
 ```
 
-Кэш инвалидируется при изменении аннотации страницы (по хэшу контента). При смене модели или числа измерений весь кэш пересоздаётся. `refreshCache` обновляет только устаревшие записи — вызывается в `runLint` и `runFormat` после записи домена.
+Кэш инвалидируется при изменении аннотации страницы (по хэшу контента). При смене модели или числа измерений весь кэш пересоздаётся. `refreshCache` обновляет только устаревшие записи — вызывается в `runIngest` (после записи страниц) и `runLint` (после прохода по домену).
 
 ### Подключение к фазам через AgentRunner
 
@@ -354,19 +361,153 @@ Phase 4: основной query-вызов (streaming, free text)
 
 | Фаза | Использование |
 |---|---|
-| `ingest` | `selectRelevant()` перед формированием контекста для LLM |
+| `ingest` | `loadCache()` + `selectRelevant()` перед формированием контекста; `refreshCache()` после записи страниц |
 | `init` | `selectRelevant()` для файлов после первого (ingest-pass) |
+| `query` | `loadCache()` + `selectRelevant()` для seed selection (только в `embedding` режиме; иначе Jaccard) |
 | `lint` | `refreshCache()` после прохода по домену |
-| `format` | `refreshCache()` после записи страниц |
+| `format` | не использует similarity |
 
 Сервис активен только при `backend = "native-agent"`. При `backend = "claude-agent"` `buildSimilarity()` возвращает `undefined`, фазы получают весь контент без фильтрации.
+
+### Полный lifecycle эмбеддингов (Mermaid)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#1e1e2e', 'primaryColor': '#313244', 'primaryTextColor': '#cdd6f4', 'primaryBorderColor': '#89b4fa', 'lineColor': '#888888', 'secondaryColor': '#181825', 'tertiaryColor': '#45475a', 'activationBorderColor': '#cba6f7', 'activationBkgColor': '#313244', 'noteBkgColor': '#45475a', 'noteTextColor': '#cdd6f4', 'loopTextColor': '#cdd6f4'}}}%%
+sequenceDiagram
+    participant AR as AgentRunner
+    participant PS as PageSimilarityService
+    participant LLM as LLM
+    participant API as Embeddings API
+    participant FS as _embeddings.json
+    participant V as Vault
+
+    rect rgb(30, 80, 140)
+        Note over AR,V: ── INGEST ──
+        AR->>V: read source + _wiki_schema.md + _index.md
+        AR->>V: listFiles(wikiVaultPath) → existingPaths
+        alt similarity включена (jaccard или embedding)
+            AR->>PS: loadCache(domainRoot, vaultTools)
+            PS->>FS: read _embeddings.json → this.cache
+            AR->>PS: selectRelevant(sourceContent, annotations, existingPaths)
+            note over PS: jaccard: scoreSeed по токенам<br/>embedding: fetchEmbeddings + cosine
+            PS-->>AR: seedPaths (top-K)
+            AR->>V: readAll(nonMetaPaths) → allPages
+            AR->>AR: graphCache.get(domainId, allPages) → graph
+            AR->>AR: bfsExpand(seedIds, graph, graphDepth) → expandedIds
+            AR->>AR: existingPages = allPages.filter(expandedIds)
+            AR->>AR: emit info_text (📋/🔍 expanded/total, bfs depth N)
+        else similarity отключена
+            AR->>V: readAll(nonMetaPaths) → existingPages (все)
+        end
+        AR->>LLM: parseWithRetry(WikiPagesOutputSchema)<br/>source + existingPages + schema + index
+        LLM-->>AR: pages[] + entity_types_delta?
+        loop pages[]
+            AR->>V: write(page.path, page.content)
+            AR->>V: upsertIndexAnnotation(_index.md)
+        end
+        AR->>AR: entity_types_delta → domain_updated
+        AR->>V: backlink sync (frontmatter source file)
+        alt similarity && written > 0
+            AR->>PS: refreshCache(domainRoot, vaultTools, updatedAnnotations)
+            PS->>FS: read _embeddings.json
+            loop stale / новые записи
+                PS->>API: fetchEmbeddings(annotations) batch≤100
+                API-->>PS: векторы
+            end
+            PS->>FS: write _embeddings.json
+        end
+    end
+
+    rect rgb(30, 120, 70)
+        Note over AR,V: ── QUERY ──
+        AR->>V: read _index.md → indexAnnotations
+        alt embedding-режим
+            AR->>PS: loadCache(wikiVaultPath, vaultTools)
+            PS->>FS: read _embeddings.json → this.cache
+            AR->>PS: selectRelevant(question, annotations, annotatedPaths)
+            PS->>API: fetchEmbeddings([question[:2000]]) → queryVec
+            loop страницы без вектора в кэше
+                PS->>API: fetchEmbeddings([annotation]) batch≤100
+                API-->>PS: pageVec
+            end
+            PS->>PS: cosine(queryVec, pageVec) → top-K
+            PS-->>AR: seeds[]
+        else jaccard / нет similarity
+            AR->>AR: selectSeeds(question, syntheticPages, topK, minScore)
+            AR-->>AR: seeds[]
+        end
+        alt seeds == 0
+            AR->>LLM: llmSelectSeeds(question, indexAnnotations, allIds)
+            LLM-->>AR: seeds[] (SeedsSchema)
+        end
+        AR->>V: listFiles + readAll(allWikiFiles)
+        AR->>AR: graphCache.get(domainId, pages) → graph
+        AR->>AR: bfsExpand(seeds, graph, graphDepth) → selectedIds
+        AR->>AR: buildContextBlock(pages, seeds, selectedIds)<br/>LLM получает только expanded subset
+        AR->>LLM: query prompt (streaming)
+        LLM-->>AR: answer
+    end
+
+    rect rgb(150, 80, 30)
+        Note over AR,V: ── LINT ──
+        AR->>V: listFiles + readAll(allWikiFiles) → pages
+        AR->>AR: graphCache.get() + checkStructure + checkGraphStructure
+        AR->>LLM: parseWithRetry(LintOutputSchema)<br/>pages + schema + entity_types
+        LLM-->>AR: report + fixes[]
+        AR->>LLM: actualizeDomainConfig → EntityTypesDeltaSchema
+        LLM-->>AR: entity_types patch → domain_updated
+        loop fixes[]
+            AR->>V: write(page.path, page.content)
+            AR->>V: upsertIndexAnnotation(_index.md)
+        end
+        AR->>V: backlink sync (raw source files)
+        alt similarity включена
+            AR->>PS: refreshCache(wikiVaultPath, vaultTools, updatedAnnotations)
+            PS->>FS: read _embeddings.json
+            loop stale записи
+                PS->>API: fetchEmbeddings(annotations) batch≤100
+                API-->>PS: векторы
+            end
+            PS->>FS: write _embeddings.json
+        end
+    end
+```
+
+**Ключевые свойства:**
+- `PageSimilarityService` ephemeral — создаётся заново на каждый `run()`. `loadCache()` восстанавливает диск-кэш в `this.cache` до вызова `selectRelevant()`, иначе каждый ingest делал бы API-запросы для всех страниц.
+- `refreshCache()` вызывается в ingest (после записи страниц) и lint (после прохода). Пишет на диск только при наличии stale entries — no-op если аннотации не менялись.
+- **`apiKey` опционален**: guard проверяет только `baseUrl` и `model`. Ollama и другие локальные серверы работают без ключа.
+- API-недоступность → автоматический fallback на Jaccard (и в `selectEmbedding`, и в `refreshCache`).
+- Инвалидация по хэшу аннотации: вектор пересчитывается только при изменении текста аннотации страницы в `_index.md`.
+
+### Прогресс-шаг выбора страниц
+
+После `selectRelevant()` фаза `ingest` эмитирует событие `info_text` (тип `RunEvent`):
+
+```typescript
+{ kind: "info_text", icon: "🔍" | "📋", summary: "N/M wiki-pages loaded (mode)", details: string[] }
+```
+
+`view.ts` рендерит его как отдельный step-item с иконкой и списком entity-names (значений `pageId(path)` для каждого выбранного файла). Иконка: `🔍` для embedding-режима, `📋` для jaccard.
 
 ### Настройки (`LocalConfig.nativeAgent`)
 
 | Поле | Тип | Назначение |
 |---|---|---|
-| `embeddingModel` | `string?` | Модель эмбеддингов; если не задана — используется `jaccard` |
+| `embeddingModel` | `string?` | Модель эмбеддингов. `undefined` = jaccard; `""` (пустая строка) = режим включён, модель не задана → jaccard до ввода имени; непустая строка = embedding-режим |
 | `embeddingDimensions` | `number?` | Число измерений; обязательно при `embeddingModel` |
 | `relevantPagesTopK` | `number?` | Максимум страниц в контексте (default: 15) |
+
+**Поведение UI-тоггла "Enable semantic similarity":**
+- Toggle OFF → `embeddingModel: undefined, embeddingDimensions: undefined`. Поля модели скрыты.
+- Toggle ON → `embeddingModel: ""` (sentinel). Поля "Embedding model" и "Embedding dimensions" появляются. Режим остаётся jaccard до ввода имени модели.
+
+**Кнопка ↻ "Fetch available models"** (рядом с полями Model и Embedding model):
+- Вызывает `GET {baseUrl}/models` с заголовком `Authorization: Bearer {apiKey}` (пустой для Ollama).
+- Ответ: `{ data: [{ id: string }] }` — стандарт OpenAI-compatible.
+- Поле **Model** (LLM): показывает все модели в dropdown.
+- Поле **Embedding model**: фильтрует по `/embed/i` — показывает только embedding-модели.
+- Список сбрасывается при `display()` (перезаходе в настройки) — нужно нажать ↻ снова.
+- Доступна только для `native-agent` backend (Claude agent — без кнопки).
 
 Поля хранятся в `local.json` (не синхронизируются между устройствами).

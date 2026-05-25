@@ -18886,7 +18886,7 @@ var en = {
     busyBanner: "Operation in progress \u2014 domain editing is disabled.",
     domains_empty: "No domains. Use 'Add domain' in the sidebar panel to create one.",
     timeouts_name: "Timeouts (seconds)",
-    timeouts_desc: "ingest / query / lint / init / format",
+    timeouts_desc: "ingest / query / lint / init / format (0 = no limit)",
     historyLimit_name: "History limit",
     historyLimit_desc: "Maximum operations in the sidebar history.",
     agentLog_name: "Agent log (JSONL)",
@@ -19102,7 +19102,7 @@ var ru = {
     busyBanner: "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0434\u043E\u043C\u0435\u043D\u043E\u0432 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E.",
     domains_empty: "\u0414\u043E\u043C\u0435\u043D\u044B \u043D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u044B. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 '\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D' \u0432 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438.",
     timeouts_name: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442\u044B (\u0441\u0435\u043A\u0443\u043D\u0434\u044B)",
-    timeouts_desc: "ingest / query / lint / init / format",
+    timeouts_desc: "ingest / query / lint / init / format (0 = \u0431\u0435\u0437 \u043B\u0438\u043C\u0438\u0442\u0430)",
     historyLimit_name: "\u041B\u0438\u043C\u0438\u0442 \u0438\u0441\u0442\u043E\u0440\u0438\u0438",
     historyLimit_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439 \u0432 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438.",
     agentLog_name: "\u041B\u043E\u0433 \u0430\u0433\u0435\u043D\u0442\u0430 (JSONL)",
@@ -19318,7 +19318,7 @@ var es = {
     busyBanner: "Operaci\xF3n en curso \u2014 la edici\xF3n de dominios est\xE1 desactivada.",
     domains_empty: "No hay dominios. Use 'A\xF1adir dominio' en el panel lateral.",
     timeouts_name: "Tiempos de espera (segundos)",
-    timeouts_desc: "ingest / query / lint / init / format",
+    timeouts_desc: "ingest / query / lint / init / format (0 = sin l\xEDmite)",
     historyLimit_name: "L\xEDmite de historial",
     historyLimit_desc: "M\xE1ximo de operaciones en el historial del panel lateral.",
     agentLog_name: "Log del agente (JSONL)",
@@ -20161,7 +20161,7 @@ async function checkNativeAvailability(baseUrl, apiKey, model) {
 }
 function parseTimeoutString(v) {
   const parts = v.split("/").map((x) => Number(x.trim()));
-  if (parts.length === 5 && parts.every((n) => Number.isFinite(n) && n > 0)) {
+  if (parts.length === 5 && parts.every((n) => Number.isFinite(n) && n >= 0)) {
     return { ingest: parts[0], query: parts[1], lint: parts[2], init: parts[3], format: parts[4] };
   }
   return null;
@@ -20174,6 +20174,10 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
   plugin;
   cachedDomains = [];
   localCache = { iclaudePath: "" };
+  _availableModels = [];
+  get _chatModels() {
+    return this._availableModels.filter((m) => !/embed|rerank|moderat/i.test(m));
+  }
   display() {
     void this.refresh();
   }
@@ -20211,6 +20215,48 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
   async patchLocalProxy(patch) {
     const cur = this.localCache.proxy ?? { enabled: false, url: "" };
     await this.patchLocal({ proxy: { ...cur, ...patch } });
+  }
+  async fetchModels() {
+    const na = this.localCache.nativeAgent;
+    if (!na?.baseUrl) {
+      new import_obsidian3.Notice("Set Base URL first");
+      return;
+    }
+    const url = `${na.baseUrl.replace(/\/$/, "")}/models`;
+    try {
+      const resp = await fetch(url, {
+        headers: { Authorization: `Bearer ${na.apiKey ?? ""}` }
+      });
+      if (!resp.ok) throw new Error(`${resp.status}`);
+      const json = await resp.json();
+      this._availableModels = json.data.map((m) => m.id).sort();
+      this.display();
+    } catch (e) {
+      new import_obsidian3.Notice(`Failed to fetch models: ${e.message}`);
+    }
+  }
+  addModelControl(s, models, currentValue, onChange) {
+    s.addButton(
+      (b) => b.setIcon("refresh-cw").setTooltip("Fetch available models from base URL").onClick(() => {
+        void this.fetchModels();
+      })
+    );
+    if (models.length > 0) {
+      s.addDropdown((d) => {
+        if (!currentValue) d.addOption("", "\u2014 select \u2014");
+        for (const m of models) d.addOption(m, m);
+        d.setValue(currentValue);
+        d.onChange((v) => {
+          void onChange(v);
+        });
+      });
+    } else {
+      s.addText(
+        (t) => t.setValue(currentValue).onChange((v) => {
+          void onChange(v.trim());
+        })
+      );
+    }
   }
   render() {
     const { containerEl } = this;
@@ -20423,10 +20469,13 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         return b;
       });
       if (!s.nativeAgent.perOperation) {
-        new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native).addText(
-          (t) => t.setPlaceholder("llama3.2").setValue(eff.nativeAgent.model).onChange(async (v) => {
-            await this.patchLocalNative({ model: v.trim() });
-          })
+        this.addModelControl(
+          new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
+          this._chatModels,
+          eff.nativeAgent.model,
+          async (v) => {
+            await this.patchLocalNative({ model: v });
+          }
         );
         new import_obsidian3.Setting(containerEl).setName(T.settings.maxTokens_name).setDesc(T.settings.maxTokens_desc).addText(
           (t) => t.setPlaceholder("4096").setValue(String(s.nativeAgent.maxTokens)).onChange(async (v) => {
@@ -20470,11 +20519,14 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         ];
         for (const { key, label } of ops) {
           new import_obsidian3.Setting(containerEl).setName(label).setHeading();
-          new import_obsidian3.Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc).addText(
-            (t) => t.setValue(s.nativeAgent.operations[key].model).onChange(async (v) => {
-              s.nativeAgent.operations[key].model = v.trim();
+          this.addModelControl(
+            new import_obsidian3.Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc),
+            this._chatModels,
+            s.nativeAgent.operations[key].model,
+            async (v) => {
+              s.nativeAgent.operations[key].model = v;
               await this.plugin.saveSettings();
-            })
+            }
           );
           new import_obsidian3.Setting(containerEl).setName(T.settings.opMaxTokens_name).setDesc(T.settings.opMaxTokens_desc).addText(
             (t) => t.setValue(String(s.nativeAgent.operations[key].maxTokens)).onChange(async (v) => {
@@ -20511,6 +20563,45 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           await this.plugin.saveSettings();
         })
       );
+      new import_obsidian3.Setting(containerEl).setName("Semantic Search").setHeading();
+      new import_obsidian3.Setting(containerEl).setName("Enable semantic similarity (embeddings)").setDesc("Use embedding vectors for relevant page selection. Requires native backend with an embeddings-capable model.").addToggle(
+        (t) => t.setValue(!!this.localCache.nativeAgent?.embeddingModel).onChange(async (v) => {
+          if (!v) {
+            await this.patchLocalNative({ embeddingModel: void 0, embeddingDimensions: void 0 });
+            this.display();
+          } else {
+            await this.patchLocalNative({ embeddingModel: "" });
+            this.display();
+          }
+        })
+      );
+      if (this.localCache.nativeAgent?.embeddingModel !== void 0) {
+        new import_obsidian3.Setting(containerEl).setName("Relevant pages (top-K)").setDesc("Max wiki pages loaded per ingest call. Lower = faster, less context. Default: 15.").addText(
+          (t) => t.setPlaceholder("15").setValue(String(this.localCache.nativeAgent?.relevantPagesTopK ?? 15)).onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n > 0) {
+              await this.patchLocalNative({ relevantPagesTopK: Math.floor(n) });
+            }
+          })
+        );
+        const embModels = this._availableModels.filter((m) => /embed/i.test(m));
+        this.addModelControl(
+          new import_obsidian3.Setting(containerEl).setName("Embedding model").setDesc("Model name for embeddings, e.g. text-embedding-3-small"),
+          embModels,
+          this.localCache.nativeAgent?.embeddingModel ?? "",
+          async (v) => {
+            await this.patchLocalNative({ embeddingModel: v || void 0 });
+          }
+        );
+        new import_obsidian3.Setting(containerEl).setName("Embedding dimensions").setDesc("Vector dimensions, e.g. 512 or 1536").addText(
+          (t) => t.setPlaceholder("512").setValue(String(this.localCache.nativeAgent?.embeddingDimensions ?? "")).onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n > 0) {
+              await this.patchLocalNative({ embeddingDimensions: Math.floor(n) });
+            }
+          })
+        );
+      }
       const proxy = eff.proxy;
       new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
       new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_enabled_name).setDesc(T.settings.proxy_enabled_desc).addToggle(
@@ -20645,6 +20736,9 @@ function domainIndexPath(domainFolder) {
 }
 function domainLogPath(domainFolder) {
   return `${domainConfigDir(domainFolder)}/_log.md`;
+}
+function domainEmbeddingsPath(domainFolder) {
+  return `${domainConfigDir(domainFolder)}/_embeddings.json`;
 }
 
 // src/utils/vault-walk.ts
@@ -21276,6 +21370,20 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
         this.liveStatusIconEl?.setText("\u{1F4AC}");
         this.liveStatusTextEl?.setText("Forming response...");
       }
+    } else if (ev.kind === "info_text") {
+      this.stopWaiting();
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      const head = step.createDiv("ai-wiki-step-head");
+      head.createSpan({ cls: "ai-wiki-step-icon" }).setText(ev.icon);
+      head.createSpan({ cls: "ai-wiki-step-name" }).setText(ev.summary);
+      head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
+      if (ev.details && ev.details.length > 0) {
+        const body = step.createDiv("ai-wiki-step-preview");
+        for (const d of ev.details) {
+          body.createDiv().setText(`\xB7 ${d}`);
+        }
+      }
+      this.scrollSteps();
     } else if (ev.kind === "system") {
       const step = this.stepsEl.createDiv("ai-wiki-step");
       const head = step.createDiv("ai-wiki-step-head");
@@ -26519,6 +26627,32 @@ function checkGraphStructure(graph, hubThreshold) {
   return issues.join("\n");
 }
 
+// src/wiki-graph-cache.ts
+function hashPages(pages) {
+  const parts = [];
+  const keys = [...pages.keys()].sort();
+  for (const k of keys) parts.push(`${k}:${pages.get(k).length}`);
+  return parts.join("|");
+}
+var GraphCache = class {
+  store = /* @__PURE__ */ new Map();
+  get(domainId, pages) {
+    const hash = hashPages(pages);
+    const hit = this.store.get(domainId);
+    if (hit && hit.hash === hash) return { graph: hit.graph, fromCache: true };
+    const graph = buildWikiGraph(pages);
+    this.store.set(domainId, { hash, graph });
+    return { graph, fromCache: false };
+  }
+  invalidate(domainId) {
+    this.store.delete(domainId);
+  }
+  clear() {
+    this.store.clear();
+  }
+};
+var graphCache = new GraphCache();
+
 // src/wiki-log.ts
 function ts() {
   return (/* @__PURE__ */ new Date()).toISOString().slice(0, 19);
@@ -26567,7 +26701,7 @@ function parseWikiStatus(content) {
   const m = /^---\n[\s\S]*?^wiki_status:[ \t]*(.+)$/m.exec(content);
   return m ? m[1].trim() : "unknown";
 }
-async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}) {
+async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}, similarity, cachedAnnotations, graphDepth = 1) {
   const filePath = args[0];
   if (!filePath) {
     yield { kind: "error", message: "ingest: file path required" };
@@ -26606,7 +26740,26 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     tryRead(vaultTools, domainIndexPath(domainRoot))
   ]);
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
-  const existingPages = await vaultTools.readAll(existingPaths.filter((f) => !f.endsWith("_index.md")));
+  const nonMetaPaths = existingPaths.filter((f) => !f.endsWith("_index.md"));
+  let existingPages;
+  if (similarity) {
+    await similarity.loadCache(domainRoot, vaultTools);
+    const annotations = cachedAnnotations ?? parseIndexAnnotations(indexContent);
+    const seedPaths = await similarity.selectRelevant(sourceContent, annotations, existingPaths);
+    const allPages = await vaultTools.readAll(nonMetaPaths);
+    const { graph } = graphCache.get(domain.id, allPages);
+    const seedIds = seedPaths.map((p) => pageId(p));
+    const expandedIds = bfsExpand(seedIds, graph, graphDepth);
+    existingPages = new Map([...allPages].filter(([p]) => expandedIds.has(pageId(p))));
+    yield {
+      kind: "info_text",
+      icon: similarity.config.mode === "embedding" ? "\u{1F50D}" : "\u{1F4CB}",
+      summary: `${existingPages.size}/${nonMetaPaths.length} wiki-pages loaded (${similarity.config.mode}, bfs depth ${graphDepth})`,
+      details: seedIds
+    };
+  } else {
+    existingPages = await vaultTools.readAll(nonMetaPaths);
+  }
   yield { kind: "assistant_text", delta: `Synthesizing wiki pages for domain "${domain.id}"...
 ` };
   const start = Date.now();
@@ -26741,6 +26894,14 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     }
     const parentPath = extractParentSourcePath(absSource, vaultRoot);
     yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
+  }
+  if (similarity && written.length > 0) {
+    try {
+      const updatedIndex = await vaultTools.read(domainIndexPath(wikiVaultPath)).catch(() => "");
+      const updatedAnnotations = parseIndexAnnotations(updatedIndex);
+      await similarity.refreshCache(domainRoot, vaultTools, updatedAnnotations);
+    } catch {
+    }
   }
   yield { kind: "result", durationMs: Date.now() - start, text: resultText, outputTokens: outputTokens || void 0 };
 }
@@ -26886,32 +27047,6 @@ ${indexContent}` : ""
 // prompts/query.md
 var query_default = "\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u043F\u043E wiki-\u0431\u0430\u0437\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u0411\u0443\u0434\u044C \u0442\u043E\u0447\u0435\u043D \u0438 \u043B\u0430\u043A\u043E\u043D\u0438\u0447\u0435\u043D.\n\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 WikiLinks [[\u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435]] \u043F\u0440\u0438 \u0441\u0441\u044B\u043B\u043A\u0430\u0445 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0437 \u0438\u043D\u0434\u0435\u043A\u0441\u0430.\n{{entity_types_block}}\n{{index_block}}\n";
 
-// src/wiki-graph-cache.ts
-function hashPages(pages) {
-  const parts = [];
-  const keys = [...pages.keys()].sort();
-  for (const k of keys) parts.push(`${k}:${pages.get(k).length}`);
-  return parts.join("|");
-}
-var GraphCache = class {
-  store = /* @__PURE__ */ new Map();
-  get(domainId, pages) {
-    const hash = hashPages(pages);
-    const hit = this.store.get(domainId);
-    if (hit && hit.hash === hash) return { graph: hit.graph, fromCache: true };
-    const graph = buildWikiGraph(pages);
-    this.store.set(domainId, { hash, graph });
-    return { graph, fromCache: false };
-  }
-  invalidate(domainId) {
-    this.store.delete(domainId);
-  }
-  clear() {
-    this.store.clear();
-  }
-};
-var graphCache = new GraphCache();
-
 // src/wiki-seeds.ts
 var STOP_WORDS = /* @__PURE__ */ new Set([
   // EN
@@ -27023,7 +27158,7 @@ function selectSeeds(question, pages, topK, minScore, indexAnnotations) {
 
 // src/phases/query.ts
 var META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
-async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1) {
+async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1, similarity) {
   const question = args[0]?.trim();
   if (!question) {
     yield { kind: "error", message: "query: question required" };
@@ -27047,10 +27182,18 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   const minScore = Math.max(0, Math.min(1, seedMinScore));
   const start = Date.now();
   let outputTokens = 0;
-  const syntheticPages = new Map(
-    [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""])
-  );
-  let seeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+  let seeds;
+  if (similarity && similarity.config.mode === "embedding") {
+    await similarity.loadCache(wikiVaultPath, vaultTools);
+    const allAnnotatedPaths = [...indexAnnotations.keys()].map((id) => `${wikiVaultPath}/${id}.md`);
+    const selected = await similarity.selectRelevant(question, indexAnnotations, allAnnotatedPaths);
+    seeds = selected.map((p) => pageId(p)).slice(0, topK);
+  } else {
+    const syntheticPages = new Map(
+      [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""])
+    );
+    seeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+  }
   if (seeds.length === 0 && indexAnnotations.size > 0) {
     if (signal.aborted) return;
     const allAnnotatedIds = [...indexAnnotations.keys()];
@@ -27067,47 +27210,17 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
   if (signal.aborted) return;
-  const idToPath = new Map(files.map((f) => [pageId(f), f]));
-  let pages;
-  let fromCache;
-  let selectedIds;
-  if (seeds.length > 0) {
-    const seedPaths = seeds.map((id) => idToPath.get(id)).filter((p) => !!p);
-    yield { kind: "tool_use", name: "Read", input: { files: seedPaths.length } };
-    pages = await vaultTools.readAll(seedPaths);
-    yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
-    fromCache = false;
-    selectedIds = new Set(seeds);
-    yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache };
-  } else {
-    yield { kind: "tool_use", name: "Read", input: { files: files.length } };
-    pages = await vaultTools.readAll(files);
-    yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
-    if (signal.aborted) return;
-    const graphResult = graphCache.get(domain.id, pages);
-    fromCache = graphResult.fromCache;
-    const allPageIds = [...pages.keys()].map(pageId);
-    seeds = selectSeeds(question, pages, topK, minScore, indexAnnotations);
-    if (seeds.length === 0) {
-      yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allPageIds.length } };
-      const seedOpts = { ...opts, thinkingBudgetTokens: void 0 };
-      const seedRes = await llmSelectSeeds(question, indexAnnotations, allPageIds, llm, model, seedOpts, signal);
-      seeds = seedRes.seeds;
-      outputTokens += seedRes.outputTokens;
-      yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
-    }
-    if (signal.aborted) return;
-    if (seeds.length === 0) {
-      yield { kind: "error", message: "No relevant pages found for this query." };
-      return;
-    }
-    selectedIds = bfsExpand(seeds, graphResult.graph, graphDepth);
-    yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: pages.size, fromCache };
-  }
+  yield { kind: "tool_use", name: "Read", input: { files: files.length } };
+  const pages = await vaultTools.readAll(files);
+  yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
+  if (signal.aborted) return;
+  const graphResult = graphCache.get(domain.id, pages);
   if (seeds.length === 0) {
     yield { kind: "error", message: "No relevant pages found for this query." };
     return;
   }
+  const selectedIds = bfsExpand(seeds, graphResult.graph, graphDepth);
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache };
   const seedSet = new Set(seeds);
   const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);
   const entityTypesBlock = buildEntityTypesBlock2(domain);
@@ -27271,7 +27384,7 @@ var lint_default = '\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u04
 
 // src/phases/lint.ts
 var META_FILES2 = ["_index.md", "_log.md"];
-async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal, hubThreshold = 20, opts = {}) {
+async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal, hubThreshold = 20, opts = {}, similarity) {
   const domainId = args[0];
   const targets = domainId ? domains.filter((d) => d.id === domainId) : domains;
   if (targets.length === 0) {
@@ -27450,6 +27563,10 @@ ${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
     }
     if (backlinks.size > 0) {
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
+    }
+    if (similarity) {
+      const indexRaw = await tryRead3(vaultTools, domainIndexPath(wikiVaultPath));
+      await similarity.refreshCache(wikiVaultPath, vaultTools, parseIndexAnnotations(indexRaw));
     }
   }
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n"), outputTokens: outputTokens || void 0 };
@@ -27703,7 +27820,7 @@ var format_schema_default = "# Format Schema (\u043F\u0440\u0430\u0432\u0438\u04
 var init_default = '\u0422\u044B \u2014 \u0430\u0440\u0445\u0438\u0442\u0435\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439. \u0421\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0439 \u0437\u0430\u043F\u0438\u0441\u044C \u0434\u043E\u043C\u0435\u043D\u0430 \u0434\u043B\u044F domain-map.json.\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0435\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B:\n{\n  "id": "{{domain_id}}",\n  "name": "\u0427\u0435\u043B\u043E\u0432\u0435\u043A\u043E\u0447\u0438\u0442\u0430\u0435\u043C\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435",\n  "wiki_folder": "{{domain_id}}",\n  "source_paths": [],\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"processes"}],\n  "language_notes": ""\n}\n{{schema_block}}\n{{index_block}}\n\n\u0412\u043A\u043B\u044E\u0447\u0438 \u043F\u043E\u043B\u0435 `reasoning` \u043F\u0435\u0440\u0432\u044B\u043C \u0432 JSON-\u043E\u0442\u0432\u0435\u0442\u0435: \u043F\u043E\u0448\u0430\u0433\u043E\u0432\u043E\u0435 \u043E\u0431\u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B \u0434\u043E\u043C\u0435\u043D\u0430.\n\n## Output JSON Example\n\n{\n  "reasoning": "\u041F\u0440\u043E\u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043B \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438. \u0412\u044B\u044F\u0432\u0438\u043B \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438: Process, ServiceContract, Customer.",\n  "id": "{{domain_id}}",\n  "name": "Telecom Operations",\n  "wiki_folder": "{{domain_id}}",\n  "entity_types": [\n    {\n      "type": "Process",\n      "description": "\u0411\u0438\u0437\u043D\u0435\u0441-\u043F\u0440\u043E\u0446\u0435\u0441\u0441 \u0438\u043B\u0438 \u0448\u0430\u0433 workflow",\n      "extraction_cues": ["BPMN", "workflow", "\u043F\u0440\u043E\u0446\u0435\u0441\u0441"],\n      "min_mentions_for_page": 1,\n      "wiki_subfolder": "processes"\n    }\n  ],\n  "language_notes": "\u0421\u043C\u0435\u0441\u044C \u0440\u0443\u0441\u0441\u043A\u043E\u0433\u043E/\u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u043E\u0433\u043E; \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0439 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 product-\u0438\u043C\u0451\u043D."\n}\n\n## Wiki Page Conventions\n\n\u0421\u0442\u0440\u0430\u043D\u0438\u0446\u044B wiki \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u044E\u0442 \u043F\u043E\u043B\u0435 `tags` \u0432\u043E frontmatter: \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 (category/subcategory, \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0447\u0435\u0440\u0435\u0437 `/`, \u0431\u0435\u0437 `#`). \u041F\u0440\u0438 ingest LLM \u043F\u0435\u0440\u0435\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442 \u0442\u0435\u0433\u0438 \u0438\u0437 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0438 \u0441\u043E\u0437\u0434\u0430\u0451\u0442 \u043D\u043E\u0432\u044B\u0435 \u043F\u043E \u0442\u043E\u0439 \u0436\u0435 \u0441\u0445\u0435\u043C\u0435.\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u041E wiki_subfolder: \u043E\u0434\u043D\u043E \u0441\u043B\u043E\u0432\u043E, \u0431\u0435\u0437 \u0441\u043B\u044D\u0448\u0435\u0439, \u0431\u0435\u0437 domain_id.\n\u041D\u0435\u043B\u044C\u0437\u044F: "os/network", "os_network". \u041C\u043E\u0436\u043D\u043E: "network", "processes", "protocols".\n\n';
 
 // src/phases/init.ts
-async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal, opts = {}, onFileError) {
+async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal, opts = {}, onFileError, similarity) {
   const domainId = args[0];
   const dryRun = args.includes("--dry-run");
   const sourcesIdx = args.indexOf("--sources");
@@ -27756,7 +27873,8 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
       signal,
       opts,
       onFileError,
-      true
+      true,
+      similarity
     );
     return;
   }
@@ -27772,7 +27890,9 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
       vaultName,
       signal,
       opts,
-      onFileError
+      onFileError,
+      false,
+      similarity
     );
     return;
   }
@@ -27789,9 +27909,9 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
     yield { kind: "error", message: `init: no source_paths configured for "${domainId}" \u2014 add them in settings` };
     return;
   }
-  yield* runInitWithSources(domainId, effectiveSources, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError);
+  yield* runInitWithSources(domainId, effectiveSources, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, false, similarity);
 }
-async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, force = false) {
+async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, force = false, similarity) {
   const start = Date.now();
   let outputTokens = 0;
   const wikiRootGuess = `!Wiki`;
@@ -27820,6 +27940,7 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
     tryRead5(vaultTools, GLOBAL_WIKI_SCHEMA_PATH),
     tryRead5(vaultTools, domainIndexPath(wikiRootGuess))
   ]);
+  let annotationsCache = parseIndexAnnotations(indexContent);
   let currentDomain = existing ?? null;
   for (let i = 0; i < toAnalyze.length; i++) {
     if (signal.aborted) return;
@@ -27961,7 +28082,7 @@ ${JSON.stringify(entry, null, 2)}
       let hadError = false;
       let caughtErr = null;
       try {
-        for await (const ev of runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts)) {
+        for await (const ev of runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts, similarity, annotationsCache)) {
           yield ev;
           if (ev.kind === "domain_updated" && ev.domainId === domainId) {
             currentDomain = { ...currentDomain, ...ev.patch };
@@ -27982,6 +28103,10 @@ ${JSON.stringify(entry, null, 2)}
         }
         done = true;
       }
+    }
+    if (similarity) {
+      const fresh = await tryRead5(vaultTools, domainIndexPath(wikiRootGuess));
+      annotationsCache = parseIndexAnnotations(fresh);
     }
     if (signal.aborted) return;
     currentDomain = {
@@ -28234,7 +28359,7 @@ function extractImagePaths(md) {
 function truncationHint(backend) {
   return backend === "claude-agent" ? "\u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442: env CLAUDE_CODE_MAX_OUTPUT_TOKENS \u0432 iclaude.sh" : "\u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442: Settings \u2192 per-operation \u2192 format \u2192 maxTokens";
 }
-async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, signal, opts = {}, backend = "native-agent") {
+async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, signal, opts = {}, backend = "native-agent", wikiVaultPath) {
   const start = Date.now();
   const filePath = args[0];
   if (!filePath) {
@@ -28385,6 +28510,200 @@ ${original}`;
   yield { kind: "result", durationMs: Date.now() - start, text: finalReport, outputTokens: outputTokens || void 0 };
 }
 
+// src/page-similarity.ts
+function encodeVector(v) {
+  return Buffer.from(v.buffer).toString("base64");
+}
+function decodeVector(b64) {
+  const buf = Buffer.from(b64, "base64");
+  return new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
+}
+function annotationHash(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = Math.imul(31, h) + s.charCodeAt(i) | 0;
+  }
+  return (h >>> 0).toString(36);
+}
+function cosine(a, b) {
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  const denom = Math.sqrt(na) * Math.sqrt(nb);
+  return denom === 0 ? 0 : dot / denom;
+}
+var EMBEDDING_BATCH_SIZE = 100;
+async function fetchEmbeddings(baseUrl, apiKey, model, inputs) {
+  const url = `${baseUrl.replace(/\/$/, "")}/embeddings`;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({ model, input: inputs })
+  });
+  if (!resp.ok) throw new Error(`Embedding API error: ${resp.status}`);
+  const json = await resp.json();
+  return json.data.map((d) => new Float32Array(d.embedding));
+}
+var PageSimilarityService = class {
+  constructor(config) {
+    this.config = config;
+  }
+  config;
+  cache = null;
+  async selectRelevant(sourceContent, indexAnnotations, allPaths) {
+    const queryTokens = tokenize(sourceContent);
+    if (queryTokens.size === 0) return [];
+    if (this.config.mode === "jaccard") {
+      return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
+    }
+    return this.selectEmbedding(sourceContent, indexAnnotations, allPaths, queryTokens);
+  }
+  selectJaccard(queryTokens, indexAnnotations, allPaths) {
+    const scored = [];
+    for (const path2 of allPaths) {
+      const pid = pageId(path2);
+      const annotation = indexAnnotations.get(pid);
+      if (!annotation) continue;
+      const score = scoreSeed(queryTokens, pid, "", annotation);
+      if (score > 0) scored.push({ path: path2, score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, this.config.topK).map((x) => x.path);
+  }
+  async selectEmbedding(sourceContent, indexAnnotations, allPaths, queryTokens) {
+    const { baseUrl, apiKey, model, topK } = this.config;
+    if (!baseUrl || !model) {
+      return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
+    }
+    let queryVec;
+    try {
+      const truncated = sourceContent.slice(0, 2e3);
+      [queryVec] = await fetchEmbeddings(baseUrl, apiKey, model, [truncated]);
+    } catch {
+      return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
+    }
+    const pids = allPaths.map((p) => pageId(p));
+    const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
+    const pageVecs = /* @__PURE__ */ new Map();
+    if (this.cache && this.cache.model === model) {
+      for (let i = 0; i < pids.length; i++) {
+        const entry = this.cache.entries[pids[i]];
+        if (entry) {
+          pageVecs.set(pids[i], decodeVector(entry.vector));
+        }
+      }
+    }
+    const batches = [];
+    let cur = { pids: [], texts: [] };
+    for (let i = 0; i < pids.length; i++) {
+      if (!annotations[i]) continue;
+      if (pageVecs.has(pids[i])) continue;
+      cur.pids.push(pids[i]);
+      cur.texts.push(annotations[i]);
+      if (cur.pids.length >= EMBEDDING_BATCH_SIZE) {
+        batches.push(cur);
+        cur = { pids: [], texts: [] };
+      }
+    }
+    if (cur.pids.length > 0) batches.push(cur);
+    for (const batch of batches) {
+      let vecs;
+      try {
+        vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
+      } catch {
+        for (const pid of batch.pids) {
+          const annotation = indexAnnotations.get(pid) ?? "";
+          const score = scoreSeed(queryTokens, pid, "", annotation);
+          if (score > 0) pageVecs.set(pid, new Float32Array(0));
+        }
+        continue;
+      }
+      for (let i = 0; i < batch.pids.length; i++) {
+        pageVecs.set(batch.pids[i], vecs[i]);
+      }
+    }
+    const scored = [];
+    for (let i = 0; i < allPaths.length; i++) {
+      const pid = pids[i];
+      const vec = pageVecs.get(pid);
+      if (!vec) continue;
+      let score;
+      if (vec.length === 0) {
+        score = scoreSeed(queryTokens, pid, "", annotations[i]);
+      } else {
+        score = cosine(queryVec, vec);
+      }
+      if (score > 0) scored.push({ path: allPaths[i], score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, topK).map((x) => x.path);
+  }
+  async loadCache(domainRoot, vaultTools) {
+    if (this.config.mode !== "embedding") return;
+    if (this.cache) return;
+    const { model, dimensions } = this.config;
+    if (!model || !dimensions) return;
+    try {
+      const raw = await vaultTools.read(domainEmbeddingsPath(domainRoot));
+      const parsed = JSON.parse(raw);
+      if (parsed.model === model && parsed.dimensions === dimensions) {
+        this.cache = parsed;
+      }
+    } catch {
+    }
+  }
+  async refreshCache(domainRoot, vaultTools, indexAnnotations) {
+    if (this.config.mode !== "embedding") return;
+    const { baseUrl, apiKey, model, dimensions } = this.config;
+    if (!baseUrl || !model || !dimensions) return;
+    const cachePath = domainEmbeddingsPath(domainRoot);
+    let cacheFile;
+    try {
+      const raw = await vaultTools.read(cachePath);
+      const parsed = JSON.parse(raw);
+      if (parsed.model !== model || parsed.dimensions !== dimensions) {
+        cacheFile = { model, dimensions, entries: {} };
+      } else {
+        cacheFile = parsed;
+      }
+    } catch {
+      cacheFile = { model, dimensions, entries: {} };
+    }
+    const toEmbed = [];
+    for (const [pid, annotation] of indexAnnotations) {
+      const hash = annotationHash(annotation);
+      const existing = cacheFile.entries[pid];
+      if (!existing || existing.hash !== hash) {
+        toEmbed.push({ pid, annotation });
+      }
+    }
+    if (toEmbed.length === 0) return;
+    for (let i = 0; i < toEmbed.length; i += EMBEDDING_BATCH_SIZE) {
+      const batch = toEmbed.slice(i, i + EMBEDDING_BATCH_SIZE);
+      let vecs;
+      try {
+        vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.map((x) => x.annotation));
+      } catch {
+        continue;
+      }
+      for (let j = 0; j < batch.length; j++) {
+        cacheFile.entries[batch[j].pid] = {
+          vector: encodeVector(vecs[j]),
+          hash: annotationHash(batch[j].annotation)
+        };
+      }
+    }
+    await vaultTools.write(cachePath, JSON.stringify(cacheFile, null, 2));
+    this.cache = cacheFile;
+  }
+};
+
 // src/agent-runner.ts
 var AgentRunner = class {
   constructor(llm, settings, vaultTools, vaultName, domains) {
@@ -28414,6 +28733,18 @@ var AgentRunner = class {
     if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
     return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
   }
+  buildSimilarity() {
+    if (this.settings.backend !== "native-agent") return void 0;
+    const na = this.settings.nativeAgent;
+    return new PageSimilarityService({
+      mode: na.embeddingModel ? "embedding" : "jaccard",
+      model: na.embeddingModel,
+      dimensions: na.embeddingDimensions,
+      topK: na.relevantPagesTopK ?? 15,
+      baseUrl: na.baseUrl,
+      apiKey: na.apiKey
+    });
+  }
   async writeDevLog(_vaultRoot, entry) {
     if (!this.settings.devMode?.enabled) return;
     const adapter = this.vaultTools.adapter;
@@ -28429,16 +28760,16 @@ var AgentRunner = class {
     } catch {
     }
   }
-  async *runOperation(req, model, opts, vaultRoot, domains) {
+  async *runOperation(req, model, opts, vaultRoot, domains, similarity) {
     switch (req.operation) {
       case "ingest":
-        yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
+        yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, similarity, void 0, this.settings.graphDepth);
         break;
       case "query":
-        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore);
+        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, similarity);
         break;
       case "lint":
-        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, opts);
+        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, opts, similarity);
         break;
       case "chat": {
         const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
@@ -28460,11 +28791,13 @@ var AgentRunner = class {
         break;
       }
       case "init":
-        yield* runInit(req.args, this.vaultTools, this.llm, model, domains, this.vaultName, req.signal, opts, req.onFileError);
+        yield* runInit(req.args, this.vaultTools, this.llm, model, domains, this.vaultName, req.signal, opts, req.onFileError, similarity);
         break;
       case "format": {
         const hasVision = this.settings.backend === "claude-agent";
-        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend);
+        const formatDomain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
+        const wikiVaultPath = formatDomain ? domainWikiFolder(formatDomain.wiki_folder) : void 0;
+        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath);
         break;
       }
       default: {
@@ -28481,9 +28814,10 @@ var AgentRunner = class {
     if (req.signal.aborted) return;
     const vaultRoot = req.cwd ?? "";
     const domains = req.domainId ? this.domains.filter((d) => d.id === req.domainId) : this.domains;
+    const similarity = this.buildSimilarity();
     const startMs = Date.now();
     let finalResultText = "";
-    for await (const ev of this.runOperation(req, model, opts, vaultRoot, domains)) {
+    for await (const ev of this.runOperation(req, model, opts, vaultRoot, domains, similarity)) {
       if (ev.kind === "result") finalResultText = ev.text;
       yield ev;
     }
@@ -28802,13 +29136,13 @@ ${userText}
       return;
     }
     signal?.addEventListener("abort", onAbort, { once: true });
-    const timeoutHandle = window.setTimeout(() => {
+    const timeoutHandle = timeoutSec > 0 ? window.setTimeout(() => {
       timedOut = true;
       child.kill("SIGTERM");
       window.setTimeout(() => {
         if (child.exitCode === null) child.kill("SIGKILL");
       }, SIGTERM_GRACE_MS);
-    }, timeoutSec * 1e3);
+    }, timeoutSec * 1e3) : null;
     let timedOut = false;
     const queue = [];
     let resolveNext = null;
@@ -28885,7 +29219,7 @@ ${stderr()}` : ""}`);
         choices: [{ index: 0, delta: {}, finish_reason: "stop" }]
       };
     } finally {
-      window.clearTimeout(timeoutHandle);
+      if (timeoutHandle !== null) window.clearTimeout(timeoutHandle);
       signal?.removeEventListener("abort", onAbort);
       for (const f of tmpFiles) {
         try {
@@ -36471,7 +36805,7 @@ var WikiController = class {
     const vaultRoot = this.cwdOrEmpty();
     let agentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat");
+      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat", this.plugin.settings.timeouts.lint);
     } catch (e) {
       new import_obsidian7.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -36644,7 +36978,7 @@ var WikiController = class {
     }
     return true;
   }
-  async buildAgentRunner(vaultRoot, resumeSessionId, opKey) {
+  async buildAgentRunner(vaultRoot, resumeSessionId, opKey, timeoutSec = 0) {
     const rawAdapter = this.app.vault.adapter;
     const vault = this.app.vault;
     const adapter = Object.create(rawAdapter);
@@ -36660,7 +36994,6 @@ var WikiController = class {
     const domains = await this.domainStore.load();
     const local = await this.localConfigStore.load();
     const s = resolveEffective(this.plugin.settings, local);
-    const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm;
     if (s.backend === "claude-agent") {
       const manifestDir = this.plugin.manifest.dir ?? (0, import_path_browserify6.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
@@ -36684,7 +37017,7 @@ var WikiController = class {
         model: claudeEff.model,
         allowedTools: claudeEff.allowedTools,
         effort,
-        requestTimeoutSec: maxTimeoutSec,
+        requestTimeoutSec: timeoutSec,
         cwd: vaultRoot,
         tmpDir,
         resumeSessionId,
@@ -36726,7 +37059,7 @@ var WikiController = class {
       const openaiClient = new OpenAI({
         baseURL: s.nativeAgent.baseUrl,
         apiKey: s.nativeAgent.apiKey,
-        timeout: maxTimeoutSec * 1e3,
+        timeout: timeoutSec > 0 ? timeoutSec * 1e3 : void 0,
         dangerouslyAllowBrowser: true,
         fetch: import_obsidian7.Platform.isMobile ? mobileFetch : proxyFetch ?? void 0
       });
@@ -36792,9 +37125,10 @@ var WikiController = class {
     if (!view) return;
     const vaultRoot = this.cwdOrEmpty();
     const opKey = op === "lint-chat" ? "lint" : op;
+    const opTimeoutSec = this.plugin.settings.timeouts[opKey];
     let agentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot, void 0, opKey);
+      agentRunner = await this.buildAgentRunner(vaultRoot, void 0, opKey, opTimeoutSec);
     } catch (e) {
       new import_obsidian7.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -36811,7 +37145,7 @@ var WikiController = class {
     let status = "done";
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
     view.setRunning(op, args);
-    const timeoutMs = this.plugin.settings.timeouts[opKey] * 1e3;
+    const timeoutMs = opTimeoutSec * 1e3;
     let timedOut = false;
     const timeoutId = timeoutMs > 0 ? window.setTimeout(() => {
       timedOut = true;

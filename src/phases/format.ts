@@ -1,16 +1,14 @@
 import type OpenAI from "openai";
 import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types";
 import type { VaultTools } from "../vault-tools";
-import type { PageSimilarityService } from "../page-similarity";
 import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured } from "./llm-utils";
 import formatTemplate from "../../prompts/format.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
 import { missingTokensWithContext, looksTruncated, appendMissingLines } from "./format-utils";
-import { GLOBAL_FORMAT_SCHEMA_PATH, domainIndexPath } from "../wiki-path";
+import { GLOBAL_FORMAT_SCHEMA_PATH } from "../wiki-path";
 import { FormatOutputSchema } from "./zod-schemas";
 import { structuralErrorCounter } from "../structural-error-counter";
-import { parseIndexAnnotations } from "../wiki-index";
 
 function parseFormatOutput(text: string): { report: string; formatted: string } | null {
   let raw: unknown;
@@ -57,7 +55,6 @@ export async function* runFormat(
   chatHistory: ChatMessage[],
   signal: AbortSignal,
   opts: LlmCallOptions = {},
-  similarity?: PageSimilarityService,
   backend: "claude-agent" | "native-agent" = "native-agent",
   wikiVaultPath?: string,
 ): AsyncGenerator<RunEvent> {
@@ -219,11 +216,6 @@ export async function* runFormat(
   } catch (e) {
     yield { kind: "error", message: `Format: запись формата не удалась — ${(e as Error).message}` };
     return;
-  }
-
-  if (similarity && wikiVaultPath) {
-    const indexRaw = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
-    await similarity.refreshCache(wikiVaultPath, vaultTools, parseIndexAnnotations(indexRaw));
   }
 
   const missingFinal = missingTokensWithContext(original, finalFormatted);

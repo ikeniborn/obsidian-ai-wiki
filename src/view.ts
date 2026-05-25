@@ -647,6 +647,20 @@ export class LlmWikiView extends ItemView {
         this.liveStatusIconEl?.setText("💬");
         this.liveStatusTextEl?.setText("Forming response...");
       }
+    } else if (ev.kind === "info_text") {
+      this.stopWaiting();
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      const head = step.createDiv("ai-wiki-step-head");
+      head.createSpan({ cls: "ai-wiki-step-icon" }).setText(ev.icon);
+      head.createSpan({ cls: "ai-wiki-step-name" }).setText(ev.summary);
+      head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
+      if (ev.details && ev.details.length > 0) {
+        const body = step.createDiv("ai-wiki-step-preview");
+        for (const d of ev.details) {
+          body.createDiv().setText(`· ${d}`);
+        }
+      }
+      this.scrollSteps();
     } else if (ev.kind === "system") {
       const step = this.stepsEl.createDiv("ai-wiki-step");
       const head = step.createDiv("ai-wiki-step-head");

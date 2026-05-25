@@ -13,6 +13,7 @@ import { pageId, bfsExpand } from "../wiki-graph";
 import { graphCache } from "../wiki-graph-cache";
 import { selectSeeds } from "../wiki-seeds";
 import { parseIndexAnnotations } from "../wiki-index";
+import type { PageSimilarityService } from "../page-similarity";
 
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
@@ -29,6 +30,7 @@ export async function* runQuery(
   opts: LlmCallOptions = {},
   seedTopK: number = 5,
   seedMinScore: number = 0.1,
+  similarity?: PageSimilarityService,
 ): AsyncGenerator<RunEvent> {
   const question = args[0]?.trim();
   if (!question) {
@@ -61,11 +63,18 @@ export async function* runQuery(
   let outputTokens = 0;
 
   // Phase 2: seed selection from index annotations (no file content needed)
-  // Synthetic pages: empty content so only pageId + annotation tokens score
-  const syntheticPages = new Map<string, string>(
-    [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""])
-  );
-  let seeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+  let seeds: string[];
+  if (similarity && similarity.config.mode === "embedding") {
+    await similarity.loadCache(wikiVaultPath, vaultTools);
+    const allAnnotatedPaths = [...indexAnnotations.keys()].map((id) => `${wikiVaultPath}/${id}.md`);
+    const selected = await similarity.selectRelevant(question, indexAnnotations, allAnnotatedPaths);
+    seeds = selected.map((p) => pageId(p)).slice(0, topK);
+  } else {
+    const syntheticPages = new Map<string, string>(
+      [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""])
+    );
+    seeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+  }
 
   if (seeds.length === 0 && indexAnnotations.size > 0) {
     if (signal.aborted) return;
@@ -79,60 +88,29 @@ export async function* runQuery(
   }
   if (signal.aborted) return;
 
-  // Phase 3: glob (cheap — no content) + targeted read
+  // Phase 3: glob
   yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
   const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
   if (signal.aborted) return;
 
-  const idToPath = new Map<string, string>(files.map((f) => [pageId(f), f]));
+  // Phase 4: read all → build graph → BFS from seeds
+  // Always read all pages: similarity seeds set direction, graph expands coverage.
+  yield { kind: "tool_use", name: "Read", input: { files: files.length } };
+  const pages = await vaultTools.readAll(files);
+  yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
+  if (signal.aborted) return;
 
-  let pages: Map<string, string>;
-  let fromCache: boolean;
-  let selectedIds: Set<string>;
-
-  if (seeds.length > 0) {
-    // Targeted read: only seed files
-    const seedPaths = seeds.map((id) => idToPath.get(id)).filter((p): p is string => !!p);
-    yield { kind: "tool_use", name: "Read", input: { files: seedPaths.length } };
-    pages = await vaultTools.readAll(seedPaths);
-    yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
-    fromCache = false;
-    selectedIds = new Set(seeds);
-    yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache };
-  } else {
-    // Full fallback: read all + graph + BFS
-    yield { kind: "tool_use", name: "Read", input: { files: files.length } };
-    pages = await vaultTools.readAll(files);
-    yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
-    if (signal.aborted) return;
-
-    const graphResult = graphCache.get(domain.id, pages);
-    fromCache = graphResult.fromCache;
-    const allPageIds = [...pages.keys()].map(pageId);
-    seeds = selectSeeds(question, pages, topK, minScore, indexAnnotations);
-    if (seeds.length === 0) {
-      yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allPageIds.length } };
-      const seedOpts = { ...opts, thinkingBudgetTokens: undefined };
-      const seedRes = await llmSelectSeeds(question, indexAnnotations, allPageIds, llm, model, seedOpts, signal);
-      seeds = seedRes.seeds;
-      outputTokens += seedRes.outputTokens;
-      yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
-    }
-    if (signal.aborted) return;
-    if (seeds.length === 0) {
-      yield { kind: "error", message: "No relevant pages found for this query." };
-      return;
-    }
-    selectedIds = bfsExpand(seeds, graphResult.graph, graphDepth);
-    yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: pages.size, fromCache };
-  }
+  const graphResult = graphCache.get(domain.id, pages);
 
   if (seeds.length === 0) {
     yield { kind: "error", message: "No relevant pages found for this query." };
     return;
   }
+
+  const selectedIds = bfsExpand(seeds, graphResult.graph, graphDepth);
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache };
 
   const seedSet = new Set(seeds);
   const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);

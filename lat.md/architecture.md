@@ -59,7 +59,9 @@ Per-operation effort levels map to Claude's extended thinking. The subprocess ki
 
 Reduces LLM context size by pre-selecting the top-K most relevant wiki pages for a given source file. Built by `AgentRunner.buildSimilarity()` and passed to ingest, init, lint, and format phases.
 
-Two modes: `jaccard` (default, no API calls) uses token overlap scoring via `scoreSeed`; `embedding` fetches vectors from an OpenAI-compatible endpoint, falls back to Jaccard on error. Embedding vectors are cached per domain at `_config/_embeddings.json` and invalidated by annotation content hash. `refreshCache` updates stale entries after a domain write pass (lint, format). Configured via `embeddingModel`, `embeddingDimensions`, `relevantPagesTopK` in `LocalConfig.nativeAgent`. Only active for `native-agent` backend.
+Two modes: `jaccard` (default, no API calls) uses token overlap scoring via `scoreSeed`; `embedding` fetches vectors from an OpenAI-compatible endpoint (no API key required — supports Ollama), falls back to Jaccard on error. Embedding vectors are cached per domain at `_config/_embeddings.json` and invalidated by annotation content hash. `refreshCache` updates stale entries after a domain write pass — called by both ingest (after writing pages) and lint. Configured via `embeddingModel`, `embeddingDimensions`, `relevantPagesTopK` in `LocalConfig.nativeAgent`. Only active for `native-agent` backend.
+
+`loadCache()` reads `_embeddings.json` into memory before `selectRelevant()` so ingest and query don't re-fetch vectors from the API on every run. Called by ingest and query phases before `selectRelevant`.
 
 See [[src/page-similarity.ts#PageSimilarityService]], [[src/agent-runner.ts#AgentRunner]], [[operations#Ingest#Page Similarity]].
 
@@ -83,6 +85,8 @@ Throws `StorageMigrationConflictError` if both `.config/` and `_config/` exist s
 
 ## Run Events
 
-All operations communicate via `RunEvent` — a discriminated union emitted as an async generator stream. Events cover: LLM streaming deltas, tool calls, domain mutations, format previews, structural errors, graph stats, and final result.
+All operations communicate via `RunEvent` — a discriminated union emitted as an async generator stream. Events cover: LLM streaming deltas, tool calls, domain mutations, format previews, structural errors, graph stats, and phase progress.
+
+`info_text` events carry an icon, summary, and optional detail lines — rendered as step-items in the sidebar without requiring LLM output. Used by ingest to report similarity seed count and BFS expansion size.
 
 See [[src/types.ts#RunEvent]].
