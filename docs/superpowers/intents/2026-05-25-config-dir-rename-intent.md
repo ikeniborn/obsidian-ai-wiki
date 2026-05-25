@@ -1,7 +1,7 @@
 # Intent: Rename .config/ to _config/ for Obsidian Sync compatibility
 
 **Date:** 2026-05-25
-**Status:** draft
+**Status:** approved
 
 ## Objective
 
