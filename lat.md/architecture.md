@@ -45,13 +45,15 @@ Two LLM backends are supported and selected in settings. Backend choice affects 
 
 OpenAI-compatible HTTP client (`openai` SDK). Works with Ollama, OpenAI, or any compatible server. Supports streaming, `json_object` response format, thinking budget, and per-operation model overrides.
 
+HTTP `timeout` is set per-operation from `settings.timeouts[opKey]`. A value of `0` passes `undefined` to the SDK (no HTTP timeout). See [[src/controller.ts#WikiController#buildAgentRunner]].
+
 On mobile, streaming is disabled via `wrapMobileNoStream`. See [[src/controller.ts#WikiController#buildAgentRunner]].
 
 ### Claude Agent
 
 Wraps `ClaudeCliClient` — spawns `iclaude.sh` / `claude` CLI as a subprocess. Shell consent is required on first run. Not available on mobile.
 
-Per-operation effort levels map to Claude's extended thinking. See [[src/claude-cli-client.ts#ClaudeCliClient]].
+Per-operation effort levels map to Claude's extended thinking. The subprocess kill timer is skipped when `requestTimeoutSec=0` (no-limit mode). See [[src/claude-cli-client.ts#ClaudeCliClient]].
 
 ## PageSimilarityService
 
