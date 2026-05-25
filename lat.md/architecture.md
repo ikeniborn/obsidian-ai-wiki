@@ -85,6 +85,6 @@ Throws `StorageMigrationConflictError` if both `.config/` and `_config/` exist s
 
 ## Run Events
 
-All operations communicate via `RunEvent` — a discriminated union emitted as an async generator stream. Events cover: LLM streaming deltas, tool calls, domain mutations, format previews, structural errors, graph stats, phase status messages, and final result.
+Operations communicate via `RunEvent` — a discriminated union in an async generator stream, covering LLM deltas, tool calls, domain mutations, format previews, errors, phase status messages, and final result.
 
 The `info_text` variant carries a phase-level status message with an `icon`, a `summary` line, and an optional `details` string array (e.g. entity breakdown from ingest). The view renders it as a progress step item with elapsed time. See [[src/types.ts#RunEvent]].
