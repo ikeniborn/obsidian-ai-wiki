@@ -7,9 +7,10 @@ import formatTemplate from "../../prompts/format.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
 import { missingTokensWithContext, looksTruncated, appendMissingLines } from "./format-utils";
-import { GLOBAL_FORMAT_SCHEMA_PATH } from "../wiki-path";
+import { GLOBAL_FORMAT_SCHEMA_PATH, domainIndexPath } from "../wiki-path";
 import { FormatOutputSchema } from "./zod-schemas";
 import { structuralErrorCounter } from "../structural-error-counter";
+import { parseIndexAnnotations } from "../wiki-index";
 
 function parseFormatOutput(text: string): { report: string; formatted: string } | null {
   let raw: unknown;
@@ -43,6 +44,10 @@ function truncationHint(backend: "claude-agent" | "native-agent"): string {
     : "увеличьте лимит: Settings → per-operation → format → maxTokens";
 }
 
+async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
+  try { return await vaultTools.read(path); } catch { return ""; }
+}
+
 export async function* runFormat(
   args: string[],
   vaultTools: VaultTools,
@@ -54,6 +59,7 @@ export async function* runFormat(
   opts: LlmCallOptions = {},
   similarity?: PageSimilarityService,
   backend: "claude-agent" | "native-agent" = "native-agent",
+  wikiVaultPath?: string,
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
   const filePath = args[0];
@@ -213,6 +219,11 @@ export async function* runFormat(
   } catch (e) {
     yield { kind: "error", message: `Format: запись формата не удалась — ${(e as Error).message}` };
     return;
+  }
+
+  if (similarity && wikiVaultPath) {
+    const indexRaw = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
+    await similarity.refreshCache(wikiVaultPath, vaultTools, parseIndexAnnotations(indexRaw));
   }
 
   const missingFinal = missingTokensWithContext(original, finalFormatted);
