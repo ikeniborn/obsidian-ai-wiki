@@ -1,3 +1,22 @@
+---
+review:
+  spec_hash: 37e458c5b4aae61e
+  last_run: 2026-05-26
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "Change Points/3"
+      section_hash: 0806d26b87632e0a
+      text: "Table used informal vars C/U without mapping to createdCount/updatedCount. Fixed: replaced with {createdCount}/{updatedCount}."
+      verdict: fixed
+      verdict_at: 2026-05-26
+---
 # Design: Ingest Progress — Create vs Update Labels
 
 **Date:** 2026-05-26
@@ -44,9 +63,9 @@ Result text logic:
 
 | Case | Text |
 |------|------|
-| only creates | `создано N стр.` |
-| only updates | `обновлено N стр.` |
-| mixed | `создано C, обновлено U` |
+| only creates | `создано {createdCount} стр.` |
+| only updates | `обновлено {updatedCount} стр.` |
+| mixed | `создано {createdCount}, обновлено {updatedCount}` |
 | zero | unchanged — "нет новых или изменённых страниц" |
 
 The `written.length` (total successful) is replaced by `createdCount + updatedCount` for the success check.
