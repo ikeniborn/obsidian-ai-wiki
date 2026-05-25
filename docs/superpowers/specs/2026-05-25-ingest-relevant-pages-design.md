@@ -1,3 +1,39 @@
+---
+review:
+  spec_hash: a140eede451e93a0
+  last_run: "2026-05-25"
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: INFO
+      section: Architecture/New module
+      section_hash: d42c93eb94eeb522
+      text: "pageId→path mapping implicit in selectRelevant — clarified in Jaccard mode bullet points"
+      verdict: fixed
+      verdict_at: "2026-05-25"
+    - id: F-002
+      phase: clarity
+      severity: WARNING
+      section: Architecture/Embedding mode
+      section_hash: d42c93eb94eeb522
+      text: "no batch size limit for embedding API — fixed: chunked at 100 entries per request with Jaccard fallback on failure"
+      verdict: fixed
+      verdict_at: "2026-05-25"
+  section_hashes:
+    Problem: 0ca3714d61f2805a
+    Solution: 5cb0a2eb63b3c73a
+    Architecture: d42c93eb94eeb522
+    Configuration: 8888a53a77a638ae
+    Files Changed: 70dbb43ef72b6f62
+    Performance Impact: 33f53921e6d4775b
+    Out of Scope: 18cfc70d6ad5260f
+---
+
 # Design: Relevant Pages Selection for Ingest
 
 **Date:** 2026-05-25  
@@ -59,13 +95,16 @@ export class PageSimilarityService {
 
 **Jaccard mode** (default, no config required):
 - `tokenize(sourceContent)` → query tokens (reuses `wiki-seeds.ts`)
-- `scoreSeed(queryTokens, pageId, "", annotation)` for each entry in `indexAnnotations`
-- Sort descending → slice `topK` → map back to vault paths
+- For each path in `allPaths`: compute `pid = pageId(path)`, look up annotation in `indexAnnotations`, call `scoreSeed(queryTokens, pid, "", annotation)`
+- Sort descending → slice `topK` → return the matching vault paths (not pageIds)
+- Pages not present in `indexAnnotations` (no annotation yet) score 0 and are excluded unless topK is not reached
 
 **Embedding mode** (opt-in via settings):
-1. `POST baseUrl/embeddings` with truncated `sourceContent` (~2000 chars) → query vector
-2. `POST baseUrl/embeddings` batch for all annotations → page vectors
+1. `POST baseUrl/embeddings` with `sourceContent` truncated to first 2000 chars → query vector
+2. `POST baseUrl/embeddings` batch for page annotations, chunked at **100 entries per request** → page vectors (multiple requests if needed)
 3. Cosine similarity → sort → top-K paths
+
+Batch size of 100 stays within limits of common embedding APIs (OpenAI, Ollama). If a batch request fails, the affected pages fall back to Jaccard scoring for that call.
 
 ### Embedding cache: `!Wiki/<domain>/_config/_embeddings.json`
 
