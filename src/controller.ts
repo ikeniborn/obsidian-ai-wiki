@@ -240,7 +240,7 @@ export class WikiController {
 
     let agentRunner: AgentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat");
+      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat", this.plugin.settings.timeouts.lint);
     } catch (e) {
       new Notice(i18n().ctrl.errorPrefix((e as Error).message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
