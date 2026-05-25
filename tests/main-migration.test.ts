@@ -50,7 +50,7 @@ describe("migrateLegacyData", () => {
       ["!Wiki/_config/_domain.json", JSON.stringify(existing)],
     ]);
     const adapter = {
-      exists: vi.fn().mockImplementation(async (p: string) => vaultFiles.has(p) || p === "!Wiki" || p === "!Wiki/.config"),
+      exists: vi.fn().mockImplementation(async (p: string) => vaultFiles.has(p) || p === "!Wiki" || p === "!Wiki/_config"),
       read: vi.fn().mockImplementation(async (p: string) => vaultFiles.get(p)!),
       write: vi.fn().mockImplementation(async (p: string, c: string) => { vaultFiles.set(p, c); }),
       rename: vi.fn(),
