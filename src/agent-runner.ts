@@ -101,7 +101,7 @@ export class AgentRunner {
         break;
       case "format": {
         const hasVision = this.settings.backend === "claude-agent";
-        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend);
+        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, undefined, this.settings.backend);
         break;
       }
       default: {

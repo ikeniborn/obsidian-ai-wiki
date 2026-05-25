@@ -1,6 +1,7 @@
 import type OpenAI from "openai";
 import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types";
 import type { VaultTools } from "../vault-tools";
+import type { PageSimilarityService } from "../page-similarity";
 import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured } from "./llm-utils";
 import formatTemplate from "../../prompts/format.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
@@ -51,6 +52,7 @@ export async function* runFormat(
   chatHistory: ChatMessage[],
   signal: AbortSignal,
   opts: LlmCallOptions = {},
+  similarity?: PageSimilarityService,
   backend: "claude-agent" | "native-agent" = "native-agent",
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();

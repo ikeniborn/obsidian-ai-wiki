@@ -9,13 +9,14 @@ import { EntityTypesDeltaSchema, LintOutputSchema } from "./zod-schemas";
 import type { LintOutput } from "./zod-schemas";
 import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
-import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder } from "../wiki-path";
+import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, domainIndexPath } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm } from "../utils/raw-frontmatter";
 import { checkGraphStructure, pageId } from "../wiki-graph";
 import { graphCache } from "../wiki-graph-cache";
-import { upsertIndexAnnotation } from "../wiki-index";
+import { upsertIndexAnnotation, parseIndexAnnotations } from "../wiki-index";
 import { appendWikiLog } from "../wiki-log";
 import { ensureDomainConfig } from "../domain-config";
+import type { PageSimilarityService } from "../page-similarity";
 
 const META_FILES = ["_index.md", "_log.md"];
 
@@ -31,6 +32,7 @@ export async function* runLint(
   signal: AbortSignal,
   hubThreshold: number = 20,
   opts: LlmCallOptions = {},
+  similarity?: PageSimilarityService,
 ): AsyncGenerator<RunEvent> {
   const domainId = args[0];
   const targets = domainId
@@ -211,6 +213,11 @@ export async function* runLint(
     }
     if (backlinks.size > 0) {
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
+    }
+
+    if (similarity) {
+      const indexRaw = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
+      await similarity.refreshCache(wikiVaultPath, vaultTools, parseIndexAnnotations(indexRaw));
     }
 
   }
