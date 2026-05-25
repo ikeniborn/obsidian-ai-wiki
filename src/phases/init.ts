@@ -10,6 +10,8 @@ import initTemplate from "../../prompts/init.md";
 import { render } from "./template";
 import { runIngest } from "./ingest";
 import { GLOBAL_CONFIG_DIR, GLOBAL_WIKI_SCHEMA_PATH, GLOBAL_FORMAT_SCHEMA_PATH, domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath } from "../wiki-path";
+import type { PageSimilarityService } from "../page-similarity";
+import { parseIndexAnnotations } from "../wiki-index";
 
 export async function* runInit(
   args: string[],
@@ -110,6 +112,7 @@ export async function* runInitWithSources(
   opts: LlmCallOptions,
   onFileError: OnFileError | undefined,
   force: boolean = false,
+  similarity?: PageSimilarityService,
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
   let outputTokens = 0;
@@ -148,6 +151,8 @@ export async function* runInitWithSources(
     tryRead(vaultTools, GLOBAL_WIKI_SCHEMA_PATH),
     tryRead(vaultTools, domainIndexPath(wikiRootGuess)),
   ]);
+
+  let annotationsCache = parseIndexAnnotations(indexContent);
 
   let currentDomain: DomainEntry | null = existing ?? null;
 
@@ -289,7 +294,7 @@ export async function* runInitWithSources(
       let hadError = false;
       let caughtErr: Error | null = null;
       try {
-        for await (const ev of runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts)) {
+        for await (const ev of runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts, similarity, annotationsCache)) {
           yield ev;
           if (ev.kind === "domain_updated" && ev.domainId === domainId) {
             currentDomain = { ...currentDomain, ...ev.patch };
@@ -307,6 +312,11 @@ export async function* runInitWithSources(
         if (choice === "retry" && canRetry) { retried = true; continue; }
         done = true;
       }
+    }
+
+    if (similarity) {
+      const fresh = await tryRead(vaultTools, domainIndexPath(wikiRootGuess));
+      annotationsCache = parseIndexAnnotations(fresh);
     }
 
     if (signal.aborted) return;
