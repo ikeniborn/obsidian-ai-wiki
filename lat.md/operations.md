@@ -14,6 +14,12 @@ Extracts entity instances from a source file and writes or updates wiki pages. L
 
 Delta is merged into domain config and emitted as `domain_updated`. See [[src/phases/ingest.ts]], [[domain#DomainEntry]].
 
+### Page Similarity
+
+Selects which wiki pages are most relevant to a source file before passing context to the LLM. [[src/page-similarity.ts#PageSimilarityService]] implements two modes configured via `SimilarityConfig`.
+
+In `jaccard` mode, Jaccard scoring over tokenized source content vs index annotations ranks candidates; top-K paths are returned. In `embedding` mode (future), a vector cache is used instead. `refreshCache` is a no-op in Jaccard mode.
+
 ### entity_types_delta
 
 When the ingest LLM response includes `entity_types_delta`, the runner merges it into the current `entity_types` via `mergeEntityTypes` and emits `domain_updated`. The controller persists the patch.
