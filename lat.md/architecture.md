@@ -61,6 +61,8 @@ Reduces LLM context size by pre-selecting the top-K most relevant wiki pages for
 
 Two modes: `jaccard` (default, no API calls) uses token overlap scoring via `scoreSeed`; `embedding` fetches vectors from an OpenAI-compatible endpoint, falls back to Jaccard on error. Embedding vectors are cached per domain at `_config/_embeddings.json` and invalidated by annotation content hash. `refreshCache` updates stale entries after a domain write pass (lint, format). Configured via `embeddingModel`, `embeddingDimensions`, `relevantPagesTopK` in `LocalConfig.nativeAgent`. Only active for `native-agent` backend.
 
+**Embedding toggle sentinel**: `embeddingModel === undefined` means embedding is disabled (Jaccard mode). `embeddingModel === ""` means enabled but no model name entered yet — still selects `embedding` mode and shows child fields in settings UI. `embeddingModel !== undefined` is the guard used in both `settings.ts` (show child fields) and `agent-runner.ts` (select embedding mode).
+
 See [[src/page-similarity.ts#PageSimilarityService]], [[src/agent-runner.ts#AgentRunner]], [[operations#Ingest#Page Similarity]].
 
 ## VaultTools
@@ -83,6 +85,6 @@ Throws `StorageMigrationConflictError` if both `.config/` and `_config/` exist s
 
 ## Run Events
 
-All operations communicate via `RunEvent` — a discriminated union emitted as an async generator stream. Events cover: LLM streaming deltas, tool calls, domain mutations, format previews, structural errors, graph stats, and final result.
+All operations communicate via `RunEvent` — a discriminated union emitted as an async generator stream. Events cover: LLM streaming deltas, tool calls, domain mutations, format previews, structural errors, graph stats, phase status messages, and final result.
 
-See [[src/types.ts#RunEvent]].
+The `info_text` variant carries a phase-level status message with an `icon`, a `summary` line, and an optional `details` string array (e.g. entity breakdown from ingest). The view renders it as a progress step item with elapsed time. See [[src/types.ts#RunEvent]].
