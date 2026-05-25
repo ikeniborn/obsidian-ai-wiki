@@ -501,6 +501,63 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             }),
         );
 
+      // Relevant pages top-K (always visible for native-agent)
+      new Setting(containerEl)
+        .setName("Relevant pages (top-K)")
+        .setDesc("Max wiki pages loaded per ingest call. Lower = faster, less context. Default: 15.")
+        .addText((t) =>
+          t.setPlaceholder("15")
+            .setValue(String(this.localCache.nativeAgent?.relevantPagesTopK ?? 15))
+            .onChange(async (v) => {
+              const n = Number(v);
+              if (Number.isFinite(n) && n > 0) {
+                await this.patchLocalNative({ relevantPagesTopK: Math.floor(n) });
+              }
+            }),
+        );
+
+      new Setting(containerEl)
+        .setName("Enable semantic similarity (embeddings)")
+        .setDesc("Use embedding vectors for relevant page selection. Requires native backend with an embeddings-capable model.")
+        .addToggle((t) =>
+          t.setValue(!!this.localCache.nativeAgent?.embeddingModel)
+            .onChange(async (v) => {
+              if (!v) {
+                await this.patchLocalNative({ embeddingModel: undefined, embeddingDimensions: undefined });
+                this.display();
+              } else {
+                this.display();
+              }
+            }),
+        );
+
+      if (this.localCache.nativeAgent?.embeddingModel !== undefined) {
+        new Setting(containerEl)
+          .setName("Embedding model")
+          .setDesc("Model name for embeddings, e.g. text-embedding-3-small")
+          .addText((t) =>
+            t.setPlaceholder("text-embedding-3-small")
+              .setValue(this.localCache.nativeAgent?.embeddingModel ?? "")
+              .onChange(async (v) => {
+                await this.patchLocalNative({ embeddingModel: v.trim() || undefined });
+              }),
+          );
+
+        new Setting(containerEl)
+          .setName("Embedding dimensions")
+          .setDesc("Vector dimensions, e.g. 512 or 1536")
+          .addText((t) =>
+            t.setPlaceholder("512")
+              .setValue(String(this.localCache.nativeAgent?.embeddingDimensions ?? ""))
+              .onChange(async (v) => {
+                const n = Number(v);
+                if (Number.isFinite(n) && n > 0) {
+                  await this.patchLocalNative({ embeddingDimensions: Math.floor(n) });
+                }
+              }),
+          );
+      }
+
       // ── Proxy section (native-agent only) ───────────────────────────────────
       const proxy = eff.proxy;
       new Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
