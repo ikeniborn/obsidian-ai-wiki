@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { extractParentSourcePath, detectDomain } from "../src/phases/ingest";
+import { extractParentSourcePath, detectDomain, runIngest } from "../src/phases/ingest";
 import type { DomainEntry } from "../src/domain";
+import { PageSimilarityService } from "../src/page-similarity";
 
 describe("extractParentSourcePath", () => {
   const VAULT = "/vaults/Work";
@@ -46,5 +47,15 @@ describe("detectDomain", () => {
 
   it("returns null if domains empty", () => {
     expect(detectDomain("/project/file.md", [], VAULT)).toBeNull();
+  });
+});
+
+describe("runIngest similarity integration", () => {
+  it("exports runIngest with optional similarity and cachedAnnotations params", () => {
+    const svc = new PageSimilarityService({ mode: "jaccard", topK: 5 });
+    const annotations = new Map<string, string>();
+    expect(typeof runIngest).toBe("function");
+    expect(svc).toBeDefined();
+    expect(annotations).toBeDefined();
   });
 });

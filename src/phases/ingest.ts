@@ -13,8 +13,9 @@ import { render } from "./template";
 import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField } from "../utils/raw-frontmatter";
-import { upsertIndexAnnotation } from "../wiki-index";
+import { upsertIndexAnnotation, parseIndexAnnotations } from "../wiki-index";
 import { pageId } from "../wiki-graph";
+import type { PageSimilarityService } from "../page-similarity";
 import { appendWikiLog } from "../wiki-log";
 import type { IngestLogEntry } from "../wiki-log";
 
@@ -32,6 +33,8 @@ export async function* runIngest(
   vaultRoot: string,
   signal: AbortSignal,
   opts: LlmCallOptions = {},
+  similarity?: PageSimilarityService,
+  cachedAnnotations?: Map<string, string>,
 ): AsyncGenerator<RunEvent> {
   const filePath = args[0];
   if (!filePath) {
@@ -79,7 +82,14 @@ export async function* runIngest(
   ]);
 
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
-  const existingPages = await vaultTools.readAll(existingPaths.filter((f) => !f.endsWith("_index.md")));
+  let filteredPaths: string[];
+  if (similarity) {
+    const annotations = cachedAnnotations ?? parseIndexAnnotations(indexContent);
+    filteredPaths = await similarity.selectRelevant(sourceContent, annotations, existingPaths);
+  } else {
+    filteredPaths = existingPaths.filter((f) => !f.endsWith("_index.md"));
+  }
+  const existingPages = await vaultTools.readAll(filteredPaths);
 
   yield { kind: "assistant_text", delta: `Synthesizing wiki pages for domain "${domain.id}"...\n` };
 
