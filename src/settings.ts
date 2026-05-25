@@ -516,16 +516,19 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             }),
         );
 
+      new Setting(containerEl).setName("Semantic Search").setHeading();
+
       new Setting(containerEl)
         .setName("Enable semantic similarity (embeddings)")
         .setDesc("Use embedding vectors for relevant page selection. Requires native backend with an embeddings-capable model.")
         .addToggle((t) =>
-          t.setValue(!!this.localCache.nativeAgent?.embeddingModel)
+          t.setValue(this.localCache.nativeAgent?.embeddingModel !== undefined)
             .onChange(async (v) => {
               if (!v) {
                 await this.patchLocalNative({ embeddingModel: undefined, embeddingDimensions: undefined });
                 this.display();
               } else {
+                await this.patchLocalNative({ embeddingModel: "" });
                 this.display();
               }
             }),
