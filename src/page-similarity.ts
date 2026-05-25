@@ -75,7 +75,6 @@ async function fetchEmbeddings(
 
 export class PageSimilarityService {
   private cache: EmbeddingCacheFile | null = null;
-  private cacheLoaded = false;
 
   constructor(private config: SimilarityConfig) {}
 
