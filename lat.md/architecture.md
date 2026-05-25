@@ -45,7 +45,7 @@ Two LLM backends are supported and selected in settings. Backend choice affects 
 
 OpenAI-compatible HTTP client (`openai` SDK). Works with Ollama, OpenAI, or any compatible server. Supports streaming, `json_object` response format, thinking budget, and per-operation model overrides.
 
-HTTP `timeout` is set per-operation from `settings.timeouts[opKey]`. A value of `0` passes `undefined` to the SDK (no HTTP timeout). See [[src/controller.ts#WikiController#buildAgentRunner]].
+HTTP `timeout` is set per-operation from `settings.timeouts[opKey]`. A value of `0` passes `undefined` to the SDK (no HTTP timeout). Chat sessions (`dispatchChat`) forward `settings.timeouts.lint` as the per-operation timeout to `buildAgentRunner`. See [[src/controller.ts#WikiController#buildAgentRunner]].
 
 On mobile, streaming is disabled via `wrapMobileNoStream`. See [[src/controller.ts#WikiController#buildAgentRunner]].
 
