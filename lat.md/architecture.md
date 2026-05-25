@@ -53,6 +53,14 @@ Wraps `ClaudeCliClient` — spawns `iclaude.sh` / `claude` CLI as a subprocess. 
 
 Per-operation effort levels map to Claude's extended thinking. See [[src/claude-cli-client.ts#ClaudeCliClient]].
 
+## PageSimilarityService
+
+Reduces LLM context size by pre-selecting the top-K most relevant wiki pages for a given source file. Built by `AgentRunner.buildSimilarity()` and passed to ingest, init, lint, and format phases.
+
+Two modes: `jaccard` (default, no API calls) uses token overlap scoring via `scoreSeed`; `embedding` fetches vectors from an OpenAI-compatible endpoint, falls back to Jaccard on error. Embedding vectors are cached per domain at `_config/_embeddings.json` and invalidated by annotation content hash. `refreshCache` updates stale entries after a domain write pass (lint, format). Configured via `embeddingModel`, `embeddingDimensions`, `relevantPagesTopK` in `LocalConfig.nativeAgent`. Only active for `native-agent` backend.
+
+See [[src/page-similarity.ts#PageSimilarityService]], [[src/agent-runner.ts#AgentRunner]], [[operations#Ingest#Page Similarity]].
+
 ## VaultTools
 
 Thin adapter over Obsidian's vault API. Used by all phase functions for read, write, list, mkdir. Decouples phases from Obsidian internals and enables testing.

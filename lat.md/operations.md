@@ -18,7 +18,7 @@ Delta is merged into domain config and emitted as `domain_updated`. See [[src/ph
 
 Selects which wiki pages are most relevant to a source file before passing context to the LLM. [[src/page-similarity.ts#PageSimilarityService]] implements two modes configured via `SimilarityConfig`.
 
-In `jaccard` mode, Jaccard scoring over tokenized source content vs index annotations ranks candidates; top-K paths are returned. In `embedding` mode (future), a vector cache is used instead. `refreshCache` is a no-op in Jaccard mode.
+In `jaccard` mode, Jaccard scoring over tokenized source content vs index annotations ranks candidates; top-K paths are returned. In `embedding` mode, vectors for all annotated pages are fetched from an OpenAI-compatible embeddings endpoint and cached in `_config/_embeddings.json` per domain. Cache entries are keyed by page ID and invalidated when annotation content changes. Falls back to Jaccard on API error. `refreshCache` is a no-op in Jaccard mode. See [[architecture#PageSimilarityService]].
 
 ### entity_types_delta
 

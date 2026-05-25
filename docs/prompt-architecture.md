@@ -318,3 +318,55 @@ Phase 4: основной query-вызов (streaming, free text)
 ### wrapWithJsonFallback — прозрачный retry без json_object
 
 `AgentRunner` оборачивает переданный `LlmClient` в `wrapWithJsonFallback` (`agent-runner.ts:23`): если LLM вернул 400/422 с упоминанием "json_object" / "unsupported", запрос повторяется без `response_format`. Активируется только при `opts.jsonMode === "json_object"`. Позволяет один и тот же код работать с моделями без поддержки structured output.
+
+## PageSimilarityService — выбор релевантных страниц
+
+`PageSimilarityService` (`src/page-similarity.ts`) решает проблему O(N²) загрузки всех wiki-страниц в `runIngest`: вместо передачи всего wiki в контекст LLM выбираются только top-K наиболее релевантных страниц.
+
+### Два режима работы
+
+| Режим | Метод отбора | Требования |
+|---|---|---|
+| `jaccard` | Jaccard-оценка пересечения токенов source-файла и аннотаций из `_index.md` | — |
+| `embedding` | Косинусное сходство векторов через OpenAI-совместимый `/embeddings` endpoint | `embeddingModel`, `embeddingDimensions`, API-ключ |
+
+В режиме `embedding` при недоступности API автоматически применяется Jaccard как fallback. Запросы к API выполняются батчами по 100 элементов.
+
+### Кэш эмбеддингов
+
+Векторы страниц хранятся в `!Wiki/<domain>/_config/_embeddings.json`. Структура:
+
+```json
+{
+  "model": "text-embedding-3-small",
+  "dimensions": 1536,
+  "entries": {
+    "<pageId>": { "vector": "<base64 Float32Array>", "hash": "<annotation hash>" }
+  }
+}
+```
+
+Кэш инвалидируется при изменении аннотации страницы (по хэшу контента). При смене модели или числа измерений весь кэш пересоздаётся. `refreshCache` обновляет только устаревшие записи — вызывается в `runLint` и `runFormat` после записи домена.
+
+### Подключение к фазам через AgentRunner
+
+`AgentRunner.buildSimilarity()` создаёт единственный экземпляр `PageSimilarityService` на запрос и передаёт его во все фазы:
+
+| Фаза | Использование |
+|---|---|
+| `ingest` | `selectRelevant()` перед формированием контекста для LLM |
+| `init` | `selectRelevant()` для файлов после первого (ingest-pass) |
+| `lint` | `refreshCache()` после прохода по домену |
+| `format` | `refreshCache()` после записи страниц |
+
+Сервис активен только при `backend = "native-agent"`. При `backend = "claude-agent"` `buildSimilarity()` возвращает `undefined`, фазы получают весь контент без фильтрации.
+
+### Настройки (`LocalConfig.nativeAgent`)
+
+| Поле | Тип | Назначение |
+|---|---|---|
+| `embeddingModel` | `string?` | Модель эмбеддингов; если не задана — используется `jaccard` |
+| `embeddingDimensions` | `number?` | Число измерений; обязательно при `embeddingModel` |
+| `relevantPagesTopK` | `number?` | Максимум страниц в контексте (default: 15) |
+
+Поля хранятся в `local.json` (не синхронизируются между устройствами).
