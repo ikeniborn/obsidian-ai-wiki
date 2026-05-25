@@ -8,6 +8,14 @@ Assembles the final `messages[]` array for an LLM call. Always prepends `base.md
 
 Also applies model params: `temperature`, `maxTokens`, `topP`, `response_format`, `thinkingBudgetTokens`. Thinking mode removes `response_format`, `temperature`, `top_p`. See [[src/phases/llm-utils.ts#buildChatParams]].
 
+## Evaluator Prompt Pattern
+
+Only phase that sends no system message to `buildChatParams`. `prependBaseContract`
+creates `system = base.md` from scratch. The evaluator prompt (`evaluator.md`) renders
+into user role — unlike all other phases where the phase prompt is the system message.
+
+See [[src/phases/evaluator.ts#runEvaluator]].
+
 ## parseWithRetry
 
 Runs a structured LLM call with Zod validation and automatic retry on failure. On JSON parse failure or Zod schema mismatch, the previous response + error feedback is appended as a new user message.
