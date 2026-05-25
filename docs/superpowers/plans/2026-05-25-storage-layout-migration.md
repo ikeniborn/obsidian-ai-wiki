@@ -1,3 +1,45 @@
+---
+review:
+  plan_hash: 0523d4cc229647d0
+  spec_hash: 2efdd5e4582230d2
+  last_run: 2026-05-25
+  phases:
+    structure:     { status: passed }
+    coverage:      { status: passed }
+    dependencies:  { status: passed }
+    verifiability: { status: passed }
+    consistency:   { status: passed }
+  findings:
+    - id: F-001
+      severity: CRITICAL
+      phase: coverage
+      section: "Task 7 (new)"
+      section_hash: a4cdadb2be91d9bd
+      text: "view.ts not covered — spec §'Sidebar buttons: open log and index' requires replacing vault.adapter open calls with workspace.openLinkText(); no task in plan"
+      verdict: fixed
+    - id: F-002
+      severity: WARNING
+      phase: coverage
+      section: "Task 5"
+      section_hash: 3e2c5f691c535399
+      text: "Edge case 'no per-domain schema' — spec says copy bundled template from prompts/templates/; plan falls back to old !Wiki/.config/ global copy instead"
+      verdict: fixed
+    - id: F-003
+      severity: WARNING
+      phase: coverage
+      section: "Task 6"
+      section_hash: c7cfce8ba0c2a44a
+      text: "I/O error handling incomplete — spec: 'halt, leave old structure intact, log error'; plan throws non-conflict errors uncaught (plugin load crash instead of logged notice)"
+      verdict: fixed
+    - id: F-004
+      severity: WARNING
+      phase: verifiability
+      section: "Task 4"
+      section_hash: b48e2927161ab83c
+      text: "Step 6 test command omits lint.test.ts and lint-chat.test.ts despite Task 4 modifying lint.ts and lint-chat.ts"
+      verdict: fixed
+---
+
 # Storage Layout Migration Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -25,6 +67,7 @@
 | `src/phases/format.ts` | Modify | Read `_format_schema.md` from `GLOBAL_FORMAT_SCHEMA_PATH` |
 | `src/storage-migration.ts` | Create | Migration logic |
 | `src/main.ts` | Modify | Call `runStorageMigration`; fix hardcoded path |
+| `src/view.ts` | Modify | Sidebar buttons use `workspace.openLinkText()` instead of `vault.adapter` path |
 | `tests/wiki-path.test.ts` | Modify | Update path assertions to `_config/` |
 | `tests/storage-migration.test.ts` | Create | Tests for migration |
 | `tests/main-migration.test.ts` | Modify | Update hardcoded `!Wiki/.config/` path |
@@ -450,7 +493,7 @@ const formatSchemaPath = GLOBAL_FORMAT_SCHEMA_PATH;
 - [ ] **Step 6: Run phase tests**
 
 ```bash
-npx vitest run tests/ingest.test.ts tests/init-args.test.ts tests/controller-format.test.ts
+npx vitest run tests/ingest.test.ts tests/init-args.test.ts tests/controller-format.test.ts tests/lint.test.ts tests/lint-chat.test.ts
 ```
 
 Expected: all PASS
@@ -727,6 +770,14 @@ async function pickAndWriteSchema(
     }
   }
 
+  // Fall back to bundled template when no vault copy exists at all
+  if (bestContent === null) {
+    const bundled = `prompts/templates/${filename}`;
+    if (await adapter.exists(bundled)) {
+      bestContent = await adapter.read(bundled);
+    }
+  }
+
   if (bestContent !== null) {
     await adapter.write(dest, bestContent);
   }
@@ -792,11 +843,9 @@ async onload(): Promise<void> {
   try {
     await runStorageMigration(this.app.vault);
   } catch (e) {
-    if (e instanceof StorageMigrationConflictError) {
-      new Notice(`AI Wiki: storage migration conflict — ${e.message}`, 0);
-    } else {
-      throw e;
-    }
+    const msg = e instanceof Error ? e.message : String(e);
+    new Notice(`AI Wiki: storage migration failed — ${msg}`, 0);
+    console.error("[AI Wiki] storage migration error:", e);
   }
 
   await migrateLegacyData(this, this.domainStore, this.localConfigStore);
@@ -824,7 +873,43 @@ git commit -m "feat(main): call runStorageMigration on startup before other vaul
 
 ---
 
-### Task 7: Update docs
+### Task 7: Update `view.ts` sidebar buttons
+
+**Files:**
+- Modify: `src/view.ts`
+
+- [ ] **Step 1: Replace vault.adapter open calls with workspace.openLinkText**
+
+In `src/view.ts`, find the sidebar button handlers that open `_log.md` and `_index.md`. Replace each direct `vault.adapter` path open with:
+
+```typescript
+// Before (example):
+await this.app.vault.adapter.open(`${domainFolder}/_config/_log.md`);
+
+// After:
+await this.app.workspace.openLinkText("_log.md", domainFolder, false);
+```
+
+Apply the same replacement for `_index.md`.
+
+- [ ] **Step 2: Run tests**
+
+```bash
+npx vitest run tests/view.test.ts
+```
+
+Expected: all PASS (or no view tests — verify no TypeScript errors via build).
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/view.ts
+git commit -m "refactor(view): sidebar buttons use workspace.openLinkText for correct tab behaviour"
+```
+
+---
+
+### Task 8: Update docs
 
 **Files:**
 - Modify: `docs/prompt-architecture.md`
@@ -899,7 +984,7 @@ git commit -m "docs: update paths to _config/ layout in prompt-architecture and 
 
 ---
 
-### Task 8: Build and final verification
+### Task 9: Build and final verification
 
 - [ ] **Step 1: Run full test suite**
 
