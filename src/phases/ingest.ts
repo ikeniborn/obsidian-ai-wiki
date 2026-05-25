@@ -86,6 +86,7 @@ export async function* runIngest(
   if (similarity) {
     const annotations = cachedAnnotations ?? parseIndexAnnotations(indexContent);
     filteredPaths = await similarity.selectRelevant(sourceContent, annotations, existingPaths);
+    yield { kind: "assistant_text", delta: `Relevant pages: ${filteredPaths.length}/${existingPaths.length} selected via ${similarity.config.mode} similarity\n` };
   } else {
     filteredPaths = existingPaths.filter((f) => !f.endsWith("_index.md"));
   }
