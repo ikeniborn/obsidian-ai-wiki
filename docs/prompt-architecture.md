@@ -321,10 +321,6 @@ Phase 4: основной query-вызов (streaming, free text)
 
 `init-incremental.md` удалён. `ingest.ts` эмитирует `domain_updated { entity_types }` когда LLM возвращает `entity_types_delta`. Контроллер сохраняет патч в `DomainStore` через существующий механизм `domain_updated` — изменений в контроллере не потребовалось.
 
-### evaluator + base.md — не изолирован
-
-Старый комментарий "base.md не применяется к evaluator" — неверен. `buildChatParams` вызывается в `evaluator.ts` с messages без system-сообщения, поэтому `prependBaseContract` создаёт `system = base.md`. `evaluator.md` при этом идёт в `user` роль — это уникально, но base.md всё равно присутствует в запросе.
-
 ### wrapWithJsonFallback — прозрачный retry без json_object
 
 `AgentRunner` оборачивает переданный `LlmClient` в `wrapWithJsonFallback` (`agent-runner.ts:23`): если LLM вернул 400/422 с упоминанием "json_object" / "unsupported", запрос повторяется без `response_format`. Активируется только при `opts.jsonMode === "json_object"`. Позволяет один и тот же код работать с моделями без поддержки structured output.
