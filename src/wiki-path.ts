@@ -50,3 +50,7 @@ export function domainIndexPath(domainFolder: string): string {
 export function domainLogPath(domainFolder: string): string {
   return `${domainConfigDir(domainFolder)}/_log.md`;
 }
+
+export function domainEmbeddingsPath(domainFolder: string): string {
+  return `${domainConfigDir(domainFolder)}/_embeddings.json`;
+}
