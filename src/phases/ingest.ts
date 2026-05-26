@@ -19,6 +19,7 @@ import { graphCache } from "../wiki-graph-cache";
 import type { PageSimilarityService } from "../page-similarity";
 import { appendWikiLog } from "../wiki-log";
 import type { IngestLogEntry } from "../wiki-log";
+import { fixWikiLinks } from "../wiki-link-validator";
 
 function parseWikiStatus(content: string): string {
   const m = /^---\n[\s\S]*?^wiki_status:[ \t]*(.+)$/m.exec(content);
@@ -37,6 +38,7 @@ export async function* runIngest(
   similarity?: PageSimilarityService,
   cachedAnnotations?: Map<string, string>,
   graphDepth: number = 1,
+  wikiLinkValidationRetries: number = 3,
 ): AsyncGenerator<RunEvent> {
   const filePath = args[0];
   if (!filePath) {
@@ -168,6 +170,15 @@ export async function* runIngest(
       }
       pages = valid;
     }
+  }
+
+  // Programmatic WikiLink fix (always run; maxPasses=0 only warns)
+  const pagesMap = new Map(pages.map((p) => [p.path, p.content]));
+  const knownStems = new Set([...pagesMap.keys()].map((p) => p.split("/").pop()!.replace(/\.md$/, "")));
+  const wlFixResult = fixWikiLinks(pagesMap, wikiLinkValidationRetries, knownStems);
+  pages = pages.map((p) => ({ ...p, content: wlFixResult.fixed.get(p.path) ?? p.content }));
+  if (wlFixResult.warnings.length > 0) {
+    yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFixResult.warnings };
   }
 
   const written: string[] = [];
