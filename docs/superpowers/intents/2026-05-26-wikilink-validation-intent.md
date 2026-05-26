@@ -1,7 +1,7 @@
 # Intent: WikiLink Validation
 
 **Date:** 2026-05-26
-**Status:** draft
+**Status:** approved
 
 ## Objective
 
