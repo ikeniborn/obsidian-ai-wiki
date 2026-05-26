@@ -38,13 +38,15 @@ LLM-генерируемые WikiLinks некорректны при ingest и f
 
 ### Hard (architectural enforcement)
 
-- Максимум 10 retry в `parseWithRetry` — не превышать
+- `parseWithRetry` не трогаем (только Zod-схемы расширяем)
+- WikiLink-валидация имеет **отдельный** retry-лимит — настройка `wikiLinkValidationRetries` в general settings, default=3
+- Лимит применяется к фазам ingest/format/lint независимо от `parseWithRetry`
+- При исчерпании retry — сохранить страницу с предупреждением, не бросать ошибку
 - Сигнатуру `parseWithRetry` менять только через proposal-first (требует одобрения)
-- При исчерпании retry (10) — сохранить страницу с предупреждением, не бросать ошибку
 
 ## Autonomy Zones
 
-- Full autonomy (reversible, low risk): Zod-схемы в phase-файлах, шаблоны `_wiki_schema.md` / `_format_schema.md`, новый модуль `wiki-link-validator.ts`, lint-проверки WikiLinks, тесты
+- Full autonomy (reversible, low risk): Zod-схемы в phase-файлах, шаблоны `_wiki_schema.md` / `_format_schema.md`, новый модуль `wiki-link-validator.ts`, lint-проверки WikiLinks, добавление `wikiLinkValidationRetries` в settings + UI, тесты
 - Guarded (log + confidence threshold): —
 - Proposal-first (needs approval): изменение сигнатуры `parseWithRetry`
 - No autonomy (human only): —
