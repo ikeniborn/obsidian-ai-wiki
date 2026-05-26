@@ -26836,7 +26836,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
       existingContent = await vaultTools.read(page.path);
     } catch {
     }
-    yield { kind: "tool_use", name: "Write", input: { path: page.path } };
+    yield { kind: "tool_use", name: existingContent === null ? "Create" : "Update", input: { path: page.path } };
     try {
       await vaultTools.write(page.path, page.content);
       written.push(page.path);
@@ -26858,7 +26858,9 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
       yield { kind: "tool_result", ok: false, preview: e.message };
     }
   }
-  const resultText = buildIngestSummary(domain.id, sourceVaultPath, written, pages.length);
+  const createdCount = logEntries.filter((e) => e.action === "\u0421\u041E\u0417\u0414\u0410\u041D\u0410").length;
+  const updatedCount = logEntries.filter((e) => e.action === "\u041E\u0411\u041D\u041E\u0412\u041B\u0415\u041D\u0410").length;
+  const resultText = buildIngestSummary(domain.id, sourceVaultPath, createdCount, updatedCount, pages.length);
   yield { kind: "assistant_text", delta: resultText };
   const delta = parseResult.value.entity_types_delta;
   if (delta?.length) {
@@ -26905,17 +26907,23 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   }
   yield { kind: "result", durationMs: Date.now() - start, text: resultText, outputTokens: outputTokens || void 0 };
 }
-function buildIngestSummary(domainId, sourcePath, written, total) {
+function buildIngestSummary(domainId, sourcePath, createdCount, updatedCount, total) {
   const src = sourcePath.split("/").pop() ?? sourcePath;
-  if (written.length === 0) {
+  const totalWritten = createdCount + updatedCount;
+  if (totalWritten === 0) {
     return `\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \xAB${src}\xBB \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u0430\u043D \u2014 \u043D\u043E\u0432\u044B\u0445 \u0438\u043B\u0438 \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043D\u0435\u0442.`;
   }
-  const skipped = total - written.length;
-  const lines = [`\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \xAB${src}\xBB \u2192 \u0434\u043E\u043C\u0435\u043D \xAB${domainId}\xBB: \u0437\u0430\u043F\u0438\u0441\u0430\u043D\u043E ${written.length} \u0441\u0442\u0440.${skipped > 0 ? `, \u043E\u0448\u0438\u0431\u043E\u043A ${skipped}` : ""}`];
-  for (const p of written) {
-    lines.push(`  \u2022 ${p.split("/").pop()}`);
+  const skipped = total - totalWritten;
+  let countStr;
+  if (createdCount > 0 && updatedCount > 0) {
+    countStr = `\u0441\u043E\u0437\u0434\u0430\u043D\u043E ${createdCount}, \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E ${updatedCount}`;
+  } else if (createdCount > 0) {
+    countStr = `\u0441\u043E\u0437\u0434\u0430\u043D\u043E ${createdCount} \u0441\u0442\u0440.`;
+  } else {
+    countStr = `\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E ${updatedCount} \u0441\u0442\u0440.`;
   }
-  return lines.join("\n");
+  const errStr = skipped > 0 ? `, \u043E\u0448\u0438\u0431\u043E\u043A ${skipped}` : "";
+  return `\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \xAB${src}\xBB \u2192 \u0434\u043E\u043C\u0435\u043D \xAB${domainId}\xBB: ${countStr}${errStr}`;
 }
 function detectDomain(absFilePath, domains, vaultRoot) {
   for (const d of domains) {

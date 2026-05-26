@@ -24,6 +24,10 @@ In `jaccard` mode, Jaccard scoring over tokenized source content vs index annota
 
 Before writing each wiki page, ingest emits `tool_use` with `name: "Create"` for new pages or `name: "Update"` for existing ones. Error-path yields (blocked/invalid paths) keep `name: "Write"`.
 
+### Result Summary
+
+After writing pages, ingest emits a result text broken down by action: `создано N стр.` (all new), `обновлено N стр.` (all updated), or `создано C, обновлено U` (mixed). Zero-write runs report no changes.
+
 ### entity_types_delta
 
 When the ingest LLM response includes `entity_types_delta`, the runner merges it into the current `entity_types` via `mergeEntityTypes` and emits `domain_updated`. The controller persists the patch.
