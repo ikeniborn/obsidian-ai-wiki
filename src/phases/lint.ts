@@ -145,9 +145,6 @@ export async function* runLint(
     const fixesMap = new Map(lintResult.value.fixes.map((p) => [p.path, p.content]));
     const wlFixResult = fixWikiLinks(fixesMap, wikiLinkValidationRetries, knownStems);
     const fixedPages = lintResult.value.fixes.map((p) => ({ ...p, content: wlFixResult.fixed.get(p.path) ?? p.content }));
-    if (wlFixResult.warnings.length > 0) {
-      yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFixResult.warnings };
-    }
     const writtenPaths: string[] = [];
     for (const page of fixedPages) {
       yield { kind: "assistant_text", delta: `  • ${page.path.split("/").pop()}...\n` };
@@ -170,6 +167,10 @@ export async function* runLint(
         yield { kind: "tool_result", ok: false, preview: (e as Error).message };
       }
     }
+    if (wlFixResult.warnings.length > 0) {
+      yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFixResult.warnings };
+    }
+
     if (writtenPaths.length > 0) {
       reportParts.push(`### Исправлено страниц: ${writtenPaths.length}\n${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
       for (const p of writtenPaths) {
