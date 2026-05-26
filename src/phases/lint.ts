@@ -217,7 +217,18 @@ export async function* runLint(
 
     if (similarity) {
       const indexRaw = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
-      await similarity.refreshCache(wikiVaultPath, vaultTools, parseIndexAnnotations(indexRaw));
+      const annotations = parseIndexAnnotations(indexRaw);
+
+      if (similarity.config.mode === "embedding") {
+        yield { kind: "info_text", icon: "📥", summary: "загрузка кэша векторов..." };
+        await similarity.loadCache(wikiVaultPath, vaultTools);
+      }
+
+      const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, annotations);
+
+      if (similarity.config.mode === "embedding" && updated > 0) {
+        yield { kind: "info_text", icon: "📤", summary: `обновлено векторов: ${updated}` };
+      }
     }
 
   }

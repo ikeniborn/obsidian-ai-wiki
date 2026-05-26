@@ -373,6 +373,69 @@ describe("runLint", () => {
     const systemMsg = firstCall?.[0]?.messages?.find((m: any) => m.role === "system");
     expect(systemMsg?.content).not.toContain("Конвенции (_wiki_schema.md):");
   });
+
+  it("emits vector info_text events in embedding mode", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const similarity = {
+      config: { mode: "embedding" as const },
+      loadCache: vi.fn().mockResolvedValue(undefined),
+      refreshCache: vi.fn().mockResolvedValue({ updated: 3 }),
+    };
+    const events = await collect(
+      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal, 20, {}, similarity as any),
+    );
+    const infoEvents = events.filter((e: any) => e.kind === "info_text") as any[];
+    expect(similarity.loadCache).toHaveBeenCalled();
+    expect(similarity.refreshCache).toHaveBeenCalled();
+    expect(infoEvents.some((e) => e.summary.includes("загрузка кэша векторов"))).toBe(true);
+    expect(infoEvents.some((e) => e.summary.includes("обновлено векторов: 3"))).toBe(true);
+  });
+
+  it("does not emit vector events in jaccard mode", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const similarity = {
+      config: { mode: "jaccard" as const },
+      loadCache: vi.fn().mockResolvedValue(undefined),
+      refreshCache: vi.fn().mockResolvedValue({ updated: 0 }),
+    };
+    const events = await collect(
+      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal, 20, {}, similarity as any),
+    );
+    const vectorEvents = (events as any[]).filter(
+      (e) => e.kind === "info_text" && (e.summary.includes("векторов") || e.summary.includes("кэша")),
+    );
+    expect(vectorEvents).toHaveLength(0);
+  });
+
+  it("does not emit write event when updated is 0", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const similarity = {
+      config: { mode: "embedding" as const },
+      loadCache: vi.fn().mockResolvedValue(undefined),
+      refreshCache: vi.fn().mockResolvedValue({ updated: 0 }),
+    };
+    const events = await collect(
+      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal, 20, {}, similarity as any),
+    );
+    const infoEvents = (events as any[]).filter((e) => e.kind === "info_text");
+    expect(infoEvents.some((e) => e.summary.includes("загрузка кэша векторов"))).toBe(true);
+    expect(infoEvents.some((e) => e.summary.includes("обновлено векторов"))).toBe(false);
+  });
 });
 
 describe("runLint with merged assess+fix (LintOutputSchema)", () => {
