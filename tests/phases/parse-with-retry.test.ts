@@ -58,7 +58,7 @@ describe("parseWithRetry", () => {
     });
     expect(r.value).toEqual({ id: "a", value: 1 });
     expect(r.outputTokens).toBe(5);
-    expect(events).toEqual([]);
+    expect(events.filter(e => e.kind !== "llm_call_stats")).toEqual([]);
     expect(structuralErrorCounter.get()).toEqual({ failed: 0, retried: 0, ok: 1 });
   });
 

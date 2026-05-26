@@ -60,11 +60,9 @@ export async function* runLint(
       continue;
     }
 
-    await ensureDomainConfig(vaultTools, wikiVaultPath);
-
-    const schemaContent = await tryRead(vaultTools, GLOBAL_WIKI_SCHEMA_PATH);
-
     yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
+    await ensureDomainConfig(vaultTools, wikiVaultPath);
+    const schemaContent = await tryRead(vaultTools, GLOBAL_WIKI_SCHEMA_PATH);
     const allFiles = await vaultTools.listFiles(wikiVaultPath);
     const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
     yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
@@ -101,6 +99,7 @@ export async function* runLint(
     ];
 
     // Combined assess+fix call
+    yield { kind: "tool_use", name: "Analysing wiki", input: { pages: String(files.length) } };
     const lintPwtEvents: RunEvent[] = [];
     let lintResult: { value: LintOutput; outputTokens: number };
     try {
@@ -114,8 +113,10 @@ export async function* runLint(
         signal,
         onEvent: (ev) => lintPwtEvents.push(ev),
       });
+      yield { kind: "tool_result", ok: true, preview: `${lintResult.value.fixes.length} fixes` };
     } catch (e) {
       if (signal.aborted || (e as Error).name === "AbortError") return;
+      yield { kind: "tool_result", ok: false, preview: (e as Error).message };
       for (const ev of lintPwtEvents) yield ev;
       reportParts.push(`## ${domain.id}\nLLM validation failed: ${(e as Error).message}`);
       continue;
@@ -130,7 +131,9 @@ export async function* runLint(
 
     if (signal.aborted) return;
     yield { kind: "assistant_text", delta: `\nActualizing domain config for "${domain.id}"...\n` };
+    yield { kind: "tool_use", name: "Updating config", input: {} };
     const patchRes = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
+    yield { kind: "tool_result", ok: true, preview: patchRes.patch ? "config updated" : "no changes" };
     outputTokens += patchRes.outputTokens;
     const patch = patchRes.patch;
     if (patch) {
@@ -141,7 +144,15 @@ export async function* runLint(
 
     if (signal.aborted) return;
 
-    const knownStems = new Set([...pages.keys()].map((p) => p.split("/").pop()!.replace(/\.md$/, "")));
+    const allVaultPaths = await vaultTools.listFiles("").catch(() => [] as string[]);
+    const allMdPaths = allVaultPaths.filter(p => p.endsWith(".md"));
+    const knownStems = new Set([
+      ...allMdPaths.map(p => p.split("/").pop()!.replace(/\.md$/, "")),
+      ...[...pages.keys()].map((p) => p.split("/").pop()!.replace(/\.md$/, "")),
+    ]);
+    const stemToPath = new Map<string, string>(
+      allMdPaths.map(p => [p.split("/").pop()!.replace(/\.md$/, ""), p])
+    );
     const fixesMap = new Map(lintResult.value.fixes.map((p) => [p.path, p.content]));
     const wlFixResult = fixWikiLinks(fixesMap, wikiLinkValidationRetries, knownStems);
     const fixedPages = lintResult.value.fixes.map((p) => ({ ...p, content: wlFixResult.fixed.get(p.path) ?? p.content }));
@@ -193,9 +204,13 @@ export async function* runLint(
     const backlinks = new Map<string, Set<string>>();
     for (const [wikiPath, wikiContent] of pages) {
       for (const src of parseWikiSourcesFromFm(wikiContent)) {
-        const rawPath = src.slice(2, -2);
+        const bareName = src.slice(2, -2);
+        // Support both bare names ([[PageName]]) and legacy path-style ([[path/to/file.md]])
+        const rawPath = bareName.includes("/")
+          ? bareName
+          : (stemToPath.get(bareName) ?? bareName);
         if (!backlinks.has(rawPath)) backlinks.set(rawPath, new Set());
-        backlinks.get(rawPath)!.add(`[[${wikiPath}]]`);
+        backlinks.get(rawPath)!.add(`[[${wikiPath.split("/").pop()!.replace(/\.md$/, "")}]]`);
       }
     }
 

@@ -119,6 +119,11 @@ export async function* runIngest(
     existingPages, schemaContent, indexContent,
   );
 
+  const inputChars = messages.reduce((s, m) => s + (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length), 0);
+  const inputTokEst = Math.round(inputChars / 4);
+  const inputTokFmt = inputTokEst >= 1000 ? `~${(inputTokEst / 1000).toFixed(1)}k` : `~${inputTokEst}`;
+
+  yield { kind: "tool_use", name: "Synthesising pages", input: {} };
   const pwtEvents: RunEvent[] = [];
   let parseResult: { value: WikiPagesOutput; outputTokens: number };
   try {
@@ -130,8 +135,10 @@ export async function* runIngest(
       signal,
       onEvent: (ev) => pwtEvents.push(ev),
     });
+    yield { kind: "tool_result", ok: true, preview: `${existingPages.size} pages · ${inputTokFmt} tokens sent` };
   } catch (e) {
     if (signal.aborted || (e as Error).name === "AbortError") return;
+    yield { kind: "tool_result", ok: false, preview: (e as Error).message };
     for (const ev of pwtEvents) yield ev;
     yield { kind: "error", message: `ingest: LLM output failed validation — ${(e as Error).message}` };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
@@ -174,8 +181,9 @@ export async function* runIngest(
 
   // Programmatic WikiLink fix (always run; maxPasses=0 only warns)
   const pagesMap = new Map(pages.map((p) => [p.path, p.content]));
+  const allVaultPaths = await vaultTools.listFiles("").catch(() => [] as string[]);
   const knownStems = new Set([
-    ...[...existingPages.keys()].map((p) => p.split("/").pop()!.replace(/\.md$/, "")),
+    ...allVaultPaths.filter(p => p.endsWith(".md")).map(p => p.split("/").pop()!.replace(/\.md$/, "")),
     ...[...pagesMap.keys()].map((p) => p.split("/").pop()!.replace(/\.md$/, "")),
   ]);
   const wlFixResult = fixWikiLinks(pagesMap, wikiLinkValidationRetries, knownStems);
@@ -243,7 +251,7 @@ export async function* runIngest(
     const backlinkToday = new Date().toISOString().slice(0, 10);
     const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
     const existingArticles = parseWikiArticlesFromFm(sourceContent);
-    const writtenLinks = written.map((p) => `[[${p}]]`);
+    const writtenLinks = written.map((p) => `[[${p.split("/").pop()!.replace(/\.md$/, "")}]]`);
     const mergedArticles = [...new Set([...existingArticles, ...writtenLinks])];
     const updatedSource = upsertRawFrontmatter(sourceContent, {
       wiki_added: isFirstTime ? backlinkToday : undefined,
@@ -444,6 +452,7 @@ function buildIngestMessages(
     today,
     schema_block: schemaContent ? `КОНВЕНЦИИ (_wiki_schema.md):\n${schemaContent}` : "",
     source_path: sourcePath,
+    source_stem: sourcePath.split("/").pop()!.replace(/\.md$/, ""),
   });
 
   return [

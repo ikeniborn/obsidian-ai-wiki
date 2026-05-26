@@ -1,2097 +1,690 @@
 {
   "vitest.mock.ts": {
     "mtime": 1779363957.167018,
-    "ast_hash": "cba82a5a314f348c376998a5432029c7",
-    "semantic_hash": ""
+    "hash": "cba82a5a314f348c376998a5432029c7"
   },
   "vitest.setup.ts": {
     "mtime": 1779363957.167018,
-    "ast_hash": "369832f9ec383c6280e79d41df333e16",
-    "semantic_hash": ""
+    "hash": "369832f9ec383c6280e79d41df333e16"
   },
   "vitest.config.ts": {
     "mtime": 1779363957.167018,
-    "ast_hash": "ba2401a4ef1ad22740d670856cecb76e",
-    "semantic_hash": ""
+    "hash": "ba2401a4ef1ad22740d670856cecb76e"
   },
   "esbuild.config.mjs": {
     "mtime": 1779363957.158018,
-    "ast_hash": "db4b76c07d0df2c562079f3af1a3702e",
-    "semantic_hash": ""
+    "hash": "db4b76c07d0df2c562079f3af1a3702e"
   },
   "tests/init-similarity.test.ts": {
     "mtime": 1779725717.5736623,
-    "ast_hash": "a2eee8abb33e9ce7067dc0b4e39bd637",
-    "semantic_hash": ""
+    "hash": "a2eee8abb33e9ce7067dc0b4e39bd637"
   },
   "tests/local-config.test.ts": {
     "mtime": 1779657227.6860552,
-    "ast_hash": "661ba4523b0da170c45c128947ab8b88",
-    "semantic_hash": ""
+    "hash": "661ba4523b0da170c45c128947ab8b88"
   },
   "tests/storage-migration.test.ts": {
     "mtime": 1779711716.8601115,
-    "ast_hash": "d7e1fedf3a1471b5c2e83c5eefa2188e",
-    "semantic_hash": ""
+    "hash": "d7e1fedf3a1471b5c2e83c5eefa2188e"
   },
   "tests/agent-runner.integration.test.js": {
     "mtime": 1779363957.1650963,
-    "ast_hash": "9a6243c4c80767e96c2b7693e2043e6f",
-    "semantic_hash": ""
+    "hash": "9a6243c4c80767e96c2b7693e2043e6f"
   },
   "tests/llm-utils.test.ts": {
-    "mtime": 1779363957.1658547,
-    "ast_hash": "94e43724a8bd3566fb887b9cb6df097c",
-    "semantic_hash": ""
+    "mtime": 1779814696.8188803,
+    "hash": "52eb05e0e9ed5f9f2847109e2983f28f"
   },
   "tests/controller-per-op-timeout.test.ts": {
     "mtime": 1779730381.5675247,
-    "ast_hash": "792083054f2664ca61958d552f8e519c",
-    "semantic_hash": ""
+    "hash": "792083054f2664ca61958d552f8e519c"
   },
   "tests/evaluator.test.ts": {
     "mtime": 1779363957.1652005,
-    "ast_hash": "af1cef8899a2cf491c41202f72c7614e",
-    "semantic_hash": ""
+    "hash": "af1cef8899a2cf491c41202f72c7614e"
   },
   "tests/main-mobile.test.ts": {
     "mtime": 1779657227.686186,
-    "ast_hash": "ae260337c9cc5d88ae7b143f44a165f4",
-    "semantic_hash": ""
+    "hash": "ae260337c9cc5d88ae7b143f44a165f4"
   },
   "tests/wiki-log.test.ts": {
     "mtime": 1779711716.8602483,
-    "ast_hash": "48492bc14838a74a55033971048693a0",
-    "semantic_hash": ""
+    "hash": "48492bc14838a74a55033971048693a0"
   },
   "tests/mobile-llm-wrap.test.ts": {
     "mtime": 1779363957.1658547,
-    "ast_hash": "7d4a8b040a85da6b3c4f5e3adf48bd1a",
-    "semantic_hash": ""
+    "hash": "7d4a8b040a85da6b3c4f5e3adf48bd1a"
   },
   "tests/wiki-index.test.ts": {
     "mtime": 1779711716.860187,
-    "ast_hash": "0819cceef43251147efdd4f4861d4c2c",
-    "semantic_hash": ""
+    "hash": "0819cceef43251147efdd4f4861d4c2c"
   },
   "tests/collect-md-in-paths.test.ts": {
     "mtime": 1779657227.6856925,
-    "ast_hash": "5dedefc6bb0f874ce0cef51f0c4b2f9c",
-    "semantic_hash": ""
+    "hash": "5dedefc6bb0f874ce0cef51f0c4b2f9c"
   },
   "tests/view-last-domain.test.ts": {
     "mtime": 1779657227.6872077,
-    "ast_hash": "645e2ab0f354857935dac6bcfe385c54",
-    "semantic_hash": ""
+    "hash": "645e2ab0f354857935dac6bcfe385c54"
   },
   "tests/page-similarity.test.ts": {
-    "mtime": 1779725382.7409518,
-    "ast_hash": "95148100bd2fbdccdc44962e2c0a0920",
-    "semantic_hash": ""
+    "mtime": 1779796678.7251382,
+    "hash": "b15a09032d55f6f223c4d7e1942bb58a"
   },
   "tests/domain.test.ts": {
     "mtime": 1779363957.1652005,
-    "ast_hash": "64f3d854fbf28f7068569f2264cc0e3d",
-    "semantic_hash": ""
+    "hash": "64f3d854fbf28f7068569f2264cc0e3d"
   },
   "tests/claude-cli-client.test.js": {
     "mtime": 1779363957.1652005,
-    "ast_hash": "a2e16d8690b4f0406cee9a69b522cdf2",
-    "semantic_hash": ""
+    "hash": "a2e16d8690b4f0406cee9a69b522cdf2"
   },
   "tests/source-paths.test.ts": {
     "mtime": 1779363957.1664374,
-    "ast_hash": "da88350bb57f1da3c5ee2a3da6a3433f",
-    "semantic_hash": ""
+    "hash": "da88350bb57f1da3c5ee2a3da6a3433f"
   },
   "tests/settings.test.ts": {
     "mtime": 1779730084.7271926,
-    "ast_hash": "ca9ea5546701dfe21a22f6c7da756d84",
-    "semantic_hash": ""
+    "hash": "ca9ea5546701dfe21a22f6c7da756d84"
   },
   "tests/controller-manage-sources.test.ts": {
     "mtime": 1779657227.6858504,
-    "ast_hash": "1c260af1efff3dc19150a7d274f62395",
-    "semantic_hash": ""
+    "hash": "1c260af1efff3dc19150a7d274f62395"
   },
   "tests/view-add-source-btn.test.ts": {
     "mtime": 1779657227.6871161,
-    "ast_hash": "ba2730f58b68e8503c13d34ecc10f100",
-    "semantic_hash": ""
+    "hash": "ba2730f58b68e8503c13d34ecc10f100"
   },
   "tests/apply-domain-event.test.ts": {
     "mtime": 1779363957.1652005,
-    "ast_hash": "ca084fd2e1dd5799235312094da95713",
-    "semantic_hash": ""
+    "hash": "ca084fd2e1dd5799235312094da95713"
   },
   "tests/structural-error-counter.test.ts": {
     "mtime": 1779363957.1664374,
-    "ast_hash": "efdb8427cd7512424aafd727d121d2cb",
-    "semantic_hash": ""
+    "hash": "efdb8427cd7512424aafd727d121d2cb"
   },
   "tests/wiki-graph.test.ts": {
     "mtime": 1779363957.167018,
-    "ast_hash": "e16c5d6949d0f4dd1f9f3ce1ce99eb79",
-    "semantic_hash": ""
+    "hash": "e16c5d6949d0f4dd1f9f3ce1ce99eb79"
   },
   "tests/agent-runner-dev-log.test.ts": {
     "mtime": 1779711716.8594298,
-    "ast_hash": "8ddb7e6e0555479f63d56875579dac4a",
-    "semantic_hash": ""
+    "hash": "8ddb7e6e0555479f63d56875579dac4a"
   },
   "tests/manage-sources-modal.test.ts": {
     "mtime": 1779657227.686186,
-    "ast_hash": "c94128d400133b85927f8a26487b0686",
-    "semantic_hash": ""
+    "hash": "c94128d400133b85927f8a26487b0686"
   },
   "tests/main-migration.test.ts": {
     "mtime": 1779711716.8596942,
-    "ast_hash": "581906c1a559815788b59317864448f3",
-    "semantic_hash": ""
+    "hash": "581906c1a559815788b59317864448f3"
   },
   "tests/claude-cli-client.test.ts": {
     "mtime": 1779730215.973484,
-    "ast_hash": "c47887566b3396364d062925417eb55e",
-    "semantic_hash": ""
+    "hash": "c47887566b3396364d062925417eb55e"
   },
   "tests/stream.test.ts": {
-    "mtime": 1779363957.1664374,
-    "ast_hash": "8539b95c7a3c4b3c8c68b5ddb3e332b1",
-    "semantic_hash": ""
+    "mtime": 1779796678.7253702,
+    "hash": "f368c25ea3706717a16a197c772ff781"
   },
   "tests/no-fs-imports.test.ts": {
     "mtime": 1779657227.686186,
-    "ast_hash": "d133f099fafb289ac6dc20747783d885",
-    "semantic_hash": ""
+    "hash": "d133f099fafb289ac6dc20747783d885"
   },
   "tests/controller-mobile.test.ts": {
     "mtime": 1779363957.1652005,
-    "ast_hash": "f32a39a814a62ab7e9fe64c72cdcd0fc",
-    "semantic_hash": ""
+    "hash": "f32a39a814a62ab7e9fe64c72cdcd0fc"
   },
   "tests/wiki-seeds.test.ts": {
     "mtime": 1779363957.167018,
-    "ast_hash": "3933063d1d84860315620095579f8ea6",
-    "semantic_hash": ""
+    "hash": "3933063d1d84860315620095579f8ea6"
+  },
+  "tests/parse-with-retry.test.ts": {
+    "mtime": 1779796678.7251642,
+    "hash": "92557f097f06013fa29ee45a0e67c142"
   },
   "tests/template.test.ts": {
     "mtime": 1779363957.1664374,
-    "ast_hash": "560e20c7f38390d22e5c7618af075486",
-    "semantic_hash": ""
+    "hash": "560e20c7f38390d22e5c7618af075486"
   },
   "tests/ingest.test.ts": {
     "mtime": 1779725587.885973,
-    "ast_hash": "3bafa760c321837f5af0cdf17f8f8535",
-    "semantic_hash": ""
+    "hash": "3bafa760c321837f5af0cdf17f8f8535"
   },
   "tests/vault-tools.test.ts": {
     "mtime": 1779657227.687069,
-    "ast_hash": "8cb475956245c3cb2d8107a53730f102",
-    "semantic_hash": ""
+    "hash": "8cb475956245c3cb2d8107a53730f102"
   },
   "tests/controller-build-fail.test.ts": {
     "mtime": 1779363957.1652005,
-    "ast_hash": "6062b93395231b95954fb2f77afee02f",
-    "semantic_hash": ""
+    "hash": "6062b93395231b95954fb2f77afee02f"
   },
   "tests/domain-store-migration.test.ts": {
     "mtime": 1779363957.1652005,
-    "ast_hash": "fb591e1cd5ee83ec79e76818745a9ccc",
-    "semantic_hash": ""
+    "hash": "fb591e1cd5ee83ec79e76818745a9ccc"
   },
   "tests/prompts.test.ts": {
     "mtime": 1779657227.6869252,
-    "ast_hash": "82395f89cfed11cea73581b38a0082e7",
-    "semantic_hash": ""
+    "hash": "82395f89cfed11cea73581b38a0082e7"
+  },
+  "tests/wiki-link-validator.test.ts": {
+    "mtime": 1779797348.7026105,
+    "hash": "30c8f4d2f2833f1329760eda0c28d7ca"
   },
   "tests/controller-log-adapter.test.ts": {
     "mtime": 1779711716.8595102,
-    "ast_hash": "427f0488369aa18e3bb04c46054aab19",
-    "semantic_hash": ""
+    "hash": "427f0488369aa18e3bb04c46054aab19"
   },
   "tests/agent-runner.integration.test.ts": {
     "mtime": 1779657227.6856093,
-    "ast_hash": "0c8d44347954c2e372fee9d9f2519e08",
-    "semantic_hash": ""
+    "hash": "0c8d44347954c2e372fee9d9f2519e08"
   },
   "tests/init-args.test.ts": {
     "mtime": 1779363957.1658547,
-    "ast_hash": "ea518dbb689cf323f9e06eb98a305ee7",
-    "semantic_hash": ""
+    "hash": "ea518dbb689cf323f9e06eb98a305ee7"
   },
   "tests/format-migration.test.ts": {
     "mtime": 1779363957.1658547,
-    "ast_hash": "7635338b84fb4aff1b2375131d8acf1e",
-    "semantic_hash": ""
+    "hash": "7635338b84fb4aff1b2375131d8acf1e"
   },
   "tests/modals.test.ts": {
     "mtime": 1779363957.1658547,
-    "ast_hash": "50321efe0d12e1d190398a139a339301",
-    "semantic_hash": ""
+    "hash": "50321efe0d12e1d190398a139a339301"
   },
   "tests/shell-consent.test.ts": {
     "mtime": 1779657227.6869252,
-    "ast_hash": "cdd4a517e85c43bae8c7fb09d1afdc8f",
-    "semantic_hash": ""
+    "hash": "cdd4a517e85c43bae8c7fb09d1afdc8f"
   },
   "tests/domain-config.test.ts": {
     "mtime": 1779711716.859567,
-    "ast_hash": "e38331cc4608c4b8c3c3585663ca7410",
-    "semantic_hash": ""
+    "hash": "e38331cc4608c4b8c3c3585663ca7410"
   },
   "tests/controller-cache-invalidation.test.ts": {
     "mtime": 1779657227.6857595,
-    "ast_hash": "f47d992c29f3fc82de9ffdddec5e34ab",
-    "semantic_hash": ""
+    "hash": "f47d992c29f3fc82de9ffdddec5e34ab"
   },
   "tests/controller-format.test.ts": {
     "mtime": 1779363957.1652005,
-    "ast_hash": "05e20f350218c8e200e143af74961409",
-    "semantic_hash": ""
+    "hash": "05e20f350218c8e200e143af74961409"
   },
   "tests/vault-tools.test.js": {
     "mtime": 1779363957.1664374,
-    "ast_hash": "80fe9cfc30540659fc8f423f1da35887",
-    "semantic_hash": ""
+    "hash": "80fe9cfc30540659fc8f423f1da35887"
   },
   "tests/types.test.ts": {
     "mtime": 1779363957.1664374,
-    "ast_hash": "4b1b0fe8b7feb320c7deb931987d2f56",
-    "semantic_hash": ""
+    "hash": "4b1b0fe8b7feb320c7deb931987d2f56"
   },
   "tests/ingest-scope-modal.test.ts": {
     "mtime": 1779657227.6859522,
-    "ast_hash": "ad07baf4852b893f20d88bb67eade645",
-    "semantic_hash": ""
+    "hash": "ad07baf4852b893f20d88bb67eade645"
   },
   "tests/wiki-path.test.ts": {
     "mtime": 1779711716.8603053,
-    "ast_hash": "3f2437d86539edc692858269151fe070",
-    "semantic_hash": ""
+    "hash": "3f2437d86539edc692858269151fe070"
   },
   "tests/proxy.test.ts": {
     "mtime": 1779363957.1664374,
-    "ast_hash": "cfda65a626cdab4b9af71fec2e62dc33",
-    "semantic_hash": ""
+    "hash": "cfda65a626cdab4b9af71fec2e62dc33"
   },
   "tests/zod-schemas.test.ts": {
-    "mtime": 1779363957.167018,
-    "ast_hash": "3d9d220987ffb91dcbe410c76a837a0e",
-    "semantic_hash": ""
+    "mtime": 1779797727.9222298,
+    "hash": "d8d8fdd087be5bbf599f8450140ad228"
   },
   "tests/stream.test.js": {
     "mtime": 1779363957.1664374,
-    "ast_hash": "da66de61b15cece5b994f1be1604c478",
-    "semantic_hash": ""
+    "hash": "da66de61b15cece5b994f1be1604c478"
   },
   "tests/effective-settings.test.ts": {
     "mtime": 1779363957.1652005,
-    "ast_hash": "03256921adbc26cbbb9079eaec20c3d0",
-    "semantic_hash": ""
+    "hash": "03256921adbc26cbbb9079eaec20c3d0"
   },
   "tests/migration.test.ts": {
     "mtime": 1779363957.1658547,
-    "ast_hash": "33da158a59e5677d853de5757c1174eb",
-    "semantic_hash": ""
+    "hash": "33da158a59e5677d853de5757c1174eb"
   },
   "tests/mobile-fetch.test.ts": {
     "mtime": 1779363957.1658547,
-    "ast_hash": "a8311d46ce80ceea575b79733c7eb7ee",
-    "semantic_hash": ""
+    "hash": "a8311d46ce80ceea575b79733c7eb7ee"
   },
   "tests/view-metrics.test.ts": {
     "mtime": 1779363957.167018,
-    "ast_hash": "fbdcf9df12fdff4112b6ee47c49325ee",
-    "semantic_hash": ""
+    "hash": "fbdcf9df12fdff4112b6ee47c49325ee"
   },
   "tests/domain-store.test.ts": {
     "mtime": 1779711716.8596241,
-    "ast_hash": "5f93123d2cbc13f32fbe73200f1fcc2f",
-    "semantic_hash": ""
+    "hash": "5f93123d2cbc13f32fbe73200f1fcc2f"
   },
   "tests/modals.test.js": {
     "mtime": 1779363957.1658547,
-    "ast_hash": "8c8b4230f6ec60e7dbe4d11be7490418",
-    "semantic_hash": ""
+    "hash": "8c8b4230f6ec60e7dbe4d11be7490418"
   },
   "tests/domain.test.js": {
     "mtime": 1779363957.1652005,
-    "ast_hash": "f08e6f6c9046bf45af04801190f0d397",
-    "semantic_hash": ""
+    "hash": "f08e6f6c9046bf45af04801190f0d397"
   },
   "tests/view-history-rerun.test.ts": {
     "mtime": 1779657227.6871626,
-    "ast_hash": "f3ceb0884fad5c810739aecdb4973ef1",
-    "semantic_hash": ""
+    "hash": "f3ceb0884fad5c810739aecdb4973ef1"
   },
   "tests/wiki-graph-cache.test.ts": {
     "mtime": 1779363957.167018,
-    "ast_hash": "cd0e11be394120a18796dddc6256173c",
-    "semantic_hash": ""
+    "hash": "cd0e11be394120a18796dddc6256173c"
   },
   "tests/i18n-manage-sources.test.ts": {
     "mtime": 1779657227.6859522,
-    "ast_hash": "f124a2982fce6b8ed2f3107972b073e7",
-    "semantic_hash": ""
+    "hash": "f124a2982fce6b8ed2f3107972b073e7"
   },
   "tests/utils/vault-walk.test.ts": {
     "mtime": 1779657227.6869252,
-    "ast_hash": "5f0321a1fb06360b2b3bf5c5f44a3f2f",
-    "semantic_hash": ""
+    "hash": "5f0321a1fb06360b2b3bf5c5f44a3f2f"
   },
   "tests/utils/raw-frontmatter.test.ts": {
     "mtime": 1779363957.1664374,
-    "ast_hash": "368614c9df85e3c484c861bd24ecc5a0",
-    "semantic_hash": ""
+    "hash": "368614c9df85e3c484c861bd24ecc5a0"
   },
   "tests/phases/llm-utils.test.ts": {
     "mtime": 1779363957.1664374,
-    "ast_hash": "1189091f79ebe4ef8d53e1eec8c492d0",
-    "semantic_hash": ""
+    "hash": "1189091f79ebe4ef8d53e1eec8c492d0"
   },
   "tests/phases/query.test.ts": {
     "mtime": 1779657227.6868815,
-    "ast_hash": "32a4f8e8bbdba915c6033d8eae60a101",
-    "semantic_hash": ""
+    "hash": "32a4f8e8bbdba915c6033d8eae60a101"
   },
   "tests/phases/ingest.test.js": {
     "mtime": 1779363957.1664374,
-    "ast_hash": "0e173ef78fefa66a8d4eeacd44485360",
-    "semantic_hash": ""
+    "hash": "0e173ef78fefa66a8d4eeacd44485360"
   },
   "tests/phases/format-utils.test.ts": {
     "mtime": 1779363957.1658547,
-    "ast_hash": "03c638bf9580084878e40e0b7f62695e",
-    "semantic_hash": ""
+    "hash": "03c638bf9580084878e40e0b7f62695e"
   },
   "tests/phases/query-thinking.test.ts": {
     "mtime": 1779363957.1664374,
-    "ast_hash": "12a3fd886e0b3c9b4e1f121f7c18e432",
-    "semantic_hash": ""
+    "hash": "12a3fd886e0b3c9b4e1f121f7c18e432"
   },
   "tests/phases/lint-thinking.test.ts": {
     "mtime": 1779657227.686726,
-    "ast_hash": "17d70655d65e9007913c0704a502bc3b",
-    "semantic_hash": ""
+    "hash": "17d70655d65e9007913c0704a502bc3b"
   },
   "tests/phases/lint.test.ts": {
-    "mtime": 1779711716.8600485,
-    "ast_hash": "0263a0f48b5827bc29ffca10bd6ad993",
-    "semantic_hash": ""
+    "mtime": 1779796678.7253122,
+    "hash": "dc9fdce3698a7c35079fc6cfa5658084"
   },
   "tests/phases/lint-chat.test.ts": {
     "mtime": 1779711716.8599653,
-    "ast_hash": "b115a5adf898b6b59889fbc3056f4649",
-    "semantic_hash": ""
+    "hash": "b115a5adf898b6b59889fbc3056f4649"
   },
   "tests/phases/parse-with-retry.test.ts": {
-    "mtime": 1779363957.1664374,
-    "ast_hash": "9175a4f46e25ca372aaa610189234696",
-    "semantic_hash": ""
+    "mtime": 1779814696.8189573,
+    "hash": "3be497c30805f40048dc4d628a429c01"
   },
   "tests/phases/ingest.test.ts": {
-    "mtime": 1779711716.8598766,
-    "ast_hash": "32e1872200653cc7ba32524d1e567d11",
-    "semantic_hash": ""
+    "mtime": 1779769845.9198387,
+    "hash": "819748bb0de887918f71dfe15eafd86e"
   },
   "tests/phases/format.test.ts": {
     "mtime": 1779725918.3915682,
-    "ast_hash": "2827b68d6dcf801591c7e16092d18622",
-    "semantic_hash": ""
+    "hash": "2827b68d6dcf801591c7e16092d18622"
   },
   "tests/phases/lint.test.js": {
-    "mtime": 1779363957.1664374,
-    "ast_hash": "e89a91ab2c3d77e1ca59915e2cc34461",
-    "semantic_hash": ""
+    "mtime": 1779796678.7252207,
+    "hash": "ae5ab8c8e839e911df38f621661e7414"
   },
   "tests/phases/query.test.js": {
     "mtime": 1779363957.1664374,
-    "ast_hash": "c078a465949ee44958327861fe463848",
-    "semantic_hash": ""
+    "hash": "c078a465949ee44958327861fe463848"
   },
   "tests/phases/zod-schemas.test.ts": {
     "mtime": 1779657227.6869252,
-    "ast_hash": "11a6bc2b0e98aed2e8403193ddb9711e",
-    "semantic_hash": ""
+    "hash": "11a6bc2b0e98aed2e8403193ddb9711e"
   },
   "tests/phases/init.test.js": {
     "mtime": 1779363957.1664374,
-    "ast_hash": "9d8164e46ce6e5fd9059880880023d6b",
-    "semantic_hash": ""
+    "hash": "9d8164e46ce6e5fd9059880880023d6b"
   },
   "tests/phases/init.test.ts": {
     "mtime": 1779657227.686613,
-    "ast_hash": "e03377fbb44c85b3ba8fa7e79e39aa0b",
-    "semantic_hash": ""
+    "hash": "e03377fbb44c85b3ba8fa7e79e39aa0b"
   },
   "tests/phases/init-thinking.test.ts": {
     "mtime": 1779657227.6864965,
-    "ast_hash": "569e8dd59c78c866973764afe1c38a78",
-    "semantic_hash": ""
+    "hash": "569e8dd59c78c866973764afe1c38a78"
   },
   "tests/phases/init.force.test.ts": {
     "mtime": 1779363957.1664374,
-    "ast_hash": "2652d4c85efd47e02f56e4e1f0ace8f9",
-    "semantic_hash": ""
+    "hash": "2652d4c85efd47e02f56e4e1f0ace8f9"
   },
   "scripts/dspy/optimize.py": {
     "mtime": 1779363957.161411,
-    "ast_hash": "7835ff54e18b18a08fc61793c185988c",
-    "semantic_hash": ""
+    "hash": "7835ff54e18b18a08fc61793c185988c"
   },
   "scripts/dspy/lib/writer.py": {
     "mtime": 1779363957.161411,
-    "ast_hash": "ee86f07f288a62da42eaee06860d27d1",
-    "semantic_hash": ""
+    "hash": "ee86f07f288a62da42eaee06860d27d1"
   },
   "scripts/dspy/lib/optimizer.py": {
     "mtime": 1779363957.161411,
-    "ast_hash": "8153eac7b9f318aa7c2928c14797054d",
-    "semantic_hash": ""
+    "hash": "8153eac7b9f318aa7c2928c14797054d"
   },
   "scripts/dspy/lib/__init__.py": {
     "mtime": 1779363957.1612837,
-    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
-    "semantic_hash": ""
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "scripts/dspy/lib/signature.py": {
     "mtime": 1779363957.161411,
-    "ast_hash": "e482827ddf7c590dc48201f507580d61",
-    "semantic_hash": ""
+    "hash": "e482827ddf7c590dc48201f507580d61"
   },
   "scripts/dspy/lib/loader.py": {
     "mtime": 1779363957.161411,
-    "ast_hash": "3750bb1ec18d70a6f3c502adcfbabccf",
-    "semantic_hash": ""
+    "hash": "3750bb1ec18d70a6f3c502adcfbabccf"
   },
   "scripts/dspy/lib/backend.py": {
     "mtime": 1779363957.161411,
-    "ast_hash": "41b9f199553f3defb23fac95286be5ea",
-    "semantic_hash": ""
+    "hash": "41b9f199553f3defb23fac95286be5ea"
   },
   "scripts/dspy/tests/test_signature.py": {
     "mtime": 1779363957.1616092,
-    "ast_hash": "3abfdf85a4a867f25590ad0377a4f093",
-    "semantic_hash": ""
+    "hash": "3abfdf85a4a867f25590ad0377a4f093"
   },
   "scripts/dspy/tests/test_loader.py": {
     "mtime": 1779363957.1616092,
-    "ast_hash": "2868b548a5b624b6acb4955dbcf9423b",
-    "semantic_hash": ""
+    "hash": "2868b548a5b624b6acb4955dbcf9423b"
   },
   "scripts/dspy/tests/test_writer.py": {
     "mtime": 1779363957.1616092,
-    "ast_hash": "143bb66c6b2fb739cc9ac39343e53036",
-    "semantic_hash": ""
+    "hash": "143bb66c6b2fb739cc9ac39343e53036"
   },
   "scripts/dspy/tests/__init__.py": {
     "mtime": 1779363957.161411,
-    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
-    "semantic_hash": ""
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "scripts/dspy/tests/test_optimizer.py": {
     "mtime": 1779363957.1616092,
-    "ast_hash": "4b09d57f8fa93a92f75018713f8d786e",
-    "semantic_hash": ""
+    "hash": "4b09d57f8fa93a92f75018713f8d786e"
   },
   "scripts/dspy/tests/test_backend.py": {
     "mtime": 1779363957.1616092,
-    "ast_hash": "1015bd4ab4a42ff5d28f7892f7a2cae6",
-    "semantic_hash": ""
+    "hash": "1015bd4ab4a42ff5d28f7892f7a2cae6"
   },
   "src/mobile-fetch.ts": {
     "mtime": 1779363957.1632447,
-    "ast_hash": "2d6287c5925caba49bb9c4c49308a7ab",
-    "semantic_hash": ""
+    "hash": "2d6287c5925caba49bb9c4c49308a7ab"
   },
   "src/modals.ts": {
     "mtime": 1779657227.6832273,
-    "ast_hash": "f497553488e32da0a40569b19f950b28",
-    "semantic_hash": ""
+    "hash": "f497553488e32da0a40569b19f950b28"
   },
   "src/effective-settings.ts": {
     "mtime": 1779363957.1632447,
-    "ast_hash": "b3d22c976a459a7964cbe9413364c7d0",
-    "semantic_hash": ""
+    "hash": "b3d22c976a459a7964cbe9413364c7d0"
   },
   "src/controller.ts": {
-    "mtime": 1779731105.3820405,
-    "ast_hash": "ebebf911985996d4f0e573b6480a7847",
-    "semantic_hash": ""
+    "mtime": 1779796678.7241027,
+    "hash": "189b6ab7b003f90200765e0d854b8199"
   },
   "src/agent-runner.ts": {
-    "mtime": 1779741601.8164184,
-    "ast_hash": "2977ac450fd341184a5215ca1f0f93f7",
-    "semantic_hash": ""
+    "mtime": 1779798531.9301248,
+    "hash": "57f7bb72aaf34ef29d6377501b5fed12"
   },
   "src/proxy.ts": {
     "mtime": 1779363957.1639364,
-    "ast_hash": "154e1a27814aba6332b8007bb56d9c56",
-    "semantic_hash": ""
+    "hash": "154e1a27814aba6332b8007bb56d9c56"
   },
   "src/main.ts": {
     "mtime": 1779711716.858361,
-    "ast_hash": "569239c5d97c61be70819fc246257bed",
-    "semantic_hash": ""
+    "hash": "569239c5d97c61be70819fc246257bed"
   },
   "src/wiki-seeds.ts": {
     "mtime": 1779363957.164018,
-    "ast_hash": "5ee6d9eb4b9d21ce86a3a962bca455d4",
-    "semantic_hash": ""
+    "hash": "5ee6d9eb4b9d21ce86a3a962bca455d4"
   },
   "src/domain.ts": {
     "mtime": 1779657227.6827817,
-    "ast_hash": "ce400191064da33467afd055f0d7eded",
-    "semantic_hash": ""
+    "hash": "ce400191064da33467afd055f0d7eded"
   },
   "src/wiki-index.ts": {
     "mtime": 1779657227.6844523,
-    "ast_hash": "dd3d11f0c32b15c99e068a26820777f7",
-    "semantic_hash": ""
+    "hash": "dd3d11f0c32b15c99e068a26820777f7"
   },
   "src/source-paths.ts": {
     "mtime": 1779363957.164018,
-    "ast_hash": "2d7bc9f6817d07b48a23e935e64b7e9f",
-    "semantic_hash": ""
+    "hash": "2d7bc9f6817d07b48a23e935e64b7e9f"
   },
   "src/storage-migration.ts": {
     "mtime": 1779711716.8590546,
-    "ast_hash": "dec2420c9138005c6767831c77ade2df",
-    "semantic_hash": ""
+    "hash": "dec2420c9138005c6767831c77ade2df"
   },
   "src/md-modules.d.ts": {
     "mtime": 1779363957.1632447,
-    "ast_hash": "abffb78177d180c14a8441155503afd2",
-    "semantic_hash": ""
+    "hash": "abffb78177d180c14a8441155503afd2"
   },
   "src/mobile-llm-wrap.ts": {
     "mtime": 1779363957.1632447,
-    "ast_hash": "2f2907c174464390fa5ead014139e207",
-    "semantic_hash": ""
+    "hash": "2f2907c174464390fa5ead014139e207"
   },
   "src/settings.ts": {
-    "mtime": 1779743300.240109,
-    "ast_hash": "51eec29d4a95f98fda57b0e2e439b46a",
-    "semantic_hash": ""
+    "mtime": 1779798051.8674123,
+    "hash": "3ecf88a374e7526a47f04bc121926131"
   },
   "src/wiki-graph-cache.ts": {
     "mtime": 1779363957.164018,
-    "ast_hash": "63bef97cb310817c047f8076a5945d43",
-    "semantic_hash": ""
+    "hash": "63bef97cb310817c047f8076a5945d43"
   },
   "src/vault-tools.ts": {
     "mtime": 1779657227.6842153,
-    "ast_hash": "edb1ee45d111588b8d20d1adc204095e",
-    "semantic_hash": ""
+    "hash": "edb1ee45d111588b8d20d1adc204095e"
   },
   "src/local-config.ts": {
     "mtime": 1779725108.608324,
-    "ast_hash": "42c4d402c167aa94dad3568f58a22332",
-    "semantic_hash": ""
+    "hash": "42c4d402c167aa94dad3568f58a22332"
   },
   "src/wiki-log.ts": {
     "mtime": 1779657227.6844966,
-    "ast_hash": "a3677491bacc2f72ed9c5b839183e75e",
-    "semantic_hash": ""
+    "hash": "a3677491bacc2f72ed9c5b839183e75e"
   },
   "src/wiki-path.ts": {
     "mtime": 1779725025.5170329,
-    "ast_hash": "ac3f2535b4f58dee0bcbfc3378d34526",
-    "semantic_hash": ""
+    "hash": "ac3f2535b4f58dee0bcbfc3378d34526"
   },
   "src/page-similarity.ts": {
-    "mtime": 1779742253.2502875,
-    "ast_hash": "f54437451785c76370e8268f4e57db7b",
-    "semantic_hash": ""
+    "mtime": 1779796678.7241828,
+    "hash": "55eced7ce4680dd0ec870f8769aa16b3"
+  },
+  "src/wiki-link-validator.ts": {
+    "mtime": 1779797489.6669977,
+    "hash": "4a392fb1a8857eb170af4e0af104e25e"
   },
   "src/domain-config.ts": {
     "mtime": 1779657227.6826727,
-    "ast_hash": "9c2b95db13091b920010cb0a3940ab55",
-    "semantic_hash": ""
+    "hash": "9c2b95db13091b920010cb0a3940ab55"
   },
   "src/i18n.ts": {
-    "mtime": 1779730724.9903274,
-    "ast_hash": "bbd21451b4eda3fae4d1848f53f4b4aa",
-    "semantic_hash": ""
+    "mtime": 1779798043.0055172,
+    "hash": "85746be8c3be73e370e2a06a314d512a"
   },
   "src/domain-store.ts": {
     "mtime": 1779711716.8581736,
-    "ast_hash": "5695f52478f88d0eb2ae6d1b90e6007a",
-    "semantic_hash": ""
+    "hash": "5695f52478f88d0eb2ae6d1b90e6007a"
   },
   "src/structural-error-counter.ts": {
     "mtime": 1779363957.164018,
-    "ast_hash": "0bf10f2182063ad5c30641880d7d69ed",
-    "semantic_hash": ""
+    "hash": "0bf10f2182063ad5c30641880d7d69ed"
   },
   "src/wiki-graph.ts": {
     "mtime": 1779363957.164018,
-    "ast_hash": "dbd4bbf010ac14b9de7838853ddeea34",
-    "semantic_hash": ""
+    "hash": "dbd4bbf010ac14b9de7838853ddeea34"
   },
   "src/claude-cli-client.ts": {
     "mtime": 1779730228.1924136,
-    "ast_hash": "e0385d90914209e9cdf996aacc088b9e",
-    "semantic_hash": ""
+    "hash": "e0385d90914209e9cdf996aacc088b9e"
   },
   "src/types.ts": {
-    "mtime": 1779742132.8642082,
-    "ast_hash": "33fa424cd1449f3c8a8ce41c6b4e9f46",
-    "semantic_hash": ""
+    "mtime": 1779814696.8185785,
+    "hash": "95af227981c114e22406f612b8fa7238"
   },
   "src/view.ts": {
-    "mtime": 1779742146.8240113,
-    "ast_hash": "2d89d7d16dc21a08b2053cedce198fd8",
-    "semantic_hash": ""
+    "mtime": 1779814696.8187613,
+    "hash": "c12f403c84e4ab71e65c30b756d450bd"
   },
   "src/stream.ts": {
-    "mtime": 1779363957.164018,
-    "ast_hash": "a0b80f52c42058f27f87d13af0661773",
-    "semantic_hash": ""
+    "mtime": 1779796678.7247477,
+    "hash": "808a7ade570dc1f6da25f3b4b0799ebe"
   },
   "src/utils/raw-frontmatter.ts": {
     "mtime": 1779363957.164018,
-    "ast_hash": "5afb45f826ca1a1d6bd03fade3dc8d48",
-    "semantic_hash": ""
+    "hash": "5afb45f826ca1a1d6bd03fade3dc8d48"
   },
   "src/utils/vault-walk.ts": {
     "mtime": 1779657227.6841614,
-    "ast_hash": "2c95ace799219bb60ad91ac55d7e31ae",
-    "semantic_hash": ""
+    "hash": "2c95ace799219bb60ad91ac55d7e31ae"
   },
   "src/phases/query.ts": {
-    "mtime": 1779743269.7023528,
-    "ast_hash": "14a47f9328bc9018da8e6cfda2ebd90d",
-    "semantic_hash": ""
+    "mtime": 1779796678.7247005,
+    "hash": "7d2ba6ae6fa588a71aefa74debe2ad17"
   },
   "src/phases/parse-with-retry.ts": {
-    "mtime": 1779657227.6837118,
-    "ast_hash": "cba2a271c9923154638c5a045bae963b",
-    "semantic_hash": ""
+    "mtime": 1779814696.818504,
+    "hash": "13d743f4170e536d7a8f85b8ed3ace5e"
   },
   "src/phases/template.ts": {
     "mtime": 1779363957.1639364,
-    "ast_hash": "5c7446685a6238fba936e71b9885eb79",
-    "semantic_hash": ""
+    "hash": "5c7446685a6238fba936e71b9885eb79"
   },
   "src/phases/schemas.ts": {
     "mtime": 1779363957.1639364,
-    "ast_hash": "a6c9831ccfbcbea8c627cdf95583b038",
-    "semantic_hash": ""
+    "hash": "a6c9831ccfbcbea8c627cdf95583b038"
   },
   "src/phases/lint-chat.ts": {
     "mtime": 1779711716.8588686,
-    "ast_hash": "c2d14fb261abc99395aa5c2da44a2264",
-    "semantic_hash": ""
+    "hash": "c2d14fb261abc99395aa5c2da44a2264"
   },
   "src/phases/ingest.ts": {
-    "mtime": 1779742640.2603693,
-    "ast_hash": "997ad1cd1e2ab15ea3d1db846527a585",
-    "semantic_hash": ""
+    "mtime": 1779816446.8865674,
+    "hash": "558b01320ccde7e8c9df0a862a7b0523"
   },
   "src/phases/format-utils.ts": {
     "mtime": 1779363957.1639364,
-    "ast_hash": "415fabb522b41be6416243ede8e4fe3e",
-    "semantic_hash": ""
+    "hash": "415fabb522b41be6416243ede8e4fe3e"
   },
   "src/phases/format.ts": {
-    "mtime": 1779741586.2678885,
-    "ast_hash": "f023b99a308e782a1926933428168a87",
-    "semantic_hash": ""
+    "mtime": 1779802184.9467862,
+    "hash": "4c7e52fbf490eca5c92c18e2935e8639"
   },
   "src/phases/init.ts": {
     "mtime": 1779726279.7346725,
-    "ast_hash": "8088d5b6f8f70ecf5369623b328a9729",
-    "semantic_hash": ""
+    "hash": "8088d5b6f8f70ecf5369623b328a9729"
   },
   "src/phases/chat.ts": {
-    "mtime": 1779363957.1632447,
-    "ast_hash": "eea6b9feee565d34bd9a69ffddc9f3e8",
-    "semantic_hash": ""
+    "mtime": 1779796678.724234,
+    "hash": "61bf85b3a69c2f119b9435ecdeedb78f"
   },
   "src/phases/llm-utils.ts": {
-    "mtime": 1779363957.1639364,
-    "ast_hash": "82c70e3e80e9c3b87e118f6fd39d63c0",
-    "semantic_hash": ""
+    "mtime": 1779814696.818421,
+    "hash": "ee2234594abbd7aff0f51668ea028386"
   },
   "src/phases/evaluator.ts": {
     "mtime": 1779363957.1639364,
-    "ast_hash": "8f26138e188efe03b33ed4ac6c7ef1fa",
-    "semantic_hash": ""
+    "hash": "8f26138e188efe03b33ed4ac6c7ef1fa"
   },
   "src/phases/lint.ts": {
-    "mtime": 1779725871.7165492,
-    "ast_hash": "19d41f9877509330bcf2473e77e6a7af",
-    "semantic_hash": ""
+    "mtime": 1779816452.1867464,
+    "hash": "92d49198b180818d97cbcf2c81e45f8d"
   },
   "src/phases/zod-schemas.ts": {
-    "mtime": 1779657227.6838574,
-    "ast_hash": "d3235f796d0e2161dca4a374b421f12f",
-    "semantic_hash": ""
+    "mtime": 1779797740.4720829,
+    "hash": "56a1e12b94dd70fcdedec140373e4242"
   },
   "CLAUDE.md": {
     "mtime": 1779657227.672697,
-    "ast_hash": "4c75ca92470b9b7c299b7ed073596445",
-    "semantic_hash": ""
+    "hash": "4c75ca92470b9b7c299b7ed073596445"
   },
   "README.md": {
     "mtime": 1779657227.6727705,
-    "ast_hash": "7d52bb1dc13f7a6d157a5cfbd192d25c",
-    "semantic_hash": ""
+    "hash": "7d52bb1dc13f7a6d157a5cfbd192d25c"
   },
   "CHANGELOG.md": {
     "mtime": 1779712687.764075,
-    "ast_hash": "328c5ab7200a86eca296bce3bba1d1c3",
-    "semantic_hash": ""
+    "hash": "328c5ab7200a86eca296bce3bba1d1c3"
   },
   "prompts/evaluator.md": {
     "mtime": 1779363957.1608365,
-    "ast_hash": "9fe1b583429e2c7bc06751e64053f9d8",
-    "semantic_hash": ""
+    "hash": "9fe1b583429e2c7bc06751e64053f9d8"
   },
   "prompts/ingest.md": {
     "mtime": 1779657227.6821263,
-    "ast_hash": "705e95297748ac330fc9e6c99bfec7a7",
-    "semantic_hash": ""
+    "hash": "705e95297748ac330fc9e6c99bfec7a7"
   },
   "prompts/chat.md": {
     "mtime": 1779363957.1608365,
-    "ast_hash": "0a16ae24cd9a358ccf42b5b4f2b6c9e0",
-    "semantic_hash": ""
+    "hash": "0a16ae24cd9a358ccf42b5b4f2b6c9e0"
   },
   "prompts/format.md": {
     "mtime": 1779363957.1608365,
-    "ast_hash": "f7c11797417c2b0e83dd3a085c7540b7",
-    "semantic_hash": ""
+    "hash": "f7c11797417c2b0e83dd3a085c7540b7"
   },
   "prompts/lint-chat.md": {
     "mtime": 1779657227.6822307,
-    "ast_hash": "bdd471616964a0f6c2445db23b2c4479",
-    "semantic_hash": ""
+    "hash": "bdd471616964a0f6c2445db23b2c4479"
   },
   "prompts/query.md": {
     "mtime": 1779657227.6823359,
-    "ast_hash": "fa9945771a70a4d2a95ad8e7dbe9f088",
-    "semantic_hash": ""
+    "hash": "fa9945771a70a4d2a95ad8e7dbe9f088"
   },
   "prompts/lint.md": {
     "mtime": 1779657227.6822863,
-    "ast_hash": "fb6a258d314c73abb3506c8c316e64d5",
-    "semantic_hash": ""
+    "hash": "fb6a258d314c73abb3506c8c316e64d5"
   },
   "prompts/init.md": {
     "mtime": 1779657227.6821804,
-    "ast_hash": "98c6a3703b1309f443b8261a85653329",
-    "semantic_hash": ""
+    "hash": "98c6a3703b1309f443b8261a85653329"
   },
   "prompts/base.md": {
     "mtime": 1779363957.160018,
-    "ast_hash": "c429cd10245c8de0d3ad8d8f3aad304b",
-    "semantic_hash": ""
+    "hash": "c429cd10245c8de0d3ad8d8f3aad304b"
   },
   "templates/_wiki_schema.md": {
-    "mtime": 1779657227.6855192,
-    "ast_hash": "498cc177563edc89903bf0754f6319b8",
-    "semantic_hash": ""
+    "mtime": 1779798632.951487,
+    "hash": "13b1aae7f779e37e877dc65f277d313c"
   },
   "templates/_format_schema.md": {
     "mtime": 1779657227.6854622,
-    "ast_hash": "d084ce31e8d83caa17969446c887f882",
-    "semantic_hash": ""
+    "hash": "d084ce31e8d83caa17969446c887f882"
   },
   "tests/fixtures/format-sample.md": {
     "mtime": 1779363957.1652005,
-    "ast_hash": "81e51cd228789d22c02c282c4ef6bd68",
-    "semantic_hash": ""
+    "hash": "81e51cd228789d22c02c282c4ef6bd68"
   },
   "scripts/dspy/CLAUDE.md": {
     "mtime": 1779363957.1612837,
-    "ast_hash": "90d83e6bc05aa57101464b875baa1f4e",
-    "semantic_hash": ""
+    "hash": "90d83e6bc05aa57101464b875baa1f4e"
   },
   "scripts/dspy/README.md": {
     "mtime": 1779363957.1612837,
-    "ast_hash": "9a740b7601f415692d8ef916c30560af",
-    "semantic_hash": ""
+    "hash": "9a740b7601f415692d8ef916c30560af"
   },
   "lat.md/wiki-graph.md": {
     "mtime": 1779657227.6812768,
-    "ast_hash": "69b423bde20b696a5ca158a8b1958c2b",
-    "semantic_hash": ""
+    "hash": "69b423bde20b696a5ca158a8b1958c2b"
   },
   "lat.md/llm-pipeline.md": {
-    "mtime": 1779721369.5059872,
-    "ast_hash": "f9cecd8e8fcc14083644090605b79688",
-    "semantic_hash": ""
+    "mtime": 1779814696.8176246,
+    "hash": "9b582502a8834148cc02753e6fc00807"
   },
   "lat.md/domain.md": {
     "mtime": 1779711716.8578558,
-    "ast_hash": "b8e08c6e3528f4eee6d22e3f966a957b",
-    "semantic_hash": ""
+    "hash": "b8e08c6e3528f4eee6d22e3f966a957b"
   },
   "lat.md/architecture.md": {
-    "mtime": 1779741873.3300126,
-    "ast_hash": "5bdf5bd54cf4a24d841627987ff5db89",
-    "semantic_hash": ""
+    "mtime": 1779796678.723848,
+    "hash": "3763ac9d37d607fcad154b769293ff8a"
   },
   "lat.md/lat.md": {
     "mtime": 1779657227.6811123,
-    "ast_hash": "03bf5ef389b70b464c0835bc8e1907a7",
-    "semantic_hash": ""
+    "hash": "03bf5ef389b70b464c0835bc8e1907a7"
   },
   "lat.md/operations.md": {
-    "mtime": 1779743321.988697,
-    "ast_hash": "9783fb14f7af5b6e6ccb84b80e19f443",
-    "semantic_hash": ""
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/esbuild.config.mjs": {
-    "mtime": 1779343248.1048281,
-    "ast_hash": "db4b76c07d0df2c562079f3af1a3702e",
-    "semantic_hash": "db4b76c07d0df2c562079f3af1a3702e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tsconfig.json": {
-    "mtime": 1779343248.1288288,
-    "ast_hash": "357718f65159372848d746e8ceef69b4",
-    "semantic_hash": "357718f65159372848d746e8ceef69b4"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/vitest.config.ts": {
-    "mtime": 1779343248.1288288,
-    "ast_hash": "ba2401a4ef1ad22740d670856cecb76e",
-    "semantic_hash": "ba2401a4ef1ad22740d670856cecb76e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/vitest.mock.ts": {
-    "mtime": 1779343248.1288288,
-    "ast_hash": "cba82a5a314f348c376998a5432029c7",
-    "semantic_hash": "cba82a5a314f348c376998a5432029c7"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/vitest.setup.ts": {
-    "mtime": 1779343248.129829,
-    "ast_hash": "369832f9ec383c6280e79d41df333e16",
-    "semantic_hash": "369832f9ec383c6280e79d41df333e16"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/manifest.json": {
-    "mtime": 1779777377.5500958,
-    "ast_hash": "d83bc21f6548a6742a2fc02689ba1d0b",
-    "semantic_hash": "d83bc21f6548a6742a2fc02689ba1d0b"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/package.json": {
-    "mtime": 1779777377.5500958,
-    "ast_hash": "614c324183527499541dd9b3eef747c9",
-    "semantic_hash": "614c324183527499541dd9b3eef747c9"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/.config/domain-map.json": {
-    "mtime": 1779343248.070827,
-    "ast_hash": "ef11cfd9639babc82d036d78628991b5",
-    "semantic_hash": "ef11cfd9639babc82d036d78628991b5"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/scripts/dspy/optimize.py": {
-    "mtime": 1779343248.1108282,
-    "ast_hash": "7835ff54e18b18a08fc61793c185988c",
-    "semantic_hash": "7835ff54e18b18a08fc61793c185988c"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/scripts/dspy/lib/__init__.py": {
-    "mtime": 1779343248.1098282,
-    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
-    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/scripts/dspy/lib/backend.py": {
-    "mtime": 1779343248.1098282,
-    "ast_hash": "41b9f199553f3defb23fac95286be5ea",
-    "semantic_hash": "41b9f199553f3defb23fac95286be5ea"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/scripts/dspy/lib/loader.py": {
-    "mtime": 1779343248.1098282,
-    "ast_hash": "3750bb1ec18d70a6f3c502adcfbabccf",
-    "semantic_hash": "3750bb1ec18d70a6f3c502adcfbabccf"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/scripts/dspy/lib/optimizer.py": {
-    "mtime": 1779343248.1098282,
-    "ast_hash": "8153eac7b9f318aa7c2928c14797054d",
-    "semantic_hash": "8153eac7b9f318aa7c2928c14797054d"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/scripts/dspy/lib/signature.py": {
-    "mtime": 1779343248.1098282,
-    "ast_hash": "e482827ddf7c590dc48201f507580d61",
-    "semantic_hash": "e482827ddf7c590dc48201f507580d61"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/scripts/dspy/lib/writer.py": {
-    "mtime": 1779343248.1098282,
-    "ast_hash": "ee86f07f288a62da42eaee06860d27d1",
-    "semantic_hash": "ee86f07f288a62da42eaee06860d27d1"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/scripts/dspy/tests/__init__.py": {
-    "mtime": 1779343248.1108282,
-    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
-    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/scripts/dspy/tests/test_backend.py": {
-    "mtime": 1779343248.1108282,
-    "ast_hash": "1015bd4ab4a42ff5d28f7892f7a2cae6",
-    "semantic_hash": "1015bd4ab4a42ff5d28f7892f7a2cae6"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/scripts/dspy/tests/test_loader.py": {
-    "mtime": 1779343248.1108282,
-    "ast_hash": "2868b548a5b624b6acb4955dbcf9423b",
-    "semantic_hash": "2868b548a5b624b6acb4955dbcf9423b"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/scripts/dspy/tests/test_optimizer.py": {
-    "mtime": 1779343248.1108282,
-    "ast_hash": "4b09d57f8fa93a92f75018713f8d786e",
-    "semantic_hash": "4b09d57f8fa93a92f75018713f8d786e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/scripts/dspy/tests/test_signature.py": {
-    "mtime": 1779343248.1108282,
-    "ast_hash": "3abfdf85a4a867f25590ad0377a4f093",
-    "semantic_hash": "3abfdf85a4a867f25590ad0377a4f093"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/scripts/dspy/tests/test_writer.py": {
-    "mtime": 1779343248.1108282,
-    "ast_hash": "143bb66c6b2fb739cc9ac39343e53036",
-    "semantic_hash": "143bb66c6b2fb739cc9ac39343e53036"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/effective-settings.ts": {
-    "mtime": 1779343248.1138284,
-    "ast_hash": "b3d22c976a459a7964cbe9413364c7d0",
-    "semantic_hash": "b3d22c976a459a7964cbe9413364c7d0"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/md-modules.d.ts": {
-    "mtime": 1779343248.1148283,
-    "ast_hash": "abffb78177d180c14a8441155503afd2",
-    "semantic_hash": "abffb78177d180c14a8441155503afd2"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/mobile-fetch.ts": {
-    "mtime": 1779343248.1148283,
-    "ast_hash": "2d6287c5925caba49bb9c4c49308a7ab",
-    "semantic_hash": "2d6287c5925caba49bb9c4c49308a7ab"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/mobile-llm-wrap.ts": {
-    "mtime": 1779343248.1148283,
-    "ast_hash": "2f2907c174464390fa5ead014139e207",
-    "semantic_hash": "2f2907c174464390fa5ead014139e207"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/proxy.ts": {
-    "mtime": 1779343248.1168284,
-    "ast_hash": "154e1a27814aba6332b8007bb56d9c56",
-    "semantic_hash": "154e1a27814aba6332b8007bb56d9c56"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/source-paths.ts": {
-    "mtime": 1779343248.1168284,
-    "ast_hash": "2d7bc9f6817d07b48a23e935e64b7e9f",
-    "semantic_hash": "2d7bc9f6817d07b48a23e935e64b7e9f"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/stream.ts": {
-    "mtime": 1779343248.1168284,
-    "ast_hash": "a0b80f52c42058f27f87d13af0661773",
-    "semantic_hash": "a0b80f52c42058f27f87d13af0661773"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/structural-error-counter.ts": {
-    "mtime": 1779343248.1178284,
-    "ast_hash": "0bf10f2182063ad5c30641880d7d69ed",
-    "semantic_hash": "0bf10f2182063ad5c30641880d7d69ed"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/wiki-graph-cache.ts": {
-    "mtime": 1779343248.1178284,
-    "ast_hash": "63bef97cb310817c047f8076a5945d43",
-    "semantic_hash": "63bef97cb310817c047f8076a5945d43"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/wiki-graph.ts": {
-    "mtime": 1779343248.1178284,
-    "ast_hash": "dbd4bbf010ac14b9de7838853ddeea34",
-    "semantic_hash": "dbd4bbf010ac14b9de7838853ddeea34"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/wiki-seeds.ts": {
-    "mtime": 1779343248.1188285,
-    "ast_hash": "5ee6d9eb4b9d21ce86a3a962bca455d4",
-    "semantic_hash": "5ee6d9eb4b9d21ce86a3a962bca455d4"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/domain-config.ts": {
-    "mtime": 1779695474.2206726,
-    "ast_hash": "9c2b95db13091b920010cb0a3940ab55",
-    "semantic_hash": "9c2b95db13091b920010cb0a3940ab55"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/domain.ts": {
-    "mtime": 1779695474.2206726,
-    "ast_hash": "ce400191064da33467afd055f0d7eded",
-    "semantic_hash": "ce400191064da33467afd055f0d7eded"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/modals.ts": {
-    "mtime": 1779695474.2216725,
-    "ast_hash": "f497553488e32da0a40569b19f950b28",
-    "semantic_hash": "f497553488e32da0a40569b19f950b28"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/vault-tools.ts": {
-    "mtime": 1779695474.2256727,
-    "ast_hash": "edb1ee45d111588b8d20d1adc204095e",
-    "semantic_hash": "edb1ee45d111588b8d20d1adc204095e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/wiki-index.ts": {
-    "mtime": 1779695474.2266726,
-    "ast_hash": "dd3d11f0c32b15c99e068a26820777f7",
-    "semantic_hash": "dd3d11f0c32b15c99e068a26820777f7"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/wiki-log.ts": {
-    "mtime": 1779695474.2266726,
-    "ast_hash": "a3677491bacc2f72ed9c5b839183e75e",
-    "semantic_hash": "a3677491bacc2f72ed9c5b839183e75e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/agent-runner.ts": {
-    "mtime": 1779777377.5500958,
-    "ast_hash": "a42259609ac3025dfd4046fc37ad42e2",
-    "semantic_hash": "a42259609ac3025dfd4046fc37ad42e2"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/claude-cli-client.ts": {
-    "mtime": 1779777377.5500958,
-    "ast_hash": "e0385d90914209e9cdf996aacc088b9e",
-    "semantic_hash": "e0385d90914209e9cdf996aacc088b9e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/controller.ts": {
-    "mtime": 1779777377.551096,
-    "ast_hash": "ebebf911985996d4f0e573b6480a7847",
-    "semantic_hash": "ebebf911985996d4f0e573b6480a7847"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/domain-store.ts": {
-    "mtime": 1779777377.551096,
-    "ast_hash": "5695f52478f88d0eb2ae6d1b90e6007a",
-    "semantic_hash": "5695f52478f88d0eb2ae6d1b90e6007a"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/i18n.ts": {
-    "mtime": 1779777377.551096,
-    "ast_hash": "bbd21451b4eda3fae4d1848f53f4b4aa",
-    "semantic_hash": "bbd21451b4eda3fae4d1848f53f4b4aa"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/local-config.ts": {
-    "mtime": 1779777377.551096,
-    "ast_hash": "42c4d402c167aa94dad3568f58a22332",
-    "semantic_hash": "42c4d402c167aa94dad3568f58a22332"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/main.ts": {
-    "mtime": 1779777377.551096,
-    "ast_hash": "569239c5d97c61be70819fc246257bed",
-    "semantic_hash": "569239c5d97c61be70819fc246257bed"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/manifest.json": {
-    "mtime": 1779777377.551096,
-    "ast_hash": "d83bc21f6548a6742a2fc02689ba1d0b",
-    "semantic_hash": "d83bc21f6548a6742a2fc02689ba1d0b"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/settings.ts": {
-    "mtime": 1779777377.553096,
-    "ast_hash": "51eec29d4a95f98fda57b0e2e439b46a",
-    "semantic_hash": "51eec29d4a95f98fda57b0e2e439b46a"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/storage-migration.ts": {
-    "mtime": 1779777377.553096,
-    "ast_hash": "dec2420c9138005c6767831c77ade2df",
-    "semantic_hash": "dec2420c9138005c6767831c77ade2df"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/types.ts": {
-    "mtime": 1779777377.553096,
-    "ast_hash": "33fa424cd1449f3c8a8ce41c6b4e9f46",
-    "semantic_hash": "33fa424cd1449f3c8a8ce41c6b4e9f46"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/view.ts": {
-    "mtime": 1779777377.554096,
-    "ast_hash": "2d89d7d16dc21a08b2053cedce198fd8",
-    "semantic_hash": "2d89d7d16dc21a08b2053cedce198fd8"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/wiki-path.ts": {
-    "mtime": 1779777377.554096,
-    "ast_hash": "ac3f2535b4f58dee0bcbfc3378d34526",
-    "semantic_hash": "ac3f2535b4f58dee0bcbfc3378d34526"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/page-similarity.ts": {
-    "mtime": 1779786284.2152143,
-    "ast_hash": "55eced7ce4680dd0ec870f8769aa16b3",
-    "semantic_hash": "55eced7ce4680dd0ec870f8769aa16b3"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/phases/chat.ts": {
-    "mtime": 1779343248.1148283,
-    "ast_hash": "eea6b9feee565d34bd9a69ffddc9f3e8",
-    "semantic_hash": "eea6b9feee565d34bd9a69ffddc9f3e8"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/phases/evaluator.ts": {
-    "mtime": 1779343248.1158285,
-    "ast_hash": "8f26138e188efe03b33ed4ac6c7ef1fa",
-    "semantic_hash": "8f26138e188efe03b33ed4ac6c7ef1fa"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/phases/format-utils.ts": {
-    "mtime": 1779343248.1158285,
-    "ast_hash": "415fabb522b41be6416243ede8e4fe3e",
-    "semantic_hash": "415fabb522b41be6416243ede8e4fe3e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/phases/llm-utils.ts": {
-    "mtime": 1779343248.1168284,
-    "ast_hash": "82c70e3e80e9c3b87e118f6fd39d63c0",
-    "semantic_hash": "82c70e3e80e9c3b87e118f6fd39d63c0"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/phases/schemas.ts": {
-    "mtime": 1779343248.1168284,
-    "ast_hash": "a6c9831ccfbcbea8c627cdf95583b038",
-    "semantic_hash": "a6c9831ccfbcbea8c627cdf95583b038"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/phases/template.ts": {
-    "mtime": 1779343248.1168284,
-    "ast_hash": "5c7446685a6238fba936e71b9885eb79",
-    "semantic_hash": "5c7446685a6238fba936e71b9885eb79"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/phases/parse-with-retry.ts": {
-    "mtime": 1779695474.2246726,
-    "ast_hash": "cba2a271c9923154638c5a045bae963b",
-    "semantic_hash": "cba2a271c9923154638c5a045bae963b"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/phases/zod-schemas.ts": {
-    "mtime": 1779695474.2246726,
-    "ast_hash": "d3235f796d0e2161dca4a374b421f12f",
-    "semantic_hash": "d3235f796d0e2161dca4a374b421f12f"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/phases/format.ts": {
-    "mtime": 1779777377.552096,
-    "ast_hash": "f023b99a308e782a1926933428168a87",
-    "semantic_hash": "f023b99a308e782a1926933428168a87"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/phases/ingest.ts": {
-    "mtime": 1779777377.552096,
-    "ast_hash": "5c2f39ac99317b375ccc090a8dc3f7af",
-    "semantic_hash": "5c2f39ac99317b375ccc090a8dc3f7af"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/phases/init.ts": {
-    "mtime": 1779777377.552096,
-    "ast_hash": "8088d5b6f8f70ecf5369623b328a9729",
-    "semantic_hash": "8088d5b6f8f70ecf5369623b328a9729"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/phases/lint-chat.ts": {
-    "mtime": 1779777377.552096,
-    "ast_hash": "c2d14fb261abc99395aa5c2da44a2264",
-    "semantic_hash": "c2d14fb261abc99395aa5c2da44a2264"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/phases/query.ts": {
-    "mtime": 1779777377.553096,
-    "ast_hash": "14a47f9328bc9018da8e6cfda2ebd90d",
-    "semantic_hash": "14a47f9328bc9018da8e6cfda2ebd90d"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/phases/lint.ts": {
-    "mtime": 1779786638.95389,
-    "ast_hash": "fd5e47d2ba83dc86424a3705e858dc25",
-    "semantic_hash": "fd5e47d2ba83dc86424a3705e858dc25"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/utils/raw-frontmatter.ts": {
-    "mtime": 1779343248.1178284,
-    "ast_hash": "5afb45f826ca1a1d6bd03fade3dc8d48",
-    "semantic_hash": "5afb45f826ca1a1d6bd03fade3dc8d48"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/src/utils/vault-walk.ts": {
-    "mtime": 1779695474.2256727,
-    "ast_hash": "2c95ace799219bb60ad91ac55d7e31ae",
-    "semantic_hash": "2c95ace799219bb60ad91ac55d7e31ae"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/agent-runner.integration.test.js": {
-    "mtime": 1779343248.1188285,
-    "ast_hash": "9a6243c4c80767e96c2b7693e2043e6f",
-    "semantic_hash": "9a6243c4c80767e96c2b7693e2043e6f"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/apply-domain-event.test.ts": {
-    "mtime": 1779343248.1198285,
-    "ast_hash": "ca084fd2e1dd5799235312094da95713",
-    "semantic_hash": "ca084fd2e1dd5799235312094da95713"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/claude-cli-client.test.js": {
-    "mtime": 1779343248.1198285,
-    "ast_hash": "a2e16d8690b4f0406cee9a69b522cdf2",
-    "semantic_hash": "a2e16d8690b4f0406cee9a69b522cdf2"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/controller-build-fail.test.ts": {
-    "mtime": 1779343248.1198285,
-    "ast_hash": "6062b93395231b95954fb2f77afee02f",
-    "semantic_hash": "6062b93395231b95954fb2f77afee02f"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/controller-format.test.ts": {
-    "mtime": 1779343248.1198285,
-    "ast_hash": "05e20f350218c8e200e143af74961409",
-    "semantic_hash": "05e20f350218c8e200e143af74961409"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/controller-mobile.test.ts": {
-    "mtime": 1779343248.1208286,
-    "ast_hash": "f32a39a814a62ab7e9fe64c72cdcd0fc",
-    "semantic_hash": "f32a39a814a62ab7e9fe64c72cdcd0fc"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/domain-store-migration.test.ts": {
-    "mtime": 1779343248.1208286,
-    "ast_hash": "fb591e1cd5ee83ec79e76818745a9ccc",
-    "semantic_hash": "fb591e1cd5ee83ec79e76818745a9ccc"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/domain.test.js": {
-    "mtime": 1779343248.1208286,
-    "ast_hash": "f08e6f6c9046bf45af04801190f0d397",
-    "semantic_hash": "f08e6f6c9046bf45af04801190f0d397"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/domain.test.ts": {
-    "mtime": 1779343248.1208286,
-    "ast_hash": "64f3d854fbf28f7068569f2264cc0e3d",
-    "semantic_hash": "64f3d854fbf28f7068569f2264cc0e3d"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/effective-settings.test.ts": {
-    "mtime": 1779343248.1218286,
-    "ast_hash": "03256921adbc26cbbb9079eaec20c3d0",
-    "semantic_hash": "03256921adbc26cbbb9079eaec20c3d0"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/evaluator.test.ts": {
-    "mtime": 1779343248.1218286,
-    "ast_hash": "af1cef8899a2cf491c41202f72c7614e",
-    "semantic_hash": "af1cef8899a2cf491c41202f72c7614e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/format-migration.test.ts": {
-    "mtime": 1779343248.1238286,
-    "ast_hash": "7635338b84fb4aff1b2375131d8acf1e",
-    "semantic_hash": "7635338b84fb4aff1b2375131d8acf1e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/init-args.test.ts": {
-    "mtime": 1779343248.1238286,
-    "ast_hash": "ea518dbb689cf323f9e06eb98a305ee7",
-    "semantic_hash": "ea518dbb689cf323f9e06eb98a305ee7"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/llm-utils.test.ts": {
-    "mtime": 1779343248.1238286,
-    "ast_hash": "94e43724a8bd3566fb887b9cb6df097c",
-    "semantic_hash": "94e43724a8bd3566fb887b9cb6df097c"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/migration.test.ts": {
-    "mtime": 1779343248.1248288,
-    "ast_hash": "33da158a59e5677d853de5757c1174eb",
-    "semantic_hash": "33da158a59e5677d853de5757c1174eb"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/mobile-fetch.test.ts": {
-    "mtime": 1779343248.1248288,
-    "ast_hash": "a8311d46ce80ceea575b79733c7eb7ee",
-    "semantic_hash": "a8311d46ce80ceea575b79733c7eb7ee"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/mobile-llm-wrap.test.ts": {
-    "mtime": 1779343248.1248288,
-    "ast_hash": "7d4a8b040a85da6b3c4f5e3adf48bd1a",
-    "semantic_hash": "7d4a8b040a85da6b3c4f5e3adf48bd1a"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/modals.test.js": {
-    "mtime": 1779343248.1248288,
-    "ast_hash": "8c8b4230f6ec60e7dbe4d11be7490418",
-    "semantic_hash": "8c8b4230f6ec60e7dbe4d11be7490418"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/modals.test.ts": {
-    "mtime": 1779343248.1248288,
-    "ast_hash": "50321efe0d12e1d190398a139a339301",
-    "semantic_hash": "50321efe0d12e1d190398a139a339301"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/proxy.test.ts": {
-    "mtime": 1779343248.1268287,
-    "ast_hash": "cfda65a626cdab4b9af71fec2e62dc33",
-    "semantic_hash": "cfda65a626cdab4b9af71fec2e62dc33"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/source-paths.test.ts": {
-    "mtime": 1779343248.1278288,
-    "ast_hash": "da88350bb57f1da3c5ee2a3da6a3433f",
-    "semantic_hash": "da88350bb57f1da3c5ee2a3da6a3433f"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/stream.test.js": {
-    "mtime": 1779343248.1278288,
-    "ast_hash": "da66de61b15cece5b994f1be1604c478",
-    "semantic_hash": "da66de61b15cece5b994f1be1604c478"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/stream.test.ts": {
-    "mtime": 1779343248.1278288,
-    "ast_hash": "8539b95c7a3c4b3c8c68b5ddb3e332b1",
-    "semantic_hash": "8539b95c7a3c4b3c8c68b5ddb3e332b1"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/structural-error-counter.test.ts": {
-    "mtime": 1779343248.1278288,
-    "ast_hash": "efdb8427cd7512424aafd727d121d2cb",
-    "semantic_hash": "efdb8427cd7512424aafd727d121d2cb"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/template.test.ts": {
-    "mtime": 1779343248.1278288,
-    "ast_hash": "560e20c7f38390d22e5c7618af075486",
-    "semantic_hash": "560e20c7f38390d22e5c7618af075486"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/types.test.ts": {
-    "mtime": 1779343248.1278288,
-    "ast_hash": "4b1b0fe8b7feb320c7deb931987d2f56",
-    "semantic_hash": "4b1b0fe8b7feb320c7deb931987d2f56"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/vault-tools.test.js": {
-    "mtime": 1779343248.1278288,
-    "ast_hash": "80fe9cfc30540659fc8f423f1da35887",
-    "semantic_hash": "80fe9cfc30540659fc8f423f1da35887"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/view-metrics.test.ts": {
-    "mtime": 1779343248.1278288,
-    "ast_hash": "fbdcf9df12fdff4112b6ee47c49325ee",
-    "semantic_hash": "fbdcf9df12fdff4112b6ee47c49325ee"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/wiki-graph-cache.test.ts": {
-    "mtime": 1779343248.1278288,
-    "ast_hash": "cd0e11be394120a18796dddc6256173c",
-    "semantic_hash": "cd0e11be394120a18796dddc6256173c"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/wiki-graph.test.ts": {
-    "mtime": 1779343248.1288288,
-    "ast_hash": "e16c5d6949d0f4dd1f9f3ce1ce99eb79",
-    "semantic_hash": "e16c5d6949d0f4dd1f9f3ce1ce99eb79"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/wiki-seeds.test.ts": {
-    "mtime": 1779343248.1288288,
-    "ast_hash": "3933063d1d84860315620095579f8ea6",
-    "semantic_hash": "3933063d1d84860315620095579f8ea6"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/zod-schemas.test.ts": {
-    "mtime": 1779343248.1288288,
-    "ast_hash": "3d9d220987ffb91dcbe410c76a837a0e",
-    "semantic_hash": "3d9d220987ffb91dcbe410c76a837a0e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/agent-runner.integration.test.ts": {
-    "mtime": 1779695474.2276728,
-    "ast_hash": "0c8d44347954c2e372fee9d9f2519e08",
-    "semantic_hash": "0c8d44347954c2e372fee9d9f2519e08"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/collect-md-in-paths.test.ts": {
-    "mtime": 1779695474.2276728,
-    "ast_hash": "5dedefc6bb0f874ce0cef51f0c4b2f9c",
-    "semantic_hash": "5dedefc6bb0f874ce0cef51f0c4b2f9c"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/controller-cache-invalidation.test.ts": {
-    "mtime": 1779695474.2276728,
-    "ast_hash": "f47d992c29f3fc82de9ffdddec5e34ab",
-    "semantic_hash": "f47d992c29f3fc82de9ffdddec5e34ab"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/controller-manage-sources.test.ts": {
-    "mtime": 1779695474.2276728,
-    "ast_hash": "1c260af1efff3dc19150a7d274f62395",
-    "semantic_hash": "1c260af1efff3dc19150a7d274f62395"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/i18n-manage-sources.test.ts": {
-    "mtime": 1779695474.2286727,
-    "ast_hash": "f124a2982fce6b8ed2f3107972b073e7",
-    "semantic_hash": "f124a2982fce6b8ed2f3107972b073e7"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/ingest-scope-modal.test.ts": {
-    "mtime": 1779695474.2286727,
-    "ast_hash": "ad07baf4852b893f20d88bb67eade645",
-    "semantic_hash": "ad07baf4852b893f20d88bb67eade645"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/local-config.test.ts": {
-    "mtime": 1779695474.2286727,
-    "ast_hash": "661ba4523b0da170c45c128947ab8b88",
-    "semantic_hash": "661ba4523b0da170c45c128947ab8b88"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/main-mobile.test.ts": {
-    "mtime": 1779695474.2286727,
-    "ast_hash": "ae260337c9cc5d88ae7b143f44a165f4",
-    "semantic_hash": "ae260337c9cc5d88ae7b143f44a165f4"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/manage-sources-modal.test.ts": {
-    "mtime": 1779695474.2286727,
-    "ast_hash": "c94128d400133b85927f8a26487b0686",
-    "semantic_hash": "c94128d400133b85927f8a26487b0686"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/no-fs-imports.test.ts": {
-    "mtime": 1779695474.229673,
-    "ast_hash": "d133f099fafb289ac6dc20747783d885",
-    "semantic_hash": "d133f099fafb289ac6dc20747783d885"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/prompts.test.ts": {
-    "mtime": 1779695474.2316728,
-    "ast_hash": "82395f89cfed11cea73581b38a0082e7",
-    "semantic_hash": "82395f89cfed11cea73581b38a0082e7"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/shell-consent.test.ts": {
-    "mtime": 1779695474.2316728,
-    "ast_hash": "cdd4a517e85c43bae8c7fb09d1afdc8f",
-    "semantic_hash": "cdd4a517e85c43bae8c7fb09d1afdc8f"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/vault-tools.test.ts": {
-    "mtime": 1779695474.2316728,
-    "ast_hash": "8cb475956245c3cb2d8107a53730f102",
-    "semantic_hash": "8cb475956245c3cb2d8107a53730f102"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/view-add-source-btn.test.ts": {
-    "mtime": 1779695474.2316728,
-    "ast_hash": "ba2730f58b68e8503c13d34ecc10f100",
-    "semantic_hash": "ba2730f58b68e8503c13d34ecc10f100"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/view-history-rerun.test.ts": {
-    "mtime": 1779695474.2316728,
-    "ast_hash": "f3ceb0884fad5c810739aecdb4973ef1",
-    "semantic_hash": "f3ceb0884fad5c810739aecdb4973ef1"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/view-last-domain.test.ts": {
-    "mtime": 1779695474.232673,
-    "ast_hash": "645e2ab0f354857935dac6bcfe385c54",
-    "semantic_hash": "645e2ab0f354857935dac6bcfe385c54"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/agent-runner-dev-log.test.ts": {
-    "mtime": 1779777377.554096,
-    "ast_hash": "8ddb7e6e0555479f63d56875579dac4a",
-    "semantic_hash": "8ddb7e6e0555479f63d56875579dac4a"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/claude-cli-client.test.ts": {
-    "mtime": 1779777377.554096,
-    "ast_hash": "c47887566b3396364d062925417eb55e",
-    "semantic_hash": "c47887566b3396364d062925417eb55e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/controller-log-adapter.test.ts": {
-    "mtime": 1779777377.554096,
-    "ast_hash": "427f0488369aa18e3bb04c46054aab19",
-    "semantic_hash": "427f0488369aa18e3bb04c46054aab19"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/controller-per-op-timeout.test.ts": {
-    "mtime": 1779777377.554096,
-    "ast_hash": "792083054f2664ca61958d552f8e519c",
-    "semantic_hash": "792083054f2664ca61958d552f8e519c"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/domain-config.test.ts": {
-    "mtime": 1779777377.5550961,
-    "ast_hash": "e38331cc4608c4b8c3c3585663ca7410",
-    "semantic_hash": "e38331cc4608c4b8c3c3585663ca7410"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/domain-store.test.ts": {
-    "mtime": 1779777377.5550961,
-    "ast_hash": "5f93123d2cbc13f32fbe73200f1fcc2f",
-    "semantic_hash": "5f93123d2cbc13f32fbe73200f1fcc2f"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/ingest.test.ts": {
-    "mtime": 1779777377.556096,
-    "ast_hash": "3bafa760c321837f5af0cdf17f8f8535",
-    "semantic_hash": "3bafa760c321837f5af0cdf17f8f8535"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/init-similarity.test.ts": {
-    "mtime": 1779777377.556096,
-    "ast_hash": "a2eee8abb33e9ce7067dc0b4e39bd637",
-    "semantic_hash": "a2eee8abb33e9ce7067dc0b4e39bd637"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/main-migration.test.ts": {
-    "mtime": 1779777377.556096,
-    "ast_hash": "581906c1a559815788b59317864448f3",
-    "semantic_hash": "581906c1a559815788b59317864448f3"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/settings.test.ts": {
-    "mtime": 1779777377.5580962,
-    "ast_hash": "ca9ea5546701dfe21a22f6c7da756d84",
-    "semantic_hash": "ca9ea5546701dfe21a22f6c7da756d84"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/storage-migration.test.ts": {
-    "mtime": 1779777377.5580962,
-    "ast_hash": "d7e1fedf3a1471b5c2e83c5eefa2188e",
-    "semantic_hash": "d7e1fedf3a1471b5c2e83c5eefa2188e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/wiki-index.test.ts": {
-    "mtime": 1779777377.5580962,
-    "ast_hash": "0819cceef43251147efdd4f4861d4c2c",
-    "semantic_hash": "0819cceef43251147efdd4f4861d4c2c"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/wiki-log.test.ts": {
-    "mtime": 1779777377.5580962,
-    "ast_hash": "48492bc14838a74a55033971048693a0",
-    "semantic_hash": "48492bc14838a74a55033971048693a0"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/wiki-path.test.ts": {
-    "mtime": 1779777377.559096,
-    "ast_hash": "3f2437d86539edc692858269151fe070",
-    "semantic_hash": "3f2437d86539edc692858269151fe070"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/page-similarity.test.ts": {
-    "mtime": 1779785793.17572,
-    "ast_hash": "b15a09032d55f6f223c4d7e1942bb58a",
-    "semantic_hash": "b15a09032d55f6f223c4d7e1942bb58a"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/fixtures/mock-iclaude-interactive.sh": {
-    "mtime": 1779343248.1218286,
-    "ast_hash": "bbe80b6aaea3d2fc2420b94afa5927e4",
-    "semantic_hash": "bbe80b6aaea3d2fc2420b94afa5927e4"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/fixtures/mock-iclaude.sh": {
-    "mtime": 1779343248.1218286,
-    "ast_hash": "4720fd1f7c887a7104f0d4dce6aa6376",
-    "semantic_hash": "4720fd1f7c887a7104f0d4dce6aa6376"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/fixtures/structured/delta-empty-arrays.json": {
-    "mtime": 1779343248.1228287,
-    "ast_hash": "1576d0eccc5042b4fa7a663be12d9483",
-    "semantic_hash": "1576d0eccc5042b4fa7a663be12d9483"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/fixtures/structured/delta-extra-fields.json": {
-    "mtime": 1779343248.1228287,
-    "ast_hash": "0ff23f22b2d002a7ed531666bcd406e3",
-    "semantic_hash": "0ff23f22b2d002a7ed531666bcd406e3"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/fixtures/structured/delta-valid.json": {
-    "mtime": 1779343248.1228287,
-    "ast_hash": "016a2b7ba09300f8ae19572699e33125",
-    "semantic_hash": "016a2b7ba09300f8ae19572699e33125"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/fixtures/structured/domain-entry-missing-id.json": {
-    "mtime": 1779343248.1228287,
-    "ast_hash": "daad43cef1490d75490d613df2cd6f7f",
-    "semantic_hash": "daad43cef1490d75490d613df2cd6f7f"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/fixtures/structured/domain-entry-valid.json": {
-    "mtime": 1779343248.1228287,
-    "ast_hash": "13358cbaba26d0af20e991d084c57102",
-    "semantic_hash": "13358cbaba26d0af20e991d084c57102"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/fixtures/structured/domain-entry-wrong-type.json": {
-    "mtime": 1779343248.1228287,
-    "ast_hash": "c63c5e05b0e14b0177611df694550597",
-    "semantic_hash": "c63c5e05b0e14b0177611df694550597"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/fixtures/structured/seeds-non-string-elem.json": {
-    "mtime": 1779343248.1238286,
-    "ast_hash": "a56e972d92d44f33580b6be7e57227ea",
-    "semantic_hash": "a56e972d92d44f33580b6be7e57227ea"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/fixtures/structured/seeds-valid.json": {
-    "mtime": 1779343248.1238286,
-    "ast_hash": "25a2067d9315644d4d7056ef6cce8a89",
-    "semantic_hash": "25a2067d9315644d4d7056ef6cce8a89"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/format-utils.test.ts": {
-    "mtime": 1779343248.1248288,
-    "ast_hash": "03c638bf9580084878e40e0b7f62695e",
-    "semantic_hash": "03c638bf9580084878e40e0b7f62695e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/ingest.test.js": {
-    "mtime": 1779343248.1258287,
-    "ast_hash": "0e173ef78fefa66a8d4eeacd44485360",
-    "semantic_hash": "0e173ef78fefa66a8d4eeacd44485360"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/init.force.test.ts": {
-    "mtime": 1779343248.1258287,
-    "ast_hash": "2652d4c85efd47e02f56e4e1f0ace8f9",
-    "semantic_hash": "2652d4c85efd47e02f56e4e1f0ace8f9"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/init.test.js": {
-    "mtime": 1779343248.1258287,
-    "ast_hash": "9d8164e46ce6e5fd9059880880023d6b",
-    "semantic_hash": "9d8164e46ce6e5fd9059880880023d6b"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/llm-utils.test.ts": {
-    "mtime": 1779343248.1268287,
-    "ast_hash": "1189091f79ebe4ef8d53e1eec8c492d0",
-    "semantic_hash": "1189091f79ebe4ef8d53e1eec8c492d0"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/parse-with-retry.test.ts": {
-    "mtime": 1779343248.1268287,
-    "ast_hash": "9175a4f46e25ca372aaa610189234696",
-    "semantic_hash": "9175a4f46e25ca372aaa610189234696"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/query-thinking.test.ts": {
-    "mtime": 1779343248.1268287,
-    "ast_hash": "12a3fd886e0b3c9b4e1f121f7c18e432",
-    "semantic_hash": "12a3fd886e0b3c9b4e1f121f7c18e432"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/query.test.js": {
-    "mtime": 1779343248.1268287,
-    "ast_hash": "c078a465949ee44958327861fe463848",
-    "semantic_hash": "c078a465949ee44958327861fe463848"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/init-thinking.test.ts": {
-    "mtime": 1779695474.229673,
-    "ast_hash": "569e8dd59c78c866973764afe1c38a78",
-    "semantic_hash": "569e8dd59c78c866973764afe1c38a78"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/init.test.ts": {
-    "mtime": 1779695474.2306728,
-    "ast_hash": "e03377fbb44c85b3ba8fa7e79e39aa0b",
-    "semantic_hash": "e03377fbb44c85b3ba8fa7e79e39aa0b"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/lint-thinking.test.ts": {
-    "mtime": 1779695474.2306728,
-    "ast_hash": "17d70655d65e9007913c0704a502bc3b",
-    "semantic_hash": "17d70655d65e9007913c0704a502bc3b"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/query.test.ts": {
-    "mtime": 1779695474.2306728,
-    "ast_hash": "32a4f8e8bbdba915c6033d8eae60a101",
-    "semantic_hash": "32a4f8e8bbdba915c6033d8eae60a101"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/zod-schemas.test.ts": {
-    "mtime": 1779695474.2306728,
-    "ast_hash": "11a6bc2b0e98aed2e8403193ddb9711e",
-    "semantic_hash": "11a6bc2b0e98aed2e8403193ddb9711e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/format.test.ts": {
-    "mtime": 1779777377.557096,
-    "ast_hash": "2827b68d6dcf801591c7e16092d18622",
-    "semantic_hash": "2827b68d6dcf801591c7e16092d18622"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/ingest.test.ts": {
-    "mtime": 1779777377.557096,
-    "ast_hash": "819748bb0de887918f71dfe15eafd86e",
-    "semantic_hash": "819748bb0de887918f71dfe15eafd86e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/lint-chat.test.ts": {
-    "mtime": 1779777377.557096,
-    "ast_hash": "b115a5adf898b6b59889fbc3056f4649",
-    "semantic_hash": "b115a5adf898b6b59889fbc3056f4649"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/lint.test.js": {
-    "mtime": 1779786457.234753,
-    "ast_hash": "ae5ab8c8e839e911df38f621661e7414",
-    "semantic_hash": "ae5ab8c8e839e911df38f621661e7414"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/phases/lint.test.ts": {
-    "mtime": 1779786612.6568992,
-    "ast_hash": "dc9fdce3698a7c35079fc6cfa5658084",
-    "semantic_hash": "dc9fdce3698a7c35079fc6cfa5658084"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/utils/raw-frontmatter.test.ts": {
-    "mtime": 1779343248.1278288,
-    "ast_hash": "368614c9df85e3c484c861bd24ecc5a0",
-    "semantic_hash": "368614c9df85e3c484c861bd24ecc5a0"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/utils/vault-walk.test.ts": {
-    "mtime": 1779695474.2316728,
-    "ast_hash": "5f0321a1fb06360b2b3bf5c5f44a3f2f",
-    "semantic_hash": "5f0321a1fb06360b2b3bf5c5f44a3f2f"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/CLAUDE.md": {
-    "mtime": 1779695474.1946716,
-    "ast_hash": "4c75ca92470b9b7c299b7ed073596445",
-    "semantic_hash": "4c75ca92470b9b7c299b7ed073596445"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/README.md": {
-    "mtime": 1779695474.1946716,
-    "ast_hash": "7d52bb1dc13f7a6d157a5cfbd192d25c",
-    "semantic_hash": "7d52bb1dc13f7a6d157a5cfbd192d25c"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/CHANGELOG.md": {
-    "mtime": 1779777377.5200949,
-    "ast_hash": "328c5ab7200a86eca296bce3bba1d1c3",
-    "semantic_hash": "328c5ab7200a86eca296bce3bba1d1c3"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.claude/skills/publish-version/SKILL.md": {
-    "mtime": 1779777377.5100946,
-    "ast_hash": "3cfef3e33c0e3bb309e752899f8a05e2",
-    "semantic_hash": "3cfef3e33c0e3bb309e752899f8a05e2"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.github/workflows/release.yml": {
-    "mtime": 1779343247.912822,
-    "ast_hash": "cf5a6e7a77755e138c38c820c3538b15",
-    "semantic_hash": "cf5a6e7a77755e138c38c820c3538b15"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/.config/schema.md": {
-    "mtime": 1779343248.070827,
-    "ast_hash": "7e6732f012b4c346ce86188a847b7302",
-    "semantic_hash": "7e6732f012b4c346ce86188a847b7302"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/.config/index.md": {
-    "mtime": 1779695474.1896715,
-    "ast_hash": "40cd03177d508445b7c3d54b93d36784",
-    "semantic_hash": "40cd03177d508445b7c3d54b93d36784"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/.config/log.md": {
-    "mtime": 1779695474.1906714,
-    "ast_hash": "da4e77fd4be299c72029d85b0374c1bc",
-    "semantic_hash": "da4e77fd4be299c72029d85b0374c1bc"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442\u044b/agent-runner.md": {
-    "mtime": 1779343248.071827,
-    "ast_hash": "96a0553b4f4ad526007603f6da754c54",
-    "semantic_hash": "96a0553b4f4ad526007603f6da754c54"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442\u044b/claude-cli-client.md": {
-    "mtime": 1779343248.071827,
-    "ast_hash": "6343a35508b7c12a559441177fa43dcc",
-    "semantic_hash": "6343a35508b7c12a559441177fa43dcc"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442\u044b/format-utils.md": {
-    "mtime": 1779343248.071827,
-    "ast_hash": "6a73d5bcc532424be4ce6781f4d36945",
-    "semantic_hash": "6a73d5bcc532424be4ce6781f4d36945"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442\u044b/parse-with-retry.md": {
-    "mtime": 1779343248.071827,
-    "ast_hash": "ca6fef3444d866090e83815610fe4110",
-    "semantic_hash": "ca6fef3444d866090e83815610fe4110"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442\u044b/structural-error-counter.md": {
-    "mtime": 1779343248.071827,
-    "ast_hash": "5cc7a7640e48b8c5ca72eac09cbe187e",
-    "semantic_hash": "5cc7a7640e48b8c5ca72eac09cbe187e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442\u044b/wiki-controller.md": {
-    "mtime": 1779343248.071827,
-    "ast_hash": "82521612e2eb78ffc96fb787f2c98bca",
-    "semantic_hash": "82521612e2eb78ffc96fb787f2c98bca"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442\u044b/wiki-graph-cache.md": {
-    "mtime": 1779343248.071827,
-    "ast_hash": "5e437736550d337d3fe0c4187ad05281",
-    "semantic_hash": "5e437736550d337d3fe0c4187ad05281"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442\u044b/wiki-seeds.md": {
-    "mtime": 1779343248.072827,
-    "ast_hash": "b87355d5e41bea60ff7561401eb92f67",
-    "semantic_hash": "b87355d5e41bea60ff7561401eb92f67"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442\u044b/llm-wiki-view.md": {
-    "mtime": 1779695474.1906714,
-    "ast_hash": "9666d1192a5d6ea64ac5920a1f1f67e1",
-    "semantic_hash": "9666d1192a5d6ea64ac5920a1f1f67e1"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442\u044b/settings.md": {
-    "mtime": 1779695474.1906714,
-    "ast_hash": "42637740bf02c835acc2fa59031c1ad4",
-    "semantic_hash": "42637740bf02c835acc2fa59031c1ad4"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442\u044b/wiki-index.md": {
-    "mtime": 1779695474.1906714,
-    "ast_hash": "dbb135997adc082ec2c7013e88e08654",
-    "semantic_hash": "dbb135997adc082ec2c7013e88e08654"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442\u044b/wiki-log.md": {
-    "mtime": 1779695474.1906714,
-    "ast_hash": "08ba478ed7f6cdca4191ab232c8e6c23",
-    "semantic_hash": "08ba478ed7f6cdca4191ab232c8e6c23"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043e\u043f\u0435\u0440\u0430\u0446\u0438\u0438/format-operation.md": {
-    "mtime": 1779343248.072827,
-    "ast_hash": "7b44e1441e795d64a5a7b0f6d412c7ba",
-    "semantic_hash": "7b44e1441e795d64a5a7b0f6d412c7ba"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043e\u043f\u0435\u0440\u0430\u0446\u0438\u0438/\u043f\u043e\u0442\u043e\u043a-\u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u044f-\u043e\u043f\u0435\u0440\u0430\u0446\u0438\u0438.md": {
-    "mtime": 1779343248.072827,
-    "ast_hash": "d23a236789416dad5605a2d1569cfb99",
-    "semantic_hash": "d23a236789416dad5605a2d1569cfb99"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043e\u043f\u0435\u0440\u0430\u0446\u0438\u0438/chat-operation.md": {
-    "mtime": 1779695474.1916716,
-    "ast_hash": "d310c9d83e13b70839feb9d7c3c3d687",
-    "semantic_hash": "d310c9d83e13b70839feb9d7c3c3d687"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043e\u043f\u0435\u0440\u0430\u0446\u0438\u0438/fix-operation.md": {
-    "mtime": 1779695474.1916716,
-    "ast_hash": "2a7680bc86128f283f6e21d059e090a5",
-    "semantic_hash": "2a7680bc86128f283f6e21d059e090a5"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043e\u043f\u0435\u0440\u0430\u0446\u0438\u0438/ingest-operation.md": {
-    "mtime": 1779695474.1916716,
-    "ast_hash": "56281c48259d218ee48ad3a2f7374828",
-    "semantic_hash": "56281c48259d218ee48ad3a2f7374828"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043e\u043f\u0435\u0440\u0430\u0446\u0438\u0438/init-operation.md": {
-    "mtime": 1779695474.1916716,
-    "ast_hash": "c76d85d40a0c6d363f824e8b83dde813",
-    "semantic_hash": "c76d85d40a0c6d363f824e8b83dde813"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043e\u043f\u0435\u0440\u0430\u0446\u0438\u0438/lint-operation.md": {
-    "mtime": 1779695474.1916716,
-    "ast_hash": "37077b115e851fb7d99bc9f0745711bd",
-    "semantic_hash": "37077b115e851fb7d99bc9f0745711bd"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043e\u043f\u0435\u0440\u0430\u0446\u0438\u0438/query-operation.md": {
-    "mtime": 1779695474.1926715,
-    "ast_hash": "6347d1e2e69d300e8857b3089a42fd33",
-    "semantic_hash": "6347d1e2e69d300e8857b3089a42fd33"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u0430\u0442\u0442\u0435\u0440\u043d\u044b/async-generator-events.md": {
-    "mtime": 1779343248.073827,
-    "ast_hash": "e5ab22ed7667dc2976df929a2f020d51",
-    "semantic_hash": "e5ab22ed7667dc2976df929a2f020d51"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u0430\u0442\u0442\u0435\u0440\u043d\u044b/backend-strategy.md": {
-    "mtime": 1779343248.073827,
-    "ast_hash": "8f7b9d415806f78c218c1527d67b998c",
-    "semantic_hash": "8f7b9d415806f78c218c1527d67b998c"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u0430\u0442\u0442\u0435\u0440\u043d\u044b/per-device-settings.md": {
-    "mtime": 1779343248.073827,
-    "ast_hash": "c51e858c8ae3a013f0cde033523a343a",
-    "semantic_hash": "c51e858c8ae3a013f0cde033523a343a"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u0430\u0442\u0442\u0435\u0440\u043d\u044b/reasoning-first-json.md": {
-    "mtime": 1779343248.073827,
-    "ast_hash": "facb3ef2f2a27748e206dfe7d8cf7fa9",
-    "semantic_hash": "facb3ef2f2a27748e206dfe7d8cf7fa9"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u0430\u0442\u0442\u0435\u0440\u043d\u044b/single-flight-guard.md": {
-    "mtime": 1779343248.073827,
-    "ast_hash": "a6a5f4ff8e8f6e328fb6f2d53379a0d8",
-    "semantic_hash": "a6a5f4ff8e8f6e328fb6f2d53379a0d8"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u0430\u0442\u0442\u0435\u0440\u043d\u044b/structured-output-retry.md": {
-    "mtime": 1779343248.073827,
-    "ast_hash": "00f0591360ff9cee26b3ac81085e0bfe",
-    "semantic_hash": "00f0591360ff9cee26b3ac81085e0bfe"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u0430\u0442\u0442\u0435\u0440\u043d\u044b/shell-consent.md": {
-    "mtime": 1779695474.1926715,
-    "ast_hash": "49e646ddc00c47290ac84f654666388a",
-    "semantic_hash": "49e646ddc00c47290ac84f654666388a"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u043b\u0430\u043d\u044b/generation-speed-plan.md": {
-    "mtime": 1779343248.073827,
-    "ast_hash": "5b9f649aa1f3c526342e6c4a7d045881",
-    "semantic_hash": "5b9f649aa1f3c526342e6c4a7d045881"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u043b\u0430\u043d\u044b/init-stability-plan.md": {
-    "mtime": 1779343248.073827,
-    "ast_hash": "5f5b6c6944a33510fcc7b3499226a31d",
-    "semantic_hash": "5f5b6c6944a33510fcc7b3499226a31d"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u043b\u0430\u043d\u044b/mobile-domain-selector-plan.md": {
-    "mtime": 1779343248.0748272,
-    "ast_hash": "fdbb686fe75bfd5a1e75fece6e96803b",
-    "semantic_hash": "fdbb686fe75bfd5a1e75fece6e96803b"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u043b\u0430\u043d\u044b/mobile-query-seed-plan.md": {
-    "mtime": 1779343248.0748272,
-    "ast_hash": "28848b880360d40d31c37bc1c68a1322",
-    "semantic_hash": "28848b880360d40d31c37bc1c68a1322"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u043b\u0430\u043d\u044b/reinit-button-plan.md": {
-    "mtime": 1779343248.0748272,
-    "ast_hash": "1c41b75a99f7b401690159a1e3436933",
-    "semantic_hash": "1c41b75a99f7b401690159a1e3436933"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u043b\u0430\u043d\u044b/reinit-force-plan.md": {
-    "mtime": 1779343248.0748272,
-    "ast_hash": "d49342f0f346906d94afbb45980db489",
-    "semantic_hash": "d49342f0f346906d94afbb45980db489"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u043b\u0430\u043d\u044b/structured-output-resilience-plan.md": {
-    "mtime": 1779343248.0748272,
-    "ast_hash": "d9ce8de19060039659d0ed76d9e176f3",
-    "semantic_hash": "d9ce8de19060039659d0ed76d9e176f3"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u043b\u0430\u043d\u044b/index-path-annotation-plan.md": {
-    "mtime": 1779695474.1926715,
-    "ast_hash": "c9c54c71e31b11d6a4ad28123a9ccbca",
-    "semantic_hash": "c9c54c71e31b11d6a4ad28123a9ccbca"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u043b\u0430\u043d\u044b/lint-ux-fixes-plan.md": {
-    "mtime": 1779695474.1926715,
-    "ast_hash": "53f3e1895123f17d970adaff45c2395d",
-    "semantic_hash": "53f3e1895123f17d970adaff45c2395d"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u043b\u0430\u043d\u044b/live-response-ux-plan.md": {
-    "mtime": 1779695474.1926715,
-    "ast_hash": "98f04e0dd0f73287ddbb307b5aa417c7",
-    "semantic_hash": "98f04e0dd0f73287ddbb307b5aa417c7"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u043b\u0430\u043d\u044b/live-status-ux-plan.md": {
-    "mtime": 1779695474.1926715,
-    "ast_hash": "16b9b1fa363d576f869e17663aeaf584",
-    "semantic_hash": "16b9b1fa363d576f869e17663aeaf584"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u043b\u0430\u043d\u044b/security-audit-fixes-plan.md": {
-    "mtime": 1779695474.1926715,
-    "ast_hash": "25caff8dfe9fc4b83db9734ae650294e",
-    "semantic_hash": "25caff8dfe9fc4b83db9734ae650294e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u043b\u0430\u043d\u044b/ux-cleanup-plan.md": {
-    "mtime": 1779695474.1926715,
-    "ast_hash": "3b91ab36d0c7656b5e3cad01540e3ea4",
-    "semantic_hash": "3b91ab36d0c7656b5e3cad01540e3ea4"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u043f\u043b\u0430\u043d\u044b/wiki-path-hierarchy-plan.md": {
-    "mtime": 1779695474.1936717,
-    "ast_hash": "41e0d50e0c07646fd674295b8068984c",
-    "semantic_hash": "41e0d50e0c07646fd674295b8068984c"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/agent-base-contract.md": {
-    "mtime": 1779343248.0748272,
-    "ast_hash": "ef1e7d468369f38ed9a11fdbb10e2b50",
-    "semantic_hash": "ef1e7d468369f38ed9a11fdbb10e2b50"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/audit-fix-design.md": {
-    "mtime": 1779343248.0748272,
-    "ast_hash": "6cc66b4c5c78f30e64965535770ed038",
-    "semantic_hash": "6cc66b4c5c78f30e64965535770ed038"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/claude-agent-backend-design.md": {
-    "mtime": 1779343248.0758271,
-    "ast_hash": "78b57b6a3a6f7c0e74caceea20357f6a",
-    "semantic_hash": "78b57b6a3a6f7c0e74caceea20357f6a"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/format-operation-design.md": {
-    "mtime": 1779343248.0758271,
-    "ast_hash": "be50c10e5564aaaa0d67987274e5b15b",
-    "semantic_hash": "be50c10e5564aaaa0d67987274e5b15b"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/generation-speed-design.md": {
-    "mtime": 1779343248.0758271,
-    "ast_hash": "2f1853a606002127a479eb7de9004676",
-    "semantic_hash": "2f1853a606002127a479eb7de9004676"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/init-stability-design.md": {
-    "mtime": 1779343248.0758271,
-    "ast_hash": "4768bc03149a63211036bf7f34aa5b3e",
-    "semantic_hash": "4768bc03149a63211036bf7f34aa5b3e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/mobile-domain-selector-design.md": {
-    "mtime": 1779343248.0758271,
-    "ast_hash": "b0bcf6890e6036b01640f98810b4f1bc",
-    "semantic_hash": "b0bcf6890e6036b01640f98810b4f1bc"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/mobile-query-seed-design.md": {
-    "mtime": 1779343248.0758271,
-    "ast_hash": "0d738a6fcef8dae9a0033808ee841602",
-    "semantic_hash": "0d738a6fcef8dae9a0033808ee841602"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/reinit-button-design.md": {
-    "mtime": 1779343248.0768273,
-    "ast_hash": "58dfdd10294b7d4a013308e32f4f9200",
-    "semantic_hash": "58dfdd10294b7d4a013308e32f4f9200"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/reinit-force-design.md": {
-    "mtime": 1779343248.0768273,
-    "ast_hash": "26780967712a3e0dc02951ad548cfb8a",
-    "semantic_hash": "26780967712a3e0dc02951ad548cfb8a"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/remove-content-truncation-design.md": {
-    "mtime": 1779343248.0768273,
-    "ast_hash": "beb7d233131444370d96e3eaf8fecc9e",
-    "semantic_hash": "beb7d233131444370d96e3eaf8fecc9e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/agent-stability-audit-design.md": {
-    "mtime": 1779695474.1936717,
-    "ast_hash": "2ee853f52f0552215414f9ee83c6cce6",
-    "semantic_hash": "2ee853f52f0552215414f9ee83c6cce6"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/index-path-annotation-design.md": {
-    "mtime": 1779695474.1936717,
-    "ast_hash": "24b6585042c56ae2cc3d173adaa21b21",
-    "semantic_hash": "24b6585042c56ae2cc3d173adaa21b21"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/lint-ux-fixes-design.md": {
-    "mtime": 1779695474.1936717,
-    "ast_hash": "44d07d98493752e245dada440dadfe54",
-    "semantic_hash": "44d07d98493752e245dada440dadfe54"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/live-response-ux-design.md": {
-    "mtime": 1779695474.1936717,
-    "ast_hash": "c9275c1e30b5316e2f2d808ad05518b3",
-    "semantic_hash": "c9275c1e30b5316e2f2d808ad05518b3"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/live-status-ux-design.md": {
-    "mtime": 1779695474.1936717,
-    "ast_hash": "d1ce3f2ef1f75954171e3642b3a7227b",
-    "semantic_hash": "d1ce3f2ef1f75954171e3642b3a7227b"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/security-audit-fixes-design.md": {
-    "mtime": 1779695474.1936717,
-    "ast_hash": "82eaed332099f72c7085376498ce3295",
-    "semantic_hash": "82eaed332099f72c7085376498ce3295"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/ux-cleanup-design.md": {
-    "mtime": 1779695474.1946716,
-    "ast_hash": "c662a6436c89044a73f7209e74ff90f9",
-    "semantic_hash": "c662a6436c89044a73f7209e74ff90f9"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/wiki-config-schema-log-index-design.md": {
-    "mtime": 1779695474.1946716,
-    "ast_hash": "c8b50cd21d3d3f9a840438c59f816780",
-    "semantic_hash": "c8b50cd21d3d3f9a840438c59f816780"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/.wiki/\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f/\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438/wiki-path-hierarchy-design.md": {
-    "mtime": 1779695474.1946716,
-    "ast_hash": "45d8f830f948c796455c535b5b6539df",
-    "semantic_hash": "45d8f830f948c796455c535b5b6539df"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/prompts/base.md": {
-    "mtime": 1779343248.1078281,
-    "ast_hash": "c429cd10245c8de0d3ad8d8f3aad304b",
-    "semantic_hash": "c429cd10245c8de0d3ad8d8f3aad304b"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/prompts/chat.md": {
-    "mtime": 1779343248.1078281,
-    "ast_hash": "0a16ae24cd9a358ccf42b5b4f2b6c9e0",
-    "semantic_hash": "0a16ae24cd9a358ccf42b5b4f2b6c9e0"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/prompts/evaluator.md": {
-    "mtime": 1779343248.1078281,
-    "ast_hash": "9fe1b583429e2c7bc06751e64053f9d8",
-    "semantic_hash": "9fe1b583429e2c7bc06751e64053f9d8"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/prompts/format.md": {
-    "mtime": 1779343248.1078281,
-    "ast_hash": "f7c11797417c2b0e83dd3a085c7540b7",
-    "semantic_hash": "f7c11797417c2b0e83dd3a085c7540b7"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/prompts/ingest.md": {
-    "mtime": 1779695474.2186725,
-    "ast_hash": "705e95297748ac330fc9e6c99bfec7a7",
-    "semantic_hash": "705e95297748ac330fc9e6c99bfec7a7"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/prompts/init.md": {
-    "mtime": 1779695474.2186725,
-    "ast_hash": "98c6a3703b1309f443b8261a85653329",
-    "semantic_hash": "98c6a3703b1309f443b8261a85653329"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/prompts/lint-chat.md": {
-    "mtime": 1779695474.2186725,
-    "ast_hash": "bdd471616964a0f6c2445db23b2c4479",
-    "semantic_hash": "bdd471616964a0f6c2445db23b2c4479"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/prompts/lint.md": {
-    "mtime": 1779695474.2186725,
-    "ast_hash": "fb6a258d314c73abb3506c8c316e64d5",
-    "semantic_hash": "fb6a258d314c73abb3506c8c316e64d5"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/prompts/query.md": {
-    "mtime": 1779695474.2196724,
-    "ast_hash": "fa9945771a70a4d2a95ad8e7dbe9f088",
-    "semantic_hash": "fa9945771a70a4d2a95ad8e7dbe9f088"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/scripts/dspy/CLAUDE.md": {
-    "mtime": 1779343248.1098282,
-    "ast_hash": "90d83e6bc05aa57101464b875baa1f4e",
-    "semantic_hash": "90d83e6bc05aa57101464b875baa1f4e"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/scripts/dspy/README.md": {
-    "mtime": 1779343248.1098282,
-    "ast_hash": "9a740b7601f415692d8ef916c30560af",
-    "semantic_hash": "9a740b7601f415692d8ef916c30560af"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/templates/_format_schema.md": {
-    "mtime": 1779695474.2266726,
-    "ast_hash": "d084ce31e8d83caa17969446c887f882",
-    "semantic_hash": "d084ce31e8d83caa17969446c887f882"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/templates/_wiki_schema.md": {
-    "mtime": 1779695474.2266726,
-    "ast_hash": "498cc177563edc89903bf0754f6319b8",
-    "semantic_hash": "498cc177563edc89903bf0754f6319b8"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/tests/fixtures/format-sample.md": {
-    "mtime": 1779343248.1218286,
-    "ast_hash": "81e51cd228789d22c02c282c4ef6bd68",
-    "semantic_hash": "81e51cd228789d22c02c282c4ef6bd68"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/lat.md/lat.md": {
-    "mtime": 1779695474.2156723,
-    "ast_hash": "03bf5ef389b70b464c0835bc8e1907a7",
-    "semantic_hash": "03bf5ef389b70b464c0835bc8e1907a7"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/lat.md/wiki-graph.md": {
-    "mtime": 1779695474.2156723,
-    "ast_hash": "69b423bde20b696a5ca158a8b1958c2b",
-    "semantic_hash": "69b423bde20b696a5ca158a8b1958c2b"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/lat.md/domain.md": {
-    "mtime": 1779777377.5490959,
-    "ast_hash": "b8e08c6e3528f4eee6d22e3f966a957b",
-    "semantic_hash": "b8e08c6e3528f4eee6d22e3f966a957b"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/lat.md/llm-pipeline.md": {
-    "mtime": 1779777377.5490959,
-    "ast_hash": "f9cecd8e8fcc14083644090605b79688",
-    "semantic_hash": "f9cecd8e8fcc14083644090605b79688"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/lat.md/architecture.md": {
-    "mtime": 1779786852.4600718,
-    "ast_hash": "ad35a66e094cc0d56a8c40180d1918d0",
-    "semantic_hash": "ad35a66e094cc0d56a8c40180d1918d0"
-  },
-  "/home/altuser/\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/Project/obsidian-ai-wiki/lat.md/operations.md": {
-    "mtime": 1779786861.2583616,
-    "ast_hash": "6dec4809746cd435158085f67490a0be",
-    "semantic_hash": "6dec4809746cd435158085f67490a0be"
+    "mtime": 1779814696.8177047,
+    "hash": "ff71589704b6d72feade75d700aa8c6c"
   }
 }

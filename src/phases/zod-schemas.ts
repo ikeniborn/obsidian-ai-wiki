@@ -42,12 +42,19 @@ export const WikiPageSchema = z.object({
   content: z.string(),
   annotation: z.string().optional(),
 }).superRefine((val, ctx) => {
-  if (/\[\[[^\]]+\|[^\]]+\]\]/.test(val.content)) {
+  // Extract body only (after frontmatter) — wiki_sources in frontmatter
+  // intentionally uses [[path/to/source]] format and must not be checked.
+  const fmEnd = val.content.startsWith("---\n")
+    ? (() => { const i = val.content.indexOf("\n---", 4); return i >= 0 ? i + 4 : 0; })()
+    : 0;
+  const body = val.content.slice(fmEnd);
+
+  if (/\[\[[^\]]+\|[^\]]+\]\]/.test(body)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "WikiLink aliases not allowed", path: ["content"] });
   }
   const linkRe = /\[\[([^\]|]+)\]\]/g;
   let m: RegExpExecArray | null;
-  while ((m = linkRe.exec(val.content)) !== null) {
+  while ((m = linkRe.exec(body)) !== null) {
     if (m[1].includes("/")) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "WikiLink with path", path: ["content"] });
       break;

@@ -81,6 +81,21 @@ describe("WikiPageSchema", () => {
     const result = WikiPageSchema.safeParse({ path: "a/b.md" });
     expect(result.success).toBe(false);
   });
+  it("accepts path-style links in wiki_sources frontmatter field", () => {
+    const content = '---\nwiki_sources:\n  - "[[ИЛЬЯ/Здоровье/source.md]]"\nwiki_outgoing_links: []\n---\n# Page\n\nText with [[OtherPage]].';
+    const result = WikiPageSchema.safeParse({ path: "!Wiki/d/e/Page.md", content });
+    expect(result.success).toBe(true);
+  });
+  it("rejects path-style wikilinks in body", () => {
+    const content = '---\nwiki_sources:\n  - "[[source.md]]"\n---\n# Page\n\nSee [[folder/OtherPage]].';
+    const result = WikiPageSchema.safeParse({ path: "!Wiki/d/e/Page.md", content });
+    expect(result.success).toBe(false);
+  });
+  it("rejects alias wikilinks in body", () => {
+    const content = "# Page\n\nSee [[OtherPage|alias]].";
+    const result = WikiPageSchema.safeParse({ path: "!Wiki/d/e/Page.md", content });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("WikiPagesOutputSchema", () => {

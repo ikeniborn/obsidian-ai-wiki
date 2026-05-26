@@ -110,7 +110,7 @@ describe("runLint", () => {
     expect(rawCall).toBeDefined();
     const writtenContent = rawCall![1] as string;
     expect(writtenContent).toContain("wiki_articles:");
-    expect(writtenContent).toContain("[[!Wiki/work/Entity.md]]");
+    expect(writtenContent).toContain("[[Entity]]");
   });
 
   it("does not fail lint when raw file read throws during sync", async () => {
@@ -173,8 +173,8 @@ describe("runLint", () => {
       runLint([], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "Lint OK", fixes: [] })), "model", [domainA, domainB], VAULT_ROOT, new AbortController().signal),
     );
 
-    expect(rawContent).toContain("[[!Wiki/A/EntityA.md]]");
-    expect(rawContent).toContain("[[!Wiki/B/EntityB.md]]");
+    expect(rawContent).toContain("[[EntityA]]");
+    expect(rawContent).toContain("[[EntityB]]");
   });
 
   it("refreshes pages map after fix-pass so backlink sync uses updated wiki_sources", async () => {
@@ -217,7 +217,7 @@ describe("runLint", () => {
     );
     expect(rawCall).toBeDefined();
     const writtenContent = rawCall![1] as string;
-    expect(writtenContent).toContain("[[!Wiki/work/Page.md]]");
+    expect(writtenContent).toContain("[[Page]]");
   });
 
   it("does not append backlink sync line when no wiki pages have wiki_sources", async () => {

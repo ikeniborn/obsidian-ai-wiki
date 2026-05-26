@@ -98,7 +98,8 @@ export interface LlmCallOptions {
   maxTokens?: number;
   topP?: number | null;
   systemPrompt?: string;
-  jsonMode?: "json_object" | false;
+  jsonMode?: "json_object" | "json_schema" | false;
+  jsonSchema?: { name: string; schema: object };
   structuredRetries?: number;
   thinkingBudgetTokens?: number;
 }

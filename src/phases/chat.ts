@@ -33,6 +33,7 @@ export async function* runLintChat(
   let outputTokens = 0;
   let streamStats: import("./llm-utils").LlmStreamStats | undefined;
 
+  yield { kind: "tool_use", name: "Responding", input: {} };
   try {
     const requestStartMs = Date.now();
     const rawStream = await llm.chat.completions.create(
@@ -59,6 +60,7 @@ export async function* runLintChat(
   }
 
   if (signal.aborted) return;
+  yield { kind: "tool_result", ok: !!fullText, preview: fullText ? `${fullText.length} chars` : "no response" };
   if (streamStats) yield buildLlmCallStatsEvent(streamStats);
   yield { kind: "result", durationMs: Date.now() - start, text: fullText, outputTokens: outputTokens || undefined };
 }

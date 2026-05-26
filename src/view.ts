@@ -6,6 +6,7 @@ import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
 import { domainWikiFolder, domainLogPath, domainIndexPath } from "./wiki-path";
 import { computeSpeedText } from "./phases/llm-utils";
+import { isAbsolute, relative } from "path-browserify";
 
 import { collectMdInPaths, walkFolder } from "./utils/vault-walk";
 export { collectMdInPaths, walkFolder };
@@ -399,7 +400,13 @@ export class LlmWikiView extends ItemView {
     }
 
     const T = i18n().modal;
-    const mdFiles = collectMdInPaths(this.app.vault, sourcePaths);
+    const base = this.plugin.controller.cwdOrEmpty();
+    const toVaultRel = (p: string): string => {
+      if (!base || !isAbsolute(p)) return p;
+      const rel = relative(base, p);
+      return rel.startsWith("..") ? p : rel;
+    };
+    const mdFiles = collectMdInPaths(this.app.vault, sourcePaths.map(toVaultRel));
     const wikiFiles = collectMdInPaths(this.app.vault, [domainWikiFolder(entry.wiki_folder)]);
     const body = T.reinitConfirmBody(entry.id, wikiFiles.length, mdFiles.length, sourcePaths.length);
 

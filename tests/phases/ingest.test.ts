@@ -187,12 +187,12 @@ describe("runIngest", () => {
     expect(writtenContent).toContain("wiki_added:");
     expect(writtenContent).toContain("wiki_updated:");
     expect(writtenContent).toContain("wiki_articles:");
-    expect(writtenContent).toContain("[[!Wiki/work/entities/Entity.md]]");
+    expect(writtenContent).toContain("[[Entity]]");
   });
 
   it("preserves wiki_added and unions wiki_articles on repeated ingest", async () => {
     const existingFm =
-      '---\nwiki_added: 2026-01-01\nwiki_updated: 2026-01-01\nwiki_articles:\n  - "[[!Wiki/work/entities/Old.md]]"\n---\nsource text';
+      '---\nwiki_added: 2026-01-01\nwiki_updated: 2026-01-01\nwiki_articles:\n  - "[[Old]]"\n---\nsource text';
     const adapter = mockAdapter({
       read: vi.fn().mockResolvedValue(existingFm),
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
@@ -219,8 +219,8 @@ describe("runIngest", () => {
     expect(rawCall).toBeDefined();
     const writtenContent = rawCall![1] as string;
     expect(writtenContent).toContain("wiki_added: 2026-01-01"); // preserved
-    expect(writtenContent).toContain("[[!Wiki/work/entities/Old.md]]");  // union
-    expect(writtenContent).toContain("[[!Wiki/work/entities/New.md]]");  // union
+    expect(writtenContent).toContain("[[Old]]");  // union
+    expect(writtenContent).toContain("[[New]]");  // union
   });
 
   it("does not write backlinks when no wiki pages were written", async () => {

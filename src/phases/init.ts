@@ -119,15 +119,17 @@ export async function* runInitWithSources(
   let outputTokens = 0;
   const wikiRootGuess = `!Wiki`;
 
+  yield { kind: "tool_use", name: "Glob", input: { pattern: sourcePaths.join(", ") } };
   await ensureRootFiles(vaultTools, wikiRootGuess);
-
   const sourceFileLists = await Promise.all(sourcePaths.map((sp) => vaultTools.listFiles(sp)));
   const sourceFiles = [...new Set(sourceFileLists.flat())].filter((f) => f.endsWith(".md"));
 
   if (!sourceFiles.length) {
+    yield { kind: "tool_result", ok: false, preview: "no .md files found" };
     yield { kind: "error", message: `No .md files found in source paths: ${sourcePaths.join(", ")}` };
     return;
   }
+  yield { kind: "tool_result", ok: true, preview: `${sourceFiles.length} source files` };
 
   const existing = domains.find((d) => d.id === domainId);
   const isResuming = !force && existing?.analyzed_sources !== undefined;
@@ -189,6 +191,7 @@ export async function* runInitWithSources(
         { role: "user", content: `Domain ID: ${domainId}\nVault name: ${vaultName}\nSource paths: ${sourcePaths.join(", ")}\n\n${file}:\n${fileContent}` },
       ];
 
+      yield { kind: "tool_use", name: "Initialising domain", input: {} };
       const collected: RunEvent[] = [];
       let parsed: { id: string; name: string; wiki_folder: string; entity_types: EntityType[]; language_notes: string };
       try {
@@ -202,8 +205,10 @@ export async function* runInitWithSources(
         });
         parsed = r.value;
         outputTokens += r.outputTokens;
+        yield { kind: "tool_result", ok: true, preview: `domain: ${parsed.id}` };
         if (r.fullText) yield { kind: "assistant_text", delta: r.fullText };
       } catch (e) {
+        yield { kind: "tool_result", ok: false, preview: (e as Error).message };
         for (const ev of collected) yield ev;
         if ((e as Error).name === "AbortError" || signal.aborted) return;
         yield { kind: "assistant_text", delta: `⚠ ${file}: LLM вернул невалидный JSON, пропускаем bootstrap (${(e as Error).message})\n` };

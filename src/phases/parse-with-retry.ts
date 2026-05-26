@@ -1,6 +1,7 @@
 import type OpenAI from "openai";
 import type { z } from "zod";
 import { ZodError } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import type { LlmClient, LlmCallOptions, RunEvent } from "../types";
 import {
   parseStructured, buildChatParams, extractStreamDeltas, extractUsage,
@@ -104,7 +105,23 @@ async function streamOnce(
 }
 
 export async function parseWithRetry<T>(args: ParseWithRetryArgs<T>): Promise<ParseWithRetryResult<T>> {
-  const { llm, model, baseMessages, opts, schema, maxRetries, callSite, signal, onEvent } = args;
+  const { llm, model, baseMessages, schema, maxRetries, callSite, signal, onEvent } = args;
+
+  // Upgrade json_object → json_schema with auto-generated schema for supporting backends.
+  // superRefine rules (e.g. WikiLink checks) are not expressible in JSON Schema and are
+  // skipped here — Zod still validates them after parsing.
+  const opts: LlmCallOptions =
+    (args.opts.jsonMode === "json_object" || args.opts.jsonMode === "json_schema")
+      ? {
+          ...args.opts,
+          jsonMode: "json_schema",
+          jsonSchema: {
+            name: callSite.replace(/\./g, "_"),
+            schema: zodToJsonSchema(schema, { $refStrategy: "none" }) as object,
+          },
+        }
+      : args.opts;
+
   let messages: OpenAI.Chat.ChatCompletionMessageParam[] = baseMessages;
   let totalTokens = 0;
   let lastError: Error = new Error("no attempts");

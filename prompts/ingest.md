@@ -14,7 +14,8 @@
 - Если тип сущности не определён или у домена нет entity_types → путь по умолчанию: {{wiki_path}}/entities/<EntityName>.md
 - Frontmatter обязателен: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature
 - tags: иерархические теги (category/subcategory). Переиспользуй теги из существующих wiki-страниц (переданы в контексте). Создавай новые по той же схеме если нужно. Формат: строчные, через `/`, без пробелов, без `#`
-- wiki_sources: каждый элемент обязательно в формате [[path/to/source]], тип свойства Links в Obsidian
+- wiki_sources: каждый элемент — bare имя источника без пути и без псевдонима: [[ИмяФайла]]. НЕ [[папка/Имя.md]]
+- wiki_outgoing_links и [[ссылки]] в тексте страниц — ТОЛЬКО bare имя страницы без пути и без псевдонима: [[ИмяСтраницы]]. НЕ [[папка/Имя]], НЕ [[Имя|Псевдоним]]
 - Раздел "## Основные характеристики" обязателен для каждой страницы
 - При добавлении из нового источника — фиксировать в "## История изменений" с датой и источником
 - "## Связанные концепции" — создавать только при наличии пояснительного контекста к связям
@@ -32,4 +33,4 @@
 добавь поле entity_types_delta в JSON-ответ. Если ничего нового — просто не включай это поле.
 
 Верни ТОЛЬКО JSON-объект — никакого другого текста:
-{"reasoning":"Обоснование: какие сущности извлечены и почему","pages":[{"path":"{{wiki_path}}/entities/EntityName.md","content":"---\nwiki_sources: [\"[[{{source_path}}]]\"]\nwiki_updated: {{today}}\nwiki_status: stub\ntags: []\nwiki_outgoing_links: []\n---\n# EntityName\n\ncontент...","annotation":"Краткое описание сущности для контекстного поиска"}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}
+{"reasoning":"Обоснование: какие сущности извлечены и почему","pages":[{"path":"{{wiki_path}}/entities/EntityName.md","content":"---\nwiki_sources: [\"[[{{source_stem}}]]\"]\nwiki_updated: {{today}}\nwiki_status: stub\ntags: []\nwiki_outgoing_links: []\n---\n# EntityName\n\ncontент...","annotation":"Краткое описание сущности для контекстного поиска"}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}

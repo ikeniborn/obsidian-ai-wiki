@@ -50,13 +50,13 @@ export async function* runQuery(
   }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
 
+  // Phase 1: read index
+  yield { kind: "tool_use", name: "Read", input: { path: domainIndexPath(wikiVaultPath) } };
   await ensureDomainConfig(vaultTools, wikiVaultPath);
-
-  // Phase 1: read index (no full file scan yet)
   const indexContent = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
   if (signal.aborted) return;
-
   const indexAnnotations = parseIndexAnnotations(indexContent);
+  yield { kind: "tool_result", ok: true, preview: `${indexAnnotations.size} annotations` };
   const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
   const minScore = Math.max(0, Math.min(1, seedMinScore));
   const start = Date.now();
@@ -131,6 +131,7 @@ export async function* runQuery(
   const params = buildChatParams(model, messages, opts, true);
   let answer = "";
   let streamStats: import("./llm-utils").LlmStreamStats | undefined;
+  yield { kind: "tool_use", name: "Answering", input: {} };
   try {
     const requestStartMs = Date.now();
     const rawStream = await llm.chat.completions.create(
@@ -157,6 +158,7 @@ export async function* runQuery(
   }
 
   if (signal.aborted) return;
+  yield { kind: "tool_result", ok: !!answer, preview: answer ? `${answer.length} chars` : "no response" };
   if (streamStats) yield buildLlmCallStatsEvent(streamStats);
 
   if (save && answer) {

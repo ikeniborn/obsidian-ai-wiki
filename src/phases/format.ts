@@ -69,8 +69,17 @@ export async function* runFormat(
   }
   if (signal.aborted) return;
 
-  const original = await vaultTools.read(filePath);
+  yield { kind: "tool_use", name: "Read", input: { file_path: filePath } };
+  let original: string;
+  try {
+    original = await vaultTools.read(filePath);
+  } catch {
+    yield { kind: "tool_result", ok: false, preview: "cannot read file" };
+    yield { kind: "error", message: `Format: cannot read ${filePath}` };
+    return;
+  }
   if (!original) {
+    yield { kind: "tool_result", ok: false, preview: "empty file" };
     yield { kind: "error", message: `Format: cannot read ${filePath}` };
     return;
   }
@@ -83,6 +92,7 @@ export async function* runFormat(
     formatSchema = formatSchemaDefault;
     try { await vaultTools.write(formatSchemaPath, formatSchemaDefault); } catch { /* не блокируем */ }
   }
+  yield { kind: "tool_result", ok: true, preview: `${original.length} chars` };
 
   const systemContent = render(formatTemplate, {
     format_schema: formatSchema,
@@ -150,17 +160,20 @@ export async function* runFormat(
     return acc;
   }
 
+  yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
   let fullText = yield* callOnce(baseParams);
   if (signal.aborted) return;
 
   let parsed = parseFormatOutput(fullText);
   const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
   if (!parsed && truncated) {
+    yield { kind: "tool_result", ok: false, preview: "response truncated" };
     yield { kind: "error", message: `Format: ответ обрезан по лимиту вывода модели — сократите страницу или ${truncationHint(backend)}` };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
     return;
   }
   if (!parsed) {
+    yield { kind: "tool_result", ok: false, preview: "invalid JSON — retrying" };
     yield { kind: "assistant_text", delta: "\n[JSON невалиден — повторяю запрос]\n" };
     const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: "system", content: systemContent + "\n\nКРИТИЧЕСКИ ВАЖНО: верни ТОЛЬКО JSON-объект {\"report\": \"...\", \"formatted\": \"...\"} без markdown-обёртки, без ```json fence, без пояснений. Все спецсимволы внутри строк должны быть экранированы (\\n, \\\", \\\\)." },
@@ -168,6 +181,7 @@ export async function* runFormat(
       ...chatHistory.map((m) => ({ role: m.role, content: m.content } as OpenAI.Chat.ChatCompletionMessageParam)),
     ];
     const retryParams = { ...buildChatParams(model, retryMessages, opts, true), response_format: { type: "json_object" } };
+    yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     fullText = yield* callOnce(retryParams);
     if (signal.aborted) return;
     parsed = parseFormatOutput(fullText);
@@ -177,10 +191,12 @@ export async function* runFormat(
     const msg = retryTruncated
       ? `Format: ответ обрезан по лимиту вывода модели (после retry) — сократите страницу или ${truncationHint(backend)}`
       : "Format: LLM вернул невалидный JSON (после retry)";
+    yield { kind: "tool_result", ok: false, preview: msg };
     yield { kind: "error", message: msg };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
     return;
   }
+  yield { kind: "tool_result", ok: true, preview: `${parsed.formatted.length} chars` };
 
   const lastSlash = filePath.lastIndexOf("/");
   const dir = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "";
@@ -203,6 +219,7 @@ export async function* runFormat(
       },
     ];
     const restoreParams = { ...buildChatParams(model, restoreMessages, opts, true), response_format: { type: "json_object" } };
+    yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     const fullText2 = yield* callOnce(restoreParams);
     if (!signal.aborted) {
       const parsed2 = parseFormatOutput(fullText2);
@@ -210,6 +227,7 @@ export async function* runFormat(
         finalFormatted = parsed2.formatted;
         finalReport = parsed2.report;
       }
+      yield { kind: "tool_result", ok: true, preview: "tokens restored" };
     }
     const missing2 = missingTokensWithContext(original, finalFormatted);
     if (missing2.length > 0) {

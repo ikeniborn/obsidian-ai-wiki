@@ -477,7 +477,7 @@ describe("computeSpeedText", () => {
   it("formats single call correctly", () => {
     // 200 in / 2s = 100 in tok/s; 100 out / 2s = 50 out tok/s; median ttft = 300ms
     const stats = [{ inputTokens: 200, outputTokens: 100, ttftMs: 300, llmDurationMs: 2000 }];
-    expect(computeSpeedText(stats)).toBe(" in: 100 · out: 50 tok/s · latency: 300ms");
+    expect(computeSpeedText(stats)).toBe(" in: 100 tok/s · out: 50 tok/s · latency: 300ms");
   });
 
   it("aggregates multiple calls and uses median TTFT", () => {

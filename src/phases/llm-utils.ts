@@ -1,6 +1,7 @@
 import type OpenAI from "openai";
 import type { LlmCallOptions, LlmClient, RunEvent } from "../types";
 import baseContract from "../../prompts/base.md";
+import { jsonrepair } from "jsonrepair";
 
 /** Remove <think>...</think> blocks leaked into content by thinking models. */
 export function stripThinking(text: string): string {
@@ -18,9 +19,22 @@ export function parseStructured(fullText: string): unknown {
   try { return JSON.parse(text); } catch { /* fall through */ }
   const stripped = stripFences(stripThinking(text));
   try { return JSON.parse(stripped); } catch { /* fall through */ }
+  if (stripped.includes("{")) {
+    try { return JSON.parse(jsonrepair(stripped)); } catch { /* fall through */ }
+  }
   const match = stripped.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("No JSON object found");
-  return JSON.parse(match[0]);
+  try { return JSON.parse(match[0]); } catch (e) {
+    // "Unexpected non-whitespace character after JSON at position N" —
+    // greedy regex captured trailing garbage after valid JSON closing brace.
+    // Slice to error position and retry.
+    const posMatch = String((e as Error).message).match(/at position (\d+)/);
+    if (posMatch) {
+      const pos = parseInt(posMatch[1], 10);
+      if (pos > 0) return JSON.parse(match[0].slice(0, pos));
+    }
+    throw e;
+  }
 }
 
 function stripFences(text: string): string {
@@ -66,7 +80,12 @@ export function buildChatParams(
   if (opts.topP != null) params.top_p = opts.topP;
   if (stream) params.stream_options = { include_usage: true };
 
-  if (opts.jsonMode === "json_object") {
+  if (opts.jsonMode === "json_schema" && opts.jsonSchema) {
+    params.response_format = {
+      type: "json_schema",
+      json_schema: { name: opts.jsonSchema.name, schema: opts.jsonSchema.schema, strict: false },
+    };
+  } else if (opts.jsonMode === "json_object") {
     params.response_format = { type: "json_object" };
   }
 
@@ -117,7 +136,12 @@ function hasContentDelta(chunk: OpenAI.Chat.ChatCompletionChunk): boolean {
   return typeof c === "string" && c.length > 0;
 }
 
-function stripResponseFormat(params: Record<string, unknown>): Record<string, unknown> {
+/** Two-stage response_format degradation: json_schema → json_object → nothing. */
+function degradeResponseFormat(params: Record<string, unknown>): Record<string, unknown> {
+  const rf = params.response_format as { type?: string } | undefined;
+  if (rf?.type === "json_schema") {
+    return { ...params, response_format: { type: "json_object" } };
+  }
   const next = { ...params };
   delete next.response_format;
   return next;
@@ -146,34 +170,47 @@ export function wrapWithJsonFallback(inner: LlmClient): LlmClient {
 
     if (!isStream) {
       return (async () => {
-        try {
-          return await (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<unknown>)(params, callOpts);
-        } catch (e) {
-          if (!isJsonModeError(e)) throw e;
-          return (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<unknown>)(stripResponseFormat(params), callOpts);
+        let current = params;
+        while (current.response_format !== undefined) {
+          try {
+            return await (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<unknown>)(current, callOpts);
+          } catch (e) {
+            if (!isJsonModeError(e)) throw e;
+            current = degradeResponseFormat(current);
+          }
         }
+        return (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<unknown>)(current, callOpts);
       })();
     }
 
     return (async () => {
-      let upstream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
-      try {
-        upstream = await (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>)(params, callOpts);
-      } catch (e) {
-        if (!isJsonModeError(e)) throw e;
-        return (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>)(stripResponseFormat(params), callOpts);
+      // Initial connection: loop through degradation levels until connected.
+      let current = params;
+      let upstream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk> | undefined;
+      while (upstream === undefined) {
+        try {
+          upstream = await (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>)(current, callOpts);
+        } catch (e) {
+          if (!isJsonModeError(e) || current.response_format === undefined) throw e;
+          current = degradeResponseFormat(current);
+        }
       }
+      const connectedParams = current;
 
       async function* gated(): AsyncIterable<OpenAI.Chat.ChatCompletionChunk> {
         let seenContent = false;
         try {
-          for await (const chunk of upstream) {
+          for await (const chunk of upstream!) {
             if (hasContentDelta(chunk)) seenContent = true;
             yield chunk;
           }
         } catch (e) {
           if (seenContent || !isJsonModeError(e)) throw e;
-          const retry = await (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>)(stripResponseFormat(params), callOpts);
+          // Mid-stream error before any content: degrade one level from the params
+          // that connected successfully (connectedParams), not from original params.
+          const degraded = degradeResponseFormat(connectedParams);
+          if (degraded.response_format === connectedParams.response_format) throw e;
+          const retry = await (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>)(degraded, callOpts);
           for await (const c of retry) yield c;
         }
       }

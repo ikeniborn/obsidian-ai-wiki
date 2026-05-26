@@ -20,6 +20,12 @@ Selects seed wiki pages most relevant to a source file, then expands via BFS ove
 
 In `jaccard` mode, Jaccard scoring over tokenized source content vs index annotations ranks candidates; top-K paths are seeds. In `embedding` mode, vectors for all annotated pages are fetched from an OpenAI-compatible endpoint (no API key required for Ollama), cached in `_config/_embeddings.json` per domain, and scored by cosine similarity. Falls back to Jaccard on API error. After similarity selects seeds, ingest reads all non-meta pages, builds the graph cache, and BFS-expands from seed IDs — only the expanded subset is passed to the LLM. `refreshCache` updates the embedding cache after ingest writes pages. An `info_text` event reports how many pages were loaded vs total. See [[architecture#PageSimilarityService]].
 
+### LLM Progress Step
+
+Emits `tool_use name: "Synthesising pages"` before `parseWithRetry`. On success, `tool_result` preview shows context page count and estimated input tokens (`"N pages · ~Xk tokens sent"`); on error, `ok: false`.
+
+Gives the user a visible waiting indicator during the LLM call. See [[llm-pipeline#LLM Progress Events]].
+
 ### Per-page Progress Events
 
 Before writing each wiki page, ingest emits `tool_use` with `name: "Create"` for new pages or `name: "Update"` for existing ones. Error-path yields (blocked/invalid paths) keep `name: "Write"`.
@@ -54,13 +60,19 @@ See [[src/wiki-graph.ts#bfsExpand]], [[wiki-graph#Query Graph Traversal]].
 
 Analyzes all wiki pages for a domain, returns `LintOutputSchema` with `report` and `fixes[]`. A second call `actualizeDomainConfig` runs after lint to sync `entity_types` from real wiki content.
 
-Emits `domain_updated` with updated entity types. In `embedding` mode, calls `loadCache` before `refreshCache` and emits two conditional `info_text` progress events: one before loading the cache ("загрузка кэша векторов...") and one after `refreshCache` if any vectors were updated ("обновлено векторов: N"). See [[src/phases/lint.ts]].
+Emits an `info_text` progress event ("Analysing N pages...") before structural analysis. Before the `lint.fix` LLM call emits `tool_use name: "Analysing wiki"`; `tool_result` on success shows fix count. After lint, `actualizeDomainConfig` is wrapped with `tool_use name: "Updating config"`/`tool_result`. In `embedding` mode, calls `loadCache` before `refreshCache` and emits two conditional `info_text` progress events: one before loading the cache ("загрузка кэша векторов...") and one after `refreshCache` if any vectors were updated ("обновлено векторов: N"). See [[src/phases/lint.ts]].
+
+### Backlink Sync
+
+After writing fixed pages, lint syncs `wiki_articles` backlinks into source files. For each wiki page with `wiki_sources`, it resolves each source to a vault path and appends the wiki page as `[[WikiPageName]]` into the source file's `wiki_articles` field.
+
+`wiki_sources` uses bare names (`[[FileName]]`). Lint builds a `stemToPath` map from all vault `.md` files (via `vaultTools.listFiles("")`) to resolve bare names to vault paths. Legacy path-style entries (containing `/`) are used as-is for backward compatibility. See [[src/phases/lint.ts]].
 
 ## Lint-Chat
 
 Interactive fix pass driven by a lint report. The user provides an instruction; the LLM returns `LintChatSchema` with updated page contents. Pages are written back to the vault.
 
-See [[src/phases/lint-chat.ts]].
+Emits `tool_use name: "Glob"` (file list) and `tool_use name: "Read"` (page load) before any I/O so the UI shows activity immediately. Before the LLM call emits `tool_use name: "Applying fixes"`; `tool_result` on success shows page count. `parseWithRetry` events are forwarded after success or failure. See [[src/phases/lint-chat.ts]], [[llm-pipeline#LLM Progress Events]].
 
 ## Chat
 
