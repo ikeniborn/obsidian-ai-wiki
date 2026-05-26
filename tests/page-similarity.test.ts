@@ -46,10 +46,10 @@ describe("PageSimilarityService (Jaccard)", () => {
     expect(result).toHaveLength(0);
   });
 
-  it("refreshCache is no-op in Jaccard mode", async () => {
+  it("refreshCache returns { updated: 0 } in Jaccard mode", async () => {
     const svc = makeService(5);
-    // Should resolve without error
-    await expect(svc.refreshCache("domainRoot", {} as never, new Map())).resolves.toBeUndefined();
+    const result = await svc.refreshCache("domainRoot", {} as never, new Map());
+    expect(result).toEqual({ updated: 0 });
   });
 });
 

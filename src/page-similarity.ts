@@ -214,10 +214,10 @@ export class PageSimilarityService {
     domainRoot: string,
     vaultTools: VaultTools,
     indexAnnotations: Map<string, string>,
-  ): Promise<void> {
-    if (this.config.mode !== "embedding") return;
+  ): Promise<{ updated: number }> {
+    if (this.config.mode !== "embedding") return { updated: 0 };
     const { baseUrl, apiKey, model, dimensions } = this.config;
-    if (!baseUrl || !model || !dimensions) return;
+    if (!baseUrl || !model || !dimensions) return { updated: 0 };
 
     const cachePath = domainEmbeddingsPath(domainRoot);
     let cacheFile: EmbeddingCacheFile;
@@ -245,7 +245,7 @@ export class PageSimilarityService {
       }
     }
 
-    if (toEmbed.length === 0) return;
+    if (toEmbed.length === 0) return { updated: 0 };
 
     // Embed in batches
     for (let i = 0; i < toEmbed.length; i += EMBEDDING_BATCH_SIZE) {
@@ -266,5 +266,6 @@ export class PageSimilarityService {
 
     await vaultTools.write(cachePath, JSON.stringify(cacheFile, null, 2));
     this.cache = cacheFile;
+    return { updated: toEmbed.length };
   }
 }
