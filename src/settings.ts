@@ -684,6 +684,21 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName(T.settings.wikiLinkValidationRetries_name)
+      .setDesc(T.settings.wikiLinkValidationRetries_desc)
+      .addText((t) =>
+        t.setPlaceholder("3")
+          .setValue(String(s.wikiLinkValidationRetries))
+          .onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isInteger(n) && n >= 0) {
+              s.wikiLinkValidationRetries = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
       .setName(T.settings.seedTopK_name)
       .setDesc(T.settings.seedTopK_desc)
       .addText((t) =>

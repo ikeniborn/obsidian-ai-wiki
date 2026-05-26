@@ -141,6 +141,7 @@ export interface LlmWikiPluginSettings {
   historyLimit: number;
   graphDepth: number;
   hubThreshold: number;
+  wikiLinkValidationRetries: number;
   seedTopK: number;
   seedMinScore: number;
   timeouts: {
@@ -186,6 +187,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   historyLimit: 20,
   graphDepth: 1,
   hubThreshold: 20,
+  wikiLinkValidationRetries: 3,
   seedTopK: 5,
   seedMinScore: 0.1,
   timeouts: { ingest: 300, query: 300, lint: 900, init: 3600, format: 600 },
