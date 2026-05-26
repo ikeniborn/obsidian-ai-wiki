@@ -40,6 +40,14 @@ See [[src/phases/zod-schemas.ts]], [[src/phases/schemas.ts]].
 
 `WikiPageSchema` rejects malformed wikilinks via `superRefine`. Alias links (`[[Page|alias]]`) and path links (`[[folder/page]]`) are both forbidden. Violations produce a Zod error that `parseWithRetry` treats as a structural failure and retries.
 
+## WikiLink Validation
+
+Programmatic WikiLink fixer runs after `parseWithRetry` in ingest, format, and lint phases. Fixes format violations without LLM retry.
+
+Violations detected: `alias` (`[[X|Y]]`), `path` (`[[folder/page]]`), `inline-json` (`wiki_outgoing_links: [...]`), `outgoing-desync` (body links ≠ frontmatter field). Dead links produce warnings only — never block writes.
+
+Configured via `wikiLinkValidationRetries` (default=3, 0=validate-only). See [[src/wiki-link-validator.ts]].
+
 ## wrapWithJsonFallback
 
 Transparent wrapper applied to the LLM client in `AgentRunner`. On 400/422 with "json_object" or "unsupported" in the error body, retries the request without `response_format`.
