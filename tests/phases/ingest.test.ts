@@ -341,6 +341,57 @@ describe("runIngest", () => {
     expect(logContent).toContain("СОЗДАНА: компоненты/new-page.md (stub)");
   });
 
+  it("emits tool_use with name 'Create' for new wiki page", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "Sources/doc.md") return "source text";
+        throw new Error("not found"); // wiki page does not exist yet
+      }),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llmResponse = JSON.stringify({
+      reasoning: "x",
+      pages: [{ path: "!Wiki/work/entities/New.md", content: "# New" }],
+    });
+    const events = await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`], vt, makeLlm(llmResponse), "llama3.2",
+        [domain], VAULT_ROOT, new AbortController().signal,
+      ),
+    );
+    const tu = events.find(
+      (e: any) => e.kind === "tool_use" && (e.input as any)?.path === "!Wiki/work/entities/New.md",
+    ) as any;
+    expect(tu?.name).toBe("Create");
+  });
+
+  it("emits tool_use with name 'Update' for existing wiki page", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "Sources/doc.md") return "source text";
+        if (path === "!Wiki/work/entities/Existing.md") return "# Old content";
+        throw new Error("not found");
+      }),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llmResponse = JSON.stringify({
+      reasoning: "x",
+      pages: [{ path: "!Wiki/work/entities/Existing.md", content: "# Updated content" }],
+    });
+    const events = await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`], vt, makeLlm(llmResponse), "llama3.2",
+        [domain], VAULT_ROOT, new AbortController().signal,
+      ),
+    );
+    const tu = events.find(
+      (e: any) => e.kind === "tool_use" && (e.input as any)?.path === "!Wiki/work/entities/Existing.md",
+    ) as any;
+    expect(tu?.name).toBe("Update");
+  });
+
   it("reads wiki schema from global _config/ folder", async () => {
     let schemaReadPath = "";
     const adapter = mockAdapter({

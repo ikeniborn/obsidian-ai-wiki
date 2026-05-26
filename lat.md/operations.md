@@ -20,6 +20,10 @@ Selects seed wiki pages most relevant to a source file, then expands via BFS ove
 
 In `jaccard` mode, Jaccard scoring over tokenized source content vs index annotations ranks candidates; top-K paths are seeds. In `embedding` mode, vectors for all annotated pages are fetched from an OpenAI-compatible endpoint (no API key required for Ollama), cached in `_config/_embeddings.json` per domain, and scored by cosine similarity. Falls back to Jaccard on API error. After similarity selects seeds, ingest reads all non-meta pages, builds the graph cache, and BFS-expands from seed IDs — only the expanded subset is passed to the LLM. `refreshCache` updates the embedding cache after ingest writes pages. An `info_text` event reports how many pages were loaded vs total. See [[architecture#PageSimilarityService]].
 
+### Per-page Progress Events
+
+Before writing each wiki page, ingest emits `tool_use` with `name: "Create"` for new pages or `name: "Update"` for existing ones. Error-path yields (blocked/invalid paths) keep `name: "Write"`.
+
 ### entity_types_delta
 
 When the ingest LLM response includes `entity_types_delta`, the runner merges it into the current `entity_types` via `mergeEntityTypes` and emits `domain_updated`. The controller persists the patch.

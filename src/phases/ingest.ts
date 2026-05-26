@@ -182,7 +182,7 @@ export async function* runIngest(
     let existingContent: string | null = null;
     try { existingContent = await vaultTools.read(page.path); } catch { /* new page */ }
 
-    yield { kind: "tool_use", name: "Write", input: { path: page.path } };
+    yield { kind: "tool_use", name: existingContent === null ? "Create" : "Update", input: { path: page.path } };
     try {
       await vaultTools.write(page.path, page.content);
       written.push(page.path);
