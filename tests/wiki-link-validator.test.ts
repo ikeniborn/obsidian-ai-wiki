@@ -31,8 +31,7 @@ describe("validateWikiLinks", () => {
   });
 
   it("dead link is NOT a violation", () => {
-    const stems = new Set(["ExistingPage"]);
-    const v = validateWikiLinks(page("See [[NonExistent]]."), stems);
+    const v = validateWikiLinks(page("See [[NonExistent]]."));
     expect(v).toHaveLength(0);
   });
 
@@ -86,6 +85,18 @@ describe("fixWikiLinks", () => {
     const result = fixWikiLinks(page(content), 3, stems);
     expect(result.fixed.get("Wiki/domain/entity/Page.md")).toContain("[[Dead]]");
     expect(result.warnings.some((w) => w.includes("Dead"))).toBe(true);
+  });
+
+  it("does not corrupt empty wiki_outgoing_links on repeated passes", () => {
+    // page body has no links → FM should stabilize at wiki_outgoing_links: []
+    const content = `---\nwiki_outgoing_links:\n  - "[[A]]"\n---\n\nBody with no links.`;
+    const r1 = fixWikiLinks(page(content), 3);
+    const fixed1 = r1.fixed.get("Wiki/domain/entity/Page.md")!;
+    const r2 = fixWikiLinks(new Map([["Wiki/domain/entity/Page.md", fixed1]]), 3);
+    const fixed2 = r2.fixed.get("Wiki/domain/entity/Page.md")!;
+    expect(fixed2).toBe(fixed1); // idempotent
+    expect(fixed1).not.toContain("[] []"); // not corrupted
+    expect(fixed1).toContain("wiki_outgoing_links: []");
   });
 
   it("maxPasses=0 returns unchanged pages + violations as warnings", () => {

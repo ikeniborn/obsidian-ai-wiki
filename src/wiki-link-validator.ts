@@ -41,8 +41,8 @@ function setFmLinks(fm: string, links: string[]): string {
   const block = links.length > 0
     ? "wiki_outgoing_links:\n" + links.map((l) => `  - "${l}"`).join("\n")
     : "wiki_outgoing_links: []";
-  const replaced = fm.replace(/^wiki_outgoing_links:(?:\n  - "[^"]*")*/m, block);
-  if (replaced !== fm) return replaced;
+  const re = /^wiki_outgoing_links:(?:[ \t]*\[\]|(?:\n  - "[^"]*")*)/m;
+  if (re.test(fm)) return fm.replace(re, block);
   return fm.replace(/\n---$/, `\n${block}\n---`);
 }
 
@@ -87,7 +87,6 @@ function stripPath(text: string): string {
 
 export function validateWikiLinks(
   pages: Map<string, string>,
-  _knownPageStems?: Set<string>,
 ): WikiLinkViolation[] {
   const violations: WikiLinkViolation[] = [];
 
@@ -105,7 +104,9 @@ export function validateWikiLinks(
       }
     }
 
-    if (/^wiki_outgoing_links:[ \t]*\[/m.test(content)) {
+    const fmParts = splitFrontmatter(content);
+    const fmContent = fmParts ? fmParts[0] : "";
+    if (fmContent && /^wiki_outgoing_links:[ \t]*\[/m.test(fmContent)) {
       violations.push({ page: pagePath, kind: "inline-json", detail: "wiki_outgoing_links: [...]" });
     }
 
@@ -139,6 +140,18 @@ export function fixWikiLinks(
     const violations = validateWikiLinks(pages);
     for (const v of violations) {
       warnings.push(`${v.page}: ${v.kind} — ${v.detail}`);
+    }
+    if (knownPageStems) {
+      for (const [path, content] of pages) {
+        const parts = splitFrontmatter(content);
+        const body = parts ? parts[1] : content;
+        for (const link of extractLinks(body)) {
+          const stem = link.split("/").pop()!;
+          if (!knownPageStems.has(stem)) {
+            warnings.push(`${path}: dead link [[${stem}]]`);
+          }
+        }
+      }
     }
     return { fixed: new Map(pages), warnings };
   }
