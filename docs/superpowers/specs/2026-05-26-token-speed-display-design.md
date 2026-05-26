@@ -1,3 +1,22 @@
+---
+review:
+  spec_hash: 2dfc2306b730dc62
+  last_run: "2026-05-26"
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "Components/2.llm-utils.ts"
+      text: "wrapStreamWithStats measured ttftMs from after create() — not true TTFT. Fixed: requestStartMs parameter added, set before create() at call sites."
+      verdict: fixed
+      verdict_at: "2026-05-26"
+---
+
 # Design: Token Speed Display in Sidebar Result Block
 
 **Date:** 2026-05-26
@@ -43,7 +62,7 @@ Add new RunEvent variant:
     kind: "llm_call_stats";
     inputTokens: number;
     outputTokens: number;
-    ttftMs: number;        // time from request to first chunk
+    ttftMs: number;        // time from before create() call to first chunk
     llmDurationMs: number; // time from first chunk to last chunk
     inTokPerSec: number;
     outTokPerSec: number;
@@ -84,6 +103,7 @@ export interface LlmStreamStats {
 ```typescript
 export function wrapStreamWithStats(
   stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>,
+  requestStartMs: number,  // Date.now() called BEFORE llm.chat.completions.create()
 ): {
   stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
   getStats(): LlmStreamStats | undefined;
@@ -91,8 +111,8 @@ export function wrapStreamWithStats(
 ```
 
 Internally:
-- Records `startMs = Date.now()` before first chunk
-- On first chunk: sets `ttftMs = Date.now() - startMs`; resets timer for `llmDurationMs`
+- `requestStartMs` passed by call site (set before `create()`) — captures true TTFT including server processing
+- On first chunk: `ttftMs = Date.now() - requestStartMs`; records `firstChunkMs = Date.now()`
 - On each chunk: yields transparently, accumulates usage
 - After last chunk: `llmDurationMs = Date.now() - firstChunkMs`
 - `getStats()` returns undefined if stream never yielded (e.g. error before first chunk)
@@ -119,8 +139,9 @@ async function streamOnce(...): Promise<{
   outputTokens: number;
   stats: LlmStreamStats | undefined;
 }> {
+  const requestStartMs = Date.now();
   const rawStream = await llm.chat.completions.create({ ...params, stream: true }, { signal });
-  const { stream, getStats } = wrapStreamWithStats(rawStream);
+  const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
   let fullText = "";
   let outputTokens = 0;
   for await (const chunk of stream) {
@@ -145,8 +166,9 @@ if (stats) args.onEvent(buildLlmCallStatsEvent(stats));
 
 Pattern applied at each streaming call site:
 ```typescript
+const requestStartMs = Date.now();
 const rawStream = await llm.chat.completions.create({ ...params, stream: true }, { signal });
-const { stream, getStats } = wrapStreamWithStats(rawStream);
+const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
 for await (const chunk of stream) {
   // existing logic unchanged
 }
