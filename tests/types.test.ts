@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from "../src/types";
-import type { ClaudeOperationConfig, NativeOperationConfig, LlmCallOptions } from "../src/types";
+import type { ClaudeOperationConfig, NativeOperationConfig, LlmCallOptions, RunEvent } from "../src/types";
 
 it("ClaudeOperationConfig accepts effort field", () => {
   const c: ClaudeOperationConfig = { model: "sonnet", effort: "high" };
@@ -24,4 +24,19 @@ it("LlmCallOptions accepts thinkingBudgetTokens", () => {
 it("DEFAULT_SETTINGS has no effort or thinkingBudgetTokens", () => {
   expect(DEFAULT_SETTINGS.claudeAgent.effort).toBeUndefined();
   expect(DEFAULT_SETTINGS.nativeAgent.thinkingBudgetTokens).toBeUndefined();
+});
+
+it("RunEvent accepts info_text with icon, summary, details", () => {
+  const ev: RunEvent = {
+    kind: "info_text",
+    icon: "🔍",
+    summary: "5/42 wiki-pages loaded (jaccard)",
+    details: ["Alice", "Memory", "ProjectX"],
+  };
+  expect(ev.kind).toBe("info_text");
+});
+
+it("RunEvent info_text details is optional", () => {
+  const ev: RunEvent = { kind: "info_text", icon: "📋", summary: "no pages" };
+  expect(ev.kind).toBe("info_text");
 });
