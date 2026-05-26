@@ -174,7 +174,10 @@ export async function* runIngest(
 
   // Programmatic WikiLink fix (always run; maxPasses=0 only warns)
   const pagesMap = new Map(pages.map((p) => [p.path, p.content]));
-  const knownStems = new Set([...pagesMap.keys()].map((p) => p.split("/").pop()!.replace(/\.md$/, "")));
+  const knownStems = new Set([
+    ...[...existingPages.keys()].map((p) => p.split("/").pop()!.replace(/\.md$/, "")),
+    ...[...pagesMap.keys()].map((p) => p.split("/").pop()!.replace(/\.md$/, "")),
+  ]);
   const wlFixResult = fixWikiLinks(pagesMap, wikiLinkValidationRetries, knownStems);
   pages = pages.map((p) => ({ ...p, content: wlFixResult.fixed.get(p.path) ?? p.content }));
   if (wlFixResult.warnings.length > 0) {
