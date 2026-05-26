@@ -36,6 +36,10 @@ Each call site ties a phase to a Zod schema for structured output validation.
 
 See [[src/phases/zod-schemas.ts]], [[src/phases/schemas.ts]].
 
+### WikiPageSchema Constraints
+
+`WikiPageSchema` rejects malformed wikilinks via `superRefine`. Alias links (`[[Page|alias]]`) and path links (`[[folder/page]]`) are both forbidden. Violations produce a Zod error that `parseWithRetry` treats as a structural failure and retries.
+
 ## wrapWithJsonFallback
 
 Transparent wrapper applied to the LLM client in `AgentRunner`. On 400/422 with "json_object" or "unsupported" in the error body, retries the request without `response_format`.
