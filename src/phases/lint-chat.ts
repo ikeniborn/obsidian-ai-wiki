@@ -4,6 +4,7 @@ import type { LlmCallOptions, RunEvent, LlmClient, RunRequest } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { parseWithRetry } from "./parse-with-retry";
 import { LintChatSchema } from "./zod-schemas";
+import type { LintChatResponse } from "./zod-schemas";
 import lintChatTemplate from "../../prompts/lint-chat.md";
 import { render } from "./template";
 import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder } from "../wiki-path";
@@ -32,15 +33,18 @@ export async function* runLintFixChat(
   }
 
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
+
+  // 1. Load domain pages (Glob emitted immediately — before any async I/O)
+  yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**` } };
   await ensureDomainConfig(vaultTools, wikiVaultPath);
-
   const schemaContent = await tryRead(vaultTools, GLOBAL_WIKI_SCHEMA_PATH);
-
-  // 1. Load domain pages
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
   const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
+  yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
 
+  yield { kind: "tool_use", name: "Read", input: { files: String(files.length) } };
   const pages = await vaultTools.readAll(files);
+  yield { kind: "tool_result", ok: true, preview: "loaded" };
 
   const pagesBlock = [...pages.entries()]
     .map(([p, c]) => `--- ${p} ---\n${c}`)
@@ -61,17 +65,30 @@ export async function* runLintFixChat(
   ];
 
   // 3. Structured LLM call
-  const result = await parseWithRetry({
-    llm,
-    model,
-    baseMessages: messages,
-    opts: { ...opts, jsonMode: "json_object" },
-    schema: LintChatSchema,
-    maxRetries: opts.structuredRetries ?? 1,
-    callSite: "lint-chat.fix",
-    signal,
-    onEvent: (_ev: RunEvent) => {},
-  });
+  yield { kind: "tool_use", name: "Applying fixes", input: { pages: String(files.length) } };
+  const pwtEvents: RunEvent[] = [];
+  let result: { value: LintChatResponse; outputTokens: number; fullText: string };
+  try {
+    result = await parseWithRetry({
+      llm,
+      model,
+      baseMessages: messages,
+      opts: { ...opts, jsonMode: "json_object" },
+      schema: LintChatSchema,
+      maxRetries: opts.structuredRetries ?? 1,
+      callSite: "lint-chat.fix",
+      signal,
+      onEvent: (ev) => pwtEvents.push(ev),
+    });
+    yield { kind: "tool_result", ok: true, preview: `${result.value.pages?.length ?? 0} pages` };
+  } catch (e) {
+    yield { kind: "tool_result", ok: false, preview: (e as Error).message };
+    for (const ev of pwtEvents) yield ev;
+    yield { kind: "error", message: `lint-chat: ${(e as Error).message}` };
+    yield { kind: "result", durationMs: Date.now() - start, text: "" };
+    return;
+  }
+  for (const ev of pwtEvents) yield ev;
 
   const parsed = result.value;
 

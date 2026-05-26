@@ -59,7 +59,7 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
-.ai-wiki-step.reasoning { display: flex; gap: 6px; align-items: flex-start; padding: 4px 0; opacity: 0.6; }
+.ai-wiki-step.reasoning { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; padding: 4px 0; opacity: 0.6; }
 .ai-wiki-reasoning-text { white-space: pre-wrap; word-break: break-word; font-style: italic; color: var(--text-muted); font-size: 0.88em; }
 .ai-wiki-step.muted, .muted { color: var(--text-muted); }
 .ai-wiki-step.err { color: var(--text-error); }

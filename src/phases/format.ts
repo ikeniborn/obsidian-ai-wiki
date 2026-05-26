@@ -1,12 +1,13 @@
 import type OpenAI from "openai";
 import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured, wrapStreamWithStats, buildLlmCallStatsEvent } from "./llm-utils";
 import formatTemplate from "../../prompts/format.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
 import { missingTokensWithContext, looksTruncated, appendMissingLines } from "./format-utils";
 import { GLOBAL_FORMAT_SCHEMA_PATH } from "../wiki-path";
+import { fixWikiLinks } from "../wiki-link-validator";
 import { FormatOutputSchema } from "./zod-schemas";
 import { structuralErrorCounter } from "../structural-error-counter";
 
@@ -42,6 +43,10 @@ function truncationHint(backend: "claude-agent" | "native-agent"): string {
     : "увеличьте лимит: Settings → per-operation → format → maxTokens";
 }
 
+async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
+  try { return await vaultTools.read(path); } catch { return ""; }
+}
+
 export async function* runFormat(
   args: string[],
   vaultTools: VaultTools,
@@ -52,6 +57,8 @@ export async function* runFormat(
   signal: AbortSignal,
   opts: LlmCallOptions = {},
   backend: "claude-agent" | "native-agent" = "native-agent",
+  wikiVaultPath?: string,
+  wikiLinkValidationRetries: number = 3,
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
   const filePath = args[0];
@@ -62,8 +69,17 @@ export async function* runFormat(
   }
   if (signal.aborted) return;
 
-  const original = await vaultTools.read(filePath);
+  yield { kind: "tool_use", name: "Read", input: { file_path: filePath } };
+  let original: string;
+  try {
+    original = await vaultTools.read(filePath);
+  } catch {
+    yield { kind: "tool_result", ok: false, preview: "cannot read file" };
+    yield { kind: "error", message: `Format: cannot read ${filePath}` };
+    return;
+  }
   if (!original) {
+    yield { kind: "tool_result", ok: false, preview: "empty file" };
     yield { kind: "error", message: `Format: cannot read ${filePath}` };
     return;
   }
@@ -76,6 +92,7 @@ export async function* runFormat(
     formatSchema = formatSchemaDefault;
     try { await vaultTools.write(formatSchemaPath, formatSchemaDefault); } catch { /* не блокируем */ }
   }
+  yield { kind: "tool_result", ok: true, preview: `${original.length} chars` };
 
   const systemContent = render(formatTemplate, {
     format_schema: formatSchema,
@@ -114,10 +131,12 @@ export async function* runFormat(
     let acc = "";
     lastFinishReason = null;
     try {
-      const stream = await llm.chat.completions.create(
+      const requestStartMs = Date.now();
+      const rawStream = await llm.chat.completions.create(
         { ...p, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
         { signal },
       );
+      const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
       for await (const chunk of stream) {
         const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
         if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
@@ -126,6 +145,8 @@ export async function* runFormat(
         const fr = chunk.choices[0]?.finish_reason;
         if (fr) lastFinishReason = fr;
       }
+      const callStats = getStats();
+      if (callStats) yield buildLlmCallStatsEvent(callStats);
     } catch (e) {
       if (signal.aborted || (e as Error).name === "AbortError") return acc;
       const resp = await llm.chat.completions.create(
@@ -139,17 +160,20 @@ export async function* runFormat(
     return acc;
   }
 
+  yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
   let fullText = yield* callOnce(baseParams);
   if (signal.aborted) return;
 
   let parsed = parseFormatOutput(fullText);
   const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
   if (!parsed && truncated) {
+    yield { kind: "tool_result", ok: false, preview: "response truncated" };
     yield { kind: "error", message: `Format: ответ обрезан по лимиту вывода модели — сократите страницу или ${truncationHint(backend)}` };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
     return;
   }
   if (!parsed) {
+    yield { kind: "tool_result", ok: false, preview: "invalid JSON — retrying" };
     yield { kind: "assistant_text", delta: "\n[JSON невалиден — повторяю запрос]\n" };
     const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: "system", content: systemContent + "\n\nКРИТИЧЕСКИ ВАЖНО: верни ТОЛЬКО JSON-объект {\"report\": \"...\", \"formatted\": \"...\"} без markdown-обёртки, без ```json fence, без пояснений. Все спецсимволы внутри строк должны быть экранированы (\\n, \\\", \\\\)." },
@@ -157,6 +181,7 @@ export async function* runFormat(
       ...chatHistory.map((m) => ({ role: m.role, content: m.content } as OpenAI.Chat.ChatCompletionMessageParam)),
     ];
     const retryParams = { ...buildChatParams(model, retryMessages, opts, true), response_format: { type: "json_object" } };
+    yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     fullText = yield* callOnce(retryParams);
     if (signal.aborted) return;
     parsed = parseFormatOutput(fullText);
@@ -166,10 +191,12 @@ export async function* runFormat(
     const msg = retryTruncated
       ? `Format: ответ обрезан по лимиту вывода модели (после retry) — сократите страницу или ${truncationHint(backend)}`
       : "Format: LLM вернул невалидный JSON (после retry)";
+    yield { kind: "tool_result", ok: false, preview: msg };
     yield { kind: "error", message: msg };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
     return;
   }
+  yield { kind: "tool_result", ok: true, preview: `${parsed.formatted.length} chars` };
 
   const lastSlash = filePath.lastIndexOf("/");
   const dir = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "";
@@ -192,6 +219,7 @@ export async function* runFormat(
       },
     ];
     const restoreParams = { ...buildChatParams(model, restoreMessages, opts, true), response_format: { type: "json_object" } };
+    yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     const fullText2 = yield* callOnce(restoreParams);
     if (!signal.aborted) {
       const parsed2 = parseFormatOutput(fullText2);
@@ -199,6 +227,7 @@ export async function* runFormat(
         finalFormatted = parsed2.formatted;
         finalReport = parsed2.report;
       }
+      yield { kind: "tool_result", ok: true, preview: "tokens restored" };
     }
     const missing2 = missingTokensWithContext(original, finalFormatted);
     if (missing2.length > 0) {
@@ -206,11 +235,18 @@ export async function* runFormat(
     }
   }
 
+  const wlFix = fixWikiLinks(new Map([[filePath, finalFormatted]]), wikiLinkValidationRetries);
+  finalFormatted = wlFix.fixed.get(filePath) ?? finalFormatted;
+
   try {
     await vaultTools.write(tempPath, finalFormatted);
   } catch (e) {
     yield { kind: "error", message: `Format: запись формата не удалась — ${(e as Error).message}` };
     return;
+  }
+
+  if (wlFix.warnings.length > 0) {
+    yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFix.warnings };
   }
 
   const missingFinal = missingTokensWithContext(original, finalFormatted);

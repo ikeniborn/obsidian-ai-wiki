@@ -36,6 +36,24 @@ Each call site ties a phase to a Zod schema for structured output validation.
 
 See [[src/phases/zod-schemas.ts]], [[src/phases/schemas.ts]].
 
+### WikiPageSchema Constraints
+
+`WikiPageSchema` rejects alias (`[[Page|alias]]`) and path (`[[folder/page]]`) links in the page **body** via `superRefine`. Frontmatter is not checked.
+
+`superRefine` extracts body by finding the closing `---` of the frontmatter; only body content is scanned. Violations produce a Zod error that triggers a retry. `wiki_sources`, `wiki_outgoing_links`, and `wiki_articles` all use bare names (`[[PageName]]`) — no path, no alias.
+
+## WikiLink Validation
+
+Programmatic WikiLink fixer runs after `parseWithRetry` in ingest, format, and lint phases. Fixes format violations without LLM retry.
+
+Violations detected: `alias` (`[[X|Y]]`), `path` (`[[folder/page]]`), `inline-json` (`wiki_outgoing_links: [...]`), `outgoing-desync` (body links ≠ frontmatter field). Dead links produce warnings only — never block writes.
+
+`knownStems` for dead-link detection is built from **all `.md` files in the vault** (via `vaultTools.listFiles("")`), not just wiki pages. This prevents false-positive warnings for links pointing to source files or notes outside `!Wiki/`.
+
+Warning events (`info_text`) are always emitted **after** all vault writes complete, never before. This ensures warnings appear at the end of the progress stream rather than interrupting write progress.
+
+Configured via `wikiLinkValidationRetries` (default=3, 0=validate-only). See [[src/wiki-link-validator.ts]].
+
 ## wrapWithJsonFallback
 
 Transparent wrapper applied to the LLM client in `AgentRunner`. On 400/422 with "json_object" or "unsupported" in the error body, retries the request without `response_format`.
@@ -48,8 +66,20 @@ Singleton observable that counts `structural_error` events across all calls. Dis
 
 See [[src/structural-error-counter.ts#structuralErrorCounter]].
 
+## LLM Progress Events
+
+Every LLM call in every phase emits a `tool_use` event immediately before the call and a `tool_result` event immediately after. This gives the user a visible waiting indicator (🔧 step in the progress panel) instead of a silent hang.
+
+For `parseWithRetry` calls: `tool_use name: "<descriptive label>"` (e.g. `"Synthesising pages"`, `"Analysing wiki"`, `"Applying fixes"`) with optional `input` fields for context. On success, `tool_result ok: true` with a short preview (e.g. `"12 fixes"`). On failure, `ok: false` with the error message; `parseWithRetry` events (`llm_call_stats`, `structural_error`) are still forwarded after the `tool_result`.
+
+For streaming calls (query, chat, format): same `tool_use` before the stream (e.g. `"Answering"`, `"Responding"`, `"Formatting"`), `tool_result` after the stream completes with `preview: "N chars"`.
+
+The UI renders `tool_use` as a 🔧 step with `liveStatus` showing the call site name. `tool_result` completes the step with duration and starts the ⏳ waiting ticker for the next phase. See [[src/view.ts]].
+
 ## Streaming
 
 Free-text operations (query, chat, format reasoning) use streaming. `extractStreamDeltas` extracts `content` and optional `reasoning` deltas per chunk. `isReasoning: true` marks thinking tokens.
 
-Mobile backend uses `wrapMobileNoStream` for non-streaming polling instead. See [[src/phases/llm-utils.ts#extractStreamDeltas]], [[src/mobile-llm-wrap.ts#wrapMobileNoStream]].
+`wrapStreamWithStats` wraps any streaming call to measure per-call timing. It tracks TTFT, total duration, and token counts, then builds a `llm_call_stats` event via `buildLlmCallStatsEvent`. The caller emits this event after the stream is consumed.
+
+Mobile backend uses `wrapMobileNoStream` for non-streaming polling instead. See [[src/phases/llm-utils.ts#extractStreamDeltas]], [[src/phases/llm-utils.ts#wrapStreamWithStats]], [[src/mobile-llm-wrap.ts#wrapMobileNoStream]].

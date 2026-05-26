@@ -187,12 +187,12 @@ describe("runIngest", () => {
     expect(writtenContent).toContain("wiki_added:");
     expect(writtenContent).toContain("wiki_updated:");
     expect(writtenContent).toContain("wiki_articles:");
-    expect(writtenContent).toContain("[[!Wiki/work/entities/Entity.md]]");
+    expect(writtenContent).toContain("[[Entity]]");
   });
 
   it("preserves wiki_added and unions wiki_articles on repeated ingest", async () => {
     const existingFm =
-      '---\nwiki_added: 2026-01-01\nwiki_updated: 2026-01-01\nwiki_articles:\n  - "[[!Wiki/work/entities/Old.md]]"\n---\nsource text';
+      '---\nwiki_added: 2026-01-01\nwiki_updated: 2026-01-01\nwiki_articles:\n  - "[[Old]]"\n---\nsource text';
     const adapter = mockAdapter({
       read: vi.fn().mockResolvedValue(existingFm),
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
@@ -219,8 +219,8 @@ describe("runIngest", () => {
     expect(rawCall).toBeDefined();
     const writtenContent = rawCall![1] as string;
     expect(writtenContent).toContain("wiki_added: 2026-01-01"); // preserved
-    expect(writtenContent).toContain("[[!Wiki/work/entities/Old.md]]");  // union
-    expect(writtenContent).toContain("[[!Wiki/work/entities/New.md]]");  // union
+    expect(writtenContent).toContain("[[Old]]");  // union
+    expect(writtenContent).toContain("[[New]]");  // union
   });
 
   it("does not write backlinks when no wiki pages were written", async () => {
@@ -339,6 +339,136 @@ describe("runIngest", () => {
       new AbortController().signal));
     expect(logContent).toContain("ОБНОВЛЕНА: компоненты/existing.md (developing→mature)");
     expect(logContent).toContain("СОЗДАНА: компоненты/new-page.md (stub)");
+  });
+
+  it("emits tool_use with name 'Create' for new wiki page", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "Sources/doc.md") return "source text";
+        throw new Error("not found"); // wiki page does not exist yet
+      }),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llmResponse = JSON.stringify({
+      reasoning: "x",
+      pages: [{ path: "!Wiki/work/entities/New.md", content: "# New" }],
+    });
+    const events = await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`], vt, makeLlm(llmResponse), "llama3.2",
+        [domain], VAULT_ROOT, new AbortController().signal,
+      ),
+    );
+    const tu = events.find(
+      (e: any) => e.kind === "tool_use" && (e.input as any)?.path === "!Wiki/work/entities/New.md",
+    ) as any;
+    expect(tu?.name).toBe("Create");
+  });
+
+  it("result text shows 'создано N стр.' when all pages are new", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "Sources/doc.md") return "source text";
+        throw new Error("not found");
+      }),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llmResponse = JSON.stringify({
+      reasoning: "x",
+      pages: [
+        { path: "!Wiki/work/entities/A.md", content: "# A" },
+        { path: "!Wiki/work/entities/B.md", content: "# B" },
+      ],
+    });
+    const events = await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`], vt, makeLlm(llmResponse), "llama3.2",
+        [domain], VAULT_ROOT, new AbortController().signal,
+      ),
+    );
+    const result = events.find((e: any) => e.kind === "result") as any;
+    expect(result?.text).toMatch(/создано 2 стр\./);
+    expect(result?.text).not.toMatch(/обновлено/);
+  });
+
+  it("result text shows 'обновлено N стр.' when all pages exist", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "Sources/doc.md") return "source text";
+        // all wiki pages exist
+        return "# existing content";
+      }),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llmResponse = JSON.stringify({
+      reasoning: "x",
+      pages: [{ path: "!Wiki/work/entities/Existing.md", content: "# Updated" }],
+    });
+    const events = await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`], vt, makeLlm(llmResponse), "llama3.2",
+        [domain], VAULT_ROOT, new AbortController().signal,
+      ),
+    );
+    const result = events.find((e: any) => e.kind === "result") as any;
+    expect(result?.text).toMatch(/обновлено 1 стр\./);
+    expect(result?.text).not.toMatch(/создано/);
+  });
+
+  it("result text shows 'создано C, обновлено U' for mixed ingest", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "Sources/doc.md") return "source text";
+        if (path === "!Wiki/work/entities/Existing.md") return "# Old";
+        throw new Error("not found"); // New.md does not exist
+      }),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llmResponse = JSON.stringify({
+      reasoning: "x",
+      pages: [
+        { path: "!Wiki/work/entities/New.md", content: "# New" },
+        { path: "!Wiki/work/entities/Existing.md", content: "# Updated" },
+      ],
+    });
+    const events = await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`], vt, makeLlm(llmResponse), "llama3.2",
+        [domain], VAULT_ROOT, new AbortController().signal,
+      ),
+    );
+    const result = events.find((e: any) => e.kind === "result") as any;
+    expect(result?.text).toMatch(/создано 1, обновлено 1/);
+  });
+
+  it("emits tool_use with name 'Update' for existing wiki page", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "Sources/doc.md") return "source text";
+        if (path === "!Wiki/work/entities/Existing.md") return "# Old content";
+        throw new Error("not found");
+      }),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llmResponse = JSON.stringify({
+      reasoning: "x",
+      pages: [{ path: "!Wiki/work/entities/Existing.md", content: "# Updated content" }],
+    });
+    const events = await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`], vt, makeLlm(llmResponse), "llama3.2",
+        [domain], VAULT_ROOT, new AbortController().signal,
+      ),
+    );
+    const tu = events.find(
+      (e: any) => e.kind === "tool_use" && (e.input as any)?.path === "!Wiki/work/entities/Existing.md",
+    ) as any;
+    expect(tu?.name).toBe("Update");
   });
 
   it("reads wiki schema from global _config/ folder", async () => {

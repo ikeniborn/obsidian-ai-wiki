@@ -45,13 +45,27 @@ Two LLM backends are supported and selected in settings. Backend choice affects 
 
 OpenAI-compatible HTTP client (`openai` SDK). Works with Ollama, OpenAI, or any compatible server. Supports streaming, `json_object` response format, thinking budget, and per-operation model overrides.
 
+HTTP `timeout` is set per-operation from `settings.timeouts[opKey]`. A value of `0` passes `undefined` to the SDK (no HTTP timeout). Chat sessions (`dispatchChat`) forward `settings.timeouts.lint` as the per-operation timeout to `buildAgentRunner`. See [[src/controller.ts#WikiController#buildAgentRunner]].
+
 On mobile, streaming is disabled via `wrapMobileNoStream`. See [[src/controller.ts#WikiController#buildAgentRunner]].
 
 ### Claude Agent
 
 Wraps `ClaudeCliClient` — spawns `iclaude.sh` / `claude` CLI as a subprocess. Shell consent is required on first run. Not available on mobile.
 
-Per-operation effort levels map to Claude's extended thinking. See [[src/claude-cli-client.ts#ClaudeCliClient]].
+Per-operation effort levels map to Claude's extended thinking. The subprocess kill timer is skipped when `requestTimeoutSec=0` (no-limit mode). See [[src/claude-cli-client.ts#ClaudeCliClient]].
+
+## PageSimilarityService
+
+Reduces LLM context size by pre-selecting the top-K most relevant wiki pages for a given source file. Built by `AgentRunner.buildSimilarity()` and passed to ingest, init, lint, and format phases.
+
+Two modes: `jaccard` (default, no API calls) uses token overlap scoring via `scoreSeed`; `embedding` fetches vectors from an OpenAI-compatible endpoint (no API key required — supports Ollama), falls back to Jaccard on error. Embedding vectors are cached per domain at `_config/_embeddings.json` and invalidated by annotation content hash. `refreshCache` updates stale entries after a domain write pass — called by both ingest (after writing pages) and lint. Configured via `embeddingModel`, `embeddingDimensions`, `relevantPagesTopK` in `LocalConfig.nativeAgent`. Only active for `native-agent` backend.
+
+`loadCache()` reads `_embeddings.json` into memory before `selectRelevant()` so ingest, query, and lint don't re-fetch vectors from the API on every run. Called by ingest, query, and lint phases before `selectRelevant` or `refreshCache`.
+
+`refreshCache` returns `{ updated: number }` — the count of newly embedded pages written to the cache. Returns `{ updated: 0 }` when in `jaccard` mode, when config is incomplete, or when no entries need updating.
+
+See [[src/page-similarity.ts#PageSimilarityService]], [[src/agent-runner.ts#AgentRunner]], [[operations#Ingest#Page Similarity]].
 
 ## VaultTools
 
@@ -73,6 +87,12 @@ Throws `StorageMigrationConflictError` if both `.config/` and `_config/` exist s
 
 ## Run Events
 
-All operations communicate via `RunEvent` — a discriminated union emitted as an async generator stream. Events cover: LLM streaming deltas, tool calls, domain mutations, format previews, structural errors, graph stats, and final result.
+All operations communicate via `RunEvent` — a discriminated union emitted as an async generator stream. Events cover: LLM streaming deltas, tool calls, domain mutations, format previews, structural errors, graph stats, and phase progress.
+
+`info_text` events carry an icon, summary, and optional detail lines — rendered as step-items in the sidebar without requiring LLM output. Used by ingest to report similarity seed count and BFS expansion size.
+
+| Event type | Description |
+|---|---|
+| `llm_call_stats` | Per-call timing metadata: inputTokens, outputTokens, ttftMs, llmDurationMs, inTokPerSec, outTokPerSec. Emitted after each streaming LLM call completes. |
 
 See [[src/types.ts#RunEvent]].

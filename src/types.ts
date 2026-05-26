@@ -42,7 +42,17 @@ export type RunEvent =
   | { kind: "tool_use"; name: string; input: unknown }
   | { kind: "tool_result"; ok: boolean; preview?: string }
   | { kind: "assistant_text"; delta: string; isReasoning?: boolean }
-  | { kind: "result"; durationMs: number; usdCost?: number; text: string; outputTokens?: number }
+  | { kind: "info_text"; icon: string; summary: string; details?: string[] }
+  | { kind: "result"; durationMs: number; text: string; outputTokens?: number }
+  | {
+      kind: "llm_call_stats";
+      inputTokens: number;
+      outputTokens: number;
+      ttftMs: number;
+      llmDurationMs: number;
+      inTokPerSec: number;
+      outTokPerSec: number;
+    }
   | { kind: "error"; message: string }
   | { kind: "exit"; code: number }
   | { kind: "ask_user"; question: string; options: string[]; toolUseId: string }
@@ -88,7 +98,8 @@ export interface LlmCallOptions {
   maxTokens?: number;
   topP?: number | null;
   systemPrompt?: string;
-  jsonMode?: "json_object" | false;
+  jsonMode?: "json_object" | "json_schema" | false;
+  jsonSchema?: { name: string; schema: object };
   structuredRetries?: number;
   thinkingBudgetTokens?: number;
 }
@@ -131,6 +142,7 @@ export interface LlmWikiPluginSettings {
   historyLimit: number;
   graphDepth: number;
   hubThreshold: number;
+  wikiLinkValidationRetries: number;
   seedTopK: number;
   seedMinScore: number;
   timeouts: {
@@ -159,6 +171,9 @@ export interface LlmWikiPluginSettings {
     operations: OpMap<NativeOperationConfig>;
     structuredRetries: number;
     thinkingBudgetTokens?: number;
+    embeddingModel?: string;
+    embeddingDimensions?: number;
+    relevantPagesTopK?: number;
   };
   devMode: {
     enabled: boolean;
@@ -173,6 +188,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   historyLimit: 20,
   graphDepth: 1,
   hubThreshold: 20,
+  wikiLinkValidationRetries: 3,
   seedTopK: 5,
   seedMinScore: 0.1,
   timeouts: { ingest: 300, query: 300, lint: 900, init: 3600, format: 600 },

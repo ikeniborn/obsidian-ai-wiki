@@ -10,6 +10,8 @@ import initTemplate from "../../prompts/init.md";
 import { render } from "./template";
 import { runIngest } from "./ingest";
 import { GLOBAL_CONFIG_DIR, GLOBAL_WIKI_SCHEMA_PATH, GLOBAL_FORMAT_SCHEMA_PATH, domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath } from "../wiki-path";
+import type { PageSimilarityService } from "../page-similarity";
+import { parseIndexAnnotations } from "../wiki-index";
 
 export async function* runInit(
   args: string[],
@@ -21,6 +23,7 @@ export async function* runInit(
   signal: AbortSignal,
   opts: LlmCallOptions = {},
   onFileError?: OnFileError,
+  similarity?: PageSimilarityService,
 ): AsyncGenerator<RunEvent> {
   const domainId = args[0];
   const dryRun = args.includes("--dry-run");
@@ -69,14 +72,14 @@ export async function* runInit(
     existing.language_notes = "";
 
     yield* runInitWithSources(
-      domainId, effectiveSources, false, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, true,
+      domainId, effectiveSources, false, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, true, similarity,
     );
     return;
   }
 
   if (sourcePaths.length) {
     yield* runInitWithSources(
-      domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError,
+      domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, false, similarity,
     );
     return;
   }
@@ -94,7 +97,7 @@ export async function* runInit(
     yield { kind: "error", message: `init: no source_paths configured for "${domainId}" — add them in settings` };
     return;
   }
-  yield* runInitWithSources(domainId, effectiveSources, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError);
+  yield* runInitWithSources(domainId, effectiveSources, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, false, similarity);
 }
 
 export async function* runInitWithSources(
@@ -110,20 +113,23 @@ export async function* runInitWithSources(
   opts: LlmCallOptions,
   onFileError: OnFileError | undefined,
   force: boolean = false,
+  similarity?: PageSimilarityService,
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
   let outputTokens = 0;
   const wikiRootGuess = `!Wiki`;
 
+  yield { kind: "tool_use", name: "Glob", input: { pattern: sourcePaths.join(", ") } };
   await ensureRootFiles(vaultTools, wikiRootGuess);
-
   const sourceFileLists = await Promise.all(sourcePaths.map((sp) => vaultTools.listFiles(sp)));
   const sourceFiles = [...new Set(sourceFileLists.flat())].filter((f) => f.endsWith(".md"));
 
   if (!sourceFiles.length) {
+    yield { kind: "tool_result", ok: false, preview: "no .md files found" };
     yield { kind: "error", message: `No .md files found in source paths: ${sourcePaths.join(", ")}` };
     return;
   }
+  yield { kind: "tool_result", ok: true, preview: `${sourceFiles.length} source files` };
 
   const existing = domains.find((d) => d.id === domainId);
   const isResuming = !force && existing?.analyzed_sources !== undefined;
@@ -148,6 +154,8 @@ export async function* runInitWithSources(
     tryRead(vaultTools, GLOBAL_WIKI_SCHEMA_PATH),
     tryRead(vaultTools, domainIndexPath(wikiRootGuess)),
   ]);
+
+  let annotationsCache = parseIndexAnnotations(indexContent);
 
   let currentDomain: DomainEntry | null = existing ?? null;
 
@@ -183,6 +191,7 @@ export async function* runInitWithSources(
         { role: "user", content: `Domain ID: ${domainId}\nVault name: ${vaultName}\nSource paths: ${sourcePaths.join(", ")}\n\n${file}:\n${fileContent}` },
       ];
 
+      yield { kind: "tool_use", name: "Initialising domain", input: {} };
       const collected: RunEvent[] = [];
       let parsed: { id: string; name: string; wiki_folder: string; entity_types: EntityType[]; language_notes: string };
       try {
@@ -196,8 +205,10 @@ export async function* runInitWithSources(
         });
         parsed = r.value;
         outputTokens += r.outputTokens;
+        yield { kind: "tool_result", ok: true, preview: `domain: ${parsed.id}` };
         if (r.fullText) yield { kind: "assistant_text", delta: r.fullText };
       } catch (e) {
+        yield { kind: "tool_result", ok: false, preview: (e as Error).message };
         for (const ev of collected) yield ev;
         if ((e as Error).name === "AbortError" || signal.aborted) return;
         yield { kind: "assistant_text", delta: `⚠ ${file}: LLM вернул невалидный JSON, пропускаем bootstrap (${(e as Error).message})\n` };
@@ -289,7 +300,7 @@ export async function* runInitWithSources(
       let hadError = false;
       let caughtErr: Error | null = null;
       try {
-        for await (const ev of runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts)) {
+        for await (const ev of runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts, similarity, annotationsCache)) {
           yield ev;
           if (ev.kind === "domain_updated" && ev.domainId === domainId) {
             currentDomain = { ...currentDomain, ...ev.patch };
@@ -307,6 +318,11 @@ export async function* runInitWithSources(
         if (choice === "retry" && canRetry) { retried = true; continue; }
         done = true;
       }
+    }
+
+    if (similarity) {
+      const fresh = await tryRead(vaultTools, domainIndexPath(wikiRootGuess));
+      annotationsCache = parseIndexAnnotations(fresh);
     }
 
     if (signal.aborted) return;

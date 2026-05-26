@@ -14,25 +14,45 @@ Extracts entity instances from a source file and writes or updates wiki pages. L
 
 Delta is merged into domain config and emitted as `domain_updated`. See [[src/phases/ingest.ts]], [[domain#DomainEntry]].
 
+### Page Similarity
+
+Selects seed wiki pages most relevant to a source file, then expands via BFS over the wiki graph before passing context to the LLM. [[src/page-similarity.ts#PageSimilarityService]] implements two modes configured via `SimilarityConfig`.
+
+In `jaccard` mode, Jaccard scoring over tokenized source content vs index annotations ranks candidates; top-K paths are seeds. In `embedding` mode, vectors for all annotated pages are fetched from an OpenAI-compatible endpoint (no API key required for Ollama), cached in `_config/_embeddings.json` per domain, and scored by cosine similarity. Falls back to Jaccard on API error. After similarity selects seeds, ingest reads all non-meta pages, builds the graph cache, and BFS-expands from seed IDs — only the expanded subset is passed to the LLM. `refreshCache` updates the embedding cache after ingest writes pages. An `info_text` event reports how many pages were loaded vs total. See [[architecture#PageSimilarityService]].
+
+### LLM Progress Step
+
+Emits `tool_use name: "Synthesising pages"` before `parseWithRetry`. On success, `tool_result` preview shows context page count and estimated input tokens (`"N pages · ~Xk tokens sent"`); on error, `ok: false`.
+
+Gives the user a visible waiting indicator during the LLM call. See [[llm-pipeline#LLM Progress Events]].
+
+### Per-page Progress Events
+
+Before writing each wiki page, ingest emits `tool_use` with `name: "Create"` for new pages or `name: "Update"` for existing ones. Error-path yields (blocked/invalid paths) keep `name: "Write"`.
+
+### Result Summary
+
+After writing pages, ingest emits a result text broken down by action: `создано N стр.` (all new), `обновлено N стр.` (all updated), or `создано C, обновлено U` (mixed). Zero-write runs report no changes.
+
 ### entity_types_delta
 
 When the ingest LLM response includes `entity_types_delta`, the runner merges it into the current `entity_types` via `mergeEntityTypes` and emits `domain_updated`. The controller persists the patch.
 
 ## Query
 
-Two-phase retrieval: seed selection from `_index.md` annotations, then BFS expansion over the wiki graph. Jaccard token scoring runs first; `llmSelectSeeds` is used as fallback only when Jaccard produces zero results.
+Two-phase retrieval: seed selection from `_index.md` annotations, then BFS expansion over the wiki graph. Similarity (embedding or Jaccard) selects seeds; graph traversal expands coverage.
 
 See [[src/phases/query.ts]], [[wiki-graph#Query Graph Traversal]].
 
 ### Seed Selection
 
-Seeds are wiki page IDs most relevant to the question. `selectSeeds` uses Jaccard similarity over tokenized question vs page content + index annotations.
+Seeds are wiki page IDs most relevant to the question. In `embedding` mode, `loadCache()` + `selectRelevant(question, ...)` uses cosine similarity. In `jaccard` mode, `selectSeeds` scores by token overlap.
 
-If Jaccard yields nothing, `llmSelectSeeds` asks the LLM to pick from all annotated page IDs. See [[src/wiki-seeds.ts#selectSeeds]], [[src/phases/query.ts#llmSelectSeeds]].
+If seed selection yields nothing, `llmSelectSeeds` asks the LLM to pick from all annotated page IDs. See [[src/wiki-seeds.ts#selectSeeds]], [[src/phases/query.ts#llmSelectSeeds]], [[src/page-similarity.ts#PageSimilarityService]].
 
 ### BFS Expansion
 
-From the seed set, BFS expands to neighbor pages within `graphDepth` hops. The graph is undirected — `A → [[B]]` allows traversal B→A. Hub pages are not excluded but flagged by `checkGraphStructure`.
+BFS always runs from the seed set — both when seeds come from similarity and from Jaccard. All wiki pages are read to build the graph; only BFS-expanded pages are passed to the LLM. The graph is undirected — `A → [[B]]` allows traversal B→A.
 
 See [[src/wiki-graph.ts#bfsExpand]], [[wiki-graph#Query Graph Traversal]].
 
@@ -40,13 +60,19 @@ See [[src/wiki-graph.ts#bfsExpand]], [[wiki-graph#Query Graph Traversal]].
 
 Analyzes all wiki pages for a domain, returns `LintOutputSchema` with `report` and `fixes[]`. A second call `actualizeDomainConfig` runs after lint to sync `entity_types` from real wiki content.
 
-Emits `domain_updated` with updated entity types. See [[src/phases/lint.ts]].
+Emits an `info_text` progress event ("Analysing N pages...") before structural analysis. Before the `lint.fix` LLM call emits `tool_use name: "Analysing wiki"`; `tool_result` on success shows fix count. After lint, `actualizeDomainConfig` is wrapped with `tool_use name: "Updating config"`/`tool_result`. In `embedding` mode, calls `loadCache` before `refreshCache` and emits two conditional `info_text` progress events: one before loading the cache ("загрузка кэша векторов...") and one after `refreshCache` if any vectors were updated ("обновлено векторов: N"). See [[src/phases/lint.ts]].
+
+### Backlink Sync
+
+After writing fixed pages, lint syncs `wiki_articles` backlinks into source files. For each wiki page with `wiki_sources`, it resolves each source to a vault path and appends the wiki page as `[[WikiPageName]]` into the source file's `wiki_articles` field.
+
+`wiki_sources` uses bare names (`[[FileName]]`). Lint builds a `stemToPath` map from all vault `.md` files (via `vaultTools.listFiles("")`) to resolve bare names to vault paths. Legacy path-style entries (containing `/`) are used as-is for backward compatibility. See [[src/phases/lint.ts]].
 
 ## Lint-Chat
 
 Interactive fix pass driven by a lint report. The user provides an instruction; the LLM returns `LintChatSchema` with updated page contents. Pages are written back to the vault.
 
-See [[src/phases/lint-chat.ts]].
+Emits `tool_use name: "Glob"` (file list) and `tool_use name: "Read"` (page load) before any I/O so the UI shows activity immediately. Before the LLM call emits `tool_use name: "Applying fixes"`; `tool_result` on success shows page count. `parseWithRetry` events are forwarded after success or failure. See [[src/phases/lint-chat.ts]], [[llm-pipeline#LLM Progress Events]].
 
 ## Chat
 

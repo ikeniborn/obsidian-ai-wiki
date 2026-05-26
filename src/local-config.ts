@@ -23,6 +23,9 @@ export interface LocalConfig {
     model: string;
     temperature: number;
     topP: number | null;
+    embeddingModel?: string;
+    embeddingDimensions?: number;
+    relevantPagesTopK?: number;
   };
   proxy?: ProxyConfig;
   migrated_v1?: boolean;

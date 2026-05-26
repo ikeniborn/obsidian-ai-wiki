@@ -1,10 +1,13 @@
 import type OpenAI from "openai";
 import type { z } from "zod";
 import { ZodError } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import type { LlmClient, LlmCallOptions, RunEvent } from "../types";
 import {
   parseStructured, buildChatParams, extractStreamDeltas, extractUsage,
+  wrapStreamWithStats, buildLlmCallStatsEvent,
 } from "./llm-utils";
+import type { LlmStreamStats } from "./llm-utils";
 import { structuralErrorCounter } from "../structural-error-counter";
 
 export type CallSite =
@@ -71,21 +74,23 @@ async function streamOnce(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   opts: LlmCallOptions,
   signal: AbortSignal,
-): Promise<{ fullText: string; outputTokens: number }> {
+): Promise<{ fullText: string; outputTokens: number; stats: LlmStreamStats | undefined }> {
   const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
   let outputTokens = 0;
   try {
-    const stream = await llm.chat.completions.create(
+    const requestStartMs = Date.now();
+    const rawStream = await llm.chat.completions.create(
       { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
       { signal },
     );
+    const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
     for await (const chunk of stream) {
       const { content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (content) fullText += content;
       if (tok !== undefined) outputTokens += tok;
     }
-    return { fullText, outputTokens };
+    return { fullText, outputTokens, stats: getStats() };
   } catch (e) {
     if (signal.aborted || (e as Error).name === "AbortError") throw e;
     const params2 = buildChatParams(model, messages, opts);
@@ -95,12 +100,28 @@ async function streamOnce(
     );
     const text = resp.choices[0]?.message?.content ?? "";
     const tok = extractUsage(resp);
-    return { fullText: text, outputTokens: tok ?? 0 };
+    return { fullText: text, outputTokens: tok ?? 0, stats: undefined };
   }
 }
 
 export async function parseWithRetry<T>(args: ParseWithRetryArgs<T>): Promise<ParseWithRetryResult<T>> {
-  const { llm, model, baseMessages, opts, schema, maxRetries, callSite, signal, onEvent } = args;
+  const { llm, model, baseMessages, schema, maxRetries, callSite, signal, onEvent } = args;
+
+  // Upgrade json_object → json_schema with auto-generated schema for supporting backends.
+  // superRefine rules (e.g. WikiLink checks) are not expressible in JSON Schema and are
+  // skipped here — Zod still validates them after parsing.
+  const opts: LlmCallOptions =
+    (args.opts.jsonMode === "json_object" || args.opts.jsonMode === "json_schema")
+      ? {
+          ...args.opts,
+          jsonMode: "json_schema",
+          jsonSchema: {
+            name: callSite.replace(/\./g, "_"),
+            schema: zodToJsonSchema(schema, { $refStrategy: "none" }) as object,
+          },
+        }
+      : args.opts;
+
   let messages: OpenAI.Chat.ChatCompletionMessageParam[] = baseMessages;
   let totalTokens = 0;
   let lastError: Error = new Error("no attempts");
@@ -111,8 +132,9 @@ export async function parseWithRetry<T>(args: ParseWithRetryArgs<T>): Promise<Pa
       err.name = "AbortError";
       throw err;
     }
-    const { fullText, outputTokens } = await streamOnce(llm, model, messages, opts, signal);
+    const { fullText, outputTokens, stats } = await streamOnce(llm, model, messages, opts, signal);
     totalTokens += outputTokens;
+    if (stats) onEvent(buildLlmCallStatsEvent(stats));
 
     let raw: unknown;
     try {

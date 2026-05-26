@@ -268,7 +268,7 @@ describe("runFormat", () => {
     const adapter = mockAdapter({ [FILE]: SAMPLE });
     const vt = new VaultTools(adapter, VAULT);
     const events = await collect(
-      runFormat([FILE], vt, makeLlmTruncated(), "model", false, [], new AbortController().signal, {}, "claude-agent"),
+      runFormat([FILE], vt, makeLlmTruncated(), "model", false, [], new AbortController().signal, {}, undefined, "claude-agent"),
     );
     const err = events.find((e: unknown) => (e as { kind: string }).kind === "error") as { message: string } | undefined;
     expect(err).toBeDefined();

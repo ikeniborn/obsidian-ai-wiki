@@ -1,8 +1,10 @@
 # Prompt Architecture
 
-Схема использования промтов и шаблонов по операциям.
+Архитектура промптов, пайплайнов и функций агента. Описывает как собираются сообщения для LLM, как работают retry-цепочки, граф-поиск и валидация WikiLink.
 
-## Последовательность операций и зависимости
+---
+
+## 1. Операции и зависимости
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'background': '#1e1e2e', 'primaryColor': '#313244', 'primaryTextColor': '#cdd6f4', 'primaryBorderColor': '#89b4fa', 'lineColor': '#888888', 'secondaryColor': '#181825', 'tertiaryColor': '#45475a'}}}%%
@@ -36,7 +38,7 @@ flowchart TD
     end
 
     NEW --> INIT
-    INIT -->|"DomainEntry, entity_types, !Wiki/_config/_wiki_schema.md, !Wiki/_config/_format_schema.md"| INGEST
+    INIT -->|"DomainEntry, entity_types, _wiki_schema.md, _format_schema.md"| INGEST
     INGEST -->|"wiki pages, _index.md"| QUERY
     INGEST -->|"wiki pages"| LINT
     LINT -->|"lint report"| LINTCHAT
@@ -65,37 +67,39 @@ flowchart TD
     class NEW,PAGE input
 ```
 
-**Сплошные стрелки** — жёсткая зависимость (операция не запустится без артефакта-источника).  
-**Пунктирные стрелки** — мягкая зависимость (chat берёт `context` из последнего результата; технически запустится без него, но бесполезен).
+**Сплошные стрелки** — жёсткая зависимость (операция не запустится без артефакта).  
+**Пунктирные стрелки** — мягкая зависимость (chat берёт `context` из результата; без него бесполезен).
 
 | Операция | Требует | Производит |
 |---|---|---|
-| **init** | — | `DomainEntry`, `entity_types`, `!Wiki/_config/_wiki_schema.md`, `!Wiki/_config/_format_schema.md` |
-| **ingest** | `DomainEntry`, `_wiki_schema.md` | wiki-страницы, `_index.md` (обновление), `analyzed_sources` |
-| **query** | `DomainEntry`, `_index.md`, wiki-страницы | ответ |
-| **lint** | `DomainEntry`, wiki-страницы | lint-отчёт + исправленные страницы + `domain_updated` (entity_types) |
+| **init** | — | `DomainEntry`, `entity_types`, `_wiki_schema.md`, `_format_schema.md` |
+| **ingest** | `DomainEntry`, `_wiki_schema.md` | wiki-страницы, `_index.md`, `analyzed_sources` |
+| **query** | `DomainEntry`, `_index.md`, wiki-страницы | ответ (seeds → BFS → LLM-subset) |
+| **lint** | `DomainEntry`, wiki-страницы | lint-отчёт, исправленные страницы, `domain_updated` |
 | **lint-chat** | `DomainEntry`, lint-отчёт, wiki-страницы | исправленные wiki-страницы |
 | **chat** | результат любой предыдущей операции | диалог |
 | **format** | произвольная страница, `_format_schema.md` | отформатированная страница |
 
-## Routing: операция → фаза
+---
+
+## 2. Routing: операция → фаза
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'background': '#1e1e2e', 'primaryColor': '#313244', 'primaryTextColor': '#cdd6f4', 'primaryBorderColor': '#89b4fa', 'lineColor': '#888888', 'secondaryColor': '#181825', 'tertiaryColor': '#45475a'}}}%%
 flowchart TD
     UI["Команда Obsidian / UI"]
-    UI --> AR["AgentRunner.run"]
+    UI --> AR["AgentRunner.run()"]
     AR --> OP{"operation"}
 
-    OP -->|ingest| PI["phases/ingest.ts"]
-    OP -->|query| PQ["phases/query.ts"]
-    OP -->|lint| PL["phases/lint.ts"]
-    OP -->|chat| PC["phases/chat.ts"]
-    OP -->|lint-chat| PLC["phases/lint-chat.ts"]
-    OP -->|init| PIN["phases/init.ts"]
-    OP -->|format| PF["phases/format.ts"]
+    OP -->|ingest| PI["phases/ingest.ts · runIngest()"]
+    OP -->|query| PQ["phases/query.ts · runQuery()"]
+    OP -->|lint| PL["phases/lint.ts · runLint()"]
+    OP -->|chat| PC["phases/chat.ts · runLintChat()"]
+    OP -->|lint-chat| PLC["phases/lint-chat.ts · runLintFixChat()"]
+    OP -->|init| PIN["phases/init.ts · runInit()"]
+    OP -->|format| PF["phases/format.ts · runFormat()"]
 
-    AR -->|devMode| PE["phases/evaluator.ts"]
+    AR -->|devMode| PE["phases/evaluator.ts · runEvaluator()"]
 
     classDef phase fill:#89b4fa,color:#1e1e2e,stroke:#74c7ec
     classDef dev   fill:#585b70,color:#cdd6f4,stroke:#6c7086
@@ -103,42 +107,45 @@ flowchart TD
     class PE dev
 ```
 
-## Промты по фазам
+Все фазы реализованы как `async function*` — генераторы `RunEvent`. `AgentRunner` итерирует поток и маршрутизирует события в UI.
+
+---
+
+## 3. Промпты по фазам
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'background': '#1e1e2e', 'primaryColor': '#313244', 'primaryTextColor': '#cdd6f4', 'primaryBorderColor': '#89b4fa', 'lineColor': '#888888', 'secondaryColor': '#181825', 'tertiaryColor': '#45475a'}}}%%
 flowchart LR
-    subgraph tmpl["templates/ bundled"]
+    subgraph tmpl["templates/ (bundled в dist)"]
         WIKI_SCHEMA["_wiki_schema.md"]
         FMT_SCHEMA["_format_schema.md"]
     end
 
-    subgraph vault["vault runtime read (global + per-domain)"]
-        V_WIKI["!Wiki/_config/_wiki_schema.md (global)"]
-        V_FMT["!Wiki/_config/_format_schema.md (global)"]
+    subgraph vault["vault runtime (читается из файлов)"]
+        V_WIKI["!Wiki/_config/_wiki_schema.md"]
+        V_FMT["!Wiki/_config/_format_schema.md"]
         V_IDX["domain/_config/_index.md"]
     end
 
-    BASE["base.md system"]
+    BASE["prompts/base.md\n(system contract)"]
 
     BASE --> PI2
     BASE --> PQ2
     BASE --> PL2
     BASE --> PC2
     BASE --> PLC2
-    BASE --> PIN2a
+    BASE --> PIN2
     BASE --> PF2
     BASE --> PE2
 
-    PI2["ingest"] --> INGEST["ingest.md"]
-    PQ2["query"] --> QUERY["query.md"]
-    PL2["lint"] --> LINT["lint.md"]
-    PC2["chat"] --> CHAT["chat.md"]
-    PLC2["lint-chat"] --> LINTCHAT["lint-chat.md"]
-    PIN2a["init file 0"] --> INIT["init.md"]
-    PF2["format"] --> FORMAT["format.md"]
-
-    PE2["evaluator"] --> EVAL["evaluator.md"]
+    PI2["ingest"] --> INGEST["prompts/ingest.md"]
+    PQ2["query"] --> QUERY["prompts/query.md"]
+    PL2["lint"] --> LINT["prompts/lint.md"]
+    PC2["chat"] --> CHAT["prompts/chat.md"]
+    PLC2["lint-chat"] --> LINTCHAT["prompts/lint-chat.md"]
+    PIN2["init"] --> INIT["prompts/init.md"]
+    PF2["format"] --> FORMAT["prompts/format.md"]
+    PE2["evaluator"] --> EVAL["prompts/evaluator.md"]
 
     V_WIKI -->|schema_block| PI2
     V_WIKI -->|schema_block| PL2
@@ -146,8 +153,8 @@ flowchart LR
     V_IDX  -->|index_block| PQ2
     V_FMT  -->|format_schema| PF2
 
-    WIKI_SCHEMA -->|schema_block| PIN2a
-    FMT_SCHEMA  -->|"written to vault"| V_FMT
+    WIKI_SCHEMA -->|schema_block| PIN2
+    FMT_SCHEMA  -->|"записывается в vault при init"| V_FMT
 
     classDef prompt  fill:#89b4fa,color:#1e1e2e,stroke:#74c7ec
     classDef tmplcls fill:#a6e3a1,color:#1e1e2e,stroke:#40a02b
@@ -161,31 +168,53 @@ flowchart LR
     class PE2,EVAL dev
 ```
 
-**Примечание:** `evaluator.md` рендерится в роль `user`, но `base.md` всё равно инжектируется как `system` через `buildChatParams → prependBaseContract` (см. ниже).
+`evaluator.md` рендерится в роль `user`, но `base.md` всё равно инжектируется через `prependBaseContract` как `system` — применяется ко всем вызовам без исключений.
 
-## buildChatParams: сборка сообщений
+### Переменные шаблонов (render)
 
-Каждый вызов LLM идёт через `buildChatParams` → формирует финальный массив `messages`:
+`src/phases/template.ts` — простая интерполяция `{{var}}`:
+
+```typescript
+export function render(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
+}
+```
+
+| Операция | Промт | Переменные render() | Схема ответа |
+|---|---|---|---|
+| **ingest** | `ingest.md` | `domain_name`, `entity_types_block`, `lang_notes`, `wiki_path`, `today`, `schema_block` | `WikiPagesOutputSchema` |
+| **query** | `query.md` | `domain_name`, `entity_types_block`, `index_block` | free text |
+| **lint** | `lint.md` | `domain_name`, `entity_types_block`, `schema_block` | `LintOutputSchema` |
+| **chat** | `chat.md` | `operation_header`, `context` | free text |
+| **lint-chat** | `lint-chat.md` | `domain_name`, `lint_report`, `pages_block`, `schema_block` | `LintChatSchema` |
+| **init** | `init.md` | `domain_id`, `vault_name`, `schema_block`, `index_block` | `DomainEntrySchema` |
+| **format** | `format.md` | `format_schema`, `has_vision` | `FormatOutputSchema` |
+| **evaluator** | `evaluator.md` | `operation`, `task_input`, `result` | `{score, reasoning}` |
+
+---
+
+## 4. buildChatParams: сборка сообщений
+
+`src/phases/llm-utils.ts · buildChatParams()` — единственная точка сборки параметров запроса к LLM.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'background': '#1e1e2e', 'primaryColor': '#313244', 'primaryTextColor': '#cdd6f4', 'primaryBorderColor': '#89b4fa', 'lineColor': '#888888', 'secondaryColor': '#181825', 'tertiaryColor': '#45475a'}}}%%
 flowchart TD
-    MSGS["messages от фазы"]
+    MSGS["messages[] от фазы"]
 
-    MSGS --> PBC["prependBaseContract"]
-    PBC -->|"system найден"| PREPEND["base.md + newline + existing system"]
+    MSGS --> PBC["prependBaseContract()"]
+    PBC -->|"system найден"| PREPEND["base.md + '\\n\\n' + existing system"]
     PBC -->|"system не найден"| INSERT["новый system = base.md"]
 
     PREPEND --> ISP
     INSERT --> ISP
 
     ISP{"opts.systemPrompt?"}
-    ISP -->|да| INJECT["append Уточнение + systemPrompt"]
+    ISP -->|да| INJECT["injectSystemPrompt():\nappend '## Уточнение\\n' + systemPrompt"]
     ISP -->|нет| FINAL
 
     INJECT --> FINAL["финальный messages[]"]
-
-    FINAL --> PARAMS["buildChatParams: добавить model, temperature, maxTokens, jsonMode, thinkingBudget, stream_options"]
+    FINAL --> PARAMS["buildChatParams:\nmodel, temperature, maxTokens, topP,\njsonMode, thinkingBudget, stream_options"]
 
     classDef step fill:#89b4fa,color:#1e1e2e,stroke:#74c7ec
     classDef dec  fill:#f9e2af,color:#1e1e2e,stroke:#df8e1d
@@ -197,29 +226,65 @@ flowchart TD
 
 | Опция `LlmCallOptions` | Поведение |
 |---|---|
-| `systemPrompt` | Добавляет секцию `## Уточнение` в конец system-сообщения |
-| `jsonMode: "json_object"` | Устанавливает `response_format: { type: "json_object" }`. Автоматически снимается при `thinkingBudgetTokens > 0`. Fallback: при ошибке 400/422 с ключевыми словами "json_object" / "unsupported" — retry без `response_format` (`wrapWithJsonFallback`) |
-| `thinkingBudgetTokens` | Включает thinking-режим модели; снимает `response_format`, `temperature`, `top_p` |
+| `systemPrompt` | Добавляет `## Уточнение\n{text}` в конец system-сообщения |
+| `jsonMode: "json_schema"` | `response_format: { type: "json_schema", ... }`. Приоритет над `json_object` |
+| `jsonMode: "json_object"` | `response_format: { type: "json_object" }` |
+| `thinkingBudgetTokens > 0` | Включает extended thinking; снимает `response_format`, `temperature`, `top_p` |
 | `temperature`, `maxTokens`, `topP` | Прямая передача в API |
-| `structuredRetries` | Число retry в `parseWithRetry` (default 1) |
 
-## parseWithRetry: структурированный вывод с ретраем
+---
 
-Все операции с JSON-схемой (`ingest`, `lint`, `lint-chat`, `init`, `query.seeds`, `format`) используют `parseWithRetry` из `phases/parse-with-retry.ts`:
+## 5. wrapWithJsonFallback: деградация response_format
+
+`AgentRunner` оборачивает `LlmClient` в `wrapWithJsonFallback` (`src/phases/llm-utils.ts`). При ошибке 400/422 с ключевыми словами `"response_format"`, `"json_object"`, `"json mode"`, `"unsupported"` — деградирует `response_format` до следующего уровня.
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#1e1e2e', 'primaryColor': '#313244', 'primaryTextColor': '#cdd6f4', 'primaryBorderColor': '#89b4fa', 'lineColor': '#888888', 'secondaryColor': '#181825', 'tertiaryColor': '#45475a'}}}%%
+flowchart LR
+    S["json_schema"] -->|"400/422 json-mode error"| O["json_object"]
+    O -->|"400/422 json-mode error"| N["без response_format"]
+    N -->|"любая ошибка"| THROW["throw"]
+
+    classDef ok   fill:#a6e3a1,color:#1e1e2e,stroke:#40a02b
+    classDef warn fill:#f9e2af,color:#1e1e2e,stroke:#df8e1d
+    classDef err  fill:#f38ba8,color:#1e1e2e,stroke:#d20f39
+    class S ok
+    class O warn
+    class N warn
+    class THROW err
+```
+
+`degradeResponseFormat()` (`llm-utils.ts:140`): `json_schema` → `json_object` → удалить поле.  
+Для стриминга: retry выполняется только если ни одного content-чанка не было получено (reasoning-чанки `delta.reasoning` не считаются контентом).
+
+---
+
+## 6. parseWithRetry: структурированный вывод с retry
+
+`src/phases/parse-with-retry.ts · parseWithRetry()` — используется всеми операциями с JSON-схемой.
+
+**Ключевое:** при `jsonMode: "json_object"` автоматически апгрейдится до `json_schema` через `zodToJsonSchema()`. `superRefine`-правила (например, WikiLink-проверки) в JSON Schema не выражаются — они применяются на уровне Zod после парсинга.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'background': '#1e1e2e', 'primaryColor': '#313244', 'primaryTextColor': '#cdd6f4', 'primaryBorderColor': '#89b4fa', 'lineColor': '#888888', 'secondaryColor': '#181825', 'tertiaryColor': '#45475a'}}}%%
 flowchart TD
     START["parseWithRetry(baseMessages, schema, maxRetries)"]
-    START --> CALL["streamOnce → fullText"]
-    CALL --> PARSE{"parseStructured"}
-    PARSE -->|"invalid JSON"| ERR_JSON["emit structural_error json_parse"]
-    PARSE -->|OK| ZOD{"schema.safeParse"}
-    ZOD -->|success| RETURN["return value"]
+    START --> UPGRADE["json_object → json_schema\n(zodToJsonSchema автоматически)"]
+    UPGRADE --> CALL["streamOnce() → fullText + stats"]
+    CALL --> STATS["emit llm_call_stats\n(inputTokens, outputTokens, ttftMs, tok/s)"]
+    STATS --> PARSE{"parseStructured()"}
+
+    PARSE -->|"прямой JSON.parse OK"| ZOD
+    PARSE -->|"fail → stripThinking → stripFences → jsonrepair → regex"| ZOD
+    PARSE -->|"всё failed"| ERR_JSON["emit structural_error json_parse"]
+
+    ZOD{"schema.safeParse()"}
+    ZOD -->|success| RETURN["return { value, outputTokens, fullText }"]
     ZOD -->|fail| ERR_ZOD["emit structural_error schema_validate"]
+
     ERR_JSON --> RETRY{"attempt < maxRetries?"}
     ERR_ZOD --> RETRY
-    RETRY -->|да| APPEND["append assistant+user feedback → повтор с расширенным контекстом"]
+    RETRY -->|да| APPEND["append:\nassistant: fullText\nuser: formatZodFeedback()"]
     RETRY -->|нет| THROW["throw StructuredValidationError"]
     APPEND --> CALL
 
@@ -227,94 +292,407 @@ flowchart TD
     classDef dec  fill:#f9e2af,color:#1e1e2e,stroke:#df8e1d
     classDef ok   fill:#a6e3a1,color:#1e1e2e,stroke:#40a02b
     classDef err  fill:#f38ba8,color:#1e1e2e,stroke:#d20f39
-    class CALL,APPEND step
+    class CALL,APPEND,UPGRADE,STATS step
     class PARSE,ZOD,RETRY dec
     class RETURN ok
     class ERR_JSON,ERR_ZOD,THROW err
 ```
 
-При retry — предыдущий ответ LLM добавляется как `assistant`, а текст ошибки Zod как `user`. LLM видит свою ошибку и исправляет структуру.
+**parseStructured fallback-цепочка** (`llm-utils.ts:17`):
+1. `JSON.parse(text)` — прямой
+2. `stripThinking()` → убирает `<think>...</think>` блоки thinking-моделей
+3. `stripFences()` → убирает ` ```json ` обёртки
+4. `jsonrepair(stripped)` — исправляет частично корректный JSON
+5. regex `.match(/\{[\s\S]*\}/)` + позиционный `slice` при "Unexpected non-whitespace at position N"
 
-Точки вызова (`CallSite`):
+**formatZodFeedback**: при `err === null` → "не валидный JSON"; при `ZodError` → список `path: message` по первым 20 issue.
 
-| callSite | Фаза | Схема |
+**streamOnce fallback**: при ошибке стриминга — повтор через non-streaming (`chat.completions.create` без `stream: true`).
+
+### CallSite → схема
+
+| callSite | Фаза | Zod-схема |
 |---|---|---|
 | `ingest.pages` | `ingest.ts` | `WikiPagesOutputSchema` |
-| `init.bootstrap` | `init.ts` file 0 | `DomainEntrySchema` |
+| `init.bootstrap` | `init.ts` файл 0 | `DomainEntrySchema` |
+| `init.delta` | `init.ts` файлы 1..N | `EntityTypesDeltaSchema` |
 | `lint.fix` | `lint.ts` | `LintOutputSchema` |
 | `lint.patch` | `lint.ts` (actualizeDomainConfig) | `EntityTypesDeltaSchema` |
 | `lint-chat.fix` | `lint-chat.ts` | `LintChatSchema` |
 | `query.seeds` | `query.ts` (llmSelectSeeds) | `SeedsSchema` |
 | `format.output` | `format.ts` | `FormatOutputSchema` |
 
-## Вторичные LLM-вызовы
+---
 
-Некоторые фазы делают более одного LLM-вызова:
+## 7. Статистика LLM-вызовов
 
-### query: seed selection
+`src/phases/llm-utils.ts · wrapStreamWithStats()` — декоратор над стримом, собирает метрики без изменения поведения.
+
+```typescript
+interface LlmStreamStats {
+  inputTokens: number;   // из финального чанка (stream_options.include_usage=true)
+  outputTokens: number;
+  ttftMs: number;        // время до первого чанка
+  llmDurationMs: number; // от первого до последнего чанка
+}
+```
+
+`buildLlmCallStatsEvent(stats)` эмитирует `RunEvent` с типом `llm_call_stats`, добавляя `inTokPerSec` и `outTokPerSec`.
+
+`computeSpeedText(stats[])` — агрегирует несколько вызовов за операцию: суммирует токены, медианный TTFT.
+
+`extractStreamDeltas(chunk)` читает `delta.content` и нестандартные поля reasoning-моделей (`delta.reasoning`, `delta.reasoning_content`).
+
+---
+
+## 8. WikiLink Validation
+
+`src/wiki-link-validator.ts` — полный цикл проверки и автоисправления WikiLink-нарушений.
+
+### Типы нарушений (ViolationKind)
+
+| Kind | Паттерн | Пример |
+|---|---|---|
+| `alias` | `[[page\|alias]]` | `[[Процесс\|Шаг 1]]` — алиасы запрещены |
+| `path` | `[[path/to/page]]` | `[[Folder/Page]]` — пути запрещены, только stem |
+| `inline-json` | `wiki_outgoing_links: [...]` | JSON-массив в одну строку (нарушение формата frontmatter) |
+| `outgoing-desync` | body links ≠ fm links | тело содержит `[[A]]`, `[[B]]`, но `wiki_outgoing_links` содержит только `[[A]]` |
+
+### fixWikiLinks: алгоритм
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#1e1e2e', 'primaryColor': '#313244', 'primaryTextColor': '#cdd6f4', 'primaryBorderColor': '#89b4fa', 'lineColor': '#888888', 'secondaryColor': '#181825', 'tertiaryColor': '#45475a'}}}%%
+flowchart TD
+    FWL["fixWikiLinks(pages, maxPasses, knownPageStems?)"]
+
+    FWL --> MZ{"maxPasses == 0?"}
+    MZ -->|да| WO["validateWikiLinks() → warnings only\n(без авто-исправления)"]
+    MZ -->|нет| LOOP["for pass in 0..maxPasses"]
+
+    LOOP --> VAL["validateWikiLinks(current)"]
+    VAL --> NOVIOL{"violations == 0?"}
+    NOVIOL -->|да| DONE["выход из цикла"]
+    NOVIOL -->|нет| FIX["fixOnePass(content) для каждой страницы"]
+    FIX --> LOOP
+
+    DONE --> REMAIN["validateWikiLinks(current) → оставшиеся → warnings"]
+    WO --> DEAD
+    REMAIN --> DEAD{"knownPageStems задан?"}
+    DEAD -->|да| DEADCHECK["for link in body links:\n  stem not in knownPageStems → dead link warning"]
+    DEAD -->|нет| RET
+    DEADCHECK --> RET["return { fixed, warnings }"]
+
+    classDef step fill:#89b4fa,color:#1e1e2e,stroke:#74c7ec
+    classDef dec  fill:#f9e2af,color:#1e1e2e,stroke:#df8e1d
+    classDef ok   fill:#a6e3a1,color:#1e1e2e,stroke:#40a02b
+    class FIX,WO,DEADCHECK step
+    class MZ,NOVIOL,DEAD dec
+    class RET ok
+```
+
+**fixOnePass** (`wiki-link-validator.ts:49`):
+1. `stripAlias(body)` — `[[page|alias]]` → `[[page]]`
+2. `stripPath(body)` — `[[path/to/page]]` → `[[page]]` (берёт последний сегмент)
+3. inline-json в frontmatter → разворачивает в блок `- "[[link]]"`
+4. `setFmLinks(fm, bodyLinks)` — синхронизирует `wiki_outgoing_links` в frontmatter с body
+
+**Dead link detection**: проверяет только stems (`link.split("/").pop()`), не полные пути. `knownPageStems` строится из существующих wiki-страниц (`Set<string>`).
+
+### Интеграция в ingest
+
+`src/phases/ingest.ts:182` — после получения страниц от LLM, до записи в vault:
+
+```typescript
+const wlFixResult = fixWikiLinks(pagesMap, wikiLinkValidationRetries, knownStems);
+// wikiLinkValidationRetries: из настроек (default 3)
+// knownStems: stems из existingPaths + stems новых страниц этого же ingest-вызова
+```
+
+Предупреждения накапливаются и эмитируются единым событием **после** завершения write-цикла:
+
+```typescript
+// ingest.ts:275
+yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFixResult.warnings };
+```
+
+| Параметр | Источник | Default |
+|---|---|---|
+| `maxPasses` | `wikiLinkValidationRetries` из настроек | `3` |
+| `knownPageStems` | existing wiki paths + новые страницы текущего ingest | строится в фазе |
+
+---
+
+## 9. Граф вики и BFS-расширение
+
+`src/wiki-graph.ts` — построение графа WikiLink и обход BFS от seed-страниц.
+
+### Структура графа
+
+```typescript
+type WikiGraph = Map<string, Set<string>>;
+// key: pageId (stem страницы), value: Set<string> исходящих ссылок
+```
+
+`buildWikiGraph(pages)` — парсит `[[link]]` из тела каждой страницы через regex `/\[\[([^\]|#]+)/g`.
+
+### BFS-расширение (undirected)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#1e1e2e', 'primaryColor': '#313244', 'primaryTextColor': '#cdd6f4', 'primaryBorderColor': '#89b4fa', 'lineColor': '#888888', 'secondaryColor': '#181825', 'tertiaryColor': '#45475a'}}}%%
+flowchart TD
+    BFS["bfsExpand(seeds, graph, depth)"]
+    BFS --> REV["pre-compute reverse index\n(Map<target, Set<source>>)"]
+    REV --> INIT2["visited = Set(seeds)\nfrontier = Set(seeds)"]
+    INIT2 --> HOP["for hop in 0..depth"]
+    HOP --> FWD["для каждого node в frontier:\n  прямые рёбра: graph.get(node)"]
+    FWD --> BWD["обратные рёбра: reverse.get(node)"]
+    BWD --> NEXT{"next.size == 0?"}
+    NEXT -->|да| END["выход: visited"]
+    NEXT -->|нет| UPD["frontier = next"]
+    UPD --> HOP
+
+    classDef step fill:#89b4fa,color:#1e1e2e,stroke:#74c7ec
+    classDef dec  fill:#f9e2af,color:#1e1e2e,stroke:#df8e1d
+    classDef ok   fill:#a6e3a1,color:#1e1e2e,stroke:#40a02b
+    class REV,INIT2,FWD,BWD,UPD step
+    class NEXT dec
+    class END ok
+```
+
+Граф обходится **без направления**: прямые рёбра (A→B) и обратные (B→A backlinks) равнозначны. Depth=1 (default) означает непосредственных соседей seeds в обоих направлениях.
+
+Проверки качества графа (`checkGraphStructure`): изолированные узлы (нет in/out рёбер), hub-узлы (> `hubThreshold` исходящих), несимметричные ссылки.
+
+---
+
+## 10. PageSimilarityService: выбор релевантных страниц
+
+`src/page-similarity.ts` — решает O(N) проблему: вместо передачи всех wiki-страниц в контекст LLM выбирает top-K наиболее релевантных через Jaccard или embedding.
+
+### Два режима
+
+| Режим | Метод | Требования |
+|---|---|---|
+| `jaccard` | Пересечение токенов source-файла и аннотаций `_index.md` | — |
+| `embedding` | Косинусное сходство float32-векторов | `embeddingModel`, `embeddingDimensions`, `baseUrl`; API-ключ опционален |
+
+При недоступности embedding API — автоматический fallback на Jaccard.
+
+### Jaccard: алгоритм (src/wiki-seeds.ts)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#1e1e2e', 'primaryColor': '#313244', 'primaryTextColor': '#cdd6f4', 'primaryBorderColor': '#89b4fa', 'lineColor': '#888888', 'secondaryColor': '#181825', 'tertiaryColor': '#45475a'}}}%%
+flowchart TD
+    Q["вопрос / source-текст"]
+    Q --> TQ["tokenize(question)\n→ Set<string> questionTokens"]
+
+    P["страница: pageId + content + annotation"]
+    P --> TP["tokenize(pageId ∪ wiki_keywords ∪ body ∪ annotation)\n→ Set<string> pageTokens"]
+
+    TQ --> SCORE["score = |intersection| / |questionTokens|"]
+    TP --> SCORE
+
+    SCORE --> FILTER["filter: score >= seedMinScore (default 0.1)"]
+    FILTER --> TOPK["sort desc → top seedTopK (default 5)"]
+
+    classDef step fill:#89b4fa,color:#1e1e2e,stroke:#74c7ec
+    classDef ok   fill:#a6e3a1,color:#1e1e2e,stroke:#40a02b
+    class TQ,TP,SCORE,FILTER step
+    class TOPK ok
+```
+
+**tokenize** (`wiki-seeds.ts:16`): lowercase → split по `[^\p{L}\p{N}]+` → отбрасывает токены ≤2 символов + стоп-слова (EN + RU). Формула: `|intersection| / |questionTokens|` — не классический Jaccard (union в знаменателе), а покрытие запроса.
+
+### Embedding: кэш векторов
+
+Хранится в `!Wiki/<domain>/_config/_embeddings.json`:
+
+```json
+{
+  "model": "text-embedding-3-small",
+  "dimensions": 1536,
+  "entries": {
+    "<pageId>": { "vector": "<base64 Float32Array>", "hash": "<annotation hash>" }
+  }
+}
+```
+
+Инвалидация по хэшу аннотации: вектор пересчитывается при изменении текста аннотации в `_index.md`. Смена `model` или `dimensions` — пересоздаёт весь кэш. `refreshCache()` обновляет только устаревшие записи, батчи по 100.
+
+**Косинусное сходство** (`page-similarity.ts:43`):
+```typescript
+function cosine(a: Float32Array, b: Float32Array): number {
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) { dot += a[i]*b[i]; na += a[i]*a[i]; nb += b[i]*b[i]; }
+  return dot / (Math.sqrt(na) * Math.sqrt(nb));
+}
+```
+
+### Полный lifecycle: ingest + query + lint
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#1e1e2e', 'primaryColor': '#313244', 'primaryTextColor': '#cdd6f4', 'primaryBorderColor': '#89b4fa', 'lineColor': '#888888', 'secondaryColor': '#181825', 'tertiaryColor': '#45475a', 'activationBorderColor': '#cba6f7', 'activationBkgColor': '#313244', 'noteBkgColor': '#45475a', 'noteTextColor': '#cdd6f4', 'loopTextColor': '#cdd6f4'}}}%%
+sequenceDiagram
+    participant AR as AgentRunner
+    participant PS as PageSimilarityService
+    participant API as Embeddings API
+    participant FS as _embeddings.json
+    participant G as WikiGraph
+    participant LLM as LLM
+    participant V as Vault
+
+    rect rgb(30, 80, 140)
+        Note over AR,V: ── INGEST ──
+        AR->>V: read source + _wiki_schema.md + _index.md
+        alt similarity включена
+            AR->>PS: loadCache(domainRoot) → read _embeddings.json
+            AR->>PS: selectRelevant(sourceContent, annotations, existingPaths)
+            note over PS: jaccard: scoreSeed() по токенам<br/>embedding: fetchEmbeddings + cosine top-K
+            PS-->>AR: seedPaths[]
+            AR->>V: readAll(allWikiFiles) → allPages
+            AR->>G: buildWikiGraph(allPages)
+            AR->>G: bfsExpand(seedIds, graph, depth) → expandedIds
+            AR->>AR: existingPages = allPages filtered by expandedIds
+            AR->>AR: emit graph_stats {seeds, expanded, total}
+        else similarity отключена
+            AR->>V: readAll → existingPages (все)
+        end
+        AR->>LLM: parseWithRetry(WikiPagesOutputSchema)\nsource + existingPages + schema + index
+        LLM-->>AR: pages[] + entity_types_delta?
+        loop pages[]
+            AR->>AR: fixWikiLinks(pages, maxPasses, knownStems)
+            AR->>V: write(page.path, fixed_content)
+            AR->>V: upsertIndexAnnotation(_index.md)
+        end
+        AR->>AR: emit WikiLink warnings (если есть)
+        AR->>AR: entity_types_delta → emit domain_updated
+        alt similarity && written > 0
+            AR->>PS: refreshCache(domainRoot, updatedAnnotations)
+            loop stale/новые записи
+                PS->>API: fetchEmbeddings(annotations) batch≤100
+                API-->>PS: vectors
+            end
+            PS->>FS: write _embeddings.json
+        end
+    end
+
+    rect rgb(30, 120, 70)
+        Note over AR,V: ── QUERY ──
+        AR->>V: read _index.md → annotations
+        alt embedding-режим
+            AR->>PS: loadCache → read _embeddings.json
+            AR->>PS: selectRelevant(question, annotations, paths)
+            PS->>API: fetchEmbeddings([question[:2000]])
+            PS->>PS: cosine(queryVec, pageVec) → top-K
+            PS-->>AR: seeds[]
+        else jaccard / нет similarity
+            AR->>AR: selectSeeds(question, syntheticPages, topK, minScore)
+        end
+        alt seeds == 0
+            AR->>LLM: llmSelectSeeds(question, indexAnnotations) → SeedsSchema
+        end
+        AR->>V: readAll(allWikiFiles)
+        AR->>G: buildWikiGraph + bfsExpand(seeds, depth)
+        AR->>AR: buildContextBlock(pages, seeds, expandedIds)
+        AR->>LLM: query prompt streaming → answer
+    end
+
+    rect rgb(150, 80, 30)
+        Note over AR,V: ── LINT ──
+        AR->>V: readAll(allWikiFiles) → pages
+        AR->>G: buildWikiGraph + checkStructure + checkGraphStructure
+        AR->>LLM: parseWithRetry(LintOutputSchema)
+        LLM-->>AR: report + fixes[]
+        AR->>LLM: actualizeDomainConfig → EntityTypesDeltaSchema
+        LLM-->>AR: entity_types patch → emit domain_updated
+        loop fixes[]
+            AR->>V: write(page.path, content)
+            AR->>V: upsertIndexAnnotation(_index.md)
+        end
+        alt similarity включена
+            AR->>PS: refreshCache → API → write _embeddings.json
+        end
+    end
+```
+
+### Использование similarity по фазам
+
+| Фаза | loadCache | selectRelevant | refreshCache |
+|---|---|---|---|
+| `ingest` | ✓ перед отбором | ✓ → BFS-expand | ✓ после записи страниц |
+| `init` (файлы 1..N) | — | ✓ (ingest-pass) | — |
+| `query` | ✓ (embedding mode) | ✓ → seed selection | — |
+| `lint` | — | — | ✓ после прохода |
+| `format` | — | — | — |
+
+`PageSimilarityService` ephemeral — создаётся заново на каждый `AgentRunner.run()`. `loadCache()` восстанавливает диск-кэш до первого `selectRelevant()`.
+
+### Настройки
+
+| Поле `nativeAgent` | Тип | Назначение |
+|---|---|---|
+| `embeddingModel` | `string?` | `undefined` = jaccard; `""` = режим включён, ждёт модель; непустая = embedding |
+| `embeddingDimensions` | `number?` | Число измерений; обязательно при `embeddingModel` |
+| `relevantPagesTopK` | `number?` | Максимум страниц в контексте (default: 15) |
+| `seedTopK` | `number` | Число seeds при Jaccard (default: 5) |
+| `seedMinScore` | `number` | Минимальный Jaccard-score (default: 0.1) |
+
+---
+
+## 11. Вторичные LLM-вызовы
+
+### query: многоэтапный отбор контекста
 
 ```
-Phase 1: читает _index.md (без файлов wiki)
-Phase 2: selectSeeds — Jaccard по токенам (без LLM)
-         если seeds == 0 → llmSelectSeeds (parseWithRetry, SeedsSchema)
-Phase 3: читает только файлы-семена + BFS-расширение
-Phase 4: основной query-вызов (streaming, free text)
+1. read _index.md → annotations (без чтения wiki-файлов)
+2. seed selection:
+   embedding → loadCache + cosine top-K
+   jaccard   → selectSeeds() по токенам
+   seeds==0  → llmSelectSeeds (parseWithRetry, SeedsSchema)
+   seeds==0 после LLM → error
+3. readAll(allWikiFiles) → buildWikiGraph → bfsExpand(seeds, depth)
+4. buildContextBlock(expanded subset) → LLM только BFS-expanded страницы
+5. query prompt streaming → answer
 ```
-
-`llmSelectSeeds` вызывается без system-сообщения → `prependBaseContract` добавляет `base.md` как system.
 
 ### lint: actualizeDomainConfig
 
-После основного lint-вызова (единый CoT+Structured вызов через `parseWithRetry, LintOutputSchema`) — отдельный вызов `actualizeDomainConfig`:
+После основного `parseWithRetry(LintOutputSchema)` — отдельный вызов:
 - анализирует реальный контент wiki vs текущий `entity_types`
-- возвращает дельту (`EntityTypesDeltaSchema`)
-- эмитирует `domain_updated` — контроллер сохраняет в domain-map
+- возвращает дельту (`EntityTypesDeltaSchema`, callSite `lint.patch`)
+- эмитирует `domain_updated` → контроллер сохраняет в domain-map
 
 ### ingest: entity_types_delta
 
-Если LLM возвращает `entity_types_delta` в ответе:
+Если LLM вернул `entity_types_delta`:
 - `mergeEntityTypes(domain.entity_types, delta)` — merge по ключу `type`
-- эмитирует `domain_updated { domainId, patch: { entity_types: merged } }`
-- контроллер сохраняет патч; `runInitWithSources` интерцептирует событие для обновления `currentDomain` перед следующим файлом
+- эмитирует `domain_updated { domainId, patch: { entity_types } }`
+- `runInitWithSources` перехватывает событие для обновления `currentDomain` перед следующим файлом
 
-### ingest: retry invalid paths
+### ingest: retry невалидных путей
 
-При получении страниц с нарушением правила 4 сегментов:
-- `retryInvalidPaths` — отдельный `buildChatParams`-вызов (free text)
+При нарушении правила 4 сегментов (`!Wiki/<domain>/<subfolder>/<Article>.md`):
+- `splitByPathValidity()` делит страницы на valid/invalid
+- `retryInvalidPaths()` — отдельный `buildChatParams`-вызов (free text)
 - передаёт оригинальные messages + ошибку как user-сообщение
 - ожидает JSON-массив только для невалидных путей
 
-## Контекст, инжектируемый в каждый промт
+---
 
-| Операция | Промт | Переменные `render()` | Схема ответа |
-|---|---|---|---|
-| **ingest** | `ingest.md` + `base.md` | `domain_name`, `entity_types_block`, `lang_notes`, `wiki_path`, `today`, `schema_block`, `source_path` | `WikiPagesOutputSchema` `{reasoning, pages[{path,content,annotation?}], entity_types_delta?}` |
-| **query** | `query.md` + `base.md` | `domain_name`, `entity_types_block`, `index_block` | free text |
-| **lint** | `lint.md` + `base.md` | `domain_name`, `entity_types_block`, `schema_block` | `LintOutputSchema` `{reasoning, report, fixes[{path,content,annotation?}]}` |
-| **chat** | `chat.md` + `base.md` | `operation_header`, `context` | free text |
-| **lint-chat** | `lint-chat.md` + `base.md` | `domain_name`, `lint_report`, `pages_block`, `schema_block` | `LintChatSchema` `{summary, pages[{path,content,annotation?}]}` |
-| **init** file 0 | `init.md` + `base.md` | `domain_id`, `vault_name`, `schema_block`, `index_block` | `DomainEntrySchema` `{reasoning,id,name,wiki_folder,entity_types,language_notes}` |
-| **format** | `format.md` + `base.md` | `format_schema`, `has_vision` | `FormatOutputSchema` `{report, formatted}` |
-| **evaluator** _(devMode)_ | `base.md` + `evaluator.md` | `operation`, `task_input`, `result` _(user role; base инжектируется как system через buildChatParams)_ | `{score:0-10, reasoning}` |
+## 12. RunEvent: поток событий
 
-## Сравнительная таблица промтов
+Все фазы возвращают `AsyncGenerator<RunEvent>`. Типы событий (`src/types.ts`):
 
-| Промт | Используется в | Задача | Проблемы / противоречия |
-|---|---|---|---|
-| `base.md` | Все операции (system, prepend через `prependBaseContract`) | Базовый контракт: достоверность, формат, минимализм | Применяется ко ВСЕМ вызовам включая evaluator — `buildChatParams` всегда вставляет `base.md` в system |
-| `ingest.md` | `ingest` | Извлечение экземпляров сущностей из источника → wiki-страницы + обогащение `entity_types` через `entity_types_delta?` | — |
-| `query.md` | `query` | Ответ на вопрос по wiki-индексу домена | Нет явного ограничения на длину ответа; при большом `index_block` контекст разрастается |
-| `lint.md` | `lint` | Единый CoT+Structured вызов: анализ качества wiki + автоисправление страниц в одном ответе | — |
-| `lint-chat.md` | `lint-chat` | Интерактивное исправление по lint-отчёту; читает `_wiki_schema.md` → `schema_block` | — |
-| `chat.md` | `chat` | Свободный диалог по результатам операции | Не специфичен для домена: нет `entity_types_block`, `schema_block`. Контекст только через `{{context}}` |
-| `init.md` | `init`, файл 0 (bootstrap) | Создание полной записи домена (`entity_types`, `wiki_folder`, …) | — |
-| `format.md` | `format` | Форматирование произвольной markdown-страницы | Не связан с доменной wiki — намеренно. Дублирует часть правил из `_format_schema.md` |
-| `evaluator.md` | `agent-runner`, devMode | Оценка качества результата операции (score 0–10) | Рендерится в роль `user`, но `base.md` применяется как `system` через `buildChatParams`. Вызывается после каждой операции при devMode |
-| `_wiki_schema.md` | `init` (bundled), `ingest`/`lint`/`lint-chat` (vault read) | Конвенции wiki-страниц: frontmatter, структура, стиль. Путь: `!Wiki/_config/_wiki_schema.md` (shared by all domains) | Изменения в bundled-шаблоне не попадают в существующие vaults автоматически |
-| `_format_schema.md` | `init` (bundled, записывается в vault), `format` (vault read) | Конвенции форматирования не-wiki страниц. Путь: `!Wiki/_config/_format_schema.md` (shared by all domains) | При `init` пишется в vault как дефолт — изменения в `templates/` не обновляют существующие vaults |
-
-## Замечания для архитектурного анализа
-
-### wrapWithJsonFallback — прозрачный retry без json_object
-
-`AgentRunner` оборачивает переданный `LlmClient` в `wrapWithJsonFallback` (`agent-runner.ts:23`): если LLM вернул 400/422 с упоминанием "json_object" / "unsupported", запрос повторяется без `response_format`. Активируется только при `opts.jsonMode === "json_object"`. Позволяет один и тот же код работать с моделями без поддержки structured output.
+| kind | Описание |
+|---|---|
+| `tool_use` / `tool_result` | I/O операции с vault |
+| `assistant_text` | Стриминг текста LLM; `isReasoning=true` для thinking-чанков |
+| `info_text` | Прогресс: выбор страниц, WikiLink warnings, BFS stats |
+| `llm_call_stats` | Метрики: inputTokens, outputTokens, ttftMs, tok/s |
+| `graph_stats` | seeds[], expanded, total, fromCache |
+| `structural_error` | JSON-parse или schema-validate fail с retry-статусом |
+| `domain_updated` | Изменение entity_types или language_notes |
+| `domain_created` | Новый DomainEntry при init |
+| `result` | Финальный текст операции + durationMs |
+| `eval_result` | score + reasoning от evaluator (devMode) |
+| `format_preview` | Предпросмотр форматирования с отчётом |

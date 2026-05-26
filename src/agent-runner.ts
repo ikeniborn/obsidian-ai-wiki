@@ -10,7 +10,8 @@ import { runFormat } from "./phases/format";
 import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, OpKey, RunEvent, RunRequest } from "./types";
 import type { VaultTools } from "./vault-tools";
 import { wrapWithJsonFallback } from "./phases/llm-utils";
-import { GLOBAL_DEV_LOG_PATH } from "./wiki-path";
+import { GLOBAL_DEV_LOG_PATH, domainWikiFolder } from "./wiki-path";
+import { PageSimilarityService } from "./page-similarity";
 
 export class AgentRunner {
   private llm: LlmClient;
@@ -44,6 +45,19 @@ export class AgentRunner {
     return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
   }
 
+  private buildSimilarity(): PageSimilarityService | undefined {
+    if (this.settings.backend !== "native-agent") return undefined;
+    const na = this.settings.nativeAgent;
+    return new PageSimilarityService({
+      mode: na.embeddingModel ? "embedding" : "jaccard",
+      model: na.embeddingModel,
+      dimensions: na.embeddingDimensions,
+      topK: na.relevantPagesTopK ?? 15,
+      baseUrl: na.baseUrl,
+      apiKey: na.apiKey,
+    });
+  }
+
   private async writeDevLog(_vaultRoot: string, entry: {
     operation: string;
     model: string;
@@ -70,16 +84,17 @@ export class AgentRunner {
     opts: LlmCallOptions,
     vaultRoot: string,
     domains: DomainEntry[],
+    similarity: PageSimilarityService | undefined,
   ): AsyncGenerator<RunEvent, void, void> {
     switch (req.operation) {
       case "ingest":
-        yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
+        yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, similarity, undefined, this.settings.graphDepth, this.settings.wikiLinkValidationRetries);
         break;
       case "query":
-        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore);
+        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, similarity);
         break;
       case "lint":
-        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, opts);
+        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, this.settings.wikiLinkValidationRetries, opts, similarity);
         break;
       case "chat": {
         const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : undefined;
@@ -97,11 +112,13 @@ export class AgentRunner {
         break;
       }
       case "init":
-        yield* runInit(req.args, this.vaultTools, this.llm, model, domains, this.vaultName, req.signal, opts, req.onFileError);
+        yield* runInit(req.args, this.vaultTools, this.llm, model, domains, this.vaultName, req.signal, opts, req.onFileError, similarity);
         break;
       case "format": {
         const hasVision = this.settings.backend === "claude-agent";
-        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend);
+        const formatDomain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : undefined;
+        const wikiVaultPath = formatDomain ? domainWikiFolder(formatDomain.wiki_folder) : undefined;
+        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries);
         break;
       }
       default: {
@@ -126,10 +143,11 @@ export class AgentRunner {
       ? this.domains.filter((d) => d.id === req.domainId)
       : this.domains;
 
+    const similarity = this.buildSimilarity();
     const startMs = Date.now();
     let finalResultText = "";
 
-    for await (const ev of this.runOperation(req, model, opts, vaultRoot, domains)) {
+    for await (const ev of this.runOperation(req, model, opts, vaultRoot, domains, similarity)) {
       if (ev.kind === "result") finalResultText = ev.text;
       yield ev;
     }

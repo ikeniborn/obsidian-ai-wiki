@@ -42,8 +42,22 @@
 | `wiki_external_links` | Массив внешних URL (`http://` или `https://`). Не формируют граф Obsidian — только справочные ресурсы и документация. |
 
 ## WikiLinks
-- Ссылаться только на существующие страницы через `[[имя-страницы]]`
-- Запрещено: мёртвые ссылки, ссылки на файлы вне `!Wiki/`
+
+- Only `[[page-name]]` — no aliases, no folder paths
+- ❌ Forbidden: `[[Page|alias]]`, `[[folder/page]]`
+- ✅ Correct: `[[page-name]]`, `[[Кириллица]]`, `[[Scalability]]`
+- Link only to existing pages; dead links yield a warning
+
+`wiki_outgoing_links` — YAML block list (not inline JSON):
+- ✅ Correct:
+  ```yaml
+  wiki_outgoing_links:
+    - "[[page-a]]"
+    - "[[page-b]]"
+  ```
+- ❌ Forbidden: `wiki_outgoing_links: ["[[page-a]]", "[[page-b]]"]`
+
+`wiki_outgoing_links` MUST contain every `[[link]]` found in the page body.
 
 ## Контент
 - Синтез, не копирование — переработать информацию из источников

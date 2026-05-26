@@ -53,6 +53,7 @@ export class WikiController {
   private _currentClaudeClient: ClaudeCliClient | null = null;
   private _pendingFormat: { originalPath: string; tempPath: string; chat: ChatMessage[] } | null = null;
   private _currentLogMeta: { backend: string; model: string } | null = null;
+  private _llmCallIndex = 0;
   constructor(
     private app: App,
     private plugin: LlmWikiPlugin,
@@ -240,7 +241,7 @@ export class WikiController {
 
     let agentRunner: AgentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat");
+      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat", this.plugin.settings.timeouts.lint);
     } catch (e) {
       new Notice(i18n().ctrl.errorPrefix((e as Error).message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -431,7 +432,7 @@ export class WikiController {
     return true;
   }
 
-  private async buildAgentRunner(vaultRoot: string, resumeSessionId?: string, opKey?: string): Promise<AgentRunner> {
+  private async buildAgentRunner(vaultRoot: string, resumeSessionId?: string, opKey?: string, timeoutSec = 0): Promise<AgentRunner> {
     const rawAdapter = this.app.vault.adapter as unknown as VaultAdapter;
     const vault = this.app.vault;
     const adapter = Object.create(rawAdapter) as VaultAdapter;
@@ -445,7 +446,6 @@ export class WikiController {
     const local = await this.localConfigStore.load();
     const s = resolveEffective(this.plugin.settings, local);
 
-    const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm: import("./types").LlmClient;
     if (s.backend === "claude-agent") {
       const manifestDir = this.plugin.manifest.dir
@@ -479,7 +479,7 @@ export class WikiController {
         model: claudeEff.model,
         allowedTools: claudeEff.allowedTools,
         effort,
-        requestTimeoutSec: maxTimeoutSec,
+        requestTimeoutSec: timeoutSec,
         cwd: vaultRoot,
         tmpDir,
         resumeSessionId,
@@ -522,7 +522,7 @@ export class WikiController {
       const openaiClient = new OpenAI({
         baseURL: s.nativeAgent.baseUrl,
         apiKey: s.nativeAgent.apiKey,
-        timeout: maxTimeoutSec * 1000,
+        timeout: timeoutSec > 0 ? timeoutSec * 1000 : undefined,
         dangerouslyAllowBrowser: true,
         fetch: Platform.isMobile ? mobileFetch : (proxyFetch ?? undefined),
       });
@@ -542,9 +542,7 @@ export class WikiController {
     try {
       if (!(await adapter.exists("!Wiki"))) await this.app.vault.createFolder("!Wiki").catch(() => {});
       if (!(await adapter.exists("!Wiki/_config"))) await this.app.vault.createFolder("!Wiki/_config").catch(() => {});
-      const extra = ev.kind === "result" && ev.outputTokens !== undefined && ev.durationMs > 0
-        ? { tokPerSec: Math.round(ev.outputTokens / (ev.durationMs / 1000)) }
-        : {};
+      const extra = ev.kind === "llm_call_stats" ? { callIndex: this._llmCallIndex++ } : {};
       const line = JSON.stringify({
         ts: new Date().toISOString(),
         session: sessionId, op, domainId,
@@ -597,10 +595,11 @@ export class WikiController {
 
     const vaultRoot = this.cwdOrEmpty();
     const opKey = op === "lint-chat" ? "lint" : op;
+    const opTimeoutSec = this.plugin.settings.timeouts[opKey as keyof typeof this.plugin.settings.timeouts];
 
     let agentRunner: AgentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot, undefined, opKey);
+      agentRunner = await this.buildAgentRunner(vaultRoot, undefined, opKey, opTimeoutSec);
     } catch (e) {
       new Notice(i18n().ctrl.errorPrefix((e as Error).message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -613,6 +612,7 @@ export class WikiController {
     this.currentOp = { op, args };
 
     const startedAt = Date.now();
+    this._llmCallIndex = 0;
     const sessionId = String(startedAt);
     const steps: RunHistoryEntry["steps"] = [];
     let finalText = "";
@@ -620,7 +620,7 @@ export class WikiController {
 
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
     view.setRunning(op, args);
-    const timeoutMs = this.plugin.settings.timeouts[opKey as keyof typeof this.plugin.settings.timeouts] * 1000;
+    const timeoutMs = opTimeoutSec * 1000;
     let timedOut = false;
     const timeoutId = timeoutMs > 0
       ? window.setTimeout(() => { timedOut = true; ctrl.abort(); }, timeoutMs)

@@ -5,6 +5,8 @@ import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./ty
 import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
 import { domainWikiFolder, domainLogPath, domainIndexPath } from "./wiki-path";
+import { computeSpeedText } from "./phases/llm-utils";
+import { isAbsolute, relative } from "path-browserify";
 
 import { collectMdInPaths, walkFolder } from "./utils/vault-walk";
 export { collectMdInPaths, walkFolder };
@@ -70,7 +72,8 @@ export class LlmWikiView extends ItemView {
   private chatStartTs = 0;
   private lastUserMessage = "";
   private startTs = 0;
-  private lastTokPerSec: number | undefined;
+  private lastStepTs = 0;
+  private llmStats: Array<{ inputTokens: number; outputTokens: number; ttftMs: number; llmDurationMs: number; }> = [];
   private resultSpeedEl: HTMLElement | null = null;
   private toolCount = 0;
   private stepCount = 0;
@@ -397,7 +400,13 @@ export class LlmWikiView extends ItemView {
     }
 
     const T = i18n().modal;
-    const mdFiles = collectMdInPaths(this.app.vault, sourcePaths);
+    const base = this.plugin.controller.cwdOrEmpty();
+    const toVaultRel = (p: string): string => {
+      if (!base || !isAbsolute(p)) return p;
+      const rel = relative(base, p);
+      return rel.startsWith("..") ? p : rel;
+    };
+    const mdFiles = collectMdInPaths(this.app.vault, sourcePaths.map(toVaultRel));
     const wikiFiles = collectMdInPaths(this.app.vault, [domainWikiFolder(entry.wiki_folder)]);
     const body = T.reinitConfirmBody(entry.id, wikiFiles.length, mdFiles.length, sourcePaths.length);
 
@@ -476,6 +485,7 @@ export class LlmWikiView extends ItemView {
     this.resultOpen = false;
 
     this.startTs = Date.now();
+    this.lastStepTs = this.startTs;
     this.toolCount = 0;
     this.stepCount = 0;
     this.progressEl = null;
@@ -490,7 +500,7 @@ export class LlmWikiView extends ItemView {
       window.cancelAnimationFrame(this.reasoningRafHandle);
       this.reasoningRafHandle = null;
     }
-    this.lastTokPerSec = undefined;
+    this.llmStats = [];
     this.resultSpeedEl?.setText("");
     this.stepsOpen = true;
     this.stepsEl.removeClass("ai-wiki-hidden");
@@ -580,6 +590,7 @@ export class LlmWikiView extends ItemView {
     }
     if (ev.kind === "source_path_added") return;
     if (ev.kind === "domain_updated") { void this.refreshDomains(); return; }
+    if (ev.kind === "llm_call_stats") { this.llmStats.push(ev); return; }
     if (ev.kind !== "assistant_text") this.stepCount++;
     if (ev.kind === "tool_use") {
       this.stopWaiting();
@@ -647,6 +658,20 @@ export class LlmWikiView extends ItemView {
         this.liveStatusIconEl?.setText("💬");
         this.liveStatusTextEl?.setText("Forming response...");
       }
+    } else if (ev.kind === "info_text") {
+      this.stopWaiting();
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      const head = step.createDiv("ai-wiki-step-head");
+      head.createSpan({ cls: "ai-wiki-step-icon" }).setText(ev.icon);
+      head.createSpan({ cls: "ai-wiki-step-name" }).setText(ev.summary);
+      head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
+      if (ev.details && ev.details.length > 0) {
+        const body = step.createDiv("ai-wiki-step-preview");
+        for (const d of ev.details) {
+          body.createDiv().setText(`· ${d}`);
+        }
+      }
+      this.scrollSteps();
     } else if (ev.kind === "system") {
       const step = this.stepsEl.createDiv("ai-wiki-step");
       const head = step.createDiv("ai-wiki-step-head");
@@ -660,9 +685,6 @@ export class LlmWikiView extends ItemView {
       this.scrollSteps();
     } else if (ev.kind === "result") {
       this.stopWaiting();
-      if (ev.outputTokens !== undefined && ev.durationMs > 0) {
-        this.lastTokPerSec = Math.round(ev.outputTokens / (ev.durationMs / 1000));
-      }
     } else if (ev.kind === "eval_result") {
       const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
       el.setText(`[eval: ${ev.score}/10] ${ev.reasoning}`);
@@ -754,7 +776,7 @@ export class LlmWikiView extends ItemView {
     this.liveStatusSection?.addClass("ai-wiki-hidden");
     const totalDur = ((entry.finishedAt - entry.startedAt) / 1000).toFixed(1);
     this.progressCount.setText(`${totalDur}s`);
-    this.resultSpeedEl?.setText(this.lastTokPerSec !== undefined ? ` ${this.lastTokPerSec} tok/s` : "");
+    this.resultSpeedEl?.setText(this.buildSpeedText());
     this.finalEl.empty();
     if (entry.finalText) {
       const comp = new Component();
@@ -975,7 +997,10 @@ export class LlmWikiView extends ItemView {
   }
 
   private elapsedShort(): string {
-    return `${((Date.now() - this.startTs) / 1000).toFixed(1)}s`;
+    const now = Date.now();
+    const ms = now - this.lastStepTs;
+    this.lastStepTs = now;
+    return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : "";
   }
 
   private scrollSteps(): void {
@@ -1015,6 +1040,10 @@ export class LlmWikiView extends ItemView {
     const dur = ((entry.finishedAt - entry.startedAt) / 1000).toFixed(1);
     const icon = entry.status === "done" ? "✓" : entry.status === "cancelled" ? "⛔" : "✗";
     return `${icon} ${entry.operation} (${dur}s)`;
+  }
+
+  private buildSpeedText(): string {
+    return computeSpeedText(this.llmStats);
   }
 
   private renderHistory(): void {

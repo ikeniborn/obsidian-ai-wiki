@@ -9,13 +9,15 @@ import { EntityTypesDeltaSchema, LintOutputSchema } from "./zod-schemas";
 import type { LintOutput } from "./zod-schemas";
 import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
-import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder } from "../wiki-path";
+import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, domainIndexPath } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm } from "../utils/raw-frontmatter";
 import { checkGraphStructure, pageId } from "../wiki-graph";
+import { checkWikiLinks, fixWikiLinks } from "../wiki-link-validator";
 import { graphCache } from "../wiki-graph-cache";
-import { upsertIndexAnnotation } from "../wiki-index";
+import { upsertIndexAnnotation, parseIndexAnnotations } from "../wiki-index";
 import { appendWikiLog } from "../wiki-log";
 import { ensureDomainConfig } from "../domain-config";
+import type { PageSimilarityService } from "../page-similarity";
 
 const META_FILES = ["_index.md", "_log.md"];
 
@@ -30,7 +32,9 @@ export async function* runLint(
   vaultRoot: string,
   signal: AbortSignal,
   hubThreshold: number = 20,
+  wikiLinkValidationRetries: number = 3,
   opts: LlmCallOptions = {},
+  similarity?: PageSimilarityService,
 ): AsyncGenerator<RunEvent> {
   const domainId = args[0];
   const targets = domainId
@@ -56,21 +60,21 @@ export async function* runLint(
       continue;
     }
 
-    await ensureDomainConfig(vaultTools, wikiVaultPath);
-
-    const schemaContent = await tryRead(vaultTools, GLOBAL_WIKI_SCHEMA_PATH);
-
     yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
+    await ensureDomainConfig(vaultTools, wikiVaultPath);
+    const schemaContent = await tryRead(vaultTools, GLOBAL_WIKI_SCHEMA_PATH);
     const allFiles = await vaultTools.listFiles(wikiVaultPath);
     const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
     yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
 
     const pages = await vaultTools.readAll(files);
 
+    yield { kind: "info_text", icon: "🔍", summary: `Analysing ${files.length} pages...` };
     const { graph } = graphCache.get(domain.id, pages);
     const structuralIssues = checkStructure(pages);
     const graphIssues = checkGraphStructure(graph, hubThreshold);
-    const allIssues = [structuralIssues, graphIssues].filter(Boolean).join("\n");
+    const wikiLinkIssues = checkWikiLinks(pages);
+    const allIssues = [structuralIssues, graphIssues, wikiLinkIssues].filter(Boolean).join("\n");
 
     const entityTypesBlock = buildEntityTypesBlock(domain);
 
@@ -95,6 +99,7 @@ export async function* runLint(
     ];
 
     // Combined assess+fix call
+    yield { kind: "tool_use", name: "Analysing wiki", input: { pages: String(files.length) } };
     const lintPwtEvents: RunEvent[] = [];
     let lintResult: { value: LintOutput; outputTokens: number };
     try {
@@ -108,8 +113,10 @@ export async function* runLint(
         signal,
         onEvent: (ev) => lintPwtEvents.push(ev),
       });
+      yield { kind: "tool_result", ok: true, preview: `${lintResult.value.fixes.length} fixes` };
     } catch (e) {
       if (signal.aborted || (e as Error).name === "AbortError") return;
+      yield { kind: "tool_result", ok: false, preview: (e as Error).message };
       for (const ev of lintPwtEvents) yield ev;
       reportParts.push(`## ${domain.id}\nLLM validation failed: ${(e as Error).message}`);
       continue;
@@ -124,7 +131,9 @@ export async function* runLint(
 
     if (signal.aborted) return;
     yield { kind: "assistant_text", delta: `\nActualizing domain config for "${domain.id}"...\n` };
+    yield { kind: "tool_use", name: "Updating config", input: {} };
     const patchRes = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
+    yield { kind: "tool_result", ok: true, preview: patchRes.patch ? "config updated" : "no changes" };
     outputTokens += patchRes.outputTokens;
     const patch = patchRes.patch;
     if (patch) {
@@ -135,7 +144,18 @@ export async function* runLint(
 
     if (signal.aborted) return;
 
-    const fixedPages = lintResult.value.fixes;
+    const allVaultPaths = await vaultTools.listFiles("").catch(() => [] as string[]);
+    const allMdPaths = allVaultPaths.filter(p => p.endsWith(".md"));
+    const knownStems = new Set([
+      ...allMdPaths.map(p => p.split("/").pop()!.replace(/\.md$/, "")),
+      ...[...pages.keys()].map((p) => p.split("/").pop()!.replace(/\.md$/, "")),
+    ]);
+    const stemToPath = new Map<string, string>(
+      allMdPaths.map(p => [p.split("/").pop()!.replace(/\.md$/, ""), p])
+    );
+    const fixesMap = new Map(lintResult.value.fixes.map((p) => [p.path, p.content]));
+    const wlFixResult = fixWikiLinks(fixesMap, wikiLinkValidationRetries, knownStems);
+    const fixedPages = lintResult.value.fixes.map((p) => ({ ...p, content: wlFixResult.fixed.get(p.path) ?? p.content }));
     const writtenPaths: string[] = [];
     for (const page of fixedPages) {
       yield { kind: "assistant_text", delta: `  • ${page.path.split("/").pop()}...\n` };
@@ -144,7 +164,7 @@ export async function* runLint(
         yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
         continue;
       }
-      yield { kind: "tool_use", name: "Write", input: { path: page.path } };
+      yield { kind: "tool_use", name: "Update", input: { path: page.path } };
       try {
         await vaultTools.write(page.path, page.content);
         writtenPaths.push(page.path);
@@ -158,6 +178,10 @@ export async function* runLint(
         yield { kind: "tool_result", ok: false, preview: (e as Error).message };
       }
     }
+    if (wlFixResult.warnings.length > 0) {
+      yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFixResult.warnings };
+    }
+
     if (writtenPaths.length > 0) {
       reportParts.push(`### Исправлено страниц: ${writtenPaths.length}\n${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
       for (const p of writtenPaths) {
@@ -180,16 +204,20 @@ export async function* runLint(
     const backlinks = new Map<string, Set<string>>();
     for (const [wikiPath, wikiContent] of pages) {
       for (const src of parseWikiSourcesFromFm(wikiContent)) {
-        const rawPath = src.slice(2, -2);
+        const bareName = src.slice(2, -2);
+        // Support both bare names ([[PageName]]) and legacy path-style ([[path/to/file.md]])
+        const rawPath = bareName.includes("/")
+          ? bareName
+          : (stemToPath.get(bareName) ?? bareName);
         if (!backlinks.has(rawPath)) backlinks.set(rawPath, new Set());
-        backlinks.get(rawPath)!.add(`[[${wikiPath}]]`);
+        backlinks.get(rawPath)!.add(`[[${wikiPath.split("/").pop()!.replace(/\.md$/, "")}]]`);
       }
     }
 
     const syncToday = new Date().toISOString().slice(0, 10);
     let syncUpdated = 0;
     for (const [rawPath, articles] of backlinks) {
-      yield { kind: "tool_use", name: "Write", input: { path: rawPath } };
+      yield { kind: "tool_use", name: "Update", input: { path: rawPath } };
       try {
         const rawContent = await vaultTools.read(rawPath);
         const existingArticles = parseWikiArticlesFromFm(rawContent);
@@ -211,6 +239,22 @@ export async function* runLint(
     }
     if (backlinks.size > 0) {
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
+    }
+
+    if (similarity) {
+      const indexRaw = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
+      const annotations = parseIndexAnnotations(indexRaw);
+
+      if (similarity.config.mode === "embedding") {
+        yield { kind: "info_text", icon: "📥", summary: "загрузка кэша векторов..." };
+        await similarity.loadCache(wikiVaultPath, vaultTools);
+      }
+
+      const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, annotations);
+
+      if (similarity.config.mode === "embedding" && updated > 0) {
+        yield { kind: "info_text", icon: "📤", summary: `обновлено векторов: ${updated}` };
+      }
     }
 
   }

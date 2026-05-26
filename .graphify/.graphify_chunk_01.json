@@ -1,0 +1,779 @@
+{
+  "nodes": [
+    {
+      "id": "ingest_prompt",
+      "label": "Ingest Prompt Template",
+      "file_type": "document",
+      "source_file": "prompts/ingest.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "ingest_entity_types",
+      "label": "Entity Types Block",
+      "file_type": "rationale",
+      "source_file": "prompts/ingest.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "ingest_wiki_page_rules",
+      "label": "Wiki Page Rules",
+      "file_type": "rationale",
+      "source_file": "prompts/ingest.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "ingest_path_rule",
+      "label": "Wiki Path Rule",
+      "file_type": "rationale",
+      "source_file": "prompts/ingest.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "ingest_entity_types_delta",
+      "label": "entity_types_delta",
+      "file_type": "rationale",
+      "source_file": "prompts/ingest.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llm_pipeline",
+      "label": "LLM Pipeline",
+      "file_type": "document",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llm_pipeline_buildchatparams",
+      "label": "buildChatParams",
+      "file_type": "rationale",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llm_pipeline_evaluator_prompt_pattern",
+      "label": "Evaluator Prompt Pattern",
+      "file_type": "rationale",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llm_pipeline_parsewithretry",
+      "label": "parseWithRetry",
+      "file_type": "rationale",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llm_pipeline_call_sites",
+      "label": "Call Sites",
+      "file_type": "rationale",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llm_pipeline_wikipageschema_constraints",
+      "label": "WikiPageSchema Constraints",
+      "file_type": "rationale",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llm_pipeline_wikilink_validation",
+      "label": "WikiLink Validation",
+      "file_type": "rationale",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llm_pipeline_wrapwithjsonfallback",
+      "label": "wrapWithJsonFallback",
+      "file_type": "rationale",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llm_pipeline_structural_error_counter",
+      "label": "Structural Error Counter",
+      "file_type": "rationale",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llm_pipeline_llm_progress_events",
+      "label": "LLM Progress Events",
+      "file_type": "rationale",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llm_pipeline_streaming",
+      "label": "Streaming",
+      "file_type": "rationale",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "operations",
+      "label": "Operations",
+      "file_type": "document",
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "operations_init",
+      "label": "Init Operation",
+      "file_type": "rationale",
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "operations_ingest",
+      "label": "Ingest Operation",
+      "file_type": "rationale",
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "operations_page_similarity",
+      "label": "Page Similarity",
+      "file_type": "rationale",
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "operations_query",
+      "label": "Query Operation",
+      "file_type": "rationale",
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "operations_seed_selection",
+      "label": "Seed Selection",
+      "file_type": "rationale",
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "operations_bfs_expansion",
+      "label": "BFS Expansion",
+      "file_type": "rationale",
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "operations_lint",
+      "label": "Lint Operation",
+      "file_type": "rationale",
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "operations_backlink_sync",
+      "label": "Backlink Sync",
+      "file_type": "rationale",
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "operations_lint_chat",
+      "label": "Lint-Chat Operation",
+      "file_type": "rationale",
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "operations_chat",
+      "label": "Chat Operation",
+      "file_type": "rationale",
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "operations_format",
+      "label": "Format Operation",
+      "file_type": "rationale",
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "ingest_prompt",
+      "target": "ingest_entity_types",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/ingest.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "ingest_prompt",
+      "target": "ingest_wiki_page_rules",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/ingest.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "ingest_prompt",
+      "target": "ingest_path_rule",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/ingest.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "ingest_prompt",
+      "target": "ingest_entity_types_delta",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/ingest.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations_ingest",
+      "target": "ingest_prompt",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations_ingest",
+      "target": "ingest_entity_types_delta",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline",
+      "target": "llm_pipeline_buildchatparams",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline",
+      "target": "llm_pipeline_parsewithretry",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline",
+      "target": "llm_pipeline_evaluator_prompt_pattern",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline",
+      "target": "llm_pipeline_wikilink_validation",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline",
+      "target": "llm_pipeline_wrapwithjsonfallback",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline",
+      "target": "llm_pipeline_structural_error_counter",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline",
+      "target": "llm_pipeline_llm_progress_events",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline",
+      "target": "llm_pipeline_streaming",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline_parsewithretry",
+      "target": "llm_pipeline_call_sites",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline_parsewithretry",
+      "target": "llm_pipeline_wikipageschema_constraints",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline_wikilink_validation",
+      "target": "llm_pipeline_parsewithretry",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations",
+      "target": "operations_init",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations",
+      "target": "operations_ingest",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations",
+      "target": "operations_query",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations",
+      "target": "operations_lint",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations",
+      "target": "operations_lint_chat",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations",
+      "target": "operations_chat",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations",
+      "target": "operations_format",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations_init",
+      "target": "llm_pipeline_parsewithretry",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations_ingest",
+      "target": "operations_page_similarity",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations_ingest",
+      "target": "llm_pipeline_llm_progress_events",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations_ingest",
+      "target": "llm_pipeline_parsewithretry",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations_query",
+      "target": "operations_seed_selection",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations_query",
+      "target": "operations_bfs_expansion",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations_seed_selection",
+      "target": "operations_page_similarity",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations_lint",
+      "target": "llm_pipeline_parsewithretry",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations_lint",
+      "target": "operations_backlink_sync",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations_lint",
+      "target": "llm_pipeline_llm_progress_events",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations_lint_chat",
+      "target": "llm_pipeline_llm_progress_events",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "operations_lint_chat",
+      "target": "llm_pipeline_parsewithretry",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/operations.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline_call_sites",
+      "target": "operations_ingest",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline_call_sites",
+      "target": "operations_init",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline_call_sites",
+      "target": "operations_lint",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline_call_sites",
+      "target": "operations_lint_chat",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline_call_sites",
+      "target": "operations_query",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline_call_sites",
+      "target": "operations_format",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline_buildchatparams",
+      "target": "llm_pipeline_evaluator_prompt_pattern",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline_wikilink_validation",
+      "target": "ingest_wiki_page_rules",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "llm_pipeline_wikipageschema_constraints",
+      "target": "ingest_wiki_page_rules",
+      "relation": "rationale_for",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "ingest_path_rule",
+      "target": "ingest_wiki_page_rules",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/ingest.md",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

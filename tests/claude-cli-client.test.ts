@@ -345,6 +345,25 @@ describe("ClaudeCliClient", () => {
     };
     expect(testCfg.effort).toBeUndefined();
   });
+
+  it("timeoutSec=0 does not schedule a kill timer", async () => {
+    const lines = [
+      JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "ok" }] } }),
+      JSON.stringify({ type: "result", duration_ms: 10, total_cost_usd: 0, result: "ok", is_error: false }),
+    ];
+    (spawn as any).mockReturnValue(makeMockProcess(lines));
+
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout");
+
+    const client = new ClaudeCliClient({ ...cfg, requestTimeoutSec: 0 });
+    await client.chat.completions.create(
+      { model: "sonnet", messages: [{ role: "user", content: "hi" }], stream: false } as any,
+    );
+
+    // No kill timer should have been scheduled
+    expect(setTimeoutSpy).not.toHaveBeenCalled();
+    setTimeoutSpy.mockRestore();
+  });
 });
 
 describe("validateIclaudePath", () => {

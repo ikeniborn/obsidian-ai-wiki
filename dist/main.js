@@ -150,15 +150,15 @@ var require_path_browserify = __commonJS({
       normalize: function normalize(path2) {
         assertPath(path2);
         if (path2.length === 0) return ".";
-        var isAbsolute5 = path2.charCodeAt(0) === 47;
+        var isAbsolute6 = path2.charCodeAt(0) === 47;
         var trailingSeparator = path2.charCodeAt(path2.length - 1) === 47;
-        path2 = normalizeStringPosix(path2, !isAbsolute5);
-        if (path2.length === 0 && !isAbsolute5) path2 = ".";
+        path2 = normalizeStringPosix(path2, !isAbsolute6);
+        if (path2.length === 0 && !isAbsolute6) path2 = ".";
         if (path2.length > 0 && trailingSeparator) path2 += "/";
-        if (isAbsolute5) return "/" + path2;
+        if (isAbsolute6) return "/" + path2;
         return path2;
       },
-      isAbsolute: function isAbsolute5(path2) {
+      isAbsolute: function isAbsolute6(path2) {
         assertPath(path2);
         return path2.length > 0 && path2.charCodeAt(0) === 47;
       },
@@ -180,7 +180,7 @@ var require_path_browserify = __commonJS({
           return ".";
         return posix.normalize(joined);
       },
-      relative: function relative3(from, to) {
+      relative: function relative4(from, to) {
         assertPath(from);
         assertPath(to);
         if (from === to) return "";
@@ -372,9 +372,9 @@ var require_path_browserify = __commonJS({
         var ret = { root: "", dir: "", base: "", ext: "", name: "" };
         if (path2.length === 0) return ret;
         var code = path2.charCodeAt(0);
-        var isAbsolute5 = code === 47;
+        var isAbsolute6 = code === 47;
         var start;
-        if (isAbsolute5) {
+        if (isAbsolute6) {
           ret.root = "/";
           start = 1;
         } else {
@@ -410,11 +410,11 @@ var require_path_browserify = __commonJS({
         preDotState === 0 || // The (right-most) trimmed path component is exactly '..'
         preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
           if (end !== -1) {
-            if (startPart === 0 && isAbsolute5) ret.base = ret.name = path2.slice(1, end);
+            if (startPart === 0 && isAbsolute6) ret.base = ret.name = path2.slice(1, end);
             else ret.base = ret.name = path2.slice(startPart, end);
           }
         } else {
-          if (startPart === 0 && isAbsolute5) {
+          if (startPart === 0 && isAbsolute6) {
             ret.name = path2.slice(1, startDot);
             ret.base = path2.slice(1, end);
           } else {
@@ -424,7 +424,7 @@ var require_path_browserify = __commonJS({
           ret.ext = path2.slice(startDot, end);
         }
         if (startPart > 0) ret.dir = path2.slice(0, startPart - 1);
-        else if (isAbsolute5) ret.dir = "/";
+        else if (isAbsolute6) ret.dir = "/";
         return ret;
       },
       sep: "/",
@@ -18822,6 +18822,7 @@ var DEFAULT_SETTINGS = {
   historyLimit: 20,
   graphDepth: 1,
   hubThreshold: 20,
+  wikiLinkValidationRetries: 3,
   seedTopK: 5,
   seedMinScore: 0.1,
   timeouts: { ingest: 300, query: 300, lint: 900, init: 3600, format: 600 },
@@ -18886,7 +18887,7 @@ var en = {
     busyBanner: "Operation in progress \u2014 domain editing is disabled.",
     domains_empty: "No domains. Use 'Add domain' in the sidebar panel to create one.",
     timeouts_name: "Timeouts (seconds)",
-    timeouts_desc: "ingest / query / lint / init / format",
+    timeouts_desc: "ingest / query / lint / init / format (0 = no limit)",
     historyLimit_name: "History limit",
     historyLimit_desc: "Maximum operations in the sidebar history.",
     agentLog_name: "Agent log (JSONL)",
@@ -18947,6 +18948,8 @@ var en = {
     graphDepth_desc: "Query: hops from seed pages. 0 = seeds only, max sensible: 3.",
     hubThreshold_name: "Hub threshold",
     hubThreshold_desc: "Lint: pages with more outgoing links than this are flagged as hub nodes.",
+    wikiLinkValidationRetries_name: "WikiLink fix passes",
+    wikiLinkValidationRetries_desc: "Max programmatic fix passes for WikiLink format errors. 0 = validate only.",
     seedTopK_name: "Seed top-K",
     seedTopK_desc: "Maximum seed pages selected by keyword score (1\u201350).",
     seedMinScore_name: "Seed min score",
@@ -19102,7 +19105,7 @@ var ru = {
     busyBanner: "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0434\u043E\u043C\u0435\u043D\u043E\u0432 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E.",
     domains_empty: "\u0414\u043E\u043C\u0435\u043D\u044B \u043D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u044B. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 '\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D' \u0432 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438.",
     timeouts_name: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442\u044B (\u0441\u0435\u043A\u0443\u043D\u0434\u044B)",
-    timeouts_desc: "ingest / query / lint / init / format",
+    timeouts_desc: "ingest / query / lint / init / format (0 = \u0431\u0435\u0437 \u043B\u0438\u043C\u0438\u0442\u0430)",
     historyLimit_name: "\u041B\u0438\u043C\u0438\u0442 \u0438\u0441\u0442\u043E\u0440\u0438\u0438",
     historyLimit_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439 \u0432 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438.",
     agentLog_name: "\u041B\u043E\u0433 \u0430\u0433\u0435\u043D\u0442\u0430 (JSONL)",
@@ -19163,6 +19166,8 @@ var ru = {
     graphDepth_desc: "Query: \u0448\u0430\u0433\u043E\u0432 \u043E\u0442 seed-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. 0 = \u0442\u043E\u043B\u044C\u043A\u043E seeds, \u0440\u0430\u0437\u0443\u043C\u043D\u044B\u0439 \u043C\u0430\u043A\u0441\u0438\u043C\u0443\u043C: 3.",
     hubThreshold_name: "\u041F\u043E\u0440\u043E\u0433 \u0445\u0430\u0431\u0430",
     hubThreshold_desc: "Lint: \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0441 \u0431\u043E\u0301\u043B\u044C\u0448\u0438\u043C \u0447\u0438\u0441\u043B\u043E\u043C \u0438\u0441\u0445\u043E\u0434\u044F\u0449\u0438\u0445 \u0441\u0441\u044B\u043B\u043E\u043A \u043F\u043E\u043C\u0435\u0447\u0430\u044E\u0442\u0441\u044F \u043A\u0430\u043A hub.",
+    wikiLinkValidationRetries_name: "\u041F\u0440\u043E\u0445\u043E\u0434\u043E\u0432 \u0444\u0438\u043A\u0441\u0435\u0440\u0430 WikiLinks",
+    wikiLinkValidationRetries_desc: "\u041C\u0430\u043A\u0441. \u0447\u0438\u0441\u043B\u043E \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u043D\u044B\u0445 \u043F\u0440\u043E\u0445\u043E\u0434\u043E\u0432 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u0444\u043E\u0440\u043C\u0430\u0442\u0430 WikiLinks. 0 \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0432\u0430\u043B\u0438\u0434\u0430\u0446\u0438\u044F.",
     seedTopK_name: "Seed top-K",
     seedTopK_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C seed-\u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043F\u043E keyword-score (1\u201350).",
     seedMinScore_name: "\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u044B\u0439 score seed",
@@ -19318,7 +19323,7 @@ var es = {
     busyBanner: "Operaci\xF3n en curso \u2014 la edici\xF3n de dominios est\xE1 desactivada.",
     domains_empty: "No hay dominios. Use 'A\xF1adir dominio' en el panel lateral.",
     timeouts_name: "Tiempos de espera (segundos)",
-    timeouts_desc: "ingest / query / lint / init / format",
+    timeouts_desc: "ingest / query / lint / init / format (0 = sin l\xEDmite)",
     historyLimit_name: "L\xEDmite de historial",
     historyLimit_desc: "M\xE1ximo de operaciones en el historial del panel lateral.",
     agentLog_name: "Log del agente (JSONL)",
@@ -19379,6 +19384,8 @@ var es = {
     graphDepth_desc: "Query: saltos desde p\xE1ginas semilla. 0 = solo semillas, m\xE1x recomendado: 3.",
     hubThreshold_name: "Umbral de hub",
     hubThreshold_desc: "Lint: p\xE1ginas con m\xE1s enlaces salientes que este valor se marcan como hub.",
+    wikiLinkValidationRetries_name: "Pasadas del fijador de WikiLinks",
+    wikiLinkValidationRetries_desc: "M\xE1x. pasadas program\xE1ticas para corregir formato de WikiLinks. 0 = solo validar.",
     seedTopK_name: "Top-K semillas",
     seedTopK_desc: "M\xE1ximo de p\xE1ginas semilla por puntuaci\xF3n de palabras clave (1\u201350).",
     seedMinScore_name: "Puntuaci\xF3n m\xEDnima semilla",
@@ -20161,7 +20168,7 @@ async function checkNativeAvailability(baseUrl, apiKey, model) {
 }
 function parseTimeoutString(v) {
   const parts = v.split("/").map((x) => Number(x.trim()));
-  if (parts.length === 5 && parts.every((n) => Number.isFinite(n) && n > 0)) {
+  if (parts.length === 5 && parts.every((n) => Number.isFinite(n) && n >= 0)) {
     return { ingest: parts[0], query: parts[1], lint: parts[2], init: parts[3], format: parts[4] };
   }
   return null;
@@ -20174,6 +20181,10 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
   plugin;
   cachedDomains = [];
   localCache = { iclaudePath: "" };
+  _availableModels = [];
+  get _chatModels() {
+    return this._availableModels.filter((m) => !/embed|rerank|moderat/i.test(m));
+  }
   display() {
     void this.refresh();
   }
@@ -20211,6 +20222,48 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
   async patchLocalProxy(patch) {
     const cur = this.localCache.proxy ?? { enabled: false, url: "" };
     await this.patchLocal({ proxy: { ...cur, ...patch } });
+  }
+  async fetchModels() {
+    const na = this.localCache.nativeAgent;
+    if (!na?.baseUrl) {
+      new import_obsidian3.Notice("Set Base URL first");
+      return;
+    }
+    const url = `${na.baseUrl.replace(/\/$/, "")}/models`;
+    try {
+      const resp = await fetch(url, {
+        headers: { Authorization: `Bearer ${na.apiKey ?? ""}` }
+      });
+      if (!resp.ok) throw new Error(`${resp.status}`);
+      const json = await resp.json();
+      this._availableModels = json.data.map((m) => m.id).sort();
+      this.display();
+    } catch (e) {
+      new import_obsidian3.Notice(`Failed to fetch models: ${e.message}`);
+    }
+  }
+  addModelControl(s, models, currentValue, onChange) {
+    s.addButton(
+      (b) => b.setIcon("refresh-cw").setTooltip("Fetch available models from base URL").onClick(() => {
+        void this.fetchModels();
+      })
+    );
+    if (models.length > 0) {
+      s.addDropdown((d) => {
+        if (!currentValue) d.addOption("", "\u2014 select \u2014");
+        for (const m of models) d.addOption(m, m);
+        d.setValue(currentValue);
+        d.onChange((v) => {
+          void onChange(v);
+        });
+      });
+    } else {
+      s.addText(
+        (t) => t.setValue(currentValue).onChange((v) => {
+          void onChange(v.trim());
+        })
+      );
+    }
   }
   render() {
     const { containerEl } = this;
@@ -20423,10 +20476,13 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         return b;
       });
       if (!s.nativeAgent.perOperation) {
-        new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native).addText(
-          (t) => t.setPlaceholder("llama3.2").setValue(eff.nativeAgent.model).onChange(async (v) => {
-            await this.patchLocalNative({ model: v.trim() });
-          })
+        this.addModelControl(
+          new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
+          this._chatModels,
+          eff.nativeAgent.model,
+          async (v) => {
+            await this.patchLocalNative({ model: v });
+          }
         );
         new import_obsidian3.Setting(containerEl).setName(T.settings.maxTokens_name).setDesc(T.settings.maxTokens_desc).addText(
           (t) => t.setPlaceholder("4096").setValue(String(s.nativeAgent.maxTokens)).onChange(async (v) => {
@@ -20470,11 +20526,14 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         ];
         for (const { key, label } of ops) {
           new import_obsidian3.Setting(containerEl).setName(label).setHeading();
-          new import_obsidian3.Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc).addText(
-            (t) => t.setValue(s.nativeAgent.operations[key].model).onChange(async (v) => {
-              s.nativeAgent.operations[key].model = v.trim();
+          this.addModelControl(
+            new import_obsidian3.Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc),
+            this._chatModels,
+            s.nativeAgent.operations[key].model,
+            async (v) => {
+              s.nativeAgent.operations[key].model = v;
               await this.plugin.saveSettings();
-            })
+            }
           );
           new import_obsidian3.Setting(containerEl).setName(T.settings.opMaxTokens_name).setDesc(T.settings.opMaxTokens_desc).addText(
             (t) => t.setValue(String(s.nativeAgent.operations[key].maxTokens)).onChange(async (v) => {
@@ -20511,6 +20570,45 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           await this.plugin.saveSettings();
         })
       );
+      new import_obsidian3.Setting(containerEl).setName("Semantic Search").setHeading();
+      new import_obsidian3.Setting(containerEl).setName("Enable semantic similarity (embeddings)").setDesc("Use embedding vectors for relevant page selection. Requires native backend with an embeddings-capable model.").addToggle(
+        (t) => t.setValue(!!this.localCache.nativeAgent?.embeddingModel).onChange(async (v) => {
+          if (!v) {
+            await this.patchLocalNative({ embeddingModel: void 0, embeddingDimensions: void 0 });
+            this.display();
+          } else {
+            await this.patchLocalNative({ embeddingModel: "" });
+            this.display();
+          }
+        })
+      );
+      if (this.localCache.nativeAgent?.embeddingModel !== void 0) {
+        new import_obsidian3.Setting(containerEl).setName("Relevant pages (top-K)").setDesc("Max wiki pages loaded per ingest call. Lower = faster, less context. Default: 15.").addText(
+          (t) => t.setPlaceholder("15").setValue(String(this.localCache.nativeAgent?.relevantPagesTopK ?? 15)).onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n > 0) {
+              await this.patchLocalNative({ relevantPagesTopK: Math.floor(n) });
+            }
+          })
+        );
+        const embModels = this._availableModels.filter((m) => /embed/i.test(m));
+        this.addModelControl(
+          new import_obsidian3.Setting(containerEl).setName("Embedding model").setDesc("Model name for embeddings, e.g. text-embedding-3-small"),
+          embModels,
+          this.localCache.nativeAgent?.embeddingModel ?? "",
+          async (v) => {
+            await this.patchLocalNative({ embeddingModel: v || void 0 });
+          }
+        );
+        new import_obsidian3.Setting(containerEl).setName("Embedding dimensions").setDesc("Vector dimensions, e.g. 512 or 1536").addText(
+          (t) => t.setPlaceholder("512").setValue(String(this.localCache.nativeAgent?.embeddingDimensions ?? "")).onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n > 0) {
+              await this.patchLocalNative({ embeddingDimensions: Math.floor(n) });
+            }
+          })
+        );
+      }
       const proxy = eff.proxy;
       new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
       new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_enabled_name).setDesc(T.settings.proxy_enabled_desc).addToggle(
@@ -20559,6 +20657,15 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         const n = Number(v);
         if (Number.isInteger(n) && n > 0) {
           s.hubThreshold = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName(T.settings.wikiLinkValidationRetries_name).setDesc(T.settings.wikiLinkValidationRetries_desc).addText(
+      (t) => t.setPlaceholder("3").setValue(String(s.wikiLinkValidationRetries)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isInteger(n) && n >= 0) {
+          s.wikiLinkValidationRetries = n;
           await this.plugin.saveSettings();
         }
       })
@@ -20646,6 +20753,915 @@ function domainIndexPath(domainFolder) {
 function domainLogPath(domainFolder) {
   return `${domainConfigDir(domainFolder)}/_log.md`;
 }
+function domainEmbeddingsPath(domainFolder) {
+  return `${domainConfigDir(domainFolder)}/_embeddings.json`;
+}
+
+// prompts/base.md
+var base_default = "\u0422\u044B \u2014 wiki-\u0430\u0433\u0435\u043D\u0442. \u0421\u043B\u0435\u0434\u0443\u0439 \u044D\u0442\u0438\u043C \u043F\u0440\u0430\u0432\u0438\u043B\u0430\u043C \u043D\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043C\u043E \u043E\u0442 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.\n\n## \u0414\u043E\u0441\u0442\u043E\u0432\u0435\u0440\u043D\u043E\u0441\u0442\u044C\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430.\n\u041D\u0435 \u0432\u044B\u0434\u0443\u043C\u044B\u0432\u0430\u0439 \u0444\u0430\u043A\u0442\u044B, \u043A\u043E\u0442\u043E\u0440\u044B\u0445 \u043D\u0435\u0442 \u0432 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0435.\n\u0415\u0441\u043B\u0438 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E \u2014 \u0441\u043A\u0430\u0436\u0438 \u043E\u0431 \u044D\u0442\u043E\u043C \u043F\u0440\u044F\u043C\u043E.\n\n## \u0424\u043E\u0440\u043C\u0430\u0442\n\u0412\u043E\u0437\u0432\u0440\u0430\u0449\u0430\u0439 \u0440\u043E\u0432\u043D\u043E \u0442\u043E, \u0447\u0442\u043E \u0437\u0430\u043F\u0440\u043E\u0448\u0435\u043D\u043E.\n\u0415\u0441\u043B\u0438 \u043E\u0436\u0438\u0434\u0430\u0435\u0442\u0441\u044F JSON \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON, \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439 \u0432\u043E\u043A\u0440\u0443\u0433.\n\u0415\u0441\u043B\u0438 \u043E\u0436\u0438\u0434\u0430\u0435\u0442\u0441\u044F \u0442\u0435\u043A\u0441\u0442 \u2014 \u0431\u0435\u0437 \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u043C\u0435\u0442\u043E\u043A \u0438 \u0442\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0445 \u0430\u0440\u0442\u0435\u0444\u0430\u043A\u0442\u043E\u0432.\n\n## \u041C\u0438\u043D\u0438\u043C\u0430\u043B\u0438\u0437\u043C\n\u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u0442\u043E, \u043E \u0447\u0451\u043C \u043D\u0435 \u043F\u0440\u043E\u0441\u0438\u043B\u0438.\n\u041D\u0435 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0438\u0440\u0443\u0439 \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u044B\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F, \u0435\u0441\u043B\u0438 \u044D\u0442\u043E \u043D\u0435 \u0447\u0430\u0441\u0442\u044C \u0437\u0430\u0434\u0430\u0447\u0438.\n";
+
+// node_modules/jsonrepair/lib/esm/utils/JSONRepairError.js
+var JSONRepairError = class extends Error {
+  constructor(message, position) {
+    super(`${message} at position ${position}`);
+    this.position = position;
+  }
+};
+
+// node_modules/jsonrepair/lib/esm/utils/stringUtils.js
+var codeSpace = 32;
+var codeNewline = 10;
+var codeTab = 9;
+var codeReturn = 13;
+var codeNonBreakingSpace = 160;
+var codeMongolianVowelSeparator = 6158;
+var codeEnQuad = 8192;
+var codeZeroWidthSpace = 8203;
+var codeNarrowNoBreakSpace = 8239;
+var codeMediumMathematicalSpace = 8287;
+var codeIdeographicSpace = 12288;
+var codeZeroWidthNoBreakSpace = 65279;
+function isHex(char) {
+  return /^[0-9A-Fa-f]$/.test(char);
+}
+function isDigit(char) {
+  return char >= "0" && char <= "9";
+}
+function isValidStringCharacter(char) {
+  return char >= " ";
+}
+function isDelimiter(char) {
+  return ",:[]/{}()\n+".includes(char);
+}
+function isFunctionNameCharStart(char) {
+  return char >= "a" && char <= "z" || char >= "A" && char <= "Z" || char === "_" || char === "$";
+}
+function isFunctionNameChar(char) {
+  return char >= "a" && char <= "z" || char >= "A" && char <= "Z" || char === "_" || char === "$" || char >= "0" && char <= "9";
+}
+var regexUrlStart = /^(http|https|ftp|mailto|file|data|irc):\/\/$/;
+var regexUrlChar = /^[A-Za-z0-9-._~:/?#@!$&'()*+;=]$/;
+function isUnquotedStringDelimiter(char) {
+  return ",[]/{}\n+".includes(char);
+}
+function isStartOfValue(char) {
+  return isQuote(char) || regexStartOfValue.test(char);
+}
+var regexStartOfValue = /^[[{\w-]$/;
+function isControlCharacter(char) {
+  return char === "\n" || char === "\r" || char === "	" || char === "\b" || char === "\f";
+}
+function isWhitespace(text, index) {
+  const code = text.charCodeAt(index);
+  return code === codeSpace || code === codeNewline || code === codeTab || code === codeReturn;
+}
+function isWhitespaceExceptNewline(text, index) {
+  const code = text.charCodeAt(index);
+  return code === codeSpace || code === codeTab || code === codeReturn;
+}
+function isSpecialWhitespace(text, index) {
+  const code = text.charCodeAt(index);
+  return code === codeNonBreakingSpace || code === codeMongolianVowelSeparator || code >= codeEnQuad && code <= codeZeroWidthSpace || code === codeNarrowNoBreakSpace || code === codeMediumMathematicalSpace || code === codeIdeographicSpace || code === codeZeroWidthNoBreakSpace;
+}
+function isQuote(char) {
+  return isDoubleQuoteLike(char) || isSingleQuoteLike(char);
+}
+function isDoubleQuoteLike(char) {
+  return char === '"' || char === "\u201C" || char === "\u201D";
+}
+function isDoubleQuote(char) {
+  return char === '"';
+}
+function isSingleQuoteLike(char) {
+  return char === "'" || char === "\u2018" || char === "\u2019" || char === "`" || char === "\xB4";
+}
+function isSingleQuote(char) {
+  return char === "'";
+}
+function stripLastOccurrence(text, textToStrip) {
+  let stripRemainingText = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : false;
+  const index = text.lastIndexOf(textToStrip);
+  return index !== -1 ? text.substring(0, index) + (stripRemainingText ? "" : text.substring(index + 1)) : text;
+}
+function insertBeforeLastWhitespace(text, textToInsert) {
+  let index = text.length;
+  if (!isWhitespace(text, index - 1)) {
+    return text + textToInsert;
+  }
+  while (isWhitespace(text, index - 1)) {
+    index--;
+  }
+  return text.substring(0, index) + textToInsert + text.substring(index);
+}
+function removeAtIndex(text, start, count) {
+  return text.substring(0, start) + text.substring(start + count);
+}
+function endsWithCommaOrNewline(text) {
+  return /[,\n][ \t\r]*$/.test(text);
+}
+
+// node_modules/jsonrepair/lib/esm/regular/jsonrepair.js
+var controlCharacters = {
+  "\b": "\\b",
+  "\f": "\\f",
+  "\n": "\\n",
+  "\r": "\\r",
+  "	": "\\t"
+};
+var escapeCharacters = {
+  '"': '"',
+  "\\": "\\",
+  "/": "/",
+  b: "\b",
+  f: "\f",
+  n: "\n",
+  r: "\r",
+  t: "	"
+  // note that \u is handled separately in parseString()
+};
+function jsonrepair(text) {
+  let i = 0;
+  let output = "";
+  parseMarkdownCodeBlock(["```", "[```", "{```"]);
+  const processed = parseValue();
+  if (!processed) {
+    throwUnexpectedEnd();
+  }
+  parseMarkdownCodeBlock(["```", "```]", "```}"]);
+  const processedComma = parseCharacter(",");
+  if (processedComma) {
+    parseWhitespaceAndSkipComments();
+  }
+  if (isStartOfValue(text[i]) && endsWithCommaOrNewline(output)) {
+    if (!processedComma) {
+      output = insertBeforeLastWhitespace(output, ",");
+    }
+    parseNewlineDelimitedJSON();
+  } else if (processedComma) {
+    output = stripLastOccurrence(output, ",");
+  }
+  while (text[i] === "}" || text[i] === "]") {
+    i++;
+    parseWhitespaceAndSkipComments();
+  }
+  if (i >= text.length) {
+    return output;
+  }
+  throwUnexpectedCharacter();
+  function parseValue() {
+    parseWhitespaceAndSkipComments();
+    const processed2 = parseObject() || parseArray() || parseString() || parseNumber() || parseKeywords() || parseUnquotedString(false) || parseRegex();
+    parseWhitespaceAndSkipComments();
+    return processed2;
+  }
+  function parseWhitespaceAndSkipComments() {
+    let skipNewline = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : true;
+    const start = i;
+    let changed = parseWhitespace(skipNewline);
+    do {
+      changed = parseComment();
+      if (changed) {
+        changed = parseWhitespace(skipNewline);
+      }
+    } while (changed);
+    return i > start;
+  }
+  function parseWhitespace(skipNewline) {
+    const _isWhiteSpace = skipNewline ? isWhitespace : isWhitespaceExceptNewline;
+    let whitespace = "";
+    while (true) {
+      if (_isWhiteSpace(text, i)) {
+        whitespace += text[i];
+        i++;
+      } else if (isSpecialWhitespace(text, i)) {
+        whitespace += " ";
+        i++;
+      } else {
+        break;
+      }
+    }
+    if (whitespace.length > 0) {
+      output += whitespace;
+      return true;
+    }
+    return false;
+  }
+  function parseComment() {
+    if (text[i] === "/" && text[i + 1] === "*") {
+      while (i < text.length && !atEndOfBlockComment(text, i)) {
+        i++;
+      }
+      i += 2;
+      return true;
+    }
+    if (text[i] === "/" && text[i + 1] === "/") {
+      while (i < text.length && text[i] !== "\n") {
+        i++;
+      }
+      return true;
+    }
+    return false;
+  }
+  function parseMarkdownCodeBlock(blocks) {
+    if (skipMarkdownCodeBlock(blocks)) {
+      if (isFunctionNameCharStart(text[i])) {
+        while (i < text.length && isFunctionNameChar(text[i])) {
+          i++;
+        }
+      }
+      parseWhitespaceAndSkipComments();
+      return true;
+    }
+    return false;
+  }
+  function skipMarkdownCodeBlock(blocks) {
+    parseWhitespace(true);
+    for (const block of blocks) {
+      const end = i + block.length;
+      if (text.slice(i, end) === block) {
+        i = end;
+        return true;
+      }
+    }
+    return false;
+  }
+  function parseCharacter(char) {
+    if (text[i] === char) {
+      output += text[i];
+      i++;
+      return true;
+    }
+    return false;
+  }
+  function skipCharacter(char) {
+    if (text[i] === char) {
+      i++;
+      return true;
+    }
+    return false;
+  }
+  function skipEscapeCharacter() {
+    return skipCharacter("\\");
+  }
+  function skipEllipsis() {
+    parseWhitespaceAndSkipComments();
+    if (text[i] === "." && text[i + 1] === "." && text[i + 2] === ".") {
+      i += 3;
+      parseWhitespaceAndSkipComments();
+      skipCharacter(",");
+      return true;
+    }
+    return false;
+  }
+  function parseObject() {
+    if (text[i] === "{") {
+      output += "{";
+      i++;
+      parseWhitespaceAndSkipComments();
+      if (skipCharacter(",")) {
+        parseWhitespaceAndSkipComments();
+      }
+      let initial = true;
+      while (i < text.length && text[i] !== "}") {
+        let processedComma2;
+        if (!initial) {
+          processedComma2 = parseCharacter(",");
+          if (!processedComma2) {
+            output = insertBeforeLastWhitespace(output, ",");
+          }
+          parseWhitespaceAndSkipComments();
+        } else {
+          processedComma2 = true;
+          initial = false;
+        }
+        skipEllipsis();
+        const processedKey = parseString() || parseUnquotedString(true);
+        if (!processedKey) {
+          if (text[i] === "}" || text[i] === "{" || text[i] === "]" || text[i] === "[" || text[i] === void 0) {
+            output = stripLastOccurrence(output, ",");
+          } else {
+            throwObjectKeyExpected();
+          }
+          break;
+        }
+        parseWhitespaceAndSkipComments();
+        const processedColon = parseCharacter(":");
+        const truncatedText = i >= text.length;
+        if (!processedColon) {
+          if (isStartOfValue(text[i]) || truncatedText) {
+            output = insertBeforeLastWhitespace(output, ":");
+          } else {
+            throwColonExpected();
+          }
+        }
+        const processedValue = parseValue();
+        if (!processedValue) {
+          if (processedColon || truncatedText) {
+            output += "null";
+          } else {
+            throwColonExpected();
+          }
+        }
+      }
+      if (text[i] === "}") {
+        output += "}";
+        i++;
+      } else {
+        output = insertBeforeLastWhitespace(output, "}");
+      }
+      return true;
+    }
+    return false;
+  }
+  function parseArray() {
+    if (text[i] === "[") {
+      output += "[";
+      i++;
+      parseWhitespaceAndSkipComments();
+      if (skipCharacter(",")) {
+        parseWhitespaceAndSkipComments();
+      }
+      let initial = true;
+      while (i < text.length && text[i] !== "]") {
+        if (!initial) {
+          const processedComma2 = parseCharacter(",");
+          if (!processedComma2) {
+            output = insertBeforeLastWhitespace(output, ",");
+          }
+        } else {
+          initial = false;
+        }
+        skipEllipsis();
+        const processedValue = parseValue();
+        if (!processedValue) {
+          output = stripLastOccurrence(output, ",");
+          break;
+        }
+      }
+      if (text[i] === "]") {
+        output += "]";
+        i++;
+      } else {
+        output = insertBeforeLastWhitespace(output, "]");
+      }
+      return true;
+    }
+    return false;
+  }
+  function parseNewlineDelimitedJSON() {
+    let initial = true;
+    let processedValue = true;
+    while (processedValue) {
+      if (!initial) {
+        const processedComma2 = parseCharacter(",");
+        if (!processedComma2) {
+          output = insertBeforeLastWhitespace(output, ",");
+        }
+      } else {
+        initial = false;
+      }
+      processedValue = parseValue();
+    }
+    if (!processedValue) {
+      output = stripLastOccurrence(output, ",");
+    }
+    output = `[
+${output}
+]`;
+  }
+  function parseString() {
+    let stopAtDelimiter = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : false;
+    let stopAtIndex = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : -1;
+    let skipEscapeChars = text[i] === "\\";
+    if (skipEscapeChars) {
+      i++;
+      skipEscapeChars = true;
+    }
+    if (isQuote(text[i])) {
+      const isEndQuote = isDoubleQuote(text[i]) ? isDoubleQuote : isSingleQuote(text[i]) ? isSingleQuote : isSingleQuoteLike(text[i]) ? isSingleQuoteLike : isDoubleQuoteLike;
+      const iBefore = i;
+      const oBefore = output.length;
+      let str2 = '"';
+      i++;
+      while (true) {
+        if (i >= text.length) {
+          const iPrev = prevNonWhitespaceIndex(i - 1);
+          if (!stopAtDelimiter && isDelimiter(text.charAt(iPrev))) {
+            i = iBefore;
+            output = output.substring(0, oBefore);
+            return parseString(true);
+          }
+          str2 = insertBeforeLastWhitespace(str2, '"');
+          output += str2;
+          return true;
+        }
+        if (i === stopAtIndex) {
+          str2 = insertBeforeLastWhitespace(str2, '"');
+          output += str2;
+          return true;
+        }
+        if (isEndQuote(text[i])) {
+          const iQuote = i;
+          const oQuote = str2.length;
+          str2 += '"';
+          i++;
+          output += str2;
+          parseWhitespaceAndSkipComments(false);
+          if (stopAtDelimiter || i >= text.length || isDelimiter(text[i]) || isQuote(text[i]) || isDigit(text[i])) {
+            parseConcatenatedString();
+            return true;
+          }
+          const iPrevChar = prevNonWhitespaceIndex(iQuote - 1);
+          const prevChar = text.charAt(iPrevChar);
+          if (prevChar === ",") {
+            i = iBefore;
+            output = output.substring(0, oBefore);
+            return parseString(false, iPrevChar);
+          }
+          if (isDelimiter(prevChar)) {
+            i = iBefore;
+            output = output.substring(0, oBefore);
+            return parseString(true);
+          }
+          output = output.substring(0, oBefore);
+          i = iQuote + 1;
+          str2 = `${str2.substring(0, oQuote)}\\${str2.substring(oQuote)}`;
+        } else if (stopAtDelimiter && isUnquotedStringDelimiter(text[i])) {
+          if (text[i - 1] === ":" && regexUrlStart.test(text.substring(iBefore + 1, i + 2))) {
+            while (i < text.length && regexUrlChar.test(text[i])) {
+              str2 += text[i];
+              i++;
+            }
+          }
+          str2 = insertBeforeLastWhitespace(str2, '"');
+          output += str2;
+          parseConcatenatedString();
+          return true;
+        } else if (text[i] === "\\") {
+          const char = text.charAt(i + 1);
+          const escapeChar = escapeCharacters[char];
+          if (escapeChar !== void 0) {
+            str2 += text.slice(i, i + 2);
+            i += 2;
+          } else if (char === "u") {
+            let j = 2;
+            while (j < 6 && isHex(text[i + j])) {
+              j++;
+            }
+            if (j === 6) {
+              str2 += text.slice(i, i + 6);
+              i += 6;
+            } else if (i + j >= text.length) {
+              i = text.length;
+            } else {
+              throwInvalidUnicodeCharacter();
+            }
+          } else if (char === "\n") {
+            str2 += "\\n";
+            i += 2;
+          } else {
+            str2 += char;
+            i += 2;
+          }
+        } else {
+          const char = text.charAt(i);
+          if (char === '"' && text[i - 1] !== "\\") {
+            str2 += `\\${char}`;
+            i++;
+          } else if (isControlCharacter(char)) {
+            str2 += controlCharacters[char];
+            i++;
+          } else {
+            if (!isValidStringCharacter(char)) {
+              throwInvalidCharacter(char);
+            }
+            str2 += char;
+            i++;
+          }
+        }
+        if (skipEscapeChars) {
+          skipEscapeCharacter();
+        }
+      }
+    }
+    return false;
+  }
+  function parseConcatenatedString() {
+    let processed2 = false;
+    parseWhitespaceAndSkipComments();
+    while (text[i] === "+") {
+      processed2 = true;
+      i++;
+      parseWhitespaceAndSkipComments();
+      output = stripLastOccurrence(output, '"', true);
+      const start = output.length;
+      const parsedStr = parseString();
+      if (parsedStr) {
+        output = removeAtIndex(output, start, 1);
+      } else {
+        output = insertBeforeLastWhitespace(output, '"');
+      }
+    }
+    return processed2;
+  }
+  function parseNumber() {
+    const start = i;
+    if (text[i] === "-") {
+      i++;
+      if (atEndOfNumber()) {
+        repairNumberEndingWithNumericSymbol(start);
+        return true;
+      }
+      if (!isDigit(text[i])) {
+        i = start;
+        return false;
+      }
+    }
+    while (isDigit(text[i])) {
+      i++;
+    }
+    if (text[i] === ".") {
+      i++;
+      if (atEndOfNumber()) {
+        repairNumberEndingWithNumericSymbol(start);
+        return true;
+      }
+      if (!isDigit(text[i])) {
+        i = start;
+        return false;
+      }
+      while (isDigit(text[i])) {
+        i++;
+      }
+    }
+    if (text[i] === "e" || text[i] === "E") {
+      i++;
+      if (text[i] === "-" || text[i] === "+") {
+        i++;
+      }
+      if (atEndOfNumber()) {
+        repairNumberEndingWithNumericSymbol(start);
+        return true;
+      }
+      if (!isDigit(text[i])) {
+        i = start;
+        return false;
+      }
+      while (isDigit(text[i])) {
+        i++;
+      }
+    }
+    if (!atEndOfNumber()) {
+      i = start;
+      return false;
+    }
+    if (i > start) {
+      const num = text.slice(start, i);
+      const hasInvalidLeadingZero = /^0\d/.test(num);
+      output += hasInvalidLeadingZero ? `"${num}"` : num;
+      return true;
+    }
+    return false;
+  }
+  function parseKeywords() {
+    return parseKeyword("true", "true") || parseKeyword("false", "false") || parseKeyword("null", "null") || // repair Python keywords True, False, None
+    parseKeyword("True", "true") || parseKeyword("False", "false") || parseKeyword("None", "null");
+  }
+  function parseKeyword(name, value) {
+    if (text.slice(i, i + name.length) === name) {
+      output += value;
+      i += name.length;
+      return true;
+    }
+    return false;
+  }
+  function parseUnquotedString(isKey) {
+    const start = i;
+    if (isFunctionNameCharStart(text[i])) {
+      while (i < text.length && isFunctionNameChar(text[i])) {
+        i++;
+      }
+      let j = i;
+      while (isWhitespace(text, j)) {
+        j++;
+      }
+      if (text[j] === "(") {
+        i = j + 1;
+        parseValue();
+        if (text[i] === ")") {
+          i++;
+          if (text[i] === ";") {
+            i++;
+          }
+        }
+        return true;
+      }
+    }
+    while (i < text.length && !isUnquotedStringDelimiter(text[i]) && !isQuote(text[i]) && (!isKey || text[i] !== ":")) {
+      i++;
+    }
+    if (text[i - 1] === ":" && regexUrlStart.test(text.substring(start, i + 2))) {
+      while (i < text.length && regexUrlChar.test(text[i])) {
+        i++;
+      }
+    }
+    if (i > start) {
+      while (isWhitespace(text, i - 1) && i > 0) {
+        i--;
+      }
+      const symbol = text.slice(start, i);
+      output += symbol === "undefined" ? "null" : JSON.stringify(symbol);
+      if (text[i] === '"') {
+        i++;
+      }
+      return true;
+    }
+  }
+  function parseRegex() {
+    if (text[i] === "/") {
+      const start = i;
+      i++;
+      while (i < text.length && (text[i] !== "/" || text[i - 1] === "\\")) {
+        i++;
+      }
+      i++;
+      output += JSON.stringify(text.substring(start, i));
+      return true;
+    }
+  }
+  function prevNonWhitespaceIndex(start) {
+    let prev = start;
+    while (prev > 0 && isWhitespace(text, prev)) {
+      prev--;
+    }
+    return prev;
+  }
+  function atEndOfNumber() {
+    return i >= text.length || isDelimiter(text[i]) || isWhitespace(text, i);
+  }
+  function repairNumberEndingWithNumericSymbol(start) {
+    output += `${text.slice(start, i)}0`;
+  }
+  function throwInvalidCharacter(char) {
+    throw new JSONRepairError(`Invalid character ${JSON.stringify(char)}`, i);
+  }
+  function throwUnexpectedCharacter() {
+    throw new JSONRepairError(`Unexpected character ${JSON.stringify(text[i])}`, i);
+  }
+  function throwUnexpectedEnd() {
+    throw new JSONRepairError("Unexpected end of json string", text.length);
+  }
+  function throwObjectKeyExpected() {
+    throw new JSONRepairError("Object key expected", i);
+  }
+  function throwColonExpected() {
+    throw new JSONRepairError("Colon expected", i);
+  }
+  function throwInvalidUnicodeCharacter() {
+    const chars = text.slice(i, i + 6);
+    throw new JSONRepairError(`Invalid unicode character "${chars}"`, i);
+  }
+}
+function atEndOfBlockComment(text, i) {
+  return text[i] === "*" && text[i + 1] === "/";
+}
+
+// src/phases/llm-utils.ts
+function stripThinking(text) {
+  return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+}
+function parseStructured(fullText) {
+  const text = fullText.trim();
+  try {
+    return JSON.parse(text);
+  } catch {
+  }
+  const stripped = stripFences(stripThinking(text));
+  try {
+    return JSON.parse(stripped);
+  } catch {
+  }
+  if (stripped.includes("{")) {
+    try {
+      return JSON.parse(jsonrepair(stripped));
+    } catch {
+    }
+  }
+  const match = stripped.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("No JSON object found");
+  try {
+    return JSON.parse(match[0]);
+  } catch (e) {
+    const posMatch = String(e.message).match(/at position (\d+)/);
+    if (posMatch) {
+      const pos = parseInt(posMatch[1], 10);
+      if (pos > 0) return JSON.parse(match[0].slice(0, pos));
+    }
+    throw e;
+  }
+}
+function stripFences(text) {
+  const fenced = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/i);
+  return fenced ? fenced[1].trim() : text;
+}
+function extractStreamDeltas(chunk) {
+  const delta = chunk.choices[0]?.delta;
+  const rawReasoning = delta?.reasoning ?? delta?.reasoning_content;
+  const usage = chunk.usage;
+  const outputTokens = typeof usage?.completion_tokens === "number" ? usage.completion_tokens : void 0;
+  const inputTokens = typeof usage?.prompt_tokens === "number" ? usage.prompt_tokens : void 0;
+  return {
+    reasoning: typeof rawReasoning === "string" ? rawReasoning : "",
+    content: typeof delta?.content === "string" ? delta.content : "",
+    outputTokens,
+    inputTokens
+  };
+}
+function extractUsage(resp) {
+  const tok = resp.usage?.completion_tokens;
+  return typeof tok === "number" ? tok : void 0;
+}
+function buildChatParams(model, messages, opts, stream = false) {
+  let msgs = prependBaseContract(messages);
+  msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
+  const params = { model, messages: msgs };
+  if (opts.temperature !== void 0) params.temperature = opts.temperature;
+  if (opts.maxTokens != null) params.max_tokens = opts.maxTokens;
+  if (opts.topP != null) params.top_p = opts.topP;
+  if (stream) params.stream_options = { include_usage: true };
+  if (opts.jsonMode === "json_schema" && opts.jsonSchema) {
+    params.response_format = {
+      type: "json_schema",
+      json_schema: { name: opts.jsonSchema.name, schema: opts.jsonSchema.schema, strict: false }
+    };
+  } else if (opts.jsonMode === "json_object") {
+    params.response_format = { type: "json_object" };
+  }
+  if (opts.thinkingBudgetTokens && opts.thinkingBudgetTokens > 0) {
+    params.thinking = { type: "enabled", budget_tokens: opts.thinkingBudgetTokens };
+    delete params.response_format;
+    delete params.temperature;
+    delete params.top_p;
+  }
+  return params;
+}
+function prependBaseContract(messages) {
+  const firstSystem = messages.findIndex((m) => m.role === "system");
+  if (firstSystem >= 0) {
+    const updated = [...messages];
+    const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
+    updated[firstSystem] = { role: "system", content: `${base_default}
+
+${existing}` };
+    return updated;
+  }
+  return [{ role: "system", content: base_default }, ...messages];
+}
+var JSON_MODE_KEYWORDS = ["response_format", "json_object", "json mode", "unsupported"];
+function isJsonModeError(e) {
+  if (!e || typeof e !== "object") return false;
+  const status = e.status;
+  if (status !== 400 && status !== 422) return false;
+  const msg = String(e.message ?? "").toLowerCase();
+  return JSON_MODE_KEYWORDS.some((kw) => msg.includes(kw));
+}
+function hasContentDelta(chunk) {
+  const c = chunk.choices?.[0]?.delta?.content;
+  return typeof c === "string" && c.length > 0;
+}
+function degradeResponseFormat(params) {
+  const rf = params.response_format;
+  if (rf?.type === "json_schema") {
+    return { ...params, response_format: { type: "json_object" } };
+  }
+  const next = { ...params };
+  delete next.response_format;
+  return next;
+}
+function wrapWithJsonFallback(inner) {
+  const create = ((params, callOpts) => {
+    const hasRf = params.response_format !== void 0;
+    const isStream = params.stream === true;
+    if (!hasRf) {
+      return inner.chat.completions.create(params, callOpts);
+    }
+    if (!isStream) {
+      return (async () => {
+        let current = params;
+        while (current.response_format !== void 0) {
+          try {
+            return await inner.chat.completions.create(current, callOpts);
+          } catch (e) {
+            if (!isJsonModeError(e)) throw e;
+            current = degradeResponseFormat(current);
+          }
+        }
+        return inner.chat.completions.create(current, callOpts);
+      })();
+    }
+    return (async () => {
+      let current = params;
+      let upstream;
+      while (upstream === void 0) {
+        try {
+          upstream = await inner.chat.completions.create(current, callOpts);
+        } catch (e) {
+          if (!isJsonModeError(e) || current.response_format === void 0) throw e;
+          current = degradeResponseFormat(current);
+        }
+      }
+      const connectedParams = current;
+      async function* gated() {
+        let seenContent = false;
+        try {
+          for await (const chunk of upstream) {
+            if (hasContentDelta(chunk)) seenContent = true;
+            yield chunk;
+          }
+        } catch (e) {
+          if (seenContent || !isJsonModeError(e)) throw e;
+          const degraded = degradeResponseFormat(connectedParams);
+          if (degraded.response_format === connectedParams.response_format) throw e;
+          const retry = await inner.chat.completions.create(degraded, callOpts);
+          for await (const c of retry) yield c;
+        }
+      }
+      return gated();
+    })();
+  });
+  return { chat: { completions: { create } } };
+}
+function injectSystemPrompt(messages, systemPrompt) {
+  if (!systemPrompt) return messages;
+  const section = `## \u0423\u0442\u043E\u0447\u043D\u0435\u043D\u0438\u0435
+${systemPrompt}`;
+  const firstSystem = messages.findIndex((m) => m.role === "system");
+  if (firstSystem >= 0) {
+    const updated = [...messages];
+    const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
+    updated[firstSystem] = { role: "system", content: `${existing}
+
+${section}` };
+    return updated;
+  }
+  return [{ role: "system", content: section }, ...messages];
+}
+function wrapStreamWithStats(stream, requestStartMs) {
+  let ttftMs;
+  let firstChunkMs;
+  let llmDurationMs;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let yielded = false;
+  async function* wrapped() {
+    for await (const chunk of stream) {
+      if (!yielded) {
+        ttftMs = Date.now() - requestStartMs;
+        firstChunkMs = Date.now();
+        yielded = true;
+      }
+      const { outputTokens: tok, inputTokens: inTok } = extractStreamDeltas(chunk);
+      if (tok !== void 0) outputTokens = tok;
+      if (inTok !== void 0) inputTokens = inTok;
+      yield chunk;
+    }
+    if (yielded && firstChunkMs !== void 0) {
+      llmDurationMs = Date.now() - firstChunkMs;
+    }
+  }
+  const wrappedStream = wrapped();
+  return {
+    stream: wrappedStream,
+    getStats() {
+      if (!yielded || ttftMs === void 0 || llmDurationMs === void 0) return void 0;
+      return { inputTokens, outputTokens, ttftMs, llmDurationMs };
+    }
+  };
+}
+function buildLlmCallStatsEvent(s) {
+  const durS = s.llmDurationMs / 1e3;
+  return {
+    kind: "llm_call_stats",
+    ...s,
+    inTokPerSec: durS > 0 ? Math.round(s.inputTokens / durS) : 0,
+    outTokPerSec: durS > 0 ? Math.round(s.outputTokens / durS) : 0
+  };
+}
+function computeSpeedText(stats) {
+  if (!stats.length) return "";
+  const totalIn = stats.reduce((s, x) => s + x.inputTokens, 0);
+  const totalOut = stats.reduce((s, x) => s + x.outputTokens, 0);
+  const totalDurS = stats.reduce((s, x) => s + x.llmDurationMs, 0) / 1e3;
+  const sorted = [...stats.map((x) => x.ttftMs)].sort((a, b) => a - b);
+  const medTtft = sorted[Math.floor(sorted.length / 2)];
+  if (totalDurS <= 0) return "";
+  const inS = Math.round(totalIn / totalDurS);
+  const outS = Math.round(totalOut / totalDurS);
+  return ` in: ${inS} tok/s \xB7 out: ${outS} tok/s \xB7 latency: ${medTtft}ms`;
+}
+
+// src/view.ts
+var import_path_browserify = __toESM(require_path_browserify(), 1);
 
 // src/utils/vault-walk.ts
 function walkFolder(folder, out) {
@@ -20732,7 +21748,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   chatStartTs = 0;
   lastUserMessage = "";
   startTs = 0;
-  lastTokPerSec;
+  lastStepTs = 0;
+  llmStats = [];
   resultSpeedEl = null;
   toolCount = 0;
   stepCount = 0;
@@ -21031,7 +22048,13 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       return;
     }
     const T = i18n().modal;
-    const mdFiles = collectMdInPaths(this.app.vault, sourcePaths);
+    const base = this.plugin.controller.cwdOrEmpty();
+    const toVaultRel = (p) => {
+      if (!base || !(0, import_path_browserify.isAbsolute)(p)) return p;
+      const rel = (0, import_path_browserify.relative)(base, p);
+      return rel.startsWith("..") ? p : rel;
+    };
+    const mdFiles = collectMdInPaths(this.app.vault, sourcePaths.map(toVaultRel));
     const wikiFiles = collectMdInPaths(this.app.vault, [domainWikiFolder(entry.wiki_folder)]);
     const body = T.reinitConfirmBody(entry.id, wikiFiles.length, mdFiles.length, sourcePaths.length);
     new ConfirmModal(
@@ -21103,6 +22126,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.finalEl.empty();
     this.resultOpen = false;
     this.startTs = Date.now();
+    this.lastStepTs = this.startTs;
     this.toolCount = 0;
     this.stepCount = 0;
     this.progressEl = null;
@@ -21117,7 +22141,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       window.cancelAnimationFrame(this.reasoningRafHandle);
       this.reasoningRafHandle = null;
     }
-    this.lastTokPerSec = void 0;
+    this.llmStats = [];
     this.resultSpeedEl?.setText("");
     this.stepsOpen = true;
     this.stepsEl.removeClass("ai-wiki-hidden");
@@ -21209,6 +22233,10 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       void this.refreshDomains();
       return;
     }
+    if (ev.kind === "llm_call_stats") {
+      this.llmStats.push(ev);
+      return;
+    }
     if (ev.kind !== "assistant_text") this.stepCount++;
     if (ev.kind === "tool_use") {
       this.stopWaiting();
@@ -21276,6 +22304,20 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
         this.liveStatusIconEl?.setText("\u{1F4AC}");
         this.liveStatusTextEl?.setText("Forming response...");
       }
+    } else if (ev.kind === "info_text") {
+      this.stopWaiting();
+      const step = this.stepsEl.createDiv("ai-wiki-step");
+      const head = step.createDiv("ai-wiki-step-head");
+      head.createSpan({ cls: "ai-wiki-step-icon" }).setText(ev.icon);
+      head.createSpan({ cls: "ai-wiki-step-name" }).setText(ev.summary);
+      head.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
+      if (ev.details && ev.details.length > 0) {
+        const body = step.createDiv("ai-wiki-step-preview");
+        for (const d of ev.details) {
+          body.createDiv().setText(`\xB7 ${d}`);
+        }
+      }
+      this.scrollSteps();
     } else if (ev.kind === "system") {
       const step = this.stepsEl.createDiv("ai-wiki-step");
       const head = step.createDiv("ai-wiki-step-head");
@@ -21289,9 +22331,6 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.scrollSteps();
     } else if (ev.kind === "result") {
       this.stopWaiting();
-      if (ev.outputTokens !== void 0 && ev.durationMs > 0) {
-        this.lastTokPerSec = Math.round(ev.outputTokens / (ev.durationMs / 1e3));
-      }
     } else if (ev.kind === "eval_result") {
       const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
       el.setText(`[eval: ${ev.score}/10] ${ev.reasoning}`);
@@ -21375,7 +22414,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.liveStatusSection?.addClass("ai-wiki-hidden");
     const totalDur = ((entry.finishedAt - entry.startedAt) / 1e3).toFixed(1);
     this.progressCount.setText(`${totalDur}s`);
-    this.resultSpeedEl?.setText(this.lastTokPerSec !== void 0 ? ` ${this.lastTokPerSec} tok/s` : "");
+    this.resultSpeedEl?.setText(this.buildSpeedText());
     this.finalEl.empty();
     if (entry.finalText) {
       const comp = new import_obsidian4.Component();
@@ -21586,7 +22625,10 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     }, 500);
   }
   elapsedShort() {
-    return `${((Date.now() - this.startTs) / 1e3).toFixed(1)}s`;
+    const now = Date.now();
+    const ms = now - this.lastStepTs;
+    this.lastStepTs = now;
+    return ms >= 1e3 ? `${(ms / 1e3).toFixed(1)}s` : "";
   }
   scrollSteps() {
     this.stepsEl.scrollTop = this.stepsEl.scrollHeight;
@@ -21621,6 +22663,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     const dur = ((entry.finishedAt - entry.startedAt) / 1e3).toFixed(1);
     const icon = entry.status === "done" ? "\u2713" : entry.status === "cancelled" ? "\u26D4" : "\u2717";
     return `${icon} ${entry.operation} (${dur}s)`;
+  }
+  buildSpeedText() {
+    return computeSpeedText(this.llmStats);
   }
   renderHistory() {
     this.historyEl.empty();
@@ -21803,12 +22848,12 @@ function translateSystemEvent(message) {
 
 // src/controller.ts
 var import_obsidian7 = require("obsidian");
-var import_path_browserify6 = __toESM(require_path_browserify(), 1);
+var import_path_browserify7 = __toESM(require_path_browserify(), 1);
 
 // src/source-paths.ts
-var import_path_browserify = __toESM(require_path_browserify(), 1);
+var import_path_browserify2 = __toESM(require_path_browserify(), 1);
 function consolidateSourcePaths(existing, newPath, vaultRoot) {
-  const toAbs = (p) => (0, import_path_browserify.isAbsolute)(p) ? p : (0, import_path_browserify.join)(vaultRoot, p);
+  const toAbs = (p) => (0, import_path_browserify2.isAbsolute)(p) ? p : (0, import_path_browserify2.join)(vaultRoot, p);
   const normed = (p) => {
     const a = toAbs(p);
     return a.endsWith("/") ? a : a + "/";
@@ -21870,320 +22915,88 @@ function applyDomainEvent(domains, ev, opts) {
 }
 
 // src/phases/ingest.ts
-var import_path_browserify3 = __toESM(require_path_browserify(), 1);
+var import_path_browserify4 = __toESM(require_path_browserify(), 1);
 
-// prompts/base.md
-var base_default = "\u0422\u044B \u2014 wiki-\u0430\u0433\u0435\u043D\u0442. \u0421\u043B\u0435\u0434\u0443\u0439 \u044D\u0442\u0438\u043C \u043F\u0440\u0430\u0432\u0438\u043B\u0430\u043C \u043D\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043C\u043E \u043E\u0442 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.\n\n## \u0414\u043E\u0441\u0442\u043E\u0432\u0435\u0440\u043D\u043E\u0441\u0442\u044C\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430.\n\u041D\u0435 \u0432\u044B\u0434\u0443\u043C\u044B\u0432\u0430\u0439 \u0444\u0430\u043A\u0442\u044B, \u043A\u043E\u0442\u043E\u0440\u044B\u0445 \u043D\u0435\u0442 \u0432 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0435.\n\u0415\u0441\u043B\u0438 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E \u2014 \u0441\u043A\u0430\u0436\u0438 \u043E\u0431 \u044D\u0442\u043E\u043C \u043F\u0440\u044F\u043C\u043E.\n\n## \u0424\u043E\u0440\u043C\u0430\u0442\n\u0412\u043E\u0437\u0432\u0440\u0430\u0449\u0430\u0439 \u0440\u043E\u0432\u043D\u043E \u0442\u043E, \u0447\u0442\u043E \u0437\u0430\u043F\u0440\u043E\u0448\u0435\u043D\u043E.\n\u0415\u0441\u043B\u0438 \u043E\u0436\u0438\u0434\u0430\u0435\u0442\u0441\u044F JSON \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON, \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439 \u0432\u043E\u043A\u0440\u0443\u0433.\n\u0415\u0441\u043B\u0438 \u043E\u0436\u0438\u0434\u0430\u0435\u0442\u0441\u044F \u0442\u0435\u043A\u0441\u0442 \u2014 \u0431\u0435\u0437 \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u043C\u0435\u0442\u043E\u043A \u0438 \u0442\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0445 \u0430\u0440\u0442\u0435\u0444\u0430\u043A\u0442\u043E\u0432.\n\n## \u041C\u0438\u043D\u0438\u043C\u0430\u043B\u0438\u0437\u043C\n\u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u0442\u043E, \u043E \u0447\u0451\u043C \u043D\u0435 \u043F\u0440\u043E\u0441\u0438\u043B\u0438.\n\u041D\u0435 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0438\u0440\u0443\u0439 \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u044B\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F, \u0435\u0441\u043B\u0438 \u044D\u0442\u043E \u043D\u0435 \u0447\u0430\u0441\u0442\u044C \u0437\u0430\u0434\u0430\u0447\u0438.\n";
+// node_modules/zod-to-json-schema/dist/esm/Options.js
+var ignoreOverride = /* @__PURE__ */ Symbol("Let zodToJsonSchema decide on which parser to use");
+var defaultOptions = {
+  name: void 0,
+  $refStrategy: "root",
+  basePath: ["#"],
+  effectStrategy: "input",
+  pipeStrategy: "all",
+  dateStrategy: "format:date-time",
+  mapStrategy: "entries",
+  removeAdditionalStrategy: "passthrough",
+  allowedAdditionalProperties: true,
+  rejectedAdditionalProperties: false,
+  definitionPath: "definitions",
+  target: "jsonSchema7",
+  strictUnions: false,
+  definitions: {},
+  errorMessages: false,
+  markdownDescription: false,
+  patternStrategy: "escape",
+  applyRegexFlags: false,
+  emailStrategy: "format:email",
+  base64Strategy: "contentEncoding:base64",
+  nameStrategy: "ref",
+  openAiAnyTypeName: "OpenAiAnyType"
+};
+var getDefaultOptions = (options) => typeof options === "string" ? {
+  ...defaultOptions,
+  name: options
+} : {
+  ...defaultOptions,
+  ...options
+};
 
-// src/phases/llm-utils.ts
-function stripThinking(text) {
-  return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-}
-function parseStructured(fullText) {
-  const text = fullText.trim();
-  try {
-    return JSON.parse(text);
-  } catch {
-  }
-  const stripped = stripFences(stripThinking(text));
-  try {
-    return JSON.parse(stripped);
-  } catch {
-  }
-  const match = stripped.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("No JSON object found");
-  return JSON.parse(match[0]);
-}
-function stripFences(text) {
-  const fenced = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/i);
-  return fenced ? fenced[1].trim() : text;
-}
-function extractStreamDeltas(chunk) {
-  const delta = chunk.choices[0]?.delta;
-  const rawReasoning = delta?.reasoning ?? delta?.reasoning_content;
-  const usage = chunk.usage;
-  const outputTokens = typeof usage?.completion_tokens === "number" ? usage.completion_tokens : void 0;
+// node_modules/zod-to-json-schema/dist/esm/Refs.js
+var getRefs = (options) => {
+  const _options = getDefaultOptions(options);
+  const currentPath = _options.name !== void 0 ? [..._options.basePath, _options.definitionPath, _options.name] : _options.basePath;
   return {
-    reasoning: typeof rawReasoning === "string" ? rawReasoning : "",
-    content: typeof delta?.content === "string" ? delta.content : "",
-    outputTokens
+    ..._options,
+    flags: { hasReferencedOpenAiAnyType: false },
+    currentPath,
+    propertyPath: void 0,
+    seen: new Map(Object.entries(_options.definitions).map(([name, def]) => [
+      def._def,
+      {
+        def: def._def,
+        path: [..._options.basePath, _options.definitionPath, name],
+        // Resolution of references will be forced even though seen, so it's ok that the schema is undefined here for now.
+        jsonSchema: void 0
+      }
+    ]))
   };
-}
-function extractUsage(resp) {
-  const tok = resp.usage?.completion_tokens;
-  return typeof tok === "number" ? tok : void 0;
-}
-function buildChatParams(model, messages, opts, stream = false) {
-  let msgs = prependBaseContract(messages);
-  msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
-  const params = { model, messages: msgs };
-  if (opts.temperature !== void 0) params.temperature = opts.temperature;
-  if (opts.maxTokens != null) params.max_tokens = opts.maxTokens;
-  if (opts.topP != null) params.top_p = opts.topP;
-  if (stream) params.stream_options = { include_usage: true };
-  if (opts.jsonMode === "json_object") {
-    params.response_format = { type: "json_object" };
-  }
-  if (opts.thinkingBudgetTokens && opts.thinkingBudgetTokens > 0) {
-    params.thinking = { type: "enabled", budget_tokens: opts.thinkingBudgetTokens };
-    delete params.response_format;
-    delete params.temperature;
-    delete params.top_p;
-  }
-  return params;
-}
-function prependBaseContract(messages) {
-  const firstSystem = messages.findIndex((m) => m.role === "system");
-  if (firstSystem >= 0) {
-    const updated = [...messages];
-    const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
-    updated[firstSystem] = { role: "system", content: `${base_default}
+};
 
-${existing}` };
-    return updated;
-  }
-  return [{ role: "system", content: base_default }, ...messages];
-}
-var JSON_MODE_KEYWORDS = ["response_format", "json_object", "json mode", "unsupported"];
-function isJsonModeError(e) {
-  if (!e || typeof e !== "object") return false;
-  const status = e.status;
-  if (status !== 400 && status !== 422) return false;
-  const msg = String(e.message ?? "").toLowerCase();
-  return JSON_MODE_KEYWORDS.some((kw) => msg.includes(kw));
-}
-function hasContentDelta(chunk) {
-  const c = chunk.choices?.[0]?.delta?.content;
-  return typeof c === "string" && c.length > 0;
-}
-function stripResponseFormat(params) {
-  const next = { ...params };
-  delete next.response_format;
-  return next;
-}
-function wrapWithJsonFallback(inner) {
-  const create = ((params, callOpts) => {
-    const hasRf = params.response_format !== void 0;
-    const isStream = params.stream === true;
-    if (!hasRf) {
-      return inner.chat.completions.create(params, callOpts);
-    }
-    if (!isStream) {
-      return (async () => {
-        try {
-          return await inner.chat.completions.create(params, callOpts);
-        } catch (e) {
-          if (!isJsonModeError(e)) throw e;
-          return inner.chat.completions.create(stripResponseFormat(params), callOpts);
-        }
-      })();
-    }
-    return (async () => {
-      let upstream;
-      try {
-        upstream = await inner.chat.completions.create(params, callOpts);
-      } catch (e) {
-        if (!isJsonModeError(e)) throw e;
-        return inner.chat.completions.create(stripResponseFormat(params), callOpts);
-      }
-      async function* gated() {
-        let seenContent = false;
-        try {
-          for await (const chunk of upstream) {
-            if (hasContentDelta(chunk)) seenContent = true;
-            yield chunk;
-          }
-        } catch (e) {
-          if (seenContent || !isJsonModeError(e)) throw e;
-          const retry = await inner.chat.completions.create(stripResponseFormat(params), callOpts);
-          for await (const c of retry) yield c;
-        }
-      }
-      return gated();
-    })();
-  });
-  return { chat: { completions: { create } } };
-}
-function injectSystemPrompt(messages, systemPrompt) {
-  if (!systemPrompt) return messages;
-  const section = `## \u0423\u0442\u043E\u0447\u043D\u0435\u043D\u0438\u0435
-${systemPrompt}`;
-  const firstSystem = messages.findIndex((m) => m.role === "system");
-  if (firstSystem >= 0) {
-    const updated = [...messages];
-    const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
-    updated[firstSystem] = { role: "system", content: `${existing}
-
-${section}` };
-    return updated;
-  }
-  return [{ role: "system", content: section }, ...messages];
-}
-
-// src/structural-error-counter.ts
-var Counter = class {
-  stats = { failed: 0, retried: 0, ok: 0 };
-  listeners = /* @__PURE__ */ new Set();
-  record(succeeded, retryAttempt) {
-    if (succeeded === null) return;
-    if (!succeeded) this.stats.failed++;
-    else if (retryAttempt > 0) this.stats.retried++;
-    else this.stats.ok++;
-    const snap = { ...this.stats };
-    for (const fn of this.listeners) fn(snap);
-  }
-  subscribe(fn) {
-    this.listeners.add(fn);
-    return () => {
-      this.listeners.delete(fn);
+// node_modules/zod-to-json-schema/dist/esm/errorMessages.js
+function addErrorMessage(res, key, errorMessage, refs) {
+  if (!refs?.errorMessages)
+    return;
+  if (errorMessage) {
+    res.errorMessage = {
+      ...res.errorMessage,
+      [key]: errorMessage
     };
   }
-  get() {
-    return { ...this.stats };
-  }
-  reset() {
-    this.stats = { failed: 0, retried: 0, ok: 0 };
-  }
-};
-var structuralErrorCounter = new Counter();
+}
+function setResponseValueAndErrors(res, key, value, errorMessage, refs) {
+  res[key] = value;
+  addErrorMessage(res, key, errorMessage, refs);
+}
 
-// src/phases/parse-with-retry.ts
-var StructuredValidationError = class extends Error {
-  constructor(callSite, attempts, lastError) {
-    super(`[${callSite}] structural validation failed after ${attempts} attempt(s): ${lastError.message}`);
-    this.callSite = callSite;
-    this.attempts = attempts;
-    this.lastError = lastError;
-    this.name = "StructuredValidationError";
+// node_modules/zod-to-json-schema/dist/esm/getRelativePath.js
+var getRelativePath = (pathA, pathB) => {
+  let i = 0;
+  for (; i < pathA.length && i < pathB.length; i++) {
+    if (pathA[i] !== pathB[i])
+      break;
   }
-  callSite;
-  attempts;
-  lastError;
+  return [(pathA.length - i).toString(), ...pathB.slice(i)].join("/");
 };
-function formatZodFeedback(err, raw) {
-  if (err === null) {
-    return [
-      "Previous response was not valid JSON.",
-      `Raw output (truncated):`,
-      raw.slice(0, 2e3),
-      "",
-      "Return ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary."
-    ].join("\n");
-  }
-  const bullets = err.issues.slice(0, 20).map((i) => {
-    const path2 = i.path.length ? i.path.join(".") : "(root)";
-    return `- ${path2}: ${i.message}`;
-  }).join("\n");
-  return [
-    "Previous response failed validation:",
-    bullets,
-    "",
-    "Return ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary."
-  ].join("\n");
-}
-async function streamOnce(llm, model, messages, opts, signal) {
-  const params = buildChatParams(model, messages, opts, true);
-  let fullText = "";
-  let outputTokens = 0;
-  try {
-    const stream = await llm.chat.completions.create(
-      { ...params, stream: true },
-      { signal }
-    );
-    for await (const chunk of stream) {
-      const { content, outputTokens: tok } = extractStreamDeltas(chunk);
-      if (content) fullText += content;
-      if (tok !== void 0) outputTokens += tok;
-    }
-    return { fullText, outputTokens };
-  } catch (e) {
-    if (signal.aborted || e.name === "AbortError") throw e;
-    const params2 = buildChatParams(model, messages, opts);
-    const resp = await llm.chat.completions.create(
-      { ...params2, stream: false },
-      { signal }
-    );
-    const text = resp.choices[0]?.message?.content ?? "";
-    const tok = extractUsage(resp);
-    return { fullText: text, outputTokens: tok ?? 0 };
-  }
-}
-async function parseWithRetry(args) {
-  const { llm, model, baseMessages, opts, schema, maxRetries, callSite, signal, onEvent } = args;
-  let messages = baseMessages;
-  let totalTokens = 0;
-  let lastError = new Error("no attempts");
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (signal.aborted) {
-      const err = new Error("aborted");
-      err.name = "AbortError";
-      throw err;
-    }
-    const { fullText, outputTokens } = await streamOnce(llm, model, messages, opts, signal);
-    totalTokens += outputTokens;
-    let raw;
-    try {
-      raw = parseStructured(fullText);
-    } catch (e) {
-      lastError = e;
-      const isLast2 = attempt === maxRetries;
-      const ev2 = {
-        kind: "structural_error",
-        callSite,
-        errorType: "json_parse",
-        retryAttempt: attempt,
-        succeeded: isLast2 ? false : null,
-        message: lastError.message
-      };
-      onEvent(ev2);
-      structuralErrorCounter.record(ev2.succeeded, attempt);
-      if (isLast2) throw new StructuredValidationError(callSite, attempt + 1, lastError);
-      const feedback2 = formatZodFeedback(null, fullText);
-      messages = [
-        ...messages,
-        { role: "assistant", content: fullText },
-        { role: "user", content: feedback2 }
-      ];
-      continue;
-    }
-    const parsed = schema.safeParse(raw);
-    if (parsed.success) {
-      if (attempt > 0) {
-        const ev2 = {
-          kind: "structural_error",
-          callSite,
-          errorType: "schema_validate",
-          retryAttempt: attempt,
-          succeeded: true,
-          message: "retry succeeded"
-        };
-        onEvent(ev2);
-      }
-      structuralErrorCounter.record(true, attempt);
-      return { value: parsed.data, outputTokens: totalTokens, fullText };
-    }
-    lastError = parsed.error;
-    const isLast = attempt === maxRetries;
-    const feedback = formatZodFeedback(parsed.error, fullText);
-    const ev = {
-      kind: "structural_error",
-      callSite,
-      errorType: "schema_validate",
-      retryAttempt: attempt,
-      succeeded: isLast ? false : null,
-      message: feedback
-    };
-    onEvent(ev);
-    structuralErrorCounter.record(ev.succeeded, attempt);
-    if (isLast) throw new StructuredValidationError(callSite, attempt + 1, lastError);
-    messages = [
-      ...messages,
-      { role: "assistant", content: fullText },
-      { role: "user", content: feedback }
-    ];
-  }
-  throw new StructuredValidationError(callSite, maxRetries + 1, lastError);
-}
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -26226,6 +27039,1385 @@ var coerce = {
 };
 var NEVER = INVALID;
 
+// node_modules/zod-to-json-schema/dist/esm/parsers/any.js
+function parseAnyDef(refs) {
+  if (refs.target !== "openAi") {
+    return {};
+  }
+  const anyDefinitionPath = [
+    ...refs.basePath,
+    refs.definitionPath,
+    refs.openAiAnyTypeName
+  ];
+  refs.flags.hasReferencedOpenAiAnyType = true;
+  return {
+    $ref: refs.$refStrategy === "relative" ? getRelativePath(anyDefinitionPath, refs.currentPath) : anyDefinitionPath.join("/")
+  };
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/array.js
+function parseArrayDef(def, refs) {
+  const res = {
+    type: "array"
+  };
+  if (def.type?._def && def.type?._def?.typeName !== ZodFirstPartyTypeKind.ZodAny) {
+    res.items = parseDef(def.type._def, {
+      ...refs,
+      currentPath: [...refs.currentPath, "items"]
+    });
+  }
+  if (def.minLength) {
+    setResponseValueAndErrors(res, "minItems", def.minLength.value, def.minLength.message, refs);
+  }
+  if (def.maxLength) {
+    setResponseValueAndErrors(res, "maxItems", def.maxLength.value, def.maxLength.message, refs);
+  }
+  if (def.exactLength) {
+    setResponseValueAndErrors(res, "minItems", def.exactLength.value, def.exactLength.message, refs);
+    setResponseValueAndErrors(res, "maxItems", def.exactLength.value, def.exactLength.message, refs);
+  }
+  return res;
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/bigint.js
+function parseBigintDef(def, refs) {
+  const res = {
+    type: "integer",
+    format: "int64"
+  };
+  if (!def.checks)
+    return res;
+  for (const check of def.checks) {
+    switch (check.kind) {
+      case "min":
+        if (refs.target === "jsonSchema7") {
+          if (check.inclusive) {
+            setResponseValueAndErrors(res, "minimum", check.value, check.message, refs);
+          } else {
+            setResponseValueAndErrors(res, "exclusiveMinimum", check.value, check.message, refs);
+          }
+        } else {
+          if (!check.inclusive) {
+            res.exclusiveMinimum = true;
+          }
+          setResponseValueAndErrors(res, "minimum", check.value, check.message, refs);
+        }
+        break;
+      case "max":
+        if (refs.target === "jsonSchema7") {
+          if (check.inclusive) {
+            setResponseValueAndErrors(res, "maximum", check.value, check.message, refs);
+          } else {
+            setResponseValueAndErrors(res, "exclusiveMaximum", check.value, check.message, refs);
+          }
+        } else {
+          if (!check.inclusive) {
+            res.exclusiveMaximum = true;
+          }
+          setResponseValueAndErrors(res, "maximum", check.value, check.message, refs);
+        }
+        break;
+      case "multipleOf":
+        setResponseValueAndErrors(res, "multipleOf", check.value, check.message, refs);
+        break;
+    }
+  }
+  return res;
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/boolean.js
+function parseBooleanDef() {
+  return {
+    type: "boolean"
+  };
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/branded.js
+function parseBrandedDef(_def, refs) {
+  return parseDef(_def.type._def, refs);
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/catch.js
+var parseCatchDef = (def, refs) => {
+  return parseDef(def.innerType._def, refs);
+};
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/date.js
+function parseDateDef(def, refs, overrideDateStrategy) {
+  const strategy = overrideDateStrategy ?? refs.dateStrategy;
+  if (Array.isArray(strategy)) {
+    return {
+      anyOf: strategy.map((item, i) => parseDateDef(def, refs, item))
+    };
+  }
+  switch (strategy) {
+    case "string":
+    case "format:date-time":
+      return {
+        type: "string",
+        format: "date-time"
+      };
+    case "format:date":
+      return {
+        type: "string",
+        format: "date"
+      };
+    case "integer":
+      return integerDateParser(def, refs);
+  }
+}
+var integerDateParser = (def, refs) => {
+  const res = {
+    type: "integer",
+    format: "unix-time"
+  };
+  if (refs.target === "openApi3") {
+    return res;
+  }
+  for (const check of def.checks) {
+    switch (check.kind) {
+      case "min":
+        setResponseValueAndErrors(
+          res,
+          "minimum",
+          check.value,
+          // This is in milliseconds
+          check.message,
+          refs
+        );
+        break;
+      case "max":
+        setResponseValueAndErrors(
+          res,
+          "maximum",
+          check.value,
+          // This is in milliseconds
+          check.message,
+          refs
+        );
+        break;
+    }
+  }
+  return res;
+};
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/default.js
+function parseDefaultDef(_def, refs) {
+  return {
+    ...parseDef(_def.innerType._def, refs),
+    default: _def.defaultValue()
+  };
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/effects.js
+function parseEffectsDef(_def, refs) {
+  return refs.effectStrategy === "input" ? parseDef(_def.schema._def, refs) : parseAnyDef(refs);
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/enum.js
+function parseEnumDef(def) {
+  return {
+    type: "string",
+    enum: Array.from(def.values)
+  };
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/intersection.js
+var isJsonSchema7AllOfType = (type) => {
+  if ("type" in type && type.type === "string")
+    return false;
+  return "allOf" in type;
+};
+function parseIntersectionDef(def, refs) {
+  const allOf = [
+    parseDef(def.left._def, {
+      ...refs,
+      currentPath: [...refs.currentPath, "allOf", "0"]
+    }),
+    parseDef(def.right._def, {
+      ...refs,
+      currentPath: [...refs.currentPath, "allOf", "1"]
+    })
+  ].filter((x) => !!x);
+  let unevaluatedProperties = refs.target === "jsonSchema2019-09" ? { unevaluatedProperties: false } : void 0;
+  const mergedAllOf = [];
+  allOf.forEach((schema) => {
+    if (isJsonSchema7AllOfType(schema)) {
+      mergedAllOf.push(...schema.allOf);
+      if (schema.unevaluatedProperties === void 0) {
+        unevaluatedProperties = void 0;
+      }
+    } else {
+      let nestedSchema = schema;
+      if ("additionalProperties" in schema && schema.additionalProperties === false) {
+        const { additionalProperties, ...rest } = schema;
+        nestedSchema = rest;
+      } else {
+        unevaluatedProperties = void 0;
+      }
+      mergedAllOf.push(nestedSchema);
+    }
+  });
+  return mergedAllOf.length ? {
+    allOf: mergedAllOf,
+    ...unevaluatedProperties
+  } : void 0;
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/literal.js
+function parseLiteralDef(def, refs) {
+  const parsedType = typeof def.value;
+  if (parsedType !== "bigint" && parsedType !== "number" && parsedType !== "boolean" && parsedType !== "string") {
+    return {
+      type: Array.isArray(def.value) ? "array" : "object"
+    };
+  }
+  if (refs.target === "openApi3") {
+    return {
+      type: parsedType === "bigint" ? "integer" : parsedType,
+      enum: [def.value]
+    };
+  }
+  return {
+    type: parsedType === "bigint" ? "integer" : parsedType,
+    const: def.value
+  };
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/string.js
+var emojiRegex2 = void 0;
+var zodPatterns = {
+  /**
+   * `c` was changed to `[cC]` to replicate /i flag
+   */
+  cuid: /^[cC][^\s-]{8,}$/,
+  cuid2: /^[0-9a-z]+$/,
+  ulid: /^[0-9A-HJKMNP-TV-Z]{26}$/,
+  /**
+   * `a-z` was added to replicate /i flag
+   */
+  email: /^(?!\.)(?!.*\.\.)([a-zA-Z0-9_'+\-\.]*)[a-zA-Z0-9_+-]@([a-zA-Z0-9][a-zA-Z0-9\-]*\.)+[a-zA-Z]{2,}$/,
+  /**
+   * Constructed a valid Unicode RegExp
+   *
+   * Lazily instantiate since this type of regex isn't supported
+   * in all envs (e.g. React Native).
+   *
+   * See:
+   * https://github.com/colinhacks/zod/issues/2433
+   * Fix in Zod:
+   * https://github.com/colinhacks/zod/commit/9340fd51e48576a75adc919bff65dbc4a5d4c99b
+   */
+  emoji: () => {
+    if (emojiRegex2 === void 0) {
+      emojiRegex2 = RegExp("^(\\p{Extended_Pictographic}|\\p{Emoji_Component})+$", "u");
+    }
+    return emojiRegex2;
+  },
+  /**
+   * Unused
+   */
+  uuid: /^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/,
+  /**
+   * Unused
+   */
+  ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$/,
+  ipv4Cidr: /^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\/(3[0-2]|[12]?[0-9])$/,
+  /**
+   * Unused
+   */
+  ipv6: /^(([a-f0-9]{1,4}:){7}|::([a-f0-9]{1,4}:){0,6}|([a-f0-9]{1,4}:){1}:([a-f0-9]{1,4}:){0,5}|([a-f0-9]{1,4}:){2}:([a-f0-9]{1,4}:){0,4}|([a-f0-9]{1,4}:){3}:([a-f0-9]{1,4}:){0,3}|([a-f0-9]{1,4}:){4}:([a-f0-9]{1,4}:){0,2}|([a-f0-9]{1,4}:){5}:([a-f0-9]{1,4}:){0,1})([a-f0-9]{1,4}|(((25[0-5])|(2[0-4][0-9])|(1[0-9]{2})|([0-9]{1,2}))\.){3}((25[0-5])|(2[0-4][0-9])|(1[0-9]{2})|([0-9]{1,2})))$/,
+  ipv6Cidr: /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$/,
+  base64: /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/,
+  base64url: /^([0-9a-zA-Z-_]{4})*(([0-9a-zA-Z-_]{2}(==)?)|([0-9a-zA-Z-_]{3}(=)?))?$/,
+  nanoid: /^[a-zA-Z0-9_-]{21}$/,
+  jwt: /^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]*$/
+};
+function parseStringDef(def, refs) {
+  const res = {
+    type: "string"
+  };
+  if (def.checks) {
+    for (const check of def.checks) {
+      switch (check.kind) {
+        case "min":
+          setResponseValueAndErrors(res, "minLength", typeof res.minLength === "number" ? Math.max(res.minLength, check.value) : check.value, check.message, refs);
+          break;
+        case "max":
+          setResponseValueAndErrors(res, "maxLength", typeof res.maxLength === "number" ? Math.min(res.maxLength, check.value) : check.value, check.message, refs);
+          break;
+        case "email":
+          switch (refs.emailStrategy) {
+            case "format:email":
+              addFormat(res, "email", check.message, refs);
+              break;
+            case "format:idn-email":
+              addFormat(res, "idn-email", check.message, refs);
+              break;
+            case "pattern:zod":
+              addPattern(res, zodPatterns.email, check.message, refs);
+              break;
+          }
+          break;
+        case "url":
+          addFormat(res, "uri", check.message, refs);
+          break;
+        case "uuid":
+          addFormat(res, "uuid", check.message, refs);
+          break;
+        case "regex":
+          addPattern(res, check.regex, check.message, refs);
+          break;
+        case "cuid":
+          addPattern(res, zodPatterns.cuid, check.message, refs);
+          break;
+        case "cuid2":
+          addPattern(res, zodPatterns.cuid2, check.message, refs);
+          break;
+        case "startsWith":
+          addPattern(res, RegExp(`^${escapeLiteralCheckValue(check.value, refs)}`), check.message, refs);
+          break;
+        case "endsWith":
+          addPattern(res, RegExp(`${escapeLiteralCheckValue(check.value, refs)}$`), check.message, refs);
+          break;
+        case "datetime":
+          addFormat(res, "date-time", check.message, refs);
+          break;
+        case "date":
+          addFormat(res, "date", check.message, refs);
+          break;
+        case "time":
+          addFormat(res, "time", check.message, refs);
+          break;
+        case "duration":
+          addFormat(res, "duration", check.message, refs);
+          break;
+        case "length":
+          setResponseValueAndErrors(res, "minLength", typeof res.minLength === "number" ? Math.max(res.minLength, check.value) : check.value, check.message, refs);
+          setResponseValueAndErrors(res, "maxLength", typeof res.maxLength === "number" ? Math.min(res.maxLength, check.value) : check.value, check.message, refs);
+          break;
+        case "includes": {
+          addPattern(res, RegExp(escapeLiteralCheckValue(check.value, refs)), check.message, refs);
+          break;
+        }
+        case "ip": {
+          if (check.version !== "v6") {
+            addFormat(res, "ipv4", check.message, refs);
+          }
+          if (check.version !== "v4") {
+            addFormat(res, "ipv6", check.message, refs);
+          }
+          break;
+        }
+        case "base64url":
+          addPattern(res, zodPatterns.base64url, check.message, refs);
+          break;
+        case "jwt":
+          addPattern(res, zodPatterns.jwt, check.message, refs);
+          break;
+        case "cidr": {
+          if (check.version !== "v6") {
+            addPattern(res, zodPatterns.ipv4Cidr, check.message, refs);
+          }
+          if (check.version !== "v4") {
+            addPattern(res, zodPatterns.ipv6Cidr, check.message, refs);
+          }
+          break;
+        }
+        case "emoji":
+          addPattern(res, zodPatterns.emoji(), check.message, refs);
+          break;
+        case "ulid": {
+          addPattern(res, zodPatterns.ulid, check.message, refs);
+          break;
+        }
+        case "base64": {
+          switch (refs.base64Strategy) {
+            case "format:binary": {
+              addFormat(res, "binary", check.message, refs);
+              break;
+            }
+            case "contentEncoding:base64": {
+              setResponseValueAndErrors(res, "contentEncoding", "base64", check.message, refs);
+              break;
+            }
+            case "pattern:zod": {
+              addPattern(res, zodPatterns.base64, check.message, refs);
+              break;
+            }
+          }
+          break;
+        }
+        case "nanoid": {
+          addPattern(res, zodPatterns.nanoid, check.message, refs);
+        }
+        case "toLowerCase":
+        case "toUpperCase":
+        case "trim":
+          break;
+        default:
+          /* @__PURE__ */ ((_) => {
+          })(check);
+      }
+    }
+  }
+  return res;
+}
+function escapeLiteralCheckValue(literal, refs) {
+  return refs.patternStrategy === "escape" ? escapeNonAlphaNumeric(literal) : literal;
+}
+var ALPHA_NUMERIC = new Set("ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvxyz0123456789");
+function escapeNonAlphaNumeric(source) {
+  let result = "";
+  for (let i = 0; i < source.length; i++) {
+    if (!ALPHA_NUMERIC.has(source[i])) {
+      result += "\\";
+    }
+    result += source[i];
+  }
+  return result;
+}
+function addFormat(schema, value, message, refs) {
+  if (schema.format || schema.anyOf?.some((x) => x.format)) {
+    if (!schema.anyOf) {
+      schema.anyOf = [];
+    }
+    if (schema.format) {
+      schema.anyOf.push({
+        format: schema.format,
+        ...schema.errorMessage && refs.errorMessages && {
+          errorMessage: { format: schema.errorMessage.format }
+        }
+      });
+      delete schema.format;
+      if (schema.errorMessage) {
+        delete schema.errorMessage.format;
+        if (Object.keys(schema.errorMessage).length === 0) {
+          delete schema.errorMessage;
+        }
+      }
+    }
+    schema.anyOf.push({
+      format: value,
+      ...message && refs.errorMessages && { errorMessage: { format: message } }
+    });
+  } else {
+    setResponseValueAndErrors(schema, "format", value, message, refs);
+  }
+}
+function addPattern(schema, regex, message, refs) {
+  if (schema.pattern || schema.allOf?.some((x) => x.pattern)) {
+    if (!schema.allOf) {
+      schema.allOf = [];
+    }
+    if (schema.pattern) {
+      schema.allOf.push({
+        pattern: schema.pattern,
+        ...schema.errorMessage && refs.errorMessages && {
+          errorMessage: { pattern: schema.errorMessage.pattern }
+        }
+      });
+      delete schema.pattern;
+      if (schema.errorMessage) {
+        delete schema.errorMessage.pattern;
+        if (Object.keys(schema.errorMessage).length === 0) {
+          delete schema.errorMessage;
+        }
+      }
+    }
+    schema.allOf.push({
+      pattern: stringifyRegExpWithFlags(regex, refs),
+      ...message && refs.errorMessages && { errorMessage: { pattern: message } }
+    });
+  } else {
+    setResponseValueAndErrors(schema, "pattern", stringifyRegExpWithFlags(regex, refs), message, refs);
+  }
+}
+function stringifyRegExpWithFlags(regex, refs) {
+  if (!refs.applyRegexFlags || !regex.flags) {
+    return regex.source;
+  }
+  const flags = {
+    i: regex.flags.includes("i"),
+    m: regex.flags.includes("m"),
+    s: regex.flags.includes("s")
+    // `.` matches newlines
+  };
+  const source = flags.i ? regex.source.toLowerCase() : regex.source;
+  let pattern = "";
+  let isEscaped = false;
+  let inCharGroup = false;
+  let inCharRange = false;
+  for (let i = 0; i < source.length; i++) {
+    if (isEscaped) {
+      pattern += source[i];
+      isEscaped = false;
+      continue;
+    }
+    if (flags.i) {
+      if (inCharGroup) {
+        if (source[i].match(/[a-z]/)) {
+          if (inCharRange) {
+            pattern += source[i];
+            pattern += `${source[i - 2]}-${source[i]}`.toUpperCase();
+            inCharRange = false;
+          } else if (source[i + 1] === "-" && source[i + 2]?.match(/[a-z]/)) {
+            pattern += source[i];
+            inCharRange = true;
+          } else {
+            pattern += `${source[i]}${source[i].toUpperCase()}`;
+          }
+          continue;
+        }
+      } else if (source[i].match(/[a-z]/)) {
+        pattern += `[${source[i]}${source[i].toUpperCase()}]`;
+        continue;
+      }
+    }
+    if (flags.m) {
+      if (source[i] === "^") {
+        pattern += `(^|(?<=[\r
+]))`;
+        continue;
+      } else if (source[i] === "$") {
+        pattern += `($|(?=[\r
+]))`;
+        continue;
+      }
+    }
+    if (flags.s && source[i] === ".") {
+      pattern += inCharGroup ? `${source[i]}\r
+` : `[${source[i]}\r
+]`;
+      continue;
+    }
+    pattern += source[i];
+    if (source[i] === "\\") {
+      isEscaped = true;
+    } else if (inCharGroup && source[i] === "]") {
+      inCharGroup = false;
+    } else if (!inCharGroup && source[i] === "[") {
+      inCharGroup = true;
+    }
+  }
+  try {
+    new RegExp(pattern);
+  } catch {
+    console.warn(`Could not convert regex pattern at ${refs.currentPath.join("/")} to a flag-independent form! Falling back to the flag-ignorant source`);
+    return regex.source;
+  }
+  return pattern;
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/record.js
+function parseRecordDef(def, refs) {
+  if (refs.target === "openAi") {
+    console.warn("Warning: OpenAI may not support records in schemas! Try an array of key-value pairs instead.");
+  }
+  if (refs.target === "openApi3" && def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodEnum) {
+    return {
+      type: "object",
+      required: def.keyType._def.values,
+      properties: def.keyType._def.values.reduce((acc, key) => ({
+        ...acc,
+        [key]: parseDef(def.valueType._def, {
+          ...refs,
+          currentPath: [...refs.currentPath, "properties", key]
+        }) ?? parseAnyDef(refs)
+      }), {}),
+      additionalProperties: refs.rejectedAdditionalProperties
+    };
+  }
+  const schema = {
+    type: "object",
+    additionalProperties: parseDef(def.valueType._def, {
+      ...refs,
+      currentPath: [...refs.currentPath, "additionalProperties"]
+    }) ?? refs.allowedAdditionalProperties
+  };
+  if (refs.target === "openApi3") {
+    return schema;
+  }
+  if (def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodString && def.keyType._def.checks?.length) {
+    const { type, ...keyType } = parseStringDef(def.keyType._def, refs);
+    return {
+      ...schema,
+      propertyNames: keyType
+    };
+  } else if (def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodEnum) {
+    return {
+      ...schema,
+      propertyNames: {
+        enum: def.keyType._def.values
+      }
+    };
+  } else if (def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodBranded && def.keyType._def.type._def.typeName === ZodFirstPartyTypeKind.ZodString && def.keyType._def.type._def.checks?.length) {
+    const { type, ...keyType } = parseBrandedDef(def.keyType._def, refs);
+    return {
+      ...schema,
+      propertyNames: keyType
+    };
+  }
+  return schema;
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/map.js
+function parseMapDef(def, refs) {
+  if (refs.mapStrategy === "record") {
+    return parseRecordDef(def, refs);
+  }
+  const keys = parseDef(def.keyType._def, {
+    ...refs,
+    currentPath: [...refs.currentPath, "items", "items", "0"]
+  }) || parseAnyDef(refs);
+  const values = parseDef(def.valueType._def, {
+    ...refs,
+    currentPath: [...refs.currentPath, "items", "items", "1"]
+  }) || parseAnyDef(refs);
+  return {
+    type: "array",
+    maxItems: 125,
+    items: {
+      type: "array",
+      items: [keys, values],
+      minItems: 2,
+      maxItems: 2
+    }
+  };
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/nativeEnum.js
+function parseNativeEnumDef(def) {
+  const object = def.values;
+  const actualKeys = Object.keys(def.values).filter((key) => {
+    return typeof object[object[key]] !== "number";
+  });
+  const actualValues = actualKeys.map((key) => object[key]);
+  const parsedTypes = Array.from(new Set(actualValues.map((values) => typeof values)));
+  return {
+    type: parsedTypes.length === 1 ? parsedTypes[0] === "string" ? "string" : "number" : ["string", "number"],
+    enum: actualValues
+  };
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/never.js
+function parseNeverDef(refs) {
+  return refs.target === "openAi" ? void 0 : {
+    not: parseAnyDef({
+      ...refs,
+      currentPath: [...refs.currentPath, "not"]
+    })
+  };
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/null.js
+function parseNullDef(refs) {
+  return refs.target === "openApi3" ? {
+    enum: ["null"],
+    nullable: true
+  } : {
+    type: "null"
+  };
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/union.js
+var primitiveMappings = {
+  ZodString: "string",
+  ZodNumber: "number",
+  ZodBigInt: "integer",
+  ZodBoolean: "boolean",
+  ZodNull: "null"
+};
+function parseUnionDef(def, refs) {
+  if (refs.target === "openApi3")
+    return asAnyOf(def, refs);
+  const options = def.options instanceof Map ? Array.from(def.options.values()) : def.options;
+  if (options.every((x) => x._def.typeName in primitiveMappings && (!x._def.checks || !x._def.checks.length))) {
+    const types = options.reduce((types2, x) => {
+      const type = primitiveMappings[x._def.typeName];
+      return type && !types2.includes(type) ? [...types2, type] : types2;
+    }, []);
+    return {
+      type: types.length > 1 ? types : types[0]
+    };
+  } else if (options.every((x) => x._def.typeName === "ZodLiteral" && !x.description)) {
+    const types = options.reduce((acc, x) => {
+      const type = typeof x._def.value;
+      switch (type) {
+        case "string":
+        case "number":
+        case "boolean":
+          return [...acc, type];
+        case "bigint":
+          return [...acc, "integer"];
+        case "object":
+          if (x._def.value === null)
+            return [...acc, "null"];
+        case "symbol":
+        case "undefined":
+        case "function":
+        default:
+          return acc;
+      }
+    }, []);
+    if (types.length === options.length) {
+      const uniqueTypes = types.filter((x, i, a) => a.indexOf(x) === i);
+      return {
+        type: uniqueTypes.length > 1 ? uniqueTypes : uniqueTypes[0],
+        enum: options.reduce((acc, x) => {
+          return acc.includes(x._def.value) ? acc : [...acc, x._def.value];
+        }, [])
+      };
+    }
+  } else if (options.every((x) => x._def.typeName === "ZodEnum")) {
+    return {
+      type: "string",
+      enum: options.reduce((acc, x) => [
+        ...acc,
+        ...x._def.values.filter((x2) => !acc.includes(x2))
+      ], [])
+    };
+  }
+  return asAnyOf(def, refs);
+}
+var asAnyOf = (def, refs) => {
+  const anyOf = (def.options instanceof Map ? Array.from(def.options.values()) : def.options).map((x, i) => parseDef(x._def, {
+    ...refs,
+    currentPath: [...refs.currentPath, "anyOf", `${i}`]
+  })).filter((x) => !!x && (!refs.strictUnions || typeof x === "object" && Object.keys(x).length > 0));
+  return anyOf.length ? { anyOf } : void 0;
+};
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/nullable.js
+function parseNullableDef(def, refs) {
+  if (["ZodString", "ZodNumber", "ZodBigInt", "ZodBoolean", "ZodNull"].includes(def.innerType._def.typeName) && (!def.innerType._def.checks || !def.innerType._def.checks.length)) {
+    if (refs.target === "openApi3") {
+      return {
+        type: primitiveMappings[def.innerType._def.typeName],
+        nullable: true
+      };
+    }
+    return {
+      type: [
+        primitiveMappings[def.innerType._def.typeName],
+        "null"
+      ]
+    };
+  }
+  if (refs.target === "openApi3") {
+    const base2 = parseDef(def.innerType._def, {
+      ...refs,
+      currentPath: [...refs.currentPath]
+    });
+    if (base2 && "$ref" in base2)
+      return { allOf: [base2], nullable: true };
+    return base2 && { ...base2, nullable: true };
+  }
+  const base = parseDef(def.innerType._def, {
+    ...refs,
+    currentPath: [...refs.currentPath, "anyOf", "0"]
+  });
+  return base && { anyOf: [base, { type: "null" }] };
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/number.js
+function parseNumberDef(def, refs) {
+  const res = {
+    type: "number"
+  };
+  if (!def.checks)
+    return res;
+  for (const check of def.checks) {
+    switch (check.kind) {
+      case "int":
+        res.type = "integer";
+        addErrorMessage(res, "type", check.message, refs);
+        break;
+      case "min":
+        if (refs.target === "jsonSchema7") {
+          if (check.inclusive) {
+            setResponseValueAndErrors(res, "minimum", check.value, check.message, refs);
+          } else {
+            setResponseValueAndErrors(res, "exclusiveMinimum", check.value, check.message, refs);
+          }
+        } else {
+          if (!check.inclusive) {
+            res.exclusiveMinimum = true;
+          }
+          setResponseValueAndErrors(res, "minimum", check.value, check.message, refs);
+        }
+        break;
+      case "max":
+        if (refs.target === "jsonSchema7") {
+          if (check.inclusive) {
+            setResponseValueAndErrors(res, "maximum", check.value, check.message, refs);
+          } else {
+            setResponseValueAndErrors(res, "exclusiveMaximum", check.value, check.message, refs);
+          }
+        } else {
+          if (!check.inclusive) {
+            res.exclusiveMaximum = true;
+          }
+          setResponseValueAndErrors(res, "maximum", check.value, check.message, refs);
+        }
+        break;
+      case "multipleOf":
+        setResponseValueAndErrors(res, "multipleOf", check.value, check.message, refs);
+        break;
+    }
+  }
+  return res;
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/object.js
+function parseObjectDef(def, refs) {
+  const forceOptionalIntoNullable = refs.target === "openAi";
+  const result = {
+    type: "object",
+    properties: {}
+  };
+  const required = [];
+  const shape = def.shape();
+  for (const propName in shape) {
+    let propDef = shape[propName];
+    if (propDef === void 0 || propDef._def === void 0) {
+      continue;
+    }
+    let propOptional = safeIsOptional(propDef);
+    if (propOptional && forceOptionalIntoNullable) {
+      if (propDef._def.typeName === "ZodOptional") {
+        propDef = propDef._def.innerType;
+      }
+      if (!propDef.isNullable()) {
+        propDef = propDef.nullable();
+      }
+      propOptional = false;
+    }
+    const parsedDef = parseDef(propDef._def, {
+      ...refs,
+      currentPath: [...refs.currentPath, "properties", propName],
+      propertyPath: [...refs.currentPath, "properties", propName]
+    });
+    if (parsedDef === void 0) {
+      continue;
+    }
+    result.properties[propName] = parsedDef;
+    if (!propOptional) {
+      required.push(propName);
+    }
+  }
+  if (required.length) {
+    result.required = required;
+  }
+  const additionalProperties = decideAdditionalProperties(def, refs);
+  if (additionalProperties !== void 0) {
+    result.additionalProperties = additionalProperties;
+  }
+  return result;
+}
+function decideAdditionalProperties(def, refs) {
+  if (def.catchall._def.typeName !== "ZodNever") {
+    return parseDef(def.catchall._def, {
+      ...refs,
+      currentPath: [...refs.currentPath, "additionalProperties"]
+    });
+  }
+  switch (def.unknownKeys) {
+    case "passthrough":
+      return refs.allowedAdditionalProperties;
+    case "strict":
+      return refs.rejectedAdditionalProperties;
+    case "strip":
+      return refs.removeAdditionalStrategy === "strict" ? refs.allowedAdditionalProperties : refs.rejectedAdditionalProperties;
+  }
+}
+function safeIsOptional(schema) {
+  try {
+    return schema.isOptional();
+  } catch {
+    return true;
+  }
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/optional.js
+var parseOptionalDef = (def, refs) => {
+  if (refs.currentPath.toString() === refs.propertyPath?.toString()) {
+    return parseDef(def.innerType._def, refs);
+  }
+  const innerSchema = parseDef(def.innerType._def, {
+    ...refs,
+    currentPath: [...refs.currentPath, "anyOf", "1"]
+  });
+  return innerSchema ? {
+    anyOf: [
+      {
+        not: parseAnyDef(refs)
+      },
+      innerSchema
+    ]
+  } : parseAnyDef(refs);
+};
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/pipeline.js
+var parsePipelineDef = (def, refs) => {
+  if (refs.pipeStrategy === "input") {
+    return parseDef(def.in._def, refs);
+  } else if (refs.pipeStrategy === "output") {
+    return parseDef(def.out._def, refs);
+  }
+  const a = parseDef(def.in._def, {
+    ...refs,
+    currentPath: [...refs.currentPath, "allOf", "0"]
+  });
+  const b = parseDef(def.out._def, {
+    ...refs,
+    currentPath: [...refs.currentPath, "allOf", a ? "1" : "0"]
+  });
+  return {
+    allOf: [a, b].filter((x) => x !== void 0)
+  };
+};
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/promise.js
+function parsePromiseDef(def, refs) {
+  return parseDef(def.type._def, refs);
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/set.js
+function parseSetDef(def, refs) {
+  const items = parseDef(def.valueType._def, {
+    ...refs,
+    currentPath: [...refs.currentPath, "items"]
+  });
+  const schema = {
+    type: "array",
+    uniqueItems: true,
+    items
+  };
+  if (def.minSize) {
+    setResponseValueAndErrors(schema, "minItems", def.minSize.value, def.minSize.message, refs);
+  }
+  if (def.maxSize) {
+    setResponseValueAndErrors(schema, "maxItems", def.maxSize.value, def.maxSize.message, refs);
+  }
+  return schema;
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/tuple.js
+function parseTupleDef(def, refs) {
+  if (def.rest) {
+    return {
+      type: "array",
+      minItems: def.items.length,
+      items: def.items.map((x, i) => parseDef(x._def, {
+        ...refs,
+        currentPath: [...refs.currentPath, "items", `${i}`]
+      })).reduce((acc, x) => x === void 0 ? acc : [...acc, x], []),
+      additionalItems: parseDef(def.rest._def, {
+        ...refs,
+        currentPath: [...refs.currentPath, "additionalItems"]
+      })
+    };
+  } else {
+    return {
+      type: "array",
+      minItems: def.items.length,
+      maxItems: def.items.length,
+      items: def.items.map((x, i) => parseDef(x._def, {
+        ...refs,
+        currentPath: [...refs.currentPath, "items", `${i}`]
+      })).reduce((acc, x) => x === void 0 ? acc : [...acc, x], [])
+    };
+  }
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/undefined.js
+function parseUndefinedDef(refs) {
+  return {
+    not: parseAnyDef(refs)
+  };
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/unknown.js
+function parseUnknownDef(refs) {
+  return parseAnyDef(refs);
+}
+
+// node_modules/zod-to-json-schema/dist/esm/parsers/readonly.js
+var parseReadonlyDef = (def, refs) => {
+  return parseDef(def.innerType._def, refs);
+};
+
+// node_modules/zod-to-json-schema/dist/esm/selectParser.js
+var selectParser = (def, typeName, refs) => {
+  switch (typeName) {
+    case ZodFirstPartyTypeKind.ZodString:
+      return parseStringDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodNumber:
+      return parseNumberDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodObject:
+      return parseObjectDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodBigInt:
+      return parseBigintDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodBoolean:
+      return parseBooleanDef();
+    case ZodFirstPartyTypeKind.ZodDate:
+      return parseDateDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodUndefined:
+      return parseUndefinedDef(refs);
+    case ZodFirstPartyTypeKind.ZodNull:
+      return parseNullDef(refs);
+    case ZodFirstPartyTypeKind.ZodArray:
+      return parseArrayDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodUnion:
+    case ZodFirstPartyTypeKind.ZodDiscriminatedUnion:
+      return parseUnionDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodIntersection:
+      return parseIntersectionDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodTuple:
+      return parseTupleDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodRecord:
+      return parseRecordDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodLiteral:
+      return parseLiteralDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodEnum:
+      return parseEnumDef(def);
+    case ZodFirstPartyTypeKind.ZodNativeEnum:
+      return parseNativeEnumDef(def);
+    case ZodFirstPartyTypeKind.ZodNullable:
+      return parseNullableDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodOptional:
+      return parseOptionalDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodMap:
+      return parseMapDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodSet:
+      return parseSetDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodLazy:
+      return () => def.getter()._def;
+    case ZodFirstPartyTypeKind.ZodPromise:
+      return parsePromiseDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodNaN:
+    case ZodFirstPartyTypeKind.ZodNever:
+      return parseNeverDef(refs);
+    case ZodFirstPartyTypeKind.ZodEffects:
+      return parseEffectsDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodAny:
+      return parseAnyDef(refs);
+    case ZodFirstPartyTypeKind.ZodUnknown:
+      return parseUnknownDef(refs);
+    case ZodFirstPartyTypeKind.ZodDefault:
+      return parseDefaultDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodBranded:
+      return parseBrandedDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodReadonly:
+      return parseReadonlyDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodCatch:
+      return parseCatchDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodPipeline:
+      return parsePipelineDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodFunction:
+    case ZodFirstPartyTypeKind.ZodVoid:
+    case ZodFirstPartyTypeKind.ZodSymbol:
+      return void 0;
+    default:
+      return /* @__PURE__ */ ((_) => void 0)(typeName);
+  }
+};
+
+// node_modules/zod-to-json-schema/dist/esm/parseDef.js
+function parseDef(def, refs, forceResolution = false) {
+  const seenItem = refs.seen.get(def);
+  if (refs.override) {
+    const overrideResult = refs.override?.(def, refs, seenItem, forceResolution);
+    if (overrideResult !== ignoreOverride) {
+      return overrideResult;
+    }
+  }
+  if (seenItem && !forceResolution) {
+    const seenSchema = get$ref(seenItem, refs);
+    if (seenSchema !== void 0) {
+      return seenSchema;
+    }
+  }
+  const newItem = { def, path: refs.currentPath, jsonSchema: void 0 };
+  refs.seen.set(def, newItem);
+  const jsonSchemaOrGetter = selectParser(def, def.typeName, refs);
+  const jsonSchema = typeof jsonSchemaOrGetter === "function" ? parseDef(jsonSchemaOrGetter(), refs) : jsonSchemaOrGetter;
+  if (jsonSchema) {
+    addMeta(def, refs, jsonSchema);
+  }
+  if (refs.postProcess) {
+    const postProcessResult = refs.postProcess(jsonSchema, def, refs);
+    newItem.jsonSchema = jsonSchema;
+    return postProcessResult;
+  }
+  newItem.jsonSchema = jsonSchema;
+  return jsonSchema;
+}
+var get$ref = (item, refs) => {
+  switch (refs.$refStrategy) {
+    case "root":
+      return { $ref: item.path.join("/") };
+    case "relative":
+      return { $ref: getRelativePath(refs.currentPath, item.path) };
+    case "none":
+    case "seen": {
+      if (item.path.length < refs.currentPath.length && item.path.every((value, index) => refs.currentPath[index] === value)) {
+        console.warn(`Recursive reference detected at ${refs.currentPath.join("/")}! Defaulting to any`);
+        return parseAnyDef(refs);
+      }
+      return refs.$refStrategy === "seen" ? parseAnyDef(refs) : void 0;
+    }
+  }
+};
+var addMeta = (def, refs, jsonSchema) => {
+  if (def.description) {
+    jsonSchema.description = def.description;
+    if (refs.markdownDescription) {
+      jsonSchema.markdownDescription = def.description;
+    }
+  }
+  return jsonSchema;
+};
+
+// node_modules/zod-to-json-schema/dist/esm/zodToJsonSchema.js
+var zodToJsonSchema = (schema, options) => {
+  const refs = getRefs(options);
+  let definitions = typeof options === "object" && options.definitions ? Object.entries(options.definitions).reduce((acc, [name2, schema2]) => ({
+    ...acc,
+    [name2]: parseDef(schema2._def, {
+      ...refs,
+      currentPath: [...refs.basePath, refs.definitionPath, name2]
+    }, true) ?? parseAnyDef(refs)
+  }), {}) : void 0;
+  const name = typeof options === "string" ? options : options?.nameStrategy === "title" ? void 0 : options?.name;
+  const main = parseDef(schema._def, name === void 0 ? refs : {
+    ...refs,
+    currentPath: [...refs.basePath, refs.definitionPath, name]
+  }, false) ?? parseAnyDef(refs);
+  const title = typeof options === "object" && options.name !== void 0 && options.nameStrategy === "title" ? options.name : void 0;
+  if (title !== void 0) {
+    main.title = title;
+  }
+  if (refs.flags.hasReferencedOpenAiAnyType) {
+    if (!definitions) {
+      definitions = {};
+    }
+    if (!definitions[refs.openAiAnyTypeName]) {
+      definitions[refs.openAiAnyTypeName] = {
+        // Skipping "object" as no properties can be defined and additionalProperties must be "false"
+        type: ["string", "number", "integer", "boolean", "array", "null"],
+        items: {
+          $ref: refs.$refStrategy === "relative" ? "1" : [
+            ...refs.basePath,
+            refs.definitionPath,
+            refs.openAiAnyTypeName
+          ].join("/")
+        }
+      };
+    }
+  }
+  const combined = name === void 0 ? definitions ? {
+    ...main,
+    [refs.definitionPath]: definitions
+  } : main : {
+    $ref: [
+      ...refs.$refStrategy === "relative" ? [] : refs.basePath,
+      refs.definitionPath,
+      name
+    ].join("/"),
+    [refs.definitionPath]: {
+      ...definitions,
+      [name]: main
+    }
+  };
+  if (refs.target === "jsonSchema7") {
+    combined.$schema = "http://json-schema.org/draft-07/schema#";
+  } else if (refs.target === "jsonSchema2019-09" || refs.target === "openAi") {
+    combined.$schema = "https://json-schema.org/draft/2019-09/schema#";
+  }
+  if (refs.target === "openAi" && ("anyOf" in combined || "oneOf" in combined || "allOf" in combined || "type" in combined && Array.isArray(combined.type))) {
+    console.warn("Warning: OpenAI may not support schemas with unions as roots! Try wrapping it in an object property.");
+  }
+  return combined;
+};
+
+// src/structural-error-counter.ts
+var Counter = class {
+  stats = { failed: 0, retried: 0, ok: 0 };
+  listeners = /* @__PURE__ */ new Set();
+  record(succeeded, retryAttempt) {
+    if (succeeded === null) return;
+    if (!succeeded) this.stats.failed++;
+    else if (retryAttempt > 0) this.stats.retried++;
+    else this.stats.ok++;
+    const snap = { ...this.stats };
+    for (const fn of this.listeners) fn(snap);
+  }
+  subscribe(fn) {
+    this.listeners.add(fn);
+    return () => {
+      this.listeners.delete(fn);
+    };
+  }
+  get() {
+    return { ...this.stats };
+  }
+  reset() {
+    this.stats = { failed: 0, retried: 0, ok: 0 };
+  }
+};
+var structuralErrorCounter = new Counter();
+
+// src/phases/parse-with-retry.ts
+var StructuredValidationError = class extends Error {
+  constructor(callSite, attempts, lastError) {
+    super(`[${callSite}] structural validation failed after ${attempts} attempt(s): ${lastError.message}`);
+    this.callSite = callSite;
+    this.attempts = attempts;
+    this.lastError = lastError;
+    this.name = "StructuredValidationError";
+  }
+  callSite;
+  attempts;
+  lastError;
+};
+function formatZodFeedback(err, raw) {
+  if (err === null) {
+    return [
+      "Previous response was not valid JSON.",
+      `Raw output (truncated):`,
+      raw.slice(0, 2e3),
+      "",
+      "Return ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary."
+    ].join("\n");
+  }
+  const bullets = err.issues.slice(0, 20).map((i) => {
+    const path2 = i.path.length ? i.path.join(".") : "(root)";
+    return `- ${path2}: ${i.message}`;
+  }).join("\n");
+  return [
+    "Previous response failed validation:",
+    bullets,
+    "",
+    "Return ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary."
+  ].join("\n");
+}
+async function streamOnce(llm, model, messages, opts, signal) {
+  const params = buildChatParams(model, messages, opts, true);
+  let fullText = "";
+  let outputTokens = 0;
+  try {
+    const requestStartMs = Date.now();
+    const rawStream = await llm.chat.completions.create(
+      { ...params, stream: true },
+      { signal }
+    );
+    const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
+    for await (const chunk of stream) {
+      const { content, outputTokens: tok } = extractStreamDeltas(chunk);
+      if (content) fullText += content;
+      if (tok !== void 0) outputTokens += tok;
+    }
+    return { fullText, outputTokens, stats: getStats() };
+  } catch (e) {
+    if (signal.aborted || e.name === "AbortError") throw e;
+    const params2 = buildChatParams(model, messages, opts);
+    const resp = await llm.chat.completions.create(
+      { ...params2, stream: false },
+      { signal }
+    );
+    const text = resp.choices[0]?.message?.content ?? "";
+    const tok = extractUsage(resp);
+    return { fullText: text, outputTokens: tok ?? 0, stats: void 0 };
+  }
+}
+async function parseWithRetry(args) {
+  const { llm, model, baseMessages, schema, maxRetries, callSite, signal, onEvent } = args;
+  const opts = args.opts.jsonMode === "json_object" || args.opts.jsonMode === "json_schema" ? {
+    ...args.opts,
+    jsonMode: "json_schema",
+    jsonSchema: {
+      name: callSite.replace(/\./g, "_"),
+      schema: zodToJsonSchema(schema, { $refStrategy: "none" })
+    }
+  } : args.opts;
+  let messages = baseMessages;
+  let totalTokens = 0;
+  let lastError = new Error("no attempts");
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (signal.aborted) {
+      const err = new Error("aborted");
+      err.name = "AbortError";
+      throw err;
+    }
+    const { fullText, outputTokens, stats } = await streamOnce(llm, model, messages, opts, signal);
+    totalTokens += outputTokens;
+    if (stats) onEvent(buildLlmCallStatsEvent(stats));
+    let raw;
+    try {
+      raw = parseStructured(fullText);
+    } catch (e) {
+      lastError = e;
+      const isLast2 = attempt === maxRetries;
+      const ev2 = {
+        kind: "structural_error",
+        callSite,
+        errorType: "json_parse",
+        retryAttempt: attempt,
+        succeeded: isLast2 ? false : null,
+        message: lastError.message
+      };
+      onEvent(ev2);
+      structuralErrorCounter.record(ev2.succeeded, attempt);
+      if (isLast2) throw new StructuredValidationError(callSite, attempt + 1, lastError);
+      const feedback2 = formatZodFeedback(null, fullText);
+      messages = [
+        ...messages,
+        { role: "assistant", content: fullText },
+        { role: "user", content: feedback2 }
+      ];
+      continue;
+    }
+    const parsed = schema.safeParse(raw);
+    if (parsed.success) {
+      if (attempt > 0) {
+        const ev2 = {
+          kind: "structural_error",
+          callSite,
+          errorType: "schema_validate",
+          retryAttempt: attempt,
+          succeeded: true,
+          message: "retry succeeded"
+        };
+        onEvent(ev2);
+      }
+      structuralErrorCounter.record(true, attempt);
+      return { value: parsed.data, outputTokens: totalTokens, fullText };
+    }
+    lastError = parsed.error;
+    const isLast = attempt === maxRetries;
+    const feedback = formatZodFeedback(parsed.error, fullText);
+    const ev = {
+      kind: "structural_error",
+      callSite,
+      errorType: "schema_validate",
+      retryAttempt: attempt,
+      succeeded: isLast ? false : null,
+      message: feedback
+    };
+    onEvent(ev);
+    structuralErrorCounter.record(ev.succeeded, attempt);
+    if (isLast) throw new StructuredValidationError(callSite, attempt + 1, lastError);
+    messages = [
+      ...messages,
+      { role: "assistant", content: fullText },
+      { role: "user", content: feedback }
+    ];
+  }
+  throw new StructuredValidationError(callSite, maxRetries + 1, lastError);
+}
+
 // src/phases/zod-schemas.ts
 var EntityTypeSchema = external_exports.object({
   type: external_exports.string().min(1),
@@ -26263,6 +28455,23 @@ var WikiPageSchema = external_exports.object({
   path: external_exports.string(),
   content: external_exports.string(),
   annotation: external_exports.string().optional()
+}).superRefine((val, ctx) => {
+  const fmEnd = val.content.startsWith("---\n") ? (() => {
+    const i = val.content.indexOf("\n---", 4);
+    return i >= 0 ? i + 4 : 0;
+  })() : 0;
+  const body = val.content.slice(fmEnd);
+  if (/\[\[[^\]]+\|[^\]]+\]\]/.test(body)) {
+    ctx.addIssue({ code: external_exports.ZodIssueCode.custom, message: "WikiLink aliases not allowed", path: ["content"] });
+  }
+  const linkRe = /\[\[([^\]|]+)\]\]/g;
+  let m;
+  while ((m = linkRe.exec(body)) !== null) {
+    if (m[1].includes("/")) {
+      ctx.addIssue({ code: external_exports.ZodIssueCode.custom, message: "WikiLink with path", path: ["content"] });
+      break;
+    }
+  }
 });
 var WikiPagesOutputSchema = external_exports.object({
   reasoning: external_exports.string(),
@@ -26280,7 +28489,7 @@ var FormatOutputSchema = external_exports.object({
 });
 
 // prompts/ingest.md
-var ingest_default = '\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0441\u0438\u043D\u0442\u0435\u0437\u0430 wiki-\u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0418\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439/\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n\n\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:\n{{entity_types_block}}\n{{lang_notes}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- CREATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 wiki, \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 >= min_mentions_for_page\n- UPDATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2192 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E, \u041D\u0415 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E\n- SKIP: \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u043E \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0435\u0441\u0442\u044C\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043A\u043E\u043D\u0444\u0438\u0433\u0438/SQL \u043C\u043E\u0436\u043D\u043E \u0446\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445.\n- \u041F\u0443\u0442\u044C \u0441\u0442\u0430\u0442\u044C\u0438 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u0435\u0442\u0441\u044F \u0442\u0438\u043F\u043E\u043C \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u2014 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u043E\u0447\u043D\u044B\u0439 \u0448\u0430\u0431\u043B\u043E\u043D \u0438\u0437 \u0441\u0435\u043A\u0446\u0438\u0438 \xAB\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410\xBB (\u0432\u044B\u0448\u0435, \u0434\u043E \u0431\u043B\u043E\u043A\u0430 \u041F\u0420\u0410\u0412\u0418\u041B\u0410), \u043F\u043E\u0434\u0441\u0442\u0430\u0432\u0438\u0432 \u0438\u043C\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0432\u043C\u0435\u0441\u0442\u043E <EntityName>\n- \u0415\u0441\u043B\u0438 \u0442\u0438\u043F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u043D\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0451\u043D \u0438\u043B\u0438 \u0443 \u0434\u043E\u043C\u0435\u043D\u0430 \u043D\u0435\u0442 entity_types \u2192 \u043F\u0443\u0442\u044C \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- tags: \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 (category/subcategory). \u041F\u0435\u0440\u0435\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u0435\u0433\u0438 \u0438\u0437 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446 (\u043F\u0435\u0440\u0435\u0434\u0430\u043D\u044B \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435). \u0421\u043E\u0437\u0434\u0430\u0432\u0430\u0439 \u043D\u043E\u0432\u044B\u0435 \u043F\u043E \u0442\u043E\u0439 \u0436\u0435 \u0441\u0445\u0435\u043C\u0435 \u0435\u0441\u043B\u0438 \u043D\u0443\u0436\u043D\u043E. \u0424\u043E\u0440\u043C\u0430\u0442: \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0447\u0435\u0440\u0435\u0437 `/`, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432, \u0431\u0435\u0437 `#`\n- wiki_sources: \u043A\u0430\u0436\u0434\u044B\u0439 \u044D\u043B\u0435\u043C\u0435\u043D\u0442 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 [[path/to/source]], \u0442\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 Links \u0432 Obsidian\n- \u0420\u0430\u0437\u0434\u0435\u043B "## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438" \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D \u0434\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0444\u0438\u043A\u0441\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 "## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439" \u0441 \u0434\u0430\u0442\u043E\u0439 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u043C\n- "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438" \u2014 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043A \u0441\u0432\u044F\u0437\u044F\u043C\n- \u0414\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0434\u043E\u0431\u0430\u0432\u044C \u043F\u043E\u043B\u0435 "annotation" \u0432 JSON: \u043E\u0434\u043D\u043E \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u2014 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430 \u043F\u043E \u0441\u043C\u044B\u0441\u043B\u0443\n{{schema_block}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u041E \u041F\u0423\u0422\u0415\u0419: \u043F\u0443\u0442\u044C \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0430\u0442\u044C\u0438 = !Wiki/<domain>/<entity>/<Article>.md \u2014 \u0440\u043E\u0432\u043D\u043E 4 \u0441\u0435\u0433\u043C\u0435\u043D\u0442\u0430.\n\u041D\u0435\u043B\u044C\u0437\u044F: !Wiki/os/os/network/NFS.md (\u0434\u043E\u043C\u0435\u043D \u0434\u0432\u0430\u0436\u0434\u044B), !Wiki/os/network/nfs/NFS.md (5 \u0441\u0435\u0433\u043C\u0435\u043D\u0442\u043E\u0432).\n\u041C\u043E\u0436\u043D\u043E:  !Wiki/os/network/NFS.md\n\n\u041E\u0411\u041E\u0413\u0410\u0429\u0415\u041D\u0418\u0415 \u0422\u0418\u041F\u041E\u0412 (entity_types_delta):\n\u0415\u0441\u043B\u0438 \u043F\u0440\u0438 \u0430\u043D\u0430\u043B\u0438\u0437\u0435 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0442\u044B \u043E\u0431\u043D\u0430\u0440\u0443\u0436\u0438\u0432\u0430\u0435\u0448\u044C:\n- \u043D\u043E\u0432\u044B\u0435 \u0442\u0438\u043F\u044B \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0435\u0439 (\u043A\u043B\u044E\u0447 type \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 \u0442\u0435\u043A\u0443\u0449\u0435\u043C \u0441\u043F\u0438\u0441\u043A\u0435 \u0432\u044B\u0448\u0435), \u0438\u043B\u0438\n- \u0443\u043B\u0443\u0447\u0448\u0435\u043D\u0438\u044F \u043A \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u043C \u0442\u0438\u043F\u0430\u043C (\u0431\u043E\u043B\u0435\u0435 \u0442\u043E\u0447\u043D\u043E\u0435 description \u0438\u043B\u0438 \u0434\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0435 extraction_cues \u0434\u043B\u044F \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0433\u043E \u043A\u043B\u044E\u0447\u0430 type) \u2014\n\u0434\u043E\u0431\u0430\u0432\u044C \u043F\u043E\u043B\u0435 entity_types_delta \u0432 JSON-\u043E\u0442\u0432\u0435\u0442. \u0415\u0441\u043B\u0438 \u043D\u0438\u0447\u0435\u0433\u043E \u043D\u043E\u0432\u043E\u0433\u043E \u2014 \u043F\u0440\u043E\u0441\u0442\u043E \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0430\u0439 \u044D\u0442\u043E \u043F\u043E\u043B\u0435.\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 \u2014 \u043D\u0438\u043A\u0430\u043A\u043E\u0433\u043E \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n{"reasoning":"\u041E\u0431\u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0435: \u043A\u0430\u043A\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437\u0432\u043B\u0435\u0447\u0435\u043D\u044B \u0438 \u043F\u043E\u0447\u0435\u043C\u0443","pages":[{"path":"{{wiki_path}}/entities/EntityName.md","content":"---\\nwiki_sources: [\\"[[{{source_path}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncont\u0435\u043D\u0442...","annotation":"\u041A\u0440\u0430\u0442\u043A\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u0433\u043E \u043F\u043E\u0438\u0441\u043A\u0430"}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}\n';
+var ingest_default = '\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0441\u0438\u043D\u0442\u0435\u0437\u0430 wiki-\u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0418\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439/\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n\n\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:\n{{entity_types_block}}\n{{lang_notes}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- CREATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 wiki, \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 >= min_mentions_for_page\n- UPDATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2192 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E, \u041D\u0415 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E\n- SKIP: \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u043E \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0435\u0441\u0442\u044C\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043A\u043E\u043D\u0444\u0438\u0433\u0438/SQL \u043C\u043E\u0436\u043D\u043E \u0446\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445.\n- \u041F\u0443\u0442\u044C \u0441\u0442\u0430\u0442\u044C\u0438 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u0435\u0442\u0441\u044F \u0442\u0438\u043F\u043E\u043C \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u2014 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u043E\u0447\u043D\u044B\u0439 \u0448\u0430\u0431\u043B\u043E\u043D \u0438\u0437 \u0441\u0435\u043A\u0446\u0438\u0438 \xAB\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410\xBB (\u0432\u044B\u0448\u0435, \u0434\u043E \u0431\u043B\u043E\u043A\u0430 \u041F\u0420\u0410\u0412\u0418\u041B\u0410), \u043F\u043E\u0434\u0441\u0442\u0430\u0432\u0438\u0432 \u0438\u043C\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0432\u043C\u0435\u0441\u0442\u043E <EntityName>\n- \u0415\u0441\u043B\u0438 \u0442\u0438\u043F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u043D\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0451\u043D \u0438\u043B\u0438 \u0443 \u0434\u043E\u043C\u0435\u043D\u0430 \u043D\u0435\u0442 entity_types \u2192 \u043F\u0443\u0442\u044C \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- tags: \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 (category/subcategory). \u041F\u0435\u0440\u0435\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u0435\u0433\u0438 \u0438\u0437 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446 (\u043F\u0435\u0440\u0435\u0434\u0430\u043D\u044B \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435). \u0421\u043E\u0437\u0434\u0430\u0432\u0430\u0439 \u043D\u043E\u0432\u044B\u0435 \u043F\u043E \u0442\u043E\u0439 \u0436\u0435 \u0441\u0445\u0435\u043C\u0435 \u0435\u0441\u043B\u0438 \u043D\u0443\u0436\u043D\u043E. \u0424\u043E\u0440\u043C\u0430\u0442: \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0447\u0435\u0440\u0435\u0437 `/`, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432, \u0431\u0435\u0437 `#`\n- wiki_sources: \u043A\u0430\u0436\u0434\u044B\u0439 \u044D\u043B\u0435\u043C\u0435\u043D\u0442 \u2014 bare \u0438\u043C\u044F \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0431\u0435\u0437 \u043F\u0443\u0442\u0438 \u0438 \u0431\u0435\u0437 \u043F\u0441\u0435\u0432\u0434\u043E\u043D\u0438\u043C\u0430: [[\u0418\u043C\u044F\u0424\u0430\u0439\u043B\u0430]]. \u041D\u0415 [[\u043F\u0430\u043F\u043A\u0430/\u0418\u043C\u044F.md]]\n- wiki_outgoing_links \u0438 [[\u0441\u0441\u044B\u043B\u043A\u0438]] \u0432 \u0442\u0435\u043A\u0441\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u2014 \u0422\u041E\u041B\u042C\u041A\u041E bare \u0438\u043C\u044F \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0431\u0435\u0437 \u043F\u0443\u0442\u0438 \u0438 \u0431\u0435\u0437 \u043F\u0441\u0435\u0432\u0434\u043E\u043D\u0438\u043C\u0430: [[\u0418\u043C\u044F\u0421\u0442\u0440\u0430\u043D\u0438\u0446\u044B]]. \u041D\u0415 [[\u043F\u0430\u043F\u043A\u0430/\u0418\u043C\u044F]], \u041D\u0415 [[\u0418\u043C\u044F|\u041F\u0441\u0435\u0432\u0434\u043E\u043D\u0438\u043C]]\n- \u0420\u0430\u0437\u0434\u0435\u043B "## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438" \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D \u0434\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0444\u0438\u043A\u0441\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 "## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439" \u0441 \u0434\u0430\u0442\u043E\u0439 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u043C\n- "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438" \u2014 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043A \u0441\u0432\u044F\u0437\u044F\u043C\n- \u0414\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0434\u043E\u0431\u0430\u0432\u044C \u043F\u043E\u043B\u0435 "annotation" \u0432 JSON: \u043E\u0434\u043D\u043E \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u2014 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430 \u043F\u043E \u0441\u043C\u044B\u0441\u043B\u0443\n{{schema_block}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u041E \u041F\u0423\u0422\u0415\u0419: \u043F\u0443\u0442\u044C \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0430\u0442\u044C\u0438 = !Wiki/<domain>/<entity>/<Article>.md \u2014 \u0440\u043E\u0432\u043D\u043E 4 \u0441\u0435\u0433\u043C\u0435\u043D\u0442\u0430.\n\u041D\u0435\u043B\u044C\u0437\u044F: !Wiki/os/os/network/NFS.md (\u0434\u043E\u043C\u0435\u043D \u0434\u0432\u0430\u0436\u0434\u044B), !Wiki/os/network/nfs/NFS.md (5 \u0441\u0435\u0433\u043C\u0435\u043D\u0442\u043E\u0432).\n\u041C\u043E\u0436\u043D\u043E:  !Wiki/os/network/NFS.md\n\n\u041E\u0411\u041E\u0413\u0410\u0429\u0415\u041D\u0418\u0415 \u0422\u0418\u041F\u041E\u0412 (entity_types_delta):\n\u0415\u0441\u043B\u0438 \u043F\u0440\u0438 \u0430\u043D\u0430\u043B\u0438\u0437\u0435 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0442\u044B \u043E\u0431\u043D\u0430\u0440\u0443\u0436\u0438\u0432\u0430\u0435\u0448\u044C:\n- \u043D\u043E\u0432\u044B\u0435 \u0442\u0438\u043F\u044B \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0435\u0439 (\u043A\u043B\u044E\u0447 type \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 \u0442\u0435\u043A\u0443\u0449\u0435\u043C \u0441\u043F\u0438\u0441\u043A\u0435 \u0432\u044B\u0448\u0435), \u0438\u043B\u0438\n- \u0443\u043B\u0443\u0447\u0448\u0435\u043D\u0438\u044F \u043A \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u043C \u0442\u0438\u043F\u0430\u043C (\u0431\u043E\u043B\u0435\u0435 \u0442\u043E\u0447\u043D\u043E\u0435 description \u0438\u043B\u0438 \u0434\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0435 extraction_cues \u0434\u043B\u044F \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0433\u043E \u043A\u043B\u044E\u0447\u0430 type) \u2014\n\u0434\u043E\u0431\u0430\u0432\u044C \u043F\u043E\u043B\u0435 entity_types_delta \u0432 JSON-\u043E\u0442\u0432\u0435\u0442. \u0415\u0441\u043B\u0438 \u043D\u0438\u0447\u0435\u0433\u043E \u043D\u043E\u0432\u043E\u0433\u043E \u2014 \u043F\u0440\u043E\u0441\u0442\u043E \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0430\u0439 \u044D\u0442\u043E \u043F\u043E\u043B\u0435.\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 \u2014 \u043D\u0438\u043A\u0430\u043A\u043E\u0433\u043E \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n{"reasoning":"\u041E\u0431\u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0435: \u043A\u0430\u043A\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437\u0432\u043B\u0435\u0447\u0435\u043D\u044B \u0438 \u043F\u043E\u0447\u0435\u043C\u0443","pages":[{"path":"{{wiki_path}}/entities/EntityName.md","content":"---\\nwiki_sources: [\\"[[{{source_stem}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncont\u0435\u043D\u0442...","annotation":"\u041A\u0440\u0430\u0442\u043A\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u0433\u043E \u043F\u043E\u0438\u0441\u043A\u0430"}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}\n';
 
 // src/phases/template.ts
 function render(template, vars) {
@@ -26442,9 +28651,9 @@ async function upsertIndexAnnotation(vaultTools, wikiFolder, pid, annotation, fu
 }
 
 // src/wiki-graph.ts
-var import_path_browserify2 = __toESM(require_path_browserify(), 1);
+var import_path_browserify3 = __toESM(require_path_browserify(), 1);
 function pageId(vaultPath) {
-  return (0, import_path_browserify2.basename)(vaultPath, ".md");
+  return (0, import_path_browserify3.basename)(vaultPath, ".md");
 }
 function buildWikiGraph(pages) {
   const graph = /* @__PURE__ */ new Map();
@@ -26519,6 +28728,32 @@ function checkGraphStructure(graph, hubThreshold) {
   return issues.join("\n");
 }
 
+// src/wiki-graph-cache.ts
+function hashPages(pages) {
+  const parts = [];
+  const keys = [...pages.keys()].sort();
+  for (const k of keys) parts.push(`${k}:${pages.get(k).length}`);
+  return parts.join("|");
+}
+var GraphCache = class {
+  store = /* @__PURE__ */ new Map();
+  get(domainId, pages) {
+    const hash = hashPages(pages);
+    const hit = this.store.get(domainId);
+    if (hit && hit.hash === hash) return { graph: hit.graph, fromCache: true };
+    const graph = buildWikiGraph(pages);
+    this.store.set(domainId, { hash, graph });
+    return { graph, fromCache: false };
+  }
+  invalidate(domainId) {
+    this.store.delete(domainId);
+  }
+  clear() {
+    this.store.clear();
+  }
+};
+var graphCache = new GraphCache();
+
 // src/wiki-log.ts
 function ts() {
   return (/* @__PURE__ */ new Date()).toISOString().slice(0, 19);
@@ -26562,18 +28797,178 @@ async function appendWikiLog(vaultTools, domainFolder, domainId, event) {
   await vaultTools.write(logPath, existing + buildEntry(domainId, event));
 }
 
+// src/wiki-link-validator.ts
+function splitFrontmatter(content) {
+  if (!content.startsWith("---\n")) return null;
+  const closeIdx = content.indexOf("\n---", 4);
+  if (closeIdx === -1) return null;
+  const fmEnd = closeIdx + 4;
+  const after = content[fmEnd];
+  if (after !== void 0 && after !== "\n" && after !== "\r") return null;
+  return [content.slice(0, fmEnd), content.slice(fmEnd)];
+}
+function extractLinks(text) {
+  const links = [];
+  const re = /\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]/g;
+  let m;
+  while ((m = re.exec(text)) !== null) links.push(m[1].trim());
+  return links;
+}
+function extractFmLinks(fm) {
+  const set = /* @__PURE__ */ new Set();
+  const re = /^\s+- "(\[\[[^\]]+\]\])"/mg;
+  let m;
+  while ((m = re.exec(fm)) !== null) set.add(m[1]);
+  return set;
+}
+function setFmLinks(fm, links) {
+  const block = links.length > 0 ? "wiki_outgoing_links:\n" + links.map((l) => `  - "${l}"`).join("\n") : "wiki_outgoing_links: []";
+  const re = /^wiki_outgoing_links:(?:[ \t]*\[\]|(?:\n  - "[^"]*")*)/m;
+  if (re.test(fm)) return fm.replace(re, block);
+  return fm.replace(/\n---$/, `
+${block}
+---`);
+}
+function fixOnePass(content) {
+  const parts = splitFrontmatter(content);
+  if (!parts) {
+    return stripPath(stripAlias(content));
+  }
+  let [fm, body] = parts;
+  body = stripAlias(body);
+  body = stripPath(body);
+  const inlineMatch = fm.match(/^wiki_outgoing_links:[ \t]*(\[.*?\])[ \t]*$/m);
+  if (inlineMatch) {
+    try {
+      const arr = JSON.parse(inlineMatch[1]);
+      fm = fm.replace(
+        /^wiki_outgoing_links:[ \t]*\[.*?\][ \t]*$/m,
+        arr.length > 0 ? "wiki_outgoing_links:\n" + arr.map((l) => `  - "${l}"`).join("\n") : "wiki_outgoing_links: []"
+      );
+    } catch {
+    }
+  }
+  const bodyLinks = extractLinks(body).map((l) => `[[${l}]]`);
+  fm = setFmLinks(fm, bodyLinks);
+  return fm + body;
+}
+function stripAlias(text) {
+  return text.replace(/\[\[([^\]|]+)\|[^\]]+\]\]/g, "[[$1]]");
+}
+function stripPath(text) {
+  return text.replace(/\[\[([^\]|]+)\]\]/g, (_, link) => {
+    if (!link.includes("/")) return `[[${link}]]`;
+    return `[[${link.split("/").pop()}]]`;
+  });
+}
+function validateWikiLinks(pages) {
+  const violations = [];
+  for (const [pagePath, content] of pages) {
+    const aliasRe = /\[\[([^\]|]+)\|([^\]]+)\]\]/g;
+    let m;
+    while ((m = aliasRe.exec(content)) !== null) {
+      violations.push({ page: pagePath, kind: "alias", detail: m[0] });
+    }
+    const linkRe = /\[\[([^\]|]+)\]\]/g;
+    while ((m = linkRe.exec(content)) !== null) {
+      if (m[1].includes("/")) {
+        violations.push({ page: pagePath, kind: "path", detail: m[0] });
+      }
+    }
+    const fmParts = splitFrontmatter(content);
+    const fmContent = fmParts ? fmParts[0] : "";
+    if (fmContent && /^wiki_outgoing_links:[ \t]*\[/m.test(fmContent)) {
+      violations.push({ page: pagePath, kind: "inline-json", detail: "wiki_outgoing_links: [...]" });
+    }
+    const parts = splitFrontmatter(content);
+    if (parts && /^wiki_outgoing_links:/m.test(parts[0])) {
+      const [fm, body] = parts;
+      const bodyLinksFmt = new Set(extractLinks(body).map((l) => `[[${l}]]`));
+      const fmLinks = extractFmLinks(fm);
+      const synced = bodyLinksFmt.size === fmLinks.size && [...bodyLinksFmt].every((l) => fmLinks.has(l));
+      if (!synced) {
+        violations.push({
+          page: pagePath,
+          kind: "outgoing-desync",
+          detail: `body: [${[...bodyLinksFmt].join(", ")}], fm: [${[...fmLinks].join(", ")}]`
+        });
+      }
+    }
+  }
+  return violations;
+}
+function fixWikiLinks(pages, maxPasses, knownPageStems) {
+  const warnings = [];
+  if (maxPasses === 0) {
+    const violations = validateWikiLinks(pages);
+    for (const v of violations) {
+      warnings.push(`${v.page}: ${v.kind} \u2014 ${v.detail}`);
+    }
+    if (knownPageStems) {
+      for (const [path2, content] of pages) {
+        const parts = splitFrontmatter(content);
+        const body = parts ? parts[1] : content;
+        for (const link of extractLinks(body)) {
+          const stem = link.split("/").pop();
+          if (!knownPageStems.has(stem)) {
+            warnings.push(`${path2}: dead link [[${stem}]]`);
+          }
+        }
+      }
+    }
+    return { fixed: new Map(pages), warnings };
+  }
+  let current = new Map(pages);
+  for (let pass = 0; pass < maxPasses; pass++) {
+    const violations = validateWikiLinks(current);
+    if (violations.length === 0) break;
+    const next = /* @__PURE__ */ new Map();
+    for (const [path2, content] of current) {
+      try {
+        next.set(path2, fixOnePass(content));
+      } catch (e) {
+        next.set(path2, content);
+        warnings.push(`${path2}: fix error \u2014 ${e.message}`);
+      }
+    }
+    current = next;
+  }
+  const remaining = validateWikiLinks(current);
+  for (const v of remaining) {
+    warnings.push(`${v.page}: ${v.kind} \u2014 ${v.detail}`);
+  }
+  if (knownPageStems) {
+    for (const [path2, content] of current) {
+      const parts = splitFrontmatter(content);
+      const body = parts ? parts[1] : content;
+      for (const link of extractLinks(body)) {
+        const stem = link.split("/").pop();
+        if (!knownPageStems.has(stem)) {
+          warnings.push(`${path2}: dead link [[${stem}]]`);
+        }
+      }
+    }
+  }
+  return { fixed: current, warnings };
+}
+function checkWikiLinks(pages) {
+  const violations = validateWikiLinks(pages);
+  if (violations.length === 0) return "";
+  return violations.map((v) => `- ${v.page}: ${v.kind} link ${v.detail}`).join("\n");
+}
+
 // src/phases/ingest.ts
 function parseWikiStatus(content) {
   const m = /^---\n[\s\S]*?^wiki_status:[ \t]*(.+)$/m.exec(content);
   return m ? m[1].trim() : "unknown";
 }
-async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}) {
+async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}, similarity, cachedAnnotations, graphDepth = 1, wikiLinkValidationRetries = 3) {
   const filePath = args[0];
   if (!filePath) {
     yield { kind: "error", message: "ingest: file path required" };
     return;
   }
-  const absSource = (0, import_path_browserify3.isAbsolute)(filePath) ? filePath : (0, import_path_browserify3.join)(vaultRoot, filePath);
+  const absSource = (0, import_path_browserify4.isAbsolute)(filePath) ? filePath : (0, import_path_browserify4.join)(vaultRoot, filePath);
   const sourceVaultPath = vaultTools.toVaultPath(absSource);
   if (!sourceVaultPath) {
     yield { kind: "error", message: `Source file ${filePath} is outside the vault.` };
@@ -26593,7 +28988,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     yield { kind: "error", message: "No domain found for this file. Configure domain-map." };
     return;
   }
-  const absWiki = (0, import_path_browserify3.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+  const absWiki = (0, import_path_browserify4.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
     yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
@@ -26606,7 +29001,26 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     tryRead(vaultTools, domainIndexPath(domainRoot))
   ]);
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
-  const existingPages = await vaultTools.readAll(existingPaths.filter((f) => !f.endsWith("_index.md")));
+  const nonMetaPaths = existingPaths.filter((f) => !f.endsWith("_index.md"));
+  let existingPages;
+  if (similarity) {
+    await similarity.loadCache(domainRoot, vaultTools);
+    const annotations = cachedAnnotations ?? parseIndexAnnotations(indexContent);
+    const seedPaths = await similarity.selectRelevant(sourceContent, annotations, existingPaths);
+    const allPages = await vaultTools.readAll(nonMetaPaths);
+    const { graph } = graphCache.get(domain.id, allPages);
+    const seedIds = seedPaths.map((p) => pageId(p));
+    const expandedIds = bfsExpand(seedIds, graph, graphDepth);
+    existingPages = new Map([...allPages].filter(([p]) => expandedIds.has(pageId(p))));
+    yield {
+      kind: "info_text",
+      icon: similarity.config.mode === "embedding" ? "\u{1F50D}" : "\u{1F4CB}",
+      summary: `${existingPages.size}/${nonMetaPaths.length} wiki-pages loaded (${similarity.config.mode}, bfs depth ${graphDepth})`,
+      details: seedIds
+    };
+  } else {
+    existingPages = await vaultTools.readAll(nonMetaPaths);
+  }
   yield { kind: "assistant_text", delta: `Synthesizing wiki pages for domain "${domain.id}"...
 ` };
   const start = Date.now();
@@ -26619,6 +29033,10 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     schemaContent,
     indexContent
   );
+  const inputChars = messages.reduce((s, m) => s + (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length), 0);
+  const inputTokEst = Math.round(inputChars / 4);
+  const inputTokFmt = inputTokEst >= 1e3 ? `~${(inputTokEst / 1e3).toFixed(1)}k` : `~${inputTokEst}`;
+  yield { kind: "tool_use", name: "Synthesising pages", input: {} };
   const pwtEvents = [];
   let parseResult;
   try {
@@ -26633,8 +29051,10 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
       signal,
       onEvent: (ev) => pwtEvents.push(ev)
     });
+    yield { kind: "tool_result", ok: true, preview: `${existingPages.size} pages \xB7 ${inputTokFmt} tokens sent` };
   } catch (e) {
     if (signal.aborted || e.name === "AbortError") return;
+    yield { kind: "tool_result", ok: false, preview: e.message };
     for (const ev of pwtEvents) yield ev;
     yield { kind: "error", message: `ingest: LLM output failed validation \u2014 ${e.message}` };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
@@ -26670,6 +29090,14 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
       pages = valid;
     }
   }
+  const pagesMap = new Map(pages.map((p) => [p.path, p.content]));
+  const allVaultPaths = await vaultTools.listFiles("").catch(() => []);
+  const knownStems = /* @__PURE__ */ new Set([
+    ...allVaultPaths.filter((p) => p.endsWith(".md")).map((p) => p.split("/").pop().replace(/\.md$/, "")),
+    ...[...pagesMap.keys()].map((p) => p.split("/").pop().replace(/\.md$/, ""))
+  ]);
+  const wlFixResult = fixWikiLinks(pagesMap, wikiLinkValidationRetries, knownStems);
+  pages = pages.map((p) => ({ ...p, content: wlFixResult.fixed.get(p.path) ?? p.content }));
   const written = [];
   const logEntries = [];
   for (const page of pages) {
@@ -26683,7 +29111,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
       existingContent = await vaultTools.read(page.path);
     } catch {
     }
-    yield { kind: "tool_use", name: "Write", input: { path: page.path } };
+    yield { kind: "tool_use", name: existingContent === null ? "Create" : "Update", input: { path: page.path } };
     try {
       await vaultTools.write(page.path, page.content);
       written.push(page.path);
@@ -26705,7 +29133,9 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
       yield { kind: "tool_result", ok: false, preview: e.message };
     }
   }
-  const resultText = buildIngestSummary(domain.id, sourceVaultPath, written, pages.length);
+  const createdCount = logEntries.filter((e) => e.action === "\u0421\u041E\u0417\u0414\u0410\u041D\u0410").length;
+  const updatedCount = logEntries.filter((e) => e.action === "\u041E\u0411\u041D\u041E\u0412\u041B\u0415\u041D\u0410").length;
+  const resultText = buildIngestSummary(domain.id, sourceVaultPath, createdCount, updatedCount, pages.length);
   yield { kind: "assistant_text", delta: resultText };
   const delta = parseResult.value.entity_types_delta;
   if (delta?.length) {
@@ -26725,14 +29155,14 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     const backlinkToday = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
     const existingArticles = parseWikiArticlesFromFm(sourceContent);
-    const writtenLinks = written.map((p) => `[[${p}]]`);
+    const writtenLinks = written.map((p) => `[[${p.split("/").pop().replace(/\.md$/, "")}]]`);
     const mergedArticles = [.../* @__PURE__ */ new Set([...existingArticles, ...writtenLinks])];
     const updatedSource = upsertRawFrontmatter(sourceContent, {
       wiki_added: isFirstTime ? backlinkToday : void 0,
       wiki_updated: backlinkToday,
       wiki_articles: mergedArticles
     });
-    yield { kind: "tool_use", name: "Write", input: { path: sourceVaultPath } };
+    yield { kind: "tool_use", name: "Update", input: { path: sourceVaultPath } };
     try {
       await vaultTools.write(sourceVaultPath, updatedSource);
       yield { kind: "tool_result", ok: true, preview: `backlinks \u2192 ${sourceVaultPath}` };
@@ -26742,24 +29172,41 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     const parentPath = extractParentSourcePath(absSource, vaultRoot);
     yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
   }
+  if (similarity && written.length > 0) {
+    try {
+      const updatedIndex = await vaultTools.read(domainIndexPath(wikiVaultPath)).catch(() => "");
+      const updatedAnnotations = parseIndexAnnotations(updatedIndex);
+      await similarity.refreshCache(domainRoot, vaultTools, updatedAnnotations);
+    } catch {
+    }
+  }
+  if (wlFixResult.warnings.length > 0) {
+    yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "WikiLink warnings", details: wlFixResult.warnings };
+  }
   yield { kind: "result", durationMs: Date.now() - start, text: resultText, outputTokens: outputTokens || void 0 };
 }
-function buildIngestSummary(domainId, sourcePath, written, total) {
+function buildIngestSummary(domainId, sourcePath, createdCount, updatedCount, total) {
   const src = sourcePath.split("/").pop() ?? sourcePath;
-  if (written.length === 0) {
+  const totalWritten = createdCount + updatedCount;
+  if (totalWritten === 0) {
     return `\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \xAB${src}\xBB \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u0430\u043D \u2014 \u043D\u043E\u0432\u044B\u0445 \u0438\u043B\u0438 \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043D\u0435\u0442.`;
   }
-  const skipped = total - written.length;
-  const lines = [`\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \xAB${src}\xBB \u2192 \u0434\u043E\u043C\u0435\u043D \xAB${domainId}\xBB: \u0437\u0430\u043F\u0438\u0441\u0430\u043D\u043E ${written.length} \u0441\u0442\u0440.${skipped > 0 ? `, \u043E\u0448\u0438\u0431\u043E\u043A ${skipped}` : ""}`];
-  for (const p of written) {
-    lines.push(`  \u2022 ${p.split("/").pop()}`);
+  const skipped = total - totalWritten;
+  let countStr;
+  if (createdCount > 0 && updatedCount > 0) {
+    countStr = `\u0441\u043E\u0437\u0434\u0430\u043D\u043E ${createdCount}, \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E ${updatedCount}`;
+  } else if (createdCount > 0) {
+    countStr = `\u0441\u043E\u0437\u0434\u0430\u043D\u043E ${createdCount} \u0441\u0442\u0440.`;
+  } else {
+    countStr = `\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E ${updatedCount} \u0441\u0442\u0440.`;
   }
-  return lines.join("\n");
+  const errStr = skipped > 0 ? `, \u043E\u0448\u0438\u0431\u043E\u043A ${skipped}` : "";
+  return `\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \xAB${src}\xBB \u2192 \u0434\u043E\u043C\u0435\u043D \xAB${domainId}\xBB: ${countStr}${errStr}`;
 }
 function detectDomain(absFilePath, domains, vaultRoot) {
   for (const d of domains) {
     const matched = d.source_paths?.some((sp) => {
-      const abs = (0, import_path_browserify3.isAbsolute)(sp) ? sp : (0, import_path_browserify3.join)(vaultRoot, sp);
+      const abs = (0, import_path_browserify4.isAbsolute)(sp) ? sp : (0, import_path_browserify4.join)(vaultRoot, sp);
       return absFilePath.startsWith(abs);
     });
     if (matched) return d;
@@ -26787,10 +29234,10 @@ async function tryRead(vaultTools, path2) {
   }
 }
 function extractParentSourcePath(absSource, vaultRoot) {
-  const parentAbs = (0, import_path_browserify3.dirname)(absSource);
+  const parentAbs = (0, import_path_browserify4.dirname)(absSource);
   const normedVault = vaultRoot.endsWith("/") ? vaultRoot : vaultRoot + "/";
   const clamped = (parentAbs + "/").startsWith(normedVault) ? parentAbs : vaultRoot;
-  const rel = (0, import_path_browserify3.relative)(vaultRoot, clamped);
+  const rel = (0, import_path_browserify4.relative)(vaultRoot, clamped);
   return (rel || ".") + "/";
 }
 function splitByPathValidity(pages, wikiVaultPath) {
@@ -26860,7 +29307,8 @@ ${c}`).join("\n\n") : "\u041D\u0435\u0442.";
     today,
     schema_block: schemaContent ? `\u041A\u041E\u041D\u0412\u0415\u041D\u0426\u0418\u0418 (_wiki_schema.md):
 ${schemaContent}` : "",
-    source_path: sourcePath
+    source_path: sourcePath,
+    source_stem: sourcePath.split("/").pop().replace(/\.md$/, "")
   });
   return [
     { role: "system", content: systemContent },
@@ -26885,32 +29333,6 @@ ${indexContent}` : ""
 
 // prompts/query.md
 var query_default = "\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u043F\u043E wiki-\u0431\u0430\u0437\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u0411\u0443\u0434\u044C \u0442\u043E\u0447\u0435\u043D \u0438 \u043B\u0430\u043A\u043E\u043D\u0438\u0447\u0435\u043D.\n\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 WikiLinks [[\u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435]] \u043F\u0440\u0438 \u0441\u0441\u044B\u043B\u043A\u0430\u0445 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0437 \u0438\u043D\u0434\u0435\u043A\u0441\u0430.\n{{entity_types_block}}\n{{index_block}}\n";
-
-// src/wiki-graph-cache.ts
-function hashPages(pages) {
-  const parts = [];
-  const keys = [...pages.keys()].sort();
-  for (const k of keys) parts.push(`${k}:${pages.get(k).length}`);
-  return parts.join("|");
-}
-var GraphCache = class {
-  store = /* @__PURE__ */ new Map();
-  get(domainId, pages) {
-    const hash = hashPages(pages);
-    const hit = this.store.get(domainId);
-    if (hit && hit.hash === hash) return { graph: hit.graph, fromCache: true };
-    const graph = buildWikiGraph(pages);
-    this.store.set(domainId, { hash, graph });
-    return { graph, fromCache: false };
-  }
-  invalidate(domainId) {
-    this.store.delete(domainId);
-  }
-  clear() {
-    this.store.clear();
-  }
-};
-var graphCache = new GraphCache();
 
 // src/wiki-seeds.ts
 var STOP_WORDS = /* @__PURE__ */ new Set([
@@ -27023,7 +29445,7 @@ function selectSeeds(question, pages, topK, minScore, indexAnnotations) {
 
 // src/phases/query.ts
 var META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
-async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1) {
+async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1, similarity) {
   const question = args[0]?.trim();
   if (!question) {
     yield { kind: "error", message: "query: question required" };
@@ -27039,18 +29461,28 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
     return;
   }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
+  yield { kind: "tool_use", name: "Read", input: { path: domainIndexPath(wikiVaultPath) } };
   await ensureDomainConfig(vaultTools, wikiVaultPath);
   const indexContent = await tryRead2(vaultTools, domainIndexPath(wikiVaultPath));
   if (signal.aborted) return;
   const indexAnnotations = parseIndexAnnotations(indexContent);
+  yield { kind: "tool_result", ok: true, preview: `${indexAnnotations.size} annotations` };
   const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
   const minScore = Math.max(0, Math.min(1, seedMinScore));
   const start = Date.now();
   let outputTokens = 0;
-  const syntheticPages = new Map(
-    [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""])
-  );
-  let seeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+  let seeds;
+  if (similarity && similarity.config.mode === "embedding") {
+    await similarity.loadCache(wikiVaultPath, vaultTools);
+    const allAnnotatedPaths = [...indexAnnotations.keys()].map((id) => `${wikiVaultPath}/${id}.md`);
+    const selected = await similarity.selectRelevant(question, indexAnnotations, allAnnotatedPaths);
+    seeds = selected.map((p) => pageId(p)).slice(0, topK);
+  } else {
+    const syntheticPages = new Map(
+      [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""])
+    );
+    seeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+  }
   if (seeds.length === 0 && indexAnnotations.size > 0) {
     if (signal.aborted) return;
     const allAnnotatedIds = [...indexAnnotations.keys()];
@@ -27067,47 +29499,17 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
   if (signal.aborted) return;
-  const idToPath = new Map(files.map((f) => [pageId(f), f]));
-  let pages;
-  let fromCache;
-  let selectedIds;
-  if (seeds.length > 0) {
-    const seedPaths = seeds.map((id) => idToPath.get(id)).filter((p) => !!p);
-    yield { kind: "tool_use", name: "Read", input: { files: seedPaths.length } };
-    pages = await vaultTools.readAll(seedPaths);
-    yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
-    fromCache = false;
-    selectedIds = new Set(seeds);
-    yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache };
-  } else {
-    yield { kind: "tool_use", name: "Read", input: { files: files.length } };
-    pages = await vaultTools.readAll(files);
-    yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
-    if (signal.aborted) return;
-    const graphResult = graphCache.get(domain.id, pages);
-    fromCache = graphResult.fromCache;
-    const allPageIds = [...pages.keys()].map(pageId);
-    seeds = selectSeeds(question, pages, topK, minScore, indexAnnotations);
-    if (seeds.length === 0) {
-      yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allPageIds.length } };
-      const seedOpts = { ...opts, thinkingBudgetTokens: void 0 };
-      const seedRes = await llmSelectSeeds(question, indexAnnotations, allPageIds, llm, model, seedOpts, signal);
-      seeds = seedRes.seeds;
-      outputTokens += seedRes.outputTokens;
-      yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
-    }
-    if (signal.aborted) return;
-    if (seeds.length === 0) {
-      yield { kind: "error", message: "No relevant pages found for this query." };
-      return;
-    }
-    selectedIds = bfsExpand(seeds, graphResult.graph, graphDepth);
-    yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: pages.size, fromCache };
-  }
+  yield { kind: "tool_use", name: "Read", input: { files: files.length } };
+  const pages = await vaultTools.readAll(files);
+  yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
+  if (signal.aborted) return;
+  const graphResult = graphCache.get(domain.id, pages);
   if (seeds.length === 0) {
     yield { kind: "error", message: "No relevant pages found for this query." };
     return;
   }
+  const selectedIds = bfsExpand(seeds, graphResult.graph, graphDepth);
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache };
   const seedSet = new Set(seeds);
   const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);
   const entityTypesBlock = buildEntityTypesBlock2(domain);
@@ -27127,11 +29529,15 @@ ${contextBlock}` }
   ];
   const params = buildChatParams(model, messages, opts, true);
   let answer = "";
+  let streamStats;
+  yield { kind: "tool_use", name: "Answering", input: {} };
   try {
-    const stream = await llm.chat.completions.create(
+    const requestStartMs = Date.now();
+    const rawStream = await llm.chat.completions.create(
       { ...params, stream: true },
       { signal }
     );
+    const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
     for await (const chunk of stream) {
       const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
@@ -27141,6 +29547,7 @@ ${contextBlock}` }
       }
       if (tok !== void 0) outputTokens += tok;
     }
+    streamStats = getStats();
   } catch (e) {
     if (signal.aborted || e.name === "AbortError") return;
     const resp = await llm.chat.completions.create(
@@ -27152,6 +29559,8 @@ ${contextBlock}` }
     if (answer) yield { kind: "assistant_text", delta: answer };
   }
   if (signal.aborted) return;
+  yield { kind: "tool_result", ok: !!answer, preview: answer ? `${answer.length} chars` : "no response" };
+  if (streamStats) yield buildLlmCallStatsEvent(streamStats);
   if (save && answer) {
     const slug = question.slice(0, 40).replace(/[^a-zA-Z0-9а-яёА-ЯЁ\s]/g, "").trim().replace(/\s+/g, "-");
     const savePath = `${wikiVaultPath}/Q-${slug}.md`;
@@ -27264,14 +29673,14 @@ ${types}${notes}`;
 }
 
 // src/phases/lint.ts
-var import_path_browserify4 = __toESM(require_path_browserify(), 1);
+var import_path_browserify5 = __toESM(require_path_browserify(), 1);
 
 // prompts/lint.md
 var lint_default = '\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u0438 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0410\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0439 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u043E wiki: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442, \u0431\u0438\u0442\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438.\n\u041E\u0434\u043D\u043E\u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043F\u043E\u0434\u0433\u043E\u0442\u043E\u0432\u044C \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0435 \u0432\u0435\u0440\u0441\u0438\u0438 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446.\n{{entity_types_block}}\n{{schema_block}}\n\n\u041F\u0440\u0438 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0441\u0442\u0440\u0430\u043D\u0438\u0446:\n- tags: \u043F\u0440\u043E\u0432\u0435\u0440\u044C \u0438 \u043E\u0431\u043D\u043E\u0432\u0438 \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 (category/subcategory). \u041F\u0435\u0440\u0435\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u0435\u0433\u0438 \u0438\u0437 \u0434\u0440\u0443\u0433\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0434\u043E\u043C\u0435\u043D\u0430 (\u043F\u0435\u0440\u0435\u0434\u0430\u043D\u044B \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435). \u0424\u043E\u0440\u043C\u0430\u0442: \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0447\u0435\u0440\u0435\u0437 `/`, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432, \u0431\u0435\u0437 `#`\n- "annotation": \u043E\u0434\u043D\u043E \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u2014 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430 \u043F\u043E \u0441\u043C\u044B\u0441\u043B\u0443\n- \u043C\u0451\u0440\u0442\u0432\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438 [[X]] \u0443\u0431\u0435\u0440\u0438 \u0438\u043B\u0438 \u0437\u0430\u043C\u0435\u043D\u0438; \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0439 frontmatter \u0434\u043E\u0431\u0430\u0432\u044C; \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0438\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 \u2014 \u043D\u0438\u043A\u0430\u043A\u043E\u0433\u043E \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n{"reasoning":"\u0446\u0435\u043F\u043E\u0447\u043A\u0430 \u0440\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439","report":"## \u041E\u0442\u0447\u0451\u0442 lint\\n\\n\u0410\u043D\u0430\u043B\u0438\u0437 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 Markdown...","fixes":[{"path":"!Wiki/domain/type/Entity.md","content":"\u043F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B","annotation":"\u043A\u0440\u0430\u0442\u043A\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435"}]}\n\n\u041F\u043E\u043B\u0435 `fixes` \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0422\u041E\u041B\u042C\u041A\u041E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0435\u0441\u043B\u0438 \u043F\u0440\u0430\u0432\u043E\u043A \u043D\u0435\u0442).\n\u041F\u043E\u043B\u0435 `report` \u2014 \u043F\u043E\u043B\u043D\u044B\u0439 markdown-\u043E\u0442\u0447\u0451\u0442 \u0434\u043B\u044F \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F.\n';
 
 // src/phases/lint.ts
 var META_FILES2 = ["_index.md", "_log.md"];
-async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal, hubThreshold = 20, opts = {}) {
+async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal, hubThreshold = 20, wikiLinkValidationRetries = 3, opts = {}, similarity) {
   const domainId = args[0];
   const targets = domainId ? domains.filter((d) => d.id === domainId) : domains;
   if (targets.length === 0) {
@@ -27283,24 +29692,26 @@ async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal
   let outputTokens = 0;
   for (const domain of targets) {
     if (signal.aborted) return;
-    const absWiki = (0, import_path_browserify4.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+    const absWiki = (0, import_path_browserify5.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
     const wikiVaultPath = vaultTools.toVaultPath(absWiki);
     if (!wikiVaultPath) {
       reportParts.push(`## ${domain.id}
 Wiki folder outside vault \u2014 skipped.`);
       continue;
     }
+    yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
     await ensureDomainConfig(vaultTools, wikiVaultPath);
     const schemaContent = await tryRead3(vaultTools, GLOBAL_WIKI_SCHEMA_PATH);
-    yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
     const allFiles = await vaultTools.listFiles(wikiVaultPath);
     const files = allFiles.filter((f) => !META_FILES2.some((m) => f.endsWith(m)));
     yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
     const pages = await vaultTools.readAll(files);
+    yield { kind: "info_text", icon: "\u{1F50D}", summary: `Analysing ${files.length} pages...` };
     const { graph } = graphCache.get(domain.id, pages);
     const structuralIssues = checkStructure(pages);
     const graphIssues = checkGraphStructure(graph, hubThreshold);
-    const allIssues = [structuralIssues, graphIssues].filter(Boolean).join("\n");
+    const wikiLinkIssues = checkWikiLinks(pages);
+    const allIssues = [structuralIssues, graphIssues, wikiLinkIssues].filter(Boolean).join("\n");
     const entityTypesBlock = buildEntityTypesBlock3(domain);
     yield { kind: "assistant_text", delta: `Evaluating domain "${domain.id}" quality...
 ` };
@@ -27328,6 +29739,7 @@ ${c}`).join("\n\n")}`
         ].join("\n")
       }
     ];
+    yield { kind: "tool_use", name: "Analysing wiki", input: { pages: String(files.length) } };
     const lintPwtEvents = [];
     let lintResult;
     try {
@@ -27342,8 +29754,10 @@ ${c}`).join("\n\n")}`
         signal,
         onEvent: (ev) => lintPwtEvents.push(ev)
       });
+      yield { kind: "tool_result", ok: true, preview: `${lintResult.value.fixes.length} fixes` };
     } catch (e) {
       if (signal.aborted || e.name === "AbortError") return;
+      yield { kind: "tool_result", ok: false, preview: e.message };
       for (const ev of lintPwtEvents) yield ev;
       reportParts.push(`## ${domain.id}
 LLM validation failed: ${e.message}`);
@@ -27363,7 +29777,9 @@ ${allIssues}
     yield { kind: "assistant_text", delta: `
 Actualizing domain config for "${domain.id}"...
 ` };
+    yield { kind: "tool_use", name: "Updating config", input: {} };
     const patchRes = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
+    yield { kind: "tool_result", ok: true, preview: patchRes.patch ? "config updated" : "no changes" };
     outputTokens += patchRes.outputTokens;
     const patch = patchRes.patch;
     if (patch) {
@@ -27372,7 +29788,18 @@ Actualizing domain config for "${domain.id}"...
       yield { kind: "domain_updated", domainId: domain.id, patch };
     }
     if (signal.aborted) return;
-    const fixedPages = lintResult.value.fixes;
+    const allVaultPaths = await vaultTools.listFiles("").catch(() => []);
+    const allMdPaths = allVaultPaths.filter((p) => p.endsWith(".md"));
+    const knownStems = /* @__PURE__ */ new Set([
+      ...allMdPaths.map((p) => p.split("/").pop().replace(/\.md$/, "")),
+      ...[...pages.keys()].map((p) => p.split("/").pop().replace(/\.md$/, ""))
+    ]);
+    const stemToPath = new Map(
+      allMdPaths.map((p) => [p.split("/").pop().replace(/\.md$/, ""), p])
+    );
+    const fixesMap = new Map(lintResult.value.fixes.map((p) => [p.path, p.content]));
+    const wlFixResult = fixWikiLinks(fixesMap, wikiLinkValidationRetries, knownStems);
+    const fixedPages = lintResult.value.fixes.map((p) => ({ ...p, content: wlFixResult.fixed.get(p.path) ?? p.content }));
     const writtenPaths = [];
     for (const page of fixedPages) {
       yield { kind: "assistant_text", delta: `  \u2022 ${page.path.split("/").pop()}...
@@ -27382,7 +29809,7 @@ Actualizing domain config for "${domain.id}"...
         yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
         continue;
       }
-      yield { kind: "tool_use", name: "Write", input: { path: page.path } };
+      yield { kind: "tool_use", name: "Update", input: { path: page.path } };
       try {
         await vaultTools.write(page.path, page.content);
         writtenPaths.push(page.path);
@@ -27396,6 +29823,9 @@ Actualizing domain config for "${domain.id}"...
       } catch (e) {
         yield { kind: "tool_result", ok: false, preview: e.message };
       }
+    }
+    if (wlFixResult.warnings.length > 0) {
+      yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "WikiLink warnings", details: wlFixResult.warnings };
     }
     if (writtenPaths.length > 0) {
       reportParts.push(`### \u0418\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u0441\u0442\u0440\u0430\u043D\u0438\u0446: ${writtenPaths.length}
@@ -27420,15 +29850,16 @@ ${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
     const backlinks = /* @__PURE__ */ new Map();
     for (const [wikiPath, wikiContent] of pages) {
       for (const src of parseWikiSourcesFromFm(wikiContent)) {
-        const rawPath = src.slice(2, -2);
+        const bareName = src.slice(2, -2);
+        const rawPath = bareName.includes("/") ? bareName : stemToPath.get(bareName) ?? bareName;
         if (!backlinks.has(rawPath)) backlinks.set(rawPath, /* @__PURE__ */ new Set());
-        backlinks.get(rawPath).add(`[[${wikiPath}]]`);
+        backlinks.get(rawPath).add(`[[${wikiPath.split("/").pop().replace(/\.md$/, "")}]]`);
       }
     }
     const syncToday = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     let syncUpdated = 0;
     for (const [rawPath, articles] of backlinks) {
-      yield { kind: "tool_use", name: "Write", input: { path: rawPath } };
+      yield { kind: "tool_use", name: "Update", input: { path: rawPath } };
       try {
         const rawContent = await vaultTools.read(rawPath);
         const existingArticles = parseWikiArticlesFromFm(rawContent);
@@ -27450,6 +29881,18 @@ ${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
     }
     if (backlinks.size > 0) {
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
+    }
+    if (similarity) {
+      const indexRaw = await tryRead3(vaultTools, domainIndexPath(wikiVaultPath));
+      const annotations = parseIndexAnnotations(indexRaw);
+      if (similarity.config.mode === "embedding") {
+        yield { kind: "info_text", icon: "\u{1F4E5}", summary: "\u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043A\u044D\u0448\u0430 \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432..." };
+        await similarity.loadCache(wikiVaultPath, vaultTools);
+      }
+      const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, annotations);
+      if (similarity.config.mode === "embedding" && updated > 0) {
+        yield { kind: "info_text", icon: "\u{1F4E4}", summary: `\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432: ${updated}` };
+      }
     }
   }
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n"), outputTokens: outputTokens || void 0 };
@@ -27589,11 +30032,15 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
   const params = buildChatParams(model, messages, opts, true);
   let fullText = "";
   let outputTokens = 0;
+  let streamStats;
+  yield { kind: "tool_use", name: "Responding", input: {} };
   try {
-    const stream = await llm.chat.completions.create(
+    const requestStartMs = Date.now();
+    const rawStream = await llm.chat.completions.create(
       { ...params, stream: true },
       { signal }
     );
+    const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
     for await (const chunk of stream) {
       const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
@@ -27603,6 +30050,7 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
       }
       if (tok !== void 0) outputTokens += tok;
     }
+    streamStats = getStats();
   } catch (e) {
     if (signal.aborted || e.name === "AbortError") return;
     const resp = await llm.chat.completions.create(
@@ -27614,6 +30062,8 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
     if (fullText) yield { kind: "assistant_text", delta: fullText };
   }
   if (signal.aborted) return;
+  yield { kind: "tool_result", ok: !!fullText, preview: fullText ? `${fullText.length} chars` : "no response" };
+  if (streamStats) yield buildLlmCallStatsEvent(streamStats);
   yield { kind: "result", durationMs: Date.now() - start, text: fullText, outputTokens: outputTokens || void 0 };
 }
 
@@ -27630,11 +30080,15 @@ async function* runLintFixChat(req, vaultTools, _vaultRoot, domain, llm, model, 
     return;
   }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
+  yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**` } };
   await ensureDomainConfig(vaultTools, wikiVaultPath);
   const schemaContent = await tryRead4(vaultTools, GLOBAL_WIKI_SCHEMA_PATH);
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
   const files = allFiles.filter((f) => !META_FILES3.some((m) => f.endsWith(m)));
+  yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
+  yield { kind: "tool_use", name: "Read", input: { files: String(files.length) } };
   const pages = await vaultTools.readAll(files);
+  yield { kind: "tool_result", ok: true, preview: "loaded" };
   const pagesBlock = [...pages.entries()].map(([p, c]) => `--- ${p} ---
 ${c}`).join("\n\n");
   const systemContent = render(lint_chat_default, {
@@ -27650,18 +30104,30 @@ ${schemaContent}` : ""
     { role: "system", content: systemContent },
     ...chatMessages.map((m) => ({ role: m.role, content: m.content }))
   ];
-  const result = await parseWithRetry({
-    llm,
-    model,
-    baseMessages: messages,
-    opts: { ...opts, jsonMode: "json_object" },
-    schema: LintChatSchema,
-    maxRetries: opts.structuredRetries ?? 1,
-    callSite: "lint-chat.fix",
-    signal,
-    onEvent: (_ev) => {
-    }
-  });
+  yield { kind: "tool_use", name: "Applying fixes", input: { pages: String(files.length) } };
+  const pwtEvents = [];
+  let result;
+  try {
+    result = await parseWithRetry({
+      llm,
+      model,
+      baseMessages: messages,
+      opts: { ...opts, jsonMode: "json_object" },
+      schema: LintChatSchema,
+      maxRetries: opts.structuredRetries ?? 1,
+      callSite: "lint-chat.fix",
+      signal,
+      onEvent: (ev) => pwtEvents.push(ev)
+    });
+    yield { kind: "tool_result", ok: true, preview: `${result.value.pages?.length ?? 0} pages` };
+  } catch (e) {
+    yield { kind: "tool_result", ok: false, preview: e.message };
+    for (const ev of pwtEvents) yield ev;
+    yield { kind: "error", message: `lint-chat: ${e.message}` };
+    yield { kind: "result", durationMs: Date.now() - start, text: "" };
+    return;
+  }
+  for (const ev of pwtEvents) yield ev;
   const parsed = result.value;
   for (const page of parsed.pages ?? []) {
     yield { kind: "tool_use", name: "Write", input: { path: page.path } };
@@ -27694,7 +30160,7 @@ async function tryRead4(vaultTools, path2) {
 }
 
 // templates/_wiki_schema.md
-var wiki_schema_default = '# Wiki Schema\n\n## \u042F\u0437\u044B\u043A \u0438 \u0441\u0442\u0438\u043B\u044C\n- \u041E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u044F\u0437\u044B\u043A: \u0440\u0443\u0441\u0441\u043A\u0438\u0439\n- \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u043D\u0435 \u043F\u0435\u0440\u0435\u0432\u043E\u0434\u0438\u0442\u044C: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML\n- \u0418\u043C\u0435\u043D\u0430 \u0441\u0438\u0441\u0442\u0435\u043C \u2014 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 (RT.DataExporter, CRM B2C, \u0426\u0425\u0414)\n- \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B \u0440\u0430\u0441\u0448\u0438\u0444\u0440\u043E\u0432\u044B\u0432\u0430\u0442\u044C \u043F\u0440\u0438 \u043F\u0435\u0440\u0432\u043E\u043C \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0438 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435\n- \u0421\u0442\u0438\u043B\u044C: \u043D\u0435\u0439\u0442\u0440\u0430\u043B\u044C\u043D\u044B\u0439, \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0432\u043D\u044B\u0439, \u0431\u0435\u0437 \u043E\u0446\u0435\u043D\u043E\u0447\u043D\u044B\u0445 \u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: "\u041E\u0447\u0435\u0432\u0438\u0434\u043D\u043E, \u0447\u0442\u043E...", "\u041B\u0443\u0447\u0448\u0438\u0439 \u0441\u043F\u043E\u0441\u043E\u0431...", \u043C\u0435\u0441\u0442\u043E\u0438\u043C\u0435\u043D\u0438\u044F "\u044F", "\u043C\u044B", "\u043D\u0430\u0448"\n\n## \u0418\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u043E\u0432 \u0438 \u043F\u0430\u043F\u043E\u043A\n- \u0424\u0430\u0439\u043B\u044B: kebab-case, \u043A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u0430, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432 \u0438 \u0441\u043F\u0435\u0446\u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432 \u043A\u0440\u043E\u043C\u0435 \u0434\u0435\u0444\u0438\u0441\u0430\n  - \u041F\u0440\u0438\u043C\u0435\u0440\u044B: `\u0432\u0435\u0440\u0441\u0438\u043E\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435-scd.md`, `clickhouse-\u043E\u0431\u0437\u043E\u0440.md`\n- \u041F\u0430\u043F\u043A\u0438 \u0434\u043E\u043C\u0435\u043D\u043E\u0432: \u043D\u0438\u0436\u043D\u0438\u0439 \u0440\u0435\u0433\u0438\u0441\u0442\u0440, \u043B\u0430\u0442\u0438\u043D\u0438\u0446\u0430 (`ai/`, `databases/`)\n- \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1: \u0440\u0443\u0441\u0441\u043A\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435; \u0442\u0435\u0445\u0442\u0435\u0440\u043C\u0438\u043D \u0432 \u0441\u043A\u043E\u0431\u043A\u0430\u0445 \u043F\u0440\u0438 \u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E\u0441\u0442\u0438\n\n## \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u043F\u043E\u0440\u044F\u0434\u043E\u043A)\n1. Frontmatter (YAML)\n2. \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1\n3. \u0412\u0432\u043E\u0434\u043D\u044B\u0439 \u0430\u0431\u0437\u0430\u0446 \u2014 1-3 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0431\u0435\u0437 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0430, \u0441\u0440\u0430\u0437\u0443 \u043F\u043E\u0441\u043B\u0435 H1\n4. `## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438` \u2014 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0438 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u044B\n\n## \u041E\u043F\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B\n- `## \u041F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435 [\u0414\u043E\u043C\u0435\u043D]`\n- `## \u041F\u0440\u0438\u043C\u0435\u0440\u044B`\n- `## \u041E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F`\n- `## Best Practices`\n- `## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438` \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u043D\u0443\u0436\u0435\u043D \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043A \u0441\u0432\u044F\u0437\u044F\u043C; \u0431\u0435\u0437 \u043E\u043F\u0438\u0441\u0430\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u0440\u0430\u0437\u0434\u0435\u043B \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C\n- `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n\n## Frontmatter\n\n| \u041F\u043E\u043B\u0435 | \u041F\u0440\u0430\u0432\u0438\u043B\u043E |\n|------|---------|\n| `wiki_sources` | \u041C\u0430\u0441\u0441\u0438\u0432 \u0440\u0435\u0430\u043B\u044C\u043D\u044B\u0445 \u043F\u0443\u0442\u0435\u0439 \u043E\u0442 \u043A\u043E\u0440\u043D\u044F \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F. \u0422\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u043D\u044B\u0435 \u0444\u0430\u0439\u043B\u044B. \u041F\u0440\u0438 UPDATE \u2014 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0442\u044C, \u043D\u0435 \u0443\u0434\u0430\u043B\u044F\u0442\u044C. \u0422\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0432 Obsidian: **Links** (\u043D\u0435 list/text) \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0442\u043E\u0433\u0434\u0430 \u0441\u0441\u044B\u043B\u043A\u0438 \u0443\u0447\u0430\u0441\u0442\u0432\u0443\u044E\u0442 \u0432 Graph View. \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 `[[page-name]]`: `["[[page-a]]", "[[page-b]]"] |\n| `wiki_updated` | YYYY-MM-DD |\n| `wiki_status` | `stub` (<2 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432, <10 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439) / `developing` (\u22652 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430, \u226510 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439, \u043E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B \u0437\u0430\u043F\u043E\u043B\u043D\u0435\u043D\u044B) / `mature` (\u22654 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430, \u0432\u0441\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B) |\n| `wiki_type` | \u0422\u0438\u043F \u0444\u0430\u0439\u043B\u0430: `page \\| index \\| log \\| schema`. \u0422\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u0444\u0430\u0439\u043B\u043E\u0432 (`_index.md`, `_log.md`, `_wiki_schema.md`). \u041E\u0431\u044B\u0447\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u043D\u0435 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u044E\u0442 \u044D\u0442\u043E \u043F\u043E\u043B\u0435. |\n| `tags` | YAML-\u0441\u043F\u0438\u0441\u043E\u043A: `[category/subcategory, domain/topic]`. \u0418\u0435\u0440\u0430\u0440\u0445\u0438\u044F \u0447\u0435\u0440\u0435\u0437 `/`, \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432, \u0431\u0435\u0437 `#`. \u041F\u0435\u0440\u0435\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u0435\u0433\u0438 \u0438\u0437 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0434\u043E\u043C\u0435\u043D\u0430; \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439 \u043D\u043E\u0432\u044B\u0435 \u043F\u043E \u0442\u043E\u0439 \u0436\u0435 \u0441\u0445\u0435\u043C\u0435. Obsidian \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u0451\u0442 \u043A\u043B\u044E\u0447 `tags` \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u2014 \u0442\u0438\u043F \u044F\u0432\u043D\u043E \u043D\u0435 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C. |\n| `aliases` | \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B, \u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u0438\u0435 \u0432\u0430\u0440\u0438\u0430\u043D\u0442\u044B, \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B |\n| `wiki_outgoing_links` | \u041C\u0430\u0441\u0441\u0438\u0432 WikiLinks \u043D\u0430 \u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B. \u0422\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0432 Obsidian: **Links** (\u043D\u0435 list/text) \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0442\u043E\u0433\u0434\u0430 \u0441\u0441\u044B\u043B\u043A\u0438 \u0443\u0447\u0430\u0441\u0442\u0432\u0443\u044E\u0442 \u0432 Graph View. \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 `[[page-name]]`: `["[[page-a]]", "[[page-b]]"]`. \u041F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C. |\n| `wiki_external_links` | \u041C\u0430\u0441\u0441\u0438\u0432 \u0432\u043D\u0435\u0448\u043D\u0438\u0445 URL (`http://` \u0438\u043B\u0438 `https://`). \u041D\u0435 \u0444\u043E\u0440\u043C\u0438\u0440\u0443\u044E\u0442 \u0433\u0440\u0430\u0444 Obsidian \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0441\u043F\u0440\u0430\u0432\u043E\u0447\u043D\u044B\u0435 \u0440\u0435\u0441\u0443\u0440\u0441\u044B \u0438 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430\u0446\u0438\u044F. |\n\n## WikiLinks\n- \u0421\u0441\u044B\u043B\u0430\u0442\u044C\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0447\u0435\u0440\u0435\u0437 `[[\u0438\u043C\u044F-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B]]`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: \u043C\u0451\u0440\u0442\u0432\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438, \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0444\u0430\u0439\u043B\u044B \u0432\u043D\u0435 `!Wiki/`\n\n## \u041A\u043E\u043D\u0442\u0435\u043D\u0442\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u2014 \u043F\u0435\u0440\u0435\u0440\u0430\u0431\u043E\u0442\u0430\u0442\u044C \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432\n- \u0414\u043E\u0441\u043B\u043E\u0432\u043D\u044B\u0435 \u0446\u0438\u0442\u0430\u0442\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445 (SQL, \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438)\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u0434\u0430\u0442\u0443 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0432 `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: placeholder-\u0442\u0435\u043A\u0441\u0442 (TODO, "\u0441\u043C. \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A"), \u043F\u0443\u0441\u0442\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B, \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438\n- \u0422\u0430\u0431\u043B\u0438\u0446\u044B: markdown \u0441 \u0432\u044B\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u043D\u0438\u0435\u043C (`| \u041F\u0430\u0440\u0430\u043C\u0435\u0442\u0440 | \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u0435 |` + `|----------|----------|`)\n- \u041A\u043E\u0434\u043E\u0432\u044B\u0435 \u0431\u043B\u043E\u043A\u0438: \u0432\u0441\u0435\u0433\u0434\u0430 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u044F\u0437\u044B\u043A (` ```sql `, ` ```yaml `, ` ```json `)\n';
+var wiki_schema_default = '# Wiki Schema\n\n## \u042F\u0437\u044B\u043A \u0438 \u0441\u0442\u0438\u043B\u044C\n- \u041E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u044F\u0437\u044B\u043A: \u0440\u0443\u0441\u0441\u043A\u0438\u0439\n- \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u043D\u0435 \u043F\u0435\u0440\u0435\u0432\u043E\u0434\u0438\u0442\u044C: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML\n- \u0418\u043C\u0435\u043D\u0430 \u0441\u0438\u0441\u0442\u0435\u043C \u2014 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 (RT.DataExporter, CRM B2C, \u0426\u0425\u0414)\n- \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B \u0440\u0430\u0441\u0448\u0438\u0444\u0440\u043E\u0432\u044B\u0432\u0430\u0442\u044C \u043F\u0440\u0438 \u043F\u0435\u0440\u0432\u043E\u043C \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D\u0438\u0438 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435\n- \u0421\u0442\u0438\u043B\u044C: \u043D\u0435\u0439\u0442\u0440\u0430\u043B\u044C\u043D\u044B\u0439, \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0432\u043D\u044B\u0439, \u0431\u0435\u0437 \u043E\u0446\u0435\u043D\u043E\u0447\u043D\u044B\u0445 \u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: "\u041E\u0447\u0435\u0432\u0438\u0434\u043D\u043E, \u0447\u0442\u043E...", "\u041B\u0443\u0447\u0448\u0438\u0439 \u0441\u043F\u043E\u0441\u043E\u0431...", \u043C\u0435\u0441\u0442\u043E\u0438\u043C\u0435\u043D\u0438\u044F "\u044F", "\u043C\u044B", "\u043D\u0430\u0448"\n\n## \u0418\u043C\u0435\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u043E\u0432 \u0438 \u043F\u0430\u043F\u043E\u043A\n- \u0424\u0430\u0439\u043B\u044B: kebab-case, \u043A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u0430, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432 \u0438 \u0441\u043F\u0435\u0446\u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432 \u043A\u0440\u043E\u043C\u0435 \u0434\u0435\u0444\u0438\u0441\u0430\n  - \u041F\u0440\u0438\u043C\u0435\u0440\u044B: `\u0432\u0435\u0440\u0441\u0438\u043E\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435-scd.md`, `clickhouse-\u043E\u0431\u0437\u043E\u0440.md`\n- \u041F\u0430\u043F\u043A\u0438 \u0434\u043E\u043C\u0435\u043D\u043E\u0432: \u043D\u0438\u0436\u043D\u0438\u0439 \u0440\u0435\u0433\u0438\u0441\u0442\u0440, \u043B\u0430\u0442\u0438\u043D\u0438\u0446\u0430 (`ai/`, `databases/`)\n- \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1: \u0440\u0443\u0441\u0441\u043A\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435; \u0442\u0435\u0445\u0442\u0435\u0440\u043C\u0438\u043D \u0432 \u0441\u043A\u043E\u0431\u043A\u0430\u0445 \u043F\u0440\u0438 \u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E\u0441\u0442\u0438\n\n## \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u043F\u043E\u0440\u044F\u0434\u043E\u043A)\n1. Frontmatter (YAML)\n2. \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A H1\n3. \u0412\u0432\u043E\u0434\u043D\u044B\u0439 \u0430\u0431\u0437\u0430\u0446 \u2014 1-3 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0431\u0435\u0437 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0430, \u0441\u0440\u0430\u0437\u0443 \u043F\u043E\u0441\u043B\u0435 H1\n4. `## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438` \u2014 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0438 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u044B\n\n## \u041E\u043F\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B\n- `## \u041F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435 [\u0414\u043E\u043C\u0435\u043D]`\n- `## \u041F\u0440\u0438\u043C\u0435\u0440\u044B`\n- `## \u041E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F`\n- `## Best Practices`\n- `## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438` \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u043D\u0443\u0436\u0435\u043D \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043A \u0441\u0432\u044F\u0437\u044F\u043C; \u0431\u0435\u0437 \u043E\u043F\u0438\u0441\u0430\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u0440\u0430\u0437\u0434\u0435\u043B \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C\n- `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n\n## Frontmatter\n\n| \u041F\u043E\u043B\u0435 | \u041F\u0440\u0430\u0432\u0438\u043B\u043E |\n|------|---------|\n| `wiki_sources` | \u041C\u0430\u0441\u0441\u0438\u0432 \u0440\u0435\u0430\u043B\u044C\u043D\u044B\u0445 \u043F\u0443\u0442\u0435\u0439 \u043E\u0442 \u043A\u043E\u0440\u043D\u044F \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F. \u0422\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u043D\u043D\u044B\u0435 \u0444\u0430\u0439\u043B\u044B. \u041F\u0440\u0438 UPDATE \u2014 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0442\u044C, \u043D\u0435 \u0443\u0434\u0430\u043B\u044F\u0442\u044C. \u0422\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0432 Obsidian: **Links** (\u043D\u0435 list/text) \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0442\u043E\u0433\u0434\u0430 \u0441\u0441\u044B\u043B\u043A\u0438 \u0443\u0447\u0430\u0441\u0442\u0432\u0443\u044E\u0442 \u0432 Graph View. \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 `[[page-name]]`: `["[[page-a]]", "[[page-b]]"] |\n| `wiki_updated` | YYYY-MM-DD |\n| `wiki_status` | `stub` (<2 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432, <10 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439) / `developing` (\u22652 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430, \u226510 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439, \u043E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B \u0437\u0430\u043F\u043E\u043B\u043D\u0435\u043D\u044B) / `mature` (\u22654 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430, \u0432\u0441\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B) |\n| `wiki_type` | \u0422\u0438\u043F \u0444\u0430\u0439\u043B\u0430: `page \\| index \\| log \\| schema`. \u0422\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u0444\u0430\u0439\u043B\u043E\u0432 (`_index.md`, `_log.md`, `_wiki_schema.md`). \u041E\u0431\u044B\u0447\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u043D\u0435 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u044E\u0442 \u044D\u0442\u043E \u043F\u043E\u043B\u0435. |\n| `tags` | YAML-\u0441\u043F\u0438\u0441\u043E\u043A: `[category/subcategory, domain/topic]`. \u0418\u0435\u0440\u0430\u0440\u0445\u0438\u044F \u0447\u0435\u0440\u0435\u0437 `/`, \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432, \u0431\u0435\u0437 `#`. \u041F\u0435\u0440\u0435\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u0435\u0433\u0438 \u0438\u0437 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0434\u043E\u043C\u0435\u043D\u0430; \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439 \u043D\u043E\u0432\u044B\u0435 \u043F\u043E \u0442\u043E\u0439 \u0436\u0435 \u0441\u0445\u0435\u043C\u0435. Obsidian \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u0451\u0442 \u043A\u043B\u044E\u0447 `tags` \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u2014 \u0442\u0438\u043F \u044F\u0432\u043D\u043E \u043D\u0435 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C. |\n| `aliases` | \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B, \u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u0438\u0435 \u0432\u0430\u0440\u0438\u0430\u043D\u0442\u044B, \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B |\n| `wiki_outgoing_links` | \u041C\u0430\u0441\u0441\u0438\u0432 WikiLinks \u043D\u0430 \u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B. \u0422\u0438\u043F \u0441\u0432\u043E\u0439\u0441\u0442\u0432\u0430 \u0432 Obsidian: **Links** (\u043D\u0435 list/text) \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0442\u043E\u0433\u0434\u0430 \u0441\u0441\u044B\u043B\u043A\u0438 \u0443\u0447\u0430\u0441\u0442\u0432\u0443\u044E\u0442 \u0432 Graph View. \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 `[[page-name]]`: `["[[page-a]]", "[[page-b]]"]`. \u041F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C. |\n| `wiki_external_links` | \u041C\u0430\u0441\u0441\u0438\u0432 \u0432\u043D\u0435\u0448\u043D\u0438\u0445 URL (`http://` \u0438\u043B\u0438 `https://`). \u041D\u0435 \u0444\u043E\u0440\u043C\u0438\u0440\u0443\u044E\u0442 \u0433\u0440\u0430\u0444 Obsidian \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0441\u043F\u0440\u0430\u0432\u043E\u0447\u043D\u044B\u0435 \u0440\u0435\u0441\u0443\u0440\u0441\u044B \u0438 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430\u0446\u0438\u044F. |\n\n## WikiLinks\n\n- Only `[[page-name]]` \u2014 no aliases, no folder paths\n- \u274C Forbidden: `[[Page|alias]]`, `[[folder/page]]`\n- \u2705 Correct: `[[page-name]]`, `[[\u041A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430]]`, `[[Scalability]]`\n- Link only to existing pages; dead links yield a warning\n\n`wiki_outgoing_links` \u2014 YAML block list (not inline JSON):\n- \u2705 Correct:\n  ```yaml\n  wiki_outgoing_links:\n    - "[[page-a]]"\n    - "[[page-b]]"\n  ```\n- \u274C Forbidden: `wiki_outgoing_links: ["[[page-a]]", "[[page-b]]"]`\n\n`wiki_outgoing_links` MUST contain every `[[link]]` found in the page body.\n\n## \u041A\u043E\u043D\u0442\u0435\u043D\u0442\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u2014 \u043F\u0435\u0440\u0435\u0440\u0430\u0431\u043E\u0442\u0430\u0442\u044C \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432\n- \u0414\u043E\u0441\u043B\u043E\u0432\u043D\u044B\u0435 \u0446\u0438\u0442\u0430\u0442\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445 (SQL, \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438)\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u0434\u0430\u0442\u0443 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0432 `## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439`\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: placeholder-\u0442\u0435\u043A\u0441\u0442 (TODO, "\u0441\u043C. \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A"), \u043F\u0443\u0441\u0442\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B, \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438\n- \u0422\u0430\u0431\u043B\u0438\u0446\u044B: markdown \u0441 \u0432\u044B\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u043D\u0438\u0435\u043C (`| \u041F\u0430\u0440\u0430\u043C\u0435\u0442\u0440 | \u0417\u043D\u0430\u0447\u0435\u043D\u0438\u0435 |` + `|----------|----------|`)\n- \u041A\u043E\u0434\u043E\u0432\u044B\u0435 \u0431\u043B\u043E\u043A\u0438: \u0432\u0441\u0435\u0433\u0434\u0430 \u0443\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u044F\u0437\u044B\u043A (` ```sql `, ` ```yaml `, ` ```json `)\n';
 
 // templates/_format_schema.md
 var format_schema_default = "# Format Schema (\u043F\u0440\u0430\u0432\u0438\u043B\u0430 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F \u043D\u0435-wiki \u0441\u0442\u0440\u0430\u043D\u0438\u0446)\n\n## Frontmatter\n\n| \u041F\u043E\u043B\u0435 | \u041F\u0440\u0430\u0432\u0438\u043B\u043E |\n|------|---------|\n| `tags` | YAML-\u0441\u043F\u0438\u0441\u043E\u043A: `[category/subcategory, domain/topic]`. \u0418\u0435\u0440\u0430\u0440\u0445\u0438\u044F \u0447\u0435\u0440\u0435\u0437 `/`, \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432, \u0431\u0435\u0437 `#`. \u041F\u0435\u0440\u0435\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u0435\u0433\u0438 \u0438\u0437 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446; \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439 \u043D\u043E\u0432\u044B\u0435 \u043F\u043E \u0442\u043E\u0439 \u0436\u0435 \u0441\u0445\u0435\u043C\u0435. \u0422\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u0442\u0435\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0439 \u043A\u043B\u0430\u0441\u0441\u0438\u0444\u0438\u043A\u0430\u0446\u0438\u0438. |\n| `aliases` | \u0410\u0431\u0431\u0440\u0435\u0432\u0438\u0430\u0442\u0443\u0440\u044B, \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B, \u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u0438\u0435 \u0432\u0430\u0440\u0438\u0430\u043D\u0442\u044B |\n| `created` | YYYY-MM-DD \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u0432 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0435 \u0438\u043B\u0438 \u043F\u0440\u0438 \u043F\u0435\u0440\u0432\u043E\u043C \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0438 |\n| `updated` | YYYY-MM-DD \u0442\u0435\u043A\u0443\u0449\u0430\u044F \u0434\u0430\u0442\u0430 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F |\n| `external_links` | \u041C\u0430\u0441\u0441\u0438\u0432 URL \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u0432 \u0442\u0435\u043B\u0435 \u0435\u0441\u0442\u044C `http(s)://` \u0441\u0441\u044B\u043B\u043A\u0438 |\n| `related` | \u041C\u0430\u0441\u0441\u0438\u0432 `[[wikilinks]]` \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u0432 \u0442\u0435\u043B\u0435 \u0443\u0436\u0435 \u0432\u0441\u0442\u0440\u0435\u0447\u0430\u044E\u0442\u0441\u044F \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0434\u0440\u0443\u0433\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B |\n\n\u041F\u043E\u043B\u044F `wiki_*` \u2014 \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0430\u0442\u044C \u0432 \u0432\u044B\u0432\u043E\u0434. \u041E\u043D\u0438 \u0443\u043F\u0440\u0430\u0432\u043B\u044F\u044E\u0442\u0441\u044F \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u043D\u043E \u0438 \u0431\u0443\u0434\u0443\u0442 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u044B \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.\n\n## \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430\n\n- H1 \u2014 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n- \u0412\u0432\u043E\u0434\u043D\u044B\u0439 \u0430\u0431\u0437\u0430\u0446 1-3 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0441\u0440\u0430\u0437\u0443 \u043F\u043E\u0441\u043B\u0435 H1, \u0431\u0435\u0437 \u043F\u043E\u0434\u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0430\n- `##` \u0440\u0430\u0437\u0434\u0435\u043B\u044B \u043F\u043E \u043B\u043E\u0433\u0438\u043A\u0435 \u043A\u043E\u043D\u0442\u0435\u043D\u0442\u0430; \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u044F \u0431\u0435\u0437 \u0441\u043A\u0430\u0447\u043A\u043E\u0432 (H2 \u2192 H3 \u2192 H4)\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u044B \u043F\u0443\u0441\u0442\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B \u0438 placeholder-\u0442\u0435\u043A\u0441\u0442\n\n## \u0422\u0430\u0431\u043B\u0438\u0446\u044B\n\nMarkdown \u0441 \u0432\u044B\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u043D\u0438\u0435\u043C. \u041F\u0440\u0438\u043C\u0435\u043D\u044F\u0442\u044C \u043F\u0440\u0438 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0445 \u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u0435\u043D\u0438\u044F\u0445 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u043E\u0432/\u0441\u0440\u0430\u0432\u043D\u0435\u043D\u0438\u0439. \u041D\u0435 \u043F\u0440\u0435\u0432\u0440\u0430\u0449\u0430\u0442\u044C \u043F\u043E\u0432\u0435\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u0442\u0435\u043A\u0441\u0442 \u0432 \u0442\u0430\u0431\u043B\u0438\u0446\u044B.\n\n## Mermaid\n\n` ```mermaid ` \u0431\u043B\u043E\u043A\u0438 \u0434\u043B\u044F \u043F\u0440\u043E\u0446\u0435\u0441\u0441\u043E\u0432, \u043F\u043E\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u0435\u043B\u044C\u043D\u043E\u0441\u0442\u0435\u0439, \u0441\u0432\u044F\u0437\u0435\u0439.\n- \u041E\u043F\u0438\u0441\u0430\u043D\u043D\u044B\u0435 \u0432 \u0442\u0435\u043A\u0441\u0442\u0435 \u043F\u0440\u043E\u0446\u0435\u0441\u0441\u044B \u2192 flowchart/sequenceDiagram\n- \u0421\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u0441\u0445\u0435\u043C \u0438\u0437 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439 (\u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438 vision-backend) \u2192 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u0439 mermaid-\u0431\u043B\u043E\u043A \u043D\u0438\u0436\u0435 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u044F. \u0421\u0430\u043C\u043E \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0435\u0442\u0441\u044F.\n\n## \u0418\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u044F\n\n- \u041A\u0430\u0436\u0434\u043E\u0439 \u043A\u0430\u0440\u0442\u0438\u043D\u043A\u0435 \u2014 \u043E\u043F\u0438\u0441\u0430\u0442\u0435\u043B\u044C\u043D\u0430\u044F \u043F\u043E\u0434\u043F\u0438\u0441\u044C \u043D\u0435\u043F\u043E\u0441\u0440\u0435\u0434\u0441\u0442\u0432\u0435\u043D\u043D\u043E \u043F\u043E\u0434 \u043D\u0435\u0439\n- \u041F\u0440\u0438 `has_vision=true`: \u0434\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E \u0442\u0435\u043A\u0441\u0442\u043E\u0432\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 (\u0442\u0430\u0431\u043B\u0438\u0446\u0430 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u043E\u0432, mermaid, \u0438\u043B\u0438 \u0441\u0432\u044F\u0437\u043D\u044B\u0439 \u0442\u0435\u043A\u0441\u0442)\n- \u041F\u0440\u0438 `has_vision=false`: \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u043C \u0442\u043E\u043B\u044C\u043A\u043E alt \u0438 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u043F\u043E\u0434\u043F\u0438\u0441\u0438; \u043D\u043E\u0432\u043E\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438 \u043D\u0435 \u0441\u043E\u0447\u0438\u043D\u044F\u0435\u043C\n\n## \u041A\u043E\u0434\n\nFenced blocks \u0432\u0441\u0435\u0433\u0434\u0430 \u0441 \u0443\u043A\u0430\u0437\u0430\u043D\u0438\u0435\u043C \u044F\u0437\u044B\u043A\u0430.\n\n## \u0421\u0442\u0438\u043B\u044C\n\n- \u041D\u0435\u0439\u0442\u0440\u0430\u043B\u044C\u043D\u044B\u0439, \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0432\u043D\u044B\u0439, \u0431\u0435\u0437 \u043E\u0446\u0435\u043D\u043E\u0447\u043D\u044B\u0445 \u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439\n- \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u2014 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 (SQL, API, LLM)\n- \u0417\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E: \xAB\u043E\u0447\u0435\u0432\u0438\u0434\u043D\u043E\xBB, \xAB\u043B\u0443\u0447\u0448\u0438\u0439 \u0441\u043F\u043E\u0441\u043E\u0431\xBB, \u043C\u0435\u0441\u0442\u043E\u0438\u043C\u0435\u043D\u0438\u044F \xAB\u044F/\u043C\u044B/\u043D\u0430\u0448\xBB\n\n## \u0416\u0451\u0441\u0442\u043A\u0438\u0435 \u0437\u0430\u043F\u0440\u0435\u0442\u044B\n\n- \u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0442\u044C \u0444\u0430\u043A\u0442\u044B, \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u0432 \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A\u0435 (\u0438\u0441\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435: \u0442\u0435\u043A\u0441\u0442\u043E\u0432\u043E\u0435 \u0438\u0437\u0432\u043B\u0435\u0447\u0435\u043D\u0438\u0435 \u0438\u0437 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439 \u043F\u0440\u0438 `has_vision=true`)\n- \u041D\u0435 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0444\u0430\u043A\u0442\u044B\n- \u041D\u0435 \u0438\u0441\u043A\u0430\u0436\u0430\u0442\u044C \u0441\u043C\u044B\u0441\u043B; \u043F\u0435\u0440\u0435\u0444\u0440\u0430\u0437 \u0434\u043B\u044F \u044F\u0441\u043D\u043E\u0441\u0442\u0438 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D\n- \u0412\u0441\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u044F\u0442\u044C \u0432 `report`\n";
@@ -27703,7 +30169,7 @@ var format_schema_default = "# Format Schema (\u043F\u0440\u0430\u0432\u0438\u04
 var init_default = '\u0422\u044B \u2014 \u0430\u0440\u0445\u0438\u0442\u0435\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439. \u0421\u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0439 \u0437\u0430\u043F\u0438\u0441\u044C \u0434\u043E\u043C\u0435\u043D\u0430 \u0434\u043B\u044F domain-map.json.\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0435\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B:\n{\n  "id": "{{domain_id}}",\n  "name": "\u0427\u0435\u043B\u043E\u0432\u0435\u043A\u043E\u0447\u0438\u0442\u0430\u0435\u043C\u043E\u0435 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435",\n  "wiki_folder": "{{domain_id}}",\n  "source_paths": [],\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"processes"}],\n  "language_notes": ""\n}\n{{schema_block}}\n{{index_block}}\n\n\u0412\u043A\u043B\u044E\u0447\u0438 \u043F\u043E\u043B\u0435 `reasoning` \u043F\u0435\u0440\u0432\u044B\u043C \u0432 JSON-\u043E\u0442\u0432\u0435\u0442\u0435: \u043F\u043E\u0448\u0430\u0433\u043E\u0432\u043E\u0435 \u043E\u0431\u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0435 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u044B \u0434\u043E\u043C\u0435\u043D\u0430.\n\n## Output JSON Example\n\n{\n  "reasoning": "\u041F\u0440\u043E\u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043B \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438. \u0412\u044B\u044F\u0432\u0438\u043B \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438: Process, ServiceContract, Customer.",\n  "id": "{{domain_id}}",\n  "name": "Telecom Operations",\n  "wiki_folder": "{{domain_id}}",\n  "entity_types": [\n    {\n      "type": "Process",\n      "description": "\u0411\u0438\u0437\u043D\u0435\u0441-\u043F\u0440\u043E\u0446\u0435\u0441\u0441 \u0438\u043B\u0438 \u0448\u0430\u0433 workflow",\n      "extraction_cues": ["BPMN", "workflow", "\u043F\u0440\u043E\u0446\u0435\u0441\u0441"],\n      "min_mentions_for_page": 1,\n      "wiki_subfolder": "processes"\n    }\n  ],\n  "language_notes": "\u0421\u043C\u0435\u0441\u044C \u0440\u0443\u0441\u0441\u043A\u043E\u0433\u043E/\u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u043E\u0433\u043E; \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0439 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u044C\u043D\u043E\u0435 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 product-\u0438\u043C\u0451\u043D."\n}\n\n## Wiki Page Conventions\n\n\u0421\u0442\u0440\u0430\u043D\u0438\u0446\u044B wiki \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u044E\u0442 \u043F\u043E\u043B\u0435 `tags` \u0432\u043E frontmatter: \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 (category/subcategory, \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0447\u0435\u0440\u0435\u0437 `/`, \u0431\u0435\u0437 `#`). \u041F\u0440\u0438 ingest LLM \u043F\u0435\u0440\u0435\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442 \u0442\u0435\u0433\u0438 \u0438\u0437 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0438 \u0441\u043E\u0437\u0434\u0430\u0451\u0442 \u043D\u043E\u0432\u044B\u0435 \u043F\u043E \u0442\u043E\u0439 \u0436\u0435 \u0441\u0445\u0435\u043C\u0435.\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u041E wiki_subfolder: \u043E\u0434\u043D\u043E \u0441\u043B\u043E\u0432\u043E, \u0431\u0435\u0437 \u0441\u043B\u044D\u0448\u0435\u0439, \u0431\u0435\u0437 domain_id.\n\u041D\u0435\u043B\u044C\u0437\u044F: "os/network", "os_network". \u041C\u043E\u0436\u043D\u043E: "network", "processes", "protocols".\n\n';
 
 // src/phases/init.ts
-async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal, opts = {}, onFileError) {
+async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal, opts = {}, onFileError, similarity) {
   const domainId = args[0];
   const dryRun = args.includes("--dry-run");
   const sourcesIdx = args.indexOf("--sources");
@@ -27756,7 +30222,8 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
       signal,
       opts,
       onFileError,
-      true
+      true,
+      similarity
     );
     return;
   }
@@ -27772,7 +30239,9 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
       vaultName,
       signal,
       opts,
-      onFileError
+      onFileError,
+      false,
+      similarity
     );
     return;
   }
@@ -27789,19 +30258,22 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
     yield { kind: "error", message: `init: no source_paths configured for "${domainId}" \u2014 add them in settings` };
     return;
   }
-  yield* runInitWithSources(domainId, effectiveSources, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError);
+  yield* runInitWithSources(domainId, effectiveSources, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, false, similarity);
 }
-async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, force = false) {
+async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, force = false, similarity) {
   const start = Date.now();
   let outputTokens = 0;
   const wikiRootGuess = `!Wiki`;
+  yield { kind: "tool_use", name: "Glob", input: { pattern: sourcePaths.join(", ") } };
   await ensureRootFiles(vaultTools, wikiRootGuess);
   const sourceFileLists = await Promise.all(sourcePaths.map((sp) => vaultTools.listFiles(sp)));
   const sourceFiles = [...new Set(sourceFileLists.flat())].filter((f) => f.endsWith(".md"));
   if (!sourceFiles.length) {
+    yield { kind: "tool_result", ok: false, preview: "no .md files found" };
     yield { kind: "error", message: `No .md files found in source paths: ${sourcePaths.join(", ")}` };
     return;
   }
+  yield { kind: "tool_result", ok: true, preview: `${sourceFiles.length} source files` };
   const existing = domains.find((d) => d.id === domainId);
   const isResuming = !force && existing?.analyzed_sources !== void 0;
   const alreadyAnalyzed = new Set(force ? [] : existing?.analyzed_sources ?? []);
@@ -27820,6 +30292,7 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
     tryRead5(vaultTools, GLOBAL_WIKI_SCHEMA_PATH),
     tryRead5(vaultTools, domainIndexPath(wikiRootGuess))
   ]);
+  let annotationsCache = parseIndexAnnotations(indexContent);
   let currentDomain = existing ?? null;
   for (let i = 0; i < toAnalyze.length; i++) {
     if (signal.aborted) return;
@@ -27856,6 +30329,7 @@ Source paths: ${sourcePaths.join(", ")}
 ${file}:
 ${fileContent}` }
       ];
+      yield { kind: "tool_use", name: "Initialising domain", input: {} };
       const collected = [];
       let parsed;
       try {
@@ -27872,8 +30346,10 @@ ${fileContent}` }
         });
         parsed = r.value;
         outputTokens += r.outputTokens;
+        yield { kind: "tool_result", ok: true, preview: `domain: ${parsed.id}` };
         if (r.fullText) yield { kind: "assistant_text", delta: r.fullText };
       } catch (e) {
+        yield { kind: "tool_result", ok: false, preview: e.message };
         for (const ev of collected) yield ev;
         if (e.name === "AbortError" || signal.aborted) return;
         yield { kind: "assistant_text", delta: `\u26A0 ${file}: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON, \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u043C bootstrap (${e.message})
@@ -27961,7 +30437,7 @@ ${JSON.stringify(entry, null, 2)}
       let hadError = false;
       let caughtErr = null;
       try {
-        for await (const ev of runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts)) {
+        for await (const ev of runIngest([file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts, similarity, annotationsCache)) {
           yield ev;
           if (ev.kind === "domain_updated" && ev.domainId === domainId) {
             currentDomain = { ...currentDomain, ...ev.patch };
@@ -27982,6 +30458,10 @@ ${JSON.stringify(entry, null, 2)}
         }
         done = true;
       }
+    }
+    if (similarity) {
+      const fresh = await tryRead5(vaultTools, domainIndexPath(wikiRootGuess));
+      annotationsCache = parseIndexAnnotations(fresh);
     }
     if (signal.aborted) return;
     currentDomain = {
@@ -28234,7 +30714,7 @@ function extractImagePaths(md) {
 function truncationHint(backend) {
   return backend === "claude-agent" ? "\u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442: env CLAUDE_CODE_MAX_OUTPUT_TOKENS \u0432 iclaude.sh" : "\u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442: Settings \u2192 per-operation \u2192 format \u2192 maxTokens";
 }
-async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, signal, opts = {}, backend = "native-agent") {
+async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, signal, opts = {}, backend = "native-agent", wikiVaultPath, wikiLinkValidationRetries = 3) {
   const start = Date.now();
   const filePath = args[0];
   if (!filePath) {
@@ -28242,8 +30722,17 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
     return;
   }
   if (signal.aborted) return;
-  const original = await vaultTools.read(filePath);
+  yield { kind: "tool_use", name: "Read", input: { file_path: filePath } };
+  let original;
+  try {
+    original = await vaultTools.read(filePath);
+  } catch {
+    yield { kind: "tool_result", ok: false, preview: "cannot read file" };
+    yield { kind: "error", message: `Format: cannot read ${filePath}` };
+    return;
+  }
   if (!original) {
+    yield { kind: "tool_result", ok: false, preview: "empty file" };
     yield { kind: "error", message: `Format: cannot read ${filePath}` };
     return;
   }
@@ -28258,6 +30747,7 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
     } catch {
     }
   }
+  yield { kind: "tool_result", ok: true, preview: `${original.length} chars` };
   const systemContent = render(format_default, {
     format_schema: formatSchema,
     has_vision: String(hasVision)
@@ -28287,10 +30777,12 @@ ${original}`;
     let acc = "";
     lastFinishReason = null;
     try {
-      const stream = await llm.chat.completions.create(
+      const requestStartMs = Date.now();
+      const rawStream = await llm.chat.completions.create(
         { ...p, stream: true },
         { signal }
       );
+      const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
       for await (const chunk of stream) {
         const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
         if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
@@ -28302,6 +30794,8 @@ ${original}`;
         const fr = chunk.choices[0]?.finish_reason;
         if (fr) lastFinishReason = fr;
       }
+      const callStats = getStats();
+      if (callStats) yield buildLlmCallStatsEvent(callStats);
     } catch (e) {
       if (signal.aborted || e.name === "AbortError") return acc;
       const resp = await llm.chat.completions.create(
@@ -28314,16 +30808,19 @@ ${original}`;
     }
     return acc;
   }
+  yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
   let fullText = yield* callOnce(baseParams);
   if (signal.aborted) return;
   let parsed = parseFormatOutput(fullText);
   const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
   if (!parsed && truncated) {
+    yield { kind: "tool_result", ok: false, preview: "response truncated" };
     yield { kind: "error", message: `Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 ${truncationHint(backend)}` };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
     return;
   }
   if (!parsed) {
+    yield { kind: "tool_result", ok: false, preview: "invalid JSON \u2014 retrying" };
     yield { kind: "assistant_text", delta: "\n[JSON \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u2014 \u043F\u043E\u0432\u0442\u043E\u0440\u044F\u044E \u0437\u0430\u043F\u0440\u043E\u0441]\n" };
     const retryMessages = [
       { role: "system", content: systemContent + '\n\n\u041A\u0420\u0418\u0422\u0418\u0427\u0415\u0421\u041A\u0418 \u0412\u0410\u0416\u041D\u041E: \u0432\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 {"report": "...", "formatted": "..."} \u0431\u0435\u0437 markdown-\u043E\u0431\u0451\u0440\u0442\u043A\u0438, \u0431\u0435\u0437 ```json fence, \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439. \u0412\u0441\u0435 \u0441\u043F\u0435\u0446\u0441\u0438\u043C\u0432\u043E\u043B\u044B \u0432\u043D\u0443\u0442\u0440\u0438 \u0441\u0442\u0440\u043E\u043A \u0434\u043E\u043B\u0436\u043D\u044B \u0431\u044B\u0442\u044C \u044D\u043A\u0440\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u044B (\\n, \\", \\\\).' },
@@ -28331,6 +30828,7 @@ ${original}`;
       ...chatHistory.map((m) => ({ role: m.role, content: m.content }))
     ];
     const retryParams = { ...buildChatParams(model, retryMessages, opts, true), response_format: { type: "json_object" } };
+    yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     fullText = yield* callOnce(retryParams);
     if (signal.aborted) return;
     parsed = parseFormatOutput(fullText);
@@ -28338,10 +30836,12 @@ ${original}`;
   if (!parsed) {
     const retryTruncated = lastFinishReason === "length" || looksTruncated(fullText);
     const msg = retryTruncated ? `Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 (\u043F\u043E\u0441\u043B\u0435 retry) \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 ${truncationHint(backend)}` : "Format: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON (\u043F\u043E\u0441\u043B\u0435 retry)";
+    yield { kind: "tool_result", ok: false, preview: msg };
     yield { kind: "error", message: msg };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
     return;
   }
+  yield { kind: "tool_result", ok: true, preview: `${parsed.formatted.length} chars` };
   const lastSlash = filePath.lastIndexOf("/");
   const dir = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "";
   const baseName = (lastSlash >= 0 ? filePath.slice(lastSlash + 1) : filePath).replace(/\.md$/, "") || "page";
@@ -28361,6 +30861,7 @@ ${original}`;
       }
     ];
     const restoreParams = { ...buildChatParams(model, restoreMessages, opts, true), response_format: { type: "json_object" } };
+    yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     const fullText2 = yield* callOnce(restoreParams);
     if (!signal.aborted) {
       const parsed2 = parseFormatOutput(fullText2);
@@ -28368,22 +30869,223 @@ ${original}`;
         finalFormatted = parsed2.formatted;
         finalReport = parsed2.report;
       }
+      yield { kind: "tool_result", ok: true, preview: "tokens restored" };
     }
     const missing2 = missingTokensWithContext(original, finalFormatted);
     if (missing2.length > 0) {
       finalFormatted = appendMissingLines(finalFormatted, missing2);
     }
   }
+  const wlFix = fixWikiLinks(/* @__PURE__ */ new Map([[filePath, finalFormatted]]), wikiLinkValidationRetries);
+  finalFormatted = wlFix.fixed.get(filePath) ?? finalFormatted;
   try {
     await vaultTools.write(tempPath, finalFormatted);
   } catch (e) {
     yield { kind: "error", message: `Format: \u0437\u0430\u043F\u0438\u0441\u044C \u0444\u043E\u0440\u043C\u0430\u0442\u0430 \u043D\u0435 \u0443\u0434\u0430\u043B\u0430\u0441\u044C \u2014 ${e.message}` };
     return;
   }
+  if (wlFix.warnings.length > 0) {
+    yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "WikiLink warnings", details: wlFix.warnings };
+  }
   const missingFinal = missingTokensWithContext(original, finalFormatted);
   yield { kind: "format_preview", tempPath, report: finalReport, missingTokens: missingFinal };
   yield { kind: "result", durationMs: Date.now() - start, text: finalReport, outputTokens: outputTokens || void 0 };
 }
+
+// src/page-similarity.ts
+function encodeVector(v) {
+  return Buffer.from(v.buffer).toString("base64");
+}
+function decodeVector(b64) {
+  const buf = Buffer.from(b64, "base64");
+  return new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
+}
+function annotationHash(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = Math.imul(31, h) + s.charCodeAt(i) | 0;
+  }
+  return (h >>> 0).toString(36);
+}
+function cosine(a, b) {
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  const denom = Math.sqrt(na) * Math.sqrt(nb);
+  return denom === 0 ? 0 : dot / denom;
+}
+var EMBEDDING_BATCH_SIZE = 100;
+async function fetchEmbeddings(baseUrl, apiKey, model, inputs) {
+  const url = `${baseUrl.replace(/\/$/, "")}/embeddings`;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({ model, input: inputs })
+  });
+  if (!resp.ok) throw new Error(`Embedding API error: ${resp.status}`);
+  const json = await resp.json();
+  return json.data.map((d) => new Float32Array(d.embedding));
+}
+var PageSimilarityService = class {
+  constructor(config) {
+    this.config = config;
+  }
+  config;
+  cache = null;
+  async selectRelevant(sourceContent, indexAnnotations, allPaths) {
+    const queryTokens = tokenize(sourceContent);
+    if (queryTokens.size === 0) return [];
+    if (this.config.mode === "jaccard") {
+      return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
+    }
+    return this.selectEmbedding(sourceContent, indexAnnotations, allPaths, queryTokens);
+  }
+  selectJaccard(queryTokens, indexAnnotations, allPaths) {
+    const scored = [];
+    for (const path2 of allPaths) {
+      const pid = pageId(path2);
+      const annotation = indexAnnotations.get(pid);
+      if (!annotation) continue;
+      const score = scoreSeed(queryTokens, pid, "", annotation);
+      if (score > 0) scored.push({ path: path2, score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, this.config.topK).map((x) => x.path);
+  }
+  async selectEmbedding(sourceContent, indexAnnotations, allPaths, queryTokens) {
+    const { baseUrl, apiKey, model, topK } = this.config;
+    if (!baseUrl || !model) {
+      return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
+    }
+    let queryVec;
+    try {
+      const truncated = sourceContent.slice(0, 2e3);
+      [queryVec] = await fetchEmbeddings(baseUrl, apiKey, model, [truncated]);
+    } catch {
+      return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
+    }
+    const pids = allPaths.map((p) => pageId(p));
+    const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
+    const pageVecs = /* @__PURE__ */ new Map();
+    if (this.cache && this.cache.model === model) {
+      for (let i = 0; i < pids.length; i++) {
+        const entry = this.cache.entries[pids[i]];
+        if (entry) {
+          pageVecs.set(pids[i], decodeVector(entry.vector));
+        }
+      }
+    }
+    const batches = [];
+    let cur = { pids: [], texts: [] };
+    for (let i = 0; i < pids.length; i++) {
+      if (!annotations[i]) continue;
+      if (pageVecs.has(pids[i])) continue;
+      cur.pids.push(pids[i]);
+      cur.texts.push(annotations[i]);
+      if (cur.pids.length >= EMBEDDING_BATCH_SIZE) {
+        batches.push(cur);
+        cur = { pids: [], texts: [] };
+      }
+    }
+    if (cur.pids.length > 0) batches.push(cur);
+    for (const batch of batches) {
+      let vecs;
+      try {
+        vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
+      } catch {
+        for (const pid of batch.pids) {
+          const annotation = indexAnnotations.get(pid) ?? "";
+          const score = scoreSeed(queryTokens, pid, "", annotation);
+          if (score > 0) pageVecs.set(pid, new Float32Array(0));
+        }
+        continue;
+      }
+      for (let i = 0; i < batch.pids.length; i++) {
+        pageVecs.set(batch.pids[i], vecs[i]);
+      }
+    }
+    const scored = [];
+    for (let i = 0; i < allPaths.length; i++) {
+      const pid = pids[i];
+      const vec = pageVecs.get(pid);
+      if (!vec) continue;
+      let score;
+      if (vec.length === 0) {
+        score = scoreSeed(queryTokens, pid, "", annotations[i]);
+      } else {
+        score = cosine(queryVec, vec);
+      }
+      if (score > 0) scored.push({ path: allPaths[i], score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, topK).map((x) => x.path);
+  }
+  async loadCache(domainRoot, vaultTools) {
+    if (this.config.mode !== "embedding") return;
+    if (this.cache) return;
+    const { model, dimensions } = this.config;
+    if (!model || !dimensions) return;
+    try {
+      const raw = await vaultTools.read(domainEmbeddingsPath(domainRoot));
+      const parsed = JSON.parse(raw);
+      if (parsed.model === model && parsed.dimensions === dimensions) {
+        this.cache = parsed;
+      }
+    } catch {
+    }
+  }
+  async refreshCache(domainRoot, vaultTools, indexAnnotations) {
+    if (this.config.mode !== "embedding") return { updated: 0 };
+    const { baseUrl, apiKey, model, dimensions } = this.config;
+    if (!baseUrl || !model || !dimensions) return { updated: 0 };
+    const cachePath = domainEmbeddingsPath(domainRoot);
+    let cacheFile;
+    try {
+      const raw = await vaultTools.read(cachePath);
+      const parsed = JSON.parse(raw);
+      if (parsed.model !== model || parsed.dimensions !== dimensions) {
+        cacheFile = { model, dimensions, entries: {} };
+      } else {
+        cacheFile = parsed;
+      }
+    } catch {
+      cacheFile = { model, dimensions, entries: {} };
+    }
+    const toEmbed = [];
+    for (const [pid, annotation] of indexAnnotations) {
+      const hash = annotationHash(annotation);
+      const existing = cacheFile.entries[pid];
+      if (!existing || existing.hash !== hash) {
+        toEmbed.push({ pid, annotation });
+      }
+    }
+    if (toEmbed.length === 0) return { updated: 0 };
+    for (let i = 0; i < toEmbed.length; i += EMBEDDING_BATCH_SIZE) {
+      const batch = toEmbed.slice(i, i + EMBEDDING_BATCH_SIZE);
+      let vecs;
+      try {
+        vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.map((x) => x.annotation));
+      } catch {
+        continue;
+      }
+      for (let j = 0; j < batch.length; j++) {
+        cacheFile.entries[batch[j].pid] = {
+          vector: encodeVector(vecs[j]),
+          hash: annotationHash(batch[j].annotation)
+        };
+      }
+    }
+    await vaultTools.write(cachePath, JSON.stringify(cacheFile, null, 2));
+    this.cache = cacheFile;
+    return { updated: toEmbed.length };
+  }
+};
 
 // src/agent-runner.ts
 var AgentRunner = class {
@@ -28414,6 +31116,18 @@ var AgentRunner = class {
     if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
     return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
   }
+  buildSimilarity() {
+    if (this.settings.backend !== "native-agent") return void 0;
+    const na = this.settings.nativeAgent;
+    return new PageSimilarityService({
+      mode: na.embeddingModel ? "embedding" : "jaccard",
+      model: na.embeddingModel,
+      dimensions: na.embeddingDimensions,
+      topK: na.relevantPagesTopK ?? 15,
+      baseUrl: na.baseUrl,
+      apiKey: na.apiKey
+    });
+  }
   async writeDevLog(_vaultRoot, entry) {
     if (!this.settings.devMode?.enabled) return;
     const adapter = this.vaultTools.adapter;
@@ -28429,16 +31143,16 @@ var AgentRunner = class {
     } catch {
     }
   }
-  async *runOperation(req, model, opts, vaultRoot, domains) {
+  async *runOperation(req, model, opts, vaultRoot, domains, similarity) {
     switch (req.operation) {
       case "ingest":
-        yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts);
+        yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, similarity, void 0, this.settings.graphDepth, this.settings.wikiLinkValidationRetries);
         break;
       case "query":
-        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore);
+        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, similarity);
         break;
       case "lint":
-        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, opts);
+        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, this.settings.wikiLinkValidationRetries, opts, similarity);
         break;
       case "chat": {
         const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
@@ -28460,11 +31174,13 @@ var AgentRunner = class {
         break;
       }
       case "init":
-        yield* runInit(req.args, this.vaultTools, this.llm, model, domains, this.vaultName, req.signal, opts, req.onFileError);
+        yield* runInit(req.args, this.vaultTools, this.llm, model, domains, this.vaultName, req.signal, opts, req.onFileError, similarity);
         break;
       case "format": {
         const hasVision = this.settings.backend === "claude-agent";
-        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend);
+        const formatDomain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
+        const wikiVaultPath = formatDomain ? domainWikiFolder(formatDomain.wiki_folder) : void 0;
+        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries);
         break;
       }
       default: {
@@ -28481,9 +31197,10 @@ var AgentRunner = class {
     if (req.signal.aborted) return;
     const vaultRoot = req.cwd ?? "";
     const domains = req.domainId ? this.domains.filter((d) => d.id === req.domainId) : this.domains;
+    const similarity = this.buildSimilarity();
     const startMs = Date.now();
     let finalResultText = "";
-    for await (const ev of this.runOperation(req, model, opts, vaultRoot, domains)) {
+    for await (const ev of this.runOperation(req, model, opts, vaultRoot, domains, similarity)) {
       if (ev.kind === "result") finalResultText = ev.text;
       yield ev;
     }
@@ -28613,7 +31330,7 @@ var VaultTools = class {
 
 // src/claude-cli-client.ts
 var import_child_process = require("child_process");
-var import_path_browserify5 = __toESM(require_path_browserify(), 1);
+var import_path_browserify6 = __toESM(require_path_browserify(), 1);
 
 // src/stream.ts
 var PREVIEW_MAX = 200;
@@ -28693,7 +31410,6 @@ function mapResult(obj) {
   return {
     kind: "result",
     durationMs: Number(obj.duration_ms ?? 0),
-    usdCost: typeof obj.total_cost_usd === "number" ? obj.total_cost_usd : void 0,
     text: typeof obj.result === "string" ? obj.result : "",
     outputTokens
   };
@@ -28706,7 +31422,7 @@ function truncate2(s, n) {
 var SIGTERM_GRACE_MS = 3e3;
 function validateIclaudePath(p) {
   if (!p) throw new Error("iclaudePath is empty");
-  if (!(0, import_path_browserify5.isAbsolute)(p)) throw new Error(`iclaudePath must be absolute: "${p}"`);
+  if (!(0, import_path_browserify6.isAbsolute)(p)) throw new Error(`iclaudePath must be absolute: "${p}"`);
   if (p.split("/").includes("..")) throw new Error(`iclaudePath contains path traversal: "${p}"`);
 }
 var ClaudeCliClient = class {
@@ -28742,7 +31458,7 @@ var ClaudeCliClient = class {
     try {
       const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
       if (isLargeUser) {
-        const tmpUsrFile = (0, import_path_browserify5.join)(this.cfg.tmpDir, `ai-wiki-usr-${id}.txt`);
+        const tmpUsrFile = (0, import_path_browserify6.join)(this.cfg.tmpDir, `ai-wiki-usr-${id}.txt`);
         const wrapped = `<user_input>
 ${userText}
 </user_input>`;
@@ -28760,7 +31476,7 @@ ${userText}
       if (!isResume && systemContent) {
         const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
         if (isLargeSys) {
-          const tmpSysFile = (0, import_path_browserify5.join)(this.cfg.tmpDir, `ai-wiki-sys-${id}.txt`);
+          const tmpSysFile = (0, import_path_browserify6.join)(this.cfg.tmpDir, `ai-wiki-sys-${id}.txt`);
           await this.cfg.tmpWrite(tmpSysFile, systemContent);
           tmpFiles.push(tmpSysFile);
           args.push("--system-prompt-file", tmpSysFile);
@@ -28802,13 +31518,13 @@ ${userText}
       return;
     }
     signal?.addEventListener("abort", onAbort, { once: true });
-    const timeoutHandle = window.setTimeout(() => {
+    const timeoutHandle = timeoutSec > 0 ? window.setTimeout(() => {
       timedOut = true;
       child.kill("SIGTERM");
       window.setTimeout(() => {
         if (child.exitCode === null) child.kill("SIGKILL");
       }, SIGTERM_GRACE_MS);
-    }, timeoutSec * 1e3);
+    }, timeoutSec * 1e3) : null;
     let timedOut = false;
     const queue = [];
     let resolveNext = null;
@@ -28885,7 +31601,7 @@ ${stderr()}` : ""}`);
         choices: [{ index: 0, delta: {}, finish_reason: "stop" }]
       };
     } finally {
-      window.clearTimeout(timeoutHandle);
+      if (timeoutHandle !== null) window.clearTimeout(timeoutHandle);
       signal?.removeEventListener("abort", onAbort);
       for (const f of tmpFiles) {
         try {
@@ -36280,6 +38996,7 @@ var WikiController = class {
   _currentClaudeClient = null;
   _pendingFormat = null;
   _currentLogMeta = null;
+  _llmCallIndex = 0;
   isBusy() {
     return this.current !== null;
   }
@@ -36471,7 +39188,7 @@ var WikiController = class {
     const vaultRoot = this.cwdOrEmpty();
     let agentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat");
+      agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat", this.plugin.settings.timeouts.lint);
     } catch (e) {
       new import_obsidian7.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -36644,7 +39361,7 @@ var WikiController = class {
     }
     return true;
   }
-  async buildAgentRunner(vaultRoot, resumeSessionId, opKey) {
+  async buildAgentRunner(vaultRoot, resumeSessionId, opKey, timeoutSec = 0) {
     const rawAdapter = this.app.vault.adapter;
     const vault = this.app.vault;
     const adapter = Object.create(rawAdapter);
@@ -36660,12 +39377,11 @@ var WikiController = class {
     const domains = await this.domainStore.load();
     const local = await this.localConfigStore.load();
     const s = resolveEffective(this.plugin.settings, local);
-    const maxTimeoutSec = Math.max(...Object.values(s.timeouts));
     let llm;
     if (s.backend === "claude-agent") {
-      const manifestDir = this.plugin.manifest.dir ?? (0, import_path_browserify6.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
+      const manifestDir = this.plugin.manifest.dir ?? (0, import_path_browserify7.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
       const pluginDir = this.app.vault.adapter.getFullPath(manifestDir);
-      const tmpDir = (0, import_path_browserify6.join)(pluginDir, "tmp");
+      const tmpDir = (0, import_path_browserify7.join)(pluginDir, "tmp");
       const tmpDirRelative = tmpDir.startsWith(base) ? tmpDir.slice(base.length).replace(/^\//, "") : tmpDir;
       if (base) {
         try {
@@ -36684,7 +39400,7 @@ var WikiController = class {
         model: claudeEff.model,
         allowedTools: claudeEff.allowedTools,
         effort,
-        requestTimeoutSec: maxTimeoutSec,
+        requestTimeoutSec: timeoutSec,
         cwd: vaultRoot,
         tmpDir,
         resumeSessionId,
@@ -36726,7 +39442,7 @@ var WikiController = class {
       const openaiClient = new OpenAI({
         baseURL: s.nativeAgent.baseUrl,
         apiKey: s.nativeAgent.apiKey,
-        timeout: maxTimeoutSec * 1e3,
+        timeout: timeoutSec > 0 ? timeoutSec * 1e3 : void 0,
         dangerouslyAllowBrowser: true,
         fetch: import_obsidian7.Platform.isMobile ? mobileFetch : proxyFetch ?? void 0
       });
@@ -36744,7 +39460,7 @@ var WikiController = class {
       });
       if (!await adapter.exists("!Wiki/_config")) await this.app.vault.createFolder("!Wiki/_config").catch(() => {
       });
-      const extra = ev.kind === "result" && ev.outputTokens !== void 0 && ev.durationMs > 0 ? { tokPerSec: Math.round(ev.outputTokens / (ev.durationMs / 1e3)) } : {};
+      const extra = ev.kind === "llm_call_stats" ? { callIndex: this._llmCallIndex++ } : {};
       const line = JSON.stringify({
         ts: (/* @__PURE__ */ new Date()).toISOString(),
         session: sessionId,
@@ -36792,9 +39508,10 @@ var WikiController = class {
     if (!view) return;
     const vaultRoot = this.cwdOrEmpty();
     const opKey = op === "lint-chat" ? "lint" : op;
+    const opTimeoutSec = this.plugin.settings.timeouts[opKey];
     let agentRunner;
     try {
-      agentRunner = await this.buildAgentRunner(vaultRoot, void 0, opKey);
+      agentRunner = await this.buildAgentRunner(vaultRoot, void 0, opKey, opTimeoutSec);
     } catch (e) {
       new import_obsidian7.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
@@ -36805,13 +39522,14 @@ var WikiController = class {
     this.onBusyChange?.();
     this.currentOp = { op, args };
     const startedAt = Date.now();
+    this._llmCallIndex = 0;
     const sessionId = String(startedAt);
     const steps = [];
     let finalText = "";
     let status = "done";
     await this.logEvent(vaultRoot, sessionId, op, domainId, { kind: "system", message: `start op=${op} args=${JSON.stringify(args)} domainId=${domainId ?? ""}` });
     view.setRunning(op, args);
-    const timeoutMs = this.plugin.settings.timeouts[opKey] * 1e3;
+    const timeoutMs = opTimeoutSec * 1e3;
     let timedOut = false;
     const timeoutId = timeoutMs > 0 ? window.setTimeout(() => {
       timedOut = true;
