@@ -118,7 +118,7 @@ export class AgentRunner {
         const hasVision = this.settings.backend === "claude-agent";
         const formatDomain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : undefined;
         const wikiVaultPath = formatDomain ? domainWikiFolder(formatDomain.wiki_folder) : undefined;
-        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath);
+        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries);
         break;
       }
       default: {

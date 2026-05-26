@@ -7,6 +7,7 @@ import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
 import { missingTokensWithContext, looksTruncated, appendMissingLines } from "./format-utils";
 import { GLOBAL_FORMAT_SCHEMA_PATH } from "../wiki-path";
+import { fixWikiLinks } from "../wiki-link-validator";
 import { FormatOutputSchema } from "./zod-schemas";
 import { structuralErrorCounter } from "../structural-error-counter";
 
@@ -57,6 +58,7 @@ export async function* runFormat(
   opts: LlmCallOptions = {},
   backend: "claude-agent" | "native-agent" = "native-agent",
   wikiVaultPath?: string,
+  wikiLinkValidationRetries: number = 3,
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
   const filePath = args[0];
@@ -212,6 +214,15 @@ export async function* runFormat(
     const missing2 = missingTokensWithContext(original, finalFormatted);
     if (missing2.length > 0) {
       finalFormatted = appendMissingLines(finalFormatted, missing2);
+    }
+  }
+
+  {
+    const fmtMap = new Map([[filePath, finalFormatted]]);
+    const wlFix = fixWikiLinks(fmtMap, wikiLinkValidationRetries);
+    finalFormatted = wlFix.fixed.get(filePath) ?? finalFormatted;
+    if (wlFix.warnings.length > 0) {
+      yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFix.warnings };
     }
   }
 
