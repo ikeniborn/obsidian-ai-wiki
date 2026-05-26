@@ -1,7 +1,7 @@
 # Intent: Exclude _config from lint/query/similarity operations
 
 **Date:** 2026-05-26
-**Status:** draft
+**Status:** approved
 
 ## Objective
 
