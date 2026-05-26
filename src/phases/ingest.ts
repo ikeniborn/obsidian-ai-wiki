@@ -239,7 +239,7 @@ export async function* runIngest(
       wiki_updated: backlinkToday,
       wiki_articles: mergedArticles,
     });
-    yield { kind: "tool_use", name: "Write", input: { path: sourceVaultPath } };
+    yield { kind: "tool_use", name: "Update", input: { path: sourceVaultPath } };
     try {
       await vaultTools.write(sourceVaultPath, updatedSource);
       yield { kind: "tool_result", ok: true, preview: `backlinks → ${sourceVaultPath}` };

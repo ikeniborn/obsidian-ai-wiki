@@ -146,7 +146,7 @@ export async function* runLint(
         yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
         continue;
       }
-      yield { kind: "tool_use", name: "Write", input: { path: page.path } };
+      yield { kind: "tool_use", name: "Update", input: { path: page.path } };
       try {
         await vaultTools.write(page.path, page.content);
         writtenPaths.push(page.path);
@@ -191,7 +191,7 @@ export async function* runLint(
     const syncToday = new Date().toISOString().slice(0, 10);
     let syncUpdated = 0;
     for (const [rawPath, articles] of backlinks) {
-      yield { kind: "tool_use", name: "Write", input: { path: rawPath } };
+      yield { kind: "tool_use", name: "Update", input: { path: rawPath } };
       try {
         const rawContent = await vaultTools.read(rawPath);
         const existingArticles = parseWikiArticlesFromFm(rawContent);
