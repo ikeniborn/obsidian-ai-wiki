@@ -272,5 +272,5 @@ export function computeSpeedText(stats: Array<{
   if (totalDurS <= 0) return "";
   const inS = Math.round(totalIn / totalDurS);
   const outS = Math.round(totalOut / totalDurS);
-  return ` in: ${inS} · out: ${outS} tok/s · latency: ${medTtft}ms`;
+  return ` in: ${inS} tok/s · out: ${outS} tok/s · latency: ${medTtft}ms`;
 }

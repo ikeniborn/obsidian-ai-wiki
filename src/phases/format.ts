@@ -217,20 +217,18 @@ export async function* runFormat(
     }
   }
 
-  {
-    const fmtMap = new Map([[filePath, finalFormatted]]);
-    const wlFix = fixWikiLinks(fmtMap, wikiLinkValidationRetries);
-    finalFormatted = wlFix.fixed.get(filePath) ?? finalFormatted;
-    if (wlFix.warnings.length > 0) {
-      yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFix.warnings };
-    }
-  }
+  const wlFix = fixWikiLinks(new Map([[filePath, finalFormatted]]), wikiLinkValidationRetries);
+  finalFormatted = wlFix.fixed.get(filePath) ?? finalFormatted;
 
   try {
     await vaultTools.write(tempPath, finalFormatted);
   } catch (e) {
     yield { kind: "error", message: `Format: запись формата не удалась — ${(e as Error).message}` };
     return;
+  }
+
+  if (wlFix.warnings.length > 0) {
+    yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFix.warnings };
   }
 
   const missingFinal = missingTokensWithContext(original, finalFormatted);

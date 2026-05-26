@@ -180,9 +180,6 @@ export async function* runIngest(
   ]);
   const wlFixResult = fixWikiLinks(pagesMap, wikiLinkValidationRetries, knownStems);
   pages = pages.map((p) => ({ ...p, content: wlFixResult.fixed.get(p.path) ?? p.content }));
-  if (wlFixResult.warnings.length > 0) {
-    yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFixResult.warnings };
-  }
 
   const written: string[] = [];
   const logEntries: IngestLogEntry[] = [];
@@ -271,6 +268,10 @@ export async function* runIngest(
       const updatedAnnotations = parseIndexAnnotations(updatedIndex);
       await similarity.refreshCache(domainRoot, vaultTools, updatedAnnotations);
     } catch { /* non-critical */ }
+  }
+
+  if (wlFixResult.warnings.length > 0) {
+    yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFixResult.warnings };
   }
 
   yield { kind: "result", durationMs: Date.now() - start, text: resultText, outputTokens: outputTokens || undefined };

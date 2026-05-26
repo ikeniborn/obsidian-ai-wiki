@@ -71,6 +71,7 @@ export async function* runLint(
 
     const pages = await vaultTools.readAll(files);
 
+    yield { kind: "info_text", icon: "🔍", summary: `Analysing ${files.length} pages...` };
     const { graph } = graphCache.get(domain.id, pages);
     const structuralIssues = checkStructure(pages);
     const graphIssues = checkGraphStructure(graph, hubThreshold);

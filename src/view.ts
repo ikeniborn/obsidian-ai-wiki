@@ -71,6 +71,7 @@ export class LlmWikiView extends ItemView {
   private chatStartTs = 0;
   private lastUserMessage = "";
   private startTs = 0;
+  private lastStepTs = 0;
   private llmStats: Array<{ inputTokens: number; outputTokens: number; ttftMs: number; llmDurationMs: number; }> = [];
   private resultSpeedEl: HTMLElement | null = null;
   private toolCount = 0;
@@ -477,6 +478,7 @@ export class LlmWikiView extends ItemView {
     this.resultOpen = false;
 
     this.startTs = Date.now();
+    this.lastStepTs = this.startTs;
     this.toolCount = 0;
     this.stepCount = 0;
     this.progressEl = null;
@@ -988,7 +990,10 @@ export class LlmWikiView extends ItemView {
   }
 
   private elapsedShort(): string {
-    return `${((Date.now() - this.startTs) / 1000).toFixed(1)}s`;
+    const now = Date.now();
+    const ms = now - this.lastStepTs;
+    this.lastStepTs = now;
+    return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : "";
   }
 
   private scrollSteps(): void {
