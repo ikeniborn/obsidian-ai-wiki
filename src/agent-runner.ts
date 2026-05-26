@@ -94,7 +94,7 @@ export class AgentRunner {
         yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, similarity);
         break;
       case "lint":
-        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, opts, similarity);
+        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, this.settings.wikiLinkValidationRetries, opts, similarity);
         break;
       case "chat": {
         const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : undefined;

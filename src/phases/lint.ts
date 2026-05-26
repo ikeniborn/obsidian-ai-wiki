@@ -12,6 +12,7 @@ import { render } from "./template";
 import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, domainIndexPath } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm } from "../utils/raw-frontmatter";
 import { checkGraphStructure, pageId } from "../wiki-graph";
+import { checkWikiLinks, fixWikiLinks } from "../wiki-link-validator";
 import { graphCache } from "../wiki-graph-cache";
 import { upsertIndexAnnotation, parseIndexAnnotations } from "../wiki-index";
 import { appendWikiLog } from "../wiki-log";
@@ -31,6 +32,7 @@ export async function* runLint(
   vaultRoot: string,
   signal: AbortSignal,
   hubThreshold: number = 20,
+  wikiLinkValidationRetries: number = 3,
   opts: LlmCallOptions = {},
   similarity?: PageSimilarityService,
 ): AsyncGenerator<RunEvent> {
@@ -72,7 +74,8 @@ export async function* runLint(
     const { graph } = graphCache.get(domain.id, pages);
     const structuralIssues = checkStructure(pages);
     const graphIssues = checkGraphStructure(graph, hubThreshold);
-    const allIssues = [structuralIssues, graphIssues].filter(Boolean).join("\n");
+    const wikiLinkIssues = checkWikiLinks(pages);
+    const allIssues = [structuralIssues, graphIssues, wikiLinkIssues].filter(Boolean).join("\n");
 
     const entityTypesBlock = buildEntityTypesBlock(domain);
 
@@ -137,7 +140,13 @@ export async function* runLint(
 
     if (signal.aborted) return;
 
-    const fixedPages = lintResult.value.fixes;
+    const knownStems = new Set([...pages.keys()].map((p) => p.split("/").pop()!.replace(/\.md$/, "")));
+    const fixesMap = new Map(lintResult.value.fixes.map((p) => [p.path, p.content]));
+    const wlFixResult = fixWikiLinks(fixesMap, wikiLinkValidationRetries, knownStems);
+    const fixedPages = lintResult.value.fixes.map((p) => ({ ...p, content: wlFixResult.fixed.get(p.path) ?? p.content }));
+    if (wlFixResult.warnings.length > 0) {
+      yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFixResult.warnings };
+    }
     const writtenPaths: string[] = [];
     for (const page of fixedPages) {
       yield { kind: "assistant_text", delta: `  • ${page.path.split("/").pop()}...\n` };
