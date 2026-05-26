@@ -5,7 +5,11 @@
 
 ## Objective
 
-`_config/` directories (global `!Wiki/_config/` and per-domain `!Wiki/<domain>/_config/`) contain technical files (`_index.md`, `_log.md`, schemas, logs). Currently they are picked up by lint and query operations and get incorrectly modified. They must be excluded from all user-content operations.
+`_config/` directories contain technical files, not user content. Two levels:
+- `!Wiki/_config/` — global: logs, schemas (written by system)
+- `!Wiki/<domain>/_config/` — per-domain: `_index.md`, `_log.md`, embeddings (written by ingest/lint)
+
+Currently lint and query pick up these files and incorrectly modify them. They must be excluded from all user-content operations.
 
 ## Desired Outcomes
 
@@ -16,7 +20,8 @@
 
 ## Health Metrics
 
-- ingest and lint still write to `_config/` (`_index.md`, `_log.md`) — write path unchanged
+- ingest and lint still write to domain `_config/` (`_index.md`, `_log.md`, embeddings) — write path unchanged
+- system still writes to global `_config/` (logs, schemas) — write path unchanged
 - format does not touch `_config/` — unchanged
 - All existing lint/query tests pass
 
@@ -48,5 +53,5 @@
 ## Stop Rules
 
 - Halt if: removing similarity from format breaks ingest or lint behavior
-- Halt if: `_config/` write paths (index, log) stop working
+- Halt if: `_config/` write paths (index, log, embeddings) stop working
 - Done when: all tests pass and `lat check` reports no errors
