@@ -1,3 +1,36 @@
+---
+review:
+  spec_hash: 0791c74a90ad6e45
+  last_run: 2026-05-26
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: structure
+      severity: WARNING
+      section: "Tests"
+      text: "Duplicate headings validateWikiLinks/fixWikiLinks in Tests vs wiki-link-validator.ts"
+      verdict: fixed
+      verdict_at: 2026-05-26
+    - id: F-002
+      phase: clarity
+      severity: WARNING
+      section: "wiki-link-validator.ts#validateWikiLinks"
+      text: "Missing knownPageStems param for dead-link detection"
+      verdict: fixed
+      verdict_at: 2026-05-26
+    - id: F-003
+      phase: clarity
+      severity: INFO
+      section: "wiki-link-validator.ts#fixWikiLinks"
+      text: "fixable violations term undefined"
+      verdict: fixed
+      verdict_at: 2026-05-26
+---
+
 # Design: WikiLink Validation
 
 **Date:** 2026-05-26
@@ -47,6 +80,10 @@ interface FixResult {
 
 Scans all pages for violations. Returns list of `WikiLinkViolation[]`.
 
+Signature: `validateWikiLinks(pages: Map<string, string>, knownPageStems?: Set<string>): WikiLinkViolation[]`
+
+`knownPageStems` — set of bare file stems (no path, no `.md`) used for dead-link detection. If omitted, dead-link check is skipped (no warning emitted).
+
 Rules:
 
 | Kind | Pattern | Detection |
@@ -64,6 +101,9 @@ Runs up to `maxPasses` times. On each pass:
 2. Strips paths: `[[folder/page]]` → `[[page]]` (basename)
 3. Normalizes inline-JSON frontmatter → YAML block list
 4. Syncs `wiki_outgoing_links` from body links (parses all `[[...]]` in body, writes block list)
+
+Fixable violations: `alias`, `path`, `inline-json`, `outgoing-desync` — all correctable by string manipulation.
+Non-fixable: `dead-link` — requires knowing valid page names; collected into `warnings[]`.
 
 Stops when `validateWikiLinks()` returns zero fixable violations or `maxPasses` exhausted.
 Dead links collected into `warnings[]` — pages written as-is.
@@ -136,26 +176,12 @@ wikiLinkValidationRetries_desc: "Máx. pasadas programáticas para corregir form
 
 ## Zod Refinement
 
-`WikiPageSchema` in `zod-schemas.ts` gets `.superRefine()` on `content`:
+`WikiPageSchema` in `zod-schemas.ts` gets `.superRefine()` on `content` field with two checks:
 
-```ts
-.superRefine((content, ctx) => {
-  // alias links
-  if (/\[\[[^\]]+\|[^\]]+\]\]/.test(content)) {
-    ctx.addIssue({ code: "custom", message: "WikiLink aliases not allowed" });
-  }
-  // path links
-  const links = [...content.matchAll(/\[\[([^\]]+)\]\]/g)].map(m => m[1]);
-  for (const link of links) {
-    if (link.includes("/")) {
-      ctx.addIssue({ code: "custom", message: `WikiLink with path: [[${link}]]` });
-    }
-  }
-})
-```
+1. **Alias check** — regex `\[\[[^\]]+\|[^\]]+\]\]` matches any `[[X|Y]]` pattern; adds a Zod issue "WikiLink aliases not allowed"
+2. **Path check** — iterates all `[[...]]` matches; if link text contains `/`, adds a Zod issue "WikiLink with path"
 
-Used in tests to verify validator and schema agree. Not used for runtime LLM retry.
-
+Used in tests to verify validator and schema agree. Not used for runtime LLM retry — runtime fix is programmatic via `fixWikiLinks`.
 ## Template Changes (_wiki_schema.md)
 
 Replace existing WikiLinks section with:
@@ -180,7 +206,7 @@ wiki_outgoing_links MUST contain every [[link]] found in the page body.
 
 ## Tests (wiki-link-validator.test.ts)
 
-### validateWikiLinks
+### Tests: validateWikiLinks
 - Detects alias: `[[Page|alias]]` → violation `kind="alias"`
 - Detects path: `[[folder/page]]` → violation `kind="path"`
 - Detects inline-json frontmatter → violation `kind="inline-json"`
@@ -188,7 +214,7 @@ wiki_outgoing_links MUST contain every [[link]] found in the page body.
 - Dead link → warning (not violation)
 - Clean page → empty violations
 
-### fixWikiLinks
+### Tests: fixWikiLinks
 - Strips alias: `[[Page|alias]]` → `[[Page]]`
 - Strips path: `[[folder/page]]` → `[[page]]`
 - Normalizes inline-json frontmatter → block list
