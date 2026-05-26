@@ -208,7 +208,9 @@ export async function* runIngest(
     }
   }
 
-  const resultText = buildIngestSummary(domain.id, sourceVaultPath, written, pages.length);
+  const createdCount = logEntries.filter(e => e.action === "СОЗДАНА").length;
+  const updatedCount = logEntries.filter(e => e.action === "ОБНОВЛЕНА").length;
+  const resultText = buildIngestSummary(domain.id, sourceVaultPath, createdCount, updatedCount, pages.length);
   yield { kind: "assistant_text", delta: resultText };
 
   const delta = parseResult.value.entity_types_delta;
@@ -260,17 +262,29 @@ export async function* runIngest(
   yield { kind: "result", durationMs: Date.now() - start, text: resultText, outputTokens: outputTokens || undefined };
 }
 
-function buildIngestSummary(domainId: string, sourcePath: string, written: string[], total: number): string {
+function buildIngestSummary(
+  domainId: string,
+  sourcePath: string,
+  createdCount: number,
+  updatedCount: number,
+  total: number,
+): string {
   const src = sourcePath.split("/").pop() ?? sourcePath;
-  if (written.length === 0) {
+  const totalWritten = createdCount + updatedCount;
+  if (totalWritten === 0) {
     return `Источник «${src}» обработан — новых или изменённых страниц нет.`;
   }
-  const skipped = total - written.length;
-  const lines = [`Источник «${src}» → домен «${domainId}»: записано ${written.length} стр.${skipped > 0 ? `, ошибок ${skipped}` : ""}`];
-  for (const p of written) {
-    lines.push(`  • ${p.split("/").pop()}`);
+  const skipped = total - totalWritten;
+  let countStr: string;
+  if (createdCount > 0 && updatedCount > 0) {
+    countStr = `создано ${createdCount}, обновлено ${updatedCount}`;
+  } else if (createdCount > 0) {
+    countStr = `создано ${createdCount} стр.`;
+  } else {
+    countStr = `обновлено ${updatedCount} стр.`;
   }
-  return lines.join("\n");
+  const errStr = skipped > 0 ? `, ошибок ${skipped}` : "";
+  return `Источник «${src}» → домен «${domainId}»: ${countStr}${errStr}`;
 }
 
 export function detectDomain(absFilePath: string, domains: DomainEntry[], vaultRoot: string): DomainEntry | null {
