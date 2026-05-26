@@ -41,6 +41,18 @@ export const WikiPageSchema = z.object({
   path: z.string(),
   content: z.string(),
   annotation: z.string().optional(),
+}).superRefine((val, ctx) => {
+  if (/\[\[[^\]]+\|[^\]]+\]\]/.test(val.content)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "WikiLink aliases not allowed", path: ["content"] });
+  }
+  const linkRe = /\[\[([^\]|]+)\]\]/g;
+  let m: RegExpExecArray | null;
+  while ((m = linkRe.exec(val.content)) !== null) {
+    if (m[1].includes("/")) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "WikiLink with path", path: ["content"] });
+      break;
+    }
+  }
 });
 
 export const WikiPagesOutputSchema = z.object({
