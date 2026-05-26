@@ -1,0 +1,265 @@
+{
+  "nodes": [
+    {
+      "id": "src/phases/ingest.ts#runIngest",
+      "label": "runIngest",
+      "file": "src/phases/ingest.ts",
+      "file_type": "code",
+      "description": "Main async generator orchestrating the full ingest pipeline: reads source file, detects domain, loads existing wiki pages (optionally with similarity-based BFS selection), calls LLM via parseWithRetry, validates/fixes paths and WikiLinks, writes output pages, updates source frontmatter with backlinks, refreshes similarity cache, and emits RunEvents throughout."
+    },
+    {
+      "id": "src/phases/ingest.ts#detectDomain",
+      "label": "detectDomain",
+      "file": "src/phases/ingest.ts",
+      "file_type": "code",
+      "description": "Matches an absolute file path against configured domain source_paths to find the owning DomainEntry; falls back to the first domain if no match."
+    },
+    {
+      "id": "src/phases/ingest.ts#buildIngestMessages",
+      "label": "buildIngestMessages",
+      "file": "src/phases/ingest.ts",
+      "file_type": "code",
+      "description": "Assembles the OpenAI chat message array for the ingest LLM call: renders system prompt from ingest template and builds user message containing source content, existing wiki pages, and index."
+    },
+    {
+      "id": "src/phases/ingest.ts#buildEntityTypesBlock",
+      "label": "buildEntityTypesBlock",
+      "file": "src/phases/ingest.ts",
+      "file_type": "code",
+      "description": "Renders the entity types section of the ingest prompt from a DomainEntry's entity_types array, including path templates per entity type."
+    },
+    {
+      "id": "src/phases/ingest.ts#retryInvalidPaths",
+      "label": "retryInvalidPaths",
+      "file": "src/phases/ingest.ts",
+      "file_type": "code",
+      "description": "Sends a follow-up LLM message asking the model to correct pages whose paths violate the 4-segment wiki path rule; returns raw text response."
+    },
+    {
+      "id": "src/phases/ingest.ts#splitByPathValidity",
+      "label": "splitByPathValidity",
+      "file": "src/phases/ingest.ts",
+      "file_type": "code",
+      "description": "Partitions an array of LLM-produced pages into valid and invalid subsets based on validateArticlePath, exempting system files (prefixed _ and ending .md)."
+    },
+    {
+      "id": "src/phases/ingest.ts#parseJsonPages",
+      "label": "parseJsonPages",
+      "file": "src/phases/ingest.ts",
+      "file_type": "code",
+      "description": "Extracts a JSON array of page objects from raw LLM text, used to parse the retry response for invalid paths."
+    },
+    {
+      "id": "src/phases/ingest.ts#extractParentSourcePath",
+      "label": "extractParentSourcePath",
+      "file": "src/phases/ingest.ts",
+      "file_type": "code",
+      "description": "Returns the vault-relative parent directory of the ingested source file, clamped to vault root, used for source_path_added event."
+    },
+    {
+      "id": "src/phases/ingest.ts#buildIngestSummary",
+      "label": "buildIngestSummary",
+      "file": "src/phases/ingest.ts",
+      "file_type": "code",
+      "description": "Formats a Russian-language summary string of the ingest result (pages created/updated/errored) for display."
+    },
+    {
+      "id": "src/phases/ingest.ts#parseWikiStatus",
+      "label": "parseWikiStatus",
+      "file": "src/phases/ingest.ts",
+      "file_type": "code",
+      "description": "Extracts the wiki_status frontmatter value from page content for log entries."
+    }
+  ],
+  "edges": [
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/phases/parse-with-retry.ts#parseWithRetry",
+      "relation": "calls to validate and parse LLM output against WikiPagesOutputSchema with retries",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/phases/llm-utils.ts#buildChatParams",
+      "relation": "calls via retryInvalidPaths to build LLM params for path correction retry",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/phases/llm-utils.ts#extractStreamDeltas",
+      "relation": "calls via retryInvalidPaths to extract text from stream chunks",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/phases/ingest.ts#detectDomain",
+      "relation": "calls to identify domain for the source file",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/phases/ingest.ts#buildIngestMessages",
+      "relation": "calls to construct the LLM prompt messages",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/phases/ingest.ts#splitByPathValidity",
+      "relation": "calls to partition pages before write loop",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/phases/ingest.ts#retryInvalidPaths",
+      "relation": "calls when invalid paths are detected after initial parse",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/phases/ingest.ts#buildIngestSummary",
+      "relation": "calls to build result text after write loop",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/wiki-link-validator.ts#fixWikiLinks",
+      "relation": "calls to programmatically fix/validate WikiLinks in all output pages before writing",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/wiki-graph.ts#bfsExpand",
+      "relation": "calls to expand similarity seed page ids to a broader set via BFS on the wiki graph",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/wiki-graph-cache.ts#graphCache",
+      "relation": "uses graphCache.get to build/retrieve cached wiki link graph for BFS expansion",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/page-similarity.ts#PageSimilarityService",
+      "relation": "optionally uses PageSimilarityService to select relevant existing pages before LLM call",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/wiki-index.ts#upsertIndexAnnotation",
+      "relation": "calls after each page write to store page annotation in domain index",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/wiki-index.ts#parseIndexAnnotations",
+      "relation": "calls to parse existing index annotations for similarity selection",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/wiki-log.ts#appendWikiLog",
+      "relation": "calls after writing pages to append structured log entry for the ingest operation",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/utils/raw-frontmatter.ts#upsertRawFrontmatter",
+      "relation": "calls to update source file frontmatter with wiki_added, wiki_updated, wiki_articles backlinks",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/utils/raw-frontmatter.ts#parseWikiArticlesFromFm",
+      "relation": "calls to read existing wiki_articles links from source frontmatter before merging",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/utils/raw-frontmatter.ts#hasFrontmatterField",
+      "relation": "calls to check if wiki_added is already set before writing backlink date",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/domain-config.ts#ensureDomainConfig",
+      "relation": "calls to ensure domain config files exist before processing",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/wiki-path.ts#validateArticlePath",
+      "relation": "calls via splitByPathValidity to enforce 4-level path rule",
+      "confidence": "INFERRED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/domain.ts#mergeEntityTypes",
+      "relation": "calls to merge LLM-produced entity_types_delta into domain config after successful ingest",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/types.ts#RunEvent",
+      "relation": "yields RunEvent values throughout to stream progress and results to caller",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/phases/zod-schemas.ts#WikiPagesOutputSchema",
+      "relation": "passes as schema to parseWithRetry for output validation",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#buildIngestMessages",
+      "target": "src/phases/ingest.ts#buildEntityTypesBlock",
+      "relation": "calls to embed entity types section in system prompt",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#buildIngestMessages",
+      "target": "src/phases/template.ts#render",
+      "relation": "calls to render ingest.md prompt template with domain/wiki variables",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#retryInvalidPaths",
+      "target": "src/phases/ingest.ts#parseJsonPages",
+      "relation": "caller (runIngest) uses parseJsonPages to parse the text returned by retryInvalidPaths",
+      "confidence": "INFERRED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/vault-tools.ts#VaultTools",
+      "relation": "uses VaultTools for all file I/O: read, write, listFiles, readAll, toVaultPath",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/wiki-path.ts#domainWikiFolder",
+      "relation": "calls to resolve domain wiki folder path",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/wiki-path.ts#domainIndexPath",
+      "relation": "calls to resolve domain _index.md path",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/wiki-path.ts#GLOBAL_WIKI_SCHEMA_PATH",
+      "relation": "reads global wiki schema from this path for prompt context",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "src/phases/ingest.ts#runIngest",
+      "target": "src/wiki-graph.ts#pageId",
+      "relation": "calls to convert page paths to ids for BFS seed and expansion filtering",
+      "confidence": "EXTRACTED"
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 3200,
+  "output_tokens": 950
+}

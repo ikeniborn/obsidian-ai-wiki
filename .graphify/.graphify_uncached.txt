@@ -1,0 +1,14 @@
+/home/ikeniborn/Documents/Project/obsidian-ai-wiki/tests/phases/lint.test.ts
+/home/ikeniborn/Documents/Project/obsidian-ai-wiki/tests/phases/ingest.test.ts
+/home/ikeniborn/Documents/Project/obsidian-ai-wiki/tests/phases/zod-schemas.test.ts
+/home/ikeniborn/Documents/Project/obsidian-ai-wiki/src/phases/query.ts
+/home/ikeniborn/Documents/Project/obsidian-ai-wiki/src/phases/lint-chat.ts
+/home/ikeniborn/Documents/Project/obsidian-ai-wiki/src/phases/ingest.ts
+/home/ikeniborn/Documents/Project/obsidian-ai-wiki/src/phases/format.ts
+/home/ikeniborn/Documents/Project/obsidian-ai-wiki/src/phases/init.ts
+/home/ikeniborn/Documents/Project/obsidian-ai-wiki/src/phases/chat.ts
+/home/ikeniborn/Documents/Project/obsidian-ai-wiki/src/phases/lint.ts
+/home/ikeniborn/Documents/Project/obsidian-ai-wiki/src/phases/zod-schemas.ts
+/home/ikeniborn/Documents/Project/obsidian-ai-wiki/prompts/ingest.md
+/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/llm-pipeline.md
+/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/operations.md
