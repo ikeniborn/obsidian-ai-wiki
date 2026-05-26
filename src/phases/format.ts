@@ -1,7 +1,7 @@
 import type OpenAI from "openai";
 import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured, wrapStreamWithStats, buildLlmCallStatsEvent } from "./llm-utils";
 import formatTemplate from "../../prompts/format.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
@@ -119,10 +119,12 @@ export async function* runFormat(
     let acc = "";
     lastFinishReason = null;
     try {
-      const stream = await llm.chat.completions.create(
+      const requestStartMs = Date.now();
+      const rawStream = await llm.chat.completions.create(
         { ...p, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
         { signal },
       );
+      const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
       for await (const chunk of stream) {
         const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
         if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
@@ -131,6 +133,8 @@ export async function* runFormat(
         const fr = chunk.choices[0]?.finish_reason;
         if (fr) lastFinishReason = fr;
       }
+      const callStats = getStats();
+      if (callStats) yield buildLlmCallStatsEvent(callStats);
     } catch (e) {
       if (signal.aborted || (e as Error).name === "AbortError") return acc;
       const resp = await llm.chat.completions.create(

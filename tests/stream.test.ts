@@ -48,7 +48,6 @@ describe("parseStreamLine", () => {
     const result = events[5] as Extract<RunEvent, { kind: "result" }>;
     expect(result.text).toBe("Создано 1 страница, обновлено 0");
     expect(result.durationMs).toBe(42000);
-    expect(result.usdCost).toBe(0.012);
     expect(result.outputTokens).toBe(580);
   });
 

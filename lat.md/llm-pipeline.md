@@ -52,4 +52,6 @@ See [[src/structural-error-counter.ts#structuralErrorCounter]].
 
 Free-text operations (query, chat, format reasoning) use streaming. `extractStreamDeltas` extracts `content` and optional `reasoning` deltas per chunk. `isReasoning: true` marks thinking tokens.
 
-Mobile backend uses `wrapMobileNoStream` for non-streaming polling instead. See [[src/phases/llm-utils.ts#extractStreamDeltas]], [[src/mobile-llm-wrap.ts#wrapMobileNoStream]].
+`wrapStreamWithStats` wraps any streaming call to measure per-call timing. It tracks TTFT, total duration, and token counts, then builds a `llm_call_stats` event via `buildLlmCallStatsEvent`. The caller emits this event after the stream is consumed.
+
+Mobile backend uses `wrapMobileNoStream` for non-streaming polling instead. See [[src/phases/llm-utils.ts#extractStreamDeltas]], [[src/phases/llm-utils.ts#wrapStreamWithStats]], [[src/mobile-llm-wrap.ts#wrapMobileNoStream]].

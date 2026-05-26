@@ -94,7 +94,6 @@ function mapResult(obj: Record<string, unknown>): RunEvent {
   return {
     kind: "result",
     durationMs: Number(obj.duration_ms ?? 0),
-    usdCost: typeof obj.total_cost_usd === "number" ? obj.total_cost_usd : undefined,
     text: typeof obj.result === "string" ? obj.result : "",
     outputTokens,
   };

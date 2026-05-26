@@ -5,6 +5,7 @@ import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./ty
 import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
 import { domainWikiFolder, domainLogPath, domainIndexPath } from "./wiki-path";
+import { computeSpeedText } from "./phases/llm-utils";
 
 import { collectMdInPaths, walkFolder } from "./utils/vault-walk";
 export { collectMdInPaths, walkFolder };
@@ -70,7 +71,7 @@ export class LlmWikiView extends ItemView {
   private chatStartTs = 0;
   private lastUserMessage = "";
   private startTs = 0;
-  private lastTokPerSec: number | undefined;
+  private llmStats: Array<{ inputTokens: number; outputTokens: number; ttftMs: number; llmDurationMs: number; }> = [];
   private resultSpeedEl: HTMLElement | null = null;
   private toolCount = 0;
   private stepCount = 0;
@@ -490,7 +491,7 @@ export class LlmWikiView extends ItemView {
       window.cancelAnimationFrame(this.reasoningRafHandle);
       this.reasoningRafHandle = null;
     }
-    this.lastTokPerSec = undefined;
+    this.llmStats = [];
     this.resultSpeedEl?.setText("");
     this.stepsOpen = true;
     this.stepsEl.removeClass("ai-wiki-hidden");
@@ -580,6 +581,7 @@ export class LlmWikiView extends ItemView {
     }
     if (ev.kind === "source_path_added") return;
     if (ev.kind === "domain_updated") { void this.refreshDomains(); return; }
+    if (ev.kind === "llm_call_stats") { this.llmStats.push(ev); return; }
     if (ev.kind !== "assistant_text") this.stepCount++;
     if (ev.kind === "tool_use") {
       this.stopWaiting();
@@ -674,9 +676,6 @@ export class LlmWikiView extends ItemView {
       this.scrollSteps();
     } else if (ev.kind === "result") {
       this.stopWaiting();
-      if (ev.outputTokens !== undefined && ev.durationMs > 0) {
-        this.lastTokPerSec = Math.round(ev.outputTokens / (ev.durationMs / 1000));
-      }
     } else if (ev.kind === "eval_result") {
       const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
       el.setText(`[eval: ${ev.score}/10] ${ev.reasoning}`);
@@ -768,7 +767,7 @@ export class LlmWikiView extends ItemView {
     this.liveStatusSection?.addClass("ai-wiki-hidden");
     const totalDur = ((entry.finishedAt - entry.startedAt) / 1000).toFixed(1);
     this.progressCount.setText(`${totalDur}s`);
-    this.resultSpeedEl?.setText(this.lastTokPerSec !== undefined ? ` ${this.lastTokPerSec} tok/s` : "");
+    this.resultSpeedEl?.setText(this.buildSpeedText());
     this.finalEl.empty();
     if (entry.finalText) {
       const comp = new Component();
@@ -1029,6 +1028,10 @@ export class LlmWikiView extends ItemView {
     const dur = ((entry.finishedAt - entry.startedAt) / 1000).toFixed(1);
     const icon = entry.status === "done" ? "✓" : entry.status === "cancelled" ? "⛔" : "✗";
     return `${icon} ${entry.operation} (${dur}s)`;
+  }
+
+  private buildSpeedText(): string {
+    return computeSpeedText(this.llmStats);
   }
 
   private renderHistory(): void {

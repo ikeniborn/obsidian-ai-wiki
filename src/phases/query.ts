@@ -2,7 +2,7 @@ import type OpenAI from "openai";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, extractUsage } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, extractUsage, wrapStreamWithStats, buildLlmCallStatsEvent } from "./llm-utils";
 import { parseWithRetry } from "./parse-with-retry";
 import { SeedsSchema } from "./zod-schemas";
 import queryTemplate from "../../prompts/query.md";
@@ -130,17 +130,21 @@ export async function* runQuery(
 
   const params = buildChatParams(model, messages, opts, true);
   let answer = "";
+  let streamStats: import("./llm-utils").LlmStreamStats | undefined;
   try {
-    const stream = await llm.chat.completions.create(
+    const requestStartMs = Date.now();
+    const rawStream = await llm.chat.completions.create(
       { ...params, stream: true } as OpenAI.Chat.ChatCompletionCreateParamsStreaming,
       { signal },
     );
+    const { stream, getStats } = wrapStreamWithStats(rawStream, requestStartMs);
     for await (const chunk of stream) {
       const { reasoning, content, outputTokens: tok } = extractStreamDeltas(chunk);
       if (reasoning) yield { kind: "assistant_text", delta: reasoning, isReasoning: true };
       if (content) { answer += content; yield { kind: "assistant_text", delta: content }; }
       if (tok !== undefined) outputTokens += tok;
     }
+    streamStats = getStats();
   } catch (e) {
     if (signal.aborted || (e as Error).name === "AbortError") return;
     const resp = await llm.chat.completions.create(
@@ -153,6 +157,7 @@ export async function* runQuery(
   }
 
   if (signal.aborted) return;
+  if (streamStats) yield buildLlmCallStatsEvent(streamStats);
 
   if (save && answer) {
     const slug = question.slice(0, 40).replace(/[^a-zA-Z0-9а-яёА-ЯЁ\s]/g, "").trim().replace(/\s+/g, "-");

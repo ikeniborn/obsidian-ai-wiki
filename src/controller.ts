@@ -53,6 +53,7 @@ export class WikiController {
   private _currentClaudeClient: ClaudeCliClient | null = null;
   private _pendingFormat: { originalPath: string; tempPath: string; chat: ChatMessage[] } | null = null;
   private _currentLogMeta: { backend: string; model: string } | null = null;
+  private _llmCallIndex = 0;
   constructor(
     private app: App,
     private plugin: LlmWikiPlugin,
@@ -541,9 +542,7 @@ export class WikiController {
     try {
       if (!(await adapter.exists("!Wiki"))) await this.app.vault.createFolder("!Wiki").catch(() => {});
       if (!(await adapter.exists("!Wiki/_config"))) await this.app.vault.createFolder("!Wiki/_config").catch(() => {});
-      const extra = ev.kind === "result" && ev.outputTokens !== undefined && ev.durationMs > 0
-        ? { tokPerSec: Math.round(ev.outputTokens / (ev.durationMs / 1000)) }
-        : {};
+      const extra = ev.kind === "llm_call_stats" ? { callIndex: this._llmCallIndex++ } : {};
       const line = JSON.stringify({
         ts: new Date().toISOString(),
         session: sessionId, op, domainId,
@@ -613,6 +612,7 @@ export class WikiController {
     this.currentOp = { op, args };
 
     const startedAt = Date.now();
+    this._llmCallIndex = 0;
     const sessionId = String(startedAt);
     const steps: RunHistoryEntry["steps"] = [];
     let finalText = "";

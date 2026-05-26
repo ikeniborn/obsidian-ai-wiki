@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { buildChatParams, stripThinking, parseStructured, extractStreamDeltas, extractUsage, isJsonModeError, wrapWithJsonFallback } from "../src/phases/llm-utils";
+import { buildChatParams, stripThinking, parseStructured, extractStreamDeltas, extractUsage, isJsonModeError, wrapWithJsonFallback, wrapStreamWithStats, buildLlmCallStatsEvent, computeSpeedText } from "../src/phases/llm-utils";
+import type { LlmStreamStats } from "../src/phases/llm-utils";
 import type OpenAI from "openai";
 import type { LlmClient } from "../src/types";
 import baseContract from "../prompts/base.md";
@@ -291,6 +292,21 @@ describe("wrapWithJsonFallback — non-streaming", () => {
   });
 });
 
+// Helper: create async iterable from array of partial chunks
+function makeStream(chunks: Partial<OpenAI.Chat.ChatCompletionChunk>[]): AsyncIterable<OpenAI.Chat.ChatCompletionChunk> {
+  return {
+    [Symbol.asyncIterator]() {
+      let i = 0;
+      return {
+        async next() {
+          if (i >= chunks.length) return { done: true as const, value: undefined };
+          return { done: false as const, value: chunks[i++] as OpenAI.Chat.ChatCompletionChunk };
+        },
+      };
+    },
+  };
+}
+
 describe("wrapWithJsonFallback — streaming", () => {
   it("retries when stream rejects at create()", async () => {
     const calls: Record<string, unknown>[] = [];
@@ -390,5 +406,108 @@ describe("wrapWithJsonFallback — streaming", () => {
     for await (const c of stream) chunks.push(c);
     expect(calls.length).toBe(2);
     expect(chunks.some((c) => c.choices[0].delta.content === "after-retry")).toBe(true);
+  });
+});
+
+describe("extractStreamDeltas — inputTokens", () => {
+  it("extracts prompt_tokens as inputTokens from usage chunk", () => {
+    const chunk = {
+      choices: [{ delta: {} }],
+      usage: { completion_tokens: 20, prompt_tokens: 100 },
+    } as unknown as OpenAI.Chat.ChatCompletionChunk;
+    const result = extractStreamDeltas(chunk);
+    expect(result.inputTokens).toBe(100);
+  });
+
+  it("returns undefined inputTokens when usage absent", () => {
+    const chunk = {
+      choices: [{ delta: { content: "hi" } }],
+    } as OpenAI.Chat.ChatCompletionChunk;
+    const result = extractStreamDeltas(chunk);
+    expect(result.inputTokens).toBeUndefined();
+  });
+});
+
+describe("wrapStreamWithStats", () => {
+  it("yields all chunks from wrapped stream", async () => {
+    const chunks = [
+      { choices: [{ delta: { content: "hello" } }] },
+      { choices: [{ delta: { content: " world" } }] },
+      { choices: [{ delta: {} }], usage: { completion_tokens: 5, prompt_tokens: 10 } },
+    ];
+    const { stream } = wrapStreamWithStats(makeStream(chunks), Date.now());
+    const received: unknown[] = [];
+    for await (const c of stream) received.push(c);
+    expect(received).toHaveLength(3);
+  });
+
+  it("getStats() returns undefined when stream yields no chunks", async () => {
+    const { stream, getStats } = wrapStreamWithStats(makeStream([]), Date.now());
+    for await (const _ of stream) { /* drain */ }
+    expect(getStats()).toBeUndefined();
+  });
+
+  it("getStats() returns stats after stream is drained", async () => {
+    const chunks = [
+      { choices: [{ delta: { content: "a" } }] },
+      { choices: [{ delta: {} }], usage: { completion_tokens: 7, prompt_tokens: 15 } },
+    ];
+    const before = Date.now();
+    const { stream, getStats } = wrapStreamWithStats(makeStream(chunks), before);
+    for await (const _ of stream) { /* drain */ }
+    const stats = getStats();
+    expect(stats).toBeDefined();
+    expect(stats!.outputTokens).toBe(7);
+    expect(stats!.inputTokens).toBe(15);
+    expect(stats!.ttftMs).toBeGreaterThanOrEqual(0);
+    expect(stats!.llmDurationMs).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("computeSpeedText", () => {
+  it("returns empty string for empty stats array", () => {
+    expect(computeSpeedText([])).toBe("");
+  });
+
+  it("returns empty string when total llmDurationMs is 0", () => {
+    const stats = [{ inputTokens: 100, outputTokens: 50, ttftMs: 100, llmDurationMs: 0 }];
+    expect(computeSpeedText(stats)).toBe("");
+  });
+
+  it("formats single call correctly", () => {
+    // 200 in / 2s = 100 in tok/s; 100 out / 2s = 50 out tok/s; median ttft = 300ms
+    const stats = [{ inputTokens: 200, outputTokens: 100, ttftMs: 300, llmDurationMs: 2000 }];
+    expect(computeSpeedText(stats)).toBe(" in: 100 · out: 50 tok/s · latency: 300ms");
+  });
+
+  it("aggregates multiple calls and uses median TTFT", () => {
+    const stats = [
+      { inputTokens: 100, outputTokens: 50, ttftMs: 500, llmDurationMs: 1000 },
+      { inputTokens: 100, outputTokens: 50, ttftMs: 200, llmDurationMs: 1000 },
+      { inputTokens: 100, outputTokens: 50, ttftMs: 300, llmDurationMs: 1000 },
+    ];
+    // sorted ttftMs: [200, 300, 500], median index = floor(3/2) = 1 → 300ms
+    // total: 300 in / 3s = 100 tok/s; 150 out / 3s = 50 tok/s
+    const result = computeSpeedText(stats);
+    expect(result).toContain("latency: 300ms");
+    expect(result).toContain("in: 100");
+    expect(result).toContain("out: 50");
+  });
+});
+
+describe("buildLlmCallStatsEvent", () => {
+  it("computes tok/s from duration", () => {
+    const s: LlmStreamStats = { inputTokens: 200, outputTokens: 100, ttftMs: 300, llmDurationMs: 2000 };
+    const ev = buildLlmCallStatsEvent(s);
+    expect(ev.kind).toBe("llm_call_stats");
+    expect(ev.inTokPerSec).toBe(100);  // 200 / 2
+    expect(ev.outTokPerSec).toBe(50);  // 100 / 2
+  });
+
+  it("returns 0 tok/s when llmDurationMs is 0", () => {
+    const s: LlmStreamStats = { inputTokens: 100, outputTokens: 50, ttftMs: 100, llmDurationMs: 0 };
+    const ev = buildLlmCallStatsEvent(s);
+    expect(ev.inTokPerSec).toBe(0);
+    expect(ev.outTokPerSec).toBe(0);
   });
 });

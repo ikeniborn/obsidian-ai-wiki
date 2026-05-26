@@ -1,5 +1,5 @@
 import type OpenAI from "openai";
-import type { LlmCallOptions, LlmClient } from "../types";
+import type { LlmCallOptions, LlmClient, RunEvent } from "../types";
 import baseContract from "../../prompts/base.md";
 
 /** Remove <think>...</think> blocks leaked into content by thinking models. */
@@ -31,16 +31,18 @@ function stripFences(text: string): string {
 /** Извлекает reasoning, content и usage.completion_tokens из одного streaming-чанка.
  *  Reasoning-модели (minimax, o1 и др.) возвращают думающий текст в нестандартном поле delta.reasoning.
  *  outputTokens приходит только в финальном чанке при stream_options.include_usage=true. */
-export function extractStreamDeltas(chunk: OpenAI.Chat.ChatCompletionChunk): { reasoning: string; content: string; outputTokens?: number } {
+export function extractStreamDeltas(chunk: OpenAI.Chat.ChatCompletionChunk): { reasoning: string; content: string; outputTokens?: number; inputTokens?: number } {
   const delta = chunk.choices[0]?.delta;
   const rawReasoning = (delta as Record<string, unknown> | undefined)?.reasoning
     ?? (delta as Record<string, unknown> | undefined)?.reasoning_content;
-  const usage = (chunk as unknown as { usage?: { completion_tokens?: number } }).usage;
+  const usage = (chunk as unknown as { usage?: { completion_tokens?: number; prompt_tokens?: number } }).usage;
   const outputTokens = typeof usage?.completion_tokens === "number" ? usage.completion_tokens : undefined;
+  const inputTokens = typeof usage?.prompt_tokens === "number" ? usage.prompt_tokens : undefined;
   return {
     reasoning: typeof rawReasoning === "string" ? rawReasoning : "",
     content: typeof delta?.content === "string" ? delta.content : "",
     outputTokens,
+    inputTokens,
   };
 }
 
@@ -196,4 +198,79 @@ function injectSystemPrompt(
     return updated;
   }
   return [{ role: "system", content: section }, ...messages];
+}
+
+export interface LlmStreamStats {
+  inputTokens: number;
+  outputTokens: number;
+  ttftMs: number;
+  llmDurationMs: number;
+}
+
+export function wrapStreamWithStats(
+  stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>,
+  requestStartMs: number,
+): {
+  stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
+  getStats(): LlmStreamStats | undefined;
+} {
+  let ttftMs: number | undefined;
+  let firstChunkMs: number | undefined;
+  let llmDurationMs: number | undefined;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let yielded = false;
+
+  async function* wrapped(): AsyncIterable<OpenAI.Chat.ChatCompletionChunk> {
+    for await (const chunk of stream) {
+      if (!yielded) {
+        ttftMs = Date.now() - requestStartMs;
+        firstChunkMs = Date.now();
+        yielded = true;
+      }
+      const { outputTokens: tok, inputTokens: inTok } = extractStreamDeltas(chunk);
+      if (tok !== undefined) outputTokens = tok;
+      if (inTok !== undefined) inputTokens = inTok;
+      yield chunk;
+    }
+    if (yielded && firstChunkMs !== undefined) {
+      llmDurationMs = Date.now() - firstChunkMs;
+    }
+  }
+
+  const wrappedStream = wrapped();
+
+  return {
+    stream: wrappedStream,
+    getStats(): LlmStreamStats | undefined {
+      if (!yielded || ttftMs === undefined || llmDurationMs === undefined) return undefined;
+      return { inputTokens, outputTokens, ttftMs, llmDurationMs };
+    },
+  };
+}
+
+export function buildLlmCallStatsEvent(s: LlmStreamStats): RunEvent {
+  const durS = s.llmDurationMs / 1000;
+  return {
+    kind: "llm_call_stats",
+    ...s,
+    inTokPerSec: durS > 0 ? Math.round(s.inputTokens / durS) : 0,
+    outTokPerSec: durS > 0 ? Math.round(s.outputTokens / durS) : 0,
+  };
+}
+
+export function computeSpeedText(stats: Array<{
+  inputTokens: number; outputTokens: number;
+  ttftMs: number; llmDurationMs: number;
+}>): string {
+  if (!stats.length) return "";
+  const totalIn = stats.reduce((s, x) => s + x.inputTokens, 0);
+  const totalOut = stats.reduce((s, x) => s + x.outputTokens, 0);
+  const totalDurS = stats.reduce((s, x) => s + x.llmDurationMs, 0) / 1000;
+  const sorted = [...stats.map(x => x.ttftMs)].sort((a, b) => a - b);
+  const medTtft = sorted[Math.floor(sorted.length / 2)];
+  if (totalDurS <= 0) return "";
+  const inS = Math.round(totalIn / totalDurS);
+  const outS = Math.round(totalOut / totalDurS);
+  return ` in: ${inS} · out: ${outS} tok/s · latency: ${medTtft}ms`;
 }

@@ -54,7 +54,7 @@ See [[src/wiki-graph.ts#bfsExpand]], [[wiki-graph#Query Graph Traversal]].
 
 Analyzes all wiki pages for a domain, returns `LintOutputSchema` with `report` and `fixes[]`. A second call `actualizeDomainConfig` runs after lint to sync `entity_types` from real wiki content.
 
-Emits `domain_updated` with updated entity types. See [[src/phases/lint.ts]].
+Emits `domain_updated` with updated entity types. In `embedding` mode, calls `loadCache` before `refreshCache` and emits two conditional `info_text` progress events: one before loading the cache ("загрузка кэша векторов...") and one after `refreshCache` if any vectors were updated ("обновлено векторов: N"). See [[src/phases/lint.ts]].
 
 ## Lint-Chat
 
