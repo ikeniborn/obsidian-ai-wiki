@@ -15,6 +15,7 @@ LLM-генерируемые WikiLinks некорректны при ingest и f
 - Ссылки в теле синхронизированы с `wiki_outgoing_links` в frontmatter
 - Inline JSON array `["[[page]]"]` → заменяется на блок-список
 - При невалидных ссылках после retry — страница сохраняется с предупреждением
+- Lint проверяет WikiLinks во всех страницах: формат, aliases, мёртвые ссылки — выводит в lint report
 
 ## Health Metrics
 
@@ -24,7 +25,7 @@ LLM-генерируемые WikiLinks некорректны при ingest и f
 
 ## Strategic Context
 
-- Interacts with: `src/phases/ingest.ts`, `src/phases/format.ts`, `src/phases/lint.ts`, `src/wiki-graph.ts`, `parseWithRetry`, `_wiki_schema.md`, `_format_schema.md`
+- Interacts with: `src/phases/ingest.ts`, `src/phases/format.ts`, `src/phases/lint.ts`, `src/wiki-graph.ts`, `src/wiki-index.ts`, `parseWithRetry`, `_wiki_schema.md`, `_format_schema.md`
 - Priority trade-off: **trust** — ссылки всегда корректны важнее скорости и стоимости
 
 ## Constraints
@@ -43,7 +44,7 @@ LLM-генерируемые WikiLinks некорректны при ingest и f
 
 ## Autonomy Zones
 
-- Full autonomy (reversible, low risk): Zod-схемы в phase-файлах, шаблоны `_wiki_schema.md` / `_format_schema.md`, новый модуль `wiki-link-validator.ts`, тесты
+- Full autonomy (reversible, low risk): Zod-схемы в phase-файлах, шаблоны `_wiki_schema.md` / `_format_schema.md`, новый модуль `wiki-link-validator.ts`, lint-проверки WikiLinks, тесты
 - Guarded (log + confidence threshold): —
 - Proposal-first (needs approval): изменение сигнатуры `parseWithRetry`
 - No autonomy (human only): —
