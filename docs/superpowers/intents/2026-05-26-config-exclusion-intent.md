@@ -13,15 +13,17 @@ Currently lint and query pick up these files and incorrectly modify them. They m
 
 ## Desired Outcomes
 
-- Lint skips all files inside any `_config/` directory
-- Query does not include `_config/` files in LLM context
-- PageSimilarityService does not index `_config/` files
+- **Core invariant:** no file inside `_config/` is ever treated as a wiki article (by any operation at any level)
+- Lint does not process `_config/` files as wiki pages — it may still read/write technical files there (vectors, log, index)
+- Query does not include `_config/` files in LLM context and does not pass them to similarity search
+- PageSimilarityService never indexes `_config/` files as candidate wiki pages
 - format never uses PageSimilarityService (it operates on source, not wiki pages)
 
 ## Health Metrics
 
-- ingest and lint still write to domain `_config/` (`_index.md`, `_log.md`, embeddings) — write path unchanged
-- system still writes to global `_config/` (logs, schemas) — write path unchanged
+- lint still reads/writes domain `_config/` for technical purposes (vectors, `_log.md`, `_index.md`) — unchanged
+- query reads similarity index from `_config/` but never writes — unchanged
+- system still writes to global `_config/` (logs, schemas) — unchanged
 - format does not touch `_config/` — unchanged
 - All existing lint/query tests pass
 
