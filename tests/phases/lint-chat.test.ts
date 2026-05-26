@@ -68,10 +68,13 @@ describe("runLintFixChat", () => {
     const toolResultEvents = events.filter((e) => e.kind === "tool_result");
     const resultEvent = events.find((e) => e.kind === "result");
 
-    expect(toolUseEvents).toHaveLength(1);
-    expect(toolUseEvents[0].name).toBe("Write");
-    expect(toolResultEvents).toHaveLength(1);
-    expect(toolResultEvents[0].ok).toBe(true);
+    expect(toolUseEvents).toHaveLength(4);
+    expect(toolUseEvents[0].name).toBe("Glob");
+    expect(toolUseEvents[1].name).toBe("Read");
+    expect(toolUseEvents[2].name).toBe("Applying fixes");
+    expect(toolUseEvents[3].name).toBe("Write");
+    expect(toolResultEvents).toHaveLength(4);
+    expect(toolResultEvents[3].ok).toBe(true);
     expect(resultEvent).toBeDefined();
     expect(resultEvent.text).toBe("## Исправлено\n- Убрано дублирование");
     expect(vaultTools.write).toHaveBeenCalledWith(`${wikiPath}/X.md`, "# X\nFixed content");

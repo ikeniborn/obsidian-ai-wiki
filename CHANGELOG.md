@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.142 — 2026-05-26
+
+### New
+- feat(ui): add LLM progress steps to all phases; show ingest token count
+
+### Fixes
+- fix(lint): move WikiLink warnings yield after write loop
+- fix(ui): wikilink warnings after write; lint analysing progress; per-step timing ≥1s; tok/s on in/out
+- fix(ingest): include existing pages in knownStems for dead-link detection
+
+---
+
 ## 0.1.141 — 2026-05-25
 
 ### Новое

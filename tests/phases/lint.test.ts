@@ -387,7 +387,7 @@ describe("runLint", () => {
       refreshCache: vi.fn().mockResolvedValue({ updated: 3 }),
     };
     const events = await collect(
-      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal, 20, {}, similarity as any),
+      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal, 20, 3, {}, similarity as any),
     );
     const infoEvents = events.filter((e: any) => e.kind === "info_text") as any[];
     expect(similarity.loadCache).toHaveBeenCalled();
@@ -430,7 +430,7 @@ describe("runLint", () => {
       refreshCache: vi.fn().mockResolvedValue({ updated: 0 }),
     };
     const events = await collect(
-      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal, 20, {}, similarity as any),
+      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal, 20, 3, {}, similarity as any),
     );
     const infoEvents = (events as any[]).filter((e) => e.kind === "info_text");
     expect(infoEvents.some((e) => e.summary.includes("загрузка кэша векторов"))).toBe(true);

@@ -57,7 +57,10 @@ describe("runQuery", () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
-      read: vi.fn().mockResolvedValue("# Page\n\nThis is the answer to everything."),
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p.endsWith("_index.md")) return "- [[Page]] Page.md — the answer to everything";
+        return "# Page\n\nThis is the answer to everything.";
+      }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const events = await collect(
@@ -82,6 +85,7 @@ describe("runQuery", () => {
       exists: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Topic.md"], folders: [] }),
       read: vi.fn().mockImplementation(async (p: string) => {
+        if (p.endsWith("_index.md")) return "- [[Topic]] Topic.md — topic details";
         if (p.includes("Topic.md")) return "topic details description";
         return "";
       }),
@@ -108,6 +112,7 @@ describe("runQuery", () => {
     const adapter = mockAdapter({
       list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Alpha.md", "!Wiki/work/Beta.md"], folders: [] }),
       read: vi.fn().mockImplementation(async (p: string) => {
+        if (p.endsWith("_index.md")) return "- [[Alpha]] Alpha.md — alpha content\n- [[Beta]] Beta.md — beta";
         if (p.endsWith("Alpha.md")) return "alpha content";
         if (p.endsWith("Beta.md")) return "beta [[Alpha]]";
         return "";
@@ -133,7 +138,7 @@ describe("runQuery", () => {
       list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/DeepSeek.md"], folders: [] }),
       read: vi.fn().mockImplementation(async (p: string) => {
         if (p.endsWith("DeepSeek.md")) return "# DeepSeek\nA language model.";
-        if (p.endsWith("_index.md")) return "DeepSeek: быстрая языковая модель";
+        if (p.endsWith("_index.md")) return "- [[DeepSeek]] DeepSeek.md — быстрая языковая модель";
         return "";
       }),
     });
@@ -164,7 +169,10 @@ describe("runQuery", () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
-      read: vi.fn().mockResolvedValue("# Page\n\nContent."),
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p.endsWith("_index.md")) return "- [[Page]] Page.md — content";
+        return "# Page\n\nContent.";
+      }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     await collect(
@@ -184,6 +192,8 @@ describe("runQuery", () => {
         folders: [],
       }),
       read: vi.fn().mockImplementation((path: string) => {
+        if (path.endsWith("_index.md"))
+          return Promise.resolve("- [[Neural-network]] Neural-network.md — neural learning\n- [[Unrelated]] Unrelated.md — unrelated topic");
         if (path.endsWith("Neural-network.md"))
           return Promise.resolve("# Neural network\nA learning system.");
         if (path.endsWith("Unrelated.md"))

@@ -44,16 +44,19 @@ const domain: DomainEntry = {
 };
 
 function makeAdapterWithPages(pages: Record<string, string>): VaultAdapter {
+  // A single dummy entry: makes indexAnnotations.size > 0 so llmSelectSeeds fires,
+  // but doesn't list noise page names so system-prompt index doesn't pollute ctx checks.
+  const allPages = { ...pages, [`${WIKI_DIR}/_config/_index.md`]: "- [[dummy]] dummy.md — placeholder" };
   return mockAdapter({
     exists: vi.fn().mockResolvedValue(true),
     list: vi.fn().mockImplementation((dir: string) => {
-      const files = Object.keys(pages).filter(
+      const files = Object.keys(allPages).filter(
         (p) => p.startsWith(dir + "/") || p === dir,
       );
       return Promise.resolve({ files, folders: [] });
     }),
     read: vi.fn().mockImplementation((path: string) => {
-      return Promise.resolve(pages[path] ?? "");
+      return Promise.resolve(allPages[path] ?? "");
     }),
   });
 }

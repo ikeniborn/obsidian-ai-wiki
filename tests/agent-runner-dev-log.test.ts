@@ -12,10 +12,13 @@ import { createMockAdapter } from "../vitest.mock";
 
 function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
   return {
-    read: vi.fn().mockResolvedValue("source content"),
+    read: vi.fn().mockImplementation(async (p: string) => {
+      if (p.endsWith("_config/_index.md")) return "- [[page1]] page1.md — source content";
+      return "source content";
+    }),
     write: vi.fn().mockResolvedValue(undefined),
     append: vi.fn().mockResolvedValue(undefined),
-    list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    list: vi.fn().mockResolvedValue({ files: ["!Wiki/wiki/page1.md"], folders: [] }),
     exists: vi.fn().mockResolvedValue(false),
     mkdir: vi.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -147,6 +150,9 @@ describe("AgentRunner dev log — path validation", () => {
     // createMockAdapter is stateful: write() stores data, read() retrieves it.
     // This lets writeDevLog write the file and updateDevLogEval read it back in one run.
     const statefulAdapter = createMockAdapter();
+    // Pre-populate _index.md so indexAnnotations.size > 0 and llmSelectSeeds is called.
+    // Annotation deliberately doesn't match "test?" so Jaccard skips and LLM seeds call fires.
+    statefulAdapter.files.set("!Wiki/wiki/_config/_index.md", "- [[page1]] page1.md — unrelated topic");
     const vt = new VaultTools(statefulAdapter as VaultAdapter, "/vault");
 
     const settings: LlmWikiPluginSettings = {
