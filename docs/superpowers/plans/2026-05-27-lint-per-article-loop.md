@@ -1,3 +1,68 @@
+---
+chain:
+  intent: docs/superpowers/intents/2026-05-27-lint-per-article-loop-intent.md
+  spec: docs/superpowers/specs/2026-05-27-lint-per-article-loop-design.md
+review:
+  plan_hash: 029fe993d47c3a5c
+  spec_hash: d60c9c1369d67430
+  last_run: 2026-05-27
+  phases:
+    structure:     { status: passed }
+    coverage:      { status: passed }
+    dependencies:  { status: passed }
+    verifiability: { status: passed }
+    consistency:   { status: passed }
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: WARNING
+      section: "## Task 4"
+      section_hash: d8879c9ad70fcfc6
+      text: "Task 4 not tied to explicit spec requirement — contingency for test compatibility after Task 3"
+      verdict: wontfix
+      verdict_at: 2026-05-27
+    - id: F-002
+      phase: coverage
+      severity: WARNING
+      section: "## Task 3"
+      section_hash: e4e4b8a394db85fb
+      text: "Error handling: spec requires specific 'Article too large — skipped: {path}' message; plan catches error and adds to skippedArticles without that specific message"
+      verdict: fixed
+      verdict_at: 2026-05-27
+    - id: F-003
+      phase: coverage
+      severity: WARNING
+      section: "## Task 3"
+      section_hash: e4e4b8a394db85fb
+      text: "Error handling: spec requires 'Log warning' when vaultTools.remove not supported; plan silently skips with no warning event yielded"
+      verdict: fixed
+      verdict_at: 2026-05-27
+    - id: F-004
+      phase: consistency
+      severity: WARNING
+      section: "## Task 3"
+      section_hash: e4e4b8a394db85fb
+      text: "Progress event: spec code example uses ${i} (0-based); plan uses ${i+1} (1-based). Plan test expects 1/1 so plan is internally consistent, but diverges from spec pseudocode"
+      verdict: accepted
+      verdict_at: 2026-05-27
+    - id: F-005
+      phase: dependencies
+      severity: WARNING
+      section: "## Task 3"
+      section_hash: e4e4b8a394db85fb
+      text: "Within Task 3: Step 1 writes tests using makeLlm(json, '{}', N) before Step 3 updates makeLlm to accept 3rd arg — Step 2 (verify red) may show wrong failure reason"
+      verdict: fixed
+      verdict_at: 2026-05-27
+    - id: F-006
+      phase: verifiability
+      severity: WARNING
+      section: "## Task 2"
+      section_hash: 3d7123048dc53f9f
+      text: "Task 2 has no programmatic verification after prompt replacement (Step 2 → Step 3 skips any test run) — prompt changes unverified before commit"
+      verdict: wontfix
+      verdict_at: 2026-05-27
+---
+
 # Lint Per-Article Loop Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -167,6 +232,8 @@ git commit -m "feat(prompt): add per-article context format and delete instructi
 - Modify: `src/phases/lint.ts`
 
 This task replaces the single "all pages at once" LLM call with a per-article loop. Read the full current file before making changes.
+
+> **⚠️ Step order:** Complete Steps 3–4 (update `makeLlm` helper + existing test) **before** Steps 1–2. This ensures the TDD red-phase fails for the right reason (missing functionality) rather than a mock signature mismatch. Execution order: **3 → 4 → 1 → 2 → 5 → 6 → 7 → 8**.
 
 - [ ] **Step 1: Write failing tests for new per-article behavior**
 
@@ -528,7 +595,10 @@ export async function* runLint(
         yield { kind: "tool_result", ok: true, preview: `${lintResult.value.fixes.length} fixes${delCount ? `, ${delCount} deleted` : ""}` };
       } catch (e) {
         if (signal.aborted || (e as Error).name === "AbortError") return;
-        yield { kind: "tool_result", ok: false, preview: (e as Error).message };
+        const errMsg = (e as Error).message ?? "";
+        const isTokenLimit = errMsg.toLowerCase().includes("context_length") || errMsg.toLowerCase().includes("too large");
+        const preview = isTokenLimit ? `Article too large — skipped: ${targetPath}` : errMsg;
+        yield { kind: "tool_result", ok: false, preview };
         for (const ev of pwtEvents) yield ev;
         skippedArticles.push(articleName);
         continue;
@@ -584,6 +654,8 @@ export async function* runLint(
         try {
           if (typeof vaultTools.remove === "function") {
             await vaultTools.remove(delPath);
+          } else {
+            yield { kind: "info_text", icon: "⚠️", summary: `vaultTools.remove not supported — physical delete skipped: ${delPath}` };
           }
           pages.delete(delPath);
           annotations.delete(deletedName);
