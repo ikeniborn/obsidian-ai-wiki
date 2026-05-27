@@ -3,6 +3,7 @@ import { runLint, checkStructure } from "../../src/phases/lint";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
+import { LintOutputSchema } from "../../src/phases/zod-schemas";
 
 function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
   return {
@@ -568,6 +569,32 @@ describe("runLint with merged assess+fix (LintOutputSchema)", () => {
       (e: any) => e.kind === "assistant_text" && typeof e.delta === "string" && e.delta.includes("Page.md"),
     );
     expect(progressEv).toBeDefined();
+  });
+});
+
+describe("LintOutputSchema", () => {
+  it("accepts deletes as optional array of { path, redirectTo? }", () => {
+    const result = LintOutputSchema.safeParse({
+      reasoning: "found duplicate",
+      report: "merged B into A",
+      fixes: [],
+      deletes: [
+        { path: "!Wiki/work/Duplicate.md", redirectTo: "!Wiki/work/Original.md" },
+        { path: "!Wiki/work/Dead.md" },
+      ],
+    });
+    expect(result.success).toBe(true);
+    expect(result.data?.deletes).toHaveLength(2);
+    expect(result.data?.deletes?.[0].redirectTo).toBe("!Wiki/work/Original.md");
+    expect(result.data?.deletes?.[1].redirectTo).toBeUndefined();
+  });
+
+  it("accepts missing deletes (backwards compat)", () => {
+    const result = LintOutputSchema.safeParse({
+      reasoning: "ok", report: "no issues", fixes: [],
+    });
+    expect(result.success).toBe(true);
+    expect(result.data?.deletes).toBeUndefined();
   });
 });
 
