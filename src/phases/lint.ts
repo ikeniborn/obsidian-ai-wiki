@@ -112,6 +112,7 @@ export async function* runLint(
     yield { kind: "assistant_text", delta: `Evaluating domain "${domain.id}" quality...\n` };
 
     const deletedRefs: { deletedName: string; redirectName: string | null }[] = [];
+    const writtenPaths: string[] = [];
     const skippedArticles: string[] = [];
     const total = articlePaths.length;
 
@@ -216,6 +217,7 @@ export async function* runLint(
           try {
             const fixedContent = wlFixResult.fixed.get(fix.path) ?? fix.content;
             await vaultTools.write(fix.path, fixedContent);
+            writtenPaths.push(fix.path);
             pages.set(fix.path, fixedContent);
             if (fix.annotation) {
               annotations.set(pageId(fix.path), fix.annotation);
@@ -282,7 +284,7 @@ export async function* runLint(
 
     // Source-file backlink rewrite for deleted articles (one vault-wide scan)
     if (deletedRefs.length > 0) {
-      for (const sourcePath of allMdPaths) {
+      for (const sourcePath of allMdPaths.filter(p => !p.startsWith(wikiVaultPath + "/"))) {
         const content = await vaultTools.read(sourcePath).catch(() => null);
         if (!content) continue;
         let updated = content;
@@ -358,7 +360,7 @@ export async function* runLint(
       await appendWikiLog(vaultTools, wikiVaultPath, domain.id, {
         op: "lint",
         domainId: domain.id,
-        fixed: [],
+        fixed: writtenPaths,
         checkedCount: total,
         outputTokens,
       });
