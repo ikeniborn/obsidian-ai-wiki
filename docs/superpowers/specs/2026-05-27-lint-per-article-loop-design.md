@@ -1,3 +1,25 @@
+---
+chain:
+  intent: docs/superpowers/intents/2026-05-27-lint-per-article-loop-intent.md
+review:
+  spec_hash: 02d47560aad32701
+  last_run: 2026-05-27
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "## Architecture"
+      section_hash: 576766c8bbf9fc39
+      text: "'fixWikiLinks on all accumulated fixes' ambiguous — clarified: fixWikiLinks runs per-step on current article's fixes; post-loop call removed"
+      verdict: fixed
+      verdict_at: 2026-05-27
+---
+
 # Design: Lint per-article loop with similarity context
 
 **Date:** 2026-05-27
@@ -30,7 +52,8 @@ runLint(domain)
        ├─ yield info_text "Checking i/N: ArticleName"
        ├─ LLM call: article + contextPages → LintOutput { fixes[], deletes[] }
        │
-       ├─ Write fixes immediately:
+       ├─ Write fixes immediately (after fixWikiLinks per-step):
+       │    fixWikiLinks(fixesMap_this_step, retries, knownStems)
        │    vaultTools.write(fix.path, fix.content)
        │    pages.set / annotations.set / upsertIndexAnnotation
        │
@@ -46,7 +69,6 @@ runLint(domain)
   │
   ├─ Source-file backlink rewrite (one vault-wide scan):
   │    for each deletedRef: replace [[old]] → [[new]] in wiki_articles frontmatter
-  ├─ [unchanged] fixWikiLinks on all accumulated fixes
   ├─ [unchanged] actualizeDomainConfig
   └─ [unchanged] appendWikiLog
 ```
