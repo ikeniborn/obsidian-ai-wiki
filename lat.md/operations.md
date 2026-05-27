@@ -58,9 +58,25 @@ See [[src/wiki-graph.ts#bfsExpand]], [[wiki-graph#Query Graph Traversal]].
 
 ## Lint
 
-Analyzes all wiki pages for a domain, returns `LintOutputSchema` with `report` and `fixes[]`. A second call `actualizeDomainConfig` runs after lint to sync `entity_types` from real wiki content.
+Analyzes wiki pages for a domain one article at a time. For each article selects a limited context set via `PageSimilarityService` + BFS graph expansion, then calls the LLM. Results are merged into `LintOutputSchema`.
 
-Emits an `info_text` progress event ("Analysing N pages...") before structural analysis. Before the `lint.fix` LLM call emits `tool_use name: "Analysing wiki"`; `tool_result` on success shows fix count. After lint, `actualizeDomainConfig` is wrapped with `tool_use name: "Updating config"`/`tool_result`. In `embedding` mode, calls `loadCache` before `refreshCache` and emits two conditional `info_text` progress events: one before loading the cache ("загрузка кэша векторов...") and one after `refreshCache` if any vectors were updated ("обновлено векторов: N"). See [[src/phases/lint.ts]].
+Per-article loop:
+1. `selectRelevant(articleContent, annotations, otherPaths)` → top-K paths
+2. `bfsExpand([articleId, ...topKIds], graph, depth=1)` → expanded page set
+3. LLM call with article + context → `{ report, fixes[], deletes[] }`
+4. Apply fixes immediately: `fixWikiLinks` per-step, write to vault, update `pages` and `annotations` in-memory
+5. Process `deletes`: `vaultTools.remove`, rewrite `[[deleted]]` links in wiki pages
+6. Rebuild graph (`graphCache`) + refresh vectors (`similarity.refreshCache`)
+
+After all articles:
+- Source-file backlink rewrite (vault-wide scan for deleted article refs, skipping wiki pages)
+- `actualizeDomainConfig` — syncs `entity_types` from final wiki content
+- Backlink sync — writes `wiki_articles` into source files via `wiki_sources`
+- `appendWikiLog`
+
+Emits `info_text "Checking i/N: ArticleName"` per article. Skipped articles (LLM error) reported at end.
+
+`LintOutputSchema.deletes` carries `{ path, redirect_to? }` for duplicate merges. See [[src/phases/lint.ts]], [[llm-pipeline#LLM Progress Events]], [[architecture#PageSimilarityService]].
 
 ### Backlink Sync
 
