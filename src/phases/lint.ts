@@ -11,7 +11,7 @@ import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
 import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, domainIndexPath } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm } from "../utils/raw-frontmatter";
-import { checkGraphStructure, pageId } from "../wiki-graph";
+import { checkGraphStructure, pageId, bfsExpand } from "../wiki-graph";
 import { checkWikiLinks, fixWikiLinks } from "../wiki-link-validator";
 import { graphCache } from "../wiki-graph-cache";
 import { upsertIndexAnnotation, parseIndexAnnotations } from "../wiki-index";
@@ -69,67 +69,237 @@ export async function* runLint(
 
     const pages = await vaultTools.readAll(files);
 
-    yield { kind: "info_text", icon: "🔍", summary: `Analysing ${files.length} pages...` };
-    const { graph } = graphCache.get(domain.id, pages);
+    // Build initial graph + structural checks on all pages
+    let { graph } = graphCache.get(domain.id, pages);
     const structuralIssues = checkStructure(pages);
     const graphIssues = checkGraphStructure(graph, hubThreshold);
     const wikiLinkIssues = checkWikiLinks(pages);
-    const allIssues = [structuralIssues, graphIssues, wikiLinkIssues].filter(Boolean).join("\n");
+    const allStructuralIssues = [structuralIssues, graphIssues, wikiLinkIssues].filter(Boolean).join("\n");
+
+    // Vault-wide paths for fixWikiLinks + backlink sync (computed once)
+    const allVaultPaths = await vaultTools.listFiles("").catch(() => [] as string[]);
+    const allMdPaths = allVaultPaths.filter(p => p.endsWith(".md"));
+    const knownStems = new Set([
+      ...allMdPaths.map(p => p.split("/").pop()!.replace(/\.md$/, "")),
+      ...[...pages.keys()].map((p) => p.split("/").pop()!.replace(/\.md$/, "")),
+    ]);
+    const stemToPath = new Map<string, string>(
+      allMdPaths.map(p => [p.split("/").pop()!.replace(/\.md$/, ""), p])
+    );
+
+    // Index annotations + article iteration order
+    const indexRaw = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
+    const annotations = parseIndexAnnotations(indexRaw);
+    const pidToPath = new Map(files.map(p => [pageId(p), p]));
+    const articlePaths = [...new Set([
+      ...[...annotations.keys()].map(pid => pidToPath.get(pid)!).filter(Boolean),
+      ...files,
+    ])];
+
+    // Load embedding cache before loop
+    if (similarity?.config.mode === "embedding") {
+      yield { kind: "info_text", icon: "📥", summary: "загрузка кэша векторов..." };
+      await similarity.loadCache(wikiVaultPath, vaultTools);
+    }
 
     const entityTypesBlock = buildEntityTypesBlock(domain);
-
-    yield { kind: "assistant_text", delta: `Evaluating domain "${domain.id}" quality...\n` };
     const systemContent = render(lintTemplate, {
       domain_name: domain.name,
       entity_types_block: entityTypesBlock ? `\nТИПЫ СУЩНОСТЕЙ ДОМЕНА:\n${entityTypesBlock}` : "",
       schema_block: schemaContent ? `\nКонвенции (_wiki_schema.md):\n${schemaContent}` : "",
     });
 
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      { role: "system", content: systemContent },
-      {
-        role: "user",
-        content: [
-          `Домен: ${domain.id} (${domain.name})`,
-          `Автоматические проблемы:\n${allIssues || "Нет."}`,
-          "",
-          `Wiki-страницы:\n${[...pages.entries()].map(([p, c]) => `--- ${p} ---\n${c}`).join("\n\n")}`,
-        ].join("\n"),
-      },
-    ];
+    yield { kind: "assistant_text", delta: `Evaluating domain "${domain.id}" quality...\n` };
 
-    // Combined assess+fix call
-    yield { kind: "tool_use", name: "Analysing wiki", input: { pages: String(files.length) } };
-    const lintPwtEvents: RunEvent[] = [];
-    let lintResult: { value: LintOutput; outputTokens: number };
-    try {
-      lintResult = await parseWithRetry({
-        llm, model,
-        baseMessages: messages,
-        opts,
-        schema: LintOutputSchema,
-        maxRetries: opts.structuredRetries ?? 1,
-        callSite: "lint.fix",
-        signal,
-        onEvent: (ev) => lintPwtEvents.push(ev),
-      });
-      yield { kind: "tool_result", ok: true, preview: `${lintResult.value.fixes.length} fixes` };
-    } catch (e) {
-      if (signal.aborted || (e as Error).name === "AbortError") return;
-      yield { kind: "tool_result", ok: false, preview: (e as Error).message };
-      for (const ev of lintPwtEvents) yield ev;
-      reportParts.push(`## ${domain.id}\nLLM validation failed: ${(e as Error).message}`);
-      continue;
+    const deletedRefs: { deletedName: string; redirectName: string | null }[] = [];
+    const skippedArticles: string[] = [];
+    const total = articlePaths.length;
+
+    // ── Per-article loop ──────────────────────────────────────────────────────
+    for (let i = 0; i < total; i++) {
+      if (signal.aborted) return;
+
+      const targetPath = articlePaths[i];
+      const articleName = targetPath.split("/").pop()!.replace(/\.md$/, "");
+      const articleContent = pages.get(targetPath) ?? "";
+
+      // Context selection: top-K similar + BFS expansion
+      const otherPaths = files.filter(p => p !== targetPath && pages.has(p));
+      const topKPaths = similarity
+        ? await similarity.selectRelevant(articleContent, annotations, otherPaths)
+        : [];
+      const seeds = [pageId(targetPath), ...topKPaths.map(p => pageId(p))];
+      const expanded = bfsExpand(seeds, graph, 1);
+      const contextPaths = [...expanded]
+        .map(pid => pidToPath.get(pid))
+        .filter((p): p is string => !!p && p !== targetPath && pages.has(p));
+
+      // Per-article structural issues
+      const articleIssues = allStructuralIssues
+        .split("\n")
+        .filter(l => l.includes(articleName) || l.includes(targetPath))
+        .join("\n") || "Нет.";
+
+      // Build user message
+      const contextBlock = contextPaths
+        .map(p => `--- ${p} ---\n${pages.get(p) ?? ""}`)
+        .join("\n\n");
+      const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+        { role: "system", content: systemContent },
+        {
+          role: "user",
+          content: [
+            `Домен: ${domain.id} (${domain.name})`,
+            `Анализируемая статья: ${targetPath}`,
+            `Автоматические проблемы:\n${articleIssues}`,
+            "",
+            `--- ${targetPath} ---`,
+            articleContent,
+            "",
+            contextBlock ? `--- Контекст (связанные статьи) ---\n${contextBlock}` : "",
+          ].filter(l => l !== undefined).join("\n"),
+        },
+      ];
+
+      yield { kind: "info_text", icon: "🔍", summary: `Checking ${i + 1}/${total}: ${articleName}` };
+      yield { kind: "tool_use", name: "Analysing wiki", input: { article: articleName, context: contextPaths.length } };
+
+      const pwtEvents: RunEvent[] = [];
+      let lintResult: { value: LintOutput; outputTokens: number };
+      try {
+        lintResult = await parseWithRetry({
+          llm, model,
+          baseMessages: messages,
+          opts,
+          schema: LintOutputSchema,
+          maxRetries: opts.structuredRetries ?? 1,
+          callSite: "lint.fix",
+          signal,
+          onEvent: (ev) => pwtEvents.push(ev),
+        });
+        const delCount = (lintResult.value.deletes ?? []).length;
+        yield { kind: "tool_result", ok: true, preview: `${lintResult.value.fixes.length} fixes${delCount ? `, ${delCount} deleted` : ""}` };
+      } catch (e) {
+        if (signal.aborted || (e as Error).name === "AbortError") return;
+        const errMsg = (e as Error).message ?? "";
+        const isTokenLimit = errMsg.toLowerCase().includes("context_length") || errMsg.toLowerCase().includes("too large");
+        const preview = isTokenLimit ? `Article too large — skipped: ${targetPath}` : errMsg;
+        yield { kind: "tool_result", ok: false, preview };
+        for (const ev of pwtEvents) yield ev;
+        skippedArticles.push(articleName);
+        continue;
+      }
+      for (const ev of pwtEvents) yield ev;
+      if (signal.aborted) return;
+
+      outputTokens += lintResult.outputTokens;
+      const { fixes, deletes = [] } = lintResult.value;
+
+      yield { kind: "assistant_text", delta: lintResult.value.report };
+      reportParts.push(`### ${articleName}\n${lintResult.value.report}`);
+
+      // Apply fixes (fixWikiLinks per-step)
+      if (fixes.length > 0) {
+        const fixesMapThisStep = new Map(fixes.map(p => [p.path, p.content]));
+        const wlFixResult = fixWikiLinks(fixesMapThisStep, wikiLinkValidationRetries, knownStems);
+        if (wlFixResult.warnings.length > 0) {
+          yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFixResult.warnings };
+        }
+        for (const fix of fixes) {
+          yield { kind: "assistant_text", delta: `  • ${fix.path.split("/").pop()}...\n` };
+          if (!fix.path.startsWith(wikiVaultPath + "/")) {
+            yield { kind: "tool_use", name: "Write", input: { path: fix.path } };
+            yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
+            continue;
+          }
+          yield { kind: "tool_use", name: "Update", input: { path: fix.path } };
+          try {
+            const fixedContent = wlFixResult.fixed.get(fix.path) ?? fix.content;
+            await vaultTools.write(fix.path, fixedContent);
+            pages.set(fix.path, fixedContent);
+            if (fix.annotation) {
+              annotations.set(pageId(fix.path), fix.annotation);
+              try {
+                await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(fix.path), fix.annotation, fix.path);
+              } catch { /* non-critical */ }
+            }
+            yield { kind: "tool_result", ok: true };
+          } catch (e) {
+            yield { kind: "tool_result", ok: false, preview: (e as Error).message };
+          }
+        }
+        reportParts.push(`#### Исправлено: ${fixes.length} страниц`);
+      }
+
+      // Process deletes
+      for (const { path: delPath, redirect_to } of deletes) {
+        const deletedName = pageId(delPath);
+        const redirectName = redirect_to ? pageId(redirect_to) : null;
+
+        yield { kind: "tool_use", name: "Delete", input: { path: delPath } };
+        try {
+          if (typeof vaultTools.remove === "function") {
+            await vaultTools.remove(delPath);
+          } else {
+            yield { kind: "info_text", icon: "⚠️", summary: `vaultTools.remove not supported — physical delete skipped: ${delPath}` };
+          }
+          pages.delete(delPath);
+          annotations.delete(deletedName);
+
+          // Rewrite [[deletedName]] links in all wiki pages
+          for (const [wikiPath, wikiContent] of pages) {
+            if (wikiContent.includes(`[[${deletedName}]]`)) {
+              const newContent = redirectName
+                ? wikiContent.replaceAll(`[[${deletedName}]]`, `[[${redirectName}]]`)
+                : wikiContent.replaceAll(`[[${deletedName}]]`, "");
+              await vaultTools.write(wikiPath, newContent);
+              pages.set(wikiPath, newContent);
+            }
+          }
+
+          deletedRefs.push({ deletedName, redirectName });
+          yield { kind: "tool_result", ok: true, preview: redirectName ? `merged → [[${redirectName}]]` : "deleted" };
+        } catch (e) {
+          yield { kind: "tool_result", ok: false, preview: (e as Error).message };
+        }
+      }
+
+      // Rebuild graph + refresh vectors after state changes
+      ({ graph } = graphCache.get(domain.id, pages));
+      if (similarity) {
+        const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, annotations);
+        if (similarity.config.mode === "embedding" && updated > 0) {
+          yield { kind: "info_text", icon: "📤", summary: `обновлено векторов: ${updated}` };
+        }
+      }
     }
-    for (const ev of lintPwtEvents) yield ev;
-    if (signal.aborted) return;
-    outputTokens += lintResult.outputTokens;
+    // ── End per-article loop ──────────────────────────────────────────────────
 
-    const llmReport = lintResult.value.report;
-    yield { kind: "assistant_text", delta: llmReport };
-    reportParts.push(`## ${domain.id}\n${allIssues ? `**Структурные проблемы:**\n${allIssues}\n\n` : ""}${llmReport}`);
+    // Skipped articles summary
+    if (skippedArticles.length > 0) {
+      reportParts.push(`### Пропущены (ошибка LLM)\n${skippedArticles.map(a => `- ${a}.md`).join("\n")}`);
+    }
+
+    // Source-file backlink rewrite for deleted articles (one vault-wide scan)
+    if (deletedRefs.length > 0) {
+      for (const sourcePath of allMdPaths) {
+        const content = await vaultTools.read(sourcePath).catch(() => null);
+        if (!content) continue;
+        let updated = content;
+        for (const { deletedName, redirectName } of deletedRefs) {
+          if (updated.includes(`[[${deletedName}]]`)) {
+            updated = redirectName
+              ? updated.replaceAll(`[[${deletedName}]]`, `[[${redirectName}]]`)
+              : updated.replaceAll(`[[${deletedName}]]`, "");
+          }
+        }
+        if (updated !== content) await vaultTools.write(sourcePath, updated);
+      }
+    }
 
     if (signal.aborted) return;
+
+    // actualizeDomainConfig (runs once after loop)
     yield { kind: "assistant_text", delta: `\nActualizing domain config for "${domain.id}"...\n` };
     yield { kind: "tool_use", name: "Updating config", input: {} };
     const patchRes = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
@@ -144,68 +314,11 @@ export async function* runLint(
 
     if (signal.aborted) return;
 
-    const allVaultPaths = await vaultTools.listFiles("").catch(() => [] as string[]);
-    const allMdPaths = allVaultPaths.filter(p => p.endsWith(".md"));
-    const knownStems = new Set([
-      ...allMdPaths.map(p => p.split("/").pop()!.replace(/\.md$/, "")),
-      ...[...pages.keys()].map((p) => p.split("/").pop()!.replace(/\.md$/, "")),
-    ]);
-    const stemToPath = new Map<string, string>(
-      allMdPaths.map(p => [p.split("/").pop()!.replace(/\.md$/, ""), p])
-    );
-    const fixesMap = new Map(lintResult.value.fixes.map((p) => [p.path, p.content]));
-    const wlFixResult = fixWikiLinks(fixesMap, wikiLinkValidationRetries, knownStems);
-    const fixedPages = lintResult.value.fixes.map((p) => ({ ...p, content: wlFixResult.fixed.get(p.path) ?? p.content }));
-    const writtenPaths: string[] = [];
-    for (const page of fixedPages) {
-      yield { kind: "assistant_text", delta: `  • ${page.path.split("/").pop()}...\n` };
-      if (!page.path.startsWith(wikiVaultPath + "/")) {
-        yield { kind: "tool_use", name: "Write", input: { path: page.path } };
-        yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
-        continue;
-      }
-      yield { kind: "tool_use", name: "Update", input: { path: page.path } };
-      try {
-        await vaultTools.write(page.path, page.content);
-        writtenPaths.push(page.path);
-        yield { kind: "tool_result", ok: true };
-        if (page.annotation) {
-          try {
-            await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation, page.path);
-          } catch { /* non-critical */ }
-        }
-      } catch (e) {
-        yield { kind: "tool_result", ok: false, preview: (e as Error).message };
-      }
-    }
-    if (wlFixResult.warnings.length > 0) {
-      yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFixResult.warnings };
-    }
-
-    if (writtenPaths.length > 0) {
-      reportParts.push(`### Исправлено страниц: ${writtenPaths.length}\n${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
-      for (const p of writtenPaths) {
-        try {
-          pages.set(p, await vaultTools.read(p));
-        } catch { /* non-critical */ }
-      }
-    }
-
-    try {
-      await appendWikiLog(vaultTools, wikiVaultPath, domain.id, {
-        op: "lint",
-        domainId: domain.id,
-        fixed: writtenPaths,
-        checkedCount: files.length,
-        outputTokens,
-      });
-    } catch { /* non-critical */ }
-
+    // Backlink sync: wiki_articles from wiki_sources
     const backlinks = new Map<string, Set<string>>();
     for (const [wikiPath, wikiContent] of pages) {
       for (const src of parseWikiSourcesFromFm(wikiContent)) {
         const bareName = src.slice(2, -2);
-        // Support both bare names ([[PageName]]) and legacy path-style ([[path/to/file.md]])
         const rawPath = bareName.includes("/")
           ? bareName
           : (stemToPath.get(bareName) ?? bareName);
@@ -241,26 +354,20 @@ export async function* runLint(
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
     }
 
-    if (similarity) {
-      const indexRaw = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
-      const annotations = parseIndexAnnotations(indexRaw);
-
-      if (similarity.config.mode === "embedding") {
-        yield { kind: "info_text", icon: "📥", summary: "загрузка кэша векторов..." };
-        await similarity.loadCache(wikiVaultPath, vaultTools);
-      }
-
-      const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, annotations);
-
-      if (similarity.config.mode === "embedding" && updated > 0) {
-        yield { kind: "info_text", icon: "📤", summary: `обновлено векторов: ${updated}` };
-      }
-    }
-
+    try {
+      await appendWikiLog(vaultTools, wikiVaultPath, domain.id, {
+        op: "lint",
+        domainId: domain.id,
+        fixed: [],
+        checkedCount: total,
+        outputTokens,
+      });
+    } catch { /* non-critical */ }
   }
 
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n"), outputTokens: outputTokens || undefined };
 }
+
 
 export function checkStructure(pages: Map<string, string>): string {
   const issues: string[] = [];

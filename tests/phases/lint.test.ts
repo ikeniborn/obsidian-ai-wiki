@@ -16,16 +16,14 @@ function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
   };
 }
 
-function makeLlm(reportJson: string, configJson = "{}"): LlmClient {
+function makeLlm(reportJson: string, configJson = "{}", lintCallCount = 1): LlmClient {
   let callCount = 0;
   return {
     chat: {
       completions: {
         create: vi.fn().mockImplementation((_params: any) => {
           const call = ++callCount;
-          // call 1: combined assess+fix (LintOutputSchema JSON)
-          // call 2: actualizeDomainConfig (EntityTypesDeltaSchema JSON via parseWithRetry)
-          const content = call === 2 ? configJson : reportJson;
+          const content = call <= lintCallCount ? reportJson : configJson;
           return Promise.resolve({
             [Symbol.asyncIterator]: async function* () {
               yield { choices: [{ delta: { content } }] };
@@ -171,7 +169,7 @@ describe("runLint", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     await collect(
-      runLint([], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "Lint OK", fixes: [] })), "model", [domainA, domainB], VAULT_ROOT, new AbortController().signal),
+      runLint([], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "Lint OK", fixes: [] }), "{}", 2), "model", [domainA, domainB], VAULT_ROOT, new AbortController().signal),
     );
 
     expect(rawContent).toContain("[[EntityA]]");
@@ -267,7 +265,7 @@ describe("runLint", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     await collect(
-      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal),
+      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] }), "{}", 2), "model", [domain], VAULT_ROOT, new AbortController().signal),
     );
     const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls as [string, string][];
     const flatIndexWrite = writeCalls.find(
@@ -386,6 +384,7 @@ describe("runLint", () => {
       config: { mode: "embedding" as const },
       loadCache: vi.fn().mockResolvedValue(undefined),
       refreshCache: vi.fn().mockResolvedValue({ updated: 3 }),
+      selectRelevant: vi.fn().mockResolvedValue([]),
     };
     const events = await collect(
       runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal, 20, 3, {}, similarity as any),
@@ -408,6 +407,7 @@ describe("runLint", () => {
       config: { mode: "jaccard" as const },
       loadCache: vi.fn().mockResolvedValue(undefined),
       refreshCache: vi.fn().mockResolvedValue({ updated: 0 }),
+      selectRelevant: vi.fn().mockResolvedValue([]),
     };
     const events = await collect(
       runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal, 20, {}, similarity as any),
@@ -429,6 +429,7 @@ describe("runLint", () => {
       config: { mode: "embedding" as const },
       loadCache: vi.fn().mockResolvedValue(undefined),
       refreshCache: vi.fn().mockResolvedValue({ updated: 0 }),
+      selectRelevant: vi.fn().mockResolvedValue([]),
     };
     const events = await collect(
       runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal, 20, 3, {}, similarity as any),
@@ -436,6 +437,130 @@ describe("runLint", () => {
     const infoEvents = (events as any[]).filter((e) => e.kind === "info_text");
     expect(infoEvents.some((e) => e.summary.includes("загрузка кэша векторов"))).toBe(true);
     expect(infoEvents.some((e) => e.summary.includes("обновлено векторов"))).toBe(false);
+  });
+
+  it("emits per-article info_text progress events", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const events = await collect(
+      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    const infoEvents = (events as any[]).filter(e => e.kind === "info_text" && e.summary?.includes("Checking"));
+    expect(infoEvents.length).toBeGreaterThanOrEqual(1);
+    expect(infoEvents[0].summary).toMatch(/Checking 1\/1:/);
+  });
+
+  it("calls vaultTools.remove when LLM returns deletes", async () => {
+    const wikiContent = "---\ntags: []\n---\n# Original\n\nContent.";
+    const dupContent = "---\ntags: []\n---\n# Duplicate\n\nSame content.";
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockImplementation((path: string) => {
+        if (path.includes("!Wiki"))
+          return Promise.resolve({ files: ["!Wiki/work/Original.md", "!Wiki/work/Duplicate.md"], folders: [] });
+        return Promise.resolve({ files: [], folders: [] });
+      }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/work/Original.md") return Promise.resolve(wikiContent);
+        if (path === "!Wiki/work/Duplicate.md") return Promise.resolve(dupContent);
+        return Promise.resolve("");
+      }),
+      remove: vi.fn().mockResolvedValue(undefined),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const lintJson = JSON.stringify({
+      reasoning: "found duplicate",
+      report: "Merged Duplicate into Original.",
+      fixes: [{ path: "!Wiki/work/Original.md", content: wikiContent + "\n\nSame content." }],
+      deletes: [{ path: "!Wiki/work/Duplicate.md", redirect_to: "!Wiki/work/Original.md" }],
+    });
+    // 2 articles → 2 lint calls, then actualize
+    const llm = makeLlm(lintJson, "{}", 2);
+    await collect(
+      runLint(["work"], vt, llm, "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    expect(adapter.remove).toHaveBeenCalledWith("!Wiki/work/Duplicate.md");
+  });
+
+  it("rewrites [[Deleted]] links in wiki pages when delete has redirect_to", async () => {
+    const originalContent = "---\ntags: []\n---\n# Original\n\nContent.";
+    const linkedContent = "---\ntags: []\n---\n# Linker\n\nSee [[Duplicate]] for more.";
+    const dupContent = "---\ntags: []\n---\n# Duplicate\n\nDuplicated.";
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockImplementation((path: string) => {
+        if (path.includes("!Wiki"))
+          return Promise.resolve({
+            files: ["!Wiki/work/Original.md", "!Wiki/work/Linker.md", "!Wiki/work/Duplicate.md"],
+            folders: [],
+          });
+        return Promise.resolve({ files: [], folders: [] });
+      }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/work/Original.md") return Promise.resolve(originalContent);
+        if (path === "!Wiki/work/Linker.md") return Promise.resolve(linkedContent);
+        if (path === "!Wiki/work/Duplicate.md") return Promise.resolve(dupContent);
+        return Promise.resolve("");
+      }),
+      remove: vi.fn().mockResolvedValue(undefined),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const lintJson = JSON.stringify({
+      reasoning: "merged",
+      report: "ok",
+      fixes: [],
+      deletes: [{ path: "!Wiki/work/Duplicate.md", redirect_to: "!Wiki/work/Original.md" }],
+    });
+    const llm = makeLlm(lintJson, "{}", 3);
+    await collect(
+      runLint(["work"], vt, llm, "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    const linkerWrite = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([path, content]: [string, string]) => path === "!Wiki/work/Linker.md" && content.includes("[[Original]]"),
+    );
+    expect(linkerWrite).toBeDefined();
+  });
+
+  it("continues processing remaining articles when one LLM call fails", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/A.md", "!Wiki/work/B.md"], folders: [] }),
+      read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    // First lint call returns invalid JSON (will fail parseWithRetry), second returns valid
+    let callCount = 0;
+    const llm: LlmClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockImplementation(() => {
+            callCount++;
+            const content = callCount === 1
+              ? "NOT VALID JSON {{{"  // will fail LintOutputSchema parse
+              : callCount === 2
+              ? JSON.stringify({ reasoning: "ok", report: "B is fine.", fixes: [] })
+              : JSON.stringify({ reasoning: "ok", entity_types: [] });
+            return Promise.resolve({
+              [Symbol.asyncIterator]: async function* () {
+                yield { choices: [{ delta: { content } }] };
+              },
+            });
+          }),
+        },
+      },
+    } as unknown as LlmClient;
+    const events = await collect(
+      runLint(["work"], vt, llm, "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    // Should reach result event (not crash)
+    expect(events.some((e: any) => e.kind === "result")).toBe(true);
+    // Report should mention B is fine
+    const result = events.find((e: any) => e.kind === "result") as any;
+    expect(result.text).toContain("B is fine");
   });
 });
 
