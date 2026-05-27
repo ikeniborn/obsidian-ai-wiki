@@ -70,7 +70,7 @@ export const WikiPagesOutputSchema = z.object({
 
 export const LintDeleteSchema = z.object({
   path: z.string(),
-  redirectTo: z.string().optional(),
+  redirect_to: z.string().optional(),
 });
 
 export const LintOutputSchema = z.object({

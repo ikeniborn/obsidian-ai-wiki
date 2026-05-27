@@ -573,20 +573,20 @@ describe("runLint with merged assess+fix (LintOutputSchema)", () => {
 });
 
 describe("LintOutputSchema", () => {
-  it("accepts deletes as optional array of { path, redirectTo? }", () => {
+  it("accepts deletes as optional array of { path, redirect_to? }", () => {
     const result = LintOutputSchema.safeParse({
       reasoning: "found duplicate",
       report: "merged B into A",
       fixes: [],
       deletes: [
-        { path: "!Wiki/work/Duplicate.md", redirectTo: "!Wiki/work/Original.md" },
+        { path: "!Wiki/work/Duplicate.md", redirect_to: "!Wiki/work/Original.md" },
         { path: "!Wiki/work/Dead.md" },
       ],
     });
     expect(result.success).toBe(true);
     expect(result.data?.deletes).toHaveLength(2);
-    expect(result.data?.deletes?.[0].redirectTo).toBe("!Wiki/work/Original.md");
-    expect(result.data?.deletes?.[1].redirectTo).toBeUndefined();
+    expect(result.data?.deletes?.[0].redirect_to).toBe("!Wiki/work/Original.md");
+    expect(result.data?.deletes?.[1].redirect_to).toBeUndefined();
   });
 
   it("accepts missing deletes (backwards compat)", () => {
