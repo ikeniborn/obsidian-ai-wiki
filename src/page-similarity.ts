@@ -116,18 +116,10 @@ export class PageSimilarityService {
     indexAnnotations: Map<string, string>,
     allPaths: string[],
   ): Promise<EntityRetrievalResult> {
-    const results = new Map<string, string[]>();
-    if (entities.length === 0) return { results, allFailed: false };
+    if (entities.length === 0) return { results: new Map<string, string[]>(), allFailed: false };
 
     if (this.config.mode === "jaccard") {
-      let anySuccess = false;
-      for (const e of entities) {
-        const queryTokens = tokenize(entityQuery(e));
-        const top = this.scoreJaccardOnce(queryTokens, indexAnnotations, allPaths);
-        results.set(entityKey(e), top);
-        if (indexAnnotations.size > 0) anySuccess = true;
-      }
-      return { results, allFailed: !anySuccess };
+      return this.jaccardFallbackAll(entities, indexAnnotations, allPaths);
     }
 
     return this.selectByEntitiesEmbedding(entities, indexAnnotations, allPaths);
@@ -151,6 +143,21 @@ export class PageSimilarityService {
     return scored.slice(0, this.config.topK).map((x) => x.path);
   }
 
+  private jaccardFallbackAll(
+    entities: ExtractedEntity[],
+    indexAnnotations: Map<string, string>,
+    allPaths: string[],
+  ): EntityRetrievalResult {
+    const results = new Map<string, string[]>();
+    let anySuccess = false;
+    for (const e of entities) {
+      const top = this.scoreJaccardOnce(tokenize(entityQuery(e)), indexAnnotations, allPaths);
+      results.set(entityKey(e), top);
+      if (indexAnnotations.size > 0) anySuccess = true;
+    }
+    return { results, allFailed: !anySuccess };
+  }
+
   private async selectByEntitiesEmbedding(
     entities: ExtractedEntity[],
     indexAnnotations: Map<string, string>,
@@ -159,27 +166,15 @@ export class PageSimilarityService {
     const { baseUrl, apiKey, model, topK } = this.config;
     const results = new Map<string, string[]>();
 
-    if (!baseUrl || !model) {
-      let anySuccess = false;
-      for (const e of entities) {
-        const top = this.scoreJaccardOnce(tokenize(entityQuery(e)), indexAnnotations, allPaths);
-        results.set(entityKey(e), top);
-        if (indexAnnotations.size > 0) anySuccess = true;
-      }
-      return { results, allFailed: !anySuccess };
+    if (!baseUrl || !model || !apiKey) {
+      return this.jaccardFallbackAll(entities, indexAnnotations, allPaths);
     }
 
     let entityVecs: Float32Array[];
     try {
-      entityVecs = await fetchEmbeddings(baseUrl, apiKey!, model, entities.map(entityQuery));
+      entityVecs = await fetchEmbeddings(baseUrl, apiKey, model, entities.map(entityQuery));
     } catch {
-      let anySuccess = false;
-      for (const e of entities) {
-        const top = this.scoreJaccardOnce(tokenize(entityQuery(e)), indexAnnotations, allPaths);
-        results.set(entityKey(e), top);
-        if (indexAnnotations.size > 0) anySuccess = true;
-      }
-      return { results, allFailed: !anySuccess };
+      return this.jaccardFallbackAll(entities, indexAnnotations, allPaths);
     }
 
     const pids = allPaths.map((p) => pageId(p));
@@ -209,7 +204,7 @@ export class PageSimilarityService {
 
     for (const batch of batches) {
       try {
-        const vecs = await fetchEmbeddings(baseUrl, apiKey!, model, batch.texts);
+        const vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
         for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], vecs[i]);
       } catch {
         for (let i = 0; i < batch.pids.length; i++) {
