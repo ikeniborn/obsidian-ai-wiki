@@ -67,7 +67,7 @@ export type RunEvent =
   | { kind: "format_applied"; path: string }
   | { kind: "format_cancelled" }
   | { kind: "structural_error";
-      callSite: "init.bootstrap" | "init.delta" | "lint.patch" | "lint.fix" | "lint-chat.fix" | "query.seeds" | "ingest.pages" | "format.output";
+      callSite: "init.bootstrap" | "init.delta" | "lint.patch" | "lint.fix" | "lint-chat.fix" | "query.seeds" | "ingest.entities" | "ingest.pages" | "format.output";
       errorType: "json_parse" | "schema_validate";
       retryAttempt: number;
       succeeded: boolean | null;

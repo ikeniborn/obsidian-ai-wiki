@@ -14,6 +14,7 @@ export type CallSite =
   | "init.bootstrap"
   | "lint.patch" | "lint.fix" | "lint-chat.fix"
   | "query.seeds"
+  | "ingest.entities"
   | "ingest.pages"
   | "format.output";
 
