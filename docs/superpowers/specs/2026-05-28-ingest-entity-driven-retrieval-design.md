@@ -1,3 +1,27 @@
+---
+review:
+  spec_hash: 4e056974150d5a05
+  last_run: 2026-05-28
+  phases:
+    structure: { status: passed }
+    coverage: { status: passed }
+    clarity: { status: passed }
+    consistency: { status: passed }
+  findings: []
+  sections:
+    Summary: 9611217e5f546578
+    Architecture: 69422633e8c1ebdc
+    Components: 6e8f83049e9a4c0d
+    "Data Flow": 473dc7eb872283f0
+    "Error Handling": e1a937e9da793698
+    Testing: e2633faccc8d5688
+    Migration: 2af8cd3251ebb8bf
+    Observability: 075a976788c42a5d
+    "Out of Scope": 2bd396a8deec28d3
+chain:
+  intent: docs/superpowers/intents/2026-05-28-ingest-entity-driven-retrieval-intent.md
+---
+
 # Design: ingest entity-driven retrieval (no graph)
 
 **Date:** 2026-05-28
