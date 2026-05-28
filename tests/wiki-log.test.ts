@@ -105,6 +105,6 @@ describe("appendWikiLog — УДАЛЕНА action", () => {
       ],
     });
     expect(written[0]).toContain("СОЗДАНА: entities/New.md (stub)");
-    expect(written[0]).toContain("УДАЛЕНА: entities/Old.md");
+    expect(written[0]).toMatch(/^- УДАЛЕНА: entities\/Old\.md$/m);
   });
 });
