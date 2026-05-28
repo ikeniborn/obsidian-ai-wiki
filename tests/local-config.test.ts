@@ -86,7 +86,7 @@ describe("LocalConfigStore", () => {
 
 describe("LocalConfig.claudeAgent effort field", () => {
   it("LocalConfig.claudeAgent accepts effort field", () => {
-    const lc: typeof import("../src/local-config").LocalConfig = {
+    const lc: import("../src/local-config").LocalConfig = {
       iclaudePath: "/usr/bin/claude",
       claudeAgent: { model: "sonnet", allowedTools: "", effort: "high" },
     };
@@ -94,7 +94,7 @@ describe("LocalConfig.claudeAgent effort field", () => {
   });
 
   it("LocalConfig.claudeAgent effort is optional", () => {
-    const lc: typeof import("../src/local-config").LocalConfig = {
+    const lc: import("../src/local-config").LocalConfig = {
       iclaudePath: "/usr/bin/claude",
       claudeAgent: { model: "sonnet", allowedTools: "" },
     };
@@ -124,7 +124,7 @@ describe("LocalConfig.nativeAgent.mergeDeleteWarnThreshold", () => {
   });
 
   it("LocalConfig.nativeAgent.mergeDeleteWarnThreshold is optional", () => {
-    const lc: typeof import("../src/local-config").LocalConfig = {
+    const lc: import("../src/local-config").LocalConfig = {
       iclaudePath: "",
       nativeAgent: { baseUrl: "", apiKey: "", model: "", temperature: 0.2, topP: null },
     };
