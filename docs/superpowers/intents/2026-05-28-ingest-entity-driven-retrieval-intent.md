@@ -1,7 +1,7 @@
 # Intent: ingest entity-driven retrieval (no graph)
 
 **Date:** 2026-05-28
-**Status:** draft
+**Status:** approved
 
 ## Objective
 
