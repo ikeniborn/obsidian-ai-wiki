@@ -73,6 +73,25 @@ async function fetchEmbeddings(
   return json.data.map((d) => new Float32Array(d.embedding));
 }
 
+export interface ExtractedEntity {
+  name: string;
+  type?: string;
+  context_snippet?: string;
+}
+
+export interface EntityRetrievalResult {
+  results: Map<string, string[]>;
+  allFailed: boolean;
+}
+
+function entityKey(e: { name: string; type?: string }): string {
+  return `${e.name}::${e.type ?? ""}`;
+}
+
+function entityQuery(e: ExtractedEntity): string {
+  return [e.name, e.type, e.context_snippet].filter(Boolean).join(" — ");
+}
+
 export class PageSimilarityService {
   private cache: EmbeddingCacheFile | null = null;
 
@@ -90,6 +109,137 @@ export class PageSimilarityService {
       return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
     }
     return this.selectEmbedding(sourceContent, indexAnnotations, allPaths, queryTokens);
+  }
+
+  async selectByEntities(
+    entities: ExtractedEntity[],
+    indexAnnotations: Map<string, string>,
+    allPaths: string[],
+  ): Promise<EntityRetrievalResult> {
+    const results = new Map<string, string[]>();
+    if (entities.length === 0) return { results, allFailed: false };
+
+    if (this.config.mode === "jaccard") {
+      let anySuccess = false;
+      for (const e of entities) {
+        const queryTokens = tokenize(entityQuery(e));
+        const top = this.scoreJaccardOnce(queryTokens, indexAnnotations, allPaths);
+        results.set(entityKey(e), top);
+        if (indexAnnotations.size > 0) anySuccess = true;
+      }
+      return { results, allFailed: !anySuccess };
+    }
+
+    return this.selectByEntitiesEmbedding(entities, indexAnnotations, allPaths);
+  }
+
+  private scoreJaccardOnce(
+    queryTokens: Set<string>,
+    indexAnnotations: Map<string, string>,
+    allPaths: string[],
+  ): string[] {
+    if (queryTokens.size === 0) return [];
+    const scored: { path: string; score: number }[] = [];
+    for (const path of allPaths) {
+      const pid = pageId(path);
+      const annotation = indexAnnotations.get(pid);
+      if (!annotation) continue;
+      const score = scoreSeed(queryTokens, pid, "", annotation);
+      if (score > 0) scored.push({ path, score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, this.config.topK).map((x) => x.path);
+  }
+
+  private async selectByEntitiesEmbedding(
+    entities: ExtractedEntity[],
+    indexAnnotations: Map<string, string>,
+    allPaths: string[],
+  ): Promise<EntityRetrievalResult> {
+    const { baseUrl, apiKey, model, topK } = this.config;
+    const results = new Map<string, string[]>();
+
+    if (!baseUrl || !model) {
+      let anySuccess = false;
+      for (const e of entities) {
+        const top = this.scoreJaccardOnce(tokenize(entityQuery(e)), indexAnnotations, allPaths);
+        results.set(entityKey(e), top);
+        if (indexAnnotations.size > 0) anySuccess = true;
+      }
+      return { results, allFailed: !anySuccess };
+    }
+
+    let entityVecs: Float32Array[];
+    try {
+      entityVecs = await fetchEmbeddings(baseUrl, apiKey!, model, entities.map(entityQuery));
+    } catch {
+      let anySuccess = false;
+      for (const e of entities) {
+        const top = this.scoreJaccardOnce(tokenize(entityQuery(e)), indexAnnotations, allPaths);
+        results.set(entityKey(e), top);
+        if (indexAnnotations.size > 0) anySuccess = true;
+      }
+      return { results, allFailed: !anySuccess };
+    }
+
+    const pids = allPaths.map((p) => pageId(p));
+    const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
+    const pageVecs = new Map<string, Float32Array>();
+
+    if (this.cache && this.cache.model === model) {
+      for (let i = 0; i < pids.length; i++) {
+        const entry = this.cache.entries[pids[i]];
+        if (entry) pageVecs.set(pids[i], decodeVector(entry.vector));
+      }
+    }
+
+    const batches: { pids: string[]; texts: string[] }[] = [];
+    let cur: { pids: string[]; texts: string[] } = { pids: [], texts: [] };
+    for (let i = 0; i < pids.length; i++) {
+      if (!annotations[i]) continue;
+      if (pageVecs.has(pids[i])) continue;
+      cur.pids.push(pids[i]);
+      cur.texts.push(annotations[i]);
+      if (cur.pids.length >= EMBEDDING_BATCH_SIZE) {
+        batches.push(cur);
+        cur = { pids: [], texts: [] };
+      }
+    }
+    if (cur.pids.length > 0) batches.push(cur);
+
+    for (const batch of batches) {
+      try {
+        const vecs = await fetchEmbeddings(baseUrl, apiKey!, model, batch.texts);
+        for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], vecs[i]);
+      } catch {
+        for (let i = 0; i < batch.pids.length; i++) {
+          pageVecs.set(batch.pids[i], new Float32Array(0));
+        }
+      }
+    }
+
+    let anySuccess = false;
+    for (let ei = 0; ei < entities.length; ei++) {
+      const e = entities[ei];
+      const queryVec = entityVecs[ei];
+      const queryTokens = tokenize(entityQuery(e));
+      const scored: { path: string; score: number }[] = [];
+      for (let pi = 0; pi < allPaths.length; pi++) {
+        const pid = pids[pi];
+        const vec = pageVecs.get(pid);
+        if (!vec) continue;
+        const score = vec.length === 0
+          ? scoreSeed(queryTokens, pid, "", annotations[pi])
+          : cosine(queryVec, vec);
+        if (score > 0) scored.push({ path: allPaths[pi], score });
+      }
+      scored.sort((a, b) => b.score - a.score);
+      const top = scored.slice(0, topK).map((x) => x.path);
+      results.set(entityKey(e), top);
+      if (indexAnnotations.size > 0) anySuccess = true;
+    }
+
+    return { results, allFailed: !anySuccess };
   }
 
   private selectJaccard(
