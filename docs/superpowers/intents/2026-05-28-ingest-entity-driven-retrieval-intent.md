@@ -9,6 +9,42 @@ Current ingest sends excessive context to the LLM: `PageSimilarityService` selec
 
 Replace the single-pass `source → similarity → BFS → LLM` flow with a two-stage entity-driven retrieval: (1) LLM reads the article and emits the set of entities it contains, (2) for each entity, vector top-K lookup over `_index.md` annotations finds the matching wiki pages, (3) only the union of those top-K results is passed to the second LLM call that writes/updates/merges wiki pages.
 
+## Process Diagram
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#1e1e2e', 'primaryColor': '#313244', 'primaryTextColor': '#cdd6f4', 'primaryBorderColor': '#89b4fa', 'lineColor': '#888888'}}}%%
+flowchart TD
+    Article["Source article"] --> ExtractLLM["LLM call 1: extract entities"]
+    ExtractLLM --> Entities["Entities list e1..eN"]
+    Entities --> PerEntity{"For each entity"}
+    PerEntity --> VectorCheck{"Vector available?"}
+    VectorCheck -- Yes --> VectorTopK["Vector top-K over _index.md annotations"]
+    VectorCheck -- No --> JaccardTopK["Jaccard top-K fallback"]
+    VectorTopK --> Union["Union of top-K pages"]
+    JaccardTopK --> Union
+    Union --> WriteLLM["LLM call 2: write/update/merge"]
+    WriteLLM --> Decision{"Action per page"}
+    Decision -- "no top-K match" --> Create["Create new page"]
+    Decision -- "existing match" --> Update["Update page"]
+    Decision -- "duplicates found" --> Merge["Merge: create new + delete old"]
+    Create --> Apply["Apply entity_types_delta + progress events"]
+    Update --> Apply
+    Merge --> Apply
+    Apply --> Summary["Result Summary: created / updated / merged"]
+
+    classDef llm     fill:#89b4fa,color:#1e1e2e,stroke:#74c7ec,stroke-width:2px
+    classDef create  fill:#a6e3a1,color:#1e1e2e,stroke:#40a02b
+    classDef update  fill:#94e2d5,color:#1e1e2e,stroke:#179299
+    classDef merge   fill:#f9e2af,color:#1e1e2e,stroke:#df8e1d
+    classDef fallback fill:#f38ba8,color:#1e1e2e,stroke:#d20f39
+
+    class ExtractLLM,WriteLLM llm
+    class Create create
+    class Update update
+    class Merge merge
+    class JaccardTopK fallback
+```
+
 ## Desired Outcomes
 
 - Logs show the entity extraction phase followed by per-entity top-K retrieval, with the relevant article paths listed per entity.
