@@ -201,6 +201,7 @@ describe("removeIndexAnnotation", () => {
     const { vt, written } = makeVt(initial);
     await removeIndexAnnotation(vt, "!Wiki/work", "Missing");
     expect(written()).toBe(initial);
+    expect(vt.write).not.toHaveBeenCalled();
   });
 
   it("does not throw when index file is unreadable", async () => {
