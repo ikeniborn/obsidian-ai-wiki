@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { parseIndexAnnotations, upsertIndexAnnotation } from "../src/wiki-index";
+import { parseIndexAnnotations, upsertIndexAnnotation, removeIndexAnnotation } from "../src/wiki-index";
 import type { VaultTools } from "../src/vault-tools";
 
 // ─── parseIndexAnnotations ───────────────────────────────────────────────────
@@ -152,5 +152,59 @@ describe("upsertIndexAnnotation", () => {
     expect(written()).toContain("## general");
     expect(written()).toContain("- [[P]]");
     expect(written()).toContain("desc");
+  });
+});
+
+// ─── removeIndexAnnotation ───────────────────────────────────────────────────
+
+describe("removeIndexAnnotation", () => {
+  it("strips matching entry line and leaves the section if other entries remain", async () => {
+    const initial = [
+      "# Wiki Index",
+      "",
+      "## entities",
+      "- [[Alpha]] entities/Alpha.md — desc A",
+      "- [[Beta]] entities/Beta.md — desc B",
+    ].join("\n");
+    const { vt, written } = makeVt(initial);
+    await removeIndexAnnotation(vt, "!Wiki/work", "Alpha");
+    expect(written()).not.toContain("[[Alpha]]");
+    expect(written()).toContain("[[Beta]]");
+    expect(written()).toContain("## entities");
+  });
+
+  it("removes the section header when last entry deleted", async () => {
+    const initial = [
+      "# Wiki Index",
+      "",
+      "## entities",
+      "- [[Solo]] entities/Solo.md — only one",
+      "",
+      "## other",
+      "- [[X]] other/X.md — keep",
+    ].join("\n");
+    const { vt, written } = makeVt(initial);
+    await removeIndexAnnotation(vt, "!Wiki/work", "Solo");
+    expect(written()).not.toContain("## entities");
+    expect(written()).not.toContain("[[Solo]]");
+    expect(written()).toContain("## other");
+    expect(written()).toContain("[[X]]");
+  });
+
+  it("is a no-op when pid is absent", async () => {
+    const initial = [
+      "# Wiki Index",
+      "",
+      "## entities",
+      "- [[Alpha]] entities/Alpha.md — desc",
+    ].join("\n");
+    const { vt, written } = makeVt(initial);
+    await removeIndexAnnotation(vt, "!Wiki/work", "Missing");
+    expect(written()).toBe(initial);
+  });
+
+  it("does not throw when index file is unreadable", async () => {
+    const vt = throwVt();
+    await expect(removeIndexAnnotation(vt, "!Wiki/work", "Anything")).resolves.toBeUndefined();
   });
 });

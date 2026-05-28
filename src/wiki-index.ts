@@ -74,3 +74,37 @@ export async function upsertIndexAnnotation(
 
   await vaultTools.write(indexPath, upsertInSection(content, section, pid, entryLine));
 }
+
+export async function removeIndexAnnotation(
+  vaultTools: VaultTools,
+  wikiFolder: string,
+  pid: string,
+): Promise<void> {
+  const indexPath = domainIndexPath(wikiFolder);
+  let content = "";
+  try { content = await vaultTools.read(indexPath); } catch { return; }
+
+  const escaped = pid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pidRe = new RegExp(`^- \\[\\[${escaped}\\]\\]`);
+
+  const lines = content.split("\n");
+  const targetIdx = lines.findIndex((l) => pidRe.test(l));
+  if (targetIdx === -1) return;
+
+  // Drop the entry line.
+  const without = [...lines.slice(0, targetIdx), ...lines.slice(targetIdx + 1)];
+
+  // Find the section header above the removed line; remove it if no entries remain.
+  let secIdx = -1;
+  for (let i = targetIdx - 1; i >= 0; i--) {
+    if (without[i]?.startsWith("## ")) { secIdx = i; break; }
+  }
+  if (secIdx !== -1) {
+    const nextSec = without.findIndex((l, i) => i > secIdx && l.startsWith("## "));
+    const end = nextSec === -1 ? without.length : nextSec;
+    const hasEntries = without.slice(secIdx + 1, end).some((l) => l.startsWith("- "));
+    if (!hasEntries) without.splice(secIdx, 1);
+  }
+
+  await vaultTools.write(indexPath, without.join("\n"));
+}
