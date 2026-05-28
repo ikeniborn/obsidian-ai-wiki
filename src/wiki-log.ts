@@ -3,9 +3,9 @@ import type { VaultTools } from "./vault-tools";
 
 export interface IngestLogEntry {
   path: string;
-  action: "СОЗДАНА" | "ОБНОВЛЕНА";
+  action: "СОЗДАНА" | "ОБНОВЛЕНА" | "УДАЛЕНА";
   statusFrom?: string;
-  statusTo: string;
+  statusTo?: string;
 }
 
 export type LogOperation =
@@ -27,10 +27,12 @@ function buildEntry(domainId: string, event: LogOperation): string {
     lines.push("");
     for (const e of event.entries) {
       if (e.action === "СОЗДАНА") {
-        lines.push(`- СОЗДАНА: ${e.path} (${e.statusTo})`);
-      } else {
-        const status = e.statusFrom ? `${e.statusFrom}→${e.statusTo}` : e.statusTo;
+        lines.push(`- СОЗДАНА: ${e.path} (${e.statusTo ?? "unknown"})`);
+      } else if (e.action === "ОБНОВЛЕНА") {
+        const status = e.statusFrom ? `${e.statusFrom}→${e.statusTo}` : (e.statusTo ?? "unknown");
         lines.push(`- ОБНОВЛЕНА: ${e.path} (${status})`);
+      } else {
+        lines.push(`- УДАЛЕНА: ${e.path}`);
       }
     }
   } else if (event.op === "lint") {

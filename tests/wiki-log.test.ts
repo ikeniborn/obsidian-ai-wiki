@@ -91,3 +91,20 @@ describe("appendWikiLog — fix", () => {
     expect(written[0]).toContain("ИСПРАВЛЕНА: компоненты/foo.md");
   });
 });
+
+describe("appendWikiLog — УДАЛЕНА action", () => {
+  it("emits 'УДАЛЕНА: <path>' line for merge-delete entries", async () => {
+    const { vt, written } = makeVt();
+    await appendWikiLog(vt, DOMAIN_FOLDER, "work", {
+      op: "ingest",
+      sourcePath: "Sources/doc.md",
+      outputTokens: 42,
+      entries: [
+        { path: "entities/New.md", action: "СОЗДАНА", statusTo: "stub" },
+        { path: "entities/Old.md", action: "УДАЛЕНА" },
+      ],
+    });
+    expect(written[0]).toContain("СОЗДАНА: entities/New.md (stub)");
+    expect(written[0]).toContain("УДАЛЕНА: entities/Old.md");
+  });
+});
