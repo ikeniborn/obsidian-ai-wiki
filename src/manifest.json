@@ -1,7 +1,7 @@
 {
   "id": "ai-wiki",
   "name": "AI Wiki",
-  "version": "0.1.142",
+  "version": "0.1.143",
   "minAppVersion": "1.7.2",
   "description": "AI-powered compoundable knowledge base — extracts, synthesizes and maintains a wiki from raw sources.",
   "author": "ikeniborn",

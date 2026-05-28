@@ -20571,8 +20571,9 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         })
       );
       new import_obsidian3.Setting(containerEl).setName("Semantic Search").setHeading();
+      new import_obsidian3.Setting(containerEl).setName("Semantic Search").setHeading();
       new import_obsidian3.Setting(containerEl).setName("Enable semantic similarity (embeddings)").setDesc("Use embedding vectors for relevant page selection. Requires native backend with an embeddings-capable model.").addToggle(
-        (t) => t.setValue(!!this.localCache.nativeAgent?.embeddingModel).onChange(async (v) => {
+        (t) => t.setValue(this.localCache.nativeAgent?.embeddingModel !== void 0).onChange(async (v) => {
           if (!v) {
             await this.patchLocalNative({ embeddingModel: void 0, embeddingDimensions: void 0 });
             this.display();
@@ -28478,10 +28479,15 @@ var WikiPagesOutputSchema = external_exports.object({
   pages: external_exports.array(WikiPageSchema),
   entity_types_delta: external_exports.array(EntityTypeSchema).optional()
 });
+var LintDeleteSchema = external_exports.object({
+  path: external_exports.string(),
+  redirect_to: external_exports.string().optional()
+});
 var LintOutputSchema = external_exports.object({
   reasoning: external_exports.string(),
   report: external_exports.string(),
-  fixes: external_exports.array(WikiPageSchema)
+  fixes: external_exports.array(WikiPageSchema),
+  deletes: external_exports.array(LintDeleteSchema).optional()
 });
 var FormatOutputSchema = external_exports.object({
   report: external_exports.string(),
@@ -29676,7 +29682,7 @@ ${types}${notes}`;
 var import_path_browserify5 = __toESM(require_path_browserify(), 1);
 
 // prompts/lint.md
-var lint_default = '\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u0438 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0410\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0439 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u043E wiki: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442, \u0431\u0438\u0442\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438.\n\u041E\u0434\u043D\u043E\u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043F\u043E\u0434\u0433\u043E\u0442\u043E\u0432\u044C \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0435 \u0432\u0435\u0440\u0441\u0438\u0438 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446.\n{{entity_types_block}}\n{{schema_block}}\n\n\u041F\u0440\u0438 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0441\u0442\u0440\u0430\u043D\u0438\u0446:\n- tags: \u043F\u0440\u043E\u0432\u0435\u0440\u044C \u0438 \u043E\u0431\u043D\u043E\u0432\u0438 \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 (category/subcategory). \u041F\u0435\u0440\u0435\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u0435\u0433\u0438 \u0438\u0437 \u0434\u0440\u0443\u0433\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0434\u043E\u043C\u0435\u043D\u0430 (\u043F\u0435\u0440\u0435\u0434\u0430\u043D\u044B \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435). \u0424\u043E\u0440\u043C\u0430\u0442: \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0447\u0435\u0440\u0435\u0437 `/`, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432, \u0431\u0435\u0437 `#`\n- "annotation": \u043E\u0434\u043D\u043E \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u2014 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430 \u043F\u043E \u0441\u043C\u044B\u0441\u043B\u0443\n- \u043C\u0451\u0440\u0442\u0432\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438 [[X]] \u0443\u0431\u0435\u0440\u0438 \u0438\u043B\u0438 \u0437\u0430\u043C\u0435\u043D\u0438; \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0439 frontmatter \u0434\u043E\u0431\u0430\u0432\u044C; \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0438\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 \u2014 \u043D\u0438\u043A\u0430\u043A\u043E\u0433\u043E \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n{"reasoning":"\u0446\u0435\u043F\u043E\u0447\u043A\u0430 \u0440\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439","report":"## \u041E\u0442\u0447\u0451\u0442 lint\\n\\n\u0410\u043D\u0430\u043B\u0438\u0437 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 Markdown...","fixes":[{"path":"!Wiki/domain/type/Entity.md","content":"\u043F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B","annotation":"\u043A\u0440\u0430\u0442\u043A\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435"}]}\n\n\u041F\u043E\u043B\u0435 `fixes` \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0422\u041E\u041B\u042C\u041A\u041E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0435\u0441\u043B\u0438 \u043F\u0440\u0430\u0432\u043E\u043A \u043D\u0435\u0442).\n\u041F\u043E\u043B\u0435 `report` \u2014 \u043F\u043E\u043B\u043D\u044B\u0439 markdown-\u043E\u0442\u0447\u0451\u0442 \u0434\u043B\u044F \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F.\n';
+var lint_default = '\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u0438 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0410\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0439 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u043E wiki: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442, \u0431\u0438\u0442\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438.\n\u041E\u0434\u043D\u043E\u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043F\u043E\u0434\u0433\u043E\u0442\u043E\u0432\u044C \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0435 \u0432\u0435\u0440\u0441\u0438\u0438 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446.\n{{entity_types_block}}\n{{schema_block}}\n\n\u041F\u0440\u0438 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0441\u0442\u0440\u0430\u043D\u0438\u0446:\n- tags: \u043F\u0440\u043E\u0432\u0435\u0440\u044C \u0438 \u043E\u0431\u043D\u043E\u0432\u0438 \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 (category/subcategory). \u041F\u0435\u0440\u0435\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u0435\u0433\u0438 \u0438\u0437 \u0434\u0440\u0443\u0433\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0434\u043E\u043C\u0435\u043D\u0430 (\u043F\u0435\u0440\u0435\u0434\u0430\u043D\u044B \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435). \u0424\u043E\u0440\u043C\u0430\u0442: \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0447\u0435\u0440\u0435\u0437 `/`, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432, \u0431\u0435\u0437 `#`\n- "annotation": \u043E\u0434\u043D\u043E \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u2014 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430 \u043F\u043E \u0441\u043C\u044B\u0441\u043B\u0443\n- \u043C\u0451\u0440\u0442\u0432\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438 [[X]] \u0443\u0431\u0435\u0440\u0438 \u0438\u043B\u0438 \u0437\u0430\u043C\u0435\u043D\u0438; \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0439 frontmatter \u0434\u043E\u0431\u0430\u0432\u044C; \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0438\n\n\u041F\u0440\u0438 \u043E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u0438\u0438 \u0434\u0443\u0431\u043B\u0438\u0440\u0443\u044E\u0449\u0438\u0445\u0441\u044F \u0441\u0442\u0430\u0442\u0435\u0439 \u0432 \u043F\u0435\u0440\u0435\u0434\u0430\u043D\u043D\u043E\u043C \u043D\u0430\u0431\u043E\u0440\u0435:\n- \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0438 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0434\u0443\u0431\u043B\u0435\u0439 \u0432 \u043E\u0441\u043D\u043E\u0432\u043D\u0443\u044E \u0441\u0442\u0430\u0442\u044C\u044E (\u0432\u043A\u043B\u044E\u0447\u0438 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0451\u043D\u043D\u0443\u044E \u0441\u0442\u0430\u0442\u044C\u044E \u0432 fixes[])\n- \u0443\u043A\u0430\u0436\u0438 \u043F\u0443\u0442\u0438 \u0434\u0443\u0431\u043B\u0435\u0439 \u0432 \u043F\u043E\u043B\u0435 deletes[].path\n- \u0443\u043A\u0430\u0436\u0438 \u043F\u0443\u0442\u044C \u043E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u0441\u0442\u0430\u0442\u044C\u0438 \u0432 deletes[].redirect_to \u0434\u043B\u044F \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0441\u0441\u044B\u043B\u043E\u043A\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 \u2014 \u043D\u0438\u043A\u0430\u043A\u043E\u0433\u043E \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n{"reasoning":"\u0446\u0435\u043F\u043E\u0447\u043A\u0430 \u0440\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439","report":"## \u041E\u0442\u0447\u0451\u0442 lint\\n\\n\u0410\u043D\u0430\u043B\u0438\u0437 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 Markdown...","fixes":[{"path":"!Wiki/domain/type/Entity.md","content":"\u043F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B","annotation":"\u043A\u0440\u0430\u0442\u043A\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435"}],"deletes":[{"path":"!Wiki/domain/type/Duplicate.md","redirect_to":"!Wiki/domain/type/Entity.md"}]}\n\n\u041F\u043E\u043B\u0435 `fixes` \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0422\u041E\u041B\u042C\u041A\u041E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0435\u0441\u043B\u0438 \u043F\u0440\u0430\u0432\u043E\u043A \u043D\u0435\u0442).\n\u041F\u043E\u043B\u0435 `deletes` \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B-\u0434\u0443\u0431\u043B\u0438 \u0434\u043B\u044F \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F (\u043F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0438\u043B\u0438 \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0435\u0441\u043B\u0438 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u0439 \u043D\u0435\u0442).\n\u041F\u043E\u043B\u0435 `report` \u2014 \u043F\u043E\u043B\u043D\u044B\u0439 markdown-\u043E\u0442\u0447\u0451\u0442 \u0434\u043B\u044F \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F.\n';
 
 // src/phases/lint.ts
 var META_FILES2 = ["_index.md", "_log.md"];
@@ -29706,15 +29712,32 @@ Wiki folder outside vault \u2014 skipped.`);
     const files = allFiles.filter((f) => !META_FILES2.some((m) => f.endsWith(m)));
     yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
     const pages = await vaultTools.readAll(files);
-    yield { kind: "info_text", icon: "\u{1F50D}", summary: `Analysing ${files.length} pages...` };
-    const { graph } = graphCache.get(domain.id, pages);
+    let { graph } = graphCache.get(domain.id, pages);
     const structuralIssues = checkStructure(pages);
     const graphIssues = checkGraphStructure(graph, hubThreshold);
     const wikiLinkIssues = checkWikiLinks(pages);
-    const allIssues = [structuralIssues, graphIssues, wikiLinkIssues].filter(Boolean).join("\n");
+    const allStructuralIssues = [structuralIssues, graphIssues, wikiLinkIssues].filter(Boolean).join("\n");
+    const allVaultPaths = await vaultTools.listFiles("").catch(() => []);
+    const allMdPaths = allVaultPaths.filter((p) => p.endsWith(".md"));
+    const knownStems = /* @__PURE__ */ new Set([
+      ...allMdPaths.map((p) => p.split("/").pop().replace(/\.md$/, "")),
+      ...[...pages.keys()].map((p) => p.split("/").pop().replace(/\.md$/, ""))
+    ]);
+    const stemToPath = new Map(
+      allMdPaths.map((p) => [p.split("/").pop().replace(/\.md$/, ""), p])
+    );
+    const indexRaw = await tryRead3(vaultTools, domainIndexPath(wikiVaultPath));
+    const annotations = parseIndexAnnotations(indexRaw);
+    const pidToPath = new Map(files.map((p) => [pageId(p), p]));
+    const articlePaths = [.../* @__PURE__ */ new Set([
+      ...[...annotations.keys()].map((pid) => pidToPath.get(pid)).filter(Boolean),
+      ...files
+    ])];
+    if (similarity?.config.mode === "embedding") {
+      yield { kind: "info_text", icon: "\u{1F4E5}", summary: "\u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043A\u044D\u0448\u0430 \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432..." };
+      await similarity.loadCache(wikiVaultPath, vaultTools);
+    }
     const entityTypesBlock = buildEntityTypesBlock3(domain);
-    yield { kind: "assistant_text", delta: `Evaluating domain "${domain.id}" quality...
-` };
     const systemContent = render(lint_default, {
       domain_name: domain.name,
       entity_types_block: entityTypesBlock ? `
@@ -29724,55 +29747,162 @@ ${entityTypesBlock}` : "",
 \u041A\u043E\u043D\u0432\u0435\u043D\u0446\u0438\u0438 (_wiki_schema.md):
 ${schemaContent}` : ""
     });
-    const messages = [
-      { role: "system", content: systemContent },
-      {
-        role: "user",
-        content: [
-          `\u0414\u043E\u043C\u0435\u043D: ${domain.id} (${domain.name})`,
-          `\u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B:
-${allIssues || "\u041D\u0435\u0442."}`,
-          "",
-          `Wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B:
-${[...pages.entries()].map(([p, c]) => `--- ${p} ---
-${c}`).join("\n\n")}`
-        ].join("\n")
+    yield { kind: "assistant_text", delta: `Evaluating domain "${domain.id}" quality...
+` };
+    const deletedRefs = [];
+    const writtenPaths = [];
+    const skippedArticles = [];
+    const total = articlePaths.length;
+    for (let i = 0; i < total; i++) {
+      if (signal.aborted) return;
+      const targetPath = articlePaths[i];
+      const articleName = targetPath.split("/").pop().replace(/\.md$/, "");
+      const articleContent = pages.get(targetPath) ?? "";
+      const otherPaths = files.filter((p) => p !== targetPath && pages.has(p));
+      const topKPaths = similarity ? await similarity.selectRelevant(articleContent, annotations, otherPaths) : [];
+      const seeds = [pageId(targetPath), ...topKPaths.map((p) => pageId(p))];
+      const expanded = bfsExpand(seeds, graph, 1);
+      const contextPaths = [...expanded].map((pid) => pidToPath.get(pid)).filter((p) => !!p && p !== targetPath && pages.has(p));
+      const articleIssues = allStructuralIssues.split("\n").filter((l) => l.includes(articleName) || l.includes(targetPath)).join("\n") || "\u041D\u0435\u0442.";
+      const contextBlock = contextPaths.map((p) => `--- ${p} ---
+${pages.get(p) ?? ""}`).join("\n\n");
+      const messages = [
+        { role: "system", content: systemContent },
+        {
+          role: "user",
+          content: [
+            `\u0414\u043E\u043C\u0435\u043D: ${domain.id} (${domain.name})`,
+            `\u0410\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0435\u043C\u0430\u044F \u0441\u0442\u0430\u0442\u044C\u044F: ${targetPath}`,
+            `\u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B:
+${articleIssues}`,
+            "",
+            `--- ${targetPath} ---`,
+            articleContent,
+            "",
+            contextBlock ? `--- \u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 (\u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u0441\u0442\u0430\u0442\u044C\u0438) ---
+${contextBlock}` : ""
+          ].filter((l) => l !== void 0).join("\n")
+        }
+      ];
+      yield { kind: "info_text", icon: "\u{1F50D}", summary: `Checking ${i + 1}/${total}: ${articleName}` };
+      yield { kind: "tool_use", name: "Analysing wiki", input: { article: articleName, context: contextPaths.length } };
+      const pwtEvents = [];
+      let lintResult;
+      try {
+        lintResult = await parseWithRetry({
+          llm,
+          model,
+          baseMessages: messages,
+          opts,
+          schema: LintOutputSchema,
+          maxRetries: opts.structuredRetries ?? 1,
+          callSite: "lint.fix",
+          signal,
+          onEvent: (ev) => pwtEvents.push(ev)
+        });
+        const delCount = (lintResult.value.deletes ?? []).length;
+        yield { kind: "tool_result", ok: true, preview: `${lintResult.value.fixes.length} fixes${delCount ? `, ${delCount} deleted` : ""}` };
+      } catch (e) {
+        if (signal.aborted || e.name === "AbortError") return;
+        const errMsg = e.message ?? "";
+        const isTokenLimit = errMsg.toLowerCase().includes("context_length") || errMsg.toLowerCase().includes("too large");
+        const preview = isTokenLimit ? `Article too large \u2014 skipped: ${targetPath}` : errMsg;
+        yield { kind: "tool_result", ok: false, preview };
+        for (const ev of pwtEvents) yield ev;
+        skippedArticles.push(articleName);
+        continue;
       }
-    ];
-    yield { kind: "tool_use", name: "Analysing wiki", input: { pages: String(files.length) } };
-    const lintPwtEvents = [];
-    let lintResult;
-    try {
-      lintResult = await parseWithRetry({
-        llm,
-        model,
-        baseMessages: messages,
-        opts,
-        schema: LintOutputSchema,
-        maxRetries: opts.structuredRetries ?? 1,
-        callSite: "lint.fix",
-        signal,
-        onEvent: (ev) => lintPwtEvents.push(ev)
-      });
-      yield { kind: "tool_result", ok: true, preview: `${lintResult.value.fixes.length} fixes` };
-    } catch (e) {
-      if (signal.aborted || e.name === "AbortError") return;
-      yield { kind: "tool_result", ok: false, preview: e.message };
-      for (const ev of lintPwtEvents) yield ev;
-      reportParts.push(`## ${domain.id}
-LLM validation failed: ${e.message}`);
-      continue;
+      for (const ev of pwtEvents) yield ev;
+      if (signal.aborted) return;
+      outputTokens += lintResult.outputTokens;
+      const { fixes, deletes = [] } = lintResult.value;
+      yield { kind: "assistant_text", delta: lintResult.value.report };
+      reportParts.push(`### ${articleName}
+${lintResult.value.report}`);
+      if (fixes.length > 0) {
+        const fixesMapThisStep = new Map(fixes.map((p) => [p.path, p.content]));
+        const wlFixResult = fixWikiLinks(fixesMapThisStep, wikiLinkValidationRetries, knownStems);
+        if (wlFixResult.warnings.length > 0) {
+          yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "WikiLink warnings", details: wlFixResult.warnings };
+        }
+        for (const fix of fixes) {
+          yield { kind: "assistant_text", delta: `  \u2022 ${fix.path.split("/").pop()}...
+` };
+          if (!fix.path.startsWith(wikiVaultPath + "/")) {
+            yield { kind: "tool_use", name: "Write", input: { path: fix.path } };
+            yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
+            continue;
+          }
+          yield { kind: "tool_use", name: "Update", input: { path: fix.path } };
+          try {
+            const fixedContent = wlFixResult.fixed.get(fix.path) ?? fix.content;
+            await vaultTools.write(fix.path, fixedContent);
+            writtenPaths.push(fix.path);
+            pages.set(fix.path, fixedContent);
+            if (fix.annotation) {
+              annotations.set(pageId(fix.path), fix.annotation);
+              try {
+                await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(fix.path), fix.annotation, fix.path);
+              } catch {
+              }
+            }
+            yield { kind: "tool_result", ok: true };
+          } catch (e) {
+            yield { kind: "tool_result", ok: false, preview: e.message };
+          }
+        }
+        reportParts.push(`#### \u0418\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E: ${fixes.length} \u0441\u0442\u0440\u0430\u043D\u0438\u0446`);
+      }
+      for (const { path: delPath, redirect_to } of deletes) {
+        const deletedName = pageId(delPath);
+        const redirectName = redirect_to ? pageId(redirect_to) : null;
+        yield { kind: "tool_use", name: "Delete", input: { path: delPath } };
+        try {
+          if (typeof vaultTools.remove === "function") {
+            await vaultTools.remove(delPath);
+          } else {
+            yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: `vaultTools.remove not supported \u2014 physical delete skipped: ${delPath}` };
+          }
+          pages.delete(delPath);
+          annotations.delete(deletedName);
+          for (const [wikiPath, wikiContent] of pages) {
+            if (wikiContent.includes(`[[${deletedName}]]`)) {
+              const newContent = redirectName ? wikiContent.replaceAll(`[[${deletedName}]]`, `[[${redirectName}]]`) : wikiContent.replaceAll(`[[${deletedName}]]`, "");
+              await vaultTools.write(wikiPath, newContent);
+              pages.set(wikiPath, newContent);
+            }
+          }
+          deletedRefs.push({ deletedName, redirectName });
+          yield { kind: "tool_result", ok: true, preview: redirectName ? `merged \u2192 [[${redirectName}]]` : "deleted" };
+        } catch (e) {
+          yield { kind: "tool_result", ok: false, preview: e.message };
+        }
+      }
+      ({ graph } = graphCache.get(domain.id, pages));
+      if (similarity) {
+        const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, annotations);
+        if (similarity.config.mode === "embedding" && updated > 0) {
+          yield { kind: "info_text", icon: "\u{1F4E4}", summary: `\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432: ${updated}` };
+        }
+      }
     }
-    for (const ev of lintPwtEvents) yield ev;
-    if (signal.aborted) return;
-    outputTokens += lintResult.outputTokens;
-    const llmReport = lintResult.value.report;
-    yield { kind: "assistant_text", delta: llmReport };
-    reportParts.push(`## ${domain.id}
-${allIssues ? `**\u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B:**
-${allIssues}
-
-` : ""}${llmReport}`);
+    if (skippedArticles.length > 0) {
+      reportParts.push(`### \u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u044B (\u043E\u0448\u0438\u0431\u043A\u0430 LLM)
+${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
+    }
+    if (deletedRefs.length > 0) {
+      for (const sourcePath of allMdPaths.filter((p) => !p.startsWith(wikiVaultPath + "/"))) {
+        const content = await vaultTools.read(sourcePath).catch(() => null);
+        if (!content) continue;
+        let updated = content;
+        for (const { deletedName, redirectName } of deletedRefs) {
+          if (updated.includes(`[[${deletedName}]]`)) {
+            updated = redirectName ? updated.replaceAll(`[[${deletedName}]]`, `[[${redirectName}]]`) : updated.replaceAll(`[[${deletedName}]]`, "");
+          }
+        }
+        if (updated !== content) await vaultTools.write(sourcePath, updated);
+      }
+    }
     if (signal.aborted) return;
     yield { kind: "assistant_text", delta: `
 Actualizing domain config for "${domain.id}"...
@@ -29788,65 +29918,6 @@ Actualizing domain config for "${domain.id}"...
       yield { kind: "domain_updated", domainId: domain.id, patch };
     }
     if (signal.aborted) return;
-    const allVaultPaths = await vaultTools.listFiles("").catch(() => []);
-    const allMdPaths = allVaultPaths.filter((p) => p.endsWith(".md"));
-    const knownStems = /* @__PURE__ */ new Set([
-      ...allMdPaths.map((p) => p.split("/").pop().replace(/\.md$/, "")),
-      ...[...pages.keys()].map((p) => p.split("/").pop().replace(/\.md$/, ""))
-    ]);
-    const stemToPath = new Map(
-      allMdPaths.map((p) => [p.split("/").pop().replace(/\.md$/, ""), p])
-    );
-    const fixesMap = new Map(lintResult.value.fixes.map((p) => [p.path, p.content]));
-    const wlFixResult = fixWikiLinks(fixesMap, wikiLinkValidationRetries, knownStems);
-    const fixedPages = lintResult.value.fixes.map((p) => ({ ...p, content: wlFixResult.fixed.get(p.path) ?? p.content }));
-    const writtenPaths = [];
-    for (const page of fixedPages) {
-      yield { kind: "assistant_text", delta: `  \u2022 ${page.path.split("/").pop()}...
-` };
-      if (!page.path.startsWith(wikiVaultPath + "/")) {
-        yield { kind: "tool_use", name: "Write", input: { path: page.path } };
-        yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
-        continue;
-      }
-      yield { kind: "tool_use", name: "Update", input: { path: page.path } };
-      try {
-        await vaultTools.write(page.path, page.content);
-        writtenPaths.push(page.path);
-        yield { kind: "tool_result", ok: true };
-        if (page.annotation) {
-          try {
-            await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation, page.path);
-          } catch {
-          }
-        }
-      } catch (e) {
-        yield { kind: "tool_result", ok: false, preview: e.message };
-      }
-    }
-    if (wlFixResult.warnings.length > 0) {
-      yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "WikiLink warnings", details: wlFixResult.warnings };
-    }
-    if (writtenPaths.length > 0) {
-      reportParts.push(`### \u0418\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u0441\u0442\u0440\u0430\u043D\u0438\u0446: ${writtenPaths.length}
-${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
-      for (const p of writtenPaths) {
-        try {
-          pages.set(p, await vaultTools.read(p));
-        } catch {
-        }
-      }
-    }
-    try {
-      await appendWikiLog(vaultTools, wikiVaultPath, domain.id, {
-        op: "lint",
-        domainId: domain.id,
-        fixed: writtenPaths,
-        checkedCount: files.length,
-        outputTokens
-      });
-    } catch {
-    }
     const backlinks = /* @__PURE__ */ new Map();
     for (const [wikiPath, wikiContent] of pages) {
       for (const src of parseWikiSourcesFromFm(wikiContent)) {
@@ -29882,17 +29953,15 @@ ${writtenPaths.map((p) => `- ${p.split("/").pop()}`).join("\n")}`);
     if (backlinks.size > 0) {
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
     }
-    if (similarity) {
-      const indexRaw = await tryRead3(vaultTools, domainIndexPath(wikiVaultPath));
-      const annotations = parseIndexAnnotations(indexRaw);
-      if (similarity.config.mode === "embedding") {
-        yield { kind: "info_text", icon: "\u{1F4E5}", summary: "\u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043A\u044D\u0448\u0430 \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432..." };
-        await similarity.loadCache(wikiVaultPath, vaultTools);
-      }
-      const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, annotations);
-      if (similarity.config.mode === "embedding" && updated > 0) {
-        yield { kind: "info_text", icon: "\u{1F4E4}", summary: `\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432: ${updated}` };
-      }
+    try {
+      await appendWikiLog(vaultTools, wikiVaultPath, domain.id, {
+        op: "lint",
+        domainId: domain.id,
+        fixed: writtenPaths,
+        checkedCount: total,
+        outputTokens
+      });
+    } catch {
     }
   }
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n"), outputTokens: outputTokens || void 0 };
@@ -31120,7 +31189,7 @@ var AgentRunner = class {
     if (this.settings.backend !== "native-agent") return void 0;
     const na = this.settings.nativeAgent;
     return new PageSimilarityService({
-      mode: na.embeddingModel ? "embedding" : "jaccard",
+      mode: na.embeddingModel !== void 0 ? "embedding" : "jaccard",
       model: na.embeddingModel,
       dimensions: na.embeddingDimensions,
       topK: na.relevantPagesTopK ?? 15,
