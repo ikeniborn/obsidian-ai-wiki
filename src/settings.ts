@@ -598,6 +598,18 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                 }
               }),
           );
+
+        new Setting(containerEl)
+          .setName(T.settings.mergeDeleteWarnThreshold_name)
+          .setDesc(T.settings.mergeDeleteWarnThreshold_desc)
+          .addSlider((s) =>
+            s.setLimits(1, 20, 1)
+              .setDynamicTooltip()
+              .setValue(this.localCache.nativeAgent?.mergeDeleteWarnThreshold ?? 5)
+              .onChange(async (v) => {
+                await this.patchLocalNative({ mergeDeleteWarnThreshold: v });
+              }),
+          );
       }
 
       // ── Proxy section (native-agent only) ───────────────────────────────────

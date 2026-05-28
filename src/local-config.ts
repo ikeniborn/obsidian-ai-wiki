@@ -26,6 +26,7 @@ export interface LocalConfig {
     embeddingModel?: string;
     embeddingDimensions?: number;
     relevantPagesTopK?: number;
+    mergeDeleteWarnThreshold?: number;
   };
   proxy?: ProxyConfig;
   migrated_v1?: boolean;

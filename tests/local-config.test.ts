@@ -101,3 +101,33 @@ describe("LocalConfig.claudeAgent effort field", () => {
     expect(lc.claudeAgent?.effort).toBeUndefined();
   });
 });
+
+describe("LocalConfig.nativeAgent.mergeDeleteWarnThreshold", () => {
+  it("round-trips mergeDeleteWarnThreshold through save/load", async () => {
+    let written = "";
+    const adapter = {
+      exists: vi.fn().mockResolvedValue(false),
+      read: vi.fn(),
+      write: vi.fn().mockImplementation(async (_p: string, c: string) => { written = c; }),
+    };
+    const store = new LocalConfigStore(makePlugin(adapter));
+    await store.save({
+      iclaudePath: "",
+      nativeAgent: {
+        baseUrl: "", apiKey: "", model: "", temperature: 0.2, topP: null,
+        mergeDeleteWarnThreshold: 10,
+      },
+    });
+    expect(written).toContain('"mergeDeleteWarnThreshold": 10');
+    const loaded = await store.load();
+    expect(loaded.nativeAgent?.mergeDeleteWarnThreshold).toBe(10);
+  });
+
+  it("LocalConfig.nativeAgent.mergeDeleteWarnThreshold is optional", () => {
+    const lc: typeof import("../src/local-config").LocalConfig = {
+      iclaudePath: "",
+      nativeAgent: { baseUrl: "", apiKey: "", model: "", temperature: 0.2, topP: null },
+    };
+    expect(lc.nativeAgent?.mergeDeleteWarnThreshold).toBeUndefined();
+  });
+});

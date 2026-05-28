@@ -29,20 +29,21 @@ export class AgentRunner {
     const key = (op === "chat" || op === "lint-chat" ? "lint" : op) as OpKey;
     const s = this.settings;
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
+    const mergeDeleteWarnThreshold = s.nativeAgent.mergeDeleteWarnThreshold;
 
     if (s.backend === "claude-agent") {
       // claude-agent: maxTokens задаётся на уровне iclaude.sh (env CLAUDE_CODE_MAX_OUTPUT_TOKENS),
       // плагин его не плумит — параметр был бы избыточным.
       const c = s.claudeAgent.perOperation ? s.claudeAgent.operations[key] : undefined;
       const model = c ? c.model : s.claudeAgent.model;
-      return { model, opts: { systemPrompt: s.systemPrompt, structuredRetries } };
+      return { model, opts: { systemPrompt: s.systemPrompt, structuredRetries, mergeDeleteWarnThreshold } };
     }
 
     const na = s.nativeAgent;
     const c = na.perOperation ? na.operations[key] : undefined;
     const budgetTokens = c?.thinkingBudgetTokens ?? na.thinkingBudgetTokens;
-    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
-    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries } };
+    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold } };
+    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold } };
   }
 
   private buildSimilarity(): PageSimilarityService | undefined {

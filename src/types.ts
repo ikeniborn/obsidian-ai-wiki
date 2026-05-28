@@ -102,6 +102,7 @@ export interface LlmCallOptions {
   jsonSchema?: { name: string; schema: object };
   structuredRetries?: number;
   thinkingBudgetTokens?: number;
+  mergeDeleteWarnThreshold?: number;
 }
 
 /** Минимальный интерфейс OpenAI-клиента, используемый фазами. */
@@ -174,6 +175,7 @@ export interface LlmWikiPluginSettings {
     embeddingModel?: string;
     embeddingDimensions?: number;
     relevantPagesTopK?: number;
+    mergeDeleteWarnThreshold?: number;
   };
   devMode: {
     enabled: boolean;
