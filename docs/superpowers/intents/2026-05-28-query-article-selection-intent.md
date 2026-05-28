@@ -1,7 +1,7 @@
 # Intent: Query Article Selection Pipeline
 
 **Date:** 2026-05-28
-**Status:** draft
+**Status:** approved
 
 ## Objective
 
