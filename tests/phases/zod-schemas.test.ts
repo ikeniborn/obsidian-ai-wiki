@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   DomainEntrySchema, EntityTypesDeltaSchema, SeedsSchema,
   WikiPageSchema, WikiPagesOutputSchema, LintOutputSchema, FormatOutputSchema,
+  EntitiesOutputSchema,
 } from "../../src/phases/zod-schemas";
 
 const fx = (name: string) =>
@@ -143,5 +144,72 @@ describe("FormatOutputSchema", () => {
   it("rejects missing formatted", () => {
     const result = FormatOutputSchema.safeParse({ report: "ok" });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("EntitiesOutputSchema", () => {
+  it("accepts minimal entity", () => {
+    const r = EntitiesOutputSchema.safeParse({
+      reasoning: "ok",
+      entities: [{ name: "Foo" }],
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("accepts entity with type and context_snippet", () => {
+    const r = EntitiesOutputSchema.safeParse({
+      reasoning: "ok",
+      entities: [{ name: "Foo", type: "Concept", context_snippet: "Foo is a concept." }],
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects empty name", () => {
+    const r = EntitiesOutputSchema.safeParse({
+      reasoning: "ok",
+      entities: [{ name: "" }],
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects entities array longer than 50", () => {
+    const entities = Array.from({ length: 51 }, (_, i) => ({ name: `E${i}` }));
+    const r = EntitiesOutputSchema.safeParse({ reasoning: "ok", entities });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects missing reasoning", () => {
+    const r = EntitiesOutputSchema.safeParse({ entities: [{ name: "Foo" }] });
+    expect(r.success).toBe(false);
+  });
+});
+
+describe("WikiPagesOutputSchema — deletes", () => {
+  it("accepts optional deletes[]", () => {
+    const r = WikiPagesOutputSchema.safeParse({
+      reasoning: "merge",
+      pages: [{ path: "!Wiki/d/e/New.md", content: "# New" }],
+      deletes: [{ path: "!Wiki/d/e/Old.md" }],
+    });
+    expect(r.success).toBe(true);
+    expect(r.data?.deletes).toHaveLength(1);
+  });
+
+  it("accepts response without deletes (backward compat)", () => {
+    const r = WikiPagesOutputSchema.safeParse({
+      reasoning: "ok",
+      pages: [{ path: "!Wiki/d/e/A.md", content: "# A" }],
+    });
+    expect(r.success).toBe(true);
+    expect(r.data?.deletes).toBeUndefined();
+  });
+
+  it("rejects deletes entry without path", () => {
+    const r = WikiPagesOutputSchema.safeParse({
+      reasoning: "merge",
+      pages: [],
+      deletes: [{}],
+    });
+    expect(r.success).toBe(false);
   });
 });

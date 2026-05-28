@@ -62,9 +62,19 @@ export const WikiPageSchema = z.object({
   }
 });
 
+export const EntitiesOutputSchema = z.object({
+  reasoning: z.string(),
+  entities: z.array(z.object({
+    name: z.string().min(1),
+    type: z.string().optional(),
+    context_snippet: z.string().optional(),
+  })).max(50),
+});
+
 export const WikiPagesOutputSchema = z.object({
   reasoning: z.string(),
   pages: z.array(WikiPageSchema),
+  deletes: z.array(z.object({ path: z.string() })).optional(),
   entity_types_delta: z.array(EntityTypeSchema).optional(),
 });
 
@@ -90,6 +100,7 @@ export type EntityTypesDeltaResponse = z.infer<typeof EntityTypesDeltaSchema>;
 export type SeedsResponse = z.infer<typeof SeedsSchema>;
 export type LintChatResponse = z.infer<typeof LintChatSchema>;
 export type WikiPageResponse = z.infer<typeof WikiPageSchema>;
+export type EntitiesOutput = z.infer<typeof EntitiesOutputSchema>;
 export type WikiPagesOutput = z.infer<typeof WikiPagesOutputSchema>;
 export type LintDelete = z.infer<typeof LintDeleteSchema>;
 export type LintOutput = z.infer<typeof LintOutputSchema>;
