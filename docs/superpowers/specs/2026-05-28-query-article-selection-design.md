@@ -6,22 +6,30 @@
 
 ## Problem
 
-Query phase has two bugs:
+Three phases (query, lint, ingest) use `PageSimilarityService` for article selection.
+Ingest is already correct. Query and lint have bugs:
 
-1. **Double topK**: In embedding mode, `selectRelevant()` caps seeds at `relevantPagesTopK`, then `runQuery` slices again to `seedTopK`. Seeds end up capped by the smaller of the two — inconsistent and confusing.
-2. **Arbitrary context cap**: `buildContextBlock` uses `topK * 3` as `maxPages`, an arbitrary multiplier not connected to any user setting. BFS-selected pages are silently dropped. Sidebar shows `selectedIds.size` (full BFS count) but LLM gets fewer pages — counts diverge.
-3. **Jaccard inconsistency**: Jaccard mode in `runQuery` uses inline `selectSeeds` with `seedTopK`, completely bypassing `similarity.selectRelevant` and `relevantPagesTopK`. Embedding and Jaccard follow different topK pipelines.
+**Query (`src/phases/query.ts`):**
 
-## Intended Pipeline
+1. Double topK — embedding mode: `selectRelevant()` caps seeds at `relevantPagesTopK`, then `runQuery` slices again to `seedTopK`. Seeds end up capped by the smaller of the two.
+2. Jaccard inconsistency — Jaccard mode bypasses `similarity.selectRelevant`, uses inline `selectSeeds` with `seedTopK`. Embedding and Jaccard follow different topK pipelines.
+3. Arbitrary context cap — `buildContextBlock` uses `topK * 3` as `maxPages`. BFS-selected pages silently dropped. Sidebar shows `selectedIds.size` (full BFS count) but LLM gets fewer pages — counts diverge.
 
-```
-question → similarity.selectRelevant()   [both embedding and Jaccard modes]
-                ↓ ≤ relevantPagesTopK seeds
-           bfsExpand(seeds, graph, graphDepth)
-                ↓ all selectedIds (naturally bounded)
-           buildContextBlock → LLM
-                ↓
-           graph_stats { expanded: selectedIds.size }   ← sidebar shows this
+**Lint (`src/phases/lint.ts`):**
+
+4. `graphDepth` hardcoded — BFS call uses `bfsExpand(seeds, graph, 1)` instead of the `graphDepth` setting. `runLint` signature doesn't accept `graphDepth` at all.
+
+**Ingest (`src/phases/ingest.ts`):** already correct — no changes needed.
+
+## Intended Pipeline (all phases)
+
+```text
+content/question
+  → similarity.selectRelevant()   [both embedding and Jaccard, both phases]
+      ↓ ≤ relevantPagesTopK seeds
+  → bfsExpand(seeds, graph, graphDepth)
+      ↓ all selectedIds (naturally bounded)
+  → LLM context
 ```
 
 `relevantPagesTopK` is the single seed cap for both modes. `graphDepth` bounds BFS reach. No additional multiplier cap.
@@ -30,9 +38,10 @@ question → similarity.selectRelevant()   [both embedding and Jaccard modes]
 
 ### `src/phases/query.ts`
 
-**Unify seed selection:** Call `similarity.selectRelevant()` for both embedding and Jaccard modes when `similarity` is provided. Currently, only the embedding branch calls it; the Jaccard branch falls through to inline `selectSeeds` with `seedTopK`.
+**Unify seed selection** — call `similarity.selectRelevant()` for both embedding and Jaccard when `similarity` is provided. Remove extra `.slice(0, topK)` (double-slice bug).
 
 Before:
+
 ```typescript
 if (similarity && similarity.config.mode === "embedding") {
   await similarity.loadCache(wikiVaultPath, vaultTools);
@@ -46,6 +55,7 @@ if (similarity && similarity.config.mode === "embedding") {
 ```
 
 After:
+
 ```typescript
 if (similarity) {
   await similarity.loadCache(wikiVaultPath, vaultTools);
@@ -59,51 +69,43 @@ if (similarity) {
 }
 ```
 
-**Remove `maxPages` cap from `buildContextBlock`:**
+**Remove `maxPages` cap** from `buildContextBlock` call:
 
-Before:
+Before: `buildContextBlock(pages, seedSet, selectedIds, topK * 3)`
+
+After: `buildContextBlock(pages, seedSet, selectedIds)`
+
+**Update `buildContextBlock` signature** — remove `maxPages` parameter and `bfsCap` slicing. Return all pages from `selectedIds`.
+
+### `src/phases/lint.ts`
+
+**Add `graphDepth` parameter** to `runLint` signature (default `1` to preserve current behavior):
+
 ```typescript
-const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);
+export async function* runLint(
+  // ... existing params ...
+  similarity?: PageSimilarityService,
+  graphDepth: number = 1,   // add this
+): AsyncGenerator<RunEvent>
 ```
 
-After:
-```typescript
-const contextBlock = buildContextBlock(pages, seedSet, selectedIds);
-```
+**Use `graphDepth` in BFS** — replace hardcoded `1`:
 
-**Update `buildContextBlock` signature** — remove `maxPages` parameter and `bfsCap` slicing:
+Before: `const expanded = bfsExpand(seeds, graph, 1);`
 
-Before:
-```typescript
-function buildContextBlock(
-  pages: Map<string, string>,
-  seeds: Set<string>,
-  selectedIds: Set<string>,
-  maxPages: number,
-): string {
-  ...
-  const bfsCap = Math.max(0, maxPages - seedPages.length);
-  const ordered = [...seedPages, ...bfsPages.slice(0, bfsCap)];
-  ...
-}
-```
+After: `const expanded = bfsExpand(seeds, graph, graphDepth);`
 
-After:
-```typescript
-function buildContextBlock(
-  pages: Map<string, string>,
-  seeds: Set<string>,
-  selectedIds: Set<string>,
-): string {
-  ...
-  const ordered = [...seedPages, ...bfsPages];
-  ...
-}
-```
+### `src/agent-runner.ts`
+
+**Pass `graphDepth` to `runLint`**:
+
+Before: `yield* runLint(req.args, ..., opts, similarity);`
+
+After: `yield* runLint(req.args, ..., opts, similarity, this.settings.graphDepth);`
 
 ### `src/types.ts` — no changes
 
-`graph_stats` event shape is already correct. After the fix, `expanded: selectedIds.size` equals the actual LLM context count, so no new fields needed.
+`graph_stats` event shape is already correct. After the fix, `expanded: selectedIds.size` equals the actual LLM context count.
 
 ### `src/view.ts` — no changes
 
@@ -113,29 +115,30 @@ Sidebar already displays `ev.expanded`. After fix this matches LLM context exact
 
 `selectRelevant` already caps at `this.config.topK` (`relevantPagesTopK`) for both modes.
 
-### `src/agent-runner.ts` — no changes
+### `src/phases/ingest.ts` — no changes
 
-`buildSimilarity()` already sets `topK: na.relevantPagesTopK ?? 15` for both embedding and Jaccard modes.
+Already uses `similarity.selectRelevant()` for both modes with `graphDepth` parameter.
 
 ## Role of `seedTopK` After Fix
 
 `seedTopK` (global setting, default 5) remains used for:
-- `llmSelectSeeds` fallback (when similarity returns 0 seeds) — `topK` still passed as limit
-- `seedMinScore` filtering in fallback Jaccard path (no similarity service)
 
-It no longer governs seed selection in the normal path. The de facto seed limit in normal operation is `relevantPagesTopK`.
+- `llmSelectSeeds` fallback — when similarity returns 0 seeds
+- Fallback Jaccard path — when no similarity service is configured at all
+
+It no longer governs seed selection in the normal path. The effective seed limit in normal operation is `relevantPagesTopK`.
 
 ## Invariants
 
-- Lint and ingest phases: untouched — they already use `PageSimilarityService` correctly
 - Embedding cache: not invalidated — `loadCache()` still called before `selectRelevant()`
-- `relevantPagesTopK = 0` or undefined: `relevantPagesTopK ?? 15` in `buildSimilarity()` prevents zero seeds; `Math.max(1, ...)` guard in `selectJaccard` and `selectEmbedding` exists via the `topK` field
+- `relevantPagesTopK` undefined: `buildSimilarity()` defaults to `15`
 - Jaccard fallback (API error in embedding mode): handled inside `selectEmbedding` — unchanged
+- Lint default `graphDepth = 1`: preserves current behavior unless caller passes a different value
 
 ## Health Checks
 
-- Lint per-article loop: no code change, must pass unchanged
-- Query via chat: result quality must not degrade (trimmed to relevant context only)
+- Lint per-article loop: BFS now uses `graphDepth` from settings (default 1 = unchanged)
+- Query via chat: result quality must not degrade (more relevant, trimmed context)
 - Embedding cache (`_embeddings.json`): not invalidated on this change
-- Jaccard mode: now uses `relevantPagesTopK` via `similarity.selectRelevant` — same pipeline as embedding
+- Jaccard mode in query: now uses `relevantPagesTopK` via `similarity.selectRelevant` — same pipeline as embedding
 - Sidebar article count = LLM context article count ≤ `relevantPagesTopK` seeds + BFS expansion
