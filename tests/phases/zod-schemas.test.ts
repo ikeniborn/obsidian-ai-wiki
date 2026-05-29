@@ -173,6 +173,7 @@ describe("EntitiesOutputSchema", () => {
     expect(r.success).toBe(false);
   });
 
+  // @lat: [[tests#Entity Extraction#Entities schema rejects oversize lists]]
   it("rejects entities array longer than 50", () => {
     const entities = Array.from({ length: 51 }, (_, i) => ({ name: `E${i}` }));
     const r = EntitiesOutputSchema.safeParse({ reasoning: "ok", entities });

@@ -12,7 +12,11 @@ Tests that validate LLM #1 extracts entities from the source via `ingest.entitie
 
 ### Entities schema accepts minimal entity
 
-The `EntitiesOutputSchema` accepts `{reasoning, entities: [{name}]}` and rejects entities longer than 50.
+The `EntitiesOutputSchema` accepts `{reasoning, entities: [{name}]}` — `name` is the only required entity field.
+
+### Entities schema rejects oversize lists
+
+The `EntitiesOutputSchema` rejects an `entities` array containing more than 50 items.
 
 ### Entity extraction halt on parse failure
 
@@ -24,7 +28,7 @@ Tests that validate `PageSimilarityService.selectByEntities` returns per-entity 
 
 ### Top-K per entity in embedding mode
 
-A single batched POST to `/embeddings` carries all entity queries, cosine similarity ranks pages, top-K is returned per entity.
+All entity queries are sent in one batched POST to `/embeddings`; cosine similarity ranks pages and returns top-K per entity.
 
 ### Jaccard fallback on HTTP error
 
