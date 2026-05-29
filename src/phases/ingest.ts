@@ -6,17 +6,17 @@ import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import { parseWithRetry } from "./parse-with-retry";
-import { WikiPagesOutputSchema } from "./zod-schemas";
-import type { WikiPagesOutput } from "./zod-schemas";
+import { WikiPagesOutputSchema, EntitiesOutputSchema } from "./zod-schemas";
+import type { WikiPagesOutput, EntitiesOutput } from "./zod-schemas";
 import ingestTemplate from "../../prompts/ingest.md";
+import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
 import { render } from "./template";
 import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField } from "../utils/raw-frontmatter";
-import { upsertIndexAnnotation, parseIndexAnnotations } from "../wiki-index";
-import { pageId, bfsExpand } from "../wiki-graph";
-import { graphCache } from "../wiki-graph-cache";
-import type { PageSimilarityService } from "../page-similarity";
+import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation } from "../wiki-index";
+import { pageId } from "../wiki-graph";
+import type { PageSimilarityService, ExtractedEntity } from "../page-similarity";
 import { appendWikiLog } from "../wiki-log";
 import type { IngestLogEntry } from "../wiki-log";
 import { fixWikiLinks } from "../wiki-link-validator";
@@ -79,44 +79,87 @@ export async function* runIngest(
   const domainRoot = wikiVaultPath;
 
   await ensureDomainConfig(vaultTools, domainRoot);
-
+  void graphDepth;
   const [schemaContent, indexContent] = await Promise.all([
     tryRead(vaultTools, GLOBAL_WIKI_SCHEMA_PATH),
     tryRead(vaultTools, domainIndexPath(domainRoot)),
   ]);
-
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
   const nonMetaPaths = existingPaths.filter((f) => !f.endsWith("_index.md"));
+  const annotations = cachedAnnotations ?? parseIndexAnnotations(indexContent);
 
+  yield { kind: "assistant_text", delta: `Synthesizing wiki pages for domain "${domain.id}"...\n` };
+  const start = Date.now();
+
+  // === LLM #1: extract entities =========================================
+  const messages_extract = buildExtractMessages(sourceVaultPath, sourceContent, domain);
+  yield { kind: "tool_use", name: "Extracting entities", input: {} };
+  const extractEvents: RunEvent[] = [];
+  let entitiesResult: { value: EntitiesOutput; outputTokens: number };
+  try {
+    entitiesResult = await parseWithRetry({
+      llm, model, baseMessages: messages_extract, opts,
+      schema: EntitiesOutputSchema,
+      maxRetries: opts.structuredRetries ?? 1,
+      callSite: "ingest.entities",
+      signal,
+      onEvent: (ev) => extractEvents.push(ev),
+    });
+    yield { kind: "tool_result", ok: true, preview: `${entitiesResult.value.entities.length} entities` };
+  } catch (e) {
+    if (signal.aborted || (e as Error).name === "AbortError") return;
+    yield { kind: "tool_result", ok: false, preview: (e as Error).message };
+    for (const ev of extractEvents) yield ev;
+    yield { kind: "error", message: `ingest: entity extraction failed — ${(e as Error).message}` };
+    yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
+    return;
+  }
+  for (const ev of extractEvents) yield ev;
+  if (signal.aborted) return;
+
+  // === Per-entity top-K retrieval =======================================
   let existingPages: Map<string, string>;
+  const retrievalDetails: string[] = [];
   if (similarity) {
     await similarity.loadCache(domainRoot, vaultTools);
-    const annotations = cachedAnnotations ?? parseIndexAnnotations(indexContent);
-    const seedPaths = await similarity.selectRelevant(sourceContent, annotations, existingPaths);
+    const { results: entityMap, allFailed } = await similarity.selectByEntities(
+      entitiesResult.value.entities, annotations, nonMetaPaths,
+    );
 
-    // Build graph from all pages, BFS-expand from similarity seeds for full coverage
-    const allPages = await vaultTools.readAll(nonMetaPaths);
-    const { graph } = graphCache.get(domain.id, allPages);
-    const seedIds = seedPaths.map((p) => pageId(p));
-    const expandedIds = bfsExpand(seedIds, graph, graphDepth);
-    existingPages = new Map([...allPages].filter(([p]) => expandedIds.has(pageId(p))));
+    if (allFailed && entitiesResult.value.entities.length > 0) {
+      yield { kind: "error", message: "ingest: per-entity retrieval failed for all entities" };
+      yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
+      return;
+    }
+
+    const union = new Set<string>();
+    for (let i = 0; i < entitiesResult.value.entities.length; i++) {
+      const e = entitiesResult.value.entities[i];
+      const key = `${e.name}::${e.type ?? ""}`;
+      const paths = entityMap.get(key) ?? [];
+      retrievalDetails.push(
+        `${i + 1}/${entitiesResult.value.entities.length} ${e.name}` +
+        `${e.type ? ` (${e.type})` : ""} → ${paths.length ? paths.join(", ") : "—"}`,
+      );
+      for (const p of paths) union.add(p);
+    }
 
     yield {
       kind: "info_text",
       icon: similarity.config.mode === "embedding" ? "🔍" : "📋",
-      summary: `${existingPages.size}/${nonMetaPaths.length} wiki-pages loaded (${similarity.config.mode}, bfs depth ${graphDepth})`,
-      details: seedIds,
+      summary: `${union.size}/${nonMetaPaths.length} pages retrieved (${similarity.config.mode}, ${entitiesResult.value.entities.length} entities)`,
+      details: retrievalDetails,
     };
+
+    existingPages = await vaultTools.readAll([...union]);
   } else {
     existingPages = await vaultTools.readAll(nonMetaPaths);
   }
 
-  yield { kind: "assistant_text", delta: `Synthesizing wiki pages for domain "${domain.id}"...\n` };
-
-  const start = Date.now();
   const messages = buildIngestMessages(
     sourceVaultPath, sourceContent, domain, wikiVaultPath,
     existingPages, schemaContent, indexContent,
+    entitiesResult.value.entities,
   );
 
   const inputChars = messages.reduce((s, m) => s + (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length), 0);
@@ -227,9 +270,42 @@ export async function* runIngest(
     }
   }
 
+  // === Delete loop (merge cleanup) ======================================
+  const deletes = parseResult.value.deletes ?? [];
+  const threshold = opts.mergeDeleteWarnThreshold ?? 5;
+  if (deletes.length > threshold) {
+    yield {
+      kind: "info_text",
+      icon: "⚠️",
+      summary: `Large merge: ${deletes.length} deletions`,
+      details: deletes.map((d) => d.path),
+    };
+  }
+
+  const deletedPaths: string[] = [];
+  for (const d of deletes) {
+    if (!d.path.startsWith(wikiVaultPath + "/")) {
+      yield { kind: "tool_use", name: "Delete", input: { path: d.path } };
+      yield { kind: "tool_result", ok: false, preview: `outside wiki folder (${wikiVaultPath})` };
+      continue;
+    }
+    yield { kind: "tool_use", name: "Delete", input: { path: d.path } };
+    try {
+      await vaultTools.remove(d.path);
+      try { await removeIndexAnnotation(vaultTools, wikiVaultPath, pageId(d.path)); } catch { /* non-critical */ }
+      deletedPaths.push(d.path);
+      const relPath = d.path.slice(wikiVaultPath.length + 1);
+      logEntries.push({ path: relPath, action: "УДАЛЕНА" });
+      yield { kind: "tool_result", ok: true };
+    } catch (e) {
+      yield { kind: "tool_result", ok: false, preview: (e as Error).message };
+    }
+  }
+
   const createdCount = logEntries.filter(e => e.action === "СОЗДАНА").length;
   const updatedCount = logEntries.filter(e => e.action === "ОБНОВЛЕНА").length;
-  const resultText = buildIngestSummary(domain.id, sourceVaultPath, createdCount, updatedCount, pages.length);
+  const mergedCount  = logEntries.filter(e => e.action === "УДАЛЕНА").length;
+  const resultText = buildIngestSummary(domain.id, sourceVaultPath, createdCount, updatedCount, mergedCount, pages.length);
   yield { kind: "assistant_text", delta: resultText };
 
   const delta = parseResult.value.entity_types_delta;
@@ -238,19 +314,26 @@ export async function* runIngest(
     yield { kind: "domain_updated", domainId: domain.id, patch: { entity_types: merged } };
   }
 
-  if (written.length > 0) {
-    try {
-      await appendWikiLog(vaultTools, domainRoot, domain.id, {
-        op: "ingest",
-        sourcePath: sourceVaultPath,
-        entries: logEntries,
-        outputTokens,
-      });
-    } catch { /* non-critical */ }
+  const deletedStems = new Set(deletedPaths.map((p) => p.split("/").pop()!.replace(/\.md$/, "")));
+
+  if (written.length > 0 || deletedPaths.length > 0) {
+    if (logEntries.length > 0) {
+      try {
+        await appendWikiLog(vaultTools, domainRoot, domain.id, {
+          op: "ingest",
+          sourcePath: sourceVaultPath,
+          entries: logEntries,
+          outputTokens,
+        });
+      } catch { /* non-critical */ }
+    }
 
     const backlinkToday = new Date().toISOString().slice(0, 10);
     const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
-    const existingArticles = parseWikiArticlesFromFm(sourceContent);
+    const existingArticles = parseWikiArticlesFromFm(sourceContent).filter((link) => {
+      const stem = link.replace(/^\[\[/, "").replace(/\]\]$/, "");
+      return !deletedStems.has(stem);
+    });
     const writtenLinks = written.map((p) => `[[${p.split("/").pop()!.replace(/\.md$/, "")}]]`);
     const mergedArticles = [...new Set([...existingArticles, ...writtenLinks])];
     const updatedSource = upsertRawFrontmatter(sourceContent, {
@@ -290,22 +373,20 @@ function buildIngestSummary(
   sourcePath: string,
   createdCount: number,
   updatedCount: number,
+  mergedCount: number,
   total: number,
 ): string {
   const src = sourcePath.split("/").pop() ?? sourcePath;
-  const totalWritten = createdCount + updatedCount;
-  if (totalWritten === 0) {
+  const totalActed = createdCount + updatedCount + mergedCount;
+  if (totalActed === 0) {
     return `Источник «${src}» обработан — новых или изменённых страниц нет.`;
   }
-  const skipped = total - totalWritten;
-  let countStr: string;
-  if (createdCount > 0 && updatedCount > 0) {
-    countStr = `создано ${createdCount}, обновлено ${updatedCount}`;
-  } else if (createdCount > 0) {
-    countStr = `создано ${createdCount} стр.`;
-  } else {
-    countStr = `обновлено ${updatedCount} стр.`;
-  }
+  const parts: string[] = [];
+  if (createdCount > 0) parts.push(`создано ${createdCount}`);
+  if (updatedCount > 0) parts.push(`обновлено ${updatedCount}`);
+  if (mergedCount  > 0) parts.push(`объединено ${mergedCount}`);
+  const countStr = parts.length === 1 ? `${parts[0]} стр.` : parts.join(", ");
+  const skipped = total - (createdCount + updatedCount);
   const errStr = skipped > 0 ? `, ошибок ${skipped}` : "";
   return `Источник «${src}» → домен «${domainId}»: ${countStr}${errStr}`;
 }
@@ -427,6 +508,24 @@ export function buildEntityTypesBlock(domain: DomainEntry, wikiVaultPath: string
   }).join("\n\n");
 }
 
+function buildExtractMessages(
+  sourcePath: string,
+  sourceContent: string,
+  domain: DomainEntry,
+): OpenAI.Chat.ChatCompletionMessageParam[] {
+  const entityTypesBlock = buildEntityTypesBlock(domain, "");
+  const langNotes = domain.language_notes ? `Языковые правила: ${domain.language_notes}` : "";
+  const systemContent = render(ingestEntitiesTemplate, {
+    domain_name: domain.name,
+    entity_types_block: entityTypesBlock || "(не заданы)",
+    lang_notes: langNotes,
+  });
+  return [
+    { role: "system", content: systemContent },
+    { role: "user", content: `Источник: ${sourcePath}\n\n${sourceContent}` },
+  ];
+}
+
 function buildIngestMessages(
   sourcePath: string,
   sourceContent: string,
@@ -435,6 +534,7 @@ function buildIngestMessages(
   existingPages: Map<string, string>,
   schemaContent: string,
   indexContent: string,
+  entities: ExtractedEntity[],
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const existing = existingPages.size > 0
     ? [...existingPages.entries()].map(([p, c]) => `${p}:\n${c}`).join("\n\n")
@@ -455,6 +555,21 @@ function buildIngestMessages(
     source_stem: sourcePath.split("/").pop()!.replace(/\.md$/, ""),
   });
 
+  const existingPathSet = new Set(existingPages.keys());
+  const entityLines = entities.map((e) => {
+    const matching = [...existingPathSet].filter((p) => {
+      const stem = p.split("/").pop()!.replace(/\.md$/, "");
+      return stem.toLowerCase() === e.name.toLowerCase();
+    });
+    const head = `- ${e.name}${e.type ? ` (${e.type})` : ""}`;
+    const snippet = e.context_snippet ? ` — ${e.context_snippet}` : "";
+    const tail = ` [existing: ${matching.length > 0 ? matching.join(", ") : "—"}]`;
+    return head + snippet + tail;
+  });
+  const entitiesBlock = entityLines.length > 0
+    ? `\nИзвлечённые сущности:\n${entityLines.join("\n")}\n`
+    : "";
+
   return [
     { role: "system", content: systemContent },
     {
@@ -467,6 +582,7 @@ function buildIngestMessages(
         sourceContent,
         ``,
         `Существующие wiki-страницы:\n${existing}`,
+        entitiesBlock,
         indexContent ? `\nИндекс wiki (_index.md):\n${indexContent}` : "",
       ].filter(Boolean).join("\n"),
     },

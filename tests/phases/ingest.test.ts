@@ -16,15 +16,17 @@ function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
   };
 }
 
-function makeLlm(responseText: string): LlmClient {
-  const fakeStream = {
-    [Symbol.asyncIterator]: async function* () {
-      yield { choices: [{ delta: { content: responseText } }] };
-    },
-  };
-  return {
-    chat: { completions: { create: vi.fn().mockResolvedValue(fakeStream) } },
-  } as unknown as LlmClient;
+function makeLlm(responses: string | string[]): LlmClient {
+  const queue = Array.isArray(responses) ? [...responses] : [responses];
+  const create = vi.fn().mockImplementation(async () => {
+    const text = queue.length > 1 ? queue.shift()! : queue[0];
+    return {
+      [Symbol.asyncIterator]: async function* () {
+        yield { choices: [{ delta: { content: text } }] };
+      },
+    };
+  });
+  return { chat: { completions: { create } } } as unknown as LlmClient;
 }
 
 async function collect<T>(gen: AsyncGenerator<T>): Promise<T[]> {
@@ -65,15 +67,18 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify({
-      reasoning: "Extracted Entity.",
-      pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact." }],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "Entity" }] }),
+      JSON.stringify({
+        reasoning: "Extracted Entity.",
+        pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact." }],
+      }),
+    ]);
     const events = await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
         vt,
-        makeLlm(llmResponse),
+        llm,
         "llama3.2",
         [domain],
         VAULT_ROOT,
@@ -91,15 +96,18 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify({
-      reasoning: "Extracted Entity.",
-      pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity" }],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "Entity" }] }),
+      JSON.stringify({
+        reasoning: "Extracted Entity.",
+        pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity" }],
+      }),
+    ]);
     const events = await collect(
       runIngest(
         [`${VAULT_ROOT}/ИИ/subfolder/file.md`],
         vt,
-        makeLlm(llmResponse),
+        llm,
         "llama3.2",
         [domainWithoutPath],
         VAULT_ROOT,
@@ -118,15 +126,18 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify({
-      reasoning: "Extracted Entity.",
-      pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity" }],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "Entity" }] }),
+      JSON.stringify({
+        reasoning: "Extracted Entity.",
+        pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity" }],
+      }),
+    ]);
     const events = await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
         vt,
-        makeLlm(llmResponse),
+        llm,
         "llama3.2",
         [domain],
         VAULT_ROOT,
@@ -142,11 +153,15 @@ describe("runIngest", () => {
   it("yields result with count=0 when LLM returns empty array", async () => {
     const adapter = mockAdapter({ read: vi.fn().mockResolvedValue("content") });
     const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [] }),
+      JSON.stringify({ reasoning: "nothing to extract", pages: [] }),
+    ]);
     const events = await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
         vt,
-        makeLlm(JSON.stringify({ reasoning: "nothing to extract", pages: [] })),
+        llm,
         "llama3.2",
         [domain],
         VAULT_ROOT,
@@ -164,15 +179,18 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify({
-      reasoning: "Extracted Entity.",
-      pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact." }],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "Entity" }] }),
+      JSON.stringify({
+        reasoning: "Extracted Entity.",
+        pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact." }],
+      }),
+    ]);
     await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
         vt,
-        makeLlm(llmResponse),
+        llm,
         "llama3.2",
         [domain],
         VAULT_ROOT,
@@ -198,15 +216,18 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify({
-      reasoning: "Extracted New.",
-      pages: [{ path: "!Wiki/work/entities/New.md", content: "# New" }],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "New" }] }),
+      JSON.stringify({
+        reasoning: "Extracted New.",
+        pages: [{ path: "!Wiki/work/entities/New.md", content: "# New" }],
+      }),
+    ]);
     await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
         vt,
-        makeLlm(llmResponse),
+        llm,
         "llama3.2",
         [domain],
         VAULT_ROOT,
@@ -229,11 +250,15 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [] }),
+      JSON.stringify({ reasoning: "nothing to extract", pages: [] }),
+    ]);
     await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
         vt,
-        makeLlm(JSON.stringify({ reasoning: "nothing to extract", pages: [] })),
+        llm,
         "llama3.2",
         [domain],
         VAULT_ROOT,
@@ -252,15 +277,18 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify({
-      reasoning: "Extracted Entity.",
-      pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact.", annotation: "описание сущности" }],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "Entity" }] }),
+      JSON.stringify({
+        reasoning: "Extracted Entity.",
+        pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact.", annotation: "описание сущности" }],
+      }),
+    ]);
     await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
         vt,
-        makeLlm(llmResponse),
+        llm,
         "llama3.2",
         [domain],
         VAULT_ROOT,
@@ -285,15 +313,18 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify({
-      reasoning: "Extracted Entity.",
-      pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity" }],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "Entity" }] }),
+      JSON.stringify({
+        reasoning: "Extracted Entity.",
+        pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity" }],
+      }),
+    ]);
     const events = await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
         vt,
-        makeLlm(llmResponse),
+        llm,
         "llama3.2",
         [domain],
         VAULT_ROOT,
@@ -328,13 +359,16 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llm = makeLlm(JSON.stringify({
-      reasoning: "x",
-      pages: [
-        { path: "!Wiki/work/компоненты/existing.md", content: "---\nwiki_status: mature\n---\n# Existing", annotation: "desc" },
-        { path: "!Wiki/work/компоненты/new-page.md", content: "---\nwiki_status: stub\n---\n# New", annotation: "new" },
-      ],
-    }));
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "existing" }, { name: "new-page" }] }),
+      JSON.stringify({
+        reasoning: "x",
+        pages: [
+          { path: "!Wiki/work/компоненты/existing.md", content: "---\nwiki_status: mature\n---\n# Existing", annotation: "desc" },
+          { path: "!Wiki/work/компоненты/new-page.md", content: "---\nwiki_status: stub\n---\n# New", annotation: "new" },
+        ],
+      }),
+    ]);
     await collect(runIngest([`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "model", [domain], VAULT_ROOT,
       new AbortController().signal));
     expect(logContent).toContain("ОБНОВЛЕНА: компоненты/existing.md (developing→mature)");
@@ -350,13 +384,16 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify({
-      reasoning: "x",
-      pages: [{ path: "!Wiki/work/entities/New.md", content: "# New" }],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "New" }] }),
+      JSON.stringify({
+        reasoning: "x",
+        pages: [{ path: "!Wiki/work/entities/New.md", content: "# New" }],
+      }),
+    ]);
     const events = await collect(
       runIngest(
-        [`${VAULT_ROOT}/Sources/doc.md`], vt, makeLlm(llmResponse), "llama3.2",
+        [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "llama3.2",
         [domain], VAULT_ROOT, new AbortController().signal,
       ),
     );
@@ -375,16 +412,19 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify({
-      reasoning: "x",
-      pages: [
-        { path: "!Wiki/work/entities/A.md", content: "# A" },
-        { path: "!Wiki/work/entities/B.md", content: "# B" },
-      ],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "A" }, { name: "B" }] }),
+      JSON.stringify({
+        reasoning: "x",
+        pages: [
+          { path: "!Wiki/work/entities/A.md", content: "# A" },
+          { path: "!Wiki/work/entities/B.md", content: "# B" },
+        ],
+      }),
+    ]);
     const events = await collect(
       runIngest(
-        [`${VAULT_ROOT}/Sources/doc.md`], vt, makeLlm(llmResponse), "llama3.2",
+        [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "llama3.2",
         [domain], VAULT_ROOT, new AbortController().signal,
       ),
     );
@@ -403,13 +443,16 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify({
-      reasoning: "x",
-      pages: [{ path: "!Wiki/work/entities/Existing.md", content: "# Updated" }],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "Existing" }] }),
+      JSON.stringify({
+        reasoning: "x",
+        pages: [{ path: "!Wiki/work/entities/Existing.md", content: "# Updated" }],
+      }),
+    ]);
     const events = await collect(
       runIngest(
-        [`${VAULT_ROOT}/Sources/doc.md`], vt, makeLlm(llmResponse), "llama3.2",
+        [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "llama3.2",
         [domain], VAULT_ROOT, new AbortController().signal,
       ),
     );
@@ -428,16 +471,19 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify({
-      reasoning: "x",
-      pages: [
-        { path: "!Wiki/work/entities/New.md", content: "# New" },
-        { path: "!Wiki/work/entities/Existing.md", content: "# Updated" },
-      ],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "New" }, { name: "Existing" }] }),
+      JSON.stringify({
+        reasoning: "x",
+        pages: [
+          { path: "!Wiki/work/entities/New.md", content: "# New" },
+          { path: "!Wiki/work/entities/Existing.md", content: "# Updated" },
+        ],
+      }),
+    ]);
     const events = await collect(
       runIngest(
-        [`${VAULT_ROOT}/Sources/doc.md`], vt, makeLlm(llmResponse), "llama3.2",
+        [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "llama3.2",
         [domain], VAULT_ROOT, new AbortController().signal,
       ),
     );
@@ -455,13 +501,16 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify({
-      reasoning: "x",
-      pages: [{ path: "!Wiki/work/entities/Existing.md", content: "# Updated content" }],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "Existing" }] }),
+      JSON.stringify({
+        reasoning: "x",
+        pages: [{ path: "!Wiki/work/entities/Existing.md", content: "# Updated content" }],
+      }),
+    ]);
     const events = await collect(
       runIngest(
-        [`${VAULT_ROOT}/Sources/doc.md`], vt, makeLlm(llmResponse), "llama3.2",
+        [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "llama3.2",
         [domain], VAULT_ROOT, new AbortController().signal,
       ),
     );
@@ -481,7 +530,10 @@ describe("runIngest", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llm = makeLlm(JSON.stringify({ reasoning: "x", pages: [] }));
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [] }),
+      JSON.stringify({ reasoning: "x", pages: [] }),
+    ]);
     await collect(runIngest([`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "model", [domain], VAULT_ROOT,
       new AbortController().signal));
     expect(schemaReadPath).toContain("_config/_wiki_schema.md");
@@ -537,15 +589,18 @@ describe("runIngest with WikiPagesOutputSchema format", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify({
-      reasoning: "Extracted one entity.",
-      pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact." }],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "Entity" }] }),
+      JSON.stringify({
+        reasoning: "Extracted one entity.",
+        pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact." }],
+      }),
+    ]);
     const events = await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
         vt,
-        makeLlm(llmResponse),
+        llm,
         "llama3.2",
         [domain],
         VAULT_ROOT,
@@ -562,15 +617,18 @@ describe("runIngest with WikiPagesOutputSchema format", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify({
-      reasoning: "Two entities found.",
-      pages: [{ path: "!Wiki/work/entities/A.md", content: "# A" }],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "A" }] }),
+      JSON.stringify({
+        reasoning: "Two entities found.",
+        pages: [{ path: "!Wiki/work/entities/A.md", content: "# A" }],
+      }),
+    ]);
     const events = await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
         vt,
-        makeLlm(llmResponse),
+        llm,
         "llama3.2",
         [domain],
         VAULT_ROOT,
@@ -589,11 +647,15 @@ describe("runIngest with WikiPagesOutputSchema format", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "X" }] }),
+      "not json at all",
+    ]);
     const events = await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
         vt,
-        makeLlm("not json at all"),
+        llm,
         "llama3.2",
         [domain],
         VAULT_ROOT,
@@ -617,15 +679,18 @@ describe("runIngest path validation", () => {
     const vt = new VaultTools(adapter, VAULT_ROOT);
     // Domain wiki_folder "work" → wikiVaultPath = "!Wiki/work"
     // Invalid: domain appears twice in path
-    const llmResponse = JSON.stringify({
-      reasoning: "Extracted Page.",
-      pages: [{ path: "!Wiki/work/work/entity/Page.md", content: "# Page" }],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "Page" }] }),
+      JSON.stringify({
+        reasoning: "Extracted Page.",
+        pages: [{ path: "!Wiki/work/work/entity/Page.md", content: "# Page" }],
+      }),
+    ]);
     const events = await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
         vt,
-        makeLlm(llmResponse),
+        llm,
         "llama3.2",
         [domain],
         VAULT_ROOT,
@@ -645,13 +710,14 @@ describe("runIngest path validation", () => {
   });
 
   it("retries with feedback when invalid paths returned first", async () => {
-    // First call returns invalid path; second call (retry) returns corrected path
+    // Call #1: entities. Call #2: write with bad path. Call #3: path retry.
     const adapter = mockAdapter({
       read: vi.fn().mockResolvedValue("source text"),
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
 
+    const entitiesResponse = JSON.stringify({ reasoning: "entities", entities: [{ name: "Page" }] });
     const badResponse = JSON.stringify({
       reasoning: "Extracted Page with bad path.",
       pages: [{ path: "!Wiki/work/work/entity/Page.md", content: "# Page bad" }],
@@ -666,7 +732,10 @@ describe("runIngest path validation", () => {
         completions: {
           create: vi.fn().mockImplementation(() => {
             callCount++;
-            const text = callCount === 1 ? badResponse : goodResponse;
+            const text =
+              callCount === 1 ? entitiesResponse :
+              callCount === 2 ? badResponse :
+              goodResponse;
             const fakeStream = {
               [Symbol.asyncIterator]: async function* () {
                 yield { choices: [{ delta: { content: text } }] };
@@ -695,8 +764,8 @@ describe("runIngest path validation", () => {
       ([path]: [string]) => path === "!Wiki/work/entity/Page.md",
     );
     expect(writeCall).toBeDefined();
-    // LLM called twice (original + retry)
-    expect(callCount).toBe(2);
+    // LLM called three times now (entities + write + retry)
+    expect(callCount).toBe(3);
   });
 
   it("does not retry twice (retry flag prevents second retry)", async () => {
@@ -706,6 +775,7 @@ describe("runIngest path validation", () => {
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
 
+    const entitiesResponse = JSON.stringify({ reasoning: "entities", entities: [{ name: "Page" }] });
     const badResponseFirst = JSON.stringify({
       reasoning: "Extracted Page with bad path.",
       pages: [{ path: "!Wiki/work/work/entity/Page.md", content: "# Page bad" }],
@@ -720,7 +790,10 @@ describe("runIngest path validation", () => {
         completions: {
           create: vi.fn().mockImplementation(() => {
             callCount++;
-            const text = callCount === 1 ? badResponseFirst : badResponseRetry;
+            const text =
+              callCount === 1 ? entitiesResponse :
+              callCount === 2 ? badResponseFirst :
+              badResponseRetry;
             const fakeStream = {
               [Symbol.asyncIterator]: async function* () {
                 yield { choices: [{ delta: { content: text } }] };
@@ -744,8 +817,8 @@ describe("runIngest path validation", () => {
       ),
     );
 
-    // Should call LLM at most twice (original + one retry)
-    expect(callCount).toBeLessThanOrEqual(2);
+    // Should call LLM at most three times (entities + write + one retry)
+    expect(callCount).toBeLessThanOrEqual(3);
   });
 });
 
@@ -765,17 +838,20 @@ describe("runIngest — entity_types_delta", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify({
-      reasoning: "Found org type",
-      pages: [],
-      entity_types_delta: [
-        { type: "org", description: "Organisation", extraction_cues: ["company"] },
-      ],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [] }),
+      JSON.stringify({
+        reasoning: "Found org type",
+        pages: [],
+        entity_types_delta: [
+          { type: "org", description: "Organisation", extraction_cues: ["company"] },
+        ],
+      }),
+    ]);
     const events = await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
-        vt, makeLlm(llmResponse), "llama3.2",
+        vt, llm, "llama3.2",
         [domainWithTypes], VAULT_ROOT, new AbortController().signal,
       ),
     );
@@ -793,14 +869,14 @@ describe("runIngest — entity_types_delta", () => {
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llmResponse = JSON.stringify({
-      reasoning: "No new types",
-      pages: [],
-    });
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [] }),
+      JSON.stringify({ reasoning: "No new types", pages: [] }),
+    ]);
     const events = await collect(
       runIngest(
         [`${VAULT_ROOT}/Sources/doc.md`],
-        vt, makeLlm(llmResponse), "llama3.2",
+        vt, llm, "llama3.2",
         [domain], VAULT_ROOT, new AbortController().signal,
       ),
     );
@@ -828,5 +904,266 @@ describe("WikiPagesOutputSchema — entity_types_delta", () => {
     const result = WikiPagesOutputSchema.safeParse(input);
     expect(result.success).toBe(true);
     expect(result.data?.entity_types_delta).toBeUndefined();
+  });
+});
+
+describe("runIngest — entity-driven flow", () => {
+  const VAULT_ROOT = "/vaults/Work";
+  const domain: DomainEntry = {
+    id: "work", name: "Work", wiki_folder: "work", source_paths: ["Sources/"],
+  };
+
+  it("calls LLM twice: entities then pages", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "found Foo", entities: [{ name: "Foo" }] }),
+      JSON.stringify({ reasoning: "new page", pages: [{ path: "!Wiki/work/entities/Foo.md", content: "# Foo" }] }),
+    ]);
+
+    await collect(runIngest(
+      [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [domain], VAULT_ROOT,
+      new AbortController().signal,
+    ));
+
+    expect(llm.chat.completions.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("halts when entity extraction LLM returns invalid JSON", async () => {
+    const adapter = mockAdapter({ read: vi.fn().mockResolvedValue("source") });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm("not json");
+
+    const events = await collect(runIngest(
+      [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [domain], VAULT_ROOT,
+      new AbortController().signal,
+    ));
+
+    expect(events.some((e: any) =>
+      e.kind === "structural_error" && e.callSite === "ingest.entities",
+    )).toBe(true);
+    expect((adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([p]: [string]) => p.startsWith("!Wiki/work/entities/"),
+    )).toBeUndefined();
+  });
+
+  it("entity with empty top-K still goes to LLM #2 as create signal", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p === "Sources/doc.md") return "source";
+        throw new Error("not found");
+      }),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "novel", entities: [{ name: "Brand New" }] }),
+      JSON.stringify({ reasoning: "create", pages: [{ path: "!Wiki/work/entities/BrandNew.md", content: "# BrandNew" }] }),
+    ]);
+
+    await collect(runIngest(
+      [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [domain], VAULT_ROOT,
+      new AbortController().signal,
+    ));
+
+    expect(adapter.write).toHaveBeenCalledWith("!Wiki/work/entities/BrandNew.md", "# BrandNew");
+  });
+
+  it("processes deletes: vault.remove + removeIndexAnnotation called", async () => {
+    let indexContent = "# Wiki Index\n\n## entities\n- [[Old]] entities/Old.md — to delete\n";
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p === "Sources/doc.md") return "source";
+        if (p.endsWith("_index.md")) return indexContent;
+        if (p === "!Wiki/work/entities/Old.md") return "# Old";
+        throw new Error("not found");
+      }),
+      write: vi.fn().mockImplementation(async (p: string, c: string) => {
+        if (p.endsWith("_index.md")) indexContent = c;
+      }),
+      remove: vi.fn().mockResolvedValue(undefined),
+      list: vi.fn().mockResolvedValue({
+        files: ["!Wiki/work/entities/Old.md"], folders: [],
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "merge", entities: [{ name: "New" }] }),
+      JSON.stringify({
+        reasoning: "merge Old → New",
+        pages: [{ path: "!Wiki/work/entities/New.md", content: "# New" }],
+        deletes: [{ path: "!Wiki/work/entities/Old.md" }],
+      }),
+    ]);
+
+    await collect(runIngest(
+      [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [domain], VAULT_ROOT,
+      new AbortController().signal,
+    ));
+
+    expect(adapter.remove).toHaveBeenCalledWith("!Wiki/work/entities/Old.md");
+    expect(indexContent).not.toContain("[[Old]]");
+  });
+
+  it("result text shows 'создано C, обновлено U, объединено M'", async () => {
+    const existing = new Set([
+      "!Wiki/work/entities/Existing.md",
+      "!Wiki/work/entities/Old.md",
+    ]);
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p === "Sources/doc.md") return "source";
+        if (existing.has(p)) return "---\nwiki_status: developing\n---\n# X";
+        throw new Error("not found");
+      }),
+      remove: vi.fn().mockResolvedValue(undefined),
+      list: vi.fn().mockResolvedValue({ files: [...existing], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "x", entities: [{ name: "Existing" }, { name: "New" }] }),
+      JSON.stringify({
+        reasoning: "merge",
+        pages: [
+          { path: "!Wiki/work/entities/New.md", content: "---\nwiki_status: stub\n---\n# New" },
+          { path: "!Wiki/work/entities/Existing.md", content: "---\nwiki_status: mature\n---\n# Existing" },
+        ],
+        deletes: [{ path: "!Wiki/work/entities/Old.md" }],
+      }),
+    ]);
+
+    const events = await collect(runIngest(
+      [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [domain], VAULT_ROOT,
+      new AbortController().signal,
+    ));
+    const result = events.find((e: any) => e.kind === "result") as any;
+    expect(result?.text).toMatch(/создано 1, обновлено 1, объединено 1/);
+  });
+
+  it("emits Large merge warning when deletes.length > threshold", async () => {
+    const paths = Array.from({ length: 6 }, (_, i) => `!Wiki/work/entities/Old${i}.md`);
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p === "Sources/doc.md") return "source";
+        if (paths.includes(p)) return "# old";
+        throw new Error("not found");
+      }),
+      remove: vi.fn().mockResolvedValue(undefined),
+      list: vi.fn().mockResolvedValue({ files: paths, folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "x", entities: [{ name: "Bundle" }] }),
+      JSON.stringify({
+        reasoning: "big merge",
+        pages: [{ path: "!Wiki/work/entities/Bundle.md", content: "# Bundle" }],
+        deletes: paths.map((p) => ({ path: p })),
+      }),
+    ]);
+
+    const events = await collect(runIngest(
+      [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [domain], VAULT_ROOT,
+      new AbortController().signal,
+    ));
+    const warn = events.find(
+      (e: any) => e.kind === "info_text" && (e.summary as string)?.startsWith("Large merge"),
+    );
+    expect(warn).toBeDefined();
+  });
+
+  it("rejects deletes path outside wiki folder", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p === "Sources/doc.md") return "source";
+        throw new Error("not found");
+      }),
+      remove: vi.fn().mockResolvedValue(undefined),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "x", entities: [{ name: "X" }] }),
+      JSON.stringify({
+        reasoning: "bad",
+        pages: [{ path: "!Wiki/work/entities/X.md", content: "# X" }],
+        deletes: [{ path: "/etc/passwd" }],
+      }),
+    ]);
+
+    const events = await collect(runIngest(
+      [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [domain], VAULT_ROOT,
+      new AbortController().signal,
+    ));
+    expect(adapter.remove).not.toHaveBeenCalledWith("/etc/passwd");
+    const rej = events.find(
+      (e: any) => e.kind === "tool_result" && e.ok === false
+        && (e.preview as string)?.includes("outside wiki folder"),
+    );
+    expect(rej).toBeDefined();
+  });
+
+  it("source backlinks drop deleted page stems", async () => {
+    const existingFm =
+      '---\nwiki_articles:\n  - "[[Old]]"\n  - "[[Other]]"\n---\nsource';
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p === "Sources/doc.md") return existingFm;
+        if (p === "!Wiki/work/entities/Old.md") return "# old";
+        throw new Error("not found");
+      }),
+      remove: vi.fn().mockResolvedValue(undefined),
+      list: vi.fn().mockResolvedValue({
+        files: ["!Wiki/work/entities/Old.md"], folders: [],
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "x", entities: [{ name: "New" }] }),
+      JSON.stringify({
+        reasoning: "merge",
+        pages: [{ path: "!Wiki/work/entities/New.md", content: "# New" }],
+        deletes: [{ path: "!Wiki/work/entities/Old.md" }],
+      }),
+    ]);
+
+    await collect(runIngest(
+      [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [domain], VAULT_ROOT,
+      new AbortController().signal,
+    ));
+
+    const sourceWrite = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([p]: [string]) => p === "Sources/doc.md",
+    );
+    expect(sourceWrite).toBeDefined();
+    const updated = sourceWrite![1] as string;
+    expect(updated).not.toContain("[[Old]]");
+    expect(updated).toContain("[[Other]]");
+    expect(updated).toContain("[[New]]");
+  });
+
+  it("BFS not invoked: graphCache.get is never called from ingest", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "x", entities: [{ name: "X" }] }),
+      JSON.stringify({ reasoning: "y", pages: [] }),
+    ]);
+
+    const { graphCache } = await import("../../src/wiki-graph-cache");
+    const spy = vi.spyOn(graphCache, "get");
+
+    await collect(runIngest(
+      [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [domain], VAULT_ROOT,
+      new AbortController().signal,
+    ));
+
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });
