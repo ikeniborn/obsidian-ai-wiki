@@ -201,7 +201,6 @@ describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
     expect(results.get("neural network::")).toEqual(["!Wiki/d/x/Alpha.md"]);
   });
 
-  // @lat: [[tests#Stop Rules#Halt on all-entity retrieval failure]]
   it("allFailed=true when annotations map is empty (no candidates at all)", async () => {
     (globalThis as unknown as { fetch: unknown }).fetch = vi.fn().mockRejectedValue(new Error("dead"));
     const svc = new PageSimilarityService({

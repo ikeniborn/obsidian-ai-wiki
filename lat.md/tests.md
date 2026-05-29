@@ -18,10 +18,6 @@ The `EntitiesOutputSchema` accepts `{reasoning, entities: [{name}]}` — `name` 
 
 The `EntitiesOutputSchema` rejects an `entities` array containing more than 50 items.
 
-### Entity extraction halt on parse failure
-
-When `parseWithRetry` exhausts retries on the entity call, ingest yields an error result and writes nothing.
-
 ## Per-Entity Retrieval
 
 Tests that validate `PageSimilarityService.selectByEntities` returns per-entity top-K paths.

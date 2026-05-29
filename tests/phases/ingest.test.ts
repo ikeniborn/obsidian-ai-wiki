@@ -932,8 +932,35 @@ describe("runIngest — entity-driven flow", () => {
     expect(llm.chat.completions.create).toHaveBeenCalledTimes(2);
   });
 
+  // @lat: [[tests#Stop Rules#Halt on all-entity retrieval failure]]
+  it("halts when similarity.selectByEntities reports allFailed with non-empty entities", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm(JSON.stringify({ reasoning: "", entities: [{ name: "Foo" }] }));
+    const similarity = {
+      config: { mode: "embedding", topK: 5 },
+      loadCache: vi.fn().mockResolvedValue(undefined),
+      selectByEntities: vi.fn().mockResolvedValue({ results: new Map(), allFailed: true }),
+    } as unknown as import("../../src/page-similarity").PageSimilarityService;
+
+    const events = await collect(runIngest(
+      [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [domain], VAULT_ROOT,
+      new AbortController().signal, {}, similarity,
+    ));
+
+    expect(llm.chat.completions.create).toHaveBeenCalledTimes(1);
+    expect(events.some((e: any) =>
+      e.kind === "error" && /per-entity retrieval failed/.test(e.message),
+    )).toBe(true);
+    expect((adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([p]: [string]) => p.startsWith("!Wiki/work/entities/"),
+    )).toBeUndefined();
+  });
+
   // @lat: [[tests#Stop Rules#Halt on entity extraction failure]]
-  // @lat: [[tests#Entity Extraction#Entity extraction halt on parse failure]]
   it("halts when entity extraction LLM returns invalid JSON", async () => {
     const adapter = mockAdapter({ read: vi.fn().mockResolvedValue("source") });
     const vt = new VaultTools(adapter, VAULT_ROOT);
