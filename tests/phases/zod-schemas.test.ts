@@ -71,30 +71,30 @@ describe("SeedsSchema", () => {
 
 describe("WikiPageSchema", () => {
   it("accepts page with all fields", () => {
-    const result = WikiPageSchema.safeParse({ path: "a/b.md", content: "# B", annotation: "desc" });
+    const result = WikiPageSchema.safeParse({ path: "a/wiki_d_b.md", content: "# B", annotation: "desc" });
     expect(result.success).toBe(true);
   });
   it("accepts page without annotation", () => {
-    const result = WikiPageSchema.safeParse({ path: "a/b.md", content: "# B" });
+    const result = WikiPageSchema.safeParse({ path: "a/wiki_d_b.md", content: "# B" });
     expect(result.success).toBe(true);
   });
   it("rejects page missing content", () => {
-    const result = WikiPageSchema.safeParse({ path: "a/b.md" });
+    const result = WikiPageSchema.safeParse({ path: "a/wiki_d_b.md" });
     expect(result.success).toBe(false);
   });
   it("accepts path-style links in wiki_sources frontmatter field", () => {
     const content = '---\nwiki_sources:\n  - "[[ИЛЬЯ/Здоровье/source.md]]"\nwiki_outgoing_links: []\n---\n# Page\n\nText with [[OtherPage]].';
-    const result = WikiPageSchema.safeParse({ path: "!Wiki/d/e/Page.md", content });
+    const result = WikiPageSchema.safeParse({ path: "!Wiki/d/e/wiki_d_page.md", content });
     expect(result.success).toBe(true);
   });
   it("rejects path-style wikilinks in body", () => {
     const content = '---\nwiki_sources:\n  - "[[source.md]]"\n---\n# Page\n\nSee [[folder/OtherPage]].';
-    const result = WikiPageSchema.safeParse({ path: "!Wiki/d/e/Page.md", content });
+    const result = WikiPageSchema.safeParse({ path: "!Wiki/d/e/wiki_d_page.md", content });
     expect(result.success).toBe(false);
   });
   it("rejects alias wikilinks in body", () => {
     const content = "# Page\n\nSee [[OtherPage|alias]].";
-    const result = WikiPageSchema.safeParse({ path: "!Wiki/d/e/Page.md", content });
+    const result = WikiPageSchema.safeParse({ path: "!Wiki/d/e/wiki_d_page.md", content });
     expect(result.success).toBe(false);
   });
 });
@@ -103,7 +103,7 @@ describe("WikiPagesOutputSchema", () => {
   it("accepts valid output", () => {
     const result = WikiPagesOutputSchema.safeParse({
       reasoning: "Extracted 2 entities.",
-      pages: [{ path: "!Wiki/d/e/A.md", content: "# A" }],
+      pages: [{ path: "!Wiki/d/e/wiki_d_a.md", content: "# A" }],
     });
     expect(result.success).toBe(true);
   });
@@ -122,7 +122,7 @@ describe("LintOutputSchema", () => {
     const result = LintOutputSchema.safeParse({
       reasoning: "Found 1 dead link.",
       report: "## Lint Report\n- dead link in A.md",
-      fixes: [{ path: "!Wiki/d/e/A.md", content: "# A\nFixed." }],
+      fixes: [{ path: "!Wiki/d/e/wiki_d_a.md", content: "# A\nFixed." }],
     });
     expect(result.success).toBe(true);
   });
@@ -190,8 +190,8 @@ describe("WikiPagesOutputSchema — deletes", () => {
   it("accepts optional deletes[]", () => {
     const r = WikiPagesOutputSchema.safeParse({
       reasoning: "merge",
-      pages: [{ path: "!Wiki/d/e/New.md", content: "# New" }],
-      deletes: [{ path: "!Wiki/d/e/Old.md" }],
+      pages: [{ path: "!Wiki/d/e/wiki_d_new.md", content: "# New" }],
+      deletes: [{ path: "!Wiki/d/e/wiki_d_old.md" }],
     });
     expect(r.success).toBe(true);
     expect(r.data?.deletes).toHaveLength(1);
@@ -200,7 +200,7 @@ describe("WikiPagesOutputSchema — deletes", () => {
   it("accepts response without deletes (backward compat)", () => {
     const r = WikiPagesOutputSchema.safeParse({
       reasoning: "ok",
-      pages: [{ path: "!Wiki/d/e/A.md", content: "# A" }],
+      pages: [{ path: "!Wiki/d/e/wiki_d_a.md", content: "# A" }],
     });
     expect(r.success).toBe(true);
     expect(r.data?.deletes).toBeUndefined();

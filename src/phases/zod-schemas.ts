@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GENERIC_WIKI_STEM_REGEX } from "../wiki-stem";
 
 const EntityTypeSchema = z.object({
   type: z.string().min(1),
@@ -59,6 +60,15 @@ export const WikiPageSchema = z.object({
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "WikiLink with path", path: ["content"] });
       break;
     }
+  }
+
+  const stem = val.path.split("/").pop()?.replace(/\.md$/, "") ?? "";
+  if (!GENERIC_WIKI_STEM_REGEX.test(stem)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Wiki page stem "${stem}" must match wiki_<domain>_<entity>`,
+      path: ["path"],
+    });
   }
 });
 

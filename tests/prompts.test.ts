@@ -35,3 +35,22 @@ describe("prompts/ingest.md — merge block", () => {
     expect(ingestTemplate).toMatch(/deletes/);
   });
 });
+
+describe("prompts/ingest.md — source-stem collision rule", () => {
+  it("forbids wiki page name colliding with source stem", () => {
+    expect(ingestTemplate).toMatch(/НЕ должно совпадать с именем текущего источника/);
+    expect(ingestTemplate).toContain("{{source_stem}}");
+  });
+});
+
+describe("prompts/ingest.md — wiki stem prefix mask", () => {
+  it("declares the wiki_<domain>_<entity> mask rule", () => {
+    expect(ingestTemplate).toMatch(/wiki_\{\{domain_id\}\}_<entity_slug>/);
+    expect(ingestTemplate).toContain("{{domain_id}}");
+  });
+
+  it("includes the forbidden-stems placeholder", () => {
+    expect(ingestTemplate).toContain("{{forbidden_stems_block}}");
+    expect(ingestTemplate).toMatch(/ЗАПРЕЩЁННЫЕ ИМЕНА/);
+  });
+});

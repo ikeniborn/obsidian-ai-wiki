@@ -40,7 +40,7 @@ describe("LintChatSchema", () => {
 describe("WikiPageSchema superRefine", () => {
   it("rejects alias links", () => {
     const result = WikiPageSchema.safeParse({
-      path: "Wiki/d/e/Page.md",
+      path: "Wiki/d/e/wiki_d_page.md",
       content: "# Page\n\nSee [[Other|alias]].",
     });
     expect(result.success).toBe(false);
@@ -49,7 +49,7 @@ describe("WikiPageSchema superRefine", () => {
 
   it("rejects path links", () => {
     const result = WikiPageSchema.safeParse({
-      path: "Wiki/d/e/Page.md",
+      path: "Wiki/d/e/wiki_d_page.md",
       content: "# Page\n\nSee [[folder/page]].",
     });
     expect(result.success).toBe(false);
@@ -58,8 +58,34 @@ describe("WikiPageSchema superRefine", () => {
 
   it("accepts clean content", () => {
     const result = WikiPageSchema.safeParse({
-      path: "Wiki/d/e/Page.md",
+      path: "Wiki/d/e/wiki_d_page.md",
       content: "# Page\n\nSee [[OtherPage]].",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects path stems that lack the wiki_<domain>_<entity> mask", () => {
+    const result = WikiPageSchema.safeParse({
+      path: "Wiki/d/e/NFS.md",
+      content: "# NFS\n",
+    });
+    expect(result.success).toBe(false);
+    expect(JSON.stringify(result.error)).toContain("must match wiki_<domain>_<entity>");
+  });
+
+  it("rejects path stems missing the wiki_ prefix", () => {
+    const result = WikiPageSchema.safeParse({
+      path: "Wiki/d/e/foo_d_NFS.md",
+      content: "# NFS\n",
+    });
+    expect(result.success).toBe(false);
+    expect(JSON.stringify(result.error)).toContain("must match wiki_<domain>_<entity>");
+  });
+
+  it("accepts prefixed stems with multi-part domain ids", () => {
+    const result = WikiPageSchema.safeParse({
+      path: "Wiki/work_project/e/wiki_work_project_neuralnetworks.md",
+      content: "# NeuralNetworks\n",
     });
     expect(result.success).toBe(true);
   });

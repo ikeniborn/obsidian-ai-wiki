@@ -9,6 +9,11 @@
 - CREATE: сущность не существует в wiki, упоминаний >= min_mentions_for_page
 - UPDATE: сущность существует → добавить новую информацию, НЕ удалять старую
 - SKIP: слишком мало упоминаний или информация уже есть
+- ИМЯ ФАЙЛА wiki-страницы (стем без `.md`) ОБЯЗАТЕЛЬНО имеет вид `wiki_{{domain_id}}_<entity_slug>`:
+  - `<entity_slug>` = ASCII-имя сущности в lowercase snake_case (только символы `[a-z0-9_]`, без пробелов, диакритики и заглавных букв).
+  - Пример: `wiki_{{domain_id}}_neural_networks.md`.
+- Стем wiki-страницы НЕ должен совпадать с любым именем из секции «ЗАПРЕЩЁННЫЕ ИМЕНА» — это файлы источников этого домена. Wiki описывает извлечённые сущности, а не дублирует исходные файлы.
+- Имя wiki-страницы НЕ должно совпадать с именем текущего источника `{{source_stem}}` (частный случай предыдущего правила).
 - Синтез, не копирование. Технические конфиги/SQL можно цитировать в code-блоках.
 - Путь статьи определяется типом сущности — используй точный шаблон из секции «ТИПЫ СУЩНОСТЕЙ ДОМЕНА» (выше, до блока ПРАВИЛА), подставив имя сущности вместо <EntityName>
 - Если тип сущности не определён или у домена нет entity_types → путь по умолчанию: {{wiki_path}}/entities/<EntityName>.md
@@ -21,6 +26,7 @@
 - "## Связанные концепции" — создавать только при наличии пояснительного контекста к связям
 - Для каждой страницы добавь поле "annotation" в JSON: одно предложение — описание сущности для поиска по смыслу
 {{schema_block}}
+{{forbidden_stems_block}}
 
 ПРАВИЛО ПУТЕЙ: путь каждой статьи = !Wiki/<domain>/<entity>/<Article>.md — ровно 4 сегмента.
 Нельзя: !Wiki/os/os/network/NFS.md (домен дважды), !Wiki/os/network/nfs/NFS.md (5 сегментов).
@@ -39,4 +45,4 @@
 Старые страницы будут удалены, индекс почищен, backlinks в текущем источнике обновлены автоматически.
 
 Верни ТОЛЬКО JSON-объект — никакого другого текста:
-{"reasoning":"Обоснование: какие сущности извлечены и почему","pages":[{"path":"{{wiki_path}}/entities/EntityName.md","content":"---\nwiki_sources: [\"[[{{source_stem}}]]\"]\nwiki_updated: {{today}}\nwiki_status: stub\ntags: []\nwiki_outgoing_links: []\n---\n# EntityName\n\ncontент...","annotation":"Краткое описание сущности для контекстного поиска"}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}
+{"reasoning":"Обоснование: какие сущности извлечены и почему","pages":[{"path":"{{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md","content":"---\nwiki_sources: [\"[[{{source_stem}}]]\"]\nwiki_updated: {{today}}\nwiki_status: stub\ntags: []\nwiki_outgoing_links: []\n---\n# EntityName\n\ncontент...","annotation":"Краткое описание сущности для контекстного поиска"}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}

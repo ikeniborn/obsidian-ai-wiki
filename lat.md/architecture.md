@@ -87,6 +87,14 @@ One-time migration that runs on plugin load to move `.config/` directories to `_
 
 Throws `StorageMigrationConflictError` if both `.config/` and `_config/` exist simultaneously, indicating an interrupted previous migration. See [[src/storage-migration.ts#runStorageMigration]].
 
+## Wiki Stem Mask
+
+The helper [[src/wiki-stem.ts]] centralizes the `wiki_<domain>_<entity>` filename mask used wherever a wiki page stem is generated or validated.
+
+It exposes `slugifyEntity` (NFD-normalize, ASCII-collapse, split camelCase boundaries, and lowercase), `buildWikiStem(domainId, entityName)`, `stemRegex(domainId)` for per-domain match, and the domain-agnostic `GENERIC_WIKI_STEM_REGEX` used by zod schemas. Entity slugs are always lowercase `[a-z0-9_]`.
+
+The one-shot vault migration that renames legacy unprefixed pages and rewrites all backlinks lives in [[src/migrate-wiki-prefix.ts]]; the CLI wrapper is `scripts/migrate-wiki-prefix.ts`, invoked via `npm run migrate:wiki-prefix -- <vault-root> [--apply]`. It also lowercases the entity portion of already-prefixed stems (`wiki_work_Foo` → `wiki_work_foo`) and sets `DomainEntry.pageNameVersion = 1` for idempotency.
+
 ## Run Events
 
 All operations communicate via `RunEvent` — a discriminated union emitted as an async generator stream. Events cover: LLM streaming deltas, tool calls, domain mutations, format previews, structural errors, graph stats, and phase progress.

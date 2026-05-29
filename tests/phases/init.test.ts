@@ -565,7 +565,7 @@ describe("runInitWithSources — per-file pipeline", () => {
   // Ingest returns WikiPagesOutputSchema format: { reasoning, pages }.
   // Path must start with `!Wiki/dom/`.
   function ingestPagesJson(name: string): string {
-    return JSON.stringify({ reasoning: "Extracted entities.", pages: [{ path: `!Wiki/dom/concepts/${name}.md`, content: `# ${name}\nbody` }] });
+    return JSON.stringify({ reasoning: "Extracted entities.", pages: [{ path: `!Wiki/dom/concepts/wiki_dom_${name}.md`, content: `# ${name}\nbody` }] });
   }
 
   function makeOrderedLlm(events: string[][], onCall: (idx: number) => void): LlmClient {
@@ -614,9 +614,9 @@ describe("runInitWithSources — per-file pipeline", () => {
     const llm = makeOrderedLlm(
       [
         [bootstrapJson],
-        [entitiesEmpty], [ingestPagesJson("A")],
-        [entitiesEmpty], [ingestPagesJson("B")],
-        [entitiesEmpty], [ingestPagesJson("C")],
+        [entitiesEmpty], [ingestPagesJson("a")],
+        [entitiesEmpty], [ingestPagesJson("b")],
+        [entitiesEmpty], [ingestPagesJson("c")],
       ],
       (idx) => llmCallLog.push(idx),
     );
@@ -627,7 +627,7 @@ describe("runInitWithSources — per-file pipeline", () => {
 
     // The article A.md must have been written before the next file's ingest begins.
     // After bootstrap + entities-a + pages-a (3 LLM calls), A.md is written; entities-b hasn't fired yet.
-    const writeAIdx = writeLog.findIndex((w) => w.startsWith("write:!Wiki/dom/concepts/A.md"));
+    const writeAIdx = writeLog.findIndex((w) => w.startsWith("write:!Wiki/dom/concepts/wiki_dom_a.md"));
     expect(writeAIdx).toBeGreaterThanOrEqual(0);
     const writeACallCount = Number(writeLog[writeAIdx].split("@call=")[1]);
     // call=3 means after 3 LLM calls (bootstrap + entities-a + pages-a) — the 4th call (entities-b) hasn't happened yet
@@ -702,7 +702,7 @@ describe("runInitWithSources — per-file pipeline", () => {
             let body: string;
             if (idx === 0) body = bootstrapJson;
             else if (idx === 1 || idx === 3) body = JSON.stringify({ reasoning: "", entities: [] });
-            else body = JSON.stringify({ reasoning: "ok", pages: [{ path: "!Wiki/dom/concepts/A.md", content: "a" }] });
+            else body = JSON.stringify({ reasoning: "ok", pages: [{ path: "!Wiki/dom/concepts/wiki_dom_a.md", content: "a" }] });
             return Promise.resolve({
               [Symbol.asyncIterator]: async function* () {
                 yield { choices: [{ delta: { content: body } }] };

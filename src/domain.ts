@@ -18,6 +18,7 @@ export interface DomainEntry {
   language_notes?: string;
   analyzed_sources?: string[];
   analyzed_sources_v2?: boolean;
+  pageNameVersion?: number;
 }
 
 export function migrateDomainsV2(domains: DomainEntry[]): { domains: DomainEntry[]; migrated: boolean } {

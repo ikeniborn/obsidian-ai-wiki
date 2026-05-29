@@ -20,10 +20,32 @@ import type { PageSimilarityService, ExtractedEntity } from "../page-similarity"
 import { appendWikiLog } from "../wiki-log";
 import type { IngestLogEntry } from "../wiki-log";
 import { fixWikiLinks } from "../wiki-link-validator";
+import { GENERIC_WIKI_STEM_REGEX, stemRegex } from "../wiki-stem";
 
 function parseWikiStatus(content: string): string {
   const m = /^---\n[\s\S]*?^wiki_status:[ \t]*(.+)$/m.exec(content);
   return m ? m[1].trim() : "unknown";
+}
+
+export async function collectSourceStems(
+  domain: DomainEntry,
+  vaultTools: VaultTools,
+  vaultRoot: string,
+): Promise<Set<string>> {
+  const stems = new Set<string>();
+  for (const sp of domain.source_paths ?? []) {
+    const vaultPath = isAbsolute(sp)
+      ? vaultTools.toVaultPath(sp) ?? ""
+      : (sp.endsWith("/") ? sp.slice(0, -1) : sp);
+    if (!vaultPath) continue;
+    const files = await vaultTools.listFiles(vaultPath).catch(() => [] as string[]);
+    for (const f of files) {
+      if (f.endsWith(".md")) {
+        stems.add(f.split("/").pop()!.replace(/\.md$/, ""));
+      }
+    }
+  }
+  return stems;
 }
 
 export async function* runIngest(
@@ -156,10 +178,31 @@ export async function* runIngest(
     existingPages = await vaultTools.readAll(nonMetaPaths);
   }
 
+  const sourceStems = await collectSourceStems(domain, vaultTools, vaultRoot);
+
+  // Pre-migration warning: vault still has legacy unprefixed wiki pages.
+  if ((domain.pageNameVersion ?? 0) < 1) {
+    const unprefixed = nonMetaPaths.filter((p) => {
+      if (!p.endsWith(".md")) return false;
+      const name = p.split("/").pop()!;
+      if (name.startsWith("_")) return false;
+      const stem = name.replace(/\.md$/, "");
+      return !GENERIC_WIKI_STEM_REGEX.test(stem);
+    });
+    if (unprefixed.length > 0) {
+      yield {
+        kind: "info_text",
+        icon: "⚠️",
+        summary: `Legacy wiki pages without wiki_<domain>_<entity> prefix: ${unprefixed.length}.`,
+        details: unprefixed.slice(0, 10),
+      };
+    }
+  }
+
   const messages = buildIngestMessages(
     sourceVaultPath, sourceContent, domain, wikiVaultPath,
     existingPages, schemaContent, indexContent,
-    entitiesResult.value.entities,
+    entitiesResult.value.entities, sourceStems,
   );
 
   const inputChars = messages.reduce((s, m) => s + (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length), 0);
@@ -221,6 +264,25 @@ export async function* runIngest(
       pages = valid;
     }
   }
+
+  // Stem mask guard: enforce wiki_<domain>_<entity> + reject source collisions.
+  const stemMaskRe = stemRegex(domain.id);
+  const stemValid: typeof pages = [];
+  for (const p of pages) {
+    const stem = p.path.split("/").pop()!.replace(/\.md$/, "");
+    if (!stemMaskRe.test(stem)) {
+      yield { kind: "tool_use", name: "Write", input: { path: p.path } };
+      yield { kind: "tool_result", ok: false, preview: `stem violates mask wiki_${domain.id}_<entity>: ${stem}` };
+      continue;
+    }
+    if (sourceStems.has(stem)) {
+      yield { kind: "tool_use", name: "Write", input: { path: p.path } };
+      yield { kind: "tool_result", ok: false, preview: `stem collides with source filename: ${stem}` };
+      continue;
+    }
+    stemValid.push(p);
+  }
+  pages = stemValid;
 
   // Programmatic WikiLink fix (always run; maxPasses=0 only warns)
   const pagesMap = new Map(pages.map((p) => [p.path, p.content]));
@@ -535,6 +597,7 @@ function buildIngestMessages(
   schemaContent: string,
   indexContent: string,
   entities: ExtractedEntity[],
+  sourceStems: Set<string> = new Set(),
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const existing = existingPages.size > 0
     ? [...existingPages.entries()].map(([p, c]) => `${p}:\n${c}`).join("\n\n")
@@ -544,8 +607,13 @@ function buildIngestMessages(
   const entityTypesBlock = buildEntityTypesBlock(domain, wikiVaultPath);
   const langNotes = domain.language_notes ? `Языковые правила: ${domain.language_notes}` : "";
 
+  const forbiddenStemsBlock = sourceStems.size > 0
+    ? `ЗАПРЕЩЁННЫЕ ИМЕНА (источники в этом домене):\n${[...sourceStems].sort().map((s) => `- ${s}`).join("\n")}`
+    : "";
+
   const systemContent = render(ingestTemplate, {
     domain_name: domain.name,
+    domain_id: domain.id,
     entity_types_block: entityTypesBlock || "(не заданы)",
     lang_notes: langNotes,
     wiki_path: wikiVaultPath,
@@ -553,6 +621,7 @@ function buildIngestMessages(
     schema_block: schemaContent ? `КОНВЕНЦИИ (_wiki_schema.md):\n${schemaContent}` : "",
     source_path: sourcePath,
     source_stem: sourcePath.split("/").pop()!.replace(/\.md$/, ""),
+    forbidden_stems_block: forbiddenStemsBlock,
   });
 
   const existingPathSet = new Set(existingPages.keys());

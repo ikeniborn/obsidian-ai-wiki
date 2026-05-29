@@ -34,6 +34,17 @@ Before writing each wiki page, ingest emits `tool_use` with `name: "Create"` for
 
 For each entry in `deletes`, ingest emits `tool_use name: "Delete"` followed by `tool_result` — `ok: true` on success, `ok: false` with an "outside wiki folder" preview when the path escapes the wiki root.
 
+### Wiki Stem Mask + Collision Guard
+
+Every wiki page filename stem must match `wiki_<domain.id>_<entity_slug>` in lowercase snake_case (e.g. `wiki_work_neural_networks.md`).
+
+This disambiguates wiki pages from source files in `domain.source_paths` (no `[[NFS]]` ambiguity) and across domains (`foo` in `work` vs `personal` never collide). Enforced at four layers:
+
+1. **Zod schema** — [[src/phases/zod-schemas.ts#WikiPageSchema]] runs `GENERIC_WIKI_STEM_REGEX` from [[src/wiki-stem.ts]] on every emitted page path stem. Unprefixed stems are rejected during structured parsing.
+2. **Prompt** — `prompts/ingest.md` instructs LLM #2 to emit `wiki_{{domain_id}}_<EntitySlug>` paths and is given a list of forbidden stems via `{{forbidden_stems_block}}` — the basenames of files in `domain.source_paths`, collected by [[src/phases/ingest.ts#collectSourceStems]].
+3. **Runtime guard** — after path validation, [[src/phases/ingest.ts]] re-checks each emitted page stem against `stemRegex(domain.id)` and the source-stem set. Violations yield `tool_result ok:false` with a stem-specific preview and skip the page.
+4. **Migration** — [[scripts/migrate-wiki-prefix.ts]] (logic in [[src/migrate-wiki-prefix.ts]]) renames legacy unprefixed wiki pages, rewrites backlinks across page bodies, `_index.md`, `_log.md`, `_embeddings.json` keys, and source `wiki_articles`, and bumps `DomainEntry.pageNameVersion` to `1` so re-runs are no-ops. Until a domain is migrated, ingest emits an `info_text` warning before LLM #2 reporting the count of legacy unprefixed pages (only `.md` files in the wiki folder; meta files like `_index.md`, `_log.md`, `_embeddings.json`, and anything under `_config/` are excluded).
+
 ### Result Summary
 
 After writes and deletes, ingest emits a result text broken down by action. Three terms are possible: `создано C, обновлено U, объединено M`.

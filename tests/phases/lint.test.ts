@@ -70,7 +70,7 @@ describe("runLint", () => {
   it("yields result with report for existing domain", async () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
-      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/wiki_work_page.md"], folders: [] }),
       read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
@@ -186,25 +186,25 @@ describe("runLint", () => {
       exists: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockImplementation((path: string) => {
         if (path.includes("!Wiki")) {
-          return Promise.resolve({ files: ["!Wiki/work/Page.md"], folders: [] });
+          return Promise.resolve({ files: ["!Wiki/work/wiki_work_page.md"], folders: [] });
         }
         return Promise.resolve({ files: [], folders: [] });
       }),
       read: vi.fn().mockImplementation((path: string) => {
-        if (path === "!Wiki/work/Page.md") {
+        if (path === "!Wiki/work/wiki_work_page.md") {
           return Promise.resolve(fixPassCalled ? fixedContent : originalContent);
         }
         if (path === "Sources/raw.md") return Promise.resolve("# Raw source");
         return Promise.resolve("");
       }),
       write: vi.fn().mockImplementation((path: string) => {
-        if (path === "!Wiki/work/Page.md") fixPassCalled = true;
+        if (path === "!Wiki/work/wiki_work_page.md") fixPassCalled = true;
         return Promise.resolve();
       }),
     });
 
     const fixLlm = makeLlm(
-      JSON.stringify({ reasoning: "fix", report: "Fixed page.", fixes: [{ path: "!Wiki/work/Page.md", content: fixedContent }] }),
+      JSON.stringify({ reasoning: "fix", report: "Fixed page.", fixes: [{ path: "!Wiki/work/wiki_work_page.md", content: fixedContent }] }),
     );
     const vt = new VaultTools(adapter, VAULT_ROOT);
     await collect(
@@ -216,13 +216,13 @@ describe("runLint", () => {
     );
     expect(rawCall).toBeDefined();
     const writtenContent = rawCall![1] as string;
-    expect(writtenContent).toContain("[[Page]]");
+    expect(writtenContent).toContain("[[wiki_work_page]]");
   });
 
   it("does not append backlink sync line when no wiki pages have wiki_sources", async () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
-      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/wiki_work_page.md"], folders: [] }),
       read: vi.fn().mockResolvedValue("---\nwiki_status: stub\n---\n# Page\n\nContent."),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
@@ -235,7 +235,7 @@ describe("runLint", () => {
 
   it("yields domain_updated with entity_types from second LLM call", async () => {
     const adapter = mockAdapter({
-      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/wiki_work_page.md"], folders: [] }),
       read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
@@ -277,7 +277,7 @@ describe("runLint", () => {
   it("appends lint entry to _log.md after fix pass", async () => {
     let logContent = "";
     const adapter = mockAdapter({
-      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/wiki_work_page.md"], folders: [] }),
       read: vi.fn().mockImplementation((path: string) => {
         if (path === "!Wiki/work/_config/_log.md") return Promise.resolve(logContent);
         return Promise.resolve("---\nwiki_status: stub\n---\n# Page");
@@ -335,7 +335,7 @@ describe("runLint", () => {
     const schemaContent = "# Wiki Schema\n- use lowercase tags";
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
-      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/wiki_work_page.md"], folders: [] }),
       read: vi.fn().mockImplementation((path: string) => {
         if (path === "!Wiki/_config/_wiki_schema.md") return Promise.resolve(schemaContent);
         return Promise.resolve("---\ntags: []\n---\n# Page\n\nContent.");
@@ -356,7 +356,7 @@ describe("runLint", () => {
   it("passes empty schema_block when schema file absent", async () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
-      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/wiki_work_page.md"], folders: [] }),
       read: vi.fn().mockImplementation((path: string) => {
         if (path === "!Wiki/_config/_wiki_schema.md") return Promise.reject(new Error("not found"));
         return Promise.resolve("---\ntags: []\n---\n# Page\n\nContent.");
@@ -376,7 +376,7 @@ describe("runLint", () => {
   it("emits vector info_text events in embedding mode", async () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
-      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/wiki_work_page.md"], folders: [] }),
       read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
@@ -399,7 +399,7 @@ describe("runLint", () => {
   it("does not emit vector events in jaccard mode", async () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
-      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/wiki_work_page.md"], folders: [] }),
       read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
@@ -421,7 +421,7 @@ describe("runLint", () => {
   it("does not emit write event when updated is 0", async () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
-      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/wiki_work_page.md"], folders: [] }),
       read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
@@ -442,7 +442,7 @@ describe("runLint", () => {
   it("emits per-article info_text progress events", async () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
-      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/wiki_work_page.md"], folders: [] }),
       read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
@@ -461,12 +461,12 @@ describe("runLint", () => {
       exists: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockImplementation((path: string) => {
         if (path.includes("!Wiki"))
-          return Promise.resolve({ files: ["!Wiki/work/Original.md", "!Wiki/work/Duplicate.md"], folders: [] });
+          return Promise.resolve({ files: ["!Wiki/work/wiki_work_original.md", "!Wiki/work/wiki_work_duplicate.md"], folders: [] });
         return Promise.resolve({ files: [], folders: [] });
       }),
       read: vi.fn().mockImplementation((path: string) => {
-        if (path === "!Wiki/work/Original.md") return Promise.resolve(wikiContent);
-        if (path === "!Wiki/work/Duplicate.md") return Promise.resolve(dupContent);
+        if (path === "!Wiki/work/wiki_work_original.md") return Promise.resolve(wikiContent);
+        if (path === "!Wiki/work/wiki_work_duplicate.md") return Promise.resolve(dupContent);
         return Promise.resolve("");
       }),
       remove: vi.fn().mockResolvedValue(undefined),
@@ -475,35 +475,35 @@ describe("runLint", () => {
     const lintJson = JSON.stringify({
       reasoning: "found duplicate",
       report: "Merged Duplicate into Original.",
-      fixes: [{ path: "!Wiki/work/Original.md", content: wikiContent + "\n\nSame content." }],
-      deletes: [{ path: "!Wiki/work/Duplicate.md", redirect_to: "!Wiki/work/Original.md" }],
+      fixes: [{ path: "!Wiki/work/wiki_work_original.md", content: wikiContent + "\n\nSame content." }],
+      deletes: [{ path: "!Wiki/work/wiki_work_duplicate.md", redirect_to: "!Wiki/work/wiki_work_original.md" }],
     });
     // 2 articles → 2 lint calls, then actualize
     const llm = makeLlm(lintJson, "{}", 2);
     await collect(
       runLint(["work"], vt, llm, "model", [domain], VAULT_ROOT, new AbortController().signal),
     );
-    expect(adapter.remove).toHaveBeenCalledWith("!Wiki/work/Duplicate.md");
+    expect(adapter.remove).toHaveBeenCalledWith("!Wiki/work/wiki_work_duplicate.md");
   });
 
   it("rewrites [[Deleted]] links in wiki pages when delete has redirect_to", async () => {
     const originalContent = "---\ntags: []\n---\n# Original\n\nContent.";
-    const linkedContent = "---\ntags: []\n---\n# Linker\n\nSee [[Duplicate]] for more.";
+    const linkedContent = "---\ntags: []\n---\n# Linker\n\nSee [[wiki_work_duplicate]] for more.";
     const dupContent = "---\ntags: []\n---\n# Duplicate\n\nDuplicated.";
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockImplementation((path: string) => {
         if (path.includes("!Wiki"))
           return Promise.resolve({
-            files: ["!Wiki/work/Original.md", "!Wiki/work/Linker.md", "!Wiki/work/Duplicate.md"],
+            files: ["!Wiki/work/wiki_work_original.md", "!Wiki/work/wiki_work_linker.md", "!Wiki/work/wiki_work_duplicate.md"],
             folders: [],
           });
         return Promise.resolve({ files: [], folders: [] });
       }),
       read: vi.fn().mockImplementation((path: string) => {
-        if (path === "!Wiki/work/Original.md") return Promise.resolve(originalContent);
-        if (path === "!Wiki/work/Linker.md") return Promise.resolve(linkedContent);
-        if (path === "!Wiki/work/Duplicate.md") return Promise.resolve(dupContent);
+        if (path === "!Wiki/work/wiki_work_original.md") return Promise.resolve(originalContent);
+        if (path === "!Wiki/work/wiki_work_linker.md") return Promise.resolve(linkedContent);
+        if (path === "!Wiki/work/wiki_work_duplicate.md") return Promise.resolve(dupContent);
         return Promise.resolve("");
       }),
       remove: vi.fn().mockResolvedValue(undefined),
@@ -513,14 +513,14 @@ describe("runLint", () => {
       reasoning: "merged",
       report: "ok",
       fixes: [],
-      deletes: [{ path: "!Wiki/work/Duplicate.md", redirect_to: "!Wiki/work/Original.md" }],
+      deletes: [{ path: "!Wiki/work/wiki_work_duplicate.md", redirect_to: "!Wiki/work/wiki_work_original.md" }],
     });
     const llm = makeLlm(lintJson, "{}", 3);
     await collect(
       runLint(["work"], vt, llm, "model", [domain], VAULT_ROOT, new AbortController().signal),
     );
     const linkerWrite = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
-      ([path, content]: [string, string]) => path === "!Wiki/work/Linker.md" && content.includes("[[Original]]"),
+      ([path, content]: [string, string]) => path === "!Wiki/work/wiki_work_linker.md" && content.includes("[[wiki_work_original]]"),
     );
     expect(linkerWrite).toBeDefined();
   });
@@ -571,12 +571,12 @@ describe("runLint with merged assess+fix (LintOutputSchema)", () => {
       exists: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockImplementation((path: string) => {
         if (path.includes("!Wiki")) {
-          return Promise.resolve({ files: ["!Wiki/work/Page.md"], folders: [] });
+          return Promise.resolve({ files: ["!Wiki/work/wiki_work_page.md"], folders: [] });
         }
         return Promise.resolve({ files: [], folders: [] });
       }),
       read: vi.fn().mockImplementation((path: string) => {
-        if (path === "!Wiki/work/Page.md") return Promise.resolve(wikiContent);
+        if (path === "!Wiki/work/wiki_work_page.md") return Promise.resolve(wikiContent);
         return Promise.resolve("");
       }),
     });
@@ -592,7 +592,7 @@ describe("runLint with merged assess+fix (LintOutputSchema)", () => {
               ? JSON.stringify({
                   reasoning: "Found dead link.",
                   report: "## Lint\n- dead link [[DeadLink]] in Page.md",
-                  fixes: [{ path: "!Wiki/work/Page.md", content: "---\ntags: []\n---\n# Page\n\nContent." }],
+                  fixes: [{ path: "!Wiki/work/wiki_work_page.md", content: "---\ntags: []\n---\n# Page\n\nContent." }],
                 })
               : JSON.stringify({ reasoning: "ok", entity_types: [] });
             return Promise.resolve({
@@ -611,7 +611,7 @@ describe("runLint with merged assess+fix (LintOutputSchema)", () => {
 
     expect(events.some((e: any) => e.kind === "result")).toBe(true);
     const writeCall = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
-      ([path]: [string]) => path === "!Wiki/work/Page.md",
+      ([path]: [string]) => path === "!Wiki/work/wiki_work_page.md",
     );
     expect(writeCall).toBeDefined();
     expect(callCount).toBe(2);
@@ -620,7 +620,7 @@ describe("runLint with merged assess+fix (LintOutputSchema)", () => {
   it("yields report as assistant_text before write loop", async () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
-      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/wiki_work_page.md"], folders: [] }),
       read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
@@ -658,7 +658,7 @@ describe("runLint with merged assess+fix (LintOutputSchema)", () => {
   it("yields per-page progress assistant_text before each write", async () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
-      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Page.md"], folders: [] }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/wiki_work_page.md"], folders: [] }),
       read: vi.fn().mockResolvedValue("---\ntags: []\n---\n# Page\n\nContent."),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
@@ -673,7 +673,7 @@ describe("runLint with merged assess+fix (LintOutputSchema)", () => {
               ? JSON.stringify({
                   reasoning: "fix",
                   report: "## Lint\n- fix Page.md",
-                  fixes: [{ path: "!Wiki/work/Page.md", content: "# Page\n\nFixed." }],
+                  fixes: [{ path: "!Wiki/work/wiki_work_page.md", content: "# Page\n\nFixed." }],
                 })
               : JSON.stringify({ reasoning: "ok", entity_types: [] });
             return Promise.resolve({
@@ -704,13 +704,13 @@ describe("LintOutputSchema", () => {
       report: "merged B into A",
       fixes: [],
       deletes: [
-        { path: "!Wiki/work/Duplicate.md", redirect_to: "!Wiki/work/Original.md" },
-        { path: "!Wiki/work/Dead.md" },
+        { path: "!Wiki/work/wiki_work_duplicate.md", redirect_to: "!Wiki/work/wiki_work_original.md" },
+        { path: "!Wiki/work/wiki_work_dead.md" },
       ],
     });
     expect(result.success).toBe(true);
     expect(result.data?.deletes).toHaveLength(2);
-    expect(result.data?.deletes?.[0].redirect_to).toBe("!Wiki/work/Original.md");
+    expect(result.data?.deletes?.[0].redirect_to).toBe("!Wiki/work/wiki_work_original.md");
     expect(result.data?.deletes?.[1].redirect_to).toBeUndefined();
   });
 

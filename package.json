@@ -1,13 +1,14 @@
 {
   "name": "obsidian-ai-wiki",
-  "version": "0.1.143",
+  "version": "0.1.145",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "migrate:wiki-prefix": "tsx scripts/migrate-wiki-prefix.ts"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

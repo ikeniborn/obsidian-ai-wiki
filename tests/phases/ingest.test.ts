@@ -71,7 +71,7 @@ describe("runIngest", () => {
       JSON.stringify({ reasoning: "entities", entities: [{ name: "Entity" }] }),
       JSON.stringify({
         reasoning: "Extracted Entity.",
-        pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact." }],
+        pages: [{ path: "!Wiki/work/entities/wiki_work_entity.md", content: "# Entity\n\nFact." }],
       }),
     ]);
     const events = await collect(
@@ -86,7 +86,7 @@ describe("runIngest", () => {
       ),
     );
     expect(events.some((e: any) => e.kind === "result")).toBe(true);
-    expect(adapter.write).toHaveBeenCalledWith("!Wiki/work/entities/Entity.md", "# Entity\n\nFact.");
+    expect(adapter.write).toHaveBeenCalledWith("!Wiki/work/entities/wiki_work_entity.md", "# Entity\n\nFact.");
   });
 
   it("yields source_path_added when new parent folder encountered", async () => {
@@ -100,7 +100,7 @@ describe("runIngest", () => {
       JSON.stringify({ reasoning: "entities", entities: [{ name: "Entity" }] }),
       JSON.stringify({
         reasoning: "Extracted Entity.",
-        pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity" }],
+        pages: [{ path: "!Wiki/work/entities/wiki_work_entity.md", content: "# Entity" }],
       }),
     ]);
     const events = await collect(
@@ -130,7 +130,7 @@ describe("runIngest", () => {
       JSON.stringify({ reasoning: "entities", entities: [{ name: "Entity" }] }),
       JSON.stringify({
         reasoning: "Extracted Entity.",
-        pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity" }],
+        pages: [{ path: "!Wiki/work/entities/wiki_work_entity.md", content: "# Entity" }],
       }),
     ]);
     const events = await collect(
@@ -183,7 +183,7 @@ describe("runIngest", () => {
       JSON.stringify({ reasoning: "entities", entities: [{ name: "Entity" }] }),
       JSON.stringify({
         reasoning: "Extracted Entity.",
-        pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact." }],
+        pages: [{ path: "!Wiki/work/entities/wiki_work_entity.md", content: "# Entity\n\nFact." }],
       }),
     ]);
     await collect(
@@ -205,12 +205,12 @@ describe("runIngest", () => {
     expect(writtenContent).toContain("wiki_added:");
     expect(writtenContent).toContain("wiki_updated:");
     expect(writtenContent).toContain("wiki_articles:");
-    expect(writtenContent).toContain("[[Entity]]");
+    expect(writtenContent).toContain("[[wiki_work_entity]]");
   });
 
   it("preserves wiki_added and unions wiki_articles on repeated ingest", async () => {
     const existingFm =
-      '---\nwiki_added: 2026-01-01\nwiki_updated: 2026-01-01\nwiki_articles:\n  - "[[Old]]"\n---\nsource text';
+      '---\nwiki_added: 2026-01-01\nwiki_updated: 2026-01-01\nwiki_articles:\n  - "[[wiki_work_old]]"\n---\nsource text';
     const adapter = mockAdapter({
       read: vi.fn().mockResolvedValue(existingFm),
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
@@ -220,7 +220,7 @@ describe("runIngest", () => {
       JSON.stringify({ reasoning: "entities", entities: [{ name: "New" }] }),
       JSON.stringify({
         reasoning: "Extracted New.",
-        pages: [{ path: "!Wiki/work/entities/New.md", content: "# New" }],
+        pages: [{ path: "!Wiki/work/entities/wiki_work_new.md", content: "# New" }],
       }),
     ]);
     await collect(
@@ -240,8 +240,8 @@ describe("runIngest", () => {
     expect(rawCall).toBeDefined();
     const writtenContent = rawCall![1] as string;
     expect(writtenContent).toContain("wiki_added: 2026-01-01"); // preserved
-    expect(writtenContent).toContain("[[Old]]");  // union
-    expect(writtenContent).toContain("[[New]]");  // union
+    expect(writtenContent).toContain("[[wiki_work_old]]");  // union
+    expect(writtenContent).toContain("[[wiki_work_new]]");  // union
   });
 
   it("does not write backlinks when no wiki pages were written", async () => {
@@ -281,7 +281,7 @@ describe("runIngest", () => {
       JSON.stringify({ reasoning: "entities", entities: [{ name: "Entity" }] }),
       JSON.stringify({
         reasoning: "Extracted Entity.",
-        pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact.", annotation: "описание сущности" }],
+        pages: [{ path: "!Wiki/work/entities/wiki_work_entity.md", content: "# Entity\n\nFact.", annotation: "описание сущности" }],
       }),
     ]);
     await collect(
@@ -298,7 +298,7 @@ describe("runIngest", () => {
     const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls;
     const indexWrite = writeCalls.find((c: [string, string]) => c[0].endsWith("_index.md"));
     expect(indexWrite).toBeDefined();
-    expect(indexWrite![1]).toContain("- [[Entity]] entities/Entity.md — описание сущности");
+    expect(indexWrite![1]).toContain("- [[wiki_work_entity]] entities/wiki_work_entity.md — описание сущности");
   });
 
   it("does not fail ingest when raw file backlink write throws", async () => {
@@ -317,7 +317,7 @@ describe("runIngest", () => {
       JSON.stringify({ reasoning: "entities", entities: [{ name: "Entity" }] }),
       JSON.stringify({
         reasoning: "Extracted Entity.",
-        pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity" }],
+        pages: [{ path: "!Wiki/work/entities/wiki_work_entity.md", content: "# Entity" }],
       }),
     ]);
     const events = await collect(
@@ -343,7 +343,7 @@ describe("runIngest", () => {
 
   it("logs СОЗДАНА for new pages and ОБНОВЛЕНА for existing pages", async () => {
     const existingContent = "---\nwiki_status: developing\n---\n# Existing";
-    const existingPaths = new Set(["!Wiki/work/компоненты/existing.md"]);
+    const existingPaths = new Set(["!Wiki/work/компоненты/wiki_work_existing.md"]);
     let logContent = "";
 
     const adapter = mockAdapter({
@@ -364,15 +364,15 @@ describe("runIngest", () => {
       JSON.stringify({
         reasoning: "x",
         pages: [
-          { path: "!Wiki/work/компоненты/existing.md", content: "---\nwiki_status: mature\n---\n# Existing", annotation: "desc" },
-          { path: "!Wiki/work/компоненты/new-page.md", content: "---\nwiki_status: stub\n---\n# New", annotation: "new" },
+          { path: "!Wiki/work/компоненты/wiki_work_existing.md", content: "---\nwiki_status: mature\n---\n# Existing", annotation: "desc" },
+          { path: "!Wiki/work/компоненты/wiki_work_new_page.md", content: "---\nwiki_status: stub\n---\n# New", annotation: "new" },
         ],
       }),
     ]);
     await collect(runIngest([`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "model", [domain], VAULT_ROOT,
       new AbortController().signal));
-    expect(logContent).toContain("ОБНОВЛЕНА: компоненты/existing.md (developing→mature)");
-    expect(logContent).toContain("СОЗДАНА: компоненты/new-page.md (stub)");
+    expect(logContent).toContain("ОБНОВЛЕНА: компоненты/wiki_work_existing.md (developing→mature)");
+    expect(logContent).toContain("СОЗДАНА: компоненты/wiki_work_new_page.md (stub)");
   });
 
   it("emits tool_use with name 'Create' for new wiki page", async () => {
@@ -388,7 +388,7 @@ describe("runIngest", () => {
       JSON.stringify({ reasoning: "entities", entities: [{ name: "New" }] }),
       JSON.stringify({
         reasoning: "x",
-        pages: [{ path: "!Wiki/work/entities/New.md", content: "# New" }],
+        pages: [{ path: "!Wiki/work/entities/wiki_work_new.md", content: "# New" }],
       }),
     ]);
     const events = await collect(
@@ -398,7 +398,7 @@ describe("runIngest", () => {
       ),
     );
     const tu = events.find(
-      (e: any) => e.kind === "tool_use" && (e.input as any)?.path === "!Wiki/work/entities/New.md",
+      (e: any) => e.kind === "tool_use" && (e.input as any)?.path === "!Wiki/work/entities/wiki_work_new.md",
     ) as any;
     expect(tu?.name).toBe("Create");
   });
@@ -417,8 +417,8 @@ describe("runIngest", () => {
       JSON.stringify({
         reasoning: "x",
         pages: [
-          { path: "!Wiki/work/entities/A.md", content: "# A" },
-          { path: "!Wiki/work/entities/B.md", content: "# B" },
+          { path: "!Wiki/work/entities/wiki_work_a.md", content: "# A" },
+          { path: "!Wiki/work/entities/wiki_work_b.md", content: "# B" },
         ],
       }),
     ]);
@@ -447,7 +447,7 @@ describe("runIngest", () => {
       JSON.stringify({ reasoning: "entities", entities: [{ name: "Existing" }] }),
       JSON.stringify({
         reasoning: "x",
-        pages: [{ path: "!Wiki/work/entities/Existing.md", content: "# Updated" }],
+        pages: [{ path: "!Wiki/work/entities/wiki_work_existing.md", content: "# Updated" }],
       }),
     ]);
     const events = await collect(
@@ -465,7 +465,7 @@ describe("runIngest", () => {
     const adapter = mockAdapter({
       read: vi.fn().mockImplementation(async (path: string) => {
         if (path === "Sources/doc.md") return "source text";
-        if (path === "!Wiki/work/entities/Existing.md") return "# Old";
+        if (path === "!Wiki/work/entities/wiki_work_existing.md") return "# Old";
         throw new Error("not found"); // New.md does not exist
       }),
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
@@ -476,8 +476,8 @@ describe("runIngest", () => {
       JSON.stringify({
         reasoning: "x",
         pages: [
-          { path: "!Wiki/work/entities/New.md", content: "# New" },
-          { path: "!Wiki/work/entities/Existing.md", content: "# Updated" },
+          { path: "!Wiki/work/entities/wiki_work_new.md", content: "# New" },
+          { path: "!Wiki/work/entities/wiki_work_existing.md", content: "# Updated" },
         ],
       }),
     ]);
@@ -495,7 +495,7 @@ describe("runIngest", () => {
     const adapter = mockAdapter({
       read: vi.fn().mockImplementation(async (path: string) => {
         if (path === "Sources/doc.md") return "source text";
-        if (path === "!Wiki/work/entities/Existing.md") return "# Old content";
+        if (path === "!Wiki/work/entities/wiki_work_existing.md") return "# Old content";
         throw new Error("not found");
       }),
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
@@ -505,7 +505,7 @@ describe("runIngest", () => {
       JSON.stringify({ reasoning: "entities", entities: [{ name: "Existing" }] }),
       JSON.stringify({
         reasoning: "x",
-        pages: [{ path: "!Wiki/work/entities/Existing.md", content: "# Updated content" }],
+        pages: [{ path: "!Wiki/work/entities/wiki_work_existing.md", content: "# Updated content" }],
       }),
     ]);
     const events = await collect(
@@ -515,7 +515,7 @@ describe("runIngest", () => {
       ),
     );
     const tu = events.find(
-      (e: any) => e.kind === "tool_use" && (e.input as any)?.path === "!Wiki/work/entities/Existing.md",
+      (e: any) => e.kind === "tool_use" && (e.input as any)?.path === "!Wiki/work/entities/wiki_work_existing.md",
     ) as any;
     expect(tu?.name).toBe("Update");
   });
@@ -593,7 +593,7 @@ describe("runIngest with WikiPagesOutputSchema format", () => {
       JSON.stringify({ reasoning: "entities", entities: [{ name: "Entity" }] }),
       JSON.stringify({
         reasoning: "Extracted one entity.",
-        pages: [{ path: "!Wiki/work/entities/Entity.md", content: "# Entity\n\nFact." }],
+        pages: [{ path: "!Wiki/work/entities/wiki_work_entity.md", content: "# Entity\n\nFact." }],
       }),
     ]);
     const events = await collect(
@@ -607,7 +607,7 @@ describe("runIngest with WikiPagesOutputSchema format", () => {
         new AbortController().signal,
       ),
     );
-    expect(adapter.write).toHaveBeenCalledWith("!Wiki/work/entities/Entity.md", "# Entity\n\nFact.");
+    expect(adapter.write).toHaveBeenCalledWith("!Wiki/work/entities/wiki_work_entity.md", "# Entity\n\nFact.");
     expect(events.some((e: any) => e.kind === "result")).toBe(true);
   });
 
@@ -621,7 +621,7 @@ describe("runIngest with WikiPagesOutputSchema format", () => {
       JSON.stringify({ reasoning: "entities", entities: [{ name: "A" }] }),
       JSON.stringify({
         reasoning: "Two entities found.",
-        pages: [{ path: "!Wiki/work/entities/A.md", content: "# A" }],
+        pages: [{ path: "!Wiki/work/entities/wiki_work_a.md", content: "# A" }],
       }),
     ]);
     const events = await collect(
@@ -683,7 +683,7 @@ describe("runIngest path validation", () => {
       JSON.stringify({ reasoning: "entities", entities: [{ name: "Page" }] }),
       JSON.stringify({
         reasoning: "Extracted Page.",
-        pages: [{ path: "!Wiki/work/work/entity/Page.md", content: "# Page" }],
+        pages: [{ path: "!Wiki/work/work/entity/wiki_work_page.md", content: "# Page" }],
       }),
     ]);
     const events = await collect(
@@ -699,7 +699,7 @@ describe("runIngest path validation", () => {
     );
     // Page must NOT be written
     const writeCall = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
-      ([path]: [string]) => path === "!Wiki/work/work/entity/Page.md",
+      ([path]: [string]) => path === "!Wiki/work/work/entity/wiki_work_page.md",
     );
     expect(writeCall).toBeUndefined();
     // Must emit tool_result ok:false for that path
@@ -720,10 +720,10 @@ describe("runIngest path validation", () => {
     const entitiesResponse = JSON.stringify({ reasoning: "entities", entities: [{ name: "Page" }] });
     const badResponse = JSON.stringify({
       reasoning: "Extracted Page with bad path.",
-      pages: [{ path: "!Wiki/work/work/entity/Page.md", content: "# Page bad" }],
+      pages: [{ path: "!Wiki/work/work/entity/wiki_work_page.md", content: "# Page bad" }],
     });
     const goodResponse = JSON.stringify([
-      { path: "!Wiki/work/entity/Page.md", content: "# Page good" },
+      { path: "!Wiki/work/entity/wiki_work_page.md", content: "# Page good" },
     ]);
 
     let callCount = 0;
@@ -761,7 +761,7 @@ describe("runIngest path validation", () => {
 
     // Corrected page must be written
     const writeCall = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
-      ([path]: [string]) => path === "!Wiki/work/entity/Page.md",
+      ([path]: [string]) => path === "!Wiki/work/entity/wiki_work_page.md",
     );
     expect(writeCall).toBeDefined();
     // LLM called three times now (entities + write + retry)
@@ -778,10 +778,10 @@ describe("runIngest path validation", () => {
     const entitiesResponse = JSON.stringify({ reasoning: "entities", entities: [{ name: "Page" }] });
     const badResponseFirst = JSON.stringify({
       reasoning: "Extracted Page with bad path.",
-      pages: [{ path: "!Wiki/work/work/entity/Page.md", content: "# Page bad" }],
+      pages: [{ path: "!Wiki/work/work/entity/wiki_work_page.md", content: "# Page bad" }],
     });
     const badResponseRetry = JSON.stringify([
-      { path: "!Wiki/work/work/entity/Page.md", content: "# Page bad" },
+      { path: "!Wiki/work/work/entity/wiki_work_page.md", content: "# Page bad" },
     ]);
 
     let callCount = 0;
@@ -921,7 +921,7 @@ describe("runIngest — entity-driven flow", () => {
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const llm = makeLlm([
       JSON.stringify({ reasoning: "found Foo", entities: [{ name: "Foo" }] }),
-      JSON.stringify({ reasoning: "new page", pages: [{ path: "!Wiki/work/entities/Foo.md", content: "# Foo" }] }),
+      JSON.stringify({ reasoning: "new page", pages: [{ path: "!Wiki/work/entities/wiki_work_foo.md", content: "# Foo" }] }),
     ]);
 
     await collect(runIngest(
@@ -991,7 +991,7 @@ describe("runIngest — entity-driven flow", () => {
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const llm = makeLlm([
       JSON.stringify({ reasoning: "novel", entities: [{ name: "Brand New" }] }),
-      JSON.stringify({ reasoning: "create", pages: [{ path: "!Wiki/work/entities/BrandNew.md", content: "# BrandNew" }] }),
+      JSON.stringify({ reasoning: "create", pages: [{ path: "!Wiki/work/entities/wiki_work_brandnew.md", content: "# BrandNew" }] }),
     ]);
 
     await collect(runIngest(
@@ -999,17 +999,17 @@ describe("runIngest — entity-driven flow", () => {
       new AbortController().signal,
     ));
 
-    expect(adapter.write).toHaveBeenCalledWith("!Wiki/work/entities/BrandNew.md", "# BrandNew");
+    expect(adapter.write).toHaveBeenCalledWith("!Wiki/work/entities/wiki_work_brandnew.md", "# BrandNew");
   });
 
   // @lat: [[tests#Merge Handling#Deletes trigger vault.remove + index cleanup]]
   it("processes deletes: vault.remove + removeIndexAnnotation called", async () => {
-    let indexContent = "# Wiki Index\n\n## entities\n- [[Old]] entities/Old.md — to delete\n";
+    let indexContent = "# Wiki Index\n\n## entities\n- [[wiki_work_old]] entities/wiki_work_old.md — to delete\n";
     const adapter = mockAdapter({
       read: vi.fn().mockImplementation(async (p: string) => {
         if (p === "Sources/doc.md") return "source";
         if (p.endsWith("_index.md")) return indexContent;
-        if (p === "!Wiki/work/entities/Old.md") return "# Old";
+        if (p === "!Wiki/work/entities/wiki_work_old.md") return "# Old";
         throw new Error("not found");
       }),
       write: vi.fn().mockImplementation(async (p: string, c: string) => {
@@ -1017,7 +1017,7 @@ describe("runIngest — entity-driven flow", () => {
       }),
       remove: vi.fn().mockResolvedValue(undefined),
       list: vi.fn().mockResolvedValue({
-        files: ["!Wiki/work/entities/Old.md"], folders: [],
+        files: ["!Wiki/work/entities/wiki_work_old.md"], folders: [],
       }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
@@ -1025,8 +1025,8 @@ describe("runIngest — entity-driven flow", () => {
       JSON.stringify({ reasoning: "merge", entities: [{ name: "New" }] }),
       JSON.stringify({
         reasoning: "merge Old → New",
-        pages: [{ path: "!Wiki/work/entities/New.md", content: "# New" }],
-        deletes: [{ path: "!Wiki/work/entities/Old.md" }],
+        pages: [{ path: "!Wiki/work/entities/wiki_work_new.md", content: "# New" }],
+        deletes: [{ path: "!Wiki/work/entities/wiki_work_old.md" }],
       }),
     ]);
 
@@ -1035,14 +1035,14 @@ describe("runIngest — entity-driven flow", () => {
       new AbortController().signal,
     ));
 
-    expect(adapter.remove).toHaveBeenCalledWith("!Wiki/work/entities/Old.md");
-    expect(indexContent).not.toContain("[[Old]]");
+    expect(adapter.remove).toHaveBeenCalledWith("!Wiki/work/entities/wiki_work_old.md");
+    expect(indexContent).not.toContain("[[wiki_work_old]]");
   });
 
   it("result text shows 'создано C, обновлено U, объединено M'", async () => {
     const existing = new Set([
-      "!Wiki/work/entities/Existing.md",
-      "!Wiki/work/entities/Old.md",
+      "!Wiki/work/entities/wiki_work_existing.md",
+      "!Wiki/work/entities/wiki_work_old.md",
     ]);
     const adapter = mockAdapter({
       read: vi.fn().mockImplementation(async (p: string) => {
@@ -1051,7 +1051,10 @@ describe("runIngest — entity-driven flow", () => {
         throw new Error("not found");
       }),
       remove: vi.fn().mockResolvedValue(undefined),
-      list: vi.fn().mockResolvedValue({ files: [...existing], folders: [] }),
+      list: vi.fn().mockImplementation(async (dir: string) => {
+        if (dir.startsWith("!Wiki/work")) return { files: [...existing], folders: [] };
+        return { files: [], folders: [] };
+      }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const llm = makeLlm([
@@ -1059,10 +1062,10 @@ describe("runIngest — entity-driven flow", () => {
       JSON.stringify({
         reasoning: "merge",
         pages: [
-          { path: "!Wiki/work/entities/New.md", content: "---\nwiki_status: stub\n---\n# New" },
-          { path: "!Wiki/work/entities/Existing.md", content: "---\nwiki_status: mature\n---\n# Existing" },
+          { path: "!Wiki/work/entities/wiki_work_new.md", content: "---\nwiki_status: stub\n---\n# New" },
+          { path: "!Wiki/work/entities/wiki_work_existing.md", content: "---\nwiki_status: mature\n---\n# Existing" },
         ],
-        deletes: [{ path: "!Wiki/work/entities/Old.md" }],
+        deletes: [{ path: "!Wiki/work/entities/wiki_work_old.md" }],
       }),
     ]);
 
@@ -1091,7 +1094,7 @@ describe("runIngest — entity-driven flow", () => {
       JSON.stringify({ reasoning: "x", entities: [{ name: "Bundle" }] }),
       JSON.stringify({
         reasoning: "big merge",
-        pages: [{ path: "!Wiki/work/entities/Bundle.md", content: "# Bundle" }],
+        pages: [{ path: "!Wiki/work/entities/wiki_work_bundle.md", content: "# Bundle" }],
         deletes: paths.map((p) => ({ path: p })),
       }),
     ]);
@@ -1120,7 +1123,7 @@ describe("runIngest — entity-driven flow", () => {
       JSON.stringify({ reasoning: "x", entities: [{ name: "X" }] }),
       JSON.stringify({
         reasoning: "bad",
-        pages: [{ path: "!Wiki/work/entities/X.md", content: "# X" }],
+        pages: [{ path: "!Wiki/work/entities/wiki_work_x.md", content: "# X" }],
         deletes: [{ path: "/etc/passwd" }],
       }),
     ]);
@@ -1140,16 +1143,16 @@ describe("runIngest — entity-driven flow", () => {
   // @lat: [[tests#Merge Handling#Backlinks drop deleted stems]]
   it("source backlinks drop deleted page stems", async () => {
     const existingFm =
-      '---\nwiki_articles:\n  - "[[Old]]"\n  - "[[Other]]"\n---\nsource';
+      '---\nwiki_articles:\n  - "[[wiki_work_old]]"\n  - "[[Other]]"\n---\nsource';
     const adapter = mockAdapter({
       read: vi.fn().mockImplementation(async (p: string) => {
         if (p === "Sources/doc.md") return existingFm;
-        if (p === "!Wiki/work/entities/Old.md") return "# old";
+        if (p === "!Wiki/work/entities/wiki_work_old.md") return "# old";
         throw new Error("not found");
       }),
       remove: vi.fn().mockResolvedValue(undefined),
       list: vi.fn().mockResolvedValue({
-        files: ["!Wiki/work/entities/Old.md"], folders: [],
+        files: ["!Wiki/work/entities/wiki_work_old.md"], folders: [],
       }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
@@ -1157,8 +1160,8 @@ describe("runIngest — entity-driven flow", () => {
       JSON.stringify({ reasoning: "x", entities: [{ name: "New" }] }),
       JSON.stringify({
         reasoning: "merge",
-        pages: [{ path: "!Wiki/work/entities/New.md", content: "# New" }],
-        deletes: [{ path: "!Wiki/work/entities/Old.md" }],
+        pages: [{ path: "!Wiki/work/entities/wiki_work_new.md", content: "# New" }],
+        deletes: [{ path: "!Wiki/work/entities/wiki_work_old.md" }],
       }),
     ]);
 
@@ -1172,9 +1175,9 @@ describe("runIngest — entity-driven flow", () => {
     );
     expect(sourceWrite).toBeDefined();
     const updated = sourceWrite![1] as string;
-    expect(updated).not.toContain("[[Old]]");
+    expect(updated).not.toContain("[[wiki_work_old]]");
     expect(updated).toContain("[[Other]]");
-    expect(updated).toContain("[[New]]");
+    expect(updated).toContain("[[wiki_work_new]]");
   });
 
   // @lat: [[tests#Stop Rules#BFS not invoked]]
@@ -1199,5 +1202,166 @@ describe("runIngest — entity-driven flow", () => {
 
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+});
+
+describe("runIngest — pre-migration warning", () => {
+  it("emits info_text when pageNameVersion < 1 and wiki folder has unprefixed pages", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p === "Sources/doc.md") return "source";
+        if (p === "!Wiki/work/entities/LegacyPage.md") return "# Legacy";
+        throw new Error("not found");
+      }),
+      list: vi.fn().mockImplementation(async (dir: string) => {
+        if (dir.startsWith("!Wiki/work")) return { files: ["!Wiki/work/entities/LegacyPage.md"], folders: [] };
+        return { files: [], folders: [] };
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "x", entities: [{ name: "Foo" }] }),
+      JSON.stringify({ reasoning: "ok", pages: [] }),
+    ]);
+    const events = await collect(runIngest(
+      [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [domain], VAULT_ROOT,
+      new AbortController().signal,
+    ));
+    const warn = events.find((e: any) => e.kind === "info_text" && /legacy/i.test(e.summary ?? ""));
+    expect(warn).toBeDefined();
+  });
+
+  it("does not emit migration warning when pageNameVersion >= 1", async () => {
+    const migratedDomain: DomainEntry = { ...domain, pageNameVersion: 1 };
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p === "Sources/doc.md") return "source";
+        if (p === "!Wiki/work/entities/LegacyPage.md") return "# Legacy";
+        throw new Error("not found");
+      }),
+      list: vi.fn().mockImplementation(async (dir: string) => {
+        if (dir.startsWith("!Wiki/work")) return { files: ["!Wiki/work/entities/LegacyPage.md"], folders: [] };
+        return { files: [], folders: [] };
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "x", entities: [{ name: "Foo" }] }),
+      JSON.stringify({ reasoning: "ok", pages: [] }),
+    ]);
+    const events = await collect(runIngest(
+      [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [migratedDomain], VAULT_ROOT,
+      new AbortController().signal,
+    ));
+    const warn = events.find((e: any) => e.kind === "info_text" && /legacy/i.test(e.summary ?? ""));
+    expect(warn).toBeUndefined();
+  });
+
+  it("does not emit migration warning when wiki folder only has prefixed pages", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p === "Sources/doc.md") return "source";
+        if (p === "!Wiki/work/entities/wiki_work_foo.md") return "# Foo";
+        throw new Error("not found");
+      }),
+      list: vi.fn().mockImplementation(async (dir: string) => {
+        if (dir.startsWith("!Wiki/work")) return { files: ["!Wiki/work/entities/wiki_work_foo.md"], folders: [] };
+        return { files: [], folders: [] };
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "x", entities: [{ name: "Foo" }] }),
+      JSON.stringify({ reasoning: "ok", pages: [] }),
+    ]);
+    const events = await collect(runIngest(
+      [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [domain], VAULT_ROOT,
+      new AbortController().signal,
+    ));
+    const warn = events.find((e: any) => e.kind === "info_text" && /legacy/i.test(e.summary ?? ""));
+    expect(warn).toBeUndefined();
+  });
+});
+
+describe("runIngest — stem mask guard", () => {
+  it("renders forbidden-stems block from domain.source_paths", async () => {
+    const { collectSourceStems } = await import("../../src/phases/ingest");
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "Sources") {
+          return { files: ["Sources/NFS.md", "Sources/RAID.md"], folders: [] };
+        }
+        return { files: [], folders: [] };
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const stems = await collectSourceStems(domain, vt, VAULT_ROOT);
+    expect(stems.has("NFS")).toBe(true);
+    expect(stems.has("RAID")).toBe(true);
+  });
+
+  it("rejects emitted page whose stem violates the wiki_<domain>_<entity> mask", async () => {
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    // path passes 4-segment check but stem lacks prefix
+    // We have to bypass the zod schema check via parseWithRetry — emit a page
+    // with a malformed stem but valid 4-segment path. The schema will reject
+    // it at parseWithRetry, surfacing structural_error instead.
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "x", entities: [{ name: "Foo" }] }),
+      JSON.stringify({
+        reasoning: "ok",
+        pages: [{ path: "!Wiki/work/entities/RawName.md", content: "# Raw" }],
+      }),
+    ]);
+    const events = await collect(
+      runIngest([`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [domain], VAULT_ROOT,
+        new AbortController().signal),
+    );
+    // Zod schema rejects unprefixed stem → ingest emits error (structural_error after retries)
+    const errored = events.some((e: any) => e.kind === "error" && /validation/i.test(e.message ?? ""));
+    expect(errored).toBe(true);
+  });
+
+  it("rejects emitted page whose stem matches a source filename", async () => {
+    // Source NFS.md exists; LLM emits wiki_work_nfs.md which is fine — but we want
+    // to assert the runtime collision guard. Force a collision by configuring the
+    // domain so a source file shares the wiki stem after prefixing.
+    const collidingDomain: DomainEntry = {
+      id: "work", name: "Work", wiki_folder: "work",
+      source_paths: ["Sources/"],
+    };
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      list: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "Sources") {
+          return { files: ["Sources/wiki_work_collide.md"], folders: [] };
+        }
+        return { files: [], folders: [] };
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "x", entities: [{ name: "Collide" }] }),
+      JSON.stringify({
+        reasoning: "ok",
+        pages: [{ path: "!Wiki/work/entities/wiki_work_collide.md", content: "# Collide" }],
+      }),
+    ]);
+    const events = await collect(
+      runIngest([`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [collidingDomain], VAULT_ROOT,
+        new AbortController().signal),
+    );
+    const failResult = events.find(
+      (e: any) => e.kind === "tool_result" && e.ok === false && (e.preview as string)?.includes("collides with source"),
+    );
+    expect(failResult).toBeDefined();
   });
 });
