@@ -79,8 +79,17 @@ describe("runInit — entity_types delta propagation via ingest", () => {
       analyzed_sources: [],
     };
 
-    // Existing domain → no bootstrap call. Call sequence: ingest(file0 — no delta), ingest(file1 — with delta)
-    const llm = makeStreamingLlm([JSON.stringify({ reasoning: "ok", pages: [] }), INGEST_WITH_DELTA]);
+    // Existing domain → no bootstrap call. runIngest now issues TWO LLM calls per source:
+    // LLM #1 (entities, EntitiesOutputSchema) and LLM #2 (pages, WikiPagesOutputSchema).
+    // An empty entities response makes ingest skip per-entity retrieval and go straight to page synthesis.
+    // Call sequence: entities(file0), pages(file0 — no delta), entities(file1), pages(file1 — with delta)
+    const ENTITIES_EMPTY = JSON.stringify({ reasoning: "", entities: [] });
+    const llm = makeStreamingLlm([
+      ENTITIES_EMPTY,
+      JSON.stringify({ reasoning: "ok", pages: [] }),
+      ENTITIES_EMPTY,
+      INGEST_WITH_DELTA,
+    ]);
 
     const events: unknown[] = [];
     for await (const e of runInit(

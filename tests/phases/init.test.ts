@@ -258,6 +258,11 @@ describe("runInitWithSources — Phase 1 incremental (entity types via ingest de
     language_notes: "",
   });
 
+  // runIngest now issues two LLM calls per source: LLM #1 extracts entities (EntitiesOutputSchema)
+  // and LLM #2 synthesises pages (WikiPagesOutputSchema). An empty entities response makes
+  // ingest skip per-entity retrieval and proceed straight to page synthesis.
+  const entitiesEmpty = JSON.stringify({ reasoning: "", entities: [] });
+
   // Ingest responses that carry entity_types_delta
   const ingestWithPersonDelta = JSON.stringify({
     reasoning: "ok",
@@ -287,12 +292,18 @@ describe("runInitWithSources — Phase 1 incremental (entity types via ingest de
   it("emits domain_updated with merged entity_types when ingest returns delta", async () => {
     const adapter = mockAdapterWithSources(sourceFiles);
     const vt = new VaultTools(adapter, "/vault");
-    // Call sequence for 3 files: bootstrap(a), ingest(a), ingest(b with person), ingest(c with place)
+    // Call sequence for 3 files (2 calls per ingest):
+    //   bootstrap(a), entities(a), ingest(a), entities(b), ingest(b w/ person), entities(c), ingest(c w/ place)
     const events = await collect(
       runInit(
         ["dom", "--sources", "src"],
         vt,
-        makeMultiLlm([bootstrapJson, ingestEmpty, ingestWithPersonDelta, ingestWithPlaceDelta]),
+        makeMultiLlm([
+          bootstrapJson,
+          entitiesEmpty, ingestEmpty,
+          entitiesEmpty, ingestWithPersonDelta,
+          entitiesEmpty, ingestWithPlaceDelta,
+        ]),
         "model", [], "TestVault", new AbortController().signal,
       ),
     );
@@ -306,12 +317,19 @@ describe("runInitWithSources — Phase 1 incremental (entity types via ingest de
   it("entity_types accumulate correctly — later files merge on top of earlier", async () => {
     const adapter = mockAdapterWithSources(sourceFiles);
     const vt = new VaultTools(adapter, "/vault");
-    // Call sequence: bootstrap(a), ingest(a no-delta), ingest(b with person+refined-concept), ingest(c with place)
+    // Call sequence (2 calls per ingest):
+    //   bootstrap(a), entities(a), ingest(a no-delta), entities(b), ingest(b w/ person+refined-concept),
+    //   entities(c), ingest(c w/ place)
     const events = await collect(
       runInit(
         ["dom", "--sources", "src"],
         vt,
-        makeMultiLlm([bootstrapJson, ingestEmpty, ingestWithPersonDelta, ingestWithPlaceDelta]),
+        makeMultiLlm([
+          bootstrapJson,
+          entitiesEmpty, ingestEmpty,
+          entitiesEmpty, ingestWithPersonDelta,
+          entitiesEmpty, ingestWithPlaceDelta,
+        ]),
         "model", [], "TestVault", new AbortController().signal,
       ),
     );
@@ -336,7 +354,12 @@ describe("runInitWithSources — Phase 1 incremental (entity types via ingest de
       runInit(
         ["dom", "--sources", "src"],
         vt,
-        makeMultiLlm([bootstrapJson, ingestEmpty, ingestEmpty, ingestEmpty]),
+        makeMultiLlm([
+          bootstrapJson,
+          entitiesEmpty, ingestEmpty,
+          entitiesEmpty, ingestEmpty,
+          entitiesEmpty, ingestEmpty,
+        ]),
         "model", [], "TestVault", new AbortController().signal,
       ),
     );
@@ -355,7 +378,12 @@ describe("runInitWithSources — Phase 1 incremental (entity types via ingest de
       runInit(
         ["dom", "--sources", "src"],
         vt,
-        makeMultiLlm([bootstrapJson, ingestEmpty, ingestEmpty, ingestEmpty]),
+        makeMultiLlm([
+          bootstrapJson,
+          entitiesEmpty, ingestEmpty,
+          entitiesEmpty, ingestEmpty,
+          entitiesEmpty, ingestEmpty,
+        ]),
         "model", [], "TestVault", new AbortController().signal,
       ),
     );
@@ -531,6 +559,9 @@ describe("runInitWithSources — per-file pipeline", () => {
     entity_types: [{ type: "person", description: "Person", extraction_cues: [] }],
   });
 
+  // Empty entities response for LLM #1 of every ingest (skips per-entity retrieval branch).
+  const entitiesEmpty = JSON.stringify({ reasoning: "", entities: [] });
+
   // Ingest returns WikiPagesOutputSchema format: { reasoning, pages }.
   // Path must start with `!Wiki/dom/`.
   function ingestPagesJson(name: string): string {
@@ -576,13 +607,16 @@ describe("runInitWithSources — per-file pipeline", () => {
     });
     const vt = new VaultTools(adapter, "/vault");
 
-    // Calls: [0]=bootstrap(a), [1]=ingest(a), [2]=ingest(b), [3]=ingest(c)
+    // Calls (2 per ingest):
+    //   [0]=bootstrap(a), [1]=entities(a), [2]=pages(a),
+    //   [3]=entities(b), [4]=pages(b),
+    //   [5]=entities(c), [6]=pages(c)
     const llm = makeOrderedLlm(
       [
         [bootstrapJson],
-        [ingestPagesJson("A")],
-        [ingestPagesJson("B")],
-        [ingestPagesJson("C")],
+        [entitiesEmpty], [ingestPagesJson("A")],
+        [entitiesEmpty], [ingestPagesJson("B")],
+        [entitiesEmpty], [ingestPagesJson("C")],
       ],
       (idx) => llmCallLog.push(idx),
     );
@@ -591,12 +625,13 @@ describe("runInitWithSources — per-file pipeline", () => {
       runInit(["dom", "--sources", "src"], vt, llm, "model", [], "TestVault", new AbortController().signal),
     );
 
-    // The article A.md must have been written before the 3rd LLM call (ingest-b)
+    // The article A.md must have been written before the next file's ingest begins.
+    // After bootstrap + entities-a + pages-a (3 LLM calls), A.md is written; entities-b hasn't fired yet.
     const writeAIdx = writeLog.findIndex((w) => w.startsWith("write:!Wiki/dom/concepts/A.md"));
     expect(writeAIdx).toBeGreaterThanOrEqual(0);
     const writeACallCount = Number(writeLog[writeAIdx].split("@call=")[1]);
-    // call=2 means after 2 LLM calls (bootstrap + ingest-a) — the 3rd call (ingest-b) hasn't happened yet
-    expect(writeACallCount).toBeLessThanOrEqual(2);
+    // call=3 means after 3 LLM calls (bootstrap + entities-a + pages-a) — the 4th call (entities-b) hasn't happened yet
+    expect(writeACallCount).toBeLessThanOrEqual(3);
   });
 
   it("resume: skips files already in analyzed_sources_v2 domain", async () => {
@@ -652,8 +687,10 @@ describe("runInitWithSources — per-file pipeline", () => {
         completions: {
           create: vi.fn().mockImplementation(() => {
             const idx = callIndex++;
-            // 0: bootstrap(a), 1: ingest(a), 2: ingest(b) — abort here AFTER returning JSON
-            if (idx === 2) {
+            // 0: bootstrap(a),
+            // 1: entities(a), 2: pages(a),
+            // 3: entities(b), 4: pages(b) — abort here AFTER returning JSON
+            if (idx === 4) {
               return Promise.resolve({
                 [Symbol.asyncIterator]: async function* () {
                   yield { choices: [{ delta: { content: JSON.stringify({ reasoning: "ok", pages: [] }) } }] };
@@ -662,8 +699,10 @@ describe("runInitWithSources — per-file pipeline", () => {
                 },
               });
             }
-            const body =
-              idx === 0 ? bootstrapJson : JSON.stringify({ reasoning: "ok", pages: [{ path: "!Wiki/dom/concepts/A.md", content: "a" }] });
+            let body: string;
+            if (idx === 0) body = bootstrapJson;
+            else if (idx === 1 || idx === 3) body = JSON.stringify({ reasoning: "", entities: [] });
+            else body = JSON.stringify({ reasoning: "ok", pages: [{ path: "!Wiki/dom/concepts/A.md", content: "a" }] });
             return Promise.resolve({
               [Symbol.asyncIterator]: async function* () {
                 yield { choices: [{ delta: { content: body } }] };
@@ -750,6 +789,7 @@ describe("runInitWithSources — domain_updated intercept from ingest", () => {
     const adapter = mockAdapterWithSources(files);
     const vt = new VaultTools(adapter, "/vault");
 
+    const entitiesEmpty = JSON.stringify({ reasoning: "", entities: [] });
     const ingestEmpty = JSON.stringify({ reasoning: "ok", pages: [] });
     const ingestWithDelta = JSON.stringify({
       reasoning: "Found person type",
@@ -759,8 +799,13 @@ describe("runInitWithSources — domain_updated intercept from ingest", () => {
       ],
     });
 
-    // Call sequence: 0=bootstrap(a), 1=ingest(a), 2=ingest(b)
-    const llm = makeMultiLlm([bootstrapJson, ingestEmpty, ingestWithDelta]);
+    // Call sequence (2 calls per ingest):
+    //   0=bootstrap(a), 1=entities(a), 2=pages(a), 3=entities(b), 4=pages(b)
+    const llm = makeMultiLlm([
+      bootstrapJson,
+      entitiesEmpty, ingestEmpty,
+      entitiesEmpty, ingestWithDelta,
+    ]);
 
     const events = await collect(
       runInit(["dom", "--sources", "src"], vt, llm, "model", [], "TestVault", new AbortController().signal),
