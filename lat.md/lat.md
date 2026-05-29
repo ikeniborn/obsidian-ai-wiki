@@ -7,3 +7,4 @@ AI Wiki is an Obsidian plugin that builds and maintains domain wikis from raw no
 - [[operations]] — The seven wiki operations: init, ingest, query, lint, lint-chat, chat, format
 - [[llm-pipeline]] — LLM call assembly, parseWithRetry, streaming, wrapWithJsonFallback
 - [[wiki-graph]] — Wiki graph structure, BFS expansion for query, graph cache, structural checks
+- [[tests]] — Test spec sections mapped to test code via `// @lat:` comments

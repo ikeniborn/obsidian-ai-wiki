@@ -148,6 +148,7 @@ describe("FormatOutputSchema", () => {
 });
 
 describe("EntitiesOutputSchema", () => {
+  // @lat: [[tests#Entity Extraction#Entities schema accepts minimal entity]]
   it("accepts minimal entity", () => {
     const r = EntitiesOutputSchema.safeParse({
       reasoning: "ok",

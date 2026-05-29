@@ -122,6 +122,7 @@ describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
     (globalThis as unknown as { fetch: unknown }).fetch = vi.fn();
   });
 
+  // @lat: [[tests#Per-Entity Retrieval#Top-K per entity in embedding mode]]
   it("batches all entity queries in one HTTP call", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -184,6 +185,7 @@ describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
     expect(results.get("Q::")).toEqual(["!Wiki/d/x/Alpha.md"]);
   });
 
+  // @lat: [[tests#Per-Entity Retrieval#Jaccard fallback on HTTP error]]
   it("falls back to Jaccard when embedding HTTP throws", async () => {
     (globalThis as unknown as { fetch: unknown }).fetch = vi.fn().mockRejectedValue(new Error("network down"));
     const svc = new PageSimilarityService({
@@ -199,6 +201,7 @@ describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
     expect(results.get("neural network::")).toEqual(["!Wiki/d/x/Alpha.md"]);
   });
 
+  // @lat: [[tests#Stop Rules#Halt on all-entity retrieval failure]]
   it("allFailed=true when annotations map is empty (no candidates at all)", async () => {
     (globalThis as unknown as { fetch: unknown }).fetch = vi.fn().mockRejectedValue(new Error("dead"));
     const svc = new PageSimilarityService({

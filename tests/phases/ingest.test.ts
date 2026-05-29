@@ -932,6 +932,8 @@ describe("runIngest — entity-driven flow", () => {
     expect(llm.chat.completions.create).toHaveBeenCalledTimes(2);
   });
 
+  // @lat: [[tests#Stop Rules#Halt on entity extraction failure]]
+  // @lat: [[tests#Entity Extraction#Entity extraction halt on parse failure]]
   it("halts when entity extraction LLM returns invalid JSON", async () => {
     const adapter = mockAdapter({ read: vi.fn().mockResolvedValue("source") });
     const vt = new VaultTools(adapter, VAULT_ROOT);
@@ -950,6 +952,7 @@ describe("runIngest — entity-driven flow", () => {
     )).toBeUndefined();
   });
 
+  // @lat: [[tests#Per-Entity Retrieval#Empty top-K is not an error]]
   it("entity with empty top-K still goes to LLM #2 as create signal", async () => {
     const adapter = mockAdapter({
       read: vi.fn().mockImplementation(async (p: string) => {
@@ -972,6 +975,7 @@ describe("runIngest — entity-driven flow", () => {
     expect(adapter.write).toHaveBeenCalledWith("!Wiki/work/entities/BrandNew.md", "# BrandNew");
   });
 
+  // @lat: [[tests#Merge Handling#Deletes trigger vault.remove + index cleanup]]
   it("processes deletes: vault.remove + removeIndexAnnotation called", async () => {
     let indexContent = "# Wiki Index\n\n## entities\n- [[Old]] entities/Old.md — to delete\n";
     const adapter = mockAdapter({
@@ -1043,6 +1047,7 @@ describe("runIngest — entity-driven flow", () => {
     expect(result?.text).toMatch(/создано 1, обновлено 1, объединено 1/);
   });
 
+  // @lat: [[tests#Merge Handling#Large-merge warning]]
   it("emits Large merge warning when deletes.length > threshold", async () => {
     const paths = Array.from({ length: 6 }, (_, i) => `!Wiki/work/entities/Old${i}.md`);
     const adapter = mockAdapter({
@@ -1105,6 +1110,7 @@ describe("runIngest — entity-driven flow", () => {
     expect(rej).toBeDefined();
   });
 
+  // @lat: [[tests#Merge Handling#Backlinks drop deleted stems]]
   it("source backlinks drop deleted page stems", async () => {
     const existingFm =
       '---\nwiki_articles:\n  - "[[Old]]"\n  - "[[Other]]"\n---\nsource';
@@ -1144,6 +1150,7 @@ describe("runIngest — entity-driven flow", () => {
     expect(updated).toContain("[[New]]");
   });
 
+  // @lat: [[tests#Stop Rules#BFS not invoked]]
   it("BFS not invoked: graphCache.get is never called from ingest", async () => {
     const adapter = mockAdapter({
       read: vi.fn().mockResolvedValue("source"),

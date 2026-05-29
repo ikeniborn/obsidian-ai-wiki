@@ -57,7 +57,7 @@ Per-operation effort levels map to Claude's extended thinking. The subprocess ki
 
 ## PageSimilarityService
 
-Reduces LLM context size by pre-selecting the top-K most relevant wiki pages for a given source file. Built by `AgentRunner.buildSimilarity()` and passed to ingest, init, lint, and format phases.
+Reduces LLM context by pre-selecting top-K relevant wiki pages. Built by `AgentRunner.buildSimilarity()`. Exposes `selectRelevant` (whole-source query, used by query/lint/format/init) and `selectByEntities` (per-entity batched query, used by ingest).
 
 Two modes: `jaccard` (default, no API calls) uses token overlap scoring via `scoreSeed`; `embedding` fetches vectors from an OpenAI-compatible endpoint (no API key required — supports Ollama), falls back to Jaccard on error. Embedding vectors are cached per domain at `_config/_embeddings.json` and invalidated by annotation content hash. `refreshCache` updates stale entries after a domain write pass — called by both ingest (after writing pages) and lint. Configured via `embeddingModel`, `embeddingDimensions`, `relevantPagesTopK` in `LocalConfig.nativeAgent`. Only active for `native-agent` backend.
 
@@ -65,7 +65,9 @@ Two modes: `jaccard` (default, no API calls) uses token overlap scoring via `sco
 
 `refreshCache` returns `{ updated: number }` — the count of newly embedded pages written to the cache. Returns `{ updated: 0 }` when in `jaccard` mode, when config is incomplete, or when no entries need updating.
 
-See [[src/page-similarity.ts#PageSimilarityService]], [[src/agent-runner.ts#AgentRunner]], [[operations#Ingest#Page Similarity]].
+Ingest uses `selectByEntities` for per-entity vector top-K; query/lint/format/init continue to use `selectRelevant` + BFS via `wiki-graph`.
+
+See [[src/page-similarity.ts#PageSimilarityService]], [[src/agent-runner.ts#AgentRunner]], [[operations#Ingest#Per-Entity Retrieval]].
 
 ## VaultTools
 

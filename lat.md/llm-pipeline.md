@@ -26,6 +26,7 @@ Each call site ties a phase to a Zod schema for structured output validation.
 
 | callSite | Phase | Zod Schema |
 |---|---|---|
+| `ingest.entities` | ingest | `EntitiesOutputSchema` |
 | `ingest.pages` | ingest | `WikiPagesOutputSchema` |
 | `init.bootstrap` | init | `DomainEntrySchema` |
 | `lint.fix` | lint | `LintOutputSchema` |
