@@ -64,7 +64,7 @@ Tests that validate halt conditions.
 
 ### Halt on all-entity retrieval failure
 
-When `selectByEntities` returns `allFailed: true` and entities is non-empty, ingest halts before invoking LLM #2.
+When `selectByEntities` returns `allFailed: true` and both entities and `nonMetaPaths` are non-empty, ingest halts before invoking LLM #2.
 
 ### BFS not invoked
 
