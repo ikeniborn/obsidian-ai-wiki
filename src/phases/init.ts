@@ -150,9 +150,10 @@ export async function* runInitWithSources(
     return;
   }
 
+  const initialDomainRoot = existing ? domainWikiFolder(existing.wiki_folder) : wikiRootGuess;
   const [schemaContent, indexContent] = await Promise.all([
     tryRead(vaultTools, GLOBAL_WIKI_SCHEMA_PATH),
-    tryRead(vaultTools, domainIndexPath(wikiRootGuess)),
+    tryRead(vaultTools, domainIndexPath(initialDomainRoot)),
   ]);
 
   let annotationsCache = parseIndexAnnotations(indexContent);
@@ -321,7 +322,8 @@ export async function* runInitWithSources(
     }
 
     if (similarity) {
-      const fresh = await tryRead(vaultTools, domainIndexPath(wikiRootGuess));
+      const domainRoot = currentDomain ? domainWikiFolder(currentDomain.wiki_folder) : wikiRootGuess;
+      const fresh = await tryRead(vaultTools, domainIndexPath(domainRoot));
       annotationsCache = parseIndexAnnotations(fresh);
     }
 
