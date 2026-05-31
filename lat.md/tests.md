@@ -34,6 +34,10 @@ When the embeddings endpoint throws, retrieval falls back to per-entity Jaccard 
 
 An entity with no annotation matches receives `[]` and is treated by LLM #2 as a create signal — `allFailed` stays false unless the retrieval mechanism itself failed for every entity.
 
+### allFailed false when no pages exist
+
+When the wiki is empty (`allPaths` is `[]`), `jaccardFallbackAll` returns `allFailed: false` — no pages to process is not a failure.
+
 ## Merge Handling
 
 Tests that validate `deletes[]` on `WikiPagesOutputSchema` and the delete loop.
@@ -60,7 +64,7 @@ Tests that validate halt conditions.
 
 ### Halt on all-entity retrieval failure
 
-When `selectByEntities` returns `allFailed: true` and entities is non-empty, ingest halts before invoking LLM #2.
+When `selectByEntities` returns `allFailed: true` and both entities and `nonMetaPaths` are non-empty, ingest halts before invoking LLM #2.
 
 ### BFS not invoked
 

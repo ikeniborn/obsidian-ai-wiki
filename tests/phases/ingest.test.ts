@@ -936,7 +936,13 @@ describe("runIngest — entity-driven flow", () => {
   it("halts when similarity.selectByEntities reports allFailed with non-empty entities", async () => {
     const adapter = mockAdapter({
       read: vi.fn().mockResolvedValue("source"),
-      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+      list: vi.fn().mockImplementation((path: string) =>
+        Promise.resolve(
+          path.includes("!Wiki/work")
+            ? { files: ["!Wiki/work/entities/Foo.md"], folders: [] }
+            : { files: [], folders: [] },
+        ),
+      ),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const llm = makeLlm(JSON.stringify({ reasoning: "", entities: [{ name: "Foo" }] }));

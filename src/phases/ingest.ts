@@ -148,7 +148,7 @@ export async function* runIngest(
       entitiesResult.value.entities, annotations, nonMetaPaths,
     );
 
-    if (allFailed && entitiesResult.value.entities.length > 0) {
+    if (allFailed && entitiesResult.value.entities.length > 0 && nonMetaPaths.length > 0) {
       yield { kind: "error", message: "ingest: per-entity retrieval failed for all entities" };
       yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
       return;
