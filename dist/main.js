@@ -29117,7 +29117,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
       annotations,
       nonMetaPaths
     );
-    if (allFailed && entitiesResult.value.entities.length > 0) {
+    if (allFailed && entitiesResult.value.entities.length > 0 && nonMetaPaths.length > 0) {
       yield { kind: "error", message: "ingest: per-entity retrieval failed for all entities" };
       yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: 0 };
       return;
@@ -30603,9 +30603,10 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
     };
     return;
   }
+  const initialDomainRoot = existing ? domainWikiFolder(existing.wiki_folder) : wikiRootGuess;
   const [schemaContent, indexContent] = await Promise.all([
     tryRead5(vaultTools, GLOBAL_WIKI_SCHEMA_PATH),
-    tryRead5(vaultTools, domainIndexPath(wikiRootGuess))
+    tryRead5(vaultTools, domainIndexPath(initialDomainRoot))
   ]);
   let annotationsCache = parseIndexAnnotations(indexContent);
   let currentDomain = existing ?? null;
@@ -30775,7 +30776,8 @@ ${JSON.stringify(entry, null, 2)}
       }
     }
     if (similarity) {
-      const fresh = await tryRead5(vaultTools, domainIndexPath(wikiRootGuess));
+      const domainRoot = currentDomain ? domainWikiFolder(currentDomain.wiki_folder) : wikiRootGuess;
+      const fresh = await tryRead5(vaultTools, domainIndexPath(domainRoot));
       annotationsCache = parseIndexAnnotations(fresh);
     }
     if (signal.aborted) return;
@@ -31295,7 +31297,7 @@ var PageSimilarityService = class {
       results.set(entityKey(e), top);
       if (indexAnnotations.size > 0) anySuccess = true;
     }
-    return { results, allFailed: !anySuccess };
+    return { results, allFailed: allPaths.length > 0 && !anySuccess };
   }
   async selectByEntitiesEmbedding(entities, indexAnnotations, allPaths) {
     const { baseUrl, apiKey, model, topK } = this.config;
@@ -31359,7 +31361,7 @@ var PageSimilarityService = class {
       results.set(entityKey(e), top);
       if (indexAnnotations.size > 0) anySuccess = true;
     }
-    return { results, allFailed: !anySuccess };
+    return { results, allFailed: allPaths.length > 0 && !anySuccess };
   }
   selectJaccard(queryTokens, indexAnnotations, allPaths) {
     const scored = [];

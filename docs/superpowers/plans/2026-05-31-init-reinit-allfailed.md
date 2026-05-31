@@ -1,3 +1,26 @@
+---
+review:
+  plan_hash: c0e27015f74822ba
+  spec_hash: a338b7907e095460
+  last_run: 2026-05-31
+  phases:
+    structure:     { status: passed }
+    coverage:      { status: passed }
+    dependencies:  { status: passed }
+    verifiability: { status: passed }
+    consistency:   { status: passed }
+  findings:
+    - id: F-001
+      severity: WARNING
+      section: "Task 3 > Step 2"
+      section_hash: fd83fd3c5a31ce60
+      text: "Contradictory expected output — says 'Expected: FAIL' then 'Actually the test should still PASS'. Agent cannot determine correct expectation."
+      verdict: fixed
+chain:
+  intent: docs/superpowers/intents/2026-05-31-init-reinit-allfailed-intent.md
+  spec:   docs/superpowers/specs/2026-05-31-init-reinit-allfailed-design.md
+---
+
 # Fix init/reinit allFailed false-positive Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -157,19 +180,13 @@ it("halts when similarity.selectByEntities reports allFailed with non-empty enti
 
 Leave everything else in the test unchanged.
 
-- [ ] **Step 2: Run test to verify it fails**
-
-```bash
-npm test -- tests/phases/ingest.test.ts 2>&1 | grep -A5 "allFailed\|per-entity"
-```
-
-Expected: FAIL — the guard in ingest.ts doesn't yet check `nonMetaPaths.length > 0`, but `nonMetaPaths` now has one file (`Foo.md`). Actually the test should still PASS at this point (the guard fires because `allFailed=true` and `entities.length > 0`). **Run all ingest tests to verify baseline:**
+- [ ] **Step 2: Verify baseline still passes**
 
 ```bash
 npm test -- tests/phases/ingest.test.ts 2>&1 | tail -10
 ```
 
-Expected: all pass (the new list mock makes `nonMetaPaths = ["!Wiki/work/entities/Foo.md"]`, the existing guard still fires).
+Expected: all pass. The updated list mock returns `Foo.md` for the wiki path, so `nonMetaPaths = ["!Wiki/work/entities/Foo.md"]`. The existing guard (`allFailed && entities.length > 0`) still fires — the new `nonMetaPaths.length > 0` condition hasn't been added yet, but it would be true anyway.
 
 - [ ] **Step 3: Fix guard in `src/phases/ingest.ts`**
 
