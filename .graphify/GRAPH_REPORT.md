@@ -1,22 +1,22 @@
-# Graph Report - .  (2026-05-27)
+# Graph Report - .  (2026-05-31)
 
 ## Corpus Check
-- 172 files · ~92,095 words
+- 179 files · ~102,608 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2139 nodes · 2648 edges · 646 communities (152 shown, 494 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 33 edges (avg confidence: 0.8)
+- 1368 nodes · 2430 edges · 283 communities (70 shown, 213 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 35 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
-- [[_COMMUNITY_Community 0|Community 0]]
-- [[_COMMUNITY_Community 1|Community 1]]
-- [[_COMMUNITY_Community 2|Community 2]]
-- [[_COMMUNITY_Community 3|Community 3]]
-- [[_COMMUNITY_Community 4|Community 4]]
-- [[_COMMUNITY_Community 5|Community 5]]
-- [[_COMMUNITY_Community 6|Community 6]]
+- [[_COMMUNITY_Similarity & Retrieval|Similarity & Retrieval]]
+- [[_COMMUNITY_Ingest Pipeline|Ingest Pipeline]]
+- [[_COMMUNITY_Init & Domain Setup|Init & Domain Setup]]
+- [[_COMMUNITY_Wiki Path Utils|Wiki Path Utils]]
+- [[_COMMUNITY_Test Harness|Test Harness]]
+- [[_COMMUNITY_LLM Prompts|LLM Prompts]]
+- [[_COMMUNITY_Vault Tools|Vault Tools]]
 - [[_COMMUNITY_Community 7|Community 7]]
 - [[_COMMUNITY_Community 8|Community 8]]
 - [[_COMMUNITY_Community 9|Community 9]]
@@ -70,22 +70,14 @@
 - [[_COMMUNITY_Community 57|Community 57]]
 - [[_COMMUNITY_Community 58|Community 58]]
 - [[_COMMUNITY_Community 59|Community 59]]
-- [[_COMMUNITY_Community 60|Community 60]]
 - [[_COMMUNITY_Community 61|Community 61]]
 - [[_COMMUNITY_Community 62|Community 62]]
 - [[_COMMUNITY_Community 63|Community 63]]
 - [[_COMMUNITY_Community 64|Community 64]]
-- [[_COMMUNITY_Community 65|Community 65]]
-- [[_COMMUNITY_Community 66|Community 66]]
-- [[_COMMUNITY_Community 67|Community 67]]
-- [[_COMMUNITY_Community 68|Community 68]]
-- [[_COMMUNITY_Community 69|Community 69]]
-- [[_COMMUNITY_Community 70|Community 70]]
 - [[_COMMUNITY_Community 71|Community 71]]
 - [[_COMMUNITY_Community 72|Community 72]]
 - [[_COMMUNITY_Community 73|Community 73]]
 - [[_COMMUNITY_Community 74|Community 74]]
-- [[_COMMUNITY_Community 75|Community 75]]
 - [[_COMMUNITY_Community 76|Community 76]]
 - [[_COMMUNITY_Community 77|Community 77]]
 - [[_COMMUNITY_Community 78|Community 78]]
@@ -99,25 +91,60 @@
 - [[_COMMUNITY_Community 86|Community 86]]
 - [[_COMMUNITY_Community 87|Community 87]]
 - [[_COMMUNITY_Community 88|Community 88]]
+- [[_COMMUNITY_Community 89|Community 89]]
 - [[_COMMUNITY_Community 90|Community 90]]
 - [[_COMMUNITY_Community 91|Community 91]]
 - [[_COMMUNITY_Community 92|Community 92]]
 - [[_COMMUNITY_Community 93|Community 93]]
+- [[_COMMUNITY_Community 94|Community 94]]
+- [[_COMMUNITY_Community 95|Community 95]]
+- [[_COMMUNITY_Community 96|Community 96]]
+- [[_COMMUNITY_Community 97|Community 97]]
+- [[_COMMUNITY_Community 98|Community 98]]
+- [[_COMMUNITY_Community 99|Community 99]]
+- [[_COMMUNITY_Community 100|Community 100]]
+- [[_COMMUNITY_Community 101|Community 101]]
+- [[_COMMUNITY_Community 102|Community 102]]
+- [[_COMMUNITY_Community 103|Community 103]]
+- [[_COMMUNITY_Community 104|Community 104]]
+- [[_COMMUNITY_Community 105|Community 105]]
+- [[_COMMUNITY_Community 106|Community 106]]
+- [[_COMMUNITY_Community 107|Community 107]]
+- [[_COMMUNITY_Community 108|Community 108]]
+- [[_COMMUNITY_Community 109|Community 109]]
+- [[_COMMUNITY_Community 110|Community 110]]
+- [[_COMMUNITY_Community 111|Community 111]]
+- [[_COMMUNITY_Community 112|Community 112]]
+- [[_COMMUNITY_Community 113|Community 113]]
+- [[_COMMUNITY_Community 114|Community 114]]
+- [[_COMMUNITY_Community 115|Community 115]]
 - [[_COMMUNITY_Community 116|Community 116]]
 - [[_COMMUNITY_Community 117|Community 117]]
 - [[_COMMUNITY_Community 118|Community 118]]
 - [[_COMMUNITY_Community 119|Community 119]]
+- [[_COMMUNITY_Community 120|Community 120]]
+- [[_COMMUNITY_Community 121|Community 121]]
+- [[_COMMUNITY_Community 122|Community 122]]
+- [[_COMMUNITY_Community 123|Community 123]]
+- [[_COMMUNITY_Community 124|Community 124]]
+- [[_COMMUNITY_Community 125|Community 125]]
+- [[_COMMUNITY_Community 126|Community 126]]
+- [[_COMMUNITY_Community 127|Community 127]]
+- [[_COMMUNITY_Community 128|Community 128]]
+- [[_COMMUNITY_Community 129|Community 129]]
+- [[_COMMUNITY_Community 130|Community 130]]
+- [[_COMMUNITY_Community 131|Community 131]]
 - [[_COMMUNITY_Community 132|Community 132]]
 - [[_COMMUNITY_Community 133|Community 133]]
 - [[_COMMUNITY_Community 134|Community 134]]
 - [[_COMMUNITY_Community 135|Community 135]]
 - [[_COMMUNITY_Community 136|Community 136]]
-- [[_COMMUNITY_Community 137|Community 137]]
-- [[_COMMUNITY_Community 138|Community 138]]
 - [[_COMMUNITY_Community 139|Community 139]]
 - [[_COMMUNITY_Community 140|Community 140]]
 - [[_COMMUNITY_Community 141|Community 141]]
 - [[_COMMUNITY_Community 142|Community 142]]
+- [[_COMMUNITY_Community 143|Community 143]]
+- [[_COMMUNITY_Community 145|Community 145]]
 - [[_COMMUNITY_Community 146|Community 146]]
 - [[_COMMUNITY_Community 147|Community 147]]
 - [[_COMMUNITY_Community 148|Community 148]]
@@ -150,6 +177,7 @@
 - [[_COMMUNITY_Community 175|Community 175]]
 - [[_COMMUNITY_Community 176|Community 176]]
 - [[_COMMUNITY_Community 177|Community 177]]
+- [[_COMMUNITY_Community 178|Community 178]]
 - [[_COMMUNITY_Community 179|Community 179]]
 - [[_COMMUNITY_Community 180|Community 180]]
 - [[_COMMUNITY_Community 181|Community 181]]
@@ -170,6 +198,10 @@
 - [[_COMMUNITY_Community 196|Community 196]]
 - [[_COMMUNITY_Community 197|Community 197]]
 - [[_COMMUNITY_Community 198|Community 198]]
+- [[_COMMUNITY_Community 199|Community 199]]
+- [[_COMMUNITY_Community 200|Community 200]]
+- [[_COMMUNITY_Community 201|Community 201]]
+- [[_COMMUNITY_Community 202|Community 202]]
 - [[_COMMUNITY_Community 203|Community 203]]
 - [[_COMMUNITY_Community 204|Community 204]]
 - [[_COMMUNITY_Community 205|Community 205]]
@@ -200,6 +232,7 @@
 - [[_COMMUNITY_Community 230|Community 230]]
 - [[_COMMUNITY_Community 231|Community 231]]
 - [[_COMMUNITY_Community 232|Community 232]]
+- [[_COMMUNITY_Community 233|Community 233]]
 - [[_COMMUNITY_Community 234|Community 234]]
 - [[_COMMUNITY_Community 235|Community 235]]
 - [[_COMMUNITY_Community 236|Community 236]]
@@ -222,6 +255,7 @@
 - [[_COMMUNITY_Community 253|Community 253]]
 - [[_COMMUNITY_Community 254|Community 254]]
 - [[_COMMUNITY_Community 255|Community 255]]
+- [[_COMMUNITY_Community 256|Community 256]]
 - [[_COMMUNITY_Community 257|Community 257]]
 - [[_COMMUNITY_Community 258|Community 258]]
 - [[_COMMUNITY_Community 259|Community 259]]
@@ -248,713 +282,288 @@
 - [[_COMMUNITY_Community 280|Community 280]]
 - [[_COMMUNITY_Community 281|Community 281]]
 - [[_COMMUNITY_Community 282|Community 282]]
-- [[_COMMUNITY_Community 283|Community 283]]
-- [[_COMMUNITY_Community 284|Community 284]]
-- [[_COMMUNITY_Community 285|Community 285]]
-- [[_COMMUNITY_Community 286|Community 286]]
-- [[_COMMUNITY_Community 287|Community 287]]
-- [[_COMMUNITY_Community 288|Community 288]]
-- [[_COMMUNITY_Community 289|Community 289]]
-- [[_COMMUNITY_Community 290|Community 290]]
-- [[_COMMUNITY_Community 291|Community 291]]
-- [[_COMMUNITY_Community 292|Community 292]]
-- [[_COMMUNITY_Community 293|Community 293]]
-- [[_COMMUNITY_Community 294|Community 294]]
-- [[_COMMUNITY_Community 295|Community 295]]
-- [[_COMMUNITY_Community 296|Community 296]]
-- [[_COMMUNITY_Community 297|Community 297]]
-- [[_COMMUNITY_Community 299|Community 299]]
-- [[_COMMUNITY_Community 300|Community 300]]
-- [[_COMMUNITY_Community 301|Community 301]]
-- [[_COMMUNITY_Community 302|Community 302]]
-- [[_COMMUNITY_Community 303|Community 303]]
-- [[_COMMUNITY_Community 304|Community 304]]
-- [[_COMMUNITY_Community 305|Community 305]]
-- [[_COMMUNITY_Community 306|Community 306]]
-- [[_COMMUNITY_Community 307|Community 307]]
-- [[_COMMUNITY_Community 308|Community 308]]
-- [[_COMMUNITY_Community 309|Community 309]]
-- [[_COMMUNITY_Community 310|Community 310]]
-- [[_COMMUNITY_Community 311|Community 311]]
-- [[_COMMUNITY_Community 312|Community 312]]
-- [[_COMMUNITY_Community 313|Community 313]]
-- [[_COMMUNITY_Community 314|Community 314]]
-- [[_COMMUNITY_Community 315|Community 315]]
-- [[_COMMUNITY_Community 316|Community 316]]
-- [[_COMMUNITY_Community 317|Community 317]]
-- [[_COMMUNITY_Community 318|Community 318]]
-- [[_COMMUNITY_Community 319|Community 319]]
-- [[_COMMUNITY_Community 320|Community 320]]
-- [[_COMMUNITY_Community 321|Community 321]]
-- [[_COMMUNITY_Community 326|Community 326]]
-- [[_COMMUNITY_Community 327|Community 327]]
-- [[_COMMUNITY_Community 328|Community 328]]
-- [[_COMMUNITY_Community 329|Community 329]]
-- [[_COMMUNITY_Community 330|Community 330]]
-- [[_COMMUNITY_Community 333|Community 333]]
-- [[_COMMUNITY_Community 334|Community 334]]
-- [[_COMMUNITY_Community 335|Community 335]]
-- [[_COMMUNITY_Community 336|Community 336]]
-- [[_COMMUNITY_Community 337|Community 337]]
-- [[_COMMUNITY_Community 338|Community 338]]
-- [[_COMMUNITY_Community 339|Community 339]]
-- [[_COMMUNITY_Community 340|Community 340]]
-- [[_COMMUNITY_Community 341|Community 341]]
-- [[_COMMUNITY_Community 342|Community 342]]
-- [[_COMMUNITY_Community 343|Community 343]]
-- [[_COMMUNITY_Community 344|Community 344]]
-- [[_COMMUNITY_Community 345|Community 345]]
-- [[_COMMUNITY_Community 346|Community 346]]
-- [[_COMMUNITY_Community 347|Community 347]]
-- [[_COMMUNITY_Community 348|Community 348]]
-- [[_COMMUNITY_Community 349|Community 349]]
-- [[_COMMUNITY_Community 350|Community 350]]
-- [[_COMMUNITY_Community 351|Community 351]]
-- [[_COMMUNITY_Community 352|Community 352]]
-- [[_COMMUNITY_Community 353|Community 353]]
-- [[_COMMUNITY_Community 354|Community 354]]
-- [[_COMMUNITY_Community 355|Community 355]]
-- [[_COMMUNITY_Community 356|Community 356]]
-- [[_COMMUNITY_Community 357|Community 357]]
-- [[_COMMUNITY_Community 358|Community 358]]
-- [[_COMMUNITY_Community 359|Community 359]]
-- [[_COMMUNITY_Community 360|Community 360]]
-- [[_COMMUNITY_Community 361|Community 361]]
-- [[_COMMUNITY_Community 362|Community 362]]
-- [[_COMMUNITY_Community 363|Community 363]]
-- [[_COMMUNITY_Community 364|Community 364]]
-- [[_COMMUNITY_Community 365|Community 365]]
-- [[_COMMUNITY_Community 366|Community 366]]
-- [[_COMMUNITY_Community 367|Community 367]]
-- [[_COMMUNITY_Community 368|Community 368]]
-- [[_COMMUNITY_Community 369|Community 369]]
-- [[_COMMUNITY_Community 370|Community 370]]
-- [[_COMMUNITY_Community 371|Community 371]]
-- [[_COMMUNITY_Community 372|Community 372]]
-- [[_COMMUNITY_Community 373|Community 373]]
-- [[_COMMUNITY_Community 374|Community 374]]
-- [[_COMMUNITY_Community 375|Community 375]]
-- [[_COMMUNITY_Community 382|Community 382]]
-- [[_COMMUNITY_Community 383|Community 383]]
-- [[_COMMUNITY_Community 384|Community 384]]
-- [[_COMMUNITY_Community 385|Community 385]]
-- [[_COMMUNITY_Community 386|Community 386]]
-- [[_COMMUNITY_Community 387|Community 387]]
-- [[_COMMUNITY_Community 388|Community 388]]
-- [[_COMMUNITY_Community 390|Community 390]]
-- [[_COMMUNITY_Community 391|Community 391]]
-- [[_COMMUNITY_Community 392|Community 392]]
-- [[_COMMUNITY_Community 393|Community 393]]
-- [[_COMMUNITY_Community 395|Community 395]]
-- [[_COMMUNITY_Community 396|Community 396]]
-- [[_COMMUNITY_Community 397|Community 397]]
-- [[_COMMUNITY_Community 398|Community 398]]
-- [[_COMMUNITY_Community 399|Community 399]]
-- [[_COMMUNITY_Community 400|Community 400]]
-- [[_COMMUNITY_Community 401|Community 401]]
-- [[_COMMUNITY_Community 402|Community 402]]
-- [[_COMMUNITY_Community 403|Community 403]]
-- [[_COMMUNITY_Community 404|Community 404]]
-- [[_COMMUNITY_Community 405|Community 405]]
-- [[_COMMUNITY_Community 406|Community 406]]
-- [[_COMMUNITY_Community 407|Community 407]]
-- [[_COMMUNITY_Community 408|Community 408]]
-- [[_COMMUNITY_Community 409|Community 409]]
-- [[_COMMUNITY_Community 410|Community 410]]
-- [[_COMMUNITY_Community 411|Community 411]]
-- [[_COMMUNITY_Community 412|Community 412]]
-- [[_COMMUNITY_Community 413|Community 413]]
-- [[_COMMUNITY_Community 414|Community 414]]
-- [[_COMMUNITY_Community 415|Community 415]]
-- [[_COMMUNITY_Community 416|Community 416]]
-- [[_COMMUNITY_Community 417|Community 417]]
-- [[_COMMUNITY_Community 418|Community 418]]
-- [[_COMMUNITY_Community 419|Community 419]]
-- [[_COMMUNITY_Community 420|Community 420]]
-- [[_COMMUNITY_Community 421|Community 421]]
-- [[_COMMUNITY_Community 422|Community 422]]
-- [[_COMMUNITY_Community 423|Community 423]]
-- [[_COMMUNITY_Community 424|Community 424]]
-- [[_COMMUNITY_Community 425|Community 425]]
-- [[_COMMUNITY_Community 426|Community 426]]
-- [[_COMMUNITY_Community 427|Community 427]]
-- [[_COMMUNITY_Community 428|Community 428]]
-- [[_COMMUNITY_Community 429|Community 429]]
-- [[_COMMUNITY_Community 430|Community 430]]
-- [[_COMMUNITY_Community 431|Community 431]]
-- [[_COMMUNITY_Community 432|Community 432]]
-- [[_COMMUNITY_Community 433|Community 433]]
-- [[_COMMUNITY_Community 434|Community 434]]
-- [[_COMMUNITY_Community 435|Community 435]]
-- [[_COMMUNITY_Community 436|Community 436]]
-- [[_COMMUNITY_Community 437|Community 437]]
-- [[_COMMUNITY_Community 438|Community 438]]
-- [[_COMMUNITY_Community 439|Community 439]]
-- [[_COMMUNITY_Community 440|Community 440]]
-- [[_COMMUNITY_Community 441|Community 441]]
-- [[_COMMUNITY_Community 442|Community 442]]
-- [[_COMMUNITY_Community 443|Community 443]]
-- [[_COMMUNITY_Community 444|Community 444]]
-- [[_COMMUNITY_Community 445|Community 445]]
-- [[_COMMUNITY_Community 446|Community 446]]
-- [[_COMMUNITY_Community 447|Community 447]]
-- [[_COMMUNITY_Community 448|Community 448]]
-- [[_COMMUNITY_Community 449|Community 449]]
-- [[_COMMUNITY_Community 450|Community 450]]
-- [[_COMMUNITY_Community 451|Community 451]]
-- [[_COMMUNITY_Community 452|Community 452]]
-- [[_COMMUNITY_Community 453|Community 453]]
-- [[_COMMUNITY_Community 454|Community 454]]
-- [[_COMMUNITY_Community 455|Community 455]]
-- [[_COMMUNITY_Community 456|Community 456]]
-- [[_COMMUNITY_Community 457|Community 457]]
-- [[_COMMUNITY_Community 458|Community 458]]
-- [[_COMMUNITY_Community 459|Community 459]]
-- [[_COMMUNITY_Community 460|Community 460]]
-- [[_COMMUNITY_Community 461|Community 461]]
-- [[_COMMUNITY_Community 462|Community 462]]
-- [[_COMMUNITY_Community 463|Community 463]]
-- [[_COMMUNITY_Community 464|Community 464]]
-- [[_COMMUNITY_Community 465|Community 465]]
-- [[_COMMUNITY_Community 466|Community 466]]
-- [[_COMMUNITY_Community 467|Community 467]]
-- [[_COMMUNITY_Community 468|Community 468]]
-- [[_COMMUNITY_Community 469|Community 469]]
-- [[_COMMUNITY_Community 470|Community 470]]
-- [[_COMMUNITY_Community 471|Community 471]]
-- [[_COMMUNITY_Community 472|Community 472]]
-- [[_COMMUNITY_Community 473|Community 473]]
-- [[_COMMUNITY_Community 474|Community 474]]
-- [[_COMMUNITY_Community 475|Community 475]]
-- [[_COMMUNITY_Community 476|Community 476]]
-- [[_COMMUNITY_Community 477|Community 477]]
-- [[_COMMUNITY_Community 478|Community 478]]
-- [[_COMMUNITY_Community 479|Community 479]]
-- [[_COMMUNITY_Community 480|Community 480]]
-- [[_COMMUNITY_Community 481|Community 481]]
-- [[_COMMUNITY_Community 482|Community 482]]
-- [[_COMMUNITY_Community 483|Community 483]]
-- [[_COMMUNITY_Community 484|Community 484]]
-- [[_COMMUNITY_Community 485|Community 485]]
-- [[_COMMUNITY_Community 492|Community 492]]
-- [[_COMMUNITY_Community 493|Community 493]]
-- [[_COMMUNITY_Community 494|Community 494]]
-- [[_COMMUNITY_Community 495|Community 495]]
-- [[_COMMUNITY_Community 496|Community 496]]
-- [[_COMMUNITY_Community 497|Community 497]]
-- [[_COMMUNITY_Community 498|Community 498]]
-- [[_COMMUNITY_Community 499|Community 499]]
-- [[_COMMUNITY_Community 500|Community 500]]
-- [[_COMMUNITY_Community 501|Community 501]]
-- [[_COMMUNITY_Community 502|Community 502]]
-- [[_COMMUNITY_Community 503|Community 503]]
-- [[_COMMUNITY_Community 504|Community 504]]
-- [[_COMMUNITY_Community 505|Community 505]]
-- [[_COMMUNITY_Community 506|Community 506]]
-- [[_COMMUNITY_Community 507|Community 507]]
-- [[_COMMUNITY_Community 508|Community 508]]
-- [[_COMMUNITY_Community 509|Community 509]]
-- [[_COMMUNITY_Community 510|Community 510]]
-- [[_COMMUNITY_Community 511|Community 511]]
-- [[_COMMUNITY_Community 512|Community 512]]
-- [[_COMMUNITY_Community 513|Community 513]]
-- [[_COMMUNITY_Community 514|Community 514]]
-- [[_COMMUNITY_Community 515|Community 515]]
-- [[_COMMUNITY_Community 516|Community 516]]
-- [[_COMMUNITY_Community 517|Community 517]]
-- [[_COMMUNITY_Community 518|Community 518]]
-- [[_COMMUNITY_Community 519|Community 519]]
-- [[_COMMUNITY_Community 520|Community 520]]
-- [[_COMMUNITY_Community 521|Community 521]]
-- [[_COMMUNITY_Community 522|Community 522]]
-- [[_COMMUNITY_Community 523|Community 523]]
-- [[_COMMUNITY_Community 524|Community 524]]
-- [[_COMMUNITY_Community 525|Community 525]]
-- [[_COMMUNITY_Community 526|Community 526]]
-- [[_COMMUNITY_Community 527|Community 527]]
-- [[_COMMUNITY_Community 528|Community 528]]
-- [[_COMMUNITY_Community 529|Community 529]]
-- [[_COMMUNITY_Community 530|Community 530]]
-- [[_COMMUNITY_Community 531|Community 531]]
-- [[_COMMUNITY_Community 532|Community 532]]
-- [[_COMMUNITY_Community 533|Community 533]]
-- [[_COMMUNITY_Community 534|Community 534]]
-- [[_COMMUNITY_Community 535|Community 535]]
-- [[_COMMUNITY_Community 536|Community 536]]
-- [[_COMMUNITY_Community 537|Community 537]]
-- [[_COMMUNITY_Community 538|Community 538]]
-- [[_COMMUNITY_Community 539|Community 539]]
-- [[_COMMUNITY_Community 540|Community 540]]
-- [[_COMMUNITY_Community 541|Community 541]]
-- [[_COMMUNITY_Community 542|Community 542]]
-- [[_COMMUNITY_Community 543|Community 543]]
-- [[_COMMUNITY_Community 544|Community 544]]
-- [[_COMMUNITY_Community 545|Community 545]]
-- [[_COMMUNITY_Community 546|Community 546]]
-- [[_COMMUNITY_Community 547|Community 547]]
-- [[_COMMUNITY_Community 548|Community 548]]
-- [[_COMMUNITY_Community 549|Community 549]]
-- [[_COMMUNITY_Community 550|Community 550]]
-- [[_COMMUNITY_Community 551|Community 551]]
-- [[_COMMUNITY_Community 552|Community 552]]
-- [[_COMMUNITY_Community 553|Community 553]]
-- [[_COMMUNITY_Community 554|Community 554]]
-- [[_COMMUNITY_Community 555|Community 555]]
-- [[_COMMUNITY_Community 556|Community 556]]
-- [[_COMMUNITY_Community 557|Community 557]]
-- [[_COMMUNITY_Community 558|Community 558]]
-- [[_COMMUNITY_Community 559|Community 559]]
-- [[_COMMUNITY_Community 560|Community 560]]
-- [[_COMMUNITY_Community 561|Community 561]]
-- [[_COMMUNITY_Community 563|Community 563]]
-- [[_COMMUNITY_Community 564|Community 564]]
-- [[_COMMUNITY_Community 565|Community 565]]
-- [[_COMMUNITY_Community 566|Community 566]]
-- [[_COMMUNITY_Community 567|Community 567]]
-- [[_COMMUNITY_Community 568|Community 568]]
-- [[_COMMUNITY_Community 569|Community 569]]
-- [[_COMMUNITY_Community 570|Community 570]]
-- [[_COMMUNITY_Community 571|Community 571]]
-- [[_COMMUNITY_Community 572|Community 572]]
-- [[_COMMUNITY_Community 573|Community 573]]
-- [[_COMMUNITY_Community 574|Community 574]]
-- [[_COMMUNITY_Community 575|Community 575]]
-- [[_COMMUNITY_Community 576|Community 576]]
-- [[_COMMUNITY_Community 577|Community 577]]
-- [[_COMMUNITY_Community 578|Community 578]]
-- [[_COMMUNITY_Community 579|Community 579]]
-- [[_COMMUNITY_Community 580|Community 580]]
-- [[_COMMUNITY_Community 581|Community 581]]
-- [[_COMMUNITY_Community 582|Community 582]]
-- [[_COMMUNITY_Community 583|Community 583]]
-- [[_COMMUNITY_Community 584|Community 584]]
-- [[_COMMUNITY_Community 585|Community 585]]
-- [[_COMMUNITY_Community 586|Community 586]]
-- [[_COMMUNITY_Community 587|Community 587]]
-- [[_COMMUNITY_Community 588|Community 588]]
-- [[_COMMUNITY_Community 589|Community 589]]
-- [[_COMMUNITY_Community 590|Community 590]]
-- [[_COMMUNITY_Community 591|Community 591]]
-- [[_COMMUNITY_Community 592|Community 592]]
-- [[_COMMUNITY_Community 593|Community 593]]
-- [[_COMMUNITY_Community 594|Community 594]]
-- [[_COMMUNITY_Community 595|Community 595]]
-- [[_COMMUNITY_Community 596|Community 596]]
-- [[_COMMUNITY_Community 597|Community 597]]
-- [[_COMMUNITY_Community 602|Community 602]]
-- [[_COMMUNITY_Community 603|Community 603]]
-- [[_COMMUNITY_Community 604|Community 604]]
-- [[_COMMUNITY_Community 605|Community 605]]
-- [[_COMMUNITY_Community 606|Community 606]]
-- [[_COMMUNITY_Community 607|Community 607]]
-- [[_COMMUNITY_Community 608|Community 608]]
-- [[_COMMUNITY_Community 609|Community 609]]
-- [[_COMMUNITY_Community 610|Community 610]]
-- [[_COMMUNITY_Community 611|Community 611]]
-- [[_COMMUNITY_Community 612|Community 612]]
-- [[_COMMUNITY_Community 613|Community 613]]
-- [[_COMMUNITY_Community 614|Community 614]]
-- [[_COMMUNITY_Community 615|Community 615]]
-- [[_COMMUNITY_Community 616|Community 616]]
-- [[_COMMUNITY_Community 617|Community 617]]
-- [[_COMMUNITY_Community 618|Community 618]]
-- [[_COMMUNITY_Community 619|Community 619]]
-- [[_COMMUNITY_Community 620|Community 620]]
-- [[_COMMUNITY_Community 621|Community 621]]
-- [[_COMMUNITY_Community 622|Community 622]]
-- [[_COMMUNITY_Community 623|Community 623]]
-- [[_COMMUNITY_Community 624|Community 624]]
-- [[_COMMUNITY_Community 625|Community 625]]
-- [[_COMMUNITY_Community 626|Community 626]]
-- [[_COMMUNITY_Community 627|Community 627]]
-- [[_COMMUNITY_Community 628|Community 628]]
-- [[_COMMUNITY_Community 629|Community 629]]
-- [[_COMMUNITY_Community 630|Community 630]]
-- [[_COMMUNITY_Community 631|Community 631]]
-- [[_COMMUNITY_Community 632|Community 632]]
-- [[_COMMUNITY_Community 633|Community 633]]
-- [[_COMMUNITY_Community 634|Community 634]]
-- [[_COMMUNITY_Community 635|Community 635]]
-- [[_COMMUNITY_Community 636|Community 636]]
-- [[_COMMUNITY_Community 637|Community 637]]
-- [[_COMMUNITY_Community 638|Community 638]]
-- [[_COMMUNITY_Community 639|Community 639]]
-- [[_COMMUNITY_Community 640|Community 640]]
-- [[_COMMUNITY_Community 641|Community 641]]
-- [[_COMMUNITY_Community 642|Community 642]]
-- [[_COMMUNITY_Community 643|Community 643]]
-- [[_COMMUNITY_Community 644|Community 644]]
-- [[_COMMUNITY_Community 645|Community 645]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `I18n` - 50 edges
-2. `LlmWikiView` - 46 edges
-3. `VaultTools` - 45 edges
-4. `WikiController` - 36 edges
-5. `DomainEntry` - 33 edges
-6. `LlmClient` - 30 edges
-7. `RunEvent` - 24 edges
-8. `AgentRunner` - 14 edges
-9. `VaultAdapter` - 14 edges
-10. `domainWikiFolder()` - 14 edges
+1. `LlmWikiView` - 46 edges
+2. `AgentRunner` - 44 edges
+3. `ClaudeCliClient` - 40 edges
+4. `I18n` - 37 edges
+5. `WikiController` - 36 edges
+6. `LLM Utils Test` - 35 edges
+7. `DomainEntry` - 33 edges
+8. `parseWithRetry` - 29 edges
+9. `LlmClient` - 29 edges
+10. `Run Events` - 24 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `requestUrl()` --calls--> `mobileFetch()`  [INFERRED]
-  vitest.mock.ts → src/mobile-fetch.ts
-- `wrapped` --calls--> `wrapStreamWithStats()`  [INFERRED]
-  tests/llm-utils.test.ts → src/phases/llm-utils.ts
-- `main()` --calls--> `run_mipro()`  [INFERRED]
-  scripts/dspy/optimize.py → scripts/dspy/lib/optimizer.py
-- `write_optimized()` --calls--> `test_write_creates_file()`  [INFERRED]
-  scripts/dspy/lib/writer.py → scripts/dspy/tests/test_writer.py
-- `write_optimized()` --calls--> `test_write_creates_output_dir_if_missing()`  [INFERRED]
-  scripts/dspy/lib/writer.py → scripts/dspy/tests/test_writer.py
+- `parseWithRetry` --calls--> `actualizeDomainConfig()`  [EXTRACTED]
+  lat.md/llm-pipeline.md → src/phases/lint.ts
+- `Format` --calls--> `I18n`  [EXTRACTED]
+  lat.md/operations.md → src/i18n.ts
+- `ClaudeCliClient` --calls--> `ClaudeCliClient._generate`  [EXTRACTED]
+  CLAUDE.md → src/claude-cli-client.ts
+- `ClaudeCliClient` --rationale_for--> `Large Content via Temp Files (>256KB)`  [EXTRACTED]
+  CLAUDE.md → src/claude-cli-client.ts
+- `upsertIndexAnnotation` --calls--> `deriveSection()`  [EXTRACTED]
+  CHANGELOG.md → src/wiki-index.ts
 
-## Communities (646 total, 494 thin omitted)
+## Communities (283 total, 213 thin omitted)
 
-### Community 0 - "Community 0"
-Cohesion: 0.04
-Nodes (48): ac, adapter, allUpdates, bootstrapDomainJson, bootstrapJson, bootstrapUpdate, concept, created (+40 more)
-
-### Community 1 - "Community 1"
+### Community 0 - "Similarity & Retrieval"
 Cohesion: 0.06
-Nodes (41): ClaudeCliClient, ClaudeCliConfig, validateIclaudePath(), isRecord(), mapAssistant(), mapResult(), mapUserToolResult(), parseStreamLine() (+33 more)
+Nodes (43): ClaudeCliClient, ClaudeCliConfig, ClaudeCliClient._generate, Large Content via Temp Files (>256KB), requestTimeoutSec=0 skips kill timer, Resume Session (--resume flag), validateIclaudePath, parseStreamLine (+35 more)
 
-### Community 2 - "Community 2"
-Cohesion: 0.04
-Nodes (46): absWiki, actualizeDomainConfig(), allIssues, allMdPaths, allStructuralIssues, annotations, articleName, articlePaths (+38 more)
-
-### Community 3 - "Community 3"
+### Community 1 - "Ingest Pipeline"
 Cohesion: 0.05
-Nodes (28): AbstractInputSuggest, activeDocument, App, __clearNotices(), __clearRequestUrlCalls(), ItemView, makeEl(), makeElWithText() (+20 more)
+Nodes (42): absWiki, backlinkToday, buildEntityTypesBlock(), buildExtractMessages(), buildIngestMessages(), deletedPaths, deletedStems, domain (+34 more)
 
-### Community 4 - "Community 4"
+### Community 2 - "Init & Domain Setup"
+Cohesion: 0.06
+Nodes (36): wlFixResult, checkWikiLinks(), extractFmLinks(), extractLinks(), fixOnePass(), fixWikiLinks(), setFmLinks(), splitFrontmatter() (+28 more)
+
+### Community 3 - "Wiki Path Utils"
+Cohesion: 0.09
+Nodes (6): LlmWikiView, I18n, registerLinkHandler(), sanitizeLinks(), summariseInput(), translateSystemEvent()
+
+### Community 4 - "Test Harness"
+Cohesion: 0.09
+Nodes (36): selectSeeds, Format Utils Test, appendMissingLines(), escapeRawControlsInStrings(), escapeRegExp(), extractJsonObject(), FormatResponse, lemmas() (+28 more)
+
+### Community 5 - "LLM Prompts"
+Cohesion: 0.09
+Nodes (26): PageSimilarityService, home_ikeniborn_documents_project_obsidian_ai_wiki_src_wiki_graph_ts, home_ikeniborn_documents_project_obsidian_ai_wiki_src_wiki_seeds_ts, Result Summary, entity_types_delta, Per-page Progress Events, annotationHash(), cosine() (+18 more)
+
+### Community 6 - "Vault Tools"
 Cohesion: 0.07
-Nodes (37): parseFormatOutput(), retryInvalidPaths(), buildChatParams(), buildLlmCallStatsEvent(), extractStreamDeltas(), extractUsage(), injectSystemPrompt(), isJsonModeError() (+29 more)
-
-### Community 5 - "Community 5"
-Cohesion: 0.08
-Nodes (5): computeSpeedText(), LlmWikiView, registerLinkHandler(), sanitizeLinks(), translateSystemEvent()
-
-### Community 6 - "Community 6"
-Cohesion: 0.05
-Nodes (25): adapter, blocks, callArgs, create, ctrl, err, good, history (+17 more)
+Nodes (31): Run Events, parseEvalResponse, home_ikeniborn_documents_project_obsidian_ai_wiki_prompts_query_md, home_ikeniborn_documents_project_obsidian_ai_wiki_src_wiki_graph_cache_ts, params, { reasoning, content, outputTokens: tok }, requestStartMs, { stream, getStats } (+23 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.07
-Nodes (23): AgentRunner, adapter, baseSettings, collect(), ctrl, json, makeLlm(), makeLlmMulti() (+15 more)
+Cohesion: 0.12
+Nodes (10): WikiController, Chat, Format, Init, Lint, Query, Seed Selection, BFS Expansion (+2 more)
 
 ### Community 8 - "Community 8"
-Cohesion: 0.06
-Nodes (31): absWiki, backlinkToday, buildEntityTypesBlock(), buildIngestMessages(), domain, existingArticles, expandedIds, { graph } (+23 more)
+Cohesion: 0.09
+Nodes (28): Effective Settings Test, LlmWikiPlugin.loadSettings, parsed, json, written, makeLlm(), streamFromText(), Wiki Domain (+20 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.09
-Nodes (22): _get(), main(), ClaudeCodeLM, make_lm(), DSPy-совместимый LM через claude CLI. Не требует API-ключа., Создаёт LM-объект по DSPY_BACKEND из env. Вызывается после load_dotenv()., load_examples(), Читает JSONL-лог dev-режима, возвращает dict operation → list[entry].     Отфиль (+14 more)
+Cohesion: 0.08
+Nodes (21): mobileFetch, activeDocument, __clearNotices(), __clearRequestUrlCalls(), ItemView, makeEl(), makeElWithText(), moment (+13 more)
 
 ### Community 10 - "Community 10"
-Cohesion: 0.08
-Nodes (31): checkStructure(), adapter, collect(), configJson, createMock, dom, domain, domainA (+23 more)
+Cohesion: 0.06
+Nodes (29): absWiki, actualizeDomainConfig(), allMdPaths, allStructuralIssues, articleName, articlePaths, backlinks, bareName (+21 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.06
-Nodes (31): parseJsonPages(), adapter, badResponse, badResponseFirst, badResponseRetry, block, domain, domainWithoutPath (+23 more)
+Cohesion: 0.16
+Nodes (16): EditDomainModal class, FileErrorModal class, AddDomainModal, BusyCloseModal, ConfirmModal, DomainModal, FolderInputSuggest, QueryModal (+8 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.06
-Nodes (31): 1. Install Ollama, 1. Requirements, 2. Install the plugin, 2. Install the plugin, 3. Configure, 3. Enable the plugin, 4. Configure, 4. First Ingest (+23 more)
+Cohesion: 0.07
+Nodes (27): allUpdates, bootstrapDomainJson, bootstrapUpdate, concept, current, domainWithSources, existingWithProgress, fileDone (+19 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.06
-Nodes (27): allAnnotatedIds, allAnnotatedPaths, contextBlock, entityTypesBlock, files, graphResult, indexAnnotations, messages (+19 more)
+Cohesion: 0.07
+Nodes (25): detectDomain(), extractParentSourcePath(), parseJsonPages(), badResponse, badResponseFirst, badResponseRetry, block, domainWithoutPath (+17 more)
 
 ### Community 14 - "Community 14"
-Cohesion: 0.10
-Nodes (18): AddDomainInput, DomainEntry, DomainPersistEvent, EntityType, mergeEntityTypes(), migrateDomainsV2(), DomainCorruptError, DomainStore (+10 more)
+Cohesion: 0.1
+Nodes (19): runInit, applies entity_types_delta from ingest and emits domain_updated with merged types, existingDomain, makeStreamingLlm, phases_ingest_runingest, phases_init_runinit, bootstrapJson, entitiesEmpty (+11 more)
+
+### Community 15 - "Community 15"
+Cohesion: 0.12
+Nodes (18): load_examples(), _get(), main(), write_optimized(), Читает JSONL-лог dev-режима, возвращает dict operation → list[entry].     Отфиль, Counter, hashPages(), fn() (+10 more)
 
 ### Community 16 - "Community 16"
-Cohesion: 0.12
-Nodes (16): annotationHash(), cosine(), decodeVector(), EmbeddingCacheEntry, EmbeddingCacheFile, encodeVector(), fetchEmbeddings(), PageSimilarityService (+8 more)
+Cohesion: 0.11
+Nodes (21): buildChatParams, Evaluator Prompt Pattern, Streaming, WikiLink Validation, wrapWithJsonFallback, LLM Utils Test, parseFormatOutput(), computeSpeedText() (+13 more)
 
 ### Community 17 - "Community 17"
-Cohesion: 0.11
-Nodes (22): build(), DOMAIN, domain2, invalidateSpy, makeApp(), makeDomainStore(), makeLocalConfigStore(), makePlugin() (+14 more)
+Cohesion: 0.17
+Nodes (18): createProxyDispatcher function, home_ikeniborn_documents_project_obsidian_ai_wiki_src_utils_vault_walk_ts, obsidian, path_browserify, buildProxyUrl, createProxyFetch, maskProxyUrl, parseNoProxy (+10 more)
 
 ### Community 18 - "Community 18"
-Cohesion: 0.08
-Nodes (21): baseParams, callStats, lastSlash, messages, missing1, missing2, missingFinal, parsed (+13 more)
+Cohesion: 0.1
+Nodes (22): applyDomainEvent function, input, start, checkStructure(), configJson, dom, domainA, fixLlm (+14 more)
 
 ### Community 19 - "Community 19"
 Cohesion: 0.12
-Nodes (4): I18n, AddDomainModal, EditDomainModal, ManageSourcesModal
+Nodes (13): AgentRunner, phases_chat_runlintchat, phases_evaluator_runevaluator, resultEvent, phases_lint_chat_runlintfixchat, blocked, indexCall, llmResponse (+5 more)
 
 ### Community 20 - "Community 20"
-Cohesion: 0.15
-Nodes (21): appendMissingLines(), escapeRawControlsInStrings(), escapeRegExp(), extractJsonObject(), FormatResponse, lemmas(), looksTruncated(), MissingToken (+13 more)
+Cohesion: 0.1
+Nodes (17): phases_format_runformat, blocks, create, good, history, json1, json2, origRead (+9 more)
 
 ### Community 21 - "Community 21"
-Cohesion: 0.13
-Nodes (15): buildContextBlock(), bfsExpand(), buildWikiGraph(), CacheEntry, GraphCache, hashPages(), checkGraphStructure(), pageId() (+7 more)
+Cohesion: 0.1
+Nodes (19): home_ikeniborn_documents_project_obsidian_ai_wiki_src_phases_template_ts, alreadyAnalyzed, annotationsCache, collected, dryRun, force, sourceFiles, sourcesIdx (+11 more)
 
 ### Community 22 - "Community 22"
-Cohesion: 0.12
-Nodes (19): DomainEntryResponse, DomainEntrySchema, EntityTypeSchema, EntityTypesDeltaResponse, EntityTypesDeltaSchema, FormatOutput, FormatOutputSchema, LintChatResponse (+11 more)
+Cohesion: 0.17
+Nodes (16): make_signature(), restore_placeholders(), run_mipro(), call_evaluator, MockLM, test_call_evaluator_clamps_score(), test_call_evaluator_parses_score(), test_call_evaluator_renders_template_vars() (+8 more)
 
 ### Community 23 - "Community 23"
-Cohesion: 0.10
-Nodes (9): BusyCloseModal, ConfirmModal, RunHistoryEntry, WikiOperation, FileContentModal, summariseInput(), truncate(), ViewState (+1 more)
+Cohesion: 0.2
+Nodes (17): Controller Cache Invalidation Test, App, ctrl, build(), makeDomainStore(), buildSpy, makeApp(), makeLocalConfigStore() (+9 more)
 
 ### Community 24 - "Community 24"
-Cohesion: 0.12
-Nodes (14): obsidian, promises, EffectiveSettings, en, es, locales, ru, DEFAULTS (+6 more)
+Cohesion: 0.11
+Nodes (13): adapterWithSourceFiles(), firstUpdate, resetEvent, created, initStart, makeMultiLlm(), updates, phases_lint_runlint (+5 more)
 
 ### Community 25 - "Community 25"
-Cohesion: 0.10
-Nodes (15): adapter, appendPaths, devOffSettings, devOnSettings, makeLlm(), makeLlmMulti(), parsed, runner (+7 more)
+Cohesion: 0.14
+Nodes (13): DomainEntry, EntityType, Vault Schema Variants, Wiki Folder Layout, code:block1 (!Wiki/), Domain Model, migrateDomainWikiFolder, consolidateSourcePaths (+5 more)
 
 ### Community 26 - "Community 26"
-Cohesion: 0.11
-Nodes (18): messages, params, { reasoning, content, outputTokens: tok }, requestStartMs, start, { stream, getStats }, systemContent, tok (+10 more)
+Cohesion: 0.1
+Nodes (18): DomainEntryResponse, EntitiesOutput, EntitiesOutputSchema, EntityTypeSchema, EntityTypesDeltaResponse, FormatOutput, FormatOutputSchema, LintDelete (+10 more)
 
 ### Community 27 - "Community 27"
-Cohesion: 0.16
-Nodes (16): call_evaluator(), restore_placeholders(), run_mipro(), make_signature(), MockLM, test_call_evaluator_clamps_score(), test_call_evaluator_parses_score(), test_call_evaluator_renders_template_vars() (+8 more)
+Cohesion: 0.21
+Nodes (14): splitByPathValidity(), ensureDomainConfig(), migrateLegacy(), domainConfigDir(), domainEmbeddingsPath(), domainIndexPath(), domainLogPath(), domainWikiFolder() (+6 more)
 
 ### Community 28 - "Community 28"
-Cohesion: 0.18
-Nodes (18): formatZodFeedback(), parseWithRetry(), StructuredValidationError, ac, baseArgs, calls, ev, events (+10 more)
+Cohesion: 0.12
+Nodes (17): ac, baseArgs, fail, fb, midFlight, ok, second, _schema.md (+9 more)
 
 ### Community 29 - "Community 29"
-Cohesion: 0.17
-Nodes (18): checkWikiLinks(), extractFmLinks(), extractLinks(), fixOnePass(), FixResult, fixWikiLinks(), setFmLinks(), splitFrontmatter() (+10 more)
+Cohesion: 0.16
+Nodes (12): CacheEntry, makeFolder(), { ctrl, domainStore }, { ctrl, vault }, makeVault(), p, Graph Cache, Wiki Graph Cache Test (+4 more)
 
 ### Community 30 - "Community 30"
-Cohesion: 0.10
-Nodes (16): phases_lint_chat_runlintfixchat, blocked, createMock, domain, events, indexCall, llm, llmResponse (+8 more)
+Cohesion: 0.15
+Nodes (12): DomainCorruptError class, existing, main-migration.test, sampleDomain, store, stored, dms, lcs (+4 more)
 
 ### Community 31 - "Community 31"
-Cohesion: 0.11
-Nodes (18): Как это работает, Компоненты, Тесты, Быстрый старт, Бэкенды, Шаблоны промтов, claude-code, code:block1 (dev-лог (JSONL)) (+10 more)
+Cohesion: 0.14
+Nodes (13): code:json ({"operation": "ingest", "userMessage": "...", "result": "...), Configuration (.env), Input Format, Before starting work, code:markdown (---), code:python (# @lat: [[tests#User login#Rejects expired tokens]]), code:markdown (# Good Section), code:markdown (# Bad Section) (+5 more)
 
 ### Community 32 - "Community 32"
-Cohesion: 0.15
-Nodes (7): wipeDomainFolder(), domainWikiFolder(), eff, proxy, collectMdInPaths(), parseWikiSources(), walkFolder()
+Cohesion: 0.19
+Nodes (14): Call Sites, parseWithRetry, WikiPageSchema Constraints, retryInvalidPaths(), extractStreamDeltas(), extractUsage(), LlmStreamStats, wrapStreamWithStats() (+6 more)
 
 ### Community 33 - "Community 33"
-Cohesion: 0.11
-Nodes (14): phases_chat_runlintchat, phases_evaluator_runevaluator, phases_format_runformat, files, messages, META_FILES, pagesBlock, start (+6 more)
+Cohesion: 0.14
+Nodes (11): baseParams, callStats, lastSlash, missing1, missingFinal, restoreMessages, restoreParams, retryMessages (+3 more)
 
 ### Community 34 - "Community 34"
-Cohesion: 0.12
-Nodes (12): adapter, adapterWithSourceFiles(), created, existing, files, firstUpdate, initStart, llm (+4 more)
-
-### Community 35 - "Community 35"
-Cohesion: 0.15
-Nodes (12): deriveSection(), parseIndexAnnotations(), upsertIndexAnnotation(), upsertInSection(), map, c, content, initial (+4 more)
+Cohesion: 0.24
+Nodes (9): parseIndexAnnotations, upsertIndexAnnotation, deriveSection(), removeIndexAnnotation(), upsertInSection(), c, content, initial (+1 more)
 
 ### Community 36 - "Community 36"
-Cohesion: 0.12
-Nodes (13): alreadyAnalyzed, annotationsCache, collected, dryRun, existing, force, messages, sourceFiles (+5 more)
+Cohesion: 0.18
+Nodes (8): home_ikeniborn_documents_project_obsidian_ai_wiki_src_domain_ts, home_ikeniborn_documents_project_obsidian_ai_wiki_src_effective_settings_ts, home_ikeniborn_documents_project_obsidian_ai_wiki_src_main_ts, home_ikeniborn_documents_project_obsidian_ai_wiki_src_modals_ts, promises, parseTimeoutString(), OpKey, r
 
 ### Community 37 - "Community 37"
-Cohesion: 0.19
-Nodes (14): bodyContent(), parseFmKeywords(), scoreSeed(), selectSeeds(), STOP_WORDS, tokenize(), annotations, big (+6 more)
+Cohesion: 0.21
+Nodes (6): openai, callArgs, createMock, wrapMobileNoStream(), completion, LlmClient
 
 ### Community 38 - "Community 38"
-Cohesion: 0.15
-Nodes (14): phases_query_runquery, adapter, collect(), createMock, domain, llm, makeLlm(), mockAdapter() (+6 more)
+Cohesion: 0.22
+Nodes (11): 1. Install Ollama, 1. Requirements, 2. Install the plugin, 3. Enable the plugin, 4. Configure, 5. Create a domain, 6. First Ingest, code:bash (ollama pull llama3.2) (+3 more)
 
 ### Community 39 - "Community 39"
-Cohesion: 0.13
-Nodes (14): BFS Expansion, Chat, entity_types_delta, Format, Ingest, Init, Lint, Lint-Chat (+6 more)
+Cohesion: 0.18
+Nodes (10): Как это работает, Компоненты, Тесты, Шаблоны промтов, code:block1 (dev-лог (JSONL)), code:json ({), code:bash (uv run pytest), Формат dev-лога (JSONL) (+2 more)
 
 ### Community 40 - "Community 40"
 Cohesion: 0.18
-Nodes (9): validateDomainId(), migrateDomainWikiFolder(), build(), makeApp(), makeDomainStore(), makeLocalConfigStore(), makePlugin(), changed (+1 more)
+Nodes (11): askBtn, askSaveBtn, cancelBtn, finalEl, finishedAt, progressCount, resultSection, resultToggle (+3 more)
 
 ### Community 41 - "Community 41"
-Cohesion: 0.13
-Nodes (12): btnClick, domainSelect, fakeEvent, ingestItem, itemNoDomain, queryInput, queryItem, rerunBtn (+4 more)
+Cohesion: 0.24
+Nodes (5): make_lm(), Создаёт LM-объект по DSPY_BACKEND из env. Вызывается после load_dotenv()., test_make_lm_claude_code(), test_make_lm_ollama(), test_make_lm_raises_on_unknown_backend()
 
 ### Community 42 - "Community 42"
-Cohesion: 0.14
-Nodes (13): AgentRunner, Architecture, Backends, Claude Agent, Controller, Native Agent, PageSimilarityService, Phase Functions (+5 more)
-
-### Community 43 - "Community 43"
-Cohesion: 0.14
-Nodes (11): adapter, dms, existing, lcs, local, localStore, plugin, sampleDomain (+3 more)
-
-### Community 44 - "Community 44"
-Cohesion: 0.21
-Nodes (9): cleanDir(), pickAndWriteSchema(), runStorageMigration(), StorageMigrationConflictError, DOMAIN_JSON, domainJson, files, mtimes (+1 more)
-
-### Community 45 - "Community 45"
-Cohesion: 0.15
-Nodes (8): openai, EvalResult, messages, params, parseEvalResponse(), userContent, params, render()
-
-### Community 46 - "Community 46"
-Cohesion: 0.15
-Nodes (12): Before starting work, code:bash (lat locate "Section Name"      # find a section by name (exa), code:markdown (---), code:python (# @lat: [[tests#User login#Rejects expired tokens]]), code:markdown (# Good Section), code:markdown (# Bad Section), Commands, Post-task checklist (REQUIRED — do not skip) (+4 more)
-
-### Community 47 - "Community 47"
-Cohesion: 0.15
-Nodes (10): adapter, BOOTSTRAP_JSON, events, existingDomain, hasNewEntity, INGEST_WITH_DELTA, llm, updates (+2 more)
-
-### Community 48 - "Community 48"
-Cohesion: 0.17
-Nodes (10): Architecture, ClaudeCodeLM, code:bash (make sync          # uv sync — install/update dependencies), code:bash (uv run optimize.py \), code:block3 (dev.jsonl → loader.py → optimizer.py (MIPROv2 + LLM evaluato), code:json ({"operation": "ingest", "userMessage": "...", "result": "...), code:block5 (claude -- --print --dangerously-skip-permissions --model {mo), Commands (+2 more)
-
-### Community 49 - "Community 49"
-Cohesion: 0.18
-Nodes (6): wrapMobileNoStream(), callArgs, completion, createMock, inner, wrapped
-
-### Community 51 - "Community 51"
-Cohesion: 0.39
-Nodes (9): splitByPathValidity(), ensureDomainConfig(), migrateLegacy(), domainConfigDir(), domainIndexPath(), domainLogPath(), sanitizeWikiFolder(), sanitizeWikiSubfolder() (+1 more)
-
-### Community 52 - "Community 52"
-Cohesion: 0.18
-Nodes (9): ctx, domain, events, { llm, getCapturedMessages }, makeAdapterWithPages(), mockAdapter(), noisePages, pages (+1 more)
-
-### Community 53 - "Community 53"
-Cohesion: 0.17
-Nodes (9): phases_lint_runlint, adapter, domain, events, llm, updates, VALID_PATCH_JSON, vt (+1 more)
-
-### Community 55 - "Community 55"
-Cohesion: 0.18
-Nodes (10): askBtn, askSaveBtn, cancelBtn, finalEl, finishedAt, progressCount, resultSection, resultToggle (+2 more)
-
-### Community 56 - "Community 56"
-Cohesion: 0.18
-Nodes (10): buildChatParams, Call Sites, Evaluator Prompt Pattern, LLM Pipeline, parseWithRetry, Streaming, Structural Error Counter, WikiLink Validation (+2 more)
-
-### Community 57 - "Community 57"
-Cohesion: 0.18
-Nodes (4): FileErrorModal, domain, m, onSave
-
-### Community 58 - "Community 58"
-Cohesion: 0.33
-Nodes (9): buildProxyUrl(), createProxyDispatcher(), createProxyFetch(), maskProxyUrl(), parseNoProxy(), shouldBypass(), d, f (+1 more)
-
-### Community 59 - "Community 59"
-Cohesion: 0.31
-Nodes (9): patchWikiFields(), buildWikiFields(), hasFrontmatterField(), parseWikiArticlesFromFm(), parseWikiSourcesFromFm(), removeWikiFields(), ARTICLES, result (+1 more)
-
-### Community 60 - "Community 60"
-Cohesion: 0.20
-Nodes (9): Новое, 0.1.108 — 2026-05-18, 0.1.141 — 2026-05-25, Исправления, Прочее, Новое, Исправления, Прочее (+1 more)
-
-### Community 61 - "Community 61"
-Cohesion: 0.20
-Nodes (7): path_browserify, applyDomainEvent(), consolidateSourcePaths(), base, input, result, start
-
-### Community 62 - "Community 62"
-Cohesion: 0.20
+Cohesion: 0.2
 Nodes (9): Структура, Таблицы, Изображения, Код, Стиль, Жёсткие запреты, Format Schema (правила форматирования не-wiki страниц), Frontmatter (+1 more)
 
-### Community 63 - "Community 63"
-Cohesion: 0.20
-Nodes (7): f1, f2, folder, out, result, sub, vault
+### Community 43 - "Community 43"
+Cohesion: 0.24
+Nodes (9): files, _domain.json, cleanDir(), pickAndWriteSchema(), runStorageMigration(), StorageMigrationConflictError, src_wiki_path_global_dev_log_path, src_wiki_path_global_wiki_schema_path (+1 more)
 
-### Community 64 - "Community 64"
-Cohesion: 0.20
-Nodes (9): Язык и стиль, Именование файлов и папок, Структура страницы (обязательный порядок), Опциональные разделы, Контент, code:yaml (wiki_outgoing_links:), Frontmatter, Wiki Schema (+1 more)
-
-### Community 65 - "Community 65"
-Cohesion: 0.27
-Nodes (4): LocalConfigStore, adapter, lc, store
-
-### Community 66 - "Community 66"
+### Community 44 - "Community 44"
 Cohesion: 0.22
-Nodes (7): VaultAdapter, VaultIndexer, adapter, created, mockAdapter(), vault, vt
+Nodes (5): ShellConsentModal, AbstractInputSuggest, shell-consent.test, modal, onEnable
 
-### Community 67 - "Community 67"
+### Community 45 - "Community 45"
+Cohesion: 0.25
+Nodes (9): Backends, Claude Agent, Native Agent, Backend selector, Dev mode (desktop only), General (both backends), Proxy (native-agent only), Settings reference (+1 more)
+
+### Community 46 - "Community 46"
+Cohesion: 0.25
+Nodes (7): code:block5 (claude -- --print --dangerously-skip-permissions --model {mo), ClaudeCodeLM, Бэкенды, code:env (DSPY_BACKEND=ollama), code:env (DSPY_BACKEND=claude-code), ollama (default), DSPy-совместимый LM через claude CLI. Не требует API-ключа.
+
+### Community 47 - "Community 47"
 Cohesion: 0.22
-Nodes (3): ShellConsentModal, modal, onEnable
+Nodes (9): CHANGELOG, Новое, 0.1.108 — 2026-05-18, 0.1.141 — 2026-05-25, Исправления, Прочее, Новое, Исправления (+1 more)
 
-### Community 68 - "Community 68"
+### Community 48 - "Community 48"
 Cohesion: 0.25
-Nodes (8): domainRow, domainSelect, makePlugin(), makeView(), options, parent, saveListeners, { v, plugin }
+Nodes (7): TFolder, f1, f2, makeFile(), sub, out, vault
 
-### Community 69 - "Community 69"
-Cohesion: 0.22
-Nodes (6): RunEvent, chunks, errorLlm, events, s, statsEvents
+### Community 49 - "Community 49"
+Cohesion: 0.39
+Nodes (3): LlmWikiPlugin, migrateLegacyData, migrateToLocalV1
 
-### Community 70 - "Community 70"
-Cohesion: 0.25
-Nodes (7): code:block1 (!Wiki/), Domain Events, Domain Model, DomainEntry, EntityType, Vault Schema Variants, Wiki Folder Layout
+### Community 50 - "Community 50"
+Cohesion: 0.32
+Nodes (7): appendWikiLog(), buildEntry(), IngestLogEntry, LogOperation, ts(), makeVt(), { vt, written }
 
-### Community 71 - "Community 71"
-Cohesion: 0.25
-Nodes (3): IngestScopeModal, m, onChoice
+### Community 51 - "Community 51"
+Cohesion: 0.52
+Nodes (3): DomainStore, migrateDomainsV2(), DEFAULTS
 
-### Community 72 - "Community 72"
-Cohesion: 0.36
-Nodes (6): appendWikiLog(), buildEntry(), IngestLogEntry, LogOperation, ts(), { vt, written }
+### Community 52 - "Community 52"
+Cohesion: 0.29
+Nodes (7): Documentation, Security, Shell Execution, Sync, Vault Access, What it does, AI Wiki — Obsidian Plugin
 
-### Community 73 - "Community 73"
-Cohesion: 0.25
-Nodes (6): detectDomain(), extractParentSourcePath(), annotations, domains, result, svc
-
-### Community 74 - "Community 74"
-Cohesion: 0.33
-Nodes (5): buildSpy, ctrl, makeApp(), makePlugin(), plugin
-
-### Community 75 - "Community 75"
+### Community 53 - "Community 53"
 Cohesion: 0.38
-Nodes (3): LlmWikiPlugin, migrateLegacyData(), migrateToLocalV1()
+Nodes (7): raw-frontmatter tests, hasFrontmatterField(), parseWikiArticlesFromFm(), upsertRawFrontmatter(), buildWikiFields(), removeWikiFields(), ARTICLES
 
-### Community 76 - "Community 76"
+### Community 54 - "Community 54"
 Cohesion: 0.33
-Nodes (5): phases_init_runinit, collect(), makeLlm(), mockAdapter(), mockAdapterWithSources()
+Nodes (4): en, es, locales, ru
 
-### Community 77 - "Community 77"
+### Community 55 - "Community 55"
 Cohesion: 0.33
-Nodes (5): Graph Cache, Graph Structure, Query Graph Traversal, Structural Health Check, Wiki Graph
+Nodes (6): code:bash (make sync          # uv sync — install/update dependencies), code:bash (uv run optimize.py \), Commands, Быстрый старт, code:bash (cd scripts/dspy), code:bash (lat locate "Section Name"      # find a section by name (exa)
 
-### Community 78 - "Community 78"
+### Community 56 - "Community 56"
 Cohesion: 0.33
-Nodes (4): btn, entry, select, v
+Nodes (5): Phase Functions, Settings and Local Config, VaultTools, Plugin Entry Point, code:block3 (dev.jsonl → loader.py → optimizer.py (MIPROv2 + LLM evaluato)
 
-### Community 79 - "Community 79"
-Cohesion: 0.40
-Nodes (4): phases_ingest_runingest, collect(), makeLlm(), mockAdapter()
-
-### Community 80 - "Community 80"
-Cohesion: 0.40
-Nodes (4): LintChatSchema, WikiPageSchema, input, result
-
-### Community 81 - "Community 81"
-Cohesion: 0.50
-Nodes (4): makePlugin(), plugin, { plugin, registered }, setupPlugin()
-
-### Community 82 - "Community 82"
-Cohesion: 0.40
-Nodes (4): lines, MOBILE_HOT_PATH_FILES, offending, src
-
-### Community 83 - "Community 83"
-Cohesion: 0.50
+### Community 57 - "Community 57"
+Cohesion: 0.5
 Nodes (3): Достоверность, Минимализм, Формат
 
+### Community 58 - "Community 58"
+Cohesion: 0.5
+Nodes (3): ingestEntitiesTemplate, ingestTemplate, lintTemplate
+
+### Community 59 - "Community 59"
+Cohesion: 0.67
+Nodes (4): Frontmatter Fields, Page Structure, Wiki Schema, WikiLinks Rules
+
 ## Knowledge Gaps
-- **1091 isolated node(s):** `activeDocument`, `App`, `Plugin`, `Platform`, `TAbstractFile` (+1086 more)
+- **627 isolated node(s):** `activeDocument`, `Platform`, `TAbstractFile`, `TFile`, `ItemView` (+622 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **494 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **213 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `DomainEntry` connect `Community 14` to `Community 0`, `Community 2`, `Community 8`, `Community 10`, `Community 11`, `Community 13`, `Community 17`, `Community 23`, `Community 24`, `Community 26`, `Community 32`, `Community 33`, `Community 34`, `Community 36`, `Community 38`, `Community 40`, `Community 43`, `Community 44`, `Community 52`, `Community 53`, `Community 57`, `Community 61`, `Community 73`?**
+- **Why does `ClaudeCliClient` connect `Similarity & Retrieval` to `Community 37`, `Community 8`, `Community 11`, `Community 17`, `Community 18`, `Community 20`, `Community 23`, `Community 28`?**
+  _High betweenness centrality (0.052) - this node is a cross-community bridge._
+- **Why does `_get()` connect `Community 15` to `Test Harness`, `Community 29`?**
   _High betweenness centrality (0.045) - this node is a cross-community bridge._
-- **Why does `LlmWikiView` connect `Community 5` to `Community 32`, `Community 68`, `Community 7`, `Community 41`, `Community 44`, `Community 78`, `Community 17`, `Community 19`, `Community 23`?**
-  _High betweenness centrality (0.039) - this node is a cross-community bridge._
-- **Why does `VaultTools` connect `Community 54` to `Community 0`, `Community 2`, `Community 6`, `Community 7`, `Community 8`, `Community 10`, `Community 11`, `Community 13`, `Community 16`, `Community 18`, `Community 25`, `Community 32`, `Community 33`, `Community 34`, `Community 35`, `Community 36`, `Community 38`, `Community 47`, `Community 51`, `Community 52`, `Community 53`, `Community 66`, `Community 72`, `Community 76`, `Community 79`, `Community 87`?**
-  _High betweenness centrality (0.029) - this node is a cross-community bridge._
-- **What connects `activeDocument`, `App`, `Plugin` to the rest of the system?**
-  _1216 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.038461538461538464 - nodes in this community are weakly interconnected._
-- **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.05505279034690799 - nodes in this community are weakly interconnected._
-- **Should `Community 2` be split into smaller, more focused modules?**
-  _Cohesion score 0.0392156862745098 - nodes in this community are weakly interconnected._
+- **Why does `main()` connect `Community 15` to `Community 41`, `Community 22`?**
+  _High betweenness centrality (0.040) - this node is a cross-community bridge._
+- **What connects `activeDocument`, `Platform`, `TAbstractFile` to the rest of the system?**
+  _627 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `Similarity & Retrieval` be split into smaller, more focused modules?**
+  _Cohesion score 0.06 - nodes in this community are weakly interconnected._
+- **Should `Ingest Pipeline` be split into smaller, more focused modules?**
+  _Cohesion score 0.05 - nodes in this community are weakly interconnected._
+- **Should `Init & Domain Setup` be split into smaller, more focused modules?**
+  _Cohesion score 0.06 - nodes in this community are weakly interconnected._
