@@ -234,7 +234,7 @@ export class PageSimilarityService {
       if (indexAnnotations.size > 0) anySuccess = true;
     }
 
-    return { results, allFailed: !anySuccess };
+    return { results, allFailed: allPaths.length > 0 && !anySuccess };
   }
 
   private selectJaccard(
