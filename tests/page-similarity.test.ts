@@ -201,7 +201,8 @@ describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
     expect(results.get("neural network::")).toEqual(["!Wiki/d/x/Alpha.md"]);
   });
 
-  it("allFailed=true when annotations map is empty (no candidates at all)", async () => {
+  // @lat: [[tests#Per-Entity Retrieval#allFailed false when no pages exist]]
+  it("allFailed=false when no pages exist (empty wiki)", async () => {
     (globalThis as unknown as { fetch: unknown }).fetch = vi.fn().mockRejectedValue(new Error("dead"));
     const svc = new PageSimilarityService({
       mode: "embedding", topK: 1, model: "m", dimensions: 3,
@@ -212,7 +213,7 @@ describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
       new Map(),
       [],
     );
-    expect(allFailed).toBe(true);
+    expect(allFailed).toBe(false);
     expect(results.get("Q1::")).toEqual([]);
     expect(results.get("Q2::")).toEqual([]);
   });
