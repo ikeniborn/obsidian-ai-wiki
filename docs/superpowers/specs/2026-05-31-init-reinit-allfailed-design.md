@@ -1,3 +1,17 @@
+---
+review:
+  spec_hash: a338b7907e095460
+  last_run: 2026-05-31
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings: []
+chain:
+  intent: docs/superpowers/intents/2026-05-31-init-reinit-allfailed-intent.md
+---
+
 # Design: Fix init/reinit allFailed false-positive on empty wiki
 
 **Date:** 2026-05-31
