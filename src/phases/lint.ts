@@ -10,7 +10,7 @@ import type { LintOutput } from "./zod-schemas";
 import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
 import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, domainIndexPath } from "../wiki-path";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, filterStaleWikiLinks } from "../utils/raw-frontmatter";
 import { checkGraphStructure, pageId, bfsExpand } from "../wiki-graph";
 import { checkWikiLinks, fixWikiLinks } from "../wiki-link-validator";
 import { graphCache } from "../wiki-graph-cache";
@@ -315,6 +315,33 @@ export async function* runLint(
     }
 
     if (signal.aborted) return;
+
+    // Stale link cleanup — must run before backlink sync so pages map is consistent
+    const deletedNames = new Set(deletedRefs.map(d => d.deletedName));
+    const existingWikiStems = new Set(
+      [
+        ...[...pages.keys()].map(p => p.split("/").pop()!.replace(/\.md$/, "")),
+        ...writtenPaths.map(p => p.split("/").pop()!.replace(/\.md$/, "")),
+      ].filter(stem => !deletedNames.has(stem))
+    );
+
+    for (const [wikiPath, wikiContent] of pages) {
+      const { content: filteredWiki } =
+        filterStaleWikiLinks(wikiContent, existingWikiStems, ["wiki_outgoing_links"]);
+      if (filteredWiki !== wikiContent) {
+        pages.set(wikiPath, filteredWiki);
+        await vaultTools.write(wikiPath, filteredWiki);
+      }
+    }
+
+    const sourcePaths = allMdPaths.filter(p => !p.startsWith(wikiVaultPath + "/"));
+    for (const sourcePath of sourcePaths) {
+      const rawContent = await vaultTools.read(sourcePath).catch(() => null);
+      if (!rawContent) continue;
+      const { content: filteredContent } =
+        filterStaleWikiLinks(rawContent, existingWikiStems, ["wiki_articles", "related"]);
+      if (filteredContent !== rawContent) await vaultTools.write(sourcePath, filteredContent);
+    }
 
     // Backlink sync: wiki_articles from wiki_sources
     const backlinks = new Map<string, Set<string>>();

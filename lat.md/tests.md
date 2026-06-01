@@ -162,6 +162,18 @@ A `wiki_external_links` entry that does not start with `https://` or `http://` i
 
 A scalar `aliases` value on a wiki page is wrapped into a single-element list.
 
+## Lint Stale Link Cleanup
+
+Integration tests that verify `runLint` in `src/phases/lint.ts` removes stale links via `filterStaleWikiLinks` after the per-article loop.
+
+### Stale wiki_outgoing_links cleanup
+
+A wiki page with `wiki_outgoing_links` pointing at a page that no longer exists in the vault is rewritten after lint to drop the dead entry while keeping live links.
+
+### Stale wiki_articles cleanup in sources
+
+A source file with `wiki_articles` pointing at a deleted wiki page stem is rewritten after lint to remove the stale entry while keeping references to pages that still exist.
+
 ## Stop Rules
 
 Tests that validate halt conditions.
