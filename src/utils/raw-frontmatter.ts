@@ -5,7 +5,7 @@ const FM_RE = /^---\n([\s\S]*?)\n---\n?/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const WIKILINK_RE = /^\[\[.+\]\]$/;
 const URL_RE = /^https?:\/\//;
-const TAG_RE = /^[a-z][a-z0-9]*(?:[/_][a-z0-9]+)*$/;
+const TAG_RE = /^[a-z][a-z0-9-]*(?:[/_][a-z0-9-]+)*$/;
 
 export type FieldRule =
   | { field: string; kind: "list-wikilinks" }

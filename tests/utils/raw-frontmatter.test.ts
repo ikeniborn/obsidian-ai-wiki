@@ -220,6 +220,19 @@ body`;
     expect(warnings.some((w) => w.includes("wiki_articles") && w.includes("not-a-wikilink"))).toBe(true);
   });
 
+  it("preserves tags with hyphens in segments", () => {
+    const content = `---
+tags:
+  - finance/technical-analysis
+  - trading/imbalance-zones
+---
+body`;
+    const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
+    expect(out).toContain("finance/technical-analysis");
+    expect(out).toContain("trading/imbalance-zones");
+    expect(warnings).toEqual([]);
+  });
+
   // @lat: [[tests#Frontmatter Validation#Source invalid tag removal]]
   it("removes tag with uppercase letters", () => {
     const content = `---
