@@ -31,9 +31,12 @@ function extractLinks(text: string): string[] {
 
 function extractFmLinks(fm: string): Set<string> {
   const set = new Set<string>();
+  // Only read items under wiki_outgoing_links key (not wiki_sources or others)
+  const blockMatch = /^wiki_outgoing_links:((?:\n  - "[^"]*")*)/m.exec(fm);
+  if (!blockMatch) return set;
   const re = /^\s+- "(\[\[[^\]]+\]\])"/mg;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(fm)) !== null) set.add(m[1]);
+  while ((m = re.exec(blockMatch[1])) !== null) set.add(m[1]);
   return set;
 }
 
@@ -68,7 +71,7 @@ function fixOnePass(content: string): string {
     } catch { /* leave as-is */ }
   }
 
-  const bodyLinks = extractLinks(body).map((l) => `[[${l}]]`);
+  const bodyLinks = [...new Set(extractLinks(body).map((l) => `[[${l}]]`))];
   fm = setFmLinks(fm, bodyLinks);
 
   return fm + body;
@@ -106,7 +109,7 @@ export function validateWikiLinks(
 
     const fmParts = splitFrontmatter(content);
     const fmContent = fmParts ? fmParts[0] : "";
-    if (fmContent && /^wiki_outgoing_links:[ \t]*\[/m.test(fmContent)) {
+    if (fmContent && /^wiki_outgoing_links:[ \t]*\[(?!\])/m.test(fmContent)) {
       violations.push({ page: pagePath, kind: "inline-json", detail: "wiki_outgoing_links: [...]" });
     }
 

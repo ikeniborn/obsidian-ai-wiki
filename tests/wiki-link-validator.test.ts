@@ -106,6 +106,70 @@ describe("fixWikiLinks", () => {
   });
 });
 
+describe("Bug A: extractFmLinks must not read wiki_sources list items", () => {
+  it("wiki_sources entries do not trigger outgoing-desync", () => {
+    // wiki_sources: [[Фибоначчи]] should NOT be counted as an outgoing link
+    const content = [
+      "---",
+      'wiki_sources:',
+      '  - "[[Фибоначчи]]"',
+      "wiki_outgoing_links:",
+      '  - "[[wiki_fin_page]]"',
+      "---",
+      "",
+      "Body [[wiki_fin_page]].",
+    ].join("\n");
+    const v = validateWikiLinks(page(content));
+    expect(v.filter((x) => x.kind === "outgoing-desync")).toHaveLength(0);
+  });
+
+  it("fixWikiLinks produces no warnings when wiki_sources has links but outgoing is synced", () => {
+    const content = [
+      "---",
+      'wiki_sources:',
+      '  - "[[Фибоначчи]]"',
+      "wiki_outgoing_links:",
+      '  - "[[wiki_fin_page]]"',
+      "---",
+      "",
+      "Body [[wiki_fin_page]].",
+    ].join("\n");
+    const result = fixWikiLinks(page(content), 3);
+    expect(result.warnings.filter((w) => w.includes("outgoing-desync"))).toHaveLength(0);
+  });
+});
+
+describe("Bug B: wiki_outgoing_links: [] must not trigger inline-json violation", () => {
+  it("empty inline form [] is not flagged as inline-json", () => {
+    const content = "---\nwiki_outgoing_links: []\n---\n\nBody with no links.";
+    const v = validateWikiLinks(page(content));
+    expect(v.filter((x) => x.kind === "inline-json")).toHaveLength(0);
+  });
+
+  it("fixWikiLinks produces no warnings for page with no body links and [] in fm", () => {
+    const content = "---\nwiki_outgoing_links: []\n---\n\nBody with no links.";
+    const result = fixWikiLinks(page(content), 3);
+    expect(result.warnings.filter((w) => w.includes("inline-json"))).toHaveLength(0);
+  });
+});
+
+describe("Bug C: fixWikiLinks must not produce duplicate wiki_outgoing_links entries", () => {
+  it("body with repeated link produces single fm entry", () => {
+    const content = [
+      "---",
+      "wiki_outgoing_links:",
+      '  - "[[Old]]"',
+      "---",
+      "",
+      "First mention [[Target]]. Second mention [[Target]].",
+    ].join("\n");
+    const result = fixWikiLinks(page(content), 3);
+    const fixed = result.fixed.get("Wiki/domain/entity/Page.md")!;
+    const matches = [...fixed.matchAll(/- "\[\[Target\]\]"/g)];
+    expect(matches).toHaveLength(1);
+  });
+});
+
 describe("checkWikiLinks", () => {
   it("returns empty string for clean pages", () => {
     const content = `---\nwiki_outgoing_links:\n  - "[[A]]"\n---\n\nBody [[A]].`;
