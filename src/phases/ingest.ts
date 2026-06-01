@@ -13,7 +13,7 @@ import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
 import { render } from "./template";
 import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks } from "../utils/raw-frontmatter";
 import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
 import type { PageSimilarityService, ExtractedEntity } from "../page-similarity";
@@ -415,17 +415,31 @@ export async function* runIngest(
     });
     const { content: repairedSource, warnings: sourceWarnings } =
       validateAndRepairSourceFrontmatter(updatedSource);
-    if (sourceWarnings.length > 0) {
+    const wikiFileStems = new Set(
+      [...existingPaths, ...written]
+        .filter(p => !deletedPaths.includes(p) && !p.endsWith("_index.md"))
+        .map(p => p.split("/").pop()!.replace(/\.md$/, ""))
+    );
+    // Preserve non-wiki-domain links (user-curated cross-refs) by adding their
+    // stems to the set — only stems matching the wiki naming pattern are checked.
+    const existingArticleStems = parseWikiArticlesFromFm(repairedSource)
+      .map(link => link.slice(2, -2))
+      .filter(stem => !GENERIC_WIKI_STEM_REGEX.test(stem));
+    const existingStems = new Set([...wikiFileStems, ...existingArticleStems]);
+    const { content: filteredSource, warnings: staleWarnings } =
+      filterStaleWikiLinks(repairedSource, existingStems, ["wiki_articles", "related"]);
+    const allSourceWarnings = [...sourceWarnings, ...staleWarnings];
+    if (allSourceWarnings.length > 0) {
       yield {
         kind: "info_text",
         icon: "⚠️",
         summary: "Source frontmatter repaired",
-        details: sourceWarnings,
+        details: allSourceWarnings,
       };
     }
     yield { kind: "tool_use", name: "Update", input: { path: sourceVaultPath } };
     try {
-      await vaultTools.write(sourceVaultPath, repairedSource);
+      await vaultTools.write(sourceVaultPath, filteredSource);
       yield { kind: "tool_result", ok: true, preview: `backlinks → ${sourceVaultPath}` };
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: `backlink write failed: ${(e as Error).message}` };
