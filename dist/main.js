@@ -37702,7 +37702,7 @@ Actualizing domain config for "${domain.id}"...
     for (const sourcePath of sourcePaths) {
       const rawContent = await vaultTools.read(sourcePath).catch(() => null);
       if (!rawContent) continue;
-      const { content: filteredContent } = filterStaleWikiLinks(rawContent, existingWikiStems, ["wiki_articles", "related"]);
+      const { content: filteredContent } = filterStaleWikiLinks(rawContent, existingWikiStems, ["wiki_articles"]);
       if (filteredContent !== rawContent) await vaultTools.write(sourcePath, filteredContent);
     }
     const backlinks = /* @__PURE__ */ new Map();
