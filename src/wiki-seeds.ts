@@ -60,7 +60,7 @@ export function selectSeeds(
   topK: number,
   minScore: number,
   indexAnnotations?: Map<string, string>,
-): string[] {
+): { id: string; score: number }[] {
   const q = tokenize(question);
   if (q.size === 0) return [];
   const scored: { id: string; score: number }[] = [];
@@ -71,5 +71,5 @@ export function selectSeeds(
     if (score >= minScore && score > 0) scored.push({ id, score });
   }
   scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, topK).map((x) => x.id);
+  return scored.slice(0, topK);
 }

@@ -62,17 +62,19 @@ describe("selectSeeds", () => {
   it("respects topK", () => {
     const r = selectSeeds("alpha beta gamma", pages, 1, 0);
     expect(r.length).toBe(1);
+    expect(r[0]).toHaveProperty("id");
+    expect(r[0]).toHaveProperty("score");
   });
 
   it("filters by minScore", () => {
     const r = selectSeeds("alpha", pages, 10, 0.5);
-    expect(r).toContain("Alpha");
-    expect(r).not.toContain("Beta");
+    expect(r.map(x => x.id)).toContain("Alpha");
+    expect(r.map(x => x.id)).not.toContain("Beta");
   });
 
   it("sorts by score descending", () => {
     const r = selectSeeds("alpha gamma neural", pages, 10, 0);
-    expect(r[0]).toBe("Gamma");
+    expect(r[0].id).toBe("Gamma");
   });
 
   it("returns [] when nothing passes threshold", () => {
@@ -81,7 +83,7 @@ describe("selectSeeds", () => {
 
   it("matches content-only references (not in pageId)", () => {
     const r = selectSeeds("neural network", pages, 10, 0);
-    expect(r).toContain("Gamma");
+    expect(r.map(x => x.id)).toContain("Gamma");
   });
 
   it("caps content tokenization to first 500 chars", () => {
@@ -145,11 +147,11 @@ describe("selectSeeds with indexAnnotations", () => {
   it("uses annotation from indexAnnotations map", () => {
     const annotations = new Map([["Alpha", "альфа-частица физика ядро"]]);
     const r = selectSeeds("альфа физика", pages, 10, 0.1, annotations);
-    expect(r).toContain("Alpha");
+    expect(r.map(x => x.id)).toContain("Alpha");
   });
 
   it("works without indexAnnotations (backward compat)", () => {
     const r = selectSeeds("alpha content", pages, 10, 0);
-    expect(r).toContain("Alpha");
+    expect(r.map(x => x.id)).toContain("Alpha");
   });
 });
