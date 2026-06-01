@@ -18,4 +18,4 @@
 Не дублируй: один name → одна запись. Не извлекай сущности с min_mentions_for_page > 1, если они упомянуты только раз.
 
 Верни ТОЛЬКО JSON:
-{"reasoning":"...","entities":[{"name":"...","type":"...","context_snippet":"..."}]}
+{"reasoning":"...","entities":[{"name":"...","type":"...","context_snippet":"..."},{"name":"...","context_snippet":"..."}]}
