@@ -433,14 +433,40 @@ export class LlmWikiView extends ItemView {
     const added = newPaths.filter((p) => !oldPaths.includes(p));
     const removed = oldPaths.filter((p) => !newPaths.includes(p));
 
-    await this.plugin.controller.updateDomainSources(original.id, newPaths);
+    if (removed.length > 0 && newPaths.length > 0) {
+      const T = i18n().modal;
+      const base = this.plugin.controller.cwdOrEmpty();
+      const toVaultRel = (p: string): string => {
+        if (!base || !isAbsolute(p)) return p;
+        const rel = relative(base, p);
+        return rel.startsWith("..") ? p : rel;
+      };
+      const mdFiles = collectMdInPaths(this.app.vault, newPaths.map(toVaultRel));
+      const wikiFiles = collectMdInPaths(this.app.vault, [domainWikiFolder(original.wiki_folder)]);
+      const body = T.reinitConfirmBody(original.id, wikiFiles.length, mdFiles.length, newPaths.length);
+      new ConfirmModal(
+        this.app,
+        T.reinitConfirmTitle,
+        [body],
+        async () => {
+          await this.plugin.controller.updateDomainSources(original.id, newPaths);
+          const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
+          if (deleted > 0) new Notice(`Удалено статей: ${deleted}`);
+          void this.plugin.controller.init(original.id, false, newPaths, true);
+        },
+      ).open();
+      return;
+    }
 
     if (removed.length > 0) {
+      await this.plugin.controller.updateDomainSources(original.id, newPaths);
       const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
       if (deleted > 0) new Notice(`Удалено статей: ${deleted}`);
+      return;
     }
 
     if (added.length > 0) {
+      await this.plugin.controller.updateDomainSources(original.id, newPaths);
       new IngestScopeModal(this.app, added.length, newPaths.length, (scope) => {
         if (scope === "skip") return;
         const paths = scope === "new" ? added : newPaths;

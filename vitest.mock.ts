@@ -82,6 +82,11 @@ export function __clearNotices(): void {
   Notice.__messages.length = 0;
 }
 
+/** Test helper — get captured Notices. */
+export function __getNotices(): string[] {
+  return Notice.__messages;
+}
+
 
 export class AbstractInputSuggest<T> {
   app: any;
@@ -111,7 +116,10 @@ export class Modal {
   close() { (this as any).onClose?.(); }
 }
 
-export class ItemView {}
+export class ItemView {
+  app: any;
+  constructor(leaf?: any) { this.app = leaf?.app; }
+}
 
 export const moment = { locale: () => "en" };
 
