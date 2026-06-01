@@ -185,6 +185,42 @@ describe("runQuery", () => {
     expect(schemaRead).toBeUndefined();
   });
 
+  it("graph_stats event includes seedScores and expandedByHop", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Alpha.md", "!Wiki/work/Beta.md"], folders: [] }),
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p.endsWith("_index.md")) return "- [[Alpha]] !Wiki/work/Alpha.md — machine learning\n- [[Beta]] !Wiki/work/Beta.md — cooking";
+        if (p.endsWith("Alpha.md")) return "# Alpha\n[[Beta]]\nmachine learning content";
+        if (p.endsWith("Beta.md")) return "# Beta\ncooking content";
+        return "";
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const events = await collect(
+      runQuery(
+        ["machine learning"],
+        false,
+        vt,
+        makeLlm("answer"),
+        "model",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+        1, // graphDepth=1 so BFS expands
+      ),
+    );
+    const stats = events.find((e: any) => e.kind === "graph_stats") as any;
+    expect(stats).toBeDefined();
+    expect(stats.seedScores).toBeDefined();
+    expect(typeof stats.seedScores).toBe("object");
+    // At least one seed should have a score
+    const scoreValues = Object.values(stats.seedScores) as number[];
+    expect(scoreValues.some(s => s > 0)).toBe(true);
+    expect(stats.expandedByHop).toBeDefined();
+    expect(typeof stats.expandedByHop).toBe("object");
+  });
+
   it("excludes pages not reached by BFS when keyword seed found (graphDepth=0)", async () => {
     const adapter = mockAdapter({
       list: vi.fn().mockResolvedValue({

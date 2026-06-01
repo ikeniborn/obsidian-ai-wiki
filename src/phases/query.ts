@@ -9,7 +9,7 @@ import queryTemplate from "../../prompts/query.md";
 import { render } from "./template";
 import { domainWikiFolder, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
-import { pageId, bfsExpand } from "../wiki-graph";
+import { pageId, bfsExpandWithHops } from "../wiki-graph";
 import { graphCache } from "../wiki-graph-cache";
 import { selectSeeds } from "../wiki-seeds";
 import { parseIndexAnnotations } from "../wiki-index";
@@ -64,16 +64,21 @@ export async function* runQuery(
 
   // Phase 2: seed selection from index annotations (no file content needed)
   let seeds: string[];
+  let seedScores: Record<string, number> = {};
   if (similarity && similarity.config.mode === "embedding") {
     await similarity.loadCache(wikiVaultPath, vaultTools);
     const allAnnotatedPaths = [...indexAnnotations.keys()].map((id) => `${wikiVaultPath}/${id}.md`);
-    const selected = await similarity.selectRelevant(question, indexAnnotations, allAnnotatedPaths);
-    seeds = selected.map((p) => pageId(p)).slice(0, topK);
+    const selected = await similarity.selectRelevantScored(question, indexAnnotations, allAnnotatedPaths);
+    const topSelected = selected.slice(0, topK);
+    seeds = topSelected.map((x) => pageId(x.path));
+    seedScores = Object.fromEntries(topSelected.map((x) => [pageId(x.path), x.score]));
   } else {
     const syntheticPages = new Map<string, string>(
       [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""])
     );
-    seeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+    const seedResults = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+    seeds = seedResults.map((x) => x.id);
+    seedScores = Object.fromEntries(seedResults.map((x) => [x.id, x.score]));
   }
 
   if (seeds.length === 0 && indexAnnotations.size > 0) {
@@ -109,8 +114,8 @@ export async function* runQuery(
     return;
   }
 
-  const selectedIds = bfsExpand(seeds, graphResult.graph, graphDepth);
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache };
+  const { expanded: selectedIds, byHop: expandedByHop } = bfsExpandWithHops(seeds, graphResult.graph, graphDepth);
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedByHop };
 
   const seedSet = new Set(seeds);
   const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);
