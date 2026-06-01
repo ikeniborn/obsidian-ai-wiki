@@ -98,6 +98,34 @@ An `external_links` entry that does not start with `https://` or `http://` is re
 
 A `related` list entry that is not a wikilink is removed from the list.
 
+### filterStaleWikiLinks — stale wiki_articles removed
+
+`[[Foo]]` where `Foo` is absent from `existingStems` is removed from the `wiki_articles` field and a warning `"wiki_articles: stale link [[Foo]] — removed"` is emitted.
+
+### filterStaleWikiLinks — live wiki_articles kept
+
+`[[Bar]]` where `Bar` is present in `existingStems` is left unchanged and no warning is emitted.
+
+### filterStaleWikiLinks — related stale removed
+
+`[[Foo]]` absent from `existingStems` is removed from the `related` field and a warning `"related: stale link [[Foo]] — removed"` is emitted.
+
+### filterStaleWikiLinks — wiki_outgoing_links stale removed
+
+`[[Foo]]` absent from `existingStems` is removed from the `wiki_outgoing_links` field and a warning is emitted.
+
+### filterStaleWikiLinks — non-wikilink entries untouched
+
+An entry that does not match `[[...]]` (e.g., a plain string) in a targeted field is not removed by `filterStaleWikiLinks` — format validation is `validateAndRepairFrontmatter`'s responsibility.
+
+### filterStaleWikiLinks — empty existingStems removes all
+
+When `existingStems` is an empty `Set`, all valid wikilink entries in targeted fields are removed.
+
+### filterStaleWikiLinks — no frontmatter passthrough
+
+Content without a frontmatter block is returned unchanged with an empty warnings array.
+
 ### Source body preservation
 
 Invalid frontmatter fields are repaired but body content referencing those field names as plain text is preserved unchanged.
@@ -133,6 +161,18 @@ A `wiki_external_links` entry that does not start with `https://` or `http://` i
 ### Wiki scalar aliases wrap
 
 A scalar `aliases` value on a wiki page is wrapped into a single-element list.
+
+## Lint Stale Link Cleanup
+
+Integration tests that verify `runLint` in `src/phases/lint.ts` removes stale links via `filterStaleWikiLinks` after the per-article loop.
+
+### Stale wiki_outgoing_links cleanup
+
+A wiki page with `wiki_outgoing_links` pointing at a page that no longer exists in the vault is rewritten after lint to drop the dead entry while keeping live links.
+
+### Stale wiki_articles cleanup in sources
+
+A source file with `wiki_articles` pointing at a deleted wiki page stem is rewritten after lint to remove the stale entry while keeping references to pages that still exist.
 
 ## Stop Rules
 

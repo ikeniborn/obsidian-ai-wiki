@@ -212,8 +212,11 @@ describe("runIngest", () => {
     const existingFm =
       '---\nwiki_added: 2026-01-01\nwiki_updated: 2026-01-01\nwiki_articles:\n  - "[[wiki_work_old]]"\n---\nsource text';
     const adapter = mockAdapter({
-      read: vi.fn().mockResolvedValue(existingFm),
-      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+      read: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "Sources/doc.md") return existingFm;
+        return "# existing";
+      }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/entities/wiki_work_old.md"], folders: [] }),
     });
     const vt = new VaultTools(adapter, VAULT_ROOT);
     const llm = makeLlm([
@@ -537,6 +540,46 @@ describe("runIngest", () => {
     await collect(runIngest([`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "model", [domain], VAULT_ROOT,
       new AbortController().signal));
     expect(schemaReadPath).toContain("_config/_wiki_schema.md");
+  });
+
+  it("filters stale wiki_articles links after ingest", async () => {
+    // wiki_work_gone_page matches GENERIC_WIKI_STEM_REGEX so it is a stale-filter candidate
+    const existingFm =
+      '---\nwiki_added: 2026-01-01\nwiki_updated: 2026-01-01\nwiki_articles:\n  - "[[wiki_work_gone_page]]"\n  - "[[wiki_work_live_page]]"\n---\nsource text';
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "Sources/doc.md") return existingFm;
+        if (path === "!Wiki/work/wiki_work_live_page.md") return "# Live Page";
+        throw new Error("not found");
+      }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/wiki_work_live_page.md"], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "NewPage" }] }),
+      JSON.stringify({
+        reasoning: "x",
+        pages: [{ path: "!Wiki/work/entities/wiki_work_new_page.md", content: "# NewPage" }],
+      }),
+    ]);
+    await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt,
+        llm,
+        "llama3.2",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+      ),
+    );
+    const rawCall = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([path]: [string]) => path === "Sources/doc.md",
+    );
+    expect(rawCall).toBeDefined();
+    const writtenContent = rawCall![1] as string;
+    expect(writtenContent).not.toContain("[[wiki_work_gone_page]]");
+    expect(writtenContent).toContain("[[wiki_work_live_page]]");
   });
 });
 

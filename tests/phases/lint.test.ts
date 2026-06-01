@@ -733,3 +733,85 @@ describe("checkStructure", () => {
     expect(matches.length).toBe(1);
   });
 });
+
+describe("lint — filterStaleWikiLinks integration", () => {
+  it("removes stale wiki_outgoing_links from wiki pages after lint", async () => {
+    // @lat: [[tests#Lint Stale Link Cleanup#Stale wiki_outgoing_links cleanup]]
+    const targetContent =
+      '---\nwiki_outgoing_links:\n  - "[[DeadPage]]"\n  - "[[AlivePage]]"\n---\n# Target\n\nContent.';
+    const aliveContent = '---\nwiki_status: stub\n---\n# Alive\n\nContent.';
+
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockImplementation((path: string) => {
+        if (path.includes("!Wiki")) {
+          return Promise.resolve({
+            files: ["!Wiki/work/TargetPage.md", "!Wiki/work/AlivePage.md"],
+            folders: [],
+          });
+        }
+        return Promise.resolve({ files: [], folders: [] });
+      }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/work/TargetPage.md") return Promise.resolve(targetContent);
+        if (path === "!Wiki/work/AlivePage.md") return Promise.resolve(aliveContent);
+        return Promise.resolve("");
+      }),
+    });
+
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    await collect(
+      runLint([], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "Lint OK", fixes: [] }), "{}", 2), "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+
+    const targetWrite = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([path]: [string]) => path === "!Wiki/work/TargetPage.md",
+    );
+    expect(targetWrite).toBeDefined();
+    const writtenContent = targetWrite![1] as string;
+    expect(writtenContent).not.toContain("[[DeadPage]]");
+    expect(writtenContent).toContain("[[AlivePage]]");
+  });
+
+  it("removes stale wiki_articles from source files not referenced by any wiki page", async () => {
+    // @lat: [[tests#Lint Stale Link Cleanup#Stale wiki_articles cleanup in sources]]
+    const sourceContent =
+      '---\nwiki_articles:\n  - "[[DeletedWiki]]"\n  - "[[LiveWiki]]"\n---\n# Source\n\nContent.';
+    const wikiContent = '---\nwiki_status: stub\n---\n# LiveWiki\n\nContent.';
+
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockImplementation((path: string) => {
+        if (path.includes("!Wiki")) {
+          return Promise.resolve({
+            files: ["!Wiki/work/LiveWiki.md"],
+            folders: [],
+          });
+        }
+        // vault-wide list returns wiki pages + the source file
+        return Promise.resolve({
+          files: ["!Wiki/work/LiveWiki.md", "Sources/source.md"],
+          folders: [],
+        });
+      }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/work/LiveWiki.md") return Promise.resolve(wikiContent);
+        if (path === "Sources/source.md") return Promise.resolve(sourceContent);
+        return Promise.resolve("");
+      }),
+    });
+
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    await collect(
+      runLint([], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "Lint OK", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+
+    const sourceWrite = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([path]: [string]) => path === "Sources/source.md",
+    );
+    expect(sourceWrite).toBeDefined();
+    const writtenContent = sourceWrite![1] as string;
+    expect(writtenContent).not.toContain("[[DeletedWiki]]");
+    expect(writtenContent).toContain("[[LiveWiki]]");
+  });
+});

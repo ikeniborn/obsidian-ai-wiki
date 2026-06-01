@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, hasFrontmatterField } from "../../src/utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, hasFrontmatterField, filterStaleWikiLinks } from "../../src/utils/raw-frontmatter";
 import { validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter } from "../../src/utils/raw-frontmatter";
 
 const TODAY = "2026-05-12";
@@ -405,5 +405,66 @@ body`;
       wiki_articles: ["[[wiki_fin]]"],
     });
     expect(result.match(/^wiki_articles:/gm)?.length ?? 0).toBe(1);
+  });
+});
+
+describe("filterStaleWikiLinks", () => {
+  // @lat: [[lat.md/tests#Tests#Frontmatter Validation#filterStaleWikiLinks — no frontmatter passthrough]]
+  it("returns content unchanged with empty warnings when no frontmatter", () => {
+    const content = "# Just a body\n\nNo frontmatter here.";
+    const result = filterStaleWikiLinks(content, new Set(["Foo"]), ["wiki_articles"]);
+    expect(result.content).toBe(content);
+    expect(result.warnings).toEqual([]);
+  });
+
+  // @lat: [[lat.md/tests#Tests#Frontmatter Validation#filterStaleWikiLinks — live wiki_articles kept]]
+  it("keeps live wikilinks present in existingStems", () => {
+    const content = '---\nwiki_articles:\n  - "[[Bar]]"\n---\n# Body';
+    const result = filterStaleWikiLinks(content, new Set(["Bar"]), ["wiki_articles"]);
+    expect(result.content).toBe(content);
+    expect(result.warnings).toEqual([]);
+  });
+
+  // @lat: [[lat.md/tests#Tests#Frontmatter Validation#filterStaleWikiLinks — stale wiki_articles removed]]
+  it("removes stale wikilinks absent from existingStems and emits warnings", () => {
+    const content = '---\nwiki_articles:\n  - "[[Foo]]"\n  - "[[Bar]]"\n---\n# Body';
+    const result = filterStaleWikiLinks(content, new Set(["Bar"]), ["wiki_articles"]);
+    expect(result.content).not.toContain("[[Foo]]");
+    expect(result.content).toContain("[[Bar]]");
+    expect(result.warnings).toEqual(["wiki_articles: stale link [[Foo]] — removed"]);
+  });
+
+  // @lat: [[lat.md/tests#Tests#Frontmatter Validation#filterStaleWikiLinks — related stale removed]]
+  it("removes stale links from the related field", () => {
+    const content = '---\nrelated:\n  - "[[Gone]]"\n  - "[[Alive]]"\n---\n# Body';
+    const result = filterStaleWikiLinks(content, new Set(["Alive"]), ["related"]);
+    expect(result.content).not.toContain("[[Gone]]");
+    expect(result.content).toContain("[[Alive]]");
+    expect(result.warnings).toEqual(["related: stale link [[Gone]] — removed"]);
+  });
+
+  // @lat: [[lat.md/tests#Tests#Frontmatter Validation#filterStaleWikiLinks — wiki_outgoing_links stale removed]]
+  it("removes stale links from wiki_outgoing_links", () => {
+    const content = '---\nwiki_outgoing_links:\n  - "[[Dead]]"\n---\n# Body';
+    const result = filterStaleWikiLinks(content, new Set(), ["wiki_outgoing_links"]);
+    expect(result.content).not.toContain("[[Dead]]");
+    expect(result.warnings).toEqual(["wiki_outgoing_links: stale link [[Dead]] — removed"]);
+  });
+
+  // @lat: [[lat.md/tests#Tests#Frontmatter Validation#filterStaleWikiLinks — non-wikilink entries untouched]]
+  it("does not remove entries that are not valid wikilinks", () => {
+    const content = '---\nwiki_articles:\n  - "plain-text"\n---\n# Body';
+    const result = filterStaleWikiLinks(content, new Set(), ["wiki_articles"]);
+    expect(result.content).toContain("plain-text");
+    expect(result.warnings).toEqual([]);
+  });
+
+  // @lat: [[lat.md/tests#Tests#Frontmatter Validation#filterStaleWikiLinks — empty existingStems removes all]]
+  it("removes all valid wikilink entries when existingStems is empty", () => {
+    const content = '---\nwiki_articles:\n  - "[[A]]"\n  - "[[B]]"\n---\n# Body';
+    const result = filterStaleWikiLinks(content, new Set(), ["wiki_articles"]);
+    expect(result.content).not.toContain("[[A]]");
+    expect(result.content).not.toContain("[[B]]");
+    expect(result.warnings).toHaveLength(2);
   });
 });
