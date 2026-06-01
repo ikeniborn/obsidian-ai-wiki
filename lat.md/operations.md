@@ -81,7 +81,7 @@ See [[src/phases/query.ts]], [[wiki-graph#Query Graph Traversal]].
 
 ### Seed Selection
 
-Seeds are wiki page IDs most relevant to the question. In `embedding` mode, `loadCache()` + `selectRelevant(question, ...)` uses cosine similarity. In `jaccard` mode, `selectSeeds` scores by token overlap.
+Seeds are wiki page IDs most relevant to the question. Both embedding and Jaccard paths capture `seedScores: Record<string, number>` for tracing.
 
 If seed selection yields nothing, `llmSelectSeeds` asks the LLM to pick from all annotated page IDs. See [[src/wiki-seeds.ts#selectSeeds]], [[src/phases/query.ts#llmSelectSeeds]], [[src/page-similarity.ts#PageSimilarityService]].
 
@@ -89,7 +89,15 @@ If seed selection yields nothing, `llmSelectSeeds` asks the LLM to pick from all
 
 BFS always runs from the seed set — both when seeds come from similarity and from Jaccard. All wiki pages are read to build the graph; only BFS-expanded pages are passed to the LLM. The graph is undirected — `A → [[B]]` allows traversal B→A.
 
-See [[src/wiki-graph.ts#bfsExpand]], [[wiki-graph#Query Graph Traversal]].
+`bfsExpandWithHops` produces `expandedByHop: Record<number, string[]>` — pages by BFS depth — for tracing. Both `seedScores` and `expandedByHop` are emitted in the `graph_stats` event.
+
+See [[src/wiki-graph.ts#bfsExpandWithHops]], [[wiki-graph#Query Graph Traversal]].
+
+### Query Trace UI
+
+When `agentLogEnabled` is true, the `graph_stats` event is rendered with scores and BFS-by-hop breakdown. When false, compact form is shown instead.
+
+The formatting is handled by [[src/view.ts#formatGraphStatsLines]], a pure function testable without Obsidian DOM APIs.
 
 ## Lint
 
