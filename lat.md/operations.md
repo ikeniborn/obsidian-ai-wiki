@@ -8,6 +8,12 @@ Bootstraps a new domain. File 0 calls `parseWithRetry` with `DomainEntrySchema` 
 
 Creates `_wiki_schema.md`, `_format_schema.md`, `DomainEntry`. See [[src/phases/init.ts]], [[llm-pipeline#parseWithRetry]].
 
+### Reinit (--force)
+
+Re-runs init on an existing domain, wiping the wiki folder first.
+
+`wipeDomainFolder` removes all files then calls `removeSubfolders` to delete subdirectories (skipping locked entries). The wipe patch resets `entity_types` and `analyzed_sources` but preserves `language_notes`. See [[src/phases/init.ts#wipeDomainFolder]], [[architecture#VaultTools]].
+
 ## Ingest
 
 Two-call entity-driven flow. LLM #1 extracts entities from the source. Per-entity vector top-K over `_index.md` annotations selects existing pages. LLM #2 emits writes, optional `deletes` for merges, and `entity_types_delta`.
@@ -17,6 +23,8 @@ See [[src/phases/ingest.ts]], [[domain#DomainEntry]].
 ### Entity Extraction
 
 LLM #1 uses `callSite: "ingest.entities"` with `EntitiesOutputSchema` (`{reasoning, entities: [{name, type?, context_snippet?}]}`). `parseWithRetry` validates; exhausted retries halt the run with an error event and empty result. See [[src/phases/ingest.ts]], [[llm-pipeline#parseWithRetry#Call Sites]].
+
+Entities without a matching domain type are returned without `type`; synthesis assigns the type via `entity_types_delta`.
 
 ### Per-Entity Retrieval
 
@@ -62,6 +70,8 @@ The current source's `wiki_articles` frontmatter list is filtered to drop links 
 ### entity_types_delta
 
 When the ingest LLM response includes `entity_types_delta`, the runner merges it into the current `entity_types` via `mergeEntityTypes` and emits `domain_updated`. The controller persists the patch.
+
+`domain_updated` is emitted after `source_path_added` — event order: `assistant_text` → source write → `source_path_added` → `domain_updated`.
 
 ## Query
 
