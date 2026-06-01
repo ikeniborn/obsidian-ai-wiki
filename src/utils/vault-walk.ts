@@ -10,7 +10,7 @@ export function walkFolder(folder: TFolder, out: TFile[]): void {
 export function collectMdInPaths(vault: Vault, sourcePaths: string[]): TFile[] {
   const result: TFile[] = [];
   for (const p of sourcePaths) {
-    const folder = vault.getFolderByPath(p);
+    const folder = vault.getFolderByPath(p.replace(/\/+$/, ""));
     if (folder) walkFolder(folder, result);
   }
   return result;
