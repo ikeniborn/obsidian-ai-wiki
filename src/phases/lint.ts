@@ -10,7 +10,7 @@ import type { LintOutput } from "./zod-schemas";
 import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
 import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, domainIndexPath } from "../wiki-path";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, filterStaleWikiLinks } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, filterStaleWikiLinks, validateAndRepairWikiPageFrontmatter } from "../utils/raw-frontmatter";
 import { checkGraphStructure, pageId, bfsExpand } from "../wiki-graph";
 import { checkWikiLinks, fixWikiLinks } from "../wiki-link-validator";
 import { graphCache } from "../wiki-graph-cache";
@@ -315,6 +315,27 @@ export async function* runLint(
     }
 
     if (signal.aborted) return;
+
+    // Bucket repair: remove wrong-bucket stems from wiki_sources / wiki_outgoing_links
+    const repairWarnings: Array<{ path: string; warnings: string[] }> = [];
+    for (const [wikiPath, wikiContent] of pages) {
+      const { content: repaired, warnings } = validateAndRepairWikiPageFrontmatter(wikiContent);
+      if (repaired !== wikiContent) {
+        pages.set(wikiPath, repaired);
+        await vaultTools.write(wikiPath, repaired);
+      }
+      if (warnings.length > 0) {
+        repairWarnings.push({ path: wikiPath, warnings });
+      }
+    }
+    for (const { path, warnings } of repairWarnings) {
+      yield {
+        kind: "info_text" as const,
+        icon: "⚠️",
+        summary: `Frontmatter repaired: ${path}`,
+        details: warnings,
+      };
+    }
 
     // Stale link cleanup — must run before backlink sync so pages map is consistent
     const deletedNames = new Set(deletedRefs.map(d => d.deletedName));

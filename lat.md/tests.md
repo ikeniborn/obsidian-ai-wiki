@@ -154,6 +154,26 @@ A `tags` list entry containing spaces or other invalid characters is removed fro
 
 A `wiki_outgoing_links` list entry that is not a wikilink is removed from the list.
 
+### Wiki outgoing links non-wiki stem removed
+
+A `wiki_outgoing_links` entry whose stem does not match the `wiki_<domain>_<slug>` pattern is removed and a warning naming the field and "non-wiki stem" is emitted.
+
+### Wiki outgoing links valid wiki stem kept
+
+A `wiki_outgoing_links` entry whose stem matches `wiki_<domain>_<slug>` is preserved unchanged with no warnings.
+
+### Wiki outgoing links mixed list partial removal
+
+A `wiki_outgoing_links` list containing a mix of valid wiki stems and non-wiki stems is filtered to keep only the valid wiki stems.
+
+### Wiki sources wiki stem removed
+
+A `wiki_sources` entry whose stem matches `wiki_<domain>_<slug>` (a wiki page, not a source file) is removed and a warning naming the field and "wiki stem" is emitted.
+
+### Wiki sources valid source stem kept
+
+A `wiki_sources` entry whose stem does not match the wiki pattern is preserved unchanged with no warnings.
+
 ### Wiki external links invalid entry removal
 
 A `wiki_external_links` entry that does not start with `https://` or `http://` is removed from the list.
@@ -173,6 +193,18 @@ A wiki page with `wiki_outgoing_links` pointing at a page that no longer exists 
 ### Stale wiki_articles cleanup in sources
 
 A source file with `wiki_articles` pointing at a deleted wiki page stem is rewritten after lint to remove the stale entry while keeping references to pages that still exist.
+
+## Lint Bucket Repair
+
+Integration tests that verify `runLint` detects and repairs wrong-bucket stems in wiki page frontmatter — wiki stems in `wiki_sources` and source stems in `wiki_outgoing_links` — before the LLM pass.
+
+### Wiki stem in wiki_sources repaired
+
+A wiki page whose `wiki_sources` list contains a `wiki_*` stem (which belongs in `wiki_outgoing_links`) is rewritten to remove the misplaced stem, and an `info_text` event mentioning "wiki stem" is emitted.
+
+### Source stem in wiki_outgoing_links repaired
+
+A wiki page whose `wiki_outgoing_links` list contains a non-`wiki_*` stem (which belongs in `wiki_sources`) is rewritten to remove the misplaced stem, and an `info_text` event mentioning "non-wiki stem" is emitted.
 
 ## Stop Rules
 

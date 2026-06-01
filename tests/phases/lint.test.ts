@@ -738,7 +738,7 @@ describe("lint — filterStaleWikiLinks integration", () => {
   it("removes stale wiki_outgoing_links from wiki pages after lint", async () => {
     // @lat: [[tests#Lint Stale Link Cleanup#Stale wiki_outgoing_links cleanup]]
     const targetContent =
-      '---\nwiki_outgoing_links:\n  - "[[DeadPage]]"\n  - "[[AlivePage]]"\n---\n# Target\n\nContent.';
+      '---\nwiki_outgoing_links:\n  - "[[wiki_work_dead_page]]"\n  - "[[wiki_work_alive_page]]"\n---\n# Target\n\nContent.';
     const aliveContent = '---\nwiki_status: stub\n---\n# Alive\n\nContent.';
 
     const adapter = mockAdapter({
@@ -746,15 +746,15 @@ describe("lint — filterStaleWikiLinks integration", () => {
       list: vi.fn().mockImplementation((path: string) => {
         if (path.includes("!Wiki")) {
           return Promise.resolve({
-            files: ["!Wiki/work/TargetPage.md", "!Wiki/work/AlivePage.md"],
+            files: ["!Wiki/work/wiki_work_target_page.md", "!Wiki/work/wiki_work_alive_page.md"],
             folders: [],
           });
         }
         return Promise.resolve({ files: [], folders: [] });
       }),
       read: vi.fn().mockImplementation((path: string) => {
-        if (path === "!Wiki/work/TargetPage.md") return Promise.resolve(targetContent);
-        if (path === "!Wiki/work/AlivePage.md") return Promise.resolve(aliveContent);
+        if (path === "!Wiki/work/wiki_work_target_page.md") return Promise.resolve(targetContent);
+        if (path === "!Wiki/work/wiki_work_alive_page.md") return Promise.resolve(aliveContent);
         return Promise.resolve("");
       }),
     });
@@ -765,12 +765,12 @@ describe("lint — filterStaleWikiLinks integration", () => {
     );
 
     const targetWrite = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
-      ([path]: [string]) => path === "!Wiki/work/TargetPage.md",
+      ([path]: [string]) => path === "!Wiki/work/wiki_work_target_page.md",
     );
     expect(targetWrite).toBeDefined();
     const writtenContent = targetWrite![1] as string;
-    expect(writtenContent).not.toContain("[[DeadPage]]");
-    expect(writtenContent).toContain("[[AlivePage]]");
+    expect(writtenContent).not.toContain("[[wiki_work_dead_page]]");
+    expect(writtenContent).toContain("[[wiki_work_alive_page]]");
   });
 
   it("removes stale wiki_articles from source files not referenced by any wiki page", async () => {
@@ -813,5 +813,103 @@ describe("lint — filterStaleWikiLinks integration", () => {
     const writtenContent = sourceWrite![1] as string;
     expect(writtenContent).not.toContain("[[DeletedWiki]]");
     expect(writtenContent).toContain("[[LiveWiki]]");
+  });
+});
+
+describe("lint — bucket repair", () => {
+  it("repairs wiki stem in wiki_sources and emits info_text warning", async () => {
+    // @lat: [[tests#Lint Bucket Repair#Wiki stem in wiki_sources repaired]]
+    const badContent =
+      '---\nwiki_sources:\n  - "[[wiki_work_foo]]"\nwiki_status: stub\n---\n# Page\n\nContent.';
+
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockImplementation((path: string) => {
+        if (path.includes("!Wiki")) {
+          return Promise.resolve({
+            files: ["!Wiki/work/Page.md"],
+            folders: [],
+          });
+        }
+        return Promise.resolve({ files: [], folders: [] });
+      }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/work/Page.md") return Promise.resolve(badContent);
+        return Promise.resolve("");
+      }),
+    });
+
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const events = await collect(
+      runLint(
+        [],
+        vt,
+        makeLlm(JSON.stringify({ reasoning: "ok", report: "Lint OK", fixes: [] }), "{}", 2),
+        "model",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+      ),
+    );
+
+    const writeCall = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([path]: [string]) => path === "!Wiki/work/Page.md",
+    );
+    expect(writeCall).toBeDefined();
+    expect(writeCall![1]).not.toContain("[[wiki_work_foo]]");
+
+    const infoEvent = events.find(
+      (e: any) => e.kind === "info_text" && e.summary?.includes("Frontmatter repaired"),
+    );
+    expect(infoEvent).toBeDefined();
+    expect((infoEvent as any).details?.some((d: string) => d.includes("wiki stem"))).toBe(true);
+  });
+
+  it("repairs source stem in wiki_outgoing_links and emits info_text warning", async () => {
+    // @lat: [[tests#Lint Bucket Repair#Source stem in wiki_outgoing_links repaired]]
+    const badContent =
+      '---\nwiki_outgoing_links:\n  - "[[my_note]]"\nwiki_status: stub\n---\n# Page\n\nContent.';
+
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockImplementation((path: string) => {
+        if (path.includes("!Wiki")) {
+          return Promise.resolve({
+            files: ["!Wiki/work/Page.md"],
+            folders: [],
+          });
+        }
+        return Promise.resolve({ files: [], folders: [] });
+      }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/work/Page.md") return Promise.resolve(badContent);
+        return Promise.resolve("");
+      }),
+    });
+
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const events = await collect(
+      runLint(
+        [],
+        vt,
+        makeLlm(JSON.stringify({ reasoning: "ok", report: "Lint OK", fixes: [] }), "{}", 2),
+        "model",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+      ),
+    );
+
+    const writeCall = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([path]: [string]) => path === "!Wiki/work/Page.md",
+    );
+    expect(writeCall).toBeDefined();
+    expect(writeCall![1]).not.toContain("[[my_note]]");
+
+    const infoEvent = events.find(
+      (e: any) => e.kind === "info_text" && e.summary?.includes("Frontmatter repaired"),
+    );
+    expect(infoEvent).toBeDefined();
+    expect((infoEvent as any).details?.some((d: string) => d.includes("non-wiki stem"))).toBe(true);
   });
 });
