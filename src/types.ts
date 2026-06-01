@@ -79,6 +79,8 @@ export type RunEvent =
       expanded: number;
       total: number;
       fromCache: boolean;
+      seedScores: Record<string, number>;
+      expandedByHop: Record<number, string[]>;
     };
 
 export interface RunHistoryEntry {
