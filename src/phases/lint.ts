@@ -339,7 +339,7 @@ export async function* runLint(
       const rawContent = await vaultTools.read(sourcePath).catch(() => null);
       if (!rawContent) continue;
       const { content: filteredContent } =
-        filterStaleWikiLinks(rawContent, existingWikiStems, ["wiki_articles", "related"]);
+        filterStaleWikiLinks(rawContent, existingWikiStems, ["wiki_articles"]);
       if (filteredContent !== rawContent) await vaultTools.write(sourcePath, filteredContent);
     }
 
