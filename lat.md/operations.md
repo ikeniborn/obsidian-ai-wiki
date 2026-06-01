@@ -45,6 +45,8 @@ This disambiguates wiki pages from source files in `domain.source_paths` (no `[[
 3. **Runtime guard** — after path validation, [[src/phases/ingest.ts]] re-checks each emitted page stem against `stemRegex(domain.id)` and the source-stem set. Violations yield `tool_result ok:false` with a stem-specific preview and skip the page.
 4. **Migration** — [[scripts/migrate-wiki-prefix.ts]] (logic in [[src/migrate-wiki-prefix.ts]]) renames legacy unprefixed wiki pages, rewrites backlinks across page bodies, `_index.md`, `_log.md`, `_embeddings.json` keys, and source `wiki_articles`, and bumps `DomainEntry.pageNameVersion` to `1` so re-runs are no-ops. Until a domain is migrated (`pageNameVersion < 1`), ingest deletes legacy unprefixed pages via `vaultTools.remove` before LLM #2 and emits an `info_text` summary reporting the count deleted (only `.md` files in the wiki folder; meta files like `_index.md`, `_log.md`, `_embeddings.json`, and anything under `_config/` are excluded).
 
+**Check B — missing wiki_sources cleanup.** After populating `existingPages`, ingest filters out any pages whose content does not contain a `wiki_sources:` field in frontmatter. These are considered structurally invalid regardless of their filename. Each is removed via `vaultTools.remove`, deleted from the `existingPages` map so LLM #2 receives no stale context, and a single `info_text` event is emitted with the count and paths (up to 10). See [[src/phases/ingest.ts]].
+
 ### Result Summary
 
 After writes and deletes, ingest emits a result text broken down by action. Three terms are possible: `создано C, обновлено U, объединено M`.
