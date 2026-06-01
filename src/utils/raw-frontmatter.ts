@@ -142,6 +142,44 @@ export function validateAndRepairFrontmatter(
   return { content: `---\n${yamlStringify(parsed)}---\n${body}`, warnings };
 }
 
+export function filterStaleWikiLinks(
+  content: string,
+  existingStems: Set<string>,
+  fields: string[],
+): { content: string; warnings: string[] } {
+  const warnings: string[] = [];
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return { content, warnings };
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {};
+  } catch {
+    return { content, warnings };
+  }
+
+  let modified = false;
+  for (const field of fields) {
+    const val = parsed[field];
+    if (!Array.isArray(val)) continue;
+    const filtered = (val as string[]).filter((entry) => {
+      if (!WIKILINK_RE.test(entry)) return true;
+      const stem = entry.slice(2, -2);
+      if (existingStems.has(stem)) return true;
+      warnings.push(`${field}: stale link ${entry} — removed`);
+      return false;
+    });
+    if (filtered.length !== val.length) {
+      parsed[field] = filtered;
+      modified = true;
+    }
+  }
+
+  if (!modified) return { content, warnings };
+  const body = content.slice(fmMatch[0].length);
+  return { content: `---\n${yamlStringify(parsed)}---\n${body}`, warnings };
+}
+
 const SOURCE_RULES: FieldRule[] = [
   { field: "wiki_articles", kind: "list-wikilinks" },
   { field: "wiki_added", kind: "date-scalar" },
