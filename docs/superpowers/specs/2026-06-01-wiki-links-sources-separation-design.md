@@ -1,3 +1,45 @@
+---
+review:
+  spec_hash: "dc052c9f722660cf"
+  last_run: "2026-06-01"
+  phases:
+    structure:
+      status: passed
+    coverage:
+      status: passed
+    clarity:
+      status: in_progress
+    consistency:
+      status: passed
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: CRITICAL
+      section: "## Error handling"
+      section_hash: "5fb489bdb5d9cb48"
+      text: "Contradiction: Layer 2 code example (yield before write) contradicted §Error handling and §Constraints ('after all writes'). Fixed by restructuring code example to collect warnings, write all, then yield."
+      verdict: fixed
+      verdict_at: "2026-06-01"
+    - id: F-002
+      phase: clarity
+      severity: WARNING
+      section: "## Testing"
+      section_hash: "c431f07dabeab00f"
+      text: "'Audit all tests... — update to match corrected behavior' lacks explicit DoD: no file list, no criterion for what constitutes a correct update."
+      verdict: open
+      verdict_at: null
+    - id: F-003
+      phase: clarity
+      severity: INFO
+      section: "## Problem"
+      section_hash: "48cae285b5463fb2"
+      text: "Terminology drift: 'wiki page stems' used in §Problem and §Invariant; 'wiki stems' used in §Architecture, §Testing, §Constraints. Same concept, two names."
+      verdict: open
+      verdict_at: null
+chain:
+  intent: docs/superpowers/intents/2026-06-01-wiki-links-sources-separation-intent.md
+---
+
 # Design: wiki_outgoing_links / wiki_sources — link bucket separation
 
 **Date:** 2026-06-01
@@ -81,20 +123,24 @@ Lint currently does not call `validateAndRepairWikiPageFrontmatter`. Add a dedic
 import { validateAndRepairWikiPageFrontmatter } from "../utils/raw-frontmatter";
 
 // Bucket repair: remove wrong-bucket links from wiki_sources / wiki_outgoing_links
+const repairWarnings: Array<{ path: string; warnings: string[] }> = [];
 for (const [wikiPath, wikiContent] of pages) {
   const { content: repaired, warnings } = validateAndRepairWikiPageFrontmatter(wikiContent);
-  if (warnings.length > 0) {
-    yield {
-      kind: "info_text",
-      icon: "⚠️",
-      summary: `Frontmatter repaired: ${wikiPath}`,
-      details: warnings,
-    };
-  }
   if (repaired !== wikiContent) {
     pages.set(wikiPath, repaired);
     await vaultTools.write(wikiPath, repaired);
   }
+  if (warnings.length > 0) {
+    repairWarnings.push({ path: wikiPath, warnings });
+  }
+}
+for (const { path, warnings } of repairWarnings) {
+  yield {
+    kind: "info_text",
+    icon: "⚠️",
+    summary: `Frontmatter repaired: ${path}`,
+    details: warnings,
+  };
 }
 ```
 

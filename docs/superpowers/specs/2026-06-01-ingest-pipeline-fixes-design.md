@@ -2,14 +2,22 @@
 chain:
   intent: null
 review:
-  spec_hash: null
-  last_run: null
+  spec_hash: a0b7e4df016e2b66
+  last_run: 2026-06-01
   phases:
-    structure:   { status: pending }
-    coverage:    { status: pending }
-    clarity:     { status: pending }
-    consistency: { status: pending }
-  findings: []
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: INFO
+      section: "### Fix 2 — Entity extraction allows new concept types"
+      section_hash: fe54688369ec4fbc
+      text: "\"entity_types_delta enriches domain correctly\" — «correctly» без критерия приёмки"
+      verdict: fixed
+      verdict_at: 2026-06-01
 ---
 
 # Design: Ingest pipeline fixes — alias prohibition, entity extraction, domain_updated ordering
@@ -102,7 +110,7 @@ Replace line 9 and surrounding task description:
 Не дублируй: один name → одна запись. Не извлекай сущности с min_mentions_for_page > 1, если они упомянуты только раз.
 ```
 
-**Effect:** Files like `Исследования криптовалюты.md` now return entities (e.g. `CryptoDeveloperActivity` without type). Synthesis receives entity anchors → embedding retrieval surfaces relevant existing pages → `entity_types_delta` enriches domain correctly.
+**Effect:** Files like `Исследования криптовалюты.md` now return entities (e.g. `CryptoDeveloperActivity` without type). Synthesis receives entity anchors → embedding retrieval surfaces relevant existing pages → `entity_types_delta` adds any new types to `domain.entity_types` (zero new types emitted when all extracted entities already match known types).
 
 ### Fix 3 — `domain_updated` ordering in ingest.ts
 

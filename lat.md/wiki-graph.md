@@ -12,7 +12,7 @@ See [[src/wiki-graph.ts#buildWikiGraph]].
 
 BFS from seed pages up to `graphDepth` hops. The graph is treated as **undirected**: `A → [[B]]` allows traversal B→A. Rationale: backlinks are symmetric in the user's mental model.
 
-Seeds not in the graph are silently skipped. Returns all reachable IDs. See [[src/wiki-graph.ts#bfsExpand]].
+Seeds not in the graph are silently skipped. Two functions: [[src/wiki-graph.ts#bfsExpand]] returns all reachable IDs. [[src/wiki-graph.ts#bfsExpandWithHops]] additionally tracks which pages are discovered at each hop depth, enabling query tracing diagnostics.
 
 ## Graph Cache
 

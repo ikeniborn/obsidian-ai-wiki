@@ -1,3 +1,35 @@
+---
+chain:
+  intent: docs/superpowers/intents/2026-06-01-manage-sources-removal-reinit-intent.md
+  spec: docs/superpowers/specs/2026-06-01-manage-sources-removal-reinit-design.md
+review:
+  plan_hash: 9ab94bccc275c6fb
+  spec_hash: a0051ea353d684fd
+  last_run: "2026-06-01"
+  phases:
+    structure:     { status: passed }
+    coverage:      { status: passed }
+    dependencies:  { status: passed }
+    verifiability: { status: passed }
+    consistency:   { status: passed }
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: WARNING
+      section: "### Task 2: Implement `handleManageSourcesResult`"
+      section_hash: bf8420ac44b79155
+      text: "Steps 3–5 (run full suite, build, commit) not tied to explicit spec requirement"
+      verdict: fixed
+      verdict_at: "2026-06-01"
+    - id: F-002
+      phase: verifiability
+      severity: WARNING
+      section: "### Task 1: Write failing tests"
+      section_hash: 67e04752dc891e76
+      text: "Task 1 Step 1 and Task 2 Step 1 have no verification command — DoD deferred to next step"
+      verdict: fixed
+      verdict_at: "2026-06-01"
+---
 # manage-sources removal reinit Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -16,6 +48,8 @@
 - Create: `tests/view-manage-sources-result.test.ts`
 
 - [ ] **Step 1: Create test file**
+
+Expected: `tests/view-manage-sources-result.test.ts` created. Verify: `ls tests/view-manage-sources-result.test.ts`.
 
 ```typescript
 // tests/view-manage-sources-result.test.ts
@@ -173,7 +207,7 @@ Expected: Branch 1 confirm and Branch 1 cancel tests FAIL (current code calls `u
 
 - [ ] **Step 1: Replace `handleManageSourcesResult`**
 
-Replace lines 427–450 (the entire `handleManageSourcesResult` method):
+Replace lines 427–450 (the entire `handleManageSourcesResult` method). Expected: method updated. Verify: `grep -n "ConfirmModal" src/view.ts | head -3`.
 
 ```typescript
   private async handleManageSourcesResult(
@@ -238,6 +272,8 @@ Expected: all 6 tests PASS.
 
 - [ ] **Step 3: Run full test suite to confirm no regressions**
 
+_(Spec: Branch 3 add-only path must remain "identical to current behaviour".)_
+
 ```bash
 npx vitest run --reporter=verbose 2>&1 | tail -10
 ```
@@ -245,6 +281,8 @@ npx vitest run --reporter=verbose 2>&1 | tail -10
 Expected: `Test Files  79 passed`, `Tests  840 passed` (6 new tests added).
 
 - [ ] **Step 4: Build**
+
+_(Spec: Tech Stack — TypeScript; implementation must compile without errors.)_
 
 ```bash
 npm run build 2>&1 | tail -5
@@ -255,6 +293,6 @@ Expected: no TypeScript errors.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/view.ts tests/view-manage-sources-result.test.ts
+git add src/view.ts tests/view-manage-sources-result.test.ts vitest.mock.ts
 git commit -m "feat(view): force reinit on source removal in handleManageSourcesResult"
 ```

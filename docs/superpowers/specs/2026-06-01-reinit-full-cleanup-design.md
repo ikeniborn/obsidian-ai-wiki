@@ -1,3 +1,40 @@
+---
+chain:
+  intent: docs/superpowers/intents/2026-05-31-init-reinit-allfailed-intent.md
+review:
+  spec_hash: 7bbcc2439f6ab332
+  last_run: "2026-06-01"
+  phases:
+    structure: { status: passed }
+    coverage: { status: passed }
+    clarity: { status: passed }
+    consistency: { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "### 5. Lint: invalid-page cleanup pass"
+      section_hash: 2e43bdcde991f343
+      text: "§5 describes 'new synchronous pass' but implementation is async function — terminology mismatch"
+      verdict: fixed
+      verdict_at: "2026-06-01"
+    - id: F-002
+      phase: clarity
+      severity: WARNING
+      section: "## Problem"
+      section_hash: 52cbcf26f0af8f6f
+      text: "Inconsistent terms for same concept: 'wiki article' (§Problem, §Invalid), 'wiki page' (§4 emit text), 'wiki file' (§5)"
+      verdict: fixed
+      verdict_at: "2026-06-01"
+    - id: F-003
+      phase: clarity
+      severity: WARNING
+      section: "### 5. Lint: invalid-page cleanup pass"
+      section_hash: 2e43bdcde991f343
+      text: "§5 says 'Emit a step event' but shows no emission code and does not define event shape — missing DoD"
+      verdict: fixed
+      verdict_at: "2026-06-01"
+---
 # Design: reinit full cleanup — subfolders + invalid article deletion
 
 ## Status
@@ -127,14 +164,25 @@ Both checks run before ingest LLM calls so the page set is clean.
 
 ### 5. Lint: invalid-page cleanup pass
 
-In `src/phases/lint.ts`, add a new synchronous pass before LLM steps. For each wiki file in the domain:
+In `src/phases/lint.ts`, add a new async pass before LLM steps. For each wiki article in the domain:
 
 - If filename doesn't match `GENERIC_WIKI_STEM_REGEX` → delete
 - If frontmatter has no `wiki_sources` → delete
 
-Emit a `step` event with count of deleted files. This pass acts as a safety net for pages that survived ingest cleanup (e.g., files created outside the normal ingest flow).
+This pass acts as a safety net for pages that survived ingest cleanup (e.g., files created outside the normal ingest flow).
 
 Implementation: add `cleanupInvalidPages(vaultTools, wikiVaultPath, domainId)` helper function called at the top of `runLint`. Returns `{ deleted: number }`.
+
+After the call, `runLint` emits a `step` event if any files were deleted:
+
+```typescript
+const { deleted } = await cleanupInvalidPages(vaultTools, wikiVaultPath, domainId);
+if (deleted > 0) {
+  yield { kind: "step", icon: "🗑️", text: `Deleted ${deleted} invalid wiki article(s).` };
+}
+```
+
+Event shape: `{ kind: "step", icon: string, text: string }` — same as other lint step events.
 
 ```typescript
 async function cleanupInvalidPages(
