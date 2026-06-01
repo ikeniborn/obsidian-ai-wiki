@@ -2,6 +2,23 @@
 chain:
   intent: docs/superpowers/intents/2026-06-01-manage-sources-removal-reinit-intent.md
 state: approved
+review:
+  spec_hash: a0051ea353d684fd
+  last_run: "2026-06-01"
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: INFO
+      section: "### Branch 1 — remove with remaining sources"
+      section_hash: 147898317d01a735
+      text: "'same notice as today' does not quote notice text — developer must read current code to find it"
+      verdict: accepted
+      verdict_at: "2026-06-01"
 ---
 # Design: manage-sources removal — forced reinit
 
