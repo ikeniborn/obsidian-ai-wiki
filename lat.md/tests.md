@@ -98,6 +98,34 @@ An `external_links` entry that does not start with `https://` or `http://` is re
 
 A `related` list entry that is not a wikilink is removed from the list.
 
+### filterStaleWikiLinks — stale wiki_articles removed
+
+`[[Foo]]` where `Foo` is absent from `existingStems` is removed from the `wiki_articles` field and a warning `"wiki_articles: stale link [[Foo]] — removed"` is emitted.
+
+### filterStaleWikiLinks — live wiki_articles kept
+
+`[[Bar]]` where `Bar` is present in `existingStems` is left unchanged and no warning is emitted.
+
+### filterStaleWikiLinks — related stale removed
+
+`[[Foo]]` absent from `existingStems` is removed from the `related` field and a warning `"related: stale link [[Foo]] — removed"` is emitted.
+
+### filterStaleWikiLinks — wiki_outgoing_links stale removed
+
+`[[Foo]]` absent from `existingStems` is removed from the `wiki_outgoing_links` field and a warning is emitted.
+
+### filterStaleWikiLinks — non-wikilink entries untouched
+
+An entry that does not match `[[...]]` (e.g., a plain string) in a targeted field is not removed by `filterStaleWikiLinks` — format validation is `validateAndRepairFrontmatter`'s responsibility.
+
+### filterStaleWikiLinks — empty existingStems removes all
+
+When `existingStems` is an empty `Set`, all valid wikilink entries in targeted fields are removed.
+
+### filterStaleWikiLinks — no frontmatter passthrough
+
+Content without a frontmatter block is returned unchanged with an empty warnings array.
+
 ### Source body preservation
 
 Invalid frontmatter fields are repaired but body content referencing those field names as plain text is preserved unchanged.
