@@ -193,6 +193,95 @@ body`;
   });
 });
 
+describe("validateAndRepairSourceFrontmatter", () => {
+  // @lat: [[tests#Frontmatter Validation#Source invalid date removal]]
+  it("removes wiki_added with invalid date", () => {
+    const content = `---
+wiki_added: not-a-date
+wiki_updated: 2026-06-01
+---
+body`;
+    const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
+    expect(out).not.toContain("wiki_added:");
+    expect(warnings.some((w) => w.includes("wiki_added") && w.includes("invalid date"))).toBe(true);
+  });
+
+  // @lat: [[tests#Frontmatter Validation#Source invalid wikilink removal]]
+  it("removes wiki_articles entry that is not a wikilink", () => {
+    const content = `---
+wiki_articles:
+  - "[[wiki_valid]]"
+  - "not-a-wikilink"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
+    expect(out).toContain("[[wiki_valid]]");
+    expect(out).not.toContain("not-a-wikilink");
+    expect(warnings.some((w) => w.includes("wiki_articles") && w.includes("not-a-wikilink"))).toBe(true);
+  });
+
+  // @lat: [[tests#Frontmatter Validation#Source invalid tag removal]]
+  it("removes tag with uppercase letters", () => {
+    const content = `---
+tags:
+  - crypto/defi
+  - BadTag
+---
+body`;
+    const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
+    expect(out).toContain("crypto/defi");
+    expect(out).not.toContain("BadTag");
+    expect(warnings.some((w) => w.includes("tags") && w.includes("BadTag"))).toBe(true);
+  });
+
+  // @lat: [[tests#Frontmatter Validation#Source scalar aliases wrap]]
+  it("wraps scalar aliases in a list", () => {
+    const content = `---
+aliases: BTC
+---
+body`;
+    const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
+    expect(out).toContain("aliases:\n  - BTC");
+    expect(warnings.some((w) => w.includes("aliases"))).toBe(true);
+  });
+
+  // @lat: [[tests#Frontmatter Validation#Source invalid URL removal]]
+  it("removes external_links entry without http(s):// prefix", () => {
+    const content = `---
+external_links:
+  - "https://example.com"
+  - "ftp://bad.com"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
+    expect(out).toContain("https://example.com");
+    expect(out).not.toContain("ftp://bad.com");
+  });
+
+  // @lat: [[tests#Frontmatter Validation#Source related invalid entry removal]]
+  it("removes related entry that is not a wikilink", () => {
+    const content = `---
+related:
+  - "[[wiki_valid]]"
+  - "plain-text"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
+    expect(out).toContain("[[wiki_valid]]");
+    expect(out).not.toContain("plain-text");
+  });
+
+  // @lat: [[tests#Frontmatter Validation#Source body preservation]]
+  it("does not modify body content", () => {
+    const content = `---
+wiki_added: bad
+---
+# Body with wiki_added: mention`;
+    const { content: out } = validateAndRepairSourceFrontmatter(content);
+    expect(out).toContain("# Body with wiki_added: mention");
+  });
+});
+
 describe("upsertRawFrontmatter — duplicate wiki_articles bug", () => {
   it("produces exactly one wiki_articles when source already had two occurrences", () => {
     const input = `---

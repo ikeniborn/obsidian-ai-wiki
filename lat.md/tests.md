@@ -74,6 +74,34 @@ When the same YAML key appears twice, the list items are merged and deduplicated
 
 If the YAML block cannot be parsed, the original content is returned unchanged and a warning prefixed with "Unparseable YAML" is emitted.
 
+### Source invalid date removal
+
+A `wiki_added` or `wiki_updated` value that is not a `YYYY-MM-DD` string is deleted from the frontmatter and a warning containing the field name and "invalid date" is emitted.
+
+### Source invalid wikilink removal
+
+A `wiki_articles` list entry that does not match `[[...]]` is removed from the list and a warning naming the field and the offending value is emitted.
+
+### Source invalid tag removal
+
+A `tags` list entry containing uppercase letters or other invalid characters is removed and a warning naming the field and the offending tag is emitted.
+
+### Source scalar aliases wrap
+
+A scalar `aliases` value is wrapped into a single-element list and a warning naming the field is emitted.
+
+### Source invalid URL removal
+
+An `external_links` entry that does not start with `https://` or `http://` is removed from the list.
+
+### Source related invalid entry removal
+
+A `related` list entry that is not a wikilink is removed from the list.
+
+### Source body preservation
+
+Invalid frontmatter fields are repaired but body content referencing those field names as plain text is preserved unchanged.
+
 ## Stop Rules
 
 Tests that validate halt conditions.
