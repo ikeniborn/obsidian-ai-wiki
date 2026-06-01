@@ -1,3 +1,33 @@
+---
+review:
+  spec_hash: "6903620fa9f0b870"
+  last_run: "2026-06-01"
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "### Source files — all sources (vault-wide)"
+      section_hash: "5af1bebb0276f3f8"
+      text: "\"This replaces the existing backlink sync loop's per-source stale filtering\" misleads — existing backlink sync has no stale filtering; nothing to replace."
+      verdict: fixed
+      verdict_at: "2026-06-01"
+    - id: F-002
+      phase: clarity
+      severity: WARNING
+      section: "## Ingest integration"
+      section_hash: "f070847e846ef8a2"
+      text: "\"Merge staleWarnings into sourceWarnings\" — concatenation order and yield structure not specified."
+      verdict: fixed
+      verdict_at: "2026-06-01"
+chain:
+  intent: "docs/superpowers/intents/2026-06-01-source-wiki-articles-stale-link-cleanup-intent.md"
+---
+
 # Design: Source wiki_articles stale link cleanup
 
 **Date:** 2026-06-01
@@ -57,7 +87,7 @@ const { content: filteredSource, warnings: staleWarnings } =
   filterStaleWikiLinks(repairedSource, existingStems, ["wiki_articles", "related"]);
 ```
 
-Write `filteredSource`. Merge `staleWarnings` into `sourceWarnings` for the existing `info_text` yield.
+Write `filteredSource`. Append `staleWarnings` after `sourceWarnings` and pass the combined array as `details` to the existing `info_text` yield (only emitted when the combined array is non-empty).
 
 Order: format repair first, then existence filter. This ensures `filterStaleWikiLinks` only sees format-valid wikilinks.
 
@@ -109,7 +139,7 @@ for (const sourcePath of sourcePaths) {
 }
 ```
 
-This replaces the existing backlink sync loop's per-source stale filtering (backlink sync still runs to ADD new links; stale removal is now done here, vault-wide).
+Stale removal runs here, separately from the backlink sync loop. Backlink sync (which only ADDs links) is unchanged.
 
 Warnings from `filterStaleWikiLinks` in lint are discarded — stale link removal is silent cleanup.
 
