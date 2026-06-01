@@ -13,7 +13,7 @@ import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
 import { render } from "./template";
 import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter } from "../utils/raw-frontmatter";
 import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
 import type { PageSimilarityService, ExtractedEntity } from "../page-similarity";
@@ -306,16 +306,26 @@ export async function* runIngest(
     let existingContent: string | null = null;
     try { existingContent = await vaultTools.read(page.path); } catch { /* new page */ }
 
+    const { content: repairedPage, warnings: pageWarnings } =
+      validateAndRepairWikiPageFrontmatter(page.content);
+    if (pageWarnings.length > 0) {
+      yield {
+        kind: "info_text",
+        icon: "⚠️",
+        summary: `Frontmatter repaired: ${page.path}`,
+        details: pageWarnings,
+      };
+    }
     yield { kind: "tool_use", name: existingContent === null ? "Create" : "Update", input: { path: page.path } };
     try {
-      await vaultTools.write(page.path, page.content);
+      await vaultTools.write(page.path, repairedPage);
       written.push(page.path);
       yield { kind: "tool_result", ok: true };
 
       const relPath = page.path.startsWith(wikiVaultPath + "/")
         ? page.path.slice(wikiVaultPath.length + 1)
         : page.path;
-      const statusTo = parseWikiStatus(page.content);
+      const statusTo = parseWikiStatus(repairedPage);
       if (existingContent === null) {
         logEntries.push({ path: relPath, action: "СОЗДАНА", statusTo });
       } else {
@@ -403,9 +413,19 @@ export async function* runIngest(
       wiki_updated: backlinkToday,
       wiki_articles: mergedArticles,
     });
+    const { content: repairedSource, warnings: sourceWarnings } =
+      validateAndRepairSourceFrontmatter(updatedSource);
+    if (sourceWarnings.length > 0) {
+      yield {
+        kind: "info_text",
+        icon: "⚠️",
+        summary: "Source frontmatter repaired",
+        details: sourceWarnings,
+      };
+    }
     yield { kind: "tool_use", name: "Update", input: { path: sourceVaultPath } };
     try {
-      await vaultTools.write(sourceVaultPath, updatedSource);
+      await vaultTools.write(sourceVaultPath, repairedSource);
       yield { kind: "tool_result", ok: true, preview: `backlinks → ${sourceVaultPath}` };
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: `backlink write failed: ${(e as Error).message}` };
