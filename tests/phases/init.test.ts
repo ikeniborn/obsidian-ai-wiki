@@ -894,3 +894,39 @@ describe("sanitizeWikiFolder applied in init bootstrap", () => {
     expect(sanitizeWikiSubfolder("processes")).toBe("processes");
   });
 });
+
+// @lat: [[tests#Init Reinit#Reinit does not clear language_notes]]
+describe("runInit --force (reinit)", () => {
+  it("domain_updated patch does not include language_notes", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, "/vault");
+    const existingDomain: DomainEntry = {
+      id: "fin",
+      name: "Finance",
+      wiki_folder: "fin",
+      source_paths: ["Sources/old.md"],
+      entity_types: [{ name: "Contract", examples: [] }],
+      analyzed_sources: ["Sources/old.md"],
+      language_notes: "Finance domain description",
+    };
+    const llm = makeMultiLlm([
+      JSON.stringify({ reasoning: "ok", entities: [] }),
+      JSON.stringify({ reasoning: "ok", pages: [] }),
+    ]);
+    const events = await collect(runInit(
+      ["fin", "--force"],
+      vt, llm, "m", [existingDomain], "TestVault",
+      new AbortController().signal,
+    ));
+    const patches = events
+      .filter((e: any) => e.kind === "domain_updated" && e.domainId === "fin")
+      .map((e: any) => e.patch);
+    // The reinit wipe patch must not touch language_notes
+    for (const p of patches) {
+      expect(p).not.toHaveProperty("language_notes");
+    }
+  });
+});
