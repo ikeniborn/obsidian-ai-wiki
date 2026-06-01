@@ -397,12 +397,6 @@ export async function* runIngest(
   const resultText = buildIngestSummary(domain.id, sourceVaultPath, createdCount, updatedCount, mergedCount, pages.length);
   yield { kind: "assistant_text", delta: resultText };
 
-  const delta = parseResult.value.entity_types_delta;
-  if (delta?.length) {
-    const merged = mergeEntityTypes(domain.entity_types ?? [], delta);
-    yield { kind: "domain_updated", domainId: domain.id, patch: { entity_types: merged } };
-  }
-
   const deletedStems = new Set(deletedPaths.map((p) => p.split("/").pop()!.replace(/\.md$/, "")));
 
   if (written.length > 0 || deletedPaths.length > 0) {
@@ -464,6 +458,12 @@ export async function* runIngest(
 
     const parentPath = extractParentSourcePath(absSource, vaultRoot);
     yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
+  }
+
+  const delta = parseResult.value.entity_types_delta;
+  if (delta?.length) {
+    const merged = mergeEntityTypes(domain.entity_types ?? [], delta);
+    yield { kind: "domain_updated", domainId: domain.id, patch: { entity_types: merged } };
   }
 
   if (similarity && written.length > 0) {
