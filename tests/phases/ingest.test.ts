@@ -1333,6 +1333,36 @@ describe("runIngest — pre-migration warning", () => {
     const warn = events.find((e: any) => e.kind === "info_text" && /legacy/i.test(e.summary ?? ""));
     expect(warn).toBeUndefined();
   });
+
+  it("deletes unprefixed pages and emits info_text with 'Deleted' summary", async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p === "Sources/doc.md") return "source content";
+        if (p === "!Wiki/work/LegacyPage.md") return "---\n---\n# Legacy";
+        throw new Error("not found");
+      }),
+      list: vi.fn().mockImplementation(async (dir: string) => {
+        if (dir.startsWith("!Wiki/work")) return { files: ["!Wiki/work/LegacyPage.md"], folders: [] };
+        return { files: [], folders: [] };
+      }),
+      remove,
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "x", entities: [{ name: "Foo" }] }),
+      JSON.stringify({ reasoning: "ok", pages: [] }),
+    ]);
+    const domainV0: DomainEntry = { ...domain, pageNameVersion: 0 };
+    const events = await collect(runIngest(
+      [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [domainV0], VAULT_ROOT,
+      new AbortController().signal,
+    ));
+    expect(remove).toHaveBeenCalledWith("!Wiki/work/LegacyPage.md");
+    const info = events.find((e: any) => e.kind === "info_text" && /Deleted.*legacy/i.test(e.summary ?? ""));
+    expect(info).toBeDefined();
+  });
 });
 
 describe("runIngest — stem mask guard", () => {
