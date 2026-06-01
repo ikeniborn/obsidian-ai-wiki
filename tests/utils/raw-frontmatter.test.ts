@@ -256,6 +256,7 @@ body`;
     const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
     expect(out).toContain("https://example.com");
     expect(out).not.toContain("ftp://bad.com");
+    expect(warnings.some((w) => w.includes("external_links") && w.includes("ftp://bad.com"))).toBe(true);
   });
 
   // @lat: [[tests#Frontmatter Validation#Source related invalid entry removal]]
@@ -269,6 +270,7 @@ body`;
     const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
     expect(out).toContain("[[wiki_valid]]");
     expect(out).not.toContain("plain-text");
+    expect(warnings.some((w) => w.includes("related") && w.includes("plain-text"))).toBe(true);
   });
 
   // @lat: [[tests#Frontmatter Validation#Source body preservation]]
