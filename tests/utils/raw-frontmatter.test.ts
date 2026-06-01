@@ -137,3 +137,23 @@ describe("hasFrontmatterField", () => {
     expect(hasFrontmatterField("---\nwiki_updated: 2026-05-12\n---\n", "wiki_updated")).toBe(true);
   });
 });
+
+describe("upsertRawFrontmatter — duplicate wiki_articles bug", () => {
+  it("produces exactly one wiki_articles when source already had two occurrences", () => {
+    const input = `---
+tags:
+  - crypto
+wiki_articles:
+wiki_added: 2026-05-21
+wiki_updated: 2026-06-01
+wiki_articles:
+  - "[[wiki_fin]]"
+---
+body`;
+    const result = upsertRawFrontmatter(input, {
+      wiki_updated: "2026-06-01",
+      wiki_articles: ["[[wiki_fin]]"],
+    });
+    expect(result.match(/^wiki_articles:/gm)?.length ?? 0).toBe(1);
+  });
+});

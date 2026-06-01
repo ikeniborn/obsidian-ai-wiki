@@ -1,9 +1,13 @@
 const FM_RE = /^---\n([\s\S]*?)\n---\n?/;
 
 function removeWikiFields(yaml: string): string {
-  yaml = yaml.replace(/^wiki_added:[^\n]*\n?/m, "");
-  yaml = yaml.replace(/^wiki_updated:[^\n]*\n?/m, "");
-  yaml = yaml.replace(/^wiki_articles:[^\n]*\n(?:[ \t]+-[^\n]*\n?)*/m, "");
+  yaml = yaml.replace(/^wiki_added:[^\n]*\n?/gm, "");
+  yaml = yaml.replace(/^wiki_updated:[^\n]*\n?/gm, "");
+  let prev: string;
+  do {
+    prev = yaml;
+    yaml = yaml.replace(/^wiki_articles:[^\n]*\n(?:[ \t]+-[^\n]*\n?)*/m, "");
+  } while (yaml !== prev);
   return yaml;
 }
 
