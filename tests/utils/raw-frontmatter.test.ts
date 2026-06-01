@@ -353,12 +353,12 @@ body`;
   it("removes wiki_outgoing_links entry that is not a wikilink", () => {
     const content = `---
 wiki_outgoing_links:
-  - "[[wiki_valid]]"
+  - "[[wiki_work_valid]]"
   - "bare-string"
 ---
 body`;
     const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
-    expect(out).toContain("[[wiki_valid]]");
+    expect(out).toContain("[[wiki_work_valid]]");
     expect(out).not.toContain("bare-string");
     expect(warnings.some((w) => w.includes("wiki_outgoing_links") && w.includes("bare-string"))).toBe(true);
   });
@@ -385,6 +385,72 @@ aliases: Ethereum
 body`;
     const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
     expect(out).toContain("aliases:\n  - Ethereum");
+  });
+
+  // @lat: [[tests#Wiki Page Frontmatter Validation#Wiki outgoing links non-wiki stem removed]]
+  it("removes non-wiki stem from wiki_outgoing_links", () => {
+    const content = `---
+wiki_outgoing_links:
+  - "[[wiki_work_entity]]"
+  - "[[my_note]]"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
+    expect(out).toContain("[[wiki_work_entity]]");
+    expect(out).not.toContain("[[my_note]]");
+    expect(warnings.some((w) => w.includes("wiki_outgoing_links") && w.includes("non-wiki stem"))).toBe(true);
+  });
+
+  // @lat: [[tests#Wiki Page Frontmatter Validation#Wiki sources wiki stem removed]]
+  it("removes wiki stem from wiki_sources", () => {
+    const content = `---
+wiki_sources:
+  - "[[my_source]]"
+  - "[[wiki_work_foo]]"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
+    expect(out).toContain("[[my_source]]");
+    expect(out).not.toContain("[[wiki_work_foo]]");
+    expect(warnings.some((w) => w.includes("wiki_sources") && w.includes("wiki stem"))).toBe(true);
+  });
+
+  // @lat: [[tests#Wiki Page Frontmatter Validation#Wiki outgoing links valid wiki stem kept]]
+  it("keeps valid wiki stem in wiki_outgoing_links", () => {
+    const content = `---
+wiki_outgoing_links:
+  - "[[wiki_work_bar]]"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
+    expect(out).toContain("[[wiki_work_bar]]");
+    expect(warnings.filter((w) => w.includes("wiki_outgoing_links"))).toHaveLength(0);
+  });
+
+  // @lat: [[tests#Wiki Page Frontmatter Validation#Wiki sources valid source stem kept]]
+  it("keeps valid source stem in wiki_sources", () => {
+    const content = `---
+wiki_sources:
+  - "[[my_document]]"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
+    expect(out).toContain("[[my_document]]");
+    expect(warnings.filter((w) => w.includes("wiki_sources"))).toHaveLength(0);
+  });
+
+  // @lat: [[tests#Wiki Page Frontmatter Validation#Wiki outgoing links mixed list partial removal]]
+  it("removes only invalid entries from mixed wiki_outgoing_links list", () => {
+    const content = `---
+wiki_outgoing_links:
+  - "[[wiki_work_good]]"
+  - "[[not_a_wiki]]"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
+    expect(out).toContain("[[wiki_work_good]]");
+    expect(out).not.toContain("[[not_a_wiki]]");
+    expect(warnings).toHaveLength(1);
   });
 });
 
