@@ -41,6 +41,15 @@
 | `wiki_outgoing_links` | Массив WikiLinks на связанные страницы. Тип свойства в Obsidian: **Links** (не list/text) — только тогда ссылки участвуют в Graph View. Значения обязательно в формате `[[page-name]]`: `["[[page-a]]", "[[page-b]]"]`. Пустой массив допустим. |
 | `wiki_external_links` | Массив внешних URL (`http://` или `https://`). Не формируют граф Obsidian — только справочные ресурсы и документация. |
 
+## Частые ошибки (запрещено)
+
+| Ошибка | Почему плохо | Правильно |
+|--------|-------------|-----------|
+| `tags: - "[[wiki_fin_...]]"` | WikiLink не является тегом; валидатор удалит | Ставь в `wiki_outgoing_links` |
+| `tags: - {type: ..., name: ...}` | tags — только строки | `tags: - finance/technical-analysis` |
+| `wiki_outgoing_links: ["[[a]]", "[[b]]"]` | Inline JSON не парсится wiki-link-validator | Block list: `- "[[a]]"` на отдельных строках |
+| Ссылка в теле без записи в `wiki_outgoing_links` | Граф Obsidian не видит связь | Каждый `[[link]]` в теле → в `wiki_outgoing_links` |
+
 ## WikiLinks
 
 - Only `[[page-name]]` — no aliases, no folder paths
