@@ -47,7 +47,9 @@ See [[src/phases/zod-schemas.ts]], [[src/phases/schemas.ts]].
 
 Programmatic WikiLink fixer runs after `parseWithRetry` in ingest, format, and lint phases. Fixes format violations without LLM retry.
 
-Violations detected: `alias` (`[[X|Y]]`), `path` (`[[folder/page]]`), `inline-json` (`wiki_outgoing_links: [...]`), `outgoing-desync` (body links ≠ frontmatter field). Dead links produce warnings only — never block writes.
+Violations detected: `alias` (`[[X|Y]]`), `path` (`[[folder/page]]`), `inline-json` (`wiki_outgoing_links: ["..."]` non-empty inline array), `outgoing-desync` (body links ≠ `wiki_outgoing_links` field). Dead links produce warnings only — never block writes.
+
+`extractFmLinks` reads only items under the `wiki_outgoing_links:` YAML key — not from `wiki_sources` or other list fields. The canonical empty form `wiki_outgoing_links: []` is not flagged as `inline-json` (only non-empty inline arrays trigger the violation). `fixOnePass` deduplicates body links before writing to frontmatter, preventing duplicate entries when a page mentions the same target twice.
 
 `knownStems` for dead-link detection is built from **all `.md` files in the vault** (via `vaultTools.listFiles("")`), not just wiki pages. This prevents false-positive warnings for links pointing to source files or notes outside `!Wiki/`.
 
