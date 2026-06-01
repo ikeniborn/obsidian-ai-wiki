@@ -824,6 +824,46 @@ describe("runInitWithSources — domain_updated intercept from ingest", () => {
   });
 });
 
+describe("VaultTools.removeSubfolders", () => {
+  it("calls adapter.rmdir for each subdirectory", async () => {
+    const rmdir = vi.fn().mockResolvedValue(undefined);
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({
+        files: [],
+        folders: ["!Wiki/fin/strategies", "!Wiki/fin/contracts"],
+      }),
+      rmdir,
+    });
+    const vt = new VaultTools(adapter, "/vault");
+    await vt.removeSubfolders("!Wiki/fin");
+    expect(rmdir).toHaveBeenCalledWith("!Wiki/fin/strategies", true);
+    expect(rmdir).toHaveBeenCalledWith("!Wiki/fin/contracts", true);
+    expect(rmdir).toHaveBeenCalledTimes(2);
+  });
+
+  it("does nothing when directory does not exist", async () => {
+    const rmdir = vi.fn();
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(false),
+      rmdir,
+    });
+    const vt = new VaultTools(adapter, "/vault");
+    await vt.removeSubfolders("!Wiki/fin");
+    expect(rmdir).not.toHaveBeenCalled();
+  });
+
+  it("skips folders that throw (locked)", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({ files: [], folders: ["!Wiki/fin/locked"] }),
+      rmdir: vi.fn().mockRejectedValue(new Error("locked")),
+    });
+    const vt = new VaultTools(adapter, "/vault");
+    await expect(vt.removeSubfolders("!Wiki/fin")).resolves.toBeUndefined();
+  });
+});
+
 describe("sanitizeWikiFolder applied in init bootstrap", () => {
   it("returns last segment when wiki_folder contains slash", () => {
     expect(sanitizeWikiFolder("os/network")).toBe("network");

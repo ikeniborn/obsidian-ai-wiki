@@ -6,6 +6,7 @@ export interface VaultAdapter {
   exists(path: string): Promise<boolean>;
   mkdir(path: string): Promise<void>;
   remove?(path: string): Promise<void>;
+  rmdir?(path: string, recursive: boolean): Promise<void>;
 }
 
 export interface VaultIndexer {
@@ -91,6 +92,15 @@ export class VaultTools {
 
   async remove(vaultPath: string): Promise<void> {
     await this.adapter.remove?.(vaultPath);
+  }
+
+  async removeSubfolders(vaultDir: string): Promise<void> {
+    const exists = await this.adapter.exists(vaultDir);
+    if (!exists) return;
+    const { folders } = await this.adapter.list(vaultDir);
+    for (const folder of folders) {
+      try { await this.adapter.rmdir?.(folder, true); } catch { /* skip locked */ }
+    }
   }
 
   toVaultPath(absolutePath: string): string | null {
