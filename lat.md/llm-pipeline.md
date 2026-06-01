@@ -55,6 +55,8 @@ Violations detected: `alias` (`[[X|Y]]`), `path` (`[[folder/page]]`), `inline-js
 
 Warning events (`info_text`) are always emitted **after** all vault writes complete, never before. This ensures warnings appear at the end of the progress stream rather than interrupting write progress.
 
+Lint adds a **bucket repair pass** after `fixWikiLinks` and before `filterStaleWikiLinks`: calls `validateAndRepairWikiPageFrontmatter` on every wiki page, writes corrected content if changed, and yields `info_text` events listing the repairs. This catches wrong-bucket stems that persist after ingest.
+
 Configured via `wikiLinkValidationRetries` (default=3, 0=validate-only). See [[src/wiki-link-validator.ts]].
 
 ## wrapWithJsonFallback

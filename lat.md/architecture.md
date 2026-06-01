@@ -103,6 +103,8 @@ Key behaviors: duplicate YAML keys are pre-merged by regex before parsing; unpar
 
 `validateAndRepairSourceFrontmatter` applies `SOURCE_RULES` (wiki_articles, wiki_added, wiki_updated, tags, aliases, external_links, related). `validateAndRepairWikiPageFrontmatter` applies `WIKI_PAGE_RULES` (wiki_sources, wiki_updated, wiki_status, wiki_type, tags, aliases, wiki_outgoing_links, wiki_external_links). Both are called in `[[src/phases/ingest.ts]]` (`runIngest`) before their respective `vaultTools.write` calls; any warnings are emitted as `info_text` events. See [[src/utils/raw-frontmatter.ts#validateAndRepairFrontmatter]], [[src/utils/raw-frontmatter.ts#validateAndRepairSourceFrontmatter]], [[src/utils/raw-frontmatter.ts#validateAndRepairWikiPageFrontmatter]].
 
+Two bucket-enforcing kinds were added — `list-wikilinks-wiki-only` (only `wiki_<domain>_<slug>` stems allowed) and `list-wikilinks-sources-only` (wiki stems rejected). Both inherit the `[[...]]` format check from `list-wikilinks` and additionally call `isWikiStem` from [[src/wiki-stem.ts#isWikiStem]]. `WIKI_PAGE_RULES` uses these kinds for `wiki_outgoing_links` and `wiki_sources` respectively.
+
 ## Run Events
 
 All operations communicate via `RunEvent` — a discriminated union emitted as an async generator stream. Events cover: LLM streaming deltas, tool calls, domain mutations, format previews, structural errors, graph stats, and phase progress.
