@@ -62,14 +62,13 @@ export async function* runInit(
 
     yield {
       kind: "domain_updated", domainId,
-      patch: { entity_types: [], analyzed_sources: [], language_notes: "" },
+      patch: { entity_types: [], analyzed_sources: [] },
     };
 
     if (signal.aborted) return;
 
     existing.entity_types = [];
     existing.analyzed_sources = [];
-    existing.language_notes = "";
 
     yield* runInitWithSources(
       domainId, effectiveSources, false, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, true, similarity,
@@ -367,6 +366,7 @@ export async function wipeDomainFolder(vaultTools: VaultTools, wikiFolder: strin
   for (const f of files) {
     try { await vaultTools.remove(f); } catch { /* skip locked */ }
   }
+  await vaultTools.removeSubfolders(root);
   return files;
 }
 

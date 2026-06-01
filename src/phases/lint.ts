@@ -18,8 +18,38 @@ import { upsertIndexAnnotation, parseIndexAnnotations } from "../wiki-index";
 import { appendWikiLog } from "../wiki-log";
 import { ensureDomainConfig } from "../domain-config";
 import type { PageSimilarityService } from "../page-similarity";
+import { GENERIC_WIKI_STEM_REGEX } from "../wiki-stem";
 
 const META_FILES = ["_index.md", "_log.md"];
+
+export async function cleanupInvalidPages(
+  vaultTools: VaultTools,
+  wikiVaultPath: string,
+  _domainId: string,
+): Promise<{ deleted: number }> {
+  const files = await vaultTools.listFiles(wikiVaultPath);
+  const candidates = files.filter((f) => {
+    if (!f.endsWith(".md")) return false;
+    const name = f.split("/").pop()!;
+    return !name.startsWith("_");
+  });
+  let deleted = 0;
+  for (const f of candidates) {
+    const stem = f.split("/").pop()!.replace(/\.md$/, "");
+    if (!GENERIC_WIKI_STEM_REGEX.test(stem)) {
+      try { await vaultTools.remove(f); deleted++; } catch { /* skip */ }
+      continue;
+    }
+    try {
+      const content = await vaultTools.read(f);
+      if (!/wiki_sources:/m.test(content)) {
+        await vaultTools.remove(f);
+        deleted++;
+      }
+    } catch { /* skip unreadable */ }
+  }
+  return { deleted };
+}
 
 
 
@@ -58,6 +88,11 @@ export async function* runLint(
     if (!wikiVaultPath) {
       reportParts.push(`## ${domain.id}\nWiki folder outside vault — skipped.`);
       continue;
+    }
+
+    const { deleted: deletedInvalid } = await cleanupInvalidPages(vaultTools, wikiVaultPath, domain.id);
+    if (deletedInvalid > 0) {
+      yield { kind: "step", icon: "🗑️", text: `Deleted ${deletedInvalid} invalid wiki article(s).` };
     }
 
     yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };

@@ -206,6 +206,14 @@ A wiki page whose `wiki_sources` list contains a `wiki_*` stem (which belongs in
 
 A wiki page whose `wiki_outgoing_links` list contains a non-`wiki_*` stem (which belongs in `wiki_sources`) is rewritten to remove the misplaced stem, and an `info_text` event mentioning "non-wiki stem" is emitted.
 
+## Init Reinit
+
+Tests for the `--force` reinit path in `runInit`, which wipes and re-analyzes an existing domain.
+
+### Reinit does not clear language_notes
+
+The `domain_updated` wipe patch emitted at the start of reinit must not include `language_notes`. Domain descriptions are authored, not extraction artifacts, so they must survive reinit.
+
 ## Stop Rules
 
 Tests that validate halt conditions.

@@ -178,22 +178,39 @@ export async function* runIngest(
     existingPages = await vaultTools.readAll(nonMetaPaths);
   }
 
+  // Delete pages missing wiki_sources — invalid regardless of naming.
+  const noSources = [...existingPages.entries()]
+    .filter(([, content]) => !/wiki_sources:/m.test(content))
+    .map(([path]) => path);
+  for (const p of noSources) {
+    try { await vaultTools.remove(p); } catch { /* skip */ }
+  }
+  if (noSources.length > 0) {
+    yield {
+      kind: "info_text", icon: "🗑️",
+      summary: `Deleted ${noSources.length} wiki page(s) missing wiki_sources.`,
+      details: noSources.slice(0, 10),
+    };
+  }
+  for (const p of noSources) existingPages.delete(p);
+
   const sourceStems = await collectSourceStems(domain, vaultTools, vaultRoot);
 
-  // Pre-migration warning: vault still has legacy unprefixed wiki pages.
+  // Pre-migration cleanup: delete legacy unprefixed wiki pages.
   if ((domain.pageNameVersion ?? 0) < 1) {
     const unprefixed = nonMetaPaths.filter((p) => {
       if (!p.endsWith(".md")) return false;
       const name = p.split("/").pop()!;
       if (name.startsWith("_")) return false;
-      const stem = name.replace(/\.md$/, "");
-      return !GENERIC_WIKI_STEM_REGEX.test(stem);
+      return !GENERIC_WIKI_STEM_REGEX.test(name.replace(/\.md$/, ""));
     });
+    for (const p of unprefixed) {
+      try { await vaultTools.remove(p); } catch { /* skip */ }
+    }
     if (unprefixed.length > 0) {
       yield {
-        kind: "info_text",
-        icon: "⚠️",
-        summary: `Legacy wiki pages without wiki_<domain>_<entity> prefix: ${unprefixed.length}.`,
+        kind: "info_text", icon: "🗑️",
+        summary: `Deleted ${unprefixed.length} legacy page(s) without wiki_<domain>_<entity> prefix.`,
         details: unprefixed.slice(0, 10),
       };
     }
