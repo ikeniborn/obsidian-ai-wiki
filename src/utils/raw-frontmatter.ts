@@ -160,6 +160,23 @@ export function validateAndRepairSourceFrontmatter(
   return validateAndRepairFrontmatter(content, SOURCE_RULES);
 }
 
+const WIKI_PAGE_RULES: FieldRule[] = [
+  { field: "wiki_sources", kind: "list-wikilinks" },
+  { field: "wiki_updated", kind: "date-scalar" },
+  { field: "wiki_status", kind: "warn-enum", values: ["stub", "developing", "mature"] },
+  { field: "wiki_type", kind: "warn-enum", values: ["page", "index", "log", "schema"] },
+  { field: "tags", kind: "list-tags" },
+  { field: "aliases", kind: "aliases" },
+  { field: "wiki_outgoing_links", kind: "list-wikilinks" },
+  { field: "wiki_external_links", kind: "list-urls" },
+];
+
+export function validateAndRepairWikiPageFrontmatter(
+  content: string,
+): { content: string; warnings: string[] } {
+  return validateAndRepairFrontmatter(content, WIKI_PAGE_RULES);
+}
+
 function removeWikiFields(yaml: string): string {
   yaml = yaml.replace(/^wiki_added:[^\n]*\n?/gm, "");
   yaml = yaml.replace(/^wiki_updated:[^\n]*\n?/gm, "");

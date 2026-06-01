@@ -102,6 +102,38 @@ A `related` list entry that is not a wikilink is removed from the list.
 
 Invalid frontmatter fields are repaired but body content referencing those field names as plain text is preserved unchanged.
 
+## Wiki Page Frontmatter Validation
+
+Tests for [[src/utils/raw-frontmatter.ts#validateAndRepairWikiPageFrontmatter]] covering wiki page-specific fields.
+
+### Wiki sources invalid entry removal
+
+A `wiki_sources` list entry that is not a wikilink `[[...]]` is removed and a warning naming the field is emitted.
+
+### Wiki updated invalid date removal
+
+A `wiki_updated` value that is not a `YYYY-MM-DD` string is deleted from the frontmatter and a warning containing the field name and "invalid date" is emitted.
+
+### Wiki status invalid value warning
+
+A `wiki_status` value not in `[stub, developing, mature]` emits a warning but the field is left unchanged in the output.
+
+### Wiki tags invalid entry removal
+
+A `tags` list entry containing spaces or other invalid characters is removed from the list.
+
+### Wiki outgoing links invalid entry removal
+
+A `wiki_outgoing_links` list entry that is not a wikilink is removed from the list.
+
+### Wiki external links invalid entry removal
+
+A `wiki_external_links` entry that does not start with `https://` or `http://` is removed from the list.
+
+### Wiki scalar aliases wrap
+
+A scalar `aliases` value on a wiki page is wrapped into a single-element list.
+
 ## Stop Rules
 
 Tests that validate halt conditions.

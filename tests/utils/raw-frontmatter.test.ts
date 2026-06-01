@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, hasFrontmatterField } from "../../src/utils/raw-frontmatter";
-import { validateAndRepairSourceFrontmatter } from "../../src/utils/raw-frontmatter";
+import { validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter } from "../../src/utils/raw-frontmatter";
 
 const TODAY = "2026-05-12";
 const ARTICLES = ['[[!Wiki/work/Entity.md]]'];
@@ -281,6 +281,94 @@ wiki_added: bad
 # Body with wiki_added: mention`;
     const { content: out } = validateAndRepairSourceFrontmatter(content);
     expect(out).toContain("# Body with wiki_added: mention");
+  });
+});
+
+describe("validateAndRepairWikiPageFrontmatter", () => {
+  // @lat: [[tests#Wiki Page Frontmatter Validation#Wiki sources invalid entry removal]]
+  it("removes wiki_sources entry that is not a wikilink", () => {
+    const content = `---
+wiki_sources:
+  - "[[valid_source]]"
+  - "plain/path.md"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
+    expect(out).toContain("[[valid_source]]");
+    expect(out).not.toContain("plain/path.md");
+    expect(warnings.some((w) => w.includes("wiki_sources"))).toBe(true);
+  });
+
+  // @lat: [[tests#Wiki Page Frontmatter Validation#Wiki updated invalid date removal]]
+  it("removes wiki_updated with invalid date", () => {
+    const content = `---
+wiki_updated: 01-06-2026
+wiki_status: stub
+---
+body`;
+    const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
+    expect(out).not.toContain("wiki_updated:");
+    expect(warnings.some((w) => w.includes("wiki_updated") && w.includes("invalid date"))).toBe(true);
+  });
+
+  // @lat: [[tests#Wiki Page Frontmatter Validation#Wiki status invalid value warning]]
+  it("emits warning for invalid wiki_status but does not remove field", () => {
+    const content = `---
+wiki_status: draft
+---
+body`;
+    const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
+    expect(out).toContain("wiki_status: draft");
+    expect(warnings.some((w) => w.includes("wiki_status") && w.includes("draft"))).toBe(true);
+  });
+
+  // @lat: [[tests#Wiki Page Frontmatter Validation#Wiki tags invalid entry removal]]
+  it("removes tag with spaces", () => {
+    const content = `---
+tags:
+  - valid/tag
+  - "invalid tag"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
+    expect(out).toContain("valid/tag");
+    expect(out).not.toContain("invalid tag");
+  });
+
+  // @lat: [[tests#Wiki Page Frontmatter Validation#Wiki outgoing links invalid entry removal]]
+  it("removes wiki_outgoing_links entry that is not a wikilink", () => {
+    const content = `---
+wiki_outgoing_links:
+  - "[[wiki_valid]]"
+  - "bare-string"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
+    expect(out).toContain("[[wiki_valid]]");
+    expect(out).not.toContain("bare-string");
+  });
+
+  // @lat: [[tests#Wiki Page Frontmatter Validation#Wiki external links invalid entry removal]]
+  it("removes wiki_external_links entry without https:// prefix", () => {
+    const content = `---
+wiki_external_links:
+  - "https://good.com"
+  - "not-a-url"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
+    expect(out).toContain("https://good.com");
+    expect(out).not.toContain("not-a-url");
+  });
+
+  // @lat: [[tests#Wiki Page Frontmatter Validation#Wiki scalar aliases wrap]]
+  it("wraps scalar aliases in a list", () => {
+    const content = `---
+aliases: Ethereum
+---
+body`;
+    const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
+    expect(out).toContain("aliases:\n  - Ethereum");
   });
 });
 
