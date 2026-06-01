@@ -50,6 +50,13 @@
 | `wiki_outgoing_links: ["[[a]]", "[[b]]"]` | Inline JSON не парсится wiki-link-validator | Block list: `- "[[a]]"` на отдельных строках |
 | Ссылка в теле без записи в `wiki_outgoing_links` | Граф Obsidian не видит связь | Каждый `[[link]]` в теле → в `wiki_outgoing_links` |
 
+## Forbidden Frontmatter Patterns
+
+| Example | Problem | Fix |
+|---------|---------|-----|
+| `wiki_sources: ["[[wiki_work_foo]]"]` | Wiki-page stem in sources field | Move to `wiki_outgoing_links` |
+| `wiki_outgoing_links: ["[[MyNote]]"]` | Source stem in wiki-links field | Move to `wiki_sources` |
+
 ## WikiLinks
 
 - Only `[[page-name]]` — no aliases, no folder paths
