@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runLint, checkStructure } from "../../src/phases/lint";
+import { runLint, checkStructure, cleanupInvalidPages } from "../../src/phases/lint";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
@@ -911,5 +911,85 @@ describe("lint — bucket repair", () => {
     );
     expect(infoEvent).toBeDefined();
     expect((infoEvent as any).details?.some((d: string) => d.includes("non-wiki stem"))).toBe(true);
+  });
+
+  it("emits step event when wiki folder contains invalid-stem pages", async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockImplementation(async (dir: string) => {
+        if (dir === "!Wiki/work") return { files: ["!Wiki/work/InvalidName.md"], folders: [] };
+        return { files: [], folders: [] };
+      }),
+      read: vi.fn().mockResolvedValue("---\nwiki_sources:\n  - src.md\n---\n# Invalid"),
+      remove,
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const events = await collect(
+      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "ok", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    const stepEvent = events.find((e: any) => e.kind === "step" && /Deleted.*invalid/i.test(e.text ?? ""));
+    expect(stepEvent).toBeDefined();
+    expect(remove).toHaveBeenCalledWith("!Wiki/work/InvalidName.md");
+  });
+});
+
+describe("cleanupInvalidPages", () => {
+  function mockVaultTools(files: Record<string, string>): VaultTools {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const adapter: VaultAdapter = {
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p in files) return files[p];
+        throw new Error("not found");
+      }),
+      write: vi.fn(),
+      append: vi.fn(),
+      list: vi.fn().mockImplementation(async (dir: string) => ({
+        files: Object.keys(files).filter((f) => f.startsWith(dir + "/") && !f.slice(dir.length + 1).includes("/")),
+        folders: [],
+      })),
+      exists: vi.fn().mockResolvedValue(true),
+      mkdir: vi.fn(),
+      remove,
+    };
+    const vt = new VaultTools(adapter, "/vault");
+    vi.spyOn(vt, "remove").mockImplementation(remove);
+    return vt;
+  }
+
+  it("deletes files whose stem does not match GENERIC_WIKI_STEM_REGEX", async () => {
+    const vt = mockVaultTools({
+      "!Wiki/fin/InvalidName.md": "---\nwiki_sources:\n  - src.md\n---\n",
+    });
+    const { deleted } = await cleanupInvalidPages(vt, "!Wiki/fin", "fin");
+    expect(deleted).toBe(1);
+    expect(vi.mocked(vt.remove)).toHaveBeenCalledWith("!Wiki/fin/InvalidName.md");
+  });
+
+  it("deletes files without wiki_sources in frontmatter", async () => {
+    const vt = mockVaultTools({
+      "!Wiki/fin/wiki_fin_contract.md": "---\ntitle: Contract\n---\n# Contract",
+    });
+    const { deleted } = await cleanupInvalidPages(vt, "!Wiki/fin", "fin");
+    expect(deleted).toBe(1);
+    expect(vi.mocked(vt.remove)).toHaveBeenCalledWith("!Wiki/fin/wiki_fin_contract.md");
+  });
+
+  it("does not delete valid files", async () => {
+    const vt = mockVaultTools({
+      "!Wiki/fin/wiki_fin_contract.md": "---\nwiki_sources:\n  - src.md\n---\n# Contract",
+    });
+    const { deleted } = await cleanupInvalidPages(vt, "!Wiki/fin", "fin");
+    expect(deleted).toBe(0);
+    expect(vi.mocked(vt.remove)).not.toHaveBeenCalled();
+  });
+
+  it("skips files starting with _ (meta files)", async () => {
+    const vt = mockVaultTools({
+      "!Wiki/fin/_index.md": "---\n---\n",
+    });
+    const { deleted } = await cleanupInvalidPages(vt, "!Wiki/fin", "fin");
+    expect(deleted).toBe(0);
+    expect(vi.mocked(vt.remove)).not.toHaveBeenCalled();
   });
 });

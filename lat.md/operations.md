@@ -103,6 +103,14 @@ Emits `info_text "Checking i/N: ArticleName"` per article. Skipped articles (LLM
 
 `LintOutputSchema.deletes` carries `{ path, redirect_to? }` for duplicate merges. See [[src/phases/lint.ts]], [[llm-pipeline#LLM Progress Events]], [[architecture#PageSimilarityService]].
 
+### Cleanup Pass
+
+Before the Glob step, lint runs `cleanupInvalidPages` to remove stale or malformed pages. Files starting with `_` are skipped. A `step` event is emitted when pages are deleted.
+
+A page is deleted if its stem fails `GENERIC_WIKI_STEM_REGEX` (wrong prefix/format) or its frontmatter lacks `wiki_sources`.
+
+See [[src/phases/lint.ts#cleanupInvalidPages]].
+
 ### Backlink Sync
 
 After writing fixed pages, lint syncs `wiki_articles` backlinks into source files. For each wiki page with `wiki_sources`, it resolves each source to a vault path and appends the wiki page as `[[WikiPageName]]` into the source file's `wiki_articles` field.
