@@ -1,3 +1,32 @@
+---
+review:
+  spec_hash: 4193386b7d7d1a9a
+  last_run: 2026-06-01
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: INFO
+      section: "Validation Rules — Source File / Wiki Page"
+      section_hash: a311e036b3444b5b
+      text: "tags[] validation rule lacks explicit regex criterion — implementor must infer what constitutes an invalid tag"
+      verdict: open
+      verdict_at: null
+    - id: F-002
+      phase: clarity
+      severity: WARNING
+      section: "src/utils/raw-frontmatter.ts"
+      section_hash: ed4b058d7c631c3c
+      text: "`rules` parameter type for shared helper `validateAndRepairFrontmatter` not specified — shape must be inferred from rule tables"
+      verdict: open
+      verdict_at: null
+chain:
+  intent: null
+---
 # Frontmatter Validator After Ingest
 
 ## Problem
