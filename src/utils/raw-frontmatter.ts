@@ -1,4 +1,5 @@
 import { parse as yamlParse, stringify as yamlStringify } from "yaml";
+import { isWikiStem } from "../wiki-stem";
 
 const FM_RE = /^---\n([\s\S]*?)\n---\n?/;
 
@@ -9,6 +10,8 @@ const TAG_RE = /^[a-z][a-z0-9-]*(?:[/_][a-z0-9-]+)*$/;
 
 export type FieldRule =
   | { field: string; kind: "list-wikilinks" }
+  | { field: string; kind: "list-wikilinks-wiki-only" }
+  | { field: string; kind: "list-wikilinks-sources-only" }
   | { field: string; kind: "list-urls" }
   | { field: string; kind: "list-tags" }
   | { field: string; kind: "date-scalar" }
@@ -96,6 +99,42 @@ export function validateAndRepairFrontmatter(
         const filtered = (val as unknown[]).filter((v) => {
           if (typeof v !== "string" || !predicate(v)) {
             warnings.push(`${rule.field}: invalid entry "${v}" — removed`);
+            return false;
+          }
+          return true;
+        });
+        if (filtered.length < (val as unknown[]).length) {
+          modified = true;
+          if (filtered.length === 0) {
+            delete parsed[rule.field];
+          } else {
+            parsed[rule.field] = filtered;
+          }
+        }
+        break;
+      }
+      case "list-wikilinks-wiki-only":
+      case "list-wikilinks-sources-only": {
+        if (!Array.isArray(val)) {
+          warnings.push(`${rule.field}: expected list, got scalar — removed`);
+          delete parsed[rule.field];
+          modified = true;
+          break;
+        }
+        const wikiOnly = rule.kind === "list-wikilinks-wiki-only";
+        const filtered = (val as unknown[]).filter((v) => {
+          if (typeof v !== "string" || !WIKILINK_RE.test(v)) {
+            warnings.push(`${rule.field}: invalid entry "${v}" — removed`);
+            return false;
+          }
+          const stem = v.slice(2, -2).split("/").pop()!;
+          const isWiki = isWikiStem(stem);
+          if (wikiOnly && !isWiki) {
+            warnings.push(`${rule.field}: non-wiki stem "${v}" — removed`);
+            return false;
+          }
+          if (!wikiOnly && isWiki) {
+            warnings.push(`${rule.field}: wiki stem "${v}" — removed`);
             return false;
           }
           return true;
@@ -199,13 +238,13 @@ export function validateAndRepairSourceFrontmatter(
 }
 
 const WIKI_PAGE_RULES: FieldRule[] = [
-  { field: "wiki_sources", kind: "list-wikilinks" },
-  { field: "wiki_updated", kind: "date-scalar" },
-  { field: "wiki_status", kind: "warn-enum", values: ["stub", "developing", "mature"] },
-  { field: "wiki_type", kind: "warn-enum", values: ["page", "index", "log", "schema"] },
-  { field: "tags", kind: "list-tags" },
-  { field: "aliases", kind: "aliases" },
-  { field: "wiki_outgoing_links", kind: "list-wikilinks" },
+  { field: "wiki_sources",        kind: "list-wikilinks-sources-only" },
+  { field: "wiki_updated",        kind: "date-scalar" },
+  { field: "wiki_status",         kind: "warn-enum", values: ["stub", "developing", "mature"] },
+  { field: "wiki_type",           kind: "warn-enum", values: ["page", "index", "log", "schema"] },
+  { field: "tags",                kind: "list-tags" },
+  { field: "aliases",             kind: "aliases" },
+  { field: "wiki_outgoing_links", kind: "list-wikilinks-wiki-only" },
   { field: "wiki_external_links", kind: "list-urls" },
 ];
 
