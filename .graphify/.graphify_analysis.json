@@ -1,0 +1,2381 @@
+{
+  "communities": {
+    "0": [
+      "claude_llmwikiview",
+      "claude_wikicontroller",
+      "lat_md_operations_chat",
+      "lat_md_operations_format",
+      "lat_md_operations_init",
+      "lat_md_operations_lint",
+      "lat_md_operations_md",
+      "lat_md_operations_query",
+      "lat_md_operations_seed_selection",
+      "operations_bfs_expansion",
+      "src_controller_patchwikifields",
+      "src_controller_wikicontroller_activeview",
+      "src_controller_wikicontroller_buildagentrunner",
+      "src_controller_wikicontroller_cancelcurrent",
+      "src_controller_wikicontroller_collectstep",
+      "src_controller_wikicontroller_cwdorempty",
+      "src_controller_wikicontroller_dispatch",
+      "src_controller_wikicontroller_dispatchchat",
+      "src_controller_wikicontroller_ensureview",
+      "src_controller_wikicontroller_formatapply",
+      "src_controller_wikicontroller_formatcancel",
+      "src_controller_wikicontroller_formatrefine",
+      "src_controller_wikicontroller_ingestactive",
+      "src_controller_wikicontroller_isbusy",
+      "src_controller_wikicontroller_lintapplyfromchat",
+      "src_controller_wikicontroller_loaddomains",
+      "src_controller_wikicontroller_logevent",
+      "src_controller_wikicontroller_registerdomain",
+      "src_controller_wikicontroller_requireclaudeagent",
+      "src_controller_wikicontroller_requirenativeagent",
+      "src_controller_wikicontroller_running",
+      "src_controller_wikicontroller_suggestingestforwikifile",
+      "src_controller_wikicontroller_updatedomainsources",
+      "src_i18n_i18n",
+      "src_view_llmwikiview_addchatbubble",
+      "src_view_llmwikiview_appendchatevent",
+      "src_view_llmwikiview_appendevent",
+      "src_view_llmwikiview_builddomainrow",
+      "src_view_llmwikiview_buildspeedtext",
+      "src_view_llmwikiview_elapsedshort",
+      "src_view_llmwikiview_finish",
+      "src_view_llmwikiview_finishchat",
+      "src_view_llmwikiview_getdisplaytext",
+      "src_view_llmwikiview_geticon",
+      "src_view_llmwikiview_getviewtype",
+      "src_view_llmwikiview_handlemanagesourcesresult",
+      "src_view_llmwikiview_openadddomain",
+      "src_view_llmwikiview_openmanagesources",
+      "src_view_llmwikiview_refreshdomains",
+      "src_view_llmwikiview_renderformatpreview",
+      "src_view_llmwikiview_renderhistory",
+      "src_view_llmwikiview_runreinit",
+      "src_view_llmwikiview_schedulechattick",
+      "src_view_llmwikiview_schedulemetricstick",
+      "src_view_llmwikiview_schedulewaitingtick",
+      "src_view_llmwikiview_scrollsteps",
+      "src_view_llmwikiview_setchatrunning",
+      "src_view_llmwikiview_setrunning",
+      "src_view_llmwikiview_showchatsection",
+      "src_view_llmwikiview_showquestionmodal",
+      "src_view_llmwikiview_startwaiting",
+      "src_view_llmwikiview_statuslabel",
+      "src_view_llmwikiview_stopwaiting",
+      "src_view_llmwikiview_submitquery",
+      "src_view_llmwikiview_togglechat",
+      "src_view_llmwikiview_togglehistory",
+      "src_view_llmwikiview_toggleresult",
+      "src_view_llmwikiview_togglesteps",
+      "src_view_llmwikiview_updatemetrics",
+      "src_view_registerlinkhandler",
+      "src_view_sanitizelinks",
+      "src_view_translatesystemevent",
+      "tests_controller_log_adapter_test_a",
+      "tests_controller_log_adapter_test_ts"
+    ],
+    "1": [
+      "phases_lint_wlfixresult",
+      "src_wiki_link_validator_checkwikilinks",
+      "src_wiki_link_validator_extractfmlinks",
+      "src_wiki_link_validator_extractlinks",
+      "src_wiki_link_validator_fixonepass",
+      "src_wiki_link_validator_fixresult",
+      "src_wiki_link_validator_fixwikilinks",
+      "src_wiki_link_validator_setfmlinks",
+      "src_wiki_link_validator_splitfrontmatter",
+      "src_wiki_link_validator_stripalias",
+      "src_wiki_link_validator_strippath",
+      "src_wiki_link_validator_ts",
+      "src_wiki_link_validator_validatewikilinks",
+      "src_wiki_link_validator_violationkind",
+      "src_wiki_link_validator_wikilinkviolation",
+      "tests_view_add_source_btn_test_btn",
+      "tests_view_add_source_btn_test_entry",
+      "tests_view_add_source_btn_test_select",
+      "tests_view_add_source_btn_test_ts",
+      "tests_view_history_rerun_test_btnclick",
+      "tests_view_history_rerun_test_fakeevent",
+      "tests_view_history_rerun_test_ingestitem",
+      "tests_view_history_rerun_test_itemnodomain",
+      "tests_view_history_rerun_test_makerow",
+      "tests_view_history_rerun_test_queryinput",
+      "tests_view_history_rerun_test_queryitem",
+      "tests_view_history_rerun_test_rerunbtn",
+      "tests_view_history_rerun_test_row_els",
+      "tests_view_history_rerun_test_row_listeners",
+      "tests_view_history_rerun_test_ts",
+      "tests_view_history_rerun_test_v",
+      "tests_view_last_domain_test_domainrow",
+      "tests_view_last_domain_test_domainselect",
+      "tests_view_last_domain_test_makeview",
+      "tests_view_last_domain_test_options",
+      "tests_view_last_domain_test_parent",
+      "tests_view_last_domain_test_savelisteners",
+      "tests_view_last_domain_test_ts",
+      "tests_view_last_domain_test_v_plugin",
+      "tests_wiki_link_validator_test_content",
+      "tests_wiki_link_validator_test_matches",
+      "tests_wiki_link_validator_test_page",
+      "tests_wiki_link_validator_test_r1",
+      "tests_wiki_link_validator_test_r2",
+      "tests_wiki_link_validator_test_result",
+      "tests_wiki_link_validator_test_stems",
+      "tests_wiki_link_validator_test_ts",
+      "tests_wiki_link_validator_test_v"
+    ],
+    "2": [
+      "dspy_claude_codeblock_5",
+      "dspy_claudecodelm",
+      "dspy_load_examples",
+      "dspy_make_lm",
+      "dspy_optimize_get",
+      "dspy_optimize_main",
+      "dspy_readme_53",
+      "dspy_readme_codeblock_4",
+      "dspy_readme_codeblock_5",
+      "dspy_readme_ollama_default",
+      "dspy_write_optimized",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_scripts_dspy_lib_loader_py",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_scripts_dspy_lib_writer_py",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_scripts_dspy_optimize_py",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_scripts_dspy_tests_test_backend_py",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_scripts_dspy_tests_test_loader_py",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_scripts_dspy_tests_test_writer_py",
+      "lib_backend_claudecodelm_flatten",
+      "lib_backend_claudecodelm_forward",
+      "lib_backend_rationale_12",
+      "lib_backend_rationale_53",
+      "lib_loader_rationale_11",
+      "scripts_dspy_lib_backend_py",
+      "src_structural_error_counter_counter",
+      "src_structural_error_counter_counter_record",
+      "src_structural_error_counter_counter_reset",
+      "src_structural_error_counter_counter_subscribe",
+      "src_wiki_graph_cache_hashpages",
+      "tests_controller_build_fail_test_fn",
+      "tests_test_backend_test_call_with_messages",
+      "tests_test_backend_test_call_with_prompt_string",
+      "tests_test_backend_test_flatten_combines_messages",
+      "tests_test_backend_test_make_lm_claude_code",
+      "tests_test_backend_test_make_lm_ollama",
+      "tests_test_backend_test_make_lm_raises_on_unknown_backend",
+      "tests_test_loader_jsonl",
+      "tests_test_loader_test_excludes_ops_below_min_examples",
+      "tests_test_loader_test_filters_by_operations_arg",
+      "tests_test_loader_test_groups_by_operation",
+      "tests_test_loader_test_skips_missing_required_fields",
+      "tests_test_loader_test_skips_null_eval",
+      "tests_test_writer_test_write_creates_file",
+      "tests_test_writer_test_write_creates_output_dir_if_missing",
+      "tests_test_writer_test_write_overwrites_existing",
+      "tests_test_writer_test_write_returns_path_object"
+    ],
+    "3": [
+      "phases_ingest_abswiki",
+      "phases_ingest_backlinktoday",
+      "phases_ingest_buildingestsummary",
+      "phases_ingest_collectsourcestems",
+      "phases_ingest_deletedpaths",
+      "phases_ingest_deletedstems",
+      "phases_ingest_domain",
+      "phases_ingest_existingarticles",
+      "phases_ingest_extractevents",
+      "phases_ingest_inputchars",
+      "phases_ingest_inputtokest",
+      "phases_ingest_knownstems",
+      "phases_ingest_logentries",
+      "phases_ingest_merged",
+      "phases_ingest_mergedarticles",
+      "phases_ingest_messages",
+      "phases_ingest_messages_extract",
+      "phases_ingest_nonmetapaths",
+      "phases_ingest_pagesmap",
+      "phases_ingest_parentpath",
+      "phases_ingest_parsewikistatus",
+      "phases_ingest_pwtevents",
+      "phases_ingest_relpath",
+      "phases_ingest_resulttext",
+      "phases_ingest_retried",
+      "phases_ingest_retrievaldetails",
+      "phases_ingest_sourcevaultpath",
+      "phases_ingest_start",
+      "phases_ingest_statusto",
+      "phases_ingest_stem",
+      "phases_ingest_stemmaskre",
+      "phases_ingest_stemvalid",
+      "phases_ingest_tryread",
+      "phases_ingest_union",
+      "phases_ingest_unprefixed",
+      "phases_ingest_updatedannotations",
+      "phases_ingest_updatedsource",
+      "phases_ingest_valid_invalid",
+      "phases_ingest_valid_retriedvalid_invalid_retriedinvalid",
+      "phases_ingest_wikivaultpath",
+      "phases_ingest_wlfixresult",
+      "phases_ingest_writtenlinks",
+      "src_phases_ingest_ts"
+    ],
+    "4": [
+      "claude_selectseeds",
+      "format_utils_test",
+      "phases_format_utils_appendmissinglines",
+      "phases_format_utils_escaperawcontrolsinstrings",
+      "phases_format_utils_escaperegexp",
+      "phases_format_utils_extractjsonobject",
+      "phases_format_utils_formatresponse",
+      "phases_format_utils_lemmas",
+      "phases_format_utils_lookstruncated",
+      "phases_format_utils_missingtoken",
+      "phases_format_utils_missingtokenswithcontext",
+      "phases_format_utils_repairjson",
+      "phases_format_utils_significanttokens",
+      "phases_format_utils_stripcodefence",
+      "phases_format_utils_test_missing",
+      "phases_format_utils_test_per",
+      "phases_format_utils_test_xx",
+      "phases_format_utils_tryparsejson",
+      "phases_lint_annotations",
+      "phases_lint_test_pages",
+      "src_settings_parsetimeoutstring",
+      "src_wiki_graph_ts",
+      "src_wiki_seeds_bodycontent",
+      "src_wiki_seeds_parsefmkeywords",
+      "src_wiki_seeds_scoreseed",
+      "src_wiki_seeds_stop_words",
+      "src_wiki_seeds_tokenize",
+      "src_wiki_seeds_ts",
+      "test_wiki_graph",
+      "tests_llm_utils_test_s",
+      "tests_settings_test_r",
+      "tests_settings_test_ts",
+      "tests_wiki_graph_test_targets",
+      "tests_wiki_seeds_test_big",
+      "tests_wiki_seeds_test_q",
+      "tests_wiki_seeds_test_score",
+      "tests_wiki_seeds_test_t",
+      "tests_wiki_seeds_test_ts",
+      "wikigraph_bfsexpand",
+      "wikigraph_buildwikigraph",
+      "wikigraph_checkgraphstructure",
+      "wikigraph_pageid"
+    ],
+    "5": [
+      "claude_claudecliclient",
+      "claude_cli_client_claudecliconfig",
+      "claude_cli_client_generate",
+      "claude_cli_client_largecontentfiles",
+      "claude_cli_client_notimeout",
+      "claude_cli_client_resumesession",
+      "claude_cli_client_validateiclaudepath",
+      "claude_parsestreamline",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_tests_stream_test_js",
+      "phases_format_test_create",
+      "phases_lint_test_writtencontent",
+      "src_claude_cli_client_claudecliclient_generate",
+      "src_claude_cli_client_claudecliclient_makeiterable",
+      "src_stream_isrecord",
+      "src_stream_mapassistant",
+      "src_stream_mapresult",
+      "src_stream_mapusertoolresult",
+      "src_stream_ts",
+      "src_view_summariseinput",
+      "src_view_truncate",
+      "test_claude_cli_client",
+      "test_validateiclaudepath",
+      "tests_claude_cli_client_test_cfg",
+      "tests_claude_cli_client_test_client",
+      "tests_claude_cli_client_test_createpromise",
+      "tests_claude_cli_client_test_largesystem",
+      "tests_claude_cli_client_test_largetext",
+      "tests_claude_cli_client_test_makemockprocess",
+      "tests_claude_cli_client_test_pidx",
+      "tests_claude_cli_client_test_proc",
+      "tests_claude_cli_client_test_resumeidx",
+      "tests_claude_cli_client_test_separatoridx",
+      "tests_claude_cli_client_test_settimeoutspy",
+      "tests_claude_cli_client_test_stderr",
+      "tests_claude_cli_client_test_stdout",
+      "tests_claude_cli_client_test_sysidx",
+      "tests_claude_cli_client_test_testcfg",
+      "tests_claude_cli_client_test_tmpremove",
+      "tests_claude_cli_client_test_tmpwrite",
+      "tests_claude_cli_client_test_writtensyspath",
+      "tests_claude_cli_client_test_writtenusrpath",
+      "tests_stream_test_loadfixture"
+    ],
+    "6": [
+      "arch_page_similarity_service",
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_src_wiki_graph_ts",
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_src_wiki_seeds_ts",
+      "lat_md_operations_result_summary",
+      "operations_entity_types_delta",
+      "operations_per_page_progress",
+      "prompts_ingest_md",
+      "src_page_similarity_annotationhash",
+      "src_page_similarity_cosine",
+      "src_page_similarity_decodevector",
+      "src_page_similarity_embeddingcacheentry",
+      "src_page_similarity_embeddingcachefile",
+      "src_page_similarity_encodevector",
+      "src_page_similarity_entitykey",
+      "src_page_similarity_entityquery",
+      "src_page_similarity_entityretrievalresult",
+      "src_page_similarity_extractedentity",
+      "src_page_similarity_fetchembeddings",
+      "src_page_similarity_pagesimilarityservice",
+      "src_page_similarity_pagesimilarityservice_constructor",
+      "src_page_similarity_pagesimilarityservice_jaccardfallbackall",
+      "src_page_similarity_pagesimilarityservice_loadcache",
+      "src_page_similarity_pagesimilarityservice_refreshcache",
+      "src_page_similarity_pagesimilarityservice_scorejaccardonce",
+      "src_page_similarity_pagesimilarityservice_selectbyentities",
+      "src_page_similarity_pagesimilarityservice_selectbyentitiesembedding",
+      "src_page_similarity_pagesimilarityservice_selectembedding",
+      "src_page_similarity_pagesimilarityservice_selectjaccard",
+      "src_page_similarity_pagesimilarityservice_selectrelevant",
+      "src_page_similarity_similarityconfig",
+      "src_page_similarity_ts",
+      "tests_ingest_test_svc",
+      "tests_page_similarity_test_allpaths",
+      "tests_page_similarity_test_body",
+      "tests_page_similarity_test_decoded",
+      "tests_page_similarity_test_encoded",
+      "tests_page_similarity_test_fetchmock",
+      "tests_page_similarity_test_makeservice",
+      "tests_page_similarity_test_vec"
+    ],
+    "7": [
+      "mobile_fetch",
+      "obsidian_llm_wiki_vitest_mock_activedocument",
+      "obsidian_llm_wiki_vitest_mock_clearnotices",
+      "obsidian_llm_wiki_vitest_mock_clearrequesturlcalls",
+      "obsidian_llm_wiki_vitest_mock_createmockadapter",
+      "obsidian_llm_wiki_vitest_mock_itemview",
+      "obsidian_llm_wiki_vitest_mock_makeel",
+      "obsidian_llm_wiki_vitest_mock_makeelwithtext",
+      "obsidian_llm_wiki_vitest_mock_moment",
+      "obsidian_llm_wiki_vitest_mock_notice",
+      "obsidian_llm_wiki_vitest_mock_platform",
+      "obsidian_llm_wiki_vitest_mock_pluginsettingtab",
+      "obsidian_llm_wiki_vitest_mock_requesturl",
+      "obsidian_llm_wiki_vitest_mock_requesturlcalls",
+      "obsidian_llm_wiki_vitest_mock_requesturlresponse",
+      "obsidian_llm_wiki_vitest_mock_resetrequesturldelay",
+      "obsidian_llm_wiki_vitest_mock_setplatformmobile",
+      "obsidian_llm_wiki_vitest_mock_setrequesturldelay",
+      "obsidian_llm_wiki_vitest_mock_setrequesturlresponse",
+      "obsidian_llm_wiki_vitest_mock_setting",
+      "obsidian_llm_wiki_vitest_mock_setting_addbutton",
+      "obsidian_llm_wiki_vitest_mock_setting_adddropdown",
+      "obsidian_llm_wiki_vitest_mock_setting_addtext",
+      "obsidian_llm_wiki_vitest_mock_setting_addtoggle",
+      "obsidian_llm_wiki_vitest_mock_setting_setdesc",
+      "obsidian_llm_wiki_vitest_mock_setting_setname",
+      "obsidian_llm_wiki_vitest_mock_tabstractfile",
+      "obsidian_llm_wiki_vitest_mock_tfile",
+      "src_mobile_fetch_abortrace",
+      "tests_controller_build_fail_test_errspy",
+      "tests_controller_build_fail_test_ts",
+      "vitest_mock_ts"
+    ],
+    "8": [
+      "phases_lint_abswiki",
+      "phases_lint_actualizedomainconfig",
+      "phases_lint_allmdpaths",
+      "phases_lint_allstructuralissues",
+      "phases_lint_articlename",
+      "phases_lint_articlepaths",
+      "phases_lint_backlinks",
+      "phases_lint_barename",
+      "phases_lint_checkstructure",
+      "phases_lint_computeentitydiff",
+      "phases_lint_contextpaths",
+      "phases_lint_deletedname",
+      "phases_lint_deletedrefs",
+      "phases_lint_diffreport",
+      "phases_lint_existingarticles",
+      "phases_lint_expanded",
+      "phases_lint_fixesmapthisstep",
+      "phases_lint_graphissues",
+      "phases_lint_knownstems",
+      "phases_lint_mergedarticles",
+      "phases_lint_newcontent",
+      "phases_lint_otherpaths",
+      "phases_lint_pidtopath",
+      "phases_lint_reportparts",
+      "phases_lint_seeds",
+      "phases_lint_skippedarticles",
+      "phases_lint_stemtopath",
+      "phases_lint_structuralissues",
+      "phases_lint_synctoday",
+      "phases_lint_wikilinkissues",
+      "phases_lint_writtenpaths",
+      "src_phases_lint_ts"
+    ],
+    "9": [
+      "phases_init_test_allupdates",
+      "phases_init_test_bootstrapdomainjson",
+      "phases_init_test_bootstrapupdate",
+      "phases_init_test_concept",
+      "phases_init_test_current",
+      "phases_init_test_domainwithsources",
+      "phases_init_test_existingwithprogress",
+      "phases_init_test_filedone",
+      "phases_init_test_filestart",
+      "phases_init_test_incoming",
+      "phases_init_test_incrementaljson",
+      "phases_init_test_info",
+      "phases_init_test_ingestempty",
+      "phases_init_test_ingestpagesjson",
+      "phases_init_test_initialised",
+      "phases_init_test_initstarts",
+      "phases_init_test_llmcalllog",
+      "phases_init_test_llmcalls",
+      "phases_init_test_longcontent",
+      "phases_init_test_makeorderedllm",
+      "phases_init_test_nosources",
+      "phases_init_test_persistevent",
+      "phases_init_test_refstoa",
+      "phases_init_test_sourceupdates",
+      "phases_init_test_updateswithtypes",
+      "phases_init_test_warning",
+      "phases_init_test_writeacallcount",
+      "phases_init_test_writeaidx",
+      "phases_init_test_writelog",
+      "src_domain_mergeentitytypes",
+      "tests_phases_init_test_ts"
+    ],
+    "10": [
+      "lat_md_llm_pipeline_md",
+      "llm_pipeline_buildchatparams",
+      "llm_pipeline_evaluator_prompt_pattern",
+      "llm_pipeline_streaming",
+      "llm_pipeline_wikilink_validation",
+      "llm_pipeline_wrapwithjsonfallback",
+      "llm_utils_test",
+      "phases_chat_stream_getstats",
+      "phases_format_parseformatoutput",
+      "phases_llm_utils_computespeedtext",
+      "phases_llm_utils_degraderesponseformat",
+      "phases_llm_utils_hascontentdelta",
+      "phases_llm_utils_injectsystemprompt",
+      "phases_llm_utils_isjsonmodeerror",
+      "phases_llm_utils_json_mode_keywords",
+      "phases_llm_utils_llmstreamstats",
+      "phases_llm_utils_parsestructured",
+      "phases_llm_utils_prependbasecontract",
+      "phases_llm_utils_stripfences",
+      "phases_llm_utils_stripthinking",
+      "src_phases_llm_utils_ts",
+      "tests_llm_utils_test_before",
+      "tests_llm_utils_test_inner",
+      "tests_llm_utils_test_makemockllm",
+      "tests_llm_utils_test_msgs",
+      "tests_llm_utils_test_nosystem",
+      "tests_llm_utils_test_received",
+      "tests_llm_utils_test_stream"
+    ],
+    "11": [
+      "edit_domain_modal",
+      "file_error_modal",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_tests_modals_test_ts",
+      "modals_adddomainmodal",
+      "modals_busyclosemmodal",
+      "modals_confirmmodal",
+      "modals_domainmodal",
+      "modals_querymodal",
+      "src_modals_adddomainmodal_rendersourcepaths",
+      "src_modals_editdomainmodal_handlesave",
+      "src_modals_editdomainmodal_renderentitytypes",
+      "src_modals_fileerrormodal_pick",
+      "src_modals_ingestscopemodal",
+      "src_modals_managesourcesmodal",
+      "src_modals_ts",
+      "src_view_filecontentmodal",
+      "src_view_llmwikiview_constructor",
+      "src_view_llmwikiview_onclose",
+      "src_view_llmwikiview_onopen",
+      "src_view_wikiquestionmodal",
+      "tests_ingest_scope_modal_test_onchoice",
+      "tests_ingest_scope_modal_test_ts",
+      "tests_manage_sources_modal_test_domainnosrc",
+      "tests_modals_test_m",
+      "tests_modals_test_makefileerrormodal",
+      "tests_modals_test_makemodal",
+      "tests_modals_test_onsave"
+    ],
+    "12": [
+      "phases_ingest_detectdomain",
+      "phases_ingest_extractparentsourcepath",
+      "phases_ingest_parsejsonpages",
+      "phases_ingest_test_badresponse",
+      "phases_ingest_test_badresponsefirst",
+      "phases_ingest_test_badresponseretry",
+      "phases_ingest_test_block",
+      "phases_ingest_test_domainwithoutpath",
+      "phases_ingest_test_domainwithtypes",
+      "phases_ingest_test_entitiesresponse",
+      "phases_ingest_test_erroridx",
+      "phases_ingest_test_existingpaths",
+      "phases_ingest_test_failevent",
+      "phases_ingest_test_failresult",
+      "phases_ingest_test_goodresponse",
+      "phases_ingest_test_indexwrite",
+      "phases_ingest_test_paths",
+      "phases_ingest_test_reasoningev",
+      "phases_ingest_test_rej",
+      "phases_ingest_test_resultidx",
+      "phases_ingest_test_sourcewrite",
+      "phases_ingest_test_spy",
+      "phases_ingest_test_tu",
+      "phases_ingest_test_warn",
+      "phases_init_test_types",
+      "tests_ingest_test_maked",
+      "tests_ingest_test_ts"
+    ],
+    "13": [
+      "arch_agentrunner",
+      "phases_chat_runlintchat",
+      "phases_evaluator_runevaluator",
+      "phases_ingest_runingest",
+      "phases_init_alreadyanalyzed",
+      "phases_init_annotationscache",
+      "phases_init_collected",
+      "phases_init_dryrun",
+      "phases_init_ensurerootfiles",
+      "phases_init_force",
+      "phases_init_sourcefiles",
+      "phases_init_sourcesidx",
+      "phases_init_systemcontent",
+      "phases_init_wipedomainfolder",
+      "schemas_domainentryschema",
+      "src_agent_runner_agentrunner_buildoptsfor",
+      "src_agent_runner_agentrunner_buildsimilarity",
+      "src_agent_runner_agentrunner_run",
+      "src_agent_runner_agentrunner_runoperation",
+      "src_agent_runner_agentrunner_updatedevlogeval",
+      "src_agent_runner_agentrunner_writedevlog",
+      "src_controller_wikicontroller_cleanupremovedsources",
+      "src_phases_init_ts",
+      "src_types_onfileerror",
+      "src_wiki_path_domainwikifolder",
+      "src_wiki_path_global_dev_log_path"
+    ],
+    "14": [
+      "phases_lint_test_configjson",
+      "phases_lint_test_createmock",
+      "phases_lint_test_dom",
+      "phases_lint_test_domaina",
+      "phases_lint_test_fixllm",
+      "phases_lint_test_flatindexwrite",
+      "phases_lint_test_infoevents",
+      "phases_lint_test_linkerwrite",
+      "phases_lint_test_lintjson",
+      "phases_lint_test_progressev",
+      "phases_lint_test_rawcall",
+      "phases_lint_test_reportev",
+      "phases_lint_test_result",
+      "phases_lint_test_similarity",
+      "phases_lint_test_streamcall",
+      "phases_lint_test_vectorevents",
+      "phases_lint_test_writecall",
+      "phases_query_test_readmock",
+      "phases_query_test_schemaread",
+      "phases_query_test_stats",
+      "tests_phases_lint_test_js",
+      "tests_phases_lint_test_ts",
+      "tests_phases_query_test_ts",
+      "tests_types_test_ev"
+    ],
+    "15": [
+      "phases_ingest_splitbypathvalidity",
+      "src_domain_config_ensuredomainconfig",
+      "src_domain_config_migratelegacy",
+      "src_domain_config_ts",
+      "src_wiki_log_appendwikilog",
+      "src_wiki_log_buildentry",
+      "src_wiki_log_ingestlogentry",
+      "src_wiki_log_logoperation",
+      "src_wiki_log_ts",
+      "src_wiki_path_domainconfigdir",
+      "src_wiki_path_domainembeddingspath",
+      "src_wiki_path_domainlogpath",
+      "src_wiki_path_global_wiki_schema_path",
+      "src_wiki_path_sanitizewikifolder",
+      "src_wiki_path_sanitizewikisubfolder",
+      "src_wiki_path_ts",
+      "src_wiki_path_validatearticlepath",
+      "tests_domain_config_test_ts",
+      "tests_domain_config_test_vt_mkdircalls",
+      "tests_domain_config_test_vt_writecalls_removecalls",
+      "tests_wiki_log_test_makevt",
+      "tests_wiki_log_test_ts",
+      "tests_wiki_log_test_vt_written",
+      "tests_wiki_path"
+    ],
+    "16": [
+      "dspy_make_signature",
+      "dspy_restore_placeholders",
+      "dspy_run_mipro",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_scripts_dspy_lib_optimizer_py",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_scripts_dspy_lib_signature_py",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_scripts_dspy_tests_test_optimizer_py",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_scripts_dspy_tests_test_signature_py",
+      "optimizer_call_evaluator",
+      "tests_test_optimizer_mocklm",
+      "tests_test_optimizer_mocklm_call",
+      "tests_test_optimizer_test_call_evaluator_clamps_score",
+      "tests_test_optimizer_test_call_evaluator_parses_score",
+      "tests_test_optimizer_test_call_evaluator_renders_template_vars",
+      "tests_test_optimizer_test_call_evaluator_returns_zero_on_invalid_json",
+      "tests_test_optimizer_test_restore_placeholders_injects_all",
+      "tests_test_optimizer_test_restore_placeholders_raises_if_missing",
+      "tests_test_optimizer_test_run_mipro_returns_string",
+      "tests_test_signature_test_different_instructions_produce_different_signatures",
+      "tests_test_signature_test_make_signature_has_required_fields",
+      "tests_test_signature_test_make_signature_is_dspy_signature",
+      "tests_test_signature_test_make_signature_sets_instructions"
+    ],
+    "17": [
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_prompts_query_md",
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_src_wiki_graph_cache_ts",
+      "phases_lint_contextblock",
+      "phases_lint_entitytypesblock",
+      "phases_query_allannotatedids",
+      "phases_query_allannotatedpaths",
+      "phases_query_buildcontextblock",
+      "phases_query_graphresult",
+      "phases_query_indexannotations",
+      "phases_query_minscore",
+      "phases_query_pagecontent",
+      "phases_query_question",
+      "phases_query_seedopts",
+      "phases_query_seedset",
+      "phases_query_selectedids",
+      "phases_query_slug",
+      "phases_query_syntheticpages",
+      "phases_query_systemprompt",
+      "phases_query_today",
+      "phases_query_topk",
+      "src_phases_query_ts"
+    ],
+    "18": [
+      "phases_zod_schemas_domainentryresponse",
+      "phases_zod_schemas_entitiesoutput",
+      "phases_zod_schemas_entitiesoutputschema",
+      "phases_zod_schemas_entitytypeschema",
+      "phases_zod_schemas_entitytypesdeltaresponse",
+      "phases_zod_schemas_formatoutput",
+      "phases_zod_schemas_formatoutputschema",
+      "phases_zod_schemas_lintdelete",
+      "phases_zod_schemas_lintdeleteschema",
+      "phases_zod_schemas_lintoutput",
+      "phases_zod_schemas_lintoutputschema",
+      "phases_zod_schemas_seedsresponse",
+      "phases_zod_schemas_test_entities",
+      "phases_zod_schemas_test_fx",
+      "phases_zod_schemas_wikipageresponse",
+      "phases_zod_schemas_wikipageschema",
+      "phases_zod_schemas_wikipagesoutput",
+      "phases_zod_schemas_wikipagesoutputschema",
+      "schemas_entitytypesdeltaschema",
+      "schemas_seedsschema",
+      "tests_zod_schemas_test_ts"
+    ],
+    "19": [
+      "domain_corrupt_error",
+      "domain_domainstore",
+      "effective_settings_test",
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_src_effective_settings_ts",
+      "main_loadsettings",
+      "obsidian",
+      "promises",
+      "src_domain_store_domainstore_load",
+      "src_domain_store_domainstore_save",
+      "src_effective_settings_resolveeffective",
+      "src_local_config_defaults",
+      "src_local_config_localconfigstore_path",
+      "src_local_config_proxyconfig",
+      "src_local_config_ts",
+      "src_settings_checkclaudeavailability",
+      "src_settings_checknativeavailability",
+      "src_settings_ts",
+      "src_types_opkey",
+      "tests_effective_settings_test_eff",
+      "tests_effective_settings_test_proxy"
+    ],
+    "20": [
+      "controller_cache_invalidation_test",
+      "obsidian_llm_wiki_vitest_mock_app",
+      "test_controller_format",
+      "test_controller_mobile",
+      "tests_controller_format_test_build",
+      "tests_controller_format_test_makedomainstore",
+      "tests_controller_mobile_test_buildspy",
+      "tests_controller_mobile_test_makeapp",
+      "tests_controller_mobile_test_makelocalconfigstore",
+      "tests_controller_per_op_timeout_test_makestubrunner",
+      "tests_controller_per_op_timeout_test_makestubview",
+      "tests_controller_per_op_timeout_test_priv",
+      "tests_controller_per_op_timeout_test_privatectrl",
+      "tests_controller_per_op_timeout_test_stubrunner",
+      "tests_controller_per_op_timeout_test_ts",
+      "tests_main_mobile_test_makeplugin",
+      "tests_main_mobile_test_plugin",
+      "tests_main_mobile_test_plugin_registered",
+      "tests_main_mobile_test_setupplugin",
+      "tests_main_mobile_test_ts"
+    ],
+    "21": [
+      "domain",
+      "domain_entitytype",
+      "domain_vault_schema_variants",
+      "domain_wiki_folder_layout",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_tests_domain_store_migration_test_ts",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_tests_domain_test_js",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_tests_domain_test_ts",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_tests_migration_test_ts",
+      "lat_md_domain_codeblock_1",
+      "lat_md_domain_domain_model",
+      "main_migratedomainwikifolder",
+      "source_paths_consolidatesourcepaths",
+      "src_domain_domainpersistevent",
+      "src_domain_migratedomainsv2",
+      "src_domain_ts",
+      "src_source_paths_ts",
+      "tests_migration_test_changed",
+      "tests_migration_test_makedomain",
+      "validate_domain_id"
+    ],
+    "22": [
+      "arch_runevents",
+      "evaluator_parseeval",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_tests_evaluator_test_ts",
+      "phases_chat_params",
+      "phases_chat_reasoning_content_outputtokens_tok",
+      "phases_evaluator_evalresult",
+      "phases_evaluator_usercontent",
+      "phases_init_messages",
+      "readme_domain",
+      "src_phases_chat_ts",
+      "src_phases_evaluator_ts",
+      "src_types_claudeoperationconfig",
+      "src_types_default_settings",
+      "src_types_llmcalloptions",
+      "src_types_nativeoperationconfig",
+      "src_types_opmap",
+      "src_types_ts",
+      "tests_types_test_o",
+      "tests_types_test_ts"
+    ],
+    "23": [
+      "phases_init_test_ac",
+      "phases_parse_with_retry_structuredvalidationerror",
+      "phases_parse_with_retry_test_baseargs",
+      "phases_parse_with_retry_test_fail",
+      "phases_parse_with_retry_test_fb",
+      "phases_parse_with_retry_test_midflight",
+      "phases_parse_with_retry_test_ok",
+      "phases_parse_with_retry_test_second",
+      "readme_schema_md",
+      "src_structural_error_counter_structuralerrorstats",
+      "structural_error_counter",
+      "tests_llm_utils_test_calls",
+      "tests_llm_utils_test_chunks",
+      "tests_llm_utils_test_makestream",
+      "tests_parse_with_retry_test_errorllm",
+      "tests_parse_with_retry_test_statsevents",
+      "tests_parse_with_retry_test_ts",
+      "tests_structural_error_counter_test_internal",
+      "tests_structural_error_counter_test_unsub"
+    ],
+    "24": [
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_tests_phases_ingest_test_js",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_tests_phases_init_test_js",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_tests_phases_query_test_js",
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_tests_vault_tools_test_js",
+      "phases_init_force_test_adapterwithsourcefiles",
+      "phases_init_force_test_firstupdate",
+      "phases_init_force_test_mkargs",
+      "phases_init_force_test_resetevent",
+      "phases_init_force_test_validbootstrapresponse",
+      "phases_init_force_test_validdeltaresponse",
+      "phases_init_runinit",
+      "phases_init_test_initstart",
+      "phases_init_test_makemultillm",
+      "phases_init_test_mockadapterwithsources",
+      "phases_lint_test_collect",
+      "phases_lint_test_mockadapter",
+      "phases_query_runquery",
+      "phases_query_thinking_test_makeadapterwithpages",
+      "tests_phases_init_force_test_ts"
+    ],
+    "25": [
+      "changelog_parse_index_annotations",
+      "changelog_upsert_index_annotation",
+      "src_wiki_index_derivesection",
+      "src_wiki_index_removeindexannotation",
+      "src_wiki_index_ts",
+      "src_wiki_index_upsertinsection",
+      "src_wiki_path_domainindexpath",
+      "tests_init_similarity_test_ts",
+      "tests_no_fs_imports_test_mobile_hot_path_files",
+      "tests_no_fs_imports_test_offending",
+      "tests_no_fs_imports_test_src",
+      "tests_no_fs_imports_test_ts",
+      "tests_stream_test_lines",
+      "tests_types_test_c",
+      "tests_wiki_index_test_content",
+      "tests_wiki_index_test_initial",
+      "tests_wiki_index_test_map",
+      "tests_wiki_index_test_throwvt",
+      "tests_wiki_index_test_ts"
+    ],
+    "26": [
+      "init_runinit",
+      "init_thinking_test_applies_entity_types_delta_from_ingest_and_emits_domain_updated_with_merged_types",
+      "init_thinking_test_existingdomain",
+      "init_thinking_test_makestreamingllm",
+      "phases_init_test_bootstrapjson",
+      "phases_init_test_entitiesempty",
+      "phases_init_test_ingestwithdelta",
+      "phases_init_test_updates",
+      "phases_init_thinking_test_hasnewentity",
+      "phases_lint_runlint",
+      "phases_lint_test_llm",
+      "phases_lint_thinking_test_makellmwiththinkingpatch",
+      "phases_lint_thinking_test_valid_patch_json",
+      "phases_lint_thinking_test_withtypes",
+      "tests_phases_init_thinking_test_ts",
+      "tests_phases_lint_thinking_test_ts",
+      "tests_stream_test_events",
+      "vault_tools_vaultadapter"
+    ],
+    "27": [
+      "phases_format_parsed",
+      "phases_ingest_test_json",
+      "phases_ingest_written",
+      "phases_lint_test_makellm",
+      "phases_parse_with_retry_test_streamfromtext",
+      "tests_agent_runner_dev_log_test_appendpaths",
+      "tests_agent_runner_dev_log_test_devoffsettings",
+      "tests_agent_runner_dev_log_test_devonsettings",
+      "tests_agent_runner_dev_log_test_makellmmulti",
+      "tests_agent_runner_dev_log_test_runner",
+      "tests_agent_runner_dev_log_test_statefuladapter",
+      "tests_agent_runner_dev_log_test_testdomain",
+      "tests_agent_runner_dev_log_test_ts",
+      "tests_agent_runner_dev_log_test_writepaths",
+      "tests_agent_runner_integration_test_basesettings",
+      "tests_agent_runner_integration_test_settingswithurl",
+      "tests_agent_runner_integration_test_systemev",
+      "tests_agent_runner_integration_test_ts"
+    ],
+    "28": [
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_src_domain_ts",
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_src_main_ts",
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_src_modals_ts",
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_src_utils_vault_walk_ts",
+      "path_browserify",
+      "src_controller_tovaultpath",
+      "src_controller_ts",
+      "src_domain_adddomaininput",
+      "src_types_chatmessage",
+      "src_types_runhistoryentry",
+      "src_types_wikioperation",
+      "src_utils_vault_walk_ts",
+      "src_view_ts",
+      "src_view_viewstate",
+      "util_parse_wiki_sources_from_fm",
+      "utils_vault_walk_collectmdinpaths",
+      "utils_vault_walk_walkfolder"
+    ],
+    "29": [
+      "main_llmwikiplugin",
+      "main_migratelegacydata",
+      "main_migratetolocal_v1",
+      "phases_lint_files",
+      "readme_domain_json",
+      "src_main_llmwikiplugin_loadsettings",
+      "src_main_llmwikiplugin_onload",
+      "src_main_llmwikiplugin_onunload",
+      "src_main_llmwikiplugin_savesettings",
+      "src_main_ts",
+      "src_storage_migration_cleandir",
+      "src_storage_migration_pickandwriteschema",
+      "src_storage_migration_runstoragemigration",
+      "src_storage_migration_storagemigrationconflicterror",
+      "src_storage_migration_ts",
+      "tests_storage_migration_test_mtimes"
+    ],
+    "30": [
+      "phases_init_existing",
+      "test_mainmigration",
+      "tests_domain_store_test_sampledomain",
+      "tests_domain_store_test_store",
+      "tests_domain_store_test_stored",
+      "tests_domain_store_test_ts",
+      "tests_local_config_test_lc",
+      "tests_local_config_test_ts",
+      "tests_main_migration_test_dms",
+      "tests_main_migration_test_lcs",
+      "tests_main_migration_test_local",
+      "tests_main_migration_test_localstore",
+      "tests_main_migration_test_makevaultobj",
+      "tests_main_migration_test_savespy",
+      "tests_main_migration_test_vaultfiles",
+      "tests_vault_tools_test_vault"
+    ],
+    "31": [
+      "phases_chat_requeststartms",
+      "phases_chat_tok",
+      "phases_format_baseparams",
+      "phases_format_callstats",
+      "phases_format_extractimagepaths",
+      "phases_format_lastslash",
+      "phases_format_missing1",
+      "phases_format_missingfinal",
+      "phases_format_restoremessages",
+      "phases_format_restoreparams",
+      "phases_format_retrymessages",
+      "phases_format_retryparams",
+      "phases_format_tokenlist",
+      "phases_format_truncationhint",
+      "phases_format_wlfix",
+      "src_phases_format_ts"
+    ],
+    "32": [
+      "claude_md",
+      "dspy_claude_codeblock_4",
+      "dspy_claude_configuration_env",
+      "dspy_claude_input_format",
+      "obsidian_ai_wiki_claude_before_starting_work",
+      "obsidian_ai_wiki_claude_codeblock_2",
+      "obsidian_ai_wiki_claude_codeblock_3",
+      "obsidian_ai_wiki_claude_codeblock_4",
+      "obsidian_ai_wiki_claude_codeblock_5",
+      "obsidian_ai_wiki_claude_post_task_checklist_required_do_not_skip",
+      "obsidian_ai_wiki_claude_section_structure",
+      "obsidian_ai_wiki_claude_syntax_primer",
+      "obsidian_ai_wiki_claude_test_specs",
+      "obsidian_ai_wiki_claude_what_is_lat_md"
+    ],
+    "33": [
+      "phases_init_test_resultevent",
+      "phases_lint_chat_runlintfixchat",
+      "phases_lint_chat_test_blocked",
+      "phases_lint_chat_test_indexcall",
+      "phases_lint_chat_test_llmresponse",
+      "phases_lint_chat_test_makesignal",
+      "phases_lint_chat_test_makevaulttools",
+      "phases_lint_chat_test_req",
+      "phases_lint_chat_test_toolresultevents",
+      "phases_lint_chat_test_tooluseevents",
+      "phases_lint_test_systemmsg",
+      "src_types_runrequest",
+      "tests_phases_lint_chat_test_ts"
+    ],
+    "34": [
+      "obsidian_llm_wiki_vitest_mock_tfolder",
+      "phases_format_test_ctrl",
+      "tests_collect_md_in_paths_test_f1",
+      "tests_collect_md_in_paths_test_f2",
+      "tests_collect_md_in_paths_test_makefile",
+      "tests_collect_md_in_paths_test_makefolder",
+      "tests_collect_md_in_paths_test_sub",
+      "tests_collect_md_in_paths_test_ts",
+      "tests_controller_manage_sources_test_ctrl_domainstore",
+      "tests_controller_manage_sources_test_ctrl_vault",
+      "tests_controller_manage_sources_test_ts",
+      "tests_domain_store_test_makevault",
+      "tests_proxy_test_out"
+    ],
+    "35": [
+      "lat_md_llm_pipeline_call_sites",
+      "llm_pipeline_parsewithretry",
+      "llm_pipeline_wiki_page_schema_constraints",
+      "phases_ingest_retryinvalidpaths",
+      "phases_llm_utils_buildllmcallstatsevent",
+      "phases_llm_utils_extractstreamdeltas",
+      "phases_llm_utils_extractusage",
+      "phases_llm_utils_wrapstreamwithstats",
+      "phases_parse_with_retry_formatzodfeedback",
+      "phases_parse_with_retry_parsewithretryresult",
+      "phases_parse_with_retry_streamonce",
+      "phases_query_llmselectseeds",
+      "tests_llm_utils_test_wrapped"
+    ],
+    "36": [
+      "phases_format_runformat",
+      "phases_format_test_blocks",
+      "phases_format_test_good",
+      "phases_format_test_history",
+      "phases_format_test_json1",
+      "phases_format_test_json2",
+      "phases_format_test_makellmsequence",
+      "phases_format_test_makellmtruncated",
+      "phases_format_test_origread",
+      "phases_format_test_preview",
+      "phases_format_test_sample",
+      "phases_init_test_err",
+      "tests_phases_format_test_ts"
+    ],
+    "37": [
+      "apply_domain_event",
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_src_phases_template_ts",
+      "phases_ingest_test_input",
+      "phases_init_start",
+      "phases_init_tryread",
+      "phases_lint_chat_pagesblock",
+      "phases_lint_meta_files",
+      "phases_lint_pwtevents",
+      "phases_lint_wikivaultpath",
+      "phases_zod_schemas_lintchatresponse",
+      "phases_zod_schemas_lintchatschema",
+      "prompts_lint_chat_md",
+      "tests_apply_domain_event_test_base"
+    ],
+    "38": [
+      "tests_view_metrics_test_askbtn",
+      "tests_view_metrics_test_asksavebtn",
+      "tests_view_metrics_test_cancelbtn",
+      "tests_view_metrics_test_finalel",
+      "tests_view_metrics_test_finishedat",
+      "tests_view_metrics_test_progresscount",
+      "tests_view_metrics_test_resultsection",
+      "tests_view_metrics_test_resulttoggle",
+      "tests_view_metrics_test_statusel",
+      "tests_view_metrics_test_totaldur",
+      "view_metrics_test"
+    ],
+    "39": [
+      "obsidian_ai_wiki_readme_1_install_ollama",
+      "obsidian_ai_wiki_readme_1_requirements",
+      "obsidian_ai_wiki_readme_2_install_the_plugin",
+      "obsidian_ai_wiki_readme_3_enable_the_plugin",
+      "obsidian_ai_wiki_readme_4_configure",
+      "obsidian_ai_wiki_readme_5_create_a_domain",
+      "obsidian_ai_wiki_readme_6_first_ingest",
+      "obsidian_ai_wiki_readme_codeblock_1",
+      "obsidian_ai_wiki_readme_codeblock_2",
+      "obsidian_ai_wiki_readme_quick_start_claude_agent",
+      "obsidian_ai_wiki_readme_quick_start_native_agent_ollama"
+    ],
+    "40": [
+      "dspy_readme",
+      "dspy_readme_100",
+      "dspy_readme_111",
+      "dspy_readme_91",
+      "dspy_readme_codeblock_1",
+      "dspy_readme_codeblock_6",
+      "dspy_readme_codeblock_7",
+      "dspy_readme_dev_jsonl",
+      "dspy_readme_dspy_prompt_optimizer",
+      "dspy_readme_env",
+      "readme_md"
+    ],
+    "41": [
+      "src_wiki_graph_cache_cacheentry",
+      "src_wiki_graph_cache_graphcache_clear",
+      "src_wiki_graph_cache_graphcache_invalidate",
+      "tests_format_migration_test_p",
+      "tests_format_migration_test_ts",
+      "wiki_graph_cache",
+      "wiki_graph_cache_test",
+      "wiki_graph_query_traversal",
+      "wiki_graph_structural_health",
+      "wiki_graph_structure",
+      "wikigraph_wikigraph"
+    ],
+    "42": [
+      "openai",
+      "phases_format_test_callargs",
+      "src_mobile_llm_wrap_mkchunk",
+      "src_mobile_llm_wrap_ts",
+      "src_mobile_llm_wrap_wrapmobilenostream",
+      "tests_mobile_llm_wrap_test_completion",
+      "tests_mobile_llm_wrap_test_drain",
+      "tests_mobile_llm_wrap_test_makecompletion",
+      "tests_mobile_llm_wrap_test_makeinner",
+      "tests_mobile_llm_wrap_test_ts",
+      "types_llmclient"
+    ],
+    "43": [
+      "create_proxy_dispatcher",
+      "proxy_buildproxyurl",
+      "proxy_createproxyfetch",
+      "proxy_maskproxyurl",
+      "proxy_parsenoproxy",
+      "proxy_shouldbypass",
+      "src_proxy_ts",
+      "tests_proxy_test_d",
+      "tests_proxy_test_f",
+      "tests_proxy_test_ts"
+    ],
+    "44": [
+      "templates_format_schema",
+      "templates_format_schema_23",
+      "templates_format_schema_33",
+      "templates_format_schema_39",
+      "templates_format_schema_43",
+      "templates_format_schema_49",
+      "templates_format_schema_format_schema_wiki",
+      "templates_format_schema_frontmatter",
+      "templates_format_schema_md",
+      "templates_format_schema_mermaid"
+    ],
+    "45": [
+      "modals_shellconsentmodal",
+      "obsidian_llm_wiki_vitest_mock_abstractinputsuggest",
+      "obsidian_llm_wiki_vitest_mock_modal_close",
+      "obsidian_llm_wiki_vitest_mock_modal_open",
+      "src_modals_shellconsentmodal_cancel",
+      "src_modals_shellconsentmodal_enable",
+      "test_shellconsent",
+      "tests_shell_consent_test_modal",
+      "tests_shell_consent_test_onenable"
+    ],
+    "46": [
+      "changelog",
+      "obsidian_ai_wiki_changelog",
+      "obsidian_ai_wiki_changelog_0_1_108_2026_05_18",
+      "obsidian_ai_wiki_changelog_0_1_141_2026_05_25",
+      "obsidian_ai_wiki_changelog_24",
+      "obsidian_ai_wiki_changelog_33",
+      "obsidian_ai_wiki_changelog_43",
+      "obsidian_ai_wiki_changelog_58",
+      "obsidian_ai_wiki_changelog_69"
+    ],
+    "47": [
+      "architecture_backends",
+      "lat_md_architecture_claude_agent",
+      "lat_md_architecture_native_agent",
+      "obsidian_ai_wiki_readme_backend_selector",
+      "obsidian_ai_wiki_readme_dev_mode_desktop_only",
+      "obsidian_ai_wiki_readme_general_both_backends",
+      "obsidian_ai_wiki_readme_proxy_native_agent_only",
+      "obsidian_ai_wiki_readme_settings_reference",
+      "phases_lint_graph"
+    ],
+    "48": [
+      "src_settings_llmwikisettingtab",
+      "src_settings_llmwikisettingtab_chatmodels",
+      "src_settings_llmwikisettingtab_display",
+      "src_settings_llmwikisettingtab_fetchmodels",
+      "src_settings_llmwikisettingtab_patchlocal",
+      "src_settings_llmwikisettingtab_patchlocalclaude",
+      "src_settings_llmwikisettingtab_patchlocalnative",
+      "src_settings_llmwikisettingtab_patchlocalproxy",
+      "src_settings_llmwikisettingtab_refresh"
+    ],
+    "49": [
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_tests_template_test_ts",
+      "phases_ingest_buildentitytypesblock",
+      "phases_ingest_buildextractmessages",
+      "phases_ingest_buildingestmessages",
+      "phases_lint_buildentitytypesblock",
+      "src_phases_template_ts",
+      "src_settings_llmwikisettingtab_addmodelcontrol",
+      "template_render"
+    ],
+    "50": [
+      "obsidian_ai_wiki_readme_documentation",
+      "obsidian_ai_wiki_readme_security",
+      "obsidian_ai_wiki_readme_shell_execution",
+      "obsidian_ai_wiki_readme_sync",
+      "obsidian_ai_wiki_readme_vault_access",
+      "obsidian_ai_wiki_readme_what_it_does",
+      "readme_ai_wiki_plugin"
+    ],
+    "51": [
+      "phases_lint_test_vt",
+      "phases_query_thinking_test_ctx",
+      "phases_query_thinking_test_llm_getcapturedmessages",
+      "phases_query_thinking_test_makellmcapturingcontext",
+      "phases_query_thinking_test_makenoisepagesrecord",
+      "phases_query_thinking_test_noisepages",
+      "tests_phases_query_thinking_test_ts"
+    ],
+    "52": [
+      "test_raw_frontmatter",
+      "util_has_frontmatter_field",
+      "util_parse_wiki_articles_from_fm",
+      "util_upsert_raw_frontmatter",
+      "utils_raw_frontmatter_buildwikifields",
+      "utils_raw_frontmatter_removewikifields",
+      "utils_raw_frontmatter_test_articles"
+    ],
+    "53": [
+      "src_i18n_en",
+      "src_i18n_es",
+      "src_i18n_locales",
+      "src_i18n_ru",
+      "src_i18n_ts",
+      "tests_i18n_manage_sources_test_ts"
+    ],
+    "54": [
+      "arch_phase_functions",
+      "arch_settings",
+      "arch_vaulttools",
+      "architecture_plugin_entry_point",
+      "dspy_claude_codeblock_3",
+      "lat_md_architecture_md"
+    ],
+    "55": [
+      "dspy_claude_codeblock_1",
+      "dspy_claude_codeblock_2",
+      "dspy_claude_commands",
+      "dspy_readme_16",
+      "dspy_readme_codeblock_2",
+      "obsidian_ai_wiki_claude_codeblock_1"
+    ],
+    "56": [
+      "tests_stream_test_e",
+      "tests_stream_test_kinds",
+      "tests_stream_test_line",
+      "tests_stream_test_ts",
+      "tests_stream_test_tu1"
+    ],
+    "57": [
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_prompts_base_md",
+      "prompts_base",
+      "prompts_base_13",
+      "prompts_base_8"
+    ],
+    "58": [
+      "tests_prompts_test_ingestentitiestemplate",
+      "tests_prompts_test_ingesttemplate",
+      "tests_prompts_test_linttemplate",
+      "tests_prompts_test_ts"
+    ],
+    "59": [
+      "wiki_schema_frontmatter",
+      "wiki_schema_page_structure",
+      "wiki_schema_wiki_schema",
+      "wiki_schema_wikilinks"
+    ],
+    "60": [
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_tests_init_args_test_ts",
+      "tests_init_args_test_derivewikiroot",
+      "tests_init_args_test_parsesourcesfromargs"
+    ],
+    "61": [
+      "modals_folderinputsuggest",
+      "src_modals_folderinputsuggest_getsuggestions",
+      "src_modals_folderinputsuggest_rendersuggestion"
+    ],
+    "62": [
+      "prompts_init_md",
+      "prompts_init_output_json_example",
+      "prompts_init_wiki_page_conventions"
+    ],
+    "63": [
+      "obsidian_llm_wiki_vitest_config_dirname",
+      "obsidian_llm_wiki_vitest_config_transform",
+      "vitest_config_ts"
+    ],
+    "64": [
+      "phases_init_test_created",
+      "phases_lint_test_adapter",
+      "tests_vault_tools_test_ts"
+    ],
+    "65": [
+      "fixtures_format_sample_clickhouse",
+      "home_ikeniborn_documents_project_obsidian_llm_wiki_tests_fixtures_format_sample_md"
+    ],
+    "66": [
+      "lat_md_lat_md",
+      "latmd_index"
+    ],
+    "67": [
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_scripts_dspy_lib_init_py"
+    ],
+    "68": [
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_prompts_evaluator_md"
+    ],
+    "69": [
+      "home_uf_rt_ru_i_y_tischenko_git_obsidian_llm_wiki_prompts_chat_md"
+    ],
+    "70": [
+      "prompts_query_md"
+    ],
+    "71": [
+      "prompts_lint_md"
+    ],
+    "72": [
+      "src_phases_schemas_ts"
+    ],
+    "73": [
+      "tests_agent_runner_integration_test_structerr"
+    ],
+    "74": [
+      "effective_settings"
+    ],
+    "75": [
+      "src_wikiseeds"
+    ],
+    "76": [
+      "src_domain"
+    ],
+    "77": [
+      "md_modules_d"
+    ],
+    "78": [
+      "src_mobilellmwrap"
+    ],
+    "79": [
+      "src_domainstore"
+    ],
+    "80": [
+      "src_structuralerror"
+    ],
+    "81": [
+      "util_raw_frontmatter"
+    ],
+    "82": [
+      "phase_format_utils"
+    ],
+    "83": [
+      "evaluator_runevaluator"
+    ],
+    "84": [
+      "test_agent_runner_js"
+    ],
+    "85": [
+      "test_evaluator_parse_eval_response"
+    ],
+    "86": [
+      "test_mainmobile"
+    ],
+    "87": [
+      "test_mobilellmwrap"
+    ],
+    "88": [
+      "test_collectmdinpaths"
+    ],
+    "89": [
+      "domain_test"
+    ],
+    "90": [
+      "apply_domain_event_test"
+    ],
+    "91": [
+      "test_structuralerror"
+    ],
+    "92": [
+      "test_nofsimports"
+    ],
+    "93": [
+      "mobile_guard_rationale"
+    ],
+    "94": [
+      "test_wikiseeds"
+    ],
+    "95": [
+      "test_template_render"
+    ],
+    "96": [
+      "test_vault_tools"
+    ],
+    "97": [
+      "controller_build_fail_test"
+    ],
+    "98": [
+      "test_domainstoremigration"
+    ],
+    "99": [
+      "controller_log_adapter_test"
+    ],
+    "100": [
+      "init_args_test_derivewikiroot"
+    ],
+    "101": [
+      "init_args_test_parsesourcesfromargs"
+    ],
+    "102": [
+      "format_migration_test"
+    ],
+    "103": [
+      "llm_wiki_plugin"
+    ],
+    "104": [
+      "modals_test"
+    ],
+    "105": [
+      "format_preview_flow"
+    ],
+    "106": [
+      "proxy_test"
+    ],
+    "107": [
+      "build_proxy_url"
+    ],
+    "108": [
+      "create_proxy_fetch"
+    ],
+    "109": [
+      "should_bypass"
+    ],
+    "110": [
+      "parse_no_proxy"
+    ],
+    "111": [
+      "mask_proxy_url"
+    ],
+    "112": [
+      "test_stream_js"
+    ],
+    "113": [
+      "migration_test"
+    ],
+    "114": [
+      "migrate_domain_wiki_folder"
+    ],
+    "115": [
+      "domain_store_test"
+    ],
+    "116": [
+      "domain_store"
+    ],
+    "117": [
+      "domain_store_migration"
+    ],
+    "118": [
+      "test_modals"
+    ],
+    "119": [
+      "domain_test_js"
+    ],
+    "120": [
+      "phases_ingest_js_runingest"
+    ],
+    "121": [
+      "phases_ingest_js_extracttoplevelsourcepath"
+    ],
+    "122": [
+      "lint_thinking_test"
+    ],
+    "123": [
+      "phases_query_js_runquery"
+    ],
+    "124": [
+      "phases_init_js_runinit"
+    ],
+    "125": [
+      "initforce_test_force_flag"
+    ],
+    "126": [
+      "initforce_test_dispatch"
+    ],
+    "127": [
+      "concept_wipe_domain_folder"
+    ],
+    "128": [
+      "fixture_format_sample"
+    ],
+    "129": [
+      "prompt_evaluator"
+    ],
+    "130": [
+      "prompt_chat"
+    ],
+    "131": [
+      "prompt_format"
+    ],
+    "132": [
+      "prompt_query"
+    ],
+    "133": [
+      "prompts_lintmd"
+    ],
+    "134": [
+      "prompt_lint"
+    ],
+    "135": [
+      "prompts_basemd"
+    ],
+    "136": [
+      "prompts_ingest"
+    ],
+    "137": [
+      "prompts_init"
+    ],
+    "138": [
+      "rationale_4segment_path_rule"
+    ],
+    "139": [
+      "vitest_setup_ts"
+    ],
+    "140": [
+      "esbuild_config_mjs"
+    ],
+    "141": [
+      "vitestmock_obsidianmock"
+    ],
+    "142": [
+      "vitest_mock"
+    ],
+    "143": [
+      "vitestsetup_globalsetup"
+    ],
+    "144": [
+      "vitestconfig_testconfig"
+    ],
+    "145": [
+      "esbuildconfig_buildconfig"
+    ],
+    "146": [
+      "optimize_main"
+    ],
+    "147": [
+      "dspy_miprov2_pattern"
+    ],
+    "148": [
+      "dspy_lib_init"
+    ],
+    "149": [
+      "signature_wikioperation"
+    ],
+    "150": [
+      "backend_py_make_lm"
+    ],
+    "151": [
+      "concept_dspy_optimizer"
+    ],
+    "152": [
+      "test_signature_make_signature"
+    ],
+    "153": [
+      "test_loader_load_examples"
+    ],
+    "154": [
+      "test_writer_write_optimized"
+    ],
+    "155": [
+      "test_optimizer_run_mipro"
+    ],
+    "156": [
+      "test_backend_claudecodelm"
+    ],
+    "157": [
+      "claude_obsidian_llm_wiki_plugin"
+    ],
+    "158": [
+      "claude_settings"
+    ],
+    "159": [
+      "claude_types"
+    ],
+    "160": [
+      "claude_stream_json_protocol"
+    ],
+    "161": [
+      "claude_single_flight"
+    ],
+    "162": [
+      "claude_versioning"
+    ],
+    "163": [
+      "readme_security_shell_execution"
+    ],
+    "164": [
+      "changelog_v0_1_108"
+    ],
+    "165": [
+      "template_format_schema"
+    ],
+    "166": [
+      "wiki_fields_preservation_rationale"
+    ],
+    "167": [
+      "dspy_claude_md"
+    ],
+    "168": [
+      "dspy_optimize_py"
+    ],
+    "169": [
+      "dspy_loader_py"
+    ],
+    "170": [
+      "dspy_backend_py"
+    ],
+    "171": [
+      "dspy_optimizer_py"
+    ],
+    "172": [
+      "dspy_signature_py"
+    ],
+    "173": [
+      "dspy_writer_py"
+    ],
+    "174": [
+      "dspy_miprov2"
+    ],
+    "175": [
+      "dspy_dev_jsonl"
+    ],
+    "176": [
+      "dspy_placeholder_syntax"
+    ],
+    "177": [
+      "dspy_dspy_backend_env"
+    ],
+    "178": [
+      "concept_dspy_miprov2"
+    ],
+    "179": [
+      "concept_claude_code_lm"
+    ],
+    "180": [
+      "ingest_prompt"
+    ],
+    "181": [
+      "ingest_domain_name"
+    ],
+    "182": [
+      "ingest_entity_types_block"
+    ],
+    "183": [
+      "ingest_wiki_path"
+    ],
+    "184": [
+      "ingest_source_path"
+    ],
+    "185": [
+      "ingest_today"
+    ],
+    "186": [
+      "ingest_schema_block"
+    ],
+    "187": [
+      "ingest_lang_notes"
+    ],
+    "188": [
+      "ingest_create_rule"
+    ],
+    "189": [
+      "ingest_update_rule"
+    ],
+    "190": [
+      "ingest_skip_rule"
+    ],
+    "191": [
+      "ingest_path_rule"
+    ],
+    "192": [
+      "ingest_frontmatter_rule"
+    ],
+    "193": [
+      "ingest_annotation_field"
+    ],
+    "194": [
+      "ingest_output_schema"
+    ],
+    "195": [
+      "lint_output_schema"
+    ],
+    "196": [
+      "lint_fixes_rule"
+    ],
+    "197": [
+      "lint_dead_links_rule"
+    ],
+    "198": [
+      "lint_wiki_keywords_rule"
+    ],
+    "199": [
+      "readme_fix_operation"
+    ],
+    "200": [
+      "readme_iclaude_sh"
+    ],
+    "201": [
+      "readme_ollama"
+    ],
+    "202": [
+      "readme_sidebar_panel"
+    ],
+    "203": [
+      "readme_local_json"
+    ],
+    "204": [
+      "readme_shell_consent"
+    ],
+    "205": [
+      "readme_graph_settings"
+    ],
+    "206": [
+      "readme_proxy_settings"
+    ],
+    "207": [
+      "readme_dev_mode"
+    ],
+    "208": [
+      "readme_command_palette"
+    ],
+    "209": [
+      "readme_index_md"
+    ],
+    "210": [
+      "readme_mobile_support"
+    ],
+    "211": [
+      "readme_sigterm_sigkill"
+    ],
+    "212": [
+      "ingest_wikisynthesis"
+    ],
+    "213": [
+      "ingest_entityrules"
+    ],
+    "214": [
+      "ingest_pathrule"
+    ],
+    "215": [
+      "lintchat_prompt"
+    ],
+    "216": [
+      "lintchat_wikieditor"
+    ],
+    "217": [
+      "lint_wikireviewer"
+    ],
+    "218": [
+      "lint_outputschema"
+    ],
+    "219": [
+      "init_prompt"
+    ],
+    "220": [
+      "init_domainarchitect"
+    ],
+    "221": [
+      "init_entitytype"
+    ],
+    "222": [
+      "init_wikisubfolderrule"
+    ],
+    "223": [
+      "formatschema_template"
+    ],
+    "224": [
+      "formatschema_frontmatter"
+    ],
+    "225": [
+      "formatschema_contentrules"
+    ],
+    "226": [
+      "shared_annotationfield"
+    ],
+    "227": [
+      "changelog_lint_fix_chat"
+    ],
+    "228": [
+      "changelog_effort_field"
+    ],
+    "229": [
+      "changelog_lint_apply_from_chat"
+    ],
+    "230": [
+      "changelog_abort_signal"
+    ],
+    "231": [
+      "operations_page_similarity"
+    ],
+    "232": [
+      "operations_query"
+    ],
+    "233": [
+      "llm_pipeline_call_sites"
+    ],
+    "234": [
+      "llm_pipeline_jaccard"
+    ],
+    "235": [
+      "llm_pipeline_embedding"
+    ],
+    "236": [
+      "arch_plugin_entry"
+    ],
+    "237": [
+      "arch_controller"
+    ],
+    "238": [
+      "arch_backends"
+    ],
+    "239": [
+      "arch_pagesimilarity"
+    ],
+    "240": [
+      "claude_md_project_instructions"
+    ],
+    "241": [
+      "claude_md_lat_workflow"
+    ],
+    "242": [
+      "claude_md_latmd_description"
+    ],
+    "243": [
+      "claude_md_lat_commands"
+    ],
+    "244": [
+      "claude_md_section_structure"
+    ],
+    "245": [
+      "changelog_v0_1_141"
+    ],
+    "246": [
+      "changelog_storage_migration"
+    ],
+    "247": [
+      "changelog_lint_chat"
+    ],
+    "248": [
+      "changelog_ingest_enrichment"
+    ],
+    "249": [
+      "changelog_wiki_index_rewrite"
+    ],
+    "250": [
+      "changelog_shell_consent"
+    ],
+    "251": [
+      "changelog_schemas"
+    ],
+    "252": [
+      "changelog_view_enhancements"
+    ],
+    "253": [
+      "arch_native_agent_backend"
+    ],
+    "254": [
+      "arch_claude_agent_backend"
+    ],
+    "255": [
+      "arch_settings_local_config"
+    ],
+    "256": [
+      "arch_storage_migration"
+    ],
+    "257": [
+      "arch_run_events"
+    ],
+    "258": [
+      "ops_init"
+    ],
+    "259": [
+      "ops_ingest"
+    ],
+    "260": [
+      "ops_ingest_entity_types_delta"
+    ],
+    "261": [
+      "ops_query"
+    ],
+    "262": [
+      "ops_query_seed_selection"
+    ],
+    "263": [
+      "ops_query_bfs_expansion"
+    ],
+    "264": [
+      "ops_lint"
+    ],
+    "265": [
+      "ops_lint_chat"
+    ],
+    "266": [
+      "ops_chat"
+    ],
+    "267": [
+      "ops_format"
+    ],
+    "268": [
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_src_wiki_path_ts"
+    ],
+    "269": [
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_src_phases_llm_utils_ts"
+    ],
+    "270": [
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_src_phases_parse_with_retry_ts"
+    ],
+    "271": [
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_src_phases_zod_schemas_ts"
+    ],
+    "272": [
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_src_wiki_index_ts"
+    ],
+    "273": [
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_src_i18n_ts"
+    ],
+    "274": [
+      "home_ikeniborn_documents_project_obsidian_ai_wiki_src_local_config_ts"
+    ],
+    "275": [
+      "architecture_native_agent"
+    ],
+    "276": [
+      "architecture_claude_agent"
+    ],
+    "277": [
+      "operations_result_summary"
+    ],
+    "278": [
+      "rationale_wikilink_alias_forbidden"
+    ],
+    "279": [
+      "rationale_wrap_json_fallback"
+    ],
+    "280": [
+      "rationale_settings_split"
+    ],
+    "281": [
+      "rationale_page_similarity_jaccard_embedding"
+    ],
+    "282": [
+      "rationale_vault_tools_decoupling"
+    ],
+    "283": [
+      "test_controller_peroptimeout"
+    ],
+    "284": [
+      "test_settings_parsetimeout"
+    ]
+  },
+  "cohesion": {
+    "0": 0.06,
+    "1": 0.06,
+    "2": 0.06,
+    "3": 0.05,
+    "4": 0.08,
+    "5": 0.07,
+    "6": 0.09,
+    "7": 0.08,
+    "8": 0.06,
+    "9": 0.06,
+    "10": 0.1,
+    "11": 0.19,
+    "12": 0.07,
+    "13": 0.1,
+    "14": 0.11,
+    "15": 0.15,
+    "16": 0.17,
+    "17": 0.1,
+    "18": 0.1,
+    "19": 0.15,
+    "20": 0.21,
+    "21": 0.15,
+    "22": 0.16,
+    "23": 0.11,
+    "24": 0.13,
+    "25": 0.16,
+    "26": 0.14,
+    "27": 0.14,
+    "28": 0.21,
+    "29": 0.2,
+    "30": 0.13,
+    "31": 0.12,
+    "32": 0.14,
+    "33": 0.15,
+    "34": 0.18,
+    "35": 0.21,
+    "36": 0.15,
+    "37": 0.15,
+    "38": 0.18,
+    "39": 0.22,
+    "40": 0.18,
+    "41": 0.2,
+    "42": 0.24,
+    "43": 0.38,
+    "44": 0.2,
+    "45": 0.22,
+    "46": 0.22,
+    "47": 0.25,
+    "48": 0.36,
+    "49": 0.32,
+    "50": 0.29,
+    "51": 0.29,
+    "52": 0.38,
+    "53": 0.33,
+    "54": 0.33,
+    "55": 0.33,
+    "56": 0.4,
+    "57": 0.5,
+    "58": 0.5,
+    "59": 0.67,
+    "60": 0.67,
+    "61": 0.67,
+    "62": 0.67,
+    "63": 0.67,
+    "64": 0.67,
+    "65": 1.0,
+    "66": 1.0,
+    "67": 1.0,
+    "68": 1.0,
+    "69": 1.0,
+    "70": 1.0,
+    "71": 1.0,
+    "72": 1.0,
+    "73": 1.0,
+    "74": 1.0,
+    "75": 1.0,
+    "76": 1.0,
+    "77": 1.0,
+    "78": 1.0,
+    "79": 1.0,
+    "80": 1.0,
+    "81": 1.0,
+    "82": 1.0,
+    "83": 1.0,
+    "84": 1.0,
+    "85": 1.0,
+    "86": 1.0,
+    "87": 1.0,
+    "88": 1.0,
+    "89": 1.0,
+    "90": 1.0,
+    "91": 1.0,
+    "92": 1.0,
+    "93": 1.0,
+    "94": 1.0,
+    "95": 1.0,
+    "96": 1.0,
+    "97": 1.0,
+    "98": 1.0,
+    "99": 1.0,
+    "100": 1.0,
+    "101": 1.0,
+    "102": 1.0,
+    "103": 1.0,
+    "104": 1.0,
+    "105": 1.0,
+    "106": 1.0,
+    "107": 1.0,
+    "108": 1.0,
+    "109": 1.0,
+    "110": 1.0,
+    "111": 1.0,
+    "112": 1.0,
+    "113": 1.0,
+    "114": 1.0,
+    "115": 1.0,
+    "116": 1.0,
+    "117": 1.0,
+    "118": 1.0,
+    "119": 1.0,
+    "120": 1.0,
+    "121": 1.0,
+    "122": 1.0,
+    "123": 1.0,
+    "124": 1.0,
+    "125": 1.0,
+    "126": 1.0,
+    "127": 1.0,
+    "128": 1.0,
+    "129": 1.0,
+    "130": 1.0,
+    "131": 1.0,
+    "132": 1.0,
+    "133": 1.0,
+    "134": 1.0,
+    "135": 1.0,
+    "136": 1.0,
+    "137": 1.0,
+    "138": 1.0,
+    "139": 1.0,
+    "140": 1.0,
+    "141": 1.0,
+    "142": 1.0,
+    "143": 1.0,
+    "144": 1.0,
+    "145": 1.0,
+    "146": 1.0,
+    "147": 1.0,
+    "148": 1.0,
+    "149": 1.0,
+    "150": 1.0,
+    "151": 1.0,
+    "152": 1.0,
+    "153": 1.0,
+    "154": 1.0,
+    "155": 1.0,
+    "156": 1.0,
+    "157": 1.0,
+    "158": 1.0,
+    "159": 1.0,
+    "160": 1.0,
+    "161": 1.0,
+    "162": 1.0,
+    "163": 1.0,
+    "164": 1.0,
+    "165": 1.0,
+    "166": 1.0,
+    "167": 1.0,
+    "168": 1.0,
+    "169": 1.0,
+    "170": 1.0,
+    "171": 1.0,
+    "172": 1.0,
+    "173": 1.0,
+    "174": 1.0,
+    "175": 1.0,
+    "176": 1.0,
+    "177": 1.0,
+    "178": 1.0,
+    "179": 1.0,
+    "180": 1.0,
+    "181": 1.0,
+    "182": 1.0,
+    "183": 1.0,
+    "184": 1.0,
+    "185": 1.0,
+    "186": 1.0,
+    "187": 1.0,
+    "188": 1.0,
+    "189": 1.0,
+    "190": 1.0,
+    "191": 1.0,
+    "192": 1.0,
+    "193": 1.0,
+    "194": 1.0,
+    "195": 1.0,
+    "196": 1.0,
+    "197": 1.0,
+    "198": 1.0,
+    "199": 1.0,
+    "200": 1.0,
+    "201": 1.0,
+    "202": 1.0,
+    "203": 1.0,
+    "204": 1.0,
+    "205": 1.0,
+    "206": 1.0,
+    "207": 1.0,
+    "208": 1.0,
+    "209": 1.0,
+    "210": 1.0,
+    "211": 1.0,
+    "212": 1.0,
+    "213": 1.0,
+    "214": 1.0,
+    "215": 1.0,
+    "216": 1.0,
+    "217": 1.0,
+    "218": 1.0,
+    "219": 1.0,
+    "220": 1.0,
+    "221": 1.0,
+    "222": 1.0,
+    "223": 1.0,
+    "224": 1.0,
+    "225": 1.0,
+    "226": 1.0,
+    "227": 1.0,
+    "228": 1.0,
+    "229": 1.0,
+    "230": 1.0,
+    "231": 1.0,
+    "232": 1.0,
+    "233": 1.0,
+    "234": 1.0,
+    "235": 1.0,
+    "236": 1.0,
+    "237": 1.0,
+    "238": 1.0,
+    "239": 1.0,
+    "240": 1.0,
+    "241": 1.0,
+    "242": 1.0,
+    "243": 1.0,
+    "244": 1.0,
+    "245": 1.0,
+    "246": 1.0,
+    "247": 1.0,
+    "248": 1.0,
+    "249": 1.0,
+    "250": 1.0,
+    "251": 1.0,
+    "252": 1.0,
+    "253": 1.0,
+    "254": 1.0,
+    "255": 1.0,
+    "256": 1.0,
+    "257": 1.0,
+    "258": 1.0,
+    "259": 1.0,
+    "260": 1.0,
+    "261": 1.0,
+    "262": 1.0,
+    "263": 1.0,
+    "264": 1.0,
+    "265": 1.0,
+    "266": 1.0,
+    "267": 1.0,
+    "268": 1.0,
+    "269": 1.0,
+    "270": 1.0,
+    "271": 1.0,
+    "272": 1.0,
+    "273": 1.0,
+    "274": 1.0,
+    "275": 1.0,
+    "276": 1.0,
+    "277": 1.0,
+    "278": 1.0,
+    "279": 1.0,
+    "280": 1.0,
+    "281": 1.0,
+    "282": 1.0,
+    "283": 1.0,
+    "284": 1.0
+  },
+  "gods": [
+    {
+      "id": "claude_llmwikiview",
+      "label": "LlmWikiView",
+      "degree": 46
+    },
+    {
+      "id": "arch_agentrunner",
+      "label": "AgentRunner",
+      "degree": 44
+    },
+    {
+      "id": "claude_claudecliclient",
+      "label": "ClaudeCliClient",
+      "degree": 40
+    },
+    {
+      "id": "src_i18n_i18n",
+      "label": "I18n",
+      "degree": 37
+    },
+    {
+      "id": "claude_wikicontroller",
+      "label": "WikiController",
+      "degree": 36
+    },
+    {
+      "id": "llm_utils_test",
+      "label": "LLM Utils Test",
+      "degree": 35
+    },
+    {
+      "id": "domain",
+      "label": "DomainEntry",
+      "degree": 33
+    },
+    {
+      "id": "llm_pipeline_parsewithretry",
+      "label": "parseWithRetry",
+      "degree": 29
+    },
+    {
+      "id": "types_llmclient",
+      "label": "LlmClient",
+      "degree": 29
+    },
+    {
+      "id": "arch_runevents",
+      "label": "Run Events",
+      "degree": 24
+    }
+  ],
+  "surprises": [
+    {
+      "source": "parseWithRetry",
+      "target": "actualizeDomainConfig()",
+      "source_files": [
+        "lat.md/llm-pipeline.md",
+        "src/phases/lint.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "crosses file types (doc \u2194 code); connects across different repos/directories; bridges separate communities; peripheral node `actualizeDomainConfig()` unexpectedly reaches hub `parseWithRetry`"
+    },
+    {
+      "source": "ClaudeCliClient",
+      "target": "ClaudeCliClient._generate",
+      "source_files": [
+        "CLAUDE.md",
+        "src/claude-cli-client.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "crosses file types (doc \u2194 code); connects across different repos/directories; peripheral node `ClaudeCliClient._generate` unexpectedly reaches hub `ClaudeCliClient`"
+    },
+    {
+      "source": "ClaudeCliClient",
+      "target": "Large Content via Temp Files (>256KB)",
+      "source_files": [
+        "CLAUDE.md",
+        "src/claude-cli-client.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "rationale_for",
+      "why": "crosses file types (doc \u2194 code); connects across different repos/directories; peripheral node `Large Content via Temp Files (>256KB)` unexpectedly reaches hub `ClaudeCliClient`"
+    },
+    {
+      "source": "upsertIndexAnnotation",
+      "target": "deriveSection()",
+      "source_files": [
+        "CHANGELOG.md",
+        "src/wiki-index.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "crosses file types (doc \u2194 code); connects across different repos/directories; peripheral node `deriveSection()` unexpectedly reaches hub `upsertIndexAnnotation`"
+    },
+    {
+      "source": "upsertIndexAnnotation",
+      "target": "upsertInSection()",
+      "source_files": [
+        "CHANGELOG.md",
+        "src/wiki-index.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "crosses file types (doc \u2194 code); connects across different repos/directories; peripheral node `upsertInSection()` unexpectedly reaches hub `upsertIndexAnnotation`"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `ClaudeCliClient` connect `Community 5` to `Community 34`, `Community 42`, `Community 11`, `Community 22`, `Community 23`, `Community 24`, `Community 25`, `Community 28`?",
+      "why": "High betweenness centrality (0.052) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `_get()` connect `Community 2` to `Community 41`, `Community 4`?",
+      "why": "High betweenness centrality (0.045) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `DomainEntry` connect `Community 21` to `Community 3`, `Community 8`, `Community 9`, `Community 11`, `Community 12`, `Community 13`, `Community 14`, `Community 17`, `Community 19`, `Community 20`, `Community 22`, `Community 24`, `Community 26`, `Community 28`, `Community 29`, `Community 30`, `Community 34`, `Community 37`, `Community 51`?",
+      "why": "High betweenness centrality (0.040) - this node is a cross-community bridge."
+    },
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `activeDocument`, `Platform`, `TAbstractFile` to the rest of the system?",
+      "why": "629 weakly-connected nodes found - possible documentation gaps or missing edges."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 0` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.06 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 1` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.06 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 2` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.06 - nodes in this community are weakly interconnected."
+    }
+  ]
+}

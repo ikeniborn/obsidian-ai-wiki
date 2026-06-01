@@ -28876,9 +28876,11 @@ function extractLinks(text) {
 }
 function extractFmLinks(fm) {
   const set = /* @__PURE__ */ new Set();
+  const blockMatch = /^wiki_outgoing_links:((?:\n  - "[^"]*")*)/m.exec(fm);
+  if (!blockMatch) return set;
   const re = /^\s+- "(\[\[[^\]]+\]\])"/mg;
   let m;
-  while ((m = re.exec(fm)) !== null) set.add(m[1]);
+  while ((m = re.exec(blockMatch[1])) !== null) set.add(m[1]);
   return set;
 }
 function setFmLinks(fm, links) {
@@ -28908,7 +28910,7 @@ function fixOnePass(content) {
     } catch {
     }
   }
-  const bodyLinks = extractLinks(body).map((l) => `[[${l}]]`);
+  const bodyLinks = [...new Set(extractLinks(body).map((l) => `[[${l}]]`))];
   fm = setFmLinks(fm, bodyLinks);
   return fm + body;
 }
@@ -28937,7 +28939,7 @@ function validateWikiLinks(pages) {
     }
     const fmParts = splitFrontmatter(content);
     const fmContent = fmParts ? fmParts[0] : "";
-    if (fmContent && /^wiki_outgoing_links:[ \t]*\[/m.test(fmContent)) {
+    if (fmContent && /^wiki_outgoing_links:[ \t]*\[(?!\])/m.test(fmContent)) {
       violations.push({ page: pagePath, kind: "inline-json", detail: "wiki_outgoing_links: [...]" });
     }
     const parts = splitFrontmatter(content);

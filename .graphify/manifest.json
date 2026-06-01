@@ -176,8 +176,8 @@
     "hash": "d2f7b7c96dc8a82bbf74faac950b34c5"
   },
   "tests/wiki-link-validator.test.ts": {
-    "mtime": 1779826009.7165291,
-    "hash": "30c8f4d2f2833f1329760eda0c28d7ca"
+    "mtime": 1780287820.5291796,
+    "hash": "aec536b0b95765af80c1f8993e511a95"
   },
   "tests/controller-log-adapter.test.ts": {
     "mtime": 1779711716.8595102,
@@ -512,8 +512,8 @@
     "hash": "f4d77660fcf2638d31b12f62a5d5dc28"
   },
   "src/wiki-link-validator.ts": {
-    "mtime": 1779826009.7148247,
-    "hash": "4a392fb1a8857eb170af4e0af104e25e"
+    "mtime": 1780287864.9189718,
+    "hash": "b3dbf2e2ae4ab0f92201a01209f194a9"
   },
   "src/domain-config.ts": {
     "mtime": 1779657227.6826727,

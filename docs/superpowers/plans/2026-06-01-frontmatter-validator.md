@@ -1,12 +1,44 @@
+---
+chain:
+  intent: null
+  spec: docs/superpowers/specs/2026-06-01-frontmatter-validator-design.md
+review:
+  plan_hash: 1b2ffae2f90fdb28
+  spec_hash: 4193386b7d7d1a9a
+  last_run: 2026-06-01
+  phases:
+    structure:     { status: passed }
+    coverage:      { status: passed }
+    dependencies:  { status: passed }
+    verifiability: { status: passed }
+    consistency:   { status: passed }
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: WARNING
+      section: "## Task 2: Shared helper `validateAndRepairFrontmatter`"
+      section_hash: e519fa474316c632
+      text: "Plan uses surgical string replacement instead of yaml.stringify (spec arch step 6). Plan preamble explicitly states 'parse only — no stringify'. Behavior differs: string replacement preserves exact YAML formatting; yaml.stringify would reformat."
+      verdict: fixed
+      verdict_at: 2026-06-01
+    - id: F-002
+      phase: consistency
+      severity: INFO
+      section: "## Task 5: Wire validators into `ingest.ts`"
+      section_hash: 821a8285ecfb4518
+      text: "Wiki page warning summary uses page.path.split('/').pop() (filename only) while spec uses full page.path."
+      verdict: fixed
+      verdict_at: 2026-06-01
+---
 # Frontmatter Validator After Ingest — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add YAML-based frontmatter validation and auto-repair to ingest for both source files and wiki pages, and fix the root-cause bug in `removeWikiFields`.
 
-**Architecture:** Single shared helper `validateAndRepairFrontmatter(content, rules)` performs surgical string repairs without re-serializing unmodified fields. Two public exports (`validateAndRepairSourceFrontmatter`, `validateAndRepairWikiPageFrontmatter`) are called in `ingest.ts` before each `vaultTools.write`. Duplicate detection via regex scan; validation via `yaml.parse`; repairs via targeted string replacement.
+**Architecture:** Single shared helper `validateAndRepairFrontmatter(content, rules)` detects duplicate keys via regex, pre-merges duplicate list fields, parses via `yaml.parse`, applies per-field rules on the parsed object, then re-serializes via `yaml.stringify`. Two public exports (`validateAndRepairSourceFrontmatter`, `validateAndRepairWikiPageFrontmatter`) are called in `ingest.ts` before each `vaultTools.write`.
 
-**Tech Stack:** `yaml ^2.x` (parse only — no stringify), vitest, TypeScript
+**Tech Stack:** `yaml ^2.x` (parse + stringify), vitest, TypeScript
 
 ---
 
@@ -190,7 +222,7 @@ Expected: FAIL — `validateAndRepairSourceFrontmatter is not a function`.
 Add after the existing `FM_RE` constant:
 
 ```ts
-import { parse as yamlParse } from "yaml";
+import { parse as yamlParse, stringify as yamlStringify } from "yaml";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const WIKILINK_RE = /^\[\[.+\]\]$/;
@@ -205,21 +237,6 @@ export type FieldRule =
   | { field: string; kind: "aliases" }
   | { field: string; kind: "warn-enum"; values: readonly string[] };
 
-function removeYamlField(yaml: string, field: string): string {
-  return yaml.replace(
-    new RegExp(`^${field}:[^\\n]*\\n(?:[ \\t]+-[^\\n]*\\n?)*`, "m"),
-    "",
-  );
-}
-
-function removeListItemFromField(yaml: string, field: string, item: string): string {
-  const esc = item.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return yaml.replace(
-    new RegExp(`(^${field}:[^\\n]*\\n(?:[ \\t]+-[^\\n]*\\n?)*)[ \\t]+-[ \\t]+"?${esc}"?[ \\t]*\\n?`, "m"),
-    (_, prefix) => prefix,
-  );
-}
-
 export function validateAndRepairFrontmatter(
   content: string,
   rules: FieldRule[],
@@ -228,56 +245,53 @@ export function validateAndRepairFrontmatter(
   const fmMatch = FM_RE.exec(content);
   if (!fmMatch) return { content, warnings };
 
-  let yaml = fmMatch[1];
+  let rawYaml = fmMatch[1];
   const body = content.slice(fmMatch[0].length);
 
-  // Detect + merge duplicate list keys
+  // Step 2: Detect duplicate keys via regex line scan
   const counts = new Map<string, number>();
-  for (const m of yaml.matchAll(/^([\w][\w_]*):/gm)) {
+  for (const m of rawYaml.matchAll(/^([\w][\w_]*):/gm)) {
     counts.set(m[1], (counts.get(m[1]) ?? 0) + 1);
   }
+
+  // Step 4: Pre-merge duplicate list fields in raw YAML before parsing
   for (const [key, count] of counts) {
     if (count < 2) continue;
     const allItems: string[] = [];
     const blockRe = new RegExp(`^${key}:[^\\n]*\\n((?:[ \\t]+-[^\\n]*\\n?)*)`, "gm");
-    for (const m of yaml.matchAll(blockRe)) {
+    for (const m of rawYaml.matchAll(blockRe)) {
       for (const item of m[1].matchAll(/[ \t]+-[ \t]+"?([^"\n]+?)"?[ \t]*$/gm)) {
         allItems.push(item[1].trim());
       }
     }
+    let prev: string;
+    do {
+      prev = rawYaml;
+      rawYaml = rawYaml.replace(
+        new RegExp(`^${key}:[^\\n]*\\n(?:[ \\t]+-[^\\n]*\\n?)*`, "m"),
+        "",
+      );
+    } while (rawYaml !== prev);
     if (allItems.length > 0) {
-      let prev: string;
-      do {
-        prev = yaml;
-        yaml = yaml.replace(
-          new RegExp(`^${key}:[^\\n]*\\n(?:[ \\t]+-[^\\n]*\\n?)*`, "m"),
-          "",
-        );
-      } while (yaml !== prev);
       const merged = [...new Set(allItems)];
-      yaml =
-        yaml.trimEnd() +
-        "\n" +
-        key +
-        ":\n" +
-        merged.map((v) => `  - "${v}"`).join("\n") +
-        "\n";
+      rawYaml =
+        rawYaml.trimEnd() + "\n" + key + ":\n" + merged.map((v) => `  - "${v}"`).join("\n") + "\n";
       warnings.push(`Duplicate key "${key}" — merged ${merged.length} items`);
     } else {
       warnings.push(`Duplicate scalar key "${key}" — last value kept`);
     }
   }
 
-  // Parse cleaned YAML
+  // Step 3: Parse via yaml.parse — catch syntax errors → warn, return original
   let parsed: Record<string, unknown>;
   try {
-    parsed = (yamlParse(yaml) as Record<string, unknown>) ?? {};
+    parsed = (yamlParse(rawYaml) as Record<string, unknown>) ?? {};
   } catch (e) {
     warnings.push(`Unparseable YAML: ${(e as Error).message} — left unchanged`);
     return { content, warnings };
   }
 
-  // Apply per-field rules
+  // Step 5: Apply per-field rules on parsed object
   for (const rule of rules) {
     const val = parsed[rule.field];
     if (val === undefined || val === null) continue;
@@ -288,7 +302,7 @@ export function validateAndRepairFrontmatter(
       case "list-tags": {
         if (!Array.isArray(val)) {
           warnings.push(`${rule.field}: expected list, got scalar — removed`);
-          yaml = removeYamlField(yaml, rule.field);
+          delete parsed[rule.field];
           break;
         }
         const predicate =
@@ -297,28 +311,27 @@ export function validateAndRepairFrontmatter(
             : rule.kind === "list-urls"
               ? (v: string) => URL_RE.test(v)
               : (v: string) => TAG_RE.test(v);
-        for (const v of val as unknown[]) {
+        const filtered = (val as unknown[]).filter((v) => {
           if (typeof v !== "string" || !predicate(v)) {
             warnings.push(`${rule.field}: invalid entry "${v}" — removed`);
-            yaml = removeListItemFromField(yaml, rule.field, String(v));
+            return false;
           }
-        }
+          return true;
+        });
+        parsed[rule.field] = filtered;
         break;
       }
       case "date-scalar": {
         if (typeof val !== "string" || !DATE_RE.test(val)) {
           warnings.push(`${rule.field}: invalid date "${val}" — removed`);
-          yaml = removeYamlField(yaml, rule.field);
+          delete parsed[rule.field];
         }
         break;
       }
       case "aliases": {
         if (typeof val === "string") {
           warnings.push(`aliases: scalar "${val}" wrapped in list`);
-          yaml = yaml.replace(
-            new RegExp(`^aliases:[ \\t]+(.+)$`, "m"),
-            `aliases:\n  - $1`,
-          );
+          parsed[rule.field] = [val];
         }
         break;
       }
@@ -333,8 +346,9 @@ export function validateAndRepairFrontmatter(
     }
   }
 
+  // Step 6+7: Re-serialize via yaml.stringify and reconstruct full file
   if (warnings.length === 0) return { content, warnings };
-  return { content: `---\n${yaml.trimEnd()}\n---\n${body}`, warnings };
+  return { content: `---\n${yamlStringify(parsed)}---\n${body}`, warnings };
 }
 ```
 
@@ -677,7 +691,7 @@ if (pageWarnings.length > 0) {
   yield {
     kind: "info_text",
     icon: "⚠️",
-    summary: `Frontmatter repaired: ${page.path.split("/").pop()}`,
+    summary: `Frontmatter repaired: ${page.path}`,
     details: pageWarnings,
   };
 }
