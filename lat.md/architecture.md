@@ -101,7 +101,7 @@ Shared utility that detects and repairs malformed frontmatter before ingest writ
 
 Key behaviors: duplicate YAML keys are pre-merged by regex before parsing; unparseable YAML is returned as-is with a warning; field-level rules strip invalid list entries or scalars and record a warning per violation. Only files with at least one warning are rewritten.
 
-`validateAndRepairSourceFrontmatter` is a thin wrapper that applies the canonical `SOURCE_RULES` set (wiki_articles, wiki_added, wiki_updated, tags, aliases, external_links, related). See [[src/utils/raw-frontmatter.ts#validateAndRepairFrontmatter]], [[src/utils/raw-frontmatter.ts#validateAndRepairSourceFrontmatter]].
+`validateAndRepairSourceFrontmatter` applies `SOURCE_RULES` (wiki_articles, wiki_added, wiki_updated, tags, aliases, external_links, related). `validateAndRepairWikiPageFrontmatter` applies `WIKI_PAGE_RULES` (wiki_sources, wiki_updated, wiki_status, wiki_type, tags, aliases, wiki_outgoing_links, wiki_external_links). Both are called in `[[src/phases/ingest.ts]]` (`runIngest`) before their respective `vaultTools.write` calls; any warnings are emitted as `info_text` events. See [[src/utils/raw-frontmatter.ts#validateAndRepairFrontmatter]], [[src/utils/raw-frontmatter.ts#validateAndRepairSourceFrontmatter]], [[src/utils/raw-frontmatter.ts#validateAndRepairWikiPageFrontmatter]].
 
 ## Run Events
 
