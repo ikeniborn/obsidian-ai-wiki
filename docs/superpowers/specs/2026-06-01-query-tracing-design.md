@@ -1,3 +1,25 @@
+---
+review:
+  spec_hash: "26880de6a7ac1469"
+  last_run: "2026-06-01"
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: CRITICAL
+      section: "Architecture"
+      section_hash: "8f89b6fcc187176e"
+      text: "UI gating by agentLogEnabled was unspecified — view.ts would show trace regardless of setting, contradicting intent."
+      verdict: fixed
+      verdict_at: "2026-06-01"
+chain:
+  intent: "docs/superpowers/intents/2026-06-01-query-tracing-intent.md"
+---
+
 # Design: Query Pipeline Tracing
 
 **Date:** 2026-06-01
@@ -12,7 +34,7 @@ Add structured tracing to the query pipeline so seed selection scores, BFS expan
 
 The existing `graph_stats` RunEvent is extended with two new fields. A new `bfsExpandWithHops` function is added alongside the unchanged `bfsExpand`. A new `selectRelevantScored` method is added to `PageSimilarityService` alongside the unchanged `selectRelevant`. `selectSeeds` in `wiki-seeds.ts` changes its return type (only one caller: `query.ts`). The `_agent.jsonl` log receives richer data for free via the existing `logEvent` mechanism.
 
-All tracing output is gated by `agentLogEnabled` in plugin settings — no output when logging is disabled.
+All tracing output is gated by `agentLogEnabled` in plugin settings. When disabled: `view.ts` renders `graph_stats` in the existing compact form (no scores, no BFS-by-hop), and `logEvent` does not write to disk. When enabled: full trace visible in UI and written to `_agent.jsonl`.
 
 ## Components
 
@@ -70,17 +92,24 @@ Existing `selectRelevant` is unchanged (used by lint/format/init).
 
 Embedding mode calls `selectRelevantScored` instead of `selectRelevant`, collects `{path, score}` pairs. Jaccard mode uses updated `selectSeeds` return value. Both modes build `seedScores: Record<string, number>`. BFS uses `bfsExpandWithHops` to get `expandedByHop`. These are passed to the `graph_stats` yield.
 
-When `agentLogEnabled` is false, the extra fields are still computed (they come free from existing calls) but the event is not written to disk.
+The extra fields (`seedScores`, `expandedByHop`) are always computed — they come free from existing calls. When `agentLogEnabled` is false: `view.ts` renders compact form (no scores/hops), `logEvent` skips disk write.
 
 ### `src/view.ts` — render extended `graph_stats`
 
+When `agentLogEnabled` is **true** — full trace:
 ```
 🌐 Seeds: ArticleA (0.87), ArticleB (0.72), ArticleC (0.41)  [cache hit]
    BFS +1: [ArticleD, ArticleE]
    BFS +2: [ArticleF, ArticleG]
 ```
 
+When `agentLogEnabled` is **false** — existing compact form (unchanged):
+```
+🌐 Граф: 3 seeds [ArticleA, ArticleB, ArticleC] → 7 / 42 страниц
+```
+
 Rules:
+- `view.ts` reads `this.plugin.settings.agentLogEnabled` to select render mode
 - Seeds truncated to 5, remainder shown as "…+N"
 - BFS hop lines omitted if `expandedByHop` is empty (depth=0 or no links)
 - Score formatted to 2 decimal places
@@ -148,5 +177,5 @@ llm-utils.ts computeSpeedText
 - `selectRelevant` signature unchanged → lint/format/init unaffected
 - `bfsExpand` unchanged → lint.ts unaffected
 - No new API calls, no new log channels
-- Tracing gated by existing `agentLogEnabled` setting
+- Tracing (UI + log) gated by existing `agentLogEnabled` setting — both `view.ts` render mode and `logEvent` disk write check this flag
 - Seed selection logic unchanged — scores are read-only metadata
