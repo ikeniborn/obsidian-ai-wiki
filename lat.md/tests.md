@@ -54,6 +54,26 @@ When `deletes.length` exceeds `mergeDeleteWarnThreshold`, ingest yields a `Large
 
 The current source's `wiki_articles` frontmatter list is filtered to remove links pointing at deleted page stems.
 
+## Frontmatter Validation
+
+Tests for [[src/utils/raw-frontmatter.ts#validateAndRepairFrontmatter]] and [[src/utils/raw-frontmatter.ts#validateAndRepairSourceFrontmatter]].
+
+### No-frontmatter passthrough
+
+Content without a frontmatter block is returned unchanged with an empty warnings array.
+
+### Valid frontmatter passthrough
+
+Frontmatter that satisfies all field rules is returned unchanged with an empty warnings array.
+
+### Duplicate key merge
+
+When the same YAML key appears twice, the list items are merged and deduplicated, a single key remains, and a warning naming the key is emitted.
+
+### Unparseable YAML guard
+
+If the YAML block cannot be parsed, the original content is returned unchanged and a warning prefixed with "Unparseable YAML" is emitted.
+
 ## Stop Rules
 
 Tests that validate halt conditions.

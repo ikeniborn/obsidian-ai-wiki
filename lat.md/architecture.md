@@ -95,6 +95,14 @@ It exposes `slugifyEntity` (NFD-normalize, ASCII-collapse, split camelCase bound
 
 The one-shot vault migration that renames legacy unprefixed pages and rewrites all backlinks lives in [[src/migrate-wiki-prefix.ts]]; the CLI wrapper is `scripts/migrate-wiki-prefix.ts`, invoked via `npm run migrate:wiki-prefix -- <vault-root> [--apply]`. It also lowercases the entity portion of already-prefixed stems (`wiki_work_Foo` → `wiki_work_foo`) and sets `DomainEntry.pageNameVersion = 1` for idempotency.
 
+## Frontmatter Validator
+
+Shared utility that detects and repairs malformed frontmatter before ingest writes wiki fields. Parses via `yaml.parse`, applies per-field `FieldRule`s, re-serializes via `yaml.stringify`. Returns original content unchanged when no repairs needed.
+
+Key behaviors: duplicate YAML keys are pre-merged by regex before parsing; unparseable YAML is returned as-is with a warning; field-level rules strip invalid list entries or scalars and record a warning per violation. Only files with at least one warning are rewritten.
+
+`validateAndRepairSourceFrontmatter` is a thin wrapper that applies the canonical `SOURCE_RULES` set (wiki_articles, wiki_added, wiki_updated, tags, aliases, external_links, related). See [[src/utils/raw-frontmatter.ts#validateAndRepairFrontmatter]], [[src/utils/raw-frontmatter.ts#validateAndRepairSourceFrontmatter]].
+
 ## Run Events
 
 All operations communicate via `RunEvent` — a discriminated union emitted as an async generator stream. Events cover: LLM streaming deltas, tool calls, domain mutations, format previews, structural errors, graph stats, and phase progress.

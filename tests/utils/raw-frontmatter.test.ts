@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, hasFrontmatterField } from "../../src/utils/raw-frontmatter";
+import { validateAndRepairSourceFrontmatter } from "../../src/utils/raw-frontmatter";
 
 const TODAY = "2026-05-12";
 const ARTICLES = ['[[!Wiki/work/Entity.md]]'];
@@ -135,6 +136,60 @@ describe("hasFrontmatterField", () => {
 
   it("returns true for wiki_updated when present", () => {
     expect(hasFrontmatterField("---\nwiki_updated: 2026-05-12\n---\n", "wiki_updated")).toBe(true);
+  });
+});
+
+describe("validateAndRepairFrontmatter — core behaviors", () => {
+  // @lat: [[tests#Frontmatter Validation#No-frontmatter passthrough]]
+  it("returns content unchanged when no frontmatter present", () => {
+    const content = "# Just body\n\nNo frontmatter.";
+    const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
+    expect(out).toBe(content);
+    expect(warnings).toEqual([]);
+  });
+
+  // @lat: [[tests#Frontmatter Validation#Valid frontmatter passthrough]]
+  it("returns content unchanged when frontmatter is valid", () => {
+    const content = `---
+tags:
+  - crypto/defi
+wiki_added: 2026-05-01
+wiki_updated: 2026-06-01
+wiki_articles:
+  - "[[wiki_defi_overview]]"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
+    expect(out).toBe(content);
+    expect(warnings).toEqual([]);
+  });
+
+  // @lat: [[tests#Frontmatter Validation#Duplicate key merge]]
+  it("merges duplicate list key and emits warning", () => {
+    const content = `---
+tags:
+  - crypto
+wiki_articles:
+wiki_added: 2026-05-21
+wiki_updated: 2026-06-01
+wiki_articles:
+  - "[[wiki_fin]]"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
+    expect(out.match(/^wiki_articles:/gm)?.length ?? 0).toBe(1);
+    expect(warnings.some((w) => w.includes('Duplicate key "wiki_articles"'))).toBe(true);
+  });
+
+  // @lat: [[tests#Frontmatter Validation#Unparseable YAML guard]]
+  it("returns original content and warns on unparseable YAML", () => {
+    const content = `---
+key: [unclosed bracket
+---
+body`;
+    const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
+    expect(out).toBe(content);
+    expect(warnings.some((w) => w.includes("Unparseable YAML"))).toBe(true);
   });
 });
 
