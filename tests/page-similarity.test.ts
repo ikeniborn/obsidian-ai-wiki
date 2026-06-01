@@ -117,6 +117,58 @@ describe("PageSimilarityService.selectByEntities (Jaccard mode)", () => {
   });
 });
 
+describe("PageSimilarityService.selectRelevantScored (Jaccard)", () => {
+  it("returns scored paths with scores in [0,1]", async () => {
+    const svc = new PageSimilarityService({ mode: "jaccard", topK: 3 });
+    const annotations = new Map([
+      ["Alpha", "machine learning neural network deep"],
+      ["Beta",  "cooking recipes ingredients kitchen"],
+      ["Gamma", "machine learning classification model"],
+    ]);
+    const allPaths = [
+      "!Wiki/d/alpha/Alpha.md",
+      "!Wiki/d/beta/Beta.md",
+      "!Wiki/d/gamma/Gamma.md",
+    ];
+    const result = await svc.selectRelevantScored(
+      "deep learning neural network classification",
+      annotations,
+      allPaths,
+    );
+    expect(result.length).toBeGreaterThan(0);
+    for (const { path, score } of result) {
+      expect(typeof path).toBe("string");
+      expect(score).toBeGreaterThanOrEqual(0);
+      expect(score).toBeLessThanOrEqual(1);
+    }
+    // Alpha and Gamma rank ahead of Beta
+    const topPaths = result.slice(0, 2).map(x => x.path);
+    expect(topPaths.some(p => p.includes("Alpha"))).toBe(true);
+    expect(topPaths.some(p => p.includes("Gamma"))).toBe(true);
+  });
+
+  it("returns empty when source has no tokens", async () => {
+    const svc = new PageSimilarityService({ mode: "jaccard", topK: 5 });
+    const annotations = new Map([["Alpha", "machine learning"]]);
+    const allPaths = ["!Wiki/d/sub/Alpha.md"];
+    const result = await svc.selectRelevantScored("", annotations, allPaths);
+    expect(result).toHaveLength(0);
+  });
+
+  it("scores match those returned by selectJaccard internally", async () => {
+    const svc = new PageSimilarityService({ mode: "jaccard", topK: 5 });
+    const annotations = new Map([
+      ["Alpha", "neural network deep learning"],
+      ["Beta", "cooking recipes"],
+    ]);
+    const allPaths = ["!Wiki/d/sub/Alpha.md", "!Wiki/d/sub/Beta.md"];
+    const scored = await svc.selectRelevantScored("neural deep", annotations, allPaths);
+    const alphaEntry = scored.find(x => x.path.includes("Alpha"));
+    expect(alphaEntry).toBeDefined();
+    expect(alphaEntry!.score).toBeGreaterThan(0);
+  });
+});
+
 describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
   beforeEach(() => {
     (globalThis as unknown as { fetch: unknown }).fetch = vi.fn();
