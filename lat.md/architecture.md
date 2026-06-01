@@ -57,7 +57,7 @@ Per-operation effort levels map to Claude's extended thinking. The subprocess ki
 
 ## PageSimilarityService
 
-Reduces LLM context by pre-selecting top-K relevant wiki pages. Built by `AgentRunner.buildSimilarity()`. Exposes `selectRelevant` (whole-source query, used by query/lint/format/init) and `selectByEntities` (per-entity batched query, used by ingest).
+Reduces LLM context by pre-selecting top-K relevant wiki pages. Built by `AgentRunner.buildSimilarity()`. Exposes three public methods: `selectRelevant`, `selectRelevantScored` (scored variant for query tracing), and `selectByEntities`.
 
 Two modes: `jaccard` (default, no API calls) uses token overlap scoring via `scoreSeed`; `embedding` fetches vectors from an OpenAI-compatible endpoint (no API key required — supports Ollama), falls back to Jaccard on error. Embedding vectors are cached per domain at `_config/_embeddings.json` and invalidated by annotation content hash. `refreshCache` updates stale entries after a domain write pass — called by both ingest (after writing pages) and lint. Configured via `embeddingModel`, `embeddingDimensions`, `relevantPagesTopK` in `LocalConfig.nativeAgent`. Only active for `native-agent` backend.
 
