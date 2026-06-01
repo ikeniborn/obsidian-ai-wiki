@@ -367,6 +367,7 @@ export async function wipeDomainFolder(vaultTools: VaultTools, wikiFolder: strin
   for (const f of files) {
     try { await vaultTools.remove(f); } catch { /* skip locked */ }
   }
+  await vaultTools.removeSubfolders(root);
   return files;
 }
 

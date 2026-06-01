@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runInit } from "../../src/phases/init";
+import { runInit, wipeDomainFolder } from "../../src/phases/init";
 import { mergeEntityTypes } from "../../src/domain";
 import { sanitizeWikiFolder, sanitizeWikiSubfolder } from "../../src/wiki-path";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
@@ -861,6 +861,25 @@ describe("VaultTools.removeSubfolders", () => {
     });
     const vt = new VaultTools(adapter, "/vault");
     await expect(vt.removeSubfolders("!Wiki/fin")).resolves.toBeUndefined();
+  });
+});
+
+describe("wipeDomainFolder", () => {
+  it("calls removeSubfolders (adapter.rmdir) after removing files", async () => {
+    const rmdir = vi.fn().mockResolvedValue(undefined);
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockImplementation(async (dir: string) => {
+        if (dir === "!Wiki/fin") return { files: ["!Wiki/fin/page.md"], folders: ["!Wiki/fin/strategies"] };
+        return { files: [], folders: [] };
+      }),
+      remove,
+      rmdir,
+    });
+    const vt = new VaultTools(adapter, "/vault");
+    await wipeDomainFolder(vt, "fin");
+    expect(rmdir).toHaveBeenCalledWith("!Wiki/fin/strategies", true);
   });
 });
 
