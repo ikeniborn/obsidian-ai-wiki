@@ -13,6 +13,37 @@ export { collectMdInPaths, walkFolder };
 
 export const AI_WIKI_VIEW_TYPE = "ai-wiki-view";
 
+export function formatGraphStatsLines(
+  ev: Extract<RunEvent, { kind: "graph_stats" }>,
+  agentLogEnabled: boolean,
+): string[] {
+  if (!agentLogEnabled) {
+    // Compact form (unchanged behavior)
+    const preview = ev.seeds.slice(0, 3).join(", ");
+    const extra = ev.seeds.length > 3 ? `, …+${ev.seeds.length - 3}` : "";
+    const cacheHint = ev.fromCache ? " (cache hit)" : "";
+    return [`Граф: ${ev.seeds.length} seeds [${preview}${extra}] → ${ev.expanded} / ${ev.total} страниц${cacheHint}`];
+  }
+
+  // Trace form
+  const SEED_CAP = 5;
+  const cacheHint = ev.fromCache ? "  [cache hit]" : "";
+  const shown = ev.seeds.slice(0, SEED_CAP);
+  const remainder = ev.seeds.length - shown.length;
+  const seedParts = shown
+    .filter(id => (ev.seedScores[id] ?? 0) > 0)
+    .map(id => `${id} (${(ev.seedScores[id] ?? 0).toFixed(2)})`);
+  const seedStr = seedParts.join(", ") + (remainder > 0 ? `, …+${remainder}` : "");
+  const lines: string[] = [`Seeds: ${seedStr}${cacheHint}`];
+
+  const hops = Object.keys(ev.expandedByHop).map(Number).sort((a, b) => a - b);
+  for (const hop of hops) {
+    const pages = ev.expandedByHop[hop];
+    if (pages.length > 0) lines.push(`BFS +${hop}: [${pages.join(", ")}]`);
+  }
+  return lines;
+}
+
 type ViewState = "idle" | "running" | "done" | "error" | "cancelled";
 
 function registerLinkHandler(el: HTMLElement, app: App): void {
@@ -593,15 +624,19 @@ export class LlmWikiView extends ItemView {
       return;
     }
     if (ev.kind === "graph_stats") {
-      const cacheHint = ev.fromCache ? " (cache hit)" : "";
-      const preview = ev.seeds.slice(0, 3).join(", ");
-      const extra = ev.seeds.length > 3 ? `, …+${ev.seeds.length - 3}` : "";
+      const agentLogEnabled = this.plugin.settings.agentLogEnabled;
+      const lines = formatGraphStatsLines(ev, agentLogEnabled);
       const step = this.stepsEl.createDiv("ai-wiki-step");
       const graphHead = step.createDiv("ai-wiki-step-head");
       graphHead.createSpan({ cls: "ai-wiki-step-icon" }).setText("🌐");
-      graphHead.createSpan({ cls: "ai-wiki-step-name" })
-        .setText(`Граф: ${ev.seeds.length} seeds [${preview}${extra}] → ${ev.expanded} / ${ev.total} страниц${cacheHint}`);
+      graphHead.createSpan({ cls: "ai-wiki-step-name" }).setText(lines[0]);
       graphHead.createSpan({ cls: "ai-wiki-step-time muted" }).setText(this.elapsedShort());
+      if (agentLogEnabled && lines.length > 1) {
+        const detail = step.createDiv("ai-wiki-step-detail");
+        for (const line of lines.slice(1)) {
+          detail.createDiv().setText(line);
+        }
+      }
       this.scrollSteps();
       return;
     }
