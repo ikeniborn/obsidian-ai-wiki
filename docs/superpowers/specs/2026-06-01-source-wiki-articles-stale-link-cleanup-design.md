@@ -77,19 +77,41 @@ const existingWikiStems = new Set(
 );
 ```
 
-In the backlink sync loop, after `upsertRawFrontmatter`, before `write`:
+### Wiki pages — `wiki_outgoing_links`
+
+After computing `existingWikiStems`, iterate all wiki pages and clean stale `wiki_outgoing_links`:
 
 ```ts
-const newContent = upsertRawFrontmatter(rawContent, {
-  wiki_updated: syncToday,
-  wiki_articles: mergedArticles,
-});
-const { content: filteredContent } =
-  filterStaleWikiLinks(newContent, existingWikiStems, ["wiki_articles", "related"]);
-await vaultTools.write(rawPath, filteredContent);
+for (const [wikiPath, wikiContent] of pages) {
+  const { content: filteredWiki } =
+    filterStaleWikiLinks(wikiContent, existingWikiStems, ["wiki_outgoing_links"]);
+  if (filteredWiki !== wikiContent) {
+    pages.set(wikiPath, filteredWiki);
+    await vaultTools.write(wikiPath, filteredWiki);
+  }
+}
 ```
 
-Warnings from `filterStaleWikiLinks` in lint are discarded — stale link removal is silent cleanup, not a lint report item.
+This runs before the backlink sync so the updated page map is consistent.
+
+### Source files — all sources (vault-wide)
+
+After the wiki page pass, clean ALL source files (not just those in backlinks). Reuses the same `allMdPaths` already computed:
+
+```ts
+const sourcePaths = allMdPaths.filter(p => !p.startsWith(wikiVaultPath + "/"));
+for (const sourcePath of sourcePaths) {
+  const rawContent = await vaultTools.read(sourcePath).catch(() => null);
+  if (!rawContent) continue;
+  const { content: filteredContent } =
+    filterStaleWikiLinks(rawContent, existingWikiStems, ["wiki_articles", "related"]);
+  if (filteredContent !== rawContent) await vaultTools.write(sourcePath, filteredContent);
+}
+```
+
+This replaces the existing backlink sync loop's per-source stale filtering (backlink sync still runs to ADD new links; stale removal is now done here, vault-wide).
+
+Warnings from `filterStaleWikiLinks` in lint are discarded — stale link removal is silent cleanup.
 
 ## Tests
 
@@ -100,11 +122,15 @@ New spec sections under `lat.md/tests.md` → `Frontmatter Validation` → `filt
 | `Stale wiki_articles removed` | `[[Foo]]` where `Foo ∉ existingStems` is removed, warning emitted |
 | `Live wiki_articles kept` | `[[Bar]]` where `Bar ∈ existingStems` is kept unchanged |
 | `related stale removed` | Same behavior for the `related` field |
+| `wiki_outgoing_links stale removed` | Same behavior for the `wiki_outgoing_links` field in wiki pages |
 | `Non-wikilink entries untouched` | Non-`[[...]]` entry in a field is not removed by this function |
 | `Empty existingStems removes all` | Empty Set removes all valid wikilink entries |
 | `No frontmatter passthrough` | Content without frontmatter returned unchanged, empty warnings |
 
-Integration test in ingest: after a run where a wiki page was present in a prior cycle but absent now, the source's `wiki_articles` does not contain the stale link.
+Integration tests:
+- Ingest: after a run where a wiki page was present in a prior cycle but absent now, the source's `wiki_articles` does not contain the stale link.
+- Lint: after lint completes, a source file NOT referenced by any wiki page also has its stale `wiki_articles` links removed.
+- Lint: after lint completes, a wiki page's `wiki_outgoing_links` does not contain links to deleted pages.
 
 Existing tests that must stay green:
 - `Frontmatter Validation` suite (all)
@@ -117,3 +143,5 @@ Existing tests that must stay green:
 - Stale-link removal stays in the caller layer (ingest, lint); the function accepts stems as a parameter.
 - `FieldRule` / `validateAndRepairFrontmatter` infrastructure untouched.
 - Public API change: `filterStaleWikiLinks` is a new export — no existing signatures modified.
+- Lint vault-wide source pass reuses `allMdPaths` already computed — no extra `listFiles` call.
+- Wiki page stale pass mutates the in-memory `pages` map so downstream code (backlink sync, similarity) sees consistent state.

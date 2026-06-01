@@ -9,7 +9,9 @@ After init or reinit, `wiki_articles` in source frontmatter accumulates dead lin
 
 ## Desired Outcomes
 
-- After ingest completes, `wiki_articles` in source frontmatter contains no links pointing to non-existent wiki pages.
+- After ingest completes, `wiki_articles` and `related` in source frontmatter contain no links pointing to non-existent wiki pages.
+- After lint completes, ALL source files (not just those in backlink sync) have stale `wiki_articles` and `related` links removed.
+- After lint completes, `wiki_outgoing_links` in wiki pages contain no links pointing to non-existent wiki pages.
 
 ## Health Metrics
 
@@ -21,6 +23,7 @@ After init or reinit, `wiki_articles` in source frontmatter accumulates dead lin
 
 - Interacts with: `validateAndRepairSourceFrontmatter`, ingest init/reinit phase, `format` and `lint` operations.
 - Cleanup runs in the **ingest-phase after wiki pages are written** — at that point the final set of existing pages is known.
+- In lint: stale link removal covers **all** source files (vault-wide pass) and **all** wiki pages (`wiki_outgoing_links`), not just sources touched by backlink sync.
 - Function must be **reusable**: accept the list of existing wiki page stems as a parameter so `format` and `lint` can call it without coupling to ingest internals.
 - Priority trade-off: **correctness** — never leave dead links, even at the cost of an extra vault read.
 
