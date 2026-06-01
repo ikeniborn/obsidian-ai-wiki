@@ -1,7 +1,7 @@
 # Intent: Source wiki_articles stale link cleanup
 
 **Date:** 2026-06-01
-**Status:** draft
+**Status:** approved
 
 ## Objective
 
