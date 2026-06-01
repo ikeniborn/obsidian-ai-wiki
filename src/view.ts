@@ -347,35 +347,30 @@ export class LlmWikiView extends ItemView {
     const cwd = this.plugin.controller.cwdOrEmpty();
     if (!cwd) { new Notice(i18n().view.cwdNotSet); return; }
     new AddDomainModal(this.app, (input) => {
-      void (async () => {
-        const r = await this.plugin.controller.registerDomain(input);
-        if (!r.ok) return;
-        await this.refreshDomains();
-        if (this.domainSelect) {
-          this.domainSelect.value = input.id;
-          this.domainSelect.dispatchEvent(new Event("change"));
-        }
+      const T = i18n().modal;
+      const mdFiles = input.sourcePaths.length
+        ? collectMdInPaths(this.app.vault, input.sourcePaths)
+        : [];
 
-        if (!input.sourcePaths.length) {
-          void this.plugin.controller.init(input.id, false);
-          return;
-        }
-
-        const T = i18n().modal;
-        const mdFiles = collectMdInPaths(this.app.vault, input.sourcePaths);
-
-        if (!mdFiles.length) {
-          void this.plugin.controller.init(input.id, false);
-          return;
-        }
-
-        new ConfirmModal(
-          this.app,
-          T.initConfirmTitle,
-          [T.initConfirmBody(mdFiles.length, input.sourcePaths.length)],
-          () => void this.plugin.controller.init(input.id, false, input.sourcePaths),
-        ).open();
-      })();
+      new ConfirmModal(
+        this.app,
+        T.initConfirmTitle,
+        [T.initConfirmBody(mdFiles.length, input.sourcePaths.length)],
+        () => void (async () => {
+          const r = await this.plugin.controller.registerDomain(input);
+          if (!r.ok) return;
+          await this.refreshDomains();
+          if (this.domainSelect) {
+            this.domainSelect.value = input.id;
+            this.domainSelect.dispatchEvent(new Event("change"));
+          }
+          void this.plugin.controller.init(
+            input.id,
+            false,
+            input.sourcePaths.length ? input.sourcePaths : undefined,
+          );
+        })(),
+      ).open();
     }).open();
   }
 
