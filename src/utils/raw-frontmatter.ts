@@ -32,6 +32,8 @@ export function validateAndRepairFrontmatter(
     counts.set(m[1], (counts.get(m[1]) ?? 0) + 1);
   }
 
+  let modified = false;
+
   // Pre-merge duplicate list fields in raw YAML before parsing
   for (const [key, count] of counts) {
     if (count < 2) continue;
@@ -50,6 +52,7 @@ export function validateAndRepairFrontmatter(
         "",
       );
     } while (rawYaml !== prev);
+    modified = true;
     if (allItems.length > 0) {
       const merged = [...new Set(allItems)];
       rawYaml =
@@ -81,6 +84,7 @@ export function validateAndRepairFrontmatter(
         if (!Array.isArray(val)) {
           warnings.push(`${rule.field}: expected list, got scalar — removed`);
           delete parsed[rule.field];
+          modified = true;
           break;
         }
         const predicate =
@@ -96,20 +100,29 @@ export function validateAndRepairFrontmatter(
           }
           return true;
         });
-        parsed[rule.field] = filtered;
+        if (filtered.length < (val as unknown[]).length) {
+          modified = true;
+          if (filtered.length === 0) {
+            delete parsed[rule.field];
+          } else {
+            parsed[rule.field] = filtered;
+          }
+        }
         break;
       }
       case "date-scalar": {
         if (typeof val !== "string" || !DATE_RE.test(val)) {
           warnings.push(`${rule.field}: invalid date "${val}" — removed`);
           delete parsed[rule.field];
+          modified = true;
         }
         break;
       }
       case "aliases": {
         if (typeof val === "string") {
-          warnings.push(`aliases: scalar "${val}" wrapped in list`);
+          warnings.push(`${rule.field}: scalar "${val}" wrapped in list`);
           parsed[rule.field] = [val];
+          modified = true;
         }
         break;
       }
@@ -125,7 +138,7 @@ export function validateAndRepairFrontmatter(
   }
 
   // Re-serialize via yaml.stringify and reconstruct full file
-  if (warnings.length === 0) return { content, warnings };
+  if (!modified) return { content, warnings };
   return { content: `---\n${yamlStringify(parsed)}---\n${body}`, warnings };
 }
 
