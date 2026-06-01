@@ -333,6 +333,7 @@ body`;
     const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
     expect(out).toContain("valid/tag");
     expect(out).not.toContain("invalid tag");
+    expect(warnings.some((w) => w.includes("tags") && w.includes("invalid tag"))).toBe(true);
   });
 
   // @lat: [[tests#Wiki Page Frontmatter Validation#Wiki outgoing links invalid entry removal]]
@@ -346,6 +347,7 @@ body`;
     const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
     expect(out).toContain("[[wiki_valid]]");
     expect(out).not.toContain("bare-string");
+    expect(warnings.some((w) => w.includes("wiki_outgoing_links") && w.includes("bare-string"))).toBe(true);
   });
 
   // @lat: [[tests#Wiki Page Frontmatter Validation#Wiki external links invalid entry removal]]
@@ -359,6 +361,7 @@ body`;
     const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
     expect(out).toContain("https://good.com");
     expect(out).not.toContain("not-a-url");
+    expect(warnings.some((w) => w.includes("wiki_external_links") && w.includes("not-a-url"))).toBe(true);
   });
 
   // @lat: [[tests#Wiki Page Frontmatter Validation#Wiki scalar aliases wrap]]
