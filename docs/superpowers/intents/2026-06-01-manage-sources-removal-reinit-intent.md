@@ -1,7 +1,7 @@
 # Intent: Manage Sources — Reinit on Source Removal
 
 **Date:** 2026-06-01
-**Status:** draft
+**Status:** approved
 
 ## Objective
 
