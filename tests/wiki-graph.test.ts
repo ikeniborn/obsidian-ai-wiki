@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pageId, buildWikiGraph, bfsExpand, checkGraphStructure } from "../src/wiki-graph";
+import { pageId, buildWikiGraph, bfsExpand, bfsExpandWithHops, checkGraphStructure } from "../src/wiki-graph";
 
 describe("pageId", () => {
   it("strips path prefix and .md suffix", () => {
@@ -80,6 +80,54 @@ describe("bfsExpand", () => {
 
   it("handles seed not in graph", () => {
     expect(bfsExpand(["Unknown"], graph, 1)).toEqual(new Set(["Unknown"]));
+  });
+});
+
+describe("bfsExpandWithHops", () => {
+  // Graph: A → B → C → D, E isolated
+  const graph = new Map([
+    ["A", new Set(["B"])],
+    ["B", new Set(["C"])],
+    ["C", new Set(["D"])],
+    ["D", new Set<string>()],
+    ["E", new Set<string>()],
+  ]);
+
+  it("depth=0 returns only seeds in hop 0, byHop empty", () => {
+    const { expanded, byHop } = bfsExpandWithHops(["A"], graph, 0);
+    expect(expanded).toEqual(new Set(["A"]));
+    expect(Object.keys(byHop)).toHaveLength(0);
+  });
+
+  it("depth=1 attributes direct neighbors to hop 1", () => {
+    const { expanded, byHop } = bfsExpandWithHops(["B"], graph, 1);
+    // B is seed, A and C are hop 1 (undirected)
+    expect(expanded).toEqual(new Set(["A", "B", "C"]));
+    expect(byHop[1]).toEqual(expect.arrayContaining(["A", "C"]));
+    expect(byHop[1]).toHaveLength(2);
+  });
+
+  it("depth=2 attributes second-level neighbors to hop 2", () => {
+    const { expanded, byHop } = bfsExpandWithHops(["B"], graph, 2);
+    expect(byHop[1]).toEqual(expect.arrayContaining(["A", "C"]));
+    expect(byHop[2]).toEqual(expect.arrayContaining(["D"]));
+  });
+
+  it("returns empty expanded and empty byHop for empty seeds", () => {
+    const { expanded, byHop } = bfsExpandWithHops([], graph, 2);
+    expect(expanded).toEqual(new Set());
+    expect(byHop).toEqual({});
+  });
+
+  it("handles seed not in graph", () => {
+    const { expanded, byHop } = bfsExpandWithHops(["Unknown"], graph, 1);
+    expect(expanded).toEqual(new Set(["Unknown"]));
+    expect(byHop).toEqual({});
+  });
+
+  it("does not include isolated nodes not reachable from seeds", () => {
+    const { expanded } = bfsExpandWithHops(["A"], graph, 3);
+    expect(expanded.has("E")).toBe(false);
   });
 });
 

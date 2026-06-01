@@ -60,6 +60,50 @@ export function bfsExpand(seeds: string[], graph: WikiGraph, depth: number): Set
   return visited;
 }
 
+/**
+ * BFS-expansion that tracks which pages are discovered at each hop depth.
+ * Returns both the expanded set of all reachable pages and a mapping of hop → pages discovered at that hop.
+ * Graph is treated as **undirected**: edge `A → B` lets BFS traverse `B → A` too.
+ * Seeds not present in the graph are included in expanded but do not contribute to expansion.
+ */
+export function bfsExpandWithHops(
+  seeds: string[],
+  graph: WikiGraph,
+  depth: number,
+): { expanded: Set<string>; byHop: Record<number, string[]> } {
+  if (seeds.length === 0) return { expanded: new Set(), byHop: {} };
+
+  // Pre-compute reverse index (same logic as bfsExpand)
+  const reverse = new Map<string, Set<string>>();
+  for (const [src, targets] of graph) {
+    for (const tgt of targets) {
+      if (!reverse.has(tgt)) reverse.set(tgt, new Set());
+      reverse.get(tgt)!.add(src);
+    }
+  }
+
+  const visited = new Set<string>(seeds);
+  let frontier = new Set<string>(seeds);
+  const byHop: Record<number, string[]> = {};
+
+  for (let hop = 1; hop <= depth; hop++) {
+    const next = new Set<string>();
+    for (const node of frontier) {
+      for (const neighbor of graph.get(node) ?? []) {
+        if (!visited.has(neighbor)) { visited.add(neighbor); next.add(neighbor); }
+      }
+      for (const neighbor of reverse.get(node) ?? []) {
+        if (!visited.has(neighbor)) { visited.add(neighbor); next.add(neighbor); }
+      }
+    }
+    if (next.size === 0) break;
+    byHop[hop] = [...next];
+    frontier = next;
+  }
+
+  return { expanded: visited, byHop };
+}
+
 export function checkGraphStructure(graph: WikiGraph, hubThreshold: number): string {
   const inDegree = new Map<string, number>();
   for (const node of graph.keys()) {
