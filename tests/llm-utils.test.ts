@@ -474,10 +474,10 @@ describe("computeSpeedText", () => {
     expect(computeSpeedText(stats)).toBe("");
   });
 
-  it("formats single call correctly", () => {
+  it("formats single call correctly with token counts", () => {
     // 200 in / 2s = 100 in tok/s; 100 out / 2s = 50 out tok/s; median ttft = 300ms
     const stats = [{ inputTokens: 200, outputTokens: 100, ttftMs: 300, llmDurationMs: 2000 }];
-    expect(computeSpeedText(stats)).toBe(" in: 100 tok/s · out: 50 tok/s · latency: 300ms");
+    expect(computeSpeedText(stats)).toBe(" in: 200 tok (100 tok/s) · out: 100 tok (50 tok/s) · latency: 300ms");
   });
 
   it("aggregates multiple calls and uses median TTFT", () => {
@@ -490,8 +490,8 @@ describe("computeSpeedText", () => {
     // total: 300 in / 3s = 100 tok/s; 150 out / 3s = 50 tok/s
     const result = computeSpeedText(stats);
     expect(result).toContain("latency: 300ms");
-    expect(result).toContain("in: 100");
-    expect(result).toContain("out: 50");
+    expect(result).toContain("in: 300 tok (100 tok/s)");
+    expect(result).toContain("out: 150 tok (50 tok/s)");
   });
 });
 
