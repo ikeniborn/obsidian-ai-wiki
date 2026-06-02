@@ -140,6 +140,18 @@ describe("bfsExpandWithHops", () => {
     const { expanded } = bfsExpandWithHops(["A"], graph, 3);
     expect(expanded.has("E")).toBe(false);
   });
+
+  it("does not include phantom nodes (dangling links with no graph key) in expanded or byHop", () => {
+    // A links to Ghost which has no graph entry
+    const graph = new Map([
+      ["A", new Set(["B", "Ghost"])],
+      ["B", new Set<string>()],
+    ]);
+    const { expanded, byHop } = bfsExpandWithHops(["A"], graph, 1);
+    expect(expanded.has("Ghost")).toBe(false);
+    expect(byHop[1]).not.toContain("Ghost");
+    expect(expanded.has("B")).toBe(true);
+  });
 });
 
 describe("checkGraphStructure", () => {
