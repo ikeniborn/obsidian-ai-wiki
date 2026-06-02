@@ -1,7 +1,7 @@
 # Intent: Fix init — missing wiki_sources and redundant annotation in frontmatter
 
 **Date:** 2026-06-02
-**Status:** draft
+**Status:** approved
 
 ## Objective
 
