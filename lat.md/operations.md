@@ -97,7 +97,9 @@ See [[src/wiki-graph.ts#bfsExpandWithHops]], [[wiki-graph#Query Graph Traversal]
 
 ### Query Trace UI
 
-When `agentLogEnabled` is true, the `graph_stats` event is rendered with scores and BFS-by-hop breakdown. When false, compact form is shown instead.
+When `agentLogEnabled` is true, the `graph_stats` event is rendered with scores and BFS-by-hop breakdown in multi-line trace format. When false, compact single-line form is shown instead.
+
+Trace format (agentLogEnabled): `Seeds (N)` header, each seed with score on its own indented line, then per-hop sections `BFS +N (count):` with page list on the next indented line.
 
 The formatting is handled by [[src/view.ts#formatGraphStatsLines]], a pure function testable without Obsidian DOM APIs.
 
