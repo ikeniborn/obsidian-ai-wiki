@@ -81,6 +81,17 @@ describe("bfsExpand", () => {
   it("handles seed not in graph", () => {
     expect(bfsExpand(["Unknown"], graph, 1)).toEqual(new Set(["Unknown"]));
   });
+
+  it("does not include phantom nodes (dangling links with no graph key) in BFS results", () => {
+    // A links to Ghost which has no graph entry
+    const graph = new Map([
+      ["A", new Set(["B", "Ghost"])],
+      ["B", new Set<string>()],
+    ]);
+    const result = bfsExpand(["A"], graph, 1);
+    expect(result.has("Ghost")).toBe(false);
+    expect(result.has("B")).toBe(true);
+  });
 });
 
 describe("bfsExpandWithHops", () => {

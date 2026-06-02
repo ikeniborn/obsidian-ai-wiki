@@ -47,7 +47,7 @@ export function bfsExpand(seeds: string[], graph: WikiGraph, depth: number): Set
     const next = new Set<string>();
     for (const node of frontier) {
       for (const neighbor of graph.get(node) ?? []) {
-        if (!visited.has(neighbor)) { visited.add(neighbor); next.add(neighbor); }
+        if (!visited.has(neighbor) && graph.has(neighbor)) { visited.add(neighbor); next.add(neighbor); }
       }
       for (const neighbor of reverse.get(node) ?? []) {
         if (!visited.has(neighbor)) { visited.add(neighbor); next.add(neighbor); }
