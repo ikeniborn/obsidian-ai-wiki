@@ -185,7 +185,7 @@ describe("runQuery", () => {
     expect(schemaRead).toBeUndefined();
   });
 
-  it("graph_stats event includes seedScores and expandedByHop", async () => {
+  it("graph_stats event includes seedScores", async () => {
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Alpha.md", "!Wiki/work/Beta.md"], folders: [] }),
@@ -217,8 +217,7 @@ describe("runQuery", () => {
     // At least one seed should have a score
     const scoreValues = Object.values(stats.seedScores) as number[];
     expect(scoreValues.some(s => s > 0)).toBe(true);
-    expect(stats.expandedByHop).toBeDefined();
-    expect(typeof stats.expandedByHop).toBe("object");
+    expect(stats.expandedByHop).toBeUndefined();
   });
 
   it("excludes files under _config/ directory from BFS graph", async () => {
