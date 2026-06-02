@@ -30,6 +30,7 @@ export async function* runQuery(
   opts: LlmCallOptions = {},
   seedTopK: number = 5,
   seedMinScore: number = 0.1,
+  bfsTopK: number = 10,
   similarity?: PageSimilarityService,
 ): AsyncGenerator<RunEvent> {
   const question = args[0]?.trim();

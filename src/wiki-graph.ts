@@ -104,7 +104,7 @@ export function bfsExpandWithHops(
   return { expanded: visited, byHop };
 }
 
-export function checkGraphStructure(graph: WikiGraph, hubThreshold: number): string {
+export function checkGraphStructure(graph: WikiGraph): string {
   const inDegree = new Map<string, number>();
   for (const node of graph.keys()) {
     if (!inDegree.has(node)) inDegree.set(node, 0);
@@ -120,9 +120,6 @@ export function checkGraphStructure(graph: WikiGraph, hubThreshold: number): str
 
     if (inDeg === 0 && outDeg === 0) {
       issues.push(`- ${node}: isolated node (no links in or out)`);
-    }
-    if (outDeg > hubThreshold) {
-      issues.push(`- ${node}: hub node (${outDeg} outgoing links)`);
     }
     for (const tgt of neighbors) {
       if (graph.has(tgt) && !graph.get(tgt)!.has(node)) {

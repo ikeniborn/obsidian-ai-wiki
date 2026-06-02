@@ -161,19 +161,9 @@ describe("checkGraphStructure", () => {
       ["B", new Set<string>()],
       ["Orphan", new Set<string>()],
     ]);
-    const result = checkGraphStructure(graph, 20);
+    const result = checkGraphStructure(graph);
     expect(result).toContain("Orphan: isolated node");
     expect(result).not.toContain("A: isolated");
-  });
-
-  it("detects hub node (outDegree > threshold)", () => {
-    const targets = new Set(["B","C","D","E","F"]);
-    const graph = new Map([
-      ["Hub", targets],
-      ...([...targets].map((t) => [t, new Set<string>()] as [string, Set<string>])),
-    ]);
-    const result = checkGraphStructure(graph, 4);
-    expect(result).toContain("Hub: hub node (5 outgoing links)");
   });
 
   it("detects unidirectional link A→B where B exists but has no edge to A", () => {
@@ -181,7 +171,7 @@ describe("checkGraphStructure", () => {
       ["A", new Set(["B"])],
       ["B", new Set<string>()],
     ]);
-    const result = checkGraphStructure(graph, 20);
+    const result = checkGraphStructure(graph);
     expect(result).toContain("A → [[B]] not reciprocated");
   });
 
@@ -190,13 +180,13 @@ describe("checkGraphStructure", () => {
       ["A", new Set(["B"])],
       ["B", new Set(["A"])],
     ]);
-    const result = checkGraphStructure(graph, 20);
+    const result = checkGraphStructure(graph);
     expect(result).not.toContain("not reciprocated");
   });
 
   it("does NOT flag dangling link (target not in graph) as unidirectional", () => {
     const graph = new Map([["A", new Set(["Ghost"])]]);
-    const result = checkGraphStructure(graph, 20);
+    const result = checkGraphStructure(graph);
     expect(result).not.toContain("not reciprocated");
   });
 
@@ -205,6 +195,6 @@ describe("checkGraphStructure", () => {
       ["A", new Set(["B"])],
       ["B", new Set(["A"])],
     ]);
-    expect(checkGraphStructure(graph, 20)).toBe("");
+    expect(checkGraphStructure(graph)).toBe("");
   });
 });

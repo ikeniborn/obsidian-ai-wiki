@@ -61,7 +61,6 @@ export async function* runLint(
   domains: DomainEntry[],
   vaultRoot: string,
   signal: AbortSignal,
-  hubThreshold: number = 20,
   wikiLinkValidationRetries: number = 3,
   opts: LlmCallOptions = {},
   similarity?: PageSimilarityService,
@@ -107,7 +106,7 @@ export async function* runLint(
     // Build initial graph + structural checks on all pages
     let { graph } = graphCache.get(domain.id, pages);
     const structuralIssues = checkStructure(pages);
-    const graphIssues = checkGraphStructure(graph, hubThreshold);
+    const graphIssues = checkGraphStructure(graph);
     const wikiLinkIssues = checkWikiLinks(pages);
     const allStructuralIssues = [structuralIssues, graphIssues, wikiLinkIssues].filter(Boolean).join("\n");
 

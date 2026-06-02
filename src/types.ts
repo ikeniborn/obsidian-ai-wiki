@@ -80,7 +80,7 @@ export type RunEvent =
       total: number;
       fromCache: boolean;
       seedScores: Record<string, number>;
-      expandedByHop: Record<number, string[]>;
+      expandedByHop?: Record<number, string[]>;
     };
 
 export interface RunHistoryEntry {
@@ -144,7 +144,7 @@ export interface LlmWikiPluginSettings {
   agentLogEnabled: boolean;
   historyLimit: number;
   graphDepth: number;
-  hubThreshold: number;
+  bfsTopK: number;
   wikiLinkValidationRetries: number;
   seedTopK: number;
   seedMinScore: number;
@@ -191,7 +191,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   agentLogEnabled: false,
   historyLimit: 20,
   graphDepth: 1,
-  hubThreshold: 20,
+  bfsTopK: 10,
   wikiLinkValidationRetries: 3,
   seedTopK: 5,
   seedMinScore: 0.1,
