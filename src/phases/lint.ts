@@ -86,6 +86,35 @@ export async function buildTitleMap(
   return result;
 }
 
+export function validateWikiSources(
+  content: string,
+  knownStems: Set<string>,
+  titleMap: Map<string, string>,
+): string {
+  const entries = parseWikiSourcesFromFm(content);
+  if (entries.length === 0) return content;
+
+  const isValid = (entry: string): boolean => {
+    const m = entry.match(/^\[\[(.+?)\]\]$/);
+    if (!m) return true; // non-wikilink format: keep as-is
+    const text = m[1];
+    return knownStems.has(text) || titleMap.has(text.toLowerCase());
+  };
+
+  const toRemove = entries.filter((e) => !isValid(e));
+  if (toRemove.length === 0) return content;
+
+  // YAML parses [[...]] as a flow sequence (nested array), so filterStaleWikiLinks
+  // cannot handle wiki_sources entries. Remove them via raw string substitution.
+  let result = content;
+  for (const entry of toRemove) {
+    // Remove the list item line that contains this exact wikilink entry.
+    const escaped = entry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    result = result.replace(new RegExp(`[ \\t]+-[ \\t]+${escaped}\\n?`, ""), "");
+  }
+  return result;
+}
+
 export async function* runLint(
   args: string[],
   vaultTools: VaultTools,

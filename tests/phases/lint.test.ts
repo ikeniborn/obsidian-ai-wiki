@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runLint, checkStructure, cleanupInvalidPages, buildTitleMap } from "../../src/phases/lint";
+import { runLint, checkStructure, cleanupInvalidPages, buildTitleMap, validateWikiSources } from "../../src/phases/lint";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
@@ -1025,5 +1025,37 @@ describe("buildTitleMap", () => {
 
     expect(result.has("настройка прокси")).toBe(true);
     expect(result.get("настройка прокси")).toBe("wiki_os_pac_file");
+  });
+});
+
+describe("validateWikiSources", () => {
+  const knownStems = new Set(["wiki_os_pac_file", "wiki_networking_dns"]);
+  const titleMap = new Map([["настройка прокси", "wiki_os_pac_file"]]);
+
+  const makeContent = (sources: string[]) =>
+    `---\nwiki_sources:\n${sources.map(s => `  - ${s}`).join("\n")}\n---\n# Article`;
+
+  it("[[Настройка прокси]] with matching titleMap entry → preserved", () => {
+    const content = makeContent(["[[Настройка прокси]]"]);
+    const result = validateWikiSources(content, knownStems, titleMap);
+    expect(result).toContain("[[Настройка прокси]]");
+  });
+
+  it("[[wiki_os_deleted_page]] not in knownStems or titleMap → removed", () => {
+    const content = makeContent(["[[wiki_os_deleted_page]]"]);
+    const result = validateWikiSources(content, knownStems, titleMap);
+    expect(result).not.toContain("[[wiki_os_deleted_page]]");
+  });
+
+  it("content without frontmatter → returned unchanged", () => {
+    const content = "no frontmatter here\n# Article";
+    const result = validateWikiSources(content, knownStems, titleMap);
+    expect(result).toBe(content);
+  });
+
+  it("entry without [[...]] format → left intact", () => {
+    const content = makeContent(["plain-text-entry"]);
+    const result = validateWikiSources(content, knownStems, titleMap);
+    expect(result).toContain("plain-text-entry");
   });
 });
