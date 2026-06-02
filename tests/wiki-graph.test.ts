@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { pageId, buildWikiGraph, bfsExpand, bfsExpandWithHops, checkGraphStructure } from "../src/wiki-graph";
+import { describe, it, expect, vi } from "vitest";
+import { pageId, buildWikiGraph, bfsExpand, bfsExpandWithHops, checkGraphStructure, bfsExpandRanked } from "../src/wiki-graph";
+import type { PageSimilarityService } from "../src/page-similarity";
 
 describe("pageId", () => {
   it("strips path prefix and .md suffix", () => {
@@ -196,5 +197,74 @@ describe("checkGraphStructure", () => {
       ["B", new Set(["A"])],
     ]);
     expect(checkGraphStructure(graph)).toBe("");
+  });
+});
+
+describe("bfsExpandRanked", () => {
+  // A connects to B, C, D, E (all undirected via reverse edges)
+  const graph = new Map<string, Set<string>>([
+    ["A", new Set(["B", "C", "D", "E"])],
+    ["B", new Set<string>()],
+    ["C", new Set<string>()],
+    ["D", new Set<string>()],
+    ["E", new Set<string>()],
+  ]);
+
+  // vaultPath → content; pageId("vault/X.md") === "X"
+  const pages = new Map([
+    ["vault/A.md", "apple ant armor"],
+    ["vault/B.md", "banana bread bake"],
+    ["vault/C.md", "cat cup cake"],
+    ["vault/D.md", "dog door dial"],
+    ["vault/E.md", "egg ear extra"],
+  ]);
+
+  it("seeds always included even when bfsTopK=1 and many BFS pages exist", async () => {
+    const result = await bfsExpandRanked(["A"], graph, 1, pages, "apple", 1);
+    expect(result.has("A")).toBe(true);
+  });
+
+  it("bfsTopK=0 returns all BFS pages", async () => {
+    const result = await bfsExpandRanked(["A"], graph, 1, pages, "query", 0);
+    expect(result).toEqual(new Set(["A", "B", "C", "D", "E"]));
+  });
+
+  it("Jaccard fallback: page with higher overlap score included over lower-scored page at bfsTopK=1", async () => {
+    // query "cat cup" overlaps with C="cat cup cake" but not B="banana bread bake"
+    const result = await bfsExpandRanked(["A"], graph, 1, pages, "cat cup", 1);
+    expect(result.has("A")).toBe(true);   // seed always included
+    expect(result.has("C")).toBe(true);   // highest overlap
+    expect(result.has("B")).toBe(false);  // no overlap
+  });
+
+  it("embedding path: mock similarity results are respected", async () => {
+    const mockSimilarity = {
+      selectRelevantScored: vi.fn().mockResolvedValue([
+        { path: "vault/D.md", score: 0.9 },
+        { path: "vault/B.md", score: 0.8 },
+      ]),
+    } as unknown as PageSimilarityService;
+
+    const result = await bfsExpandRanked(
+      ["A"], graph, 1, pages, "test query", 2,
+      undefined, mockSimilarity,
+    );
+    expect(result.has("A")).toBe(true);   // seed always included
+    expect(result.has("D")).toBe(true);   // rank 1 from mock
+    expect(result.has("B")).toBe(true);   // rank 2 from mock
+    expect(result.has("C")).toBe(false);  // not in top-2
+  });
+
+  it("similarity throws → fallback to full BFS, no exception thrown", async () => {
+    const mockSimilarity = {
+      selectRelevantScored: vi.fn().mockRejectedValue(new Error("API down")),
+    } as unknown as PageSimilarityService;
+
+    const result = await bfsExpandRanked(
+      ["A"], graph, 1, pages, "query", 2,
+      undefined, mockSimilarity,
+    );
+    // Full BFS fallback — all reachable pages returned
+    expect(result).toEqual(new Set(["A", "B", "C", "D", "E"]));
   });
 });
