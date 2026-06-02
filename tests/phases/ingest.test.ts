@@ -1365,6 +1365,67 @@ describe("runIngest — pre-migration warning", () => {
   });
 });
 
+describe("runIngest — Frontmatter Fixes", () => {
+  // @lat: [[tests#Ingest Pipeline Frontmatter Fixes#wiki_sources injected when absent]]
+  it("injects wiki_sources when LLM omits it from frontmatter", async () => {
+    const pageContent =
+      `---\nwiki_updated: 2026-06-01\nwiki_status: stub\ntags: []\nwiki_outgoing_links: []\n---\n# Entity\n\nFact.`;
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "Entity" }] }),
+      JSON.stringify({
+        reasoning: "Extracted.",
+        pages: [{ path: "!Wiki/work/entities/wiki_work_entity.md", content: pageContent }],
+      }),
+    ]);
+    await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt, llm, "llama3.2", [domain], VAULT_ROOT, new AbortController().signal,
+      ),
+    );
+    const writtenContent = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([path]: [string]) => path === "!Wiki/work/entities/wiki_work_entity.md",
+    )?.[1] as string | undefined;
+    expect(writtenContent).toBeDefined();
+    expect(writtenContent).toContain("wiki_sources:");
+    expect(writtenContent).toContain("[[doc]]");
+  });
+
+  // @lat: [[tests#Ingest Pipeline Frontmatter Fixes#annotation stripped during ingest]]
+  it("strips annotation from wiki page frontmatter during ingest", async () => {
+    const pageContent =
+      `---\nwiki_sources:\n  - "[[doc]]"\nwiki_updated: 2026-06-01\nwiki_status: stub\nannotation: Entity description.\ntags: []\nwiki_outgoing_links: []\n---\n# Entity\n\nFact.`;
+    const adapter = mockAdapter({
+      read: vi.fn().mockResolvedValue("source text"),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "entities", entities: [{ name: "Entity" }] }),
+      JSON.stringify({
+        reasoning: "Extracted.",
+        pages: [{ path: "!Wiki/work/entities/wiki_work_entity.md", content: pageContent }],
+      }),
+    ]);
+    await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt, llm, "llama3.2", [domain], VAULT_ROOT, new AbortController().signal,
+      ),
+    );
+    const writtenContent = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([path]: [string]) => path === "!Wiki/work/entities/wiki_work_entity.md",
+    )?.[1] as string | undefined;
+    expect(writtenContent).toBeDefined();
+    expect(writtenContent).not.toContain("annotation:");
+  });
+});
+
 describe("runIngest — Check B: missing wiki_sources", () => {
   it("deletes wiki pages that have no wiki_sources in frontmatter", async () => {
     const remove = vi.fn().mockResolvedValue(undefined);

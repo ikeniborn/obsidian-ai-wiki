@@ -13,7 +13,7 @@ import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
 import { render } from "./template";
 import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureWikiSources } from "../utils/raw-frontmatter";
 import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
 import type { PageSimilarityService, ExtractedEntity } from "../page-similarity";
@@ -333,9 +333,18 @@ export async function* runIngest(
         details: pageWarnings,
       };
     }
+    const sourceStem = sourceVaultPath.split("/").pop()!.replace(/\.md$/, "");
+    const { content: sourcedPage, injected } = ensureWikiSources(repairedPage, sourceStem);
+    if (injected) {
+      yield {
+        kind: "info_text", icon: "⚠️",
+        summary: `wiki_sources injected: ${page.path}`,
+        details: [`Added [[${sourceStem}]] — LLM did not emit wiki_sources`],
+      };
+    }
     yield { kind: "tool_use", name: existingContent === null ? "Create" : "Update", input: { path: page.path } };
     try {
-      await vaultTools.write(page.path, repairedPage);
+      await vaultTools.write(page.path, sourcedPage);
       written.push(page.path);
       yield { kind: "tool_result", ok: true };
 
