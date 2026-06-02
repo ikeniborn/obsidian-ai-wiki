@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.1.146 — 2026-06-02
+
+### New
+- feat(view): multi-line trace format for seeds and BFS hops in graph stats
+- feat(view): render extended graph trace (seeds with scores, BFS hop breakdown) when agentLogEnabled
+- feat(view): confirm modal before domain registration — cancel prevents creation
+- feat(view): force reinit on source removal in manage sources flow
+- feat(query): collect seed scores and BFS-by-hop, emit in graph_stats event
+- feat(wiki-graph): add bfsExpandWithHops — tracks expanded pages by BFS depth
+- feat(types): extend graph_stats with seedScores and expandedByHop fields
+- feat(page-similarity): add selectRelevantScored — returns {path, score}[]
+- feat(wiki-seeds): selectSeeds returns scored results {id, score}[]
+- feat(llm-utils): computeSpeedText shows token counts alongside tok/s
+- feat(lint): add cleanupInvalidPages pass — deletes invalid wiki articles before LLM steps
+- feat(lint): add bucket repair pass for wiki_sources / wiki_outgoing_links
+- feat(lint): filter stale wiki_outgoing_links and wiki_articles vault-wide
+- feat(ingest): validate and auto-repair frontmatter before writing source and wiki pages
+- feat(ingest): filter stale wiki_articles and related links after repair
+- feat(prompts): forbid source names in outgoing_links and dead wiki links
+- feat(validator): add list-wikilinks-wiki-only and list-wikilinks-sources-only FieldRule kinds
+- feat(raw-frontmatter): add FieldRule type, validateAndRepairFrontmatter helper, wiki/source page validators
+- feat(vault): add rmdir to VaultAdapter and removeSubfolders to VaultTools
+
+### Fixes
+- fix(bfs): guard phantom nodes in bfsExpand and bfsExpandWithHops — dangling links no longer enter expanded set
+- fix(query): exclude _config/ directory files from BFS graph
+- fix(raw-frontmatter): replace regex upsertRawFrontmatter with YAML parse→mutate→serialize
+- fix(raw-frontmatter): allow hyphens in tag segments (TAG_RE)
+- fix(raw-frontmatter): track modified flag; delete empty lists; fix aliases warning
+- fix(ingest): delete wiki pages missing wiki_sources before LLM calls
+- fix(ingest): delete unprefixed legacy pages instead of warn-only
+- fix(ingest): emit domain_updated after source_path_added
+- fix(ingest): skip allFailed halt when wiki is empty
+- fix(init): preserve language_notes during reinit
+- fix(init): remove subdirectories after files in wipeDomainFolder
+- fix(init): use domain wiki path for annotationsCache
+- fix(similarity): allFailed=false when no pages exist in embedding path
+- fix(lint): remove related field from source stale-link pass — user cross-refs are ingest-only
+- fix(prompt): allow entity extraction for unknown concept types; prohibit wikilink alias syntax; show optional type field
+- fix(wiki-link-validator): three bugs causing spurious WikiLink warnings
+- fix(vault-walk): strip trailing slash before getFolderByPath
+
+### Other
+- refactor(raw-frontmatter): use gm flag instead of do-while loop in removeWikiFields
+
+---
+
 ## 0.1.142 — 2026-05-26
 
 ### New
