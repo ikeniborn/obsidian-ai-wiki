@@ -1,7 +1,7 @@
 # Intent: BFS Similarity Expansion + wiki_sources Protection
 
 **Date:** 2026-06-02
-**Status:** draft
+**Status:** approved
 
 ## Objective
 
