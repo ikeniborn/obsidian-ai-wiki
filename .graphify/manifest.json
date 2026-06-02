@@ -32,8 +32,8 @@
     "hash": "9a6243c4c80767e96c2b7693e2043e6f"
   },
   "tests/llm-utils.test.ts": {
-    "mtime": 1779826009.7153563,
-    "hash": "52eb05e0e9ed5f9f2847109e2983f28f"
+    "mtime": 1780343400.7050653,
+    "hash": "199414ebb81387132eede1fd1432db03"
   },
   "tests/controller-per-op-timeout.test.ts": {
     "mtime": 1779826009.7151344,
@@ -55,6 +55,10 @@
     "mtime": 1779363957.1658547,
     "hash": "7d4a8b040a85da6b3c4f5e3adf48bd1a"
   },
+  "tests/view-graph-trace.test.ts": {
+    "mtime": 1780388411.655412,
+    "hash": "bd26761af72eecd1a39fd65513cebaf0"
+  },
   "tests/wiki-index.test.ts": {
     "mtime": 1780057749.6487422,
     "hash": "87b27a682d9e3c4628d9fefd969492b7"
@@ -68,8 +72,8 @@
     "hash": "645e2ab0f354857935dac6bcfe385c54"
   },
   "tests/page-similarity.test.ts": {
-    "mtime": 1780233422.0155194,
-    "hash": "b705a202fd8d6cb685acb607befd269e"
+    "mtime": 1780342520.4421768,
+    "hash": "e123a18ad1d8760e89bad562450ad4e9"
   },
   "tests/domain.test.ts": {
     "mtime": 1779363957.1652005,
@@ -144,8 +148,8 @@
     "hash": "f32a39a814a62ab7e9fe64c72cdcd0fc"
   },
   "tests/wiki-seeds.test.ts": {
-    "mtime": 1779363957.167018,
-    "hash": "3933063d1d84860315620095579f8ea6"
+    "mtime": 1780342233.6898296,
+    "hash": "def77f10ff3a7bf9b8c186e770b51ce3"
   },
   "tests/parse-with-retry.test.ts": {
     "mtime": 1779826009.7154279,
@@ -292,16 +296,16 @@
     "hash": "5f0321a1fb06360b2b3bf5c5f44a3f2f"
   },
   "tests/utils/raw-frontmatter.test.ts": {
-    "mtime": 1780328904.557792,
-    "hash": "18a1493540084d2fbf4d2e6c048cf682"
+    "mtime": 1780385421.6952925,
+    "hash": "bd13964f754a97c05768f71625d015bc"
   },
   "tests/phases/llm-utils.test.ts": {
     "mtime": 1779363957.1664374,
     "hash": "1189091f79ebe4ef8d53e1eec8c492d0"
   },
   "tests/phases/query.test.ts": {
-    "mtime": 1779827091.7258108,
-    "hash": "8a2e81474549134bd58fe12e045d3ccd"
+    "mtime": 1780342771.704403,
+    "hash": "779490126fa6c295a1d10aaf0a7f57e2"
   },
   "tests/phases/ingest.test.js": {
     "mtime": 1779363957.1664374,
@@ -456,8 +460,8 @@
     "hash": "569239c5d97c61be70819fc246257bed"
   },
   "src/wiki-seeds.ts": {
-    "mtime": 1779363957.164018,
-    "hash": "5ee6d9eb4b9d21ce86a3a962bca455d4"
+    "mtime": 1780342244.3227642,
+    "hash": "fe43f498a25c65469b1f7cfc3d9b2386"
   },
   "src/domain.ts": {
     "mtime": 1780057749.6467662,
@@ -512,8 +516,8 @@
     "hash": "ac3f2535b4f58dee0bcbfc3378d34526"
   },
   "src/page-similarity.ts": {
-    "mtime": 1780233422.0152848,
-    "hash": "f4d77660fcf2638d31b12f62a5d5dc28"
+    "mtime": 1780343740.2081504,
+    "hash": "9903d2ab5a7aa1b716a97cd560c47726"
   },
   "src/wiki-link-validator.ts": {
     "mtime": 1780287864.9189718,
@@ -548,24 +552,24 @@
     "hash": "397dfd13953881143efeb99cdb314ab0"
   },
   "src/view.ts": {
-    "mtime": 1780341374.0110548,
-    "hash": "146ab32762efb3204f9e7537e73f628a"
+    "mtime": 1780385988.8758981,
+    "hash": "52a52ae2f04c82a05eb2fc940f6f7140"
   },
   "src/stream.ts": {
     "mtime": 1779826009.7143962,
     "hash": "808a7ade570dc1f6da25f3b4b0799ebe"
   },
   "src/utils/raw-frontmatter.ts": {
-    "mtime": 1780328904.5568266,
-    "hash": "6449c3817d63fcd5fcc4c5b102df43fd"
+    "mtime": 1780385604.9978251,
+    "hash": "6b866db5204194bc5119359e688c1323"
   },
   "src/utils/vault-walk.ts": {
     "mtime": 1780306330.0387225,
     "hash": "d4eab439dd3513012c2148c1ac4e5f25"
   },
   "src/phases/query.ts": {
-    "mtime": 1779826009.7141626,
-    "hash": "71dfa3d3be889a50d3e5eead7b5d885c"
+    "mtime": 1780342808.2686825,
+    "hash": "c3bf12d1cb79616db64dbf95426f0b08"
   },
   "src/phases/parse-with-retry.ts": {
     "mtime": 1780057749.647489,
@@ -584,8 +588,8 @@
     "hash": "bc410f83f23ae124576407b7df448fdd"
   },
   "src/phases/ingest.ts": {
-    "mtime": 1780341794.5155113,
-    "hash": "e4d69e7796431106bac4a69468f3a2ab"
+    "mtime": 1780342461.1245022,
+    "hash": "85d1dcc79f3d7fa7eebcd750d5cafbfb"
   },
   "src/phases/format-utils.ts": {
     "mtime": 1779363957.1639364,
@@ -604,8 +608,8 @@
     "hash": "b99995121bc663e0decfdc40cbaa5c38"
   },
   "src/phases/llm-utils.ts": {
-    "mtime": 1779826009.7140062,
-    "hash": "ee2234594abbd7aff0f51668ea028386"
+    "mtime": 1780343411.3368092,
+    "hash": "184fffbc01f6e99a685b8175fe35bc1e"
   },
   "src/phases/evaluator.ts": {
     "mtime": 1779363957.1639364,
@@ -624,8 +628,8 @@
     "hash": "4c75ca92470b9b7c299b7ed073596445"
   },
   "README.md": {
-    "mtime": 1779657227.6727705,
-    "hash": "7d52bb1dc13f7a6d157a5cfbd192d25c"
+    "mtime": 1780388766.7475865,
+    "hash": "e8b9b29fcb9b75abdc1fd50f904338a5"
   },
   "CHANGELOG.md": {
     "mtime": 1779827538.3733842,
@@ -636,8 +640,8 @@
     "hash": "9fe1b583429e2c7bc06751e64053f9d8"
   },
   "prompts/ingest.md": {
-    "mtime": 1780342200.084039,
-    "hash": "b651792991fc24801ca2b6f65d0e9ead"
+    "mtime": 1780385176.3740108,
+    "hash": "ceae8480e7dfbe9147d9bb37e4fc5d6b"
   },
   "prompts/chat.md": {
     "mtime": 1779363957.1608365,
@@ -656,8 +660,8 @@
     "hash": "fa9945771a70a4d2a95ad8e7dbe9f088"
   },
   "prompts/lint.md": {
-    "mtime": 1780057749.6465764,
-    "hash": "2cfb91a2c3bed32922aa7ba251b5f609"
+    "mtime": 1780385988.8756087,
+    "hash": "3fed0420d3b5a33e0af621238d20a1fd"
   },
   "prompts/init.md": {
     "mtime": 1779657227.6821804,
@@ -668,8 +672,8 @@
     "hash": "c429cd10245c8de0d3ad8d8f3aad304b"
   },
   "prompts/ingest-entities.md": {
-    "mtime": 1780057749.646442,
-    "hash": "13a4dad417c1820c81f8001662e36e48"
+    "mtime": 1780342723.7291093,
+    "hash": "0b6ae49a15565a18e7fff7fee75f3260"
   },
   "templates/_wiki_schema.md": {
     "mtime": 1780328904.557122,
@@ -692,7 +696,7 @@
     "hash": "9a740b7601f415692d8ef916c30560af"
   },
   "lat.md/wiki-graph.md": {
-    "mtime": 1780342052.9950073,
+    "mtime": 1780343740.2753139,
     "hash": "4b573ba5942145f10225e5a1e498d744"
   },
   "lat.md/llm-pipeline.md": {
@@ -704,19 +708,19 @@
     "hash": "b8e08c6e3528f4eee6d22e3f966a957b"
   },
   "lat.md/architecture.md": {
-    "mtime": 1780341794.515162,
-    "hash": "ae1c87a8550d3b9aed37fd093182f449"
+    "mtime": 1780346259.6753325,
+    "hash": "6ac44e6766c98418af155e4fd80e33c4"
   },
   "lat.md/tests.md": {
-    "mtime": 1780341794.5153508,
-    "hash": "e7e52d9b7e18258486349890b0e703fd"
+    "mtime": 1780385421.6947277,
+    "hash": "0e7128e3d8688e45640994ba15adbb11"
   },
   "lat.md/lat.md": {
     "mtime": 1780057749.645398,
     "hash": "cfadf054126ad8a7e990d175205de115"
   },
   "lat.md/operations.md": {
-    "mtime": 1780341794.5152671,
-    "hash": "c0317403d972a911310547cb3244e561"
+    "mtime": 1780343351.836084,
+    "hash": "4f5977fc41f9fd84e34f5b4d858acbec"
   }
 }
