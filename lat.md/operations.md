@@ -91,6 +91,8 @@ BFS always runs from the seed set — both when seeds come from similarity and f
 
 `bfsExpandWithHops` produces `expandedByHop: Record<number, string[]>` — pages by BFS depth — for tracing. Both `seedScores` and `expandedByHop` are emitted in the `graph_stats` event.
 
+Forward traversal guards against phantom nodes: `[[links]]` whose targets have no corresponding page are never added to `expanded` or `byHop`. Files under any `_config/` subdirectory are excluded before graph construction.
+
 See [[src/wiki-graph.ts#bfsExpandWithHops]], [[wiki-graph#Query Graph Traversal]].
 
 ### Query Trace UI
