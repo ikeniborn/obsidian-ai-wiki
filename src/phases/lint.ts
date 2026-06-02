@@ -179,6 +179,16 @@ export async function* runLint(
       ...allMdPaths.map(p => p.split("/").pop()!.replace(/\.md$/, "")),
       ...[...pages.keys()].map((p) => p.split("/").pop()!.replace(/\.md$/, "")),
     ]);
+
+    // Build title map from non-wiki vault files (runs once per domain)
+    const nonWikiPaths = allMdPaths.filter(p => !p.startsWith(wikiVaultPath + "/"));
+    const titleMap = await buildTitleMap(nonWikiPaths, vaultTools);
+
+    // Extend knownStems with stems from titleMap
+    for (const stem of titleMap.values()) {
+      knownStems.add(stem);
+    }
+
     const stemToPath = new Map<string, string>(
       allMdPaths.map(p => [p.split("/").pop()!.replace(/\.md$/, ""), p])
     );
@@ -311,7 +321,8 @@ export async function* runLint(
           }
           yield { kind: "tool_use", name: "Update", input: { path: fix.path } };
           try {
-            const fixedContent = wlFixResult.fixed.get(fix.path) ?? fix.content;
+            const rawFixed = wlFixResult.fixed.get(fix.path) ?? fix.content;
+            const fixedContent = validateWikiSources(rawFixed, knownStems, titleMap);
             await vaultTools.write(fix.path, fixedContent);
             writtenPaths.push(fix.path);
             pages.set(fix.path, fixedContent);
