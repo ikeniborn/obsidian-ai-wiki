@@ -264,7 +264,10 @@ export function upsertRawFrontmatter(
   let existing: Record<string, unknown> = {};
   if (match) {
     try {
-      existing = (yamlParse(match[1]) as Record<string, unknown>) ?? {};
+      const parsed = yamlParse(match[1]);
+      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        existing = parsed as Record<string, unknown>;
+      }
     } catch { /* malformed YAML — start fresh */ }
   }
 
