@@ -1,3 +1,25 @@
+---
+review:
+  spec_hash: e167046383a07912
+  last_run: 2026-06-02
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: structure
+      severity: WARNING
+      section: "### Fix / ### Root Cause (duplicates)"
+      section_hash: fixed
+      text: "Duplicate headings ### Fix and ### Root Cause across Fix 1 and Fix 2"
+      verdict: fixed
+      verdict_at: 2026-06-02
+chain:
+  intent: null
+---
+
 # BFS Scope and Phantom Node Fix
 
 ## Overview
@@ -47,13 +69,13 @@ Phantom nodes (2): `Трендовые линии`, `Фарминг ликвид
 
 ## Fix 1: Phantom Nodes in BFS
 
-### Root Cause
+### Root Cause: phantom nodes
 
 `buildWikiGraph` adds all `[[link]]` targets as forward edges regardless of whether the target page exists. `bfsExpand` / `bfsExpandWithHops` traverse forward edges without checking if the neighbor is a real graph key. Result: dangling refs become "visited" nodes.
 
 Backlink traversal is safe — the reverse index is built from graph keys, so it can only produce real nodes.
 
-### Fix
+### Fix: phantom guard
 
 In `src/wiki-graph.ts`, in both `bfsExpand` and `bfsExpandWithHops`, add `graph.has(neighbor)` guard on forward traversal:
 
@@ -77,11 +99,11 @@ Apply to both `bfsExpand` (forward loop) and `bfsExpandWithHops` (forward loop).
 
 ## Fix 2: `_config` Directory Exclusion
 
-### Root Cause
+### Root Cause: _config filter
 
 `query.ts` line 99 filters files by filename suffix (`META_FILES`). This covers `_index.md` and `_log.md` but not future files. Any new `.md` added to `_config/` leaks into the BFS graph.
 
-### Fix
+### Fix: path filter
 
 In `src/phases/query.ts`, change the file filter from filename-based to path-based:
 
