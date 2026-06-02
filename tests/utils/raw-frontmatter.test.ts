@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, hasFrontmatterField, filterStaleWikiLinks } from "../../src/utils/raw-frontmatter";
-import { validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter } from "../../src/utils/raw-frontmatter";
+import { validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, ensureWikiSources } from "../../src/utils/raw-frontmatter";
 
 const TODAY = "2026-05-12";
 const ARTICLES = ['[[!Wiki/work/Entity.md]]'];
@@ -554,5 +554,35 @@ describe("filterStaleWikiLinks", () => {
     expect(result.content).not.toContain("[[A]]");
     expect(result.content).not.toContain("[[B]]");
     expect(result.warnings).toHaveLength(2);
+  });
+});
+
+describe("ensureWikiSources", () => {
+  // @lat: [[tests#Ensure Wiki Sources#Absent wiki_sources injected]]
+  it("injects sourceStem when wiki_sources absent", () => {
+    const content = `---\nwiki_updated: 2026-06-01\nwiki_status: stub\ntags: []\n---\n# Entity\n`;
+    const { content: out, injected } = ensureWikiSources(content, "my_source");
+    expect(injected).toBe(true);
+    expect(out).toContain("wiki_sources:");
+    expect(out).toContain("[[my_source]]");
+  });
+
+  // @lat: [[tests#Ensure Wiki Sources#Non-empty wiki_sources unchanged]]
+  it("returns unchanged content when wiki_sources already has entries", () => {
+    const content = `---\nwiki_sources:\n  - "[[my_source]]"\nwiki_updated: 2026-06-01\n---\n# Entity\n`;
+    const { content: out, injected } = ensureWikiSources(content, "my_source");
+    expect(injected).toBe(false);
+    expect(out).toBe(content);
+  });
+
+  // @lat: [[tests#Ensure Wiki Sources#Empty wiki_sources after repair injected]]
+  it("injects sourceStem when wiki_sources field is absent after repair emptied it", () => {
+    // Simulates content where repair has already deleted the wiki_sources field
+    // (all prior entries were wiki stems — removed by list-wikilinks-sources-only rule).
+    // From ensureWikiSources perspective: no wiki_sources present.
+    const content = `---\nwiki_updated: 2026-06-01\nwiki_status: stub\n---\n# Entity\n`;
+    const { content: out, injected } = ensureWikiSources(content, "raw_source");
+    expect(injected).toBe(true);
+    expect(out).toContain("[[raw_source]]");
   });
 });
