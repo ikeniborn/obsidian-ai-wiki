@@ -70,6 +70,10 @@ Frontmatter that satisfies all field rules is returned unchanged with an empty w
 
 When the same YAML key appears twice, the list items are merged and deduplicated, a single key remains, and a warning naming the key is emitted.
 
+### upsertRawFrontmatter — no duplicate on yaml.stringify indent
+
+When source frontmatter was re-serialized by `yaml.stringify` (which may produce 0-space-indented list items), `upsertRawFrontmatter` must replace the existing `wiki_articles` block cleanly and produce exactly one `wiki_articles:` key.
+
 ### Unparseable YAML guard
 
 If the YAML block cannot be parsed, the original content is returned unchanged and a warning prefixed with "Unparseable YAML" is emitted.

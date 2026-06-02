@@ -472,6 +472,20 @@ body`;
     });
     expect(result.match(/^wiki_articles:/gm)?.length ?? 0).toBe(1);
   });
+
+  // @lat: [[tests#Frontmatter Validation#upsertRawFrontmatter — no duplicate on yaml.stringify indent]]
+  it("no duplicate wiki_articles when list items have no leading indent (yaml.stringify style)", () => {
+    // yaml.stringify can produce items without leading spaces: "wiki_articles:\n- item"
+    // The old regex [ \t]+- fails to match and leaves the original key intact → duplicate
+    const input = `---\ntags:\n  - crypto\nwiki_articles:\n- "[[wiki_fin]]"\nwiki_updated: 2026-06-01\n---\nbody`;
+    const result = upsertRawFrontmatter(input, {
+      wiki_updated: "2026-06-02",
+      wiki_articles: ["[[wiki_new]]"],
+    });
+    expect(result.match(/^wiki_articles:/gm)?.length ?? 0).toBe(1);
+    expect(result).toContain("[[wiki_new]]");
+    expect(result).not.toContain("[[wiki_fin]]");
+  });
 });
 
 describe("filterStaleWikiLinks", () => {
