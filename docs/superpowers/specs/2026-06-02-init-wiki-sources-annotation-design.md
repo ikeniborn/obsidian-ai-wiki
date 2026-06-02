@@ -1,3 +1,41 @@
+---
+chain:
+  intent: docs/superpowers/intents/2026-06-02-init-wiki-sources-annotation-intent.md
+review:
+  spec_hash: "b31854f048bf459d"
+  last_run: "2026-06-02"
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: INFO
+      section: "## Tests"
+      section_hash: "c13032e6af55724a"
+      text: "Spec defines new tests but does not explicitly state that existing tests must not break (health metric from intent: \"All existing tests pass\")"
+      verdict: fixed
+      verdict_at: "2026-06-02"
+    - id: F-002
+      phase: clarity
+      severity: WARNING
+      section: "### `src/phases/ingest.ts` — post-repair injection"
+      section_hash: "5044868705f377ac"
+      text: "Text says \"add:\" but the snippet starts with the validateAndRepairWikiPageFrontmatter call — unclear whether snippet replaces the existing call or adds a duplicate call after it"
+      verdict: fixed
+      verdict_at: "2026-06-02"
+    - id: F-003
+      phase: clarity
+      severity: WARNING
+      section: "### `src/phases/ingest.ts` — post-repair injection"
+      section_hash: "5044868705f377ac"
+      text: "`warnings` variable declared in snippet but never used — if existing code emits repair warnings, this replacement silently drops them"
+      verdict: fixed
+      verdict_at: "2026-06-02"
+---
+
 # Design: Fix init — missing wiki_sources and redundant annotation in frontmatter
 
 **Date:** 2026-06-02
@@ -83,10 +121,11 @@ the LLM did not emit a valid `wiki_sources` field.
 
 ### `src/phases/ingest.ts` — post-repair injection
 
-After the `validateAndRepairWikiPageFrontmatter` call (currently ~line 327), add:
+Replace the `validateAndRepairWikiPageFrontmatter` call and the subsequent `vaultTools.write` call (currently ~line 327) with:
 
 ```ts
 const { content: repairedPage, warnings } = validateAndRepairWikiPageFrontmatter(page.content);
+// …emit warnings as before…
 const sourceStem = sourcePath.split("/").pop()!.replace(/\.md$/, "");
 const { content: sourcedPage, injected } = ensureWikiSources(repairedPage, sourceStem);
 if (injected) {
@@ -130,6 +169,8 @@ vaultTools.write(page.path, finalContent)
 ```
 
 ## Tests
+
+All existing tests must continue to pass; these cases extend the suite.
 
 ### Unit: `validateAndRepairWikiPageFrontmatter` — annotation strip
 
