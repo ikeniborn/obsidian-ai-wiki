@@ -221,6 +221,34 @@ describe("runQuery", () => {
     expect(typeof stats.expandedByHop).toBe("object");
   });
 
+  it("excludes files under _config/ directory from BFS graph", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({
+        files: [
+          "!Wiki/work/Page.md",
+          "!Wiki/work/_config/_index.md",
+          "!Wiki/work/_config/future-config.md",
+        ],
+        folders: [],
+      }),
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p.endsWith("_index.md")) return "- [[Page]] Page.md — content";
+        if (p.endsWith("Page.md")) return "# Page\nContent.";
+        if (p.endsWith("future-config.md")) return "# Config\nConfig file.";
+        return "";
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const events = await collect(
+      runQuery(["content"], false, vt, makeLlm("answer"), "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+    const stats = events.find((e: any) => e.kind === "graph_stats") as any;
+    expect(stats).toBeDefined();
+    // _config/ files must not appear in the total page count sent to graph
+    expect(stats.total).toBe(1); // only Page.md
+  });
+
   it("excludes pages not reached by BFS when keyword seed found (graphDepth=0)", async () => {
     const adapter = mockAdapter({
       list: vi.fn().mockResolvedValue({

@@ -96,7 +96,9 @@ export async function* runQuery(
   // Phase 3: glob
   yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
-  const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
+  const files = allFiles.filter(
+    (f) => !META_FILES.some((m) => f.endsWith(m)) && !f.includes("/_config/"),
+  );
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
   if (signal.aborted) return;
 
