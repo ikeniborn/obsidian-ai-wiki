@@ -16,7 +16,8 @@ export type FieldRule =
   | { field: string; kind: "list-tags" }
   | { field: string; kind: "date-scalar" }
   | { field: string; kind: "aliases" }
-  | { field: string; kind: "warn-enum"; values: readonly string[] };
+  | { field: string; kind: "warn-enum"; values: readonly string[] }
+  | { field: string; kind: "remove" };
 
 export function validateAndRepairFrontmatter(
   content: string,
@@ -173,6 +174,14 @@ export function validateAndRepairFrontmatter(
         }
         break;
       }
+      case "remove": {
+        if (rule.field in parsed) {
+          warnings.push(`${rule.field}: field not allowed in wiki page frontmatter — removed`);
+          delete parsed[rule.field];
+          modified = true;
+        }
+        break;
+      }
     }
   }
 
@@ -246,6 +255,7 @@ const WIKI_PAGE_RULES: FieldRule[] = [
   { field: "aliases",             kind: "aliases" },
   { field: "wiki_outgoing_links", kind: "list-wikilinks-wiki-only" },
   { field: "wiki_external_links", kind: "list-urls" },
+  { field: "annotation", kind: "remove" },
 ];
 
 export function validateAndRepairWikiPageFrontmatter(

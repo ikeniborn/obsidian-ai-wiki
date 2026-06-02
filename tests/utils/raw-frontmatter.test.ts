@@ -439,6 +439,14 @@ body`;
     expect(warnings.filter((w) => w.includes("wiki_sources"))).toHaveLength(0);
   });
 
+  // @lat: [[tests#Wiki Page Frontmatter Validation#Annotation field strip]]
+  it("strips annotation field from wiki page frontmatter", () => {
+    const content = `---\nwiki_sources:\n  - "[[my_source]]"\nannotation: "some text"\n---\n# Page\n`;
+    const { content: out, warnings } = validateAndRepairWikiPageFrontmatter(content);
+    expect(out).not.toContain("annotation:");
+    expect(warnings.some((w) => w.includes("annotation"))).toBe(true);
+  });
+
   // @lat: [[tests#Wiki Page Frontmatter Validation#Wiki outgoing links mixed list partial removal]]
   it("removes only invalid entries from mixed wiki_outgoing_links list", () => {
     const content = `---
