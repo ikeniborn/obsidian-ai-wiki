@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.147 — 2026-06-02
+
+### New
+- feat(frontmatter): add remove FieldRule kind, strip annotation from wiki pages
+- feat(frontmatter): add ensureWikiSources — inject sourceStem when wiki_sources absent
+- feat(ingest): inject wiki_sources when absent, strip annotation from frontmatter
+
+---
+
 ## 0.1.146 — 2026-06-02
 
 ### New
