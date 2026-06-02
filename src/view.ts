@@ -38,7 +38,7 @@ export function formatGraphStatsLines(
   for (const part of seedParts) lines.push(`  ${part}`);
   if (remainder > 0) lines.push(`  …+${remainder}`);
 
-  const hops = Object.keys(ev.expandedByHop).map(Number).sort((a, b) => a - b);
+  const hops = Object.keys(ev.expandedByHop ?? {}).map(Number).sort((a, b) => a - b);
   for (const hop of hops) {
     const pages = ev.expandedByHop[hop];
     if (pages.length > 0) {

@@ -122,7 +122,7 @@ export async function bfsExpandRanked(
   similarity?: PageSimilarityService,
 ): Promise<Set<string>> {
   const allBfs = bfsExpand(seeds, graph, depth);
-  const seedSet = new Set(seeds.filter(s => allBfs.has(s)));
+  const seedSet = new Set(seeds);
 
   if (bfsTopK <= 0) return allBfs;
 

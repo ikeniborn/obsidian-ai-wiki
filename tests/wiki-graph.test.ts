@@ -267,4 +267,11 @@ describe("bfsExpandRanked", () => {
     // Full BFS fallback — all reachable pages returned
     expect(result).toEqual(new Set(["A", "B", "C", "D", "E"]));
   });
+
+  it("seed not in graph is still included in result", async () => {
+    const emptyGraph = new Map<string, Set<string>>();
+    const emptyPages = new Map<string, string>();
+    const result = await bfsExpandRanked(["GhostPage"], emptyGraph, 1, emptyPages, "query", 1);
+    expect(result.has("GhostPage")).toBe(true);
+  });
 });
