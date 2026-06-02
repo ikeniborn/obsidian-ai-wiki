@@ -29014,12 +29014,17 @@ function formatGraphStatsLines(ev, agentLogEnabled) {
   const shown = ev.seeds.slice(0, SEED_CAP);
   const remainder = ev.seeds.length - shown.length;
   const seedParts = shown.filter((id) => (ev.seedScores[id] ?? 0) > 0).map((id) => `${id} (${(ev.seedScores[id] ?? 0).toFixed(2)})`);
-  const seedStr = seedParts.join(", ") + (remainder > 0 ? `, \u2026+${remainder}` : "");
-  const lines = [`Seeds: ${seedStr}${cacheHint}`];
+  const totalSeeds = seedParts.length + remainder;
+  const lines = [`Seeds (${totalSeeds})${cacheHint}`];
+  for (const part of seedParts) lines.push(`  ${part}`);
+  if (remainder > 0) lines.push(`  \u2026+${remainder}`);
   const hops = Object.keys(ev.expandedByHop).map(Number).sort((a, b) => a - b);
   for (const hop of hops) {
     const pages = ev.expandedByHop[hop];
-    if (pages.length > 0) lines.push(`BFS +${hop}: [${pages.join(", ")}]`);
+    if (pages.length > 0) {
+      lines.push(`BFS +${hop} (${pages.length}):`);
+      lines.push(`  ${pages.join(", ")}`);
+    }
   }
   return lines;
 }
@@ -29580,7 +29585,14 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       if (agentLogEnabled && lines.length > 1) {
         const detail = step.createDiv("ai-wiki-step-detail");
         for (const line of lines.slice(1)) {
-          detail.createDiv().setText(line);
+          const d = detail.createDiv();
+          if (line.startsWith("  ")) {
+            d.addClass("ai-wiki-step-detail-item");
+            d.setText(line.trimStart());
+          } else {
+            d.addClass("ai-wiki-step-detail-header");
+            d.setText(line);
+          }
         }
       }
       this.scrollSteps();

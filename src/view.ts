@@ -25,7 +25,7 @@ export function formatGraphStatsLines(
     return [`Граф: ${ev.seeds.length} seeds [${preview}${extra}] → ${ev.expanded} / ${ev.total} страниц${cacheHint}`];
   }
 
-  // Trace form
+  // Trace form — lines prefixed with "  " are indented items, others are sub-headers
   const SEED_CAP = 5;
   const cacheHint = ev.fromCache ? "  [cache hit]" : "";
   const shown = ev.seeds.slice(0, SEED_CAP);
@@ -33,13 +33,18 @@ export function formatGraphStatsLines(
   const seedParts = shown
     .filter(id => (ev.seedScores[id] ?? 0) > 0)
     .map(id => `${id} (${(ev.seedScores[id] ?? 0).toFixed(2)})`);
-  const seedStr = seedParts.join(", ") + (remainder > 0 ? `, …+${remainder}` : "");
-  const lines: string[] = [`Seeds: ${seedStr}${cacheHint}`];
+  const totalSeeds = seedParts.length + remainder;
+  const lines: string[] = [`Seeds (${totalSeeds})${cacheHint}`];
+  for (const part of seedParts) lines.push(`  ${part}`);
+  if (remainder > 0) lines.push(`  …+${remainder}`);
 
   const hops = Object.keys(ev.expandedByHop).map(Number).sort((a, b) => a - b);
   for (const hop of hops) {
     const pages = ev.expandedByHop[hop];
-    if (pages.length > 0) lines.push(`BFS +${hop}: [${pages.join(", ")}]`);
+    if (pages.length > 0) {
+      lines.push(`BFS +${hop} (${pages.length}):`);
+      lines.push(`  ${pages.join(", ")}`);
+    }
   }
   return lines;
 }
@@ -634,7 +639,14 @@ export class LlmWikiView extends ItemView {
       if (agentLogEnabled && lines.length > 1) {
         const detail = step.createDiv("ai-wiki-step-detail");
         for (const line of lines.slice(1)) {
-          detail.createDiv().setText(line);
+          const d = detail.createDiv();
+          if (line.startsWith("  ")) {
+            d.addClass("ai-wiki-step-detail-item");
+            d.setText(line.trimStart());
+          } else {
+            d.addClass("ai-wiki-step-detail-header");
+            d.setText(line);
+          }
         }
       }
       this.scrollSteps();

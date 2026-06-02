@@ -1,3 +1,40 @@
+---
+chain:
+  intent: null
+review:
+  spec_hash: f9cbe480b00bc34c
+  last_run: "2026-06-02"
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: structure
+      severity: WARNING
+      section: "Problem Summary"
+      section_hash: e9956f8d625d3e4f
+      text: "Нумерация строк таблицы: 1, 2, 4 — строка #3 отсутствует без пояснения"
+      verdict: fixed
+      verdict_at: "2026-06-02"
+    - id: F-002
+      phase: structure
+      severity: WARNING
+      section: "Document"
+      section_hash: f9cbe480b00bc34c
+      text: "Порядок секций Fix 1 → Fix 4 → Fix 2 не совпадает с порядком задач в таблице (1, 2, 4) и Implementation Order (1+4, затем 2)"
+      verdict: fixed
+      verdict_at: "2026-06-02"
+    - id: F-003
+      phase: clarity
+      severity: WARNING
+      section: "Success Criteria"
+      section_hash: f36b41d04bdf12b2
+      text: "Критерий Fix 4 содержит OR: «0 dead links или LLM создаёт stub-страницу» — неясно, какое условие считается успехом"
+      verdict: fixed
+      verdict_at: "2026-06-02"
+---
 # Ingest Quality Fixes — Design Spec
 
 **Date:** 2026-06-02  
@@ -13,6 +50,8 @@
 | 1 | Source file names in `wiki_outgoing_links` | 32/66 pages (49%) | LLM puts current source filename as outgoing link |
 | 2 | Duplicate `wiki_articles` key in source frontmatter | 2 occurrences | `removeWikiFields` regex fails on some YAML formats |
 | 4 | Dead wiki link `[[wiki_fin_proof_of_reserve]]` in chainlink page | 1 occurrence | LLM references entity without creating its page |
+
+*Problem #3 (stale links in existing source frontmatter) is handled by existing `filterStaleWikiLinks` — not a new issue, no fix needed.*
 
 All three are currently caught by validators and auto-repaired, but generate noise and lose link context.
 
@@ -32,23 +71,6 @@ All three are currently caught by validators and auto-repaired, but generate noi
 ```
 
 **Why it works:** LLM adds source filename because it sees semantic relationship (page is derived from source). Explicit negative example with a concrete filename pattern breaks the association. The rule already exists (`Никогда [[ИмяИсточника]]`) but without a concrete example the model ignores it.
-
----
-
-## Fix 4 — Prompt: forbid dead wiki links
-
-**File:** `prompts/ingest.md`  
-**Location:** End of the ПРАВИЛА section (before ПРАВИЛО ПУТЕЙ)
-
-**Change:** Add new rule:
-
-```
-- МЁРТВЫЕ ССЫЛКИ: каждый [[wiki_domain_slug]] в wiki_outgoing_links и в теле статьи обязан
-  либо существовать среди «Существующих wiki-страниц» (переданы в контексте), либо
-  присутствовать в списке pages этого ответа. Нет страницы — не пиши ссылку.
-```
-
-**Why it works:** LLM referenced `[[wiki_fin_proof_of_reserve]]` because Proof of Reserve is mentioned in the Chainlink article body and it correctly inferred a wiki link should exist — but didn't create the page. Explicit rule forces LLM to choose: create page OR omit link.
 
 ---
 
@@ -101,6 +123,23 @@ export function upsertRawFrontmatter(
 
 ---
 
+## Fix 4 — Prompt: forbid dead wiki links
+
+**File:** `prompts/ingest.md`  
+**Location:** End of the ПРАВИЛА section (before ПРАВИЛО ПУТЕЙ)
+
+**Change:** Add new rule:
+
+```
+- МЁРТВЫЕ ССЫЛКИ: каждый [[wiki_domain_slug]] в wiki_outgoing_links и в теле статьи обязан
+  либо существовать среди «Существующих wiki-страниц» (переданы в контексте), либо
+  присутствовать в списке pages этого ответа. Нет страницы — не пиши ссылку.
+```
+
+**Why it works:** LLM referenced `[[wiki_fin_proof_of_reserve]]` because Proof of Reserve is mentioned in the Chainlink article body and it correctly inferred a wiki link should exist — but didn't create the page. Explicit rule forces LLM to choose: create page OR omit link.
+
+---
+
 ## Implementation Order
 
 1. `prompts/ingest.md` — Fix 1 + Fix 4 (single commit, low risk)
@@ -114,7 +153,7 @@ export function upsertRawFrontmatter(
 |-----|-------------|
 | Fix 1 | Next ingest session: 0 `Frontmatter repaired` events with `non-wiki stem` in details |
 | Fix 2 | 0 `Duplicate key "wiki_articles"` warnings in source frontmatter repair events |
-| Fix 4 | 0 `dead link [[wiki_fin_*]]` WikiLink warnings post-ingest (or LLM creates stub page for referenced entity) |
+| Fix 4 | 0 `dead link [[wiki_fin_*]]` WikiLink warnings post-ingest; any referenced entity must either have a wiki page or be absent from `wiki_outgoing_links` |
 
 ---
 

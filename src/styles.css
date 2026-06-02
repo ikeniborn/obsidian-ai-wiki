@@ -49,6 +49,9 @@
 .ai-wiki-step-time { flex: 0 0 auto; font-size: 11px; margin-left: auto; }
 .ai-wiki-step-head.ok .ai-wiki-step-name { color: var(--text-success); }
 .ai-wiki-step-head.err .ai-wiki-step-name { color: var(--text-error); }
+.ai-wiki-step-detail { margin-top: 2px; font-size: 11px; color: var(--text-muted); }
+.ai-wiki-step-detail-header { font-weight: 600; color: var(--text-normal); margin-top: 3px; }
+.ai-wiki-step-detail-item { padding-left: 1.2em; word-break: break-word; }
 .ai-wiki-step-preview {
   margin: 2px 0 0 22px;
   padding: 4px 6px;

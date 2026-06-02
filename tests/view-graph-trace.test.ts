@@ -35,8 +35,8 @@ describe("formatGraphStatsLines", () => {
 
   it("trace mode: shows scores formatted to 2 decimal places", () => {
     const lines = formatGraphStatsLines(baseEvent, true);
-    expect(lines[0]).toContain("ArticleA (0.87)");
-    expect(lines[0]).toContain("ArticleB (0.72)");
+    expect(lines.some(l => l.includes("ArticleA (0.87)"))).toBe(true);
+    expect(lines.some(l => l.includes("ArticleB (0.72)"))).toBe(true);
   });
 
   it("trace mode: truncates seeds to 5 with …+N", () => {
@@ -46,14 +46,18 @@ describe("formatGraphStatsLines", () => {
       seedScores: { A: 0.9, B: 0.8, C: 0.7, D: 0.6, E: 0.5, F: 0.4, G: 0.3 },
     };
     const lines = formatGraphStatsLines(many, true);
-    expect(lines[0]).toContain("…+2");
-    expect(lines[0]).not.toContain("(0.40)"); // F not shown
+    expect(lines.some(l => l.includes("…+2"))).toBe(true);
+    expect(lines.every(l => !l.includes("(0.40)"))).toBe(true); // F not shown
   });
 
   it("trace mode: shows BFS hop lines", () => {
     const lines = formatGraphStatsLines(baseEvent, true);
-    expect(lines.some(l => l.includes("BFS +1") && l.includes("ArticleD"))).toBe(true);
-    expect(lines.some(l => l.includes("BFS +2") && l.includes("ArticleF"))).toBe(true);
+    const bfs1 = lines.findIndex(l => l.includes("BFS +1"));
+    const bfs2 = lines.findIndex(l => l.includes("BFS +2"));
+    expect(bfs1).toBeGreaterThan(-1);
+    expect(bfs2).toBeGreaterThan(-1);
+    expect(lines[bfs1 + 1]).toContain("ArticleD");
+    expect(lines[bfs2 + 1]).toContain("ArticleF");
   });
 
   it("trace mode: omits BFS lines when expandedByHop is empty", () => {
