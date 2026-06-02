@@ -186,6 +186,38 @@ A `wiki_external_links` entry that does not start with `https://` or `http://` i
 
 A scalar `aliases` value on a wiki page is wrapped into a single-element list.
 
+### Annotation field strip
+
+A wiki page with `annotation:` in its frontmatter has the field removed by `validateAndRepairWikiPageFrontmatter`. The warnings array includes an entry containing "annotation".
+
+## Ensure Wiki Sources
+
+Tests for [[src/utils/raw-frontmatter.ts#ensureWikiSources]] covering the three injection scenarios.
+
+### Absent wiki_sources injected
+
+When `wiki_sources` is absent from frontmatter, `ensureWikiSources` returns `injected: true` and the output contains `[[sourceStem]]`.
+
+### Non-empty wiki_sources unchanged
+
+When `wiki_sources` is present and non-empty, `ensureWikiSources` returns `injected: false` and content is unchanged.
+
+### Empty wiki_sources after repair injected
+
+When the content reaching `ensureWikiSources` has no `wiki_sources` field (e.g., repair deleted all entries), `ensureWikiSources` injects `[[sourceStem]]` and returns `injected: true`.
+
+## Ingest Pipeline Frontmatter Fixes
+
+Integration tests for [[src/phases/ingest.ts]] verifying the repair-then-inject pipeline applied to each page during write.
+
+### wiki_sources injected when absent
+
+When the LLM emits a page without `wiki_sources`, the written page has `wiki_sources` containing `[[sourceStem]]` derived from the source file name.
+
+### annotation stripped during ingest
+
+When the LLM emits a page with `annotation:` in frontmatter, the written page does not contain `annotation:`.
+
 ## Lint Stale Link Cleanup
 
 Integration tests that verify `runLint` in `src/phases/lint.ts` removes stale links via `filterStaleWikiLinks` after the per-article loop.
