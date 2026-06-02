@@ -53,6 +53,39 @@ export async function cleanupInvalidPages(
 
 
 
+export async function buildTitleMap(
+  paths: string[],
+  vaultTools: VaultTools,
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  for (const path of paths) {
+    try {
+      const content = await vaultTools.read(path);
+      const stem = path.split("/").pop()!.replace(/\.md$/, "");
+
+      // Prefer title: frontmatter field
+      const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+      if (fmMatch) {
+        const titleMatch = fmMatch[1].match(/^title:\s*(.+)$/m);
+        if (titleMatch) {
+          result.set(titleMatch[1].trim().toLowerCase(), stem);
+          continue;
+        }
+      }
+
+      // Fall back to first H1
+      const h1Match = content.match(/^# (.+)$/m);
+      if (h1Match) {
+        result.set(h1Match[1].trim().toLowerCase(), stem);
+      }
+      // No title found: skip
+    } catch {
+      // Unreadable file: skip silently
+    }
+  }
+  return result;
+}
+
 export async function* runLint(
   args: string[],
   vaultTools: VaultTools,

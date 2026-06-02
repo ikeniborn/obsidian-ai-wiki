@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runLint, checkStructure, cleanupInvalidPages } from "../../src/phases/lint";
+import { runLint, checkStructure, cleanupInvalidPages, buildTitleMap } from "../../src/phases/lint";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
@@ -991,5 +991,39 @@ describe("cleanupInvalidPages", () => {
     const { deleted } = await cleanupInvalidPages(vt, "!Wiki/fin", "fin");
     expect(deleted).toBe(0);
     expect(vi.mocked(vt.remove)).not.toHaveBeenCalled();
+  });
+});
+
+describe("buildTitleMap", () => {
+  it("parses H1 heading and stores lowercased title → stem", async () => {
+    const mockVaultTools = {
+      read: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "vault/wiki_os_pac_file.md") {
+          return "# Настройка прокси\n\nContent here.";
+        }
+        throw new Error("not found");
+      }),
+    };
+
+    const result = await buildTitleMap(
+      ["vault/wiki_os_pac_file.md"],
+      mockVaultTools as any,
+    );
+
+    expect(result.get("настройка прокси")).toBe("wiki_os_pac_file");
+  });
+
+  it("key is lowercased, so titleMap.has() with lowercase input resolves [[НАСТРОЙКА ПРОКСИ]]", async () => {
+    const mockVaultTools = {
+      read: vi.fn().mockResolvedValue("# Настройка Прокси\n\nContent."),
+    };
+
+    const result = await buildTitleMap(
+      ["vault/wiki_os_pac_file.md"],
+      mockVaultTools as any,
+    );
+
+    expect(result.has("настройка прокси")).toBe(true);
+    expect(result.get("настройка прокси")).toBe("wiki_os_pac_file");
   });
 });
