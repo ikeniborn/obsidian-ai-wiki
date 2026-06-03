@@ -10,7 +10,7 @@ import type { LintOutput } from "./zod-schemas";
 import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
 import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, domainIndexPath } from "../wiki-path";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, filterStaleWikiLinks, validateAndRepairWikiPageFrontmatter } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, filterStaleWikiLinks, validateAndRepairWikiPageFrontmatter, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
 import { checkGraphStructure, pageId, bfsExpand } from "../wiki-graph";
 import { checkWikiLinks, fixWikiLinks } from "../wiki-link-validator";
 import { graphCache } from "../wiki-graph-cache";
@@ -527,8 +527,11 @@ export async function* runLint(
     for (const sourcePath of sourcePaths) {
       const rawContent = await vaultTools.read(sourcePath).catch(() => null);
       if (!rawContent) continue;
-      const { content: filteredContent } =
-        filterStaleWikiLinks(rawContent, existingWikiStems, ["wiki_articles"]);
+      const { content: filteredContent, warnings: stripWarnings } =
+        stripInvalidWikiArticles(rawContent, existingWikiStems);
+      if (stripWarnings.length > 0) {
+        yield { kind: "info_text", icon: "⚠️", summary: `wiki_articles repaired: ${sourcePath}`, details: stripWarnings };
+      }
       if (filteredContent !== rawContent) await vaultTools.write(sourcePath, filteredContent);
     }
 

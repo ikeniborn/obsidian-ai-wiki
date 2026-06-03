@@ -776,26 +776,26 @@ describe("lint — filterStaleWikiLinks integration", () => {
   it("removes stale wiki_articles from source files not referenced by any wiki page", async () => {
     // @lat: [[tests#Lint Stale Link Cleanup#Stale wiki_articles cleanup in sources]]
     const sourceContent =
-      '---\nwiki_articles:\n  - "[[DeletedWiki]]"\n  - "[[LiveWiki]]"\n---\n# Source\n\nContent.';
-    const wikiContent = '---\nwiki_status: stub\n---\n# LiveWiki\n\nContent.';
+      '---\nwiki_articles:\n  - "[[wiki_work_deleted]]"\n  - "[[wiki_work_live]]"\n---\n# Source\n\nContent.';
+    const wikiContent = '---\nwiki_status: stub\n---\n# Live\n\nContent.';
 
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockImplementation((path: string) => {
         if (path.includes("!Wiki")) {
           return Promise.resolve({
-            files: ["!Wiki/work/LiveWiki.md"],
+            files: ["!Wiki/work/wiki_work_live.md"],
             folders: [],
           });
         }
         // vault-wide list returns wiki pages + the source file
         return Promise.resolve({
-          files: ["!Wiki/work/LiveWiki.md", "Sources/source.md"],
+          files: ["!Wiki/work/wiki_work_live.md", "Sources/source.md"],
           folders: [],
         });
       }),
       read: vi.fn().mockImplementation((path: string) => {
-        if (path === "!Wiki/work/LiveWiki.md") return Promise.resolve(wikiContent);
+        if (path === "!Wiki/work/wiki_work_live.md") return Promise.resolve(wikiContent);
         if (path === "Sources/source.md") return Promise.resolve(sourceContent);
         return Promise.resolve("");
       }),
@@ -811,8 +811,8 @@ describe("lint — filterStaleWikiLinks integration", () => {
     );
     expect(sourceWrite).toBeDefined();
     const writtenContent = sourceWrite![1] as string;
-    expect(writtenContent).not.toContain("[[DeletedWiki]]");
-    expect(writtenContent).toContain("[[LiveWiki]]");
+    expect(writtenContent).not.toContain("[[wiki_work_deleted]]");
+    expect(writtenContent).toContain("[[wiki_work_live]]");
   });
 });
 
