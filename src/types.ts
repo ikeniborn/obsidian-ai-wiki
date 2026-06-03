@@ -191,6 +191,9 @@ export interface LlmWikiPluginSettings {
     enabled: boolean;
     evaluatorModel: string;
   };
+  lintOptions: {
+    useLlm: boolean;
+  };
 }
 
 export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
@@ -238,5 +241,8 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   devMode: {
     enabled: false,
     evaluatorModel: "sonnet",
+  },
+  lintOptions: {
+    useLlm: true,
   },
 };

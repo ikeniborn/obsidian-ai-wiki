@@ -618,6 +618,20 @@ export class LlmWikiSettingTab extends PluginSettingTab {
 
     }
 
+    // ── Lint settings ─────────────────────────────────────────────────────────
+    new Setting(containerEl).setName(T.settings.h3_lint).setHeading();
+
+    new Setting(containerEl)
+      .setName(T.settings.lintUseLlm_name)
+      .setDesc(T.settings.lintUseLlm_desc)
+      .addToggle((t) =>
+        t.setValue(s.lintOptions.useLlm)
+          .onChange(async (v) => {
+            s.lintOptions.useLlm = v;
+            await this.plugin.saveSettings();
+          }),
+      );
+
     // ── Graph settings ────────────────────────────────────────────────────────
     new Setting(containerEl).setName(T.settings.h3_graph).setHeading();
 
