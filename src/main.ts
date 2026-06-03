@@ -4,7 +4,7 @@ import type { DomainEntry } from "./domain";
 import { LlmWikiSettingTab } from "./settings";
 import { AI_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { WikiController } from "./controller";
-import { QueryModal, DomainModal } from "./modals";
+import { QueryModal, DomainModal, LintOptionsModal } from "./modals";
 import { i18n } from "./i18n";
 import { DomainStore } from "./domain-store";
 import { LocalConfigStore } from "./local-config";
@@ -96,8 +96,8 @@ export default class LlmWikiPlugin extends Plugin {
           void (async () => {
             let domains: DomainEntry[];
             try { domains = await this.controller.loadDomains(); } catch { return; }
-            new DomainModal(this.app, T.cmd.lint, true, null, domains,
-              (d) => void this.controller.lint(d)).open();
+            new LintOptionsModal(this.app, domains, this.settings.lintOptions.useLlm,
+              (d, opts) => void this.controller.lint(d, opts)).open();
           })();
         },
       });

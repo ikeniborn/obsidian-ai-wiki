@@ -1,5 +1,5 @@
 import { App, ItemView, Modal, WorkspaceLeaf, MarkdownRenderer, Component, Notice, Platform, setIcon } from "obsidian";
-import { AddDomainModal, BusyCloseModal, ConfirmModal, ManageSourcesModal, IngestScopeModal } from "./modals";
+import { AddDomainModal, BusyCloseModal, ConfirmModal, ManageSourcesModal, IngestScopeModal, LintOptionsModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
 import type { DomainEntry } from "./domain";
@@ -344,12 +344,12 @@ export class LlmWikiView extends ItemView {
         ], () => void this.plugin.controller.ingestActive(domainId)).open();
       });
       this.lintBtn.addEventListener("click", () => {
-        const d = this.domainSelect!.value;
-        const domainLabel = d ? `«${d}»` : "all wiki";
-        new ConfirmModal(this.plugin.app, "Lint — confirm", [
-          `Domain: ${domainLabel}`,
-          "Claude will check wiki pages for quality and update entity_types.",
-        ], () => void this.plugin.controller.lint(d || "all")).open();
+        new LintOptionsModal(
+          this.plugin.app,
+          this.domains,
+          this.plugin.settings.lintOptions.useLlm,
+          (domain, opts) => void this.plugin.controller.lint(domain, opts),
+        ).open();
       });
     }
 
