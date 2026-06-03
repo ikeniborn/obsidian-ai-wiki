@@ -37750,6 +37750,7 @@ function validateWikiSources(content, originalContent, knownStems, titleMap, wik
     if (!m) return true;
     const text = m[1];
     if (wikiStems.has(text)) return false;
+    if (text.includes("/")) return true;
     return knownStems.has(text) || titleMap.has(text.toLowerCase());
   };
   if (originalContent) {

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.151 — 2026-06-03
+
+### Fixes
+- fix(lint): exclude wiki page stems from wiki_sources restore and validation
+- fix(lint): quote [[...]] in wiki_sources to prevent YAML flow-sequence misparse
+- fix(lint): keep path-based wiki_sources entries (e.g. Sources/raw.md) valid
+
+---
+
 ## 0.1.150 — 2026-06-03
 
 ### Fixes
