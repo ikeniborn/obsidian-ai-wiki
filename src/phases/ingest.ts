@@ -13,7 +13,7 @@ import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
 import { render } from "./template";
 import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureWikiSources } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureWikiSources, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
 import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
 import type { PageSimilarityService, ExtractedEntity } from "../page-similarity";
@@ -440,14 +440,11 @@ export async function* runIngest(
         .filter(p => !deletedPaths.includes(p) && !p.endsWith("_index.md"))
         .map(p => p.split("/").pop()!.replace(/\.md$/, ""))
     );
-    // Preserve non-wiki-domain links (user-curated cross-refs) by adding their
-    // stems to the set — only stems matching the wiki naming pattern are checked.
-    const existingArticleStems = parseWikiArticlesFromFm(repairedSource)
-      .map(link => link.slice(2, -2))
-      .filter(stem => !GENERIC_WIKI_STEM_REGEX.test(stem));
-    const existingStems = new Set([...wikiFileStems, ...existingArticleStems]);
-    const { content: filteredSource, warnings: staleWarnings } =
-      filterStaleWikiLinks(repairedSource, existingStems, ["wiki_articles", "related"]);
+    const { content: wikiArticlesFiltered, warnings: wikiArticlesWarnings } =
+      stripInvalidWikiArticles(repairedSource, wikiFileStems);
+    const { content: filteredSource, warnings: relatedWarnings } =
+      filterStaleWikiLinks(wikiArticlesFiltered, wikiFileStems, ["related"]);
+    const staleWarnings = [...wikiArticlesWarnings, ...relatedWarnings];
     const allSourceWarnings = [...sourceWarnings, ...staleWarnings];
     if (allSourceWarnings.length > 0) {
       yield {

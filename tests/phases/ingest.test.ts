@@ -1225,7 +1225,7 @@ describe("runIngest — entity-driven flow", () => {
     expect(sourceWrite).toBeDefined();
     const updated = sourceWrite![1] as string;
     expect(updated).not.toContain("[[wiki_work_old]]");
-    expect(updated).toContain("[[Other]]");
+    expect(updated).not.toContain("[[Other]]");   // non-wiki_* stem stripped by stripInvalidWikiArticles
     expect(updated).toContain("[[wiki_work_new]]");
   });
 
