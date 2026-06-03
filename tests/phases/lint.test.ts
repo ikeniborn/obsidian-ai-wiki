@@ -1178,3 +1178,52 @@ describe("lint — empty-sources deletion", () => {
     expect(lastWrite).not.toContain("[[wiki_work_orphan]]");
   });
 });
+
+describe("runLint — stripInvalidWikiArticles integration", () => {
+  // @lat: [[lat.md/tests#Tests#Lint#stripInvalidWikiArticles in lint — plain text stripped]]
+  it("strips plain-text wiki_articles entries from source files after lint", async () => {
+    const sourceContent = "---\nwiki_articles:\n  - Иммуномодуляторы\n---\nBody.";
+    const wikiContent = "---\nwiki_sources: []\n---\n# Page\n\nContent.";
+
+    const adapter = mockAdapter({
+      list: vi.fn().mockImplementation(async (path: string) => {
+        if (path.includes("!Wiki")) return { files: ["!Wiki/work/wiki_work_page.md"], folders: [] };
+        return { files: ["source.md", "!Wiki/work/wiki_work_page.md"], folders: ["!Wiki"] };
+      }),
+      read: vi.fn().mockImplementation(async (path: string) => {
+        if (path.includes("wiki_work_page")) return wikiContent;
+        return sourceContent;
+      }),
+      write: vi.fn().mockResolvedValue(undefined),
+      exists: vi.fn().mockResolvedValue(true),
+      mkdir: vi.fn().mockResolvedValue(undefined),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm(JSON.stringify({ reasoning: "ok", report: "ok", fixes: [] }));
+
+    await collect(
+      runLint([], vt, llm, "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+
+    const writeCalls = (adapter.write as ReturnType<typeof vi.fn>).mock.calls;
+    const sourceWrite = writeCalls.find(([p]: [string]) => p === "source.md");
+    expect(sourceWrite).toBeDefined();
+    expect(sourceWrite![1]).not.toContain("Иммуномодуляторы");
+  });
+
+  // @lat: [[lat.md/tests#Tests#Lint#useLlm=false skips LLM loop]]
+  it("useLlm=false: skips LLM calls entirely", async () => {
+    const adapter = mockAdapter({
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+      read: vi.fn().mockResolvedValue("---\n---\n"),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm(JSON.stringify({ reasoning: "ok", report: "", fixes: [] }));
+
+    await collect(
+      runLint([], vt, llm, "model", [domain], VAULT_ROOT, new AbortController().signal, 0, {}, undefined, false, []),
+    );
+
+    expect((llm.chat.completions.create as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+  });
+});

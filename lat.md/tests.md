@@ -353,3 +353,23 @@ After `formatApply`, any forbidden fields the LLM may have added (e.g. `wiki_out
 ### formatApply strips path-style wiki_articles entries
 
 After `formatApply`, any `wiki_articles` entries from the original that are path-style wikilinks (containing `/`) are removed from the written output. Valid stem entries are kept.
+
+## Lint
+
+Integration tests for `runLint` in [[src/phases/lint.ts]] covering the `stripInvalidWikiArticles` cleanup and the `useLlm=false` skip path.
+
+### stripInvalidWikiArticles in lint — plain text stripped
+
+After `runLint`, plain-text `wiki_articles` entries (e.g. `Иммуномодуляторы` without `[[...]]`) in source files are removed by `stripInvalidWikiArticles`.
+
+### useLlm=false skips LLM loop
+
+When `useLlm` is `false`, `runLint` must not invoke `llm.chat.completions.create` at all.
+
+## Ingest
+
+Integration tests for `runIngest` in [[src/phases/ingest.ts]] covering the `stripInvalidWikiArticles` cleanup after ingest.
+
+### stripInvalidWikiArticles in ingest — non-wiki stem stripped
+
+After `runIngest`, `wiki_articles` entries whose stem does not match the `wiki_*` pattern (e.g. `[[ИРС-19]]`) are removed; valid entries like `[[wiki_work_live]]` are kept.

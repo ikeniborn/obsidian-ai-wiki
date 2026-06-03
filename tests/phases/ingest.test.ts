@@ -1537,3 +1537,47 @@ describe("runIngest — stem mask guard", () => {
     expect(failResult).toBeDefined();
   });
 });
+
+describe("runIngest — stripInvalidWikiArticles", () => {
+  // @lat: [[lat.md/tests#Tests#Ingest#stripInvalidWikiArticles in ingest — non-wiki stem stripped]]
+  it("strips [[ИРС-19]] (non-wiki_* stem) from wiki_articles during ingest", async () => {
+    const existingFm =
+      '---\nwiki_added: 2026-01-01\nwiki_updated: 2026-01-01\nwiki_articles:\n  - "[[ИРС-19]]"\n  - "[[wiki_work_live]]"\n---\nsource text';
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "Sources/doc.md") return existingFm;
+        if (path === "!Wiki/work/wiki_work_live.md") return "# Live";
+        throw new Error("not found");
+      }),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/wiki_work_live.md"], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "x", entities: [{ name: "NewPage" }] }),
+      JSON.stringify({
+        reasoning: "x",
+        pages: [{ path: "!Wiki/work/entities/wiki_work_new_page.md", content: "# NewPage" }],
+      }),
+    ]);
+
+    await collect(
+      runIngest(
+        [`${VAULT_ROOT}/Sources/doc.md`],
+        vt,
+        llm,
+        "llama3.2",
+        [domain],
+        VAULT_ROOT,
+        new AbortController().signal,
+      ),
+    );
+
+    const sourceWrite = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([p]: [string]) => p === "Sources/doc.md",
+    );
+    expect(sourceWrite).toBeDefined();
+    const written = sourceWrite![1] as string;
+    expect(written).not.toContain("[[ИРС-19]]");
+    expect(written).toContain("[[wiki_work_live]]");
+  });
+});
