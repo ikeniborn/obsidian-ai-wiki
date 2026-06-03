@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.150 — 2026-06-03
+
+### Fixes
+- fix(settings): hide proxy section when backend is claude-agent
+
+### Other
+- refactor(settings): move wikiLinkValidationRetries into LLM section; add Jaccard heading
+- refactor(i18n): add h3_jaccard key for all locales
+
+---
+
 ## 0.1.149 — 2026-06-03
 
 ### New
