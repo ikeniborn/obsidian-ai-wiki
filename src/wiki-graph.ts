@@ -1,4 +1,6 @@
 import { basename } from "path-browserify";
+import { tokenize, scoreSeed } from "./wiki-seeds";
+import type { PageSimilarityService } from "./page-similarity";
 
 export type WikiGraph = Map<string, Set<string>>;
 
@@ -104,7 +106,69 @@ export function bfsExpandWithHops(
   return { expanded: visited, byHop };
 }
 
-export function checkGraphStructure(graph: WikiGraph, hubThreshold: number): string {
+/**
+ * BFS-expansion with ranking: expands seeds up to `depth` hops, then returns seeds + top-K
+ * non-seed pages ranked by embedding similarity (if available) or Jaccard overlap as fallback.
+ * bfsTopK=0 returns all BFS pages unfiltered.
+ */
+export async function bfsExpandRanked(
+  seeds: string[],
+  graph: WikiGraph,
+  depth: number,
+  pages: Map<string, string>,
+  query: string,
+  bfsTopK: number,
+  annotations?: Map<string, string>,
+  similarity?: PageSimilarityService,
+): Promise<Set<string>> {
+  const allBfs = bfsExpand(seeds, graph, depth);
+  const seedSet = new Set(seeds);
+
+  if (bfsTopK <= 0) return allBfs;
+
+  const nonSeeds = [...allBfs].filter(pid => !seedSet.has(pid));
+  if (nonSeeds.length === 0) return new Set(seedSet);
+
+  // Reverse lookup: pageId → vaultPath
+  const pidToPath = new Map<string, string>();
+  for (const vaultPath of pages.keys()) {
+    pidToPath.set(pageId(vaultPath), vaultPath);
+  }
+
+  const nonSeedPaths = nonSeeds.flatMap(pid => {
+    const p = pidToPath.get(pid);
+    return p ? [p] : [];
+  });
+
+  if (similarity) {
+    try {
+      const scored = await similarity.selectRelevantScored(
+        query,
+        annotations ?? new Map(),
+        nonSeedPaths,
+      );
+      const topPids = scored.slice(0, bfsTopK).map(({ path }) => pageId(path));
+      return new Set([...seedSet, ...topPids]);
+    } catch (err) {
+      console.warn("[bfsExpandRanked] similarity threw, returning full BFS:", err);
+      return allBfs;
+    }
+  }
+
+  // Jaccard fallback
+  const questionTokens = tokenize(query);
+  const scored = nonSeeds.map(pid => {
+    const path = pidToPath.get(pid);
+    const content = path ? (pages.get(path) ?? "") : "";
+    return { pid, score: scoreSeed(questionTokens, pid, content) };
+  });
+  scored.sort((a, b) => b.score - a.score);
+
+  const topPids = scored.slice(0, bfsTopK).map(x => x.pid);
+  return new Set([...seedSet, ...topPids]);
+}
+
+export function checkGraphStructure(graph: WikiGraph): string {
   const inDegree = new Map<string, number>();
   for (const node of graph.keys()) {
     if (!inDegree.has(node)) inDegree.set(node, 0);
@@ -120,9 +184,6 @@ export function checkGraphStructure(graph: WikiGraph, hubThreshold: number): str
 
     if (inDeg === 0 && outDeg === 0) {
       issues.push(`- ${node}: isolated node (no links in or out)`);
-    }
-    if (outDeg > hubThreshold) {
-      issues.push(`- ${node}: hub node (${outDeg} outgoing links)`);
     }
     for (const tgt of neighbors) {
       if (graph.has(tgt) && !graph.get(tgt)!.has(node)) {

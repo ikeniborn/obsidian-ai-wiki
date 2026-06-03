@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runLint, checkStructure, cleanupInvalidPages } from "../../src/phases/lint";
+import { runLint, checkStructure, cleanupInvalidPages, buildTitleMap, validateWikiSources } from "../../src/phases/lint";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
@@ -387,7 +387,7 @@ describe("runLint", () => {
       selectRelevant: vi.fn().mockResolvedValue([]),
     };
     const events = await collect(
-      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal, 20, 3, {}, similarity as any),
+      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal, 3, {}, similarity as any),
     );
     const infoEvents = events.filter((e: any) => e.kind === "info_text") as any[];
     expect(similarity.loadCache).toHaveBeenCalled();
@@ -410,7 +410,7 @@ describe("runLint", () => {
       selectRelevant: vi.fn().mockResolvedValue([]),
     };
     const events = await collect(
-      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal, 20, {}, similarity as any),
+      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal, 3, {}, similarity as any),
     );
     const vectorEvents = (events as any[]).filter(
       (e) => e.kind === "info_text" && (e.summary.includes("векторов") || e.summary.includes("кэша")),
@@ -432,7 +432,7 @@ describe("runLint", () => {
       selectRelevant: vi.fn().mockResolvedValue([]),
     };
     const events = await collect(
-      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal, 20, 3, {}, similarity as any),
+      runLint(["work"], vt, makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] })), "model", [domain], VAULT_ROOT, new AbortController().signal, 3, {}, similarity as any),
     );
     const infoEvents = (events as any[]).filter((e) => e.kind === "info_text");
     expect(infoEvents.some((e) => e.summary.includes("загрузка кэша векторов"))).toBe(true);
@@ -991,5 +991,71 @@ describe("cleanupInvalidPages", () => {
     const { deleted } = await cleanupInvalidPages(vt, "!Wiki/fin", "fin");
     expect(deleted).toBe(0);
     expect(vi.mocked(vt.remove)).not.toHaveBeenCalled();
+  });
+});
+
+describe("buildTitleMap", () => {
+  it("parses H1 heading and stores lowercased title → stem", async () => {
+    const mockVaultTools = {
+      read: vi.fn().mockImplementation(async (path: string) => {
+        if (path === "vault/wiki_os_pac_file.md") {
+          return "# Настройка прокси\n\nContent here.";
+        }
+        throw new Error("not found");
+      }),
+    };
+
+    const result = await buildTitleMap(
+      ["vault/wiki_os_pac_file.md"],
+      mockVaultTools as any,
+    );
+
+    expect(result.get("настройка прокси")).toBe("wiki_os_pac_file");
+  });
+
+  it("key is lowercased, so titleMap.has() with lowercase input resolves [[НАСТРОЙКА ПРОКСИ]]", async () => {
+    const mockVaultTools = {
+      read: vi.fn().mockResolvedValue("# Настройка Прокси\n\nContent."),
+    };
+
+    const result = await buildTitleMap(
+      ["vault/wiki_os_pac_file.md"],
+      mockVaultTools as any,
+    );
+
+    expect(result.has("настройка прокси")).toBe(true);
+    expect(result.get("настройка прокси")).toBe("wiki_os_pac_file");
+  });
+});
+
+describe("validateWikiSources", () => {
+  const knownStems = new Set(["wiki_os_pac_file", "wiki_networking_dns"]);
+  const titleMap = new Map([["настройка прокси", "wiki_os_pac_file"]]);
+
+  const makeContent = (sources: string[]) =>
+    `---\nwiki_sources:\n${sources.map(s => `  - ${s}`).join("\n")}\n---\n# Article`;
+
+  it("[[Настройка прокси]] with matching titleMap entry → preserved", () => {
+    const content = makeContent(["[[Настройка прокси]]"]);
+    const result = validateWikiSources(content, knownStems, titleMap);
+    expect(result).toContain("[[Настройка прокси]]");
+  });
+
+  it("[[wiki_os_deleted_page]] not in knownStems or titleMap → removed", () => {
+    const content = makeContent(["[[wiki_os_deleted_page]]"]);
+    const result = validateWikiSources(content, knownStems, titleMap);
+    expect(result).not.toContain("[[wiki_os_deleted_page]]");
+  });
+
+  it("content without frontmatter → returned unchanged", () => {
+    const content = "no frontmatter here\n# Article";
+    const result = validateWikiSources(content, knownStems, titleMap);
+    expect(result).toBe(content);
+  });
+
+  it("entry without [[...]] format → left intact", () => {
+    const content = makeContent(["plain-text-entry"]);
+    const result = validateWikiSources(content, knownStems, titleMap);
+    expect(result).toContain("plain-text-entry");
   });
 });

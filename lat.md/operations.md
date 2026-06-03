@@ -89,11 +89,11 @@ If seed selection yields nothing, `llmSelectSeeds` asks the LLM to pick from all
 
 BFS always runs from the seed set — both when seeds come from similarity and from Jaccard. All wiki pages are read to build the graph; only BFS-expanded pages are passed to the LLM. The graph is undirected — `A → [[B]]` allows traversal B→A.
 
-`bfsExpandWithHops` produces `expandedByHop: Record<number, string[]>` — pages by BFS depth — for tracing. Both `seedScores` and `expandedByHop` are emitted in the `graph_stats` event.
+`bfsExpandRanked` wraps BFS with a similarity/Jaccard ranking pass. Non-seed pages are ranked and capped at `bfsTopK` (setting, default 10). Seeds are always included. The `graph_stats` event emits `seedScores` for tracing; `expandedByHop` is no longer emitted.
 
-Forward traversal guards against phantom nodes: `[[links]]` whose targets have no corresponding page are never added to `expanded` or `byHop`. Files under any `_config/` subdirectory are excluded before graph construction.
+Forward traversal guards against phantom nodes: `[[links]]` whose targets have no corresponding page are never added to the expanded set. Files under any `_config/` subdirectory are excluded before graph construction.
 
-See [[src/wiki-graph.ts#bfsExpandWithHops]], [[wiki-graph#Query Graph Traversal]].
+See [[src/wiki-graph.ts#bfsExpandRanked]], [[wiki-graph#Query Graph Traversal]].
 
 ### Query Trace UI
 
@@ -107,13 +107,17 @@ The formatting is handled by [[src/view.ts#formatGraphStatsLines]], a pure funct
 
 Analyzes wiki pages for a domain one article at a time. For each article selects a limited context set via `PageSimilarityService` + BFS graph expansion, then calls the LLM. Results are merged into `LintOutputSchema`.
 
+Before the per-article loop, lint pre-builds a title map from non-wiki vault files. `buildTitleMap` reads H1 headings (or `title:` frontmatter) from each file and stores a lowercase-title → stem mapping. Title-derived stems are added to `knownStems` so `[[Title-based links]]` in `wiki_sources` are not falsely removed.
+
 Per-article loop:
 1. `selectRelevant(articleContent, annotations, otherPaths)` → top-K paths
 2. `bfsExpand([articleId, ...topKIds], graph, depth=1)` → expanded page set
 3. LLM call with article + context → `{ report, fixes[], deletes[] }`
-4. Apply fixes immediately: `fixWikiLinks` per-step, write to vault, update `pages` and `annotations` in-memory
+4. Apply fixes: `fixWikiLinks` per-step, then `validateWikiSources` guards `wiki_sources` against false-positive removals by the LLM — entries are kept if resolvable by filename stem OR page title. Write to vault, update `pages` and `annotations` in-memory.
 5. Process `deletes`: `vaultTools.remove`, rewrite `[[deleted]]` links in wiki pages
 6. Rebuild graph (`graphCache`) + refresh vectors (`similarity.refreshCache`)
+
+See [[src/phases/lint.ts#buildTitleMap]], [[src/phases/lint.ts#validateWikiSources]].
 
 After all articles:
 - Source-file backlink rewrite (vault-wide scan for deleted article refs, skipping wiki pages)

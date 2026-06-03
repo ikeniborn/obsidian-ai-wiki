@@ -9,7 +9,7 @@ import queryTemplate from "../../prompts/query.md";
 import { render } from "./template";
 import { domainWikiFolder, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
-import { pageId, bfsExpandWithHops } from "../wiki-graph";
+import { pageId, bfsExpandRanked } from "../wiki-graph";
 import { graphCache } from "../wiki-graph-cache";
 import { selectSeeds } from "../wiki-seeds";
 import { parseIndexAnnotations } from "../wiki-index";
@@ -30,6 +30,7 @@ export async function* runQuery(
   opts: LlmCallOptions = {},
   seedTopK: number = 5,
   seedMinScore: number = 0.1,
+  bfsTopK: number = 10,
   similarity?: PageSimilarityService,
 ): AsyncGenerator<RunEvent> {
   const question = args[0]?.trim();
@@ -116,8 +117,17 @@ export async function* runQuery(
     return;
   }
 
-  const { expanded: selectedIds, byHop: expandedByHop } = bfsExpandWithHops(seeds, graphResult.graph, graphDepth);
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedByHop };
+  const selectedIds = await bfsExpandRanked(
+    seeds,
+    graphResult.graph,
+    graphDepth,
+    pages,
+    question,
+    bfsTopK,
+    indexAnnotations,
+    similarity,
+  );
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores };
 
   const seedSet = new Set(seeds);
   const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);

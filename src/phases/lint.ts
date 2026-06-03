@@ -53,6 +53,68 @@ export async function cleanupInvalidPages(
 
 
 
+export async function buildTitleMap(
+  paths: string[],
+  vaultTools: VaultTools,
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  for (const path of paths) {
+    try {
+      const content = await vaultTools.read(path);
+      const stem = path.split("/").pop()!.replace(/\.md$/, "");
+
+      // Prefer title: frontmatter field
+      const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+      if (fmMatch) {
+        const titleMatch = fmMatch[1].match(/^title:\s*(.+)$/m);
+        if (titleMatch) {
+          result.set(titleMatch[1].trim().toLowerCase(), stem);
+          continue;
+        }
+      }
+
+      // Fall back to first H1
+      const h1Match = content.match(/^# (.+)$/m);
+      if (h1Match) {
+        result.set(h1Match[1].trim().toLowerCase(), stem);
+      }
+      // No title found: skip
+    } catch {
+      // Unreadable file: skip silently
+    }
+  }
+  return result;
+}
+
+export function validateWikiSources(
+  content: string,
+  knownStems: Set<string>,
+  titleMap: Map<string, string>,
+): string {
+  const entries = parseWikiSourcesFromFm(content);
+  if (entries.length === 0) return content;
+
+  const isValid = (entry: string): boolean => {
+    const m = entry.match(/^\[\[(.+?)\]\]$/);
+    if (!m) return true; // non-wikilink format: keep as-is
+    const text = m[1];
+    return knownStems.has(text) || titleMap.has(text.toLowerCase());
+  };
+
+  const toRemove = entries.filter((e) => !isValid(e));
+  if (toRemove.length === 0) return content;
+
+  // YAML parses [[...]] as a flow sequence (nested array), so filterStaleWikiLinks
+  // cannot handle wiki_sources entries. Remove them via raw string substitution.
+  let result = content;
+  for (const entry of toRemove) {
+    // Remove the list item line that contains this exact wikilink entry.
+    const escaped = entry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    result = result.replace(new RegExp(`[ \\t]+-[ \\t]+${escaped}\\n?`, ""), "");
+  }
+  return result;
+}
+
 export async function* runLint(
   args: string[],
   vaultTools: VaultTools,
@@ -61,7 +123,6 @@ export async function* runLint(
   domains: DomainEntry[],
   vaultRoot: string,
   signal: AbortSignal,
-  hubThreshold: number = 20,
   wikiLinkValidationRetries: number = 3,
   opts: LlmCallOptions = {},
   similarity?: PageSimilarityService,
@@ -107,7 +168,7 @@ export async function* runLint(
     // Build initial graph + structural checks on all pages
     let { graph } = graphCache.get(domain.id, pages);
     const structuralIssues = checkStructure(pages);
-    const graphIssues = checkGraphStructure(graph, hubThreshold);
+    const graphIssues = checkGraphStructure(graph);
     const wikiLinkIssues = checkWikiLinks(pages);
     const allStructuralIssues = [structuralIssues, graphIssues, wikiLinkIssues].filter(Boolean).join("\n");
 
@@ -118,6 +179,16 @@ export async function* runLint(
       ...allMdPaths.map(p => p.split("/").pop()!.replace(/\.md$/, "")),
       ...[...pages.keys()].map((p) => p.split("/").pop()!.replace(/\.md$/, "")),
     ]);
+
+    // Build title map from non-wiki vault files (runs once per domain)
+    const nonWikiPaths = allMdPaths.filter(p => !p.startsWith(wikiVaultPath + "/"));
+    const titleMap = await buildTitleMap(nonWikiPaths, vaultTools);
+
+    // Extend knownStems with stems from titleMap
+    for (const stem of titleMap.values()) {
+      knownStems.add(stem);
+    }
+
     const stemToPath = new Map<string, string>(
       allMdPaths.map(p => [p.split("/").pop()!.replace(/\.md$/, ""), p])
     );
@@ -250,7 +321,8 @@ export async function* runLint(
           }
           yield { kind: "tool_use", name: "Update", input: { path: fix.path } };
           try {
-            const fixedContent = wlFixResult.fixed.get(fix.path) ?? fix.content;
+            const rawFixed = wlFixResult.fixed.get(fix.path) ?? fix.content;
+            const fixedContent = validateWikiSources(rawFixed, knownStems, titleMap);
             await vaultTools.write(fix.path, fixedContent);
             writtenPaths.push(fix.path);
             pages.set(fix.path, fixedContent);

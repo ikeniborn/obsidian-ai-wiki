@@ -683,15 +683,15 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName(T.settings.hubThreshold_name)
-      .setDesc(T.settings.hubThreshold_desc)
+      .setName(T.settings.bfsTopK_name)
+      .setDesc(T.settings.bfsTopK_desc)
       .addText((t) =>
-        t.setPlaceholder("20")
-          .setValue(String(s.hubThreshold))
+        t.setPlaceholder("10")
+          .setValue(String(s.bfsTopK))
           .onChange(async (v) => {
             const n = Number(v);
-            if (Number.isInteger(n) && n > 0) {
-              s.hubThreshold = n;
+            if (Number.isInteger(n) && n >= 0) {
+              s.bfsTopK = n;
               await this.plugin.saveSettings();
             }
           }),
