@@ -134,6 +134,26 @@ Content without a frontmatter block is returned unchanged with an empty warnings
 
 Invalid frontmatter fields are repaired but body content referencing those field names as plain text is preserved unchanged.
 
+### Source path-style wikilink removal
+
+Entries in `wiki_articles` that contain `/` or end with `.md]]` are path-style links, not stems. They are removed and a warning is emitted. Valid stem links like `[[wiki_valid]]` are kept.
+
+### Source path-style dot-md wikilink removal
+
+Entries in `wiki_articles` ending with `.md]]` (e.g. `[[procedures/file.md]]`) are rejected even if they pass the basic `[[...]]` test, because they reference a path, not a stem.
+
+### Source forbidden wiki field removal
+
+Fields like `wiki_outgoing_links`, `wiki_sources`, `wiki_status`, `wiki_type`, `wiki_external_links` belong to wiki pages only. When present in source frontmatter, they are removed silently with a warning.
+
+### Source forbidden wiki_sources removal
+
+`wiki_sources` in source frontmatter (files outside `!Wiki/`) is a wiki-page-only field and must be stripped.
+
+### Source forbidden annotation removal
+
+`annotation` is a wiki-page-only field and must be stripped from source file frontmatter.
+
 ## Wiki Page Frontmatter Validation
 
 Tests for [[src/utils/raw-frontmatter.ts#validateAndRepairWikiPageFrontmatter]] covering wiki page-specific fields.
