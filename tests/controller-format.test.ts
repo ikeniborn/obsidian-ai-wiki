@@ -206,6 +206,7 @@ describe("WikiController formatApply / formatCancel / formatRefine", () => {
     expect(dispatchSpy).toHaveBeenCalledWith("format", ["x.md"]);
   });
 
+  // @lat: [[tests#Controller Format Cleanup#formatApply strips forbidden wiki fields]]
   it("formatApply strips forbidden wiki_* fields (e.g. wiki_outgoing_links) added by LLM", async () => {
     const { ctrl, app } = build();
     (ctrl as unknown as { _pendingFormat: unknown })._pendingFormat = {
@@ -241,6 +242,7 @@ describe("WikiController formatApply / formatCancel / formatRefine", () => {
     expect(written).toContain("New");
   });
 
+  // @lat: [[tests#Controller Format Cleanup#formatApply strips path-style wiki_articles entries]]
   it("formatApply strips path-style entries from wiki_articles", async () => {
     const { ctrl, app } = build();
     (ctrl as unknown as { _pendingFormat: unknown })._pendingFormat = {

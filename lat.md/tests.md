@@ -285,3 +285,15 @@ When `selectByEntities` returns `allFailed: true` and both entities and `nonMeta
 ### BFS not invoked
 
 `graphCache.get` is never called from the ingest path — the test spies on the cache and asserts zero calls.
+
+## Controller Format Cleanup
+
+Tests for `formatApply` post-processing: forbidden wiki_* field stripping and path-style wikilink removal after LLM format.
+
+### formatApply strips forbidden wiki fields
+
+After `formatApply`, any forbidden fields the LLM may have added (e.g. `wiki_outgoing_links`) are removed from the written output. Original wiki tracking fields are preserved.
+
+### formatApply strips path-style wiki_articles entries
+
+After `formatApply`, any `wiki_articles` entries from the original that are path-style wikilinks (containing `/`) are removed from the written output. Valid stem entries are kept.
