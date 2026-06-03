@@ -37726,15 +37726,34 @@ async function buildTitleMap(paths, vaultTools) {
   }
   return result;
 }
-function validateWikiSources(content, knownStems, titleMap) {
-  const entries = parseWikiSourcesFromFm(content);
-  if (entries.length === 0) return content;
+function validateWikiSources(content, originalContent, knownStems, titleMap) {
   const isValid2 = (entry) => {
     const m = entry.match(/^\[\[(.+?)\]\]$/);
     if (!m) return true;
     const text = m[1];
     return knownStems.has(text) || titleMap.has(text.toLowerCase());
   };
+  if (originalContent) {
+    const originalEntries = parseWikiSourcesFromFm(originalContent);
+    const llmEntries = new Set(parseWikiSourcesFromFm(content));
+    const validOriginal = originalEntries.filter(isValid2);
+    const missing = validOriginal.filter((e) => !llmEntries.has(e));
+    if (missing.length > 0) {
+      const emptyKeyRe = /wiki_sources:\s*(?:\[\]\s*\n|\n(?!\s*-))/;
+      if (emptyKeyRe.test(content)) {
+        const block = "wiki_sources:\n" + missing.map((e) => `  - ${e}`).join("\n") + "\n";
+        content = content.replace(emptyKeyRe, block);
+      } else {
+        const listBlockRe = /(wiki_sources:\s*\n(?:[ \t]+-[ \t]+[^\n]+\n?)+)/;
+        content = content.replace(
+          listBlockRe,
+          (match) => match.trimEnd() + "\n" + missing.map((e) => `  - ${e}`).join("\n") + "\n"
+        );
+      }
+    }
+  }
+  const entries = parseWikiSourcesFromFm(content);
+  if (entries.length === 0) return content;
   const toRemove = entries.filter((e) => !isValid2(e));
   if (toRemove.length === 0) return content;
   let result = content;
@@ -37903,7 +37922,8 @@ ${lintResult.value.report}`);
           yield { kind: "tool_use", name: "Update", input: { path: fix.path } };
           try {
             const rawFixed = wlFixResult.fixed.get(fix.path) ?? fix.content;
-            const fixedContent = validateWikiSources(rawFixed, knownStems, titleMap);
+            const originalContent = pages.get(fix.path) ?? "";
+            const fixedContent = validateWikiSources(rawFixed, originalContent, knownStems, titleMap);
             await vaultTools.write(fix.path, fixedContent);
             writtenPaths.push(fix.path);
             pages.set(fix.path, fixedContent);
@@ -37952,6 +37972,26 @@ ${lintResult.value.report}`);
         if (similarity.config.mode === "embedding" && updated > 0) {
           yield { kind: "info_text", icon: "\u{1F4E4}", summary: `\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432: ${updated}` };
         }
+      }
+    }
+    for (const wikiPath of writtenPaths) {
+      const wikiContent = pages.get(wikiPath);
+      if (!wikiContent) continue;
+      if (parseWikiSourcesFromFm(wikiContent).length === 0) {
+        const stem = pageId(wikiPath);
+        try {
+          if (typeof vaultTools.remove === "function") {
+            await vaultTools.remove(wikiPath);
+          }
+        } catch {
+        }
+        pages.delete(wikiPath);
+        deletedRefs.push({ deletedName: stem, redirectName: null });
+        yield {
+          kind: "info_text",
+          icon: "\u26A0\uFE0F",
+          summary: `Deleted empty-sources wiki page: ${stem}`
+        };
       }
     }
     if (skippedArticles.length > 0) {
