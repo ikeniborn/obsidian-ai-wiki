@@ -48,7 +48,17 @@ export const WikiPageSchema = z.object({
   const fmEnd = val.content.startsWith("---\n")
     ? (() => { const i = val.content.indexOf("\n---", 4); return i >= 0 ? i + 4 : 0; })()
     : 0;
+  const fm = val.content.slice(0, fmEnd);
   const body = val.content.slice(fmEnd);
+
+  // wiki_sources entries must be double-quoted to prevent YAML from parsing [[...]] as a flow sequence.
+  const sourcesBlock = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fm);
+  if (sourcesBlock) {
+    const unquoted = [...sourcesBlock[1].matchAll(/[ \t]+-[ \t]+(\[\[[^\]]+\]\])/g)];
+    if (unquoted.length > 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `wiki_sources entries must be double-quoted: "[[...]]" (found unquoted: ${unquoted.map(m => m[1]).join(", ")})`, path: ["content"] });
+    }
+  }
 
   if (/\[\[[^\]]+\|[^\]]+\]\]/.test(body)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "WikiLink aliases not allowed", path: ["content"] });

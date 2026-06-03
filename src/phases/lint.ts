@@ -92,6 +92,12 @@ export function validateWikiSources(
   knownStems: Set<string>,
   titleMap: Map<string, string>,
 ): string {
+  // Normalize unquoted [[...]] items in wiki_sources — bare [[x]] is parsed by YAML as a flow sequence.
+  content = content.replace(
+    /(wiki_sources:\s*\n(?:[ \t]+-[ \t]+[^\n]+\n?)+)/,
+    (block) => block.replace(/^([ \t]+-[ \t]+)(\[\[[^\]]+\]\])([ \t]*)$/gm, '$1"$2"$3'),
+  );
+
   const isValid = (entry: string): boolean => {
     const m = entry.match(/^\[\[(.+?)\]\]$/);
     if (!m) return true; // non-wikilink format: keep as-is
@@ -109,13 +115,13 @@ export function validateWikiSources(
       // Normalise: replace inline `wiki_sources: []` or bare `wiki_sources:` with a block list.
       const emptyKeyRe = /wiki_sources:\s*(?:\[\]\s*\n|\n(?!\s*-))/;
       if (emptyKeyRe.test(content)) {
-        const block = "wiki_sources:\n" + missing.map((e) => `  - ${e}`).join("\n") + "\n";
+        const block = "wiki_sources:\n" + missing.map((e) => `  - "${e}"`).join("\n") + "\n";
         content = content.replace(emptyKeyRe, block);
       } else {
         // Block-list exists — append missing items after the last list entry.
         const listBlockRe = /(wiki_sources:\s*\n(?:[ \t]+-[ \t]+[^\n]+\n?)+)/;
         content = content.replace(listBlockRe, (match) =>
-          match.trimEnd() + "\n" + missing.map((e) => `  - ${e}`).join("\n") + "\n",
+          match.trimEnd() + "\n" + missing.map((e) => `  - "${e}"`).join("\n") + "\n",
         );
       }
     }
@@ -132,9 +138,9 @@ export function validateWikiSources(
   // cannot handle wiki_sources entries. Remove them via raw string substitution.
   let result = content;
   for (const entry of toRemove) {
-    // Remove the list item line that contains this exact wikilink entry.
+    // Remove the list item line containing this wikilink — handles both quoted and unquoted forms.
     const escaped = entry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    result = result.replace(new RegExp(`[ \\t]+-[ \\t]+${escaped}\\n?`, ""), "");
+    result = result.replace(new RegExp(`[ \\t]+-[ \\t]+"?${escaped}"?\\n?`, ""), "");
   }
   return result;
 }
