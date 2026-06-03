@@ -1,3 +1,40 @@
+---
+review:
+  spec_hash: 32dd57c0aee89372
+  last_run: 2026-06-03
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: INFO
+      section: "### 1. Source frontmatter rules (`src/utils/raw-frontmatter.ts`)"
+      section_hash: dfc2b3bb0bd225e7
+      text: "`WIKILINK_RE` referenced but not defined in spec — implementer must locate it in codebase"
+      verdict: fixed
+      verdict_at: 2026-06-03
+    - id: F-002
+      phase: clarity
+      severity: INFO
+      section: "### 5. Wiki article guard replacement (`src/controller.ts`)"
+      section_hash: a55324a2b6cafc40
+      text: "\"where needed\" — ambiguous about whether ConfirmModal import should be removed or kept alongside InfoModal"
+      verdict: fixed
+      verdict_at: 2026-06-03
+    - id: F-003
+      phase: clarity
+      severity: WARNING
+      section: "## Overview"
+      section_hash: cff149d397730ce4
+      text: "Inconsistent terminology: \"wiki article guard\" (title/Overview) vs \"wiki guard\" (§Existing wiki guard, §5 heading)"
+      verdict: fixed
+      verdict_at: 2026-06-03
+chain:
+  intent: null
+---
 # Design: Format Frontmatter Cleanup + Wiki Article Guard
 
 ## Overview
@@ -26,7 +63,7 @@ Source files (articles outside `!Wiki/`) must only contain these wiki-related fr
 
 All other `wiki_*` fields belong to wiki pages only and must be absent from source files.
 
-### Existing wiki guard
+### Existing wiki article guard
 
 `controller.ts` `format()` already checks if the active file is inside a wiki domain folder and shows a `ConfirmModal` offering to run ingest from sources. The user wants this replaced with a simple "forbidden" `InfoModal` — no ingest option.
 
@@ -38,7 +75,7 @@ All other `wiki_*` fields belong to wiki pages only and must be absent from sour
 
 Extends `list-wikilinks` but additionally rejects entries that contain `/` or end with `.md]]`. These are path-style links, not stem links. Valid wikilinks in `wiki_articles` are bare stems: `[[wiki_health_oblivanie_kholodnoj_vodoj]]` or `[[SomeUserNote]]`.
 
-Predicate: `WIKILINK_RE.test(v) && !v.includes("/") && !v.endsWith(".md]]")`
+Predicate: `WIKILINK_RE.test(v) && !v.includes("/") && !v.endsWith(".md]]")` — where `WIKILINK_RE` is the existing regex constant in `src/utils/raw-frontmatter.ts` that matches `[[...]]` strings.
 
 **Changes to `SOURCE_RULES`:**
 
@@ -126,7 +163,7 @@ Add/update in `view` section (en, ru, es):
 | `formatInWikiBody` | `(id) => \`This file is a wiki article (domain «${id}»). Formatting wiki articles is not available.\`` | `(id) => \`Файл является wiki-статьёй домена «${id}». Форматирование wiki-статей недоступно.\`` | `(id) => \`Este archivo es un artículo wiki (dominio «${id}»). No se puede formatear artículos wiki.\`` |
 | `formatInWikiClose` | "Close" | "Закрыть" | "Cerrar" |
 
-### 5. Wiki guard replacement (`src/controller.ts`)
+### 5. Wiki article guard replacement (`src/controller.ts`)
 
 In `format()`, replace:
 
@@ -152,7 +189,7 @@ new InfoModal(
 
 Remove `suggestIngestForWikiFile` method (becomes unused).
 
-Import `InfoModal` instead of only `ConfirmModal` where needed.
+In `src/controller.ts`: add `InfoModal` to the import from `./modals`. `ConfirmModal` remains imported if used elsewhere; if `format()` was its only call site, remove it.
 
 ## Files changed
 

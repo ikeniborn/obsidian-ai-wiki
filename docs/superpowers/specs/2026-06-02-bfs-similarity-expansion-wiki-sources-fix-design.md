@@ -1,3 +1,51 @@
+---
+review:
+  spec_hash: 8881456ec82f2fa9
+  last_run: 2026-06-02
+  phases:
+    structure:
+      status: passed
+    coverage:
+      status: passed
+    clarity:
+      status: passed
+    consistency:
+      status: passed
+  section_hashes:
+    "Overview": f50026c7f3178e7e
+    "Architecture": 970fec7f46977b48
+    "Task 1: BFS Similarity Expansion": 0326b2a8afe768cc
+    "Task 2: wiki_sources Fix": 66b5d8eeabfb04f1
+    "Components & Interfaces": 6515abf0e6f60669
+    "src/wiki-graph.ts": b0192d161f2199f6
+    "src/phases/lint.ts": 748cd39588e8ba26
+    "src/types.ts": 5dc3f10eae3dbf52
+    "src/settings.ts": 90b71da41fff51d6
+    "Data Flow": 3b2c13832af755e7
+    "Query pipeline": c640457e92c960f4
+    "Lint pipeline": b0568586338ea5aa
+    "Error Handling": 92504a19c77a6d47
+    "What Does Not Change": 4323674d2460f369
+    "Testing": 51fc5660c8072e44
+    "src/wiki-graph.test.ts — bfsExpandRanked": fbe2a69c9d8af756
+    "src/utils/raw-frontmatter.test.ts or src/phases/lint.test.ts — buildTitleMap": 78e0af84bfb33cfa
+    "src/phases/lint.test.ts — validateWikiSources": 5b2684f8e45a6760
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "Task 2: wiki_sources Fix"
+      section_hash: b36ce4fd2a4f32c8
+      text: >-
+        Terminology inconsistency: 'titleAliases' (Architecture §Task 2, Data Flow §Lint pipeline)
+        vs 'titleMap' (Components §lint.ts). 'knownStems ∪ titleAliases' implies Set<string>,
+        but buildTitleMap returns Map<string,string> and validateWikiSources takes the full Map.
+        Unclear whether titleAliases = titleMap.values() (stems only) or the full Map.
+      verdict: fixed
+      verdict_at: 2026-06-02
+chain:
+  intent: docs/superpowers/intents/2026-06-02-bfs-similarity-expansion-wiki-sources-fix-intent.md
+---
 # Design: BFS Similarity Expansion + wiki_sources Fix
 
 **Date:** 2026-06-02
@@ -27,7 +75,7 @@ New function `bfsExpandRanked` in `src/wiki-graph.ts`. Wraps existing `bfsExpand
 
 New function `buildTitleMap` in `src/phases/lint.ts`. Runs once before the per-article loop. Reads H1 (or `title:` frontmatter) from all non-wiki vault files, builds a lowercased `title → stem` map.
 
-`knownStems` in lint is extended with title aliases before being used in dead-link checks and passed to the LLM prompt context.
+`knownStems` in lint is extended with stems from `titleMap` (its values) before being used in dead-link checks and passed to the LLM prompt context.
 
 New function `validateWikiSources` applied as a post-process step after each LLM fix: for every `[[entry]]` in `wiki_sources`, resolve against `knownStems ∪ titleAliases`. Remove only if unresolvable from both.
 
@@ -121,7 +169,7 @@ Page vectors already cached after `similarity.loadCache()` in Phase 2. No extra 
 ```
 allMdPaths
   → buildTitleMap(non-wiki files)          ← NEW, runs once
-  → knownStems ∪ titleAliases              ← extended set
+  → knownStems ∪ titleMap.values()         ← extended set (stems only)
 
 per-article loop:
   → LLM lint fix [unchanged]
