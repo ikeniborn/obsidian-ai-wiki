@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.1.149 — 2026-06-03
+
+### New
+- feat(wiki-graph): add bfsExpandRanked with embedding/Jaccard ranking and bfsTopK limit
+- feat(query): replace bfsExpandWithHops with bfsExpandRanked for similarity-ranked BFS context
+- feat(query): add expandedScores to graph_stats; improve query prompt formatting
+- feat(lint): add buildTitleMap for Obsidian title-based link resolution
+- feat(lint): wire buildTitleMap + validateWikiSources into runLint for title-aware wiki_sources validation
+- feat(lint): add originalContent param to validateWikiSources; restore dropped valid entries
+- feat(lint): delete wiki pages with empty wiki_sources after per-article loop
+- feat(frontmatter): add list-wikilinks-stem-only rule kind; strip forbidden wiki_* fields from SOURCE_RULES
+- feat(controller): strip forbidden wiki_* fields after format apply; replace ConfirmModal wiki guard with InfoModal
+- feat(modals): add InfoModal — title, body lines, single close button
+- feat(i18n): update formatInWiki strings to 'forbidden' framing; add formatInWikiClose key
+
+### Fixes
+- fix(settings): move structuredRetries above per-op section; add heading separator; remove duplicate Semantic Search heading
+- fix(frontmatter): use context-neutral warning message for remove rule kind
+- fix: guard expandedByHop undefined in view.ts; make seed inclusion explicit in bfsExpandRanked
+- fix: remove dead formatInWikiNoSources key
+
+### Other
+- refactor: replace hubThreshold with bfsTopK, remove hub detection from checkGraphStructure
+
+---
+
 ## 0.1.147 — 2026-06-02
 
 ### New
