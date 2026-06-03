@@ -1,7 +1,7 @@
 # Intent: Settings grouping — reorder global params, visual separator, dedup Semantic Search
 
 **Date:** 2026-06-03
-**Status:** draft
+**Status:** approved
 
 ## Objective
 
