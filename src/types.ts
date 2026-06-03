@@ -80,6 +80,8 @@ export type RunEvent =
       total: number;
       fromCache: boolean;
       seedScores: Record<string, number>;
+      expandedPages: string[];
+      expandedScores: Record<string, number>;
       expandedByHop?: Record<number, string[]>;
     };
 

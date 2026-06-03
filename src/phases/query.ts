@@ -117,7 +117,7 @@ export async function* runQuery(
     return;
   }
 
-  const selectedIds = await bfsExpandRanked(
+  const { selectedIds, expandedScores } = await bfsExpandRanked(
     seeds,
     graphResult.graph,
     graphDepth,
@@ -127,9 +127,9 @@ export async function* runQuery(
     indexAnnotations,
     similarity,
   );
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores };
-
   const seedSet = new Set(seeds);
+  const expandedPages = [...selectedIds].filter(id => !seedSet.has(id));
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores };
   const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);
 
   const entityTypesBlock = buildEntityTypesBlock(domain);

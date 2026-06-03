@@ -220,24 +220,26 @@ describe("bfsExpandRanked", () => {
   ]);
 
   it("seeds always included even when bfsTopK=1 and many BFS pages exist", async () => {
-    const result = await bfsExpandRanked(["A"], graph, 1, pages, "apple", 1);
-    expect(result.has("A")).toBe(true);
+    const { selectedIds } = await bfsExpandRanked(["A"], graph, 1, pages, "apple", 1);
+    expect(selectedIds.has("A")).toBe(true);
   });
 
-  it("bfsTopK=0 returns all BFS pages", async () => {
-    const result = await bfsExpandRanked(["A"], graph, 1, pages, "query", 0);
-    expect(result).toEqual(new Set(["A", "B", "C", "D", "E"]));
+  it("bfsTopK=0 returns all BFS pages with empty scores", async () => {
+    const { selectedIds, expandedScores } = await bfsExpandRanked(["A"], graph, 1, pages, "query", 0);
+    expect(selectedIds).toEqual(new Set(["A", "B", "C", "D", "E"]));
+    expect(expandedScores).toEqual({});
   });
 
   it("Jaccard fallback: page with higher overlap score included over lower-scored page at bfsTopK=1", async () => {
     // query "cat cup" overlaps with C="cat cup cake" but not B="banana bread bake"
-    const result = await bfsExpandRanked(["A"], graph, 1, pages, "cat cup", 1);
-    expect(result.has("A")).toBe(true);   // seed always included
-    expect(result.has("C")).toBe(true);   // highest overlap
-    expect(result.has("B")).toBe(false);  // no overlap
+    const { selectedIds, expandedScores } = await bfsExpandRanked(["A"], graph, 1, pages, "cat cup", 1);
+    expect(selectedIds.has("A")).toBe(true);   // seed always included
+    expect(selectedIds.has("C")).toBe(true);   // highest overlap
+    expect(selectedIds.has("B")).toBe(false);  // no overlap
+    expect(typeof expandedScores["C"]).toBe("number");
   });
 
-  it("embedding path: mock similarity results are respected", async () => {
+  it("embedding path: mock similarity results are respected with scores", async () => {
     const mockSimilarity = {
       selectRelevantScored: vi.fn().mockResolvedValue([
         { path: "vault/D.md", score: 0.9 },
@@ -245,33 +247,36 @@ describe("bfsExpandRanked", () => {
       ]),
     } as unknown as PageSimilarityService;
 
-    const result = await bfsExpandRanked(
+    const { selectedIds, expandedScores } = await bfsExpandRanked(
       ["A"], graph, 1, pages, "test query", 2,
       undefined, mockSimilarity,
     );
-    expect(result.has("A")).toBe(true);   // seed always included
-    expect(result.has("D")).toBe(true);   // rank 1 from mock
-    expect(result.has("B")).toBe(true);   // rank 2 from mock
-    expect(result.has("C")).toBe(false);  // not in top-2
+    expect(selectedIds.has("A")).toBe(true);   // seed always included
+    expect(selectedIds.has("D")).toBe(true);   // rank 1 from mock
+    expect(selectedIds.has("B")).toBe(true);   // rank 2 from mock
+    expect(selectedIds.has("C")).toBe(false);  // not in top-2
+    expect(expandedScores["D"]).toBe(0.9);
+    expect(expandedScores["B"]).toBe(0.8);
   });
 
-  it("similarity throws → fallback to full BFS, no exception thrown", async () => {
+  it("similarity throws → fallback to full BFS with empty scores", async () => {
     const mockSimilarity = {
       selectRelevantScored: vi.fn().mockRejectedValue(new Error("API down")),
     } as unknown as PageSimilarityService;
 
-    const result = await bfsExpandRanked(
+    const { selectedIds, expandedScores } = await bfsExpandRanked(
       ["A"], graph, 1, pages, "query", 2,
       undefined, mockSimilarity,
     );
     // Full BFS fallback — all reachable pages returned
-    expect(result).toEqual(new Set(["A", "B", "C", "D", "E"]));
+    expect(selectedIds).toEqual(new Set(["A", "B", "C", "D", "E"]));
+    expect(expandedScores).toEqual({});
   });
 
   it("seed not in graph is still included in result", async () => {
     const emptyGraph = new Map<string, Set<string>>();
     const emptyPages = new Map<string, string>();
-    const result = await bfsExpandRanked(["GhostPage"], emptyGraph, 1, emptyPages, "query", 1);
-    expect(result.has("GhostPage")).toBe(true);
+    const { selectedIds } = await bfsExpandRanked(["GhostPage"], emptyGraph, 1, emptyPages, "query", 1);
+    expect(selectedIds.has("GhostPage")).toBe(true);
   });
 });

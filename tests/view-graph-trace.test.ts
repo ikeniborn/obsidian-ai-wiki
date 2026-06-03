@@ -9,7 +9,8 @@ describe("formatGraphStatsLines", () => {
     total: 42,
     fromCache: false,
     seedScores: { ArticleA: 0.87, ArticleB: 0.72, ArticleC: 0.41 },
-    expandedByHop: { 1: ["ArticleD", "ArticleE"], 2: ["ArticleF", "ArticleG"] },
+    expandedPages: ["ArticleD", "ArticleE", "ArticleF", "ArticleG"],
+    expandedScores: { ArticleD: 0.65, ArticleE: 0.60, ArticleF: 0.55, ArticleG: 0.50 },
   };
 
   it("compact mode: returns single line without scores", () => {
@@ -50,19 +51,25 @@ describe("formatGraphStatsLines", () => {
     expect(lines.every(l => !l.includes("(0.40)"))).toBe(true); // F not shown
   });
 
-  it("trace mode: shows BFS hop lines", () => {
+  it("trace mode: shows BFS expanded lines with scores", () => {
     const lines = formatGraphStatsLines(baseEvent, true);
-    const bfs1 = lines.findIndex(l => l.includes("BFS +1"));
-    const bfs2 = lines.findIndex(l => l.includes("BFS +2"));
-    expect(bfs1).toBeGreaterThan(-1);
-    expect(bfs2).toBeGreaterThan(-1);
-    expect(lines[bfs1 + 1]).toContain("ArticleD");
-    expect(lines[bfs2 + 1]).toContain("ArticleF");
+    const bfsIdx = lines.findIndex(l => l.includes("BFS expanded"));
+    expect(bfsIdx).toBeGreaterThan(-1);
+    expect(lines[bfsIdx]).toContain("(4)");
+    expect(lines.some(l => l.includes("ArticleD (0.65)"))).toBe(true);
+    expect(lines.some(l => l.includes("ArticleF (0.55)"))).toBe(true);
   });
 
-  it("trace mode: omits BFS lines when expandedByHop is empty", () => {
-    const noHops = { ...baseEvent, expandedByHop: {} };
-    const lines = formatGraphStatsLines(noHops, true);
+  it("trace mode: shows BFS expanded without score when score absent", () => {
+    const noScores = { ...baseEvent, expandedScores: {} };
+    const lines = formatGraphStatsLines(noScores, true);
+    expect(lines.some(l => l.trim() === "ArticleD")).toBe(true);
+    expect(lines.every(l => !l.includes("(0.00)"))).toBe(true);
+  });
+
+  it("trace mode: omits BFS lines when expandedPages is empty", () => {
+    const noExpanded = { ...baseEvent, expandedPages: [] };
+    const lines = formatGraphStatsLines(noExpanded, true);
     expect(lines.every(l => !l.includes("BFS"))).toBe(true);
   });
 
@@ -71,7 +78,7 @@ describe("formatGraphStatsLines", () => {
       ...baseEvent,
       seeds: ["ArticleA", "ArticleZ"],
       seedScores: { ArticleA: 0.87, ArticleZ: 0 },
-      expandedByHop: {},
+      expandedPages: [],
     };
     const lines = formatGraphStatsLines(zeroScore, true);
     // ArticleZ with score 0 should not appear as "(0.00)"

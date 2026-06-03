@@ -38,12 +38,11 @@ export function formatGraphStatsLines(
   for (const part of seedParts) lines.push(`  ${part}`);
   if (remainder > 0) lines.push(`  …+${remainder}`);
 
-  const hops = Object.keys(ev.expandedByHop ?? {}).map(Number).sort((a, b) => a - b);
-  for (const hop of hops) {
-    const pages = ev.expandedByHop[hop];
-    if (pages.length > 0) {
-      lines.push(`BFS +${hop} (${pages.length}):`);
-      lines.push(`  ${pages.join(", ")}`);
+  if (ev.expandedPages.length > 0) {
+    lines.push(`BFS expanded (${ev.expandedPages.length}):`);
+    for (const id of ev.expandedPages) {
+      const score = ev.expandedScores[id];
+      lines.push(score !== undefined ? `  ${id} (${score.toFixed(2)})` : `  ${id}`);
     }
   }
   return lines;

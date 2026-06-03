@@ -111,6 +111,8 @@ export function bfsExpandWithHops(
  * non-seed pages ranked by embedding similarity (if available) or Jaccard overlap as fallback.
  * bfsTopK=0 returns all BFS pages unfiltered.
  */
+export type BfsExpandResult = { selectedIds: Set<string>; expandedScores: Record<string, number> };
+
 export async function bfsExpandRanked(
   seeds: string[],
   graph: WikiGraph,
@@ -120,14 +122,14 @@ export async function bfsExpandRanked(
   bfsTopK: number,
   annotations?: Map<string, string>,
   similarity?: PageSimilarityService,
-): Promise<Set<string>> {
+): Promise<BfsExpandResult> {
   const allBfs = bfsExpand(seeds, graph, depth);
   const seedSet = new Set(seeds);
 
-  if (bfsTopK <= 0) return allBfs;
+  if (bfsTopK <= 0) return { selectedIds: allBfs, expandedScores: {} };
 
   const nonSeeds = [...allBfs].filter(pid => !seedSet.has(pid));
-  if (nonSeeds.length === 0) return new Set(seedSet);
+  if (nonSeeds.length === 0) return { selectedIds: new Set(seedSet), expandedScores: {} };
 
   // Reverse lookup: pageId → vaultPath
   const pidToPath = new Map<string, string>();
@@ -147,11 +149,13 @@ export async function bfsExpandRanked(
         annotations ?? new Map(),
         nonSeedPaths,
       );
-      const topPids = scored.slice(0, bfsTopK).map(({ path }) => pageId(path));
-      return new Set([...seedSet, ...topPids]);
+      const top = scored.slice(0, bfsTopK);
+      const expandedScores: Record<string, number> = {};
+      for (const { path, score } of top) expandedScores[pageId(path)] = score;
+      return { selectedIds: new Set([...seedSet, ...Object.keys(expandedScores)]), expandedScores };
     } catch (err) {
       console.warn("[bfsExpandRanked] similarity threw, returning full BFS:", err);
-      return allBfs;
+      return { selectedIds: allBfs, expandedScores: {} };
     }
   }
 
@@ -164,8 +168,10 @@ export async function bfsExpandRanked(
   });
   scored.sort((a, b) => b.score - a.score);
 
-  const topPids = scored.slice(0, bfsTopK).map(x => x.pid);
-  return new Set([...seedSet, ...topPids]);
+  const top = scored.slice(0, bfsTopK);
+  const expandedScores: Record<string, number> = {};
+  for (const { pid, score } of top) expandedScores[pid] = score;
+  return { selectedIds: new Set([...seedSet, ...Object.keys(expandedScores)]), expandedScores };
 }
 
 export function checkGraphStructure(graph: WikiGraph): string {

@@ -89,17 +89,23 @@ If seed selection yields nothing, `llmSelectSeeds` asks the LLM to pick from all
 
 BFS always runs from the seed set — both when seeds come from similarity and from Jaccard. All wiki pages are read to build the graph; only BFS-expanded pages are passed to the LLM. The graph is undirected — `A → [[B]]` allows traversal B→A.
 
-`bfsExpandRanked` wraps BFS with a similarity/Jaccard ranking pass. Non-seed pages are ranked and capped at `bfsTopK` (setting, default 10). Seeds are always included. The `graph_stats` event emits `seedScores` for tracing; `expandedByHop` is no longer emitted.
+`bfsExpandRanked` wraps BFS with a similarity/Jaccard ranking pass. Non-seed pages are ranked and capped at `bfsTopK` (setting, default 10). Seeds are always included. The `graph_stats` event emits `seedScores`, `expandedPages` (BFS-added IDs excluding seeds), and `expandedScores` (similarity or Jaccard score per expanded page) for tracing. When fallback to full BFS occurs, `expandedScores` is empty.
 
 Forward traversal guards against phantom nodes: `[[links]]` whose targets have no corresponding page are never added to the expanded set. Files under any `_config/` subdirectory are excluded before graph construction.
 
 See [[src/wiki-graph.ts#bfsExpandRanked]], [[wiki-graph#Query Graph Traversal]].
 
+### Answer Generation
+
+System prompt loaded from `prompts/query.md`. Injected variables: `domain_name`, `entity_types_block`, `index_block`. User message contains `Вопрос: {question}` followed by the context block of selected wiki pages.
+
+The prompt enforces: inline `[[WikiLink]]` references per fact (not a trailing sources block), code/commands in backticks or fenced blocks with language tag, section headers only when answer covers multiple topics, no filler phrases.
+
 ### Query Trace UI
 
 When `agentLogEnabled` is true, the `graph_stats` event is rendered with scores and BFS-by-hop breakdown in multi-line trace format. When false, compact single-line form is shown instead.
 
-Trace format (agentLogEnabled): `Seeds (N)` header, each seed with score on its own indented line, then per-hop sections `BFS +N (count):` with page list on the next indented line.
+Trace format (agentLogEnabled): `Seeds (N)` header, each seed with score on its own indented line, then `BFS expanded (N):` with each expanded page and its score on its own indented line.
 
 The formatting is handled by [[src/view.ts#formatGraphStatsLines]], a pure function testable without Obsidian DOM APIs.
 
