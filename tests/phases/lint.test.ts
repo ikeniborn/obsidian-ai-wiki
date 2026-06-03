@@ -1037,25 +1037,56 @@ describe("validateWikiSources", () => {
 
   it("[[Настройка прокси]] with matching titleMap entry → preserved", () => {
     const content = makeContent(["[[Настройка прокси]]"]);
-    const result = validateWikiSources(content, knownStems, titleMap);
+    const result = validateWikiSources(content, "", knownStems, titleMap);
     expect(result).toContain("[[Настройка прокси]]");
   });
 
   it("[[wiki_os_deleted_page]] not in knownStems or titleMap → removed", () => {
     const content = makeContent(["[[wiki_os_deleted_page]]"]);
-    const result = validateWikiSources(content, knownStems, titleMap);
+    const result = validateWikiSources(content, "", knownStems, titleMap);
     expect(result).not.toContain("[[wiki_os_deleted_page]]");
   });
 
   it("content without frontmatter → returned unchanged", () => {
     const content = "no frontmatter here\n# Article";
-    const result = validateWikiSources(content, knownStems, titleMap);
+    const result = validateWikiSources(content, "", knownStems, titleMap);
     expect(result).toBe(content);
   });
 
   it("entry without [[...]] format → left intact", () => {
     const content = makeContent(["plain-text-entry"]);
-    const result = validateWikiSources(content, knownStems, titleMap);
+    const result = validateWikiSources(content, "", knownStems, titleMap);
     expect(result).toContain("plain-text-entry");
+  });
+
+  it("LLM returned wiki_sources: [] (inline), original had valid entry → entry restored in block-list format", () => {
+    const originalContent = makeContent(["[[wiki_os_pac_file]]"]);
+    const llmContent = "---\nwiki_sources: []\n---\n# Article";
+    const result = validateWikiSources(llmContent, originalContent, knownStems, titleMap);
+    expect(result).toContain("wiki_sources:");
+    expect(result).toContain("[[wiki_os_pac_file]]");
+    expect(result).not.toContain("wiki_sources: []");
+  });
+
+  it("LLM reduced list (dropped one of two valid entries) → missing entry restored", () => {
+    const originalContent = makeContent(["[[wiki_os_pac_file]]", "[[wiki_networking_dns]]"]);
+    const llmContent = makeContent(["[[wiki_os_pac_file]]"]);
+    const result = validateWikiSources(llmContent, originalContent, knownStems, titleMap);
+    expect(result).toContain("[[wiki_os_pac_file]]");
+    expect(result).toContain("[[wiki_networking_dns]]");
+  });
+
+  it("LLM dropped stale entry (stem absent from knownStems) → not restored", () => {
+    const originalContent = makeContent(["[[wiki_os_deleted_page]]"]);
+    const llmContent = makeContent([]);
+    const result = validateWikiSources(llmContent, originalContent, knownStems, titleMap);
+    expect(result).not.toContain("[[wiki_os_deleted_page]]");
+  });
+
+  it("originalContent is empty string → no restore; stale removal only", () => {
+    const llmContent = makeContent(["[[wiki_os_deleted_page]]", "[[wiki_os_pac_file]]"]);
+    const result = validateWikiSources(llmContent, "", knownStems, titleMap);
+    expect(result).not.toContain("[[wiki_os_deleted_page]]");
+    expect(result).toContain("[[wiki_os_pac_file]]");
   });
 });
