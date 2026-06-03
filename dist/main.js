@@ -37740,7 +37740,7 @@ async function buildTitleMap(paths, vaultTools) {
   }
   return result;
 }
-function validateWikiSources(content, originalContent, knownStems, titleMap) {
+function validateWikiSources(content, originalContent, knownStems, titleMap, wikiStems = /* @__PURE__ */ new Set()) {
   content = content.replace(
     /(wiki_sources:\s*\n(?:[ \t]+-[ \t]+[^\n]+\n?)+)/,
     (block) => block.replace(/^([ \t]+-[ \t]+)(\[\[[^\]]+\]\])([ \t]*)$/gm, '$1"$2"$3')
@@ -37749,6 +37749,7 @@ function validateWikiSources(content, originalContent, knownStems, titleMap) {
     const m = entry.match(/^\[\[(.+?)\]\]$/);
     if (!m) return true;
     const text = m[1];
+    if (wikiStems.has(text)) return false;
     return knownStems.has(text) || titleMap.has(text.toLowerCase());
   };
   if (originalContent) {
@@ -37941,7 +37942,8 @@ ${lintResult.value.report}`);
           try {
             const rawFixed = wlFixResult.fixed.get(fix.path) ?? fix.content;
             const originalContent = pages.get(fix.path) ?? "";
-            const fixedContent = validateWikiSources(rawFixed, originalContent, knownStems, titleMap);
+            const wikiStems = new Set([...pages.keys()].map((p) => p.split("/").pop().replace(/\.md$/, "")));
+            const fixedContent = validateWikiSources(rawFixed, originalContent, knownStems, titleMap, wikiStems);
             await vaultTools.write(fix.path, fixedContent);
             writtenPaths.push(fix.path);
             pages.set(fix.path, fixedContent);
