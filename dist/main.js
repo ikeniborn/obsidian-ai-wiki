@@ -26123,7 +26123,7 @@ var DEFAULT_SETTINGS = {
   agentLogEnabled: false,
   historyLimit: 20,
   graphDepth: 1,
-  hubThreshold: 20,
+  bfsTopK: 10,
   wikiLinkValidationRetries: 3,
   seedTopK: 5,
   seedMinScore: 0.1,
@@ -26248,8 +26248,8 @@ var en = {
     h3_graph: "Graph",
     graphDepth_name: "BFS depth",
     graphDepth_desc: "Query: hops from seed pages. 0 = seeds only, max sensible: 3.",
-    hubThreshold_name: "Hub threshold",
-    hubThreshold_desc: "Lint: pages with more outgoing links than this are flagged as hub nodes.",
+    bfsTopK_name: "BFS context top-K",
+    bfsTopK_desc: "Max BFS-expanded pages ranked by similarity and added to query context. 0 = all pages.",
     wikiLinkValidationRetries_name: "WikiLink fix passes",
     wikiLinkValidationRetries_desc: "Max programmatic fix passes for WikiLink format errors. 0 = validate only.",
     seedTopK_name: "Seed top-K",
@@ -26278,9 +26278,9 @@ var en = {
     lint: "Lint",
     format: "Format",
     formatOnlyMarkdown: "Format only works on markdown files",
-    formatInWikiTitle: "File is inside a wiki domain",
-    formatInWikiBody: (id) => `This file belongs to wiki domain \xAB${id}\xBB. Re-run ingest from sources instead?`,
-    formatInWikiNoSources: "No wiki_sources in frontmatter \u2014 cannot re-ingest",
+    formatInWikiTitle: "Action forbidden",
+    formatInWikiBody: (id) => `This file is a wiki article (domain \xAB${id}\xBB). Formatting wiki articles is not available.`,
+    formatInWikiClose: "Close",
     formatNoPending: "No format preview available",
     formatApplied: (path2) => `Formatted: ${path2}`,
     formatCancelled: "Format cancelled",
@@ -26468,8 +26468,8 @@ var ru = {
     h3_graph: "\u0413\u0440\u0430\u0444",
     graphDepth_name: "\u0413\u043B\u0443\u0431\u0438\u043D\u0430 BFS",
     graphDepth_desc: "Query: \u0448\u0430\u0433\u043E\u0432 \u043E\u0442 seed-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. 0 = \u0442\u043E\u043B\u044C\u043A\u043E seeds, \u0440\u0430\u0437\u0443\u043C\u043D\u044B\u0439 \u043C\u0430\u043A\u0441\u0438\u043C\u0443\u043C: 3.",
-    hubThreshold_name: "\u041F\u043E\u0440\u043E\u0433 \u0445\u0430\u0431\u0430",
-    hubThreshold_desc: "Lint: \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0441 \u0431\u043E\u0301\u043B\u044C\u0448\u0438\u043C \u0447\u0438\u0441\u043B\u043E\u043C \u0438\u0441\u0445\u043E\u0434\u044F\u0449\u0438\u0445 \u0441\u0441\u044B\u043B\u043E\u043A \u043F\u043E\u043C\u0435\u0447\u0430\u044E\u0442\u0441\u044F \u043A\u0430\u043A hub.",
+    bfsTopK_name: "BFS top-K",
+    bfsTopK_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u0441\u0442\u0440\u0430\u043D\u0438\u0446 BFS, \u043E\u0442\u0440\u0430\u043D\u0436\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0445 \u043F\u043E \u0441\u0445\u043E\u0436\u0435\u0441\u0442\u0438 \u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u0437\u0430\u043F\u0440\u043E\u0441\u0430. 0 = \u0432\u0441\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.",
     wikiLinkValidationRetries_name: "\u041F\u0440\u043E\u0445\u043E\u0434\u043E\u0432 \u0444\u0438\u043A\u0441\u0435\u0440\u0430 WikiLinks",
     wikiLinkValidationRetries_desc: "\u041C\u0430\u043A\u0441. \u0447\u0438\u0441\u043B\u043E \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u043D\u044B\u0445 \u043F\u0440\u043E\u0445\u043E\u0434\u043E\u0432 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u0444\u043E\u0440\u043C\u0430\u0442\u0430 WikiLinks. 0 \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0432\u0430\u043B\u0438\u0434\u0430\u0446\u0438\u044F.",
     seedTopK_name: "Seed top-K",
@@ -26498,9 +26498,9 @@ var ru = {
     lint: "Lint",
     format: "\u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C",
     formatOnlyMarkdown: "\u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442 \u0442\u043E\u043B\u044C\u043A\u043E \u0441 markdown-\u0444\u0430\u0439\u043B\u0430\u043C\u0438",
-    formatInWikiTitle: "\u0424\u0430\u0439\u043B \u043D\u0430\u0445\u043E\u0434\u0438\u0442\u0441\u044F \u0432\u043D\u0443\u0442\u0440\u0438 wiki-\u0434\u043E\u043C\u0435\u043D\u0430",
-    formatInWikiBody: (id) => `\u0424\u0430\u0439\u043B \u043F\u0440\u0438\u043D\u0430\u0434\u043B\u0435\u0436\u0438\u0442 wiki-\u0434\u043E\u043C\u0435\u043D\u0443 \xAB${id}\xBB. \u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C ingest \u0437\u0430\u043D\u043E\u0432\u043E \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432 \u0432\u043C\u0435\u0441\u0442\u043E \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F?`,
-    formatInWikiNoSources: "\u0412 frontmatter \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 wiki_sources \u2014 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u044B\u0439 ingest \u043D\u0435\u0432\u043E\u0437\u043C\u043E\u0436\u0435\u043D",
+    formatInWikiTitle: "\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u0435 \u0437\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E",
+    formatInWikiBody: (id) => `\u0424\u0430\u0439\u043B \u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F wiki-\u0441\u0442\u0430\u0442\u044C\u0451\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${id}\xBB. \u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 wiki-\u0441\u0442\u0430\u0442\u0435\u0439 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E.`,
+    formatInWikiClose: "\u0417\u0430\u043A\u0440\u044B\u0442\u044C",
     formatNoPending: "\u041D\u0435\u0442 \u043E\u0436\u0438\u0434\u0430\u044E\u0449\u0435\u0433\u043E \u043F\u0440\u0435\u0434\u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440\u0430 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F",
     formatApplied: (path2) => `\u041E\u0442\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043E: ${path2}`,
     formatCancelled: "\u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E",
@@ -26688,8 +26688,8 @@ var es = {
     h3_graph: "Grafo",
     graphDepth_name: "Profundidad BFS",
     graphDepth_desc: "Query: saltos desde p\xE1ginas semilla. 0 = solo semillas, m\xE1x recomendado: 3.",
-    hubThreshold_name: "Umbral de hub",
-    hubThreshold_desc: "Lint: p\xE1ginas con m\xE1s enlaces salientes que este valor se marcan como hub.",
+    bfsTopK_name: "BFS top-K",
+    bfsTopK_desc: "M\xE1x. p\xE1ginas BFS rankeadas por similitud agregadas al contexto. 0 = todas.",
     wikiLinkValidationRetries_name: "Pasadas del fijador de WikiLinks",
     wikiLinkValidationRetries_desc: "M\xE1x. pasadas program\xE1ticas para corregir formato de WikiLinks. 0 = solo validar.",
     seedTopK_name: "Top-K semillas",
@@ -26718,9 +26718,9 @@ var es = {
     lint: "Lint",
     format: "Formatear",
     formatOnlyMarkdown: "El formateo solo funciona con archivos markdown",
-    formatInWikiTitle: "El archivo est\xE1 dentro de un dominio wiki",
-    formatInWikiBody: (id) => `El archivo pertenece al dominio wiki \xAB${id}\xBB. \xBFRe-ejecutar ingest desde las fuentes?`,
-    formatInWikiNoSources: "Sin wiki_sources en frontmatter \u2014 no se puede re-ingestar",
+    formatInWikiTitle: "Acci\xF3n prohibida",
+    formatInWikiBody: (id) => `Este archivo es un art\xEDculo wiki (dominio \xAB${id}\xBB). No se puede formatear art\xEDculos wiki.`,
+    formatInWikiClose: "Cerrar",
     formatNoPending: "No hay previsualizaci\xF3n de formato",
     formatApplied: (path2) => `Formateado: ${path2}`,
     formatCancelled: "Formateo cancelado",
@@ -26881,6 +26881,26 @@ var ConfirmModal = class extends import_obsidian2.Modal {
       this.close();
       this.onConfirm();
     }));
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+var InfoModal = class extends import_obsidian2.Modal {
+  constructor(app, title, lines, closeLabel) {
+    super(app);
+    this.title = title;
+    this.lines = lines;
+    this.closeLabel = closeLabel;
+  }
+  title;
+  lines;
+  closeLabel;
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: this.title });
+    for (const line of this.lines) contentEl.createEl("p", { text: line });
+    new import_obsidian2.Setting(contentEl).addButton((b) => b.setButtonText(this.closeLabel).setCta().onClick(() => this.close()));
   }
   onClose() {
     this.contentEl.empty();
@@ -27815,7 +27835,16 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           })
         );
       }
+      new import_obsidian3.Setting(containerEl).setName(T.settings.structuredRetries_name).setDesc(T.settings.structuredRetries_desc).addText(
+        (t) => t.setPlaceholder("1").setValue(String(s.nativeAgent.structuredRetries)).onChange(async (v) => {
+          const n = Number(v);
+          if (!Number.isFinite(n) || n < 0 || n > 3) return;
+          s.nativeAgent.structuredRetries = Math.floor(n);
+          await this.plugin.saveSettings();
+        })
+      );
       if (!import_obsidian3.Platform.isMobile) {
+        new import_obsidian3.Setting(containerEl).setName("Per-operation models").setHeading();
         new import_obsidian3.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
           (t) => t.setValue(s.nativeAgent.perOperation).onChange(async (v) => {
             s.nativeAgent.perOperation = v;
@@ -27870,15 +27899,6 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           );
         }
       }
-      new import_obsidian3.Setting(containerEl).setName(T.settings.structuredRetries_name).setDesc(T.settings.structuredRetries_desc).addText(
-        (t) => t.setPlaceholder("1").setValue(String(s.nativeAgent.structuredRetries)).onChange(async (v) => {
-          const n = Number(v);
-          if (!Number.isFinite(n) || n < 0 || n > 3) return;
-          s.nativeAgent.structuredRetries = Math.floor(n);
-          await this.plugin.saveSettings();
-        })
-      );
-      new import_obsidian3.Setting(containerEl).setName("Semantic Search").setHeading();
       new import_obsidian3.Setting(containerEl).setName("Semantic Search").setHeading();
       new import_obsidian3.Setting(containerEl).setName("Enable semantic similarity (embeddings)").setDesc("Use embedding vectors for relevant page selection. Requires native backend with an embeddings-capable model.").addToggle(
         (t) => t.setValue(this.localCache.nativeAgent?.embeddingModel !== void 0).onChange(async (v) => {
@@ -27966,11 +27986,11 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         }
       })
     );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.hubThreshold_name).setDesc(T.settings.hubThreshold_desc).addText(
-      (t) => t.setPlaceholder("20").setValue(String(s.hubThreshold)).onChange(async (v) => {
+    new import_obsidian3.Setting(containerEl).setName(T.settings.bfsTopK_name).setDesc(T.settings.bfsTopK_desc).addText(
+      (t) => t.setPlaceholder("10").setValue(String(s.bfsTopK)).onChange(async (v) => {
         const n = Number(v);
-        if (Number.isInteger(n) && n > 0) {
-          s.hubThreshold = n;
+        if (Number.isInteger(n) && n >= 0) {
+          s.bfsTopK = n;
           await this.plugin.saveSettings();
         }
       })
@@ -29018,12 +29038,11 @@ function formatGraphStatsLines(ev, agentLogEnabled) {
   const lines = [`Seeds (${totalSeeds})${cacheHint}`];
   for (const part of seedParts) lines.push(`  ${part}`);
   if (remainder > 0) lines.push(`  \u2026+${remainder}`);
-  const hops = Object.keys(ev.expandedByHop).map(Number).sort((a, b) => a - b);
-  for (const hop of hops) {
-    const pages = ev.expandedByHop[hop];
-    if (pages.length > 0) {
-      lines.push(`BFS +${hop} (${pages.length}):`);
-      lines.push(`  ${pages.join(", ")}`);
+  if (ev.expandedPages.length > 0) {
+    lines.push(`BFS expanded (${ev.expandedPages.length}):`);
+    for (const id of ev.expandedPages) {
+      const score = ev.expandedScores[id];
+      lines.push(score !== void 0 ? `  ${id} (${score.toFixed(2)})` : `  ${id}`);
     }
   }
   return lines;
@@ -36019,6 +36038,30 @@ function validateAndRepairFrontmatter(content, rules) {
         }
         break;
       }
+      case "list-wikilinks-stem-only": {
+        if (!Array.isArray(val)) {
+          warnings.push(`${rule.field}: expected list, got scalar \u2014 removed`);
+          delete parsed[rule.field];
+          modified = true;
+          break;
+        }
+        const filtered = val.filter((v) => {
+          if (typeof v !== "string" || !WIKILINK_RE.test(v) || v.includes("/") || v.endsWith(".md]]")) {
+            warnings.push(`${rule.field}: invalid entry "${v}" \u2014 removed`);
+            return false;
+          }
+          return true;
+        });
+        if (filtered.length < val.length) {
+          modified = true;
+          if (filtered.length === 0) {
+            delete parsed[rule.field];
+          } else {
+            parsed[rule.field] = filtered;
+          }
+        }
+        break;
+      }
       case "list-wikilinks-wiki-only":
       case "list-wikilinks-sources-only": {
         if (!Array.isArray(val)) {
@@ -36081,7 +36124,7 @@ function validateAndRepairFrontmatter(content, rules) {
       }
       case "remove": {
         if (rule.field in parsed) {
-          warnings.push(`${rule.field}: field not allowed in wiki page frontmatter \u2014 removed`);
+          warnings.push(`${rule.field}: field not allowed here \u2014 removed`);
           delete parsed[rule.field];
           modified = true;
         }
@@ -36127,7 +36170,7 @@ ${(0, import_yaml.stringify)(parsed)}---
 ${body}`, warnings };
 }
 var SOURCE_RULES = [
-  { field: "wiki_articles", kind: "list-wikilinks" },
+  { field: "wiki_articles", kind: "list-wikilinks-stem-only" },
   { field: "wiki_added", kind: "date-scalar" },
   { field: "wiki_updated", kind: "date-scalar" },
   { field: "tags", kind: "list-tags" },
@@ -36135,7 +36178,13 @@ var SOURCE_RULES = [
   { field: "created", kind: "date-scalar" },
   { field: "updated", kind: "date-scalar" },
   { field: "external_links", kind: "list-urls" },
-  { field: "related", kind: "list-wikilinks" }
+  { field: "related", kind: "list-wikilinks" },
+  { field: "wiki_outgoing_links", kind: "remove" },
+  { field: "wiki_sources", kind: "remove" },
+  { field: "wiki_status", kind: "remove" },
+  { field: "wiki_type", kind: "remove" },
+  { field: "wiki_external_links", kind: "remove" },
+  { field: "annotation", kind: "remove" }
 ];
 function validateAndRepairSourceFrontmatter(content) {
   return validateAndRepairFrontmatter(content, SOURCE_RULES);
@@ -36313,6 +36362,117 @@ async function removeIndexAnnotation(vaultTools, wikiFolder, pid) {
 
 // src/wiki-graph.ts
 var import_path_browserify3 = __toESM(require_path_browserify(), 1);
+
+// src/wiki-seeds.ts
+var STOP_WORDS = /* @__PURE__ */ new Set([
+  // EN
+  "the",
+  "and",
+  "for",
+  "are",
+  "was",
+  "were",
+  "with",
+  "that",
+  "this",
+  "from",
+  "have",
+  "has",
+  "had",
+  "but",
+  "not",
+  "you",
+  "your",
+  "our",
+  "their",
+  "his",
+  "her",
+  "its",
+  "into",
+  "about",
+  "what",
+  "which",
+  "when",
+  "where",
+  "how",
+  "here",
+  // RU
+  "\u0447\u0442\u043E",
+  "\u043A\u0430\u043A",
+  "\u0434\u043B\u044F",
+  "\u0438\u043B\u0438",
+  "\u044D\u0442\u043E",
+  "\u043F\u0440\u0438",
+  "\u0431\u0435\u0437",
+  "\u0442\u043E\u0442",
+  "\u0435\u0433\u043E",
+  "\u043E\u043D\u0430",
+  "\u043E\u043D\u0438",
+  "\u0431\u044B\u043B",
+  "\u0431\u044B\u043B\u0430",
+  "\u0431\u044B\u0442\u044C",
+  "\u0442\u043E\u0436\u0435",
+  "\u0442\u0430\u043A\u0436\u0435",
+  "\u0435\u0441\u043B\u0438",
+  "\u0442\u043E\u0433\u0434\u0430",
+  "\u043F\u043E\u0442\u043E\u043C",
+  "\u043A\u043E\u0433\u0434\u0430",
+  "\u043E\u0447\u0435\u043D\u044C",
+  "\u0431\u043E\u043B\u0435\u0435",
+  "\u043C\u0435\u043D\u0435\u0435",
+  "\u043D\u0435\u0442",
+  "\u0443\u0436\u0435",
+  "\u0435\u0449\u0451",
+  "\u0435\u0449\u0435"
+]);
+var BODY_CAP = 500;
+function tokenize(s) {
+  const out = /* @__PURE__ */ new Set();
+  if (!s) return out;
+  for (const raw of s.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
+    if (raw.length <= 2) continue;
+    if (STOP_WORDS.has(raw)) continue;
+    out.add(raw);
+  }
+  return out;
+}
+function bodyContent(content) {
+  const m = content.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)/);
+  return (m ? m[1] : content).slice(0, BODY_CAP);
+}
+function parseFmKeywords(content) {
+  const m = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!m) return /* @__PURE__ */ new Set();
+  const kw = m[1].match(/wiki_keywords:\s*\[(.*?)\]/);
+  if (!kw) return /* @__PURE__ */ new Set();
+  return new Set(kw[1].split(",").map((s) => s.trim().replace(/['"]/g, "").toLowerCase()));
+}
+function scoreSeed(questionTokens, pageIdValue, content, annotation) {
+  if (questionTokens.size === 0) return 0;
+  const p = tokenize(pageIdValue);
+  for (const t of parseFmKeywords(content)) p.add(t);
+  for (const t of tokenize(bodyContent(content))) p.add(t);
+  if (annotation) for (const t of tokenize(annotation)) p.add(t);
+  if (p.size === 0) return 0;
+  let inter = 0;
+  for (const t of questionTokens) if (p.has(t)) inter++;
+  return inter / questionTokens.size;
+}
+function selectSeeds(question, pages, topK, minScore, indexAnnotations) {
+  const q = tokenize(question);
+  if (q.size === 0) return [];
+  const scored = [];
+  for (const [path2, content] of pages) {
+    const id = pageId(path2);
+    const annotation = indexAnnotations?.get(id);
+    const score = scoreSeed(q, id, content, annotation);
+    if (score >= minScore && score > 0) scored.push({ id, score });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, topK);
+}
+
+// src/wiki-graph.ts
 function pageId(vaultPath) {
   return (0, import_path_browserify3.basename)(vaultPath, ".md");
 }
@@ -36362,41 +36522,49 @@ function bfsExpand(seeds, graph, depth) {
   }
   return visited;
 }
-function bfsExpandWithHops(seeds, graph, depth) {
-  if (seeds.length === 0) return { expanded: /* @__PURE__ */ new Set(), byHop: {} };
-  const reverse = /* @__PURE__ */ new Map();
-  for (const [src, targets] of graph) {
-    for (const tgt of targets) {
-      if (!reverse.has(tgt)) reverse.set(tgt, /* @__PURE__ */ new Set());
-      reverse.get(tgt).add(src);
+async function bfsExpandRanked(seeds, graph, depth, pages, query, bfsTopK, annotations, similarity) {
+  const allBfs = bfsExpand(seeds, graph, depth);
+  const seedSet = new Set(seeds);
+  if (bfsTopK <= 0) return { selectedIds: allBfs, expandedScores: {} };
+  const nonSeeds = [...allBfs].filter((pid) => !seedSet.has(pid));
+  if (nonSeeds.length === 0) return { selectedIds: new Set(seedSet), expandedScores: {} };
+  const pidToPath = /* @__PURE__ */ new Map();
+  for (const vaultPath of pages.keys()) {
+    pidToPath.set(pageId(vaultPath), vaultPath);
+  }
+  const nonSeedPaths = nonSeeds.flatMap((pid) => {
+    const p = pidToPath.get(pid);
+    return p ? [p] : [];
+  });
+  if (similarity) {
+    try {
+      const scored2 = await similarity.selectRelevantScored(
+        query,
+        annotations ?? /* @__PURE__ */ new Map(),
+        nonSeedPaths
+      );
+      const top2 = scored2.slice(0, bfsTopK);
+      const expandedScores2 = {};
+      for (const { path: path2, score } of top2) expandedScores2[pageId(path2)] = score;
+      return { selectedIds: /* @__PURE__ */ new Set([...seedSet, ...Object.keys(expandedScores2)]), expandedScores: expandedScores2 };
+    } catch (err) {
+      console.warn("[bfsExpandRanked] similarity threw, returning full BFS:", err);
+      return { selectedIds: allBfs, expandedScores: {} };
     }
   }
-  const visited = new Set(seeds);
-  let frontier = new Set(seeds);
-  const byHop = {};
-  for (let hop = 1; hop <= depth; hop++) {
-    const next = /* @__PURE__ */ new Set();
-    for (const node of frontier) {
-      for (const neighbor of graph.get(node) ?? []) {
-        if (!visited.has(neighbor) && graph.has(neighbor)) {
-          visited.add(neighbor);
-          next.add(neighbor);
-        }
-      }
-      for (const neighbor of reverse.get(node) ?? []) {
-        if (!visited.has(neighbor)) {
-          visited.add(neighbor);
-          next.add(neighbor);
-        }
-      }
-    }
-    if (next.size === 0) break;
-    byHop[hop] = [...next];
-    frontier = next;
-  }
-  return { expanded: visited, byHop };
+  const questionTokens = tokenize(query);
+  const scored = nonSeeds.map((pid) => {
+    const path2 = pidToPath.get(pid);
+    const content = path2 ? pages.get(path2) ?? "" : "";
+    return { pid, score: scoreSeed(questionTokens, pid, content) };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  const top = scored.slice(0, bfsTopK);
+  const expandedScores = {};
+  for (const { pid, score } of top) expandedScores[pid] = score;
+  return { selectedIds: /* @__PURE__ */ new Set([...seedSet, ...Object.keys(expandedScores)]), expandedScores };
 }
-function checkGraphStructure(graph, hubThreshold) {
+function checkGraphStructure(graph) {
   const inDegree = /* @__PURE__ */ new Map();
   for (const node of graph.keys()) {
     if (!inDegree.has(node)) inDegree.set(node, 0);
@@ -36410,9 +36578,6 @@ function checkGraphStructure(graph, hubThreshold) {
     const inDeg = inDegree.get(node) ?? 0;
     if (inDeg === 0 && outDeg === 0) {
       issues.push(`- ${node}: isolated node (no links in or out)`);
-    }
-    if (outDeg > hubThreshold) {
-      issues.push(`- ${node}: hub node (${outDeg} outgoing links)`);
     }
     for (const tgt of neighbors) {
       if (graph.has(tgt) && !graph.get(tgt).has(node)) {
@@ -37255,118 +37420,9 @@ var GraphCache = class {
 };
 var graphCache = new GraphCache();
 
-// src/wiki-seeds.ts
-var STOP_WORDS = /* @__PURE__ */ new Set([
-  // EN
-  "the",
-  "and",
-  "for",
-  "are",
-  "was",
-  "were",
-  "with",
-  "that",
-  "this",
-  "from",
-  "have",
-  "has",
-  "had",
-  "but",
-  "not",
-  "you",
-  "your",
-  "our",
-  "their",
-  "his",
-  "her",
-  "its",
-  "into",
-  "about",
-  "what",
-  "which",
-  "when",
-  "where",
-  "how",
-  "here",
-  // RU
-  "\u0447\u0442\u043E",
-  "\u043A\u0430\u043A",
-  "\u0434\u043B\u044F",
-  "\u0438\u043B\u0438",
-  "\u044D\u0442\u043E",
-  "\u043F\u0440\u0438",
-  "\u0431\u0435\u0437",
-  "\u0442\u043E\u0442",
-  "\u0435\u0433\u043E",
-  "\u043E\u043D\u0430",
-  "\u043E\u043D\u0438",
-  "\u0431\u044B\u043B",
-  "\u0431\u044B\u043B\u0430",
-  "\u0431\u044B\u0442\u044C",
-  "\u0442\u043E\u0436\u0435",
-  "\u0442\u0430\u043A\u0436\u0435",
-  "\u0435\u0441\u043B\u0438",
-  "\u0442\u043E\u0433\u0434\u0430",
-  "\u043F\u043E\u0442\u043E\u043C",
-  "\u043A\u043E\u0433\u0434\u0430",
-  "\u043E\u0447\u0435\u043D\u044C",
-  "\u0431\u043E\u043B\u0435\u0435",
-  "\u043C\u0435\u043D\u0435\u0435",
-  "\u043D\u0435\u0442",
-  "\u0443\u0436\u0435",
-  "\u0435\u0449\u0451",
-  "\u0435\u0449\u0435"
-]);
-var BODY_CAP = 500;
-function tokenize(s) {
-  const out = /* @__PURE__ */ new Set();
-  if (!s) return out;
-  for (const raw of s.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
-    if (raw.length <= 2) continue;
-    if (STOP_WORDS.has(raw)) continue;
-    out.add(raw);
-  }
-  return out;
-}
-function bodyContent(content) {
-  const m = content.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)/);
-  return (m ? m[1] : content).slice(0, BODY_CAP);
-}
-function parseFmKeywords(content) {
-  const m = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!m) return /* @__PURE__ */ new Set();
-  const kw = m[1].match(/wiki_keywords:\s*\[(.*?)\]/);
-  if (!kw) return /* @__PURE__ */ new Set();
-  return new Set(kw[1].split(",").map((s) => s.trim().replace(/['"]/g, "").toLowerCase()));
-}
-function scoreSeed(questionTokens, pageIdValue, content, annotation) {
-  if (questionTokens.size === 0) return 0;
-  const p = tokenize(pageIdValue);
-  for (const t of parseFmKeywords(content)) p.add(t);
-  for (const t of tokenize(bodyContent(content))) p.add(t);
-  if (annotation) for (const t of tokenize(annotation)) p.add(t);
-  if (p.size === 0) return 0;
-  let inter = 0;
-  for (const t of questionTokens) if (p.has(t)) inter++;
-  return inter / questionTokens.size;
-}
-function selectSeeds(question, pages, topK, minScore, indexAnnotations) {
-  const q = tokenize(question);
-  if (q.size === 0) return [];
-  const scored = [];
-  for (const [path2, content] of pages) {
-    const id = pageId(path2);
-    const annotation = indexAnnotations?.get(id);
-    const score = scoreSeed(q, id, content, annotation);
-    if (score >= minScore && score > 0) scored.push({ id, score });
-  }
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, topK);
-}
-
 // src/phases/query.ts
 var META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
-async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1, similarity) {
+async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1, bfsTopK = 10, similarity) {
   const question = args[0]?.trim();
   if (!question) {
     yield { kind: "error", message: "query: question required" };
@@ -37436,9 +37492,19 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
     yield { kind: "error", message: "No relevant pages found for this query." };
     return;
   }
-  const { expanded: selectedIds, byHop: expandedByHop } = bfsExpandWithHops(seeds, graphResult.graph, graphDepth);
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedByHop };
+  const { selectedIds, expandedScores } = await bfsExpandRanked(
+    seeds,
+    graphResult.graph,
+    graphDepth,
+    pages,
+    question,
+    bfsTopK,
+    indexAnnotations,
+    similarity
+  );
   const seedSet = new Set(seeds);
+  const expandedPages = [...selectedIds].filter((id) => !seedSet.has(id));
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores };
   const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);
   const entityTypesBlock = buildEntityTypesBlock2(domain);
   const systemPrompt = render(query_default, {
@@ -37637,7 +37703,48 @@ async function cleanupInvalidPages(vaultTools, wikiVaultPath, _domainId) {
   }
   return { deleted };
 }
-async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal, hubThreshold = 20, wikiLinkValidationRetries = 3, opts = {}, similarity) {
+async function buildTitleMap(paths, vaultTools) {
+  const result = /* @__PURE__ */ new Map();
+  for (const path2 of paths) {
+    try {
+      const content = await vaultTools.read(path2);
+      const stem = path2.split("/").pop().replace(/\.md$/, "");
+      const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+      if (fmMatch) {
+        const titleMatch = fmMatch[1].match(/^title:\s*(.+)$/m);
+        if (titleMatch) {
+          result.set(titleMatch[1].trim().toLowerCase(), stem);
+          continue;
+        }
+      }
+      const h1Match = content.match(/^# (.+)$/m);
+      if (h1Match) {
+        result.set(h1Match[1].trim().toLowerCase(), stem);
+      }
+    } catch {
+    }
+  }
+  return result;
+}
+function validateWikiSources(content, knownStems, titleMap) {
+  const entries = parseWikiSourcesFromFm(content);
+  if (entries.length === 0) return content;
+  const isValid2 = (entry) => {
+    const m = entry.match(/^\[\[(.+?)\]\]$/);
+    if (!m) return true;
+    const text = m[1];
+    return knownStems.has(text) || titleMap.has(text.toLowerCase());
+  };
+  const toRemove = entries.filter((e) => !isValid2(e));
+  if (toRemove.length === 0) return content;
+  let result = content;
+  for (const entry of toRemove) {
+    const escaped = entry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    result = result.replace(new RegExp(`[ \\t]+-[ \\t]+${escaped}\\n?`, ""), "");
+  }
+  return result;
+}
+async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal, wikiLinkValidationRetries = 3, opts = {}, similarity) {
   const domainId = args[0];
   const targets = domainId ? domains.filter((d) => d.id === domainId) : domains;
   if (targets.length === 0) {
@@ -37669,7 +37776,7 @@ Wiki folder outside vault \u2014 skipped.`);
     const pages = await vaultTools.readAll(files);
     let { graph } = graphCache.get(domain.id, pages);
     const structuralIssues = checkStructure(pages);
-    const graphIssues = checkGraphStructure(graph, hubThreshold);
+    const graphIssues = checkGraphStructure(graph);
     const wikiLinkIssues = checkWikiLinks(pages);
     const allStructuralIssues = [structuralIssues, graphIssues, wikiLinkIssues].filter(Boolean).join("\n");
     const allVaultPaths = await vaultTools.listFiles("").catch(() => []);
@@ -37678,6 +37785,11 @@ Wiki folder outside vault \u2014 skipped.`);
       ...allMdPaths.map((p) => p.split("/").pop().replace(/\.md$/, "")),
       ...[...pages.keys()].map((p) => p.split("/").pop().replace(/\.md$/, ""))
     ]);
+    const nonWikiPaths = allMdPaths.filter((p) => !p.startsWith(wikiVaultPath + "/"));
+    const titleMap = await buildTitleMap(nonWikiPaths, vaultTools);
+    for (const stem of titleMap.values()) {
+      knownStems.add(stem);
+    }
     const stemToPath = new Map(
       allMdPaths.map((p) => [p.split("/").pop().replace(/\.md$/, ""), p])
     );
@@ -37790,7 +37902,8 @@ ${lintResult.value.report}`);
           }
           yield { kind: "tool_use", name: "Update", input: { path: fix.path } };
           try {
-            const fixedContent = wlFixResult.fixed.get(fix.path) ?? fix.content;
+            const rawFixed = wlFixResult.fixed.get(fix.path) ?? fix.content;
+            const fixedContent = validateWikiSources(rawFixed, knownStems, titleMap);
             await vaultTools.write(fix.path, fixedContent);
             writtenPaths.push(fix.path);
             pages.set(fix.path, fixedContent);
@@ -39388,10 +39501,10 @@ var AgentRunner = class {
         yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, similarity, void 0, this.settings.graphDepth, this.settings.wikiLinkValidationRetries);
         break;
       case "query":
-        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, similarity);
+        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, this.settings.bfsTopK, similarity);
         break;
       case "lint":
-        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.hubThreshold, this.settings.wikiLinkValidationRetries, opts, similarity);
+        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.wikiLinkValidationRetries, opts, similarity);
         break;
       case "chat": {
         const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
@@ -47223,11 +47336,13 @@ function patchWikiFields(originalContent, formattedContent) {
   const wikiAddedMatch = /^wiki_added:[ \t]*(.+)$/m.exec(originalContent);
   const wikiAdded = wikiAddedMatch?.[1].trim();
   const wikiArticles = parseWikiArticlesFromFm(originalContent);
-  return upsertRawFrontmatter(formattedContent, {
+  const patched = upsertRawFrontmatter(formattedContent, {
     wiki_added: wikiAdded,
     wiki_updated: wikiUpdated,
     wiki_articles: wikiArticles
   });
+  const { content } = validateAndRepairSourceFrontmatter(patched);
+  return content;
 }
 var WikiController = class {
   constructor(app, plugin, domainStore, localConfigStore) {
@@ -47277,36 +47392,16 @@ var WikiController = class {
     });
     if (inWiki) {
       const T = i18n().view;
-      new ConfirmModal(
+      new InfoModal(
         this.app,
         T.formatInWikiTitle,
         [T.formatInWikiBody(inWiki.id)],
-        () => void this.suggestIngestForWikiFile(file.path, inWiki)
+        T.formatInWikiClose
       ).open();
       return;
     }
     this._pendingFormat = { originalPath: file.path, tempPath: "", chat: [] };
     await this.dispatch("format", [file.path]);
-  }
-  async suggestIngestForWikiFile(filePath, domain) {
-    const content = await this.app.vault.adapter.read(filePath);
-    const m = content.match(/^---\n([\s\S]*?)\n---/);
-    if (!m) {
-      new import_obsidian7.Notice(i18n().view.formatInWikiNoSources);
-      return;
-    }
-    const frontmatter = m[1];
-    const sourcesMatch = frontmatter.match(/wiki_sources:\s*\n((?:\s*-\s*.+\n?)+)/);
-    if (!sourcesMatch) {
-      new import_obsidian7.Notice(i18n().view.formatInWikiNoSources);
-      return;
-    }
-    const sources = sourcesMatch[1].split("\n").map((l) => l.replace(/^\s*-\s*/, "").trim()).filter(Boolean);
-    if (!sources.length) {
-      new import_obsidian7.Notice(i18n().view.formatInWikiNoSources);
-      return;
-    }
-    await this.init(domain.id, false, sources);
   }
   async formatApply(keepOld) {
     const p = this._pendingFormat;

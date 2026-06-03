@@ -468,7 +468,22 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           );
       }
 
+      new Setting(containerEl)
+        .setName(T.settings.structuredRetries_name)
+        .setDesc(T.settings.structuredRetries_desc)
+        .addText((t) =>
+          t.setPlaceholder("1")
+            .setValue(String(s.nativeAgent.structuredRetries))
+            .onChange(async (v) => {
+              const n = Number(v);
+              if (!Number.isFinite(n) || n < 0 || n > 3) return;
+              s.nativeAgent.structuredRetries = Math.floor(n);
+              await this.plugin.saveSettings();
+            }),
+        );
+
       if (!Platform.isMobile) {
+        new Setting(containerEl).setName("Per-operation models").setHeading();
         new Setting(containerEl)
           .setName(T.settings.perOperation_name)
           .setDesc(T.settings.perOperation_desc)
@@ -527,22 +542,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             );
         }
       }
-
-      new Setting(containerEl)
-        .setName(T.settings.structuredRetries_name)
-        .setDesc(T.settings.structuredRetries_desc)
-        .addText((t) =>
-          t.setPlaceholder("1")
-            .setValue(String(s.nativeAgent.structuredRetries))
-            .onChange(async (v) => {
-              const n = Number(v);
-              if (!Number.isFinite(n) || n < 0 || n > 3) return;
-              s.nativeAgent.structuredRetries = Math.floor(n);
-              await this.plugin.saveSettings();
-            }),
-        );
-
-      new Setting(containerEl).setName("Semantic Search").setHeading();
 
       new Setting(containerEl).setName("Semantic Search").setHeading();
 
