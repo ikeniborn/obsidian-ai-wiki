@@ -346,7 +346,8 @@ export async function* runLint(
           yield { kind: "tool_use", name: "Update", input: { path: fix.path } };
           try {
             const rawFixed = wlFixResult.fixed.get(fix.path) ?? fix.content;
-            const fixedContent = validateWikiSources(rawFixed, knownStems, titleMap);
+            const originalContent = pages.get(fix.path) ?? "";
+            const fixedContent = validateWikiSources(rawFixed, originalContent, knownStems, titleMap);
             await vaultTools.write(fix.path, fixedContent);
             writtenPaths.push(fix.path);
             pages.set(fix.path, fixedContent);
