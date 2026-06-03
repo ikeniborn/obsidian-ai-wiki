@@ -409,6 +409,29 @@ export async function* runLint(
     }
     // ── End per-article loop ──────────────────────────────────────────────────
 
+    // Post-loop: delete wiki pages that ended up with no valid wiki_sources.
+    // Pushes their stems into deletedRefs so the backlink rewrite below removes
+    // their wiki_articles entries from source files.
+    for (const wikiPath of writtenPaths) {
+      const wikiContent = pages.get(wikiPath);
+      if (!wikiContent) continue;
+      if (parseWikiSourcesFromFm(wikiContent).length === 0) {
+        const stem = pageId(wikiPath);
+        try {
+          if (typeof vaultTools.remove === "function") {
+            await vaultTools.remove(wikiPath);
+          }
+        } catch { /* non-critical — page already gone */ }
+        pages.delete(wikiPath);
+        deletedRefs.push({ deletedName: stem, redirectName: null });
+        yield {
+          kind: "info_text" as const,
+          icon: "⚠️",
+          summary: `Deleted empty-sources wiki page: ${stem}`,
+        };
+      }
+    }
+
     // Skipped articles summary
     if (skippedArticles.length > 0) {
       reportParts.push(`### Пропущены (ошибка LLM)\n${skippedArticles.map(a => `- ${a}.md`).join("\n")}`);

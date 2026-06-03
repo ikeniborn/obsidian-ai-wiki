@@ -1090,3 +1090,69 @@ describe("validateWikiSources", () => {
     expect(result).toContain("[[wiki_os_pac_file]]");
   });
 });
+
+describe("lint — empty-sources deletion", () => {
+  it("wiki page whose only source stem is deleted from vault → page deleted; source file wiki_articles entry removed", async () => {
+    const wikiContent = [
+      "---",
+      "wiki_sources:",
+      "  - [[deleted_source]]",
+      "---",
+      "# Orphan",
+    ].join("\n");
+    const someSourceContent = [
+      "---",
+      "wiki_articles:",
+      "  - [[wiki_work_orphan]]",
+      "---",
+      "# Some Source",
+    ].join("\n");
+
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockImplementation((path: string) => {
+        if (path.includes("!Wiki"))
+          return Promise.resolve({ files: ["!Wiki/work/wiki_work_orphan.md"], folders: [] });
+        // deleted_source.md is intentionally absent — simulates file deleted from vault.
+        // some_source.md still exists and holds the wiki_articles backlink.
+        return Promise.resolve({ files: ["src/some_source.md"], folders: [] });
+      }),
+      read: vi.fn().mockImplementation((path: string) => {
+        if (path === "!Wiki/work/wiki_work_orphan.md") return Promise.resolve(wikiContent);
+        if (path === "src/some_source.md") return Promise.resolve(someSourceContent);
+        return Promise.resolve("");
+      }),
+      remove: vi.fn().mockResolvedValue(undefined),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+
+    // LLM fixes the wiki page — collapses wiki_sources to inline [].
+    const fixedWikiContent = [
+      "---",
+      "wiki_sources: []",
+      "---",
+      "# Orphan",
+    ].join("\n");
+    const lintJson = JSON.stringify({
+      reasoning: "sources gone",
+      report: "ok",
+      fixes: [{ path: "!Wiki/work/wiki_work_orphan.md", content: fixedWikiContent }],
+      deletes: [],
+    });
+    const llm = makeLlm(lintJson, "{}");
+    await collect(
+      runLint(["work"], vt, llm, "model", [domain], VAULT_ROOT, new AbortController().signal),
+    );
+
+    // Wiki page must be deleted
+    expect(adapter.remove).toHaveBeenCalledWith("!Wiki/work/wiki_work_orphan.md");
+
+    // some_source.md wiki_articles entry must be removed by the deletedRefs backlink-rewrite pass
+    const sourceWrites = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([path]: [string]) => path === "src/some_source.md",
+    );
+    expect(sourceWrites.length).toBeGreaterThan(0);
+    const lastWrite = sourceWrites[sourceWrites.length - 1][1] as string;
+    expect(lastWrite).not.toContain("[[wiki_work_orphan]]");
+  });
+});
