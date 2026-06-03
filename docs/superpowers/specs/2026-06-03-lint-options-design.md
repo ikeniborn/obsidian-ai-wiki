@@ -1,3 +1,33 @@
+---
+chain:
+  intent: docs/superpowers/intents/2026-06-03-wiki-articles-validation-intent.md
+review:
+  spec_hash: 2316841a1eb0d9e7
+  last_run: "2026-06-03"
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: WARNING
+      section: "3. `LintOptionsModal`"
+      section_hash: 649a85768efa7fa6
+      text: "`controller.lint` signature change not documented"
+      verdict: fixed
+      verdict_at: "2026-06-03"
+    - id: F-002
+      phase: coverage
+      severity: WARNING
+      section: "3. `LintOptionsModal`"
+      section_hash: 649a85768efa7fa6
+      text: "`view.ts:352` lint button not addressed in spec"
+      verdict: fixed
+      verdict_at: "2026-06-03"
+---
+
 # Lint Options: Programmatic Mode + Entity Type Filter
 
 **Date:** 2026-06-03  
@@ -133,6 +163,29 @@ export class LintOptionsModal extends Modal {
     ) => void,
   )
 }
+```
+
+### Callers
+
+`LintOptionsModal` replaces **both** existing lint entry points:
+
+1. **`src/main.ts`** — command palette lint command (currently uses `DomainModal`).
+2. **`src/view.ts:352`** — lint button in the sidebar panel (currently uses `ConfirmModal`). Replace with `LintOptionsModal`; remove the `ConfirmModal` call.
+
+Both callers pass `settings.lintOptions.useLlm` as `defaultUseLlm`.
+
+### `controller.lint` signature
+
+`src/controller.ts:189` — update signature:
+
+```typescript
+async lint(
+  domain: string,
+  opts: { useLlm?: boolean; entityTypeFilter?: string[] } = {}
+): Promise<void>
+```
+
+Passes `opts.useLlm ?? true` and `opts.entityTypeFilter ?? []` down to `runLint`.
 ```
 
 ---
