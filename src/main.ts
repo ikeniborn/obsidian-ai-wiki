@@ -32,6 +32,7 @@ export default class LlmWikiPlugin extends Plugin {
     await migrateLegacyData(this, this.domainStore, this.localConfigStore);
     await this.loadSettings();
     await migrateToLocalV1(this, this.localConfigStore);
+    await migrateToLocalV2(this, this.localConfigStore);
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
     this.controller.onBusyChange = () => this.settingTab?.display();
 
@@ -169,6 +170,7 @@ export default class LlmWikiPlugin extends Plugin {
           format: { ...defNA.operations.format, ...((naOps.format as object) ?? {}) },
         },
       },
+      proxy: { ...DEFAULT_SETTINGS.proxy, ...((data?.proxy as object) ?? {}) },
       history: (data?.history as RunHistoryEntry[]) ?? [],
     } as LlmWikiPluginSettings;
 
@@ -325,23 +327,79 @@ export async function migrateToLocalV1(
 
   const s = plugin.settings;
   await localConfigStore.save({
-    backend: s.backend,
-    nativeAgent: {
-      baseUrl: s.nativeAgent.baseUrl,
-      apiKey: s.nativeAgent.apiKey,
-      model: s.nativeAgent.model,
-      temperature: s.nativeAgent.temperature,
-      topP: s.nativeAgent.topP,
-    },
-    claudeAgent: {
-      model: s.claudeAgent.model,
-      allowedTools: s.claudeAgent.allowedTools,
-    },
-    agentLogEnabled: s.agentLogEnabled,
+    nativeAgent: { apiKey: s.nativeAgent.apiKey },
     migrated_v1: true,
+    migrated_v2: true,
   });
-
   // Scrub apiKey from synced data.json — sensitive.
   s.nativeAgent.apiKey = "";
   await plugin.saveSettings();
+}
+
+export async function migrateToLocalV2(
+  plugin: LlmWikiPlugin,
+  localConfigStore: LocalConfigStore,
+): Promise<void> {
+  const local = await localConfigStore.load();
+  if (local.migrated_v2) return;
+
+  const s = plugin.settings;
+  // Read raw local.json to access old fields (claudeAgent, full nativeAgent, proxy).
+  const adapter = plugin.app.vault.adapter;
+  const localPath = `${plugin.manifest.dir}/local.json`;
+  let raw: Record<string, unknown> = {};
+  try {
+    if (await adapter.exists(localPath)) {
+      raw = JSON.parse(await adapter.read(localPath)) as Record<string, unknown>;
+    }
+  } catch { /* ignore */ }
+
+  const ln = (raw.nativeAgent as Record<string, unknown>) ?? {};
+  const lc = (raw.claudeAgent as Record<string, unknown>) ?? {};
+  const lp = (raw.proxy as Record<string, unknown>) ?? {};
+
+  // Move nativeAgent fields (except apiKey) to data.json settings.
+  if (typeof ln.baseUrl === "string" && ln.baseUrl) s.nativeAgent.baseUrl = ln.baseUrl;
+  if (typeof ln.model === "string" && ln.model) s.nativeAgent.model = ln.model;
+  if (typeof ln.temperature === "number") s.nativeAgent.temperature = ln.temperature;
+  if (ln.topP !== undefined) s.nativeAgent.topP = ln.topP as number | null;
+  if (typeof ln.embeddingModel === "string") s.nativeAgent.embeddingModel = ln.embeddingModel || undefined;
+  if (typeof ln.embeddingDimensions === "number") s.nativeAgent.embeddingDimensions = ln.embeddingDimensions;
+  if (typeof ln.relevantPagesTopK === "number") s.nativeAgent.relevantPagesTopK = ln.relevantPagesTopK;
+  if (typeof ln.mergeDeleteWarnThreshold === "number") s.nativeAgent.mergeDeleteWarnThreshold = ln.mergeDeleteWarnThreshold;
+
+  // Move claudeAgent fields to data.json settings.
+  if (typeof lc.model === "string" && lc.model) s.claudeAgent.model = lc.model;
+  if (typeof lc.allowedTools === "string") s.claudeAgent.allowedTools = lc.allowedTools;
+  if (typeof lc.effort === "string") s.claudeAgent.effort = lc.effort as typeof s.claudeAgent.effort;
+
+  // Move proxy (except password) to data.json settings.
+  if (typeof lp.enabled === "boolean" || typeof lp.url === "string") {
+    s.proxy = {
+      enabled: typeof lp.enabled === "boolean" ? lp.enabled : false,
+      url: typeof lp.url === "string" ? lp.url : "",
+      username: typeof lp.username === "string" ? lp.username : undefined,
+      noProxy: typeof lp.noProxy === "string" ? lp.noProxy : undefined,
+    };
+  }
+
+  // Move backend to local backend override (keep it local).
+  // agentLogEnabled stays local too (already in LocalConfig).
+
+  await plugin.saveSettings();
+
+  // Rewrite local.json keeping only local-specific fields.
+  const newLocal = {
+    iclaudePath: raw.iclaudePath ?? "",
+    ...(raw.backend !== undefined ? { backend: raw.backend } : {}),
+    ...(raw.agentLogEnabled !== undefined ? { agentLogEnabled: raw.agentLogEnabled } : {}),
+    ...(typeof ln.apiKey === "string" && ln.apiKey ? { nativeAgent: { apiKey: ln.apiKey } } : {}),
+    ...(typeof lp.password === "string" && lp.password ? { proxy: { password: lp.password } } : {}),
+    ...(raw.shellConsentGiven !== undefined ? { shellConsentGiven: raw.shellConsentGiven } : {}),
+    ...(raw.lastDomain !== undefined ? { lastDomain: raw.lastDomain } : {}),
+    migrated_v1: true,
+    migrated_v2: true,
+  };
+  await adapter.write(localPath, JSON.stringify(newLocal, null, 2));
+  localConfigStore["cache"] = null; // invalidate cache
 }

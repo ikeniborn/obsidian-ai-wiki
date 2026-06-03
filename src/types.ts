@@ -181,6 +181,12 @@ export interface LlmWikiPluginSettings {
     relevantPagesTopK?: number;
     mergeDeleteWarnThreshold?: number;
   };
+  proxy: {
+    enabled: boolean;
+    url: string;
+    username?: string;
+    noProxy?: string;
+  };
   devMode: {
     enabled: boolean;
     evaluatorModel: string;
@@ -228,6 +234,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     },
     structuredRetries: 1,
   },
+  proxy: { enabled: false, url: "" },
   devMode: {
     enabled: false,
     evaluatorModel: "sonnet",

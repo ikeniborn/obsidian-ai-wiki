@@ -274,6 +274,14 @@ When the LLM drops a `wiki_sources` entry whose stem is absent from `knownStems`
 
 When `originalContent` is `""`, no entries are restored; existing stale-removal logic still removes invalid entries from the LLM-returned content.
 
+### Wiki page stem in wiki_sources — rejected
+
+A `wiki_sources` entry whose stem is present in `wikiStems` (wiki page stems) is removed even if it also appears in `knownStems`. Wiki pages are not valid sources.
+
+### Wiki page stem in original — not restored
+
+When `originalContent` had a `wiki_sources` entry whose stem is in `wikiStems`, the LLM's omission is not restored. Wiki page stems must not be re-injected by the restore pass.
+
 ## Lint Bucket Repair
 
 Integration tests that verify `runLint` detects and repairs wrong-bucket stems in wiki page frontmatter — wiki stems in `wiki_sources` and source stems in `wiki_outgoing_links` — before the LLM pass.

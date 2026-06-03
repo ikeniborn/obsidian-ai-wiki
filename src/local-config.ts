@@ -1,5 +1,6 @@
 import type { Plugin } from "obsidian";
 
+/** Full proxy config (password included) — used only in EffectiveSettings. */
 export interface ProxyConfig {
   enabled: boolean;
   url: string;
@@ -12,24 +13,10 @@ export interface LocalConfig {
   iclaudePath: string;
   backend?: "claude-agent" | "native-agent";
   agentLogEnabled?: boolean;
-  claudeAgent?: {
-    model: string;
-    allowedTools: string;
-    effort?: "low" | "medium" | "high" | "xhigh" | "max";
-  };
-  nativeAgent?: {
-    baseUrl: string;
-    apiKey: string;
-    model: string;
-    temperature: number;
-    topP: number | null;
-    embeddingModel?: string;
-    embeddingDimensions?: number;
-    relevantPagesTopK?: number;
-    mergeDeleteWarnThreshold?: number;
-  };
-  proxy?: ProxyConfig;
+  nativeAgent?: { apiKey: string };
+  proxy?: { password?: string };
   migrated_v1?: boolean;
+  migrated_v2?: boolean;
   shellConsentGiven?: boolean;
   lastDomain?: string;
 }

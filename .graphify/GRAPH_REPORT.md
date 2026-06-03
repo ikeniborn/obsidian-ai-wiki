@@ -1,30 +1,30 @@
 # Graph Report - .  (2026-06-03)
 
 ## Corpus Check
-- 26 files · ~0 words
+- 0 files · ~0 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1940 nodes · 3098 edges · 191 communities (116 shown, 75 thin omitted)
+- 1947 nodes · 3109 edges · 187 communities (113 shown, 74 thin omitted)
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 53 edges (avg confidence: 0.79)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
-- [[_COMMUNITY_Community 0|Community 0]]
-- [[_COMMUNITY_Community 1|Community 1]]
-- [[_COMMUNITY_Community 2|Community 2]]
-- [[_COMMUNITY_Community 3|Community 3]]
-- [[_COMMUNITY_Community 4|Community 4]]
-- [[_COMMUNITY_Community 5|Community 5]]
-- [[_COMMUNITY_Community 6|Community 6]]
-- [[_COMMUNITY_Community 7|Community 7]]
-- [[_COMMUNITY_Community 8|Community 8]]
-- [[_COMMUNITY_Community 9|Community 9]]
-- [[_COMMUNITY_Community 10|Community 10]]
-- [[_COMMUNITY_Community 11|Community 11]]
-- [[_COMMUNITY_Community 12|Community 12]]
-- [[_COMMUNITY_Community 13|Community 13]]
-- [[_COMMUNITY_Community 14|Community 14]]
+- [[_COMMUNITY_Embedding Cache|Embedding Cache]]
+- [[_COMMUNITY_Wiki Structure & Lint|Wiki Structure & Lint]]
+- [[_COMMUNITY_Bootstrap & Init|Bootstrap & Init]]
+- [[_COMMUNITY_JSON Parsing & Retry|JSON Parsing & Retry]]
+- [[_COMMUNITY_Backend & CLI|Backend & CLI]]
+- [[_COMMUNITY_Ingest Pipeline|Ingest Pipeline]]
+- [[_COMMUNITY_Format & Markdown|Format & Markdown]]
+- [[_COMMUNITY_Domain Rules|Domain Rules]]
+- [[_COMMUNITY_Graph Cache|Graph Cache]]
+- [[_COMMUNITY_UI View|UI View]]
+- [[_COMMUNITY_Controller & i18n|Controller & i18n]]
+- [[_COMMUNITY_Annotation & Context|Annotation & Context]]
+- [[_COMMUNITY_Agent Runner|Agent Runner]]
+- [[_COMMUNITY_Zod Schemas|Zod Schemas]]
+- [[_COMMUNITY_Wiki Controller|Wiki Controller]]
 - [[_COMMUNITY_Community 15|Community 15]]
 - [[_COMMUNITY_Community 16|Community 16]]
 - [[_COMMUNITY_Community 17|Community 17]]
@@ -123,9 +123,9 @@
 - [[_COMMUNITY_Community 110|Community 110]]
 - [[_COMMUNITY_Community 111|Community 111]]
 - [[_COMMUNITY_Community 112|Community 112]]
-- [[_COMMUNITY_Community 113|Community 113]]
 - [[_COMMUNITY_Community 114|Community 114]]
 - [[_COMMUNITY_Community 115|Community 115]]
+- [[_COMMUNITY_Community 116|Community 116]]
 - [[_COMMUNITY_Community 117|Community 117]]
 - [[_COMMUNITY_Community 118|Community 118]]
 - [[_COMMUNITY_Community 119|Community 119]]
@@ -145,15 +145,15 @@
 - [[_COMMUNITY_Community 133|Community 133]]
 - [[_COMMUNITY_Community 134|Community 134]]
 - [[_COMMUNITY_Community 135|Community 135]]
-- [[_COMMUNITY_Community 136|Community 136]]
-- [[_COMMUNITY_Community 137|Community 137]]
-- [[_COMMUNITY_Community 138|Community 138]]
-- [[_COMMUNITY_Community 139|Community 139]]
+- [[_COMMUNITY_Community 141|Community 141]]
+- [[_COMMUNITY_Community 142|Community 142]]
+- [[_COMMUNITY_Community 143|Community 143]]
+- [[_COMMUNITY_Community 144|Community 144]]
 - [[_COMMUNITY_Community 145|Community 145]]
-- [[_COMMUNITY_Community 146|Community 146]]
 - [[_COMMUNITY_Community 147|Community 147]]
 - [[_COMMUNITY_Community 148|Community 148]]
 - [[_COMMUNITY_Community 149|Community 149]]
+- [[_COMMUNITY_Community 150|Community 150]]
 - [[_COMMUNITY_Community 151|Community 151]]
 - [[_COMMUNITY_Community 152|Community 152]]
 - [[_COMMUNITY_Community 153|Community 153]]
@@ -190,10 +190,6 @@
 - [[_COMMUNITY_Community 184|Community 184]]
 - [[_COMMUNITY_Community 185|Community 185]]
 - [[_COMMUNITY_Community 186|Community 186]]
-- [[_COMMUNITY_Community 187|Community 187]]
-- [[_COMMUNITY_Community 188|Community 188]]
-- [[_COMMUNITY_Community 189|Community 189]]
-- [[_COMMUNITY_Community 190|Community 190]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `LlmWikiView` - 51 edges
@@ -204,483 +200,466 @@
 6. `LlmClient` - 33 edges
 7. `RunEvent` - 31 edges
 8. `PageSimilarityService` - 25 edges
-9. `domainWikiFolder()` - 17 edges
-10. `VaultAdapter` - 17 edges
+9. `LlmWikiSettingTab` - 19 edges
+10. `domainWikiFolder()` - 17 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `requestUrl()` --calls--> `mobileFetch()`  [INFERRED]
   vitest.mock.ts → src/mobile-fetch.ts
 - `runIngest entity-driven flow tests` --validates--> `bfsExpand`  [INFERRED]
   tests/phases/ingest.test.ts → src/wiki-graph.ts
-- `main()` --calls--> `migrateDomain()`  [EXTRACTED]
-  scripts/migrate-wiki-prefix.ts → src/migrate-wiki-prefix.ts
 - `bfsExpand tests` --tests--> `bfsExpand`  [EXTRACTED]
   tests/wiki-graph.test.ts → src/wiki-graph.ts
 - `WikiController format() tests` --tests--> `WikiController`  [EXTRACTED]
   tests/controller-format.test.ts → src/controller.ts
+- `WikiController formatApply/formatCancel/formatRefine tests` --validates--> `patchWikiFields`  [INFERRED]
+  tests/controller-format.test.ts → src/controller.ts
 
-## Hyperedges (group relationships)
-- **DSPy optimization pipeline: loader → optimizer → writer** — loader_load_examples, optimizer_run_mipro, optimize_main [EXTRACTED 1.00]
-- **Domain CRUD Operations — applyDomainEvent, DomainStore, validateDomainId** — apply_domain_event, domain_store, validate_domain_id [INFERRED 0.85]
-- **Parallel JS/TS test duplication across all phases** — phases_ingest_js_runingest, phases_ingest_ts_runingest, phases_init_js_runinit, phases_init_ts_runinit [INFERRED 0.85]
+## Communities (187 total, 74 thin omitted)
 
-## Communities (191 total, 75 thin omitted)
+### Community 0 - "Embedding Cache"
+Cohesion: 0.06
+Nodes (51): annotationHash(), cosine(), decodeVector(), EmbeddingCacheEntry, EmbeddingCacheFile, encodeVector(), entityKey(), entityQuery() (+43 more)
 
-### Community 0 - "Community 0"
+### Community 1 - "Wiki Structure & Lint"
 Cohesion: 0.03
-Nodes (54): buildTitleMap(), checkStructure(), cleanupInvalidPages(), adapter, configJson, content, createMock, dom (+46 more)
+Nodes (55): buildTitleMap(), checkStructure(), cleanupInvalidPages(), adapter, configJson, content, createMock, dom (+47 more)
 
-### Community 1 - "Community 1"
+### Community 2 - "Bootstrap & Init"
 Cohesion: 0.03
 Nodes (53): ac, allUpdates, bootstrapDomainJson, bootstrapJson, bootstrapUpdate, concept, created, current (+45 more)
 
-### Community 2 - "Community 2"
+### Community 3 - "JSON Parsing & Retry"
 Cohesion: 0.03
 Nodes (51): parseJsonPages(), adapter, badResponse, badResponseFirst, badResponseRetry, block, collidingDomain, domain (+43 more)
 
-### Community 3 - "Community 3"
+### Community 4 - "Backend & CLI"
 Cohesion: 0.06
 Nodes (41): _get(), main(), ClaudeCodeLM, make_lm(), DSPy-совместимый LM через claude CLI. Не требует API-ключа., Создаёт LM-объект по DSPY_BACKEND из env. Вызывается после load_dotenv()., load_examples(), Читает JSONL-лог dev-режима, возвращает dict operation → list[entry].     Отфиль (+33 more)
 
-### Community 4 - "Community 4"
+### Community 5 - "Ingest Pipeline"
 Cohesion: 0.04
-Nodes (50): absWiki, allSourceWarnings, backlinkToday, { content: filteredSource, warnings: staleWarnings }, { content: repairedPage, warnings: pageWarnings }, { content: repairedSource, warnings: sourceWarnings }, { content: sourcedPage, injected }, deletedPaths (+42 more)
+Nodes (51): absWiki, allSourceWarnings, backlinkToday, { content: filteredSource, warnings: staleWarnings }, { content: repairedPage, warnings: pageWarnings }, { content: repairedSource, warnings: sourceWarnings }, { content: sourcedPage, injected }, deletedPaths (+43 more)
 
-### Community 5 - "Community 5"
+### Community 6 - "Format & Markdown"
 Cohesion: 0.04
-Nodes (51): absWiki, allMdPaths, allStructuralIssues, annotations, articleName, articlePaths, backlinks, bareName (+43 more)
+Nodes (52): absWiki, allMdPaths, allStructuralIssues, annotations, articleName, articlePaths, backlinks, bareName (+44 more)
 
-### Community 6 - "Community 6"
+### Community 7 - "Domain Rules"
 Cohesion: 0.05
 Nodes (42): cross_domain_rules, description, rules, domains, extract, reader, rules_file, extract (+34 more)
 
-### Community 7 - "Community 7"
-Cohesion: 0.06
-Nodes (30): allAnnotatedIds, allAnnotatedPaths, contextBlock, entityTypesBlock, expandedPages, files, graphResult, indexAnnotations (+22 more)
+### Community 8 - "Graph Cache"
+Cohesion: 0.08
+Nodes (29): buildWikiGraph(), CacheEntry, GraphCache, hashPages(), WikiGraph, build(), DOMAIN, domain2 (+21 more)
 
-### Community 8 - "Community 8"
+### Community 9 - "UI View"
+Cohesion: 0.09
+Nodes (4): formatGraphStatsLines(), LlmWikiView, registerLinkHandler(), translateSystemEvent()
+
+### Community 10 - "Controller & i18n"
+Cohesion: 0.1
+Nodes (8): AddDomainInput, EntityType, I18n, AddDomainModal, BusyCloseModal, EditDomainModal, ManageSourcesModal, QueryModal
+
+### Community 11 - "Annotation & Context"
+Cohesion: 0.06
+Nodes (31): allAnnotatedIds, allAnnotatedPaths, buildContextBlock(), contextBlock, entityTypesBlock, expandedPages, files, graphResult (+23 more)
+
+### Community 12 - "Agent Runner"
 Cohesion: 0.07
 Nodes (32): AgentRunner, AgentRunner.buildSimilarity, AgentRunner.run, WikiController.buildAgentRunner, WikiController.dispatch, WikiController.format, WikiController format() tests, WikiController formatApply/formatCancel/formatRefine tests (+24 more)
 
-### Community 10 - "Community 10"
+### Community 13 - "Zod Schemas"
 Cohesion: 0.1
 Nodes (25): DomainEntryResponse, DomainEntrySchema, EntitiesOutput, EntitiesOutputSchema, EntityTypeSchema, EntityTypesDeltaResponse, EntityTypesDeltaSchema, FormatOutput (+17 more)
 
-### Community 11 - "Community 11"
+### Community 14 - "Wiki Controller"
+Cohesion: 0.18
+Nodes (4): WikiController, resolveEffective(), ChatMessage, WikiOperation
+
+### Community 15 - "Community 15"
 Cohesion: 0.13
 Nodes (23): parseFormatOutput(), retryInvalidPaths(), actualizeDomainConfig(), buildChatParams(), buildLlmCallStatsEvent(), extractStreamDeltas(), extractUsage(), injectSystemPrompt() (+15 more)
 
-### Community 12 - "Community 12"
+### Community 16 - "Community 16"
 Cohesion: 0.07
 Nodes (26): dependencies, jsonrepair, openai, path-browserify, undici, yaml, zod, devDependencies (+18 more)
 
-### Community 13 - "Community 13"
+### Community 17 - "Community 17"
 Cohesion: 0.19
-Nodes (3): WikiController, ChatMessage, WikiOperation
+Nodes (21): main(), makeNodeAdapter(), parseArgs(), summarize(), ensureDomainConfig(), migrateLegacy(), basename(), listMdRecursive() (+13 more)
 
-### Community 14 - "Community 14"
-Cohesion: 0.19
-Nodes (19): splitByPathValidity(), wipeDomainFolder(), ensureDomainConfig(), migrateLegacy(), basename(), listMdRecursive(), migrateDomain(), MigrateOptions (+11 more)
+### Community 18 - "Community 18"
+Cohesion: 0.14
+Nodes (16): files, messages, META_FILES, pagesBlock, pwtEvents, start, systemContent, wikiVaultPath (+8 more)
 
-### Community 15 - "Community 15"
+### Community 19 - "Community 19"
 Cohesion: 0.08
 Nodes (21): baseParams, callStats, lastSlash, messages, missing1, missing2, missingFinal, parsed (+13 more)
 
-### Community 16 - "Community 16"
-Cohesion: 0.18
-Nodes (13): annotationHash(), cosine(), decodeVector(), EmbeddingCacheEntry, EmbeddingCacheFile, encodeVector(), entityKey(), entityQuery() (+5 more)
-
-### Community 17 - "Community 17"
+### Community 20 - "Community 20"
 Cohesion: 0.08
 Nodes (22): largeSystem, largeText, pIdx, resumeIdx, separatorIdx, setTimeoutSpy, testCfg, tmpRemove (+14 more)
 
-### Community 18 - "Community 18"
+### Community 21 - "Community 21"
 Cohesion: 0.08
 Nodes (18): adapter, blocks, callArgs, create, ctrl, err, good, history (+10 more)
 
-### Community 19 - "Community 19"
-Cohesion: 0.1
-Nodes (18): messages, params, { reasoning, content, outputTokens: tok }, requestStartMs, start, { stream, getStats }, systemContent, tok (+10 more)
-
-### Community 20 - "Community 20"
-Cohesion: 0.15
-Nodes (20): checkWikiLinks(), extractFmLinks(), extractLinks(), fixOnePass(), FixResult, fixWikiLinks(), setFmLinks(), splitFrontmatter() (+12 more)
-
-### Community 21 - "Community 21"
+### Community 22 - "Community 22"
 Cohesion: 0.15
 Nodes (21): appendMissingLines(), escapeRawControlsInStrings(), escapeRegExp(), extractJsonObject(), FormatResponse, lemmas(), looksTruncated(), MissingToken (+13 more)
 
-### Community 22 - "Community 22"
+### Community 23 - "Community 23"
+Cohesion: 0.15
+Nodes (20): checkWikiLinks(), extractFmLinks(), extractLinks(), fixOnePass(), FixResult, fixWikiLinks(), setFmLinks(), splitFrontmatter() (+12 more)
+
+### Community 24 - "Community 24"
 Cohesion: 0.09
 Nodes (15): adapter, createMock, domain, llm, readMock, result, schemaRead, scoreValues (+7 more)
 
-### Community 23 - "Community 23"
-Cohesion: 0.12
-Nodes (9): LlmWikiPlugin, migrateDomainWikiFolder(), migrateLegacyData(), migrateToLocalV1(), DomainModal, LlmWikiPluginSettings, p, changed (+1 more)
-
-### Community 24 - "Community 24"
-Cohesion: 0.1
-Nodes (18): before, calls, chunks, e, ev, inner, messages, msgs (+10 more)
-
 ### Community 25 - "Community 25"
+Cohesion: 0.11
+Nodes (15): LlmWikiPlugin, migrateLegacyData(), migrateToLocalV1(), migrateToLocalV2(), adapter, dms, existing, lcs (+7 more)
+
+### Community 26 - "Community 26"
 Cohesion: 0.16
 Nodes (19): validateWikiSources(), patchWikiFields(), ensureWikiSources(), FieldRule, filterStaleWikiLinks(), hasFrontmatterField(), parseWikiArticlesFromFm(), parseWikiSourcesFromFm() (+11 more)
 
-### Community 26 - "Community 26"
-Cohesion: 0.14
-Nodes (12): DomainEntry, migrateDomainsV2(), DomainCorruptError, DomainStore, { domains, migrated }, input, adapter, calls (+4 more)
-
 ### Community 27 - "Community 27"
-Cohesion: 0.15
-Nodes (9): computeSpeedText(), RunHistoryEntry, FileContentModal, formatGraphStatsLines(), sanitizeLinks(), summariseInput(), translateSystemEvent(), truncate() (+1 more)
+Cohesion: 0.1
+Nodes (18): before, calls, chunks, e, ev, inner, messages, msgs (+10 more)
 
 ### Community 28 - "Community 28"
-Cohesion: 0.14
-Nodes (3): VaultTools, adapter, vt
+Cohesion: 0.17
+Nodes (11): wrapMobileNoStream(), InfoModal, buildProxyUrl(), createProxyDispatcher(), createProxyFetch(), maskProxyUrl(), parseNoProxy(), shouldBypass() (+3 more)
 
 ### Community 29 - "Community 29"
-Cohesion: 0.12
-Nodes (12): adapter, adapterWithSourceFiles(), created, existing, files, firstUpdate, initStart, llm (+4 more)
+Cohesion: 0.11
+Nodes (13): adapter, adapterWithSourceFiles(), created, existing, files, firstUpdate, initStart, llm (+5 more)
 
 ### Community 30 - "Community 30"
-Cohesion: 0.11
-Nodes (14): blocked, createMock, domain, events, indexCall, llm, llmResponse, pages (+6 more)
-
-### Community 31 - "Community 31"
-Cohesion: 0.11
-Nodes (14): StructuredValidationError, ac, baseArgs, calls, ev, events, fail, fb (+6 more)
-
-### Community 32 - "Community 32"
 Cohesion: 0.12
 Nodes (13): activeDocument, App, ItemView, makeEl(), makeElWithText(), moment, Platform, Plugin (+5 more)
 
-### Community 33 - "Community 33"
+### Community 31 - "Community 31"
 Cohesion: 0.12
 Nodes (14): adapter, appendPaths, devOffSettings, devOnSettings, makeLlm(), makeLlmMulti(), parsed, runner (+6 more)
 
-### Community 34 - "Community 34"
-Cohesion: 0.16
-Nodes (15): buildContextBlock(), pageId(), bodyContent(), parseFmKeywords(), scoreSeed(), selectSeeds(), STOP_WORDS, annotations (+7 more)
-
-### Community 35 - "Community 35"
+### Community 32 - "Community 32"
 Cohesion: 0.15
 Nodes (13): deriveSection(), parseIndexAnnotations(), removeIndexAnnotation(), upsertIndexAnnotation(), upsertInSection(), map, c, content (+5 more)
 
+### Community 33 - "Community 33"
+Cohesion: 0.14
+Nodes (10): f1, f2, folder, out, result, sub, vault, collectMdInPaths() (+2 more)
+
+### Community 34 - "Community 34"
+Cohesion: 0.11
+Nodes (14): StructuredValidationError, ac, baseArgs, calls, ev, events, fail, fb (+6 more)
+
+### Community 35 - "Community 35"
+Cohesion: 0.11
+Nodes (14): blocked, createMock, domain, events, indexCall, llm, llmResponse, pages (+6 more)
+
 ### Community 36 - "Community 36"
 Cohesion: 0.15
-Nodes (4): AddDomainInput, I18n, AddDomainModal, WikiQuestionModal
+Nodes (3): VaultTools, adapter, vt
 
 ### Community 37 - "Community 37"
+Cohesion: 0.16
+Nodes (10): cleanDir(), pickAndWriteSchema(), runStorageMigration(), StorageMigrationConflictError, p, DOMAIN_JSON, domainJson, files (+2 more)
+
+### Community 38 - "Community 38"
 Cohesion: 0.14
 Nodes (11): VaultAdapter, VaultIndexer, adapter, baseDomain, before, domain, emb, created (+3 more)
 
-### Community 38 - "Community 38"
-Cohesion: 0.16
-Nodes (10): f1, f2, folder, out, result, sub, vault, collectMdInPaths() (+2 more)
-
 ### Community 39 - "Community 39"
-Cohesion: 0.17
-Nodes (12): EffectiveSettings, resolveEffective(), ClaudeOperationConfig, DEFAULT_SETTINGS, NativeOperationConfig, OpMap, WikiDomain, eff (+4 more)
-
-### Community 40 - "Community 40"
-Cohesion: 0.24
-Nodes (11): DEFAULTS, ProxyConfig, buildProxyUrl(), createProxyDispatcher(), createProxyFetch(), maskProxyUrl(), parseNoProxy(), shouldBypass() (+3 more)
-
-### Community 41 - "Community 41"
-Cohesion: 0.17
-Nodes (10): applyDomainEvent(), DomainPersistEvent, mergeEntityTypes(), validateDomainId(), consolidateSourcePaths(), base, input, result (+2 more)
-
-### Community 42 - "Community 42"
-Cohesion: 0.23
-Nodes (5): buildEntityTypesBlock(), buildExtractMessages(), buildIngestMessages(), LocalConfig, LlmWikiSettingTab
-
-### Community 43 - "Community 43"
 Cohesion: 0.16
 Nodes (15): build(), { ctrl }, { ctrl, app }, { ctrl, dispatchSpy }, domain, formatted, makeApp(), makeDomainStore() (+7 more)
 
-### Community 44 - "Community 44"
+### Community 40 - "Community 40"
+Cohesion: 0.17
+Nodes (10): applyDomainEvent(), DomainPersistEvent, mergeEntityTypes(), validateDomainId(), consolidateSourcePaths(), base, input, result (+2 more)
+
+### Community 41 - "Community 41"
 Cohesion: 0.13
 Nodes (12): alreadyAnalyzed, annotationsCache, collected, dryRun, existing, force, messages, sourceFiles (+4 more)
 
-### Community 45 - "Community 45"
+### Community 42 - "Community 42"
 Cohesion: 0.13
 Nodes (12): btnClick, domainSelect, fakeEvent, ingestItem, itemNoDomain, queryInput, queryItem, rerunBtn (+4 more)
 
-### Community 46 - "Community 46"
-Cohesion: 0.3
-Nodes (7): wrapWithJsonFallback(), ParseWithRetryArgs, AgentRunner, LlmCallOptions, LlmClient, RunEvent, RunRequest
+### Community 43 - "Community 43"
+Cohesion: 0.17
+Nodes (7): computeSpeedText(), RunHistoryEntry, sanitizeLinks(), summariseInput(), truncate(), ViewState, WikiQuestionModal
 
-### Community 47 - "Community 47"
+### Community 44 - "Community 44"
 Cohesion: 0.14
 Nodes (11): adapter, json, makeLlmMulti(), result, settingsWithUrl, systemEv, baseSettings, ctrl (+3 more)
 
-### Community 48 - "Community 48"
-Cohesion: 0.18
-Nodes (13): bfsExpand(), bfsExpandRanked(), BfsExpandResult, bfsExpandWithHops(), checkGraphStructure(), emptyGraph, emptyPages, { expanded } (+5 more)
-
-### Community 49 - "Community 49"
+### Community 45 - "Community 45"
 Cohesion: 0.14
 Nodes (11): adapter, BOOTSTRAP_JSON, ENTITIES_EMPTY, events, existingDomain, hasNewEntity, INGEST_WITH_DELTA, llm (+3 more)
 
-### Community 50 - "Community 50"
-Cohesion: 0.14
-Nodes (11): adapter, dms, existing, lcs, local, localStore, plugin, sampleDomain (+3 more)
+### Community 46 - "Community 46"
+Cohesion: 0.19
+Nodes (11): ClaudeOperationConfig, DEFAULT_SETTINGS, NativeOperationConfig, OpMap, WikiDomain, eff, proxy, s (+3 more)
 
-### Community 51 - "Community 51"
+### Community 48 - "Community 48"
 Cohesion: 0.15
 Nodes (12): compilerOptions, esModuleInterop, isolatedModules, lib, module, moduleResolution, noImplicitAny, skipLibCheck (+4 more)
 
-### Community 52 - "Community 52"
-Cohesion: 0.23
-Nodes (12): build(), DOMAIN, domain2, invalidateSpy, makeApp(), makeDomainStore(), makeLocalConfigStore(), makePlugin() (+4 more)
-
-### Community 53 - "Community 53"
-Cohesion: 0.21
-Nodes (9): cleanDir(), pickAndWriteSchema(), runStorageMigration(), StorageMigrationConflictError, DOMAIN_JSON, domainJson, files, mtimes (+1 more)
-
-### Community 54 - "Community 54"
+### Community 49 - "Community 49"
 Cohesion: 0.15
 Nodes (9): adapter, configJson, domain, ev, infoEvents, result, similarity, vectorEvents (+1 more)
 
-### Community 55 - "Community 55"
+### Community 50 - "Community 50"
 Cohesion: 0.15
 Nodes (9): app, buildSpy, ctrl, domainStore, localConfigStore, plugin, priv, PrivateCtrl (+1 more)
 
-### Community 56 - "Community 56"
-Cohesion: 0.17
-Nodes (7): en, es, locales, ru, parseTimeoutString(), OpKey, r
-
-### Community 57 - "Community 57"
+### Community 51 - "Community 51"
 Cohesion: 0.21
-Nodes (7): buildWikiGraph(), CacheEntry, GraphCache, hashPages(), WikiGraph, p, r
+Nodes (7): EffectiveSettings, DEFAULTS, ProxyConfig, parseTimeoutString(), LlmWikiPluginSettings, OpKey, r
 
-### Community 58 - "Community 58"
+### Community 52 - "Community 52"
 Cohesion: 0.17
 Nodes (10): cfg, chunks, client, createPromise, ctrl, lines, proc, stderr (+2 more)
 
-### Community 59 - "Community 59"
-Cohesion: 0.18
-Nodes (6): wrapMobileNoStream(), callArgs, completion, createMock, inner, wrapped
-
-### Community 60 - "Community 60"
-Cohesion: 0.23
-Nodes (10): build(), { ctrl }, { ctrl, domainStore }, { ctrl, vault }, DOMAIN, invalidateSpy, makeApp(), makeFolder() (+2 more)
-
-### Community 61 - "Community 61"
-Cohesion: 0.17
-Nodes (10): allPaths, alphaEntry, annotations, body, decoded, encoded, fetchMock, svc (+2 more)
-
-### Community 62 - "Community 62"
+### Community 53 - "Community 53"
 Cohesion: 0.18
 Nodes (9): ctx, domain, events, { llm, getCapturedMessages }, makeAdapterWithPages(), mockAdapter(), noisePages, pages (+1 more)
 
-### Community 63 - "Community 63"
-Cohesion: 0.18
-Nodes (8): adapter, domain, events, llm, updates, VALID_PATCH_JSON, vt, withTypes
-
-### Community 64 - "Community 64"
-Cohesion: 0.18
-Nodes (7): llmResponse, adapter, domain, domainWithoutPath, ev, result, vt
-
-### Community 65 - "Community 65"
-Cohesion: 0.24
-Nodes (4): LocalConfigStore, adapter, lc, store
-
-### Community 66 - "Community 66"
+### Community 54 - "Community 54"
 Cohesion: 0.22
 Nodes (9): __clearRequestUrlCalls(), requestUrl(), __requestUrlCalls, __resetRequestUrlDelay(), __setRequestUrlDelay(), __setRequestUrlResponse(), abortRace(), mobileFetch() (+1 more)
 
-### Community 67 - "Community 67"
+### Community 55 - "Community 55"
 Cohesion: 0.18
 Nodes (4): FileErrorModal, domain, m, onSave
 
-### Community 68 - "Community 68"
+### Community 56 - "Community 56"
+Cohesion: 0.18
+Nodes (7): llmResponse, adapter, domain, domainWithoutPath, ev, result, vt
+
+### Community 57 - "Community 57"
+Cohesion: 0.24
+Nodes (4): LocalConfigStore, adapter, lc, store
+
+### Community 58 - "Community 58"
+Cohesion: 0.24
+Nodes (7): EvalResult, messages, params, parseEvalResponse(), userContent, render(), result
+
+### Community 59 - "Community 59"
 Cohesion: 0.18
 Nodes (10): askBtn, askSaveBtn, cancelBtn, finalEl, finishedAt, progressCount, resultSection, resultToggle (+2 more)
 
-### Community 69 - "Community 69"
+### Community 60 - "Community 60"
+Cohesion: 0.18
+Nodes (8): adapter, domain, events, llm, updates, VALID_PATCH_JSON, vt, withTypes
+
+### Community 61 - "Community 61"
 Cohesion: 0.2
 Nodes (8): result, e, ev, events, kinds, line, lines, tu1
 
-### Community 70 - "Community 70"
+### Community 62 - "Community 62"
 Cohesion: 0.2
 Nodes (6): domainCreated, validDomainJson, adapter, existingDomain, result, vt
 
-### Community 71 - "Community 71"
-Cohesion: 0.2
-Nodes (4): ConfirmModal, BASE_DOMAIN, original, result
-
-### Community 73 - "Community 73"
-Cohesion: 0.22
-Nodes (3): ShellConsentModal, modal, onEnable
-
-### Community 74 - "Community 74"
+### Community 63 - "Community 63"
 Cohesion: 0.38
 Nodes (8): buildWikiStem(), DOMAIN_ID_RE, escapeForRegex(), GENERIC_WIKI_STEM_REGEX, isWikiStem(), slugifyEntity(), stemRegex(), re
 
-### Community 75 - "Community 75"
+### Community 64 - "Community 64"
+Cohesion: 0.31
+Nodes (5): DomainEntry, migrateDomainsV2(), DomainStore, { domains, migrated }, input
+
+### Community 65 - "Community 65"
+Cohesion: 0.2
+Nodes (7): DomainCorruptError, adapter, calls, sampleDomain, store, stored, vault
+
+### Community 66 - "Community 66"
 Cohesion: 0.22
 Nodes (8): author, authorUrl, description, id, isDesktopOnly, minAppVersion, name, version
 
-### Community 76 - "Community 76"
+### Community 67 - "Community 67"
 Cohesion: 0.33
 Nodes (3): ClaudeCliClient, ClaudeCliConfig, validateIclaudePath()
 
-### Community 77 - "Community 77"
+### Community 68 - "Community 68"
 Cohesion: 0.22
 Nodes (8): author, authorUrl, description, id, isDesktopOnly, minAppVersion, name, version
 
-### Community 78 - "Community 78"
+### Community 69 - "Community 69"
 Cohesion: 0.22
-Nodes (8): baseEvent, bfsIdx, cached, lines, many, noExpanded, noScores, zeroScore
+Nodes (5): callArgs, completion, createMock, inner, wrapped
 
-### Community 79 - "Community 79"
+### Community 70 - "Community 70"
+Cohesion: 0.22
+Nodes (3): ShellConsentModal, modal, onEnable
+
+### Community 71 - "Community 71"
 Cohesion: 0.25
 Nodes (8): domainRow, domainSelect, makePlugin(), makeView(), options, parent, saveListeners, { v, plugin }
 
-### Community 80 - "Community 80"
+### Community 72 - "Community 72"
 Cohesion: 0.22
-Nodes (5): ManageSourcesModal, domain, domainNoSrc, m, onSave
+Nodes (8): baseEvent, bfsIdx, cached, lines, many, noExpanded, noScores, zeroScore
 
-### Community 81 - "Community 81"
+### Community 73 - "Community 73"
+Cohesion: 0.22
+Nodes (8): messages, params, { reasoning, content, outputTokens: tok }, requestStartMs, start, { stream, getStats }, systemContent, tok
+
+### Community 74 - "Community 74"
 Cohesion: 0.25
 Nodes (6): e, ev, events, kinds, line, lines
 
-### Community 82 - "Community 82"
-Cohesion: 0.36
-Nodes (6): appendWikiLog(), buildEntry(), IngestLogEntry, LogOperation, ts(), { vt, written }
-
-### Community 83 - "Community 83"
-Cohesion: 0.25
-Nodes (4): adapter, domain, result, vt
-
-### Community 84 - "Community 84"
-Cohesion: 0.25
-Nodes (4): baseSettings, ctrl, runner, vt
-
-### Community 85 - "Community 85"
-Cohesion: 0.25
-Nodes (5): chunks, errorLlm, events, s, statsEvents
-
-### Community 86 - "Community 86"
-Cohesion: 0.29
-Nodes (6): EvalResult, messages, params, parseEvalResponse(), userContent, result
-
-### Community 88 - "Community 88"
+### Community 76 - "Community 76"
 Cohesion: 0.25
 Nodes (3): IngestScopeModal, m, onChoice
 
-### Community 89 - "Community 89"
+### Community 77 - "Community 77"
+Cohesion: 0.36
+Nodes (6): appendWikiLog(), buildEntry(), IngestLogEntry, LogOperation, ts(), { vt, written }
+
+### Community 78 - "Community 78"
+Cohesion: 0.25
+Nodes (4): adapter, domain, result, vt
+
+### Community 79 - "Community 79"
+Cohesion: 0.25
+Nodes (4): baseSettings, ctrl, runner, vt
+
+### Community 80 - "Community 80"
 Cohesion: 0.25
 Nodes (6): detectDomain(), extractParentSourcePath(), annotations, domains, result, svc
 
-### Community 90 - "Community 90"
+### Community 81 - "Community 81"
+Cohesion: 0.25
+Nodes (5): chunks, errorLlm, events, s, statsEvents
+
+### Community 82 - "Community 82"
 Cohesion: 0.29
 Nodes (8): MIPROv2 prompt optimization pattern, load_examples, optimize.py main(), call_evaluator, restore_placeholders, run_mipro, make_signature, WikiOperation (DSPy Signature)
 
-### Community 91 - "Community 91"
+### Community 83 - "Community 83"
 Cohesion: 0.71
 Nodes (6): isRecord(), mapAssistant(), mapResult(), mapUserToolResult(), parseStreamLine(), truncate()
 
-### Community 92 - "Community 92"
-Cohesion: 0.33
-Nodes (5): structuralErrorCounter, StructuralErrorStats, calls, internal, unsub
-
-### Community 93 - "Community 93"
+### Community 84 - "Community 84"
 Cohesion: 0.33
 Nodes (5): buildSpy, ctrl, makeApp(), makePlugin(), plugin
 
-### Community 94 - "Community 94"
+### Community 85 - "Community 85"
+Cohesion: 0.33
+Nodes (5): structuralErrorCounter, StructuralErrorStats, calls, internal, unsub
+
+### Community 86 - "Community 86"
 Cohesion: 0.29
 Nodes (6): another_extra, entity_types, future_field, foo, language_notes, reasoning
 
-### Community 95 - "Community 95"
+### Community 87 - "Community 87"
 Cohesion: 0.29
 Nodes (6): entity_types, id, language_notes, name, reasoning, wiki_folder
 
-### Community 96 - "Community 96"
+### Community 88 - "Community 88"
 Cohesion: 0.29
 Nodes (6): entity_types, id, language_notes, name, reasoning, wiki_folder
 
-### Community 97 - "Community 97"
+### Community 89 - "Community 89"
 Cohesion: 0.29
 Nodes (7): buildProxyUrl function, createProxyDispatcher function, createProxyFetch function, maskProxyUrl function, parseNoProxy function, proxy.test.ts — proxy utility function tests, shouldBypass function
 
-### Community 98 - "Community 98"
-Cohesion: 0.53
-Nodes (5): main(), makeNodeAdapter(), parseArgs(), summarize(), MigrationReport
+### Community 90 - "Community 90"
+Cohesion: 0.33
+Nodes (4): en, es, locales, ru
 
-### Community 99 - "Community 99"
+### Community 91 - "Community 91"
 Cohesion: 0.33
 Nodes (4): btn, entry, select, v
 
-### Community 101 - "Community 101"
+### Community 93 - "Community 93"
 Cohesion: 0.33
 Nodes (5): entity_types, language_notes, name, reasoning, wiki_folder
 
-### Community 102 - "Community 102"
+### Community 94 - "Community 94"
+Cohesion: 0.33
+Nodes (3): BASE_DOMAIN, original, result
+
+### Community 95 - "Community 95"
 Cohesion: 0.33
 Nodes (6): WikiController.cleanupRemovedSources, lint empty-sources deletion tests, lint filterStaleWikiLinks integration tests, runLint tests, checkGraphStructure, checkGraphStructure tests
 
-### Community 103 - "Community 103"
-Cohesion: 0.5
-Nodes (4): makePlugin(), plugin, { plugin, registered }, setupPlugin()
-
-### Community 104 - "Community 104"
+### Community 96 - "Community 96"
 Cohesion: 0.4
 Nodes (3): __clearNotices(), Notice, errSpy
 
-### Community 105 - "Community 105"
+### Community 97 - "Community 97"
+Cohesion: 0.5
+Nodes (4): makePlugin(), plugin, { plugin, registered }, setupPlugin()
+
+### Community 98 - "Community 98"
+Cohesion: 0.5
+Nodes (3): buildEntityTypesBlock(), buildExtractMessages(), buildIngestMessages()
+
+### Community 99 - "Community 99"
 Cohesion: 0.4
 Nodes (4): lines, MOBILE_HOT_PATH_FILES, offending, src
 
-### Community 113 - "Community 113"
+### Community 100 - "Community 100"
+Cohesion: 0.4
+Nodes (3): migrateDomainWikiFolder(), changed, domains
+
+### Community 101 - "Community 101"
+Cohesion: 0.4
+Nodes (4): domain, domainNoSrc, m, onSave
+
+### Community 109 - "Community 109"
 Cohesion: 0.5
 Nodes (3): ingestEntitiesTemplate, ingestTemplate, lintTemplate
 
-### Community 114 - "Community 114"
+### Community 110 - "Community 110"
 Cohesion: 0.5
 Nodes (3): entity_types, language_notes, reasoning
 
-### Community 121 - "Community 121"
+### Community 117 - "Community 117"
 Cohesion: 0.67
 Nodes (3): buildProxyUrl, createProxyDispatcher, createProxyFetch
 
-### Community 122 - "Community 122"
+### Community 118 - "Community 118"
 Cohesion: 1.0
 Nodes (3): domain.test.ts — validateDomainId tests, domain.test.js — JS duplicate of validateDomainId tests, validateDomainId function
 
-### Community 123 - "Community 123"
+### Community 119 - "Community 119"
 Cohesion: 0.67
 Nodes (3): EditDomainModal class, FileErrorModal class, modals.test.ts — EditDomainModal & FileErrorModal tests
 
-### Community 124 - "Community 124"
+### Community 120 - "Community 120"
 Cohesion: 0.67
 Nodes (3): runIngest tests, validateAndRepairSourceFrontmatter tests, validateAndRepairWikiPageFrontmatter tests
 
-### Community 125 - "Community 125"
+### Community 121 - "Community 121"
 Cohesion: 0.67
 Nodes (3): lint bucket repair tests, buildTitleMap tests, validateWikiSources tests
 
 ## Knowledge Gaps
-- **1051 isolated node(s):** `target`, `module`, `moduleResolution`, `strict`, `noImplicitAny` (+1046 more)
+- **1054 isolated node(s):** `target`, `module`, `moduleResolution`, `strict`, `noImplicitAny` (+1049 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **75 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **74 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `DomainEntry` connect `Community 26` to `Community 0`, `Community 1`, `Community 2`, `Community 4`, `Community 5`, `Community 7`, `Community 9`, `Community 13`, `Community 14`, `Community 19`, `Community 22`, `Community 23`, `Community 27`, `Community 29`, `Community 37`, `Community 39`, `Community 40`, `Community 41`, `Community 42`, `Community 43`, `Community 44`, `Community 46`, `Community 50`, `Community 52`, `Community 56`, `Community 60`, `Community 62`, `Community 63`, `Community 67`, `Community 71`, `Community 72`, `Community 73`, `Community 80`, `Community 89`, `Community 98`?**
+- **Why does `DomainEntry` connect `Community 64` to `Wiki Structure & Lint`, `Bootstrap & Init`, `JSON Parsing & Retry`, `Ingest Pipeline`, `Format & Markdown`, `Graph Cache`, `UI View`, `Controller & i18n`, `Annotation & Context`, `Wiki Controller`, `Community 17`, `Community 18`, `Community 24`, `Community 25`, `Community 28`, `Community 29`, `Community 33`, `Community 37`, `Community 38`, `Community 39`, `Community 40`, `Community 41`, `Community 43`, `Community 46`, `Community 47`, `Community 51`, `Community 53`, `Community 55`, `Community 60`, `Community 65`, `Community 73`, `Community 80`, `Community 94`, `Community 100`, `Community 101`, `Community 105`?**
   _High betweenness centrality (0.093) - this node is a cross-community bridge._
-- **Why does `VaultTools` connect `Community 28` to `Community 0`, `Community 1`, `Community 2`, `Community 4`, `Community 5`, `Community 7`, `Community 14`, `Community 15`, `Community 16`, `Community 18`, `Community 19`, `Community 22`, `Community 29`, `Community 33`, `Community 35`, `Community 37`, `Community 40`, `Community 44`, `Community 46`, `Community 47`, `Community 49`, `Community 54`, `Community 62`, `Community 63`, `Community 64`, `Community 70`, `Community 82`, `Community 83`, `Community 84`, `Community 106`?**
+- **Why does `VaultTools` connect `Community 36` to `Embedding Cache`, `Wiki Structure & Lint`, `Bootstrap & Init`, `JSON Parsing & Retry`, `Ingest Pipeline`, `Format & Markdown`, `Annotation & Context`, `Community 17`, `Community 18`, `Community 19`, `Community 21`, `Community 24`, `Community 28`, `Community 29`, `Community 31`, `Community 32`, `Community 38`, `Community 41`, `Community 44`, `Community 45`, `Community 49`, `Community 53`, `Community 56`, `Community 60`, `Community 62`, `Community 77`, `Community 78`, `Community 79`, `Community 107`?**
   _High betweenness centrality (0.066) - this node is a cross-community bridge._
-- **Why does `LlmClient` connect `Community 46` to `Community 0`, `Community 1`, `Community 2`, `Community 4`, `Community 5`, `Community 7`, `Community 11`, `Community 15`, `Community 18`, `Community 19`, `Community 22`, `Community 24`, `Community 29`, `Community 31`, `Community 33`, `Community 39`, `Community 44`, `Community 47`, `Community 49`, `Community 59`, `Community 62`, `Community 63`, `Community 76`, `Community 85`, `Community 86`?**
+- **Why does `LlmClient` connect `Community 18` to `Wiki Structure & Lint`, `Bootstrap & Init`, `JSON Parsing & Retry`, `Ingest Pipeline`, `Format & Markdown`, `Annotation & Context`, `Community 15`, `Community 19`, `Community 21`, `Community 24`, `Community 27`, `Community 28`, `Community 29`, `Community 31`, `Community 34`, `Community 41`, `Community 44`, `Community 45`, `Community 46`, `Community 53`, `Community 58`, `Community 60`, `Community 67`, `Community 69`, `Community 73`, `Community 81`?**
   _High betweenness centrality (0.042) - this node is a cross-community bridge._
 - **What connects `target`, `module`, `moduleResolution` to the rest of the system?**
-  _1051 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Community 0` be split into smaller, more focused modules?**
+  _1054 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `Embedding Cache` be split into smaller, more focused modules?**
+  _Cohesion score 0.06 - nodes in this community are weakly interconnected._
+- **Should `Wiki Structure & Lint` be split into smaller, more focused modules?**
   _Cohesion score 0.03 - nodes in this community are weakly interconnected._
-- **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.03 - nodes in this community are weakly interconnected._
-- **Should `Community 2` be split into smaller, more focused modules?**
+- **Should `Bootstrap & Init` be split into smaller, more focused modules?**
   _Cohesion score 0.03 - nodes in this community are weakly interconnected._

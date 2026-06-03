@@ -74,37 +74,27 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     await this.plugin.localConfigStore.save(patch);
   }
 
-  private async patchLocalNative(patch: Partial<NonNullable<LocalConfig["nativeAgent"]>>): Promise<void> {
-    const cur = this.localCache.nativeAgent ?? {
-      baseUrl: this.plugin.settings.nativeAgent.baseUrl,
-      apiKey: this.plugin.settings.nativeAgent.apiKey,
-      model: this.plugin.settings.nativeAgent.model,
-      temperature: this.plugin.settings.nativeAgent.temperature,
-      topP: this.plugin.settings.nativeAgent.topP,
-    };
-    await this.patchLocal({ nativeAgent: { ...cur, ...patch } });
+  private async patchLocalNativeApiKey(apiKey: string): Promise<void> {
+    await this.patchLocal({ nativeAgent: { apiKey } });
   }
 
-  private async patchLocalClaude(patch: Partial<NonNullable<LocalConfig["claudeAgent"]>>): Promise<void> {
-    const cur = this.localCache.claudeAgent ?? {
-      model: this.plugin.settings.claudeAgent.model,
-      allowedTools: this.plugin.settings.claudeAgent.allowedTools,
-    };
-    await this.patchLocal({ claudeAgent: { ...cur, ...patch } });
+  private async patchLocalProxyPassword(password: string): Promise<void> {
+    const cur = this.localCache.proxy ?? {};
+    await this.patchLocal({ proxy: { ...cur, password } });
   }
 
-  private async patchLocalProxy(patch: Partial<NonNullable<LocalConfig["proxy"]>>): Promise<void> {
-    const cur = this.localCache.proxy ?? { enabled: false, url: "" };
-    await this.patchLocal({ proxy: { ...cur, ...patch } });
+  private async patchProxy(patch: Partial<NonNullable<LlmWikiPluginSettings["proxy"]>>): Promise<void> {
+    this.plugin.settings.proxy = { ...(this.plugin.settings.proxy ?? { enabled: false, url: "" }), ...patch };
+    await this.plugin.saveSettings();
   }
 
   private async fetchModels(): Promise<void> {
-    const na = this.localCache.nativeAgent;
-    if (!na?.baseUrl) { new Notice("Set Base URL first"); return; }
+    const na = this.plugin.settings.nativeAgent;
+    if (!na.baseUrl) { new Notice("Set Base URL first"); return; }
     const url = `${na.baseUrl.replace(/\/$/, "")}/models`;
     try {
       const resp = await fetch(url, {
-        headers: { Authorization: `Bearer ${na.apiKey ?? ""}` },
+        headers: { Authorization: `Bearer ${this.localCache.nativeAgent?.apiKey ?? ""}` },
       });
       if (!resp.ok) throw new Error(`${resp.status}`);
       const json = await resp.json() as { data: { id: string }[] };
@@ -315,7 +305,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .addText((t) =>
             t.setPlaceholder("")
               .setValue(eff.claudeAgent.model)
-              .onChange(async (v) => { await this.patchLocalClaude({ model: v.trim() }); }),
+              .onChange(async (v) => { s.claudeAgent.model = v.trim(); await this.plugin.saveSettings(); }),
           );
       }
 
@@ -325,7 +315,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .addText((t) =>
           t.setPlaceholder("Bash,read,write")
             .setValue(eff.claudeAgent.allowedTools)
-            .onChange(async (v) => { await this.patchLocalClaude({ allowedTools: v.trim() }); }),
+            .onChange(async (v) => { s.claudeAgent.allowedTools = v.trim(); await this.plugin.saveSettings(); }),
         );
 
       new Setting(containerEl)
@@ -336,7 +326,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           for (const lv of ["low", "medium", "high", "xhigh", "max"] as const) d.addOption(lv, lv);
           d.setValue(eff.claudeAgent.effort ?? "");
           d.onChange(async v => {
-            await this.patchLocalClaude({ effort: (v || undefined) as typeof eff.claudeAgent.effort });
+            s.claudeAgent.effort = (v || undefined) as typeof s.claudeAgent.effort; await this.plugin.saveSettings();
           });
           return d;
         });
@@ -388,7 +378,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .addText((t) =>
           t.setPlaceholder("")
             .setValue(eff.nativeAgent.baseUrl)
-            .onChange(async (v) => { await this.patchLocalNative({ baseUrl: v.trim() }); }),
+            .onChange(async (v) => { s.nativeAgent.baseUrl = v.trim(); await this.plugin.saveSettings(); }),
         );
 
       new Setting(containerEl)
@@ -397,7 +387,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .addText((t) =>
           t.setPlaceholder("Ollama")
             .setValue(eff.nativeAgent.apiKey)
-            .onChange(async (v) => { await this.patchLocalNative({ apiKey: v.trim() }); }),
+            .onChange(async (v) => { await this.patchLocalNativeApiKey(v.trim()); }),
         );
 
       new Setting(containerEl)
@@ -424,7 +414,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           new Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
           this._chatModels,
           eff.nativeAgent.model,
-          async (v) => { await this.patchLocalNative({ model: v }); },
+          async (v) => { s.nativeAgent.model = v; await this.plugin.saveSettings(); },
         );
 
         new Setting(containerEl)
@@ -463,7 +453,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               .setValue(String(eff.nativeAgent.temperature))
               .onChange(async (v) => {
                 const n = Number(v);
-                if (Number.isFinite(n) && n >= 0 && n <= 2) await this.patchLocalNative({ temperature: n });
+                if (Number.isFinite(n) && n >= 0 && n <= 2) { s.nativeAgent.temperature = n; await this.plugin.saveSettings(); }
               }),
           );
       }
@@ -564,29 +554,29 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .setName("Enable semantic similarity (embeddings)")
         .setDesc("Use embedding vectors for relevant page selection. Requires native backend with an embeddings-capable model.")
         .addToggle((t) =>
-          t.setValue(this.localCache.nativeAgent?.embeddingModel !== undefined)
+          t.setValue(s.nativeAgent.embeddingModel !== undefined)
             .onChange(async (v) => {
               if (!v) {
-                await this.patchLocalNative({ embeddingModel: undefined, embeddingDimensions: undefined });
+                s.nativeAgent.embeddingModel = undefined; s.nativeAgent.embeddingDimensions = undefined; await this.plugin.saveSettings();
                 this.display();
               } else {
-                await this.patchLocalNative({ embeddingModel: "" });
+                s.nativeAgent.embeddingModel = ""; await this.plugin.saveSettings();
                 this.display();
               }
             }),
         );
 
-      if (this.localCache.nativeAgent?.embeddingModel !== undefined) {
+      if (s.nativeAgent.embeddingModel !== undefined) {
         new Setting(containerEl)
           .setName("Relevant pages (top-K)")
           .setDesc("Max wiki pages loaded per ingest call. Lower = faster, less context. Default: 15.")
           .addText((t) =>
             t.setPlaceholder("15")
-              .setValue(String(this.localCache.nativeAgent?.relevantPagesTopK ?? 15))
+              .setValue(String(s.nativeAgent.relevantPagesTopK ?? 15))
               .onChange(async (v) => {
                 const n = Number(v);
                 if (Number.isFinite(n) && n > 0) {
-                  await this.patchLocalNative({ relevantPagesTopK: Math.floor(n) });
+                  s.nativeAgent.relevantPagesTopK = Math.floor(n); await this.plugin.saveSettings();
                 }
               }),
           );
@@ -595,8 +585,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         this.addModelControl(
           new Setting(containerEl).setName("Embedding model").setDesc("Model name for embeddings, e.g. text-embedding-3-small"),
           embModels,
-          this.localCache.nativeAgent?.embeddingModel ?? "",
-          async (v) => { await this.patchLocalNative({ embeddingModel: v || undefined }); },
+          s.nativeAgent.embeddingModel ?? "",
+          async (v) => { s.nativeAgent.embeddingModel = v || undefined; await this.plugin.saveSettings(); },
         );
 
         new Setting(containerEl)
@@ -604,11 +594,11 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .setDesc("Vector dimensions, e.g. 512 or 1536")
           .addText((t) =>
             t.setPlaceholder("512")
-              .setValue(String(this.localCache.nativeAgent?.embeddingDimensions ?? ""))
+              .setValue(String(s.nativeAgent.embeddingDimensions ?? ""))
               .onChange(async (v) => {
                 const n = Number(v);
                 if (Number.isFinite(n) && n > 0) {
-                  await this.patchLocalNative({ embeddingDimensions: Math.floor(n) });
+                  s.nativeAgent.embeddingDimensions = Math.floor(n); await this.plugin.saveSettings();
                 }
               }),
           );
@@ -616,12 +606,12 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         new Setting(containerEl)
           .setName(T.settings.mergeDeleteWarnThreshold_name)
           .setDesc(T.settings.mergeDeleteWarnThreshold_desc)
-          .addSlider((s) =>
-            s.setLimits(1, 20, 1)
+          .addSlider((sl) =>
+            sl.setLimits(1, 20, 1)
               .setDynamicTooltip()
-              .setValue(this.localCache.nativeAgent?.mergeDeleteWarnThreshold ?? 5)
+              .setValue(s.nativeAgent.mergeDeleteWarnThreshold ?? 5)
               .onChange(async (v) => {
-                await this.patchLocalNative({ mergeDeleteWarnThreshold: v });
+                s.nativeAgent.mergeDeleteWarnThreshold = v; await this.plugin.saveSettings();
               }),
           );
       }
@@ -704,7 +694,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .setDesc(T.settings.proxy_enabled_desc)
         .addToggle((t) =>
           t.setValue(proxy.enabled)
-            .onChange(async (v) => { await this.patchLocalProxy({ enabled: v }); this.display(); }),
+            .onChange(async (v) => { await this.patchProxy({ enabled: v }); this.display(); }),
         );
 
       if (proxy.enabled) {
@@ -714,7 +704,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .addText((t) =>
             t.setPlaceholder("http://proxy.example.com:8080")
               .setValue(proxy.url)
-              .onChange(async (v) => { await this.patchLocalProxy({ url: v.trim() }); }),
+              .onChange(async (v) => { await this.patchProxy({ url: v.trim() }); }),
           );
 
         new Setting(containerEl)
@@ -722,7 +712,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .setDesc(T.settings.proxy_username_desc)
           .addText((t) =>
             t.setValue(proxy.username ?? "")
-              .onChange(async (v) => { await this.patchLocalProxy({ username: v }); }),
+              .onChange(async (v) => { await this.patchProxy({ username: v }); }),
           );
 
         new Setting(containerEl)
@@ -730,7 +720,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .setDesc(T.settings.proxy_password_desc)
           .addText((t) => {
             t.setValue(proxy.password ?? "")
-              .onChange(async (v) => { await this.patchLocalProxy({ password: v }); });
+              .onChange(async (v) => { await this.patchLocalProxyPassword(v); });
             t.inputEl.type = "password";
           });
 
@@ -740,7 +730,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           .addText((t) =>
             t.setPlaceholder("localhost,127.0.0.1")
               .setValue(proxy.noProxy ?? "")
-              .onChange(async (v) => { await this.patchLocalProxy({ noProxy: v.trim() }); }),
+              .onChange(async (v) => { await this.patchProxy({ noProxy: v.trim() }); }),
           );
 
         containerEl.createEl("p", { text: T.settings.proxy_hint, cls: "setting-item-description" });

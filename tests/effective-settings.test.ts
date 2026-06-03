@@ -14,41 +14,35 @@ describe("resolveEffective", () => {
     expect(eff.backend).toBe("native-agent");
   });
 
-  it("merges nativeAgent overrides while preserving non-overridden fields", () => {
+  it("merges only apiKey from local nativeAgent", () => {
     const eff = resolveEffective(DEFAULT_SETTINGS, {
       iclaudePath: "",
-      nativeAgent: {
-        baseUrl: "https://x/v1",
-        apiKey: "k",
-        model: "m",
-        temperature: 0.5,
-        topP: null,
-      },
+      nativeAgent: { apiKey: "secret" },
     });
-    expect(eff.nativeAgent.baseUrl).toBe("https://x/v1");
-    expect(eff.nativeAgent.apiKey).toBe("k");
+    expect(eff.nativeAgent.apiKey).toBe("secret");
+    expect(eff.nativeAgent.baseUrl).toBe(DEFAULT_SETTINGS.nativeAgent.baseUrl);
+    expect(eff.nativeAgent.model).toBe(DEFAULT_SETTINGS.nativeAgent.model);
     expect(eff.nativeAgent.perOperation).toBe(DEFAULT_SETTINGS.nativeAgent.perOperation);
-    expect(eff.nativeAgent.operations).toEqual(DEFAULT_SETTINGS.nativeAgent.operations);
   });
 
-  it("returns proxy from local when present", () => {
-    const proxy = { enabled: true, url: "http://p:1" };
-    const eff = resolveEffective(DEFAULT_SETTINGS, { iclaudePath: "", proxy });
-    expect(eff.proxy).toEqual(proxy);
+  it("merges proxy.password from local into effective proxy", () => {
+    const s = { ...DEFAULT_SETTINGS, proxy: { enabled: true, url: "http://p:1", username: "u" } };
+    const eff = resolveEffective(s, { iclaudePath: "", proxy: { password: "pw" } });
+    expect(eff.proxy.enabled).toBe(true);
+    expect(eff.proxy.url).toBe("http://p:1");
+    expect(eff.proxy.password).toBe("pw");
   });
 
-  it("returns disabled default proxy when missing in local", () => {
+  it("returns proxy from settings when local proxy absent", () => {
+    const s = { ...DEFAULT_SETTINGS, proxy: { enabled: false, url: "" } };
+    const eff = resolveEffective(s, { iclaudePath: "" });
+    expect(eff.proxy.enabled).toBe(false);
+    expect(eff.proxy.password).toBeUndefined();
+  });
+
+  it("claudeAgent comes fully from settings, not local", () => {
     const eff = resolveEffective(DEFAULT_SETTINGS, { iclaudePath: "" });
-    expect(eff.proxy).toEqual({ enabled: false, url: "" });
-  });
-
-  it("merges claudeAgent overrides", () => {
-    const eff = resolveEffective(DEFAULT_SETTINGS, {
-      iclaudePath: "",
-      claudeAgent: { model: "haiku", allowedTools: "Read" },
-    });
-    expect(eff.claudeAgent.model).toBe("haiku");
-    expect(eff.claudeAgent.allowedTools).toBe("Read");
-    expect(eff.claudeAgent.perOperation).toBe(DEFAULT_SETTINGS.claudeAgent.perOperation);
+    expect(eff.claudeAgent.model).toBe(DEFAULT_SETTINGS.claudeAgent.model);
+    expect(eff.claudeAgent.allowedTools).toBe(DEFAULT_SETTINGS.claudeAgent.allowedTools);
   });
 });

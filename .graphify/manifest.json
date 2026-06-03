@@ -120,8 +120,8 @@
     "hash": "c94128d400133b85927f8a26487b0686"
   },
   "tests/main-migration.test.ts": {
-    "mtime": 1779711716.8596942,
-    "hash": "581906c1a559815788b59317864448f3"
+    "mtime": 1780505032.1878724,
+    "hash": "0cc0966f7db82fad774b15fc897ec5c2"
   },
   "tests/claude-cli-client.test.ts": {
     "mtime": 1779826009.7150695,
@@ -252,8 +252,8 @@
     "hash": "da66de61b15cece5b994f1be1604c478"
   },
   "tests/effective-settings.test.ts": {
-    "mtime": 1779363957.1652005,
-    "hash": "03256921adbc26cbbb9079eaec20c3d0"
+    "mtime": 1780505010.9052498,
+    "hash": "7af15756628cbe64fc81ae1067f101bc"
   },
   "tests/migration.test.ts": {
     "mtime": 1779363957.1658547,
@@ -324,8 +324,8 @@
     "hash": "17d70655d65e9007913c0704a502bc3b"
   },
   "tests/phases/lint.test.ts": {
-    "mtime": 1780482820.3051825,
-    "hash": "5f8cb1346d807dc2f549834751a3f6b9"
+    "mtime": 1780493424.1443596,
+    "hash": "f7e8b9152eea3cfed4c2749daeb60935"
   },
   "tests/phases/lint-chat.test.ts": {
     "mtime": 1779827052.2552755,
@@ -440,8 +440,8 @@
     "hash": "c5bffcae00ac3101da6b3eceb63d01be"
   },
   "src/effective-settings.ts": {
-    "mtime": 1779363957.1632447,
-    "hash": "b3d22c976a459a7964cbe9413364c7d0"
+    "mtime": 1780504685.6989493,
+    "hash": "34e347ee2d6ef44d12eec178ead91455"
   },
   "src/controller.ts": {
     "mtime": 1780465916.3653271,
@@ -456,8 +456,8 @@
     "hash": "154e1a27814aba6332b8007bb56d9c56"
   },
   "src/main.ts": {
-    "mtime": 1779711716.858361,
-    "hash": "569239c5d97c61be70819fc246257bed"
+    "mtime": 1780504963.6504123,
+    "hash": "875bb78ad040eb7401018f9b6acf80fb"
   },
   "src/wiki-seeds.ts": {
     "mtime": 1780342244.3227642,
@@ -492,8 +492,8 @@
     "hash": "2f2907c174464390fa5ead014139e207"
   },
   "src/settings.ts": {
-    "mtime": 1780483454.3668253,
-    "hash": "35b8e024ef1b6154bf5842ecb9c652fc"
+    "mtime": 1780504887.31195,
+    "hash": "a0f76945bf1727c86287f06fcaf36208"
   },
   "src/wiki-graph-cache.ts": {
     "mtime": 1779363957.164018,
@@ -504,8 +504,8 @@
     "hash": "f9184e6f54ec247e58ae1d4d389bf519"
   },
   "src/local-config.ts": {
-    "mtime": 1780057749.6469939,
-    "hash": "1a3766044651db2bca624dd10e8ce40a"
+    "mtime": 1780504635.3760304,
+    "hash": "942f36e97c35562a361c35128af5b00c"
   },
   "src/wiki-log.ts": {
     "mtime": 1780057749.6478539,
@@ -548,8 +548,8 @@
     "hash": "e0385d90914209e9cdf996aacc088b9e"
   },
   "src/types.ts": {
-    "mtime": 1780482820.3047462,
-    "hash": "832bec5135117aa0523a25607d857441"
+    "mtime": 1780504624.616067,
+    "hash": "8132ef2a5de2adfead29908ddb077816"
   },
   "src/view.ts": {
     "mtime": 1780482820.3049462,
@@ -616,12 +616,12 @@
     "hash": "8f26138e188efe03b33ed4ac6c7ef1fa"
   },
   "src/phases/lint.ts": {
-    "mtime": 1780482820.304439,
-    "hash": "320394980ee036b3a15b817cd194bafb"
+    "mtime": 1780493864.696073,
+    "hash": "fc6425cf7006624f4e503585f4b03963"
   },
   "src/phases/zod-schemas.ts": {
-    "mtime": 1780057749.6475465,
-    "hash": "c60543e5c2ae774401e83a753ecb2722"
+    "mtime": 1780491334.0637002,
+    "hash": "1d6a2d51e5b2b50fe1b99ec36c090b81"
   },
   "CLAUDE.md": {
     "mtime": 1779657227.672697,
@@ -632,8 +632,8 @@
     "hash": "e8b9b29fcb9b75abdc1fd50f904338a5"
   },
   "CHANGELOG.md": {
-    "mtime": 1780484603.7093477,
-    "hash": "5c54cc7c476efa8f054356d9a406ff71"
+    "mtime": 1780494118.0879724,
+    "hash": "57566ca48133580cea0ab93466749e6e"
   },
   "prompts/evaluator.md": {
     "mtime": 1779363957.1608365,
@@ -660,8 +660,8 @@
     "hash": "a6708e9683af6601699dafdbae07fe98"
   },
   "prompts/lint.md": {
-    "mtime": 1780407080.113535,
-    "hash": "e5029f3939479bbbcd70bff8a7b45d05"
+    "mtime": 1780491334.0634809,
+    "hash": "48193ec1fc673960fc4948c3d6ee7691"
   },
   "prompts/init.md": {
     "mtime": 1779657227.6821804,

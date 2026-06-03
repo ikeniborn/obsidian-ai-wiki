@@ -79,9 +79,15 @@ See [[src/vault-tools.ts#VaultTools]].
 
 ## Settings and Local Config
 
-Settings are split into two stores to avoid syncing secrets. `data.json` (synced) holds UI preferences and operation configs. `local.json` (local) holds API keys, iclaudePath, and shell consent.
+Settings are split into two stores to avoid syncing secrets across devices.
 
-`resolveEffective` merges both into a single `LlmWikiPluginSettings` for runtime use. See [[src/effective-settings.ts#resolveEffective]].
+`data.json` (synced via Obsidian Sync) holds all user-configurable preferences: `nativeAgent` connection params (baseUrl, model, temperature, etc.), `claudeAgent` model/effort/tools, proxy config (enabled, url, username, noProxy), operation configs, and UI settings.
+
+`local.json` (machine-local, never synced) holds only device-specific secrets: `nativeAgent.apiKey`, `proxy.password`, and `iclaudePath`. Also stores `shellConsentGiven`, `lastDomain`, and machine-specific overrides (`backend`, `agentLogEnabled`).
+
+`resolveEffective` merges both stores at runtime: spreads `data.json` settings, overlays only `apiKey` from local nativeAgent and `password` from local proxy. See [[src/effective-settings.ts#resolveEffective]].
+
+Migration `migrateToLocalV2` runs on first load after upgrade — reads old `local.json` (which contained full nativeAgent/claudeAgent/proxy fields from v1 migration), moves those fields into `data.json`, and rewrites `local.json` to the lean secret-only shape. New installs skip v2 via `migrated_v2: true` set by `migrateToLocalV1`.
 
 ## Storage Migration
 

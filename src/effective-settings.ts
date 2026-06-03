@@ -7,12 +7,12 @@ export function resolveEffective(
   s: LlmWikiPluginSettings,
   l: LocalConfig,
 ): EffectiveSettings {
+  const proxyBase = s.proxy ?? { enabled: false, url: "" };
   return {
     ...s,
     backend: l.backend ?? s.backend,
     agentLogEnabled: l.agentLogEnabled ?? s.agentLogEnabled,
-    claudeAgent: { ...s.claudeAgent, ...(l.claudeAgent ?? {}) },
-    nativeAgent: { ...s.nativeAgent, ...(l.nativeAgent ?? {}) },
-    proxy: l.proxy ?? { enabled: false, url: "" },
+    nativeAgent: { ...s.nativeAgent, apiKey: l.nativeAgent?.apiKey ?? s.nativeAgent.apiKey },
+    proxy: { ...proxyBase, password: l.proxy?.password },
   };
 }

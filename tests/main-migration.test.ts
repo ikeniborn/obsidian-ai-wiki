@@ -165,18 +165,13 @@ describe("migrateLegacyData", () => {
 });
 
 describe("migrateToLocalV1", () => {
-  it("copies backend+API to local.json and scrubs apiKey", async () => {
+  it("copies only apiKey to local.json and scrubs apiKey from settings", async () => {
     const local: any = { iclaudePath: "" };
     const plugin: any = {
       settings: {
         backend: "native-agent",
-        nativeAgent: {
-          baseUrl: "https://x/v1", apiKey: "secret", model: "m",
-          temperature: 0.2, topP: null,
-          perOperation: false, operations: {},
-        },
-        claudeAgent: { model: "sonnet", allowedTools: "", perOperation: false, operations: {} },
-        agentLogEnabled: true,
+        nativeAgent: { baseUrl: "https://x/v1", apiKey: "secret", model: "m", temperature: 0.2 },
+        claudeAgent: { model: "sonnet", allowedTools: "" },
       },
       saveSettings: vi.fn().mockResolvedValue(undefined),
     };
@@ -186,8 +181,10 @@ describe("migrateToLocalV1", () => {
     };
     await migrateToLocalV1(plugin, store);
     expect(local.migrated_v1).toBe(true);
+    expect(local.migrated_v2).toBe(true);
     expect(local.nativeAgent.apiKey).toBe("secret");
-    expect(local.backend).toBe("native-agent");
+    expect(local.backend).toBeUndefined();
+    expect(local.claudeAgent).toBeUndefined();
     expect(plugin.settings.nativeAgent.apiKey).toBe("");
     expect(plugin.saveSettings).toHaveBeenCalled();
   });
