@@ -126,6 +126,7 @@ Per-article loop:
 See [[src/phases/lint.ts#buildTitleMap]], [[src/phases/lint.ts#validateWikiSources]].
 
 After all articles:
+- Post-loop empty-sources deletion — wiki pages in `writtenPaths` with zero `wiki_sources` entries after `validateWikiSources` are deleted; their stems are pushed into `deletedRefs` so the backlink rewrite removes their `wiki_articles` entries from source files.
 - Source-file backlink rewrite (vault-wide scan for deleted article refs, skipping wiki pages)
 - `actualizeDomainConfig` — syncs `entity_types` from final wiki content
 - Backlink sync — writes `wiki_articles` into source files via `wiki_sources`

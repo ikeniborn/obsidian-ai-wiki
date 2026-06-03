@@ -1059,6 +1059,7 @@ describe("validateWikiSources", () => {
     expect(result).toContain("plain-text-entry");
   });
 
+  // @lat: [[tests#validateWikiSources Unit Tests#LLM collapsed to inline empty — valid entry restored]]
   it("LLM returned wiki_sources: [] (inline), original had valid entry → entry restored in block-list format", () => {
     const originalContent = makeContent(["[[wiki_os_pac_file]]"]);
     const llmContent = "---\nwiki_sources: []\n---\n# Article";
@@ -1068,6 +1069,7 @@ describe("validateWikiSources", () => {
     expect(result).not.toContain("wiki_sources: []");
   });
 
+  // @lat: [[tests#validateWikiSources Unit Tests#LLM reduced list — missing valid entry restored]]
   it("LLM reduced list (dropped one of two valid entries) → missing entry restored", () => {
     const originalContent = makeContent(["[[wiki_os_pac_file]]", "[[wiki_networking_dns]]"]);
     const llmContent = makeContent(["[[wiki_os_pac_file]]"]);
@@ -1076,6 +1078,7 @@ describe("validateWikiSources", () => {
     expect(result).toContain("[[wiki_networking_dns]]");
   });
 
+  // @lat: [[tests#validateWikiSources Unit Tests#LLM dropped stale entry — not restored]]
   it("LLM dropped stale entry (stem absent from knownStems) → not restored", () => {
     const originalContent = makeContent(["[[wiki_os_deleted_page]]"]);
     const llmContent = makeContent([]);
@@ -1083,6 +1086,7 @@ describe("validateWikiSources", () => {
     expect(result).not.toContain("[[wiki_os_deleted_page]]");
   });
 
+  // @lat: [[tests#validateWikiSources Unit Tests#Empty originalContent — no restore]]
   it("originalContent is empty string → no restore; stale removal only", () => {
     const llmContent = makeContent(["[[wiki_os_deleted_page]]", "[[wiki_os_pac_file]]"]);
     const result = validateWikiSources(llmContent, "", knownStems, titleMap);
@@ -1092,6 +1096,7 @@ describe("validateWikiSources", () => {
 });
 
 describe("lint — empty-sources deletion", () => {
+  // @lat: [[tests#Lint Stale Link Cleanup#Empty-sources wiki page deletion]]
   it("wiki page whose only source stem is deleted from vault → page deleted; source file wiki_articles entry removed", async () => {
     const wikiContent = [
       "---",

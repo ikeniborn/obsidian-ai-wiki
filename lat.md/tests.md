@@ -250,6 +250,30 @@ A wiki page with `wiki_outgoing_links` pointing at a page that no longer exists 
 
 A source file with `wiki_articles` pointing at a deleted wiki page stem is rewritten after lint to remove the stale entry while keeping references to pages that still exist.
 
+### Empty-sources wiki page deletion
+
+A wiki page whose only `wiki_sources` entry is stale (stem not in vault) is deleted after the per-article loop. The referencing source file's stale `[[wikiStem]]` in `wiki_articles` is removed by the `deletedRefs` backlink-rewrite pass.
+
+## validateWikiSources Unit Tests
+
+Unit tests for the `validateWikiSources` function in `src/phases/lint.ts`, verifying that the `originalContent` restore logic correctly recovers valid entries dropped by the LLM.
+
+### LLM collapsed to inline empty — valid entry restored
+
+When the LLM returns `wiki_sources: []` (inline) but `originalContent` had a valid entry, `validateWikiSources` replaces the inline form with a block list containing the missing entry.
+
+### LLM reduced list — missing valid entry restored
+
+When the LLM drops one of two valid entries from `wiki_sources`, the missing entry is re-added so both valid entries appear in the result.
+
+### LLM dropped stale entry — not restored
+
+When the LLM drops a `wiki_sources` entry whose stem is absent from `knownStems` and `titleMap`, that entry is not restored.
+
+### Empty originalContent — no restore
+
+When `originalContent` is `""`, no entries are restored; existing stale-removal logic still removes invalid entries from the LLM-returned content.
+
 ## Lint Bucket Repair
 
 Integration tests that verify `runLint` detects and repairs wrong-bucket stems in wiki page frontmatter — wiki stems in `wiki_sources` and source stems in `wiki_outgoing_links` — before the LLM pass.
