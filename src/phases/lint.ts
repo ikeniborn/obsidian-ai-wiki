@@ -105,6 +105,9 @@ export function validateWikiSources(
     const text = m[1];
     // Wiki pages belong in wiki_outgoing_links, not wiki_sources.
     if (wikiStems.has(text)) return false;
+    // Path-based references (e.g. [[Sources/raw.md]]) are always valid —
+    // knownStems only tracks basenames, not full paths.
+    if (text.includes("/")) return true;
     return knownStems.has(text) || titleMap.has(text.toLowerCase());
   };
 
