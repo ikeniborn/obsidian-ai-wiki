@@ -91,6 +91,7 @@ export function validateWikiSources(
   originalContent: string,
   knownStems: Set<string>,
   titleMap: Map<string, string>,
+  wikiStems: Set<string> = new Set(),
 ): string {
   // Normalize unquoted [[...]] items in wiki_sources — bare [[x]] is parsed by YAML as a flow sequence.
   content = content.replace(
@@ -102,6 +103,8 @@ export function validateWikiSources(
     const m = entry.match(/^\[\[(.+?)\]\]$/);
     if (!m) return true; // non-wikilink format: keep as-is
     const text = m[1];
+    // Wiki pages belong in wiki_outgoing_links, not wiki_sources.
+    if (wikiStems.has(text)) return false;
     return knownStems.has(text) || titleMap.has(text.toLowerCase());
   };
 
@@ -353,7 +356,8 @@ export async function* runLint(
           try {
             const rawFixed = wlFixResult.fixed.get(fix.path) ?? fix.content;
             const originalContent = pages.get(fix.path) ?? "";
-            const fixedContent = validateWikiSources(rawFixed, originalContent, knownStems, titleMap);
+            const wikiStems = new Set([...pages.keys()].map(p => p.split("/").pop()!.replace(/\.md$/, "")));
+            const fixedContent = validateWikiSources(rawFixed, originalContent, knownStems, titleMap, wikiStems);
             await vaultTools.write(fix.path, fixedContent);
             writtenPaths.push(fix.path);
             pages.set(fix.path, fixedContent);

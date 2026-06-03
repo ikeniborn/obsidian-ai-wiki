@@ -1086,6 +1086,23 @@ describe("validateWikiSources", () => {
     expect(result).not.toContain("[[wiki_os_deleted_page]]");
   });
 
+  // @lat: [[tests#validateWikiSources Unit Tests#Wiki page stem in wiki_sources — rejected]]
+  it("wiki page stem in wikiStems → removed from wiki_sources even if present in knownStems", () => {
+    const wikiStems = new Set(["wiki_os_pac_file"]);
+    const content = makeContent(["[[wiki_os_pac_file]]"]);
+    const result = validateWikiSources(content, "", knownStems, titleMap, wikiStems);
+    expect(result).not.toContain("[[wiki_os_pac_file]]");
+  });
+
+  // @lat: [[tests#validateWikiSources Unit Tests#Wiki page stem in original — not restored]]
+  it("original had wiki page stem in wiki_sources → not restored (wiki pages are not valid sources)", () => {
+    const wikiStems = new Set(["wiki_os_pac_file"]);
+    const originalContent = makeContent(["[[wiki_os_pac_file]]"]);
+    const llmContent = makeContent([]);
+    const result = validateWikiSources(llmContent, originalContent, knownStems, titleMap, wikiStems);
+    expect(result).not.toContain("[[wiki_os_pac_file]]");
+  });
+
   // @lat: [[tests#validateWikiSources Unit Tests#Empty originalContent — no restore]]
   it("originalContent is empty string → no restore; stale removal only", () => {
     const llmContent = makeContent(["[[wiki_os_deleted_page]]", "[[wiki_os_pac_file]]"]);
