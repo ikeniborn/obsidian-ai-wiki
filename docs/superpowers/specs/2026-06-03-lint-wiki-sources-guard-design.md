@@ -1,3 +1,32 @@
+---
+chain:
+  intent: docs/superpowers/intents/2026-06-03-lint-wiki-sources-guard-intent.md
+review:
+  spec_hash: 121a54c822b0a27d
+  last_run: 2026-06-03
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "### 3. Post-loop empty-sources deletion"
+      section_hash: d7a6e9d2a6b1b7b8
+      text: "Insertion point was ambiguous — clarified to 'after line 385, before line 392-407 backlink rewrite'"
+      verdict: fixed
+      verdict_at: 2026-06-03
+    - id: F-002
+      phase: clarity
+      severity: INFO
+      section: "### 4. Tests"
+      section_hash: 5a2d2192312c46b8
+      text: "Test #5 expected outcome now specifies which pass (deletedRefs rewrite, line 392-407) removes wiki_articles"
+      verdict: fixed
+      verdict_at: 2026-06-03
+---
 # Design: lint wiki_sources guard
 
 **Date:** 2026-06-03
@@ -55,7 +84,9 @@ If `fix.path` absent from `pages` (not possible in practice), `originalContent =
 
 ### 3. Post-loop empty-sources deletion
 
-After the per-article loop ends and before the stale-link cleanup pass, add:
+**Insertion point:** immediately after the per-article loop (after line 385 `// ── End per-article loop ──`)
+and **before** the source-file backlink rewrite at line 392-407. This ensures the new entries
+pushed into `deletedRefs` are included in that rewrite pass.
 
 ```
 for each path in writtenPaths:
@@ -68,9 +99,10 @@ for each path in writtenPaths:
 
 This reuses the existing machinery:
 - `deletedRefs` is consumed by the source-file backlink rewrite (line 392-407), which removes
-  `[[deletedName]]` references from all source files.
-- The stale-link cleanup pass (line 447-471) removes `wiki_articles` entries pointing to
-  now-absent wiki stems via `filterStaleWikiLinks`.
+  `[[deletedName]]` references (including `wiki_articles` entries) from all source files via
+  raw string replace.
+- The stale-link cleanup pass (line 447-471) additionally covers any residual `wiki_articles`
+  references via `filterStaleWikiLinks`.
 
 No new deletion infrastructure needed.
 
@@ -91,7 +123,7 @@ New integration test for post-loop deletion:
 
 | # | Scenario | Expected |
 |---|----------|----------|
-| 5 | Wiki page whose only source stem is deleted from vault | Page deleted; source file loses `[[wikiStem]]` in `wiki_articles` |
+| 5 | Wiki page whose only source stem is deleted from vault | Page deleted; source file's `wiki_articles` entry `[[wikiStem]]` removed by the `deletedRefs` backlink rewrite pass (line 392-407) |
 
 ### 5. `lat.md` updates
 
