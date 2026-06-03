@@ -295,6 +295,78 @@ wiki_added: bad
     const { content: out } = validateAndRepairSourceFrontmatter(content);
     expect(out).toContain("# Body with wiki_added: mention");
   });
+
+  // @lat: [[tests#Frontmatter Validation#Source path-style wikilink removal]]
+  it("removes wiki_articles entry that is a path-style wikilink", () => {
+    const content = `---
+wiki_articles:
+  - "[[wiki_valid]]"
+  - "[[!Wiki/health/procedures/file.md]]"
+  - "[[some/nested/stem]]"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
+    expect(out).toContain("[[wiki_valid]]");
+    expect(out).not.toContain("[[!Wiki/health/procedures/file.md]]");
+    expect(out).not.toContain("[[some/nested/stem]]");
+    expect(warnings.some((w) => w.includes("wiki_articles") && w.includes("!Wiki/health"))).toBe(true);
+    expect(warnings.some((w) => w.includes("wiki_articles") && w.includes("some/nested"))).toBe(true);
+  });
+
+  // @lat: [[tests#Frontmatter Validation#Source path-style dot-md wikilink removal]]
+  it("removes wiki_articles entry ending with .md]]", () => {
+    const content = `---
+wiki_articles:
+  - "[[wiki_health]]"
+  - "[[procedures/file.md]]"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
+    expect(out).toContain("[[wiki_health]]");
+    expect(out).not.toContain("[[procedures/file.md]]");
+    expect(warnings.some((w) => w.includes("wiki_articles"))).toBe(true);
+  });
+
+  // @lat: [[tests#Frontmatter Validation#Source forbidden wiki field removal]]
+  it("removes forbidden wiki_outgoing_links from source frontmatter", () => {
+    const content = `---
+wiki_outgoing_links:
+  - "[[wiki_work_foo]]"
+wiki_added: 2026-01-01
+wiki_updated: 2026-06-01
+---
+body`;
+    const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
+    expect(out).not.toContain("wiki_outgoing_links:");
+    expect(out).toContain("wiki_added: 2026-01-01");
+    expect(warnings.some((w) => w.includes("wiki_outgoing_links"))).toBe(true);
+  });
+
+  // @lat: [[tests#Frontmatter Validation#Source forbidden wiki_sources removal]]
+  it("removes wiki_sources from source frontmatter", () => {
+    const content = `---
+wiki_sources:
+  - "[[my_note]]"
+wiki_updated: 2026-06-01
+---
+body`;
+    const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
+    expect(out).not.toContain("wiki_sources:");
+    expect(warnings.some((w) => w.includes("wiki_sources"))).toBe(true);
+  });
+
+  // @lat: [[tests#Frontmatter Validation#Source forbidden annotation removal]]
+  it("removes annotation from source frontmatter", () => {
+    const content = `---
+wiki_added: 2026-01-01
+wiki_updated: 2026-06-01
+annotation: "some note"
+---
+body`;
+    const { content: out, warnings } = validateAndRepairSourceFrontmatter(content);
+    expect(out).not.toContain("annotation:");
+    expect(warnings.some((w) => w.includes("annotation"))).toBe(true);
+  });
 });
 
 describe("validateAndRepairWikiPageFrontmatter", () => {
