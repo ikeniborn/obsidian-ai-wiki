@@ -78,7 +78,7 @@ describe("WikiController format()", () => {
     expect(dispatchSpy).toHaveBeenCalledWith("format", ["notes/x.md"]);
   });
 
-  it("файл внутри wiki-домена — НЕ диспатчит, открывает ConfirmModal", async () => {
+  it("файл внутри wiki-домена — НЕ диспатчит (InfoModal), не вызывает ingest", async () => {
     const domain: DomainEntry = { id: "ai", name: "AI", wiki_folder: "ии", source_paths: [], entity_types: [], language_notes: "" };
     const { ctrl, dispatchSpy } = build({ path: "!Wiki/ии/note.md", extension: "md", name: "note.md" }, [domain]);
     await ctrl.format();
@@ -204,5 +204,65 @@ describe("WikiController formatApply / formatCancel / formatRefine", () => {
     const pending = (ctrl as unknown as { _pendingFormat: { chat: Array<{ role: string; content: string }> } })._pendingFormat;
     expect(pending.chat).toEqual([{ role: "user", content: "сделай таблицу" }]);
     expect(dispatchSpy).toHaveBeenCalledWith("format", ["x.md"]);
+  });
+
+  it("formatApply strips forbidden wiki_* fields (e.g. wiki_outgoing_links) added by LLM", async () => {
+    const { ctrl, app } = build();
+    (ctrl as unknown as { _pendingFormat: unknown })._pendingFormat = {
+      originalPath: "x.md", tempPath: "!Temp/x.formatted.md", chat: [],
+    };
+    const original = [
+      "---",
+      "wiki_added: 2026-01-01",
+      "wiki_updated: 2026-05-01",
+      "wiki_articles:",
+      '  - "[[wiki_health]]"',
+      "---",
+      "Old",
+    ].join("\n");
+    // LLM output includes a forbidden wiki_outgoing_links field
+    const formatted = [
+      "---",
+      "tags:",
+      "  - note",
+      "wiki_outgoing_links:",
+      '  - "[[wiki_other]]"',
+      "---",
+      "New",
+    ].join("\n");
+    (app.vault.adapter.read as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(original)
+      .mockResolvedValueOnce(formatted);
+    await ctrl.formatApply(false);
+    const written = (app.vault.adapter.write as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+    expect(written).not.toContain("wiki_outgoing_links:");
+    expect(written).toContain("wiki_updated: 2026-05-01");
+    expect(written).toContain("[[wiki_health]]");
+    expect(written).toContain("New");
+  });
+
+  it("formatApply strips path-style entries from wiki_articles", async () => {
+    const { ctrl, app } = build();
+    (ctrl as unknown as { _pendingFormat: unknown })._pendingFormat = {
+      originalPath: "x.md", tempPath: "!Temp/x.formatted.md", chat: [],
+    };
+    const original = [
+      "---",
+      "wiki_added: 2026-01-01",
+      "wiki_updated: 2026-05-01",
+      "wiki_articles:",
+      '  - "[[wiki_health]]"',
+      '  - "[[!Wiki/health/procedures/file.md]]"',
+      "---",
+      "Old",
+    ].join("\n");
+    const formatted = "---\ntags:\n  - note\n---\nNew";
+    (app.vault.adapter.read as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(original)
+      .mockResolvedValueOnce(formatted);
+    await ctrl.formatApply(false);
+    const written = (app.vault.adapter.write as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+    expect(written).toContain("[[wiki_health]]");
+    expect(written).not.toContain("[[!Wiki/health/procedures/file.md]]");
   });
 });

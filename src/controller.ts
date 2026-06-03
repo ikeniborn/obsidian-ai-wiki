@@ -19,9 +19,9 @@ import type { DomainStore } from "./domain-store";
 import { DomainCorruptError } from "./domain-store";
 import type { LocalConfig, LocalConfigStore } from "./local-config";
 import type { LlmWikiPluginSettings } from "./types";
-import { FileErrorModal, ConfirmModal, ShellConsentModal } from "./modals";
+import { FileErrorModal, InfoModal, ShellConsentModal } from "./modals";
 import { domainWikiFolder, GLOBAL_AGENT_LOG_PATH } from "./wiki-path";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm } from "./utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, validateAndRepairSourceFrontmatter } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
 import { collectMdInPaths, parseWikiSources } from "./utils/vault-walk";
 
@@ -39,11 +39,13 @@ function patchWikiFields(originalContent: string, formattedContent: string): str
   const wikiAddedMatch = /^wiki_added:[ \t]*(.+)$/m.exec(originalContent);
   const wikiAdded = wikiAddedMatch?.[1].trim();
   const wikiArticles = parseWikiArticlesFromFm(originalContent);
-  return upsertRawFrontmatter(formattedContent, {
+  const patched = upsertRawFrontmatter(formattedContent, {
     wiki_added: wikiAdded,
     wiki_updated: wikiUpdated,
     wiki_articles: wikiArticles,
   });
+  const { content } = validateAndRepairSourceFrontmatter(patched);
+  return content;
 }
 
 export class WikiController {
@@ -89,32 +91,17 @@ export class WikiController {
     });
     if (inWiki) {
       const T = i18n().view;
-      new ConfirmModal(
+      new InfoModal(
         this.app,
         T.formatInWikiTitle,
         [T.formatInWikiBody(inWiki.id)],
-        () => void this.suggestIngestForWikiFile(file.path, inWiki),
+        T.formatInWikiClose,
       ).open();
       return;
     }
 
     this._pendingFormat = { originalPath: file.path, tempPath: "", chat: [] };
     await this.dispatch("format", [file.path]);
-  }
-
-  private async suggestIngestForWikiFile(filePath: string, domain: DomainEntry): Promise<void> {
-    const content = await this.app.vault.adapter.read(filePath);
-    const m = content.match(/^---\n([\s\S]*?)\n---/);
-    if (!m) { new Notice(i18n().view.formatInWikiNoSources); return; }
-    const frontmatter = m[1];
-    const sourcesMatch = frontmatter.match(/wiki_sources:\s*\n((?:\s*-\s*.+\n?)+)/);
-    if (!sourcesMatch) { new Notice(i18n().view.formatInWikiNoSources); return; }
-    const sources = sourcesMatch[1]
-      .split("\n")
-      .map((l) => l.replace(/^\s*-\s*/, "").trim())
-      .filter(Boolean);
-    if (!sources.length) { new Notice(i18n().view.formatInWikiNoSources); return; }
-    await this.init(domain.id, false, sources);
   }
 
   async formatApply(keepOld: boolean): Promise<void> {
