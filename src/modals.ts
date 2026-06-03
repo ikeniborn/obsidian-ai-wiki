@@ -45,6 +45,25 @@ export class ConfirmModal extends Modal {
   onClose(): void { this.contentEl.empty(); }
 }
 
+export class InfoModal extends Modal {
+  constructor(
+    app: App,
+    private title: string,
+    private lines: string[],
+    private closeLabel: string,
+  ) { super(app); }
+
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: this.title });
+    for (const line of this.lines) contentEl.createEl("p", { text: line });
+    new Setting(contentEl)
+      .addButton((b) => b.setButtonText(this.closeLabel).setCta().onClick(() => this.close()));
+  }
+
+  onClose(): void { this.contentEl.empty(); }
+}
+
 export class QueryModal extends Modal {
   private question = "";
   constructor(app: App, private onSubmit: (q: string) => void) {
