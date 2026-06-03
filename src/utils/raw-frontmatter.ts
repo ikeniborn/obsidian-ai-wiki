@@ -201,7 +201,7 @@ export function validateAndRepairFrontmatter(
       }
       case "remove": {
         if (rule.field in parsed) {
-          warnings.push(`${rule.field}: field not allowed in wiki page frontmatter — removed`);
+          warnings.push(`${rule.field}: field not allowed here — removed`);
           delete parsed[rule.field];
           modified = true;
         }
