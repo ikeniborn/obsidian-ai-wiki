@@ -186,9 +186,10 @@ export class WikiController {
     await this.dispatch("query", [question.trim()], domainId);
   }
 
-  async lint(domain: string): Promise<void> {
+  async lint(domain: string, opts: { useLlm?: boolean; entityTypeFilter?: string[] } = {}): Promise<void> {
     const args = domain === "all" ? [] : [domain];
-    await this.dispatch("lint", args);
+    const lintOpts = { useLlm: opts.useLlm ?? true, entityTypeFilter: opts.entityTypeFilter ?? [] };
+    await this.dispatch("lint", args, undefined, undefined, undefined, undefined, undefined, lintOpts);
   }
 
   async chat(operation: WikiOperation, domainId: string | undefined, context: string, history: ChatMessage[], newMessage: string): Promise<void> {
@@ -543,7 +544,7 @@ export class WikiController {
     } catch { /* не блокируем операцию */ }
   }
 
-  private async dispatch(op: WikiOperation, args: string[], domainId?: string, context?: string, instruction?: string, onFileError?: OnFileError, chatMessages?: ChatMessage[]): Promise<void> {
+  private async dispatch(op: WikiOperation, args: string[], domainId?: string, context?: string, instruction?: string, onFileError?: OnFileError, chatMessages?: ChatMessage[], lintOpts?: { useLlm: boolean; entityTypeFilter: string[] }): Promise<void> {
     if (this.isBusy()) {
       new Notice(i18n().ctrl.operationRunning);
       return;
@@ -613,7 +614,7 @@ export class WikiController {
       ? window.setTimeout(() => { timedOut = true; ctrl.abort(); }, timeoutMs)
       : null;
     const resolvedChatMessages = op === "format" ? this._pendingFormat?.chat : chatMessages;
-    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages: resolvedChatMessages });
+    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages: resolvedChatMessages, lintOpts });
 
     try {
       for await (const ev of runGen) {

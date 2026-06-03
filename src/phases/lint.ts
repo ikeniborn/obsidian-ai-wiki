@@ -162,6 +162,8 @@ export async function* runLint(
   wikiLinkValidationRetries: number = 3,
   opts: LlmCallOptions = {},
   similarity?: PageSimilarityService,
+  useLlm: boolean = true,
+  entityTypeFilter: string[] = [],
 ): AsyncGenerator<RunEvent> {
   const domainId = args[0];
   const targets = domainId
@@ -256,13 +258,24 @@ export async function* runLint(
     const deletedRefs: { deletedName: string; redirectName: string | null }[] = [];
     const writtenPaths: string[] = [];
     const skippedArticles: string[] = [];
-    const total = articlePaths.length;
+
+    if (useLlm) {
+      const loopPaths = entityTypeFilter.length > 0
+        ? articlePaths.filter(p =>
+            entityTypeFilter.some(et => {
+              const subfolder = domain.entity_types
+                ?.find(e => e.type === et)?.wiki_subfolder;
+              return subfolder && p.includes(`/${subfolder}/`);
+            })
+          )
+        : articlePaths;
+      const total = loopPaths.length;
 
     // ── Per-article loop ──────────────────────────────────────────────────────
     for (let i = 0; i < total; i++) {
       if (signal.aborted) return;
 
-      const targetPath = articlePaths[i];
+      const targetPath = loopPaths[i];
       const articleName = targetPath.split("/").pop()!.replace(/\.md$/, "");
       const articleContent = pages.get(targetPath) ?? "";
 
@@ -483,6 +496,7 @@ export async function* runLint(
     }
 
     if (signal.aborted) return;
+    } // end if (useLlm)
 
     // Bucket repair: remove wrong-bucket stems from wiki_sources / wiki_outgoing_links
     const repairWarnings: Array<{ path: string; warnings: string[] }> = [];
@@ -580,7 +594,7 @@ export async function* runLint(
         op: "lint",
         domainId: domain.id,
         fixed: writtenPaths,
-        checkedCount: total,
+        checkedCount: articlePaths.length,
         outputTokens,
       });
     } catch { /* non-critical */ }

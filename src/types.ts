@@ -35,6 +35,7 @@ export interface RunRequest {
   onFileError?: OnFileError;
   chatMessages?: ChatMessage[];
   operationHeader?: string;
+  lintOpts?: { useLlm: boolean; entityTypeFilter: string[] };
 }
 
 export type RunEvent =
