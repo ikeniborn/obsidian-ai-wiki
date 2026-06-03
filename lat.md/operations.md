@@ -125,6 +125,13 @@ Per-article loop:
 
 See [[src/phases/lint.ts#buildTitleMap]], [[src/phases/lint.ts#validateWikiSources]].
 
+### Lint Options
+
+`runLint` accepts two optional parameters to customize lint behavior:
+
+- **`useLlm: boolean = true`** — when `false`, skips the per-article LLM loop and `actualizeDomainConfig` entirely. Lint operates in programmatic-only mode: `cleanupInvalidPages` runs, then sources are not backlinked. This mode is significantly faster for analyzing large wikis without semantic review. Suitable for batch validation or when domain configuration is already stable.
+- **`entityTypeFilter: string[] = []`** — when non-empty, filters `articlePaths` to only wiki pages whose subfolder path matches a requested entity type (e.g. `['Person', 'Concept']`). Empty means process all article paths. Allows targeted linting of specific entity classes without full-domain scans.
+
 After all articles:
 - Post-loop empty-sources deletion — wiki pages in `writtenPaths` with zero `wiki_sources` entries after `validateWikiSources` are deleted; their stems are pushed into `deletedRefs` so the backlink rewrite removes their `wiki_articles` entries from source files.
 - Source-file backlink rewrite (vault-wide scan for deleted article refs, skipping wiki pages)
