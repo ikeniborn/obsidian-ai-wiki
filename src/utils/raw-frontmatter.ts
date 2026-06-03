@@ -1,5 +1,5 @@
 import { parse as yamlParse, stringify as yamlStringify } from "yaml";
-import { isWikiStem } from "../wiki-stem";
+import { GENERIC_WIKI_STEM_REGEX, isWikiStem } from "../wiki-stem";
 
 const FM_RE = /^---\n([\s\S]*?)\n---\n?/;
 
@@ -249,6 +249,47 @@ export function filterStaleWikiLinks(
   }
 
   if (!modified) return { content, warnings };
+  const body = content.slice(fmMatch[0].length);
+  return { content: `---\n${yamlStringify(parsed)}---\n${body}`, warnings };
+}
+
+export function stripInvalidWikiArticles(
+  content: string,
+  existingWikiStems: Set<string>,
+): { content: string; warnings: string[] } {
+  const warnings: string[] = [];
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return { content, warnings };
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {};
+  } catch {
+    return { content, warnings };
+  }
+
+  const val = parsed["wiki_articles"];
+  if (!Array.isArray(val) || (val as unknown[]).length === 0) return { content, warnings };
+
+  const filtered = (val as string[]).filter((entry) => {
+    if (!WIKILINK_RE.test(entry)) {
+      warnings.push(`wiki_articles: plain text "${entry}" — removed`);
+      return false;
+    }
+    const stem = entry.slice(2, -2);
+    if (!GENERIC_WIKI_STEM_REGEX.test(stem)) {
+      warnings.push(`wiki_articles: non-wiki stem ${entry} — removed`);
+      return false;
+    }
+    if (!existingWikiStems.has(stem)) {
+      warnings.push(`wiki_articles: stale link ${entry} — removed`);
+      return false;
+    }
+    return true;
+  });
+
+  if (filtered.length === (val as string[]).length) return { content, warnings };
+  parsed["wiki_articles"] = filtered;
   const body = content.slice(fmMatch[0].length);
   return { content: `---\n${yamlStringify(parsed)}---\n${body}`, warnings };
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, hasFrontmatterField, filterStaleWikiLinks } from "../../src/utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, hasFrontmatterField, filterStaleWikiLinks, stripInvalidWikiArticles } from "../../src/utils/raw-frontmatter";
 import { validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, ensureWikiSources } from "../../src/utils/raw-frontmatter";
 
 const TODAY = "2026-05-12";
@@ -656,5 +656,58 @@ describe("ensureWikiSources", () => {
     const { content: out, injected } = ensureWikiSources(content, "raw_source");
     expect(injected).toBe(true);
     expect(out).toContain("[[raw_source]]");
+  });
+});
+
+describe("stripInvalidWikiArticles", () => {
+  // @lat: [[lat.md/tests#Tests#Frontmatter Validation#stripInvalidWikiArticles — plain text removed]]
+  it("removes plain-text entry and emits warning", () => {
+    const content = "---\nwiki_articles:\n  - Иммуномодуляторы\n---\nBody.";
+    const { content: out, warnings } = stripInvalidWikiArticles(content, new Set([]));
+    expect(out).not.toContain("Иммуномодуляторы");
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("Иммуномодуляторы");
+  });
+
+  // @lat: [[lat.md/tests#Tests#Frontmatter Validation#stripInvalidWikiArticles — non-wiki stem removed]]
+  it("removes [[ИРС-19]] (non-wiki_* stem) and emits warning", () => {
+    const content = "---\nwiki_articles:\n  - '[[ИРС-19]]'\n---\nBody.";
+    const { content: out, warnings } = stripInvalidWikiArticles(content, new Set(["ИРС-19"]));
+    expect(out).not.toContain("ИРС-19");
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("ИРС-19");
+  });
+
+  // @lat: [[lat.md/tests#Tests#Frontmatter Validation#stripInvalidWikiArticles — absent wiki stem removed]]
+  it("removes valid wiki_* stem not in existingWikiStems", () => {
+    const content = "---\nwiki_articles:\n  - '[[wiki_x_thing]]'\n---\nBody.";
+    const { content: out, warnings } = stripInvalidWikiArticles(content, new Set([]));
+    expect(out).not.toContain("wiki_x_thing");
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("wiki_x_thing");
+  });
+
+  // @lat: [[lat.md/tests#Tests#Frontmatter Validation#stripInvalidWikiArticles — present wiki stem kept]]
+  it("keeps valid wiki_* stem present in existingWikiStems", () => {
+    const content = "---\nwiki_articles:\n  - '[[wiki_x_thing]]'\n---\nBody.";
+    const { content: out, warnings } = stripInvalidWikiArticles(content, new Set(["wiki_x_thing"]));
+    expect(out).toContain("wiki_x_thing");
+    expect(warnings).toHaveLength(0);
+  });
+
+  // @lat: [[lat.md/tests#Tests#Frontmatter Validation#stripInvalidWikiArticles — other fields untouched]]
+  it("does not modify fields other than wiki_articles", () => {
+    const content = "---\ntitle: My Doc\nwiki_articles:\n  - Стоп\n---\nBody.";
+    const { content: out } = stripInvalidWikiArticles(content, new Set([]));
+    expect(out).toContain("title: My Doc");
+    expect(out).toContain("Body.");
+  });
+
+  // @lat: [[lat.md/tests#Tests#Frontmatter Validation#stripInvalidWikiArticles — empty wiki_articles noop]]
+  it("returns content unchanged when wiki_articles is empty", () => {
+    const content = "---\nwiki_articles: []\n---\nBody.";
+    const { content: out, warnings } = stripInvalidWikiArticles(content, new Set([]));
+    expect(out).toBe(content);
+    expect(warnings).toHaveLength(0);
   });
 });

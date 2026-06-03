@@ -154,6 +154,30 @@ Fields like `wiki_outgoing_links`, `wiki_sources`, `wiki_status`, `wiki_type`, `
 
 `annotation` is a wiki-page-only field and must be stripped from source file frontmatter.
 
+### stripInvalidWikiArticles — plain text removed
+
+Verifies that a plain-text (non-wikilink) entry in wiki_articles is removed and a warning is emitted.
+
+### stripInvalidWikiArticles — non-wiki stem removed
+
+Verifies that a `[[ИРС-19]]`-style wikilink with a non-`wiki_*` stem is removed and a warning is emitted.
+
+### stripInvalidWikiArticles — absent wiki stem removed
+
+Verifies that a valid `wiki_*` stem not present in existingWikiStems is removed and a warning is emitted.
+
+### stripInvalidWikiArticles — present wiki stem kept
+
+Verifies that a valid `wiki_*` stem present in existingWikiStems is kept and no warning is emitted.
+
+### stripInvalidWikiArticles — other fields untouched
+
+Verifies that fields other than wiki_articles (title, body) are not modified by stripInvalidWikiArticles.
+
+### stripInvalidWikiArticles — empty wiki_articles noop
+
+Verifies that an empty wiki_articles field causes no modification and no warnings are emitted.
+
 ## Wiki Page Frontmatter Validation
 
 Tests for [[src/utils/raw-frontmatter.ts#validateAndRepairWikiPageFrontmatter]] covering wiki page-specific fields.
