@@ -26246,6 +26246,7 @@ var en = {
     proxy_mobile_warning: "Proxy is not supported on mobile in this version.",
     proxy_invalid: (m) => `Proxy config invalid: ${m}`,
     h3_graph: "Graph",
+    h3_jaccard: "Jaccard",
     graphDepth_name: "BFS depth",
     graphDepth_desc: "Query: hops from seed pages. 0 = seeds only, max sensible: 3.",
     bfsTopK_name: "BFS context top-K",
@@ -26466,6 +26467,7 @@ var ru = {
     proxy_mobile_warning: "\u041F\u0440\u043E\u043A\u0441\u0438 \u043D\u0430 \u043C\u043E\u0431\u0438\u043B\u044C\u043D\u043E\u043C \u043F\u043E\u043A\u0430 \u043D\u0435 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044F.",
     proxy_invalid: (m) => `\u041D\u0435\u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u0430\u044F \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u044F \u043F\u0440\u043E\u043A\u0441\u0438: ${m}`,
     h3_graph: "\u0413\u0440\u0430\u0444",
+    h3_jaccard: "Jaccard",
     graphDepth_name: "\u0413\u043B\u0443\u0431\u0438\u043D\u0430 BFS",
     graphDepth_desc: "Query: \u0448\u0430\u0433\u043E\u0432 \u043E\u0442 seed-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. 0 = \u0442\u043E\u043B\u044C\u043A\u043E seeds, \u0440\u0430\u0437\u0443\u043C\u043D\u044B\u0439 \u043C\u0430\u043A\u0441\u0438\u043C\u0443\u043C: 3.",
     bfsTopK_name: "BFS top-K",
@@ -26686,6 +26688,7 @@ var es = {
     proxy_mobile_warning: "El proxy no est\xE1 soportado en m\xF3vil en esta versi\xF3n.",
     proxy_invalid: (m) => `Configuraci\xF3n de proxy inv\xE1lida: ${m}`,
     h3_graph: "Grafo",
+    h3_jaccard: "Jaccard",
     graphDepth_name: "Profundidad BFS",
     graphDepth_desc: "Query: saltos desde p\xE1ginas semilla. 0 = solo semillas, m\xE1x recomendado: 3.",
     bfsTopK_name: "BFS top-K",
@@ -27843,6 +27846,15 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           await this.plugin.saveSettings();
         })
       );
+      new import_obsidian3.Setting(containerEl).setName(T.settings.wikiLinkValidationRetries_name).setDesc(T.settings.wikiLinkValidationRetries_desc).addText(
+        (t) => t.setPlaceholder("3").setValue(String(s.wikiLinkValidationRetries)).onChange(async (v) => {
+          const n = Number(v);
+          if (Number.isInteger(n) && n >= 0) {
+            s.wikiLinkValidationRetries = n;
+            await this.plugin.saveSettings();
+          }
+        })
+      );
       if (!import_obsidian3.Platform.isMobile) {
         new import_obsidian3.Setting(containerEl).setName("Per-operation models").setHeading();
         new import_obsidian3.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
@@ -27943,6 +27955,46 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           })
         );
       }
+    }
+    new import_obsidian3.Setting(containerEl).setName(T.settings.h3_graph).setHeading();
+    new import_obsidian3.Setting(containerEl).setName(T.settings.graphDepth_name).setDesc(T.settings.graphDepth_desc).addText(
+      (t) => t.setPlaceholder("1").setValue(String(s.graphDepth)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isInteger(n) && n >= 0 && n <= 3) {
+          s.graphDepth = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName(T.settings.bfsTopK_name).setDesc(T.settings.bfsTopK_desc).addText(
+      (t) => t.setPlaceholder("10").setValue(String(s.bfsTopK)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isInteger(n) && n >= 0) {
+          s.bfsTopK = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName(T.settings.h3_jaccard).setHeading();
+    new import_obsidian3.Setting(containerEl).setName(T.settings.seedTopK_name).setDesc(T.settings.seedTopK_desc).addText(
+      (t) => t.setPlaceholder("5").setValue(String(s.seedTopK)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isInteger(n) && n >= 1 && n <= 50) {
+          s.seedTopK = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName(T.settings.seedMinScore_name).setDesc(T.settings.seedMinScore_desc).addText(
+      (t) => t.setPlaceholder("0.1").setValue(String(s.seedMinScore)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isFinite(n) && n >= 0 && n <= 1) {
+          s.seedMinScore = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    if (eff.backend !== "claude-agent" && !import_obsidian3.Platform.isMobile) {
       const proxy = eff.proxy;
       new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
       new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_enabled_name).setDesc(T.settings.proxy_enabled_desc).addToggle(
@@ -27976,52 +28028,6 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         containerEl.createEl("p", { text: T.settings.proxy_hint, cls: "setting-item-description" });
       }
     }
-    new import_obsidian3.Setting(containerEl).setName(T.settings.h3_graph).setHeading();
-    new import_obsidian3.Setting(containerEl).setName(T.settings.graphDepth_name).setDesc(T.settings.graphDepth_desc).addText(
-      (t) => t.setPlaceholder("1").setValue(String(s.graphDepth)).onChange(async (v) => {
-        const n = Number(v);
-        if (Number.isInteger(n) && n >= 0 && n <= 3) {
-          s.graphDepth = n;
-          await this.plugin.saveSettings();
-        }
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.bfsTopK_name).setDesc(T.settings.bfsTopK_desc).addText(
-      (t) => t.setPlaceholder("10").setValue(String(s.bfsTopK)).onChange(async (v) => {
-        const n = Number(v);
-        if (Number.isInteger(n) && n >= 0) {
-          s.bfsTopK = n;
-          await this.plugin.saveSettings();
-        }
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.wikiLinkValidationRetries_name).setDesc(T.settings.wikiLinkValidationRetries_desc).addText(
-      (t) => t.setPlaceholder("3").setValue(String(s.wikiLinkValidationRetries)).onChange(async (v) => {
-        const n = Number(v);
-        if (Number.isInteger(n) && n >= 0) {
-          s.wikiLinkValidationRetries = n;
-          await this.plugin.saveSettings();
-        }
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.seedTopK_name).setDesc(T.settings.seedTopK_desc).addText(
-      (t) => t.setPlaceholder("5").setValue(String(s.seedTopK)).onChange(async (v) => {
-        const n = Number(v);
-        if (Number.isInteger(n) && n >= 1 && n <= 50) {
-          s.seedTopK = n;
-          await this.plugin.saveSettings();
-        }
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.seedMinScore_name).setDesc(T.settings.seedMinScore_desc).addText(
-      (t) => t.setPlaceholder("0.1").setValue(String(s.seedMinScore)).onChange(async (v) => {
-        const n = Number(v);
-        if (Number.isFinite(n) && n >= 0 && n <= 1) {
-          s.seedMinScore = n;
-          await this.plugin.saveSettings();
-        }
-      })
-    );
     if (!import_obsidian3.Platform.isMobile) {
       new import_obsidian3.Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
       new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_enabled_name).setDesc(T.settings.devMode_enabled_desc).addToggle(

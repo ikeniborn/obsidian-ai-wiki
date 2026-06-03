@@ -482,6 +482,21 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             }),
         );
 
+      new Setting(containerEl)
+        .setName(T.settings.wikiLinkValidationRetries_name)
+        .setDesc(T.settings.wikiLinkValidationRetries_desc)
+        .addText((t) =>
+          t.setPlaceholder("3")
+            .setValue(String(s.wikiLinkValidationRetries))
+            .onChange(async (v) => {
+              const n = Number(v);
+              if (Number.isInteger(n) && n >= 0) {
+                s.wikiLinkValidationRetries = n;
+                await this.plugin.saveSettings();
+              }
+            }),
+        );
+
       if (!Platform.isMobile) {
         new Setting(containerEl).setName("Per-operation models").setHeading();
         new Setting(containerEl)
@@ -611,7 +626,76 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           );
       }
 
-      // ── Proxy section (native-agent only) ───────────────────────────────────
+    }
+
+    // ── Graph settings ────────────────────────────────────────────────────────
+    new Setting(containerEl).setName(T.settings.h3_graph).setHeading();
+
+    new Setting(containerEl)
+      .setName(T.settings.graphDepth_name)
+      .setDesc(T.settings.graphDepth_desc)
+      .addText((t) =>
+        t.setPlaceholder("1")
+          .setValue(String(s.graphDepth))
+          .onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isInteger(n) && n >= 0 && n <= 3) {
+              s.graphDepth = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName(T.settings.bfsTopK_name)
+      .setDesc(T.settings.bfsTopK_desc)
+      .addText((t) =>
+        t.setPlaceholder("10")
+          .setValue(String(s.bfsTopK))
+          .onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isInteger(n) && n >= 0) {
+              s.bfsTopK = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    // ── Jaccard (keyword scoring) ─────────────────────────────────────────────
+    new Setting(containerEl).setName(T.settings.h3_jaccard).setHeading();
+
+    new Setting(containerEl)
+      .setName(T.settings.seedTopK_name)
+      .setDesc(T.settings.seedTopK_desc)
+      .addText((t) =>
+        t.setPlaceholder("5")
+          .setValue(String(s.seedTopK))
+          .onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isInteger(n) && n >= 1 && n <= 50) {
+              s.seedTopK = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName(T.settings.seedMinScore_name)
+      .setDesc(T.settings.seedMinScore_desc)
+      .addText((t) =>
+        t.setPlaceholder("0.1")
+          .setValue(String(s.seedMinScore))
+          .onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n >= 0 && n <= 1) {
+              s.seedMinScore = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    // ── Proxy (native-agent only) ─────────────────────────────────────────────
+    if (eff.backend !== "claude-agent" && !Platform.isMobile) {
       const proxy = eff.proxy;
       new Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
 
@@ -662,84 +746,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         containerEl.createEl("p", { text: T.settings.proxy_hint, cls: "setting-item-description" });
       }
     }
-
-    // ── Graph settings ────────────────────────────────────────────────────────
-    new Setting(containerEl).setName(T.settings.h3_graph).setHeading();
-
-    new Setting(containerEl)
-      .setName(T.settings.graphDepth_name)
-      .setDesc(T.settings.graphDepth_desc)
-      .addText((t) =>
-        t.setPlaceholder("1")
-          .setValue(String(s.graphDepth))
-          .onChange(async (v) => {
-            const n = Number(v);
-            if (Number.isInteger(n) && n >= 0 && n <= 3) {
-              s.graphDepth = n;
-              await this.plugin.saveSettings();
-            }
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName(T.settings.bfsTopK_name)
-      .setDesc(T.settings.bfsTopK_desc)
-      .addText((t) =>
-        t.setPlaceholder("10")
-          .setValue(String(s.bfsTopK))
-          .onChange(async (v) => {
-            const n = Number(v);
-            if (Number.isInteger(n) && n >= 0) {
-              s.bfsTopK = n;
-              await this.plugin.saveSettings();
-            }
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName(T.settings.wikiLinkValidationRetries_name)
-      .setDesc(T.settings.wikiLinkValidationRetries_desc)
-      .addText((t) =>
-        t.setPlaceholder("3")
-          .setValue(String(s.wikiLinkValidationRetries))
-          .onChange(async (v) => {
-            const n = Number(v);
-            if (Number.isInteger(n) && n >= 0) {
-              s.wikiLinkValidationRetries = n;
-              await this.plugin.saveSettings();
-            }
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName(T.settings.seedTopK_name)
-      .setDesc(T.settings.seedTopK_desc)
-      .addText((t) =>
-        t.setPlaceholder("5")
-          .setValue(String(s.seedTopK))
-          .onChange(async (v) => {
-            const n = Number(v);
-            if (Number.isInteger(n) && n >= 1 && n <= 50) {
-              s.seedTopK = n;
-              await this.plugin.saveSettings();
-            }
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName(T.settings.seedMinScore_name)
-      .setDesc(T.settings.seedMinScore_desc)
-      .addText((t) =>
-        t.setPlaceholder("0.1")
-          .setValue(String(s.seedMinScore))
-          .onChange(async (v) => {
-            const n = Number(v);
-            if (Number.isFinite(n) && n >= 0 && n <= 1) {
-              s.seedMinScore = n;
-              await this.plugin.saveSettings();
-            }
-          }),
-      );
 
     // ── Dev mode ──────────────────────────────────────────────────────────────
     if (!Platform.isMobile) {
