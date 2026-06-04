@@ -54,7 +54,7 @@ export class WikiController {
   private _chatSessionId: string | undefined;
   private _currentClaudeClient: ClaudeCliClient | null = null;
   private _pendingFormat: { originalPath: string; tempPath: string; chat: ChatMessage[] } | null = null;
-  private _currentLogMeta: { backend: string; model: string } | null = null;
+  private _currentLogMeta: { backend: string; model: string; agentLogEnabled: boolean } | null = null;
   private _llmCallIndex = 0;
   constructor(
     private app: App,
@@ -427,6 +427,9 @@ export class WikiController {
     adapter.mkdir = async (path: string) => {
       try { await vault.createFolder(path); } catch { /* already exists — fine */ }
     };
+    adapter.resolveLink = (linkpath: string, sourcePath: string): string | null => {
+      return this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath)?.path ?? null;
+    };
     const base = this.cwdOrEmpty();
     const vaultTools = new VaultTools(adapter, base, vault);
     const vaultName = this.app.vault.getName();
@@ -523,7 +526,7 @@ export class WikiController {
   }
 
   private async logEvent(_vaultRoot: string, sessionId: string, op: WikiOperation, domainId: string | undefined, ev: RunEvent): Promise<void> {
-    if (!this.plugin.settings.agentLogEnabled) return;
+    if (!(this._currentLogMeta?.agentLogEnabled ?? this.plugin.settings.agentLogEnabled)) return;
     if (ev.kind === "assistant_text") return;
     const adapter = this.app.vault.adapter;
     const path = GLOBAL_AGENT_LOG_PATH;
@@ -574,6 +577,7 @@ export class WikiController {
         model: eff.backend === "claude-agent"
           ? (eff.claudeAgent.perOperation ? eff.claudeAgent.operations[opKey].model : eff.claudeAgent.model)
           : (eff.nativeAgent.perOperation ? eff.nativeAgent.operations[opKey].model : eff.nativeAgent.model),
+        agentLogEnabled: eff.agentLogEnabled,
       };
     }
 

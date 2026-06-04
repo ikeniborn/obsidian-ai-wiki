@@ -155,29 +155,31 @@ export async function analyzeAttachments(
   llm: LlmClient,
   model: string,
   signal: AbortSignal,
+  sourcePath: string = "",
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
 
   for (const path of [...new Set(embedPaths)]) {
     if (signal.aborted) break;
-    const ext = path.split(".").pop()?.toLowerCase() ?? "";
+    const resolved = vaultTools.resolveLink(path, sourcePath);
+    const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
 
     try {
       if (ext === "excalidraw") {
-        const text = await vaultTools.read(path);
+        const text = await vaultTools.read(resolved);
         result.set(path, await analyzeExcalidraw(text, llm, model, signal));
         continue;
       }
 
       if (ext === "pdf") {
-        const buf = await vaultTools.readBinary(path);
+        const buf = await vaultTools.readBinary(resolved);
         result.set(path, await analyzePdf(buf, llm, model, signal));
         continue;
       }
 
-      const mimeType = getMimeType(path);
+      const mimeType = getMimeType(resolved);
       if (mimeType) {
-        const buf = await vaultTools.readBinary(path);
+        const buf = await vaultTools.readBinary(resolved);
         result.set(path, await analyzeImage(buf, mimeType, llm, model, signal));
         continue;
       }

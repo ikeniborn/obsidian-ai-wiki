@@ -101,7 +101,7 @@ export async function* runFormat(
     if (embedPaths.length > 0) {
       yield { kind: "assistant_text", delta: `Анализ вложений (${embedPaths.length})...\n` };
       try {
-        const descriptions = await analyzeAttachments(embedPaths, vaultTools, llm, visionSettings.model, signal);
+        const descriptions = await analyzeAttachments(embedPaths, vaultTools, llm, visionSettings.model, signal, filePath);
         for (const path of embedPaths) {
           if (!descriptions.has(path)) {
             yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [path] };

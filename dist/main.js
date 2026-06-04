@@ -1038,6 +1038,8 @@ var require_Alias = __commonJS({
        * instance of the `source` anchor before this node.
        */
       resolve(doc, ctx) {
+        if (ctx?.maxAliasCount === 0)
+          throw new ReferenceError("Alias resolution is disabled");
         let nodes;
         if (ctx?.aliasResolveCache) {
           nodes = ctx.aliasResolveCache;
@@ -2110,18 +2112,18 @@ var require_merge = __commonJS({
     };
     var isMergeKey = (ctx, key) => (merge.identify(key) || identity.isScalar(key) && (!key.type || key.type === Scalar.Scalar.PLAIN) && merge.identify(key.value)) && ctx?.doc.schema.tags.some((tag) => tag.tag === merge.tag && tag.default);
     function addMergeToJSMap(ctx, map, value) {
-      value = ctx && identity.isAlias(value) ? value.resolve(ctx.doc) : value;
-      if (identity.isSeq(value))
-        for (const it of value.items)
+      const source = resolveAliasValue(ctx, value);
+      if (identity.isSeq(source))
+        for (const it of source.items)
           mergeValue(ctx, map, it);
-      else if (Array.isArray(value))
-        for (const it of value)
+      else if (Array.isArray(source))
+        for (const it of source)
           mergeValue(ctx, map, it);
       else
-        mergeValue(ctx, map, value);
+        mergeValue(ctx, map, source);
     }
     function mergeValue(ctx, map, value) {
-      const source = ctx && identity.isAlias(value) ? value.resolve(ctx.doc) : value;
+      const source = resolveAliasValue(ctx, value);
       if (!identity.isMap(source))
         throw new Error("Merge sources must be maps or map aliases");
       const srcMap = source.toJSON(null, ctx, Map);
@@ -2141,6 +2143,9 @@ var require_merge = __commonJS({
         }
       }
       return map;
+    }
+    function resolveAliasValue(ctx, value) {
+      return ctx && identity.isAlias(value) ? value.resolve(ctx.doc, ctx) : value;
     }
     exports2.addMergeToJSMap = addMergeToJSMap;
     exports2.isMergeKey = isMergeKey;
@@ -2779,7 +2784,7 @@ var require_stringifyNumber = __commonJS({
       if (!isFinite(num))
         return isNaN(num) ? ".nan" : num < 0 ? "-.inf" : ".inf";
       let n = Object.is(value, -0) ? "-0" : JSON.stringify(value);
-      if (!format && minFractionDigits && (!tag || tag === "tag:yaml.org,2002:float") && /^\d/.test(n)) {
+      if (!format && minFractionDigits && (!tag || tag === "tag:yaml.org,2002:float") && /^-?\d/.test(n) && !n.includes("e")) {
         let i = n.indexOf(".");
         if (i < 0) {
           i = n.length;
@@ -5151,7 +5156,7 @@ var require_resolve_flow_scalar = __commonJS({
             while (next === " " || next === "	")
               next = source[++i + 1];
           } else if (next === "x" || next === "u" || next === "U") {
-            const length = { x: 2, u: 4, U: 8 }[next];
+            const length = next === "x" ? 2 : next === "u" ? 4 : 8;
             res += parseCharCode(source, i + 1, length, onError);
             i += length;
           } else {
@@ -5226,12 +5231,13 @@ var require_resolve_flow_scalar = __commonJS({
       const cc = source.substr(offset, length);
       const ok = cc.length === length && /^[0-9a-fA-F]+$/.test(cc);
       const code = ok ? parseInt(cc, 16) : NaN;
-      if (isNaN(code)) {
+      try {
+        return String.fromCodePoint(code);
+      } catch {
         const raw = source.substr(offset - 2, length + 2);
         onError(offset - 2, "BAD_DQ_ESCAPE", `Invalid escape sequence ${raw}`);
         return raw;
       }
-      return String.fromCodePoint(code);
     }
     exports2.resolveFlowScalar = resolveFlowScalar;
   }
@@ -5581,8 +5587,10 @@ ${cb}` : comment;
           }
         }
         if (afterDoc) {
-          Array.prototype.push.apply(doc.errors, this.errors);
-          Array.prototype.push.apply(doc.warnings, this.warnings);
+          for (let i = 0; i < this.errors.length; ++i)
+            doc.errors.push(this.errors[i]);
+          for (let i = 0; i < this.warnings.length; ++i)
+            doc.warnings.push(this.warnings[i]);
         } else {
           doc.errors = this.errors;
           doc.warnings = this.warnings;
@@ -6315,7 +6323,7 @@ var require_lexer = __commonJS({
           const n = (yield* this.pushCount(1)) + (yield* this.pushSpaces(true));
           this.indentNext = this.indentValue + 1;
           this.indentValue += n;
-          return yield* this.parseBlockStart();
+          return "block-start";
         }
         return "doc";
       }
@@ -6614,28 +6622,38 @@ var require_lexer = __commonJS({
         return 0;
       }
       *pushIndicators() {
-        switch (this.charAt(0)) {
-          case "!":
-            return (yield* this.pushTag()) + (yield* this.pushSpaces(true)) + (yield* this.pushIndicators());
-          case "&":
-            return (yield* this.pushUntil(isNotAnchorChar)) + (yield* this.pushSpaces(true)) + (yield* this.pushIndicators());
-          case "-":
-          // this is an error
-          case "?":
-          // this is an error outside flow collections
-          case ":": {
-            const inFlow = this.flowLevel > 0;
-            const ch1 = this.charAt(1);
-            if (isEmpty(ch1) || inFlow && flowIndicatorChars.has(ch1)) {
-              if (!inFlow)
-                this.indentNext = this.indentValue + 1;
-              else if (this.flowKey)
-                this.flowKey = false;
-              return (yield* this.pushCount(1)) + (yield* this.pushSpaces(true)) + (yield* this.pushIndicators());
+        let n = 0;
+        loop: while (true) {
+          switch (this.charAt(0)) {
+            case "!":
+              n += yield* this.pushTag();
+              n += yield* this.pushSpaces(true);
+              continue loop;
+            case "&":
+              n += yield* this.pushUntil(isNotAnchorChar);
+              n += yield* this.pushSpaces(true);
+              continue loop;
+            case "-":
+            // this is an error
+            case "?":
+            // this is an error outside flow collections
+            case ":": {
+              const inFlow = this.flowLevel > 0;
+              const ch1 = this.charAt(1);
+              if (isEmpty(ch1) || inFlow && flowIndicatorChars.has(ch1)) {
+                if (!inFlow)
+                  this.indentNext = this.indentValue + 1;
+                else if (this.flowKey)
+                  this.flowKey = false;
+                n += yield* this.pushCount(1);
+                n += yield* this.pushSpaces(true);
+                continue loop;
+              }
             }
           }
+          break loop;
         }
-        return 0;
+        return n;
       }
       *pushTag() {
         if (this.charAt(1) === "<") {
@@ -6794,6 +6812,13 @@ var require_parser = __commonJS({
       }
       return prev.splice(i, prev.length);
     }
+    function arrayPushArray(target, source) {
+      if (source.length < 1e5)
+        Array.prototype.push.apply(target, source);
+      else
+        for (let i = 0; i < source.length; ++i)
+          target.push(source[i]);
+    }
     function fixFlowSeqItems(fc) {
       if (fc.start.type === "flow-seq-start") {
         for (const it of fc.items) {
@@ -6803,11 +6828,11 @@ var require_parser = __commonJS({
             delete it.key;
             if (isFlowToken(it.value)) {
               if (it.value.end)
-                Array.prototype.push.apply(it.value.end, it.sep);
+                arrayPushArray(it.value.end, it.sep);
               else
                 it.value.end = it.sep;
             } else
-              Array.prototype.push.apply(it.start, it.sep);
+              arrayPushArray(it.start, it.sep);
             delete it.sep;
           }
         }
@@ -7162,7 +7187,7 @@ var require_parser = __commonJS({
                 const prev = map.items[map.items.length - 2];
                 const end = prev?.value?.end;
                 if (Array.isArray(end)) {
-                  Array.prototype.push.apply(end, it.start);
+                  arrayPushArray(end, it.start);
                   end.push(this.sourceToken);
                   map.items.pop();
                   return;
@@ -7350,7 +7375,7 @@ var require_parser = __commonJS({
                 const prev = seq.items[seq.items.length - 2];
                 const end = prev?.value?.end;
                 if (Array.isArray(end)) {
-                  Array.prototype.push.apply(end, it.start);
+                  arrayPushArray(end, it.start);
                   end.push(this.sourceToken);
                   seq.items.pop();
                   return;
@@ -28096,6 +28121,25 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         );
       }
     }
+    new import_obsidian3.Setting(containerEl).setName("Vision").setHeading();
+    new import_obsidian3.Setting(containerEl).setName("Enable vision analysis").setDesc("Analyse embedded images, PDFs, and Excalidraw files before formatting. Uses the same baseUrl and API key as the main backend.").addToggle(
+      (t) => t.setValue(s.vision.enabled).onChange(async (v) => {
+        s.vision.enabled = v;
+        await this.plugin.saveSettings();
+        this.display();
+      })
+    );
+    if (s.vision.enabled) {
+      this.addModelControl(
+        new import_obsidian3.Setting(containerEl).setName("Vision model").setDesc("Model name for vision calls, e.g. gpt-4o-mini or claude-3-haiku-20240307"),
+        this._chatModels,
+        s.vision.model,
+        async (v) => {
+          s.vision.model = v;
+          await this.plugin.saveSettings();
+        }
+      );
+    }
     new import_obsidian3.Setting(containerEl).setName(T.settings.h3_graph).setHeading();
     new import_obsidian3.Setting(containerEl).setName(T.settings.graphDepth_name).setDesc(T.settings.graphDepth_desc).addText(
       (t) => t.setPlaceholder("1").setValue(String(s.graphDepth)).onChange(async (v) => {
@@ -39253,25 +39297,26 @@ async function analyzeExcalidraw(text, llm, model, signal) {
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } }
   ], signal);
 }
-async function analyzeAttachments(embedPaths, vaultTools, llm, model, signal) {
+async function analyzeAttachments(embedPaths, vaultTools, llm, model, signal, sourcePath = "") {
   const result = /* @__PURE__ */ new Map();
-  for (const path2 of embedPaths) {
+  for (const path2 of [...new Set(embedPaths)]) {
     if (signal.aborted) break;
-    const ext = path2.split(".").pop()?.toLowerCase() ?? "";
+    const resolved = vaultTools.resolveLink(path2, sourcePath);
+    const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
     try {
       if (ext === "excalidraw") {
-        const text = await vaultTools.read(path2);
+        const text = await vaultTools.read(resolved);
         result.set(path2, await analyzeExcalidraw(text, llm, model, signal));
         continue;
       }
       if (ext === "pdf") {
-        const buf = await vaultTools.readBinary(path2);
+        const buf = await vaultTools.readBinary(resolved);
         result.set(path2, await analyzePdf(buf, llm, model, signal));
         continue;
       }
-      const mimeType = getMimeType(path2);
+      const mimeType = getMimeType(resolved);
       if (mimeType) {
-        const buf = await vaultTools.readBinary(path2);
+        const buf = await vaultTools.readBinary(resolved);
         result.set(path2, await analyzeImage(buf, mimeType, llm, model, signal));
         continue;
       }
@@ -39349,7 +39394,7 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
       yield { kind: "assistant_text", delta: `\u0410\u043D\u0430\u043B\u0438\u0437 \u0432\u043B\u043E\u0436\u0435\u043D\u0438\u0439 (${embedPaths.length})...
 ` };
       try {
-        const descriptions = await analyzeAttachments(embedPaths, vaultTools, llm, visionSettings.model, signal);
+        const descriptions = await analyzeAttachments(embedPaths, vaultTools, llm, visionSettings.model, signal, filePath);
         for (const path2 of embedPaths) {
           if (!descriptions.has(path2)) {
             yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [path2] };
@@ -40153,6 +40198,9 @@ var VaultTools = class {
   async readBinary(vaultPath) {
     if (!this.adapter.readBinary) throw new Error("readBinary not supported by this adapter");
     return this.adapter.readBinary(vaultPath);
+  }
+  resolveLink(linkpath, sourcePath) {
+    return this.adapter.resolveLink?.(linkpath, sourcePath) ?? linkpath;
   }
   async mkdir(vaultPath) {
     return this.adapter.mkdir(vaultPath);
@@ -48204,6 +48252,9 @@ var WikiController = class {
       } catch {
       }
     };
+    adapter.resolveLink = (linkpath, sourcePath) => {
+      return this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath)?.path ?? null;
+    };
     const base = this.cwdOrEmpty();
     const vaultTools = new VaultTools(adapter, base, vault);
     const vaultName = this.app.vault.getName();
@@ -48284,7 +48335,7 @@ var WikiController = class {
     return new AgentRunner(llm, s, vaultTools, vaultName, domains);
   }
   async logEvent(_vaultRoot, sessionId, op, domainId, ev) {
-    if (!this.plugin.settings.agentLogEnabled) return;
+    if (!(this._currentLogMeta?.agentLogEnabled ?? this.plugin.settings.agentLogEnabled)) return;
     if (ev.kind === "assistant_text") return;
     const adapter = this.app.vault.adapter;
     const path2 = GLOBAL_AGENT_LOG_PATH;
@@ -48333,7 +48384,8 @@ var WikiController = class {
       const opKey2 = op === "lint-chat" ? "lint" : op;
       this._currentLogMeta = {
         backend: eff.backend,
-        model: eff.backend === "claude-agent" ? eff.claudeAgent.perOperation ? eff.claudeAgent.operations[opKey2].model : eff.claudeAgent.model : eff.nativeAgent.perOperation ? eff.nativeAgent.operations[opKey2].model : eff.nativeAgent.model
+        model: eff.backend === "claude-agent" ? eff.claudeAgent.perOperation ? eff.claudeAgent.operations[opKey2].model : eff.claudeAgent.model : eff.nativeAgent.perOperation ? eff.nativeAgent.operations[opKey2].model : eff.nativeAgent.model,
+        agentLogEnabled: eff.agentLogEnabled
       };
     }
     await this.ensureView();

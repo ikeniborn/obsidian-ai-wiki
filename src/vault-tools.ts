@@ -8,6 +8,8 @@ export interface VaultAdapter {
   remove?(path: string): Promise<void>;
   rmdir?(path: string, recursive: boolean): Promise<void>;
   readBinary?(path: string): Promise<ArrayBuffer>;
+  /** Resolve an Obsidian wiki-link to a vault-relative path; null if not found. */
+  resolveLink?(linkpath: string, sourcePath: string): string | null;
 }
 
 export interface VaultIndexer {
@@ -90,6 +92,10 @@ export class VaultTools {
   async readBinary(vaultPath: string): Promise<ArrayBuffer> {
     if (!this.adapter.readBinary) throw new Error("readBinary not supported by this adapter");
     return this.adapter.readBinary(vaultPath);
+  }
+
+  resolveLink(linkpath: string, sourcePath: string): string {
+    return this.adapter.resolveLink?.(linkpath, sourcePath) ?? linkpath;
   }
 
   async mkdir(vaultPath: string): Promise<void> {
