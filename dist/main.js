@@ -29470,7 +29470,10 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
         const counts = /* @__PURE__ */ new Map();
         const allMd = this.plugin.app.vault.getMarkdownFiles();
         for (const et of domainEntry.entity_types ?? []) {
-          if (!et.wiki_subfolder) continue;
+          if (!et.wiki_subfolder) {
+            counts.set(et.type, 0);
+            continue;
+          }
           const prefix = `${domainEntry.wiki_folder}/${et.wiki_subfolder}/`;
           counts.set(et.type, allMd.filter((f) => f.path.startsWith(prefix)).length);
         }

@@ -351,7 +351,7 @@ export class LlmWikiView extends ItemView {
         const counts = new Map<string, number>();
         const allMd = this.plugin.app.vault.getMarkdownFiles();
         for (const et of domainEntry.entity_types ?? []) {
-          if (!et.wiki_subfolder) continue;
+          if (!et.wiki_subfolder) { counts.set(et.type, 0); continue; }
           const prefix = `${domainEntry.wiki_folder}/${et.wiki_subfolder}/`;
           counts.set(et.type, allMd.filter(f => f.path.startsWith(prefix)).length);
         }

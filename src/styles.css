@@ -80,6 +80,13 @@
   font-size: 0.9em;
 }
 
+.ai-wiki-lint-btn-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
 /* Чат после lint */
 .ai-wiki-chat-section { margin-top: 10px; border-top: 1px solid var(--background-modifier-border); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 .ai-wiki-chat-messages { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; }
