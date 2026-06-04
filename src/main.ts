@@ -98,8 +98,15 @@ export default class LlmWikiPlugin extends Plugin {
             try { domains = await this.controller.loadDomains(); } catch { return; }
             const domainEntry = domains[0];
             if (!domainEntry) return;
+            const counts = new Map<string, number>();
+            const allMd = this.app.vault.getMarkdownFiles();
+            for (const et of domainEntry.entity_types ?? []) {
+              if (!et.wiki_subfolder) { counts.set(et.type, 0); continue; }
+              const prefix = `${domainEntry.wiki_folder}/${et.wiki_subfolder}/`;
+              counts.set(et.type, allMd.filter(f => f.path.startsWith(prefix)).length);
+            }
             new LintOptionsModal(this.app, domainEntry, this.settings.lintOptions.useLlm,
-              new Map(), (opts) => void this.controller.lint(domainEntry.id, opts)).open();
+              counts, (opts) => void this.controller.lint(domainEntry.id, opts)).open();
           })();
         },
       });
