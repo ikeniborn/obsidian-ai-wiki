@@ -185,4 +185,4 @@ Reformats a non-wiki markdown page without changing facts. LLM returns `FormatOu
 
 Iterative refinement via `formatRefine`. On claude-agent, vision is enabled. See [[src/phases/format.ts]], [[src/controller.ts#WikiController#format]].
 
-When `vision.enabled` is true and `vision.model` is set, a pre-step analyzes embedded images, PDFs, and Excalidraw files, inserting vision descriptions under each embed before formatting proceeds. See [[src/phases/attachment-analyzer.ts]].
+When `vision.enabled` and `vision.model` are set, a pre-step analyzes embedded images, PDFs, and Excalidraw files. Each attachment emits `tool_use`/`tool_result` events for sidebar progress. Descriptions are inserted into the formatted output only — the source file is never modified. Language is controlled by `vision.language` (`auto`/`ru`/`en`/`es`). Vision events are logged to `_agent.jsonl`. See [[src/phases/attachment-analyzer.ts]].

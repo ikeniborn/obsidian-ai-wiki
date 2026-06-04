@@ -73,7 +73,7 @@ See [[src/page-similarity.ts#PageSimilarityService]], [[src/agent-runner.ts#Agen
 
 Thin adapter over Obsidian's vault API. Used by all phase functions for read, write, list, mkdir, remove, and rmdir. Decouples phases from Obsidian internals and enables testing.
 
-`VaultAdapter` exposes optional `remove?` and `rmdir?` methods. `removeSubfolders(vaultDir)` lists immediate subdirectories of a folder and calls `rmdir` on each, skipping locked entries that throw. Returns early if the directory does not exist.
+`VaultAdapter` exposes optional `remove?`, `rmdir?`, and `resolveLink?` methods. `resolveLink(linkpath, sourcePath)` resolves an Obsidian wiki-link to a vault-relative path via `metadataCache.getFirstLinkpathDest`; required by the vision pre-step to locate embedded attachments by bare filename. `removeSubfolders(vaultDir)` lists immediate subdirectories of a folder and calls `rmdir` on each, skipping locked entries that throw. Returns early if the directory does not exist.
 
 See [[src/vault-tools.ts#VaultTools]].
 
