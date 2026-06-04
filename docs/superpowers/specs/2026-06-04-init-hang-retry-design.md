@@ -1,3 +1,40 @@
+---
+review:
+  spec_hash: "d64bcb8962cd09cd"
+  last_run: "2026-06-04"
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: WARNING
+      section: "## Files changed"
+      section_hash: "0261754a0a829ff3"
+      text: "src/settings.ts and src/i18n.ts missing from files list; new settings fields need UI and i18n strings."
+      verdict: fixed
+      verdict_at: "2026-06-04"
+    - id: F-002
+      phase: coverage
+      severity: WARNING
+      section: "## Files changed"
+      section_hash: "0261754a0a829ff3"
+      text: "Wrong test path: src/tests/agent-runner.test.ts → tests/agent-runner.test.ts"
+      verdict: fixed
+      verdict_at: "2026-06-04"
+    - id: F-003
+      phase: clarity
+      severity: WARNING
+      section: "## Watchdog placement: `AgentRunner.run()`"
+      section_hash: "c631d3416cab3e18"
+      text: "devMode/eval behavior in retry loop unspecified. Added explicit DoD: runs only on final successful attempt."
+      verdict: fixed
+      verdict_at: "2026-06-04"
+chain:
+  intent: "docs/superpowers/intents/2026-06-04-init-hang-retry-intent.md"
+---
 # Design: Init/Ingest/Lint hang detection and auto-retry
 
 **Date:** 2026-06-04
@@ -85,6 +122,8 @@ async *run(req: RunRequest): AsyncGenerator<RunEvent, void, void> {
 
 **Resumability:** ingest/init naturally resume from last position via `analyzed_sources` — no special checkpoint logic needed.
 
+**devMode/eval:** runs only on the final successful attempt (inside the `try` block after the `for await` loop completes). On aborted attempts it is skipped entirely — same as the current behavior when an operation is cancelled.
+
 **`idleTimeoutMs = 0` disables watchdog** (consistent with `timeout = 0` means no-limit pattern in this codebase).
 
 ## Event visibility
@@ -107,7 +146,9 @@ Three unit tests for `AgentRunner` with a controllable fake `runOperation`:
 |------|--------|
 | `src/types.ts` | Add `llmIdleTimeoutSec`, `llmIdleRetries` to interface + defaults |
 | `src/agent-runner.ts` | Wrap `runOperation` in idle watchdog retry loop |
-| `src/tests/agent-runner.test.ts` | Add 3 new tests |
+| `src/settings.ts` | Add UI fields for `llmIdleTimeoutSec` and `llmIdleRetries` |
+| `src/i18n.ts` | Add labels/descriptions for new settings fields |
+| `tests/agent-runner.test.ts` | Add 3 new tests |
 
 ## Constraints honored
 
