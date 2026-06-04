@@ -96,8 +96,10 @@ export default class LlmWikiPlugin extends Plugin {
           void (async () => {
             let domains: DomainEntry[];
             try { domains = await this.controller.loadDomains(); } catch { return; }
-            new LintOptionsModal(this.app, domains, this.settings.lintOptions.useLlm,
-              (d, opts) => void this.controller.lint(d, opts)).open();
+            const domainEntry = domains[0];
+            if (!domainEntry) return;
+            new LintOptionsModal(this.app, domainEntry, this.settings.lintOptions.useLlm,
+              new Map(), (opts) => void this.controller.lint(domainEntry.id, opts)).open();
           })();
         },
       });

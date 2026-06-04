@@ -1,4 +1,4 @@
-import { AbstractInputSuggest, App, Modal, Setting, TFolder } from "obsidian";
+import { AbstractInputSuggest, App, Modal, Setting, TFolder, ToggleComponent } from "obsidian";
 import type { AddDomainInput, DomainEntry, EntityType } from "./domain";
 import { i18n } from "./i18n";
 
@@ -671,24 +671,19 @@ export class ShellConsentModal extends Modal {
 }
 
 export class LintOptionsModal extends Modal {
-  private domain: string;
   private useLlm: boolean;
   private entityTypeFilter: string[];
-  private entitySection: HTMLElement | null = null;
 
   constructor(
     app: App,
-    private domains: DomainEntry[],
+    private domain: DomainEntry,
     private defaultUseLlm: boolean,
-    private onSubmit: (
-      domain: string,
-      opts: { useLlm: boolean; entityTypeFilter: string[] },
-    ) => void,
+    private articleCounts: Map<string, number>,
+    private onSubmit: (opts: { useLlm: boolean; entityTypeFilter: string[] }) => void,
   ) {
     super(app);
-    this.domain = "all";
     this.useLlm = defaultUseLlm;
-    this.entityTypeFilter = [];
+    this.entityTypeFilter = (domain.entity_types ?? []).map(e => e.type);
   }
 
   onOpen(): void {
@@ -696,26 +691,55 @@ export class LintOptionsModal extends Modal {
     const { contentEl } = this;
     contentEl.createEl("h3", { text: T.lint_title });
 
-    new Setting(contentEl)
-      .setName(T.domain_name)
-      .addDropdown(d => {
-        d.addOption("all", T.allWiki);
-        for (const entry of this.domains) d.addOption(entry.id, entry.name || entry.id);
-        d.setValue(this.domain);
-        d.onChange(v => {
-          this.domain = v;
-          if (v === "all") this.entityTypeFilter = [];
-          this.renderEntitySection();
-        });
-      });
-
-    this.entitySection = contentEl.createDiv();
-    this.renderEntitySection();
-
+    // Use LLM toggle — top
     new Setting(contentEl)
       .setName("Use LLM")
       .addToggle(t => t.setValue(this.useLlm).onChange(v => { this.useLlm = v; }));
 
+    // Entity types section
+    const entityTypes = this.domain.entity_types ?? [];
+    if (entityTypes.length) {
+      contentEl.createEl("p", { text: "Entity types:" });
+
+      const btnRow = contentEl.createDiv({ cls: "ai-wiki-lint-btn-row" });
+      const toggles: ToggleComponent[] = [];
+
+      const deselectBtn = btnRow.createEl("button", { text: T.lintDeselectAll });
+      const selectBtn   = btnRow.createEl("button", { text: T.lintSelectAll });
+
+      deselectBtn.addEventListener("click", () => {
+        toggles.forEach(t => t.setValue(false));
+        this.entityTypeFilter = [];
+      });
+      selectBtn.addEventListener("click", () => {
+        toggles.forEach(t => t.setValue(true));
+        this.entityTypeFilter = entityTypes.map(e => e.type);
+      });
+
+      for (const et of entityTypes) {
+        const setting = new Setting(contentEl).setName(et.type);
+        const countVal = this.articleCounts.get(et.type);
+        if (countVal !== undefined) {
+          setting.nameEl.createEl("span", {
+            text: ` (${countVal})`,
+            cls: "ai-wiki-count-muted",
+          });
+        }
+        setting.addToggle(t => {
+          t.setValue(this.entityTypeFilter.includes(et.type));
+          t.onChange(checked => {
+            if (checked) {
+              if (!this.entityTypeFilter.includes(et.type)) this.entityTypeFilter.push(et.type);
+            } else {
+              this.entityTypeFilter = this.entityTypeFilter.filter(x => x !== et.type);
+            }
+          });
+          toggles.push(t);
+        });
+      }
+    }
+
+    // Run button
     new Setting(contentEl)
       .addButton(b =>
         b.setButtonText(`▶ ${T.run}`)
@@ -727,35 +751,10 @@ export class LintOptionsModal extends Modal {
       );
   }
 
-  private renderEntitySection(): void {
-    if (this.entitySection) this.entitySection.empty();
-    if (this.domain === "all") return;
-    const domainEntry = this.domains.find(d => d.id === this.domain);
-    const entityTypes = domainEntry?.entity_types ?? [];
-    if (!entityTypes.length) return;
-    if (!this.entitySection) return;
-    this.entitySection.createEl("p", { text: "Entity types:" });
-    this.entityTypeFilter = entityTypes.map(e => e.type);
-    for (const et of entityTypes) {
-      new Setting(this.entitySection!)
-        .setName(et.type)
-        .addToggle(t => {
-          t.setValue(true);
-          t.onChange(checked => {
-            if (checked) {
-              if (!this.entityTypeFilter.includes(et.type)) this.entityTypeFilter.push(et.type);
-            } else {
-              this.entityTypeFilter = this.entityTypeFilter.filter(x => x !== et.type);
-            }
-          });
-        });
-    }
-  }
-
   private submit(): void {
-    this.onSubmit(this.domain, {
+    this.onSubmit({
       useLlm: this.useLlm,
-      entityTypeFilter: this.domain === "all" ? [] : [...this.entityTypeFilter],
+      entityTypeFilter: [...this.entityTypeFilter],
     });
   }
 

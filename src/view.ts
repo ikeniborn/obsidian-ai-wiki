@@ -345,11 +345,23 @@ export class LlmWikiView extends ItemView {
         ], () => void this.plugin.controller.ingestActive(domainId)).open();
       });
       this.lintBtn.addEventListener("click", () => {
+        const domainEntry = this.domains.find(d => d.id === this.domainSelect!.value);
+        if (!domainEntry) return;
+
+        const counts = new Map<string, number>();
+        const allMd = this.plugin.app.vault.getMarkdownFiles();
+        for (const et of domainEntry.entity_types ?? []) {
+          if (!et.wiki_subfolder) continue;
+          const prefix = `${domainEntry.wiki_folder}/${et.wiki_subfolder}/`;
+          counts.set(et.type, allMd.filter(f => f.path.startsWith(prefix)).length);
+        }
+
         new LintOptionsModal(
           this.plugin.app,
-          this.domains,
+          domainEntry,
           this.plugin.settings.lintOptions.useLlm,
-          (domain, opts) => void this.plugin.controller.lint(domain, opts),
+          counts,
+          (opts) => void this.plugin.controller.lint(domainEntry.id, opts),
         ).open();
       });
     }
