@@ -181,6 +181,16 @@ export async function analyzeExcalidraw(
   ], signal);
 }
 
+export function extractExcalidrawJson(text: string): string | null {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{")) return trimmed;
+  const jsonStart = trimmed.indexOf('{"type":"excalidraw"');
+  if (jsonStart >= 0) return trimmed.slice(jsonStart);
+  const firstCurly = trimmed.indexOf("{");
+  if (firstCurly >= 0) return trimmed.slice(firstCurly);
+  return null;
+}
+
 /** Route a single embed path to the right analyzer. Returns description or null for unknown ext. */
 export async function analyzeSingleAttachment(
   path: string,
@@ -193,10 +203,13 @@ export async function analyzeSingleAttachment(
 ): Promise<string | null> {
   const resolved = vaultTools.resolveLink(path, sourcePath);
   const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
+  const isExcalidraw = ext === "excalidraw" || resolved.endsWith(".excalidraw.md");
 
-  if (ext === "excalidraw") {
+  if (isExcalidraw) {
     const text = await vaultTools.read(resolved);
-    return analyzeExcalidraw(text, llm, model, signal, language);
+    const jsonText = extractExcalidrawJson(text);
+    if (!jsonText) return null;
+    return analyzeExcalidraw(jsonText, llm, model, signal, language);
   }
   if (ext === "pdf") {
     const buf = await vaultTools.readBinary(resolved);
