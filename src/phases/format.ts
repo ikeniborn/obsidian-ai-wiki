@@ -10,6 +10,7 @@ import { GLOBAL_FORMAT_SCHEMA_PATH } from "../wiki-path";
 import { fixWikiLinks } from "../wiki-link-validator";
 import { FormatOutputSchema } from "./zod-schemas";
 import { structuralErrorCounter } from "../structural-error-counter";
+import { extractObsidianEmbedPaths, analyzeAttachments, insertDescriptions } from "./attachment-analyzer";
 
 function parseFormatOutput(text: string): { report: string; formatted: string } | null {
   let raw: unknown;
@@ -59,6 +60,7 @@ export async function* runFormat(
   backend: "claude-agent" | "native-agent" = "native-agent",
   wikiVaultPath?: string,
   wikiLinkValidationRetries: number = 3,
+  visionSettings: { enabled: boolean; model: string } = { enabled: false, model: "" },
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
   const filePath = args[0];
@@ -93,6 +95,28 @@ export async function* runFormat(
     try { await vaultTools.write(formatSchemaPath, formatSchemaDefault); } catch { /* не блокируем */ }
   }
   yield { kind: "tool_result", ok: true, preview: `${original.length} chars` };
+
+  if (visionSettings.enabled && visionSettings.model) {
+    const embedPaths = extractObsidianEmbedPaths(original);
+    if (embedPaths.length > 0) {
+      yield { kind: "assistant_text", delta: `Анализ вложений (${embedPaths.length})...\n` };
+      try {
+        const descriptions = await analyzeAttachments(embedPaths, vaultTools, llm, visionSettings.model, signal);
+        for (const path of embedPaths) {
+          if (!descriptions.has(path)) {
+            yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [path] };
+          }
+        }
+        const enriched = insertDescriptions(original, descriptions);
+        if (enriched !== original) {
+          await vaultTools.write(filePath, enriched);
+          original = enriched;
+        }
+      } catch {
+        // Vision pre-step failure must not block format
+      }
+    }
+  }
 
   const systemContent = render(formatTemplate, {
     format_schema: formatSchema,
