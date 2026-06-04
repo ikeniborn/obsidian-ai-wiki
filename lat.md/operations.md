@@ -143,6 +143,16 @@ Emits `info_text "Checking i/N: ArticleName"` per article. Skipped articles (LLM
 
 `LintOutputSchema.deletes` carries `{ path, redirect_to? }` for duplicate merges. See [[src/phases/lint.ts]], [[llm-pipeline#LLM Progress Events]], [[architecture#PageSimilarityService]].
 
+### Lint Modal UI
+
+`LintOptionsModal` takes the pre-selected domain from the sidebar — the lint button is disabled when no domain is selected, so there is no "all" case.
+
+Constructor: `(app, domain: DomainEntry, defaultUseLlm, articleCounts: Map<string, number>, onSubmit)`. Article counts are computed by the sidebar before opening the modal: for each entity type with a `wiki_subfolder`, count `.md` files under `wiki_folder/wiki_subfolder/`.
+
+Layout (top to bottom): title `h3`, Use LLM toggle, `"Entity types:"` paragraph, **[Убрать все] [Добавить все]** button row, entity type toggles with muted `(N)` count spans, `▶ Run` button. `ToggleComponent[]` refs are stored locally so the select-all/deselect-all buttons can sync both DOM state and `entityTypeFilter` in one click.
+
+Submit passes `{ useLlm, entityTypeFilter: [...] }` — the domain ID is implicit (caller captures `domainEntry.id` in the closure). See [[src/modals.ts#LintOptionsModal]].
+
 ### Cleanup Pass
 
 Before the Glob step, lint runs `cleanupInvalidPages` to remove stale or malformed pages. Files starting with `_` are skipped. A `step` event is emitted when pages are deleted.

@@ -87,6 +87,8 @@ Settings are split into two stores to avoid syncing secrets across devices.
 
 `resolveEffective` merges both stores at runtime: spreads `data.json` settings, overlays only `apiKey` from local nativeAgent and `password` from local proxy. See [[src/effective-settings.ts#resolveEffective]].
 
+`lintOptions.useLlm` is stored in `data.json` and preserved as the default value for the lint modal toggle, but it is no longer exposed in the plugin settings panel — the toggle was removed to keep settings focused on persistent configuration rather than per-run choices. See [[src/settings.ts]].
+
 Migration `migrateToLocalV2` runs on first load after upgrade — reads old `local.json` (which contained full nativeAgent/claudeAgent/proxy fields from v1 migration), moves those fields into `data.json`, and rewrites `local.json` to the lean secret-only shape. New installs skip v2 via `migrated_v2: true` set by `migrateToLocalV1`.
 
 ## Storage Migration
@@ -112,6 +114,14 @@ Key behaviors: duplicate YAML keys are pre-merged by regex before parsing; unpar
 `validateAndRepairSourceFrontmatter` applies `SOURCE_RULES` (wiki_articles, wiki_added, wiki_updated, tags, aliases, external_links, related). `validateAndRepairWikiPageFrontmatter` applies `WIKI_PAGE_RULES` (wiki_sources, wiki_updated, wiki_status, wiki_type, tags, aliases, wiki_outgoing_links, wiki_external_links). Both are called in `[[src/phases/ingest.ts]]` (`runIngest`) before their respective `vaultTools.write` calls; any warnings are emitted as `info_text` events. See [[src/utils/raw-frontmatter.ts#validateAndRepairFrontmatter]], [[src/utils/raw-frontmatter.ts#validateAndRepairSourceFrontmatter]], [[src/utils/raw-frontmatter.ts#validateAndRepairWikiPageFrontmatter]].
 
 Two bucket-enforcing kinds were added — `list-wikilinks-wiki-only` (only `wiki_<domain>_<slug>` stems allowed) and `list-wikilinks-sources-only` (wiki stems rejected). Both inherit the `[[...]]` format check from `list-wikilinks` and additionally call `isWikiStem` from [[src/wiki-stem.ts#isWikiStem]]. `WIKI_PAGE_RULES` uses these kinds for `wiki_outgoing_links` and `wiki_sources` respectively.
+
+## Sidebar View
+
+`AiWikiView` is the Obsidian `ItemView` that owns the plugin's sidebar panel. It holds references to all action buttons and the domain selector `<select>` element.
+
+`updateButtonAvailability()` is called whenever the domain selection or active file changes (domainSelect `change` event, workspace `file-open` event, and end of any operation via `finish()`). It reads `domainSelect.value` and `workspace.getActiveFile()` to set `disabled` on each button: domain-dependent buttons (`askBtn`, `ingestBtn`, `lintBtn`, `reinitBtn`, `addSourceBtn`) require a selected domain; `formatBtn` requires an active non-wiki file; `initBtn` is always enabled.
+
+`eval_result` events are rendered via `MarkdownRenderer.render()` with `**[eval: N/10]**` bold prefix, replacing the former plain-text `.setText()`. A `Component` instance is created and loaded before each render call to support interactive markdown features (link clicks, commands). See [[src/view.ts#LlmWikiView]].
 
 ## Run Events
 

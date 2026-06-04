@@ -1,3 +1,49 @@
+---
+review:
+  spec_hash: 6071a239b0bf92d0
+  last_run: 2026-06-04
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "3d. Article count display"
+      section_hash: b20f8645fb9b682a
+      text: "Два альтернативных способа отображения счётчика (setName vs muted span) без указания приоритета — нет DoD"
+      verdict: fixed
+      verdict_at: 2026-06-04
+    - id: F-002
+      phase: clarity
+      severity: INFO
+      section: "3b. Modal layout (top to bottom)"
+      section_hash: 06b3a428abe57dc3
+      text: "\"Label 'Entity types:'\" — не указан тип DOM-элемента (h4, p, Setting). Нет критерия приёмки"
+      verdict: fixed
+      verdict_at: 2026-06-04
+    - id: F-003
+      phase: clarity
+      severity: INFO
+      section: "4. Controller"
+      section_hash: 38e48b146c29ff35
+      text: "Задача §4 — только «verify/confirm», нет DoD: что именно подтверждает реализацию"
+      verdict: fixed
+      verdict_at: 2026-06-04
+    - id: F-004
+      phase: clarity
+      severity: WARNING
+      section: "Out of scope"
+      section_hash: ada5c83d9f3b44df
+      text: "Секция «Out of scope» содержит i18n — «add to i18n.ts as part of implementation». Противоречие: если добавляется при реализации, это in scope"
+      verdict: fixed
+      verdict_at: 2026-06-04
+chain:
+  intent: null
+---
+
 # Lint Modal UX Redesign
 
 **Date:** 2026-06-04  
@@ -130,7 +176,7 @@ constructor(
 1. `h3` title
 2. **Use LLM toggle** (moved from bottom to top)
 3. Entity types section:
-   - Label "Entity types:"
+   - `createEl("p", { text: "Entity types:" })` plain paragraph label
    - Row: **[Убрать все]** **[Добавить все]** buttons
    - List of entities: `toggle | EntityType.type | (N articles)` — count shown in muted span if `wiki_subfolder` is set
 4. `▶ Run` button
@@ -148,16 +194,24 @@ toggles.forEach(t => t.setValue(true));
 this.entityTypeFilter = entityTypes.map(e => e.type);
 ```
 
+i18n: add `lintDeselectAll` and `lintSelectAll` keys to `i18n.ts`; use them for button labels.
+
 ### 3d. Article count display
+
+Render count as a muted `<span>` appended to the setting name element:
 
 ```ts
 const countVal = this.articleCounts.get(et.type);
-// Add to Setting name or description:
-const label = countVal !== undefined ? `${et.type}  (${countVal})` : et.type;
-setting.setName(label);
+setting.setName(et.type);
+if (countVal !== undefined) {
+  setting.nameEl.createEl("span", {
+    text: ` (${countVal})`,
+    cls: "ai-wiki-count-muted",
+  });
+}
 ```
 
-Alternatively render count as a muted `<span>` appended to the setting name element for better styling control.
+DoD: each entity type row shows `TypeName (N)` in muted style when `wiki_subfolder` is set; shows `TypeName` only when count unavailable.
 
 ### 3e. `submit()` change
 
@@ -175,7 +229,9 @@ private submit(): void {
 
 ## 4. Controller (`src/controller.ts`)
 
-Verify `lint(domainId, opts)` signature — `domainId` is now always a real domain id (never `"all"`). No change expected, just confirm no `"all"` special-case logic needs removal.
+Verify `lint(domainId, opts)` signature — `domainId` is now always a real domain id (never `"all"`).
+
+DoD: grep `src/controller.ts` for `"all"` branch in `lint()` → none found. No code changes required; task is complete when confirmed.
 
 ---
 
@@ -225,5 +281,4 @@ void MarkdownRenderer.render(this.app, text, el, "", comp);
 
 ## Out of scope
 
-- i18n strings for new buttons ("Убрать все" / "Добавить все") — add to `i18n.ts` as part of implementation
 - Styling of article count span — use existing `muted` class or `ai-wiki-*` CSS
