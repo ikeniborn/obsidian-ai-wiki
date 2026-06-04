@@ -1,3 +1,45 @@
+---
+review:
+  spec_hash: f3db47d2d4d7a951
+  last_run: 2026-06-04
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "Files Changed"
+      section_hash: e961edb53c018e59
+      text: >
+        "Settings UI component" — не указан конкретный файл.
+      verdict: fixed
+      verdict_at: 2026-06-04
+    - id: F-002
+      phase: clarity
+      severity: WARNING
+      section: "PDF"
+      section_hash: 2065d03c0df9d96f
+      text: >
+        §PDF "unified summary" противоречил §LLM Vision Call "1-3 sentences".
+      verdict: fixed
+      verdict_at: 2026-06-04
+    - id: F-003
+      phase: clarity
+      severity: INFO
+      section: "Excalidraw (.excalidraw)"
+      section_hash: d4be7c156cbf3991
+      text: >
+        §Excalidraw "render SVG to canvas" без типа canvas. Секция переписана — companion-подход удалён,
+        заменён на @excalidraw/utils.exportToBlob (OffscreenCanvas внутри).
+      verdict: fixed
+      verdict_at: 2026-06-04
+chain:
+  intent: null
+---
+
 # Vision Attachments in Format — Design Spec
 
 **Date:** 2026-06-04  
@@ -97,8 +139,15 @@ if (visionSettings.enabled && visionSettings.model) {
 ### PNG / JPEG / WebP
 
 1. `readBinary(resolvedVaultPath)` → `ArrayBuffer`
-2. Convert to base64: `btoa(String.fromCharCode(...new Uint8Array(buffer)))`
-3. Determine MIME type from extension.
+2. Convert to base64 in 8 KB chunks (spread operator fails on large buffers):
+   ```typescript
+   const bytes = new Uint8Array(buffer);
+   let binary = '';
+   for (let i = 0; i < bytes.length; i += 8192)
+     binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+   const b64 = btoa(binary);
+   ```
+3. Determine MIME type from extension (`image/png`, `image/jpeg`, `image/webp`).
 4. Call vision LLM with single `image_url` content part: `"data:image/png;base64,..."`
 
 ### PDF
@@ -111,11 +160,17 @@ if (visionSettings.enabled && visionSettings.model) {
 
 ### Excalidraw (`.excalidraw`)
 
-1. Look for companion file: `path.replace(/\.excalidraw$/, ".excalidraw.png")`.
-   - If found: treat as PNG (path 1 above).
-2. Fallback: look for `path.replace(/\.excalidraw$/, ".excalidraw.svg")`.
-   - If found: render SVG to canvas → JPEG → LLM call.
-3. If neither companion found: emit warning, skip this embed.
+No companion file expected — the vault contains only the raw `.excalidraw` JSON.
+
+**Dependency:** add `@excalidraw/utils` to `package.json`. It is ~40 KB gzipped, React-free, and works in Electron's browser context via Canvas API.
+
+Steps:
+1. `read(vaultPath)` → string → `JSON.parse()` → `{ elements, appState, files }`.
+2. Call `exportToBlob({ elements, appState, files, mimeType: "image/png", exportPadding: 10 })` from `@excalidraw/utils`.
+3. `blob.arrayBuffer()` → base64 → `image_url: "data:image/png;base64,..."` content part.
+4. One LLM call with the resulting PNG image.
+
+`exportToBlob` internally uses `OffscreenCanvas` (Electron-compatible). No React component required.
 
 ### Unknown extension
 
@@ -138,18 +193,28 @@ Marker `[Vision]` allows idempotent re-runs: `insertDescriptions` skips an embed
 
 ## LLM Vision Call
 
-Single call per attachment (or per PDF as one call with N images).
+One non-streaming call per attachment. Not parallel — sequential to avoid token bursts.
 
-System prompt (short):
+**Single-image call** (PNG, JPEG, Excalidraw):
 ```
-You are a precise image analyst. Describe the visual content concisely in 1-3 sentences.
-Focus on: structure, key elements, relationships, text visible in the image.
-Reply in Russian if the surrounding note is in Russian, otherwise in English.
+System: You are a precise image analyst. Describe the visual content in 1-3 sentences.
+Focus on: structure, key elements, relationships, any text visible in the image.
+Reply in Russian if the note is in Russian, otherwise in English.
+
+User: [image_url content part]
 ```
 
-User message: image content parts only (no extra text).
+**Multi-image call** (PDF — all pages in one request):
+```
+System: You are a precise document analyst. Summarize this multi-page document.
+Cover: main topic, key sections, structure, important data or conclusions.
+Be comprehensive but concise — up to 10 sentences.
+Reply in Russian if the note is in Russian, otherwise in English.
 
-Not streamed — awaited as a single non-streaming call for simplicity.
+User: [image_url part page 1, image_url part page 2, ...]
+```
+
+Response is plain text. Unused streaming path — `stream: false`.
 
 ---
 
@@ -171,7 +236,8 @@ Not streamed — awaited as a single non-streaming call for simplicity.
 | `src/vault-tools.ts` | Add `readBinary()` to interface and impl |
 | `src/phases/format.ts` | Call vision pre-step when enabled |
 | `src/agent-runner.ts` | Pass `visionSettings` to `runFormat` |
-| Settings UI component | Add Vision section |
+| `src/settings.ts` (`LlmWikiSettingTab`) | Add Vision section: toggle + model field |
+| `package.json` | Add `@excalidraw/utils` dependency |
 
 ---
 
