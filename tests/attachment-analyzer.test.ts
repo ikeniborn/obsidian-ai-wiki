@@ -5,6 +5,7 @@ import {
   analyzeImage,
   analyzeAttachments,
   getMimeType,
+  extractExcalidrawJson,
 } from "../src/phases/attachment-analyzer";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
 import type { LlmClient } from "../src/types";
@@ -168,5 +169,32 @@ describe("analyzeAttachments", () => {
     const result = await analyzeAttachments(["a.png", "b.jpg"], vaultTools, llm, "gpt-4o-mini", new AbortController().signal);
     expect(result.get("a.png")).toBe("First.");
     expect(result.get("b.jpg")).toBe("Second.");
+  });
+});
+
+describe("extractExcalidrawJson", () => {
+  it("returns text as-is for pure .excalidraw file (starts with {)", () => {
+    const json = '{"type":"excalidraw","version":2,"elements":[]}';
+    expect(extractExcalidrawJson(json)).toBe(json);
+  });
+
+  it("extracts embedded JSON from .excalidraw.md wrapper", () => {
+    const md = [
+      "---",
+      "excalidraw-plugin: parsed",
+      "tags: [excalidraw]",
+      "---",
+      "",
+      "==⚠  Switch to EXCALIDRAW VIEW ⚠==",
+      "",
+      `{"type":"excalidraw","version":2,"elements":[],"appState":{},"files":{}}`,
+    ].join("\n");
+    const result = extractExcalidrawJson(md);
+    expect(result).toContain('"type":"excalidraw"');
+    expect(result).toContain('"elements"');
+  });
+
+  it("returns null for file with no JSON", () => {
+    expect(extractExcalidrawJson("# Plain markdown\nNo JSON here.")).toBeNull();
   });
 });
