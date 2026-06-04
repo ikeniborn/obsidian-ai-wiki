@@ -785,6 +785,7 @@ export class LlmWikiView extends ItemView {
       const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
       const text = `**[eval: ${ev.score}/10]** ${ev.reasoning}`;
       const comp = new Component();
+      comp.load();
       void MarkdownRenderer.render(this.app, text, el, "", comp);
     }
     this.updateMetrics();
