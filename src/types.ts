@@ -195,6 +195,10 @@ export interface LlmWikiPluginSettings {
   lintOptions: {
     useLlm: boolean;
   };
+  vision: {
+    enabled: boolean;
+    model: string;
+  };
   llmIdleTimeoutSec: number;
   llmIdleRetries: number;
 }
@@ -247,6 +251,10 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   },
   lintOptions: {
     useLlm: true,
+  },
+  vision: {
+    enabled: false,
+    model: "",
   },
   llmIdleTimeoutSec: 300,
   llmIdleRetries: 3,
