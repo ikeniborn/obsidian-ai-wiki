@@ -783,7 +783,9 @@ export class LlmWikiView extends ItemView {
       this.stopWaiting();
     } else if (ev.kind === "eval_result") {
       const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
-      el.setText(`[eval: ${ev.score}/10] ${ev.reasoning}`);
+      const text = `**[eval: ${ev.score}/10]** ${ev.reasoning}`;
+      const comp = new Component();
+      void MarkdownRenderer.render(this.app, text, el, "", comp);
     }
     this.updateMetrics();
   }
