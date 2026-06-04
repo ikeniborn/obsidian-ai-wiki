@@ -10,7 +10,7 @@ import type { LintOutput } from "./zod-schemas";
 import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
 import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, domainIndexPath, WIKI_ROOT } from "../wiki-path";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, filterStaleWikiLinks, validateAndRepairWikiPageFrontmatter } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, filterStaleWikiLinks, validateAndRepairWikiPageFrontmatter, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
 import { checkGraphStructure, pageId, bfsExpand } from "../wiki-graph";
 import { checkWikiLinks, fixWikiLinks } from "../wiki-link-validator";
 import { graphCache } from "../wiki-graph-cache";
@@ -519,6 +519,25 @@ export async function* runLint(
         pages.set(wikiPath, filteredWiki);
         await vaultTools.write(wikiPath, filteredWiki);
       }
+    }
+
+    // Source-file wiki_articles cleanup — only files outside !Wiki/, stems from ALL domains
+    const allWikiStems = new Set(
+      allMdPaths
+        .filter(p => p.startsWith(WIKI_ROOT + "/") && !p.includes("/_config/"))
+        .map(p => p.split("/").pop()!.replace(/\.md$/, ""))
+        .filter(stem => !deletedNames.has(stem))
+    );
+    const sourcePaths = allMdPaths.filter(p => !p.startsWith(WIKI_ROOT + "/"));
+    for (const sourcePath of sourcePaths) {
+      const rawContent = await vaultTools.read(sourcePath).catch(() => null);
+      if (!rawContent) continue;
+      const { content: filteredContent, warnings: stripWarnings } =
+        stripInvalidWikiArticles(rawContent, allWikiStems);
+      if (stripWarnings.length > 0) {
+        yield { kind: "info_text", icon: "⚠️", summary: `wiki_articles repaired: ${sourcePath}`, details: stripWarnings };
+      }
+      if (filteredContent !== rawContent) await vaultTools.write(sourcePath, filteredContent);
     }
 
     // Backlink sync: wiki_articles from wiki_sources
