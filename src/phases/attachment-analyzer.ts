@@ -84,8 +84,16 @@ export async function analyzeImage(
   ], signal);
 }
 
+interface PdfjsPage {
+  getViewport(opts: { scale: number }): { width: number; height: number };
+  render(ctx: { canvasContext: CanvasRenderingContext2D; viewport: unknown }): { promise: Promise<void> };
+}
+interface PdfjsDoc {
+  numPages: number;
+  getPage(n: number): Promise<PdfjsPage>;
+}
 interface PdfjsLib {
-  getDocument(opts: { data: ArrayBuffer }): { promise: Promise<{ numPages: number; getPage(n: number): Promise<{ getViewport(opts: { scale: number }): { width: number; height: number }; render(ctx: { canvasContext: CanvasRenderingContext2D; viewport: unknown }): { promise: Promise<void> } }> }> };
+  getDocument(opts: { data: ArrayBuffer }): { promise: Promise<PdfjsDoc> };
 }
 
 export async function analyzePdf(
