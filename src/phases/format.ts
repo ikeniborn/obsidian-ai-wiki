@@ -10,7 +10,7 @@ import { GLOBAL_FORMAT_SCHEMA_PATH } from "../wiki-path";
 import { fixWikiLinks } from "../wiki-link-validator";
 import { FormatOutputSchema } from "./zod-schemas";
 import { structuralErrorCounter } from "../structural-error-counter";
-import { extractObsidianEmbedPaths, analyzeAttachments, insertDescriptions } from "./attachment-analyzer";
+import { extractObsidianEmbedPaths, analyzeSingleAttachment, insertDescriptions } from "./attachment-analyzer";
 
 function parseFormatOutput(text: string): { report: string; formatted: string } | null {
   let raw: unknown;
@@ -60,7 +60,7 @@ export async function* runFormat(
   backend: "claude-agent" | "native-agent" = "native-agent",
   wikiVaultPath?: string,
   wikiLinkValidationRetries: number = 3,
-  visionSettings: { enabled: boolean; model: string } = { enabled: false, model: "" },
+  visionSettings: { enabled: boolean; model: string; language?: "auto" | "ru" | "en" | "es" } = { enabled: false, model: "" },
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
   const filePath = args[0];
@@ -97,23 +97,30 @@ export async function* runFormat(
   yield { kind: "tool_result", ok: true, preview: `${original.length} chars` };
 
   if (visionSettings.enabled && visionSettings.model) {
-    const embedPaths = extractObsidianEmbedPaths(original);
+    const embedPaths = [...new Set(extractObsidianEmbedPaths(original))];
     if (embedPaths.length > 0) {
-      yield { kind: "assistant_text", delta: `Анализ вложений (${embedPaths.length})...\n` };
-      try {
-        const descriptions = await analyzeAttachments(embedPaths, vaultTools, llm, visionSettings.model, signal, filePath);
-        for (const path of embedPaths) {
-          if (!descriptions.has(path)) {
+      const descriptions = new Map<string, string>();
+      const lang = visionSettings.language ?? "auto";
+      for (const path of embedPaths) {
+        if (signal.aborted) break;
+        const filename = path.split("/").pop() ?? path;
+        yield { kind: "tool_use", name: "Vision", input: { file_path: filename } };
+        try {
+          const description = await analyzeSingleAttachment(path, vaultTools, llm, visionSettings.model, signal, filePath, lang);
+          if (description !== null) {
+            descriptions.set(path, description);
+            yield { kind: "tool_result", ok: true, preview: description };
+          } else {
+            yield { kind: "tool_result", ok: false, preview: "unknown extension" };
             yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [path] };
           }
+        } catch (e) {
+          yield { kind: "tool_result", ok: false, preview: (e as Error)?.message ?? "failed" };
+          yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [path] };
         }
-        const enriched = insertDescriptions(original, descriptions);
-        if (enriched !== original) {
-          await vaultTools.write(filePath, enriched);
-          original = enriched;
-        }
-      } catch {
-        // Vision pre-step failure must not block format
+      }
+      if (descriptions.size > 0) {
+        original = insertDescriptions(original, descriptions);
       }
     }
   }

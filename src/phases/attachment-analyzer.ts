@@ -67,9 +67,24 @@ async function callVisionLlm(
   return (resp as OpenAI.Chat.ChatCompletion).choices[0]?.message?.content ?? "";
 }
 
-const IMAGE_SYSTEM = "You are a precise image analyst. Describe the visual content in 1-3 sentences.\nFocus on: structure, key elements, relationships, any text visible in the image.\nReply in Russian if the note is in Russian, otherwise in English.";
+export type VisionLanguage = "auto" | "ru" | "en" | "es";
 
-const PDF_SYSTEM = "You are a precise document analyst. Summarize this multi-page document.\nCover: main topic, key sections, structure, important data or conclusions.\nBe comprehensive but concise — up to 10 sentences.\nReply in Russian if the note is in Russian, otherwise in English.";
+function langInstruction(language: VisionLanguage): string {
+  switch (language) {
+    case "ru": return "Always reply in Russian.";
+    case "en": return "Always reply in English.";
+    case "es": return "Always reply in Spanish.";
+    default:   return "Reply in Russian if the note is in Russian, otherwise in English.";
+  }
+}
+
+function imageSystem(language: VisionLanguage): string {
+  return `You are a precise image analyst. Describe the visual content in 1-3 sentences.\nFocus on: structure, key elements, relationships, any text visible in the image.\n${langInstruction(language)}`;
+}
+
+function pdfSystem(language: VisionLanguage): string {
+  return `You are a precise document analyst. Summarize this multi-page document.\nCover: main topic, key sections, structure, important data or conclusions.\nBe comprehensive but concise — up to 10 sentences.\n${langInstruction(language)}`;
+}
 
 export async function analyzeImage(
   buffer: ArrayBuffer,
@@ -77,9 +92,10 @@ export async function analyzeImage(
   llm: LlmClient,
   model: string,
   signal: AbortSignal,
+  language: VisionLanguage = "auto",
 ): Promise<string> {
   const b64 = arrayBufferToBase64(buffer);
-  return callVisionLlm(llm, model, IMAGE_SYSTEM, [
+  return callVisionLlm(llm, model, imageSystem(language), [
     { type: "image_url", image_url: { url: `data:${mimeType};base64,${b64}` } },
   ], signal);
 }
@@ -101,6 +117,7 @@ export async function analyzePdf(
   llm: LlmClient,
   model: string,
   signal: AbortSignal,
+  language: VisionLanguage = "auto",
 ): Promise<string> {
   const pdfjs = (globalThis as unknown as { pdfjsLib?: PdfjsLib }).pdfjsLib;
   if (!pdfjs) throw new Error("pdfjsLib unavailable");
@@ -120,7 +137,7 @@ export async function analyzePdf(
     parts.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${b64}` } });
   }
 
-  return callVisionLlm(llm, model, PDF_SYSTEM, parts, signal);
+  return callVisionLlm(llm, model, pdfSystem(language), parts, signal);
 }
 
 export async function analyzeExcalidraw(
@@ -128,6 +145,7 @@ export async function analyzeExcalidraw(
   llm: LlmClient,
   model: string,
   signal: AbortSignal,
+  language: VisionLanguage = "auto",
 ): Promise<string> {
   const { exportToBlob } = await import("@excalidraw/utils");
   const { elements, appState, files } = JSON.parse(text) as {
@@ -144,9 +162,38 @@ export async function analyzeExcalidraw(
   });
   const buf = await blob.arrayBuffer();
   const b64 = arrayBufferToBase64(buf);
-  return callVisionLlm(llm, model, IMAGE_SYSTEM, [
+  return callVisionLlm(llm, model, imageSystem(language), [
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } },
   ], signal);
+}
+
+/** Route a single embed path to the right analyzer. Returns description or null for unknown ext. */
+export async function analyzeSingleAttachment(
+  path: string,
+  vaultTools: VaultTools,
+  llm: LlmClient,
+  model: string,
+  signal: AbortSignal,
+  sourcePath: string = "",
+  language: VisionLanguage = "auto",
+): Promise<string | null> {
+  const resolved = vaultTools.resolveLink(path, sourcePath);
+  const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
+
+  if (ext === "excalidraw") {
+    const text = await vaultTools.read(resolved);
+    return analyzeExcalidraw(text, llm, model, signal, language);
+  }
+  if (ext === "pdf") {
+    const buf = await vaultTools.readBinary(resolved);
+    return analyzePdf(buf, llm, model, signal, language);
+  }
+  const mimeType = getMimeType(resolved);
+  if (mimeType) {
+    const buf = await vaultTools.readBinary(resolved);
+    return analyzeImage(buf, mimeType, llm, model, signal, language);
+  }
+  return null;
 }
 
 export async function analyzeAttachments(
@@ -156,39 +203,17 @@ export async function analyzeAttachments(
   model: string,
   signal: AbortSignal,
   sourcePath: string = "",
+  language: VisionLanguage = "auto",
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
-
   for (const path of [...new Set(embedPaths)]) {
     if (signal.aborted) break;
-    const resolved = vaultTools.resolveLink(path, sourcePath);
-    const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
-
     try {
-      if (ext === "excalidraw") {
-        const text = await vaultTools.read(resolved);
-        result.set(path, await analyzeExcalidraw(text, llm, model, signal));
-        continue;
-      }
-
-      if (ext === "pdf") {
-        const buf = await vaultTools.readBinary(resolved);
-        result.set(path, await analyzePdf(buf, llm, model, signal));
-        continue;
-      }
-
-      const mimeType = getMimeType(resolved);
-      if (mimeType) {
-        const buf = await vaultTools.readBinary(resolved);
-        result.set(path, await analyzeImage(buf, mimeType, llm, model, signal));
-        continue;
-      }
-
-      // Unknown extension — skip; caller (runFormat) emits warning event
+      const description = await analyzeSingleAttachment(path, vaultTools, llm, model, signal, sourcePath, language);
+      if (description !== null) result.set(path, description);
     } catch {
       // Per-attachment failure — skip, don't block format
     }
   }
-
   return result;
 }

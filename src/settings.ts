@@ -672,6 +672,18 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         s.vision.model,
         async (v) => { s.vision.model = v; await this.plugin.saveSettings(); },
       );
+
+      new Setting(containerEl)
+        .setName("Vision response language")
+        .setDesc("Language for image/PDF descriptions inserted into the note.")
+        .addDropdown((d) =>
+          d.addOptions({ auto: "Auto (match note language)", ru: "Russian", en: "English", es: "Spanish" })
+            .setValue(s.vision.language ?? "auto")
+            .onChange(async (v) => {
+              s.vision.language = v as "auto" | "ru" | "en" | "es";
+              await this.plugin.saveSettings();
+            }),
+        );
     }
 
     // ── Graph settings ────────────────────────────────────────────────────────

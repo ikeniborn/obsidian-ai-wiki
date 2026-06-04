@@ -26194,7 +26194,8 @@ var DEFAULT_SETTINGS = {
   },
   vision: {
     enabled: false,
-    model: ""
+    model: "",
+    language: "auto"
   },
   llmIdleTimeoutSec: 300,
   llmIdleRetries: 3
@@ -28138,6 +28139,12 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           s.vision.model = v;
           await this.plugin.saveSettings();
         }
+      );
+      new import_obsidian3.Setting(containerEl).setName("Vision response language").setDesc("Language for image/PDF descriptions inserted into the note.").addDropdown(
+        (d) => d.addOptions({ auto: "Auto (match note language)", ru: "Russian", en: "English", es: "Spanish" }).setValue(s.vision.language ?? "auto").onChange(async (v) => {
+          s.vision.language = v;
+          await this.plugin.saveSettings();
+        })
       );
     }
     new import_obsidian3.Setting(containerEl).setName(T.settings.h3_graph).setHeading();
@@ -39255,15 +39262,36 @@ async function callVisionLlm(llm, model, systemPrompt, contentParts, signal) {
   }, { signal });
   return resp.choices[0]?.message?.content ?? "";
 }
-var IMAGE_SYSTEM = "You are a precise image analyst. Describe the visual content in 1-3 sentences.\nFocus on: structure, key elements, relationships, any text visible in the image.\nReply in Russian if the note is in Russian, otherwise in English.";
-var PDF_SYSTEM = "You are a precise document analyst. Summarize this multi-page document.\nCover: main topic, key sections, structure, important data or conclusions.\nBe comprehensive but concise \u2014 up to 10 sentences.\nReply in Russian if the note is in Russian, otherwise in English.";
-async function analyzeImage(buffer, mimeType, llm, model, signal) {
+function langInstruction(language) {
+  switch (language) {
+    case "ru":
+      return "Always reply in Russian.";
+    case "en":
+      return "Always reply in English.";
+    case "es":
+      return "Always reply in Spanish.";
+    default:
+      return "Reply in Russian if the note is in Russian, otherwise in English.";
+  }
+}
+function imageSystem(language) {
+  return `You are a precise image analyst. Describe the visual content in 1-3 sentences.
+Focus on: structure, key elements, relationships, any text visible in the image.
+${langInstruction(language)}`;
+}
+function pdfSystem(language) {
+  return `You are a precise document analyst. Summarize this multi-page document.
+Cover: main topic, key sections, structure, important data or conclusions.
+Be comprehensive but concise \u2014 up to 10 sentences.
+${langInstruction(language)}`;
+}
+async function analyzeImage(buffer, mimeType, llm, model, signal, language = "auto") {
   const b64 = arrayBufferToBase64(buffer);
-  return callVisionLlm(llm, model, IMAGE_SYSTEM, [
+  return callVisionLlm(llm, model, imageSystem(language), [
     { type: "image_url", image_url: { url: `data:${mimeType};base64,${b64}` } }
   ], signal);
 }
-async function analyzePdf(buffer, llm, model, signal) {
+async function analyzePdf(buffer, llm, model, signal, language = "auto") {
   const pdfjs = globalThis.pdfjsLib;
   if (!pdfjs) throw new Error("pdfjsLib unavailable");
   const doc = await pdfjs.getDocument({ data: buffer }).promise;
@@ -39279,9 +39307,9 @@ async function analyzePdf(buffer, llm, model, signal) {
     const b64 = arrayBufferToBase64(pageBuf);
     parts.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${b64}` } });
   }
-  return callVisionLlm(llm, model, PDF_SYSTEM, parts, signal);
+  return callVisionLlm(llm, model, pdfSystem(language), parts, signal);
 }
-async function analyzeExcalidraw(text, llm, model, signal) {
+async function analyzeExcalidraw(text, llm, model, signal, language = "auto") {
   const { exportToBlob } = await import("@excalidraw/utils");
   const { elements, appState, files } = JSON.parse(text);
   const blob = await exportToBlob({
@@ -39293,37 +39321,27 @@ async function analyzeExcalidraw(text, llm, model, signal) {
   });
   const buf = await blob.arrayBuffer();
   const b64 = arrayBufferToBase64(buf);
-  return callVisionLlm(llm, model, IMAGE_SYSTEM, [
+  return callVisionLlm(llm, model, imageSystem(language), [
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } }
   ], signal);
 }
-async function analyzeAttachments(embedPaths, vaultTools, llm, model, signal, sourcePath = "") {
-  const result = /* @__PURE__ */ new Map();
-  for (const path2 of [...new Set(embedPaths)]) {
-    if (signal.aborted) break;
-    const resolved = vaultTools.resolveLink(path2, sourcePath);
-    const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
-    try {
-      if (ext === "excalidraw") {
-        const text = await vaultTools.read(resolved);
-        result.set(path2, await analyzeExcalidraw(text, llm, model, signal));
-        continue;
-      }
-      if (ext === "pdf") {
-        const buf = await vaultTools.readBinary(resolved);
-        result.set(path2, await analyzePdf(buf, llm, model, signal));
-        continue;
-      }
-      const mimeType = getMimeType(resolved);
-      if (mimeType) {
-        const buf = await vaultTools.readBinary(resolved);
-        result.set(path2, await analyzeImage(buf, mimeType, llm, model, signal));
-        continue;
-      }
-    } catch {
-    }
+async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, sourcePath = "", language = "auto") {
+  const resolved = vaultTools.resolveLink(path2, sourcePath);
+  const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "excalidraw") {
+    const text = await vaultTools.read(resolved);
+    return analyzeExcalidraw(text, llm, model, signal, language);
   }
-  return result;
+  if (ext === "pdf") {
+    const buf = await vaultTools.readBinary(resolved);
+    return analyzePdf(buf, llm, model, signal, language);
+  }
+  const mimeType = getMimeType(resolved);
+  if (mimeType) {
+    const buf = await vaultTools.readBinary(resolved);
+    return analyzeImage(buf, mimeType, llm, model, signal, language);
+  }
+  return null;
 }
 
 // src/phases/format.ts
@@ -39389,23 +39407,30 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
   }
   yield { kind: "tool_result", ok: true, preview: `${original.length} chars` };
   if (visionSettings.enabled && visionSettings.model) {
-    const embedPaths = extractObsidianEmbedPaths(original);
+    const embedPaths = [...new Set(extractObsidianEmbedPaths(original))];
     if (embedPaths.length > 0) {
-      yield { kind: "assistant_text", delta: `\u0410\u043D\u0430\u043B\u0438\u0437 \u0432\u043B\u043E\u0436\u0435\u043D\u0438\u0439 (${embedPaths.length})...
-` };
-      try {
-        const descriptions = await analyzeAttachments(embedPaths, vaultTools, llm, visionSettings.model, signal, filePath);
-        for (const path2 of embedPaths) {
-          if (!descriptions.has(path2)) {
+      const descriptions = /* @__PURE__ */ new Map();
+      const lang = visionSettings.language ?? "auto";
+      for (const path2 of embedPaths) {
+        if (signal.aborted) break;
+        const filename = path2.split("/").pop() ?? path2;
+        yield { kind: "tool_use", name: "Vision", input: { file_path: filename } };
+        try {
+          const description = await analyzeSingleAttachment(path2, vaultTools, llm, visionSettings.model, signal, filePath, lang);
+          if (description !== null) {
+            descriptions.set(path2, description);
+            yield { kind: "tool_result", ok: true, preview: description };
+          } else {
+            yield { kind: "tool_result", ok: false, preview: "unknown extension" };
             yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [path2] };
           }
+        } catch (e) {
+          yield { kind: "tool_result", ok: false, preview: e?.message ?? "failed" };
+          yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [path2] };
         }
-        const enriched = insertDescriptions(original, descriptions);
-        if (enriched !== original) {
-          await vaultTools.write(filePath, enriched);
-          original = enriched;
-        }
-      } catch {
+      }
+      if (descriptions.size > 0) {
+        original = insertDescriptions(original, descriptions);
       }
     }
   }
@@ -40019,7 +40044,7 @@ var AgentRunner = class {
         const hasVision = this.settings.backend === "claude-agent";
         const formatDomain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
         const wikiVaultPath = formatDomain ? domainWikiFolder(formatDomain.wiki_folder) : void 0;
-        const visionSettings = this.settings.vision ?? { enabled: false, model: "" };
+        const visionSettings = this.settings.vision ?? { enabled: false, model: "", language: "auto" };
         yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings);
         break;
       }

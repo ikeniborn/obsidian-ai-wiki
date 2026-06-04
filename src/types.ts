@@ -198,6 +198,7 @@ export interface LlmWikiPluginSettings {
   vision: {
     enabled: boolean;
     model: string;
+    language: "auto" | "ru" | "en" | "es";
   };
   llmIdleTimeoutSec: number;
   llmIdleRetries: number;
@@ -255,6 +256,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   vision: {
     enabled: false,
     model: "",
+    language: "auto",
   },
   llmIdleTimeoutSec: 300,
   llmIdleRetries: 3,
