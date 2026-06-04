@@ -195,6 +195,8 @@ export interface LlmWikiPluginSettings {
   lintOptions: {
     useLlm: boolean;
   };
+  llmIdleTimeoutSec: number;
+  llmIdleRetries: number;
 }
 
 export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
@@ -246,4 +248,6 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   lintOptions: {
     useLlm: true,
   },
+  llmIdleTimeoutSec: 300,
+  llmIdleRetries: 3,
 };
