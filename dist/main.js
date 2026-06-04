@@ -27707,12 +27707,6 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
     const eff = resolveEffective(s, this.localCache);
     const T = i18n();
     const busy = this.plugin.controller.running;
-    if (busy) {
-      containerEl.createEl("div", {
-        text: T.settings.busyBanner,
-        cls: "setting-item-description ai-wiki-settings-busy-banner"
-      });
-    }
     new import_obsidian3.Setting(containerEl).setName(T.settings.h3_general).setHeading();
     new import_obsidian3.Setting(containerEl).setName(T.settings.systemPrompt_name).setDesc(T.settings.systemPrompt_desc).addTextArea((t) => {
       t.inputEl.addClass("ai-wiki-settings-textarea");
@@ -27764,6 +27758,11 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       })
     );
     new import_obsidian3.Setting(containerEl).setName(T.settings.domains_heading).setHeading();
+    if (busy) {
+      containerEl.createEl("div", {
+        cls: "ai-wiki-settings-busy-banner"
+      }).createEl("span", { text: `\u26A0 ${T.settings.busyBanner}` });
+    }
     const domains = this.cachedDomains;
     if (domains.length === 0) {
       containerEl.createEl("p", {

@@ -138,12 +138,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     const T = i18n();
 
     const busy = this.plugin.controller.running;
-    if (busy) {
-      containerEl.createEl("div", {
-        text: T.settings.busyBanner,
-        cls: "setting-item-description ai-wiki-settings-busy-banner",
-      });
-    }
 
     // ── General settings ───────────────────────────────────────────────────
     new Setting(containerEl).setName(T.settings.h3_general).setHeading();
@@ -223,6 +217,12 @@ export class LlmWikiSettingTab extends PluginSettingTab {
 
     // ── Domains ───────────────────────────────────────────────────────────────
     new Setting(containerEl).setName(T.settings.domains_heading).setHeading();
+
+    if (busy) {
+      containerEl.createEl("div", {
+        cls: "ai-wiki-settings-busy-banner",
+      }).createEl("span", { text: `⚠ ${T.settings.busyBanner}` });
+    }
 
     const domains = this.cachedDomains;
     if (domains.length === 0) {
