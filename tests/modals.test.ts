@@ -153,77 +153,53 @@ describe("EditDomainModal", () => {
 });
 
 describe("LintOptionsModal", () => {
-  const domains: DomainEntry[] = [
-    {
-      id: "pharma",
-      name: "Pharma",
-      wiki_folder: "wiki",
-      source_paths: [],
-      entity_types: [
-        { type: "Drug", description: "A drug", extraction_cues: [], min_mentions_for_page: 1, wiki_subfolder: "drugs" },
-        { type: "Condition", description: "A condition", extraction_cues: [], min_mentions_for_page: 1, wiki_subfolder: "conditions" },
-      ],
-    },
-  ];
+  const pharma: DomainEntry = {
+    id: "pharma",
+    name: "Pharma",
+    wiki_folder: "wiki",
+    source_paths: [],
+    entity_types: [
+      { type: "Drug", description: "A drug", extraction_cues: [], min_mentions_for_page: 1, wiki_subfolder: "drugs" },
+      { type: "Condition", description: "A condition", extraction_cues: [], min_mentions_for_page: 1, wiki_subfolder: "conditions" },
+    ],
+  };
+  const counts = new Map([["Drug", 5], ["Condition", 3]]);
 
-  it("initialises domain to 'all'", () => {
-    const m = new LintOptionsModal({} as any, domains, true, vi.fn());
-    expect((m as any).domain).toBe("all");
-  });
+  function makeModal(defaultUseLlm = true, onSubmit = vi.fn()) {
+    return new LintOptionsModal({} as any, pharma, defaultUseLlm, counts, onSubmit);
+  }
 
   it("initialises useLlm from defaultUseLlm=false", () => {
-    const m = new LintOptionsModal({} as any, domains, false, vi.fn());
+    const m = makeModal(false);
     expect((m as any).useLlm).toBe(false);
   });
 
   it("initialises useLlm from defaultUseLlm=true", () => {
-    const m = new LintOptionsModal({} as any, domains, true, vi.fn());
+    const m = makeModal(true);
     expect((m as any).useLlm).toBe(true);
   });
 
-  it("submit calls onSubmit with domain='all' and entityTypeFilter=[]", () => {
-    const onSubmit = vi.fn();
-    const m = new LintOptionsModal({} as any, domains, true, onSubmit);
-    (m as any).domain = "all";
-    (m as any).entityTypeFilter = [];
-    (m as any).submit();
-    expect(onSubmit).toHaveBeenCalledWith("all", { useLlm: true, entityTypeFilter: [] });
-  });
-
-  it("submit forces entityTypeFilter=[] when domain is 'all'", () => {
-    const onSubmit = vi.fn();
-    const m = new LintOptionsModal({} as any, domains, true, onSubmit);
-    (m as any).domain = "all";
-    (m as any).entityTypeFilter = ["Drug"];
-    (m as any).submit();
-    expect(onSubmit).toHaveBeenCalledWith("all", { useLlm: true, entityTypeFilter: [] });
-  });
-
-  it("submit passes entityTypeFilter when domain is not 'all'", () => {
-    const onSubmit = vi.fn();
-    const m = new LintOptionsModal({} as any, domains, true, onSubmit);
-    (m as any).domain = "pharma";
-    (m as any).entityTypeFilter = ["Drug"];
-    (m as any).useLlm = false;
-    (m as any).submit();
-    expect(onSubmit).toHaveBeenCalledWith("pharma", { useLlm: false, entityTypeFilter: ["Drug"] });
-  });
-
-  it("renderEntitySection populates entityTypeFilter with all domain entity types", () => {
-    const m = new LintOptionsModal({} as any, domains, true, vi.fn());
-    (m as any).domain = "pharma";
-    (m as any).entitySection = { empty: vi.fn(), createEl: vi.fn() };
-    (m as any).renderEntitySection();
+  it("initialises entityTypeFilter with all entity types from domain", () => {
+    const m = makeModal();
     expect((m as any).entityTypeFilter).toEqual(["Drug", "Condition"]);
   });
 
-  it("renderEntitySection empties entitySection and returns early when domain is 'all'", () => {
-    const m = new LintOptionsModal({} as any, domains, true, vi.fn());
-    const mockSection = { empty: vi.fn(), createEl: vi.fn() };
-    (m as any).domain = "all";
-    (m as any).entitySection = mockSection;
-    (m as any).renderEntitySection();
-    expect(mockSection.empty).toHaveBeenCalled();
-    expect((m as any).entityTypeFilter).toEqual([]);
+  it("submit calls onSubmit with useLlm and entityTypeFilter", () => {
+    const onSubmit = vi.fn();
+    const m = makeModal(true, onSubmit);
+    (m as any).entityTypeFilter = ["Drug"];
+    (m as any).useLlm = false;
+    (m as any).submit();
+    expect(onSubmit).toHaveBeenCalledWith({ useLlm: false, entityTypeFilter: ["Drug"] });
+  });
+
+  it("submit passes a copy of entityTypeFilter", () => {
+    const onSubmit = vi.fn();
+    const m = makeModal(true, onSubmit);
+    (m as any).entityTypeFilter = ["Drug", "Condition"];
+    (m as any).submit();
+    const arg = onSubmit.mock.calls[0][0];
+    expect(arg.entityTypeFilter).toEqual(["Drug", "Condition"]);
+    expect(arg.entityTypeFilter).not.toBe((m as any).entityTypeFilter);
   });
 });

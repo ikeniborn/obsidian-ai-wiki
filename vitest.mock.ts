@@ -119,6 +119,7 @@ export class Modal {
 export class ItemView {
   app: any;
   constructor(leaf?: any) { this.app = leaf?.app; }
+  registerEvent(_ref: any): void {}
 }
 
 export const moment = { locale: () => "en" };

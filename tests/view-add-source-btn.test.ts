@@ -10,7 +10,7 @@ function makeView() {
       currentOp: null,
     },
     settings: { history: [], historyLimit: 20 },
-    app: {},
+    app: { workspace: { getActiveFile: vi.fn().mockReturnValue(null) } },
   } as unknown as LlmWikiPlugin;
   const leaf = { view: null } as any;
   const v = new LlmWikiView(leaf, plugin);

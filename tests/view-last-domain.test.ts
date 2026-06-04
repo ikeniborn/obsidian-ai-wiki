@@ -17,7 +17,7 @@ function makePlugin(lastDomain?: string) {
       save: vi.fn().mockResolvedValue(undefined),
     },
     settings: { history: [], historyLimit: 20 },
-    app: {},
+    app: { workspace: { on: vi.fn().mockReturnValue({}), getActiveFile: vi.fn().mockReturnValue(null) } },
   } as unknown as LlmWikiPlugin;
 }
 
