@@ -179,6 +179,40 @@ Verify `lint(domainId, opts)` signature — `domainId` is now always a real doma
 
 ---
 
+## 5. Query result — selectable text and MarkdownRenderer (`src/view.ts`, `src/styles.css`)
+
+### 5a. Text selection (`src/styles.css`)
+
+Obsidian applies `user-select: none` to the entire sidebar panel. Query results rendered in `.ai-wiki-final` are unselectable as a result.
+
+Fix: add `user-select: text` to all text output containers:
+
+```css
+.ai-wiki-final,
+.ai-wiki-chat-msg,
+.ai-wiki-eval-result {
+  user-select: text;
+}
+```
+
+### 5b. MarkdownRenderer for `eval_result` (`src/view.ts`)
+
+Currently `eval_result` uses `.setText()` — plain text, no markdown. Switch to `MarkdownRenderer.render()`:
+
+```ts
+// BEFORE:
+const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
+el.setText(`[eval: ${ev.score}/10] ${ev.reasoning}`);
+
+// AFTER:
+const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
+const text = `**[eval: ${ev.score}/10]** ${ev.reasoning}`;
+const comp = new Component();
+void MarkdownRenderer.render(this.app, text, el, "", comp);
+```
+
+---
+
 ## Files changed
 
 | File | Change |
@@ -186,6 +220,8 @@ Verify `lint(domainId, opts)` signature — `domainId` is now always a real doma
 | `src/settings.ts` | Remove Lint UI section (~14 lines) |
 | `src/view.ts` | Add `updateButtonAvailability()`, update lint button handler, register `file-open` listener |
 | `src/modals.ts` | Refactor `LintOptionsModal`: new constructor, reorder UI, add select-all/deselect-all, article counts |
+| `src/view.ts` (eval_result) | Switch `eval_result` rendering from `.setText()` to `MarkdownRenderer.render()` |
+| `src/styles.css` | Add `user-select: text` to `.ai-wiki-final`, `.ai-wiki-chat-msg`, `.ai-wiki-eval-result` |
 
 ## Out of scope
 
