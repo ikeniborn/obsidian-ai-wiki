@@ -525,6 +525,10 @@ export async function* runLint(
       [
         ...[...pages.keys()].map(p => p.split("/").pop()!.replace(/\.md$/, "")),
         ...writtenPaths.map(p => p.split("/").pop()!.replace(/\.md$/, "")),
+        // Include pages from other domains so cross-domain wiki_articles links are not removed
+        ...allMdPaths
+          .filter(p => p.startsWith("!Wiki/") && !p.includes("/_config/"))
+          .map(p => p.split("/").pop()!.replace(/\.md$/, "")),
       ].filter(stem => !deletedNames.has(stem))
     );
 
