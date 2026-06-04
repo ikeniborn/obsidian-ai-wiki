@@ -247,6 +247,7 @@ export class LlmWikiView extends ItemView {
     refreshBtn.addEventListener("click", () => void this.refreshDomains());
     this.domainSelect.addEventListener("change", () => {
       void this.plugin.localConfigStore.save({ lastDomain: this.domainSelect!.value });
+      this.updateButtonAvailability();
     });
 
     if (opts.withActions) {
@@ -353,7 +354,23 @@ export class LlmWikiView extends ItemView {
       });
     }
 
+    this.registerEvent(
+      this.plugin.app.workspace.on("file-open", () => this.updateButtonAvailability()),
+    );
     void this.refreshDomains();
+  }
+
+  private updateButtonAvailability(): void {
+    const hasDomain = !!(this.domainSelect?.value);
+    const activeFile = this.plugin.app.workspace.getActiveFile();
+    const canFormat = !!activeFile && !activeFile.path.startsWith("!Wiki/");
+
+    if (this.askBtn)       this.askBtn.disabled       = !hasDomain;
+    if (this.ingestBtn)    this.ingestBtn.disabled    = !hasDomain;
+    if (this.lintBtn)      this.lintBtn.disabled      = !hasDomain;
+    if (this.formatBtn)    this.formatBtn.disabled    = !canFormat;
+    if (this.reinitBtn)    this.reinitBtn.disabled    = !hasDomain;
+    if (this.addSourceBtn) this.addSourceBtn.disabled = !hasDomain;
   }
 
   private async refreshDomains(): Promise<void> {
@@ -831,13 +848,8 @@ export class LlmWikiView extends ItemView {
     this.state = entry.status;
     this.statusEl.setText(this.statusLabel(entry));
     this.cancelBtn.disabled = true;
-    this.askBtn.disabled = false;
     if (this.initBtn) this.initBtn.disabled = false;
-    if (this.ingestBtn) this.ingestBtn.disabled = false;
-    if (this.lintBtn) this.lintBtn.disabled = false;
-    if (this.formatBtn) this.formatBtn.disabled = false;
-    if (this.reinitBtn) this.reinitBtn.disabled = !(this.domainSelect && this.domainSelect.value);
-    if (this.addSourceBtn) this.addSourceBtn.disabled = !(this.domainSelect && this.domainSelect.value);
+    this.updateButtonAvailability();
     if (this.tickHandle !== null) { window.clearTimeout(this.tickHandle); this.tickHandle = null; }
     this.updateMetrics();
     this.liveStatusSection?.addClass("ai-wiki-hidden");
