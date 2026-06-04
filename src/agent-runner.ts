@@ -146,32 +146,65 @@ export class AgentRunner {
 
     const similarity = this.buildSimilarity();
     const startMs = Date.now();
-    let finalResultText = "";
 
-    for await (const ev of this.runOperation(req, model, opts, vaultRoot, domains, similarity)) {
-      if (ev.kind === "result") finalResultText = ev.text;
-      yield ev;
-    }
+    const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1000;
+    const maxRetries = this.settings.llmIdleRetries ?? 3;
+    let attempt = 0;
 
-    if (this.settings.devMode?.enabled && finalResultText) {
-      const taskInput = req.args.join(" ") || req.operation;
-      await this.writeDevLog(vaultRoot, {
-        operation: req.operation,
-        model,
-        systemPrompt: opts.systemPrompt ?? "",
-        userMessage: taskInput,
-        result: finalResultText,
-        durationMs: Date.now() - startMs,
-      });
+    while (true) {
+      const idleCtrl = new AbortController();
+      const combined = idleTimeoutMs > 0
+        ? AbortSignal.any([req.signal, idleCtrl.signal])
+        : req.signal;
+      let idleTimer: ReturnType<typeof setTimeout> | null =
+        idleTimeoutMs > 0 ? setTimeout(() => idleCtrl.abort(), idleTimeoutMs) : null;
 
-      if (this.settings.devMode.evaluatorModel) {
-        const evalModel = this.settings.devMode.evaluatorModel;
-        for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal)) {
+      const resetTimer = () => {
+        if (!idleTimer) return;
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => idleCtrl.abort(), idleTimeoutMs);
+      };
+
+      let finalResultText = "";
+      try {
+        for await (const ev of this.runOperation({ ...req, signal: combined }, model, opts, vaultRoot, domains, similarity)) {
+          if (ev.kind === "llm_call_stats" || ev.kind === "assistant_text") resetTimer();
+          if (ev.kind === "result") finalResultText = ev.text;
           yield ev;
-          if (ev.kind === "eval_result") {
-            await this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);
+        }
+        if (idleTimer) clearTimeout(idleTimer);
+        // devMode/eval runs only on final successful attempt
+        if (this.settings.devMode?.enabled && finalResultText) {
+          const taskInput = req.args.join(" ") || req.operation;
+          await this.writeDevLog(vaultRoot, {
+            operation: req.operation,
+            model,
+            systemPrompt: opts.systemPrompt ?? "",
+            userMessage: taskInput,
+            result: finalResultText,
+            durationMs: Date.now() - startMs,
+          });
+          if (this.settings.devMode.evaluatorModel) {
+            const evalModel = this.settings.devMode.evaluatorModel;
+            for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal)) {
+              yield ev;
+              if (ev.kind === "eval_result") {
+                await this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);
+              }
+            }
           }
         }
+        return;
+      } catch (err) {
+        if (idleTimer) clearTimeout(idleTimer);
+        const isIdleAbort = !req.signal.aborted && (err as Error).name === "AbortError";
+        if (isIdleAbort && attempt < maxRetries) {
+          attempt++;
+          const sec = Math.round(idleTimeoutMs / 1000);
+          yield { kind: "system", message: `LLM idle ${sec}s — retrying (${attempt}/${maxRetries})` };
+          continue;
+        }
+        throw err;
       }
     }
   }
