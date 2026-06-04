@@ -18,7 +18,7 @@ Persists domain mutations from events via `DomainStore`. See [[src/controller.ts
 
 Stateless execution engine. Receives a `RunRequest`, selects LLM call options per operation, and delegates to the correct phase function. Wraps the LLM client in `wrapWithJsonFallback` at construction time.
 
-Optionally runs the evaluator in `devMode`. See [[src/agent-runner.ts#AgentRunner]].
+Optionally runs the evaluator in `devMode`. The `run()` method wraps each attempt in a per-attempt `AbortController`; if the LLM goes silent for `llmIdleTimeoutSec` seconds, it retries up to `llmIdleRetries` times before propagating the error. See [[src/agent-runner.ts#AgentRunner]].
 
 ## Phase Functions
 
