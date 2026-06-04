@@ -1,32 +1,44 @@
 import type OpenAI from "openai";
 import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured, wrapStreamWithStats, buildLlmCallStatsEvent } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, extractUsage, wrapStreamWithStats, buildLlmCallStatsEvent } from "./llm-utils";
 import formatTemplate from "../../prompts/format.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
-import { missingTokensWithContext, looksTruncated, appendMissingLines, restoreObsidianEmbeds, missingObsidianEmbeds } from "./format-utils";
+import { missingTokensWithContext, appendMissingLines, restoreObsidianEmbeds, missingObsidianEmbeds, parseSentinelOutput } from "./format-utils";
 import { GLOBAL_FORMAT_SCHEMA_PATH } from "../wiki-path";
 import { fixWikiLinks } from "../wiki-link-validator";
-import { FormatOutputSchema } from "./zod-schemas";
+import { FormatBaseSchema, FormatWithVisionSchema } from "./zod-schemas";
 import { structuralErrorCounter } from "../structural-error-counter";
 import { extractObsidianEmbedPaths, analyzeSingleAttachment } from "./attachment-analyzer";
 
-function parseFormatOutput(text: string): { report: string; formatted: string } | null {
-  let raw: unknown;
-  try {
-    raw = parseStructured(text);
-  } catch {
+function parseFormatOutput(
+  text: string,
+  hasVisionDescriptions: boolean,
+): { data: import("./zod-schemas").FormatOutput | null; hint: string; truncated: boolean } {
+  const sentinel = parseSentinelOutput(text, hasVisionDescriptions);
+  if (!sentinel) {
     structuralErrorCounter.record(false, 0);
-    return null;
+    return { data: null, hint: "sentinel markers not found", truncated: false };
   }
-  const result = FormatOutputSchema.safeParse(raw);
+  const raw = hasVisionDescriptions
+    ? {
+        report: sentinel.report,
+        formatted: sentinel.formatted,
+        vision_blocks_count: sentinel.visionCount ?? 0,
+        embeds_preserved: sentinel.embeds ?? [],
+      }
+    : { report: sentinel.report, formatted: sentinel.formatted };
+
+  const schema = hasVisionDescriptions ? FormatWithVisionSchema : FormatBaseSchema;
+  const result = schema.safeParse(raw);
   if (result.success) {
     structuralErrorCounter.record(true, 0);
-    return result.data;
+    return { data: result.data as import("./zod-schemas").FormatOutput, hint: "", truncated: sentinel.truncated };
   }
   structuralErrorCounter.record(false, 0);
-  return null;
+  const hint = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+  return { data: null, hint, truncated: sentinel.truncated };
 }
 
 function extractImagePaths(md: string): string[] {
@@ -122,9 +134,22 @@ export async function* runFormat(
     }
   }
 
+  const visionDescBlock = visionDescriptions.size > 0
+    ? [
+        "При наличии описаний вложений добавь после <<<FORMATTED>>> дополнительные маркеры:",
+        "<<<VISION_COUNT>>>",
+        "<количество описаний, целое число>",
+        "<<<EMBEDS>>>",
+        "<пути через |: img/a.png|img/b.png>",
+        "Эти маркеры ставь ПОСЛЕ formatted и ДО <<<END>>>.",
+      ].join("\n")
+    : "";
+
   const systemContent = render(formatTemplate, {
     format_schema: formatSchema,
     has_vision: String(hasVision),
+    has_vision_descriptions: String(visionDescriptions.size > 0),
+    has_vision_descriptions_block: visionDescBlock,
   });
 
   let visionBlock = "";
@@ -159,7 +184,7 @@ export async function* runFormat(
 
   yield { kind: "assistant_text", delta: `Анализ файла ${filePath}...\n` };
 
-  const baseParams = { ...buildChatParams(model, messages, opts, true), response_format: { type: "json_object" } };
+  const baseParams = buildChatParams(model, messages, opts, true);
 
   let lastFinishReason: string | null = null;
   let outputTokens = 0;
@@ -201,33 +226,54 @@ export async function* runFormat(
   let fullText = yield* callOnce(baseParams);
   if (signal.aborted) return;
 
-  let parsed = parseFormatOutput(fullText);
-  const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
+  let parsedResult = parseFormatOutput(fullText, visionDescriptions.size > 0);
+  let parsed = parsedResult.data;
+
+  if (parsedResult.truncated) {
+    yield {
+      kind: "info_text", icon: "⚠️",
+      summary: "Format: ответ обрезан — salvage",
+      details: ["Маркер <<<END>>> отсутствует; использован частичный вывод."],
+    };
+  }
+
+  const truncated = !parsed && lastFinishReason === "length";
   if (!parsed && truncated) {
     yield { kind: "tool_result", ok: false, preview: "response truncated" };
     yield { kind: "error", message: `Format: ответ обрезан по лимиту вывода модели — сократите страницу или ${truncationHint(backend)}` };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
     return;
   }
+
   if (!parsed) {
-    yield { kind: "tool_result", ok: false, preview: "invalid JSON — retrying" };
-    yield { kind: "assistant_text", delta: "\n[JSON невалиден — повторяю запрос]\n" };
+    yield { kind: "tool_result", ok: false, preview: "invalid sentinel — retrying" };
+    yield { kind: "assistant_text", delta: "\n[Sentinel невалиден — повторяю запрос]\n" };
+    const zodHint = parsedResult.hint;
+    const retrySystemContent = systemContent + `\n\nПредыдущая попытка не прошла: ${zodHint}. Исправь и верни заново используя маркеры <<<REPORT>>>...<<<END>>>.`;
     const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      { role: "system", content: systemContent + "\n\nКРИТИЧЕСКИ ВАЖНО: верни ТОЛЬКО JSON-объект {\"report\": \"...\", \"formatted\": \"...\"} без markdown-обёртки, без ```json fence, без пояснений. Все спецсимволы внутри строк должны быть экранированы (\\n, \\\", \\\\)." },
+      { role: "system", content: retrySystemContent },
       { role: "user", content: userContent } as OpenAI.Chat.ChatCompletionMessageParam,
-      ...chatHistory.map((m) => ({ role: m.role, content: m.content } as OpenAI.Chat.ChatCompletionMessageParam)),
     ];
-    const retryParams = { ...buildChatParams(model, retryMessages, opts, true), response_format: { type: "json_object" } };
+    const retryParams = buildChatParams(model, retryMessages, opts, true);
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     fullText = yield* callOnce(retryParams);
     if (signal.aborted) return;
-    parsed = parseFormatOutput(fullText);
+    parsedResult = parseFormatOutput(fullText, visionDescriptions.size > 0);
+    parsed = parsedResult.data;
+    if (parsedResult.truncated) {
+      yield {
+        kind: "info_text", icon: "⚠️",
+        summary: "Format: retry ответ обрезан — salvage",
+        details: ["Маркер <<<END>>> отсутствует; использован частичный вывод."],
+      };
+    }
   }
+
   if (!parsed) {
-    const retryTruncated = lastFinishReason === "length" || looksTruncated(fullText);
+    const retryTruncated = lastFinishReason === "length";
     const msg = retryTruncated
       ? `Format: ответ обрезан по лимиту вывода модели (после retry) — сократите страницу или ${truncationHint(backend)}`
-      : "Format: LLM вернул невалидный JSON (после retry)";
+      : "Format: LLM вернул невалидный sentinel (после retry)";
     yield { kind: "tool_result", ok: false, preview: msg };
     yield { kind: "error", message: msg };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
@@ -252,14 +298,15 @@ export async function* runFormat(
       { role: "assistant", content: fullText },
       {
         role: "user",
-        content: `ВОССТАНОВИ ТОКЕНЫ: следующие значения из оригинала отсутствуют в форматированном тексте. Верни полный JSON {report, formatted} где formatted содержит все перечисленные токены без изменения форматирования остального текста.\nПропущенные: ${tokenList}`,
+        content: `ВОССТАНОВИ ТОКЕНЫ: следующие значения из оригинала отсутствуют в форматированном тексте. Верни полный ответ используя маркеры <<<REPORT>>>...<<<END>>> где formatted содержит все перечисленные токены.\nПропущенные: ${tokenList}`,
       },
     ];
-    const restoreParams = { ...buildChatParams(model, restoreMessages, opts, true), response_format: { type: "json_object" } };
+    const restoreParams = buildChatParams(model, restoreMessages, opts, true);
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     const fullText2 = yield* callOnce(restoreParams);
     if (!signal.aborted) {
-      const parsed2 = parseFormatOutput(fullText2);
+      const parsed2Result = parseFormatOutput(fullText2, visionDescriptions.size > 0);
+      const parsed2 = parsed2Result.data;
       if (parsed2) {
         finalFormatted = parsed2.formatted;
         finalReport = parsed2.report;
