@@ -154,7 +154,7 @@ if (visionSettings.enabled && visionSettings.model) {
 
 1. `readBinary(resolvedVaultPath)` → `ArrayBuffer`
 2. Load with `pdfjsLib.getDocument({ data: arrayBuffer })` (global in Obsidian/Electron).
-3. Iterate all pages: render each to `OffscreenCanvas` → `toDataURL("image/jpeg", 0.85)` → strip prefix → collect base64 strings.
+3. Iterate all pages: render each to `OffscreenCanvas` → `convertToBlob({ type: "image/jpeg", quality: 0.85 })` → `arrayBuffer()` → base64 encode → collect base64 strings.
 4. One LLM call with all page images as sequential `image_url` content parts.
 5. Ask LLM to produce a unified summary across all pages.
 
@@ -231,7 +231,7 @@ Response is plain text. Unused streaming path — `stream: false`.
 
 | File | Change |
 |------|--------|
-| `src/settings.ts` | Add `vision: { enabled, model }` to settings type and defaults |
+| `src/types.ts` | Add `vision: { enabled, model }` to settings type and defaults |
 | `src/phases/attachment-analyzer.ts` | New file |
 | `src/vault-tools.ts` | Add `readBinary()` to interface and impl |
 | `src/phases/format.ts` | Call vision pre-step when enabled |
