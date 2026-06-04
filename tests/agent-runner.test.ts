@@ -78,7 +78,7 @@ describe("AgentRunner idle watchdog", () => {
     const settings = makeSettings({ llmIdleTimeoutSec: 10, llmIdleRetries: 3 });
     const runner = new AgentRunner(noopLlm, settings, new VaultTools(mockAdapter(), "/vault"), "v", []);
 
-    vi.spyOn(runner as unknown as { runOperation: unknown }, "runOperation")
+    vi.spyOn(runner as unknown as { runOperation: (...args: unknown[]) => AsyncGenerator<RunEvent, void, void> }, "runOperation")
       .mockImplementation(fakeRunOpSuccess);
 
     const events = await collect(runner.run(makeRequest()));
@@ -95,7 +95,7 @@ describe("AgentRunner idle watchdog", () => {
     const runner = new AgentRunner(noopLlm, settings, new VaultTools(mockAdapter(), "/vault"), "v", []);
 
     const hangOnce = makeRunOpHangOnce();
-    vi.spyOn(runner as unknown as { runOperation: unknown }, "runOperation")
+    vi.spyOn(runner as unknown as { runOperation: (...args: unknown[]) => AsyncGenerator<RunEvent, void, void> }, "runOperation")
       .mockImplementation(function (req: unknown) {
         return hangOnce(req as { signal: AbortSignal });
       });
@@ -121,7 +121,7 @@ describe("AgentRunner idle watchdog", () => {
     const settings = makeSettings({ llmIdleTimeoutSec: 5, llmIdleRetries: maxRetries });
     const runner = new AgentRunner(noopLlm, settings, new VaultTools(mockAdapter(), "/vault"), "v", []);
 
-    vi.spyOn(runner as unknown as { runOperation: unknown }, "runOperation")
+    vi.spyOn(runner as unknown as { runOperation: (...args: unknown[]) => AsyncGenerator<RunEvent, void, void> }, "runOperation")
       .mockImplementation(function (req: unknown) {
         return fakeRunOpHang(req as { signal: AbortSignal });
       });
