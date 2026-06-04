@@ -239,6 +239,14 @@ export async function* runLint(
       ...[...annotations.keys()].map(pid => pidToPath.get(pid)!).filter(Boolean),
       ...files,
     ])];
+    const filteredArticlePaths = entityTypeFilter.length > 0
+      ? articlePaths.filter(p =>
+          entityTypeFilter.some(et => {
+            const subfolder = domain.entity_types?.find(e => e.type === et)?.wiki_subfolder;
+            return subfolder && p.includes(`/${subfolder}/`);
+          })
+        )
+      : articlePaths;
 
     // Load embedding cache before loop
     if (similarity?.config.mode === "embedding") {
@@ -260,15 +268,7 @@ export async function* runLint(
     const skippedArticles: string[] = [];
 
     if (useLlm) {
-      const loopPaths = entityTypeFilter.length > 0
-        ? articlePaths.filter(p =>
-            entityTypeFilter.some(et => {
-              const subfolder = domain.entity_types
-                ?.find(e => e.type === et)?.wiki_subfolder;
-              return subfolder && p.includes(`/${subfolder}/`);
-            })
-          )
-        : articlePaths;
+      const loopPaths = filteredArticlePaths;
       const total = loopPaths.length;
 
     // ── Per-article loop ──────────────────────────────────────────────────────
@@ -585,7 +585,7 @@ export async function* runLint(
         op: "lint",
         domainId: domain.id,
         fixed: writtenPaths,
-        checkedCount: articlePaths.length,
+        checkedCount: filteredArticlePaths.length,
         outputTokens,
       });
     } catch { /* non-critical */ }
