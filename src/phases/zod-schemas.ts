@@ -110,9 +110,47 @@ export const LintOutputSchema = z.object({
   deletes: z.array(LintDeleteSchema).optional(),
 });
 
-export const FormatOutputSchema = z.object({
-  report: z.string(),
-  formatted: z.string(),
+export const FormatBaseSchema = z.object({
+  report: z.string().min(1, "report не должен быть пустым"),
+  formatted: z.string().min(10, "formatted слишком короткий"),
+});
+
+export const FormatWithVisionSchema = FormatBaseSchema.extend({
+  vision_blocks_count: z.number().int().min(0),
+  embeds_preserved: z.array(z.string()),
+}).superRefine((val, ctx) => {
+  if (!val.formatted.startsWith("---\n")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["formatted"],
+      message: "formatted должен начинаться с YAML frontmatter (---)",
+    });
+  }
+  if (val.report.trim().length === 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["report"], message: "report пуст" });
+  }
+  for (const path of val.embeds_preserved) {
+    if (!val.formatted.includes(`![[${path}]]`)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["formatted"],
+        message: `embed ![[${path}]] потерян`,
+      });
+    }
+  }
+});
+
+export const FormatOutputSchema = FormatBaseSchema.superRefine((val, ctx) => {
+  if (!val.formatted.startsWith("---\n")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["formatted"],
+      message: "formatted должен начинаться с YAML frontmatter (---)",
+    });
+  }
+  if (val.report.trim().length === 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["report"], message: "report пуст" });
+  }
 });
 
 export type DomainEntryResponse = z.infer<typeof DomainEntrySchema>;
@@ -124,4 +162,4 @@ export type EntitiesOutput = z.infer<typeof EntitiesOutputSchema>;
 export type WikiPagesOutput = z.infer<typeof WikiPagesOutputSchema>;
 export type LintDelete = z.infer<typeof LintDeleteSchema>;
 export type LintOutput = z.infer<typeof LintOutputSchema>;
-export type FormatOutput = z.infer<typeof FormatOutputSchema>;
+export type FormatOutput = z.infer<typeof FormatBaseSchema>;
