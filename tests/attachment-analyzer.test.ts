@@ -2,7 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 import {
   extractObsidianEmbedPaths,
   insertDescriptions,
+  analyzeImage,
+  analyzeAttachments,
+  getMimeType,
 } from "../src/phases/attachment-analyzer";
+import { VaultTools, type VaultAdapter } from "../src/vault-tools";
+import type { LlmClient } from "../src/types";
 
 describe("extractObsidianEmbedPaths", () => {
   it("returns empty array for plain text", () => {
@@ -64,5 +69,104 @@ describe("insertDescriptions", () => {
     const descriptions = new Map([["img.png", "New."]]);
     const result = insertDescriptions(md, descriptions);
     expect(result).toBe(md);
+  });
+});
+
+function makeLlm(content: string): LlmClient {
+  return {
+    chat: {
+      completions: {
+        create: vi.fn().mockResolvedValue({
+          choices: [{ message: { content } }],
+        }),
+      },
+    },
+  } as unknown as LlmClient;
+}
+
+function makeVaultTools(binaryData: Record<string, ArrayBuffer> = {}, textData: Record<string, string> = {}): VaultTools {
+  const adapter: VaultAdapter & { readBinary: ReturnType<typeof vi.fn> } = {
+    read: vi.fn().mockImplementation(async (p: string) => textData[p] ?? ""),
+    write: vi.fn().mockResolvedValue(undefined),
+    append: vi.fn().mockResolvedValue(undefined),
+    list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    exists: vi.fn().mockResolvedValue(false),
+    mkdir: vi.fn().mockResolvedValue(undefined),
+    readBinary: vi.fn().mockImplementation(async (p: string) => {
+      if (p in binaryData) return binaryData[p];
+      throw new Error(`not found: ${p}`);
+    }),
+  };
+  return new VaultTools(adapter, "/vault");
+}
+
+describe("getMimeType", () => {
+  it.each([
+    ["photo.png", "image/png"],
+    ["photo.jpg", "image/jpeg"],
+    ["photo.jpeg", "image/jpeg"],
+    ["photo.webp", "image/webp"],
+    ["doc.pdf", null],
+    ["draw.excalidraw", null],
+    ["note.md", null],
+  ])("%s → %s", (path, expected) => {
+    expect(getMimeType(path)).toBe(expected);
+  });
+});
+
+describe("analyzeImage", () => {
+  it("calls LLM with base64 data URL and returns description", async () => {
+    const buf = new Uint8Array([1, 2, 3]).buffer;
+    const llm = makeLlm("A blue rectangle.");
+    const result = await analyzeImage(buf, "image/png", llm, "gpt-4o-mini", new AbortController().signal);
+    expect(result).toBe("A blue rectangle.");
+    const call = (llm.chat.completions.create as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.model).toBe("gpt-4o-mini");
+    expect(call.stream).toBe(false);
+    const userContent = call.messages[1].content[0];
+    expect(userContent.type).toBe("image_url");
+    expect(userContent.image_url.url).toMatch(/^data:image\/png;base64,/);
+  });
+});
+
+describe("analyzeAttachments", () => {
+  it("returns description for PNG embed", async () => {
+    const buf = new Uint8Array([1]).buffer;
+    const vaultTools = makeVaultTools({ "photo.png": buf });
+    const llm = makeLlm("A circle.");
+    const result = await analyzeAttachments(["photo.png"], vaultTools, llm, "gpt-4o-mini", new AbortController().signal);
+    expect(result.get("photo.png")).toBe("A circle.");
+  });
+
+  it("skips unknown extension, emits no entry", async () => {
+    const vaultTools = makeVaultTools();
+    const llm = makeLlm("unused");
+    const result = await analyzeAttachments(["video.mp4"], vaultTools, llm, "gpt-4o-mini", new AbortController().signal);
+    expect(result.has("video.mp4")).toBe(false);
+    expect((llm.chat.completions.create as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
+  });
+
+  it("skips attachment when readBinary throws (file not found)", async () => {
+    const vaultTools = makeVaultTools({});  // empty — readBinary throws for any path
+    const llm = makeLlm("should not be called");
+    const result = await analyzeAttachments(["missing.png"], vaultTools, llm, "gpt-4o-mini", new AbortController().signal);
+    expect(result.has("missing.png")).toBe(false);
+  });
+
+  it("processes multiple embeds sequentially", async () => {
+    const buf = new Uint8Array([1]).buffer;
+    const vaultTools = makeVaultTools({ "a.png": buf, "b.jpg": buf });
+    const llm = {
+      chat: {
+        completions: {
+          create: vi.fn()
+            .mockResolvedValueOnce({ choices: [{ message: { content: "First." } }] })
+            .mockResolvedValueOnce({ choices: [{ message: { content: "Second." } }] }),
+        },
+      },
+    } as unknown as LlmClient;
+    const result = await analyzeAttachments(["a.png", "b.jpg"], vaultTools, llm, "gpt-4o-mini", new AbortController().signal);
+    expect(result.get("a.png")).toBe("First.");
+    expect(result.get("b.jpg")).toBe("Second.");
   });
 });
