@@ -173,6 +173,20 @@ export class AgentRunner {
           yield ev;
         }
         if (idleTimer) clearTimeout(idleTimer);
+        // Phases swallow AbortError silently (return instead of throw).
+        // Detect silent idle abort by checking if idleCtrl fired but user didn't cancel.
+        if (idleCtrl.signal.aborted && !req.signal.aborted) {
+          if (attempt < maxRetries) {
+            attempt++;
+            const sec = Math.round(idleTimeoutMs / 1000);
+            yield { kind: "system", message: `LLM idle ${sec}s — retrying (${attempt}/${maxRetries})` };
+            continue;
+          }
+          throw new DOMException(
+            `LLM idle timeout (${Math.round(idleTimeoutMs / 1000)}s) exhausted after ${maxRetries} retries`,
+            "AbortError",
+          );
+        }
         // devMode/eval runs only on final successful attempt
         if (this.settings.devMode?.enabled && finalResultText) {
           const taskInput = req.args.join(" ") || req.operation;
