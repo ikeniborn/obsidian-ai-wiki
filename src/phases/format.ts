@@ -5,7 +5,7 @@ import { buildChatParams, extractStreamDeltas, extractUsage, parseStructured, wr
 import formatTemplate from "../../prompts/format.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
-import { missingTokensWithContext, looksTruncated, appendMissingLines } from "./format-utils";
+import { missingTokensWithContext, looksTruncated, appendMissingLines, restoreObsidianEmbeds, missingObsidianEmbeds } from "./format-utils";
 import { GLOBAL_FORMAT_SCHEMA_PATH } from "../wiki-path";
 import { fixWikiLinks } from "../wiki-link-validator";
 import { FormatOutputSchema } from "./zod-schemas";
@@ -235,6 +235,9 @@ export async function* runFormat(
     }
   }
 
+  finalFormatted = restoreObsidianEmbeds(original, finalFormatted);
+  const embedWarnings = missingObsidianEmbeds(original, finalFormatted);
+
   const wlFix = fixWikiLinks(new Map([[filePath, finalFormatted]]), wikiLinkValidationRetries);
   finalFormatted = wlFix.fixed.get(filePath) ?? finalFormatted;
 
@@ -245,6 +248,9 @@ export async function* runFormat(
     return;
   }
 
+  if (embedWarnings.length > 0) {
+    yield { kind: "info_text", icon: "⚠️", summary: "Embed warnings", details: embedWarnings.map(e => `Not restored: ${e}`) };
+  }
   if (wlFix.warnings.length > 0) {
     yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFix.warnings };
   }

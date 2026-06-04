@@ -140,6 +140,36 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// Obsidian embed pattern: ![[path]] or ![[path|alias]]
+const OBSIDIAN_EMBED_RE = /!\[\[[^\]]+\]\]/g;
+
+/**
+ * Restores Obsidian embed links (![[...]]) that LLM converted to standard Markdown (![...](path)).
+ * Matches by inner path: if formatted has ![any](path) where path === embed inner path, restores.
+ */
+export function restoreObsidianEmbeds(original: string, formatted: string): string {
+  let result = formatted;
+  for (const m of original.matchAll(OBSIDIAN_EMBED_RE)) {
+    const embedSrc = m[0];
+    if (result.includes(embedSrc)) continue;
+    const innerPath = embedSrc.slice(3, -2); // strip ![[  and  ]]
+    const pipeIdx = innerPath.indexOf("|");
+    const filePath = pipeIdx >= 0 ? innerPath.slice(0, pipeIdx) : innerPath;
+    const stdRe = new RegExp(`!\\[[^\\]]*\\]\\(${escapeRegExp(filePath)}\\)`, "g");
+    result = result.replace(stdRe, embedSrc);
+  }
+  return result;
+}
+
+/** Returns ![[...]] embeds from original that are absent in formatted after restoration. */
+export function missingObsidianEmbeds(original: string, formatted: string): string[] {
+  const missing: string[] = [];
+  for (const m of original.matchAll(OBSIDIAN_EMBED_RE)) {
+    if (!formatted.includes(m[0])) missing.push(m[0]);
+  }
+  return missing;
+}
+
 export function missingTokens(original: string, formatted: string): string[] {
   return missingTokensWithContext(original, formatted).map((m) => m.token);
 }

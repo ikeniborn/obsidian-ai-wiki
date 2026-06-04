@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractJsonObject, significantTokens, missingTokens, missingTokensWithContext, looksTruncated, appendMissingLines } from "../../src/phases/format-utils";
+import { extractJsonObject, significantTokens, missingTokens, missingTokensWithContext, looksTruncated, appendMissingLines, restoreObsidianEmbeds, missingObsidianEmbeds } from "../../src/phases/format-utils";
 
 describe("extractJsonObject", () => {
   it("парсит чистый JSON", () => {
@@ -223,5 +223,58 @@ describe("appendMissingLines", () => {
     const before = formatted;
     appendMissingLines(formatted, missing);
     expect(formatted).toBe(before);
+  });
+});
+
+describe("restoreObsidianEmbeds", () => {
+  it("no-op when embed already preserved", () => {
+    const orig = "text\n![[file.excalidraw]]\nend";
+    const fmt  = "text\n![[file.excalidraw]]\nend";
+    expect(restoreObsidianEmbeds(orig, fmt)).toBe(fmt);
+  });
+
+  it("restores embed converted to standard Markdown image", () => {
+    const orig = "![[Проект 122 Минцифра 2025-09-23 10.03.28.excalidraw]]";
+    const fmt  = "![Схема: Проект 122 Минцифра (2025-09-23 10.03.28)](Проект 122 Минцифра 2025-09-23 10.03.28.excalidraw)";
+    expect(restoreObsidianEmbeds(orig, fmt)).toBe(orig);
+  });
+
+  it("restores embed with alias converted to standard Markdown", () => {
+    const orig = "![[diagram.png|My Diagram]]";
+    const fmt  = "![My Diagram](diagram.png)";
+    expect(restoreObsidianEmbeds(orig, fmt)).toBe("![[diagram.png|My Diagram]]");
+  });
+
+  it("restores multiple embeds", () => {
+    const orig = "![[a.png]]\n![[b.excalidraw]]";
+    const fmt  = "![](a.png)\n![](b.excalidraw)";
+    expect(restoreObsidianEmbeds(orig, fmt)).toBe(orig);
+  });
+
+  it("no-op when no embeds in original", () => {
+    const orig = "plain text";
+    const fmt  = "plain text formatted";
+    expect(restoreObsidianEmbeds(orig, fmt)).toBe(fmt);
+  });
+});
+
+describe("missingObsidianEmbeds", () => {
+  it("returns empty when all embeds preserved", () => {
+    const orig = "![[file.png]] text";
+    const fmt  = "![[file.png]] formatted text";
+    expect(missingObsidianEmbeds(orig, fmt)).toEqual([]);
+  });
+
+  it("returns missing embed when LLM dropped it entirely", () => {
+    const orig = "![[file.png]] text";
+    const fmt  = "formatted text";
+    expect(missingObsidianEmbeds(orig, fmt)).toEqual(["![[file.png]]"]);
+  });
+
+  it("returns empty after restoration (restoreObsidianEmbeds called first)", () => {
+    const orig = "![[diagram.excalidraw]]";
+    const fmt  = "![Схема](diagram.excalidraw)";
+    const restored = restoreObsidianEmbeds(orig, fmt);
+    expect(missingObsidianEmbeds(orig, restored)).toEqual([]);
   });
 });
