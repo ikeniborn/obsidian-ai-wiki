@@ -158,7 +158,7 @@ export async function analyzeAttachments(
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
 
-  for (const path of embedPaths) {
+  for (const path of [...new Set(embedPaths)]) {
     if (signal.aborted) break;
     const ext = path.split(".").pop()?.toLowerCase() ?? "";
 
