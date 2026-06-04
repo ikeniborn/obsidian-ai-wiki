@@ -101,6 +101,14 @@ System prompt loaded from `prompts/query.md`. Injected variables: `domain_name`,
 
 The prompt enforces: inline `[[WikiLink]]` references per fact (not a trailing sources block), code/commands in backticks or fenced blocks with language tag, section headers only when answer covers multiple topics, no filler phrases.
 
+### Post-Stream Link Validation
+
+After the LLM answer is streamed, `runQuery` validates all `[[WikiLink]]` references against the vault's known page stems.
+
+The validation pipeline: extract links → check against vault stems (`pageId` of every `.md` file) → if broken links exist and `wikiLinkValidationRetries > 0`, call `rewriteWithValidLinks` with the BFS context stems as hints → re-check → if still broken, `annotateBroken` marks each broken link with `⚠️`. If retries are disabled, annotation runs immediately. A corrected answer is emitted via `assistant_replace`.
+
+See [[src/phases/query-link-validator.ts]], [[src/phases/query.ts]].
+
 ### Query Trace UI
 
 When `agentLogEnabled` is true, the `graph_stats` event is rendered with scores and BFS-by-hop breakdown in multi-line trace format. When false, compact single-line form is shown instead.
@@ -181,7 +189,9 @@ See [[src/phases/chat.ts]].
 
 ## Format
 
-Reformats a non-wiki markdown page without changing facts. LLM returns `FormatOutputSchema` with `report` and `formatted`. Preview is written to a temp file; user applies or cancels via sidebar.
+Reformats a non-wiki markdown page without changing facts. LLM returns sentinel-marked output with `report` and `formatted` sections. Preview is written to a temp file; user applies or cancels via sidebar.
+
+Output parsing uses sentinel markers (`<<<REPORT>>>`, `<<<FORMATTED>>>`, `<<<END>>>`) instead of JSON for robustness. When vision descriptions are present, includes `<<<VISION_COUNT>>>` and `<<<EMBEDS>>>` sections. [[src/phases/format-utils.ts#parseSentinelOutput]] parses the output structure; [[src/phases/format-utils.ts#SentinelOutput]] defines the result type.
 
 Iterative refinement via `formatRefine`. On claude-agent, vision is enabled. See [[src/phases/format.ts]], [[src/controller.ts#WikiController#format]].
 
