@@ -68,6 +68,18 @@
 .ai-wiki-step.err { color: var(--text-error); }
 
 .ai-wiki-final { border-top: 1px dashed var(--background-modifier-border); padding-top: 8px; margin-top: 8px; }
+
+.ai-wiki-final,
+.ai-wiki-chat-msg,
+.ai-wiki-eval-result {
+  user-select: text;
+}
+
+.ai-wiki-count-muted {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
 /* Чат после lint */
 .ai-wiki-chat-section { margin-top: 10px; border-top: 1px solid var(--background-modifier-border); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 .ai-wiki-chat-messages { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; }

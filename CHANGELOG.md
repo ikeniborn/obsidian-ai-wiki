@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.154 — 2026-06-04
+
+### New
+- feat(modal): refactor LintOptionsModal — single domain, reorder UI, select-all, article counts
+- feat(view): add updateButtonAvailability, hook domain-select and file-open
+- feat(view): render eval_result with MarkdownRenderer for markdown support
+- feat(settings): remove Lint UI section from settings panel
+- feat(i18n): add lintSelectAll and lintDeselectAll keys to all locales
+- feat(styles): add user-select text for query results, add ai-wiki-count-muted
+
+---
+
 ## 0.1.153 — 2026-06-04
 
 ### New

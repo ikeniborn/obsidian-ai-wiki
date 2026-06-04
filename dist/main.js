@@ -26358,6 +26358,8 @@ var en = {
     domainIdPlaceholder: "domain id",
     allWiki: "(all wiki)",
     lint_title: "Lint Wiki",
+    lintSelectAll: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0432\u0441\u0435",
+    lintDeselectAll: "\u0423\u0431\u0440\u0430\u0442\u044C \u0432\u0441\u0435",
     dryRun_name: "--dry-run",
     addDomain: "Add domain",
     id_name: "ID",
@@ -26587,6 +26589,8 @@ var ru = {
     domainIdPlaceholder: "id \u0434\u043E\u043C\u0435\u043D\u0430",
     allWiki: "(\u0432\u0441\u044F \u0432\u0438\u043A\u0438)",
     lint_title: "Lint Wiki",
+    lintSelectAll: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0432\u0441\u0435",
+    lintDeselectAll: "\u0423\u0431\u0440\u0430\u0442\u044C \u0432\u0441\u0435",
     dryRun_name: "--dry-run",
     addDomain: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D",
     id_name: "ID",
@@ -26816,6 +26820,8 @@ var es = {
     domainIdPlaceholder: "id del dominio",
     allWiki: "(toda la wiki)",
     lint_title: "Lint Wiki",
+    lintSelectAll: "A\xF1adir todos",
+    lintDeselectAll: "Quitar todos",
     dryRun_name: "--dry-run",
     addDomain: "A\xF1adir dominio",
     id_name: "ID",
@@ -27489,41 +27495,65 @@ var ShellConsentModal = class extends import_obsidian2.Modal {
   }
 };
 var LintOptionsModal = class extends import_obsidian2.Modal {
-  constructor(app, domains, defaultUseLlm, onSubmit) {
+  constructor(app, domain, defaultUseLlm, articleCounts, onSubmit) {
     super(app);
-    this.domains = domains;
+    this.domain = domain;
     this.defaultUseLlm = defaultUseLlm;
+    this.articleCounts = articleCounts;
     this.onSubmit = onSubmit;
-    this.domain = "all";
     this.useLlm = defaultUseLlm;
-    this.entityTypeFilter = [];
+    this.entityTypeFilter = (domain.entity_types ?? []).map((e) => e.type);
   }
-  domains;
-  defaultUseLlm;
-  onSubmit;
   domain;
+  defaultUseLlm;
+  articleCounts;
+  onSubmit;
   useLlm;
   entityTypeFilter;
-  entitySection = null;
   onOpen() {
     const T = i18n().modal;
     const { contentEl } = this;
     contentEl.createEl("h3", { text: T.lint_title });
-    new import_obsidian2.Setting(contentEl).setName(T.domain_name).addDropdown((d) => {
-      d.addOption("all", T.allWiki);
-      for (const entry of this.domains) d.addOption(entry.id, entry.name || entry.id);
-      d.setValue(this.domain);
-      d.onChange((v) => {
-        this.domain = v;
-        if (v === "all") this.entityTypeFilter = [];
-        this.renderEntitySection();
-      });
-    });
-    this.entitySection = contentEl.createDiv();
-    this.renderEntitySection();
     new import_obsidian2.Setting(contentEl).setName("Use LLM").addToggle((t) => t.setValue(this.useLlm).onChange((v) => {
       this.useLlm = v;
     }));
+    const entityTypes = this.domain.entity_types ?? [];
+    if (entityTypes.length) {
+      contentEl.createEl("p", { text: "Entity types:" });
+      const btnRow = contentEl.createDiv({ cls: "ai-wiki-lint-btn-row" });
+      const toggles = [];
+      const deselectBtn = btnRow.createEl("button", { text: T.lintDeselectAll });
+      const selectBtn = btnRow.createEl("button", { text: T.lintSelectAll });
+      deselectBtn.addEventListener("click", () => {
+        toggles.forEach((t) => t.setValue(false));
+        this.entityTypeFilter = [];
+      });
+      selectBtn.addEventListener("click", () => {
+        toggles.forEach((t) => t.setValue(true));
+        this.entityTypeFilter = entityTypes.map((e) => e.type);
+      });
+      for (const et of entityTypes) {
+        const setting = new import_obsidian2.Setting(contentEl).setName(et.type);
+        const countVal = this.articleCounts.get(et.type);
+        if (countVal !== void 0) {
+          setting.nameEl.createEl("span", {
+            text: ` (${countVal})`,
+            cls: "ai-wiki-count-muted"
+          });
+        }
+        setting.addToggle((t) => {
+          t.setValue(this.entityTypeFilter.includes(et.type));
+          t.onChange((checked) => {
+            if (checked) {
+              if (!this.entityTypeFilter.includes(et.type)) this.entityTypeFilter.push(et.type);
+            } else {
+              this.entityTypeFilter = this.entityTypeFilter.filter((x) => x !== et.type);
+            }
+          });
+          toggles.push(t);
+        });
+      }
+    }
     new import_obsidian2.Setting(contentEl).addButton(
       (b) => b.setButtonText(`\u25B6 ${T.run}`).setCta().onClick(() => {
         this.close();
@@ -27531,32 +27561,10 @@ var LintOptionsModal = class extends import_obsidian2.Modal {
       })
     );
   }
-  renderEntitySection() {
-    if (this.entitySection) this.entitySection.empty();
-    if (this.domain === "all") return;
-    const domainEntry = this.domains.find((d) => d.id === this.domain);
-    const entityTypes = domainEntry?.entity_types ?? [];
-    if (!entityTypes.length) return;
-    if (!this.entitySection) return;
-    this.entitySection.createEl("p", { text: "Entity types:" });
-    this.entityTypeFilter = entityTypes.map((e) => e.type);
-    for (const et of entityTypes) {
-      new import_obsidian2.Setting(this.entitySection).setName(et.type).addToggle((t) => {
-        t.setValue(true);
-        t.onChange((checked) => {
-          if (checked) {
-            if (!this.entityTypeFilter.includes(et.type)) this.entityTypeFilter.push(et.type);
-          } else {
-            this.entityTypeFilter = this.entityTypeFilter.filter((x) => x !== et.type);
-          }
-        });
-      });
-    }
-  }
   submit() {
-    this.onSubmit(this.domain, {
+    this.onSubmit({
       useLlm: this.useLlm,
-      entityTypeFilter: this.domain === "all" ? [] : [...this.entityTypeFilter]
+      entityTypeFilter: [...this.entityTypeFilter]
     });
   }
   onClose() {
@@ -28085,13 +28093,6 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         );
       }
     }
-    new import_obsidian3.Setting(containerEl).setName(T.settings.h3_lint).setHeading();
-    new import_obsidian3.Setting(containerEl).setName(T.settings.lintUseLlm_name).setDesc(T.settings.lintUseLlm_desc).addToggle(
-      (t) => t.setValue(s.lintOptions.useLlm).onChange(async (v) => {
-        s.lintOptions.useLlm = v;
-        await this.plugin.saveSettings();
-      })
-    );
     new import_obsidian3.Setting(containerEl).setName(T.settings.h3_graph).setHeading();
     new import_obsidian3.Setting(containerEl).setName(T.settings.graphDepth_name).setDesc(T.settings.graphDepth_desc).addText(
       (t) => t.setPlaceholder("1").setValue(String(s.graphDepth)).onChange(async (v) => {
@@ -29370,6 +29371,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     refreshBtn.addEventListener("click", () => void this.refreshDomains());
     this.domainSelect.addEventListener("change", () => {
       void this.plugin.localConfigStore.save({ lastDomain: this.domainSelect.value });
+      this.updateButtonAvailability();
     });
     if (opts.withActions) {
       this.addSourceBtn = domainRow.createEl("button", { attr: { title: T.view.addSourceTitle } });
@@ -29463,15 +29465,39 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
         ], () => void this.plugin.controller.ingestActive(domainId)).open();
       });
       this.lintBtn.addEventListener("click", () => {
+        const domainEntry = this.domains.find((d) => d.id === this.domainSelect.value);
+        if (!domainEntry) return;
+        const counts = /* @__PURE__ */ new Map();
+        const allMd = this.plugin.app.vault.getMarkdownFiles();
+        for (const et of domainEntry.entity_types ?? []) {
+          if (!et.wiki_subfolder) continue;
+          const prefix = `${domainEntry.wiki_folder}/${et.wiki_subfolder}/`;
+          counts.set(et.type, allMd.filter((f) => f.path.startsWith(prefix)).length);
+        }
         new LintOptionsModal(
           this.plugin.app,
-          this.domains,
+          domainEntry,
           this.plugin.settings.lintOptions.useLlm,
-          (domain, opts2) => void this.plugin.controller.lint(domain, opts2)
+          counts,
+          (opts2) => void this.plugin.controller.lint(domainEntry.id, opts2)
         ).open();
       });
     }
+    this.registerEvent(
+      this.plugin.app.workspace.on("file-open", () => this.updateButtonAvailability())
+    );
     void this.refreshDomains();
+  }
+  updateButtonAvailability() {
+    const hasDomain = !!this.domainSelect?.value;
+    const activeFile = this.plugin.app.workspace.getActiveFile();
+    const canFormat = !!activeFile && !activeFile.path.startsWith("!Wiki/");
+    if (this.askBtn) this.askBtn.disabled = !hasDomain;
+    if (this.ingestBtn) this.ingestBtn.disabled = !hasDomain;
+    if (this.lintBtn) this.lintBtn.disabled = !hasDomain;
+    if (this.formatBtn) this.formatBtn.disabled = !canFormat;
+    if (this.reinitBtn) this.reinitBtn.disabled = !hasDomain;
+    if (this.addSourceBtn) this.addSourceBtn.disabled = !hasDomain;
   }
   async refreshDomains() {
     if (!this.domainSelect) return;
@@ -29868,7 +29894,10 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.stopWaiting();
     } else if (ev.kind === "eval_result") {
       const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
-      el.setText(`[eval: ${ev.score}/10] ${ev.reasoning}`);
+      const text = `**[eval: ${ev.score}/10]** ${ev.reasoning}`;
+      const comp = new import_obsidian4.Component();
+      comp.load();
+      void import_obsidian4.MarkdownRenderer.render(this.app, text, el, "", comp);
     }
     this.updateMetrics();
   }
@@ -29934,13 +29963,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.state = entry.status;
     this.statusEl.setText(this.statusLabel(entry));
     this.cancelBtn.disabled = true;
-    this.askBtn.disabled = false;
     if (this.initBtn) this.initBtn.disabled = false;
-    if (this.ingestBtn) this.ingestBtn.disabled = false;
-    if (this.lintBtn) this.lintBtn.disabled = false;
-    if (this.formatBtn) this.formatBtn.disabled = false;
-    if (this.reinitBtn) this.reinitBtn.disabled = !(this.domainSelect && this.domainSelect.value);
-    if (this.addSourceBtn) this.addSourceBtn.disabled = !(this.domainSelect && this.domainSelect.value);
+    this.updateButtonAvailability();
     if (this.tickHandle !== null) {
       window.clearTimeout(this.tickHandle);
       this.tickHandle = null;
@@ -48506,11 +48530,14 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
             } catch {
               return;
             }
+            const domainEntry = domains[0];
+            if (!domainEntry) return;
             new LintOptionsModal(
               this.app,
-              domains,
+              domainEntry,
               this.settings.lintOptions.useLlm,
-              (d, opts) => void this.controller.lint(d, opts)
+              /* @__PURE__ */ new Map(),
+              (opts) => void this.controller.lint(domainEntry.id, opts)
             ).open();
           })();
         }
