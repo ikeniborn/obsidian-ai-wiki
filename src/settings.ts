@@ -648,6 +648,32 @@ export class LlmWikiSettingTab extends PluginSettingTab {
 
     }
 
+    // ── Vision settings ─────────────────────────────────────────────────────
+    new Setting(containerEl).setName("Vision").setHeading();
+
+    new Setting(containerEl)
+      .setName("Enable vision analysis")
+      .setDesc("Analyse embedded images, PDFs, and Excalidraw files before formatting. Uses the same baseUrl and API key as the main backend.")
+      .addToggle((t) =>
+        t.setValue(s.vision.enabled)
+          .onChange(async (v) => {
+            s.vision.enabled = v;
+            await this.plugin.saveSettings();
+            this.display();
+          }),
+      );
+
+    if (s.vision.enabled) {
+      this.addModelControl(
+        new Setting(containerEl)
+          .setName("Vision model")
+          .setDesc("Model name for vision calls, e.g. gpt-4o-mini or claude-3-haiku-20240307"),
+        this._chatModels,
+        s.vision.model,
+        async (v) => { s.vision.model = v; await this.plugin.saveSettings(); },
+      );
+    }
+
     // ── Graph settings ────────────────────────────────────────────────────────
     new Setting(containerEl).setName(T.settings.h3_graph).setHeading();
 
