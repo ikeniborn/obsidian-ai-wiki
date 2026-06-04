@@ -81,6 +81,7 @@ chain:
 | `src/agent-runner.ts` | Modify | Pass `this.settings.vision` to `runFormat` |
 | `src/settings.ts` | Modify | Add Vision section UI (toggle + model field) |
 | `package.json` | Modify | Add `@excalidraw/utils` dependency |
+| `esbuild.config.mjs` | Modify | Externalize `@excalidraw/utils` (dynamic import must not bundle into Obsidian plugin) |
 | `tests/attachment-analyzer.test.ts` | Create | Unit tests for all analyzer functions |
 | `tests/vault-tools-binary.test.ts` | Create | Unit tests for `readBinary` |
 
@@ -502,6 +503,18 @@ git add src/phases/attachment-analyzer.ts tests/attachment-analyzer.test.ts
 git commit -m "feat(vision): add attachment-analyzer with extract/insert/analyze"
 ```
 
+- [x] **Step 6: Expand `PdfjsLib` to readable sub-interfaces**
+
+Refactor the single-line `PdfjsLib` interface in `attachment-analyzer.ts` into named sub-interfaces (`PDFDocumentProxy`, `PDFPageProxy`, `PageViewport`) for readability. No behavior change.
+
+Commit: `refactor(vision): expand PdfjsLib to readable sub-interfaces`
+
+- [x] **Step 7: Deduplicate embed paths before analysis**
+
+In `analyzeAttachments`, wrap `embedPaths` with `[...new Set(embedPaths)]` to skip duplicate embeds (same file referenced multiple times in a note).
+
+Commit: `fix(vision): deduplicate embed paths before analysis`
+
 ---
 
 ### Task 4: Add `analyzeImage` and unknown-extension tests
@@ -807,6 +820,7 @@ git commit -m "feat(vision): add Vision section to settings UI"
 
 **Files:**
 - Modify: `package.json`
+- Modify: `esbuild.config.mjs`
 
 - [ ] **Step 1: Install the package**
 
@@ -828,10 +842,14 @@ Expected: no errors
 Run: `npx vitest run 2>&1 | tail -15`
 Expected: all tests pass
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Externalize `@excalidraw/utils` in esbuild config**
+
+In `esbuild.config.mjs`, add `"@excalidraw/utils"` to the `external` array. Required because the module is loaded via dynamic `import()` at runtime in Obsidian's Electron context and must not be bundled.
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add package.json package-lock.json
+git add package.json package-lock.json esbuild.config.mjs
 git commit -m "feat(vision): add @excalidraw/utils dependency"
 ```
 
@@ -884,6 +902,8 @@ git commit -m "docs(lat): update Format section with vision pre-step description
 | Vision pre-step in `runFormat` | Task 5 |
 | `visionSettings` passed from `AgentRunner` | Task 6 |
 | `@excalidraw/utils` in package.json | Task 8 |
+| `@excalidraw/utils` externalized in esbuild | Task 8, Step 5 |
+| Deduplicate embed paths | Task 3, Step 7 |
 | Sequential LLM calls (not parallel) | Task 3 — loop is sequential |
 | Error per attachment → skip, don't block | Task 3 + Task 5 |
 
