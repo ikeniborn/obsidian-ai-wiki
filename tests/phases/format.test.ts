@@ -10,6 +10,10 @@ const VAULT = "/vault";
 const FILE = "note.md";
 const SAMPLE = readFileSync(join(__dirname, "../fixtures/format-sample.md"), "utf-8");
 
+function makeSentinel(report: string, formatted: string): string {
+  return `<<<REPORT>>>\n${report}\n<<<FORMATTED>>>\n${formatted}\n<<<END>>>`;
+}
+
 function mockAdapter(files: Record<string, string> = {}): VaultAdapter {
   return {
     read: vi.fn().mockImplementation((p: string) => Promise.resolve(files[p] ?? "")),
@@ -72,7 +76,7 @@ function makeLlmTruncated(): LlmClient {
 describe("runFormat", () => {
   it("парсит JSON, пишет temp, эмитит format_preview", async () => {
     const formatted = "---\ntags: [db]\n---\n\n# Заметка про ClickHouse\n\nClickHouse 23.8 SQL-диалект https://clickhouse.com/docs `insertBatch`. Яндекс. Replicated движок.";
-    const json = JSON.stringify({ report: "## Изменения\n- frontmatter", formatted });
+    const json = makeSentinel("## Изменения\n- frontmatter", formatted);
     const adapter = mockAdapter({ [FILE]: SAMPLE });
     const vt = new VaultTools(adapter, VAULT);
     const events = await collect(
@@ -96,8 +100,8 @@ describe("runFormat", () => {
   });
 
   it("validator: при потере значимых токенов — appendMissingLines восстанавливает их в файл", async () => {
-    const formatted = "# Заметка";
-    const json = JSON.stringify({ report: "r", formatted });
+    const formatted = "---\ntags: []\n---\n\n# Заметка";
+    const json = makeSentinel("r", formatted);
     const adapter = mockAdapter({ [FILE]: SAMPLE });
     const vt = new VaultTools(adapter, VAULT);
     const events = await collect(
@@ -111,13 +115,14 @@ describe("runFormat", () => {
 
   it("сохраняет formatted рядом с исходником (вложенный путь)", async () => {
     const NESTED = "wiki/notes/page.md";
-    const json = JSON.stringify({ report: "r", formatted: SAMPLE });
+    const nestedFormatted = "---\ntags: []\n---\n\n" + SAMPLE;
+    const json = makeSentinel("r", nestedFormatted);
     const adapter = mockAdapter({ [NESTED]: SAMPLE });
     const vt = new VaultTools(adapter, VAULT);
     const events = await collect(runFormat([NESTED], vt, makeLlm(json), "model", false, [], new AbortController().signal));
     const preview = events.find((e: unknown) => (e as { kind: string }).kind === "format_preview") as { tempPath: string };
     expect(preview.tempPath).toBe("wiki/notes/page.formatted.md");
-    expect(adapter.write).toHaveBeenCalledWith("wiki/notes/page.formatted.md", SAMPLE);
+    expect(adapter.write).toHaveBeenCalledWith("wiki/notes/page.formatted.md", nestedFormatted.trim());
   });
 
   it("abort прекращает работу без записи temp", async () => {
@@ -130,8 +135,8 @@ describe("runFormat", () => {
 
   it("при hasVision=true и наличии image-ссылки добавляет image_url content blocks", async () => {
     const sampleWithImg = SAMPLE + "\n\n![схема](images/diagram.png)\n";
-    const formatted = sampleWithImg;
-    const json = JSON.stringify({ report: "r", formatted });
+    const formatted = "---\ntags: []\n---\n\n" + sampleWithImg;
+    const json = makeSentinel("r", formatted);
     const llm = makeLlm(json);
     const adapter = mockAdapter({ [FILE]: sampleWithImg });
     const vt = new VaultTools(adapter, VAULT);
@@ -147,8 +152,8 @@ describe("runFormat", () => {
 
   it("при hasVision=false image-ссылки в content blocks НЕ добавляет", async () => {
     const sampleWithImg = SAMPLE + "\n\n![схема](images/diagram.png)\n";
-    const formatted = sampleWithImg;
-    const json = JSON.stringify({ report: "r", formatted });
+    const formatted = "---\ntags: []\n---\n\n" + sampleWithImg;
+    const json = makeSentinel("r", formatted);
     const llm = makeLlm(json);
     const adapter = mockAdapter({ [FILE]: sampleWithImg });
     const vt = new VaultTools(adapter, VAULT);
@@ -161,8 +166,8 @@ describe("runFormat", () => {
   });
 
   it("включает chat history в messages при refine", async () => {
-    const formatted = SAMPLE;
-    const json = JSON.stringify({ report: "r", formatted });
+    const formatted = "---\ntags: []\n---\n\n" + SAMPLE;
+    const json = makeSentinel("r", formatted);
     const llm = makeLlm(json);
     const adapter = mockAdapter({ [FILE]: SAMPLE });
     const vt = new VaultTools(adapter, VAULT);
@@ -180,11 +185,11 @@ describe("runFormat", () => {
 
   it("token-retry: LLM дропает токен в первом ответе, восстанавливает во втором", async () => {
     // Первый ответ: formatted без URL
-    const formatted1 = "# Заметка про ClickHouse\n\nClickHouse 23.8 SQL.";
-    const json1 = JSON.stringify({ report: "r", formatted: formatted1 });
+    const formatted1 = "---\ntags: []\n---\n\n# Заметка про ClickHouse\n\nClickHouse 23.8 SQL.";
+    const json1 = makeSentinel("r", formatted1);
     // Второй ответ (token-retry): formatted с URL
-    const formatted2 = "# Заметка про ClickHouse\n\nClickHouse 23.8 SQL https://clickhouse.com/docs `insertBatch`. Яндекс.";
-    const json2 = JSON.stringify({ report: "r2", formatted: formatted2 });
+    const formatted2 = "---\ntags: []\n---\n\n# Заметка про ClickHouse\n\nClickHouse 23.8 SQL https://clickhouse.com/docs `insertBatch`. Яндекс.";
+    const json2 = makeSentinel("r2", formatted2);
 
     const adapter = mockAdapter({ [FILE]: SAMPLE });
     const vt = new VaultTools(adapter, VAULT);
@@ -210,8 +215,8 @@ describe("runFormat", () => {
   });
 
   it("token-retry: abort во время retry не ломает restored-block", async () => {
-    const formatted1 = "# Заметка про ClickHouse\n\nClickHouse 23.8 SQL.";
-    const json1 = JSON.stringify({ report: "r", formatted: formatted1 });
+    const formatted1 = "---\ntags: []\n---\n\n# Заметка про ClickHouse\n\nClickHouse 23.8 SQL.";
+    const json1 = makeSentinel("r", formatted1);
 
     const ctrl = new AbortController();
     let callCount = 0;
@@ -244,9 +249,9 @@ describe("runFormat", () => {
 
   it("token-retry: оба ответа дропают токен → restored-block добавлен в tempPath", async () => {
     // Оба ответа: formatted без URL
-    const formatted1 = "# Заметка про ClickHouse\n\nClickHouse 23.8 SQL.";
-    const json1 = JSON.stringify({ report: "r", formatted: formatted1 });
-    const json2 = JSON.stringify({ report: "r2", formatted: formatted1 });
+    const formatted1 = "---\ntags: []\n---\n\n# Заметка про ClickHouse\n\nClickHouse 23.8 SQL.";
+    const json1 = makeSentinel("r", formatted1);
+    const json2 = makeSentinel("r2", formatted1);
 
     const adapter = mockAdapter({ [FILE]: SAMPLE });
     const vt = new VaultTools(adapter, VAULT);
@@ -291,7 +296,7 @@ describe("runFormat", () => {
     });
     const vt = new VaultTools(adapter, VAULT);
     await collect(runFormat([`${VAULT}/${FILE}`], vt,
-      makeLlm('{"report":"ok","formatted":"# Page"}'), "model", false, [], new AbortController().signal));
+      makeLlm(makeSentinel("ok", "---\ntags: []\n---\n\n# Page")), "model", false, [], new AbortController().signal));
     expect(schemaReadPath).toContain("_config/_format_schema.md");
   });
 
@@ -311,8 +316,8 @@ describe("runFormat", () => {
 describe("runFormat Zod validation", () => {
   it("records structuralErrorCounter on Zod parse failure then retry succeeds", async () => {
     structuralErrorCounter.reset();
-    const good = JSON.stringify({ report: "## ok", formatted: "---\n# Page" });
-    const bad = '{"report": "ok"}'; // missing `formatted` field
+    const good = makeSentinel("## ok", "---\ntags: []\n---\n\n# Page content here");
+    const bad = "<<<REPORT>>>\nok\n<<<END>>>"; // no FORMATTED marker → parseSentinelOutput returns null
     const adapter = mockAdapter({ [FILE]: SAMPLE });
     const vt = new VaultTools(adapter, VAULT);
 
@@ -347,7 +352,7 @@ describe("runFormat Zod validation", () => {
 
   it("emits error on Zod failure after retry", async () => {
     structuralErrorCounter.reset();
-    const bad = '{"report": "ok"}'; // missing `formatted` field
+    const bad = "<<<REPORT>>>\nok\n<<<END>>>"; // no FORMATTED marker → parseSentinelOutput returns null
     const adapter = mockAdapter({ [FILE]: SAMPLE });
     const vt = new VaultTools(adapter, VAULT);
 
