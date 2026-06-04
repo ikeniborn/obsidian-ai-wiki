@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.155 — 2026-06-04
+
+### Fixes
+- fix(format): restore Obsidian embeds (`![[...]]`) converted by LLM to standard Markdown
+- fix(settings): move busy banner under Domains heading with warning icon and indented style
+- fix(modal): show article count for all entity types; right-align select-all buttons with gap
+
+---
+
 ## 0.1.154 — 2026-06-04
 
 ### New
