@@ -223,3 +223,47 @@ export function missingTokensWithContext(original: string, formatted: string): M
   }
   return out;
 }
+
+export interface SentinelOutput {
+  report: string;
+  formatted: string;
+  visionCount?: number;
+  embeds?: string[];
+  truncated: boolean;
+}
+
+export function parseSentinelOutput(text: string, hasVisionDescriptions: boolean): SentinelOutput | null {
+  const reportIdx = text.indexOf("<<<REPORT>>>");
+  const formattedIdx = text.indexOf("<<<FORMATTED>>>");
+  if (reportIdx === -1 || formattedIdx === -1) return null;
+
+  const report = text.slice(reportIdx + "<<<REPORT>>>".length, formattedIdx).trim();
+  const endIdx = text.indexOf("<<<END>>>");
+
+  let formattedEnd: number;
+  let truncated = false;
+  let visionCount: number | undefined;
+  let embeds: string[] | undefined;
+
+  if (hasVisionDescriptions) {
+    const visionIdx = text.indexOf("<<<VISION_COUNT>>>", formattedIdx);
+    const embedsIdx = text.indexOf("<<<EMBEDS>>>", formattedIdx);
+    if (visionIdx === -1 || embedsIdx === -1) return null;
+    formattedEnd = visionIdx;
+    visionCount = parseInt(text.slice(visionIdx + "<<<VISION_COUNT>>>".length, embedsIdx).trim(), 10);
+    const embedsEnd = endIdx === -1 ? text.length : endIdx;
+    embeds = text
+      .slice(embedsIdx + "<<<EMBEDS>>>".length, embedsEnd)
+      .trim()
+      .split("|")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    truncated = endIdx === -1;
+  } else {
+    formattedEnd = endIdx === -1 ? text.length : endIdx;
+    truncated = endIdx === -1;
+  }
+
+  const formatted = text.slice(formattedIdx + "<<<FORMATTED>>>".length, formattedEnd).trim();
+  return { report, formatted, visionCount, embeds, truncated };
+}
