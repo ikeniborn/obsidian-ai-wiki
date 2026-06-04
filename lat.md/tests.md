@@ -373,3 +373,19 @@ Integration tests for `runIngest` in [[src/phases/ingest.ts]] covering the `stri
 ### stripInvalidWikiArticles in ingest — non-wiki stem stripped
 
 After `runIngest`, `wiki_articles` entries whose stem does not match the `wiki_*` pattern (e.g. `[[ИРС-19]]`) are removed; valid entries like `[[wiki_work_live]]` are kept.
+
+## AgentRunner Idle Watchdog
+
+Unit tests for the idle timeout retry loop in [[src/agent-runner.ts#AgentRunner#run]]. Covers normal completion, one idle retry, and exhausted retries.
+
+### Normal run
+
+When `runOperation` completes before the idle timeout fires, no `system` retry events are emitted. Verifies the happy path produces zero "retrying" messages.
+
+### Idle retry success
+
+When `runOperation` hangs on the first attempt and the idle timer fires, `AgentRunner.run` yields a `system` event matching `LLM idle 5s — retrying (1/3)` and retries; the second call succeeds and yields a `result` event.
+
+### Idle exhausted
+
+When every `runOperation` attempt hangs and `maxRetries` is exhausted, `AgentRunner.run` throws a `DOMException` with message matching `/idle timeout/i`.
