@@ -1,7 +1,7 @@
 # Intent: Init/Ingest/Lint hang detection and auto-retry
 
 **Date:** 2026-06-04
-**Status:** draft
+**Status:** approved
 
 ## Objective
 
