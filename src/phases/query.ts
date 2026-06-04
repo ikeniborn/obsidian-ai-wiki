@@ -14,6 +14,7 @@ import { graphCache } from "../wiki-graph-cache";
 import { selectSeeds } from "../wiki-seeds";
 import { parseIndexAnnotations } from "../wiki-index";
 import type { PageSimilarityService } from "../page-similarity";
+import { extractAnswerLinks, findBrokenLinks, annotateBroken, rewriteWithValidLinks } from "./query-link-validator";
 
 const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
 
@@ -32,6 +33,7 @@ export async function* runQuery(
   seedMinScore: number = 0.1,
   bfsTopK: number = 10,
   similarity?: PageSimilarityService,
+  wikiLinkValidationRetries: number = 3,
 ): AsyncGenerator<RunEvent> {
   const question = args[0]?.trim();
   if (!question) {
@@ -176,6 +178,59 @@ export async function* runQuery(
 
   if (signal.aborted) return;
   yield { kind: "tool_result", ok: !!answer, preview: answer ? `${answer.length} chars` : "no response" };
+
+  if (answer && !signal.aborted) {
+    yield { kind: "tool_use", name: "ValidateLinks", input: {} };
+    let skipValidation = false;
+    let knownStems = new Set<string>();
+    try {
+      const allVaultFiles = await vaultTools.listFiles("");
+      knownStems = new Set(
+        allVaultFiles.filter((f) => f.endsWith(".md")).map((f) => pageId(f)),
+      );
+    } catch {
+      console.warn("[ai-wiki] ValidateLinks: listFiles failed, skipping");
+      skipValidation = true;
+      yield { kind: "tool_result", ok: false, preview: "listFiles failed — skipped" };
+    }
+
+    if (!skipValidation) {
+      const links = extractAnswerLinks(answer);
+      const brokenInitial = findBrokenLinks(links, knownStems);
+      yield {
+        kind: "tool_result",
+        ok: brokenInitial.length === 0,
+        preview: brokenInitial.length === 0 ? "all valid" : `${brokenInitial.length} broken`,
+      };
+
+      if (brokenInitial.length > 0 && wikiLinkValidationRetries > 0) {
+        yield { kind: "tool_use", name: "FixingLinks", input: { broken: brokenInitial.length } };
+        const contextStems = [...selectedIds];
+        try {
+          const r = await rewriteWithValidLinks(llm, model, question, answer, brokenInitial, contextStems, opts, signal);
+          outputTokens += r.outputTokens;
+          const retryLinks = extractAnswerLinks(r.text);
+          const brokenFinal = findBrokenLinks(retryLinks, knownStems);
+          if (brokenFinal.length === 0) {
+            answer = r.text;
+            yield { kind: "tool_result", ok: true, preview: "fixed" };
+          } else {
+            answer = annotateBroken(r.text, new Set(brokenFinal));
+            yield { kind: "tool_result", ok: false, preview: `${brokenFinal.length} annotated` };
+          }
+        } catch (e) {
+          if (signal.aborted || (e as Error).name === "AbortError") return;
+          answer = annotateBroken(answer, new Set(brokenInitial));
+          yield { kind: "tool_result", ok: false, preview: "retry failed → annotated" };
+        }
+        yield { kind: "assistant_replace", text: answer };
+      } else if (brokenInitial.length > 0) {
+        answer = annotateBroken(answer, new Set(brokenInitial));
+        yield { kind: "assistant_replace", text: answer };
+      }
+    }
+  }
+
   if (streamStats) yield buildLlmCallStatsEvent(streamStats);
 
   if (save && answer) {
