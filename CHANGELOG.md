@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.153 — 2026-06-04
+
+### New
+- feat(agent-runner): add idle watchdog retry loop in run()
+- feat(settings): add UI controls for llmIdleTimeoutSec and llmIdleRetries
+- feat(i18n): add llmIdleTimeout and llmIdleRetries setting strings (en/ru/es)
+- feat(lint): add useLlm/entityTypeFilter params, wire through RunRequest
+- feat(lint): use stripInvalidWikiArticles for wiki_articles source cleanup
+- feat(ingest): use stripInvalidWikiArticles for wiki_articles, remove non-wiki stem preservation
+- feat(raw-frontmatter): add stripInvalidWikiArticles
+- feat(modals): add LintOptionsModal with domain, entity filter, and LLM toggle
+- feat(ui): replace DomainModal/ConfirmModal with LintOptionsModal for lint entry points
+- feat(settings): add lintOptions.useLlm with settings UI and i18n
+
+### Fixes
+- fix(agent-runner): detect silent idle abort when phases swallow AbortError
+
+### Other
+- refactor(settings): move nativeAgent/claudeAgent/proxy params to data.json
+
+---
+
 ## 0.1.151 — 2026-06-03
 
 ### Fixes

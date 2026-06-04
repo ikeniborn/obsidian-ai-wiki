@@ -26111,7 +26111,8 @@ __export(main_exports, {
   default: () => LlmWikiPlugin,
   migrateDomainWikiFolder: () => migrateDomainWikiFolder,
   migrateLegacyData: () => migrateLegacyData,
-  migrateToLocalV1: () => migrateToLocalV1
+  migrateToLocalV1: () => migrateToLocalV1,
+  migrateToLocalV2: () => migrateToLocalV2
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian8 = require("obsidian");
@@ -26158,10 +26159,16 @@ var DEFAULT_SETTINGS = {
     },
     structuredRetries: 1
   },
+  proxy: { enabled: false, url: "" },
   devMode: {
     enabled: false,
     evaluatorModel: "sonnet"
-  }
+  },
+  lintOptions: {
+    useLlm: true
+  },
+  llmIdleTimeoutSec: 300,
+  llmIdleRetries: 3
 };
 
 // src/settings.ts
@@ -26245,6 +26252,9 @@ var en = {
     proxy_hint: "Proxy applies to native-agent only. claude-agent uses its own configuration. On mobile, proxy is currently not supported.",
     proxy_mobile_warning: "Proxy is not supported on mobile in this version.",
     proxy_invalid: (m) => `Proxy config invalid: ${m}`,
+    h3_lint: "Lint",
+    lintUseLlm_name: "Use LLM for lint",
+    lintUseLlm_desc: "Uncheck to run programmatic-only lint (no LLM calls, much faster). Serves as default for the per-run modal toggle.",
     h3_graph: "Graph",
     h3_jaccard: "Jaccard",
     graphDepth_name: "BFS depth",
@@ -26260,7 +26270,11 @@ var en = {
     mergeDeleteWarnThreshold_name: "Merge delete warning threshold",
     mergeDeleteWarnThreshold_desc: "Ingest emits a warning when LLM requests deletion of more pages than this in a single merge. Default: 5.",
     structuredRetries_name: "Structured output retries",
-    structuredRetries_desc: "Retries on schema validation failure (0-3, default 1). Higher values improve success rate on weaker models at cost of latency/tokens."
+    structuredRetries_desc: "Retries on schema validation failure (0-3, default 1). Higher values improve success rate on weaker models at cost of latency/tokens.",
+    llmIdleTimeout_name: "LLM idle timeout (seconds)",
+    llmIdleTimeout_desc: "Seconds of LLM silence before aborting the attempt. 0 = disabled.",
+    llmIdleRetries_name: "LLM idle retries",
+    llmIdleRetries_desc: "Max retry attempts after idle abort (0 = no retry)."
   },
   view: {
     refreshTitle: "Refresh domains",
@@ -26343,6 +26357,7 @@ var en = {
     noDomains_desc: "No domains found. Create a domain via \xABAdd domain\xBB.",
     domainIdPlaceholder: "domain id",
     allWiki: "(all wiki)",
+    lint_title: "Lint Wiki",
     dryRun_name: "--dry-run",
     addDomain: "Add domain",
     id_name: "ID",
@@ -26466,6 +26481,9 @@ var ru = {
     proxy_hint: "\u041F\u0440\u043E\u043A\u0441\u0438 \u043F\u0440\u0438\u043C\u0435\u043D\u044F\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043A native-agent. claude-agent \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u0442 \u0441\u0432\u043E\u044E \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u044E. \u041D\u0430 \u043C\u043E\u0431\u0438\u043B\u044C\u043D\u043E\u043C \u043F\u0440\u043E\u043A\u0441\u0438 \u043F\u043E\u043A\u0430 \u043D\u0435 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044F.",
     proxy_mobile_warning: "\u041F\u0440\u043E\u043A\u0441\u0438 \u043D\u0430 \u043C\u043E\u0431\u0438\u043B\u044C\u043D\u043E\u043C \u043F\u043E\u043A\u0430 \u043D\u0435 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044F.",
     proxy_invalid: (m) => `\u041D\u0435\u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u0430\u044F \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u044F \u043F\u0440\u043E\u043A\u0441\u0438: ${m}`,
+    h3_lint: "Lint",
+    lintUseLlm_name: "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u044C LLM \u0434\u043B\u044F lint",
+    lintUseLlm_desc: "\u0421\u043D\u044F\u0442\u044C \u0444\u043B\u0430\u0436\u043E\u043A \u0434\u043B\u044F \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u043D\u043E\u0433\u043E lint \u0431\u0435\u0437 LLM (\u043D\u0430\u043C\u043D\u043E\u0433\u043E \u0431\u044B\u0441\u0442\u0440\u0435\u0435). \u0421\u043B\u0443\u0436\u0438\u0442 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435\u043C \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E \u0434\u043B\u044F \u043F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0430\u0442\u0435\u043B\u044F \u0432 \u043C\u043E\u0434\u0430\u043B\u044C\u043D\u043E\u043C \u043E\u043A\u043D\u0435.",
     h3_graph: "\u0413\u0440\u0430\u0444",
     h3_jaccard: "Jaccard",
     graphDepth_name: "\u0413\u043B\u0443\u0431\u0438\u043D\u0430 BFS",
@@ -26481,7 +26499,11 @@ var ru = {
     mergeDeleteWarnThreshold_name: "\u041F\u043E\u0440\u043E\u0433 \u043F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0435\u043D\u0438\u044F \u043E merge-\u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F\u0445",
     mergeDeleteWarnThreshold_desc: "Ingest \u043F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0430\u0435\u0442, \u0435\u0441\u043B\u0438 LLM \u043F\u0440\u043E\u0441\u0438\u0442 \u0443\u0434\u0430\u043B\u0438\u0442\u044C \u0431\u043E\u043B\u044C\u0448\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043F\u0440\u0438 merge. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E: 5.",
     structuredRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u043F\u0440\u0438 \u043E\u0448\u0438\u0431\u043A\u0435 \u0441\u0445\u0435\u043C\u044B",
-    structuredRetries_desc: "\u0421\u043A\u043E\u043B\u044C\u043A\u043E \u0440\u0430\u0437 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u0432\u044B\u0437\u043E\u0432 LLM \u043F\u0440\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0435 \u043E\u0442\u0432\u0435\u0442\u0430 (0-3, \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 1). \u0412\u044B\u0448\u0435 \u2014 \u043D\u0430\u0434\u0451\u0436\u043D\u0435\u0435 \u043D\u0430 \u0441\u043B\u0430\u0431\u044B\u0445 \u043C\u043E\u0434\u0435\u043B\u044F\u0445, \u0434\u043E\u0440\u043E\u0436\u0435 \u043F\u043E \u0442\u043E\u043A\u0435\u043D\u0430\u043C."
+    structuredRetries_desc: "\u0421\u043A\u043E\u043B\u044C\u043A\u043E \u0440\u0430\u0437 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u0432\u044B\u0437\u043E\u0432 LLM \u043F\u0440\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0435 \u043E\u0442\u0432\u0435\u0442\u0430 (0-3, \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 1). \u0412\u044B\u0448\u0435 \u2014 \u043D\u0430\u0434\u0451\u0436\u043D\u0435\u0435 \u043D\u0430 \u0441\u043B\u0430\u0431\u044B\u0445 \u043C\u043E\u0434\u0435\u043B\u044F\u0445, \u0434\u043E\u0440\u043E\u0436\u0435 \u043F\u043E \u0442\u043E\u043A\u0435\u043D\u0430\u043C.",
+    llmIdleTimeout_name: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442 \u043F\u0440\u043E\u0441\u0442\u043E\u044F LLM (\u0441\u0435\u043A\u0443\u043D\u0434\u044B)",
+    llmIdleTimeout_desc: "\u0421\u0435\u043A\u0443\u043D\u0434 \u0442\u0438\u0448\u0438\u043D\u044B LLM \u0434\u043E \u043F\u0440\u0435\u0440\u044B\u0432\u0430\u043D\u0438\u044F \u043F\u043E\u043F\u044B\u0442\u043A\u0438. 0 = \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E.",
+    llmIdleRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u043F\u0440\u0438 \u043F\u0440\u043E\u0441\u0442\u043E\u0435 LLM",
+    llmIdleRetries_desc: "\u041C\u0430\u043A\u0441. \u0447\u0438\u0441\u043B\u043E \u043F\u043E\u0432\u0442\u043E\u0440\u043E\u0432 \u043F\u043E\u0441\u043B\u0435 \u043F\u0440\u0435\u0440\u044B\u0432\u0430\u043D\u0438\u044F \u043F\u043E \u043F\u0440\u043E\u0441\u0442\u043E\u044E (0 = \u0431\u0435\u0437 \u043F\u043E\u0432\u0442\u043E\u0440\u043E\u0432)."
   },
   view: {
     refreshTitle: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D\u044B",
@@ -26564,6 +26586,7 @@ var ru = {
     noDomains_desc: "\u0414\u043E\u043C\u0435\u043D\u044B \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u044B. \u0421\u043E\u0437\u0434\u0430\u0439\u0442\u0435 \u0434\u043E\u043C\u0435\u043D \u0447\u0435\u0440\u0435\u0437 \xAB\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D\xBB.",
     domainIdPlaceholder: "id \u0434\u043E\u043C\u0435\u043D\u0430",
     allWiki: "(\u0432\u0441\u044F \u0432\u0438\u043A\u0438)",
+    lint_title: "Lint Wiki",
     dryRun_name: "--dry-run",
     addDomain: "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D",
     id_name: "ID",
@@ -26687,6 +26710,9 @@ var es = {
     proxy_hint: "El proxy se aplica solo a native-agent. claude-agent usa su propia configuraci\xF3n. En m\xF3vil el proxy no est\xE1 soportado.",
     proxy_mobile_warning: "El proxy no est\xE1 soportado en m\xF3vil en esta versi\xF3n.",
     proxy_invalid: (m) => `Configuraci\xF3n de proxy inv\xE1lida: ${m}`,
+    h3_lint: "Lint",
+    lintUseLlm_name: "Usar LLM para lint",
+    lintUseLlm_desc: "Desmarcar para ejecutar lint solo program\xE1tico (sin llamadas LLM, mucho m\xE1s r\xE1pido). Sirve como valor predeterminado para el toggle del modal.",
     h3_graph: "Grafo",
     h3_jaccard: "Jaccard",
     graphDepth_name: "Profundidad BFS",
@@ -26702,7 +26728,11 @@ var es = {
     mergeDeleteWarnThreshold_name: "Umbral de aviso de merge-deletes",
     mergeDeleteWarnThreshold_desc: "Ingest avisa cuando el LLM pide borrar m\xE1s p\xE1ginas que este umbral en un merge. Por defecto: 5.",
     structuredRetries_name: "Structured output retries",
-    structuredRetries_desc: "Retries on schema validation failure (0-3, default 1). Higher values improve success rate on weaker models at cost of latency/tokens."
+    structuredRetries_desc: "Retries on schema validation failure (0-3, default 1). Higher values improve success rate on weaker models at cost of latency/tokens.",
+    llmIdleTimeout_name: "Tiempo de espera de inactividad LLM (segundos)",
+    llmIdleTimeout_desc: "Segundos de silencio LLM antes de abortar el intento. 0 = desactivado.",
+    llmIdleRetries_name: "Reintentos por inactividad LLM",
+    llmIdleRetries_desc: "M\xE1x. reintentos tras aborto por inactividad (0 = sin reintentos)."
   },
   view: {
     refreshTitle: "Actualizar dominios",
@@ -26785,6 +26815,7 @@ var es = {
     noDomains_desc: "No se encontraron dominios. Crea uno mediante \xABA\xF1adir dominio\xBB.",
     domainIdPlaceholder: "id del dominio",
     allWiki: "(toda la wiki)",
+    lint_title: "Lint Wiki",
     dryRun_name: "--dry-run",
     addDomain: "A\xF1adir dominio",
     id_name: "ID",
@@ -27457,16 +27488,91 @@ var ShellConsentModal = class extends import_obsidian2.Modal {
     this.contentEl.empty();
   }
 };
+var LintOptionsModal = class extends import_obsidian2.Modal {
+  constructor(app, domains, defaultUseLlm, onSubmit) {
+    super(app);
+    this.domains = domains;
+    this.defaultUseLlm = defaultUseLlm;
+    this.onSubmit = onSubmit;
+    this.domain = "all";
+    this.useLlm = defaultUseLlm;
+    this.entityTypeFilter = [];
+  }
+  domains;
+  defaultUseLlm;
+  onSubmit;
+  domain;
+  useLlm;
+  entityTypeFilter;
+  entitySection = null;
+  onOpen() {
+    const T = i18n().modal;
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: T.lint_title });
+    new import_obsidian2.Setting(contentEl).setName(T.domain_name).addDropdown((d) => {
+      d.addOption("all", T.allWiki);
+      for (const entry of this.domains) d.addOption(entry.id, entry.name || entry.id);
+      d.setValue(this.domain);
+      d.onChange((v) => {
+        this.domain = v;
+        if (v === "all") this.entityTypeFilter = [];
+        this.renderEntitySection();
+      });
+    });
+    this.entitySection = contentEl.createDiv();
+    this.renderEntitySection();
+    new import_obsidian2.Setting(contentEl).setName("Use LLM").addToggle((t) => t.setValue(this.useLlm).onChange((v) => {
+      this.useLlm = v;
+    }));
+    new import_obsidian2.Setting(contentEl).addButton(
+      (b) => b.setButtonText(`\u25B6 ${T.run}`).setCta().onClick(() => {
+        this.close();
+        this.submit();
+      })
+    );
+  }
+  renderEntitySection() {
+    if (this.entitySection) this.entitySection.empty();
+    if (this.domain === "all") return;
+    const domainEntry = this.domains.find((d) => d.id === this.domain);
+    const entityTypes = domainEntry?.entity_types ?? [];
+    if (!entityTypes.length) return;
+    if (!this.entitySection) return;
+    this.entitySection.createEl("p", { text: "Entity types:" });
+    this.entityTypeFilter = entityTypes.map((e) => e.type);
+    for (const et of entityTypes) {
+      new import_obsidian2.Setting(this.entitySection).setName(et.type).addToggle((t) => {
+        t.setValue(true);
+        t.onChange((checked) => {
+          if (checked) {
+            if (!this.entityTypeFilter.includes(et.type)) this.entityTypeFilter.push(et.type);
+          } else {
+            this.entityTypeFilter = this.entityTypeFilter.filter((x) => x !== et.type);
+          }
+        });
+      });
+    }
+  }
+  submit() {
+    this.onSubmit(this.domain, {
+      useLlm: this.useLlm,
+      entityTypeFilter: this.domain === "all" ? [] : [...this.entityTypeFilter]
+    });
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
 
 // src/effective-settings.ts
 function resolveEffective(s, l) {
+  const proxyBase = s.proxy ?? { enabled: false, url: "" };
   return {
     ...s,
     backend: l.backend ?? s.backend,
     agentLogEnabled: l.agentLogEnabled ?? s.agentLogEnabled,
-    claudeAgent: { ...s.claudeAgent, ...l.claudeAgent ?? {} },
-    nativeAgent: { ...s.nativeAgent, ...l.nativeAgent ?? {} },
-    proxy: l.proxy ?? { enabled: false, url: "" }
+    nativeAgent: { ...s.nativeAgent, apiKey: l.nativeAgent?.apiKey ?? s.nativeAgent.apiKey },
+    proxy: { ...proxyBase, password: l.proxy?.password }
   };
 }
 
@@ -27533,37 +27639,27 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
     this.localCache = { ...this.localCache, ...patch };
     await this.plugin.localConfigStore.save(patch);
   }
-  async patchLocalNative(patch) {
-    const cur = this.localCache.nativeAgent ?? {
-      baseUrl: this.plugin.settings.nativeAgent.baseUrl,
-      apiKey: this.plugin.settings.nativeAgent.apiKey,
-      model: this.plugin.settings.nativeAgent.model,
-      temperature: this.plugin.settings.nativeAgent.temperature,
-      topP: this.plugin.settings.nativeAgent.topP
-    };
-    await this.patchLocal({ nativeAgent: { ...cur, ...patch } });
+  async patchLocalNativeApiKey(apiKey) {
+    await this.patchLocal({ nativeAgent: { apiKey } });
   }
-  async patchLocalClaude(patch) {
-    const cur = this.localCache.claudeAgent ?? {
-      model: this.plugin.settings.claudeAgent.model,
-      allowedTools: this.plugin.settings.claudeAgent.allowedTools
-    };
-    await this.patchLocal({ claudeAgent: { ...cur, ...patch } });
+  async patchLocalProxyPassword(password) {
+    const cur = this.localCache.proxy ?? {};
+    await this.patchLocal({ proxy: { ...cur, password } });
   }
-  async patchLocalProxy(patch) {
-    const cur = this.localCache.proxy ?? { enabled: false, url: "" };
-    await this.patchLocal({ proxy: { ...cur, ...patch } });
+  async patchProxy(patch) {
+    this.plugin.settings.proxy = { ...this.plugin.settings.proxy ?? { enabled: false, url: "" }, ...patch };
+    await this.plugin.saveSettings();
   }
   async fetchModels() {
-    const na = this.localCache.nativeAgent;
-    if (!na?.baseUrl) {
+    const na = this.plugin.settings.nativeAgent;
+    if (!na.baseUrl) {
       new import_obsidian3.Notice("Set Base URL first");
       return;
     }
     const url = `${na.baseUrl.replace(/\/$/, "")}/models`;
     try {
       const resp = await fetch(url, {
-        headers: { Authorization: `Bearer ${na.apiKey ?? ""}` }
+        headers: { Authorization: `Bearer ${this.localCache.nativeAgent?.apiKey ?? ""}` }
       });
       if (!resp.ok) throw new Error(`${resp.status}`);
       const json = await resp.json();
@@ -27623,6 +27719,24 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         const parsed = parseTimeoutString(v);
         if (parsed) {
           s.timeouts = { ...s.timeouts, ...parsed };
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName(T.settings.llmIdleTimeout_name).setDesc(T.settings.llmIdleTimeout_desc).addText(
+      (t) => t.setPlaceholder("300").setValue(String(s.llmIdleTimeoutSec)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isFinite(n) && n >= 0) {
+          s.llmIdleTimeoutSec = Math.floor(n);
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian3.Setting(containerEl).setName(T.settings.llmIdleRetries_name).setDesc(T.settings.llmIdleRetries_desc).addText(
+      (t) => t.setPlaceholder("3").setValue(String(s.llmIdleRetries)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isInteger(n) && n >= 0) {
+          s.llmIdleRetries = n;
           await this.plugin.saveSettings();
         }
       })
@@ -27727,13 +27841,15 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       if (!s.claudeAgent.perOperation) {
         new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_claude).addText(
           (t) => t.setPlaceholder("").setValue(eff.claudeAgent.model).onChange(async (v) => {
-            await this.patchLocalClaude({ model: v.trim() });
+            s.claudeAgent.model = v.trim();
+            await this.plugin.saveSettings();
           })
         );
       }
       new import_obsidian3.Setting(containerEl).setName(T.settings.allowedTools_name).setDesc(T.settings.allowedTools_desc).addText(
         (t) => t.setPlaceholder("Bash,read,write").setValue(eff.claudeAgent.allowedTools).onChange(async (v) => {
-          await this.patchLocalClaude({ allowedTools: v.trim() });
+          s.claudeAgent.allowedTools = v.trim();
+          await this.plugin.saveSettings();
         })
       );
       new import_obsidian3.Setting(containerEl).setName("Effort level").setDesc("\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u0440\u0430\u0437\u043C\u044B\u0448\u043B\u0435\u043D\u0438\u044F Claude (--effort). \u041F\u0443\u0441\u0442\u043E = \u0431\u0435\u0437 thinking. \u0412 per-op \u0440\u0435\u0436\u0438\u043C\u0435 \u2014 \u0433\u043B\u043E\u0431\u0430\u043B\u044C\u043D\u044B\u0439 fallback.").addDropdown((d) => {
@@ -27741,7 +27857,8 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         for (const lv of ["low", "medium", "high", "xhigh", "max"]) d.addOption(lv, lv);
         d.setValue(eff.claudeAgent.effort ?? "");
         d.onChange(async (v) => {
-          await this.patchLocalClaude({ effort: v || void 0 });
+          s.claudeAgent.effort = v || void 0;
+          await this.plugin.saveSettings();
         });
         return d;
       });
@@ -27783,12 +27900,13 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
     } else {
       new import_obsidian3.Setting(containerEl).setName(T.settings.baseUrl_name).setDesc(T.settings.baseUrl_desc).addText(
         (t) => t.setPlaceholder("").setValue(eff.nativeAgent.baseUrl).onChange(async (v) => {
-          await this.patchLocalNative({ baseUrl: v.trim() });
+          s.nativeAgent.baseUrl = v.trim();
+          await this.plugin.saveSettings();
         })
       );
       new import_obsidian3.Setting(containerEl).setName(T.settings.apiKey_name).setDesc(T.settings.apiKey_desc).addText(
         (t) => t.setPlaceholder("Ollama").setValue(eff.nativeAgent.apiKey).onChange(async (v) => {
-          await this.patchLocalNative({ apiKey: v.trim() });
+          await this.patchLocalNativeApiKey(v.trim());
         })
       );
       new import_obsidian3.Setting(containerEl).setName("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u0435").setDesc("\u041E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u0442 \u0442\u0435\u0441\u0442\u043E\u0432\u044B\u0439 \u043F\u0440\u043E\u043C\u043F\u0442 \u043A endpoint \u0434\u043B\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E\u0441\u0442\u0438.").addButton((b) => {
@@ -27812,7 +27930,8 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
           this._chatModels,
           eff.nativeAgent.model,
           async (v) => {
-            await this.patchLocalNative({ model: v });
+            s.nativeAgent.model = v;
+            await this.plugin.saveSettings();
           }
         );
         new import_obsidian3.Setting(containerEl).setName(T.settings.maxTokens_name).setDesc(T.settings.maxTokens_desc).addText(
@@ -27834,7 +27953,10 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         new import_obsidian3.Setting(containerEl).setName(T.settings.temperature_name).setDesc(T.settings.temperature_desc).addText(
           (t) => t.setPlaceholder("0.2").setValue(String(eff.nativeAgent.temperature)).onChange(async (v) => {
             const n = Number(v);
-            if (Number.isFinite(n) && n >= 0 && n <= 2) await this.patchLocalNative({ temperature: n });
+            if (Number.isFinite(n) && n >= 0 && n <= 2) {
+              s.nativeAgent.temperature = n;
+              await this.plugin.saveSettings();
+            }
           })
         );
       }
@@ -27913,22 +28035,26 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       }
       new import_obsidian3.Setting(containerEl).setName("Semantic Search").setHeading();
       new import_obsidian3.Setting(containerEl).setName("Enable semantic similarity (embeddings)").setDesc("Use embedding vectors for relevant page selection. Requires native backend with an embeddings-capable model.").addToggle(
-        (t) => t.setValue(this.localCache.nativeAgent?.embeddingModel !== void 0).onChange(async (v) => {
+        (t) => t.setValue(s.nativeAgent.embeddingModel !== void 0).onChange(async (v) => {
           if (!v) {
-            await this.patchLocalNative({ embeddingModel: void 0, embeddingDimensions: void 0 });
+            s.nativeAgent.embeddingModel = void 0;
+            s.nativeAgent.embeddingDimensions = void 0;
+            await this.plugin.saveSettings();
             this.display();
           } else {
-            await this.patchLocalNative({ embeddingModel: "" });
+            s.nativeAgent.embeddingModel = "";
+            await this.plugin.saveSettings();
             this.display();
           }
         })
       );
-      if (this.localCache.nativeAgent?.embeddingModel !== void 0) {
+      if (s.nativeAgent.embeddingModel !== void 0) {
         new import_obsidian3.Setting(containerEl).setName("Relevant pages (top-K)").setDesc("Max wiki pages loaded per ingest call. Lower = faster, less context. Default: 15.").addText(
-          (t) => t.setPlaceholder("15").setValue(String(this.localCache.nativeAgent?.relevantPagesTopK ?? 15)).onChange(async (v) => {
+          (t) => t.setPlaceholder("15").setValue(String(s.nativeAgent.relevantPagesTopK ?? 15)).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n > 0) {
-              await this.patchLocalNative({ relevantPagesTopK: Math.floor(n) });
+              s.nativeAgent.relevantPagesTopK = Math.floor(n);
+              await this.plugin.saveSettings();
             }
           })
         );
@@ -27936,26 +28062,36 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         this.addModelControl(
           new import_obsidian3.Setting(containerEl).setName("Embedding model").setDesc("Model name for embeddings, e.g. text-embedding-3-small"),
           embModels,
-          this.localCache.nativeAgent?.embeddingModel ?? "",
+          s.nativeAgent.embeddingModel ?? "",
           async (v) => {
-            await this.patchLocalNative({ embeddingModel: v || void 0 });
+            s.nativeAgent.embeddingModel = v || void 0;
+            await this.plugin.saveSettings();
           }
         );
         new import_obsidian3.Setting(containerEl).setName("Embedding dimensions").setDesc("Vector dimensions, e.g. 512 or 1536").addText(
-          (t) => t.setPlaceholder("512").setValue(String(this.localCache.nativeAgent?.embeddingDimensions ?? "")).onChange(async (v) => {
+          (t) => t.setPlaceholder("512").setValue(String(s.nativeAgent.embeddingDimensions ?? "")).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n > 0) {
-              await this.patchLocalNative({ embeddingDimensions: Math.floor(n) });
+              s.nativeAgent.embeddingDimensions = Math.floor(n);
+              await this.plugin.saveSettings();
             }
           })
         );
         new import_obsidian3.Setting(containerEl).setName(T.settings.mergeDeleteWarnThreshold_name).setDesc(T.settings.mergeDeleteWarnThreshold_desc).addSlider(
-          (s2) => s2.setLimits(1, 20, 1).setDynamicTooltip().setValue(this.localCache.nativeAgent?.mergeDeleteWarnThreshold ?? 5).onChange(async (v) => {
-            await this.patchLocalNative({ mergeDeleteWarnThreshold: v });
+          (sl) => sl.setLimits(1, 20, 1).setDynamicTooltip().setValue(s.nativeAgent.mergeDeleteWarnThreshold ?? 5).onChange(async (v) => {
+            s.nativeAgent.mergeDeleteWarnThreshold = v;
+            await this.plugin.saveSettings();
           })
         );
       }
     }
+    new import_obsidian3.Setting(containerEl).setName(T.settings.h3_lint).setHeading();
+    new import_obsidian3.Setting(containerEl).setName(T.settings.lintUseLlm_name).setDesc(T.settings.lintUseLlm_desc).addToggle(
+      (t) => t.setValue(s.lintOptions.useLlm).onChange(async (v) => {
+        s.lintOptions.useLlm = v;
+        await this.plugin.saveSettings();
+      })
+    );
     new import_obsidian3.Setting(containerEl).setName(T.settings.h3_graph).setHeading();
     new import_obsidian3.Setting(containerEl).setName(T.settings.graphDepth_name).setDesc(T.settings.graphDepth_desc).addText(
       (t) => t.setPlaceholder("1").setValue(String(s.graphDepth)).onChange(async (v) => {
@@ -27999,30 +28135,30 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
       new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
       new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_enabled_name).setDesc(T.settings.proxy_enabled_desc).addToggle(
         (t) => t.setValue(proxy.enabled).onChange(async (v) => {
-          await this.patchLocalProxy({ enabled: v });
+          await this.patchProxy({ enabled: v });
           this.display();
         })
       );
       if (proxy.enabled) {
         new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_url_name).setDesc(T.settings.proxy_url_desc).addText(
           (t) => t.setPlaceholder("http://proxy.example.com:8080").setValue(proxy.url).onChange(async (v) => {
-            await this.patchLocalProxy({ url: v.trim() });
+            await this.patchProxy({ url: v.trim() });
           })
         );
         new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_username_name).setDesc(T.settings.proxy_username_desc).addText(
           (t) => t.setValue(proxy.username ?? "").onChange(async (v) => {
-            await this.patchLocalProxy({ username: v });
+            await this.patchProxy({ username: v });
           })
         );
         new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_password_name).setDesc(T.settings.proxy_password_desc).addText((t) => {
           t.setValue(proxy.password ?? "").onChange(async (v) => {
-            await this.patchLocalProxy({ password: v });
+            await this.patchLocalProxyPassword(v);
           });
           t.inputEl.type = "password";
         });
         new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_noProxy_name).setDesc(T.settings.proxy_noProxy_desc).addText(
           (t) => t.setPlaceholder("localhost,127.0.0.1").setValue(proxy.noProxy ?? "").onChange(async (v) => {
-            await this.patchLocalProxy({ noProxy: v.trim() });
+            await this.patchProxy({ noProxy: v.trim() });
           })
         );
         containerEl.createEl("p", { text: T.settings.proxy_hint, cls: "setting-item-description" });
@@ -29327,12 +29463,12 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
         ], () => void this.plugin.controller.ingestActive(domainId)).open();
       });
       this.lintBtn.addEventListener("click", () => {
-        const d = this.domainSelect.value;
-        const domainLabel = d ? `\xAB${d}\xBB` : "all wiki";
-        new ConfirmModal(this.plugin.app, "Lint \u2014 confirm", [
-          `Domain: ${domainLabel}`,
-          "Claude will check wiki pages for quality and update entity_types."
-        ], () => void this.plugin.controller.lint(d || "all")).open();
+        new LintOptionsModal(
+          this.plugin.app,
+          this.domains,
+          this.plugin.settings.lintOptions.useLlm,
+          (domain, opts2) => void this.plugin.controller.lint(domain, opts2)
+        ).open();
       });
     }
     void this.refreshDomains();
@@ -36183,6 +36319,41 @@ function filterStaleWikiLinks(content, existingStems, fields) {
 ${(0, import_yaml.stringify)(parsed)}---
 ${body}`, warnings };
 }
+function stripInvalidWikiArticles(content, existingWikiStems) {
+  const warnings = [];
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return { content, warnings };
+  let parsed;
+  try {
+    parsed = (0, import_yaml.parse)(fmMatch[1]) ?? {};
+  } catch {
+    return { content, warnings };
+  }
+  const val = parsed["wiki_articles"];
+  if (!Array.isArray(val) || val.length === 0) return { content, warnings };
+  const filtered = val.filter((entry) => {
+    if (!WIKILINK_RE.test(entry)) {
+      warnings.push(`wiki_articles: plain text "${entry}" \u2014 removed`);
+      return false;
+    }
+    const stem = entry.slice(2, -2);
+    if (!GENERIC_WIKI_STEM_REGEX.test(stem)) {
+      warnings.push(`wiki_articles: non-wiki stem ${entry} \u2014 removed`);
+      return false;
+    }
+    if (!existingWikiStems.has(stem)) {
+      warnings.push(`wiki_articles: stale link ${entry} \u2014 removed`);
+      return false;
+    }
+    return true;
+  });
+  if (filtered.length === val.length) return { content, warnings };
+  parsed["wiki_articles"] = filtered;
+  const body = content.slice(fmMatch[0].length);
+  return { content: `---
+${(0, import_yaml.stringify)(parsed)}---
+${body}`, warnings };
+}
 var SOURCE_RULES = [
   { field: "wiki_articles", kind: "list-wikilinks-stem-only" },
   { field: "wiki_added", kind: "date-scalar" },
@@ -37187,9 +37358,9 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     const wikiFileStems = new Set(
       [...existingPaths, ...written].filter((p) => !deletedPaths.includes(p) && !p.endsWith("_index.md")).map((p) => p.split("/").pop().replace(/\.md$/, ""))
     );
-    const existingArticleStems = parseWikiArticlesFromFm(repairedSource).map((link) => link.slice(2, -2)).filter((stem) => !GENERIC_WIKI_STEM_REGEX.test(stem));
-    const existingStems = /* @__PURE__ */ new Set([...wikiFileStems, ...existingArticleStems]);
-    const { content: filteredSource, warnings: staleWarnings } = filterStaleWikiLinks(repairedSource, existingStems, ["wiki_articles", "related"]);
+    const { content: wikiArticlesFiltered, warnings: wikiArticlesWarnings } = stripInvalidWikiArticles(repairedSource, wikiFileStems);
+    const { content: filteredSource, warnings: relatedWarnings } = filterStaleWikiLinks(wikiArticlesFiltered, wikiFileStems, ["related"]);
+    const staleWarnings = [...wikiArticlesWarnings, ...relatedWarnings];
     const allSourceWarnings = [...sourceWarnings, ...staleWarnings];
     if (allSourceWarnings.length > 0) {
       yield {
@@ -37783,7 +37954,7 @@ function validateWikiSources(content, originalContent, knownStems, titleMap, wik
   }
   return result;
 }
-async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal, wikiLinkValidationRetries = 3, opts = {}, similarity) {
+async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal, wikiLinkValidationRetries = 3, opts = {}, similarity, useLlm = true, entityTypeFilter = []) {
   const domainId = args[0];
   const targets = domainId ? domains.filter((d) => d.id === domainId) : domains;
   if (targets.length === 0) {
@@ -37858,195 +38029,203 @@ ${schemaContent}` : ""
     const deletedRefs = [];
     const writtenPaths = [];
     const skippedArticles = [];
-    const total = articlePaths.length;
-    for (let i = 0; i < total; i++) {
-      if (signal.aborted) return;
-      const targetPath = articlePaths[i];
-      const articleName = targetPath.split("/").pop().replace(/\.md$/, "");
-      const articleContent = pages.get(targetPath) ?? "";
-      const otherPaths = files.filter((p) => p !== targetPath && pages.has(p));
-      const topKPaths = similarity ? await similarity.selectRelevant(articleContent, annotations, otherPaths) : [];
-      const seeds = [pageId(targetPath), ...topKPaths.map((p) => pageId(p))];
-      const expanded = bfsExpand(seeds, graph, 1);
-      const contextPaths = [...expanded].map((pid) => pidToPath.get(pid)).filter((p) => !!p && p !== targetPath && pages.has(p));
-      const articleIssues = allStructuralIssues.split("\n").filter((l) => l.includes(articleName) || l.includes(targetPath)).join("\n") || "\u041D\u0435\u0442.";
-      const contextBlock = contextPaths.map((p) => `--- ${p} ---
+    if (useLlm) {
+      const loopPaths = entityTypeFilter.length > 0 ? articlePaths.filter(
+        (p) => entityTypeFilter.some((et) => {
+          const subfolder = domain.entity_types?.find((e) => e.type === et)?.wiki_subfolder;
+          return subfolder && p.includes(`/${subfolder}/`);
+        })
+      ) : articlePaths;
+      const total = loopPaths.length;
+      for (let i = 0; i < total; i++) {
+        if (signal.aborted) return;
+        const targetPath = loopPaths[i];
+        const articleName = targetPath.split("/").pop().replace(/\.md$/, "");
+        const articleContent = pages.get(targetPath) ?? "";
+        const otherPaths = files.filter((p) => p !== targetPath && pages.has(p));
+        const topKPaths = similarity ? await similarity.selectRelevant(articleContent, annotations, otherPaths) : [];
+        const seeds = [pageId(targetPath), ...topKPaths.map((p) => pageId(p))];
+        const expanded = bfsExpand(seeds, graph, 1);
+        const contextPaths = [...expanded].map((pid) => pidToPath.get(pid)).filter((p) => !!p && p !== targetPath && pages.has(p));
+        const articleIssues = allStructuralIssues.split("\n").filter((l) => l.includes(articleName) || l.includes(targetPath)).join("\n") || "\u041D\u0435\u0442.";
+        const contextBlock = contextPaths.map((p) => `--- ${p} ---
 ${pages.get(p) ?? ""}`).join("\n\n");
-      const messages = [
-        { role: "system", content: systemContent },
-        {
-          role: "user",
-          content: [
-            `\u0414\u043E\u043C\u0435\u043D: ${domain.id} (${domain.name})`,
-            `\u0410\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0435\u043C\u0430\u044F \u0441\u0442\u0430\u0442\u044C\u044F: ${targetPath}`,
-            `\u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B:
+        const messages = [
+          { role: "system", content: systemContent },
+          {
+            role: "user",
+            content: [
+              `\u0414\u043E\u043C\u0435\u043D: ${domain.id} (${domain.name})`,
+              `\u0410\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0435\u043C\u0430\u044F \u0441\u0442\u0430\u0442\u044C\u044F: ${targetPath}`,
+              `\u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B:
 ${articleIssues}`,
-            "",
-            `--- ${targetPath} ---`,
-            articleContent,
-            "",
-            contextBlock ? `--- \u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 (\u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u0441\u0442\u0430\u0442\u044C\u0438) ---
+              "",
+              `--- ${targetPath} ---`,
+              articleContent,
+              "",
+              contextBlock ? `--- \u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 (\u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u0441\u0442\u0430\u0442\u044C\u0438) ---
 ${contextBlock}` : ""
-          ].filter((l) => l !== void 0).join("\n")
-        }
-      ];
-      yield { kind: "info_text", icon: "\u{1F50D}", summary: `Checking ${i + 1}/${total}: ${articleName}` };
-      yield { kind: "tool_use", name: "Analysing wiki", input: { article: articleName, context: contextPaths.length } };
-      const pwtEvents = [];
-      let lintResult;
-      try {
-        lintResult = await parseWithRetry({
-          llm,
-          model,
-          baseMessages: messages,
-          opts,
-          schema: LintOutputSchema,
-          maxRetries: opts.structuredRetries ?? 1,
-          callSite: "lint.fix",
-          signal,
-          onEvent: (ev) => pwtEvents.push(ev)
-        });
-        const delCount = (lintResult.value.deletes ?? []).length;
-        yield { kind: "tool_result", ok: true, preview: `${lintResult.value.fixes.length} fixes${delCount ? `, ${delCount} deleted` : ""}` };
-      } catch (e) {
-        if (signal.aborted || e.name === "AbortError") return;
-        const errMsg = e.message ?? "";
-        const isTokenLimit = errMsg.toLowerCase().includes("context_length") || errMsg.toLowerCase().includes("too large");
-        const preview = isTokenLimit ? `Article too large \u2014 skipped: ${targetPath}` : errMsg;
-        yield { kind: "tool_result", ok: false, preview };
-        for (const ev of pwtEvents) yield ev;
-        skippedArticles.push(articleName);
-        continue;
-      }
-      for (const ev of pwtEvents) yield ev;
-      if (signal.aborted) return;
-      outputTokens += lintResult.outputTokens;
-      const { fixes, deletes = [] } = lintResult.value;
-      yield { kind: "assistant_text", delta: lintResult.value.report };
-      reportParts.push(`### ${articleName}
-${lintResult.value.report}`);
-      if (fixes.length > 0) {
-        const fixesMapThisStep = new Map(fixes.map((p) => [p.path, p.content]));
-        const wlFixResult = fixWikiLinks(fixesMapThisStep, wikiLinkValidationRetries, knownStems);
-        if (wlFixResult.warnings.length > 0) {
-          yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "WikiLink warnings", details: wlFixResult.warnings };
-        }
-        for (const fix of fixes) {
-          yield { kind: "assistant_text", delta: `  \u2022 ${fix.path.split("/").pop()}...
-` };
-          if (!fix.path.startsWith(wikiVaultPath + "/")) {
-            yield { kind: "tool_use", name: "Write", input: { path: fix.path } };
-            yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
-            continue;
+            ].filter((l) => l !== void 0).join("\n")
           }
-          yield { kind: "tool_use", name: "Update", input: { path: fix.path } };
+        ];
+        yield { kind: "info_text", icon: "\u{1F50D}", summary: `Checking ${i + 1}/${total}: ${articleName}` };
+        yield { kind: "tool_use", name: "Analysing wiki", input: { article: articleName, context: contextPaths.length } };
+        const pwtEvents = [];
+        let lintResult;
+        try {
+          lintResult = await parseWithRetry({
+            llm,
+            model,
+            baseMessages: messages,
+            opts,
+            schema: LintOutputSchema,
+            maxRetries: opts.structuredRetries ?? 1,
+            callSite: "lint.fix",
+            signal,
+            onEvent: (ev) => pwtEvents.push(ev)
+          });
+          const delCount = (lintResult.value.deletes ?? []).length;
+          yield { kind: "tool_result", ok: true, preview: `${lintResult.value.fixes.length} fixes${delCount ? `, ${delCount} deleted` : ""}` };
+        } catch (e) {
+          if (signal.aborted || e.name === "AbortError") return;
+          const errMsg = e.message ?? "";
+          const isTokenLimit = errMsg.toLowerCase().includes("context_length") || errMsg.toLowerCase().includes("too large");
+          const preview = isTokenLimit ? `Article too large \u2014 skipped: ${targetPath}` : errMsg;
+          yield { kind: "tool_result", ok: false, preview };
+          for (const ev of pwtEvents) yield ev;
+          skippedArticles.push(articleName);
+          continue;
+        }
+        for (const ev of pwtEvents) yield ev;
+        if (signal.aborted) return;
+        outputTokens += lintResult.outputTokens;
+        const { fixes, deletes = [] } = lintResult.value;
+        yield { kind: "assistant_text", delta: lintResult.value.report };
+        reportParts.push(`### ${articleName}
+${lintResult.value.report}`);
+        if (fixes.length > 0) {
+          const fixesMapThisStep = new Map(fixes.map((p) => [p.path, p.content]));
+          const wlFixResult = fixWikiLinks(fixesMapThisStep, wikiLinkValidationRetries, knownStems);
+          if (wlFixResult.warnings.length > 0) {
+            yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "WikiLink warnings", details: wlFixResult.warnings };
+          }
+          for (const fix of fixes) {
+            yield { kind: "assistant_text", delta: `  \u2022 ${fix.path.split("/").pop()}...
+` };
+            if (!fix.path.startsWith(wikiVaultPath + "/")) {
+              yield { kind: "tool_use", name: "Write", input: { path: fix.path } };
+              yield { kind: "tool_result", ok: false, preview: `Blocked: path outside wiki folder (${wikiVaultPath})` };
+              continue;
+            }
+            yield { kind: "tool_use", name: "Update", input: { path: fix.path } };
+            try {
+              const rawFixed = wlFixResult.fixed.get(fix.path) ?? fix.content;
+              const originalContent = pages.get(fix.path) ?? "";
+              const wikiStems = new Set([...pages.keys()].map((p) => p.split("/").pop().replace(/\.md$/, "")));
+              const fixedContent = validateWikiSources(rawFixed, originalContent, knownStems, titleMap, wikiStems);
+              await vaultTools.write(fix.path, fixedContent);
+              writtenPaths.push(fix.path);
+              pages.set(fix.path, fixedContent);
+              if (fix.annotation) {
+                annotations.set(pageId(fix.path), fix.annotation);
+                try {
+                  await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(fix.path), fix.annotation, fix.path);
+                } catch {
+                }
+              }
+              yield { kind: "tool_result", ok: true };
+            } catch (e) {
+              yield { kind: "tool_result", ok: false, preview: e.message };
+            }
+          }
+          reportParts.push(`#### \u0418\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E: ${fixes.length} \u0441\u0442\u0440\u0430\u043D\u0438\u0446`);
+        }
+        for (const { path: delPath, redirect_to } of deletes) {
+          const deletedName = pageId(delPath);
+          const redirectName = redirect_to ? pageId(redirect_to) : null;
+          yield { kind: "tool_use", name: "Delete", input: { path: delPath } };
           try {
-            const rawFixed = wlFixResult.fixed.get(fix.path) ?? fix.content;
-            const originalContent = pages.get(fix.path) ?? "";
-            const wikiStems = new Set([...pages.keys()].map((p) => p.split("/").pop().replace(/\.md$/, "")));
-            const fixedContent = validateWikiSources(rawFixed, originalContent, knownStems, titleMap, wikiStems);
-            await vaultTools.write(fix.path, fixedContent);
-            writtenPaths.push(fix.path);
-            pages.set(fix.path, fixedContent);
-            if (fix.annotation) {
-              annotations.set(pageId(fix.path), fix.annotation);
-              try {
-                await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(fix.path), fix.annotation, fix.path);
-              } catch {
+            if (typeof vaultTools.remove === "function") {
+              await vaultTools.remove(delPath);
+            } else {
+              yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: `vaultTools.remove not supported \u2014 physical delete skipped: ${delPath}` };
+            }
+            pages.delete(delPath);
+            annotations.delete(deletedName);
+            for (const [wikiPath, wikiContent] of pages) {
+              if (wikiContent.includes(`[[${deletedName}]]`)) {
+                const newContent = redirectName ? wikiContent.replaceAll(`[[${deletedName}]]`, `[[${redirectName}]]`) : wikiContent.replaceAll(`[[${deletedName}]]`, "");
+                await vaultTools.write(wikiPath, newContent);
+                pages.set(wikiPath, newContent);
               }
             }
-            yield { kind: "tool_result", ok: true };
+            deletedRefs.push({ deletedName, redirectName });
+            yield { kind: "tool_result", ok: true, preview: redirectName ? `merged \u2192 [[${redirectName}]]` : "deleted" };
           } catch (e) {
             yield { kind: "tool_result", ok: false, preview: e.message };
           }
         }
-        reportParts.push(`#### \u0418\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E: ${fixes.length} \u0441\u0442\u0440\u0430\u043D\u0438\u0446`);
-      }
-      for (const { path: delPath, redirect_to } of deletes) {
-        const deletedName = pageId(delPath);
-        const redirectName = redirect_to ? pageId(redirect_to) : null;
-        yield { kind: "tool_use", name: "Delete", input: { path: delPath } };
-        try {
-          if (typeof vaultTools.remove === "function") {
-            await vaultTools.remove(delPath);
-          } else {
-            yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: `vaultTools.remove not supported \u2014 physical delete skipped: ${delPath}` };
+        ({ graph } = graphCache.get(domain.id, pages));
+        if (similarity) {
+          const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, annotations);
+          if (similarity.config.mode === "embedding" && updated > 0) {
+            yield { kind: "info_text", icon: "\u{1F4E4}", summary: `\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432: ${updated}` };
           }
-          pages.delete(delPath);
-          annotations.delete(deletedName);
-          for (const [wikiPath, wikiContent] of pages) {
-            if (wikiContent.includes(`[[${deletedName}]]`)) {
-              const newContent = redirectName ? wikiContent.replaceAll(`[[${deletedName}]]`, `[[${redirectName}]]`) : wikiContent.replaceAll(`[[${deletedName}]]`, "");
-              await vaultTools.write(wikiPath, newContent);
-              pages.set(wikiPath, newContent);
+        }
+      }
+      for (const wikiPath of writtenPaths) {
+        const wikiContent = pages.get(wikiPath);
+        if (!wikiContent) continue;
+        if (parseWikiSourcesFromFm(wikiContent).length === 0) {
+          const stem = pageId(wikiPath);
+          try {
+            if (typeof vaultTools.remove === "function") {
+              await vaultTools.remove(wikiPath);
+            }
+          } catch {
+          }
+          pages.delete(wikiPath);
+          deletedRefs.push({ deletedName: stem, redirectName: null });
+          yield {
+            kind: "info_text",
+            icon: "\u26A0\uFE0F",
+            summary: `Deleted empty-sources wiki page: ${stem}`
+          };
+        }
+      }
+      if (skippedArticles.length > 0) {
+        reportParts.push(`### \u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u044B (\u043E\u0448\u0438\u0431\u043A\u0430 LLM)
+${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
+      }
+      if (deletedRefs.length > 0) {
+        for (const sourcePath of allMdPaths.filter((p) => !p.startsWith(wikiVaultPath + "/"))) {
+          const content = await vaultTools.read(sourcePath).catch(() => null);
+          if (!content) continue;
+          let updated = content;
+          for (const { deletedName, redirectName } of deletedRefs) {
+            if (updated.includes(`[[${deletedName}]]`)) {
+              updated = redirectName ? updated.replaceAll(`[[${deletedName}]]`, `[[${redirectName}]]`) : updated.replaceAll(`[[${deletedName}]]`, "");
             }
           }
-          deletedRefs.push({ deletedName, redirectName });
-          yield { kind: "tool_result", ok: true, preview: redirectName ? `merged \u2192 [[${redirectName}]]` : "deleted" };
-        } catch (e) {
-          yield { kind: "tool_result", ok: false, preview: e.message };
+          if (updated !== content) await vaultTools.write(sourcePath, updated);
         }
       }
-      ({ graph } = graphCache.get(domain.id, pages));
-      if (similarity) {
-        const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, annotations);
-        if (similarity.config.mode === "embedding" && updated > 0) {
-          yield { kind: "info_text", icon: "\u{1F4E4}", summary: `\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432: ${updated}` };
-        }
-      }
-    }
-    for (const wikiPath of writtenPaths) {
-      const wikiContent = pages.get(wikiPath);
-      if (!wikiContent) continue;
-      if (parseWikiSourcesFromFm(wikiContent).length === 0) {
-        const stem = pageId(wikiPath);
-        try {
-          if (typeof vaultTools.remove === "function") {
-            await vaultTools.remove(wikiPath);
-          }
-        } catch {
-        }
-        pages.delete(wikiPath);
-        deletedRefs.push({ deletedName: stem, redirectName: null });
-        yield {
-          kind: "info_text",
-          icon: "\u26A0\uFE0F",
-          summary: `Deleted empty-sources wiki page: ${stem}`
-        };
-      }
-    }
-    if (skippedArticles.length > 0) {
-      reportParts.push(`### \u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u044B (\u043E\u0448\u0438\u0431\u043A\u0430 LLM)
-${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
-    }
-    if (deletedRefs.length > 0) {
-      for (const sourcePath of allMdPaths.filter((p) => !p.startsWith(wikiVaultPath + "/"))) {
-        const content = await vaultTools.read(sourcePath).catch(() => null);
-        if (!content) continue;
-        let updated = content;
-        for (const { deletedName, redirectName } of deletedRefs) {
-          if (updated.includes(`[[${deletedName}]]`)) {
-            updated = redirectName ? updated.replaceAll(`[[${deletedName}]]`, `[[${redirectName}]]`) : updated.replaceAll(`[[${deletedName}]]`, "");
-          }
-        }
-        if (updated !== content) await vaultTools.write(sourcePath, updated);
-      }
-    }
-    if (signal.aborted) return;
-    yield { kind: "assistant_text", delta: `
+      if (signal.aborted) return;
+      yield { kind: "assistant_text", delta: `
 Actualizing domain config for "${domain.id}"...
 ` };
-    yield { kind: "tool_use", name: "Updating config", input: {} };
-    const patchRes = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
-    yield { kind: "tool_result", ok: true, preview: patchRes.patch ? "config updated" : "no changes" };
-    outputTokens += patchRes.outputTokens;
-    const patch = patchRes.patch;
-    if (patch) {
-      const diffReport = computeEntityDiff(domain.entity_types ?? [], patch.entity_types ?? domain.entity_types ?? []);
-      reportParts.push(diffReport);
-      yield { kind: "domain_updated", domainId: domain.id, patch };
+      yield { kind: "tool_use", name: "Updating config", input: {} };
+      const patchRes = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
+      yield { kind: "tool_result", ok: true, preview: patchRes.patch ? "config updated" : "no changes" };
+      outputTokens += patchRes.outputTokens;
+      const patch = patchRes.patch;
+      if (patch) {
+        const diffReport = computeEntityDiff(domain.entity_types ?? [], patch.entity_types ?? domain.entity_types ?? []);
+        reportParts.push(diffReport);
+        yield { kind: "domain_updated", domainId: domain.id, patch };
+      }
+      if (signal.aborted) return;
     }
-    if (signal.aborted) return;
     const repairWarnings = [];
     for (const [wikiPath, wikiContent] of pages) {
       const { content: repaired, warnings } = validateAndRepairWikiPageFrontmatter(wikiContent);
@@ -38084,7 +38263,10 @@ Actualizing domain config for "${domain.id}"...
     for (const sourcePath of sourcePaths) {
       const rawContent = await vaultTools.read(sourcePath).catch(() => null);
       if (!rawContent) continue;
-      const { content: filteredContent } = filterStaleWikiLinks(rawContent, existingWikiStems, ["wiki_articles"]);
+      const { content: filteredContent, warnings: stripWarnings } = stripInvalidWikiArticles(rawContent, existingWikiStems);
+      if (stripWarnings.length > 0) {
+        yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: `wiki_articles repaired: ${sourcePath}`, details: stripWarnings };
+      }
       if (filteredContent !== rawContent) await vaultTools.write(sourcePath, filteredContent);
     }
     const backlinks = /* @__PURE__ */ new Map();
@@ -38127,7 +38309,7 @@ Actualizing domain config for "${domain.id}"...
         op: "lint",
         domainId: domain.id,
         fixed: writtenPaths,
-        checkedCount: total,
+        checkedCount: articlePaths.length,
         outputTokens
       });
     } catch {
@@ -39565,7 +39747,7 @@ var AgentRunner = class {
         yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, this.settings.bfsTopK, similarity);
         break;
       case "lint":
-        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.wikiLinkValidationRetries, opts, similarity);
+        yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.wikiLinkValidationRetries, opts, similarity, req.lintOpts?.useLlm ?? true, req.lintOpts?.entityTypeFilter ?? []);
         break;
       case "chat": {
         const domain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
@@ -39612,29 +39794,69 @@ var AgentRunner = class {
     const domains = req.domainId ? this.domains.filter((d) => d.id === req.domainId) : this.domains;
     const similarity = this.buildSimilarity();
     const startMs = Date.now();
-    let finalResultText = "";
-    for await (const ev of this.runOperation(req, model, opts, vaultRoot, domains, similarity)) {
-      if (ev.kind === "result") finalResultText = ev.text;
-      yield ev;
-    }
-    if (this.settings.devMode?.enabled && finalResultText) {
-      const taskInput = req.args.join(" ") || req.operation;
-      await this.writeDevLog(vaultRoot, {
-        operation: req.operation,
-        model,
-        systemPrompt: opts.systemPrompt ?? "",
-        userMessage: taskInput,
-        result: finalResultText,
-        durationMs: Date.now() - startMs
-      });
-      if (this.settings.devMode.evaluatorModel) {
-        const evalModel = this.settings.devMode.evaluatorModel;
-        for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal)) {
+    const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1e3;
+    const maxRetries = this.settings.llmIdleRetries ?? 3;
+    let attempt = 0;
+    while (true) {
+      const idleCtrl = new AbortController();
+      const combined = idleTimeoutMs > 0 ? AbortSignal.any([req.signal, idleCtrl.signal]) : req.signal;
+      let idleTimer = idleTimeoutMs > 0 ? setTimeout(() => idleCtrl.abort(), idleTimeoutMs) : null;
+      const resetTimer = () => {
+        if (!idleTimer) return;
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => idleCtrl.abort(), idleTimeoutMs);
+      };
+      let finalResultText = "";
+      try {
+        for await (const ev of this.runOperation({ ...req, signal: combined }, model, opts, vaultRoot, domains, similarity)) {
+          if (ev.kind === "llm_call_stats" || ev.kind === "assistant_text") resetTimer();
+          if (ev.kind === "result") finalResultText = ev.text;
           yield ev;
-          if (ev.kind === "eval_result") {
-            await this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);
+        }
+        if (idleTimer) clearTimeout(idleTimer);
+        if (idleCtrl.signal.aborted && !req.signal.aborted) {
+          if (attempt < maxRetries) {
+            attempt++;
+            const sec = Math.round(idleTimeoutMs / 1e3);
+            yield { kind: "system", message: `LLM idle ${sec}s \u2014 retrying (${attempt}/${maxRetries})` };
+            continue;
+          }
+          throw new DOMException(
+            `LLM idle timeout (${Math.round(idleTimeoutMs / 1e3)}s) exhausted after ${maxRetries} retries`,
+            "AbortError"
+          );
+        }
+        if (this.settings.devMode?.enabled && finalResultText) {
+          const taskInput = req.args.join(" ") || req.operation;
+          await this.writeDevLog(vaultRoot, {
+            operation: req.operation,
+            model,
+            systemPrompt: opts.systemPrompt ?? "",
+            userMessage: taskInput,
+            result: finalResultText,
+            durationMs: Date.now() - startMs
+          });
+          if (this.settings.devMode.evaluatorModel) {
+            const evalModel = this.settings.devMode.evaluatorModel;
+            for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal)) {
+              yield ev;
+              if (ev.kind === "eval_result") {
+                await this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);
+              }
+            }
           }
         }
+        return;
+      } catch (err) {
+        if (idleTimer) clearTimeout(idleTimer);
+        const isIdleAbort = !req.signal.aborted && err.name === "AbortError";
+        if (isIdleAbort && attempt < maxRetries) {
+          attempt++;
+          const sec = Math.round(idleTimeoutMs / 1e3);
+          yield { kind: "system", message: `LLM idle ${sec}s \u2014 retrying (${attempt}/${maxRetries})` };
+          continue;
+        }
+        throw err;
       }
     }
   }
@@ -47555,9 +47777,10 @@ var WikiController = class {
     if (!question.trim()) return;
     await this.dispatch("query", [question.trim()], domainId);
   }
-  async lint(domain) {
+  async lint(domain, opts = {}) {
     const args = domain === "all" ? [] : [domain];
-    await this.dispatch("lint", args);
+    const lintOpts = { useLlm: opts.useLlm ?? true, entityTypeFilter: opts.entityTypeFilter ?? [] };
+    await this.dispatch("lint", args, void 0, void 0, void 0, void 0, void 0, lintOpts);
   }
   async chat(operation, domainId, context, history, newMessage) {
     const chatMessages = [...history, { role: "user", content: newMessage }];
@@ -47882,7 +48105,7 @@ var WikiController = class {
     } catch {
     }
   }
-  async dispatch(op, args, domainId, context, instruction, onFileError, chatMessages) {
+  async dispatch(op, args, domainId, context, instruction, onFileError, chatMessages, lintOpts) {
     if (this.isBusy()) {
       new import_obsidian7.Notice(i18n().ctrl.operationRunning);
       return;
@@ -47942,7 +48165,7 @@ var WikiController = class {
       ctrl.abort();
     }, timeoutMs) : null;
     const resolvedChatMessages = op === "format" ? this._pendingFormat?.chat : chatMessages;
-    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages: resolvedChatMessages });
+    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages: resolvedChatMessages, lintOpts });
     try {
       for await (const ev of runGen) {
         await this.logEvent(vaultRoot, sessionId, op, domainId, ev);
@@ -48223,6 +48446,7 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
     await migrateLegacyData(this, this.domainStore, this.localConfigStore);
     await this.loadSettings();
     await migrateToLocalV1(this, this.localConfigStore);
+    await migrateToLocalV2(this, this.localConfigStore);
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
     this.controller.onBusyChange = () => this.settingTab?.display();
     this.registerView(AI_WIKI_VIEW_TYPE, (leaf) => new LlmWikiView(leaf, this));
@@ -48282,13 +48506,11 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
             } catch {
               return;
             }
-            new DomainModal(
+            new LintOptionsModal(
               this.app,
-              T.cmd.lint,
-              true,
-              null,
               domains,
-              (d) => void this.controller.lint(d)
+              this.settings.lintOptions.useLlm,
+              (d, opts) => void this.controller.lint(d, opts)
             ).open();
           })();
         }
@@ -48363,6 +48585,7 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
           format: { ...defNA.operations.format, ...naOps.format ?? {} }
         }
       },
+      proxy: { ...DEFAULT_SETTINGS.proxy, ...data?.proxy ?? {} },
       history: data?.history ?? []
     };
     if (!data?.systemPrompt && (caData.systemPrompt || naData.systemPrompt))
@@ -48483,29 +48706,69 @@ async function migrateToLocalV1(plugin, localConfigStore) {
   if (local.migrated_v1) return;
   const s = plugin.settings;
   await localConfigStore.save({
-    backend: s.backend,
-    nativeAgent: {
-      baseUrl: s.nativeAgent.baseUrl,
-      apiKey: s.nativeAgent.apiKey,
-      model: s.nativeAgent.model,
-      temperature: s.nativeAgent.temperature,
-      topP: s.nativeAgent.topP
-    },
-    claudeAgent: {
-      model: s.claudeAgent.model,
-      allowedTools: s.claudeAgent.allowedTools
-    },
-    agentLogEnabled: s.agentLogEnabled,
-    migrated_v1: true
+    nativeAgent: { apiKey: s.nativeAgent.apiKey },
+    migrated_v1: true,
+    migrated_v2: true
   });
   s.nativeAgent.apiKey = "";
   await plugin.saveSettings();
+}
+async function migrateToLocalV2(plugin, localConfigStore) {
+  const local = await localConfigStore.load();
+  if (local.migrated_v2) return;
+  const s = plugin.settings;
+  const adapter = plugin.app.vault.adapter;
+  const localPath = `${plugin.manifest.dir}/local.json`;
+  let raw = {};
+  try {
+    if (await adapter.exists(localPath)) {
+      raw = JSON.parse(await adapter.read(localPath));
+    }
+  } catch {
+  }
+  const ln = raw.nativeAgent ?? {};
+  const lc = raw.claudeAgent ?? {};
+  const lp = raw.proxy ?? {};
+  if (typeof ln.baseUrl === "string" && ln.baseUrl) s.nativeAgent.baseUrl = ln.baseUrl;
+  if (typeof ln.model === "string" && ln.model) s.nativeAgent.model = ln.model;
+  if (typeof ln.temperature === "number") s.nativeAgent.temperature = ln.temperature;
+  if (ln.topP !== void 0) s.nativeAgent.topP = ln.topP;
+  if (typeof ln.embeddingModel === "string") s.nativeAgent.embeddingModel = ln.embeddingModel || void 0;
+  if (typeof ln.embeddingDimensions === "number") s.nativeAgent.embeddingDimensions = ln.embeddingDimensions;
+  if (typeof ln.relevantPagesTopK === "number") s.nativeAgent.relevantPagesTopK = ln.relevantPagesTopK;
+  if (typeof ln.mergeDeleteWarnThreshold === "number") s.nativeAgent.mergeDeleteWarnThreshold = ln.mergeDeleteWarnThreshold;
+  if (typeof lc.model === "string" && lc.model) s.claudeAgent.model = lc.model;
+  if (typeof lc.allowedTools === "string") s.claudeAgent.allowedTools = lc.allowedTools;
+  if (typeof lc.effort === "string") s.claudeAgent.effort = lc.effort;
+  if (typeof lp.enabled === "boolean" || typeof lp.url === "string") {
+    s.proxy = {
+      enabled: typeof lp.enabled === "boolean" ? lp.enabled : false,
+      url: typeof lp.url === "string" ? lp.url : "",
+      username: typeof lp.username === "string" ? lp.username : void 0,
+      noProxy: typeof lp.noProxy === "string" ? lp.noProxy : void 0
+    };
+  }
+  await plugin.saveSettings();
+  const newLocal = {
+    iclaudePath: raw.iclaudePath ?? "",
+    ...raw.backend !== void 0 ? { backend: raw.backend } : {},
+    ...raw.agentLogEnabled !== void 0 ? { agentLogEnabled: raw.agentLogEnabled } : {},
+    ...typeof ln.apiKey === "string" && ln.apiKey ? { nativeAgent: { apiKey: ln.apiKey } } : {},
+    ...typeof lp.password === "string" && lp.password ? { proxy: { password: lp.password } } : {},
+    ...raw.shellConsentGiven !== void 0 ? { shellConsentGiven: raw.shellConsentGiven } : {},
+    ...raw.lastDomain !== void 0 ? { lastDomain: raw.lastDomain } : {},
+    migrated_v1: true,
+    migrated_v2: true
+  };
+  await adapter.write(localPath, JSON.stringify(newLocal, null, 2));
+  localConfigStore["cache"] = null;
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   migrateDomainWikiFolder,
   migrateLegacyData,
-  migrateToLocalV1
+  migrateToLocalV1,
+  migrateToLocalV2
 });
 /*! Bundled license information:
 
