@@ -173,6 +173,36 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName(T.settings.llmIdleTimeout_name)
+      .setDesc(T.settings.llmIdleTimeout_desc)
+      .addText((t) =>
+        t.setPlaceholder("300")
+          .setValue(String(s.llmIdleTimeoutSec))
+          .onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n >= 0) {
+              s.llmIdleTimeoutSec = Math.floor(n);
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName(T.settings.llmIdleRetries_name)
+      .setDesc(T.settings.llmIdleRetries_desc)
+      .addText((t) =>
+        t.setPlaceholder("3")
+          .setValue(String(s.llmIdleRetries))
+          .onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isInteger(n) && n >= 0) {
+              s.llmIdleRetries = n;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
       .setName(T.settings.historyLimit_name)
       .setDesc(T.settings.historyLimit_desc)
       .addText((t) =>
