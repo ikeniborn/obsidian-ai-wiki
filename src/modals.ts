@@ -45,6 +45,31 @@ export class ConfirmModal extends Modal {
   onClose(): void { this.contentEl.empty(); }
 }
 
+export class FormatVisionModal extends Modal {
+  constructor(
+    app: App,
+    private onChoice: (choice: "with" | "without") => void,
+  ) { super(app); }
+
+  onOpen(): void {
+    const T = i18n().modal;
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: T.formatVisionTitle });
+    contentEl.createEl("p", { text: T.formatVisionBody });
+    new Setting(contentEl)
+      .addButton((b) => b.setButtonText(T.cancel).onClick(() => this.close()))
+      .addButton((b) => b.setButtonText(T.formatVisionWithout).onClick(() => {
+        this.close();
+        this.onChoice("without");
+      }))
+      .addButton((b) => b.setButtonText(T.formatVisionWith).setCta().onClick(() => {
+        this.close();
+        this.onChoice("with");
+      }));
+  }
+  onClose(): void { this.contentEl.empty(); }
+}
+
 export class InfoModal extends Modal {
   constructor(
     app: App,

@@ -119,8 +119,11 @@ export class AgentRunner {
         const hasVision = this.settings.backend === "claude-agent";
         const formatDomain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : undefined;
         const wikiVaultPath = formatDomain ? domainWikiFolder(formatDomain.wiki_folder) : undefined;
-        const visionSettings = this.settings.vision ?? { enabled: false, model: "", language: "auto" as const };
-        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings);
+        const noVision = req.args.includes("--no-vision");
+        const formatArgs = req.args.filter((a) => a !== "--no-vision");
+        const baseVisionSettings = this.settings.vision ?? { enabled: false, model: "", language: "auto" as const };
+        const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
+        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings);
         break;
       }
       default: {

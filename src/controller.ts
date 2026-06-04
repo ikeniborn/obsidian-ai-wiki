@@ -19,7 +19,7 @@ import type { DomainStore } from "./domain-store";
 import { DomainCorruptError } from "./domain-store";
 import type { LocalConfig, LocalConfigStore } from "./local-config";
 import type { LlmWikiPluginSettings } from "./types";
-import { FileErrorModal, InfoModal, ShellConsentModal } from "./modals";
+import { FileErrorModal, FormatVisionModal, InfoModal, ShellConsentModal } from "./modals";
 import { domainWikiFolder, GLOBAL_AGENT_LOG_PATH } from "./wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, validateAndRepairSourceFrontmatter } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
@@ -101,7 +101,15 @@ export class WikiController {
     }
 
     this._pendingFormat = { originalPath: file.path, tempPath: "", chat: [] };
-    await this.dispatch("format", [file.path]);
+
+    if (this.plugin.settings.vision?.enabled) {
+      new FormatVisionModal(this.app, (choice) => {
+        const args = choice === "without" ? [file.path, "--no-vision"] : [file.path];
+        void this.dispatch("format", args);
+      }).open();
+    } else {
+      await this.dispatch("format", [file.path]);
+    }
   }
 
   async formatApply(keepOld: boolean): Promise<void> {

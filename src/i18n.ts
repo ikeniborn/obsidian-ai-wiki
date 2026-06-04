@@ -231,6 +231,10 @@ const en = {
     ingestScopeNew: (n: number) => `New only (${n})`,
     ingestScopeAll: (n: number) => `All (${n})`,
     ingestScopeSkip: "Skip",
+    formatVisionTitle: "Format with vision?",
+    formatVisionBody: "Vision recognition is enabled. Analyze attachments before formatting?",
+    formatVisionWith: "With vision",
+    formatVisionWithout: "Without vision",
   },
 };
 
@@ -467,6 +471,10 @@ const ru: I18n = {
     ingestScopeNew: (n: number) => `Только новые (${n})`,
     ingestScopeAll: (n: number) => `Все (${n})`,
     ingestScopeSkip: "Пропустить",
+    formatVisionTitle: "Форматировать с vision?",
+    formatVisionBody: "Vision-распознавание включено. Проанализировать вложения перед форматированием?",
+    formatVisionWith: "С vision",
+    formatVisionWithout: "Без vision",
   },
 };
 
@@ -701,6 +709,10 @@ const es: I18n = {
     ingestScopeNew: (n: number) => `Solo nuevas (${n})`,
     ingestScopeAll: (n: number) => `Todas (${n})`,
     ingestScopeSkip: "Omitir",
+    formatVisionTitle: "¿Formatear con vision?",
+    formatVisionBody: "El reconocimiento vision está activado. ¿Analizar adjuntos antes de formatear?",
+    formatVisionWith: "Con vision",
+    formatVisionWithout: "Sin vision",
   },
 };
 
