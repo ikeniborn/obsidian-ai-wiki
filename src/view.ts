@@ -728,6 +728,9 @@ export class LlmWikiView extends ItemView {
       const el = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step--ask");
       el.createSpan({ text: "⏳ Waiting for answer…" });
       return;
+    } else if (ev.kind === "assistant_replace") {
+      // query.ts corrects answer in-place before emitting result event —
+      // no live markdown block exists for non-chat query, so no-op here.
     } else if (ev.kind === "assistant_text") {
       this.stopWaiting();
       if (ev.isReasoning) {
@@ -1004,6 +1007,11 @@ export class LlmWikiView extends ItemView {
       }
       this.currentChatBuffer += ev.delta;
       this.currentChatBubble.setText(this.currentChatBuffer);
+      this.currentChatBubble.scrollIntoView({ block: "end" });
+    }
+    if (ev.kind === "assistant_replace" && this.currentChatBubble) {
+      this.currentChatBuffer = ev.text;
+      this.currentChatBubble.setText(ev.text);
       this.currentChatBubble.scrollIntoView({ block: "end" });
     }
   }
