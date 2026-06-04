@@ -9,7 +9,7 @@ import { EntityTypesDeltaSchema, LintOutputSchema } from "./zod-schemas";
 import type { LintOutput } from "./zod-schemas";
 import lintTemplate from "../../prompts/lint.md";
 import { render } from "./template";
-import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, domainIndexPath } from "../wiki-path";
+import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, domainIndexPath, WIKI_ROOT } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, filterStaleWikiLinks, validateAndRepairWikiPageFrontmatter, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
 import { checkGraphStructure, pageId, bfsExpand } from "../wiki-graph";
 import { checkWikiLinks, fixWikiLinks } from "../wiki-link-validator";
@@ -219,7 +219,7 @@ export async function* runLint(
     ]);
 
     // Build title map from non-wiki vault files (runs once per domain)
-    const nonWikiPaths = allMdPaths.filter(p => !p.startsWith(wikiVaultPath + "/"));
+    const nonWikiPaths = allMdPaths.filter(p => !p.startsWith(WIKI_ROOT + "/"));
     const titleMap = await buildTitleMap(nonWikiPaths, vaultTools);
 
     // Extend knownStems with stems from titleMap
@@ -465,7 +465,7 @@ export async function* runLint(
 
     // Source-file backlink rewrite for deleted articles (one vault-wide scan)
     if (deletedRefs.length > 0) {
-      for (const sourcePath of allMdPaths.filter(p => !p.startsWith(wikiVaultPath + "/"))) {
+      for (const sourcePath of allMdPaths.filter(p => !p.startsWith(WIKI_ROOT + "/"))) {
         const content = await vaultTools.read(sourcePath).catch(() => null);
         if (!content) continue;
         let updated = content;
@@ -525,10 +525,6 @@ export async function* runLint(
       [
         ...[...pages.keys()].map(p => p.split("/").pop()!.replace(/\.md$/, "")),
         ...writtenPaths.map(p => p.split("/").pop()!.replace(/\.md$/, "")),
-        // Include pages from other domains so cross-domain wiki_articles links are not removed
-        ...allMdPaths
-          .filter(p => p.startsWith("!Wiki/") && !p.includes("/_config/"))
-          .map(p => p.split("/").pop()!.replace(/\.md$/, "")),
       ].filter(stem => !deletedNames.has(stem))
     );
 
@@ -541,7 +537,7 @@ export async function* runLint(
       }
     }
 
-    const sourcePaths = allMdPaths.filter(p => !p.startsWith(wikiVaultPath + "/"));
+    const sourcePaths = allMdPaths.filter(p => !p.startsWith(WIKI_ROOT + "/"));
     for (const sourcePath of sourcePaths) {
       const rawContent = await vaultTools.read(sourcePath).catch(() => null);
       if (!rawContent) continue;
