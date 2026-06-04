@@ -7,6 +7,7 @@ export interface VaultAdapter {
   mkdir(path: string): Promise<void>;
   remove?(path: string): Promise<void>;
   rmdir?(path: string, recursive: boolean): Promise<void>;
+  readBinary?(path: string): Promise<ArrayBuffer>;
 }
 
 export interface VaultIndexer {
@@ -84,6 +85,11 @@ export class VaultTools {
 
   async exists(vaultPath: string): Promise<boolean> {
     return this.adapter.exists(vaultPath);
+  }
+
+  async readBinary(vaultPath: string): Promise<ArrayBuffer> {
+    if (!this.adapter.readBinary) throw new Error("readBinary not supported by this adapter");
+    return this.adapter.readBinary(vaultPath);
   }
 
   async mkdir(vaultPath: string): Promise<void> {
