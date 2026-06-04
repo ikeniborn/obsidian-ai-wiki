@@ -26167,6 +26167,10 @@ var DEFAULT_SETTINGS = {
   lintOptions: {
     useLlm: true
   },
+  vision: {
+    enabled: false,
+    model: ""
+  },
   llmIdleTimeoutSec: 300,
   llmIdleRetries: 3
 };
@@ -29473,7 +29477,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
             counts.set(et.type, 0);
             continue;
           }
-          const prefix = `${domainEntry.wiki_folder}/${et.wiki_subfolder}/`;
+          const prefix = `${domainWikiFolder(domainEntry.wiki_folder)}/${et.wiki_subfolder}/`;
           counts.set(et.type, allMd.filter((f) => f.path.startsWith(prefix)).length);
         }
         new LintOptionsModal(
@@ -38021,7 +38025,7 @@ Wiki folder outside vault \u2014 skipped.`);
       ...allMdPaths.map((p) => p.split("/").pop().replace(/\.md$/, "")),
       ...[...pages.keys()].map((p) => p.split("/").pop().replace(/\.md$/, ""))
     ]);
-    const nonWikiPaths = allMdPaths.filter((p) => !p.startsWith(wikiVaultPath + "/"));
+    const nonWikiPaths = allMdPaths.filter((p) => !p.startsWith(WIKI_ROOT + "/"));
     const titleMap = await buildTitleMap(nonWikiPaths, vaultTools);
     for (const stem of titleMap.values()) {
       knownStems.add(stem);
@@ -38036,6 +38040,12 @@ Wiki folder outside vault \u2014 skipped.`);
       ...[...annotations.keys()].map((pid) => pidToPath.get(pid)).filter(Boolean),
       ...files
     ])];
+    const filteredArticlePaths = entityTypeFilter.length > 0 ? articlePaths.filter(
+      (p) => entityTypeFilter.some((et) => {
+        const subfolder = domain.entity_types?.find((e) => e.type === et)?.wiki_subfolder;
+        return subfolder && p.includes(`/${subfolder}/`);
+      })
+    ) : articlePaths;
     if (similarity?.config.mode === "embedding") {
       yield { kind: "info_text", icon: "\u{1F4E5}", summary: "\u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043A\u044D\u0448\u0430 \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432..." };
       await similarity.loadCache(wikiVaultPath, vaultTools);
@@ -38056,12 +38066,7 @@ ${schemaContent}` : ""
     const writtenPaths = [];
     const skippedArticles = [];
     if (useLlm) {
-      const loopPaths = entityTypeFilter.length > 0 ? articlePaths.filter(
-        (p) => entityTypeFilter.some((et) => {
-          const subfolder = domain.entity_types?.find((e) => e.type === et)?.wiki_subfolder;
-          return subfolder && p.includes(`/${subfolder}/`);
-        })
-      ) : articlePaths;
+      const loopPaths = filteredArticlePaths;
       const total = loopPaths.length;
       for (let i = 0; i < total; i++) {
         if (signal.aborted) return;
@@ -38223,19 +38228,6 @@ ${lintResult.value.report}`);
         reportParts.push(`### \u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u044B (\u043E\u0448\u0438\u0431\u043A\u0430 LLM)
 ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
       }
-      if (deletedRefs.length > 0) {
-        for (const sourcePath of allMdPaths.filter((p) => !p.startsWith(wikiVaultPath + "/"))) {
-          const content = await vaultTools.read(sourcePath).catch(() => null);
-          if (!content) continue;
-          let updated = content;
-          for (const { deletedName, redirectName } of deletedRefs) {
-            if (updated.includes(`[[${deletedName}]]`)) {
-              updated = redirectName ? updated.replaceAll(`[[${deletedName}]]`, `[[${redirectName}]]`) : updated.replaceAll(`[[${deletedName}]]`, "");
-            }
-          }
-          if (updated !== content) await vaultTools.write(sourcePath, updated);
-        }
-      }
       if (signal.aborted) return;
       yield { kind: "assistant_text", delta: `
 Actualizing domain config for "${domain.id}"...
@@ -38285,11 +38277,14 @@ Actualizing domain config for "${domain.id}"...
         await vaultTools.write(wikiPath, filteredWiki);
       }
     }
-    const sourcePaths = allMdPaths.filter((p) => !p.startsWith(wikiVaultPath + "/"));
+    const allWikiStems = new Set(
+      allMdPaths.filter((p) => p.startsWith(WIKI_ROOT + "/") && !p.includes("/_config/")).map((p) => p.split("/").pop().replace(/\.md$/, "")).filter((stem) => !deletedNames.has(stem))
+    );
+    const sourcePaths = allMdPaths.filter((p) => !p.startsWith(WIKI_ROOT + "/"));
     for (const sourcePath of sourcePaths) {
       const rawContent = await vaultTools.read(sourcePath).catch(() => null);
       if (!rawContent) continue;
-      const { content: filteredContent, warnings: stripWarnings } = stripInvalidWikiArticles(rawContent, existingWikiStems);
+      const { content: filteredContent, warnings: stripWarnings } = stripInvalidWikiArticles(rawContent, allWikiStems);
       if (stripWarnings.length > 0) {
         yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: `wiki_articles repaired: ${sourcePath}`, details: stripWarnings };
       }
@@ -38335,7 +38330,7 @@ Actualizing domain config for "${domain.id}"...
         op: "lint",
         domainId: domain.id,
         fixed: writtenPaths,
-        checkedCount: articlePaths.length,
+        checkedCount: filteredArticlePaths.length,
         outputTokens
       });
     } catch {
@@ -39155,6 +39150,137 @@ function missingTokensWithContext(original, formatted) {
   return out;
 }
 
+// src/phases/attachment-analyzer.ts
+function extractObsidianEmbedPaths(md) {
+  const paths = [];
+  for (const m of md.matchAll(/!\[\[([^\]]+)\]\]/g)) {
+    paths.push(m[1].trim());
+  }
+  return paths;
+}
+function insertDescriptions(md, descriptions) {
+  const lines = md.split("\n");
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    out.push(lines[i]);
+    const embedMatch = lines[i].match(/^!\[\[([^\]]+)\]\]/);
+    if (!embedMatch) continue;
+    const path2 = embedMatch[1].trim();
+    if (!descriptions.has(path2)) continue;
+    let nextNonEmpty = "";
+    for (let j = i + 1; j < lines.length; j++) {
+      if (lines[j].trim() !== "") {
+        nextNonEmpty = lines[j];
+        break;
+      }
+    }
+    if (nextNonEmpty.startsWith("> *[Vision]")) continue;
+    out.push(`> *[Vision] ${descriptions.get(path2)}*`);
+  }
+  return out.join("\n");
+}
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 8192)
+    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  return btoa(binary);
+}
+function getMimeType(path2) {
+  const ext = path2.split(".").pop()?.toLowerCase();
+  switch (ext) {
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "webp":
+      return "image/webp";
+    default:
+      return null;
+  }
+}
+async function callVisionLlm(llm, model, systemPrompt, contentParts, signal) {
+  const resp = await llm.chat.completions.create({
+    model,
+    stream: false,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: contentParts }
+    ]
+  }, { signal });
+  return resp.choices[0]?.message?.content ?? "";
+}
+var IMAGE_SYSTEM = "You are a precise image analyst. Describe the visual content in 1-3 sentences.\nFocus on: structure, key elements, relationships, any text visible in the image.\nReply in Russian if the note is in Russian, otherwise in English.";
+var PDF_SYSTEM = "You are a precise document analyst. Summarize this multi-page document.\nCover: main topic, key sections, structure, important data or conclusions.\nBe comprehensive but concise \u2014 up to 10 sentences.\nReply in Russian if the note is in Russian, otherwise in English.";
+async function analyzeImage(buffer, mimeType, llm, model, signal) {
+  const b64 = arrayBufferToBase64(buffer);
+  return callVisionLlm(llm, model, IMAGE_SYSTEM, [
+    { type: "image_url", image_url: { url: `data:${mimeType};base64,${b64}` } }
+  ], signal);
+}
+async function analyzePdf(buffer, llm, model, signal) {
+  const pdfjs = globalThis.pdfjsLib;
+  if (!pdfjs) throw new Error("pdfjsLib unavailable");
+  const doc = await pdfjs.getDocument({ data: buffer }).promise;
+  const parts = [];
+  for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+    const page = await doc.getPage(pageNum);
+    const viewport = page.getViewport({ scale: 1.5 });
+    const canvas = new OffscreenCanvas(Math.round(viewport.width), Math.round(viewport.height));
+    const ctx = canvas.getContext("2d");
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.85 });
+    const pageBuf = await blob.arrayBuffer();
+    const b64 = arrayBufferToBase64(pageBuf);
+    parts.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${b64}` } });
+  }
+  return callVisionLlm(llm, model, PDF_SYSTEM, parts, signal);
+}
+async function analyzeExcalidraw(text, llm, model, signal) {
+  const { exportToBlob } = await import("@excalidraw/utils");
+  const { elements, appState, files } = JSON.parse(text);
+  const blob = await exportToBlob({
+    elements,
+    appState,
+    files,
+    mimeType: "image/png",
+    exportPadding: 10
+  });
+  const buf = await blob.arrayBuffer();
+  const b64 = arrayBufferToBase64(buf);
+  return callVisionLlm(llm, model, IMAGE_SYSTEM, [
+    { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } }
+  ], signal);
+}
+async function analyzeAttachments(embedPaths, vaultTools, llm, model, signal) {
+  const result = /* @__PURE__ */ new Map();
+  for (const path2 of embedPaths) {
+    if (signal.aborted) break;
+    const ext = path2.split(".").pop()?.toLowerCase() ?? "";
+    try {
+      if (ext === "excalidraw") {
+        const text = await vaultTools.read(path2);
+        result.set(path2, await analyzeExcalidraw(text, llm, model, signal));
+        continue;
+      }
+      if (ext === "pdf") {
+        const buf = await vaultTools.readBinary(path2);
+        result.set(path2, await analyzePdf(buf, llm, model, signal));
+        continue;
+      }
+      const mimeType = getMimeType(path2);
+      if (mimeType) {
+        const buf = await vaultTools.readBinary(path2);
+        result.set(path2, await analyzeImage(buf, mimeType, llm, model, signal));
+        continue;
+      }
+    } catch {
+    }
+  }
+  return result;
+}
+
 // src/phases/format.ts
 function parseFormatOutput(text) {
   let raw;
@@ -39183,7 +39309,7 @@ function extractImagePaths(md) {
 function truncationHint(backend) {
   return backend === "claude-agent" ? "\u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442: env CLAUDE_CODE_MAX_OUTPUT_TOKENS \u0432 iclaude.sh" : "\u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442: Settings \u2192 per-operation \u2192 format \u2192 maxTokens";
 }
-async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, signal, opts = {}, backend = "native-agent", wikiVaultPath, wikiLinkValidationRetries = 3) {
+async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, signal, opts = {}, backend = "native-agent", wikiVaultPath, wikiLinkValidationRetries = 3, visionSettings = { enabled: false, model: "" }) {
   const start = Date.now();
   const filePath = args[0];
   if (!filePath) {
@@ -39217,6 +39343,27 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
     }
   }
   yield { kind: "tool_result", ok: true, preview: `${original.length} chars` };
+  if (visionSettings.enabled && visionSettings.model) {
+    const embedPaths = extractObsidianEmbedPaths(original);
+    if (embedPaths.length > 0) {
+      yield { kind: "assistant_text", delta: `\u0410\u043D\u0430\u043B\u0438\u0437 \u0432\u043B\u043E\u0436\u0435\u043D\u0438\u0439 (${embedPaths.length})...
+` };
+      try {
+        const descriptions = await analyzeAttachments(embedPaths, vaultTools, llm, visionSettings.model, signal);
+        for (const path2 of embedPaths) {
+          if (!descriptions.has(path2)) {
+            yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [path2] };
+          }
+        }
+        const enriched = insertDescriptions(original, descriptions);
+        if (enriched !== original) {
+          await vaultTools.write(filePath, enriched);
+          original = enriched;
+        }
+      } catch {
+      }
+    }
+  }
   const systemContent = render(format_default, {
     format_schema: formatSchema,
     has_vision: String(hasVision)
@@ -39827,7 +39974,8 @@ var AgentRunner = class {
         const hasVision = this.settings.backend === "claude-agent";
         const formatDomain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
         const wikiVaultPath = formatDomain ? domainWikiFolder(formatDomain.wiki_folder) : void 0;
-        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries);
+        const visionSettings = this.settings.vision ?? { enabled: false, model: "" };
+        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings);
         break;
       }
       default: {
@@ -40001,6 +40149,10 @@ var VaultTools = class {
   }
   async exists(vaultPath) {
     return this.adapter.exists(vaultPath);
+  }
+  async readBinary(vaultPath) {
+    if (!this.adapter.readBinary) throw new Error("readBinary not supported by this adapter");
+    return this.adapter.readBinary(vaultPath);
   }
   async mkdir(vaultPath) {
     return this.adapter.mkdir(vaultPath);
@@ -48560,11 +48712,21 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
             }
             const domainEntry = domains[0];
             if (!domainEntry) return;
+            const counts = /* @__PURE__ */ new Map();
+            const allMd = this.app.vault.getMarkdownFiles();
+            for (const et of domainEntry.entity_types ?? []) {
+              if (!et.wiki_subfolder) {
+                counts.set(et.type, 0);
+                continue;
+              }
+              const prefix = `${domainWikiFolder(domainEntry.wiki_folder)}/${et.wiki_subfolder}/`;
+              counts.set(et.type, allMd.filter((f) => f.path.startsWith(prefix)).length);
+            }
             new LintOptionsModal(
               this.app,
               domainEntry,
               this.settings.lintOptions.useLlm,
-              /* @__PURE__ */ new Map(),
+              counts,
               (opts) => void this.controller.lint(domainEntry.id, opts)
             ).open();
           })();

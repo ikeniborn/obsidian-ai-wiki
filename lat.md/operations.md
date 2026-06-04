@@ -130,11 +130,11 @@ See [[src/phases/lint.ts#buildTitleMap]], [[src/phases/lint.ts#validateWikiSourc
 `runLint` accepts two optional parameters to customize lint behavior:
 
 - **`useLlm: boolean = true`** — when `false`, skips the per-article LLM loop and `actualizeDomainConfig` entirely. Lint operates in programmatic-only mode: `cleanupInvalidPages` runs, then sources are not backlinked. This mode is significantly faster for analyzing large wikis without semantic review. Suitable for batch validation or when domain configuration is already stable.
-- **`entityTypeFilter: string[] = []`** — when non-empty, filters `articlePaths` to only wiki pages whose subfolder path matches a requested entity type (e.g. `['Person', 'Concept']`). Empty means process all article paths. Allows targeted linting of specific entity classes without full-domain scans.
+- **`entityTypeFilter: string[] = []`** — when non-empty, filters `articlePaths` to only wiki pages whose subfolder path matches a requested entity type (e.g. `['Person', 'Concept']`). Applied before both LLM and non-LLM paths via `filteredArticlePaths`. Empty means process all article paths.
 
 After all articles:
-- Post-loop empty-sources deletion — wiki pages in `writtenPaths` with zero `wiki_sources` entries after `validateWikiSources` are deleted; their stems are pushed into `deletedRefs` so the backlink rewrite removes their `wiki_articles` entries from source files.
-- Source-file backlink rewrite (vault-wide scan for deleted article refs, skipping wiki pages)
+- Post-loop empty-sources deletion — wiki pages in `writtenPaths` with zero `wiki_sources` entries after `validateWikiSources` are deleted; their stems are pushed into `deletedRefs`.
+- Source-file `wiki_articles` cleanup — scans files outside `WIKI_ROOT` (`!Wiki/`) only; validates stems against **all** wiki pages across all domains (not just current domain) to preserve cross-domain links. Boundary: lint never reads or writes files inside `!Wiki/<other-domain>/`.
 - `actualizeDomainConfig` — syncs `entity_types` from final wiki content
 - Backlink sync — writes `wiki_articles` into source files via `wiki_sources`
 - `appendWikiLog`
@@ -147,7 +147,7 @@ Emits `info_text "Checking i/N: ArticleName"` per article. Skipped articles (LLM
 
 `LintOptionsModal` takes the pre-selected domain from the sidebar — the lint button is disabled when no domain is selected, so there is no "all" case.
 
-Constructor: `(app, domain: DomainEntry, defaultUseLlm, articleCounts: Map<string, number>, onSubmit)`. Article counts are computed by the sidebar before opening the modal: for each entity type with a `wiki_subfolder`, count `.md` files under `wiki_folder/wiki_subfolder/`.
+Constructor: `(app, domain: DomainEntry, defaultUseLlm, articleCounts: Map<string, number>, onSubmit)`. Article counts are computed by the caller before opening the modal: for each entity type with a `wiki_subfolder`, count `.md` files under `domainWikiFolder(wiki_folder)/wiki_subfolder/` (i.e. `!Wiki/<domain>/<subfolder>/`). Both the sidebar button and the command-palette command compute counts this way.
 
 Layout (top to bottom): title `h3`, Use LLM toggle, `"Entity types:"` paragraph, **[Убрать все] [Добавить все]** button row, entity type toggles with muted `(N)` count spans, `▶ Run` button. `ToggleComponent[]` refs are stored locally so the select-all/deselect-all buttons can sync both DOM state and `entityTypeFilter` in one click.
 
