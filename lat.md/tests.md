@@ -389,3 +389,27 @@ When `runOperation` hangs on the first attempt and the idle timer fires, `AgentR
 ### Idle exhausted
 
 When every `runOperation` attempt hangs and `maxRetries` is exhausted, `AgentRunner.run` throws a `DOMException` with message matching `/idle timeout/i`.
+
+## Format Sentinel Retry
+
+Integration tests for sentinel retry and salvage in `src/phases/format.ts`. Covers the retry loop, retry system prompt content, double failure, truncated-response salvage, and vision embed preservation.
+
+### First attempt fails retry succeeds
+
+When the first LLM response lacks the `<<<FORMATTED>>>` marker, `runFormat` retries once. On success, a `format_preview` event is emitted and no `error` event is produced.
+
+### Retry system prompt contains hint
+
+When `runFormat` retries after a bad sentinel, the retry system prompt must contain the Russian phrase `"Предыдущая попытка не прошла"` followed by the Zod hint, instructing the LLM to correct its output.
+
+### Both attempts fail
+
+When both the initial call and the retry return a bad sentinel (no `<<<FORMATTED>>>` marker), `runFormat` emits an `error` event and no `format_preview`.
+
+### Salvage no END marker
+
+When the LLM response contains `<<<REPORT>>>` and `<<<FORMATTED>>>` but no `<<<END>>>` marker, `runFormat` salvages the partial output. An `info_text` event with "salvage" or "обрезан" in the summary is emitted, and the temp file is still written.
+
+### Vision embed preserved
+
+When vision settings are enabled and the LLM returns a sentinel with vision markers listing an embed path that appears as `![[path]]` in the formatted content, Zod validation succeeds and `format_preview` is emitted.
