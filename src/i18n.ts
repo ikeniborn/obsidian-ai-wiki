@@ -91,6 +91,10 @@ const en = {
     mergeDeleteWarnThreshold_desc: "Ingest emits a warning when LLM requests deletion of more pages than this in a single merge. Default: 5.",
     structuredRetries_name: "Structured output retries",
     structuredRetries_desc: "Retries on schema validation failure (0-3, default 1). Higher values improve success rate on weaker models at cost of latency/tokens.",
+    llmIdleTimeout_name: "LLM idle timeout (seconds)",
+    llmIdleTimeout_desc: "Seconds of LLM silence before aborting the attempt. 0 = disabled.",
+    llmIdleRetries_name: "LLM idle retries",
+    llmIdleRetries_desc: "Max retry attempts after idle abort (0 = no retry).",
   },
   view: {
     refreshTitle: "Refresh domains",
@@ -321,6 +325,10 @@ const ru: I18n = {
     mergeDeleteWarnThreshold_desc: "Ingest предупреждает, если LLM просит удалить больше страниц при merge. По умолчанию: 5.",
     structuredRetries_name: "Повторы при ошибке схемы",
     structuredRetries_desc: "Сколько раз повторить вызов LLM при невалидной структуре ответа (0-3, по умолчанию 1). Выше — надёжнее на слабых моделях, дороже по токенам.",
+    llmIdleTimeout_name: "Таймаут простоя LLM (секунды)",
+    llmIdleTimeout_desc: "Секунд тишины LLM до прерывания попытки. 0 = отключено.",
+    llmIdleRetries_name: "Повторы при простое LLM",
+    llmIdleRetries_desc: "Макс. число повторов после прерывания по простою (0 = без повторов).",
   },
   view: {
     refreshTitle: "Обновить домены",
@@ -549,6 +557,10 @@ const es: I18n = {
     mergeDeleteWarnThreshold_desc: "Ingest avisa cuando el LLM pide borrar más páginas que este umbral en un merge. Por defecto: 5.",
     structuredRetries_name: "Structured output retries",
     structuredRetries_desc: "Retries on schema validation failure (0-3, default 1). Higher values improve success rate on weaker models at cost of latency/tokens.",
+    llmIdleTimeout_name: "Tiempo de espera de inactividad LLM (segundos)",
+    llmIdleTimeout_desc: "Segundos de silencio LLM antes de abortar el intento. 0 = desactivado.",
+    llmIdleRetries_name: "Reintentos por inactividad LLM",
+    llmIdleRetries_desc: "Máx. reintentos tras aborto por inactividad (0 = sin reintentos).",
   },
   view: {
     refreshTitle: "Actualizar dominios",
