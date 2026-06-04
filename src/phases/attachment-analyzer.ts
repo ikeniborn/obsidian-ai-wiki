@@ -78,12 +78,26 @@ function langInstruction(language: VisionLanguage): string {
   }
 }
 
+const STRUCTURE_RULES = `Return STRUCTURED markdown matching the content type. Choose ONE form:
+- Table data (rows × columns, comparison, matrix) → markdown table with header row and separator.
+- Ordered steps / sequence / pipeline → numbered list.
+- Unordered items / enumeration / set of features → bullet list with "- ".
+- Hierarchy / tree / nested structure → nested bullet list with indentation.
+- Diagram / flow / architecture (boxes + arrows) → mermaid code block (\`\`\`mermaid ... \`\`\`).
+- Math / formula / equation → LaTeX inside $...$ or $$...$$.
+- Code / config / terminal → fenced code block with language tag.
+- Single concept / photo / illustration → 1–3 plain sentences.
+Do NOT wrap output in additional prose ("Here is...", "This image shows..."). Output ONLY the structured content.
+Do NOT add headings (# or ##) — caller controls section structure.
+Do NOT add the marker "[Vision]" or any prefix — caller adds it if needed.
+Preserve any text visible in the source verbatim where it is data; transcribe — do not paraphrase.`;
+
 function imageSystem(language: VisionLanguage): string {
-  return `You are a precise image analyst. Describe the visual content in 1-3 sentences.\nFocus on: structure, key elements, relationships, any text visible in the image.\n${langInstruction(language)}`;
+  return `You are a precise image analyst. Extract the content of the image as STRUCTURED markdown.\n${STRUCTURE_RULES}\n${langInstruction(language)}`;
 }
 
 function pdfSystem(language: VisionLanguage): string {
-  return `You are a precise document analyst. Summarize this multi-page document.\nCover: main topic, key sections, structure, important data or conclusions.\nBe comprehensive but concise — up to 10 sentences.\n${langInstruction(language)}`;
+  return `You are a precise document analyst. Extract the content of this multi-page document as STRUCTURED markdown.\nCover key sections, data tables, lists, and conclusions. Preserve table structure as markdown tables.\n${STRUCTURE_RULES}\n${langInstruction(language)}`;
 }
 
 export async function analyzeImage(

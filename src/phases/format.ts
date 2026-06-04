@@ -10,7 +10,7 @@ import { GLOBAL_FORMAT_SCHEMA_PATH } from "../wiki-path";
 import { fixWikiLinks } from "../wiki-link-validator";
 import { FormatOutputSchema } from "./zod-schemas";
 import { structuralErrorCounter } from "../structural-error-counter";
-import { extractObsidianEmbedPaths, analyzeSingleAttachment, insertDescriptions } from "./attachment-analyzer";
+import { extractObsidianEmbedPaths, analyzeSingleAttachment } from "./attachment-analyzer";
 
 function parseFormatOutput(text: string): { report: string; formatted: string } | null {
   let raw: unknown;
@@ -96,19 +96,19 @@ export async function* runFormat(
   }
   yield { kind: "tool_result", ok: true, preview: `${original.length} chars` };
 
+  const visionDescriptions = new Map<string, string>();
   if (visionSettings.enabled && visionSettings.model) {
     const embedPaths = [...new Set(extractObsidianEmbedPaths(original))];
     if (embedPaths.length > 0) {
-      const descriptions = new Map<string, string>();
       const lang = visionSettings.language ?? "auto";
       for (const path of embedPaths) {
         if (signal.aborted) break;
         const filename = path.split("/").pop() ?? path;
-        yield { kind: "tool_use", name: "Vision", input: { file_path: filename } };
+        yield { kind: "tool_use", name: "Vision", input: { file_path: filename, model: visionSettings.model } };
         try {
           const description = await analyzeSingleAttachment(path, vaultTools, llm, visionSettings.model, signal, filePath, lang);
           if (description !== null) {
-            descriptions.set(path, description);
+            visionDescriptions.set(path, description);
             yield { kind: "tool_result", ok: true, preview: description };
           } else {
             yield { kind: "tool_result", ok: false, preview: "unknown extension" };
@@ -119,9 +119,6 @@ export async function* runFormat(
           yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [path] };
         }
       }
-      if (descriptions.size > 0) {
-        original = insertDescriptions(original, descriptions);
-      }
     }
   }
 
@@ -130,7 +127,16 @@ export async function* runFormat(
     has_vision: String(hasVision),
   });
 
-  const userInitial = `Исходный файл: ${filePath}\n---\n${original}`;
+  let visionBlock = "";
+  if (visionDescriptions.size > 0) {
+    const items: string[] = [];
+    for (const [path, desc] of visionDescriptions) {
+      items.push(`### ![[${path}]]\n${desc}`);
+    }
+    visionBlock = `\n---\nОПИСАНИЯ ВЛОЖЕНИЙ (vision-распознавание; интегрируй СРАЗУ ПОД соответствующей вставкой \`![[путь]]\` как структурированный markdown — таблица/список/mermaid/код по форме исходника; НЕ оборачивай в blockquote, НЕ добавляй маркер [Vision], НЕ цитируй пути):\n${items.join("\n\n")}`;
+  }
+
+  const userInitial = `Исходный файл: ${filePath}\n---\n${original}${visionBlock}`;
 
   const imagePaths = hasVision ? extractImagePaths(original) : [];
 
