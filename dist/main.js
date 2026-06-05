@@ -1038,8 +1038,6 @@ var require_Alias = __commonJS({
        * instance of the `source` anchor before this node.
        */
       resolve(doc, ctx) {
-        if (ctx?.maxAliasCount === 0)
-          throw new ReferenceError("Alias resolution is disabled");
         let nodes;
         if (ctx?.aliasResolveCache) {
           nodes = ctx.aliasResolveCache;
@@ -2112,18 +2110,18 @@ var require_merge = __commonJS({
     };
     var isMergeKey = (ctx, key) => (merge.identify(key) || identity.isScalar(key) && (!key.type || key.type === Scalar.Scalar.PLAIN) && merge.identify(key.value)) && ctx?.doc.schema.tags.some((tag) => tag.tag === merge.tag && tag.default);
     function addMergeToJSMap(ctx, map, value) {
-      const source = resolveAliasValue(ctx, value);
-      if (identity.isSeq(source))
-        for (const it of source.items)
+      value = ctx && identity.isAlias(value) ? value.resolve(ctx.doc) : value;
+      if (identity.isSeq(value))
+        for (const it of value.items)
           mergeValue(ctx, map, it);
-      else if (Array.isArray(source))
-        for (const it of source)
+      else if (Array.isArray(value))
+        for (const it of value)
           mergeValue(ctx, map, it);
       else
-        mergeValue(ctx, map, source);
+        mergeValue(ctx, map, value);
     }
     function mergeValue(ctx, map, value) {
-      const source = resolveAliasValue(ctx, value);
+      const source = ctx && identity.isAlias(value) ? value.resolve(ctx.doc) : value;
       if (!identity.isMap(source))
         throw new Error("Merge sources must be maps or map aliases");
       const srcMap = source.toJSON(null, ctx, Map);
@@ -2143,9 +2141,6 @@ var require_merge = __commonJS({
         }
       }
       return map;
-    }
-    function resolveAliasValue(ctx, value) {
-      return ctx && identity.isAlias(value) ? value.resolve(ctx.doc, ctx) : value;
     }
     exports2.addMergeToJSMap = addMergeToJSMap;
     exports2.isMergeKey = isMergeKey;
@@ -2784,7 +2779,7 @@ var require_stringifyNumber = __commonJS({
       if (!isFinite(num))
         return isNaN(num) ? ".nan" : num < 0 ? "-.inf" : ".inf";
       let n = Object.is(value, -0) ? "-0" : JSON.stringify(value);
-      if (!format && minFractionDigits && (!tag || tag === "tag:yaml.org,2002:float") && /^-?\d/.test(n) && !n.includes("e")) {
+      if (!format && minFractionDigits && (!tag || tag === "tag:yaml.org,2002:float") && /^\d/.test(n)) {
         let i = n.indexOf(".");
         if (i < 0) {
           i = n.length;
@@ -5156,7 +5151,7 @@ var require_resolve_flow_scalar = __commonJS({
             while (next === " " || next === "	")
               next = source[++i + 1];
           } else if (next === "x" || next === "u" || next === "U") {
-            const length = next === "x" ? 2 : next === "u" ? 4 : 8;
+            const length = { x: 2, u: 4, U: 8 }[next];
             res += parseCharCode(source, i + 1, length, onError);
             i += length;
           } else {
@@ -5231,13 +5226,12 @@ var require_resolve_flow_scalar = __commonJS({
       const cc = source.substr(offset, length);
       const ok = cc.length === length && /^[0-9a-fA-F]+$/.test(cc);
       const code = ok ? parseInt(cc, 16) : NaN;
-      try {
-        return String.fromCodePoint(code);
-      } catch {
+      if (isNaN(code)) {
         const raw = source.substr(offset - 2, length + 2);
         onError(offset - 2, "BAD_DQ_ESCAPE", `Invalid escape sequence ${raw}`);
         return raw;
       }
+      return String.fromCodePoint(code);
     }
     exports2.resolveFlowScalar = resolveFlowScalar;
   }
@@ -5587,10 +5581,8 @@ ${cb}` : comment;
           }
         }
         if (afterDoc) {
-          for (let i = 0; i < this.errors.length; ++i)
-            doc.errors.push(this.errors[i]);
-          for (let i = 0; i < this.warnings.length; ++i)
-            doc.warnings.push(this.warnings[i]);
+          Array.prototype.push.apply(doc.errors, this.errors);
+          Array.prototype.push.apply(doc.warnings, this.warnings);
         } else {
           doc.errors = this.errors;
           doc.warnings = this.warnings;
@@ -6323,7 +6315,7 @@ var require_lexer = __commonJS({
           const n = (yield* this.pushCount(1)) + (yield* this.pushSpaces(true));
           this.indentNext = this.indentValue + 1;
           this.indentValue += n;
-          return "block-start";
+          return yield* this.parseBlockStart();
         }
         return "doc";
       }
@@ -6622,38 +6614,28 @@ var require_lexer = __commonJS({
         return 0;
       }
       *pushIndicators() {
-        let n = 0;
-        loop: while (true) {
-          switch (this.charAt(0)) {
-            case "!":
-              n += yield* this.pushTag();
-              n += yield* this.pushSpaces(true);
-              continue loop;
-            case "&":
-              n += yield* this.pushUntil(isNotAnchorChar);
-              n += yield* this.pushSpaces(true);
-              continue loop;
-            case "-":
-            // this is an error
-            case "?":
-            // this is an error outside flow collections
-            case ":": {
-              const inFlow = this.flowLevel > 0;
-              const ch1 = this.charAt(1);
-              if (isEmpty(ch1) || inFlow && flowIndicatorChars.has(ch1)) {
-                if (!inFlow)
-                  this.indentNext = this.indentValue + 1;
-                else if (this.flowKey)
-                  this.flowKey = false;
-                n += yield* this.pushCount(1);
-                n += yield* this.pushSpaces(true);
-                continue loop;
-              }
+        switch (this.charAt(0)) {
+          case "!":
+            return (yield* this.pushTag()) + (yield* this.pushSpaces(true)) + (yield* this.pushIndicators());
+          case "&":
+            return (yield* this.pushUntil(isNotAnchorChar)) + (yield* this.pushSpaces(true)) + (yield* this.pushIndicators());
+          case "-":
+          // this is an error
+          case "?":
+          // this is an error outside flow collections
+          case ":": {
+            const inFlow = this.flowLevel > 0;
+            const ch1 = this.charAt(1);
+            if (isEmpty(ch1) || inFlow && flowIndicatorChars.has(ch1)) {
+              if (!inFlow)
+                this.indentNext = this.indentValue + 1;
+              else if (this.flowKey)
+                this.flowKey = false;
+              return (yield* this.pushCount(1)) + (yield* this.pushSpaces(true)) + (yield* this.pushIndicators());
             }
           }
-          break loop;
         }
-        return n;
+        return 0;
       }
       *pushTag() {
         if (this.charAt(1) === "<") {
@@ -6812,13 +6794,6 @@ var require_parser = __commonJS({
       }
       return prev.splice(i, prev.length);
     }
-    function arrayPushArray(target, source) {
-      if (source.length < 1e5)
-        Array.prototype.push.apply(target, source);
-      else
-        for (let i = 0; i < source.length; ++i)
-          target.push(source[i]);
-    }
     function fixFlowSeqItems(fc) {
       if (fc.start.type === "flow-seq-start") {
         for (const it of fc.items) {
@@ -6828,11 +6803,11 @@ var require_parser = __commonJS({
             delete it.key;
             if (isFlowToken(it.value)) {
               if (it.value.end)
-                arrayPushArray(it.value.end, it.sep);
+                Array.prototype.push.apply(it.value.end, it.sep);
               else
                 it.value.end = it.sep;
             } else
-              arrayPushArray(it.start, it.sep);
+              Array.prototype.push.apply(it.start, it.sep);
             delete it.sep;
           }
         }
@@ -7187,7 +7162,7 @@ var require_parser = __commonJS({
                 const prev = map.items[map.items.length - 2];
                 const end = prev?.value?.end;
                 if (Array.isArray(end)) {
-                  arrayPushArray(end, it.start);
+                  Array.prototype.push.apply(end, it.start);
                   end.push(this.sourceToken);
                   map.items.pop();
                   return;
@@ -7375,7 +7350,7 @@ var require_parser = __commonJS({
                 const prev = seq.items[seq.items.length - 2];
                 const end = prev?.value?.end;
                 if (Array.isArray(end)) {
-                  arrayPushArray(end, it.start);
+                  Array.prototype.push.apply(end, it.start);
                   end.push(this.sourceToken);
                   seq.items.pop();
                   return;
@@ -27767,6 +27742,8 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
   }
   render() {
     const { containerEl } = this;
+    const scrollEl = containerEl.closest(".vertical-tab-content") ?? containerEl.closest(".modal-content") ?? containerEl.parentElement ?? containerEl;
+    const savedScroll = scrollEl.scrollTop;
     containerEl.empty();
     const s = this.plugin.settings;
     const eff = resolveEffective(s, this.localCache);
@@ -28272,6 +28249,9 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         );
       }
     }
+    requestAnimationFrame(() => {
+      scrollEl.scrollTop = savedScroll;
+    });
   }
 };
 
@@ -29200,7 +29180,8 @@ function wrapStreamWithStats(stream, requestStartMs) {
     stream: wrappedStream,
     getStats() {
       if (!yielded || ttftMs === void 0 || llmDurationMs === void 0) return void 0;
-      return { inputTokens, outputTokens, ttftMs, llmDurationMs };
+      const effectiveDurationMs = llmDurationMs < 10 ? ttftMs : llmDurationMs;
+      return { inputTokens, outputTokens, ttftMs, llmDurationMs: effectiveDurationMs };
     }
   };
 }
@@ -39789,11 +39770,17 @@ ${original}${visionBlock}`;
 
 // src/page-similarity.ts
 function encodeVector(v) {
-  return Buffer.from(v.buffer).toString("base64");
+  const bytes = new Uint8Array(v.buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 8192)
+    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  return btoa(binary);
 }
 function decodeVector(b64) {
-  const buf = Buffer.from(b64, "base64");
-  return new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Float32Array(bytes.buffer);
 }
 function annotationHash(s) {
   let h = 0;
@@ -47980,10 +47967,19 @@ var mobileFetch = async (input, init) => {
   if (body != null && typeof body !== "string") {
     throw new Error("mobileFetch: only string body supported");
   }
+  let headers;
+  if (init?.headers instanceof Headers) {
+    headers = {};
+    init.headers.forEach((v, k) => {
+      headers[k] = v;
+    });
+  } else if (init?.headers) {
+    headers = init.headers;
+  }
   const requestPromise = (0, import_obsidian6.requestUrl)({
     url,
     method: init?.method ?? "GET",
-    headers: init?.headers,
+    headers,
     body: body ?? void 0,
     throw: false
   });
@@ -48579,9 +48575,9 @@ var WikiController = class {
     const adapter = this.app.vault.adapter;
     const path2 = GLOBAL_AGENT_LOG_PATH;
     try {
-      if (!await adapter.exists("!Wiki")) await this.app.vault.createFolder("!Wiki").catch(() => {
+      await this.app.vault.createFolder("!Wiki").catch(() => {
       });
-      if (!await adapter.exists("!Wiki/_config")) await this.app.vault.createFolder("!Wiki/_config").catch(() => {
+      await this.app.vault.createFolder("!Wiki/_config").catch(() => {
       });
       const extra = ev.kind === "llm_call_stats" ? { callIndex: this._llmCallIndex++ } : {};
       const line = JSON.stringify({
