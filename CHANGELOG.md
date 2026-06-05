@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.162 — 2026-06-05
+
+### Исправления
+- fix(security): block path traversal in delete loop and attachment resolve
+- fix(lint): add local eslint pipeline mirroring the Obsidian reviewer; resolve release blockers (lazy desktop-guarded node:child_process, this:void scoping, unused imports, window.requestAnimationFrame, unnecessary type assertions)
+
+---
+
 ## 0.1.161 — 2026-06-05
 
 ### Исправления
