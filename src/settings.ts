@@ -132,6 +132,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
 
   private render(): void {
     const { containerEl } = this;
+    const scrollEl = containerEl.parentElement ?? containerEl;
+    const savedScroll = scrollEl.scrollTop;
     containerEl.empty();
     const s = this.plugin.settings;
     const eff = resolveEffective(s, this.localCache);
@@ -828,5 +830,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           );
       }
     }
+    requestAnimationFrame(() => { scrollEl.scrollTop = savedScroll; });
   }
 }

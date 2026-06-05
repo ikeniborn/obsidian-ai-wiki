@@ -24,12 +24,18 @@ export interface EmbeddingCacheFile {
 }
 
 export function encodeVector(v: Float32Array): string {
-  return Buffer.from(v.buffer).toString("base64");
+  const bytes = new Uint8Array(v.buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 8192)
+    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  return btoa(binary);
 }
 
 export function decodeVector(b64: string): Float32Array {
-  const buf = Buffer.from(b64, "base64");
-  return new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Float32Array(bytes.buffer);
 }
 
 function annotationHash(s: string): string {

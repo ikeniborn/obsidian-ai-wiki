@@ -539,8 +539,8 @@ export class WikiController {
     const adapter = this.app.vault.adapter;
     const path = GLOBAL_AGENT_LOG_PATH;
     try {
-      if (!(await adapter.exists("!Wiki"))) await this.app.vault.createFolder("!Wiki").catch(() => {});
-      if (!(await adapter.exists("!Wiki/_config"))) await this.app.vault.createFolder("!Wiki/_config").catch(() => {});
+      await this.app.vault.createFolder("!Wiki").catch(() => {});
+      await this.app.vault.createFolder("!Wiki/_config").catch(() => {});
       const extra = ev.kind === "llm_call_stats" ? { callIndex: this._llmCallIndex++ } : {};
       const line = JSON.stringify({
         ts: new Date().toISOString(),

@@ -69,6 +69,8 @@ Reduces LLM context by pre-selecting top-K relevant wiki pages. Built by `AgentR
 
 Two modes: `jaccard` (default, no API calls) uses token overlap scoring via `scoreSeed`; `embedding` fetches vectors from an OpenAI-compatible endpoint (no API key required — supports Ollama), falls back to Jaccard on error. Embedding vectors are cached per domain at `_config/_embeddings.json` and invalidated by annotation content hash. `refreshCache` updates stale entries after a domain write pass — called by both ingest (after writing pages) and lint. Configured via `embeddingModel`, `embeddingDimensions`, `relevantPagesTopK` in `LocalConfig.nativeAgent`. Only active for `native-agent` backend.
 
+`encodeVector`/`decodeVector` serialize Float32Array to base64 using `btoa`/`atob` with chunked `String.fromCharCode` (8192-byte chunks). **Must not use `Buffer`** — unavailable in Obsidian mobile (browser environment).
+
 `loadCache()` reads `_embeddings.json` into memory before `selectRelevant()` so ingest, query, and lint don't re-fetch vectors from the API on every run. Called by ingest, query, and lint phases before `selectRelevant` or `refreshCache`.
 
 `refreshCache` returns `{ updated: number }` — the count of newly embedded pages written to the cache. Returns `{ updated: 0 }` when in `jaccard` mode, when config is incomplete, or when no entries need updating.
