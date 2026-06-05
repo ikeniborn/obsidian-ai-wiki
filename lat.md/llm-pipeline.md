@@ -87,7 +87,7 @@ Free-text operations (query, chat, format reasoning) use streaming. `extractStre
 
 `wrapStreamWithStats` wraps any streaming call to measure per-call timing. It tracks TTFT, total duration, and token counts, then builds a `llm_call_stats` event via `buildLlmCallStatsEvent`. The caller emits this event after the stream is consumed.
 
-Mobile backend uses `wrapMobileNoStream` for non-streaming polling instead. See [[src/phases/llm-utils.ts#extractStreamDeltas]], [[src/phases/llm-utils.ts#wrapStreamWithStats]], [[src/mobile-llm-wrap.ts#wrapMobileNoStream]].
+Mobile backend uses `wrapMobileNoStream` for non-streaming polling instead. Because `wrapMobileNoStream` awaits the full HTTP response before returning the emulated AsyncIterable, all chunks arrive synchronously in <10ms — `wrapStreamWithStats` detects this (`llmDurationMs < 10`) and substitutes `ttftMs` (full round-trip time) as effective duration for tok/s calculation, preventing inflated million-tok/s values. See [[src/phases/llm-utils.ts#extractStreamDeltas]], [[src/phases/llm-utils.ts#wrapStreamWithStats]], [[src/mobile-llm-wrap.ts#wrapMobileNoStream]].
 
 ## Format Sentinel
 
