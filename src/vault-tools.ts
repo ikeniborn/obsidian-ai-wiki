@@ -38,9 +38,9 @@ export class VaultTools {
     for (let i = 1; i <= segments.length; i++) {
       const partial = segments.slice(0, i).join("/");
       let exists = false;
-      try { exists = await this.adapter.exists(partial); } catch { }
+      try { exists = await this.adapter.exists(partial); } catch { /* treat as missing */ }
       if (!exists) {
-        try { await this.adapter.mkdir(partial); } catch { }
+        try { await this.adapter.mkdir(partial); } catch { /* already exists or race */ }
       }
     }
     if (this.vault) {

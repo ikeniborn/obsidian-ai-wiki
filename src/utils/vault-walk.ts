@@ -1,9 +1,9 @@
-import type { TFile, TFolder, Vault } from "obsidian";
+import { TFile, TFolder, type Vault } from "obsidian";
 
 export function walkFolder(folder: TFolder, out: TFile[]): void {
   for (const child of folder.children) {
-    if ("children" in child) walkFolder(child as TFolder, out);
-    else if ("extension" in child && (child as TFile).extension === "md") out.push(child as TFile);
+    if (child instanceof TFolder) walkFolder(child, out);
+    else if (child instanceof TFile && child.extension === "md") out.push(child);
   }
 }
 

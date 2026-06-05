@@ -1,5 +1,4 @@
-import { access, constants } from "node:fs/promises";
-import { App, DropdownComponent, Notice, Platform, PluginSettingTab, Setting } from "obsidian";
+import { App, DropdownComponent, Notice, Platform, PluginSettingTab, requestUrl, Setting } from "obsidian";
 import { ConfirmModal, EditDomainModal, ShellConsentModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { LlmWikiPluginSettings, OpKey } from "./types";
@@ -9,30 +8,30 @@ import { resolveEffective } from "./effective-settings";
 import type { LocalConfig } from "./local-config";
 
 async function checkClaudeAvailability(iclaudePath: string): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js fs check for Claude CLI executable, desktop only
+  const { access, constants } = require("node:fs/promises") as typeof import("node:fs/promises");
   await access(iclaudePath, constants.X_OK);
 }
 
 async function checkNativeAvailability(baseUrl: string, apiKey: string, model: string): Promise<void> {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 30_000);
+  let timerId: number | undefined;
+  const timeoutP = new Promise<never>((_, rej) => {
+    timerId = window.setTimeout(() => rej(new DOMException("Request timed out", "AbortError")), 30_000);
+  });
   try {
-    const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "user", content: "Привет, AI Wiki! Поработаем?" }],
-        max_tokens: 50,
-        stream: false,
+    const resp = await Promise.race([
+      requestUrl({
+        url: `${baseUrl.replace(/\/$/, "")}/chat/completions`,
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, messages: [{ role: "user", content: "Привет, AI Wiki! Поработаем?" }], max_tokens: 50, stream: false }),
+        throw: false,
       }),
-      signal: controller.signal,
-    });
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      throw new Error(`HTTP ${resp.status}: ${text.slice(0, 200)}`);
-    }
+      timeoutP,
+    ]);
+    if (resp.status >= 400) throw new Error(`HTTP ${resp.status}`);
   } finally {
-    clearTimeout(timeout);
+    if (timerId !== undefined) window.clearTimeout(timerId);
   }
 }
 
@@ -93,11 +92,13 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     if (!na.baseUrl) { new Notice("Set Base URL first"); return; }
     const url = `${na.baseUrl.replace(/\/$/, "")}/models`;
     try {
-      const resp = await fetch(url, {
+      const resp = await requestUrl({
+        url,
         headers: { Authorization: `Bearer ${this.localCache.nativeAgent?.apiKey ?? ""}` },
+        throw: false,
       });
-      if (!resp.ok) throw new Error(`${resp.status}`);
-      const json = await resp.json() as { data: { id: string }[] };
+      if (resp.status >= 400) throw new Error(`${resp.status}`);
+      const json = resp.json as { data: { id: string }[] };
       this._availableModels = json.data.map((m) => m.id).sort();
       this.display();
     } catch (e) {

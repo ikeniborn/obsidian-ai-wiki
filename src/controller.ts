@@ -25,13 +25,6 @@ import { upsertRawFrontmatter, parseWikiArticlesFromFm, validateAndRepairSourceF
 import { graphCache } from "./wiki-graph-cache";
 import { collectMdInPaths, parseWikiSources } from "./utils/vault-walk";
 
-function toVaultPath(vaultDir: string, savedPath: string): string | null {
-  const abs = isAbsolute(savedPath) ? savedPath : join(vaultDir, savedPath);
-  const rel = relative(vaultDir, abs);
-  if (rel.startsWith("..") || isAbsolute(rel)) return null;
-  return rel;
-}
-
 function patchWikiFields(originalContent: string, formattedContent: string): string {
   const wikiUpdatedMatch = /^wiki_updated:[ \t]*(.+)$/m.exec(originalContent);
   if (!wikiUpdatedMatch) return formattedContent;

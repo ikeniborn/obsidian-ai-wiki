@@ -1,4 +1,5 @@
-import { spawn } from "child_process";
+// eslint-disable-next-line obsidianmd/no-node-imports -- Claude CLI backend spawns iclaude.sh subprocess, desktop-only by design (isDesktopOnly gated)
+import { spawn } from "node:child_process";
 import { join, isAbsolute } from "path-browserify";
 import type OpenAI from "openai";
 import { parseStreamLine } from "./stream";

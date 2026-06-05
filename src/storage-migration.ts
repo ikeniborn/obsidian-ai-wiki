@@ -41,7 +41,7 @@ export async function runStorageMigration(vault: Vault): Promise<void> {
   // Load domain list
   let domains: Array<{ wiki_folder: string }> = [];
   if (await adapter.exists(GLOBAL_DOMAIN_PATH)) {
-    try { domains = JSON.parse(await adapter.read(GLOBAL_DOMAIN_PATH)); } catch { /* ignore */ }
+    try { domains = JSON.parse(await adapter.read(GLOBAL_DOMAIN_PATH)) as Array<{ wiki_folder: string }>; } catch { /* ignore */ }
   }
 
   // Pick best schema from per-domain copies (latest mtime wins)
@@ -95,8 +95,8 @@ async function pickAndWriteSchema(
   for (const domain of domains) {
     const p = `${WIKI_ROOT}/${domain.wiki_folder}/.config/${filename}`;
     if (!(await adapter.exists(p))) continue;
-    const stat = await (adapter as any).stat?.(p);
-    const mtime = (stat?.mtime as number | undefined) ?? 0;
+    const stat = await adapter.stat(p);
+    const mtime = stat?.mtime ?? 0;
     if (mtime > bestMtime) {
       bestMtime = mtime;
       bestContent = await adapter.read(p);
@@ -134,7 +134,7 @@ async function cleanDir(
   try {
     const listing = await adapter.list(dir);
     if (listing.files.length === 0 && listing.folders.length === 0) {
-      await (adapter as any).rmdir?.(dir, false).catch?.(() => {});
+      await adapter.rmdir(dir, false).catch(() => { /* ignore rmdir failure */ });
     }
   } catch { /* ignore */ }
 }

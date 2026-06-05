@@ -9,7 +9,7 @@ import { i18n } from "./i18n";
 import { DomainStore } from "./domain-store";
 import { LocalConfigStore } from "./local-config";
 import { structuralErrorCounter } from "./structural-error-counter";
-import { runStorageMigration, StorageMigrationConflictError } from "./storage-migration";
+import { runStorageMigration } from "./storage-migration";
 import { GLOBAL_DOMAIN_PATH, domainWikiFolder } from "./wiki-path";
 
 export default class LlmWikiPlugin extends Plugin {
@@ -189,9 +189,9 @@ export default class LlmWikiPlugin extends Plugin {
 
     // Schema v3: maxTokens moves to nativeAgent.maxTokens; numCtx dropped
     let schemaV3Dirty = false;
-    const legacyTop = typeof data?.maxTokens === "number" ? (data.maxTokens as number) : undefined;
-    const legacyCA = typeof caData.maxTokens === "number" ? (caData.maxTokens as number) : undefined;
-    const legacyNA = typeof naData.maxTokens === "number" ? (naData.maxTokens as number) : undefined;
+    const legacyTop = typeof data?.maxTokens === "number" ? data.maxTokens : undefined;
+    const legacyCA = typeof caData.maxTokens === "number" ? caData.maxTokens : undefined;
+    const legacyNA = typeof naData.maxTokens === "number" ? naData.maxTokens : undefined;
     const naAlreadySet = legacyNA !== undefined;
     if (!naAlreadySet) {
       const legacy = legacyTop ?? legacyCA;

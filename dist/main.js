@@ -13179,7 +13179,7 @@ var require_client_h1 = __commonJS({
       kResume,
       kHTTPContext
     } = require_symbols();
-    var constants2 = require_constants2();
+    var constants = require_constants2();
     var EMPTY_BUF = Buffer.alloc(0);
     var FastBuffer = Buffer[Symbol.species];
     var addListener = util2.addListener;
@@ -13251,7 +13251,7 @@ var require_client_h1 = __commonJS({
       constructor(client, socket, { exports: exports3 }) {
         assert(Number.isFinite(client[kMaxHeadersSize]) && client[kMaxHeadersSize] > 0);
         this.llhttp = exports3;
-        this.ptr = this.llhttp.llhttp_alloc(constants2.TYPE.RESPONSE);
+        this.ptr = this.llhttp.llhttp_alloc(constants.TYPE.RESPONSE);
         this.client = client;
         this.socket = socket;
         this.timeout = null;
@@ -13346,19 +13346,19 @@ var require_client_h1 = __commonJS({
             currentBufferRef = null;
           }
           const offset = llhttp.llhttp_get_error_pos(this.ptr) - currentBufferPtr;
-          if (ret === constants2.ERROR.PAUSED_UPGRADE) {
+          if (ret === constants.ERROR.PAUSED_UPGRADE) {
             this.onUpgrade(data.slice(offset));
-          } else if (ret === constants2.ERROR.PAUSED) {
+          } else if (ret === constants.ERROR.PAUSED) {
             this.paused = true;
             socket.unshift(data.slice(offset));
-          } else if (ret !== constants2.ERROR.OK) {
+          } else if (ret !== constants.ERROR.OK) {
             const ptr = llhttp.llhttp_get_error_reason(this.ptr);
             let message = "";
             if (ptr) {
               const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
               message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
             }
-            throw new HTTPParserError(message, constants2.ERROR[ret], data.slice(offset));
+            throw new HTTPParserError(message, constants.ERROR[ret], data.slice(offset));
           }
         } catch (err) {
           util2.destroy(socket, err);
@@ -13533,7 +13533,7 @@ var require_client_h1 = __commonJS({
           socket[kBlocking] = false;
           client[kResume]();
         }
-        return pause ? constants2.ERROR.PAUSED : 0;
+        return pause ? constants.ERROR.PAUSED : 0;
       }
       onBody(buf) {
         const { client, socket, statusCode, maxResponseSize } = this;
@@ -13555,7 +13555,7 @@ var require_client_h1 = __commonJS({
         }
         this.bytesRead += buf.length;
         if (request.onData(buf) === false) {
-          return constants2.ERROR.PAUSED;
+          return constants.ERROR.PAUSED;
         }
       }
       onMessageComplete() {
@@ -13590,13 +13590,13 @@ var require_client_h1 = __commonJS({
         if (socket[kWriting]) {
           assert(client[kRunning] === 0);
           util2.destroy(socket, new InformationalError("reset"));
-          return constants2.ERROR.PAUSED;
+          return constants.ERROR.PAUSED;
         } else if (!shouldKeepAlive) {
           util2.destroy(socket, new InformationalError("reset"));
-          return constants2.ERROR.PAUSED;
+          return constants.ERROR.PAUSED;
         } else if (socket[kReset] && client[kRunning] === 0) {
           util2.destroy(socket, new InformationalError("reset"));
-          return constants2.ERROR.PAUSED;
+          return constants.ERROR.PAUSED;
         } else if (client[kPipelining] == null || client[kPipelining] === 1) {
           setImmediate(() => client[kResume]());
         } else {
@@ -26115,7 +26115,7 @@ __export(main_exports, {
   migrateToLocalV2: () => migrateToLocalV2
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian8 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_SETTINGS = {
@@ -26177,7 +26177,6 @@ var DEFAULT_SETTINGS = {
 };
 
 // src/settings.ts
-var import_promises = require("node:fs/promises");
 var import_obsidian3 = require("obsidian");
 
 // src/modals.ts
@@ -27565,11 +27564,15 @@ var LintOptionsModal = class extends import_obsidian2.Modal {
       const deselectBtn = btnRow.createEl("button", { text: T.lintDeselectAll });
       const selectBtn = btnRow.createEl("button", { text: T.lintSelectAll });
       deselectBtn.addEventListener("click", () => {
-        toggles.forEach((t) => t.setValue(false));
+        toggles.forEach((t) => {
+          t.setValue(false);
+        });
         this.entityTypeFilter = [];
       });
       selectBtn.addEventListener("click", () => {
-        toggles.forEach((t) => t.setValue(true));
+        toggles.forEach((t) => {
+          t.setValue(true);
+        });
         this.entityTypeFilter = entityTypes.map((e) => e.type);
       });
       for (const et of entityTypes) {
@@ -27626,29 +27629,28 @@ function resolveEffective(s, l) {
 
 // src/settings.ts
 async function checkClaudeAvailability(iclaudePath) {
-  await (0, import_promises.access)(iclaudePath, import_promises.constants.X_OK);
+  const { access, constants } = require("node:fs/promises");
+  await access(iclaudePath, constants.X_OK);
 }
 async function checkNativeAvailability(baseUrl, apiKey, model) {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 3e4);
+  let timerId;
+  const timeoutP = new Promise((_, rej) => {
+    timerId = window.setTimeout(() => rej(new DOMException("Request timed out", "AbortError")), 3e4);
+  });
   try {
-    const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "user", content: "\u041F\u0440\u0438\u0432\u0435\u0442, AI Wiki! \u041F\u043E\u0440\u0430\u0431\u043E\u0442\u0430\u0435\u043C?" }],
-        max_tokens: 50,
-        stream: false
+    const resp = await Promise.race([
+      (0, import_obsidian3.requestUrl)({
+        url: `${baseUrl.replace(/\/$/, "")}/chat/completions`,
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, messages: [{ role: "user", content: "\u041F\u0440\u0438\u0432\u0435\u0442, AI Wiki! \u041F\u043E\u0440\u0430\u0431\u043E\u0442\u0430\u0435\u043C?" }], max_tokens: 50, stream: false }),
+        throw: false
       }),
-      signal: controller.signal
-    });
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      throw new Error(`HTTP ${resp.status}: ${text.slice(0, 200)}`);
-    }
+      timeoutP
+    ]);
+    if (resp.status >= 400) throw new Error(`HTTP ${resp.status}`);
   } finally {
-    clearTimeout(timeout);
+    if (timerId !== void 0) window.clearTimeout(timerId);
   }
 }
 function parseTimeoutString(v) {
@@ -27706,11 +27708,13 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
     }
     const url = `${na.baseUrl.replace(/\/$/, "")}/models`;
     try {
-      const resp = await fetch(url, {
-        headers: { Authorization: `Bearer ${this.localCache.nativeAgent?.apiKey ?? ""}` }
+      const resp = await (0, import_obsidian3.requestUrl)({
+        url,
+        headers: { Authorization: `Bearer ${this.localCache.nativeAgent?.apiKey ?? ""}` },
+        throw: false
       });
-      if (!resp.ok) throw new Error(`${resp.status}`);
-      const json = await resp.json();
+      if (resp.status >= 400) throw new Error(`${resp.status}`);
+      const json = resp.json;
       this._availableModels = json.data.map((m) => m.id).sort();
       this.display();
     } catch (e) {
@@ -28256,7 +28260,7 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
 };
 
 // src/view.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // src/wiki-path.ts
 var WIKI_ROOT = "!Wiki";
@@ -29211,10 +29215,11 @@ function computeSpeedText(stats) {
 var import_path_browserify = __toESM(require_path_browserify(), 1);
 
 // src/utils/vault-walk.ts
+var import_obsidian4 = require("obsidian");
 function walkFolder(folder, out) {
   for (const child of folder.children) {
-    if ("children" in child) walkFolder(child, out);
-    else if ("extension" in child && child.extension === "md") out.push(child);
+    if (child instanceof import_obsidian4.TFolder) walkFolder(child, out);
+    else if (child instanceof import_obsidian4.TFile && child.extension === "md") out.push(child);
   }
 }
 function collectMdInPaths(vault, sourcePaths) {
@@ -29270,7 +29275,7 @@ function registerLinkHandler(el, app) {
   });
 }
 var PREVIEW_INLINE = 140;
-var LlmWikiView = class extends import_obsidian4.ItemView {
+var LlmWikiView = class extends import_obsidian5.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.plugin = plugin;
@@ -29356,7 +29361,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     root.empty();
     root.addClass("ai-wiki-view");
     const T = i18n();
-    const isMobile = import_obsidian4.Platform.isMobile;
+    const isMobile = import_obsidian5.Platform.isMobile;
     const header = root.createDiv("ai-wiki-header");
     header.createEl("h3", { text: "AI wiki" });
     this.statusEl = header.createDiv("ai-wiki-status");
@@ -29445,23 +29450,23 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     });
     if (opts.withActions) {
       this.addSourceBtn = domainRow.createEl("button", { attr: { title: T.view.addSourceTitle } });
-      (0, import_obsidian4.setIcon)(this.addSourceBtn, "folder-plus");
+      (0, import_obsidian5.setIcon)(this.addSourceBtn, "folder-plus");
       this.addSourceBtn.disabled = true;
       this.addSourceBtn.addEventListener("click", () => void this.openManageSources());
       this.reinitBtn = domainRow.createEl("button", { attr: { title: T.view.reinitTitle } });
-      (0, import_obsidian4.setIcon)(this.reinitBtn, "recycle");
+      (0, import_obsidian5.setIcon)(this.reinitBtn, "recycle");
       this.reinitBtn.disabled = true;
       this.reinitBtn.addEventListener("click", () => void this.runReinit());
       this.openLogLink = domainRow.createEl("a", {
         cls: "internal-link ai-wiki-domain-file-link",
         attr: { title: "Open _log.md", "data-href": "" }
       });
-      (0, import_obsidian4.setIcon)(this.openLogLink, "scroll-text");
+      (0, import_obsidian5.setIcon)(this.openLogLink, "scroll-text");
       this.openIndexLink = domainRow.createEl("a", {
         cls: "internal-link ai-wiki-domain-file-link",
         attr: { title: "Open _index.md", "data-href": "" }
       });
-      (0, import_obsidian4.setIcon)(this.openIndexLink, "list");
+      (0, import_obsidian5.setIcon)(this.openIndexLink, "list");
       domainRow.addEventListener("click", (e) => {
         const a = e.target.closest("a.ai-wiki-domain-file-link");
         if (!a) return;
@@ -29496,7 +29501,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
             void this.app.workspace.openLinkText(filename, domainFolder, false);
           } else {
             const isLog = href.endsWith("_log.md");
-            new import_obsidian4.Notice(isLog ? "_log.md not found \u2014 run ingest or lint first." : "_index.md not found \u2014 run init first.");
+            new import_obsidian5.Notice(isLog ? "_log.md not found \u2014 run ingest or lint first." : "_index.md not found \u2014 run init first.");
           }
         })();
       });
@@ -29525,7 +29530,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       this.ingestBtn.addEventListener("click", () => {
         const file = this.plugin.app.workspace.getActiveFile();
         if (!file) {
-          new import_obsidian4.Notice(i18n().view.noActiveFile);
+          new import_obsidian5.Notice(i18n().view.noActiveFile);
           return;
         }
         const domainId = this.domainSelect.value || void 0;
@@ -29599,7 +29604,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   openAddDomain() {
     const cwd = this.plugin.controller.cwdOrEmpty();
     if (!cwd) {
-      new import_obsidian4.Notice(i18n().view.cwdNotSet);
+      new import_obsidian5.Notice(i18n().view.cwdNotSet);
       return;
     }
     new AddDomainModal(this.app, (input) => {
@@ -29640,7 +29645,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     if (!entry) return;
     const sourcePaths = entry.source_paths ?? [];
     if (sourcePaths.length === 0) {
-      new import_obsidian4.Notice(i18n().view.reinitNoSources);
+      new import_obsidian5.Notice(i18n().view.reinitNoSources);
       return;
     }
     const T = i18n().modal;
@@ -29690,11 +29695,13 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
         this.app,
         T.reinitConfirmTitle,
         [body],
-        async () => {
-          await this.plugin.controller.updateDomainSources(original.id, newPaths);
-          const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
-          if (deleted > 0) new import_obsidian4.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
-          void this.plugin.controller.init(original.id, false, newPaths, true);
+        () => {
+          void (async () => {
+            await this.plugin.controller.updateDomainSources(original.id, newPaths);
+            const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
+            if (deleted > 0) new import_obsidian5.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
+            void this.plugin.controller.init(original.id, false, newPaths, true);
+          })();
         }
       ).open();
       return;
@@ -29702,7 +29709,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     if (removed.length > 0) {
       await this.plugin.controller.updateDomainSources(original.id, newPaths);
       const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
-      if (deleted > 0) new import_obsidian4.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
+      if (deleted > 0) new import_obsidian5.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
       return;
     }
     if (added.length > 0) {
@@ -29717,11 +29724,11 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
   submitQuery() {
     const q = this.queryInput.value.trim();
     if (!q) {
-      new import_obsidian4.Notice(i18n().view.enterQuestion);
+      new import_obsidian5.Notice(i18n().view.enterQuestion);
       return;
     }
     if (this.state === "running") {
-      new import_obsidian4.Notice(i18n().view.operationInProgress);
+      new import_obsidian5.Notice(i18n().view.operationInProgress);
       return;
     }
     void this.plugin.controller.query(q, this.domainSelect?.value || void 0);
@@ -29778,7 +29785,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.liveStatusIconEl?.setText("");
     this.liveStatusTextEl?.setText("");
     this.scheduleMetricsTick();
-    if (import_obsidian4.Platform.isMobile) {
+    if (import_obsidian5.Platform.isMobile) {
       const placeholder = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step-pending");
       placeholder.setText(i18n().view.mobileWaiting);
       this.mobileWaitingEl = placeholder;
@@ -29969,9 +29976,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     } else if (ev.kind === "eval_result") {
       const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
       const text = `**[eval: ${ev.score}/10]** ${ev.reasoning}`;
-      const comp = new import_obsidian4.Component();
+      const comp = new import_obsidian5.Component();
       comp.load();
-      void import_obsidian4.MarkdownRenderer.render(this.app, text, el, "", comp);
+      void import_obsidian5.MarkdownRenderer.render(this.app, text, el, "", comp);
     }
     this.updateMetrics();
   }
@@ -29989,9 +29996,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     void link;
     registerLinkHandler(this.formatPreviewSection, this.app);
     const reportEl = this.formatPreviewSection.createDiv("ai-wiki-format-report");
-    const comp = new import_obsidian4.Component();
+    const comp = new import_obsidian5.Component();
     comp.load();
-    void import_obsidian4.MarkdownRenderer.render(this.app, report, reportEl, "", comp).then(() => sanitizeLinks(reportEl));
+    void import_obsidian5.MarkdownRenderer.render(this.app, report, reportEl, "", comp).then(() => sanitizeLinks(reportEl));
     if (missing.length > 0) {
       const warn = this.formatPreviewSection.createEl("details", { cls: "ai-wiki-format-warn" });
       const summary = warn.createEl("summary");
@@ -30050,9 +30057,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     this.resultSpeedEl?.setText(this.buildSpeedText());
     this.finalEl.empty();
     if (entry.finalText) {
-      const comp = new import_obsidian4.Component();
+      const comp = new import_obsidian5.Component();
       comp.load();
-      await import_obsidian4.MarkdownRenderer.render(this.app, entry.finalText, this.finalEl, "", comp);
+      await import_obsidian5.MarkdownRenderer.render(this.app, entry.finalText, this.finalEl, "", comp);
       sanitizeLinks(this.finalEl);
       this.resultSection.removeClass("ai-wiki-hidden");
       this.finalEl.removeClass("ai-wiki-hidden");
@@ -30099,7 +30106,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       if (ctx.operation === "lint" || ctx.operation === "lint-chat") {
         const domainId = (ctx.domainId ?? this.domainSelect?.value) || void 0;
         if (!domainId) {
-          new import_obsidian4.Notice(i18n().view.selectDomainFirst ?? "Select a domain first");
+          new import_obsidian5.Notice(i18n().view.selectDomainFirst ?? "Select a domain first");
           return;
         }
         void this.plugin.controller.lintApplyFromChat(
@@ -30125,17 +30132,18 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     if (role === "user") {
       el.setText(text);
     } else {
-      const comp = new import_obsidian4.Component();
+      const comp = new import_obsidian5.Component();
       comp.load();
-      void import_obsidian4.MarkdownRenderer.render(this.app, text, el, "", comp).then(() => sanitizeLinks(el));
+      void import_obsidian5.MarkdownRenderer.render(this.app, text, el, "", comp).then(() => sanitizeLinks(el));
       registerLinkHandler(el, this.app);
     }
     const copyBtn = el.createEl("button", { cls: "ai-wiki-copy-btn", attr: { "aria-label": "Copy" } });
-    (0, import_obsidian4.setIcon)(copyBtn, "copy");
-    copyBtn.addEventListener("click", async () => {
-      await navigator.clipboard.writeText(text);
-      (0, import_obsidian4.setIcon)(copyBtn, "check");
-      window.setTimeout(() => (0, import_obsidian4.setIcon)(copyBtn, "copy"), 1500);
+    (0, import_obsidian5.setIcon)(copyBtn, "copy");
+    copyBtn.addEventListener("click", () => {
+      void navigator.clipboard.writeText(text).then(() => {
+        (0, import_obsidian5.setIcon)(copyBtn, "check");
+        window.setTimeout(() => (0, import_obsidian5.setIcon)(copyBtn, "copy"), 1500);
+      });
     });
     el.scrollIntoView({ block: "end" });
     return el;
@@ -30201,10 +30209,10 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
         this.currentChatBubble.addClass("ai-wiki-chat-msg--error");
         this.currentChatBubble.setText(msg.content);
       } else {
-        const comp = new import_obsidian4.Component();
+        const comp = new import_obsidian5.Component();
         comp.load();
         const bubble = this.currentChatBubble;
-        void import_obsidian4.MarkdownRenderer.render(this.app, msg.content, bubble, "", comp).then(() => sanitizeLinks(bubble));
+        void import_obsidian5.MarkdownRenderer.render(this.app, msg.content, bubble, "", comp).then(() => sanitizeLinks(bubble));
         registerLinkHandler(bubble, this.app);
       }
       this.currentChatBubble = null;
@@ -30331,9 +30339,9 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       }
       row.addEventListener("click", () => {
         this.finalEl.empty();
-        const comp = new import_obsidian4.Component();
+        const comp = new import_obsidian5.Component();
         comp.load();
-        void import_obsidian4.MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, "", comp).then(() => sanitizeLinks(this.finalEl));
+        void import_obsidian5.MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, "", comp).then(() => sanitizeLinks(this.finalEl));
         this.resultSection.removeClass("ai-wiki-hidden");
         this.finalEl.removeClass("ai-wiki-hidden");
         this.resultOpen = true;
@@ -30348,7 +30356,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
     });
   }
 };
-var FileContentModal = class extends import_obsidian4.Modal {
+var FileContentModal = class extends import_obsidian5.Modal {
   constructor(app, filePath, content) {
     super(app);
     this.filePath = filePath;
@@ -30365,16 +30373,16 @@ var FileContentModal = class extends import_obsidian4.Modal {
       const absPath = basePath ? `${basePath}/${this.filePath}` : this.filePath;
       require("electron").shell.openPath(absPath);
     });
-    this.contentEl.style.cssText = "max-height: 60vh; overflow-y: auto;";
-    const comp = new import_obsidian4.Component();
+    this.contentEl.addClass("ai-wiki-busy-modal-content");
+    const comp = new import_obsidian5.Component();
     comp.load();
-    void import_obsidian4.MarkdownRenderer.render(this.app, this.content, this.contentEl, this.filePath, comp);
+    void import_obsidian5.MarkdownRenderer.render(this.app, this.content, this.contentEl, this.filePath, comp);
   }
   onClose() {
     this.contentEl.empty();
   }
 };
-var WikiQuestionModal = class extends import_obsidian4.Modal {
+var WikiQuestionModal = class extends import_obsidian5.Modal {
   constructor(app, question, options, resolve, reject) {
     super(app);
     this.question = question;
@@ -30485,7 +30493,7 @@ function translateSystemEvent(message) {
 }
 
 // src/controller.ts
-var import_obsidian7 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 var import_path_browserify7 = __toESM(require_path_browserify(), 1);
 
 // src/source-paths.ts
@@ -36976,7 +36984,7 @@ function extractLinks(text) {
 }
 function extractFmLinks(fm) {
   const set = /* @__PURE__ */ new Set();
-  const blockMatch = /^wiki_outgoing_links:((?:\n  - "[^"]*")*)/m.exec(fm);
+  const blockMatch = /^wiki_outgoing_links:((?:\n {2}- "[^"]*")*)/m.exec(fm);
   if (!blockMatch) return set;
   const re = /^\s+- "(\[\[[^\]]+\]\])"/mg;
   let m;
@@ -36985,7 +36993,7 @@ function extractFmLinks(fm) {
 }
 function setFmLinks(fm, links) {
   const block = links.length > 0 ? "wiki_outgoing_links:\n" + links.map((l) => `  - "${l}"`).join("\n") : "wiki_outgoing_links: []";
-  const re = /^wiki_outgoing_links:(?:[ \t]*\[\]|(?:\n  - "[^"]*")*)/m;
+  const re = /^wiki_outgoing_links:(?:[ \t]*\[\]|(?:\n {2}- "[^"]*")*)/m;
   if (re.test(fm)) return fm.replace(re, block);
   return fm.replace(/\n---$/, `
 ${block}
@@ -39418,7 +39426,7 @@ async function analyzeImage(buffer, mimeType, llm, model, signal, language = "au
   ], signal);
 }
 async function analyzePdf(buffer, llm, model, signal, language = "auto") {
-  const pdfjs = globalThis.pdfjsLib;
+  const pdfjs = window.pdfjsLib;
   if (!pdfjs) throw new Error("pdfjsLib unavailable");
   const doc = await pdfjs.getDocument({ data: buffer }).promise;
   const parts = [];
@@ -39769,6 +39777,7 @@ ${original}${visionBlock}`;
 }
 
 // src/page-similarity.ts
+var import_obsidian6 = require("obsidian");
 function encodeVector(v) {
   const bytes = new Uint8Array(v.buffer);
   let binary = "";
@@ -39802,16 +39811,18 @@ function cosine(a, b) {
 var EMBEDDING_BATCH_SIZE = 100;
 async function fetchEmbeddings(baseUrl, apiKey, model, inputs) {
   const url = `${baseUrl.replace(/\/$/, "")}/embeddings`;
-  const resp = await fetch(url, {
+  const resp = await (0, import_obsidian6.requestUrl)({
+    url,
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${apiKey}`
     },
-    body: JSON.stringify({ model, input: inputs })
+    body: JSON.stringify({ model, input: inputs }),
+    throw: false
   });
-  if (!resp.ok) throw new Error(`Embedding API error: ${resp.status}`);
-  const json = await resp.json();
+  if (resp.status >= 400) throw new Error(`Embedding API error: ${resp.status}`);
+  const json = resp.json;
   return json.data.map((d) => new Float32Array(d.embedding));
 }
 function entityKey(e) {
@@ -40263,12 +40274,13 @@ var AgentRunner = class {
     let attempt = 0;
     while (true) {
       const idleCtrl = new AbortController();
-      const combined = idleTimeoutMs > 0 ? AbortSignal.any([req.signal, idleCtrl.signal]) : req.signal;
-      let idleTimer = idleTimeoutMs > 0 ? setTimeout(() => idleCtrl.abort(), idleTimeoutMs) : null;
+      const signalAny = AbortSignal.any;
+      const combined = idleTimeoutMs > 0 ? signalAny([req.signal, idleCtrl.signal]) : req.signal;
+      let idleTimer = idleTimeoutMs > 0 ? window.setTimeout(() => idleCtrl.abort(), idleTimeoutMs) : null;
       const resetTimer = () => {
         if (!idleTimer) return;
-        clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => idleCtrl.abort(), idleTimeoutMs);
+        window.clearTimeout(idleTimer);
+        idleTimer = window.setTimeout(() => idleCtrl.abort(), idleTimeoutMs);
       };
       let finalResultText = "";
       try {
@@ -40277,7 +40289,7 @@ var AgentRunner = class {
           if (ev.kind === "result") finalResultText = ev.text;
           yield ev;
         }
-        if (idleTimer) clearTimeout(idleTimer);
+        if (idleTimer) window.clearTimeout(idleTimer);
         if (idleCtrl.signal.aborted && !req.signal.aborted) {
           if (attempt < maxRetries) {
             attempt++;
@@ -40312,7 +40324,7 @@ var AgentRunner = class {
         }
         return;
       } catch (err) {
-        if (idleTimer) clearTimeout(idleTimer);
+        if (idleTimer) window.clearTimeout(idleTimer);
         const isIdleAbort = !req.signal.aborted && err.name === "AbortError";
         if (isIdleAbort && attempt < maxRetries) {
           attempt++;
@@ -40446,7 +40458,7 @@ var VaultTools = class {
 };
 
 // src/claude-cli-client.ts
-var import_child_process = require("child_process");
+var import_node_child_process = require("node:child_process");
 var import_path_browserify6 = __toESM(require_path_browserify(), 1);
 
 // src/stream.ts
@@ -40620,7 +40632,7 @@ ${userText}
   }
   async *_generate(args, signal, timeoutSec, tmpFiles) {
     validateIclaudePath(this.cfg.iclaudePath);
-    const child = (0, import_child_process.spawn)(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
+    const child = (0, import_node_child_process.spawn)(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
     if (!child.stdout || !child.stderr) throw new Error("spawn: missing stdio");
     const stderrChunks = [];
     child.stderr.on("data", (chunk) => stderrChunks.push(chunk));
@@ -47902,10 +47914,10 @@ OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
 // src/proxy.ts
-var import_obsidian5 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 function createProxyDispatcher(cfg) {
   if (!cfg.enabled) return null;
-  if (import_obsidian5.Platform.isMobile) return null;
+  if (import_obsidian7.Platform.isMobile) return null;
   const undici = require_undici();
   return new undici.ProxyAgent(buildProxyUrl(cfg));
 }
@@ -47956,7 +47968,7 @@ function maskProxyUrl(url) {
 }
 
 // src/mobile-fetch.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 var mobileFetch = async (input, init) => {
   if (init?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
   let url;
@@ -47976,7 +47988,7 @@ var mobileFetch = async (input, init) => {
   } else if (init?.headers) {
     headers = init.headers;
   }
-  const requestPromise = (0, import_obsidian6.requestUrl)({
+  const requestPromise = (0, import_obsidian8.requestUrl)({
     url,
     method: init?.method ?? "GET",
     headers,
@@ -48135,17 +48147,17 @@ var WikiController = class {
   cancelCurrent() {
     if (this.current) {
       this.current.abort();
-      new import_obsidian7.Notice(i18n().ctrl.cancelling);
+      new import_obsidian9.Notice(i18n().ctrl.cancelling);
     }
   }
   async format() {
     const file = this.app.workspace.getActiveFile();
     if (!file) {
-      new import_obsidian7.Notice(i18n().ctrl.noActiveFile);
+      new import_obsidian9.Notice(i18n().ctrl.noActiveFile);
       return;
     }
     if (file.extension !== "md") {
-      new import_obsidian7.Notice(i18n().view.formatOnlyMarkdown ?? "Format only works on markdown files");
+      new import_obsidian9.Notice(i18n().view.formatOnlyMarkdown ?? "Format only works on markdown files");
       return;
     }
     const domains = await this.loadDomains();
@@ -48176,11 +48188,11 @@ var WikiController = class {
   async formatApply(keepOld) {
     const p = this._pendingFormat;
     if (!p || !p.tempPath) {
-      new import_obsidian7.Notice(i18n().view.formatNoPending ?? "No format preview to apply");
+      new import_obsidian9.Notice(i18n().view.formatNoPending ?? "No format preview to apply");
       return;
     }
     if (this.isBusy()) {
-      new import_obsidian7.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian9.Notice(i18n().ctrl.operationRunning);
       return;
     }
     const adapter = this.app.vault.adapter;
@@ -48207,17 +48219,17 @@ var WikiController = class {
         const content = await adapter.read(p.tempPath);
         const patched = patchWikiFields(originalContent, content);
         const origFile = this.app.vault.getAbstractFileByPath(p.originalPath);
-        if (origFile instanceof import_obsidian7.TFile) {
+        if (origFile instanceof import_obsidian9.TFile) {
           await this.app.vault.modify(origFile, patched);
         } else {
           await adapter.write(p.originalPath, patched);
         }
         await this.app.vault.adapter.remove(p.tempPath);
       }
-      new import_obsidian7.Notice(i18n().view.formatApplied(p.originalPath));
+      new import_obsidian9.Notice(i18n().view.formatApplied(p.originalPath));
       this.activeView()?.appendEvent({ kind: "format_applied", path: p.originalPath });
     } catch (e) {
-      new import_obsidian7.Notice(i18n().ctrl.errorPrefix(e.message));
+      new import_obsidian9.Notice(i18n().ctrl.errorPrefix(e.message));
     } finally {
       this._pendingFormat = null;
       this.onBusyChange?.();
@@ -48234,18 +48246,18 @@ var WikiController = class {
     } catch {
     }
     this._pendingFormat = null;
-    new import_obsidian7.Notice(i18n().view.formatCancelled);
+    new import_obsidian9.Notice(i18n().view.formatCancelled);
     this.activeView()?.appendEvent({ kind: "format_cancelled" });
     this.onBusyChange?.();
   }
   async formatRefine(message) {
     const p = this._pendingFormat;
     if (!p) {
-      new import_obsidian7.Notice(i18n().view.formatNoPending ?? "No format preview to refine");
+      new import_obsidian9.Notice(i18n().view.formatNoPending ?? "No format preview to refine");
       return;
     }
     if (this.isBusy()) {
-      new import_obsidian7.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian9.Notice(i18n().ctrl.operationRunning);
       return;
     }
     p.chat.push({ role: "user", content: message });
@@ -48254,7 +48266,7 @@ var WikiController = class {
   async ingestActive(domainId) {
     const file = this.app.workspace.getActiveFile();
     if (!file) {
-      new import_obsidian7.Notice(i18n().ctrl.noActiveFile);
+      new import_obsidian9.Notice(i18n().ctrl.noActiveFile);
       return;
     }
     const abs = this.app.vault.adapter.getFullPath(file.path);
@@ -48279,11 +48291,11 @@ var WikiController = class {
   }
   async dispatchChat(operation, domainId, context, chatMessages) {
     if (this.isBusy()) {
-      new import_obsidian7.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian9.Notice(i18n().ctrl.operationRunning);
       return;
     }
-    if (import_obsidian7.Platform.isMobile && operation !== "query") {
-      new import_obsidian7.Notice(i18n().ctrl.mobileNotAvailable);
+    if (import_obsidian9.Platform.isMobile && operation !== "query") {
+      new import_obsidian9.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
     {
@@ -48306,7 +48318,7 @@ var WikiController = class {
     try {
       agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat", this.plugin.settings.timeouts.lint);
     } catch (e) {
-      new import_obsidian7.Notice(i18n().ctrl.errorPrefix(e.message));
+      new import_obsidian9.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
       return;
     }
@@ -48391,7 +48403,7 @@ var WikiController = class {
     const adapter = this.app.vault.adapter;
     const base = adapter.getBasePath?.();
     if (base == null) {
-      if (!import_obsidian7.Platform.isMobile) {
+      if (!import_obsidian9.Platform.isMobile) {
         console.warn("[ai-wiki] vault.adapter.getBasePath is undefined on desktop");
       }
       return "";
@@ -48403,7 +48415,7 @@ var WikiController = class {
       return await this.domainStore.load();
     } catch (e) {
       if (e instanceof DomainCorruptError) {
-        new import_obsidian7.Notice(`Domain map corrupt: ${e.message}`);
+        new import_obsidian9.Notice(`Domain map corrupt: ${e.message}`);
       }
       throw e;
     }
@@ -48412,13 +48424,13 @@ var WikiController = class {
     const id = input.id.trim();
     const err = validateDomainId(id);
     if (err) {
-      new import_obsidian7.Notice(i18n().ctrl.domainAddFailed(err));
+      new import_obsidian9.Notice(i18n().ctrl.domainAddFailed(err));
       return { ok: false, error: err };
     }
     const cur = await this.domainStore.load();
     if (cur.some((d) => d.id === id)) {
       const msg = `\u0414\u043E\u043C\u0435\u043D \xAB${id}\xBB \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442`;
-      new import_obsidian7.Notice(i18n().ctrl.domainAddFailed(msg));
+      new import_obsidian9.Notice(i18n().ctrl.domainAddFailed(msg));
       return { ok: false, error: msg };
     }
     const wikiSubfolder = input.wikiFolder.trim() || id;
@@ -48431,7 +48443,7 @@ var WikiController = class {
       language_notes: ""
     }];
     await this.domainStore.save(next);
-    new import_obsidian7.Notice(i18n().ctrl.domainAdded(id));
+    new import_obsidian9.Notice(i18n().ctrl.domainAdded(id));
     return { ok: true };
   }
   async updateDomainSources(domainId, sourcePaths) {
@@ -48464,7 +48476,7 @@ var WikiController = class {
   requireClaudeAgent(local) {
     const { iclaudePath } = local;
     if (!iclaudePath) {
-      new import_obsidian7.Notice(i18n().ctrl.setClaudeCodePath);
+      new import_obsidian9.Notice(i18n().ctrl.setClaudeCodePath);
       return null;
     }
     return iclaudePath;
@@ -48472,7 +48484,7 @@ var WikiController = class {
   requireNativeAgent(eff) {
     const na = eff.nativeAgent;
     if (!na?.baseUrl?.trim() || !na?.apiKey?.trim()) {
-      new import_obsidian7.Notice(i18n().ctrl.configureCloudLlm);
+      new import_obsidian9.Notice(i18n().ctrl.configureCloudLlm);
       return false;
     }
     return true;
@@ -48544,8 +48556,8 @@ var WikiController = class {
       this._currentClaudeClient = null;
       const proxyCfg = s.proxy;
       let proxyFetch = null;
-      if (proxyCfg.enabled && import_obsidian7.Platform.isMobile) {
-        new import_obsidian7.Notice(i18n().settings.proxy_mobile_warning);
+      if (proxyCfg.enabled && import_obsidian9.Platform.isMobile) {
+        new import_obsidian9.Notice(i18n().settings.proxy_mobile_warning);
       } else if (proxyCfg.enabled) {
         try {
           const baseHost = new URL(s.nativeAgent.baseUrl).hostname;
@@ -48555,7 +48567,7 @@ var WikiController = class {
             if (proxyFetch) console.debug(`[ai-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
           }
         } catch (e) {
-          new import_obsidian7.Notice(i18n().settings.proxy_invalid(e.message));
+          new import_obsidian9.Notice(i18n().settings.proxy_invalid(e.message));
         }
       }
       const openaiClient = new OpenAI({
@@ -48563,9 +48575,9 @@ var WikiController = class {
         apiKey: s.nativeAgent.apiKey,
         timeout: timeoutSec > 0 ? timeoutSec * 1e3 : void 0,
         dangerouslyAllowBrowser: true,
-        fetch: import_obsidian7.Platform.isMobile ? mobileFetch : proxyFetch ?? void 0
+        fetch: import_obsidian9.Platform.isMobile ? mobileFetch : proxyFetch ?? void 0
       });
-      llm = import_obsidian7.Platform.isMobile ? wrapMobileNoStream(openaiClient) : openaiClient;
+      llm = import_obsidian9.Platform.isMobile ? wrapMobileNoStream(openaiClient) : openaiClient;
     }
     return new AgentRunner(llm, s, vaultTools, vaultName, domains);
   }
@@ -48597,12 +48609,12 @@ var WikiController = class {
   }
   async dispatch(op, args, domainId, context, instruction, onFileError, chatMessages, lintOpts) {
     if (this.isBusy()) {
-      new import_obsidian7.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian9.Notice(i18n().ctrl.operationRunning);
       return;
     }
     this._chatSessionId = void 0;
-    if (import_obsidian7.Platform.isMobile && op !== "query" && op !== "format") {
-      new import_obsidian7.Notice(i18n().ctrl.mobileNotAvailable);
+    if (import_obsidian9.Platform.isMobile && op !== "query" && op !== "format") {
+      new import_obsidian9.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
     {
@@ -48633,7 +48645,7 @@ var WikiController = class {
     try {
       agentRunner = await this.buildAgentRunner(vaultRoot, void 0, opKey, opTimeoutSec);
     } catch (e) {
-      new import_obsidian7.Notice(i18n().ctrl.errorPrefix(e.message));
+      new import_obsidian9.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
       return;
     }
@@ -48668,7 +48680,7 @@ var WikiController = class {
             if (next !== cur) await this.domainStore.save(next);
           } catch (e) {
             if (e instanceof DomainCorruptError) {
-              new import_obsidian7.Notice(`Domain map corrupt: ${e.message}`);
+              new import_obsidian9.Notice(`Domain map corrupt: ${e.message}`);
             }
             status = "error";
             ctrl.abort();
@@ -48879,7 +48891,7 @@ async function pickAndWriteSchema(adapter, domains, filename, dest) {
   for (const domain of domains) {
     const p = `${WIKI_ROOT}/${domain.wiki_folder}/.config/${filename}`;
     if (!await adapter.exists(p)) continue;
-    const stat = await adapter.stat?.(p);
+    const stat = await adapter.stat(p);
     const mtime = stat?.mtime ?? 0;
     if (mtime > bestMtime) {
       bestMtime = mtime;
@@ -48910,7 +48922,7 @@ async function cleanDir(adapter, dir, knownFiles) {
   try {
     const listing = await adapter.list(dir);
     if (listing.files.length === 0 && listing.folders.length === 0) {
-      await adapter.rmdir?.(dir, false).catch?.(() => {
+      await adapter.rmdir(dir, false).catch(() => {
       });
     }
   } catch {
@@ -48918,7 +48930,7 @@ async function cleanDir(adapter, dir, knownFiles) {
 }
 
 // src/main.ts
-var LlmWikiPlugin = class extends import_obsidian8.Plugin {
+var LlmWikiPlugin = class extends import_obsidian10.Plugin {
   settings;
   controller;
   settingTab;
@@ -48931,7 +48943,7 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
       await runStorageMigration(this.app.vault);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian8.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
+      new import_obsidian10.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] storage migration error:", e);
     }
     await migrateLegacyData(this, this.domainStore, this.localConfigStore);
@@ -48950,7 +48962,7 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
-    if (!import_obsidian8.Platform.isMobile) {
+    if (!import_obsidian10.Platform.isMobile) {
       const statusBar = this.addStatusBarItem();
       statusBar.setText("schema: 0/0");
       statusBar.setAttribute("aria-label", "validation: 0 ok, 0 retried, 0 failed");
@@ -48973,7 +48985,7 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
-    if (!import_obsidian8.Platform.isMobile) {
+    if (!import_obsidian10.Platform.isMobile) {
       this.addCommand({
         id: "ingest-current",
         name: T.cmd.ingestActive,
@@ -48985,7 +48997,7 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
       name: T.cmd.query,
       callback: () => new QueryModal(this.app, (q) => void this.controller.query(q)).open()
     });
-    if (!import_obsidian8.Platform.isMobile) {
+    if (!import_obsidian10.Platform.isMobile) {
       this.addCommand({
         id: "lint",
         name: T.cmd.lint,
@@ -49119,11 +49131,11 @@ var LlmWikiPlugin = class extends import_obsidian8.Plugin {
       if (data && data.model && !this.settings.claudeAgent.model)
         this.settings.claudeAgent.model = data.model;
     }
-    if (import_obsidian8.Platform.isMobile && this.settings.backend === "claude-agent") {
+    if (import_obsidian10.Platform.isMobile && this.settings.backend === "claude-agent") {
       this.settings.backend = "native-agent";
       await this.saveData(this.settings);
     }
-    if (import_obsidian8.Platform.isMobile) {
+    if (import_obsidian10.Platform.isMobile) {
       let dirty = false;
       if (this.settings.nativeAgent.perOperation) {
         this.settings.nativeAgent.perOperation = false;

@@ -157,16 +157,17 @@ export class AgentRunner {
 
     while (true) {
       const idleCtrl = new AbortController();
+      const signalAny = (AbortSignal as unknown as { any(signals: AbortSignal[]): AbortSignal }).any;
       const combined = idleTimeoutMs > 0
-        ? AbortSignal.any([req.signal, idleCtrl.signal])
+        ? signalAny([req.signal, idleCtrl.signal])
         : req.signal;
-      let idleTimer: ReturnType<typeof setTimeout> | null =
-        idleTimeoutMs > 0 ? setTimeout(() => idleCtrl.abort(), idleTimeoutMs) : null;
+      let idleTimer: number | null =
+        idleTimeoutMs > 0 ? window.setTimeout(() => idleCtrl.abort(), idleTimeoutMs) : null;
 
       const resetTimer = () => {
         if (!idleTimer) return;
-        clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => idleCtrl.abort(), idleTimeoutMs);
+        window.clearTimeout(idleTimer);
+        idleTimer = window.setTimeout(() => idleCtrl.abort(), idleTimeoutMs);
       };
 
       let finalResultText = "";
@@ -176,7 +177,7 @@ export class AgentRunner {
           if (ev.kind === "result") finalResultText = ev.text;
           yield ev;
         }
-        if (idleTimer) clearTimeout(idleTimer);
+        if (idleTimer) window.clearTimeout(idleTimer);
         // Phases swallow AbortError silently (return instead of throw).
         // Detect silent idle abort by checking if idleCtrl fired but user didn't cancel.
         if (idleCtrl.signal.aborted && !req.signal.aborted) {
@@ -214,7 +215,7 @@ export class AgentRunner {
         }
         return;
       } catch (err) {
-        if (idleTimer) clearTimeout(idleTimer);
+        if (idleTimer) window.clearTimeout(idleTimer);
         const isIdleAbort = !req.signal.aborted && (err as Error).name === "AbortError";
         if (isIdleAbort && attempt < maxRetries) {
           attempt++;

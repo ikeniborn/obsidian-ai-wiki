@@ -16,10 +16,10 @@ export function wrapMobileNoStream(inner: LlmClient): LlmClient {
     }
     const noStreamParams = { ...params, stream: false } as Record<string, unknown>;
     delete noStreamParams.stream_options;
-    const resp = (await (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<OpenAI.Chat.ChatCompletion>)(
+    const resp = await (inner.chat.completions.create as (p: unknown, o?: unknown) => Promise<OpenAI.Chat.ChatCompletion>)(
       noStreamParams,
       callOpts,
-    )) as OpenAI.Chat.ChatCompletion;
+    );
     return completionToAsyncIterable(resp);
   }) as unknown as LlmClient["chat"]["completions"]["create"];
   return { chat: { completions: { create } } };

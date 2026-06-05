@@ -3,7 +3,6 @@ import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams } from "./llm-utils";
 import { parseWithRetry } from "./parse-with-retry";
 import { EntityTypesDeltaSchema, LintOutputSchema } from "./zod-schemas";
 import type { LintOutput } from "./zod-schemas";

@@ -473,7 +473,7 @@ export class LlmWikiView extends ItemView {
       this.app,
       T.reinitConfirmTitle,
       [body],
-      () => void this.plugin.controller.init(entry!.id, false, sourcePaths, true),
+      () => void this.plugin.controller.init(entry.id, false, sourcePaths, true),
     ).open();
   }
 
@@ -512,12 +512,12 @@ export class LlmWikiView extends ItemView {
         this.app,
         T.reinitConfirmTitle,
         [body],
-        async () => {
+        () => { void (async () => {
           await this.plugin.controller.updateDomainSources(original.id, newPaths);
           const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
           if (deleted > 0) new Notice(`Удалено статей: ${deleted}`);
           void this.plugin.controller.init(original.id, false, newPaths, true);
-        },
+        })(); },
       ).open();
       return;
     }
@@ -963,10 +963,11 @@ export class LlmWikiView extends ItemView {
     }
     const copyBtn = el.createEl("button", { cls: "ai-wiki-copy-btn", attr: { "aria-label": "Copy" } });
     setIcon(copyBtn, "copy");
-    copyBtn.addEventListener("click", async () => {
-      await navigator.clipboard.writeText(text);
-      setIcon(copyBtn, "check");
-      window.setTimeout(() => setIcon(copyBtn, "copy"), 1500);
+    copyBtn.addEventListener("click", () => {
+      void navigator.clipboard.writeText(text).then(() => {
+        setIcon(copyBtn, "check");
+        window.setTimeout(() => setIcon(copyBtn, "copy"), 1500);
+      });
     });
     el.scrollIntoView({ block: "end" });
     return el;
@@ -1204,10 +1205,10 @@ class FileContentModal extends Modal {
     openBtn.addEventListener("click", () => {
       const basePath = (this.app.vault.adapter as Record<string, unknown>)["basePath"] as string ?? "";
       const absPath = basePath ? `${basePath}/${this.filePath}` : this.filePath;
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- electron shell API only available via require() in Obsidian desktop
       (require("electron") as { shell: { openPath(p: string): void } }).shell.openPath(absPath);
     });
-    this.contentEl.style.cssText = "max-height: 60vh; overflow-y: auto;";
+    this.contentEl.addClass("ai-wiki-busy-modal-content");
     const comp = new Component();
     comp.load();
     void MarkdownRenderer.render(this.app, this.content, this.contentEl, this.filePath, comp);

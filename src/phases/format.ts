@@ -34,7 +34,7 @@ function parseFormatOutput(
   const result = schema.safeParse(raw);
   if (result.success) {
     structuralErrorCounter.record(true, 0);
-    return { data: result.data as import("./zod-schemas").FormatOutput, hint: "", truncated: sentinel.truncated };
+    return { data: result.data, hint: "", truncated: sentinel.truncated };
   }
   structuralErrorCounter.record(false, 0);
   const hint = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
@@ -54,10 +54,6 @@ function truncationHint(backend: "claude-agent" | "native-agent"): string {
   return backend === "claude-agent"
     ? "увеличьте лимит: env CLAUDE_CODE_MAX_OUTPUT_TOKENS в iclaude.sh"
     : "увеличьте лимит: Settings → per-operation → format → maxTokens";
-}
-
-async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
-  try { return await vaultTools.read(path); } catch { return ""; }
 }
 
 export async function* runFormat(

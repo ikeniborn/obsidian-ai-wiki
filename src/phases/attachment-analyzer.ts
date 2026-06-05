@@ -64,7 +64,7 @@ async function callVisionLlm(
       { role: "user", content: contentParts },
     ],
   } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming, { signal });
-  return (resp as OpenAI.Chat.ChatCompletion).choices[0]?.message?.content ?? "";
+  return resp.choices[0]?.message?.content ?? "";
 }
 
 export type VisionLanguage = "auto" | "ru" | "en" | "es";
@@ -133,7 +133,7 @@ export async function analyzePdf(
   signal: AbortSignal,
   language: VisionLanguage = "auto",
 ): Promise<string> {
-  const pdfjs = (globalThis as unknown as { pdfjsLib?: PdfjsLib }).pdfjsLib;
+  const pdfjs = (window as unknown as { pdfjsLib?: PdfjsLib }).pdfjsLib;
   if (!pdfjs) throw new Error("pdfjsLib unavailable");
 
   const doc = await pdfjs.getDocument({ data: buffer }).promise;
@@ -161,6 +161,8 @@ export async function analyzeExcalidraw(
   signal: AbortSignal,
   language: VisionLanguage = "auto",
 ): Promise<string> {
+  /* @excalidraw/utils is an optional runtime dep with no bundled types — exportToBlob resolves to any */
+  /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
   const { exportToBlob } = await import("@excalidraw/utils");
   const { elements, appState, files } = JSON.parse(text) as {
     elements: unknown[];
@@ -174,6 +176,7 @@ export async function analyzeExcalidraw(
     mimeType: "image/png",
     exportPadding: 10,
   });
+  /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
   const buf = await blob.arrayBuffer();
   const b64 = arrayBufferToBase64(buf);
   return callVisionLlm(llm, model, imageSystem(language), [

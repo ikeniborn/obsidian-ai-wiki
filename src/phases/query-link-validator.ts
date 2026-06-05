@@ -22,7 +22,7 @@ export function findBrokenLinks(links: string[], knownStems: Set<string>): strin
 }
 
 export function annotateBroken(text: string, broken: Set<string>): string {
-  return text.replace(/\[\[([^\]|#/]+?)\]\]/g, (full, stem) => {
+  return text.replace(/\[\[([^\]|#/]+?)\]\]/g, (full: string, stem: string) => {
     return broken.has(stem.trim()) ? `${full} *(нет в wiki)*` : full;
   });
 }
@@ -53,7 +53,7 @@ export async function rewriteWithValidLinks(
     params as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
     { signal },
   );
-  const text = (resp as OpenAI.Chat.ChatCompletion).choices[0]?.message?.content ?? originalAnswer;
-  const outputTokens = extractUsage(resp as OpenAI.Chat.ChatCompletion) ?? 0;
+  const text = resp.choices[0]?.message?.content ?? originalAnswer;
+  const outputTokens = extractUsage(resp) ?? 0;
   return { text, outputTokens };
 }

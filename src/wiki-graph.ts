@@ -146,7 +146,7 @@ export async function bfsExpandRanked(
     try {
       const scored = await similarity.selectRelevantScored(
         query,
-        annotations ?? new Map(),
+        annotations ?? new Map<string, string>(),
         nonSeedPaths,
       );
       const top = scored.slice(0, bfsTopK);

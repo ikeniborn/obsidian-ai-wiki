@@ -279,7 +279,7 @@ export function wrapStreamWithStats(
 
   return {
     stream: wrappedStream,
-    getStats(): LlmStreamStats | undefined {
+    getStats(this: void): LlmStreamStats | undefined {
       if (!yielded || ttftMs === undefined || llmDurationMs === undefined) return undefined;
       // Non-streaming emulation (mobile): chunks arrive synchronously in <10ms.
       // Use ttftMs (full HTTP round-trip) as effective duration for tok/s calculation.

@@ -32,7 +32,7 @@ function extractLinks(text: string): string[] {
 function extractFmLinks(fm: string): Set<string> {
   const set = new Set<string>();
   // Only read items under wiki_outgoing_links key (not wiki_sources or others)
-  const blockMatch = /^wiki_outgoing_links:((?:\n  - "[^"]*")*)/m.exec(fm);
+  const blockMatch = /^wiki_outgoing_links:((?:\n {2}- "[^"]*")*)/m.exec(fm);
   if (!blockMatch) return set;
   const re = /^\s+- "(\[\[[^\]]+\]\])"/mg;
   let m: RegExpExecArray | null;
@@ -44,7 +44,7 @@ function setFmLinks(fm: string, links: string[]): string {
   const block = links.length > 0
     ? "wiki_outgoing_links:\n" + links.map((l) => `  - "${l}"`).join("\n")
     : "wiki_outgoing_links: []";
-  const re = /^wiki_outgoing_links:(?:[ \t]*\[\]|(?:\n  - "[^"]*")*)/m;
+  const re = /^wiki_outgoing_links:(?:[ \t]*\[\]|(?:\n {2}- "[^"]*")*)/m;
   if (re.test(fm)) return fm.replace(re, block);
   return fm.replace(/\n---$/, `\n${block}\n---`);
 }
@@ -62,7 +62,7 @@ function fixOnePass(content: string): string {
   const inlineMatch = fm.match(/^wiki_outgoing_links:[ \t]*(\[.*?\])[ \t]*$/m);
   if (inlineMatch) {
     try {
-      const arr: string[] = JSON.parse(inlineMatch[1]);
+      const arr = JSON.parse(inlineMatch[1]) as string[];
       fm = fm.replace(/^wiki_outgoing_links:[ \t]*\[.*?\][ \t]*$/m,
         arr.length > 0
           ? "wiki_outgoing_links:\n" + arr.map((l) => `  - "${l}"`).join("\n")

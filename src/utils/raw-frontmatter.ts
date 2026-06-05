@@ -346,7 +346,7 @@ export function upsertRawFrontmatter(
   let existing: Record<string, unknown> = {};
   if (match) {
     try {
-      const parsed = yamlParse(match[1]);
+      const parsed: unknown = yamlParse(match[1]);
       if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
         existing = parsed as Record<string, unknown>;
       }
@@ -357,8 +357,7 @@ export function upsertRawFrontmatter(
     fields.wiki_added ??
     (typeof existing.wiki_added === "string" ? existing.wiki_added : undefined);
 
-  const { wiki_added: _a, wiki_updated: _u, wiki_articles: _ar, ...rest } =
-    existing as Record<string, unknown>;
+  const { wiki_added: _a, wiki_updated: _u, wiki_articles: _ar, ...rest } = existing;
   void _a; void _u; void _ar;
 
   const result: Record<string, unknown> = { ...rest };

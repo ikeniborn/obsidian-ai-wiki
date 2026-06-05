@@ -1,3 +1,4 @@
+import { requestUrl } from "obsidian";
 import { tokenize, scoreSeed } from "./wiki-seeds";
 import { pageId } from "./wiki-graph";
 import type { VaultTools } from "./vault-tools";
@@ -66,16 +67,18 @@ async function fetchEmbeddings(
   inputs: string[],
 ): Promise<Float32Array[]> {
   const url = `${baseUrl.replace(/\/$/, "")}/embeddings`;
-  const resp = await fetch(url, {
+  const resp = await requestUrl({
+    url,
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${apiKey}`,
     },
     body: JSON.stringify({ model, input: inputs }),
+    throw: false,
   });
-  if (!resp.ok) throw new Error(`Embedding API error: ${resp.status}`);
-  const json = await resp.json() as { data: { embedding: number[] }[] };
+  if (resp.status >= 400) throw new Error(`Embedding API error: ${resp.status}`);
+  const json = resp.json as { data: { embedding: number[] }[] };
   return json.data.map((d) => new Float32Array(d.embedding));
 }
 

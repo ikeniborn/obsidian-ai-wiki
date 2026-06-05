@@ -26,6 +26,7 @@
 .ai-wiki-query-input { width: 100%; resize: vertical; font-family: inherit; padding: 6px; }
 .ai-wiki-ask-row { display: flex; justify-content: space-between; }
 .ai-wiki-ask-row button { flex: 0 0 auto; }
+.ai-wiki-busy-modal-content { max-height: 60vh; overflow-y: auto; }
 
 .ai-wiki-progress-header { display: flex; align-items: baseline; justify-content: space-between; margin-top: 6px; }
 .ai-wiki-progress-header h4 { margin: 0; }

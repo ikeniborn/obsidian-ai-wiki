@@ -733,11 +733,11 @@ export class LintOptionsModal extends Modal {
       const selectBtn   = btnRow.createEl("button", { text: T.lintSelectAll });
 
       deselectBtn.addEventListener("click", () => {
-        toggles.forEach(t => t.setValue(false));
+        toggles.forEach(t => { t.setValue(false); });
         this.entityTypeFilter = [];
       });
       selectBtn.addEventListener("click", () => {
-        toggles.forEach(t => t.setValue(true));
+        toggles.forEach(t => { t.setValue(true); });
         this.entityTypeFilter = entityTypes.map(e => e.type);
       });
 
