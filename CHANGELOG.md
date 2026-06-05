@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.158 — 2026-06-05
+
+### New
+- feat(ux): show vision confirmation modal before format when vision enabled
+- feat(format): replace JSON wrapping with sentinel markers; remove json_object mode; add Zod-feedback retry
+- feat(format): harden FormatOutputSchema with FormatBaseSchema/FormatWithVisionSchema and superRefine
+- feat(format): add parseSentinelOutput to format-utils
+- feat(prompts): replace JSON format instructions with sentinel markers in format.md
+- feat(prompts): strengthen query formatting rules — lists, tables, bold for entities
+- feat(query): add query-link-validator with post-stream broken link detection, retry, and annotate fallback
+- feat(view): handle assistant_replace event — no-op in main view, replace in chat bubble
+- feat(types): add assistant_replace event to RunEvent union
+
+### Fixes
+- fix(vision): handle .excalidraw.md files — extract embedded JSON for Excalidraw analysis
+
+---
+
 ## 0.1.155 — 2026-06-04
 
 ### Fixes

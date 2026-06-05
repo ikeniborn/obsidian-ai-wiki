@@ -26438,7 +26438,11 @@ with your operating system user's permissions. This is required for AI Wiki to f
     ingestScopeBody: (added, total) => `Added ${added} new path(s). Ingest new only or all ${total} path(s)?`,
     ingestScopeNew: (n) => `New only (${n})`,
     ingestScopeAll: (n) => `All (${n})`,
-    ingestScopeSkip: "Skip"
+    ingestScopeSkip: "Skip",
+    formatVisionTitle: "Format with vision?",
+    formatVisionBody: "Vision recognition is enabled. Analyze attachments before formatting?",
+    formatVisionWith: "With vision",
+    formatVisionWithout: "Without vision"
   }
 };
 var ru = {
@@ -26669,7 +26673,11 @@ var ru = {
     ingestScopeBody: (added, total) => `\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E ${added} \u043D\u043E\u0432\u044B\u0445 \u043F\u0443\u0442\u0435\u0439. Ingest \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u043E\u0432\u044B\u0445 \u0438\u043B\u0438 \u0432\u0441\u0435\u0445 ${total}?`,
     ingestScopeNew: (n) => `\u0422\u043E\u043B\u044C\u043A\u043E \u043D\u043E\u0432\u044B\u0435 (${n})`,
     ingestScopeAll: (n) => `\u0412\u0441\u0435 (${n})`,
-    ingestScopeSkip: "\u041F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C"
+    ingestScopeSkip: "\u041F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C",
+    formatVisionTitle: "\u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0441 vision?",
+    formatVisionBody: "Vision-\u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u0432\u0430\u043D\u0438\u0435 \u0432\u043A\u043B\u044E\u0447\u0435\u043D\u043E. \u041F\u0440\u043E\u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u043F\u0435\u0440\u0435\u0434 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435\u043C?",
+    formatVisionWith: "\u0421 vision",
+    formatVisionWithout: "\u0411\u0435\u0437 vision"
   }
 };
 var es = {
@@ -26900,7 +26908,11 @@ con los permisos de su usuario del sistema operativo. Es necesario para que AI W
     ingestScopeBody: (added, total) => `Se a\xF1adieron ${added} ruta(s) nueva(s). \xBFIngest solo las nuevas o todas (${total})?`,
     ingestScopeNew: (n) => `Solo nuevas (${n})`,
     ingestScopeAll: (n) => `Todas (${n})`,
-    ingestScopeSkip: "Omitir"
+    ingestScopeSkip: "Omitir",
+    formatVisionTitle: "\xBFFormatear con vision?",
+    formatVisionBody: "El reconocimiento vision est\xE1 activado. \xBFAnalizar adjuntos antes de formatear?",
+    formatVisionWith: "Con vision",
+    formatVisionWithout: "Sin vision"
   }
 };
 var locales = { ru, es };
@@ -26950,6 +26962,29 @@ var ConfirmModal = class extends import_obsidian2.Modal {
     new import_obsidian2.Setting(contentEl).addButton((b) => b.setButtonText(T.cancel).onClick(() => this.close())).addButton((b) => b.setButtonText(`\u25B6 ${T.run}`).setCta().onClick(() => {
       this.close();
       this.onConfirm();
+    }));
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+var FormatVisionModal = class extends import_obsidian2.Modal {
+  constructor(app, onChoice) {
+    super(app);
+    this.onChoice = onChoice;
+  }
+  onChoice;
+  onOpen() {
+    const T = i18n().modal;
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: T.formatVisionTitle });
+    contentEl.createEl("p", { text: T.formatVisionBody });
+    new import_obsidian2.Setting(contentEl).addButton((b) => b.setButtonText(T.cancel).onClick(() => this.close())).addButton((b) => b.setButtonText(T.formatVisionWithout).onClick(() => {
+      this.close();
+      this.onChoice("without");
+    })).addButton((b) => b.setButtonText(T.formatVisionWith).setCta().onClick(() => {
+      this.close();
+      this.onChoice("with");
     }));
   }
   onClose() {
@@ -29896,6 +29931,7 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       const el = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step--ask");
       el.createSpan({ text: "\u23F3 Waiting for answer\u2026" });
       return;
+    } else if (ev.kind === "assistant_replace") {
     } else if (ev.kind === "assistant_text") {
       this.stopWaiting();
       if (ev.isReasoning) {
@@ -30159,6 +30195,11 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       }
       this.currentChatBuffer += ev.delta;
       this.currentChatBubble.setText(this.currentChatBuffer);
+      this.currentChatBubble.scrollIntoView({ block: "end" });
+    }
+    if (ev.kind === "assistant_replace" && this.currentChatBubble) {
+      this.currentChatBuffer = ev.text;
+      this.currentChatBubble.setText(ev.text);
       this.currentChatBubble.scrollIntoView({ block: "end" });
     }
   }
@@ -36153,9 +36194,45 @@ var LintOutputSchema = external_exports.object({
   fixes: external_exports.array(WikiPageSchema),
   deletes: external_exports.array(LintDeleteSchema).optional()
 });
-var FormatOutputSchema = external_exports.object({
-  report: external_exports.string(),
-  formatted: external_exports.string()
+var FormatBaseSchema = external_exports.object({
+  report: external_exports.string().min(1, "report \u043D\u0435 \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043F\u0443\u0441\u0442\u044B\u043C"),
+  formatted: external_exports.string().min(10, "formatted \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043A\u043E\u0440\u043E\u0442\u043A\u0438\u0439")
+});
+var FormatWithVisionSchema = FormatBaseSchema.extend({
+  vision_blocks_count: external_exports.number().int().min(0),
+  embeds_preserved: external_exports.array(external_exports.string())
+}).superRefine((val, ctx) => {
+  if (!val.formatted.startsWith("---\n")) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["formatted"],
+      message: "formatted \u0434\u043E\u043B\u0436\u0435\u043D \u043D\u0430\u0447\u0438\u043D\u0430\u0442\u044C\u0441\u044F \u0441 YAML frontmatter (---)"
+    });
+  }
+  if (val.report.trim().length === 0) {
+    ctx.addIssue({ code: external_exports.ZodIssueCode.custom, path: ["report"], message: "report \u043F\u0443\u0441\u0442" });
+  }
+  for (const path2 of val.embeds_preserved) {
+    if (!val.formatted.includes(`![[${path2}]]`)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["formatted"],
+        message: `embed ![[${path2}]] \u043F\u043E\u0442\u0435\u0440\u044F\u043D`
+      });
+    }
+  }
+});
+var FormatOutputSchema = FormatBaseSchema.superRefine((val, ctx) => {
+  if (!val.formatted.startsWith("---\n")) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["formatted"],
+      message: "formatted \u0434\u043E\u043B\u0436\u0435\u043D \u043D\u0430\u0447\u0438\u043D\u0430\u0442\u044C\u0441\u044F \u0441 YAML frontmatter (---)"
+    });
+  }
+  if (val.report.trim().length === 0) {
+    ctx.addIssue({ code: external_exports.ZodIssueCode.custom, path: ["report"], message: "report \u043F\u0443\u0441\u0442" });
+  }
 });
 
 // prompts/ingest.md
@@ -37658,7 +37735,7 @@ ${indexContent}` : ""
 }
 
 // prompts/query.md
-var query_default = "\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u043F\u043E wiki-\u0431\u0430\u0437\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u041F\u0440\u0438 \u0441\u0441\u044B\u043B\u043A\u0430\u0445 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 WikiLinks [[\u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435]].\n{{entity_types_block}}\n{{index_block}}\n\n## \u041F\u0440\u0430\u0432\u0438\u043B\u0430 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F\n\n**\u041E\u0411\u042F\u0417\u0410\u0422\u0415\u041B\u042C\u041D\u041E \u2014 \u043A\u043E\u0434 \u0438 \u043A\u043E\u043C\u0430\u043D\u0434\u044B:**\n\n\u041B\u044E\u0431\u0430\u044F \u043A\u043E\u043C\u0430\u043D\u0434\u0430, \u0441\u043A\u0440\u0438\u043F\u0442, \u043F\u0443\u0442\u044C \u0438\u043B\u0438 \u043A\u043E\u043D\u0444\u0438\u0433 \u0412\u0421\u0415\u0413\u0414\u0410 \u043E\u0444\u043E\u0440\u043C\u043B\u044F\u0435\u0442\u0441\u044F \u0444enced-\u0431\u043B\u043E\u043A\u043E\u043C \u0441 \u0443\u043A\u0430\u0437\u0430\u043D\u0438\u0435\u043C \u044F\u0437\u044B\u043A\u0430.\n\n\u041D\u0415\u0412\u0415\u0420\u041D\u041E:\n\u0412\u044B\u043F\u043E\u043B\u043D\u0438 sudo systemctl restart nginx\n\n\u0412\u0415\u0420\u041D\u041E:\n```bash\nsudo systemctl restart nginx\n```\n\n\u041D\u0415\u0412\u0415\u0420\u041D\u041E:\n\u0414\u043E\u0431\u0430\u0432\u044C \u0432 \u043A\u043E\u043D\u0444\u0438\u0433: key: value\n\n\u0412\u0415\u0420\u041D\u041E:\n```yaml\nkey: value\n```\n\n\u042D\u0442\u043E \u043F\u0440\u0430\u0432\u0438\u043B\u043E \u0434\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 \u0438 \u0432\u043D\u0443\u0442\u0440\u0438 \u043D\u0443\u043C\u0435\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0445 \u0438 \u043C\u0430\u0440\u043A\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0445 \u0441\u043F\u0438\u0441\u043A\u043E\u0432.\n\n\u041D\u0415\u0412\u0415\u0420\u041D\u041E:\n- \u041E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0432\u0441\u0435 swap: `sudo swapoff -a`\n- \u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C: `sudo swapon --show`\n\n\u0412\u0415\u0420\u041D\u041E:\n- \u041E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0432\u0441\u0435 swap:\n  ```bash\n  sudo swapoff -a\n  ```\n- \u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C:\n  ```bash\n  sudo swapon --show\n  ```\n\n\u042F\u0437\u044B\u043A\u0438: `bash` \u0434\u043B\u044F \u043A\u043E\u043C\u0430\u043D\u0434 \u043E\u0431\u043E\u043B\u043E\u0447\u043A\u0438, `yaml`/`toml`/`ini` \u0434\u043B\u044F \u043A\u043E\u043D\u0444\u0438\u0433\u043E\u0432, `python`/`go`/`js` \u0434\u043B\u044F \u043A\u043E\u0434\u0430, `text` \u0435\u0441\u043B\u0438 \u044F\u0437\u044B\u043A \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043D.\n\u0422\u043E\u043B\u044C\u043A\u043E \u0438\u043C\u0435\u043D\u0430 \u0444\u0430\u0439\u043B\u043E\u0432 \u0438 \u0444\u043B\u0430\u0433\u0438 \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u043E \u043F\u0438\u0441\u0430\u0442\u044C \u0432 `` `backticks` `` inline: `/etc/fstab`, `--show`, `vm.swappiness`.\n\n**\u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 \u043E\u0442\u0432\u0435\u0442\u0430:**\n- \u041A\u043E\u0440\u043E\u0442\u043A\u0438\u0439 \u043F\u0440\u044F\u043C\u043E\u0439 \u043E\u0442\u0432\u0435\u0442 \u0432 \u043D\u0430\u0447\u0430\u043B\u0435 \u2014 \u0431\u0435\u0437 \u0432\u0441\u0442\u0443\u043F\u043B\u0435\u043D\u0438\u0439.\n- \u0415\u0441\u043B\u0438 \u0442\u0435\u043C \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u2014 \u0440\u0430\u0437\u0434\u0435\u043B\u0438 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0430\u043C\u0438 `##`.\n- \u0428\u0430\u0433\u0438/\u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u0435\u043D\u0438\u044F \u2192 \u043D\u0443\u043C\u0435\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u0438\u043B\u0438 \u043C\u0430\u0440\u043A\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u0441\u043F\u0438\u0441\u043E\u043A.\n\n**\u0421\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 wiki:**\n- \u0421\u0441\u044B\u043B\u0430\u0439\u0441\u044F \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443-\u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0447\u0435\u0440\u0435\u0437 [[WikiLink]] \u043F\u043E\u0441\u043B\u0435 \u0444\u0430\u043A\u0442\u0430 \u0438\u043B\u0438 \u0440\u0430\u0437\u0434\u0435\u043B\u0430.\n- \u041D\u0435 \u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u044F\u0439 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u043C \u0431\u043B\u043E\u043A\u043E\u043C \u2014 \u0432\u0441\u0442\u0430\u0432\u043B\u044F\u0439 \u0441\u0441\u044B\u043B\u043A\u0438 \u043F\u043E \u043C\u0435\u0441\u0442\u0443.\n\n**\u041A\u043E\u043C\u043F\u0430\u043A\u0442\u043D\u043E\u0441\u0442\u044C:**\n- \u041D\u0435\u0442 \u0432\u0432\u043E\u0434\u043D\u044B\u0445 \u0444\u0440\u0430\u0437 (\xAB\u041A\u043E\u043D\u0435\u0447\u043D\u043E\xBB, \xAB\u0414\u043B\u044F \u0442\u043E\u0433\u043E \u0447\u0442\u043E\u0431\u044B\xBB).\n- \u041D\u0435\u0442 \u043F\u043E\u0432\u0442\u043E\u0440\u043E\u0432 \u0438\u0437 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u0431\u0435\u0437 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u0441\u043C\u044B\u0441\u043B\u0430.\n- \u0422\u0430\u0431\u043B\u0438\u0446\u0443 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u0434\u0430\u043D\u043D\u044B\u0435 \u0440\u0435\u0430\u043B\u044C\u043D\u043E \u0442\u0430\u0431\u043B\u0438\u0447\u043D\u044B\u0435 (\u22653 \u0441\u0442\u0440\u043E\u043A, \u22652 \u0441\u0442\u043E\u043B\u0431\u0446\u0430).\n";
+var query_default = "\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u043F\u043E wiki-\u0431\u0430\u0437\u0435 \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u041F\u0440\u0438 \u0441\u0441\u044B\u043B\u043A\u0430\u0445 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 WikiLinks [[\u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435]].\n{{entity_types_block}}\n{{index_block}}\n\n## \u041F\u0440\u0430\u0432\u0438\u043B\u0430 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F\n\n**\u041E\u0411\u042F\u0417\u0410\u0422\u0415\u041B\u042C\u041D\u041E \u2014 \u043A\u043E\u0434 \u0438 \u043A\u043E\u043C\u0430\u043D\u0434\u044B:**\n\n\u041B\u044E\u0431\u0430\u044F \u043A\u043E\u043C\u0430\u043D\u0434\u0430, \u0441\u043A\u0440\u0438\u043F\u0442, \u043F\u0443\u0442\u044C \u0438\u043B\u0438 \u043A\u043E\u043D\u0444\u0438\u0433 \u0412\u0421\u0415\u0413\u0414\u0410 \u043E\u0444\u043E\u0440\u043C\u043B\u044F\u0435\u0442\u0441\u044F \u0444enced-\u0431\u043B\u043E\u043A\u043E\u043C \u0441 \u0443\u043A\u0430\u0437\u0430\u043D\u0438\u0435\u043C \u044F\u0437\u044B\u043A\u0430.\n\n\u041D\u0415\u0412\u0415\u0420\u041D\u041E:\n\u0412\u044B\u043F\u043E\u043B\u043D\u0438 sudo systemctl restart nginx\n\n\u0412\u0415\u0420\u041D\u041E:\n```bash\nsudo systemctl restart nginx\n```\n\n\u041D\u0415\u0412\u0415\u0420\u041D\u041E:\n\u0414\u043E\u0431\u0430\u0432\u044C \u0432 \u043A\u043E\u043D\u0444\u0438\u0433: key: value\n\n\u0412\u0415\u0420\u041D\u041E:\n```yaml\nkey: value\n```\n\n\u042D\u0442\u043E \u043F\u0440\u0430\u0432\u0438\u043B\u043E \u0434\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 \u0438 \u0432\u043D\u0443\u0442\u0440\u0438 \u043D\u0443\u043C\u0435\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0445 \u0438 \u043C\u0430\u0440\u043A\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0445 \u0441\u043F\u0438\u0441\u043A\u043E\u0432.\n\n\u041D\u0415\u0412\u0415\u0420\u041D\u041E:\n- \u041E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0432\u0441\u0435 swap: `sudo swapoff -a`\n- \u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C: `sudo swapon --show`\n\n\u0412\u0415\u0420\u041D\u041E:\n- \u041E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0432\u0441\u0435 swap:\n  ```bash\n  sudo swapoff -a\n  ```\n- \u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C:\n  ```bash\n  sudo swapon --show\n  ```\n\n\u042F\u0437\u044B\u043A\u0438: `bash` \u0434\u043B\u044F \u043A\u043E\u043C\u0430\u043D\u0434 \u043E\u0431\u043E\u043B\u043E\u0447\u043A\u0438, `yaml`/`toml`/`ini` \u0434\u043B\u044F \u043A\u043E\u043D\u0444\u0438\u0433\u043E\u0432, `python`/`go`/`js` \u0434\u043B\u044F \u043A\u043E\u0434\u0430, `text` \u0435\u0441\u043B\u0438 \u044F\u0437\u044B\u043A \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043D.\n\u0422\u043E\u043B\u044C\u043A\u043E \u0438\u043C\u0435\u043D\u0430 \u0444\u0430\u0439\u043B\u043E\u0432 \u0438 \u0444\u043B\u0430\u0433\u0438 \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u043E \u043F\u0438\u0441\u0430\u0442\u044C \u0432 `` `backticks` `` inline: `/etc/fstab`, `--show`, `vm.swappiness`.\n\n**\u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430 \u043E\u0442\u0432\u0435\u0442\u0430:**\n- \u041A\u043E\u0440\u043E\u0442\u043A\u0438\u0439 \u043F\u0440\u044F\u043C\u043E\u0439 \u043E\u0442\u0432\u0435\u0442 \u0432 \u043D\u0430\u0447\u0430\u043B\u0435 \u2014 \u0431\u0435\u0437 \u0432\u0441\u0442\u0443\u043F\u043B\u0435\u043D\u0438\u0439.\n- \u0415\u0441\u043B\u0438 \u0442\u0435\u043C \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u2014 \u0440\u0430\u0437\u0434\u0435\u043B\u0438 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0430\u043C\u0438 `##`.\n- \u041F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u0435\u043D\u0438\u044F: \u0412\u0421\u0415\u0413\u0414\u0410 \u0441\u043F\u0438\u0441\u043E\u043A (`-` \u0438\u043B\u0438 `1.`), \u043D\u0435 \u0447\u0435\u0440\u0435\u0437 \u0437\u0430\u043F\u044F\u0442\u0443\u044E inline.\n- \u0421\u0440\u0430\u0432\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0435/\u0447\u0438\u0441\u043B\u043E\u0432\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435 (\u22653 \u0441\u0442\u0440\u043E\u043A, \u22652 \u0441\u0442\u043E\u043B\u0431\u0446\u0430) \u2192 \u0442\u0430\u0431\u043B\u0438\u0446\u0430.\n- \u041A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u0438 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u2192 `**bold**` \u043F\u0440\u0438 \u043F\u0435\u0440\u0432\u043E\u043C \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0438.\n\n\u041D\u0415\u0412\u0415\u0420\u041D\u041E:\n\u0422\u0440\u0438 \u0440\u0435\u0446\u0435\u043F\u0442\u0430: \u0445\u0430\u0440\u0447\u043E \u2014 2 \u0447\u0430\u0441\u0430, \u0449\u0438 \u2014 3 \u0447\u0430\u0441\u0430, \u0431\u0443\u043B\u044C\u043E\u043D \u2014 6 \u0447\u0430\u0441\u043E\u0432.\n\n\u0412\u0415\u0420\u041D\u041E:\n**\u0420\u0435\u0446\u0435\u043F\u0442\u044B \u0441\u0443\u043F\u043E\u0432** [[Wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430]]:\n\n| \u0411\u043B\u044E\u0434\u043E | \u0412\u0440\u0435\u043C\u044F |\n|---|---|\n| **\u0425\u0430\u0440\u0447\u043E** | 1,5\u20132 \u0447 |\n| **\u0429\u0438** | 3 \u0447 |\n| **\u041A\u043E\u0441\u0442\u043D\u044B\u0439 \u0431\u0443\u043B\u044C\u043E\u043D** | \u22656 \u0447 |\n\n**\u0421\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 wiki:**\n- \u0421\u0441\u044B\u043B\u0430\u0439\u0441\u044F \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443-\u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0447\u0435\u0440\u0435\u0437 [[WikiLink]] \u043F\u043E\u0441\u043B\u0435 \u0444\u0430\u043A\u0442\u0430 \u0438\u043B\u0438 \u0440\u0430\u0437\u0434\u0435\u043B\u0430.\n- \u041D\u0435 \u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u044F\u0439 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u043C \u0431\u043B\u043E\u043A\u043E\u043C \u2014 \u0432\u0441\u0442\u0430\u0432\u043B\u044F\u0439 \u0441\u0441\u044B\u043B\u043A\u0438 \u043F\u043E \u043C\u0435\u0441\u0442\u0443.\n\n**\u041A\u043E\u043C\u043F\u0430\u043A\u0442\u043D\u043E\u0441\u0442\u044C:**\n- \u041D\u0435\u0442 \u0432\u0432\u043E\u0434\u043D\u044B\u0445 \u0444\u0440\u0430\u0437 (\xAB\u041A\u043E\u043D\u0435\u0447\u043D\u043E\xBB, \xAB\u0414\u043B\u044F \u0442\u043E\u0433\u043E \u0447\u0442\u043E\u0431\u044B\xBB).\n- \u041D\u0435\u0442 \u043F\u043E\u0432\u0442\u043E\u0440\u043E\u0432 \u0438\u0437 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u0431\u0435\u0437 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u0441\u043C\u044B\u0441\u043B\u0430.\n- \u0422\u0430\u0431\u043B\u0438\u0446\u0443 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u0434\u0430\u043D\u043D\u044B\u0435 \u0440\u0435\u0430\u043B\u044C\u043D\u043E \u0442\u0430\u0431\u043B\u0438\u0447\u043D\u044B\u0435 (\u22653 \u0441\u0442\u0440\u043E\u043A, \u22652 \u0441\u0442\u043E\u043B\u0431\u0446\u0430).\n";
 
 // src/wiki-graph-cache.ts
 function hashPages(pages) {
@@ -37686,9 +37763,48 @@ var GraphCache = class {
 };
 var graphCache = new GraphCache();
 
+// src/phases/query-link-validator.ts
+function extractAnswerLinks(text) {
+  const re = /\[\[([^\]|#/]+?)\]\]/g;
+  const out = [];
+  let m;
+  while ((m = re.exec(text)) !== null) out.push(m[1].trim());
+  return out;
+}
+function findBrokenLinks(links, knownStems) {
+  return [...new Set(links.filter((s) => !knownStems.has(s)))];
+}
+function annotateBroken(text, broken) {
+  return text.replace(/\[\[([^\]|#/]+?)\]\]/g, (full, stem) => {
+    return broken.has(stem.trim()) ? `${full} *(\u043D\u0435\u0442 \u0432 wiki)*` : full;
+  });
+}
+async function rewriteWithValidLinks(llm, model, question, originalAnswer, broken, contextStems, opts, signal) {
+  const systemPrompt = [
+    `\u0412 \u043E\u0442\u0432\u0435\u0442\u0435 \u0435\u0441\u0442\u044C \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u043D\u0435\u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B: ${broken.join(", ")}.`,
+    `\u041F\u0435\u0440\u0435\u043F\u0438\u0448\u0438 \u043E\u0442\u0432\u0435\u0442, \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0437 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E\u0433\u043E \u0441\u043F\u0438\u0441\u043A\u0430: ${contextStems.join(", ")}.`,
+    `\u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u043D\u043E\u0432\u044B\u0445 \u0444\u0430\u043A\u0442\u043E\u0432. \u0421\u043E\u0445\u0440\u0430\u043D\u044F\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0443 \u0438 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0442\u0432\u0435\u0442\u0430.`
+  ].join("\n");
+  const messages = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: `\u0412\u043E\u043F\u0440\u043E\u0441: ${question}
+
+\u041E\u0442\u0432\u0435\u0442 \u0434\u043B\u044F \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F:
+${originalAnswer}` }
+  ];
+  const params = buildChatParams(model, messages, { ...opts, thinkingBudgetTokens: void 0 }, false);
+  const resp = await llm.chat.completions.create(
+    params,
+    { signal }
+  );
+  const text = resp.choices[0]?.message?.content ?? originalAnswer;
+  const outputTokens = extractUsage(resp) ?? 0;
+  return { text, outputTokens };
+}
+
 // src/phases/query.ts
 var META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
-async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1, bfsTopK = 10, similarity) {
+async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1, bfsTopK = 10, similarity, wikiLinkValidationRetries = 3) {
   const question = args[0]?.trim();
   if (!question) {
     yield { kind: "error", message: "query: question required" };
@@ -37820,6 +37936,55 @@ ${contextBlock}` }
   }
   if (signal.aborted) return;
   yield { kind: "tool_result", ok: !!answer, preview: answer ? `${answer.length} chars` : "no response" };
+  if (answer && !signal.aborted) {
+    yield { kind: "tool_use", name: "ValidateLinks", input: {} };
+    let skipValidation = false;
+    let knownStems = /* @__PURE__ */ new Set();
+    try {
+      const allVaultFiles = await vaultTools.listFiles("");
+      knownStems = new Set(
+        allVaultFiles.filter((f) => f.endsWith(".md")).map((f) => pageId(f))
+      );
+    } catch {
+      console.warn("[ai-wiki] ValidateLinks: listFiles failed, skipping");
+      skipValidation = true;
+      yield { kind: "tool_result", ok: false, preview: "listFiles failed \u2014 skipped" };
+    }
+    if (!skipValidation) {
+      const links = extractAnswerLinks(answer);
+      const brokenInitial = findBrokenLinks(links, knownStems);
+      yield {
+        kind: "tool_result",
+        ok: brokenInitial.length === 0,
+        preview: brokenInitial.length === 0 ? "all valid" : `${brokenInitial.length} broken`
+      };
+      if (brokenInitial.length > 0 && wikiLinkValidationRetries > 0) {
+        yield { kind: "tool_use", name: "FixingLinks", input: { broken: brokenInitial.length } };
+        const contextStems = [...selectedIds];
+        try {
+          const r = await rewriteWithValidLinks(llm, model, question, answer, brokenInitial, contextStems, opts, signal);
+          outputTokens += r.outputTokens;
+          const retryLinks = extractAnswerLinks(r.text);
+          const brokenFinal = findBrokenLinks(retryLinks, knownStems);
+          if (brokenFinal.length === 0) {
+            answer = r.text;
+            yield { kind: "tool_result", ok: true, preview: "fixed" };
+          } else {
+            answer = annotateBroken(r.text, new Set(brokenFinal));
+            yield { kind: "tool_result", ok: false, preview: `${brokenFinal.length} annotated` };
+          }
+        } catch (e) {
+          if (signal.aborted || e.name === "AbortError") return;
+          answer = annotateBroken(answer, new Set(brokenInitial));
+          yield { kind: "tool_result", ok: false, preview: "retry failed \u2192 annotated" };
+        }
+        yield { kind: "assistant_replace", text: answer };
+      } else if (brokenInitial.length > 0) {
+        answer = annotateBroken(answer, new Set(brokenInitial));
+        yield { kind: "assistant_replace", text: answer };
+      }
+    }
+  }
   if (streamStats) yield buildLlmCallStatsEvent(streamStats);
   if (save && answer) {
     const slug = question.slice(0, 40).replace(/[^a-zA-Z0-9а-яёА-ЯЁ\s]/g, "").trim().replace(/\s+/g, "-");
@@ -39059,47 +39224,9 @@ async function* runEvaluator(llm, model, operation, taskInput, result, signal, o
 }
 
 // prompts/format.md
-var format_default = '\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 markdown-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0432\u043D\u0435 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439.\n\n\u0422\u0432\u043E\u044F \u0437\u0430\u0434\u0430\u0447\u0430 \u2014 \u043F\u0440\u043E\u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0438\u0442\u044C \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043F\u043E \u043F\u0440\u0430\u0432\u0438\u043B\u0430\u043C \u043D\u0438\u0436\u0435.\n\n\u0416\u0401\u0421\u0422\u041A\u0418\u0415 \u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- \u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u0438 \u043D\u0435 \u0443\u0434\u0430\u043B\u044F\u0439 \u0444\u0430\u043A\u0442\u044B, \u0438\u043C\u0435\u043D\u0430, \u0447\u0438\u0441\u043B\u0430, URL.\n- \u041D\u0435 \u0438\u0441\u043A\u0430\u0436\u0430\u0439 \u0441\u043C\u044B\u0441\u043B. \u041F\u0435\u0440\u0435\u0444\u0440\u0430\u0437 \u0434\u043B\u044F \u044F\u0441\u043D\u043E\u0441\u0442\u0438 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D.\n- \u0412\u0441\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u043E\u043F\u0438\u0448\u0438 \u0432 \u043F\u043E\u043B\u0435 report.\n- Obsidian-\u0432\u0441\u0442\u0430\u0432\u043A\u0438 (`![[\u043F\u0443\u0442\u044C]]`, `![[\u043F\u0443\u0442\u044C|\u0430\u043B\u0438\u0430\u0441]]`) \u2014 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0442\u043E\u0447\u043D\u043E \u043A\u0430\u043A \u0435\u0441\u0442\u044C. \u041D\u0435 \u043F\u0435\u0440\u0435\u0432\u043E\u0434\u0438\u0442\u044C \u0432 \u0441\u0442\u0430\u043D\u0434\u0430\u0440\u0442\u043D\u044B\u0439 Markdown (`![alt](path)`).\n- \u0415\u0441\u043B\u0438 \u0432 user-\u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0438 \u0435\u0441\u0442\u044C \u0431\u043B\u043E\u043A \xAB\u041E\u041F\u0418\u0421\u0410\u041D\u0418\u042F \u0412\u041B\u041E\u0416\u0415\u041D\u0418\u0419\xBB: \u0438\u043D\u0442\u0435\u0433\u0440\u0438\u0440\u0443\u0439 \u043A\u0430\u0436\u0434\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0421\u0420\u0410\u0417\u0423 \u041F\u041E\u0414 \u0441\u043E\u043E\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0439 \u0432\u0441\u0442\u0430\u0432\u043A\u043E\u0439 `![[\u043F\u0443\u0442\u044C]]` \u0432 formatted. \u0421\u043E\u0445\u0440\u0430\u043D\u044F\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0439 \u0444\u043E\u0440\u043C\u0430\u0442 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u044F (\u0442\u0430\u0431\u043B\u0438\u0446\u0430 / \u0441\u043F\u0438\u0441\u043E\u043A / mermaid / \u043A\u043E\u0434) \u043A\u0430\u043A \u0435\u0441\u0442\u044C \u2014 \u043D\u0435 \u043E\u0431\u043E\u0440\u0430\u0447\u0438\u0432\u0430\u0439 \u0432 blockquote, \u043D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u043C\u0430\u0440\u043A\u0435\u0440 `[Vision]`, \u043D\u0435 \u0446\u0438\u0442\u0438\u0440\u0443\u0439 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A `![[\u043F\u0443\u0442\u044C]]` \u0432\u043D\u0443\u0442\u0440\u0438 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u044F. \u0415\u0441\u043B\u0438 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0443\u0436\u0435 \u043F\u0440\u0438\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A\u0435 (\u0441\u0442\u0430\u0440\u044B\u0439 \u0444\u043E\u0440\u043C\u0430\u0442 `> *[Vision] ...*` \u0438\u043B\u0438 \u0434\u0443\u0431\u043B\u0438\u043A\u0430\u0442) \u2014 \u0443\u0434\u0430\u043B\u0438 \u0441\u0442\u0430\u0440\u044B\u0439 \u0432\u0430\u0440\u0438\u0430\u043D\u0442, \u043E\u0441\u0442\u0430\u0432\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u0443\u044E \u0432\u0435\u0440\u0441\u0438\u044E.\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410 \u0424\u041E\u0420\u041C\u0410\u0422\u0418\u0420\u041E\u0412\u0410\u041D\u0418\u042F:\n{{format_schema}}\n\nVISION: {{has_vision}}\n- \u041F\u0440\u0438 has_vision=true: \u0438\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u0441\u0445\u0435\u043C \u0438 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439, \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439 \u0442\u0430\u0431\u043B\u0438\u0446\u044B \u0438\u043B\u0438 mermaid-\u0431\u043B\u043E\u043A\u0438 \u043D\u0438\u0436\u0435 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u044F. \u0421\u0430\u043C\u043E \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0439.\n- \u041F\u0440\u0438 has_vision=false: \u0440\u0430\u0431\u043E\u0442\u0430\u0439 \u0442\u043E\u043B\u044C\u043A\u043E \u0441 alt-\u0442\u0435\u043A\u0441\u0442\u043E\u043C \u0438 \u043F\u043E\u0434\u043F\u0438\u0441\u044F\u043C\u0438, \u043D\u043E\u0432\u043E\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438 \u043D\u0435 \u0441\u043E\u0447\u0438\u043D\u044F\u0439.\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442. \u041D\u0438\u043A\u0430\u043A\u0438\u0445 \u043F\u0440\u0435\u0430\u043C\u0431\u0443\u043B, \u043D\u0438\u043A\u0430\u043A\u043E\u0439 \u043E\u0431\u0451\u0440\u0442\u043A\u0438 ```json```, \u043D\u0438\u043A\u0430\u043A\u0438\u0445 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u0432. \u041F\u0435\u0440\u0432\u044B\u0439 \u0441\u0438\u043C\u0432\u043E\u043B \u043E\u0442\u0432\u0435\u0442\u0430 \u2014 `{`, \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0439 \u2014 `}`.\n\n\u042D\u043A\u0440\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0432\u043D\u0443\u0442\u0440\u0438 \u0441\u0442\u0440\u043E\u043A JSON:\n- \u041A\u0430\u0436\u0434\u044B\u0439 \u043F\u0435\u0440\u0435\u0432\u043E\u0434 \u0441\u0442\u0440\u043E\u043A\u0438 \u0432\u043D\u0443\u0442\u0440\u0438 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u2014 `\\n` (\u0434\u0432\u0443\u0441\u0438\u043C\u0432\u043E\u043B\u044C\u043D\u0430\u044F \u043F\u043E\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u0435\u043B\u044C\u043D\u043E\u0441\u0442\u044C).\n- \u041A\u0430\u0436\u0434\u0430\u044F \u0434\u0432\u043E\u0439\u043D\u0430\u044F \u043A\u0430\u0432\u044B\u0447\u043A\u0430 \u2014 `\\"`.\n- \u041A\u0430\u0436\u0434\u044B\u0439 \u043E\u0431\u0440\u0430\u0442\u043D\u044B\u0439 \u0441\u043B\u044D\u0448 \u2014 `\\\\`.\n- \u041D\u0438\u043A\u0430\u043A\u0438\u0445 \u0441\u044B\u0440\u044B\u0445 control-chars.\n\n\u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430:\n\n{\n  "report": "<markdown \u043E\u0442\u0447\u0451\u0442 \u043E\u0431 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F\u0445, \u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u0435\u043D\u0438\u0435 \u043F\u043E \u043F\u0443\u043D\u043A\u0442\u0430\u043C>",\n  "formatted": "<\u043F\u043E\u043B\u043D\u044B\u0439 markdown \u043E\u0442\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B, \u0432\u043A\u043B\u044E\u0447\u0430\u044F frontmatter>"\n}\n\n\u0411\u044E\u0434\u0436\u0435\u0442: \u043F\u043E\u043B\u0435 formatted \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u0434\u043B\u0438\u043D\u043D\u044B\u043C. \u0415\u0441\u043B\u0438 \u043F\u0440\u0438\u0431\u043B\u0438\u0436\u0430\u0435\u0448\u044C\u0441\u044F \u043A \u043B\u0438\u043C\u0438\u0442\u0443 \u2014 \u0441\u043E\u043A\u0440\u0430\u0449\u0430\u0439 report, \u043D\u0435 formatted. \u041D\u0438\u043A\u043E\u0433\u0434\u0430 \u043D\u0435 \u043E\u0431\u0440\u044B\u0432\u0430\u0439 \u043E\u0442\u0432\u0435\u0442 \u043D\u0430 \u043F\u043E\u043B\u0443\u0441\u043B\u043E\u0432\u0435 \u2014 \u043B\u0443\u0447\u0448\u0435 \u043A\u043E\u0440\u043E\u0447\u0435, \u043D\u043E \u0432\u0430\u043B\u0438\u0434\u043D\u043E.\n';
+var format_default = "\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 markdown-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0432\u043D\u0435 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439.\n\n\u0422\u0432\u043E\u044F \u0437\u0430\u0434\u0430\u0447\u0430 \u2014 \u043F\u0440\u043E\u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0438\u0442\u044C \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043F\u043E \u043F\u0440\u0430\u0432\u0438\u043B\u0430\u043C \u043D\u0438\u0436\u0435.\n\n\u0416\u0401\u0421\u0422\u041A\u0418\u0415 \u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- \u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u0438 \u043D\u0435 \u0443\u0434\u0430\u043B\u044F\u0439 \u0444\u0430\u043A\u0442\u044B, \u0438\u043C\u0435\u043D\u0430, \u0447\u0438\u0441\u043B\u0430, URL.\n- \u041D\u0435 \u0438\u0441\u043A\u0430\u0436\u0430\u0439 \u0441\u043C\u044B\u0441\u043B. \u041F\u0435\u0440\u0435\u0444\u0440\u0430\u0437 \u0434\u043B\u044F \u044F\u0441\u043D\u043E\u0441\u0442\u0438 \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D.\n- \u0412\u0441\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u043E\u043F\u0438\u0448\u0438 \u0432 \u043F\u043E\u043B\u0435 report.\n- Obsidian-\u0432\u0441\u0442\u0430\u0432\u043A\u0438 (`![[\u043F\u0443\u0442\u044C]]`, `![[\u043F\u0443\u0442\u044C|\u0430\u043B\u0438\u0430\u0441]]`) \u2014 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0442\u043E\u0447\u043D\u043E \u043A\u0430\u043A \u0435\u0441\u0442\u044C. \u041D\u0435 \u043F\u0435\u0440\u0435\u0432\u043E\u0434\u0438\u0442\u044C \u0432 \u0441\u0442\u0430\u043D\u0434\u0430\u0440\u0442\u043D\u044B\u0439 Markdown (`![alt](path)`).\n- \u0415\u0441\u043B\u0438 \u0432 user-\u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0438 \u0435\u0441\u0442\u044C \u0431\u043B\u043E\u043A \xAB\u041E\u041F\u0418\u0421\u0410\u041D\u0418\u042F \u0412\u041B\u041E\u0416\u0415\u041D\u0418\u0419\xBB: \u0438\u043D\u0442\u0435\u0433\u0440\u0438\u0440\u0443\u0439 \u043A\u0430\u0436\u0434\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0421\u0420\u0410\u0417\u0423 \u041F\u041E\u0414 \u0441\u043E\u043E\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0439 \u0432\u0441\u0442\u0430\u0432\u043A\u043E\u0439 `![[\u043F\u0443\u0442\u044C]]` \u0432 formatted. \u0421\u043E\u0445\u0440\u0430\u043D\u044F\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u043D\u044B\u0439 \u0444\u043E\u0440\u043C\u0430\u0442 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u044F (\u0442\u0430\u0431\u043B\u0438\u0446\u0430 / \u0441\u043F\u0438\u0441\u043E\u043A / mermaid / \u043A\u043E\u0434) \u043A\u0430\u043A \u0435\u0441\u0442\u044C \u2014 \u043D\u0435 \u043E\u0431\u043E\u0440\u0430\u0447\u0438\u0432\u0430\u0439 \u0432 blockquote, \u043D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u043C\u0430\u0440\u043A\u0435\u0440 `[Vision]`, \u043D\u0435 \u0446\u0438\u0442\u0438\u0440\u0443\u0439 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A `![[\u043F\u0443\u0442\u044C]]` \u0432\u043D\u0443\u0442\u0440\u0438 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u044F. \u0415\u0441\u043B\u0438 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0443\u0436\u0435 \u043F\u0440\u0438\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A\u0435 (\u0441\u0442\u0430\u0440\u044B\u0439 \u0444\u043E\u0440\u043C\u0430\u0442 `> *[Vision] ...*` \u0438\u043B\u0438 \u0434\u0443\u0431\u043B\u0438\u043A\u0430\u0442) \u2014 \u0443\u0434\u0430\u043B\u0438 \u0441\u0442\u0430\u0440\u044B\u0439 \u0432\u0430\u0440\u0438\u0430\u043D\u0442, \u043E\u0441\u0442\u0430\u0432\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u0443\u044E \u0432\u0435\u0440\u0441\u0438\u044E.\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410 \u0424\u041E\u0420\u041C\u0410\u0422\u0418\u0420\u041E\u0412\u0410\u041D\u0418\u042F:\n{{format_schema}}\n\nVISION: {{has_vision}}\n- \u041F\u0440\u0438 has_vision=true: \u0438\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u0441\u0445\u0435\u043C \u0438 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439, \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439 \u0442\u0430\u0431\u043B\u0438\u0446\u044B \u0438\u043B\u0438 mermaid-\u0431\u043B\u043E\u043A\u0438 \u043D\u0438\u0436\u0435 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u044F. \u0421\u0430\u043C\u043E \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0439.\n- \u041F\u0440\u0438 has_vision=false: \u0440\u0430\u0431\u043E\u0442\u0430\u0439 \u0442\u043E\u043B\u044C\u043A\u043E \u0441 alt-\u0442\u0435\u043A\u0441\u0442\u043E\u043C \u0438 \u043F\u043E\u0434\u043F\u0438\u0441\u044F\u043C\u0438, \u043D\u043E\u0432\u043E\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u0438 \u043D\u0435 \u0441\u043E\u0447\u0438\u043D\u044F\u0439.\n\n\u0412\u0435\u0440\u043D\u0438 \u043E\u0442\u0432\u0435\u0442 \u0441\u0442\u0440\u043E\u0433\u043E \u0432 \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0435\u043C \u0444\u043E\u0440\u043C\u0430\u0442\u0435. \u041D\u0438\u043A\u0430\u043A\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430 \u0434\u043E \u043F\u0435\u0440\u0432\u043E\u0433\u043E \u043C\u0430\u0440\u043A\u0435\u0440\u0430 `<<<REPORT>>>`.\n\n<<<REPORT>>>\n<markdown \u0441\u043F\u0438\u0441\u043E\u043A \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439>\n<<<FORMATTED>>>\n<\u043F\u043E\u043B\u043D\u044B\u0439 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0439 markdown, \u043D\u0430\u0447\u0438\u043D\u0430\u044F \u0441 frontmatter --->\n<<<END>>>\n\n{{has_vision_descriptions_block}}\n\n\u0422\u0440\u0435\u0431\u043E\u0432\u0430\u043D\u0438\u044F:\n- \u041A\u0430\u0436\u0434\u044B\u0439 \u043C\u0430\u0440\u043A\u0435\u0440 `<<<...>>>` \u2014 \u043D\u0430 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E\u0439 \u0441\u0442\u0440\u043E\u043A\u0435.\n- \u041F\u043E\u0441\u043B\u0435 `<<<FORMATTED>>>` \u0438\u0434\u0451\u0442 frontmatter (`---`).\n- `<<<END>>>` \u2014 \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u044F\u044F \u0441\u0442\u0440\u043E\u043A\u0430 \u043E\u0442\u0432\u0435\u0442\u0430.\n- \u041F\u0440\u0438 \u043D\u0435\u0445\u0432\u0430\u0442\u043A\u0435 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430: \u0441\u043E\u043A\u0440\u0430\u0449\u0430\u0439 report, \u043D\u0435 formatted.\n";
 
 // src/phases/format-utils.ts
-function looksTruncated(text) {
-  const cleaned = stripCodeFence(text);
-  const start = cleaned.indexOf("{");
-  if (start < 0) return false;
-  let depth = 0;
-  let inString = false;
-  let escape2 = false;
-  let sawOpen = false;
-  for (let i = start; i < cleaned.length; i++) {
-    const ch = cleaned[i];
-    if (escape2) {
-      escape2 = false;
-      continue;
-    }
-    if (ch === "\\" && inString) {
-      escape2 = true;
-      continue;
-    }
-    if (ch === '"') {
-      inString = !inString;
-      continue;
-    }
-    if (inString) continue;
-    if (ch === "{") {
-      depth++;
-      sawOpen = true;
-    } else if (ch === "}") {
-      depth--;
-      if (depth === 0) return false;
-    }
-  }
-  return sawOpen && (depth > 0 || inString);
-}
-function stripCodeFence(text) {
-  const fence = text.match(/^\s*```(?:json|JSON)?\s*\n([\s\S]*?)\n```\s*$/);
-  if (fence) return fence[1];
-  return text;
-}
 var STOP_WORDS2 = /* @__PURE__ */ new Set([
   "The",
   "This",
@@ -39199,6 +39326,32 @@ function missingTokensWithContext(original, formatted) {
     out.push({ token: t, context });
   }
   return out;
+}
+function parseSentinelOutput(text, hasVisionDescriptions) {
+  const reportIdx = text.indexOf("<<<REPORT>>>");
+  const formattedIdx = text.indexOf("<<<FORMATTED>>>");
+  if (reportIdx === -1 || formattedIdx === -1) return null;
+  const report = text.slice(reportIdx + "<<<REPORT>>>".length, formattedIdx).trim();
+  const endIdx = text.indexOf("<<<END>>>");
+  let formattedEnd;
+  let truncated = false;
+  let visionCount;
+  let embeds;
+  if (hasVisionDescriptions) {
+    const visionIdx = text.indexOf("<<<VISION_COUNT>>>", formattedIdx);
+    const embedsIdx = text.indexOf("<<<EMBEDS>>>", formattedIdx);
+    if (visionIdx === -1 || embedsIdx === -1) return null;
+    formattedEnd = visionIdx;
+    visionCount = parseInt(text.slice(visionIdx + "<<<VISION_COUNT>>>".length, embedsIdx).trim(), 10);
+    const embedsEnd = endIdx === -1 ? text.length : endIdx;
+    embeds = text.slice(embedsIdx + "<<<EMBEDS>>>".length, embedsEnd).trim().split("|").map((s) => s.trim()).filter(Boolean);
+    truncated = endIdx === -1;
+  } else {
+    formattedEnd = endIdx === -1 ? text.length : endIdx;
+    truncated = endIdx === -1;
+  }
+  const formatted = text.slice(formattedIdx + "<<<FORMATTED>>>".length, formattedEnd).trim();
+  return { report, formatted, visionCount, embeds, truncated };
 }
 
 // src/phases/attachment-analyzer.ts
@@ -39317,12 +39470,24 @@ async function analyzeExcalidraw(text, llm, model, signal, language = "auto") {
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } }
   ], signal);
 }
+function extractExcalidrawJson(text) {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{")) return trimmed;
+  const jsonStart = trimmed.indexOf('{"type":"excalidraw"');
+  if (jsonStart >= 0) return trimmed.slice(jsonStart);
+  const firstCurly = trimmed.indexOf("{");
+  if (firstCurly >= 0) return trimmed.slice(firstCurly);
+  return null;
+}
 async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, sourcePath = "", language = "auto") {
   const resolved = vaultTools.resolveLink(path2, sourcePath);
   const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
-  if (ext === "excalidraw") {
+  const isExcalidraw = ext === "excalidraw" || resolved.endsWith(".excalidraw.md");
+  if (isExcalidraw) {
     const text = await vaultTools.read(resolved);
-    return analyzeExcalidraw(text, llm, model, signal, language);
+    const jsonText = extractExcalidrawJson(text);
+    if (!jsonText) return null;
+    return analyzeExcalidraw(jsonText, llm, model, signal, language);
   }
   if (ext === "pdf") {
     const buf = await vaultTools.readBinary(resolved);
@@ -39337,21 +39502,27 @@ async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, so
 }
 
 // src/phases/format.ts
-function parseFormatOutput(text) {
-  let raw;
-  try {
-    raw = parseStructured(text);
-  } catch {
+function parseFormatOutput(text, hasVisionDescriptions) {
+  const sentinel2 = parseSentinelOutput(text, hasVisionDescriptions);
+  if (!sentinel2) {
     structuralErrorCounter.record(false, 0);
-    return null;
+    return { data: null, hint: "sentinel markers not found", truncated: false };
   }
-  const result = FormatOutputSchema.safeParse(raw);
+  const raw = hasVisionDescriptions ? {
+    report: sentinel2.report,
+    formatted: sentinel2.formatted,
+    vision_blocks_count: sentinel2.visionCount ?? 0,
+    embeds_preserved: sentinel2.embeds ?? []
+  } : { report: sentinel2.report, formatted: sentinel2.formatted };
+  const schema = hasVisionDescriptions ? FormatWithVisionSchema : FormatBaseSchema;
+  const result = schema.safeParse(raw);
   if (result.success) {
     structuralErrorCounter.record(true, 0);
-    return result.data;
+    return { data: result.data, hint: "", truncated: sentinel2.truncated };
   }
   structuralErrorCounter.record(false, 0);
-  return null;
+  const hint = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+  return { data: null, hint, truncated: sentinel2.truncated };
 }
 function extractImagePaths(md) {
   const out = [];
@@ -39423,9 +39594,19 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
       }
     }
   }
+  const visionDescBlock = visionDescriptions.size > 0 ? [
+    "\u041F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0439 \u0432\u043B\u043E\u0436\u0435\u043D\u0438\u0439 \u0434\u043E\u0431\u0430\u0432\u044C \u043F\u043E\u0441\u043B\u0435 <<<FORMATTED>>> \u0434\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0435 \u043C\u0430\u0440\u043A\u0435\u0440\u044B:",
+    "<<<VISION_COUNT>>>",
+    "<\u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0439, \u0446\u0435\u043B\u043E\u0435 \u0447\u0438\u0441\u043B\u043E>",
+    "<<<EMBEDS>>>",
+    "<\u043F\u0443\u0442\u0438 \u0447\u0435\u0440\u0435\u0437 |: img/a.png|img/b.png>",
+    "\u042D\u0442\u0438 \u043C\u0430\u0440\u043A\u0435\u0440\u044B \u0441\u0442\u0430\u0432\u044C \u041F\u041E\u0421\u041B\u0415 formatted \u0438 \u0414\u041E <<<END>>>."
+  ].join("\n") : "";
   const systemContent = render(format_default, {
     format_schema: formatSchema,
-    has_vision: String(hasVision)
+    has_vision: String(hasVision),
+    has_vision_descriptions: String(visionDescriptions.size > 0),
+    has_vision_descriptions_block: visionDescBlock
   });
   let visionBlock = "";
   if (visionDescriptions.size > 0) {
@@ -39457,7 +39638,7 @@ ${original}${visionBlock}`;
   ];
   yield { kind: "assistant_text", delta: `\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u0430 ${filePath}...
 ` };
-  const baseParams = { ...buildChatParams(model, messages, opts, true), response_format: { type: "json_object" } };
+  const baseParams = buildChatParams(model, messages, opts, true);
   let lastFinishReason = null;
   let outputTokens = 0;
   async function* callOnce(p) {
@@ -39498,8 +39679,17 @@ ${original}${visionBlock}`;
   yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
   let fullText = yield* callOnce(baseParams);
   if (signal.aborted) return;
-  let parsed = parseFormatOutput(fullText);
-  const truncated = !parsed && (lastFinishReason === "length" || looksTruncated(fullText));
+  let parsedResult = parseFormatOutput(fullText, visionDescriptions.size > 0);
+  let parsed = parsedResult.data;
+  if (parsedResult.truncated) {
+    yield {
+      kind: "info_text",
+      icon: "\u26A0\uFE0F",
+      summary: "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u2014 salvage",
+      details: ["\u041C\u0430\u0440\u043A\u0435\u0440 <<<END>>> \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442; \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D \u0447\u0430\u0441\u0442\u0438\u0447\u043D\u044B\u0439 \u0432\u044B\u0432\u043E\u0434."]
+    };
+  }
+  const truncated = !parsed && lastFinishReason === "length";
   if (!parsed && truncated) {
     yield { kind: "tool_result", ok: false, preview: "response truncated" };
     yield { kind: "error", message: `Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 ${truncationHint(backend)}` };
@@ -39507,22 +39697,34 @@ ${original}${visionBlock}`;
     return;
   }
   if (!parsed) {
-    yield { kind: "tool_result", ok: false, preview: "invalid JSON \u2014 retrying" };
-    yield { kind: "assistant_text", delta: "\n[JSON \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u2014 \u043F\u043E\u0432\u0442\u043E\u0440\u044F\u044E \u0437\u0430\u043F\u0440\u043E\u0441]\n" };
+    yield { kind: "tool_result", ok: false, preview: "invalid sentinel \u2014 retrying" };
+    yield { kind: "assistant_text", delta: "\n[Sentinel \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u2014 \u043F\u043E\u0432\u0442\u043E\u0440\u044F\u044E \u0437\u0430\u043F\u0440\u043E\u0441]\n" };
+    const zodHint = parsedResult.hint;
+    const retrySystemContent = systemContent + `
+
+\u041F\u0440\u0435\u0434\u044B\u0434\u0443\u0449\u0430\u044F \u043F\u043E\u043F\u044B\u0442\u043A\u0430 \u043D\u0435 \u043F\u0440\u043E\u0448\u043B\u0430: ${zodHint}. \u0418\u0441\u043F\u0440\u0430\u0432\u044C \u0438 \u0432\u0435\u0440\u043D\u0438 \u0437\u0430\u043D\u043E\u0432\u043E \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u044F \u043C\u0430\u0440\u043A\u0435\u0440\u044B <<<REPORT>>>...<<<END>>>.`;
     const retryMessages = [
-      { role: "system", content: systemContent + '\n\n\u041A\u0420\u0418\u0422\u0418\u0427\u0415\u0421\u041A\u0418 \u0412\u0410\u0416\u041D\u041E: \u0432\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 {"report": "...", "formatted": "..."} \u0431\u0435\u0437 markdown-\u043E\u0431\u0451\u0440\u0442\u043A\u0438, \u0431\u0435\u0437 ```json fence, \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439. \u0412\u0441\u0435 \u0441\u043F\u0435\u0446\u0441\u0438\u043C\u0432\u043E\u043B\u044B \u0432\u043D\u0443\u0442\u0440\u0438 \u0441\u0442\u0440\u043E\u043A \u0434\u043E\u043B\u0436\u043D\u044B \u0431\u044B\u0442\u044C \u044D\u043A\u0440\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u044B (\\n, \\", \\\\).' },
-      { role: "user", content: userContent },
-      ...chatHistory.map((m) => ({ role: m.role, content: m.content }))
+      { role: "system", content: retrySystemContent },
+      { role: "user", content: userContent }
     ];
-    const retryParams = { ...buildChatParams(model, retryMessages, opts, true), response_format: { type: "json_object" } };
+    const retryParams = buildChatParams(model, retryMessages, opts, true);
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     fullText = yield* callOnce(retryParams);
     if (signal.aborted) return;
-    parsed = parseFormatOutput(fullText);
+    parsedResult = parseFormatOutput(fullText, visionDescriptions.size > 0);
+    parsed = parsedResult.data;
+    if (parsedResult.truncated) {
+      yield {
+        kind: "info_text",
+        icon: "\u26A0\uFE0F",
+        summary: "Format: retry \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u2014 salvage",
+        details: ["\u041C\u0430\u0440\u043A\u0435\u0440 <<<END>>> \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442; \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D \u0447\u0430\u0441\u0442\u0438\u0447\u043D\u044B\u0439 \u0432\u044B\u0432\u043E\u0434."]
+      };
+    }
   }
   if (!parsed) {
-    const retryTruncated = lastFinishReason === "length" || looksTruncated(fullText);
-    const msg = retryTruncated ? `Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 (\u043F\u043E\u0441\u043B\u0435 retry) \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 ${truncationHint(backend)}` : "Format: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON (\u043F\u043E\u0441\u043B\u0435 retry)";
+    const retryTruncated = lastFinishReason === "length";
+    const msg = retryTruncated ? `Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 (\u043F\u043E\u0441\u043B\u0435 retry) \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 ${truncationHint(backend)}` : "Format: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 sentinel (\u043F\u043E\u0441\u043B\u0435 retry)";
     yield { kind: "tool_result", ok: false, preview: msg };
     yield { kind: "error", message: msg };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
@@ -39543,15 +39745,16 @@ ${original}${visionBlock}`;
       { role: "assistant", content: fullText },
       {
         role: "user",
-        content: `\u0412\u041E\u0421\u0421\u0422\u0410\u041D\u041E\u0412\u0418 \u0422\u041E\u041A\u0415\u041D\u042B: \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u0438\u0437 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u0430 \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0442 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u043E\u043C \u0442\u0435\u043A\u0441\u0442\u0435. \u0412\u0435\u0440\u043D\u0438 \u043F\u043E\u043B\u043D\u044B\u0439 JSON {report, formatted} \u0433\u0434\u0435 formatted \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0432\u0441\u0435 \u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u0435\u043D\u043D\u044B\u0435 \u0442\u043E\u043A\u0435\u043D\u044B \u0431\u0435\u0437 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F \u043E\u0441\u0442\u0430\u043B\u044C\u043D\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430.
+        content: `\u0412\u041E\u0421\u0421\u0422\u0410\u041D\u041E\u0412\u0418 \u0422\u041E\u041A\u0415\u041D\u042B: \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u0438\u0437 \u043E\u0440\u0438\u0433\u0438\u043D\u0430\u043B\u0430 \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0442 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u043E\u043C \u0442\u0435\u043A\u0441\u0442\u0435. \u0412\u0435\u0440\u043D\u0438 \u043F\u043E\u043B\u043D\u044B\u0439 \u043E\u0442\u0432\u0435\u0442 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u044F \u043C\u0430\u0440\u043A\u0435\u0440\u044B <<<REPORT>>>...<<<END>>> \u0433\u0434\u0435 formatted \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0432\u0441\u0435 \u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u0435\u043D\u043D\u044B\u0435 \u0442\u043E\u043A\u0435\u043D\u044B.
 \u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043D\u044B\u0435: ${tokenList}`
       }
     ];
-    const restoreParams = { ...buildChatParams(model, restoreMessages, opts, true), response_format: { type: "json_object" } };
+    const restoreParams = buildChatParams(model, restoreMessages, opts, true);
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };
     const fullText2 = yield* callOnce(restoreParams);
     if (!signal.aborted) {
-      const parsed2 = parseFormatOutput(fullText2);
+      const parsed2Result = parseFormatOutput(fullText2, visionDescriptions.size > 0);
+      const parsed2 = parsed2Result.data;
       if (parsed2) {
         finalFormatted = parsed2.formatted;
         finalReport = parsed2.report;
@@ -40014,7 +40217,7 @@ var AgentRunner = class {
         yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, similarity, void 0, this.settings.graphDepth, this.settings.wikiLinkValidationRetries);
         break;
       case "query":
-        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, this.settings.bfsTopK, similarity);
+        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, this.settings.bfsTopK, similarity, this.settings.wikiLinkValidationRetries ?? 3);
         break;
       case "lint":
         yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.wikiLinkValidationRetries, opts, similarity, req.lintOpts?.useLlm ?? true, req.lintOpts?.entityTypeFilter ?? []);
@@ -40045,8 +40248,11 @@ var AgentRunner = class {
         const hasVision = this.settings.backend === "claude-agent";
         const formatDomain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
         const wikiVaultPath = formatDomain ? domainWikiFolder(formatDomain.wiki_folder) : void 0;
-        const visionSettings = this.settings.vision ?? { enabled: false, model: "", language: "auto" };
-        yield* runFormat(req.args, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings);
+        const noVision = req.args.includes("--no-vision");
+        const formatArgs = req.args.filter((a) => a !== "--no-vision");
+        const baseVisionSettings = this.settings.vision ?? { enabled: false, model: "", language: "auto" };
+        const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
+        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings);
         break;
       }
       default: {
@@ -47962,7 +48168,14 @@ var WikiController = class {
       return;
     }
     this._pendingFormat = { originalPath: file.path, tempPath: "", chat: [] };
-    await this.dispatch("format", [file.path]);
+    if (this.plugin.settings.vision?.enabled) {
+      new FormatVisionModal(this.app, (choice) => {
+        const args = choice === "without" ? [file.path, "--no-vision"] : [file.path];
+        void this.dispatch("format", args);
+      }).open();
+    } else {
+      await this.dispatch("format", [file.path]);
+    }
   }
   async formatApply(keepOld) {
     const p = this._pendingFormat;
