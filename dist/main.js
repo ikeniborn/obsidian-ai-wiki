@@ -26935,7 +26935,7 @@ var ConfirmModal = class extends import_obsidian2.Modal {
     }
     new import_obsidian2.Setting(contentEl).addButton((b) => b.setButtonText(T.cancel).onClick(() => this.close())).addButton((b) => b.setButtonText(`\u25B6 ${T.run}`).setCta().onClick(() => {
       this.close();
-      this.onConfirm();
+      void this.onConfirm();
     }));
   }
   onClose() {
@@ -27714,7 +27714,7 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         throw: false
       });
       if (resp.status >= 400) throw new Error(`${resp.status}`);
-      const json = resp.json;
+      const json = JSON.parse(resp.text);
       this._availableModels = json.data.map((m) => m.id).sort();
       this.display();
     } catch (e) {
@@ -29695,13 +29695,11 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
         this.app,
         T.reinitConfirmTitle,
         [body],
-        () => {
-          void (async () => {
-            await this.plugin.controller.updateDomainSources(original.id, newPaths);
-            const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
-            if (deleted > 0) new import_obsidian5.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
-            void this.plugin.controller.init(original.id, false, newPaths, true);
-          })();
+        async () => {
+          await this.plugin.controller.updateDomainSources(original.id, newPaths);
+          const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
+          if (deleted > 0) new import_obsidian5.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
+          void this.plugin.controller.init(original.id, false, newPaths, true);
         }
       ).open();
       return;
@@ -39822,7 +39820,7 @@ async function fetchEmbeddings(baseUrl, apiKey, model, inputs) {
     throw: false
   });
   if (resp.status >= 400) throw new Error(`Embedding API error: ${resp.status}`);
-  const json = resp.json;
+  const json = JSON.parse(resp.text);
   return json.data.map((d) => new Float32Array(d.embedding));
 }
 function entityKey(e) {
