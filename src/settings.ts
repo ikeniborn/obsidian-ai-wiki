@@ -98,7 +98,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         throw: false,
       });
       if (resp.status >= 400) throw new Error(`${resp.status}`);
-      const json = resp.json as { data: { id: string }[] };
+      const json = JSON.parse(resp.text) as { data: { id: string }[] };
       this._availableModels = json.data.map((m) => m.id).sort();
       this.display();
     } catch (e) {

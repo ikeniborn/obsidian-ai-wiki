@@ -78,7 +78,7 @@ async function fetchEmbeddings(
     throw: false,
   });
   if (resp.status >= 400) throw new Error(`Embedding API error: ${resp.status}`);
-  const json = resp.json as { data: { embedding: number[] }[] };
+  const json = JSON.parse(resp.text) as { data: { embedding: number[] }[] };
   return json.data.map((d) => new Float32Array(d.embedding));
 }
 

@@ -24,7 +24,7 @@ export class ConfirmModal extends Modal {
     app: App,
     private title: string,
     private lines: string[],
-    private onConfirm: () => void,
+    private onConfirm: () => void | Promise<void>,
   ) {
     super(app);
   }
@@ -39,7 +39,7 @@ export class ConfirmModal extends Modal {
       .addButton((b) => b.setButtonText(T.cancel).onClick(() => this.close()))
       .addButton((b) => b.setButtonText(`▶ ${T.run}`).setCta().onClick(() => {
         this.close();
-        this.onConfirm();
+        void this.onConfirm();
       }));
   }
   onClose(): void { this.contentEl.empty(); }

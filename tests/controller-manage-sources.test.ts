@@ -1,14 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { TFile, TFolder } from "obsidian";
 import { WikiController } from "../src/controller";
 import { graphCache } from "../src/wiki-graph-cache";
 import type { DomainEntry } from "../src/domain";
 
 function makeFile(path: string) {
-  return { path, extension: "md" } as any;
+  const f = new TFile();
+  f.path = path;
+  (f as any).extension = "md";
+  return f as any;
 }
 
 function makeFolder(path: string, children: unknown[]) {
-  return { path, children } as any;
+  const f = new TFolder();
+  f.path = path;
+  (f as any).children = children;
+  return f as any;
 }
 
 const DOMAIN: DomainEntry = {

@@ -512,12 +512,12 @@ export class LlmWikiView extends ItemView {
         this.app,
         T.reinitConfirmTitle,
         [body],
-        () => { void (async () => {
+        async () => {
           await this.plugin.controller.updateDomainSources(original.id, newPaths);
           const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
           if (deleted > 0) new Notice(`Удалено статей: ${deleted}`);
           void this.plugin.controller.init(original.id, false, newPaths, true);
-        })(); },
+        },
       ).open();
       return;
     }

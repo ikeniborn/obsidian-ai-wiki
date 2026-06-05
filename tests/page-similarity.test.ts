@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { PageSimilarityService, encodeVector, decodeVector } from "../src/page-similarity";
+import { __requestUrlCalls, __clearRequestUrlCalls, __setRequestUrlResponse } from "../vitest.mock";
 
 const makeService = (topK = 3) =>
   new PageSimilarityService({ mode: "jaccard", topK });
@@ -171,21 +172,17 @@ describe("PageSimilarityService.selectRelevantScored (Jaccard)", () => {
 
 describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
   beforeEach(() => {
-    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn();
+    __clearRequestUrlCalls();
+    __setRequestUrlResponse({ status: 200, text: "{}", headers: { "content-type": "application/json" } });
   });
 
   // @lat: [[tests#Per-Entity Retrieval#Top-K per entity in embedding mode]]
   it("batches all entity queries in one HTTP call", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        data: [
-          { embedding: [1, 0, 0] },
-          { embedding: [0, 1, 0] },
-        ],
-      }),
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: [{ embedding: [1, 0, 0] }, { embedding: [0, 1, 0] }] }),
+      headers: { "content-type": "application/json" },
     });
-    (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
     const svc = new PageSimilarityService({
       mode: "embedding", topK: 1, model: "m", dimensions: 3,
@@ -205,17 +202,17 @@ describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
       ["!Wiki/d/x/Alpha.md", "!Wiki/d/x/Beta.md"],
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(__requestUrlCalls).toHaveLength(1);
+    const body = JSON.parse(__requestUrlCalls[0].body as string);
     expect(body.input).toEqual(["Q1", "Q2"]);
   });
 
   it("ranks by cosine similarity per entity", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: [{ embedding: [1, 0, 0] }] }),
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: [{ embedding: [1, 0, 0] }] }),
+      headers: { "content-type": "application/json" },
     });
-    (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
 
     const svc = new PageSimilarityService({
       mode: "embedding", topK: 1, model: "m", dimensions: 3,
@@ -239,7 +236,7 @@ describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
 
   // @lat: [[tests#Per-Entity Retrieval#Jaccard fallback on HTTP error]]
   it("falls back to Jaccard when embedding HTTP throws", async () => {
-    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn().mockRejectedValue(new Error("network down"));
+    __setRequestUrlResponse({ status: 500, text: "error", headers: {} });
     const svc = new PageSimilarityService({
       mode: "embedding", topK: 1, model: "m", dimensions: 3,
       baseUrl: "http://x", apiKey: "k",
@@ -255,7 +252,7 @@ describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
 
   // @lat: [[tests#Per-Entity Retrieval#allFailed false when no pages exist]]
   it("allFailed=false when no pages exist (empty wiki)", async () => {
-    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn().mockRejectedValue(new Error("dead"));
+    __setRequestUrlResponse({ status: 500, text: "error", headers: {} });
     const svc = new PageSimilarityService({
       mode: "embedding", topK: 1, model: "m", dimensions: 3,
       baseUrl: "http://x", apiKey: "k",

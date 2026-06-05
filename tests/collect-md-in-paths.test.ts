@@ -1,12 +1,19 @@
 import { describe, it, expect } from "vitest";
+import { TFile, TFolder } from "obsidian";
 import { collectMdInPaths, walkFolder } from "../src/view";
 
 function makeFile(path: string, extension: string) {
-  return { path, extension } as any;
+  const f = new TFile();
+  f.path = path;
+  (f as any).extension = extension;
+  return f as any;
 }
 
 function makeFolder(path: string, children: unknown[]) {
-  return { path, children } as any;
+  const f = new TFolder();
+  f.path = path;
+  (f as any).children = children;
+  return f as any;
 }
 
 describe("walkFolder", () => {
