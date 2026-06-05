@@ -1,0 +1,4960 @@
+{
+  "nodes": [
+    {
+      "id": "test_agent_runner_js",
+      "label": "AgentRunner integration tests (JS)",
+      "file_type": "code",
+      "source_file": "tests/agent-runner.integration.test.js",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_controller_peroptimeout",
+      "label": "Test: WikiController per-op timeout forwarded to buildAgentRunner",
+      "file_type": "code",
+      "source_file": "tests/controller-per-op-timeout.test.ts",
+      "source_location": "54",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_evaluator_parse_eval_response",
+      "label": "tests for parseEvalResponse",
+      "file_type": "code",
+      "source_file": "tests/evaluator.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "view_graph_trace_test_formatgraphstatslines",
+      "label": "formatGraphStatsLines tests",
+      "file_type": "code",
+      "source_file": "tests/view-graph-trace.test.ts",
+      "source_location": "1-87",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "domain_test",
+      "label": "domain.test.ts \u2014 validateDomainId tests",
+      "file_type": "code",
+      "source_file": "tests/domain.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "validate_domain_id",
+      "label": "validateDomainId function",
+      "file_type": "code",
+      "source_file": "tests/domain.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_claude_cli_client",
+      "label": "tests for ClaudeCliClient",
+      "file_type": "code",
+      "source_file": "tests/claude-cli-client.test.js",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "source_paths_test_consolidatesourcepaths",
+      "label": "consolidateSourcePaths (test)",
+      "file_type": "code",
+      "source_file": "tests/source-paths.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_settings_parsetimeout",
+      "label": "Test: parseTimeoutString",
+      "file_type": "code",
+      "source_file": "tests/settings.test.ts",
+      "source_location": "1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "apply_domain_event_test",
+      "label": "apply-domain-event.test.ts \u2014 applyDomainEvent tests",
+      "file_type": "code",
+      "source_file": "tests/apply-domain-event.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "apply_domain_event",
+      "label": "applyDomainEvent function",
+      "file_type": "code",
+      "source_file": "tests/apply-domain-event.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wiki_graph_test_pageid",
+      "label": "pageId tests",
+      "file_type": "code",
+      "source_file": "tests/wiki-graph.test.ts",
+      "source_location": "5-15",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wiki_graph_test_buildwikigraph",
+      "label": "buildWikiGraph tests",
+      "file_type": "code",
+      "source_file": "tests/wiki-graph.test.ts",
+      "source_location": "17-46",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wiki_graph_test_bfsexpand",
+      "label": "bfsExpand tests",
+      "file_type": "code",
+      "source_file": "tests/wiki-graph.test.ts",
+      "source_location": "48-96",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wiki_graph_test_bfsexpandwithhops",
+      "label": "bfsExpandWithHops tests",
+      "file_type": "code",
+      "source_file": "tests/wiki-graph.test.ts",
+      "source_location": "98-156",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wiki_graph_test_checkgraphstructure",
+      "label": "checkGraphStructure tests",
+      "file_type": "code",
+      "source_file": "tests/wiki-graph.test.ts",
+      "source_location": "158-201",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wiki_graph_test_bfsexpandranked",
+      "label": "bfsExpandRanked tests",
+      "file_type": "code",
+      "source_file": "tests/wiki-graph.test.ts",
+      "source_location": "203-282",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_claude_cli_client",
+      "label": "Test: ClaudeCliClient",
+      "file_type": "code",
+      "source_file": "tests/claude-cli-client.test.ts",
+      "source_location": "41",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_validateiclaudepath",
+      "label": "Test: validateIclaudePath",
+      "file_type": "code",
+      "source_file": "tests/claude-cli-client.test.ts",
+      "source_location": "369",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_controller_mobile",
+      "label": "controller-mobile.test.ts",
+      "file_type": "code",
+      "source_file": "tests/controller-mobile.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "mobile_guard_rationale",
+      "label": "Mobile Guard \u2014 ingest/lint/init blocked on mobile, query allowed",
+      "file_type": "rationale",
+      "source_file": "tests/controller-mobile.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_template_render",
+      "label": "tests for render (template)",
+      "file_type": "code",
+      "source_file": "tests/template.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "controller_build_fail_test",
+      "label": "controller-build-fail.test.ts \u2014 buildAgentRunner failure notice test",
+      "file_type": "code",
+      "source_file": "tests/controller-build-fail.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "init_args_test_derivewikiroot",
+      "label": "deriveWikiRoot (test inline)",
+      "file_type": "code",
+      "source_file": "tests/init-args.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "init_args_test_parsesourcesfromargs",
+      "label": "parseSourcesFromArgs (test inline)",
+      "file_type": "code",
+      "source_file": "tests/init-args.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "format_migration_test",
+      "label": "format-migration.test.ts \u2014 settings migration for format operation",
+      "file_type": "code",
+      "source_file": "tests/format-migration.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llm_wiki_plugin",
+      "label": "LlmWikiPlugin main class",
+      "file_type": "code",
+      "source_file": "tests/format-migration.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "controller_format_test_format",
+      "label": "WikiController format() tests",
+      "file_type": "code",
+      "source_file": "tests/controller-format.test.ts",
+      "source_location": "57-87",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "controller_format_test_formatapply",
+      "label": "WikiController formatApply/formatCancel/formatRefine tests",
+      "file_type": "code",
+      "source_file": "tests/controller-format.test.ts",
+      "source_location": "89-270",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_vault_tools_js",
+      "label": "tests for VaultTools (JS)",
+      "file_type": "code",
+      "source_file": "tests/vault-tools.test.js",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "proxy_test",
+      "label": "proxy.test.ts \u2014 proxy utility function tests",
+      "file_type": "code",
+      "source_file": "tests/proxy.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "build_proxy_url",
+      "label": "buildProxyUrl function",
+      "file_type": "code",
+      "source_file": "tests/proxy.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "create_proxy_dispatcher",
+      "label": "createProxyDispatcher function",
+      "file_type": "code",
+      "source_file": "tests/proxy.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "create_proxy_fetch",
+      "label": "createProxyFetch function",
+      "file_type": "code",
+      "source_file": "tests/proxy.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "should_bypass",
+      "label": "shouldBypass function",
+      "file_type": "code",
+      "source_file": "tests/proxy.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "parse_no_proxy",
+      "label": "parseNoProxy function",
+      "file_type": "code",
+      "source_file": "tests/proxy.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "mask_proxy_url",
+      "label": "maskProxyUrl function",
+      "file_type": "code",
+      "source_file": "tests/proxy.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_stream_js",
+      "label": "tests for parseStreamLine (JS)",
+      "file_type": "code",
+      "source_file": "tests/stream.test.js",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migration_test",
+      "label": "migration.test.ts \u2014 migrateDomainWikiFolder tests",
+      "file_type": "code",
+      "source_file": "tests/migration.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "migrate_domain_wiki_folder",
+      "label": "migrateDomainWikiFolder function",
+      "file_type": "code",
+      "source_file": "tests/migration.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_modals",
+      "label": "tests for EditDomainModal",
+      "file_type": "code",
+      "source_file": "tests/modals.test.js",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "domain_test_js",
+      "label": "domain.test.js \u2014 JS duplicate of validateDomainId tests",
+      "file_type": "code",
+      "source_file": "tests/domain.test.js",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "query_test_runquery",
+      "label": "runQuery tests",
+      "file_type": "code",
+      "source_file": "tests/phases/query.test.ts",
+      "source_location": "47-290",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "phases_ingest_js_runingest",
+      "label": "runIngest (test .js)",
+      "file_type": "code",
+      "source_file": "tests/phases/ingest.test.js",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "phases_ingest_js_extracttoplevelsourcepath",
+      "label": "extractTopLevelSourcePath (test .js)",
+      "file_type": "code",
+      "source_file": "tests/phases/ingest.test.js",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "phases_query_js_runquery",
+      "label": "runQuery (test .js)",
+      "file_type": "code",
+      "source_file": "tests/phases/query.test.js",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "phases_init_js_runinit",
+      "label": "runInit (test .js)",
+      "file_type": "code",
+      "source_file": "tests/phases/init.test.js",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "init_thinking_test_mockadapter",
+      "label": "mockAdapter",
+      "file_type": "code",
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "init_thinking_test_makestreamingllm",
+      "label": "makeStreamingLlm",
+      "file_type": "code",
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "init_thinking_test_bootstrap_json",
+      "label": "BOOTSTRAP_JSON",
+      "file_type": "code",
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "init_thinking_test_ingest_with_delta",
+      "label": "INGEST_WITH_DELTA",
+      "file_type": "code",
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "init_thinking_test_entities_empty",
+      "label": "ENTITIES_EMPTY",
+      "file_type": "code",
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "init_thinking_test_existingdomain",
+      "label": "existingDomain",
+      "file_type": "code",
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "init_thinking_test_applies_entity_types_delta_from_ingest_and_emits_domain_updated_with_merged_types",
+      "label": "applies entity_types_delta from ingest and emits domain_updated with merged types",
+      "file_type": "code",
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "optimize_main",
+      "label": "optimize.py main()",
+      "file_type": "code",
+      "source_file": "scripts/dspy/optimize.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "writer_write_optimized",
+      "label": "write_optimized()",
+      "file_type": "code",
+      "source_file": "scripts/dspy/lib/writer.py",
+      "source_location": "line 6",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "optimizer_run_mipro",
+      "label": "run_mipro",
+      "file_type": "code",
+      "source_file": "scripts/dspy/lib/optimizer.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "optimizer_call_evaluator",
+      "label": "call_evaluator",
+      "file_type": "code",
+      "source_file": "scripts/dspy/lib/optimizer.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "optimizer_restore_placeholders",
+      "label": "restore_placeholders",
+      "file_type": "code",
+      "source_file": "scripts/dspy/lib/optimizer.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_miprov2_pattern",
+      "label": "MIPROv2 prompt optimization pattern",
+      "file_type": "rationale",
+      "source_file": "scripts/dspy/lib/optimizer.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Uses DSPy MIPROv2 with auto=light and no bootstrapped/labeled demos to perform lightweight prompt optimization; post-optimization placeholder restoration ensures template variables survive rewriting."
+    },
+    {
+      "id": "dspy_lib_init",
+      "label": "scripts/dspy/lib/__init__.py",
+      "file_type": "code",
+      "source_file": "scripts/dspy/lib/__init__.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "signature_make_signature",
+      "label": "make_signature",
+      "file_type": "code",
+      "source_file": "scripts/dspy/lib/signature.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "signature_wikioperation",
+      "label": "WikiOperation (DSPy Signature)",
+      "file_type": "code",
+      "source_file": "scripts/dspy/lib/signature.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "loader_load_examples",
+      "label": "load_examples",
+      "file_type": "code",
+      "source_file": "scripts/dspy/lib/loader.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_signature_make_signature",
+      "label": "test_signature (make_signature tests)",
+      "file_type": "code",
+      "source_file": "scripts/dspy/tests/test_signature.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_loader_load_examples",
+      "label": "test_loader (load_examples tests)",
+      "file_type": "code",
+      "source_file": "scripts/dspy/tests/test_loader.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_writer_write_optimized",
+      "label": "test_writer (write_optimized tests)",
+      "file_type": "code",
+      "source_file": "scripts/dspy/tests/test_writer.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_tests_init",
+      "label": "scripts/dspy/tests/__init__.py",
+      "file_type": "code",
+      "source_file": "scripts/dspy/tests/__init__.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_optimizer_run_mipro",
+      "label": "test_optimizer (run_mipro / call_evaluator / restore_placeholders tests)",
+      "file_type": "code",
+      "source_file": "scripts/dspy/tests/test_optimizer.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "test_backend_claudecodelm",
+      "label": "test_backend (ClaudeCodeLM / make_lm tests)",
+      "file_type": "code",
+      "source_file": "scripts/dspy/tests/test_backend.py",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "proxy_createproxydispatcher",
+      "label": "createProxyDispatcher",
+      "file_type": "code",
+      "source_file": "src/proxy.ts",
+      "source_location": "6",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "proxy_createproxyfetch",
+      "label": "createProxyFetch",
+      "file_type": "code",
+      "source_file": "src/proxy.ts",
+      "source_location": "13",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "proxy_buildproxyurl",
+      "label": "buildProxyUrl",
+      "file_type": "code",
+      "source_file": "src/proxy.ts",
+      "source_location": "26",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "proxy_shouldbypass",
+      "label": "shouldBypass",
+      "file_type": "code",
+      "source_file": "src/proxy.ts",
+      "source_location": "33",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "proxy_parsenoproxy",
+      "label": "parseNoProxy",
+      "file_type": "code",
+      "source_file": "src/proxy.ts",
+      "source_location": "47",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "proxy_maskproxyurl",
+      "label": "maskProxyUrl",
+      "file_type": "code",
+      "source_file": "src/proxy.ts",
+      "source_location": "52",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "source_paths_consolidatesourcepaths",
+      "label": "consolidateSourcePaths",
+      "file_type": "code",
+      "source_file": "src/source-paths.ts",
+      "source_location": "9",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "md_modules_d",
+      "label": "md-modules.d.ts",
+      "file_type": "code",
+      "source_file": "src/md-modules.d.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wiki_graph_pageid",
+      "label": "pageId",
+      "file_type": "code",
+      "source_file": "src/wiki-graph.ts",
+      "source_location": "7-9",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wiki_graph_buildwikigraph",
+      "label": "buildWikiGraph",
+      "file_type": "code",
+      "source_file": "src/wiki-graph.ts",
+      "source_location": "11-24",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wiki_graph_bfsexpand",
+      "label": "bfsExpand",
+      "file_type": "code",
+      "source_file": "src/wiki-graph.ts",
+      "source_location": "33-63",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wiki_graph_bfsexpandwithhops",
+      "label": "bfsExpandWithHops",
+      "file_type": "code",
+      "source_file": "src/wiki-graph.ts",
+      "source_location": "71-107",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wiki_graph_bfsexpandranked",
+      "label": "bfsExpandRanked",
+      "file_type": "code",
+      "source_file": "src/wiki-graph.ts",
+      "source_location": "116-175",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "wiki_graph_checkgraphstructure",
+      "label": "checkGraphStructure",
+      "file_type": "code",
+      "source_file": "src/wiki-graph.ts",
+      "source_location": "177-201",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_cli_client_claudecliclient",
+      "label": "ClaudeCliClient",
+      "file_type": "code",
+      "source_file": "src/claude-cli-client.ts",
+      "source_location": "28",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_cli_client_claudecliconfig",
+      "label": "ClaudeCliConfig",
+      "file_type": "code",
+      "source_file": "src/claude-cli-client.ts",
+      "source_location": "7",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_cli_client_validateiclaudepath",
+      "label": "validateIclaudePath",
+      "file_type": "code",
+      "source_file": "src/claude-cli-client.ts",
+      "source_location": "22",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_cli_client_generate",
+      "label": "ClaudeCliClient._generate",
+      "file_type": "code",
+      "source_file": "src/claude-cli-client.ts",
+      "source_location": "130",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_cli_client_notimeout",
+      "label": "requestTimeoutSec=0 skips kill timer",
+      "file_type": "rationale",
+      "source_file": "src/claude-cli-client.ts",
+      "source_location": "149",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_cli_client_resumesession",
+      "label": "Resume Session (--resume flag)",
+      "file_type": "rationale",
+      "source_file": "src/claude-cli-client.ts",
+      "source_location": "66",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_cli_client_largecontentfiles",
+      "label": "Large Content via Temp Files (>256KB)",
+      "file_type": "rationale",
+      "source_file": "src/claude-cli-client.ts",
+      "source_location": "62",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "vaultwalk_wallfolder",
+      "label": "walkFolder",
+      "file_type": "code",
+      "source_file": "src/utils/vault-walk.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "vaultwalk_collectmdinpaths",
+      "label": "collectMdInPaths",
+      "file_type": "code",
+      "source_file": "src/utils/vault-walk.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "vaultwalk_parsewikisources",
+      "label": "parseWikiSources",
+      "file_type": "code",
+      "source_file": "src/utils/vault-walk.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "init_runinit",
+      "label": "runInit",
+      "file_type": "code",
+      "source_file": "src/phases/init.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "init_runinitwithsources",
+      "label": "runInitWithSources",
+      "file_type": "code",
+      "source_file": "src/phases/init.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "init_wipedomainfolder",
+      "label": "wipeDomainFolder",
+      "file_type": "code",
+      "source_file": "src/phases/init.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_md_project_instructions",
+      "label": "Project CLAUDE.md Instructions",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_md_lat_workflow",
+      "label": "lat.md Pre/Post Task Workflow",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "Post-task checklist",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_md_latmd_description",
+      "label": "lat.md Knowledge Graph Description",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "What is lat.md?",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_md_lat_commands",
+      "label": "lat.md CLI Commands",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "Commands",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "claude_md_section_structure",
+      "label": "lat.md Section Structure Rules",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "Section structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_obsidian_ai_wiki",
+      "label": "Obsidian AI Wiki Plugin",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_ingest_operation",
+      "label": "Ingest Operation",
+      "file_type": "rationale",
+      "source_file": "README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_query_operation",
+      "label": "Query Operation",
+      "file_type": "rationale",
+      "source_file": "README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_lint_operation",
+      "label": "Lint Operation",
+      "file_type": "rationale",
+      "source_file": "README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_format_operation",
+      "label": "Format Operation",
+      "file_type": "rationale",
+      "source_file": "README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_init_operation",
+      "label": "Init Operation",
+      "file_type": "rationale",
+      "source_file": "README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_domain_concept",
+      "label": "Domain Concept (Source Folder \u2192 Wiki Folder Pair)",
+      "file_type": "rationale",
+      "source_file": "README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_native_agent_backend",
+      "label": "Native Agent Backend (OpenAI-compatible)",
+      "file_type": "rationale",
+      "source_file": "README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_claude_agent_backend",
+      "label": "Claude Agent Backend",
+      "file_type": "rationale",
+      "source_file": "README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_shell_consent",
+      "label": "Shell Execution Consent",
+      "file_type": "rationale",
+      "source_file": "README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "readme_local_json_sync_exclusion",
+      "label": "local.json Sync Exclusion",
+      "file_type": "rationale",
+      "source_file": "README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "prompt_evaluator",
+      "label": "Evaluator Prompt Template",
+      "file_type": "document",
+      "source_file": "prompts/evaluator.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "prompt_ingest",
+      "label": "Ingest Prompt",
+      "file_type": "document",
+      "source_file": "prompts/ingest.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "prompt_ingest_wiki_stem_mask",
+      "label": "Wiki Stem Mask Rule (ingest prompt)",
+      "file_type": "rationale",
+      "source_file": "prompts/ingest.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "prompt_ingest_entity_types_delta",
+      "label": "entity_types_delta Enrichment",
+      "file_type": "rationale",
+      "source_file": "prompts/ingest.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "prompt_ingest_merge_duplicates",
+      "label": "Merge Duplicates via deletes[]",
+      "file_type": "rationale",
+      "source_file": "prompts/ingest.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "prompt_chat",
+      "label": "Chat Prompt Template",
+      "file_type": "document",
+      "source_file": "prompts/chat.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "prompt_lint_chat",
+      "label": "Lint-Chat Prompt Template",
+      "file_type": "document",
+      "source_file": "prompts/lint-chat.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "prompt_query",
+      "label": "Query Prompt",
+      "file_type": "document",
+      "source_file": "prompts/query.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "prompt_lint",
+      "label": "Lint Prompt",
+      "file_type": "document",
+      "source_file": "prompts/lint.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "init_prompt",
+      "label": "Init Prompt",
+      "file_type": "document",
+      "source_file": "prompts/init.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "init_domainarchitect",
+      "label": "Domain Architect (domain-map.json generator)",
+      "file_type": "rationale",
+      "source_file": "prompts/init.md",
+      "source_location": "lines 1-2",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": "rationale: Generates a domain entry for domain-map.json with id, name, wiki_folder, source_paths, entity_types, language_notes fields"
+    },
+    {
+      "id": "init_entitytype",
+      "label": "EntityType Structure",
+      "file_type": "rationale",
+      "source_file": "prompts/init.md",
+      "source_location": "lines 8-9",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": "rationale: Each entity_type has: type, description, extraction_cues, min_mentions_for_page, wiki_subfolder \u2014 subfolder must be one word without slashes or domain_id"
+    },
+    {
+      "id": "init_wikisubfolderrule",
+      "label": "wiki_subfolder Rule (one word, no slashes)",
+      "file_type": "rationale",
+      "source_file": "prompts/init.md",
+      "source_location": "lines 39-40",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": "rationale: wiki_subfolder must be a single word, no slashes, no domain_id prefix. Valid: network, processes. Invalid: os/network, os_network"
+    },
+    {
+      "id": "prompts_basemd",
+      "label": "Prompt: Base Contract (prompts/base.md)",
+      "file_type": "document",
+      "source_file": "prompts/base.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "prompt_ingest_entities",
+      "label": "Ingest Entities Prompt (LLM #1)",
+      "file_type": "document",
+      "source_file": "prompts/ingest-entities.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_wikischema",
+      "label": "Wiki Schema",
+      "file_type": "document",
+      "source_file": "templates/_wiki_schema.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_languagestyle",
+      "label": "Language and Style Rules",
+      "file_type": "document",
+      "source_file": "templates/_wiki_schema.md",
+      "source_location": "\u042f\u0437\u044b\u043a \u0438 \u0441\u0442\u0438\u043b\u044c section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_frontmatterspec",
+      "label": "Frontmatter Specification",
+      "file_type": "document",
+      "source_file": "templates/_wiki_schema.md",
+      "source_location": "Frontmatter section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_wikilinkrules",
+      "label": "WikiLink Rules",
+      "file_type": "document",
+      "source_file": "templates/_wiki_schema.md",
+      "source_location": "WikiLinks section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "schema_pagestructure",
+      "label": "Page Structure Template",
+      "file_type": "document",
+      "source_file": "templates/_wiki_schema.md",
+      "source_location": "\u0421\u0442\u0440\u0443\u043a\u0442\u0443\u0440\u0430 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u044b section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "formatschema_template",
+      "label": "Format Schema Template (non-wiki pages)",
+      "file_type": "document",
+      "source_file": "templates/_format_schema.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "formatschema_frontmatter",
+      "label": "Format Schema Frontmatter Fields",
+      "file_type": "rationale",
+      "source_file": "templates/_format_schema.md",
+      "source_location": "lines 5-12",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": "rationale: Non-wiki frontmatter: tags, aliases, created, updated, external_links (only if http URLs exist in body), related (wikilinks only if already referenced in body). wiki_* fields excluded \u2014 managed programmatically"
+    },
+    {
+      "id": "formatschema_contentrules",
+      "label": "Format Schema Content Rules",
+      "file_type": "rationale",
+      "source_file": "templates/_format_schema.md",
+      "source_location": "lines 48-54",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": "rationale: Hard prohibitions: no invented facts (except vision image extraction), no fact deletion, no meaning distortion; all changes listed in report"
+    },
+    {
+      "id": "fixture_format_sample",
+      "label": "format-sample.md (fixture)",
+      "file_type": "document",
+      "source_file": "tests/fixtures/format-sample.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_claude_md",
+      "label": "scripts/dspy/CLAUDE.md",
+      "file_type": "document",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_optimize_py",
+      "label": "optimize.py (CLI entry point)",
+      "file_type": "code",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 36",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_loader_py",
+      "label": "lib/loader.py",
+      "file_type": "code",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 37",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_backend_py",
+      "label": "lib/backend.py",
+      "file_type": "code",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 38",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_optimizer_py",
+      "label": "lib/optimizer.py",
+      "file_type": "code",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 39",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_signature_py",
+      "label": "lib/signature.py",
+      "file_type": "code",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 40",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_writer_py",
+      "label": "lib/writer.py",
+      "file_type": "code",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 41",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_load_examples",
+      "label": "load_examples()",
+      "file_type": "code",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 37",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_make_lm",
+      "label": "make_lm()",
+      "file_type": "code",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 38",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_run_mipro",
+      "label": "run_mipro()",
+      "file_type": "code",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 39",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_restore_placeholders",
+      "label": "restore_placeholders()",
+      "file_type": "code",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 39",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_make_signature",
+      "label": "make_signature()",
+      "file_type": "code",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 40",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_write_optimized",
+      "label": "write_optimized()",
+      "file_type": "code",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 41",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_claudecodelm",
+      "label": "ClaudeCodeLM",
+      "file_type": "code",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 68",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_miprov2",
+      "label": "MIPROv2",
+      "file_type": "rationale",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 27",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_dev_jsonl",
+      "label": "dev.jsonl (JSONL dev log)",
+      "file_type": "document",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 27",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_placeholder_syntax",
+      "label": "{{placeholder}} template syntax",
+      "file_type": "rationale",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 64",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Templates use {{placeholder}} syntax so that restore_placeholders() can ensure named slots survive MIPROv2 rewriting, preserving prompt structure through optimization."
+    },
+    {
+      "id": "dspy_dspy_backend_env",
+      "label": "DSPY_BACKEND env var",
+      "file_type": "rationale",
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 46",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dspy_readme",
+      "label": "DSPy Prompt Optimizer README",
+      "file_type": "document",
+      "source_file": "scripts/dspy/README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_dspy_miprov2",
+      "label": "DSPy MIPROv2: automated prompt optimization via Optuna",
+      "file_type": "rationale",
+      "source_file": "scripts/dspy/README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_claude_code_lm",
+      "label": "ClaudeCodeLM: DSPy-compatible adapter for Claude CLI",
+      "file_type": "rationale",
+      "source_file": "scripts/dspy/README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lat_wiki_graph",
+      "label": "Wiki Graph",
+      "file_type": "document",
+      "source_file": "lat.md/wiki-graph.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lat_wiki_graph_adjacency_map",
+      "label": "Wiki Graph Adjacency Map",
+      "file_type": "rationale",
+      "source_file": "lat.md/wiki-graph.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lat_wiki_graph_bfs_undirected",
+      "label": "Undirected BFS Graph Traversal",
+      "file_type": "rationale",
+      "source_file": "lat.md/wiki-graph.md",
+      "source_location": "Graph Structure",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lat_wiki_graph_cache",
+      "label": "GraphCache (per-domain content-hash cache)",
+      "file_type": "rationale",
+      "source_file": "lat.md/wiki-graph.md",
+      "source_location": "Graph Cache",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lat_wiki_graph_structural_health",
+      "label": "checkGraphStructure (isolated nodes, non-reciprocated links)",
+      "file_type": "rationale",
+      "source_file": "lat.md/wiki-graph.md",
+      "source_location": "Structural Health Check",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llmpipeline_llmpipeline",
+      "label": "LLM Pipeline",
+      "file_type": "document",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llmpipeline_buildchatparams",
+      "label": "buildChatParams",
+      "file_type": "code",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "buildChatParams section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llmpipeline_evaluatorpromptpattern",
+      "label": "Evaluator Prompt Pattern",
+      "file_type": "document",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "Evaluator Prompt Pattern section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llmpipeline_parsewithretry",
+      "label": "parseWithRetry",
+      "file_type": "code",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "parseWithRetry section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llmpipeline_wikilinkvalidation",
+      "label": "WikiLink Validation",
+      "file_type": "code",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "WikiLink Validation section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llmpipeline_wrapwithjsonfallback",
+      "label": "wrapWithJsonFallback",
+      "file_type": "code",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "wrapWithJsonFallback section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llmpipeline_structuralerror",
+      "label": "Structural Error Counter",
+      "file_type": "code",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "Structural Error Counter section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llmpipeline_llmprogressevents",
+      "label": "LLM Progress Events",
+      "file_type": "document",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "LLM Progress Events section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "llmpipeline_streaming",
+      "label": "Streaming (LLM)",
+      "file_type": "code",
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "Streaming section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "domain_domainentry",
+      "label": "DomainEntry",
+      "file_type": "rationale",
+      "source_file": "lat.md/domain.md",
+      "source_location": "src/domain.ts#DomainEntry",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "domain_entitytype",
+      "label": "EntityType",
+      "file_type": "rationale",
+      "source_file": "lat.md/domain.md",
+      "source_location": "src/domain.ts#EntityType",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "domain_domain_events",
+      "label": "Domain Events",
+      "file_type": "rationale",
+      "source_file": "lat.md/domain.md",
+      "source_location": "src/domain.ts#applyDomainEvent",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "domain_wiki_folder_layout",
+      "label": "Wiki Folder Layout",
+      "file_type": "rationale",
+      "source_file": "lat.md/domain.md",
+      "source_location": "src/wiki-path.ts#domainWikiFolder",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "domain_vault_schema_variants",
+      "label": "Vault Schema Variants",
+      "file_type": "rationale",
+      "source_file": "lat.md/domain.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "domain_domainstore",
+      "label": "DomainStore",
+      "file_type": "rationale",
+      "source_file": "lat.md/domain.md",
+      "source_location": "src/domain-store.ts#DomainStore",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lat_tests",
+      "label": "Tests",
+      "file_type": "document",
+      "source_file": "lat.md/tests.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lat_tests_entity_extraction",
+      "label": "Entity Extraction Tests",
+      "file_type": "rationale",
+      "source_file": "lat.md/tests.md",
+      "source_location": "Entity Extraction",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lat_tests_per_entity_retrieval",
+      "label": "Per-Entity Retrieval Tests",
+      "file_type": "rationale",
+      "source_file": "lat.md/tests.md",
+      "source_location": "Per-Entity Retrieval",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lat_tests_merge_handling",
+      "label": "Merge Handling Tests",
+      "file_type": "rationale",
+      "source_file": "lat.md/tests.md",
+      "source_location": "Merge Handling",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lat_tests_frontmatter_validation",
+      "label": "Frontmatter Validation Tests",
+      "file_type": "rationale",
+      "source_file": "lat.md/tests.md",
+      "source_location": "Frontmatter Validation",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lat_tests_idle_watchdog",
+      "label": "AgentRunner Idle Watchdog Tests",
+      "file_type": "rationale",
+      "source_file": "lat.md/tests.md",
+      "source_location": "AgentRunner Idle Watchdog",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lat_tests_lint_stale_cleanup",
+      "label": "Lint Stale Link Cleanup Tests",
+      "file_type": "rationale",
+      "source_file": "lat.md/tests.md",
+      "source_location": "Lint Stale Link Cleanup",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lat_tests_validate_wiki_sources",
+      "label": "validateWikiSources Unit Tests",
+      "file_type": "rationale",
+      "source_file": "lat.md/tests.md",
+      "source_location": "validateWikiSources Unit Tests",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lat_tests_lint_bucket_repair",
+      "label": "Lint Bucket Repair Tests",
+      "file_type": "rationale",
+      "source_file": "lat.md/tests.md",
+      "source_location": "Lint Bucket Repair",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lat_index",
+      "label": "AI Wiki Knowledge Graph Index",
+      "file_type": "document",
+      "source_file": "lat.md/lat.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "changelog",
+      "label": "CHANGELOG",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/CHANGELOG.md",
+      "file_type": "document",
+      "summary": "Version history of the obsidian-ai-wiki plugin. Tracks new features, bug fixes, and refactors across releases from 0.1.108 through 0.1.155.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "format-prompt",
+      "label": "Format Prompt (format.md)",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/prompts/format.md",
+      "file_type": "document",
+      "summary": "LLM system prompt for the Format operation. Instructs the model to reformat a markdown page without altering facts, preserving Obsidian embeds and returning a strict JSON response with 'report' and 'formatted' fields.",
+      "confidence": "EXTRACTED",
+      "rationale": "Strict JSON-only output and explicit escaping rules prevent parse failures. Obsidian embed preservation rule was added to stop LLM from converting ![[...]] to standard Markdown, which breaks vault links."
+    },
+    {
+      "id": "architecture-doc",
+      "label": "Architecture Documentation",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/architecture.md",
+      "file_type": "document",
+      "summary": "lat.md knowledge graph file describing the high-level architecture of the plugin: Plugin entry point, Controller, AgentRunner, Phase Functions, Backends, PageSimilarityService, VaultTools, Settings, Storage Migration, Wiki Stem Mask, Frontmatter Validator, Sidebar View, and Run Events.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "operations-doc",
+      "label": "Operations Documentation",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/operations.md",
+      "file_type": "document",
+      "summary": "lat.md knowledge graph file documenting the seven plugin operations: Init, Ingest, Query, Lint, Lint-Chat, Chat, and Format, including sub-phases and design details.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "llm-wiki-plugin",
+      "label": "LlmWikiPlugin (Plugin Entry Point)",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/architecture.md",
+      "file_type": "rationale",
+      "summary": "Top-level Obsidian plugin class. Registers commands, sidebar view, ribbon icon, and status bar. Owns WikiController, DomainStore, and LocalConfigStore. Handles multi-version settings migration on load.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "wiki-controller",
+      "label": "WikiController (Controller)",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/architecture.md",
+      "file_type": "rationale",
+      "summary": "Orchestration layer between the UI and AgentRunner. Guards busy state, resolves the active backend, builds an AgentRunner, and streams RunEvents to the sidebar view. Persists domain mutations from events via DomainStore.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "agent-runner",
+      "label": "AgentRunner",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/architecture.md",
+      "file_type": "rationale",
+      "summary": "Stateless execution engine receiving a RunRequest, selecting LLM call options per operation, and delegating to phase functions. Includes idle watchdog retry logic and optional devMode evaluator.",
+      "confidence": "EXTRACTED",
+      "rationale": "Stateless design ensures no shared mutable state bleeds between runs. Per-attempt AbortController with idle timeout and retry supports unreliable LLM backends that silently stall."
+    },
+    {
+      "id": "phase-functions",
+      "label": "Phase Functions",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/architecture.md",
+      "file_type": "rationale",
+      "summary": "Each operation is implemented as an async generator in src/phases/. Functions yield RunEvent objects and write directly to the vault via VaultTools with no shared mutable state between phases.",
+      "confidence": "EXTRACTED",
+      "rationale": "Async generator pattern allows streaming events to the UI incrementally. No shared state between phases prevents cross-operation data corruption."
+    },
+    {
+      "id": "native-agent-backend",
+      "label": "Native Agent Backend",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/architecture.md",
+      "file_type": "rationale",
+      "summary": "OpenAI-compatible HTTP client using the openai SDK. Works with Ollama, OpenAI, or any compatible server. Supports streaming, json_object format, thinking budget, and per-operation model overrides. Mobile streaming is disabled via wrapMobileNoStream.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "claude-agent-backend",
+      "label": "Claude Agent Backend",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/architecture.md",
+      "file_type": "rationale",
+      "summary": "Wraps ClaudeCliClient to spawn iclaude.sh/claude CLI as a subprocess. Requires shell consent on first run. Not available on mobile. Per-operation effort levels map to Claude's extended thinking.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "page-similarity-service",
+      "label": "PageSimilarityService",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/architecture.md",
+      "file_type": "rationale",
+      "summary": "Reduces LLM context by pre-selecting top-K relevant wiki pages. Supports two modes: jaccard (token overlap, no API calls) and embedding (OpenAI-compatible vectors, cached per domain). Exposes selectRelevant, selectRelevantScored, and selectByEntities.",
+      "confidence": "EXTRACTED",
+      "rationale": "Jaccard mode provides zero-cost relevance filtering with no external API dependency. Embedding mode enables semantic similarity but falls back to Jaccard on error, ensuring resilience. Cache invalidated by content hash avoids redundant API calls."
+    },
+    {
+      "id": "vault-tools",
+      "label": "VaultTools",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/architecture.md",
+      "file_type": "rationale",
+      "summary": "Thin adapter over Obsidian's vault API for read, write, list, mkdir, remove, and rmdir. Decouples phase functions from Obsidian internals and enables testing.",
+      "confidence": "EXTRACTED",
+      "rationale": "Adapter pattern isolates Obsidian-specific vault API behind a thin interface, making phase functions testable without an Obsidian runtime."
+    },
+    {
+      "id": "settings-local-config",
+      "label": "Settings and Local Config",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/architecture.md",
+      "file_type": "rationale",
+      "summary": "Settings split into data.json (synced, user preferences) and local.json (machine-local, never synced, holds secrets like API keys and iclaudePath). resolveEffective merges both at runtime.",
+      "confidence": "EXTRACTED",
+      "rationale": "Split avoids syncing secrets (API keys, passwords) across devices via Obsidian Sync. local.json also stores machine-specific overrides like backend selection and agentLogEnabled."
+    },
+    {
+      "id": "storage-migration",
+      "label": "Storage Migration",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/architecture.md",
+      "file_type": "rationale",
+      "summary": "One-time migration on plugin load that moves .config/ directories to _config/. Throws StorageMigrationConflictError if both exist simultaneously, indicating an interrupted migration.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "wiki-stem-mask",
+      "label": "Wiki Stem Mask",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/architecture.md",
+      "file_type": "rationale",
+      "summary": "Centralizes the wiki_<domain>_<entity> filename mask used wherever a wiki page stem is generated or validated. Exposes slugifyEntity, buildWikiStem, stemRegex, and GENERIC_WIKI_STEM_REGEX.",
+      "confidence": "EXTRACTED",
+      "rationale": "Consistent stem naming disambiguates wiki pages from source files and prevents collisions across domains (e.g., 'foo' in 'work' vs 'personal')."
+    },
+    {
+      "id": "frontmatter-validator",
+      "label": "Frontmatter Validator",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/architecture.md",
+      "file_type": "rationale",
+      "summary": "Shared utility detecting and repairing malformed frontmatter before ingest writes wiki fields. Parses via yaml.parse, applies per-field FieldRules, and re-serializes. Returns original content unchanged when no repairs are needed.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "sidebar-view",
+      "label": "Sidebar View (AiWikiView)",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/architecture.md",
+      "file_type": "rationale",
+      "summary": "Obsidian ItemView owning the plugin's sidebar panel. Manages action buttons, domain selector, and button availability via updateButtonAvailability(). Renders eval_result events via MarkdownRenderer.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "run-events",
+      "label": "RunEvent (Run Events)",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/architecture.md",
+      "file_type": "rationale",
+      "summary": "Discriminated union emitted as an async generator stream by all operations. Covers LLM streaming deltas, tool calls, domain mutations, format previews, structural errors, graph stats, and phase progress.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "op-init",
+      "label": "Init Operation",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/operations.md",
+      "file_type": "rationale",
+      "summary": "Bootstraps a new domain. LLM call produces id, name, wiki_folder, entity_types, language_notes via DomainEntrySchema. Subsequent files run as ingest passes. Creates _wiki_schema.md, _format_schema.md, and DomainEntry.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "op-ingest",
+      "label": "Ingest Operation",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/operations.md",
+      "file_type": "rationale",
+      "summary": "Two-call entity-driven flow. LLM #1 extracts entities; per-entity vector top-K selects existing pages; LLM #2 emits writes, optional deletes for merges, and entity_types_delta.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "op-query",
+      "label": "Query Operation",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/operations.md",
+      "file_type": "rationale",
+      "summary": "Two-phase retrieval: seed selection from _index.md annotations via similarity, then BFS expansion over the wiki graph. bfsExpandRanked ranks non-seed pages by similarity and caps at bfsTopK.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "op-lint",
+      "label": "Lint Operation",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/operations.md",
+      "file_type": "rationale",
+      "summary": "Analyzes wiki pages one article at a time. Per-article: selects context via PageSimilarityService + BFS, calls LLM, applies fixes, syncs backlinks. Supports useLlm and entityTypeFilter options.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "op-lint-chat",
+      "label": "Lint-Chat Operation",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/operations.md",
+      "file_type": "rationale",
+      "summary": "Interactive fix pass driven by a lint report. User provides an instruction; LLM returns LintChatSchema with updated page contents written back to the vault.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "op-chat",
+      "label": "Chat Operation",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/operations.md",
+      "file_type": "rationale",
+      "summary": "Free-form conversation after any operation. Takes context and chatMessages history. On claude-agent backend, sessions resume via sessionId for multi-turn continuity.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "op-format",
+      "label": "Format Operation",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/operations.md",
+      "file_type": "rationale",
+      "summary": "Reformats a non-wiki markdown page without changing facts. LLM returns FormatOutputSchema with report and formatted. Preview written to temp file; user applies or cancels. Vision pre-step analyzes embedded images when enabled.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "bfs-expand-ranked",
+      "label": "bfsExpandRanked",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/operations.md",
+      "file_type": "rationale",
+      "summary": "BFS expansion with similarity/Jaccard ranking pass. Non-seed pages are ranked and capped at bfsTopK. Seeds always included. Guards against phantom nodes (dangling links never enter expanded set).",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "wiki-stem-collision-guard",
+      "label": "Wiki Stem Mask + Collision Guard",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/operations.md",
+      "file_type": "rationale",
+      "summary": "Four-layer enforcement of wiki_<domain>_<entity_slug> filename convention: Zod schema validation, prompt instruction, runtime guard, and migration script.",
+      "confidence": "EXTRACTED",
+      "rationale": "Multiple enforcement layers prevent any single failure mode (LLM hallucination, schema bypass, legacy files) from introducing unprefixed or colliding stems into the wiki."
+    },
+    {
+      "id": "lint-options-modal",
+      "label": "LintOptionsModal",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/operations.md",
+      "file_type": "rationale",
+      "summary": "Modal UI for configuring a lint run: pre-selected domain, Use LLM toggle, entity type filters with article counts, and select-all/deselect-all buttons.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "attachment-analyzer",
+      "label": "Attachment Analyzer (Vision Pre-Step)",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/lat.md/operations.md",
+      "file_type": "rationale",
+      "summary": "Pre-step for the Format operation when vision is enabled. Analyzes embedded images, PDFs, and Excalidraw files, inserting vision descriptions under each embed before formatting proceeds.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "feat-agent-runner-idle-watchdog",
+      "label": "AgentRunner Idle Watchdog (0.1.153)",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/CHANGELOG.md",
+      "file_type": "rationale",
+      "summary": "Added idle watchdog retry loop in AgentRunner.run(). Retries up to llmIdleRetries times when LLM goes silent for llmIdleTimeoutSec seconds.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "feat-bfs-expand-ranked-release",
+      "label": "bfsExpandRanked Feature (0.1.149)",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/CHANGELOG.md",
+      "file_type": "rationale",
+      "summary": "Added bfsExpandRanked with embedding/Jaccard ranking and bfsTopK limit, replacing bfsExpandWithHops for similarity-ranked BFS context in query.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "feat-lint-options-modal-release",
+      "label": "LintOptionsModal Feature (0.1.154/0.1.153)",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/CHANGELOG.md",
+      "file_type": "rationale",
+      "summary": "Refactored lint entry to use LintOptionsModal with single domain, entity filter, LLM toggle, select-all, and article counts. Removed Lint UI section from settings panel.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "feat-format-obsidian-embed-fix",
+      "label": "Format Obsidian Embed Fix (0.1.155)",
+      "file": "/home/ikeniborn/Documents/Project/obsidian-ai-wiki/CHANGELOG.md",
+      "file_type": "rationale",
+      "summary": "Fix to restore Obsidian embeds (![[...]]) converted by LLM to standard Markdown during the Format operation.",
+      "confidence": "EXTRACTED"
+    }
+  ],
+  "edges": [
+    {
+      "source": "test_controller_peroptimeout",
+      "target": "controller_dispatch",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/controller-per-op-timeout.test.ts",
+      "source_location": "85",
+      "weight": 1.0
+    },
+    {
+      "source": "test_controller_peroptimeout",
+      "target": "controller_buildagentrunner",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/controller-per-op-timeout.test.ts",
+      "source_location": "87",
+      "weight": 1.0
+    },
+    {
+      "source": "test_controller_peroptimeout",
+      "target": "controller_peroptimeout",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "tests/controller-per-op-timeout.test.ts",
+      "source_location": "54",
+      "weight": 1.0
+    },
+    {
+      "source": "test_evaluator_parse_eval_response",
+      "target": "evaluator_parse_eval_response",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/evaluator.test.ts",
+      "source_location": "line 3",
+      "weight": 1.0
+    },
+    {
+      "source": "domain_test",
+      "target": "validate_domain_id",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/domain.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "source_paths_test_consolidatesourcepaths",
+      "target": "source_paths_consolidatesourcepaths",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/source-paths.test.ts",
+      "source_location": "line 2",
+      "weight": 1.0
+    },
+    {
+      "source": "test_settings_parsetimeout",
+      "target": "settings_parsetimeoutstring",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/settings.test.ts",
+      "source_location": "3",
+      "weight": 1.0
+    },
+    {
+      "source": "test_settings_parsetimeout",
+      "target": "settings_timeoutsconfig",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "tests/settings.test.ts",
+      "source_location": "18",
+      "weight": 1.0
+    },
+    {
+      "source": "apply_domain_event_test",
+      "target": "apply_domain_event",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/apply-domain-event.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "apply_domain_event_test",
+      "target": "domain_entry",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/apply-domain-event.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "wiki_graph_test_pageid",
+      "target": "wiki_graph_pageid",
+      "relation": "tests",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/wiki-graph.test.ts",
+      "source_location": "5-15",
+      "weight": 1.0
+    },
+    {
+      "source": "wiki_graph_test_buildwikigraph",
+      "target": "wiki_graph_buildwikigraph",
+      "relation": "tests",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/wiki-graph.test.ts",
+      "source_location": "17-46",
+      "weight": 1.0
+    },
+    {
+      "source": "wiki_graph_test_bfsexpand",
+      "target": "wiki_graph_bfsexpand",
+      "relation": "tests",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/wiki-graph.test.ts",
+      "source_location": "48-96",
+      "weight": 1.0
+    },
+    {
+      "source": "wiki_graph_test_bfsexpandwithhops",
+      "target": "wiki_graph_bfsexpandwithhops",
+      "relation": "tests",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/wiki-graph.test.ts",
+      "source_location": "98-156",
+      "weight": 1.0
+    },
+    {
+      "source": "wiki_graph_test_checkgraphstructure",
+      "target": "wiki_graph_checkgraphstructure",
+      "relation": "tests",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/wiki-graph.test.ts",
+      "source_location": "158-201",
+      "weight": 1.0
+    },
+    {
+      "source": "wiki_graph_test_bfsexpandranked",
+      "target": "wiki_graph_bfsexpandranked",
+      "relation": "tests",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/wiki-graph.test.ts",
+      "source_location": "203-282",
+      "weight": 1.0
+    },
+    {
+      "source": "test_claude_cli_client",
+      "target": "claude_cli_client_claudecliclient",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/claude-cli-client.test.ts",
+      "source_location": "8",
+      "weight": 1.0
+    },
+    {
+      "source": "test_claude_cli_client",
+      "target": "claude_cli_client_notimeout",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/claude-cli-client.test.ts",
+      "source_location": "349",
+      "weight": 1.0
+    },
+    {
+      "source": "test_claude_cli_client",
+      "target": "claude_cli_client_resumesession",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/claude-cli-client.test.ts",
+      "source_location": "232",
+      "weight": 1.0
+    },
+    {
+      "source": "test_claude_cli_client",
+      "target": "claude_cli_client_largecontentfiles",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/claude-cli-client.test.ts",
+      "source_location": "148",
+      "weight": 1.0
+    },
+    {
+      "source": "test_validateiclaudepath",
+      "target": "claude_cli_client_validateiclaudepath",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/claude-cli-client.test.ts",
+      "source_location": "369",
+      "weight": 1.0
+    },
+    {
+      "source": "test_controller_mobile",
+      "target": "wiki_controller",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/controller-mobile.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "test_controller_mobile",
+      "target": "local_config_store",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/controller-mobile.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "test_controller_mobile",
+      "target": "mobile_guard_rationale",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/controller-mobile.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "mobile_guard_rationale",
+      "target": "wiki_controller",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/controller-mobile.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "test_template_render",
+      "target": "fix_run_fix",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.55,
+      "source_file": "tests/template.test.ts",
+      "source_location": null,
+      "weight": 0.55
+    },
+    {
+      "source": "controller_build_fail_test",
+      "target": "agent_runner",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/controller-build-fail.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_args_test_derivewikiroot",
+      "target": "migration_test_migratedomainwikifolder",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "tests/init-args.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "format_migration_test",
+      "target": "llm_wiki_plugin",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/format-migration.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "format_migration_test",
+      "target": "format_phase",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "tests/format-migration.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "controller_format_test_format",
+      "target": "controller_wikicontroller",
+      "relation": "tests",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/controller-format.test.ts",
+      "source_location": "57-87",
+      "weight": 1.0
+    },
+    {
+      "source": "controller_format_test_formatapply",
+      "target": "controller_formatapply_method",
+      "relation": "tests",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/controller-format.test.ts",
+      "source_location": "89-270",
+      "weight": 1.0
+    },
+    {
+      "source": "controller_format_test_formatapply",
+      "target": "controller_formatcancel_method",
+      "relation": "tests",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/controller-format.test.ts",
+      "source_location": "180-189",
+      "weight": 1.0
+    },
+    {
+      "source": "controller_format_test_formatapply",
+      "target": "controller_formatrefine_method",
+      "relation": "tests",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/controller-format.test.ts",
+      "source_location": "198-207",
+      "weight": 1.0
+    },
+    {
+      "source": "controller_format_test_formatapply",
+      "target": "controller_patchwikifields",
+      "relation": "validates",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "tests/controller-format.test.ts",
+      "source_location": "111-135",
+      "weight": 0.9
+    },
+    {
+      "source": "proxy_test",
+      "target": "build_proxy_url",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/proxy.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "proxy_test",
+      "target": "create_proxy_dispatcher",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/proxy.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "proxy_test",
+      "target": "create_proxy_fetch",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/proxy.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "proxy_test",
+      "target": "should_bypass",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/proxy.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "proxy_test",
+      "target": "parse_no_proxy",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/proxy.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "proxy_test",
+      "target": "mask_proxy_url",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/proxy.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "create_proxy_dispatcher",
+      "target": "mobile_compat_guard",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "tests/proxy.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "create_proxy_fetch",
+      "target": "mobile_compat_guard",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "tests/proxy.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "migration_test",
+      "target": "migrate_domain_wiki_folder",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/migration.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "migration_test",
+      "target": "domain_entry",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/migration.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "domain_test_js",
+      "target": "validate_domain_id",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/domain.test.js",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "domain_test_js",
+      "target": "domain_test",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "tests/domain.test.js",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "query_test_runquery",
+      "target": "wiki_graph_bfsexpandranked",
+      "relation": "validates",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "tests/phases/query.test.ts",
+      "source_location": "111-133",
+      "weight": 0.9
+    },
+    {
+      "source": "phases_ingest_js_runingest",
+      "target": "phases_ingest_runingest",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/phases/ingest.test.js",
+      "source_location": "line 2",
+      "weight": 1.0
+    },
+    {
+      "source": "phases_ingest_js_extracttoplevelsourcepath",
+      "target": "phases_ingest_extracttoplevelsourcepath",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/phases/ingest.test.js",
+      "source_location": "line 2",
+      "weight": 1.0
+    },
+    {
+      "source": "phases_ingest_js_runingest",
+      "target": "phases_ingest_ts_runingest",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "tests/phases/ingest.test.js",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "phases_query_js_runquery",
+      "target": "phases_query_runquery",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/phases/query.test.js",
+      "source_location": "line 2",
+      "weight": 1.0
+    },
+    {
+      "source": "phases_query_js_runquery",
+      "target": "phases_query_ts_runquery",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "tests/phases/query.test.js",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "phases_init_js_runinit",
+      "target": "phases_init_runinit",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/phases/init.test.js",
+      "source_location": "line 2",
+      "weight": 1.0
+    },
+    {
+      "source": "phases_init_js_runinit",
+      "target": "phases_init_ts_runinit",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "tests/phases/init.test.js",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_thinking_test_mockadapter",
+      "target": "vault_tools_vaultadapter",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_thinking_test_makestreamingllm",
+      "target": "types_llmclient",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_thinking_test_applies_entity_types_delta_from_ingest_and_emits_domain_updated_with_merged_types",
+      "target": "init_runinit",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_thinking_test_applies_entity_types_delta_from_ingest_and_emits_domain_updated_with_merged_types",
+      "target": "init_thinking_test_mockadapter",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_thinking_test_applies_entity_types_delta_from_ingest_and_emits_domain_updated_with_merged_types",
+      "target": "init_thinking_test_makestreamingllm",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_thinking_test_applies_entity_types_delta_from_ingest_and_emits_domain_updated_with_merged_types",
+      "target": "vault_tools_vaulttools",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_thinking_test_applies_entity_types_delta_from_ingest_and_emits_domain_updated_with_merged_types",
+      "target": "vault_tools_vaultadapter",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_thinking_test_applies_entity_types_delta_from_ingest_and_emits_domain_updated_with_merged_types",
+      "target": "init_thinking_test_existingdomain",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_thinking_test_applies_entity_types_delta_from_ingest_and_emits_domain_updated_with_merged_types",
+      "target": "init_thinking_test_entities_empty",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_thinking_test_applies_entity_types_delta_from_ingest_and_emits_domain_updated_with_merged_types",
+      "target": "init_thinking_test_ingest_with_delta",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "tests/phases/init-thinking.test.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "optimize_main",
+      "target": "loader_load_examples",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/optimize.py",
+      "source_location": "line 50",
+      "weight": 1.0
+    },
+    {
+      "source": "optimize_main",
+      "target": "optimizer_run_mipro",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/optimize.py",
+      "source_location": "line 71",
+      "weight": 1.0
+    },
+    {
+      "source": "optimizer_run_mipro",
+      "target": "signature_make_signature",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/lib/optimizer.py",
+      "source_location": "line 83",
+      "weight": 1.0
+    },
+    {
+      "source": "optimizer_run_mipro",
+      "target": "optimizer_call_evaluator",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/lib/optimizer.py",
+      "source_location": "line 96",
+      "weight": 1.0
+    },
+    {
+      "source": "optimizer_run_mipro",
+      "target": "optimizer_restore_placeholders",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/lib/optimizer.py",
+      "source_location": "line 117",
+      "weight": 1.0
+    },
+    {
+      "source": "optimizer_run_mipro",
+      "target": "dspy_miprov2_pattern",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "scripts/dspy/lib/optimizer.py",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "optimizer_restore_placeholders",
+      "target": "dspy_miprov2_pattern",
+      "relation": "rationale_for",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "scripts/dspy/lib/optimizer.py",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "signature_make_signature",
+      "target": "signature_wikioperation",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/lib/signature.py",
+      "source_location": "line 7",
+      "weight": 1.0
+    },
+    {
+      "source": "loader_load_examples",
+      "target": "phases_ingest_ts_runingest",
+      "relation": "shares_data_with",
+      "confidence": "INFERRED",
+      "confidence_score": 0.65,
+      "source_file": "scripts/dspy/lib/loader.py",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "test_signature_make_signature",
+      "target": "test_signature_make_signature",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/tests/test_signature.py",
+      "source_location": "line 4",
+      "weight": 0.5
+    },
+    {
+      "source": "test_loader_load_examples",
+      "target": "test_loader_load_examples",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/tests/test_loader.py",
+      "source_location": "line 3",
+      "weight": 0.5
+    },
+    {
+      "source": "test_writer_write_optimized",
+      "target": "writer_write_optimized",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/tests/test_writer.py",
+      "source_location": "line 7",
+      "weight": 1.0
+    },
+    {
+      "source": "test_backend_claudecodelm",
+      "target": "backend_claudecodelm",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/tests/test_backend.py",
+      "source_location": "line 8",
+      "weight": 1.0
+    },
+    {
+      "source": "test_backend_claudecodelm",
+      "target": "backend_make_lm",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/tests/test_backend.py",
+      "source_location": "line 8",
+      "weight": 1.0
+    },
+    {
+      "source": "proxy_createproxyfetch",
+      "target": "proxy_createproxydispatcher",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/proxy.ts",
+      "source_location": "14",
+      "weight": 1.0
+    },
+    {
+      "source": "proxy_createproxydispatcher",
+      "target": "proxy_buildproxyurl",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/proxy.ts",
+      "source_location": "10",
+      "weight": 1.0
+    },
+    {
+      "source": "wiki_graph_bfsexpandranked",
+      "target": "wiki_graph_bfsexpand",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/wiki-graph.ts",
+      "source_location": "126",
+      "weight": 1.0
+    },
+    {
+      "source": "wiki_graph_bfsexpandranked",
+      "target": "wiki_graph_pageid",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/wiki-graph.ts",
+      "source_location": "138",
+      "weight": 1.0
+    },
+    {
+      "source": "wiki_graph_buildwikigraph",
+      "target": "wiki_graph_pageid",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/wiki-graph.ts",
+      "source_location": "14",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_cli_client_claudecliclient",
+      "target": "claude_cli_client_validateiclaudepath",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/claude-cli-client.ts",
+      "source_location": "136",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_cli_client_claudecliclient",
+      "target": "claude_cli_client_generate",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/claude-cli-client.ts",
+      "source_location": "127",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_cli_client_notimeout",
+      "target": "claude_cli_client_generate",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/claude-cli-client.ts",
+      "source_location": "149",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_cli_client_resumesession",
+      "target": "claude_cli_client_claudecliconfig",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/claude-cli-client.ts",
+      "source_location": "66",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_cli_client_largecontentfiles",
+      "target": "claude_cli_client_claudecliclient",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/claude-cli-client.ts",
+      "source_location": "79",
+      "weight": 1.0
+    },
+    {
+      "source": "vaultwalk_collectmdinpaths",
+      "target": "vaultwalk_wallfolder",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/utils/vault-walk.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "rawfrontmatter_parsewikisourcesfromfm",
+      "target": "vaultwalk_parsewikisources",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "src/utils/vault-walk.ts",
+      "source_location": null,
+      "weight": 0.95
+    },
+    {
+      "source": "init_wipedomainfolder",
+      "target": "vault_tools_removesubfolders",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/phases/init.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_runinit",
+      "target": "init_wipedomainfolder",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/phases/init.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_runinit",
+      "target": "init_runinitithsources",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/phases/init.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_runinitithsources",
+      "target": "ingest_runingest",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/phases/init.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_runinitwithsources",
+      "target": "ingest_runingest",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/phases/init.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_runinit",
+      "target": "types_runevent",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/phases/init.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_runinitwithsources",
+      "target": "types_runevent",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/phases/init.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_wipedomainfolder",
+      "target": "vault_tools_vaulttools",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/phases/init.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_runinit",
+      "target": "types_llmcalloptions",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/phases/init.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "claude_md_project_instructions",
+      "target": "claude_md_lat_workflow",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Post-task checklist",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_md_project_instructions",
+      "target": "claude_md_latmd_description",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "What is lat.md?",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_md_project_instructions",
+      "target": "claude_md_lat_commands",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Commands",
+      "weight": 1.0
+    },
+    {
+      "source": "claude_md_project_instructions",
+      "target": "claude_md_section_structure",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": "Section structure",
+      "weight": 1.0
+    },
+    {
+      "source": "readme_obsidian_ai_wiki",
+      "target": "readme_ingest_operation",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": "What it does",
+      "weight": 1.0
+    },
+    {
+      "source": "readme_obsidian_ai_wiki",
+      "target": "readme_query_operation",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": "What it does",
+      "weight": 1.0
+    },
+    {
+      "source": "readme_obsidian_ai_wiki",
+      "target": "readme_lint_operation",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": "What it does",
+      "weight": 1.0
+    },
+    {
+      "source": "readme_obsidian_ai_wiki",
+      "target": "readme_format_operation",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": "What it does",
+      "weight": 1.0
+    },
+    {
+      "source": "readme_obsidian_ai_wiki",
+      "target": "readme_init_operation",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": "What it does",
+      "weight": 1.0
+    },
+    {
+      "source": "readme_obsidian_ai_wiki",
+      "target": "readme_domain_concept",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": "Quick start: Ollama",
+      "weight": 1.0
+    },
+    {
+      "source": "readme_obsidian_ai_wiki",
+      "target": "readme_native_agent_backend",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": "Backend selector",
+      "weight": 1.0
+    },
+    {
+      "source": "readme_obsidian_ai_wiki",
+      "target": "readme_claude_agent_backend",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": "Quick start: Claude Agent",
+      "weight": 1.0
+    },
+    {
+      "source": "readme_obsidian_ai_wiki",
+      "target": "readme_shell_consent",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": "Security",
+      "weight": 1.0
+    },
+    {
+      "source": "readme_obsidian_ai_wiki",
+      "target": "readme_local_json_sync_exclusion",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": "Sync",
+      "weight": 1.0
+    },
+    {
+      "source": "readme_claude_agent_backend",
+      "target": "readme_shell_consent",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "README.md",
+      "source_location": "Security",
+      "weight": 0.95
+    },
+    {
+      "source": "prompt_evaluator",
+      "target": "concept_placeholder_syntax",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/evaluator.md",
+      "source_location": "{{operation}}, {{task_input}}, {{result}}",
+      "weight": 1.0
+    },
+    {
+      "source": "prompt_ingest",
+      "target": "prompt_ingest_wiki_stem_mask",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/ingest.md",
+      "source_location": "\u041f\u0420\u0410\u0412\u0418\u041b\u0410",
+      "weight": 1.0
+    },
+    {
+      "source": "prompt_ingest",
+      "target": "prompt_ingest_entity_types_delta",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/ingest.md",
+      "source_location": "\u041e\u0411\u041e\u0413\u0410\u0429\u0415\u041d\u0418\u0415 \u0422\u0418\u041f\u041e\u0412",
+      "weight": 1.0
+    },
+    {
+      "source": "prompt_ingest",
+      "target": "prompt_ingest_merge_duplicates",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/ingest.md",
+      "source_location": "\u041e\u0411\u042a\u0415\u0414\u0418\u041d\u0415\u041d\u0418\u0415 \u0414\u0423\u0411\u041b\u0418\u041a\u0410\u0422\u041e\u0412",
+      "weight": 1.0
+    },
+    {
+      "source": "prompt_ingest",
+      "target": "lat_operations_ingest",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/ingest.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "prompt_ingest_wiki_stem_mask",
+      "target": "lat_operations_wiki_stem_mask_collision",
+      "relation": "rationale_for",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "prompts/ingest.md",
+      "source_location": "\u041f\u0420\u0410\u0412\u0418\u041b\u0410",
+      "weight": 0.85
+    },
+    {
+      "source": "prompt_chat",
+      "target": "concept_placeholder_syntax",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/chat.md",
+      "source_location": "{{operation_header}}, {{context}}",
+      "weight": 1.0
+    },
+    {
+      "source": "prompt_chat",
+      "target": "concept_operation_header",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/chat.md",
+      "source_location": "{{operation_header}} variable",
+      "weight": 1.0
+    },
+    {
+      "source": "prompt_lint_chat",
+      "target": "ops_lint_chat",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/lint-chat.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "prompt_query",
+      "target": "lat_operations_query",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/query.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "prompt_lint",
+      "target": "lat_operations_lint",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/lint.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_prompt",
+      "target": "init_domainarchitect",
+      "relation": "defines_behavior",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/init.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_prompt",
+      "target": "init_entitytype",
+      "relation": "specifies_structure",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/init.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_prompt",
+      "target": "init_wikisubfolderrule",
+      "relation": "contains_rule",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/init.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "init_prompt",
+      "target": "wikischema_template",
+      "relation": "references_schema",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "prompts/init.md",
+      "source_location": "line 11 (schema_block placeholder)",
+      "weight": 1.0
+    },
+    {
+      "source": "prompt_ingest_entities",
+      "target": "lat_operations_ingest",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "prompts/ingest-entities.md",
+      "source_location": null,
+      "weight": 0.95
+    },
+    {
+      "source": "prompt_ingest_entities",
+      "target": "lat_tests_entity_extraction",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "prompts/ingest-entities.md",
+      "source_location": null,
+      "weight": 0.85
+    },
+    {
+      "source": "schema_wikischema",
+      "target": "schema_languagestyle",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "templates/_wiki_schema.md",
+      "source_location": "\u042f\u0437\u044b\u043a \u0438 \u0441\u0442\u0438\u043b\u044c section",
+      "weight": 1.0
+    },
+    {
+      "source": "schema_wikischema",
+      "target": "schema_frontmatterspec",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "templates/_wiki_schema.md",
+      "source_location": "Frontmatter section",
+      "weight": 1.0
+    },
+    {
+      "source": "schema_wikischema",
+      "target": "schema_wikilinkrules",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "templates/_wiki_schema.md",
+      "source_location": "WikiLinks section",
+      "weight": 1.0
+    },
+    {
+      "source": "schema_wikischema",
+      "target": "schema_pagestructure",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "templates/_wiki_schema.md",
+      "source_location": "\u0421\u0442\u0440\u0443\u043a\u0442\u0443\u0440\u0430 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u044b section",
+      "weight": 1.0
+    },
+    {
+      "source": "formatschema_template",
+      "target": "formatschema_frontmatter",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "templates/_format_schema.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "formatschema_template",
+      "target": "formatschema_contentrules",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "templates/_format_schema.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "formatschema_template",
+      "target": "shared_tagconvention",
+      "relation": "applies_convention",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "templates/_format_schema.md",
+      "source_location": "lines 7-8",
+      "weight": 1.0
+    },
+    {
+      "source": "formatschema_template",
+      "target": "wikischema_template",
+      "relation": "complements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "templates/_format_schema.md",
+      "source_location": "line 14 (wiki_* fields excluded)",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_optimize_py",
+      "target": "dspy_loader_py",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 29",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_optimize_py",
+      "target": "dspy_optimizer_py",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 29",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_optimize_py",
+      "target": "dspy_writer_py",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 29",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_loader_py",
+      "target": "dspy_load_examples",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 37",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_backend_py",
+      "target": "dspy_make_lm",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 38",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_backend_py",
+      "target": "dspy_claudecodelm",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 68",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_optimizer_py",
+      "target": "dspy_run_mipro",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 39",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_optimizer_py",
+      "target": "dspy_restore_placeholders",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 39",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_signature_py",
+      "target": "dspy_make_signature",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 40",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_writer_py",
+      "target": "dspy_write_optimized",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 41",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_run_mipro",
+      "target": "dspy_miprov2",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 39",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_run_mipro",
+      "target": "dspy_restore_placeholders",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 39",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_load_examples",
+      "target": "dspy_dev_jsonl",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 37",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_make_lm",
+      "target": "dspy_dspy_backend_env",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 38",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_restore_placeholders",
+      "target": "dspy_placeholder_syntax",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 64",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_claudecodelm",
+      "target": "runner_iclaude_runner",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 68",
+      "weight": 0.85
+    },
+    {
+      "source": "dspy_make_signature",
+      "target": "dspy_run_mipro",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 39",
+      "weight": 0.85
+    },
+    {
+      "source": "dspy_placeholder_syntax",
+      "target": "dspy_miprov2",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md",
+      "source_location": "line 64",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_readme",
+      "target": "prompt_evaluator",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/README.md",
+      "source_location": "\u0428\u0430\u0431\u043b\u043e\u043d\u044b \u043f\u0440\u043e\u043c\u0442\u043e\u0432 section",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_readme",
+      "target": "prompt_ingest",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/README.md",
+      "source_location": "optimize.py --operations ingest,query example",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_readme",
+      "target": "prompt_ingest_optimized",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/README.md",
+      "source_location": "--output-dir prompts/optimized",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_readme",
+      "target": "concept_dspy_miprov2",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/README.md",
+      "source_location": "\u041a\u0430\u043a \u044d\u0442\u043e \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442 section",
+      "weight": 1.0
+    },
+    {
+      "source": "dspy_readme",
+      "target": "concept_claude_code_lm",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/README.md",
+      "source_location": "claude-code backend section",
+      "weight": 1.0
+    },
+    {
+      "source": "concept_dspy_miprov2",
+      "target": "concept_placeholder_syntax",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/README.md",
+      "source_location": "restore_placeholders() after optimization",
+      "weight": 1.0
+    },
+    {
+      "source": "concept_claude_code_lm",
+      "target": "concept_backend_strategy",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "scripts/dspy/README.md",
+      "source_location": "ClaudeCodeLM as DSPy-compatible LLM backend",
+      "weight": 0.85
+    },
+    {
+      "source": "lat_wiki_graph",
+      "target": "lat_wiki_graph_adjacency_map",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/wiki-graph.md",
+      "source_location": "Graph Structure",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_wiki_graph",
+      "target": "lat_wiki_graph_bfs_undirected",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/wiki-graph.md",
+      "source_location": "Query Graph Traversal",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_wiki_graph",
+      "target": "lat_wiki_graph_cache",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/wiki-graph.md",
+      "source_location": "Graph Cache",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_wiki_graph",
+      "target": "lat_wiki_graph_structural_health",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/wiki-graph.md",
+      "source_location": "Structural Health Check",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_wiki_graph_bfs_undirected",
+      "target": "lat_operations_query",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/wiki-graph.md",
+      "source_location": "Query Graph Traversal",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_wiki_graph_cache",
+      "target": "lat_architecture_agent_runner",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "lat.md/wiki-graph.md",
+      "source_location": "Graph Cache",
+      "weight": 0.85
+    },
+    {
+      "source": "lat_wiki_graph_structural_health",
+      "target": "lat_operations_lint",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/wiki-graph.md",
+      "source_location": "Structural Health Check",
+      "weight": 1.0
+    },
+    {
+      "source": "llmpipeline_llmpipeline",
+      "target": "llmpipeline_buildchatparams",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "buildChatParams section",
+      "weight": 1.0
+    },
+    {
+      "source": "llmpipeline_llmpipeline",
+      "target": "llmpipeline_evaluatorpromptpattern",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "Evaluator Prompt Pattern section",
+      "weight": 1.0
+    },
+    {
+      "source": "llmpipeline_llmpipeline",
+      "target": "llmpipeline_parsewithretry",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "parseWithRetry section",
+      "weight": 1.0
+    },
+    {
+      "source": "llmpipeline_llmpipeline",
+      "target": "llmpipeline_wikilinkvalidation",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "WikiLink Validation section",
+      "weight": 1.0
+    },
+    {
+      "source": "llmpipeline_llmpipeline",
+      "target": "llmpipeline_wrapwithjsonfallback",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "wrapWithJsonFallback section",
+      "weight": 1.0
+    },
+    {
+      "source": "llmpipeline_llmpipeline",
+      "target": "llmpipeline_structuralerror",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "Structural Error Counter section",
+      "weight": 1.0
+    },
+    {
+      "source": "llmpipeline_llmpipeline",
+      "target": "llmpipeline_llmprogressevents",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "LLM Progress Events section",
+      "weight": 1.0
+    },
+    {
+      "source": "llmpipeline_llmpipeline",
+      "target": "llmpipeline_streaming",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "Streaming section",
+      "weight": 1.0
+    },
+    {
+      "source": "llmpipeline_parsewithretry",
+      "target": "llmpipeline_structuralerror",
+      "relation": "emits",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "Structural Error Counter section",
+      "weight": 1.0
+    },
+    {
+      "source": "llmpipeline_wikilinkvalidation",
+      "target": "schema_wikilinkrules",
+      "relation": "enforces",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "lat.md/llm-pipeline.md",
+      "source_location": "WikiLink Validation section",
+      "weight": 1.0
+    },
+    {
+      "source": "domain_domainentry",
+      "target": "domain_entitytype",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/domain.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "domain_domainentry",
+      "target": "domain_domainstore",
+      "relation": "persisted_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/domain.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "domain_entitytype",
+      "target": "operations_init",
+      "relation": "initialized_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/domain.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "domain_entitytype",
+      "target": "operations_ingest",
+      "relation": "refined_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/domain.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "domain_entitytype",
+      "target": "operations_lint",
+      "relation": "re_synchronized_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/domain.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "domain_domain_events",
+      "target": "architecture_run_events",
+      "relation": "subset_of",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/domain.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "domain_domain_events",
+      "target": "architecture_controller",
+      "relation": "applied_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/domain.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "domain_wiki_folder_layout",
+      "target": "domain_domainentry",
+      "relation": "organizes",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.9,
+      "source_file": "lat.md/domain.md",
+      "source_location": null,
+      "weight": 0.9
+    },
+    {
+      "source": "domain_vault_schema_variants",
+      "target": "operations_ingest",
+      "relation": "read_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.9,
+      "source_file": "lat.md/domain.md",
+      "source_location": null,
+      "weight": 0.9
+    },
+    {
+      "source": "domain_vault_schema_variants",
+      "target": "operations_lint",
+      "relation": "read_by",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.9,
+      "source_file": "lat.md/domain.md",
+      "source_location": null,
+      "weight": 0.9
+    },
+    {
+      "source": "lat_tests",
+      "target": "lat_tests_entity_extraction",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/tests.md",
+      "source_location": "Entity Extraction",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_tests",
+      "target": "lat_tests_per_entity_retrieval",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/tests.md",
+      "source_location": "Per-Entity Retrieval",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_tests",
+      "target": "lat_tests_merge_handling",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/tests.md",
+      "source_location": "Merge Handling",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_tests",
+      "target": "lat_tests_frontmatter_validation",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/tests.md",
+      "source_location": "Frontmatter Validation",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_tests",
+      "target": "lat_tests_idle_watchdog",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/tests.md",
+      "source_location": "AgentRunner Idle Watchdog",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_tests",
+      "target": "lat_tests_lint_stale_cleanup",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/tests.md",
+      "source_location": "Lint Stale Link Cleanup",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_tests",
+      "target": "lat_tests_validate_wiki_sources",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/tests.md",
+      "source_location": "validateWikiSources Unit Tests",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_tests",
+      "target": "lat_tests_lint_bucket_repair",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/tests.md",
+      "source_location": "Lint Bucket Repair",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_tests_entity_extraction",
+      "target": "lat_operations_ingest",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/tests.md",
+      "source_location": "Entity Extraction",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_tests_per_entity_retrieval",
+      "target": "lat_architecture_page_similarity",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/tests.md",
+      "source_location": "Per-Entity Retrieval",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_tests_merge_handling",
+      "target": "lat_operations_ingest",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "lat.md/tests.md",
+      "source_location": "Merge Handling",
+      "weight": 0.95
+    },
+    {
+      "source": "lat_tests_idle_watchdog",
+      "target": "lat_architecture_agent_runner",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/tests.md",
+      "source_location": "AgentRunner Idle Watchdog",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_tests_lint_stale_cleanup",
+      "target": "lat_operations_lint",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/tests.md",
+      "source_location": "Lint Stale Link Cleanup",
+      "weight": 1.0
+    },
+    {
+      "source": "lat_tests_validate_wiki_sources",
+      "target": "lat_operations_lint",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "lat.md/tests.md",
+      "source_location": "validateWikiSources Unit Tests",
+      "weight": 0.95
+    },
+    {
+      "source": "lat_tests_lint_bucket_repair",
+      "target": "lat_architecture_frontmatter_validator",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "lat.md/tests.md",
+      "source_location": "Lint Bucket Repair",
+      "weight": 0.85
+    },
+    {
+      "source": "lat_index",
+      "target": "lat_architecture",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/lat.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "lat_index",
+      "target": "lat_operations",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/lat.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "lat_index",
+      "target": "lat_wiki_graph",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/lat.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "lat_index",
+      "target": "lat_tests",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lat.md/lat.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "architecture-doc",
+      "target": "llm-wiki-plugin",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## Plugin Entry Point section in architecture.md"
+    },
+    {
+      "source": "architecture-doc",
+      "target": "wiki-controller",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## Controller section in architecture.md"
+    },
+    {
+      "source": "architecture-doc",
+      "target": "agent-runner",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## AgentRunner section in architecture.md"
+    },
+    {
+      "source": "architecture-doc",
+      "target": "phase-functions",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## Phase Functions section in architecture.md"
+    },
+    {
+      "source": "architecture-doc",
+      "target": "native-agent-backend",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "### Native Agent section in architecture.md"
+    },
+    {
+      "source": "architecture-doc",
+      "target": "claude-agent-backend",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "### Claude Agent section in architecture.md"
+    },
+    {
+      "source": "architecture-doc",
+      "target": "page-similarity-service",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## PageSimilarityService section in architecture.md"
+    },
+    {
+      "source": "architecture-doc",
+      "target": "vault-tools",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## VaultTools section in architecture.md"
+    },
+    {
+      "source": "architecture-doc",
+      "target": "settings-local-config",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## Settings and Local Config section in architecture.md"
+    },
+    {
+      "source": "architecture-doc",
+      "target": "storage-migration",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## Storage Migration section in architecture.md"
+    },
+    {
+      "source": "architecture-doc",
+      "target": "wiki-stem-mask",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## Wiki Stem Mask section in architecture.md"
+    },
+    {
+      "source": "architecture-doc",
+      "target": "frontmatter-validator",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## Frontmatter Validator section in architecture.md"
+    },
+    {
+      "source": "architecture-doc",
+      "target": "sidebar-view",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## Sidebar View section in architecture.md"
+    },
+    {
+      "source": "architecture-doc",
+      "target": "run-events",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## Run Events section in architecture.md"
+    },
+    {
+      "source": "operations-doc",
+      "target": "op-init",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## Init section in operations.md"
+    },
+    {
+      "source": "operations-doc",
+      "target": "op-ingest",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## Ingest section in operations.md"
+    },
+    {
+      "source": "operations-doc",
+      "target": "op-query",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## Query section in operations.md"
+    },
+    {
+      "source": "operations-doc",
+      "target": "op-lint",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## Lint section in operations.md"
+    },
+    {
+      "source": "operations-doc",
+      "target": "op-lint-chat",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## Lint-Chat section in operations.md"
+    },
+    {
+      "source": "operations-doc",
+      "target": "op-chat",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## Chat section in operations.md"
+    },
+    {
+      "source": "operations-doc",
+      "target": "op-format",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "## Format section in operations.md"
+    },
+    {
+      "source": "operations-doc",
+      "target": "bfs-expand-ranked",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "### BFS Expansion section in operations.md"
+    },
+    {
+      "source": "operations-doc",
+      "target": "wiki-stem-collision-guard",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "### Wiki Stem Mask + Collision Guard section in operations.md"
+    },
+    {
+      "source": "operations-doc",
+      "target": "lint-options-modal",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "### Lint Modal UI section in operations.md"
+    },
+    {
+      "source": "operations-doc",
+      "target": "attachment-analyzer",
+      "relation": "describes",
+      "confidence": "EXTRACTED",
+      "evidence": "Format section: 'See [[src/phases/attachment-analyzer.ts]]'"
+    },
+    {
+      "source": "architecture-doc",
+      "target": "operations-doc",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "evidence": "Phase Functions table references [[operations#Operations]]"
+    },
+    {
+      "source": "llm-wiki-plugin",
+      "target": "wiki-controller",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "evidence": "Plugin Entry Point: 'Owns WikiController, DomainStore, LocalConfigStore'"
+    },
+    {
+      "source": "wiki-controller",
+      "target": "agent-runner",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "evidence": "Controller: 'builds an AgentRunner, and streams RunEvents to the sidebar view'"
+    },
+    {
+      "source": "agent-runner",
+      "target": "phase-functions",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "evidence": "AgentRunner: 'delegates to the correct phase function'"
+    },
+    {
+      "source": "agent-runner",
+      "target": "page-similarity-service",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "evidence": "PageSimilarityService: 'Built by AgentRunner.buildSimilarity()'"
+    },
+    {
+      "source": "phase-functions",
+      "target": "vault-tools",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "evidence": "Phase Functions: 'write directly to the vault via VaultTools'"
+    },
+    {
+      "source": "phase-functions",
+      "target": "run-events",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "evidence": "Phase Functions: 'Functions yield RunEvent objects'"
+    },
+    {
+      "source": "op-format",
+      "target": "format-prompt",
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "evidence": "Format operation uses prompts/format.md as its LLM system prompt"
+    },
+    {
+      "source": "op-format",
+      "target": "attachment-analyzer",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "evidence": "Format: 'a pre-step analyzes embedded images, PDFs, and Excalidraw files'"
+    },
+    {
+      "source": "op-ingest",
+      "target": "page-similarity-service",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "evidence": "Ingest: 'PageSimilarityService.selectByEntities runs per-entity top-K'"
+    },
+    {
+      "source": "op-query",
+      "target": "page-similarity-service",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "evidence": "Query: 'Similarity (embedding or Jaccard) selects seeds'"
+    },
+    {
+      "source": "op-query",
+      "target": "bfs-expand-ranked",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "evidence": "Query BFS Expansion: 'replace bfsExpandWithHops with bfsExpandRanked'"
+    },
+    {
+      "source": "op-lint",
+      "target": "page-similarity-service",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "evidence": "Lint: 'selects a limited context set via PageSimilarityService + BFS graph expansion'"
+    },
+    {
+      "source": "op-lint",
+      "target": "lint-options-modal",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "evidence": "Lint Modal UI section describes LintOptionsModal as lint entry point"
+    },
+    {
+      "source": "op-ingest",
+      "target": "frontmatter-validator",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "evidence": "Frontmatter Validator: 'Both are called in src/phases/ingest.ts before respective vaultTools.write calls'"
+    },
+    {
+      "source": "op-ingest",
+      "target": "wiki-stem-collision-guard",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "evidence": "Wiki Stem Mask + Collision Guard: enforced during ingest at four layers"
+    },
+    {
+      "source": "wiki-stem-collision-guard",
+      "target": "wiki-stem-mask",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "evidence": "Collision guard uses GENERIC_WIKI_STEM_REGEX and stemRegex from wiki-stem.ts"
+    },
+    {
+      "source": "page-similarity-service",
+      "target": "native-agent-backend",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "evidence": "PageSimilarityService: 'Only active for native-agent backend'"
+    },
+    {
+      "source": "changelog",
+      "target": "feat-agent-runner-idle-watchdog",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "evidence": "0.1.153: 'feat(agent-runner): add idle watchdog retry loop in run()'"
+    },
+    {
+      "source": "changelog",
+      "target": "feat-bfs-expand-ranked-release",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "evidence": "0.1.149: 'feat(wiki-graph): add bfsExpandRanked with embedding/Jaccard ranking'"
+    },
+    {
+      "source": "changelog",
+      "target": "feat-lint-options-modal-release",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "evidence": "0.1.154: 'feat(modal): refactor LintOptionsModal'"
+    },
+    {
+      "source": "changelog",
+      "target": "feat-format-obsidian-embed-fix",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "evidence": "0.1.155: 'fix(format): restore Obsidian embeds converted by LLM to standard Markdown'"
+    },
+    {
+      "source": "feat-agent-runner-idle-watchdog",
+      "target": "agent-runner",
+      "relation": "related_to",
+      "confidence": "EXTRACTED",
+      "evidence": "Idle watchdog feature is part of AgentRunner.run() implementation"
+    },
+    {
+      "source": "feat-bfs-expand-ranked-release",
+      "target": "bfs-expand-ranked",
+      "relation": "related_to",
+      "confidence": "EXTRACTED",
+      "evidence": "Changelog entry directly corresponds to bfsExpandRanked implementation"
+    },
+    {
+      "source": "feat-lint-options-modal-release",
+      "target": "lint-options-modal",
+      "relation": "related_to",
+      "confidence": "EXTRACTED",
+      "evidence": "Changelog entry directly corresponds to LintOptionsModal implementation"
+    },
+    {
+      "source": "feat-format-obsidian-embed-fix",
+      "target": "format-prompt",
+      "relation": "related_to",
+      "confidence": "EXTRACTED",
+      "evidence": "Fix added Obsidian embed preservation rule to the format prompt"
+    },
+    {
+      "source": "sidebar-view",
+      "target": "run-events",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "evidence": "Sidebar View consumes RunEvent stream from WikiController"
+    },
+    {
+      "source": "wiki-controller",
+      "target": "run-events",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "evidence": "Controller: 'streams RunEvents to the sidebar view'"
+    },
+    {
+      "source": "op-init",
+      "target": "vault-tools",
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "evidence": "Init creates _wiki_schema.md and _format_schema.md via vault writes"
+    },
+    {
+      "source": "storage-migration",
+      "target": "vault-tools",
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "evidence": "Storage migration copies and removes files, requiring vault access"
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "domain_crud_operations",
+      "label": "Domain CRUD Operations \u2014 applyDomainEvent, DomainStore, validateDomainId",
+      "nodes": [
+        "apply_domain_event",
+        "domain_store",
+        "validate_domain_id"
+      ],
+      "relation": "implement",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "tests/apply-domain-event.test.ts"
+    },
+    {
+      "id": "js_ts_test_duplication",
+      "label": "Parallel JS/TS test duplication across all phases",
+      "nodes": [
+        "phases_ingest_js_runingest",
+        "phases_ingest_ts_runingest",
+        "phases_init_js_runinit",
+        "phases_init_ts_runinit"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "tests/phases/ingest.test.js"
+    },
+    {
+      "id": "dspy_optimization_pipeline",
+      "label": "DSPy optimization pipeline: loader \u2192 optimizer \u2192 writer",
+      "nodes": [
+        "loader_load_examples",
+        "optimizer_run_mipro",
+        "optimize_main"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/optimize.py"
+    },
+    {
+      "id": "claude_agent_backend",
+      "label": "Claude CLI Agent Backend",
+      "nodes": [
+        "claude_cli_client_claudecliclient",
+        "claude_cli_client_claudecliconfig",
+        "claude_cli_client_validateiclaudepath",
+        "claude_cli_client_generate",
+        "claude_cli_client_notimeout",
+        "claude_cli_client_resumesession",
+        "claude_cli_client_largecontentfiles"
+      ],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "src/claude-cli-client.ts"
+    },
+    {
+      "id": "dspy_optimization_pipeline",
+      "label": "DSPy MIPROv2 optimization pipeline: dev.jsonl \u2192 loader \u2192 optimizer \u2192 writer",
+      "nodes": [
+        "dspy_dev_jsonl",
+        "dspy_load_examples",
+        "dspy_run_mipro",
+        "dspy_write_optimized",
+        "dspy_optimize_py"
+      ],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md"
+    },
+    {
+      "id": "dspy_backend_selection",
+      "label": "Backend selection: DSPY_BACKEND env selects between Ollama and ClaudeCodeLM via make_lm",
+      "nodes": [
+        "dspy_dspy_backend_env",
+        "dspy_make_lm",
+        "dspy_claudecodelm"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md"
+    },
+    {
+      "id": "dspy_placeholder_preservation",
+      "label": "Placeholder preservation: template syntax + restore_placeholders survive MIPROv2 rewriting",
+      "nodes": [
+        "dspy_placeholder_syntax",
+        "dspy_restore_placeholders",
+        "dspy_miprov2"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/dspy/CLAUDE.md"
+    },
+    {
+      "id": "hyperedge_dspy_optimization_pipeline",
+      "label": "DSPy optimization pipeline: evaluator prompt + operation prompts + dev log form closed feedback loop",
+      "nodes": [
+        "dspy_readme",
+        "prompt_evaluator",
+        "prompt_ingest",
+        "prompt_ingest_optimized",
+        "concept_dspy_miprov2"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "scripts/dspy/README.md"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}
