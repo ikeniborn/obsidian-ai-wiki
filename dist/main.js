@@ -29378,8 +29378,8 @@ var LlmWikiView = class extends import_obsidian4.ItemView {
       attr: { placeholder: "Question\u2026", rows: "3" }
     });
     const askRow = ask.createDiv("ai-wiki-ask-row");
-    this.askBtn = askRow.createEl("button", { text: T.view.ask });
     this.cancelBtn = askRow.createEl("button", { text: T.view.cancel, cls: "mod-warning" });
+    this.askBtn = askRow.createEl("button", { text: T.view.ask });
     this.cancelBtn.disabled = true;
     this.askBtn.addEventListener("click", () => this.submitQuery());
     this.cancelBtn.addEventListener("click", () => this.plugin.controller.cancelCurrent());

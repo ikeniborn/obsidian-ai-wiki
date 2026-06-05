@@ -24,7 +24,7 @@
 /* 4. Запрос */
 .ai-wiki-ask { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .ai-wiki-query-input { width: 100%; resize: vertical; font-family: inherit; padding: 6px; }
-.ai-wiki-ask-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.ai-wiki-ask-row { display: flex; justify-content: space-between; }
 .ai-wiki-ask-row button { flex: 0 0 auto; }
 
 .ai-wiki-progress-header { display: flex; align-items: baseline; justify-content: space-between; margin-top: 6px; }
