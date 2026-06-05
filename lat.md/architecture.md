@@ -37,6 +37,14 @@ Each operation is implemented as an async generator in `src/phases/`. Functions 
 
 See [[operations#Operations]].
 
+## Query Link Validator
+
+Post-stream module that validates wiki links in a query answer against the actual vault contents. Runs after the LLM stream completes in `runQuery`.
+
+Four exported helpers: `extractAnswerLinks` parses `[[stem]]` references from the answer text; `findBrokenLinks` checks each stem against a known-stems set; `annotateBroken` appends `*(нет в wiki)*` to broken link occurrences; `rewriteWithValidLinks` calls the LLM non-streaming to produce a corrected answer when retries are configured.
+
+Broken links trigger a retry only when `validationRetries > 0`. If the rewrite still has broken links, or throws, or the signal is aborted, the fallback is to annotate the original answer. See [[src/phases/query-link-validator.ts#extractAnswerLinks]], [[src/phases/query-link-validator.ts#rewriteWithValidLinks]].
+
 ## Backends
 
 Two LLM backends are supported and selected in settings. Backend choice affects how the `LlmClient` is constructed in `WikiController.buildAgentRunner`.

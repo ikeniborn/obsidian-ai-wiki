@@ -123,7 +123,7 @@ function runQ(
 // ---------------------------------------------------------------------------
 
 describe("runQuery — link validation integration", () => {
-  // @lat: [[tests/query-sentinel#All links valid]]
+  // @lat: [[query-sentinel#All links valid]]
   it("all links valid: answer unchanged, FixingLinks not emitted", async () => {
     // Answer references only [[RealPage]] which exists in the vault
     const llm = makeLlm("The answer is [[RealPage]].");
@@ -142,7 +142,7 @@ describe("runQuery — link validation integration", () => {
     expect(fixingLinks).toBeUndefined();
   });
 
-  // @lat: [[tests/query-sentinel#Broken links with retries]]
+  // @lat: [[query-sentinel#Broken links with retries]]
   it("broken links + retries>0: FixingLinks emitted, fixed answer used when rewrite has no broken", async () => {
     // Initial answer has [[FakePage]] (doesn't exist); rewrite returns clean answer
     const llm = makeLlm(
@@ -166,7 +166,7 @@ describe("runQuery — link validation integration", () => {
     expect(result.text).not.toContain("*(нет в wiki)*");
   });
 
-  // @lat: [[tests/query-sentinel#Broken links retries zero]]
+  // @lat: [[query-sentinel#Broken links retries zero]]
   it("broken links + retries=0: annotate without retry, FixingLinks not emitted", async () => {
     const llm = makeLlm("See [[FakePage]] for details.");
     const { events } = runQ(MATCHING_QUESTION, llm, {}, 0);
@@ -183,7 +183,7 @@ describe("runQuery — link validation integration", () => {
     expect(result.text).toContain("*(нет в wiki)*");
   });
 
-  // @lat: [[tests/query-sentinel#Broken links retry still broken]]
+  // @lat: [[query-sentinel#Broken links retry still broken]]
   it("broken links + retry also broken: annotate fallback", async () => {
     // Both initial and retry answer contain [[FakePage]]
     const llm = makeLlm(
@@ -203,7 +203,7 @@ describe("runQuery — link validation integration", () => {
     expect(result.text).toContain("*(нет в wiki)*");
   });
 
-  // @lat: [[tests/query-sentinel#Retry throws annotate fallback]]
+  // @lat: [[query-sentinel#Retry throws annotate fallback]]
   it("retry throws: annotate fallback on initial broken links", async () => {
     const create = vi.fn().mockImplementation(async (params: any) => {
       if (params.stream) {
@@ -227,7 +227,7 @@ describe("runQuery — link validation integration", () => {
     expect(result.text).toContain("*(нет в wiki)*");
   });
 
-  // @lat: [[tests/query-sentinel#Signal aborted before retry]]
+  // @lat: [[query-sentinel#Signal aborted before retry]]
   it("signal aborted before retry: return without annotate (AbortError)", async () => {
     const controller = new AbortController();
 
@@ -278,7 +278,7 @@ describe("runQuery — link validation integration", () => {
     expect(assistantReplace).toBeUndefined();
   });
 
-  // @lat: [[tests/query-sentinel#Empty answer no validate]]
+  // @lat: [[query-sentinel#Empty answer no validate]]
   it("empty answer: ValidateLinks not emitted", async () => {
     // LLM returns empty string
     const llm = makeLlm("");

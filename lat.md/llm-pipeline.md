@@ -88,3 +88,15 @@ Free-text operations (query, chat, format reasoning) use streaming. `extractStre
 `wrapStreamWithStats` wraps any streaming call to measure per-call timing. It tracks TTFT, total duration, and token counts, then builds a `llm_call_stats` event via `buildLlmCallStatsEvent`. The caller emits this event after the stream is consumed.
 
 Mobile backend uses `wrapMobileNoStream` for non-streaming polling instead. See [[src/phases/llm-utils.ts#extractStreamDeltas]], [[src/phases/llm-utils.ts#wrapStreamWithStats]], [[src/mobile-llm-wrap.ts#wrapMobileNoStream]].
+
+## Format Sentinel
+
+The format phase uses sentinel markers instead of JSON to delimit structured output from the LLM. The LLM is instructed to wrap its response in `<<<REPORT>>>`, `<<<FORMATTED>>>`, and `<<<END>>>` blocks.
+
+`parseSentinelOutput` extracts the three sections from the raw stream text. If `<<<END>>>` is missing, the output is salvaged from the partial response and an `info_text` event with "salvage" in the summary is emitted. When neither the initial call nor a single retry produces a valid `<<<FORMATTED>>>` marker, `runFormat` emits an `error` event. The vision descriptions channel is a separate side-channel inside the sentinel response, not part of the formatted content. See [[src/phases/format-utils.ts#parseSentinelOutput]].
+
+### Query Link Validation
+
+Post-stream step in `runQuery` that validates wiki links against known vault stems. When `validationRetries > 0` and broken links are found, a non-streaming LLM rewrite is attempted; otherwise broken links are annotated with `*(нет в wiki)*`.
+
+The `FixingLinks` tool_use event signals the rewrite pass. If rewrite fails or the signal is aborted, the original answer is annotated as fallback. See [[src/phases/query-link-validator.ts#rewriteWithValidLinks]].
