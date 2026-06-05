@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.160 — 2026-06-05
+
+### Fixes
+- fix(styles): ask-row space-between layout, remove flex-wrap
+- fix(view): swap ask/cancel button DOM order — cancel left, ask right
+
+---
+
 ## 0.1.159 — 2026-06-05
 
 ### Fixes
