@@ -222,7 +222,7 @@ const en = {
     busyCloseLeave: "Leave in background",
     shellConsentTitle: "⚠ Shell Execution Notice",
     shellConsentBody: (iclaudePath: string) =>
-      `This plugin runs an external process:\n  ${iclaudePath}\nwith your operating system user's permissions. This is required for AI Wiki to function. Review the path above, then confirm to enable.`,
+      `This plugin runs an external process:\n  ${iclaudePath}\nwith your operating system user's permissions. This is required for AI Wiki to function. Review the path above, then confirm to enable.\n\nSecurity note: this backend runs an autonomous agent without per-action permission prompts. Content of the notes you process is fed to the agent as input — a malicious or untrusted note could attempt to make the agent run unintended commands (prompt injection). Only process notes you trust.`,
     shellConsentEnable: "I understand, enable",
     manageSourcesTitle: (id: string) => `Sources: «${id}»`,
     ingestScopeTitle: "Sources saved — run ingest?",
@@ -462,7 +462,7 @@ const ru: I18n = {
     busyCloseLeave: "Оставить в фоне",
     shellConsentTitle: "⚠ Запуск внешнего процесса",
     shellConsentBody: (iclaudePath: string) =>
-      `Плагин запускает внешний процесс:\n  ${iclaudePath}\nс правами вашего системного пользователя. Это необходимо для работы AI Wiki. Проверьте путь выше, затем подтвердите включение.`,
+      `Плагин запускает внешний процесс:\n  ${iclaudePath}\nс правами вашего системного пользователя. Это необходимо для работы AI Wiki. Проверьте путь выше, затем подтвердите включение.\n\nБезопасность: этот backend запускает автономного агента без запроса разрешения на каждое действие. Содержимое обрабатываемых заметок передаётся агенту как ввод — вредоносная или недоверенная заметка может попытаться заставить агента выполнить нежелательные команды (prompt injection). Обрабатывайте только доверенные заметки.`,
     shellConsentEnable: "Понимаю, включить",
     manageSourcesTitle: (id: string) => `Источники: «${id}»`,
     ingestScopeTitle: "Источники сохранены — запустить ingest?",
@@ -700,7 +700,7 @@ const es: I18n = {
     busyCloseLeave: "Dejar en segundo plano",
     shellConsentTitle: "⚠ Ejecución de proceso externo",
     shellConsentBody: (iclaudePath: string) =>
-      `Este plugin ejecuta un proceso externo:\n  ${iclaudePath}\ncon los permisos de su usuario del sistema operativo. Es necesario para que AI Wiki funcione. Revise la ruta y confirme para habilitar.`,
+      `Este plugin ejecuta un proceso externo:\n  ${iclaudePath}\ncon los permisos de su usuario del sistema operativo. Es necesario para que AI Wiki funcione. Revise la ruta y confirme para habilitar.\n\nNota de seguridad: este backend ejecuta un agente autónomo sin solicitar permiso por cada acción. El contenido de las notas que procesa se envía al agente como entrada — una nota maliciosa o no confiable podría intentar que el agente ejecute comandos no deseados (inyección de prompts). Procese solo notas de confianza.`,
     shellConsentEnable: "Entiendo, habilitar",
     manageSourcesTitle: (id: string) => `Fuentes: «${id}»`,
     ingestScopeTitle: "Fuentes guardadas — ¿ejecutar ingest?",

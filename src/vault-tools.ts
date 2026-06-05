@@ -94,8 +94,14 @@ export class VaultTools {
     return this.adapter.readBinary(vaultPath);
   }
 
-  resolveLink(linkpath: string, sourcePath: string): string {
-    return this.adapter.resolveLink?.(linkpath, sourcePath) ?? linkpath;
+  /**
+   * Resolve an Obsidian wiki-link to a vault-relative path. Returns null when the
+   * adapter cannot resolve it: falling back to the raw linkpath would let an
+   * unresolved embed like `![[../../secret.png]]` reach read/readBinary, which on
+   * desktop escapes the vault root via path.join. Callers must skip on null.
+   */
+  resolveLink(linkpath: string, sourcePath: string): string | null {
+    return this.adapter.resolveLink?.(linkpath, sourcePath) ?? null;
   }
 
   async mkdir(vaultPath: string): Promise<void> {

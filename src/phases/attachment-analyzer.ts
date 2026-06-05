@@ -205,6 +205,9 @@ export async function analyzeSingleAttachment(
   language: VisionLanguage = "auto",
 ): Promise<string | null> {
   const resolved = vaultTools.resolveLink(path, sourcePath);
+  // Skip embeds Obsidian can't resolve to an indexed vault file — a traversal
+  // payload (`![[../../secret.png]]`) never resolves, so this blocks the read.
+  if (resolved === null) return null;
   const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
   const isExcalidraw = ext === "excalidraw" || resolved.endsWith(".excalidraw.md");
 

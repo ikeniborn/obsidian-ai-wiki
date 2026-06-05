@@ -97,6 +97,8 @@ function makeVaultTools(binaryData: Record<string, ArrayBuffer> = {}, textData: 
       if (p in binaryData) return binaryData[p];
       throw new Error(`not found: ${p}`);
     }),
+    // Treat every test linkpath as a resolvable indexed file (identity resolve).
+    resolveLink: vi.fn().mockImplementation((linkpath: string) => linkpath),
   };
   return new VaultTools(adapter, "/vault");
 }
@@ -152,6 +154,17 @@ describe("analyzeAttachments", () => {
     const llm = makeLlm("should not be called");
     const result = await analyzeAttachments(["missing.png"], vaultTools, llm, "gpt-4o-mini", new AbortController().signal);
     expect(result.has("missing.png")).toBe(false);
+  });
+
+  it("skips unresolved embed (path traversal), never reads", async () => {
+    const buf = new Uint8Array([1]).buffer;
+    const vaultTools = makeVaultTools({ "../../../secret.png": buf });
+    // Simulate Obsidian failing to resolve a traversal embed to an indexed file.
+    (vaultTools.adapter.resolveLink as ReturnType<typeof vi.fn>).mockReturnValue(null);
+    const llm = makeLlm("should not be called");
+    const result = await analyzeAttachments(["../../../secret.png"], vaultTools, llm, "gpt-4o-mini", new AbortController().signal);
+    expect(result.has("../../../secret.png")).toBe(false);
+    expect(vaultTools.adapter.readBinary as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
   });
 
   it("processes multiple embeds sequentially", async () => {

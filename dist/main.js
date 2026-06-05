@@ -1038,6 +1038,8 @@ var require_Alias = __commonJS({
        * instance of the `source` anchor before this node.
        */
       resolve(doc, ctx) {
+        if (ctx?.maxAliasCount === 0)
+          throw new ReferenceError("Alias resolution is disabled");
         let nodes;
         if (ctx?.aliasResolveCache) {
           nodes = ctx.aliasResolveCache;
@@ -2110,18 +2112,18 @@ var require_merge = __commonJS({
     };
     var isMergeKey = (ctx, key) => (merge.identify(key) || identity.isScalar(key) && (!key.type || key.type === Scalar.Scalar.PLAIN) && merge.identify(key.value)) && ctx?.doc.schema.tags.some((tag) => tag.tag === merge.tag && tag.default);
     function addMergeToJSMap(ctx, map, value) {
-      value = ctx && identity.isAlias(value) ? value.resolve(ctx.doc) : value;
-      if (identity.isSeq(value))
-        for (const it of value.items)
+      const source = resolveAliasValue(ctx, value);
+      if (identity.isSeq(source))
+        for (const it of source.items)
           mergeValue(ctx, map, it);
-      else if (Array.isArray(value))
-        for (const it of value)
+      else if (Array.isArray(source))
+        for (const it of source)
           mergeValue(ctx, map, it);
       else
-        mergeValue(ctx, map, value);
+        mergeValue(ctx, map, source);
     }
     function mergeValue(ctx, map, value) {
-      const source = ctx && identity.isAlias(value) ? value.resolve(ctx.doc) : value;
+      const source = resolveAliasValue(ctx, value);
       if (!identity.isMap(source))
         throw new Error("Merge sources must be maps or map aliases");
       const srcMap = source.toJSON(null, ctx, Map);
@@ -2141,6 +2143,9 @@ var require_merge = __commonJS({
         }
       }
       return map;
+    }
+    function resolveAliasValue(ctx, value) {
+      return ctx && identity.isAlias(value) ? value.resolve(ctx.doc, ctx) : value;
     }
     exports2.addMergeToJSMap = addMergeToJSMap;
     exports2.isMergeKey = isMergeKey;
@@ -2779,7 +2784,7 @@ var require_stringifyNumber = __commonJS({
       if (!isFinite(num))
         return isNaN(num) ? ".nan" : num < 0 ? "-.inf" : ".inf";
       let n = Object.is(value, -0) ? "-0" : JSON.stringify(value);
-      if (!format && minFractionDigits && (!tag || tag === "tag:yaml.org,2002:float") && /^\d/.test(n)) {
+      if (!format && minFractionDigits && (!tag || tag === "tag:yaml.org,2002:float") && /^-?\d/.test(n) && !n.includes("e")) {
         let i = n.indexOf(".");
         if (i < 0) {
           i = n.length;
@@ -5151,7 +5156,7 @@ var require_resolve_flow_scalar = __commonJS({
             while (next === " " || next === "	")
               next = source[++i + 1];
           } else if (next === "x" || next === "u" || next === "U") {
-            const length = { x: 2, u: 4, U: 8 }[next];
+            const length = next === "x" ? 2 : next === "u" ? 4 : 8;
             res += parseCharCode(source, i + 1, length, onError);
             i += length;
           } else {
@@ -5226,12 +5231,13 @@ var require_resolve_flow_scalar = __commonJS({
       const cc = source.substr(offset, length);
       const ok = cc.length === length && /^[0-9a-fA-F]+$/.test(cc);
       const code = ok ? parseInt(cc, 16) : NaN;
-      if (isNaN(code)) {
+      try {
+        return String.fromCodePoint(code);
+      } catch {
         const raw = source.substr(offset - 2, length + 2);
         onError(offset - 2, "BAD_DQ_ESCAPE", `Invalid escape sequence ${raw}`);
         return raw;
       }
-      return String.fromCodePoint(code);
     }
     exports2.resolveFlowScalar = resolveFlowScalar;
   }
@@ -5581,8 +5587,10 @@ ${cb}` : comment;
           }
         }
         if (afterDoc) {
-          Array.prototype.push.apply(doc.errors, this.errors);
-          Array.prototype.push.apply(doc.warnings, this.warnings);
+          for (let i = 0; i < this.errors.length; ++i)
+            doc.errors.push(this.errors[i]);
+          for (let i = 0; i < this.warnings.length; ++i)
+            doc.warnings.push(this.warnings[i]);
         } else {
           doc.errors = this.errors;
           doc.warnings = this.warnings;
@@ -6315,7 +6323,7 @@ var require_lexer = __commonJS({
           const n = (yield* this.pushCount(1)) + (yield* this.pushSpaces(true));
           this.indentNext = this.indentValue + 1;
           this.indentValue += n;
-          return yield* this.parseBlockStart();
+          return "block-start";
         }
         return "doc";
       }
@@ -6614,28 +6622,38 @@ var require_lexer = __commonJS({
         return 0;
       }
       *pushIndicators() {
-        switch (this.charAt(0)) {
-          case "!":
-            return (yield* this.pushTag()) + (yield* this.pushSpaces(true)) + (yield* this.pushIndicators());
-          case "&":
-            return (yield* this.pushUntil(isNotAnchorChar)) + (yield* this.pushSpaces(true)) + (yield* this.pushIndicators());
-          case "-":
-          // this is an error
-          case "?":
-          // this is an error outside flow collections
-          case ":": {
-            const inFlow = this.flowLevel > 0;
-            const ch1 = this.charAt(1);
-            if (isEmpty(ch1) || inFlow && flowIndicatorChars.has(ch1)) {
-              if (!inFlow)
-                this.indentNext = this.indentValue + 1;
-              else if (this.flowKey)
-                this.flowKey = false;
-              return (yield* this.pushCount(1)) + (yield* this.pushSpaces(true)) + (yield* this.pushIndicators());
+        let n = 0;
+        loop: while (true) {
+          switch (this.charAt(0)) {
+            case "!":
+              n += yield* this.pushTag();
+              n += yield* this.pushSpaces(true);
+              continue loop;
+            case "&":
+              n += yield* this.pushUntil(isNotAnchorChar);
+              n += yield* this.pushSpaces(true);
+              continue loop;
+            case "-":
+            // this is an error
+            case "?":
+            // this is an error outside flow collections
+            case ":": {
+              const inFlow = this.flowLevel > 0;
+              const ch1 = this.charAt(1);
+              if (isEmpty(ch1) || inFlow && flowIndicatorChars.has(ch1)) {
+                if (!inFlow)
+                  this.indentNext = this.indentValue + 1;
+                else if (this.flowKey)
+                  this.flowKey = false;
+                n += yield* this.pushCount(1);
+                n += yield* this.pushSpaces(true);
+                continue loop;
+              }
             }
           }
+          break loop;
         }
-        return 0;
+        return n;
       }
       *pushTag() {
         if (this.charAt(1) === "<") {
@@ -6794,6 +6812,13 @@ var require_parser = __commonJS({
       }
       return prev.splice(i, prev.length);
     }
+    function arrayPushArray(target, source) {
+      if (source.length < 1e5)
+        Array.prototype.push.apply(target, source);
+      else
+        for (let i = 0; i < source.length; ++i)
+          target.push(source[i]);
+    }
     function fixFlowSeqItems(fc) {
       if (fc.start.type === "flow-seq-start") {
         for (const it of fc.items) {
@@ -6803,11 +6828,11 @@ var require_parser = __commonJS({
             delete it.key;
             if (isFlowToken(it.value)) {
               if (it.value.end)
-                Array.prototype.push.apply(it.value.end, it.sep);
+                arrayPushArray(it.value.end, it.sep);
               else
                 it.value.end = it.sep;
             } else
-              Array.prototype.push.apply(it.start, it.sep);
+              arrayPushArray(it.start, it.sep);
             delete it.sep;
           }
         }
@@ -7162,7 +7187,7 @@ var require_parser = __commonJS({
                 const prev = map.items[map.items.length - 2];
                 const end = prev?.value?.end;
                 if (Array.isArray(end)) {
-                  Array.prototype.push.apply(end, it.start);
+                  arrayPushArray(end, it.start);
                   end.push(this.sourceToken);
                   map.items.pop();
                   return;
@@ -7350,7 +7375,7 @@ var require_parser = __commonJS({
                 const prev = seq.items[seq.items.length - 2];
                 const end = prev?.value?.end;
                 if (Array.isArray(end)) {
-                  Array.prototype.push.apply(end, it.start);
+                  arrayPushArray(end, it.start);
                   end.push(this.sourceToken);
                   seq.items.pop();
                   return;
@@ -26405,7 +26430,9 @@ var en = {
     shellConsentTitle: "\u26A0 Shell Execution Notice",
     shellConsentBody: (iclaudePath) => `This plugin runs an external process:
   ${iclaudePath}
-with your operating system user's permissions. This is required for AI Wiki to function. Review the path above, then confirm to enable.`,
+with your operating system user's permissions. This is required for AI Wiki to function. Review the path above, then confirm to enable.
+
+Security note: this backend runs an autonomous agent without per-action permission prompts. Content of the notes you process is fed to the agent as input \u2014 a malicious or untrusted note could attempt to make the agent run unintended commands (prompt injection). Only process notes you trust.`,
     shellConsentEnable: "I understand, enable",
     manageSourcesTitle: (id) => `Sources: \xAB${id}\xBB`,
     ingestScopeTitle: "Sources saved \u2014 run ingest?",
@@ -26640,7 +26667,9 @@ var ru = {
     shellConsentTitle: "\u26A0 \u0417\u0430\u043F\u0443\u0441\u043A \u0432\u043D\u0435\u0448\u043D\u0435\u0433\u043E \u043F\u0440\u043E\u0446\u0435\u0441\u0441\u0430",
     shellConsentBody: (iclaudePath) => `\u041F\u043B\u0430\u0433\u0438\u043D \u0437\u0430\u043F\u0443\u0441\u043A\u0430\u0435\u0442 \u0432\u043D\u0435\u0448\u043D\u0438\u0439 \u043F\u0440\u043E\u0446\u0435\u0441\u0441:
   ${iclaudePath}
-\u0441 \u043F\u0440\u0430\u0432\u0430\u043C\u0438 \u0432\u0430\u0448\u0435\u0433\u043E \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u0433\u043E \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F. \u042D\u0442\u043E \u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E \u0434\u043B\u044F \u0440\u0430\u0431\u043E\u0442\u044B AI Wiki. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043F\u0443\u0442\u044C \u0432\u044B\u0448\u0435, \u0437\u0430\u0442\u0435\u043C \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435 \u0432\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435.`,
+\u0441 \u043F\u0440\u0430\u0432\u0430\u043C\u0438 \u0432\u0430\u0448\u0435\u0433\u043E \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u0433\u043E \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F. \u042D\u0442\u043E \u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E \u0434\u043B\u044F \u0440\u0430\u0431\u043E\u0442\u044B AI Wiki. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043F\u0443\u0442\u044C \u0432\u044B\u0448\u0435, \u0437\u0430\u0442\u0435\u043C \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435 \u0432\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435.
+
+\u0411\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0441\u0442\u044C: \u044D\u0442\u043E\u0442 backend \u0437\u0430\u043F\u0443\u0441\u043A\u0430\u0435\u0442 \u0430\u0432\u0442\u043E\u043D\u043E\u043C\u043D\u043E\u0433\u043E \u0430\u0433\u0435\u043D\u0442\u0430 \u0431\u0435\u0437 \u0437\u0430\u043F\u0440\u043E\u0441\u0430 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F \u043D\u0430 \u043A\u0430\u0436\u0434\u043E\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435. \u0421\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u043E\u0431\u0440\u0430\u0431\u0430\u0442\u044B\u0432\u0430\u0435\u043C\u044B\u0445 \u0437\u0430\u043C\u0435\u0442\u043E\u043A \u043F\u0435\u0440\u0435\u0434\u0430\u0451\u0442\u0441\u044F \u0430\u0433\u0435\u043D\u0442\u0443 \u043A\u0430\u043A \u0432\u0432\u043E\u0434 \u2014 \u0432\u0440\u0435\u0434\u043E\u043D\u043E\u0441\u043D\u0430\u044F \u0438\u043B\u0438 \u043D\u0435\u0434\u043E\u0432\u0435\u0440\u0435\u043D\u043D\u0430\u044F \u0437\u0430\u043C\u0435\u0442\u043A\u0430 \u043C\u043E\u0436\u0435\u0442 \u043F\u043E\u043F\u044B\u0442\u0430\u0442\u044C\u0441\u044F \u0437\u0430\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u0430\u0433\u0435\u043D\u0442\u0430 \u0432\u044B\u043F\u043E\u043B\u043D\u0438\u0442\u044C \u043D\u0435\u0436\u0435\u043B\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0435 \u043A\u043E\u043C\u0430\u043D\u0434\u044B (prompt injection). \u041E\u0431\u0440\u0430\u0431\u0430\u0442\u044B\u0432\u0430\u0439\u0442\u0435 \u0442\u043E\u043B\u044C\u043A\u043E \u0434\u043E\u0432\u0435\u0440\u0435\u043D\u043D\u044B\u0435 \u0437\u0430\u043C\u0435\u0442\u043A\u0438.`,
     shellConsentEnable: "\u041F\u043E\u043D\u0438\u043C\u0430\u044E, \u0432\u043A\u043B\u044E\u0447\u0438\u0442\u044C",
     manageSourcesTitle: (id) => `\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438: \xAB${id}\xBB`,
     ingestScopeTitle: "\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B \u2014 \u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C ingest?",
@@ -26875,7 +26904,9 @@ var es = {
     shellConsentTitle: "\u26A0 Ejecuci\xF3n de proceso externo",
     shellConsentBody: (iclaudePath) => `Este plugin ejecuta un proceso externo:
   ${iclaudePath}
-con los permisos de su usuario del sistema operativo. Es necesario para que AI Wiki funcione. Revise la ruta y confirme para habilitar.`,
+con los permisos de su usuario del sistema operativo. Es necesario para que AI Wiki funcione. Revise la ruta y confirme para habilitar.
+
+Nota de seguridad: este backend ejecuta un agente aut\xF3nomo sin solicitar permiso por cada acci\xF3n. El contenido de las notas que procesa se env\xEDa al agente como entrada \u2014 una nota maliciosa o no confiable podr\xEDa intentar que el agente ejecute comandos no deseados (inyecci\xF3n de prompts). Procese solo notas de confianza.`,
     shellConsentEnable: "Entiendo, habilitar",
     manageSourcesTitle: (id) => `Fuentes: \xAB${id}\xBB`,
     ingestScopeTitle: "Fuentes guardadas \u2014 \xBFejecutar ingest?",
@@ -37448,9 +37479,10 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   }
   const deletedPaths = [];
   for (const d of deletes) {
-    if (!d.path.startsWith(wikiVaultPath + "/")) {
+    const hasTraversal = d.path.split("/").some((seg) => seg === ".." || seg === ".");
+    if (hasTraversal || !validateArticlePath(d.path, wikiVaultPath)) {
       yield { kind: "tool_use", name: "Delete", input: { path: d.path } };
-      yield { kind: "tool_result", ok: false, preview: `outside wiki folder (${wikiVaultPath})` };
+      yield { kind: "tool_result", ok: false, preview: `invalid path, outside wiki folder (${wikiVaultPath})` };
       continue;
     }
     yield { kind: "tool_use", name: "Delete", input: { path: d.path } };
@@ -39468,6 +39500,7 @@ function extractExcalidrawJson(text) {
 }
 async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, sourcePath = "", language = "auto") {
   const resolved = vaultTools.resolveLink(path2, sourcePath);
+  if (resolved === null) return null;
   const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
   const isExcalidraw = ext === "excalidraw" || resolved.endsWith(".excalidraw.md");
   if (isExcalidraw) {
@@ -40428,8 +40461,14 @@ var VaultTools = class {
     if (!this.adapter.readBinary) throw new Error("readBinary not supported by this adapter");
     return this.adapter.readBinary(vaultPath);
   }
+  /**
+   * Resolve an Obsidian wiki-link to a vault-relative path. Returns null when the
+   * adapter cannot resolve it: falling back to the raw linkpath would let an
+   * unresolved embed like `![[../../secret.png]]` reach read/readBinary, which on
+   * desktop escapes the vault root via path.join. Callers must skip on null.
+   */
   resolveLink(linkpath, sourcePath) {
-    return this.adapter.resolveLink?.(linkpath, sourcePath) ?? linkpath;
+    return this.adapter.resolveLink?.(linkpath, sourcePath) ?? null;
   }
   async mkdir(vaultPath) {
     return this.adapter.mkdir(vaultPath);

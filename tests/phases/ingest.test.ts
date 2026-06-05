@@ -1189,6 +1189,38 @@ describe("runIngest — entity-driven flow", () => {
     expect(rej).toBeDefined();
   });
 
+  it("rejects deletes path with '..' traversal that passes startsWith", async () => {
+    const traversal = "!Wiki/work/../../other/secret.md";
+    const adapter = mockAdapter({
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p === "Sources/doc.md") return "source";
+        throw new Error("not found");
+      }),
+      remove: vi.fn().mockResolvedValue(undefined),
+      list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm([
+      JSON.stringify({ reasoning: "x", entities: [{ name: "X" }] }),
+      JSON.stringify({
+        reasoning: "bad",
+        pages: [{ path: "!Wiki/work/entities/wiki_work_x.md", content: "# X" }],
+        deletes: [{ path: traversal }],
+      }),
+    ]);
+
+    const events = await collect(runIngest(
+      [`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "m", [domain], VAULT_ROOT,
+      new AbortController().signal,
+    ));
+    expect(adapter.remove).not.toHaveBeenCalledWith(traversal);
+    const rej = events.find(
+      (e: any) => e.kind === "tool_result" && e.ok === false
+        && (e.preview as string)?.includes("invalid path"),
+    );
+    expect(rej).toBeDefined();
+  });
+
   // @lat: [[tests#Merge Handling#Backlinks drop deleted stems]]
   it("source backlinks drop deleted page stems", async () => {
     const existingFm =

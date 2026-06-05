@@ -65,6 +65,8 @@ Nonzero terms are joined with commas in that order. The `стр.` suffix is appe
 
 When LLM #2 emits `deletes[]` on `WikiPagesOutputSchema`, ingest removes each listed page via `vaultTools.remove` and strips its line from `_index.md` via [[src/wiki-index.ts#removeIndexAnnotation]].
 
+Each delete path is validated before removal to block path traversal: any path containing a `..`/`.` segment, or failing [[src/wiki-path.ts#validateArticlePath]] (must be a `<domain>/<file>.md` shape inside the wiki folder), is rejected with an `invalid path` `tool_result` and skipped. The LLM-supplied path never reaches the raw filesystem adapter unvalidated.
+
 The current source's `wiki_articles` frontmatter list is filtered to drop links pointing at deleted page stems before new wiki links are merged in. When `deletes.length` exceeds `mergeDeleteWarnThreshold` (default 5, configurable via `LlmCallOptions.mergeDeleteWarnThreshold`), ingest yields a `Large merge: K deletions` `info_text` warning before processing the deletes. Deleted pages are logged as `УДАЛЕНА` entries in the wiki log. See [[src/phases/ingest.ts]].
 
 ### entity_types_delta

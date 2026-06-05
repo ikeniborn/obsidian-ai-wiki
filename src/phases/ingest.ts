@@ -382,9 +382,13 @@ export async function* runIngest(
 
   const deletedPaths: string[] = [];
   for (const d of deletes) {
-    if (!d.path.startsWith(wikiVaultPath + "/")) {
+    // Reject path traversal: deletes come from LLM JSON output and must stay
+    // inside the wiki folder. startsWith alone is bypassable with ".." segments,
+    // so enforce the same strict shape as writes plus an explicit traversal check.
+    const hasTraversal = d.path.split("/").some((seg) => seg === ".." || seg === ".");
+    if (hasTraversal || !validateArticlePath(d.path, wikiVaultPath)) {
       yield { kind: "tool_use", name: "Delete", input: { path: d.path } };
-      yield { kind: "tool_result", ok: false, preview: `outside wiki folder (${wikiVaultPath})` };
+      yield { kind: "tool_result", ok: false, preview: `invalid path, outside wiki folder (${wikiVaultPath})` };
       continue;
     }
     yield { kind: "tool_use", name: "Delete", input: { path: d.path } };
