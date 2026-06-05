@@ -94,11 +94,11 @@ describe("AgentRunner", () => {
   });
 
   it("маршрутизирует operation=format в runFormat", async () => {
-    const formatted = "# OK";
-    const json = JSON.stringify({ report: "r", formatted });
+    const formatted = "---\ntags: []\n---\n\n# OK\n\nContent here.";
+    const sentinel = `<<<REPORT>>>\nr\n<<<FORMATTED>>>\n${formatted}\n<<<END>>>`;
     const adapter = mockAdapter({ read: vi.fn().mockResolvedValue("# Заметка ClickHouse 1.0") });
     const vt = new VaultTools(adapter, "/vault");
-    const runner = new AgentRunner(makeLlm(json), baseSettings, vt, "TestVault", []);
+    const runner = new AgentRunner(makeLlm(sentinel), baseSettings, vt, "TestVault", []);
     const events = await collect(
       runner.run({
         operation: "format",
