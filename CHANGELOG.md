@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.159 — 2026-06-05
+
+### Fixes
+- fix(mobile): replace Buffer with btoa/atob, fix settings scroll, fix agent.jsonl folder creation
+- fix(mobile): fix Headers serialization in mobileFetch, fix scroll container selector
+- fix(mobile): correct tok/s stats for non-streaming emulation
+
+---
+
 ## 0.1.158 — 2026-06-05
 
 ### New
