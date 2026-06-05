@@ -16,6 +16,8 @@ Persists domain mutations from events via `DomainStore`. See [[src/controller.ts
 
 `logEvent` writes JSONL to `!Wiki/_config/_agent.jsonl` when `agentLogEnabled` is true. Folder creation uses `vault.createFolder().catch(() => {})` unconditionally — **do not guard with `adapter.exists()`**, which is unreliable for folders on Obsidian mobile.
 
+`mobileFetch` (used on mobile for all LLM HTTP requests) must convert `Headers` instances to `Record<string, string>` before passing to `requestUrl` — the OpenAI SDK passes a `Headers` class instance, not a plain object. Without conversion, `Content-Type` and `Authorization` headers are silently dropped, causing LLM requests to fail.
+
 ## AgentRunner
 
 Stateless execution engine. Receives a `RunRequest`, selects LLM call options per operation, and delegates to the correct phase function. Wraps the LLM client in `wrapWithJsonFallback` at construction time.
@@ -101,7 +103,7 @@ Settings are split into two stores to avoid syncing secrets across devices.
 
 `lintOptions.useLlm` is stored in `data.json` and preserved as the default value for the lint modal toggle, but it is no longer exposed in the plugin settings panel — the toggle was removed to keep settings focused on persistent configuration rather than per-run choices. See [[src/settings.ts]].
 
-`LlmWikiSettingTab.render()` saves `containerEl.parentElement.scrollTop` before `containerEl.empty()` and restores it via `requestAnimationFrame` after rebuild — preventing scroll reset when onChange handlers call `display()` to re-render the panel (e.g., backend toggle, per-operation model toggle).
+`LlmWikiSettingTab.render()` saves `scrollTop` before `containerEl.empty()` and restores it via `requestAnimationFrame` after rebuild — preventing scroll reset when onChange handlers call `display()` to re-render the panel. The scrollable container is resolved via `containerEl.closest('.vertical-tab-content') ?? containerEl.closest('.modal-content') ?? containerEl.parentElement` — **do not use `containerEl.parentElement` alone**, it is not the scrollable element in Obsidian's settings modal.
 
 Migration `migrateToLocalV2` runs on first load after upgrade — reads old `local.json` (which contained full nativeAgent/claudeAgent/proxy fields from v1 migration), moves those fields into `data.json`, and rewrites `local.json` to the lean secret-only shape. New installs skip v2 via `migrated_v2: true` set by `migrateToLocalV1`.
 

@@ -13,10 +13,19 @@ export const mobileFetch: typeof fetch = async (input, init) => {
     throw new Error("mobileFetch: only string body supported");
   }
 
+  // Headers may be a Headers instance — convert to plain Record for requestUrl
+  let headers: Record<string, string> | undefined;
+  if (init?.headers instanceof Headers) {
+    headers = {};
+    init.headers.forEach((v, k) => { headers![k] = v; });
+  } else if (init?.headers) {
+    headers = init.headers as Record<string, string>;
+  }
+
   const requestPromise = requestUrl({
     url,
     method: init?.method ?? "GET",
-    headers: init?.headers as Record<string, string> | undefined,
+    headers,
     body: body ?? undefined,
     throw: false,
   });

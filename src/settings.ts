@@ -132,7 +132,12 @@ export class LlmWikiSettingTab extends PluginSettingTab {
 
   private render(): void {
     const { containerEl } = this;
-    const scrollEl = containerEl.parentElement ?? containerEl;
+    const scrollEl = (
+      containerEl.closest(".vertical-tab-content") ??
+      containerEl.closest(".modal-content") ??
+      containerEl.parentElement ??
+      containerEl
+    ) as HTMLElement;
     const savedScroll = scrollEl.scrollTop;
     containerEl.empty();
     const s = this.plugin.settings;
