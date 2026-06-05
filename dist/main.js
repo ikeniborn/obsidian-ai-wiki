@@ -150,15 +150,15 @@ var require_path_browserify = __commonJS({
       normalize: function normalize(path2) {
         assertPath(path2);
         if (path2.length === 0) return ".";
-        var isAbsolute6 = path2.charCodeAt(0) === 47;
+        var isAbsolute5 = path2.charCodeAt(0) === 47;
         var trailingSeparator = path2.charCodeAt(path2.length - 1) === 47;
-        path2 = normalizeStringPosix(path2, !isAbsolute6);
-        if (path2.length === 0 && !isAbsolute6) path2 = ".";
+        path2 = normalizeStringPosix(path2, !isAbsolute5);
+        if (path2.length === 0 && !isAbsolute5) path2 = ".";
         if (path2.length > 0 && trailingSeparator) path2 += "/";
-        if (isAbsolute6) return "/" + path2;
+        if (isAbsolute5) return "/" + path2;
         return path2;
       },
-      isAbsolute: function isAbsolute6(path2) {
+      isAbsolute: function isAbsolute5(path2) {
         assertPath(path2);
         return path2.length > 0 && path2.charCodeAt(0) === 47;
       },
@@ -180,7 +180,7 @@ var require_path_browserify = __commonJS({
           return ".";
         return posix.normalize(joined);
       },
-      relative: function relative4(from, to) {
+      relative: function relative3(from, to) {
         assertPath(from);
         assertPath(to);
         if (from === to) return "";
@@ -372,9 +372,9 @@ var require_path_browserify = __commonJS({
         var ret = { root: "", dir: "", base: "", ext: "", name: "" };
         if (path2.length === 0) return ret;
         var code = path2.charCodeAt(0);
-        var isAbsolute6 = code === 47;
+        var isAbsolute5 = code === 47;
         var start;
-        if (isAbsolute6) {
+        if (isAbsolute5) {
           ret.root = "/";
           start = 1;
         } else {
@@ -410,11 +410,11 @@ var require_path_browserify = __commonJS({
         preDotState === 0 || // The (right-most) trimmed path component is exactly '..'
         preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
           if (end !== -1) {
-            if (startPart === 0 && isAbsolute6) ret.base = ret.name = path2.slice(1, end);
+            if (startPart === 0 && isAbsolute5) ret.base = ret.name = path2.slice(1, end);
             else ret.base = ret.name = path2.slice(startPart, end);
           }
         } else {
-          if (startPart === 0 && isAbsolute6) {
+          if (startPart === 0 && isAbsolute5) {
             ret.name = path2.slice(1, startDot);
             ret.base = path2.slice(1, end);
           } else {
@@ -424,7 +424,7 @@ var require_path_browserify = __commonJS({
           ret.ext = path2.slice(startDot, end);
         }
         if (startPart > 0) ret.dir = path2.slice(0, startPart - 1);
-        else if (isAbsolute6) ret.dir = "/";
+        else if (isAbsolute5) ret.dir = "/";
         return ret;
       },
       sep: "/",
@@ -26140,7 +26140,7 @@ __export(main_exports, {
   migrateToLocalV2: () => migrateToLocalV2
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian10 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_SETTINGS = {
@@ -28284,7 +28284,7 @@ var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
         );
       }
     }
-    requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
       scrollEl.scrollTop = savedScroll;
     });
   }
@@ -30522,7 +30522,7 @@ function translateSystemEvent(message) {
 }
 
 // src/controller.ts
-var import_obsidian9 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 var import_path_browserify7 = __toESM(require_path_browserify(), 1);
 
 // src/source-paths.ts
@@ -40495,7 +40495,7 @@ var VaultTools = class {
 };
 
 // src/claude-cli-client.ts
-var import_node_child_process = require("node:child_process");
+var import_obsidian7 = require("obsidian");
 var import_path_browserify6 = __toESM(require_path_browserify(), 1);
 
 // src/stream.ts
@@ -40669,7 +40669,9 @@ ${userText}
   }
   async *_generate(args, signal, timeoutSec, tmpFiles) {
     validateIclaudePath(this.cfg.iclaudePath);
-    const child = (0, import_node_child_process.spawn)(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
+    if (!import_obsidian7.Platform.isDesktopApp) throw new Error("Claude CLI backend is desktop-only");
+    const { spawn } = await import("node:child_process");
+    const child = spawn(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
     if (!child.stdout || !child.stderr) throw new Error("spawn: missing stdio");
     const stderrChunks = [];
     child.stderr.on("data", (chunk) => stderrChunks.push(chunk));
@@ -47951,10 +47953,10 @@ OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
 // src/proxy.ts
-var import_obsidian7 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 function createProxyDispatcher(cfg) {
   if (!cfg.enabled) return null;
-  if (import_obsidian7.Platform.isMobile) return null;
+  if (import_obsidian8.Platform.isMobile) return null;
   const undici = require_undici();
   return new undici.ProxyAgent(buildProxyUrl(cfg));
 }
@@ -48005,7 +48007,7 @@ function maskProxyUrl(url) {
 }
 
 // src/mobile-fetch.ts
-var import_obsidian8 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 var mobileFetch = async (input, init) => {
   if (init?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
   let url;
@@ -48025,7 +48027,7 @@ var mobileFetch = async (input, init) => {
   } else if (init?.headers) {
     headers = init.headers;
   }
-  const requestPromise = (0, import_obsidian8.requestUrl)({
+  const requestPromise = (0, import_obsidian9.requestUrl)({
     url,
     method: init?.method ?? "GET",
     headers,
@@ -48184,17 +48186,17 @@ var WikiController = class {
   cancelCurrent() {
     if (this.current) {
       this.current.abort();
-      new import_obsidian9.Notice(i18n().ctrl.cancelling);
+      new import_obsidian10.Notice(i18n().ctrl.cancelling);
     }
   }
   async format() {
     const file = this.app.workspace.getActiveFile();
     if (!file) {
-      new import_obsidian9.Notice(i18n().ctrl.noActiveFile);
+      new import_obsidian10.Notice(i18n().ctrl.noActiveFile);
       return;
     }
     if (file.extension !== "md") {
-      new import_obsidian9.Notice(i18n().view.formatOnlyMarkdown ?? "Format only works on markdown files");
+      new import_obsidian10.Notice(i18n().view.formatOnlyMarkdown ?? "Format only works on markdown files");
       return;
     }
     const domains = await this.loadDomains();
@@ -48225,11 +48227,11 @@ var WikiController = class {
   async formatApply(keepOld) {
     const p = this._pendingFormat;
     if (!p || !p.tempPath) {
-      new import_obsidian9.Notice(i18n().view.formatNoPending ?? "No format preview to apply");
+      new import_obsidian10.Notice(i18n().view.formatNoPending ?? "No format preview to apply");
       return;
     }
     if (this.isBusy()) {
-      new import_obsidian9.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian10.Notice(i18n().ctrl.operationRunning);
       return;
     }
     const adapter = this.app.vault.adapter;
@@ -48256,17 +48258,17 @@ var WikiController = class {
         const content = await adapter.read(p.tempPath);
         const patched = patchWikiFields(originalContent, content);
         const origFile = this.app.vault.getAbstractFileByPath(p.originalPath);
-        if (origFile instanceof import_obsidian9.TFile) {
+        if (origFile instanceof import_obsidian10.TFile) {
           await this.app.vault.modify(origFile, patched);
         } else {
           await adapter.write(p.originalPath, patched);
         }
         await this.app.vault.adapter.remove(p.tempPath);
       }
-      new import_obsidian9.Notice(i18n().view.formatApplied(p.originalPath));
+      new import_obsidian10.Notice(i18n().view.formatApplied(p.originalPath));
       this.activeView()?.appendEvent({ kind: "format_applied", path: p.originalPath });
     } catch (e) {
-      new import_obsidian9.Notice(i18n().ctrl.errorPrefix(e.message));
+      new import_obsidian10.Notice(i18n().ctrl.errorPrefix(e.message));
     } finally {
       this._pendingFormat = null;
       this.onBusyChange?.();
@@ -48283,18 +48285,18 @@ var WikiController = class {
     } catch {
     }
     this._pendingFormat = null;
-    new import_obsidian9.Notice(i18n().view.formatCancelled);
+    new import_obsidian10.Notice(i18n().view.formatCancelled);
     this.activeView()?.appendEvent({ kind: "format_cancelled" });
     this.onBusyChange?.();
   }
   async formatRefine(message) {
     const p = this._pendingFormat;
     if (!p) {
-      new import_obsidian9.Notice(i18n().view.formatNoPending ?? "No format preview to refine");
+      new import_obsidian10.Notice(i18n().view.formatNoPending ?? "No format preview to refine");
       return;
     }
     if (this.isBusy()) {
-      new import_obsidian9.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian10.Notice(i18n().ctrl.operationRunning);
       return;
     }
     p.chat.push({ role: "user", content: message });
@@ -48303,7 +48305,7 @@ var WikiController = class {
   async ingestActive(domainId) {
     const file = this.app.workspace.getActiveFile();
     if (!file) {
-      new import_obsidian9.Notice(i18n().ctrl.noActiveFile);
+      new import_obsidian10.Notice(i18n().ctrl.noActiveFile);
       return;
     }
     const abs = this.app.vault.adapter.getFullPath(file.path);
@@ -48328,11 +48330,11 @@ var WikiController = class {
   }
   async dispatchChat(operation, domainId, context, chatMessages) {
     if (this.isBusy()) {
-      new import_obsidian9.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian10.Notice(i18n().ctrl.operationRunning);
       return;
     }
-    if (import_obsidian9.Platform.isMobile && operation !== "query") {
-      new import_obsidian9.Notice(i18n().ctrl.mobileNotAvailable);
+    if (import_obsidian10.Platform.isMobile && operation !== "query") {
+      new import_obsidian10.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
     {
@@ -48355,7 +48357,7 @@ var WikiController = class {
     try {
       agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat", this.plugin.settings.timeouts.lint);
     } catch (e) {
-      new import_obsidian9.Notice(i18n().ctrl.errorPrefix(e.message));
+      new import_obsidian10.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
       return;
     }
@@ -48440,7 +48442,7 @@ var WikiController = class {
     const adapter = this.app.vault.adapter;
     const base = adapter.getBasePath?.();
     if (base == null) {
-      if (!import_obsidian9.Platform.isMobile) {
+      if (!import_obsidian10.Platform.isMobile) {
         console.warn("[ai-wiki] vault.adapter.getBasePath is undefined on desktop");
       }
       return "";
@@ -48452,7 +48454,7 @@ var WikiController = class {
       return await this.domainStore.load();
     } catch (e) {
       if (e instanceof DomainCorruptError) {
-        new import_obsidian9.Notice(`Domain map corrupt: ${e.message}`);
+        new import_obsidian10.Notice(`Domain map corrupt: ${e.message}`);
       }
       throw e;
     }
@@ -48461,13 +48463,13 @@ var WikiController = class {
     const id = input.id.trim();
     const err = validateDomainId(id);
     if (err) {
-      new import_obsidian9.Notice(i18n().ctrl.domainAddFailed(err));
+      new import_obsidian10.Notice(i18n().ctrl.domainAddFailed(err));
       return { ok: false, error: err };
     }
     const cur = await this.domainStore.load();
     if (cur.some((d) => d.id === id)) {
       const msg = `\u0414\u043E\u043C\u0435\u043D \xAB${id}\xBB \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442`;
-      new import_obsidian9.Notice(i18n().ctrl.domainAddFailed(msg));
+      new import_obsidian10.Notice(i18n().ctrl.domainAddFailed(msg));
       return { ok: false, error: msg };
     }
     const wikiSubfolder = input.wikiFolder.trim() || id;
@@ -48480,7 +48482,7 @@ var WikiController = class {
       language_notes: ""
     }];
     await this.domainStore.save(next);
-    new import_obsidian9.Notice(i18n().ctrl.domainAdded(id));
+    new import_obsidian10.Notice(i18n().ctrl.domainAdded(id));
     return { ok: true };
   }
   async updateDomainSources(domainId, sourcePaths) {
@@ -48513,7 +48515,7 @@ var WikiController = class {
   requireClaudeAgent(local) {
     const { iclaudePath } = local;
     if (!iclaudePath) {
-      new import_obsidian9.Notice(i18n().ctrl.setClaudeCodePath);
+      new import_obsidian10.Notice(i18n().ctrl.setClaudeCodePath);
       return null;
     }
     return iclaudePath;
@@ -48521,7 +48523,7 @@ var WikiController = class {
   requireNativeAgent(eff) {
     const na = eff.nativeAgent;
     if (!na?.baseUrl?.trim() || !na?.apiKey?.trim()) {
-      new import_obsidian9.Notice(i18n().ctrl.configureCloudLlm);
+      new import_obsidian10.Notice(i18n().ctrl.configureCloudLlm);
       return false;
     }
     return true;
@@ -48593,8 +48595,8 @@ var WikiController = class {
       this._currentClaudeClient = null;
       const proxyCfg = s.proxy;
       let proxyFetch = null;
-      if (proxyCfg.enabled && import_obsidian9.Platform.isMobile) {
-        new import_obsidian9.Notice(i18n().settings.proxy_mobile_warning);
+      if (proxyCfg.enabled && import_obsidian10.Platform.isMobile) {
+        new import_obsidian10.Notice(i18n().settings.proxy_mobile_warning);
       } else if (proxyCfg.enabled) {
         try {
           const baseHost = new URL(s.nativeAgent.baseUrl).hostname;
@@ -48604,7 +48606,7 @@ var WikiController = class {
             if (proxyFetch) console.debug(`[ai-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
           }
         } catch (e) {
-          new import_obsidian9.Notice(i18n().settings.proxy_invalid(e.message));
+          new import_obsidian10.Notice(i18n().settings.proxy_invalid(e.message));
         }
       }
       const openaiClient = new OpenAI({
@@ -48612,9 +48614,9 @@ var WikiController = class {
         apiKey: s.nativeAgent.apiKey,
         timeout: timeoutSec > 0 ? timeoutSec * 1e3 : void 0,
         dangerouslyAllowBrowser: true,
-        fetch: import_obsidian9.Platform.isMobile ? mobileFetch : proxyFetch ?? void 0
+        fetch: import_obsidian10.Platform.isMobile ? mobileFetch : proxyFetch ?? void 0
       });
-      llm = import_obsidian9.Platform.isMobile ? wrapMobileNoStream(openaiClient) : openaiClient;
+      llm = import_obsidian10.Platform.isMobile ? wrapMobileNoStream(openaiClient) : openaiClient;
     }
     return new AgentRunner(llm, s, vaultTools, vaultName, domains);
   }
@@ -48646,12 +48648,12 @@ var WikiController = class {
   }
   async dispatch(op, args, domainId, context, instruction, onFileError, chatMessages, lintOpts) {
     if (this.isBusy()) {
-      new import_obsidian9.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian10.Notice(i18n().ctrl.operationRunning);
       return;
     }
     this._chatSessionId = void 0;
-    if (import_obsidian9.Platform.isMobile && op !== "query" && op !== "format") {
-      new import_obsidian9.Notice(i18n().ctrl.mobileNotAvailable);
+    if (import_obsidian10.Platform.isMobile && op !== "query" && op !== "format") {
+      new import_obsidian10.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
     {
@@ -48682,7 +48684,7 @@ var WikiController = class {
     try {
       agentRunner = await this.buildAgentRunner(vaultRoot, void 0, opKey, opTimeoutSec);
     } catch (e) {
-      new import_obsidian9.Notice(i18n().ctrl.errorPrefix(e.message));
+      new import_obsidian10.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
       return;
     }
@@ -48717,7 +48719,7 @@ var WikiController = class {
             if (next !== cur) await this.domainStore.save(next);
           } catch (e) {
             if (e instanceof DomainCorruptError) {
-              new import_obsidian9.Notice(`Domain map corrupt: ${e.message}`);
+              new import_obsidian10.Notice(`Domain map corrupt: ${e.message}`);
             }
             status = "error";
             ctrl.abort();
@@ -48967,7 +48969,7 @@ async function cleanDir(adapter, dir, knownFiles) {
 }
 
 // src/main.ts
-var LlmWikiPlugin = class extends import_obsidian10.Plugin {
+var LlmWikiPlugin = class extends import_obsidian11.Plugin {
   settings;
   controller;
   settingTab;
@@ -48980,7 +48982,7 @@ var LlmWikiPlugin = class extends import_obsidian10.Plugin {
       await runStorageMigration(this.app.vault);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian10.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
+      new import_obsidian11.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] storage migration error:", e);
     }
     await migrateLegacyData(this, this.domainStore, this.localConfigStore);
@@ -48999,7 +49001,7 @@ var LlmWikiPlugin = class extends import_obsidian10.Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
-    if (!import_obsidian10.Platform.isMobile) {
+    if (!import_obsidian11.Platform.isMobile) {
       const statusBar = this.addStatusBarItem();
       statusBar.setText("schema: 0/0");
       statusBar.setAttribute("aria-label", "validation: 0 ok, 0 retried, 0 failed");
@@ -49022,7 +49024,7 @@ var LlmWikiPlugin = class extends import_obsidian10.Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
-    if (!import_obsidian10.Platform.isMobile) {
+    if (!import_obsidian11.Platform.isMobile) {
       this.addCommand({
         id: "ingest-current",
         name: T.cmd.ingestActive,
@@ -49034,7 +49036,7 @@ var LlmWikiPlugin = class extends import_obsidian10.Plugin {
       name: T.cmd.query,
       callback: () => new QueryModal(this.app, (q) => void this.controller.query(q)).open()
     });
-    if (!import_obsidian10.Platform.isMobile) {
+    if (!import_obsidian11.Platform.isMobile) {
       this.addCommand({
         id: "lint",
         name: T.cmd.lint,
@@ -49168,11 +49170,11 @@ var LlmWikiPlugin = class extends import_obsidian10.Plugin {
       if (data && data.model && !this.settings.claudeAgent.model)
         this.settings.claudeAgent.model = data.model;
     }
-    if (import_obsidian10.Platform.isMobile && this.settings.backend === "claude-agent") {
+    if (import_obsidian11.Platform.isMobile && this.settings.backend === "claude-agent") {
       this.settings.backend = "native-agent";
       await this.saveData(this.settings);
     }
-    if (import_obsidian10.Platform.isMobile) {
+    if (import_obsidian11.Platform.isMobile) {
       let dirty = false;
       if (this.settings.nativeAgent.perOperation) {
         this.settings.nativeAgent.perOperation = false;

@@ -227,7 +227,7 @@ export async function* runInitWithSources(
           wiki_folder: parsed.wiki_folder,
           entity_types: parsed.entity_types,
           language_notes: parsed.language_notes,
-        } as DomainEntry;
+        };
         entry.wiki_folder = sanitizeWikiFolder(entry.wiki_folder ?? "");
         for (const et of entry.entity_types ?? []) {
           if (et.wiki_subfolder) et.wiki_subfolder = sanitizeWikiSubfolder(et.wiki_subfolder);

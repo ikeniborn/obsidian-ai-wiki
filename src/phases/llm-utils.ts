@@ -105,7 +105,7 @@ function prependBaseContract(
   const firstSystem = messages.findIndex((m) => m.role === "system");
   if (firstSystem >= 0) {
     const updated = [...messages];
-    const existing: string = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content as string : "";
+    const existing: string = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
     updated[firstSystem] = { role: "system", content: `${baseContract}\n\n${existing}` };
     return updated;
   }
@@ -230,7 +230,7 @@ function injectSystemPrompt(
   const firstSystem = messages.findIndex((m) => m.role === "system");
   if (firstSystem >= 0) {
     const updated = [...messages];
-    const existing: string = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content as string : "";
+    const existing: string = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
     updated[firstSystem] = { role: "system", content: `${existing}\n\n${section}` };
     return updated;
   }
@@ -249,7 +249,7 @@ export function wrapStreamWithStats(
   requestStartMs: number,
 ): {
   stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
-  getStats(): LlmStreamStats | undefined;
+  getStats(this: void): LlmStreamStats | undefined;
 } {
   let ttftMs: number | undefined;
   let firstChunkMs: number | undefined;

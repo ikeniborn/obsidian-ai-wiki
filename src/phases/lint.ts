@@ -711,7 +711,7 @@ async function actualizeDomainConfig(
     });
     const parsed = r.value;
     const patch: { entity_types?: EntityType[]; language_notes?: string } = {};
-    if (Array.isArray(parsed.entity_types)) patch.entity_types = parsed.entity_types as EntityType[];
+    if (Array.isArray(parsed.entity_types)) patch.entity_types = parsed.entity_types;
     if (typeof parsed.language_notes === "string") patch.language_notes = parsed.language_notes;
     return { patch: Object.keys(patch).length > 0 ? patch : null, outputTokens: r.outputTokens };
   } catch {

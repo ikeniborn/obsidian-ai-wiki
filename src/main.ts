@@ -181,7 +181,7 @@ export default class LlmWikiPlugin extends Plugin {
       },
       proxy: { ...DEFAULT_SETTINGS.proxy, ...((data?.proxy as object) ?? {}) },
       history: (data?.history as RunHistoryEntry[]) ?? [],
-    } as LlmWikiPluginSettings;
+    };
 
     // Schema v2: systemPrompt promoted to top-level
     if (!data?.systemPrompt && (caData.systemPrompt || naData.systemPrompt))

@@ -118,7 +118,7 @@ export async function parseWithRetry<T>(args: ParseWithRetryArgs<T>): Promise<Pa
           jsonMode: "json_schema",
           jsonSchema: {
             name: callSite.replace(/\./g, "_"),
-            schema: zodToJsonSchema(schema, { $refStrategy: "none" }) as object,
+            schema: zodToJsonSchema(schema, { $refStrategy: "none" }),
           },
         }
       : args.opts;

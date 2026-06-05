@@ -62,12 +62,14 @@ export class Setting {
 export const Platform = {
   isMobile: false,
   isDesktop: true,
+  isDesktopApp: true,
 };
 
 /** Test helper — flip isMobile/isDesktop atomically. */
 export function __setPlatformMobile(isMobile: boolean): void {
   Platform.isMobile = isMobile;
   Platform.isDesktop = !isMobile;
+  Platform.isDesktopApp = !isMobile;
 }
 
 export class Notice {

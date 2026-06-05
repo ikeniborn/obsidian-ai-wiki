@@ -161,8 +161,6 @@ export async function analyzeExcalidraw(
   signal: AbortSignal,
   language: VisionLanguage = "auto",
 ): Promise<string> {
-  /* @excalidraw/utils is an optional runtime dep with no bundled types — exportToBlob resolves to any */
-  /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
   const { exportToBlob } = await import("@excalidraw/utils");
   const { elements, appState, files } = JSON.parse(text) as {
     elements: unknown[];
@@ -172,11 +170,10 @@ export async function analyzeExcalidraw(
   const blob = await exportToBlob({
     elements: elements as Parameters<typeof exportToBlob>[0]["elements"],
     appState,
-    files: files as Parameters<typeof exportToBlob>[0]["files"],
+    files: files,
     mimeType: "image/png",
     exportPadding: 10,
   });
-  /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
   const buf = await blob.arrayBuffer();
   const b64 = arrayBufferToBase64(buf);
   return callVisionLlm(llm, model, imageSystem(language), [

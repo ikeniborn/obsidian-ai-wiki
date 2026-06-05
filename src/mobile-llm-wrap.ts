@@ -54,10 +54,10 @@ function mkChunk(
     model: base.model,
     choices: [{
       index: 0,
-      delta: delta as OpenAI.Chat.ChatCompletionChunk.Choice.Delta,
+      delta: delta,
       finish_reason,
       logprobs: null,
     }],
     usage: usage ?? undefined,
-  } as OpenAI.Chat.ChatCompletionChunk;
+  };
 }

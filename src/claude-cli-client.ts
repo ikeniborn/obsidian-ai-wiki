@@ -1,5 +1,4 @@
-// eslint-disable-next-line obsidianmd/no-node-imports -- Claude CLI backend spawns iclaude.sh subprocess, desktop-only by design (isDesktopOnly gated)
-import { spawn } from "node:child_process";
+import { Platform } from "obsidian";
 import { join, isAbsolute } from "path-browserify";
 import type OpenAI from "openai";
 import { parseStreamLine } from "./stream";
@@ -135,6 +134,10 @@ export class ClaudeCliClient implements LlmClient {
     tmpFiles: string[],
   ): AsyncGenerator<OpenAI.Chat.ChatCompletionChunk> {
     validateIclaudePath(this.cfg.iclaudePath);
+    if (!Platform.isDesktopApp) throw new Error("Claude CLI backend is desktop-only");
+    // Lazily loaded so the Node builtin never executes on mobile, where this
+    // code path is unreachable but the module would still fail to load.
+    const { spawn } = await import("node:child_process");
     const child = spawn(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || undefined });
     if (!child.stdout || !child.stderr) throw new Error("spawn: missing stdio");
     const stderrChunks: Buffer[] = [];
@@ -181,7 +184,7 @@ export class ClaudeCliClient implements LlmClient {
             object: "chat.completion.chunk",
             model: this.cfg.model || "claude",
             created: 0,
-            choices: [{ index: 0, delta: delta as OpenAI.Chat.ChatCompletionChunk.Choice.Delta, finish_reason: null }],
+            choices: [{ index: 0, delta: delta, finish_reason: null }],
           });
           wake();
         }
@@ -216,7 +219,7 @@ export class ClaudeCliClient implements LlmClient {
         object: "chat.completion.chunk",
         model: this.cfg.model || "claude",
         created: 0,
-        choices: [{ index: 0, delta: {} as OpenAI.Chat.ChatCompletionChunk.Choice.Delta, finish_reason: "stop" }],
+        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
       };
     } finally {
       if (timeoutHandle !== null) window.clearTimeout(timeoutHandle);

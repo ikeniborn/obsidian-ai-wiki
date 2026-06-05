@@ -61,7 +61,7 @@ export async function* runLintFixChat(
   const chatMessages = req.chatMessages ?? [];
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemContent },
-    ...chatMessages.map((m) => ({ role: m.role, content: m.content } as OpenAI.Chat.ChatCompletionMessageParam)),
+    ...chatMessages.map((m) => ({ role: m.role, content: m.content })),
   ];
 
   // 3. Structured LLM call

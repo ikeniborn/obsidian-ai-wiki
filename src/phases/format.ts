@@ -174,8 +174,8 @@ export async function* runFormat(
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemContent },
-    { role: "user", content: userContent } as OpenAI.Chat.ChatCompletionMessageParam,
-    ...chatHistory.map((m) => ({ role: m.role, content: m.content } as OpenAI.Chat.ChatCompletionMessageParam)),
+    { role: "user", content: userContent },
+    ...chatHistory.map((m) => ({ role: m.role, content: m.content })),
   ];
 
   yield { kind: "assistant_text", delta: `Анализ файла ${filePath}...\n` };
@@ -248,7 +248,7 @@ export async function* runFormat(
     const retrySystemContent = systemContent + `\n\nПредыдущая попытка не прошла: ${zodHint}. Исправь и верни заново используя маркеры <<<REPORT>>>...<<<END>>>.`;
     const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: "system", content: retrySystemContent },
-      { role: "user", content: userContent } as OpenAI.Chat.ChatCompletionMessageParam,
+      { role: "user", content: userContent },
     ];
     const retryParams = buildChatParams(model, retryMessages, opts, true);
     yield { kind: "tool_use", name: "Formatting", input: { file_path: filePath } };

@@ -25,7 +25,7 @@ export async function* runLintChat(
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemContent },
-    ...history.map((m) => ({ role: m.role, content: m.content } as OpenAI.Chat.ChatCompletionMessageParam)),
+    ...history.map((m) => ({ role: m.role, content: m.content })),
   ];
 
   const params = buildChatParams(model, messages, opts, true);

@@ -1,5 +1,5 @@
 import { App, Notice, Platform, TFile } from "obsidian";
-import { relative, isAbsolute, join } from "path-browserify";
+import { join } from "path-browserify";
 import { AI_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { validateDomainId, type DomainEntry, type AddDomainInput } from "./domain";
 import type LlmWikiPlugin from "./main";
@@ -518,9 +518,9 @@ export class WikiController {
         dangerouslyAllowBrowser: true,
         fetch: Platform.isMobile ? mobileFetch : (proxyFetch ?? undefined),
       });
-      llm = (Platform.isMobile
-        ? wrapMobileNoStream(openaiClient as unknown as import("./types").LlmClient)
-        : openaiClient) as unknown as import("./types").LlmClient;
+      llm = Platform.isMobile
+        ? wrapMobileNoStream(openaiClient)
+        : openaiClient;
     }
 
     return new AgentRunner(llm, s, vaultTools, vaultName, domains);

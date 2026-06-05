@@ -138,7 +138,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       containerEl.closest(".modal-content") ??
       containerEl.parentElement ??
       containerEl
-    ) as HTMLElement;
+    );
     const savedScroll = scrollEl.scrollTop;
     containerEl.empty();
     const s = this.plugin.settings;
@@ -836,6 +836,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           );
       }
     }
-    requestAnimationFrame(() => { scrollEl.scrollTop = savedScroll; });
+    window.requestAnimationFrame(() => { scrollEl.scrollTop = savedScroll; });
   }
 }

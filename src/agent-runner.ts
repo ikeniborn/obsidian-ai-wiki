@@ -7,7 +7,7 @@ import { runLintFixChat } from "./phases/lint-chat";
 import { runInit } from "./phases/init";
 import { runEvaluator } from "./phases/evaluator";
 import { runFormat } from "./phases/format";
-import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, OpKey, RunEvent, RunRequest } from "./types";
+import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, RunEvent, RunRequest } from "./types";
 import type { VaultTools } from "./vault-tools";
 import { wrapWithJsonFallback } from "./phases/llm-utils";
 import { GLOBAL_DEV_LOG_PATH, domainWikiFolder } from "./wiki-path";
@@ -26,7 +26,7 @@ export class AgentRunner {
   }
 
   private buildOptsFor(op: RunRequest["operation"]): { model: string; opts: LlmCallOptions } {
-    const key = (op === "chat" || op === "lint-chat" ? "lint" : op) as OpKey;
+    const key = (op === "chat" || op === "lint-chat" ? "lint" : op);
     const s = this.settings;
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
     const mergeDeleteWarnThreshold = s.nativeAgent.mergeDeleteWarnThreshold;
@@ -157,7 +157,7 @@ export class AgentRunner {
 
     while (true) {
       const idleCtrl = new AbortController();
-      const signalAny = (AbortSignal as unknown as { any(signals: AbortSignal[]): AbortSignal }).any;
+      const signalAny = (AbortSignal as unknown as { any(this: void, signals: AbortSignal[]): AbortSignal }).any;
       const combined = idleTimeoutMs > 0
         ? signalAny([req.signal, idleCtrl.signal])
         : req.signal;

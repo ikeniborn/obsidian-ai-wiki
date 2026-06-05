@@ -17,7 +17,7 @@ export function createProxyFetch(cfg: ProxyConfig): typeof fetch | null {
   const wrapped: typeof fetch = (input, init) => {
     return undici.fetch(
       input as Parameters<typeof undici.fetch>[0],
-      { ...(init as Parameters<typeof undici.fetch>[1]), dispatcher } as Parameters<typeof undici.fetch>[1],
+      { ...(init as Parameters<typeof undici.fetch>[1]), dispatcher },
     ) as unknown as Promise<Response>;
   };
   return wrapped;

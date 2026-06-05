@@ -48,7 +48,7 @@ export class LocalConfigStore {
       if (parsed.nativeAgent && "numCtx" in parsed.nativeAgent) {
         const na = { ...parsed.nativeAgent };
         delete na.numCtx;
-        parsed.nativeAgent = na as LocalConfig["nativeAgent"];
+        parsed.nativeAgent = na;
       }
       this.cache = { ...DEFAULTS, ...parsed };
     } catch {
