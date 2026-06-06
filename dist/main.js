@@ -36688,7 +36688,8 @@ async function upsertIndexAnnotation(vaultTools, wikiFolder, pid, annotation, fu
   const section = deriveSection(wikiFolder, fullPath);
   const prefix = wikiFolder + "/";
   const relPath = fullPath ? fullPath.startsWith(prefix) ? fullPath.slice(prefix.length) : fullPath : pid;
-  const entryLine = `- [[${pid}]] ${relPath} \u2014 ${annotation}`;
+  const oneLineAnnotation = annotation.replace(/\s+/g, " ").trim();
+  const entryLine = `- [[${pid}]] ${relPath} \u2014 ${oneLineAnnotation}`;
   await vaultTools.write(indexPath, upsertInSection(content, section, pid, entryLine));
 }
 async function removeIndexAnnotation(vaultTools, wikiFolder, pid) {
@@ -39433,11 +39434,11 @@ var STRUCTURE_RULES = `Return STRUCTURED markdown matching the content type. Cho
 - Ordered steps / sequence / pipeline \u2192 numbered list.
 - Unordered items / enumeration / set of features \u2192 bullet list with "- ".
 - Hierarchy / tree / nested structure \u2192 nested bullet list with indentation.
-- Diagram / flow / architecture (boxes + arrows) \u2192 mermaid code block (\`\`\`mermaid ... \`\`\`).
+- Diagram / flow / architecture (boxes + arrows) \u2192 FIRST a short prose description (what it depicts, the key nodes and how they connect), THEN a mermaid code block (\`\`\`mermaid ... \`\`\`) recreating it.
 - Math / formula / equation \u2192 LaTeX inside $...$ or $$...$$.
 - Code / config / terminal \u2192 fenced code block with language tag.
 - Single concept / photo / illustration \u2192 1\u20133 plain sentences.
-Do NOT wrap output in additional prose ("Here is...", "This image shows..."). Output ONLY the structured content.
+Do NOT add boilerplate intros ("Here is...", "This image shows..."). Output ONLY the requested content (diagrams: the description + mermaid; other types: the single structured form).
 Do NOT add headings (# or ##) \u2014 caller controls section structure.
 Do NOT add the marker "[Vision]" or any prefix \u2014 caller adds it if needed.
 Preserve any text visible in the source verbatim where it is data; transcribe \u2014 do not paraphrase.`;
@@ -39619,7 +39620,7 @@ ${desc}`);
     }
     visionBlock = `
 ---
-\u041E\u041F\u0418\u0421\u0410\u041D\u0418\u042F \u0412\u041B\u041E\u0416\u0415\u041D\u0418\u0419 (vision-\u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u0432\u0430\u043D\u0438\u0435; \u0438\u043D\u0442\u0435\u0433\u0440\u0438\u0440\u0443\u0439 \u0421\u0420\u0410\u0417\u0423 \u041F\u041E\u0414 \u0441\u043E\u043E\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0439 \u0432\u0441\u0442\u0430\u0432\u043A\u043E\u0439 \`![[\u043F\u0443\u0442\u044C]]\` \u043A\u0430\u043A \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0439 markdown \u2014 \u0442\u0430\u0431\u043B\u0438\u0446\u0430/\u0441\u043F\u0438\u0441\u043E\u043A/mermaid/\u043A\u043E\u0434 \u043F\u043E \u0444\u043E\u0440\u043C\u0435 \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A\u0430; \u041D\u0415 \u043E\u0431\u043E\u0440\u0430\u0447\u0438\u0432\u0430\u0439 \u0432 blockquote, \u041D\u0415 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u043C\u0430\u0440\u043A\u0435\u0440 [Vision], \u041D\u0415 \u0446\u0438\u0442\u0438\u0440\u0443\u0439 \u043F\u0443\u0442\u0438):
+\u041E\u041F\u0418\u0421\u0410\u041D\u0418\u042F \u0412\u041B\u041E\u0416\u0415\u041D\u0418\u0419 (vision-\u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u0432\u0430\u043D\u0438\u0435; \u0438\u043D\u0442\u0435\u0433\u0440\u0438\u0440\u0443\u0439 \u0421\u0420\u0410\u0417\u0423 \u041F\u041E\u0414 \u0441\u043E\u043E\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0439 \u0432\u0441\u0442\u0430\u0432\u043A\u043E\u0439 \`![[\u043F\u0443\u0442\u044C]]\` \u043A\u0430\u043A \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0439 markdown \u2014 \u0442\u0430\u0431\u043B\u0438\u0446\u0430/\u0441\u043F\u0438\u0441\u043E\u043A/\u043A\u043E\u0434 \u043F\u043E \u0444\u043E\u0440\u043C\u0435 \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A\u0430; \u0434\u043B\u044F \u0414\u0418\u0410\u0413\u0420\u0410\u041C\u041C \u0441\u043E\u0445\u0440\u0430\u043D\u0438 \u043E\u0431\u0430 \u044D\u043B\u0435\u043C\u0435\u043D\u0442\u0430: \u0441\u043D\u0430\u0447\u0430\u043B\u0430 \u0442\u0435\u043A\u0441\u0442\u043E\u0432\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435, \u0437\u0430\u0442\u0435\u043C \u0431\u043B\u043E\u043A \`\`\`mermaid\`\`\` \u2014 \u043D\u0435 \u0432\u044B\u0431\u0440\u0430\u0441\u044B\u0432\u0430\u0439 \u043D\u0438 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435, \u043D\u0438 mermaid; \u041D\u0415 \u043E\u0431\u043E\u0440\u0430\u0447\u0438\u0432\u0430\u0439 \u0432 blockquote, \u041D\u0415 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u043C\u0430\u0440\u043A\u0435\u0440 [Vision], \u041D\u0415 \u0446\u0438\u0442\u0438\u0440\u0443\u0439 \u043F\u0443\u0442\u0438):
 ${items.join("\n\n")}`;
   }
   const userInitial = `\u0418\u0441\u0445\u043E\u0434\u043D\u044B\u0439 \u0444\u0430\u0439\u043B: ${filePath}
