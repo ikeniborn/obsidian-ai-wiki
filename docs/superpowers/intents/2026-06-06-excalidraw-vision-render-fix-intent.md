@@ -19,8 +19,7 @@ their drawing content described.
 ## Health Metrics
 - Image and PDF Vision branches keep working unchanged.
 - `dist/main.js` bundle stays ~2M (no inflation from bundling the 19M lib).
-- Existing tests stay green (`extractExcalidrawJson`, attachment routing,
-  `Vision embed preserved`).
+- Existing tests stay green (attachment routing, `Vision embed preserved`).
 - Formatting without vision / without Excalidraw is unchanged.
 
 ## Strategic Context
