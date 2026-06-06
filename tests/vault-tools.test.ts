@@ -120,4 +120,18 @@ describe("VaultTools", () => {
     expect(vault.create).toHaveBeenCalledWith("!Wiki/.config/_log.md", "new content");
     expect(adapter.write).toHaveBeenCalledWith("!Wiki/.config/_log.md", "new content");
   });
+
+  it("renderExcalidrawPng delegates to adapter and returns base64", async () => {
+    const adapter = mockAdapter({
+      renderExcalidrawPng: vi.fn().mockResolvedValue("BASE64PNG"),
+    });
+    const vt = new VaultTools(adapter, "/vault");
+    expect(await vt.renderExcalidrawPng("draw.excalidraw")).toBe("BASE64PNG");
+    expect(adapter.renderExcalidrawPng).toHaveBeenCalledWith("draw.excalidraw");
+  });
+
+  it("renderExcalidrawPng returns null when adapter lacks the hook", async () => {
+    const vt = new VaultTools(mockAdapter(), "/vault");
+    expect(await vt.renderExcalidrawPng("draw.excalidraw")).toBeNull();
+  });
 });

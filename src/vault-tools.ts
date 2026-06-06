@@ -10,6 +10,8 @@ export interface VaultAdapter {
   readBinary?(path: string): Promise<ArrayBuffer>;
   /** Resolve an Obsidian wiki-link to a vault-relative path; null if not found. */
   resolveLink?(linkpath: string, sourcePath: string): string | null;
+  /** Render an Excalidraw file (by resolved vault path) to a base64 PNG; null if unavailable. */
+  renderExcalidrawPng?(resolvedPath: string): Promise<string | null>;
 }
 
 export interface VaultIndexer {
@@ -102,6 +104,15 @@ export class VaultTools {
    */
   resolveLink(linkpath: string, sourcePath: string): string | null {
     return this.adapter.resolveLink?.(linkpath, sourcePath) ?? null;
+  }
+
+  /**
+   * Render an Excalidraw file to a base64 PNG via the host plugin (wired in
+   * controller). Returns null when no renderer is available (no host plugin,
+   * mobile, or render error) — callers treat null as "Vision skipped".
+   */
+  async renderExcalidrawPng(resolvedPath: string): Promise<string | null> {
+    return (await this.adapter.renderExcalidrawPng?.(resolvedPath)) ?? null;
   }
 
   async mkdir(vaultPath: string): Promise<void> {
