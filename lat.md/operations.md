@@ -85,6 +85,8 @@ See [[src/phases/query.ts]], [[wiki-graph#Query Graph Traversal]].
 
 Seeds are wiki page IDs most relevant to the question. Both embedding and Jaccard paths capture `seedScores: Record<string, number>` for tracing.
 
+Each page's match text is its `_index.md` annotation, which is now a rich single-line structured string (summary + `Затрагивает:` entities + `Тип:` + `Термины:` synonyms), not a single sentence. `upsertIndexAnnotation` collapses any whitespace/newlines to single spaces so the richer text stays one line and `parseIndexAnnotations` reads it whole. Richer text gives embedding cosine and Jaccard more terms to match, improving recall for queries phrased with synonyms absent from the page title. Coverage is gradual — existing pages upgrade only on re-ingest/re-lint; a changed annotation triggers a per-page re-embed via `annotationHash`. See [[src/wiki-index.ts#upsertIndexAnnotation]], [[src/wiki-index.ts#parseIndexAnnotations]].
+
 If seed selection yields nothing, `llmSelectSeeds` asks the LLM to pick from all annotated page IDs. See [[src/wiki-seeds.ts#selectSeeds]], [[src/phases/query.ts#llmSelectSeeds]], [[src/page-similarity.ts#PageSimilarityService]].
 
 ### BFS Expansion
