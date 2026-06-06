@@ -1,7 +1,7 @@
 # Intent: excalidraw-vision-render-fix
 
 **Date:** 2026-06-06
-**Status:** draft
+**Status:** approved
 
 ## Objective
 Fix Excalidraw rendering in the Vision pre-step of formatting. Currently it fails
