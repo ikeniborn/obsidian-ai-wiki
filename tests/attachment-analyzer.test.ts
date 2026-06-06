@@ -5,7 +5,6 @@ import {
   analyzeImage,
   analyzeAttachments,
   getMimeType,
-  extractExcalidrawJson,
 } from "../src/phases/attachment-analyzer";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
 import type { LlmClient } from "../src/types";
@@ -99,6 +98,8 @@ function makeVaultTools(binaryData: Record<string, ArrayBuffer> = {}, textData: 
     }),
     // Treat every test linkpath as a resolvable indexed file (identity resolve).
     resolveLink: vi.fn().mockImplementation((linkpath: string) => linkpath),
+    // Default: no excalidraw renderer wired (host plugin absent).
+    renderExcalidrawPng: vi.fn().mockResolvedValue(null),
   };
   return new VaultTools(adapter, "/vault");
 }
@@ -185,29 +186,25 @@ describe("analyzeAttachments", () => {
   });
 });
 
-describe("extractExcalidrawJson", () => {
-  it("returns text as-is for pure .excalidraw file (starts with {)", () => {
-    const json = '{"type":"excalidraw","version":2,"elements":[]}';
-    expect(extractExcalidrawJson(json)).toBe(json);
+describe("analyzeAttachments — excalidraw", () => {
+  it("renders excalidraw via host plugin and returns Vision description", async () => {
+    const vaultTools = makeVaultTools();
+    (vaultTools.adapter.renderExcalidrawPng as ReturnType<typeof vi.fn>)
+      .mockResolvedValue("RENDEREDB64");
+    const llm = makeLlm("A flowchart.");
+    const result = await analyzeAttachments(["draw.excalidraw"], vaultTools, llm, "gpt-4o-mini", new AbortController().signal);
+    expect(result.get("draw.excalidraw")).toBe("A flowchart.");
+    const call = (llm.chat.completions.create as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const userContent = call.messages[1].content[0];
+    expect(userContent.type).toBe("image_url");
+    expect(userContent.image_url.url).toBe("data:image/png;base64,RENDEREDB64");
   });
 
-  it("extracts embedded JSON from .excalidraw.md wrapper", () => {
-    const md = [
-      "---",
-      "excalidraw-plugin: parsed",
-      "tags: [excalidraw]",
-      "---",
-      "",
-      "==⚠  Switch to EXCALIDRAW VIEW ⚠==",
-      "",
-      `{"type":"excalidraw","version":2,"elements":[],"appState":{},"files":{}}`,
-    ].join("\n");
-    const result = extractExcalidrawJson(md);
-    expect(result).toContain('"type":"excalidraw"');
-    expect(result).toContain('"elements"');
-  });
-
-  it("returns null for file with no JSON", () => {
-    expect(extractExcalidrawJson("# Plain markdown\nNo JSON here.")).toBeNull();
+  it("skips excalidraw when renderer returns null (no host plugin)", async () => {
+    const vaultTools = makeVaultTools();  // renderExcalidrawPng defaults to null
+    const llm = makeLlm("should not be called");
+    const result = await analyzeAttachments(["draw.excalidraw"], vaultTools, llm, "gpt-4o-mini", new AbortController().signal);
+    expect(result.has("draw.excalidraw")).toBe(false);
+    expect((llm.chat.completions.create as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
   });
 });

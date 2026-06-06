@@ -155,40 +155,15 @@ export async function analyzePdf(
 }
 
 export async function analyzeExcalidraw(
-  text: string,
+  b64: string,
   llm: LlmClient,
   model: string,
   signal: AbortSignal,
   language: VisionLanguage = "auto",
 ): Promise<string> {
-  const { exportToBlob } = await import("@excalidraw/utils");
-  const { elements, appState, files } = JSON.parse(text) as {
-    elements: unknown[];
-    appState: Record<string, unknown>;
-    files: Record<string, unknown>;
-  };
-  const blob = await exportToBlob({
-    elements: elements as Parameters<typeof exportToBlob>[0]["elements"],
-    appState,
-    files: files,
-    mimeType: "image/png",
-    exportPadding: 10,
-  });
-  const buf = await blob.arrayBuffer();
-  const b64 = arrayBufferToBase64(buf);
   return callVisionLlm(llm, model, imageSystem(language), [
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } },
   ], signal);
-}
-
-export function extractExcalidrawJson(text: string): string | null {
-  const trimmed = text.trim();
-  if (trimmed.startsWith("{")) return trimmed;
-  const jsonStart = trimmed.indexOf('{"type":"excalidraw"');
-  if (jsonStart >= 0) return trimmed.slice(jsonStart);
-  const firstCurly = trimmed.indexOf("{");
-  if (firstCurly >= 0) return trimmed.slice(firstCurly);
-  return null;
 }
 
 /** Route a single embed path to the right analyzer. Returns description or null for unknown ext. */
@@ -209,10 +184,9 @@ export async function analyzeSingleAttachment(
   const isExcalidraw = ext === "excalidraw" || resolved.endsWith(".excalidraw.md");
 
   if (isExcalidraw) {
-    const text = await vaultTools.read(resolved);
-    const jsonText = extractExcalidrawJson(text);
-    if (!jsonText) return null;
-    return analyzeExcalidraw(jsonText, llm, model, signal, language);
+    const b64 = await vaultTools.renderExcalidrawPng(resolved);
+    if (!b64) return null;            // no host plugin / render failed → skip
+    return analyzeExcalidraw(b64, llm, model, signal, language);
   }
   if (ext === "pdf") {
     const buf = await vaultTools.readBinary(resolved);
