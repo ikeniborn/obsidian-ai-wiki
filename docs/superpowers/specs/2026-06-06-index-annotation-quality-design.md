@@ -1,3 +1,24 @@
+---
+review:
+  spec_hash: 145818d2ad3646d0
+  last_run: 2026-06-06
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "Acceptance (from intent)"
+      section_hash: ae2260b97f66e513
+      text: "Done-when criterion 'precision did not drop AND latency/cost stayed within bounds' has no measurable threshold — qualitative verification only."
+      verdict: fixed
+      verdict_at: 2026-06-06
+chain:
+  intent: docs/superpowers/intents/2026-06-06-index-annotation-quality-intent.md
+---
 # Design: index-annotation-quality
 
 **Date:** 2026-06-06
@@ -23,6 +44,19 @@ Carried verbatim from the approved intent doc — these define "done":
 - **Done when:** on a set of real queries that previously gave incomplete
   answers, top-K seed selection covers the needed pages and answers are complete,
   AND precision did not drop AND query latency/cost stayed within bounds.
+
+**Measurable thresholds** (operationalize the qualitative criteria above for
+verification):
+
+- **Precision** — on the benchmark query set (the real queries that previously
+  gave incomplete answers), every page present in the pre-change top-K remains in
+  top-K, and no previously-irrelevant page displaces a relevant one
+  (precision@K ≥ baseline).
+- **Latency** — query seed-selection time increases ≤ 10% vs the pre-change
+  baseline on the same query set.
+- **Cost** — annotation length stays ≲ 500 chars (~150 embedding tokens/page);
+  the format change triggers a one-time re-embed of changed pages only, not the
+  whole vault.
 
 > Coverage is **gradual** (see Scope): existing pages upgrade only when
 > re-ingested/re-linted. Verifying Done-when on the current vault requires
