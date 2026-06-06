@@ -220,4 +220,16 @@ describe("analyzeAttachments — excalidraw", () => {
     expect(result.has("draw.excalidraw")).toBe(false);
     expect((llm.chat.completions.create as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
   });
+
+  it("returns both prose description and mermaid for a diagram", async () => {
+    const vaultTools = makeVaultTools();
+    (vaultTools.adapter.renderExcalidrawPng as ReturnType<typeof vi.fn>)
+      .mockResolvedValue("RENDEREDB64");
+    const visionOut = "A login flow: user → auth service → database.\n\n```mermaid\nflowchart LR\n  user --> auth --> db\n```";
+    const llm = makeLlm(visionOut);
+    const result = await analyzeAttachments(["flow.excalidraw"], vaultTools, llm, "gpt-4o-mini", new AbortController().signal);
+    const desc = result.get("flow.excalidraw")!;
+    expect(desc).toContain("A login flow");
+    expect(desc).toContain("```mermaid");
+  });
 });

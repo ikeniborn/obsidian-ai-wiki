@@ -88,11 +88,11 @@ const STRUCTURE_RULES = `Return STRUCTURED markdown matching the content type. C
 - Ordered steps / sequence / pipeline → numbered list.
 - Unordered items / enumeration / set of features → bullet list with "- ".
 - Hierarchy / tree / nested structure → nested bullet list with indentation.
-- Diagram / flow / architecture (boxes + arrows) → mermaid code block (\`\`\`mermaid ... \`\`\`).
+- Diagram / flow / architecture (boxes + arrows) → FIRST a short prose description (what it depicts, the key nodes and how they connect), THEN a mermaid code block (\`\`\`mermaid ... \`\`\`) recreating it.
 - Math / formula / equation → LaTeX inside $...$ or $$...$$.
 - Code / config / terminal → fenced code block with language tag.
 - Single concept / photo / illustration → 1–3 plain sentences.
-Do NOT wrap output in additional prose ("Here is...", "This image shows..."). Output ONLY the structured content.
+Do NOT add boilerplate intros ("Here is...", "This image shows..."). Output ONLY the requested content (diagrams: the description + mermaid; other types: the single structured form).
 Do NOT add headings (# or ##) — caller controls section structure.
 Do NOT add the marker "[Vision]" or any prefix — caller adds it if needed.
 Preserve any text visible in the source verbatim where it is data; transcribe — do not paraphrase.`;
