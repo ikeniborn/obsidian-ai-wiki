@@ -1,3 +1,25 @@
+---
+chain:
+  intent: null
+review:
+  spec_hash: b3054455d764fd25
+  last_run: 2026-06-06
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: INFO
+      section: "Components / 2. visionBlock integration instruction"
+      section_hash: d2b9956f3c5e9d66
+      text: "Точный текст инструкции visionBlock (format.ts:157) не зафиксирован в спеке — уточняется на этапе плана. DoD: форматтер сохраняет и текстовое описание, и блок mermaid для диаграмм."
+      verdict: accepted
+      verdict_at: 2026-06-06
+---
+
 # Design: excalidraw-vision-diagram-description
 
 **Date:** 2026-06-06
