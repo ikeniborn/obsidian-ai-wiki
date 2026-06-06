@@ -39,6 +39,11 @@ describe("parseIndexAnnotations", () => {
     const map = parseIndexAnnotations(content);
     expect(map.get("P")).toBe("foo — bar");
   });
+
+  it("still parses an old short single-sentence entry", () => {
+    const content = "## entities\n- [[Alpha]] entities/Alpha.md — Краткое описание сущности.\n";
+    expect(parseIndexAnnotations(content).get("Alpha")).toBe("Краткое описание сущности.");
+  });
 });
 
 // ─── upsertIndexAnnotation ───────────────────────────────────────────────────
@@ -152,6 +157,36 @@ describe("upsertIndexAnnotation", () => {
     expect(written()).toContain("## general");
     expect(written()).toContain("- [[P]]");
     expect(written()).toContain("desc");
+  });
+
+  it("collapses newlines in annotation to a single line", async () => {
+    const { vt, written } = makeVt();
+    await upsertIndexAnnotation(vt, "!Wiki/work", "P", "first line\nsecond line",
+      "!Wiki/work/ops/p.md");
+    const entry = written().split("\n").find((l) => l.includes("[[P]]")) ?? "";
+    expect(entry).toBe("- [[P]] ops/p.md — first line second line");
+    // parser reads the whole annotation back — nothing dropped at the newline
+    expect(parseIndexAnnotations(written()).get("P")).toBe("first line second line");
+  });
+
+  it("collapses whitespace runs to a single space", async () => {
+    const { vt, written } = makeVt();
+    await upsertIndexAnnotation(vt, "!Wiki/work", "P", "foo   bar\t baz",
+      "!Wiki/work/ops/p.md");
+    expect(parseIndexAnnotations(written()).get("P")).toBe("foo bar baz");
+  });
+
+  it("round-trips a rich ~500-char structured annotation", async () => {
+    const rich =
+      "Задача Jira DG-49: доработка Excel-шаблона для экспорта и импорта " +
+      "спецификаций в S3. Затрагивает: Excel-шаблон, спецификации, S3-экспорт, " +
+      "маппинг колонок. Тип: доработка шаблона выгрузки/загрузки. " +
+      "Термины: выгрузка, импорт, экспорт, признак исключения из представления, спецификация.";
+    const { vt, written } = makeVt();
+    await upsertIndexAnnotation(vt, "!Wiki/work", "dg-49", rich,
+      "!Wiki/work/задачи/dg-49.md");
+    // regex (.+)$ holds the full rich line with ':' and ',' intact
+    expect(parseIndexAnnotations(written()).get("dg-49")).toBe(rich);
   });
 });
 

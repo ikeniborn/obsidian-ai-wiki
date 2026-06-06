@@ -70,7 +70,10 @@ export async function upsertIndexAnnotation(
   const relPath = fullPath
     ? (fullPath.startsWith(prefix) ? fullPath.slice(prefix.length) : fullPath)
     : pid;
-  const entryLine = `- [[${pid}]] ${relPath} — ${annotation}`;
+  // collapse newlines / whitespace runs → single space; enforce single-line invariant
+  // (not truncation — all content is preserved, only whitespace is normalized)
+  const oneLineAnnotation = annotation.replace(/\s+/g, " ").trim();
+  const entryLine = `- [[${pid}]] ${relPath} — ${oneLineAnnotation}`;
 
   await vaultTools.write(indexPath, upsertInSection(content, section, pid, entryLine));
 }
