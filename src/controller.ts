@@ -7,7 +7,7 @@ import type { RunEvent, RunHistoryEntry, WikiOperation, OnFileError } from "./ty
 import { AgentRunner } from "./agent-runner";
 import type { ChatMessage } from "./types";
 import { VaultTools, type VaultAdapter } from "./vault-tools";
-import { arrayBufferToBase64 } from "./phases/attachment-analyzer";
+import { arrayBufferToBase64, stripImageDataUriPrefix } from "./phases/attachment-analyzer";
 import { ClaudeCliClient } from "./claude-cli-client";
 import OpenAI from "openai";
 import { createProxyFetch, parseNoProxy, shouldBypass, maskProxyUrl } from "./proxy";
@@ -453,7 +453,7 @@ export class WikiController {
         if (!ea) return null;
         ea.reset();  // isolate from any prior template state
         if (ea.createPNGBase64) {
-          return await ea.createPNGBase64(resolvedPath);
+          return stripImageDataUriPrefix(await ea.createPNGBase64(resolvedPath));
         }
         if (ea.createPNG) {
           const blob = await ea.createPNG(resolvedPath);

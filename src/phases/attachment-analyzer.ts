@@ -39,6 +39,11 @@ export function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+/** Strip a leading `data:image/<type>;base64,` prefix, returning raw base64. */
+export function stripImageDataUriPrefix(s: string): string {
+  return s.replace(/^data:image\/[a-zA-Z.+-]+;base64,/, "");
+}
+
 export function getMimeType(path: string): string | null {
   const ext = path.split(".").pop()?.toLowerCase();
   switch (ext) {

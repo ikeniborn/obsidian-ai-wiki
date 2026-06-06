@@ -5,6 +5,7 @@ import {
   analyzeImage,
   analyzeAttachments,
   getMimeType,
+  stripImageDataUriPrefix,
 } from "../src/phases/attachment-analyzer";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
 import type { LlmClient } from "../src/types";
@@ -115,6 +116,18 @@ describe("getMimeType", () => {
     ["note.md", null],
   ])("%s → %s", (path, expected) => {
     expect(getMimeType(path)).toBe(expected);
+  });
+});
+
+describe("stripImageDataUriPrefix", () => {
+  it("strips a data:image/png;base64, prefix to raw base64", () => {
+    expect(stripImageDataUriPrefix("data:image/png;base64,iVBORw0KGgo=")).toBe("iVBORw0KGgo=");
+  });
+  it("returns raw base64 unchanged", () => {
+    expect(stripImageDataUriPrefix("iVBORw0KGgo=")).toBe("iVBORw0KGgo=");
+  });
+  it("handles other image subtypes", () => {
+    expect(stripImageDataUriPrefix("data:image/jpeg;base64,QUJD")).toBe("QUJD");
   });
 });
 
