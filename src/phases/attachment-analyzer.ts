@@ -19,13 +19,23 @@ export function insertDescriptions(md: string, descriptions: Map<string, string>
     if (!embedMatch) continue;
     const path = embedMatch[1].trim();
     if (!descriptions.has(path)) continue;
-    // Check if next non-empty line already has [Vision] marker
+    // Check if next non-empty line already has [Vision] marker (matches both the
+    // single-line `> *[Vision] ...*` and the multi-line `> *[Vision]*` shapes).
     let nextNonEmpty = "";
     for (let j = i + 1; j < lines.length; j++) {
       if (lines[j].trim() !== "") { nextNonEmpty = lines[j]; break; }
     }
     if (nextNonEmpty.startsWith("> *[Vision]")) continue;
-    out.push(`> *[Vision] ${descriptions.get(path)!}*`);
+    const desc = descriptions.get(path)!;
+    if (desc.includes("\n")) {
+      // Multi-line (prose + mermaid/table): a marker line, a blank line, then the
+      // description verbatim at top level so the fence/table renders.
+      out.push("> *[Vision]*");
+      out.push("");
+      out.push(desc);
+    } else {
+      out.push(`> *[Vision] ${desc}*`);
+    }
   }
   return out.join("\n");
 }

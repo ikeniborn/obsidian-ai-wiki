@@ -71,6 +71,25 @@ describe("insertDescriptions", () => {
     const result = insertDescriptions(md, descriptions);
     expect(result).toBe(md);
   });
+
+  it("inserts multi-line description (prose + mermaid) at top level with marker line", () => {
+    const md = "![[flow.excalidraw]]\nNext line";
+    const desc = "A login flow.\n\n```mermaid\nflowchart LR\n  a --> b\n```";
+    const descriptions = new Map([["flow.excalidraw", desc]]);
+    const result = insertDescriptions(md, descriptions);
+    expect(result).toBe(
+      "![[flow.excalidraw]]\n> *[Vision]*\n\nA login flow.\n\n```mermaid\nflowchart LR\n  a --> b\n```\nNext line",
+    );
+  });
+
+  it("is idempotent for multi-line descriptions", () => {
+    const md = "![[flow.excalidraw]]\nNext line";
+    const desc = "A login flow.\n\n```mermaid\nflowchart LR\n  a --> b\n```";
+    const descriptions = new Map([["flow.excalidraw", desc]]);
+    const once = insertDescriptions(md, descriptions);
+    const twice = insertDescriptions(once, descriptions);
+    expect(twice).toBe(once);
+  });
 });
 
 function makeLlm(content: string): LlmClient {
