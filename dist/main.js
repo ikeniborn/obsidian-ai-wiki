@@ -39388,6 +39388,9 @@ function arrayBufferToBase64(buffer) {
     binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
   return btoa(binary);
 }
+function stripImageDataUriPrefix(s) {
+  return s.replace(/^data:image\/[a-zA-Z.+-]+;base64,/, "");
+}
 function getMimeType(path2) {
   const ext = path2.split(".").pop()?.toLowerCase();
   switch (ext) {
@@ -39473,30 +39476,10 @@ async function analyzePdf(buffer, llm, model, signal, language = "auto") {
   }
   return callVisionLlm(llm, model, pdfSystem(language), parts, signal);
 }
-async function analyzeExcalidraw(text, llm, model, signal, language = "auto") {
-  const { exportToBlob } = await import("@excalidraw/utils");
-  const { elements, appState, files } = JSON.parse(text);
-  const blob = await exportToBlob({
-    elements,
-    appState,
-    files,
-    mimeType: "image/png",
-    exportPadding: 10
-  });
-  const buf = await blob.arrayBuffer();
-  const b64 = arrayBufferToBase64(buf);
+async function analyzeExcalidraw(b64, llm, model, signal, language = "auto") {
   return callVisionLlm(llm, model, imageSystem(language), [
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } }
   ], signal);
-}
-function extractExcalidrawJson(text) {
-  const trimmed = text.trim();
-  if (trimmed.startsWith("{")) return trimmed;
-  const jsonStart = trimmed.indexOf('{"type":"excalidraw"');
-  if (jsonStart >= 0) return trimmed.slice(jsonStart);
-  const firstCurly = trimmed.indexOf("{");
-  if (firstCurly >= 0) return trimmed.slice(firstCurly);
-  return null;
 }
 async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, sourcePath = "", language = "auto") {
   const resolved = vaultTools.resolveLink(path2, sourcePath);
@@ -39504,10 +39487,9 @@ async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, so
   const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
   const isExcalidraw = ext === "excalidraw" || resolved.endsWith(".excalidraw.md");
   if (isExcalidraw) {
-    const text = await vaultTools.read(resolved);
-    const jsonText = extractExcalidrawJson(text);
-    if (!jsonText) return null;
-    return analyzeExcalidraw(jsonText, llm, model, signal, language);
+    const b64 = await vaultTools.renderExcalidrawPng(resolved);
+    if (!b64) return null;
+    return analyzeExcalidraw(b64, llm, model, signal, language);
   }
   if (ext === "pdf") {
     const buf = await vaultTools.readBinary(resolved);
@@ -40469,6 +40451,14 @@ var VaultTools = class {
    */
   resolveLink(linkpath, sourcePath) {
     return this.adapter.resolveLink?.(linkpath, sourcePath) ?? null;
+  }
+  /**
+   * Render an Excalidraw file to a base64 PNG via the host plugin (wired in
+   * controller). Returns null when no renderer is available (no host plugin,
+   * mobile, or render error) — callers treat null as "Vision skipped".
+   */
+  async renderExcalidrawPng(resolvedPath) {
+    return await this.adapter.renderExcalidrawPng?.(resolvedPath) ?? null;
   }
   async mkdir(vaultPath) {
     return this.adapter.mkdir(vaultPath);
@@ -48540,6 +48530,25 @@ var WikiController = class {
     };
     adapter.resolveLink = (linkpath, sourcePath) => {
       return this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath)?.path ?? null;
+    };
+    adapter.renderExcalidrawPng = async (resolvedPath) => {
+      if (import_obsidian10.Platform.isMobile) return null;
+      try {
+        const host = this.app.plugins?.plugins?.["obsidian-excalidraw-plugin"];
+        const ea = host?.ea;
+        if (!ea) return null;
+        ea.reset();
+        if (ea.createPNGBase64) {
+          return stripImageDataUriPrefix(await ea.createPNGBase64(resolvedPath));
+        }
+        if (ea.createPNG) {
+          const blob = await ea.createPNG(resolvedPath);
+          return arrayBufferToBase64(await blob.arrayBuffer());
+        }
+        return null;
+      } catch {
+        return null;
+      }
     };
     const base = this.cwdOrEmpty();
     const vaultTools = new VaultTools(adapter, base, vault);
