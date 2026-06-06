@@ -7,6 +7,7 @@ import type { RunEvent, RunHistoryEntry, WikiOperation, OnFileError } from "./ty
 import { AgentRunner } from "./agent-runner";
 import type { ChatMessage } from "./types";
 import { VaultTools, type VaultAdapter } from "./vault-tools";
+import { arrayBufferToBase64 } from "./phases/attachment-analyzer";
 import { ClaudeCliClient } from "./claude-cli-client";
 import OpenAI from "openai";
 import { createProxyFetch, parseNoProxy, shouldBypass, maskProxyUrl } from "./proxy";
@@ -24,6 +25,16 @@ import { domainWikiFolder, GLOBAL_AGENT_LOG_PATH } from "./wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, validateAndRepairSourceFrontmatter } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
 import { collectMdInPaths, parseWikiSources } from "./utils/vault-walk";
+
+/** Minimal surface of the host obsidian-excalidraw-plugin's ExcalidrawAutomate. */
+interface ExcalidrawAutomateLike {
+  reset(): void;
+  createPNGBase64?(templatePath: string): Promise<string>;
+  createPNG?(templatePath: string): Promise<Blob>;
+}
+interface ExcalidrawHostPlugin {
+  ea?: ExcalidrawAutomateLike;
+}
 
 function patchWikiFields(originalContent: string, formattedContent: string): string {
   const wikiUpdatedMatch = /^wiki_updated:[ \t]*(.+)$/m.exec(originalContent);
@@ -430,6 +441,28 @@ export class WikiController {
     };
     adapter.resolveLink = (linkpath: string, sourcePath: string): string | null => {
       return this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath)?.path ?? null;
+    };
+    adapter.renderExcalidrawPng = async (resolvedPath: string): Promise<string | null> => {
+      // Desktop-only: host plugin renders via DOM/canvas, unavailable on mobile.
+      if (Platform.isMobile) return null;
+      try {
+        const host = (this.app as unknown as {
+          plugins?: { plugins?: Record<string, ExcalidrawHostPlugin | undefined> };
+        }).plugins?.plugins?.["obsidian-excalidraw-plugin"];
+        const ea = host?.ea;
+        if (!ea) return null;
+        ea.reset();  // isolate from any prior template state
+        if (ea.createPNGBase64) {
+          return await ea.createPNGBase64(resolvedPath);
+        }
+        if (ea.createPNG) {
+          const blob = await ea.createPNG(resolvedPath);
+          return arrayBufferToBase64(await blob.arrayBuffer());
+        }
+        return null;
+      } catch {
+        return null;  // any render error → Vision skipped
+      }
     };
     const base = this.cwdOrEmpty();
     const vaultTools = new VaultTools(adapter, base, vault);
