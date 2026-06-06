@@ -6,7 +6,7 @@ const production = process.argv[2] === "production";
 const ctx = await esbuild.context({
   entryPoints: ["src/main.ts"],
   bundle: true,
-  external: ["obsidian", "electron", "child_process", "node:readline", "@excalidraw/utils"],
+  external: ["obsidian", "electron", "child_process", "node:readline"],
   format: "cjs",
   target: "es2022",
   logLevel: "info",
