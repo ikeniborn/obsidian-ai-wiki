@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.163 — 2026-06-07
+
+### Новое
+- feat(vision): render Excalidraw diagrams via the host Excalidraw plugin (renderExcalidrawPng) instead of parsing JSON — wired through controller, vision, and vault-tools
+- feat(vision): diagram rule emits a prose description followed by a Mermaid recreation; vision blocks keep both description + Mermaid
+- feat(prompts): emit rich structured single-line annotations for retrieval
+- feat(wiki-index): collapse annotation whitespace to enforce single-line invariant
+
+### Исправления
+- fix(vision): insertDescriptions renders multi-line descriptions at top level
+- fix(vision): strip data-URI prefix from createPNGBase64 to avoid double prefix
+
+---
+
 ## 0.1.162 — 2026-06-05
 
 ### Исправления
