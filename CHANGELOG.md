@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.166 — 2026-06-07
+
+### Новое
+- feat(schema): bundle schemas for release-driven delivery — single source of truth in templates/, runtime no longer reads or writes _wiki_schema.md / _format_schema.md in the vault; stale copies are cleaned up on load (cleanupBundledSchemaCopies), removing bundled↔vault drift and manual-edit overwrite conflicts
+- feat(vision): structured, business-level diagram descriptions — read the canvas verbatim as a silent internal step, then emit a logical description of the scheme's meaning (purpose, components, flow) instead of an element-by-element dump; image/PDF additionally recreate structure as mermaid/table, excalidraw stays prose/lists
+
+---
+
 ## 0.1.165 — 2026-06-07
 
 ### Прочее
