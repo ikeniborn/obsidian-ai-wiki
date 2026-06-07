@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from "vitest";
 import { runFormat } from "../src/phases/format";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
 import type { LlmClient } from "../src/types";
+import { analyzeSingleAttachment } from "../src/phases/attachment-analyzer";
+import { VisionTempStore } from "../src/phases/vision-temp-store";
 
 // Mock attachment-analyzer so vision analysis doesn't hit real I/O
 vi.mock("../src/phases/attachment-analyzer", () => ({
@@ -172,5 +174,44 @@ describe("format sentinel retry/salvage", () => {
 
     expect(events.some((e) => (e as { kind: string }).kind === "error")).toBe(false);
     expect(events.some((e) => (e as { kind: string }).kind === "format_preview")).toBe(true);
+  });
+
+  it("resume: second runFormat with same store does not re-analyze (cache hit)", async () => {
+    const analyzeMock = vi.mocked(analyzeSingleAttachment);
+    analyzeMock.mockClear();
+    analyzeMock.mockResolvedValue("Cached diagram");
+
+    const embed = "img/d.png";
+    const src = `# Note\n\n![[${embed}]]\n`;
+    const formatted = `---\ntags: []\n---\n\n# Note\n\n![[${embed}]]`;
+    const sentinel = makeVisionSentinel("ok", formatted, 1, [embed]);
+
+    // Persisting in-memory adapter so the store survives between the two runs.
+    const text = new Map<string, string>([[FILE, src]]);
+    const adapter: VaultAdapter = {
+      read: (p: string) => Promise.resolve(text.get(p) ?? ""),
+      write: (p: string, d: string) => { text.set(p, d); return Promise.resolve(); },
+      append: () => Promise.resolve(),
+      list: () => Promise.resolve({ files: [], folders: [] }),
+      exists: (p: string) => Promise.resolve(text.has(p)),
+      mkdir: () => Promise.resolve(),
+      rmdir: () => Promise.resolve(),
+    };
+    const vt = new VaultTools(adapter, VAULT);
+    const store = new VisionTempStore(vt, ".obsidian/plugins/x/.vision-tmp/run1");
+
+    const run = () => collect(runFormat(
+      [FILE], vt, makeLlmSequence([sentinel]), "model", false, [],
+      new AbortController().signal, {}, "native-agent", undefined, 3,
+      { enabled: true, model: "vm" }, store,
+    ));
+
+    const first = await run();
+    expect(first.some((e) => (e as { kind: string }).kind === "format_preview")).toBe(true);
+    expect(analyzeMock).toHaveBeenCalledTimes(1);
+
+    const second = await run();
+    expect(second.some((e) => (e as { kind: string }).kind === "format_preview")).toBe(true);
+    expect(analyzeMock).toHaveBeenCalledTimes(1); // served from cache — no second LLM call
   });
 });
