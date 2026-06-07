@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.165 — 2026-06-07
+
+### Прочее
+- refactor(prompts): move remaining inline LLM prompts (vision, lint-actualize, query seeds/link-rewrite, repair/retry) into prompts/*.md, loaded via the esbuild text loader
+
+---
+
 ## 0.1.164 — 2026-06-07
 
 ### Новое
