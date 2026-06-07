@@ -1,3 +1,17 @@
+---
+review:
+  spec_hash: 884cfbe6811ba5ad
+  last_run: 2026-06-07
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings: []
+chain:
+  intent: docs/superpowers/intents/2026-06-07-vision-pipeline-optimization-intent.md
+---
+
 # Design: vision pipeline optimization (temp store + heartbeat watchdog)
 
 **Date:** 2026-06-07
