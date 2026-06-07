@@ -173,7 +173,10 @@ export class AgentRunner {
       let finalResultText = "";
       try {
         for await (const ev of this.runOperation({ ...req, signal: combined }, model, opts, vaultRoot, domains, similarity)) {
-          if (ev.kind === "llm_call_stats" || ev.kind === "assistant_text") resetTimer();
+          if (
+            ev.kind === "llm_call_stats" || ev.kind === "assistant_text" ||
+            ev.kind === "tool_use" || ev.kind === "tool_result"
+          ) resetTimer();
           if (ev.kind === "result") finalResultText = ev.text;
           yield ev;
         }

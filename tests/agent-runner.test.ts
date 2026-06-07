@@ -115,6 +115,45 @@ describe("AgentRunner idle watchdog", () => {
     expect(resultEvents).toHaveLength(1);
   });
 
+  // @lat: [[tests#AgentRunner Idle Watchdog#Heartbeat on tool events]]
+  it("heartbeat: tool_use/tool_result reset the idle timer — no retry, total > timeout", async () => {
+    // Scenario: two tool events spaced 3 s apart (total 6 s), idle timeout 5 s.
+    // Without heartbeat the idle timer fires at 5 s and triggers a spurious retry.
+    // With heartbeat each tool event resets the timer so no retry is emitted.
+    const settings = makeSettings({ llmIdleTimeoutSec: 5, llmIdleRetries: 3 });
+    const runner = new AgentRunner(noopLlm, settings, new VaultTools(mockAdapter(), "/vault"), "v", []);
+
+    // Gates controlled by fake-timer-driven resolvers so advanceTimersByTimeAsync drives progress.
+    let resolveGate1!: () => void;
+    let resolveGate2!: () => void;
+    const gate1 = new Promise<void>((r) => { resolveGate1 = r; });
+    const gate2 = new Promise<void>((r) => { resolveGate2 = r; });
+
+    setTimeout(() => resolveGate1(), 3000);
+    setTimeout(() => resolveGate2(), 6000);
+
+    vi.spyOn(runner as unknown as { runOperation: (...a: unknown[]) => AsyncGenerator<RunEvent, void, void> }, "runOperation")
+      .mockImplementation(async function* (): AsyncGenerator<RunEvent, void, void> {
+        yield { kind: "tool_use", name: "Vision", input: {} };
+        await gate1;
+        yield { kind: "tool_result", ok: true };
+        await gate2;
+        yield { kind: "result", durationMs: 1, text: "done" };
+      });
+
+    const runPromise = collect(runner.run(makeRequest()));
+    await vi.advanceTimersByTimeAsync(3100);  // fires gate1 (3 s) — tool_result should reset timer
+    await vi.advanceTimersByTimeAsync(3100);  // fires gate2 (6 s) — result emitted
+    const events = await runPromise;
+
+    const retryEvents = events.filter(
+      (e): e is { kind: "system"; message: string } =>
+        e.kind === "system" && (e as { kind: "system"; message: string }).message.includes("retrying"),
+    );
+    expect(retryEvents).toHaveLength(0);
+    expect(events.filter((e) => e.kind === "result")).toHaveLength(1);
+  });
+
   // @lat: [[tests#AgentRunner Idle Watchdog#Idle exhausted]]
   it("idle exhausted: AbortError propagates after maxRetries attempts", async () => {
     const maxRetries = 2;
