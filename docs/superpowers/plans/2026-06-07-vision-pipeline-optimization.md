@@ -1,3 +1,35 @@
+---
+review:
+  plan_hash: 80d9e2c5d146fa14
+  spec_hash: 884cfbe6811ba5ad
+  last_run: 2026-06-07
+  phases:
+    structure:     { status: passed }
+    coverage:      { status: passed }
+    dependencies:  { status: passed }
+    verifiability: { status: passed }
+    consistency:   { status: passed }
+  findings:
+    - id: F-001
+      phase: dependencies
+      severity: CRITICAL
+      section: "Task 4 / Task 5 / Task 6"
+      section_hash: 12002cf67728276d
+      text: >-
+        Caller-before-callee ordering breaks the per-task `tsc --noEmit` gate.
+        Old Task 4 (agent-runner) called runFormat with the 13th arg visionTempStore,
+        but that param was added in Task 5 — tsc would fail at that task. Old Task 5
+        (format) called analyzeSingleAttachment with the 8th arg visionTempStore,
+        but that param was added in old Task 6 — tsc would fail there. Fixed by
+        reordering so callee signatures precede callers: putPng → Task 4, format
+        stays Task 5, agent-runner → Task 6.
+      verdict: fixed
+      verdict_at: 2026-06-07
+chain:
+  intent: docs/superpowers/intents/2026-06-07-vision-pipeline-optimization-intent.md
+  spec:   docs/superpowers/specs/2026-06-07-vision-pipeline-optimization-design.md
+---
+
 # Vision Pipeline Optimization Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -26,7 +58,7 @@
 - **Modify** `tests/format-retry.test.ts` — resume test.
 - **Modify** `lat.md/operations.md`, `lat.md/tests.md` — document new behavior.
 
-Build order keeps the codebase compiling after every task: new params are optional with `undefined` defaults, so existing callers stay valid until their task wires them.
+Build order keeps the codebase compiling after every task. Two rules enforce this: (1) new params are optional with `undefined` defaults, so a callee that gains a param still accepts existing call sites; (2) callee signatures are changed BEFORE any caller passes the new argument — hence `analyzeSingleAttachment` (Task 4) precedes the format call (Task 5), and `runFormat` (Task 5) precedes the agent-runner call (Task 6). Every per-task `tsc --noEmit` gate therefore stays green.
 
 ---
 
@@ -333,12 +365,181 @@ git commit -m "fix(agent-runner): reset idle watchdog on tool_use/tool_result he
 
 ---
 
-## Task 4: Build + thread the store in AgentRunner
+## Task 4: Persist excalidraw PNG to the plugin dir
+
+**Files:**
+- Modify: `src/phases/attachment-analyzer.ts:180-212`
+- Test: `tests/attachment-analyzer.test.ts`
+
+This task adds the `visionTempStore` param to `analyzeSingleAttachment` (the callee) BEFORE Task 5 calls it with that argument — keeping every per-task `tsc` gate green.
+
+- [ ] **Step 1: Write the failing test**
+
+In `tests/attachment-analyzer.test.ts`, add `analyzeSingleAttachment` to the imports (line 2-9 import block):
+
+```typescript
+import {
+  extractObsidianEmbedPaths,
+  insertDescriptions,
+  analyzeImage,
+  analyzeAttachments,
+  analyzeSingleAttachment,
+  getMimeType,
+  stripImageDataUriPrefix,
+} from "../src/phases/attachment-analyzer";
+```
+
+Then add a new test at the end of the `describe("analyzeAttachments — excalidraw", ...)` block (after line 253):
+
+```typescript
+  it("persists the rendered PNG to the temp store via putPng", async () => {
+    const vaultTools = makeVaultTools();
+    (vaultTools.adapter.renderExcalidrawPng as ReturnType<typeof vi.fn>).mockResolvedValue("RENDEREDB64");
+    const llm = makeLlm("A flowchart.");
+    const store = {
+      getDescription: vi.fn(),
+      putDescription: vi.fn(),
+      putPng: vi.fn().mockResolvedValue(undefined),
+      cleanup: vi.fn(),
+    } as unknown as import("../src/phases/vision-temp-store").VisionTempStore;
+
+    await analyzeSingleAttachment("draw.excalidraw", vaultTools, llm, "gpt-4o-mini", new AbortController().signal, "", "auto", store);
+
+    expect(store.putPng).toHaveBeenCalledWith("draw.excalidraw", "RENDEREDB64");
+  });
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npx vitest run tests/attachment-analyzer.test.ts -t "persists the rendered PNG"`
+Expected: FAIL — `analyzeSingleAttachment` does not accept/use a store yet (TS arity error or `putPng` never called).
+
+- [ ] **Step 3: Add the store param and the putPng call**
+
+In `src/phases/attachment-analyzer.ts`, add the import near the top (after line 8 `import visionExcalidraw ...`):
+
+```typescript
+import type { VisionTempStore } from "./vision-temp-store";
+```
+
+Change the `analyzeSingleAttachment` signature (lines 181-189) to add a trailing optional param:
+
+```typescript
+export async function analyzeSingleAttachment(
+  path: string,
+  vaultTools: VaultTools,
+  llm: LlmClient,
+  model: string,
+  signal: AbortSignal,
+  sourcePath: string = "",
+  language: VisionLanguage = "auto",
+  visionTempStore?: VisionTempStore,
+): Promise<string | null> {
+```
+
+In the excalidraw branch (lines 197-201), add the persist call after a successful render:
+
+```typescript
+  if (isExcalidraw) {
+    const b64 = await vaultTools.renderExcalidrawPng(resolved);
+    if (!b64) return null;            // no host plugin / render failed → skip
+    await visionTempStore?.putPng(path, b64);
+    return analyzeExcalidraw(b64, llm, model, signal, language);
+  }
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `npx vitest run tests/attachment-analyzer.test.ts`
+Expected: PASS — new test green; existing analyzer tests unaffected (store `undefined` → `?.` short-circuits).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/phases/attachment-analyzer.ts tests/attachment-analyzer.test.ts
+git commit -m "feat(vision): persist rendered excalidraw PNG to plugin temp dir"
+```
+
+---
+
+## Task 5: Cache-resume in the format vision loop
+
+**Files:**
+- Modify: `src/phases/format.ts:59-124`
+
+The resume behavior is verified by the integration test in Task 8. This task wires it.
+
+- [ ] **Step 1: Import the store type**
+
+In `src/phases/format.ts`, change the import on line 13 to also bring in the type:
+
+```typescript
+import { extractObsidianEmbedPaths, analyzeSingleAttachment } from "./attachment-analyzer";
+import type { VisionTempStore } from "./vision-temp-store";
+```
+
+- [ ] **Step 2: Add the trailing param to `runFormat`**
+
+In `src/phases/format.ts`, change the `runFormat` signature — add a final optional param after `visionSettings` (currently lines 71-72):
+
+```typescript
+  visionSettings: { enabled: boolean; model: string; language?: "auto" | "ru" | "en" | "es" } = { enabled: false, model: "" },
+  visionTempStore?: VisionTempStore,
+): AsyncGenerator<RunEvent> {
+```
+
+- [ ] **Step 3: Add cache-resume + write-through in the vision loop**
+
+In `src/phases/format.ts`, replace the per-path loop body (lines 105-122) with:
+
+```typescript
+      for (const path of embedPaths) {
+        if (signal.aborted) break;
+        const filename = path.split("/").pop() ?? path;
+        yield { kind: "tool_use", name: "Vision", input: { file_path: filename, model: visionSettings.model } };
+        const cached = await visionTempStore?.getDescription(path);
+        if (cached != null) {
+          visionDescriptions.set(path, cached);
+          yield { kind: "tool_result", ok: true, preview: cached };
+          continue;
+        }
+        try {
+          const description = await analyzeSingleAttachment(path, vaultTools, llm, visionSettings.model, signal, filePath, lang, visionTempStore);
+          if (description !== null) {
+            visionDescriptions.set(path, description);
+            await visionTempStore?.putDescription(path, description);
+            yield { kind: "tool_result", ok: true, preview: description };
+          } else {
+            yield { kind: "tool_result", ok: false, preview: "unknown extension" };
+            yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [path] };
+          }
+        } catch (e) {
+          yield { kind: "tool_result", ok: false, preview: (e as Error)?.message ?? "failed" };
+          yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [path] };
+        }
+      }
+```
+
+- [ ] **Step 4: Verify compile + existing format/vision tests still pass**
+
+Run: `npx tsc --noEmit && npx vitest run tests/format-retry.test.ts tests/phases/format.test.ts`
+Expected: type-check clean; all existing tests PASS (store is `undefined` at every existing call site → `?.` short-circuits, behavior unchanged).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/phases/format.ts
+git commit -m "feat(format): resume vision descriptions from temp store, write-through on analyze"
+```
+
+---
+
+## Task 6: Build + thread the store in AgentRunner
 
 **Files:**
 - Modify: `src/agent-runner.ts` — constructor (line 16-26), `runOperation` signature + `runFormat` call (line 82-128), `run()` store build + cleanup (line 137-229)
 
-No new test in this task — the wiring is covered by the resume integration test in Task 8 and the existing watchdog tests (which pass `runOperation` mocks and so never construct a store). Keep the codebase compiling: the constructor param is optional.
+This task runs AFTER Task 5, so `runFormat` already accepts the trailing `visionTempStore` param — the caller change below type-checks. No new test in this task — the wiring is covered by the resume integration test in Task 8 and the existing watchdog tests (which pass `runOperation` mocks and so never construct a store). The constructor param is optional, so `controller.ts` (still passing 5 args until Task 7) keeps compiling.
 
 - [ ] **Step 1: Add the constructor param**
 
@@ -439,173 +640,6 @@ Expected: type-check clean; all watchdog tests PASS (no store is built for the `
 ```bash
 git add src/agent-runner.ts
 git commit -m "feat(agent-runner): build per-run VisionTempStore, thread it into format, cleanup in finally"
-```
-
----
-
-## Task 5: Cache-resume in the format vision loop
-
-**Files:**
-- Modify: `src/phases/format.ts:59-124`
-
-The resume behavior is verified by the integration test in Task 8. This task wires it.
-
-- [ ] **Step 1: Import the store type**
-
-In `src/phases/format.ts`, change the import on line 13 to also bring in the type:
-
-```typescript
-import { extractObsidianEmbedPaths, analyzeSingleAttachment } from "./attachment-analyzer";
-import type { VisionTempStore } from "./vision-temp-store";
-```
-
-- [ ] **Step 2: Add the trailing param to `runFormat`**
-
-In `src/phases/format.ts`, change the `runFormat` signature — add a final optional param after `visionSettings` (currently lines 71-72):
-
-```typescript
-  visionSettings: { enabled: boolean; model: string; language?: "auto" | "ru" | "en" | "es" } = { enabled: false, model: "" },
-  visionTempStore?: VisionTempStore,
-): AsyncGenerator<RunEvent> {
-```
-
-- [ ] **Step 3: Add cache-resume + write-through in the vision loop**
-
-In `src/phases/format.ts`, replace the per-path loop body (lines 105-122) with:
-
-```typescript
-      for (const path of embedPaths) {
-        if (signal.aborted) break;
-        const filename = path.split("/").pop() ?? path;
-        yield { kind: "tool_use", name: "Vision", input: { file_path: filename, model: visionSettings.model } };
-        const cached = await visionTempStore?.getDescription(path);
-        if (cached != null) {
-          visionDescriptions.set(path, cached);
-          yield { kind: "tool_result", ok: true, preview: cached };
-          continue;
-        }
-        try {
-          const description = await analyzeSingleAttachment(path, vaultTools, llm, visionSettings.model, signal, filePath, lang, visionTempStore);
-          if (description !== null) {
-            visionDescriptions.set(path, description);
-            await visionTempStore?.putDescription(path, description);
-            yield { kind: "tool_result", ok: true, preview: description };
-          } else {
-            yield { kind: "tool_result", ok: false, preview: "unknown extension" };
-            yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [path] };
-          }
-        } catch (e) {
-          yield { kind: "tool_result", ok: false, preview: (e as Error)?.message ?? "failed" };
-          yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [path] };
-        }
-      }
-```
-
-- [ ] **Step 4: Verify compile + existing format/vision tests still pass**
-
-Run: `npx tsc --noEmit && npx vitest run tests/format-retry.test.ts tests/phases/format.test.ts`
-Expected: type-check clean; all existing tests PASS (store is `undefined` at every existing call site → `?.` short-circuits, behavior unchanged).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/phases/format.ts
-git commit -m "feat(format): resume vision descriptions from temp store, write-through on analyze"
-```
-
----
-
-## Task 6: Persist excalidraw PNG to the plugin dir
-
-**Files:**
-- Modify: `src/phases/attachment-analyzer.ts:180-212`
-- Test: `tests/attachment-analyzer.test.ts`
-
-- [ ] **Step 1: Write the failing test**
-
-In `tests/attachment-analyzer.test.ts`, add `analyzeSingleAttachment` to the imports (line 2-9 import block):
-
-```typescript
-import {
-  extractObsidianEmbedPaths,
-  insertDescriptions,
-  analyzeImage,
-  analyzeAttachments,
-  analyzeSingleAttachment,
-  getMimeType,
-  stripImageDataUriPrefix,
-} from "../src/phases/attachment-analyzer";
-```
-
-Then add a new test at the end of the `describe("analyzeAttachments — excalidraw", ...)` block (after line 253):
-
-```typescript
-  it("persists the rendered PNG to the temp store via putPng", async () => {
-    const vaultTools = makeVaultTools();
-    (vaultTools.adapter.renderExcalidrawPng as ReturnType<typeof vi.fn>).mockResolvedValue("RENDEREDB64");
-    const llm = makeLlm("A flowchart.");
-    const store = {
-      getDescription: vi.fn(),
-      putDescription: vi.fn(),
-      putPng: vi.fn().mockResolvedValue(undefined),
-      cleanup: vi.fn(),
-    } as unknown as import("../src/phases/vision-temp-store").VisionTempStore;
-
-    await analyzeSingleAttachment("draw.excalidraw", vaultTools, llm, "gpt-4o-mini", new AbortController().signal, "", "auto", store);
-
-    expect(store.putPng).toHaveBeenCalledWith("draw.excalidraw", "RENDEREDB64");
-  });
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `npx vitest run tests/attachment-analyzer.test.ts -t "persists the rendered PNG"`
-Expected: FAIL — `analyzeSingleAttachment` does not accept/use a store yet (TS arity error or `putPng` never called).
-
-- [ ] **Step 3: Add the store param and the putPng call**
-
-In `src/phases/attachment-analyzer.ts`, add the import near the top (after line 8 `import visionExcalidraw ...`):
-
-```typescript
-import type { VisionTempStore } from "./vision-temp-store";
-```
-
-Change the `analyzeSingleAttachment` signature (lines 181-189) to add a trailing optional param:
-
-```typescript
-export async function analyzeSingleAttachment(
-  path: string,
-  vaultTools: VaultTools,
-  llm: LlmClient,
-  model: string,
-  signal: AbortSignal,
-  sourcePath: string = "",
-  language: VisionLanguage = "auto",
-  visionTempStore?: VisionTempStore,
-): Promise<string | null> {
-```
-
-In the excalidraw branch (lines 197-201), add the persist call after a successful render:
-
-```typescript
-  if (isExcalidraw) {
-    const b64 = await vaultTools.renderExcalidrawPng(resolved);
-    if (!b64) return null;            // no host plugin / render failed → skip
-    await visionTempStore?.putPng(path, b64);
-    return analyzeExcalidraw(b64, llm, model, signal, language);
-  }
-```
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `npx vitest run tests/attachment-analyzer.test.ts`
-Expected: PASS — new test green; existing analyzer tests unaffected (store `undefined` → `?.` short-circuits).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/phases/attachment-analyzer.ts tests/attachment-analyzer.test.ts
-git commit -m "feat(vision): persist rendered excalidraw PNG to plugin temp dir"
 ```
 
 ---
