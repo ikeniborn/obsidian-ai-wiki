@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { VisionTempStore, base64ToArrayBuffer } from "../src/phases/vision-temp-store";
 import { VaultTools, type VaultAdapter } from "../src/vault-tools";
 
@@ -58,6 +58,14 @@ describe("VisionTempStore", () => {
     const store = new VisionTempStore(vt, DIR);
     await store.cleanup();
     expect(removed).toContain(DIR);
+  });
+
+  it("returns null when stored path doesn't match requested path (collision guard)", async () => {
+    // keyFor("img/a.png") === "img_a_png"; seed a mismatched envelope at that key
+    const { vt, text } = memVault();
+    text.set(`${DIR}/img_a_png.json`, JSON.stringify({ path: "DIFFERENT", desc: "stale" }));
+    const store = new VisionTempStore(vt, DIR);
+    expect(await store.getDescription("img/a.png")).toBeNull();
   });
 
   it("swallows adapter errors — never throws", async () => {

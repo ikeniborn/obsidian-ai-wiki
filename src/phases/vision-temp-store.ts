@@ -30,8 +30,8 @@ export class VisionTempStore {
     try {
       const p = `${this.dir}/${keyFor(path)}.json`;
       if (!(await this.vaultTools.exists(p))) return null;
-      const obj = JSON.parse(await this.vaultTools.read(p)) as { desc?: string };
-      return typeof obj.desc === "string" ? obj.desc : null;
+      const obj = JSON.parse(await this.vaultTools.read(p)) as { path?: string; desc?: string };
+      return typeof obj.desc === "string" && obj.path === path ? obj.desc : null;
     } catch {
       return null;
     }
