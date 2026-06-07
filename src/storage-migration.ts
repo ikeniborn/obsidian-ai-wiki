@@ -3,8 +3,6 @@ import {
   WIKI_ROOT,
   GLOBAL_CONFIG_DIR,
   GLOBAL_DOMAIN_PATH,
-  GLOBAL_WIKI_SCHEMA_PATH,
-  GLOBAL_FORMAT_SCHEMA_PATH,
   GLOBAL_AGENT_LOG_PATH,
   GLOBAL_DEV_LOG_PATH,
 } from "./wiki-path";
@@ -44,9 +42,9 @@ export async function runStorageMigration(vault: Vault): Promise<void> {
     try { domains = JSON.parse(await adapter.read(GLOBAL_DOMAIN_PATH)) as Array<{ wiki_folder: string }>; } catch { /* ignore */ }
   }
 
-  // Pick best schema from per-domain copies (latest mtime wins)
-  await pickAndWriteSchema(adapter, domains, "_wiki_schema.md", GLOBAL_WIKI_SCHEMA_PATH);
-  await pickAndWriteSchema(adapter, domains, "_format_schema.md", GLOBAL_FORMAT_SCHEMA_PATH);
+  // Schemas are no longer migrated — they live bundled in the plugin and are
+  // delivered via release. Any old `.config` schema copies are dropped by the
+  // cleanDir calls below; the global `_config` copies by cleanupBundledSchemaCopies.
 
   // Migrate per-domain files
   for (const domain of domains) {
@@ -83,42 +81,23 @@ export async function runStorageMigration(vault: Vault): Promise<void> {
     "_format_schema.md", "_agent.jsonl", "_dev.jsonl"]);
 }
 
-async function pickAndWriteSchema(
-  adapter: Vault["adapter"],
-  domains: Array<{ wiki_folder: string }>,
-  filename: string,
-  dest: string,
-): Promise<void> {
-  let bestContent: string | null = null;
-  let bestMtime = -1;
+const GLOBAL_SCHEMA_COPIES = [
+  `${GLOBAL_CONFIG_DIR}/_wiki_schema.md`,
+  `${GLOBAL_CONFIG_DIR}/_format_schema.md`,
+];
 
-  for (const domain of domains) {
-    const p = `${WIKI_ROOT}/${domain.wiki_folder}/.config/${filename}`;
-    if (!(await adapter.exists(p))) continue;
-    const stat = await adapter.stat(p);
-    const mtime = stat?.mtime ?? 0;
-    if (mtime > bestMtime) {
-      bestMtime = mtime;
-      bestContent = await adapter.read(p);
-    }
-  }
-
-  if (bestContent === null) {
-    const globalOld = `${OLD_GLOBAL_CONFIG}/${filename}`;
-    if (await adapter.exists(globalOld)) {
-      bestContent = await adapter.read(globalOld);
-    }
-  }
-
-  if (bestContent === null) {
-    const bundled = `prompts/templates/${filename}`;
-    if (await adapter.exists(bundled)) {
-      bestContent = await adapter.read(bundled);
-    }
-  }
-
-  if (bestContent !== null) {
-    await adapter.write(dest, bestContent);
+/**
+ * Remove stale vault copies of the bundled schemas. Schemas are now compiled
+ * into the plugin and delivered via release; any `_config` copy is ignored at
+ * runtime, so delete it best-effort. Runs unconditionally on plugin load,
+ * independent of the `.config` → `_config` migration.
+ */
+export async function cleanupBundledSchemaCopies(vault: Vault): Promise<void> {
+  const adapter = vault.adapter;
+  for (const p of GLOBAL_SCHEMA_COPIES) {
+    try {
+      if (await adapter.exists(p)) await adapter.remove(p);
+    } catch { /* best-effort */ }
   }
 }
 

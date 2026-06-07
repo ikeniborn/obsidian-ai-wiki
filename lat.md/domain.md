@@ -36,8 +36,6 @@ All wiki artifacts live under `!Wiki/`. Global config lives in `!Wiki/_config/`;
 !Wiki/
   _config/                       — global config (all domains)
     _domain.json                 — domain entries list
-    _wiki_schema.md              — LLM wiki conventions (shared)
-    _format_schema.md            — format conventions (shared)
     _agent.jsonl                 — global operation log
     _dev.jsonl                   — dev mode eval log
   <domain>/
@@ -50,11 +48,10 @@ All wiki artifacts live under `!Wiki/`. Global config lives in `!Wiki/_config/`;
 
 See [[src/wiki-path.ts#domainWikiFolder]], [[src/wiki-path.ts#domainIndexPath]].
 
-## Vault Schema Variants
+## Bundled Schemas
 
-`_wiki_schema.md` and `_format_schema.md` exist in two places:
+`_wiki_schema.md` and `_format_schema.md` are compiled into the plugin (esbuild `.md` text loader from `templates/`) and are the **single source of truth**. New versions ship only via a plugin release.
 
-- **Bundled** (`prompts/templates/`): used by init and as fallback.
-- **Vault copy** (`!Wiki/_config/`): read at runtime by ingest, lint, lint-chat, format. Shared by all domains.
-
-Changes to the bundled template do not propagate to existing vaults automatically.
+- **Read at runtime** directly from the bundled constants: ingest, lint, lint-chat, init (`schemaTemplate` = `templates/_wiki_schema.md`), format (`formatSchemaDefault` = `templates/_format_schema.md`).
+- **Never written to the vault.** `!Wiki/_config/` holds no schema files; init does not create them and format does not cache them.
+- **Migration:** [[src/storage-migration.ts#cleanupBundledSchemaCopies]] runs on plugin load and deletes any stale `!Wiki/_config/_wiki_schema.md` / `_format_schema.md` left by older versions (best-effort). Manual per-vault edits are no longer supported — the trade-off is deterministic, release-driven delivery.

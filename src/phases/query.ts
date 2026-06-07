@@ -17,7 +17,7 @@ import { parseIndexAnnotations } from "../wiki-index";
 import type { PageSimilarityService } from "../page-similarity";
 import { extractAnswerLinks, findBrokenLinks, annotateBroken, rewriteWithValidLinks } from "./query-link-validator";
 
-const META_FILES = ["_index.md", "_log.md", "_wiki_schema.md", "_format_schema.md"];
+const META_FILES = ["_index.md", "_log.md"];
 
 export async function* runQuery(
   args: string[],

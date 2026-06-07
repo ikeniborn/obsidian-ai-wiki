@@ -331,13 +331,13 @@ describe("runLint", () => {
     expect(userContent).toContain("isolated node");
   });
 
-  it("passes schema_block to LLM system message when schema file present", async () => {
-    const schemaContent = "# Wiki Schema\n- use lowercase tags";
+  it("includes the bundled wiki schema conventions block and never reads a vault schema file", async () => {
+    const readPaths: string[] = [];
     const adapter = mockAdapter({
       exists: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/wiki_work_page.md"], folders: [] }),
       read: vi.fn().mockImplementation((path: string) => {
-        if (path === "!Wiki/_config/_wiki_schema.md") return Promise.resolve(schemaContent);
+        readPaths.push(path);
         return Promise.resolve("---\ntags: []\n---\n# Page\n\nContent.");
       }),
     });
@@ -350,27 +350,7 @@ describe("runLint", () => {
     const firstCall = createMock.mock.calls[0];
     const systemMsg = firstCall?.[0]?.messages?.find((m: any) => m.role === "system");
     expect(systemMsg?.content).toContain("Конвенции (_wiki_schema.md):");
-    expect(systemMsg?.content).toContain(schemaContent);
-  });
-
-  it("passes empty schema_block when schema file absent", async () => {
-    const adapter = mockAdapter({
-      exists: vi.fn().mockResolvedValue(true),
-      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/wiki_work_page.md"], folders: [] }),
-      read: vi.fn().mockImplementation((path: string) => {
-        if (path === "!Wiki/_config/_wiki_schema.md") return Promise.reject(new Error("not found"));
-        return Promise.resolve("---\ntags: []\n---\n# Page\n\nContent.");
-      }),
-    });
-    const vt = new VaultTools(adapter, VAULT_ROOT);
-    const llm = makeLlm(JSON.stringify({ reasoning: "ok", report: "No issues.", fixes: [] }));
-    await collect(
-      runLint(["work"], vt, llm, "model", [domain], VAULT_ROOT, new AbortController().signal),
-    );
-    const createMock = llm.chat.completions.create as ReturnType<typeof vi.fn>;
-    const firstCall = createMock.mock.calls[0];
-    const systemMsg = firstCall?.[0]?.messages?.find((m: any) => m.role === "system");
-    expect(systemMsg?.content).not.toContain("Конвенции (_wiki_schema.md):");
+    expect(readPaths.some((p) => p.includes("_wiki_schema.md"))).toBe(false);
   });
 
   it("emits vector info_text events in embedding mode", async () => {

@@ -32,8 +32,8 @@
     "hash": "00b513243c115e9689731aeb864b8dff"
   },
   "tests/storage-migration.test.ts": {
-    "mtime": 1779711716.8601115,
-    "hash": "d7e1fedf3a1471b5c2e83c5eefa2188e"
+    "mtime": 1780858149.8829722,
+    "hash": "0037f740d802442328082fd816c13831"
   },
   "tests/agent-runner.integration.test.js": {
     "mtime": 1779363957.1650963,
@@ -268,8 +268,8 @@
     "hash": "ad07baf4852b893f20d88bb67eade645"
   },
   "tests/wiki-path.test.ts": {
-    "mtime": 1779711716.8603053,
-    "hash": "3f2437d86539edc692858269151fe070"
+    "mtime": 1780858108.6457899,
+    "hash": "16d4fb219166e33424569876cc6ebbaa"
   },
   "tests/proxy.test.ts": {
     "mtime": 1779363957.1664374,
@@ -364,24 +364,24 @@
     "hash": "17d70655d65e9007913c0704a502bc3b"
   },
   "tests/phases/lint.test.ts": {
-    "mtime": 1780515241.8972955,
-    "hash": "2381f2039a2cdff326fa2828efb36a6f"
+    "mtime": 1780858341.4842095,
+    "hash": "3e95dc7b826d8482859be3e18b3fb5be"
   },
   "tests/phases/lint-chat.test.ts": {
-    "mtime": 1779827052.2552755,
-    "hash": "85cf6bf368f563c7a9a76db5d2e854c7"
+    "mtime": 1780858377.0295103,
+    "hash": "ca7fdacb24874f3d37556c6960b5f3b3"
   },
   "tests/phases/parse-with-retry.test.ts": {
     "mtime": 1779826009.716296,
     "hash": "3be497c30805f40048dc4d628a429c01"
   },
   "tests/phases/ingest.test.ts": {
-    "mtime": 1780660715.80063,
-    "hash": "4fe0238bdcf136848c0b7d3d179a4498"
+    "mtime": 1780858387.4767103,
+    "hash": "c1cf793630a382ccb4eff88452fdc1e9"
   },
   "tests/phases/format.test.ts": {
-    "mtime": 1780635282.9749599,
-    "hash": "ed7b8285ac6f0641dbd6c12b46781d50"
+    "mtime": 1780858189.3204417,
+    "hash": "e585eb9405e384d4fb80c3364c10ef0e"
   },
   "tests/phases/lint.test.js": {
     "mtime": 1779826009.716125,
@@ -496,8 +496,8 @@
     "hash": "a013875f43d498efc5c8268294bf9db7"
   },
   "src/main.ts": {
-    "mtime": 1780661371.0676622,
-    "hash": "82939495cc781bf339d844bf0d7c5e64"
+    "mtime": 1780858038.9489377,
+    "hash": "a871c0e53dd3ef22a777184217a003c8"
   },
   "src/wiki-seeds.ts": {
     "mtime": 1780342244.3227642,
@@ -520,8 +520,8 @@
     "hash": "025329ced21d1b26a3d18c82910997b7"
   },
   "src/storage-migration.ts": {
-    "mtime": 1780659171.3202589,
-    "hash": "02eeef866b31900e8a4a46c635346630"
+    "mtime": 1780858013.053247,
+    "hash": "eccb95e4c92c50ef284ed33e755fc1a0"
   },
   "src/md-modules.d.ts": {
     "mtime": 1779363957.1632447,
@@ -552,8 +552,8 @@
     "hash": "41a2b10b7ceab7d2ab0568d82d173855"
   },
   "src/wiki-path.ts": {
-    "mtime": 1779826009.7148912,
-    "hash": "ac3f2535b4f58dee0bcbfc3378d34526"
+    "mtime": 1780857963.5766592,
+    "hash": "2870d3244fa510cdafb3616af39f497e"
   },
   "src/page-similarity.ts": {
     "mtime": 1780659171.3196821,
@@ -608,8 +608,8 @@
     "hash": "24ff302082d65814674deb2181f12eaf"
   },
   "src/phases/query.ts": {
-    "mtime": 1780824755.616182,
-    "hash": "0dd51dfb936f990e9b52afad2e5b44df"
+    "mtime": 1780857974.336181,
+    "hash": "4b50a8a0921cfc42fed530ec1b57dfdb"
   },
   "src/phases/parse-with-retry.ts": {
     "mtime": 1780824701.70632,
@@ -624,24 +624,24 @@
     "hash": "a6c9831ccfbcbea8c627cdf95583b038"
   },
   "src/phases/lint-chat.ts": {
-    "mtime": 1780661371.0676622,
-    "hash": "618eeffa7cd7fedc946b73f286a66a77"
+    "mtime": 1780857882.6810665,
+    "hash": "84ad425bda168a4be0ce5761b88f6122"
   },
   "src/phases/ingest.ts": {
-    "mtime": 1780824741.2587702,
-    "hash": "8d64be2bd1bb876bd06c9e9f8b9bedb7"
+    "mtime": 1780857819.0322926,
+    "hash": "a6179a7f9833d9a3683d8aeb7127a9b6"
   },
   "src/phases/format-utils.ts": {
     "mtime": 1780635282.972795,
     "hash": "59ac69ae50cc9a2ba12768595513c120"
   },
   "src/phases/format.ts": {
-    "mtime": 1780824717.723478,
-    "hash": "f2e695b1028a74bdc9299a1c60e2f025"
+    "mtime": 1780857948.8881905,
+    "hash": "80fcbc934cc995705761821589578ca3"
   },
   "src/phases/init.ts": {
-    "mtime": 1780661371.0676622,
-    "hash": "93788847dd9c740dccccbf59bdc9a776"
+    "mtime": 1780857927.3981302,
+    "hash": "6fd84db56a7c6fb7b2a4a34212152e45"
   },
   "src/phases/chat.ts": {
     "mtime": 1780661371.0676622,
@@ -660,8 +660,8 @@
     "hash": "8f26138e188efe03b33ed4ac6c7ef1fa"
   },
   "src/phases/lint.ts": {
-    "mtime": 1780824793.9047344,
-    "hash": "6eb122ae95f331f1c7fe507a4dea021c"
+    "mtime": 1780857846.3750637,
+    "hash": "60ac09dd6fef0d8b303f34c383183fa4"
   },
   "src/phases/zod-schemas.ts": {
     "mtime": 1780635282.9736097,
@@ -680,8 +680,8 @@
     "hash": "e8b9b29fcb9b75abdc1fd50f904338a5"
   },
   "CHANGELOG.md": {
-    "mtime": 1780810040.114185,
-    "hash": "1409c2b24142a3a4ea2805f923c248cf"
+    "mtime": 1780827492.5117297,
+    "hash": "1efe41006ca7fc2d9f6d38379254104d"
   },
   "prompts/evaluator.md": {
     "mtime": 1779363957.1608365,
@@ -716,8 +716,8 @@
     "hash": "6aa3ffc3efb80133a0b6377dd84581f6"
   },
   "prompts/vision-pdf.md": {
-    "mtime": 1780824583.932298,
-    "hash": "b3a2ed9d96b15de3ddbd95346a852d86"
+    "mtime": 1780857144.0596018,
+    "hash": "836745426d7f73d954bee47375e64de9"
   },
   "prompts/query-fix-links.md": {
     "mtime": 1780824614.7311273,
@@ -740,8 +740,8 @@
     "hash": "7bbd9acb9c6de2869ce4f80d91741cd0"
   },
   "prompts/vision-excalidraw.md": {
-    "mtime": 1780824593.007278,
-    "hash": "6e7ba7482a775bd9bfdba07ed726f8f0"
+    "mtime": 1780856981.7132297,
+    "hash": "daab4267c31558e9e89488f57984ad3c"
   },
   "prompts/init.md": {
     "mtime": 1779657227.6821804,
@@ -752,8 +752,8 @@
     "hash": "c429cd10245c8de0d3ad8d8f3aad304b"
   },
   "prompts/vision-structure.md": {
-    "mtime": 1780824570.3274972,
-    "hash": "2ab8c588bf0150e1c8468ccf55f1d9ca"
+    "mtime": 1780857137.7297242,
+    "hash": "a3d9030298ee32b280fdadde4b2cf208"
   },
   "prompts/ingest-entities.md": {
     "mtime": 1780342723.7291093,
@@ -764,8 +764,8 @@
     "hash": "9984e9ed41641d9f1926bfe4fd536acf"
   },
   "templates/_format_schema.md": {
-    "mtime": 1779657227.6854622,
-    "hash": "d084ce31e8d83caa17969446c887f882"
+    "mtime": 1780857268.9133437,
+    "hash": "38455998e1232a87d38a012f2e4d850d"
   },
   "tests/fixtures/format-sample.md": {
     "mtime": 1779363957.1652005,
@@ -792,8 +792,8 @@
     "hash": "8446524efc0813523e4aed7a6f9818e1"
   },
   "lat.md/domain.md": {
-    "mtime": 1779711716.8578558,
-    "hash": "b8e08c6e3528f4eee6d22e3f966a957b"
+    "mtime": 1780858249.1013489,
+    "hash": "b9d645bbbf095a841613ca04fba9a395"
   },
   "lat.md/architecture.md": {
     "mtime": 1780660826.1658301,
@@ -808,7 +808,7 @@
     "hash": "6faa7a8059e9435570048fece21fa637"
   },
   "lat.md/operations.md": {
-    "mtime": 1780809936.5249944,
-    "hash": "68bfbbd315530d4bf2fa17be452a7087"
+    "mtime": 1780858229.8394308,
+    "hash": "3a10453e3bcf54093fa57973fcad8db9"
   }
 }

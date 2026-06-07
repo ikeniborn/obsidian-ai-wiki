@@ -144,14 +144,14 @@ describe("runLintFixChat", () => {
     expect(indexCall![1]).toContain("- [[MyPage]] MyPage.md — summary of MyPage");
   });
 
-  it("passes schema_block to LLM system message when schema file present", async () => {
+  it("includes the bundled wiki schema conventions block and never reads a vault schema file", async () => {
     const wikiPath = "!Wiki/test";
-    const schemaContent = "# Wiki Schema\n- lowercase tags";
     const pages = { [`${wikiPath}/Page.md`]: "---\ntags: []\n---\n# Page" };
     const vaultTools = makeVaultTools(pages);
+    const readPaths: string[] = [];
     (vaultTools.read as ReturnType<typeof vi.fn>).mockImplementation(async (path: string) => {
-      if (path === "!Wiki/_config/_wiki_schema.md") return schemaContent;
-      throw new Error("not found");
+      readPaths.push(path);
+      return pages[path] ?? "";
     });
 
     const llm = makeLlm({ summary: "done", pages: [] }) as any;
@@ -174,34 +174,6 @@ describe("runLintFixChat", () => {
     const createMock = llm.chat.completions.create as ReturnType<typeof vi.fn>;
     const systemMsg = createMock.mock.calls[0]?.[0]?.messages?.find((m: any) => m.role === "system");
     expect(systemMsg?.content).toContain("Конвенции (_wiki_schema.md):");
-    expect(systemMsg?.content).toContain(schemaContent);
-  });
-
-  it("passes empty schema_block when schema file absent", async () => {
-    const wikiPath = "!Wiki/test";
-    const pages = { [`${wikiPath}/Page.md`]: "---\ntags: []\n---\n# Page" };
-    const vaultTools = makeVaultTools(pages);
-    // read already throws by default in makeVaultTools
-
-    const llm = makeLlm({ summary: "done", pages: [] }) as any;
-    const req: RunRequest = {
-      operation: "lint-chat",
-      args: [],
-      cwd: "/vault",
-      signal: makeSignal(),
-      timeoutMs: 30000,
-      domainId: "test",
-      context: "lint report",
-      chatMessages: [{ role: "user", content: "fix" }],
-    };
-    const domain = { id: "test", name: "Test", wiki_folder: "test", entity_types: [], language_notes: "", source_paths: [] };
-
-    for await (const _ of runLintFixChat(req, vaultTools as any, "/vault", domain, llm, "model", {}, makeSignal())) {
-      // drain
-    }
-
-    const createMock = llm.chat.completions.create as ReturnType<typeof vi.fn>;
-    const systemMsg = createMock.mock.calls[0]?.[0]?.messages?.find((m: any) => m.role === "system");
-    expect(systemMsg?.content).not.toContain("Конвенции (_wiki_schema.md):");
+    expect(readPaths.some((p) => p.includes("_wiki_schema.md"))).toBe(false);
   });
 });

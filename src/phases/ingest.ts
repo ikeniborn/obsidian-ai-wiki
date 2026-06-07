@@ -11,8 +11,9 @@ import type { WikiPagesOutput, EntitiesOutput } from "./zod-schemas";
 import ingestTemplate from "../../prompts/ingest.md";
 import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
 import fixPathsTemplate from "../../prompts/ingest-fix-paths.md";
+import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
-import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
+import { domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureWikiSources, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
 import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation } from "../wiki-index";
@@ -103,10 +104,8 @@ export async function* runIngest(
 
   await ensureDomainConfig(vaultTools, domainRoot);
   void graphDepth;
-  const [schemaContent, indexContent] = await Promise.all([
-    tryRead(vaultTools, GLOBAL_WIKI_SCHEMA_PATH),
-    tryRead(vaultTools, domainIndexPath(domainRoot)),
-  ]);
+  const schemaContent = wikiSchemaTemplate;
+  const indexContent = await tryRead(vaultTools, domainIndexPath(domainRoot));
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
   const nonMetaPaths = existingPaths.filter((f) => !f.endsWith("_index.md"));
   const annotations = cachedAnnotations ?? parseIndexAnnotations(indexContent);

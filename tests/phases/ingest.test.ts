@@ -523,11 +523,11 @@ describe("runIngest", () => {
     expect(tu?.name).toBe("Update");
   });
 
-  it("reads wiki schema from global _config/ folder", async () => {
-    let schemaReadPath = "";
+  it("uses bundled wiki schema — never reads a vault schema file", async () => {
+    const readPaths: string[] = [];
     const adapter = mockAdapter({
       read: vi.fn().mockImplementation(async (path: string) => {
-        if (path.includes("_wiki_schema")) schemaReadPath = path;
+        readPaths.push(path);
         return "";
       }),
       list: vi.fn().mockResolvedValue({ files: [], folders: [] }),
@@ -539,7 +539,7 @@ describe("runIngest", () => {
     ]);
     await collect(runIngest([`${VAULT_ROOT}/Sources/doc.md`], vt, llm, "model", [domain], VAULT_ROOT,
       new AbortController().signal));
-    expect(schemaReadPath).toContain("_config/_wiki_schema.md");
+    expect(readPaths.some((p) => p.includes("_wiki_schema"))).toBe(false);
   });
 
   it("filters stale wiki_articles links after ingest", async () => {

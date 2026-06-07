@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runStorageMigration, StorageMigrationConflictError } from "../src/storage-migration";
+import { runStorageMigration, StorageMigrationConflictError, cleanupBundledSchemaCopies } from "../src/storage-migration";
 
 function makeVault(files: Map<string, string>, mtimes: Map<string, number> = new Map()) {
   const adapter = {
@@ -63,34 +63,15 @@ describe("runStorageMigration", () => {
     expect(files.has("!Wiki/os/.config/_log.md")).toBe(false);
   });
 
-  it("picks schema with latest mtime across domains", async () => {
-    const domainJson = JSON.stringify([
-      { id: "a", wiki_folder: "a" },
-      { id: "b", wiki_folder: "b" },
-    ]);
-    const files = new Map([
-      ["!Wiki/.config/_domain.json", domainJson],
-      ["!Wiki/.config/_wiki_schema.md", "old schema"],
-      ["!Wiki/.config/_format_schema.md", "old format"],
-      ["!Wiki/a/.config/_wiki_schema.md", "schema from a"],
-      ["!Wiki/b/.config/_wiki_schema.md", "schema from b"],
-    ]);
-    const mtimes = new Map([
-      ["!Wiki/a/.config/_wiki_schema.md", 1000],
-      ["!Wiki/b/.config/_wiki_schema.md", 2000],
-    ]);
-    await runStorageMigration(makeVault(files, mtimes));
-    expect(files.get("!Wiki/_config/_wiki_schema.md")).toBe("schema from b");
-  });
-
-  it("falls back to old global schema when no per-domain copy exists", async () => {
+  it("does not write schema files to the new global _config (schemas are bundled)", async () => {
     const files = new Map([
       ["!Wiki/.config/_domain.json", DOMAIN_JSON],
-      ["!Wiki/.config/_wiki_schema.md", "bundled schema"],
-      ["!Wiki/.config/_format_schema.md", "bundled format"],
+      ["!Wiki/.config/_wiki_schema.md", "old schema"],
+      ["!Wiki/.config/_format_schema.md", "old format"],
     ]);
     await runStorageMigration(makeVault(files));
-    expect(files.get("!Wiki/_config/_wiki_schema.md")).toBe("bundled schema");
+    expect(files.has("!Wiki/_config/_wiki_schema.md")).toBe(false);
+    expect(files.has("!Wiki/_config/_format_schema.md")).toBe(false);
   });
 
   it("merges _agent.jsonl lines to global path", async () => {
@@ -122,5 +103,26 @@ describe("runStorageMigration", () => {
     await runStorageMigration(makeVault(files));
     expect(files.has("!Wiki/.config/_domain.json")).toBe(false);
     expect(files.has("!Wiki/os/.config/_index.md")).toBe(false);
+  });
+});
+
+describe("cleanupBundledSchemaCopies", () => {
+  it("removes stale global schema copies from _config", async () => {
+    const files = new Map([
+      ["!Wiki/_config/_wiki_schema.md", "stale schema"],
+      ["!Wiki/_config/_format_schema.md", "stale format"],
+      ["!Wiki/_config/_domain.json", DOMAIN_JSON],
+    ]);
+    await cleanupBundledSchemaCopies(makeVault(files));
+    expect(files.has("!Wiki/_config/_wiki_schema.md")).toBe(false);
+    expect(files.has("!Wiki/_config/_format_schema.md")).toBe(false);
+    // unrelated config untouched
+    expect(files.has("!Wiki/_config/_domain.json")).toBe(true);
+  });
+
+  it("no-op when schema copies absent", async () => {
+    const files = new Map([["!Wiki/_config/_domain.json", DOMAIN_JSON]]);
+    await cleanupBundledSchemaCopies(makeVault(files));
+    expect(files.has("!Wiki/_config/_domain.json")).toBe(true);
   });
 });

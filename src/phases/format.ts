@@ -7,7 +7,6 @@ import restoreTokensTemplate from "../../prompts/format-restore-tokens.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
 import { missingTokensWithContext, appendMissingLines, restoreObsidianEmbeds, missingObsidianEmbeds, parseSentinelOutput } from "./format-utils";
-import { GLOBAL_FORMAT_SCHEMA_PATH } from "../wiki-path";
 import { fixWikiLinks } from "../wiki-link-validator";
 import { FormatBaseSchema, FormatWithVisionSchema } from "./zod-schemas";
 import { structuralErrorCounter } from "../structural-error-counter";
@@ -95,14 +94,7 @@ export async function* runFormat(
     return;
   }
 
-  const formatSchemaPath = GLOBAL_FORMAT_SCHEMA_PATH;
-  let formatSchema: string;
-  try {
-    formatSchema = await vaultTools.read(formatSchemaPath);
-  } catch {
-    formatSchema = formatSchemaDefault;
-    try { await vaultTools.write(formatSchemaPath, formatSchemaDefault); } catch { /* не блокируем */ }
-  }
+  const formatSchema = formatSchemaDefault;
   yield { kind: "tool_result", ok: true, preview: `${original.length} chars` };
 
   const visionDescriptions = new Map<string, string>();

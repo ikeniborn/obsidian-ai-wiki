@@ -281,23 +281,15 @@ describe("runFormat", () => {
     expect(err!.message).not.toContain("Settings →");
   });
 
-  it("reads format schema from global _config/ folder", async () => {
-    let schemaReadPath = "";
-    const adapter = mockAdapter({
-      [`${VAULT}/_config/_format_schema.md`]: "schema content",
-      [`${VAULT}/${FILE}`]: "# Page\ncontent",
-    });
-    const origRead = adapter.read as ReturnType<typeof vi.fn>;
-    origRead.mockImplementation(async (path: string) => {
-      schemaReadPath = path;
-      if (path === `${VAULT}/_config/_format_schema.md`) return "schema content";
-      if (path === `${VAULT}/${FILE}`) return "# Page\ncontent";
-      return "";
-    });
+  it("uses bundled format schema — never reads or writes a vault schema file", async () => {
+    const adapter = mockAdapter({ [`${VAULT}/${FILE}`]: "# Page\ncontent" });
     const vt = new VaultTools(adapter, VAULT);
     await collect(runFormat([`${VAULT}/${FILE}`], vt,
       makeLlm(makeSentinel("ok", "---\ntags: []\n---\n\n# Page")), "model", false, [], new AbortController().signal));
-    expect(schemaReadPath).toContain("_config/_format_schema.md");
+    const readPaths = (adapter.read as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0] as string);
+    const writePaths = (adapter.write as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0] as string);
+    expect(readPaths.some((p) => p.includes("_format_schema.md"))).toBe(false);
+    expect(writePaths.some((p) => p.includes("_format_schema.md"))).toBe(false);
   });
 
   it("truncation error — native-agent hint", async () => {

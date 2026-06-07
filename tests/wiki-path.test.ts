@@ -3,8 +3,6 @@ import {
   WIKI_ROOT,
   GLOBAL_CONFIG_DIR,
   GLOBAL_DOMAIN_PATH,
-  GLOBAL_WIKI_SCHEMA_PATH,
-  GLOBAL_FORMAT_SCHEMA_PATH,
   GLOBAL_AGENT_LOG_PATH,
   GLOBAL_DEV_LOG_PATH,
   domainWikiFolder,
@@ -23,8 +21,6 @@ describe("WIKI_ROOT", () => {
 describe("global constants", () => {
   it("GLOBAL_CONFIG_DIR", () => expect(GLOBAL_CONFIG_DIR).toBe("!Wiki/_config"));
   it("GLOBAL_DOMAIN_PATH", () => expect(GLOBAL_DOMAIN_PATH).toBe("!Wiki/_config/_domain.json"));
-  it("GLOBAL_WIKI_SCHEMA_PATH", () => expect(GLOBAL_WIKI_SCHEMA_PATH).toBe("!Wiki/_config/_wiki_schema.md"));
-  it("GLOBAL_FORMAT_SCHEMA_PATH", () => expect(GLOBAL_FORMAT_SCHEMA_PATH).toBe("!Wiki/_config/_format_schema.md"));
   it("GLOBAL_AGENT_LOG_PATH", () => expect(GLOBAL_AGENT_LOG_PATH).toBe("!Wiki/_config/_agent.jsonl"));
   it("GLOBAL_DEV_LOG_PATH", () => expect(GLOBAL_DEV_LOG_PATH).toBe("!Wiki/_config/_dev.jsonl"));
 });

@@ -2,8 +2,6 @@ export const WIKI_ROOT = "!Wiki";
 
 export const GLOBAL_CONFIG_DIR = `${WIKI_ROOT}/_config`;
 export const GLOBAL_DOMAIN_PATH = `${GLOBAL_CONFIG_DIR}/_domain.json`;
-export const GLOBAL_WIKI_SCHEMA_PATH = `${GLOBAL_CONFIG_DIR}/_wiki_schema.md`;
-export const GLOBAL_FORMAT_SCHEMA_PATH = `${GLOBAL_CONFIG_DIR}/_format_schema.md`;
 export const GLOBAL_AGENT_LOG_PATH = `${GLOBAL_CONFIG_DIR}/_agent.jsonl`;
 export const GLOBAL_DEV_LOG_PATH = `${GLOBAL_CONFIG_DIR}/_dev.jsonl`;
 

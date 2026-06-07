@@ -9,7 +9,7 @@ import { i18n } from "./i18n";
 import { DomainStore } from "./domain-store";
 import { LocalConfigStore } from "./local-config";
 import { structuralErrorCounter } from "./structural-error-counter";
-import { runStorageMigration } from "./storage-migration";
+import { runStorageMigration, cleanupBundledSchemaCopies } from "./storage-migration";
 import { GLOBAL_DOMAIN_PATH, domainWikiFolder } from "./wiki-path";
 
 export default class LlmWikiPlugin extends Plugin {
@@ -29,6 +29,8 @@ export default class LlmWikiPlugin extends Plugin {
       new Notice(`AI Wiki: storage migration failed — ${msg}`, 0);
       console.error("[AI Wiki] storage migration error:", e);
     }
+    // Schemas are bundled & delivered via release; drop any stale vault copies.
+    await cleanupBundledSchemaCopies(this.app.vault);
     await migrateLegacyData(this, this.domainStore, this.localConfigStore);
     await this.loadSettings();
     await migrateToLocalV1(this, this.localConfigStore);

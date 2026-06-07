@@ -6,8 +6,9 @@ import { parseWithRetry } from "./parse-with-retry";
 import { LintChatSchema } from "./zod-schemas";
 import type { LintChatResponse } from "./zod-schemas";
 import lintChatTemplate from "../../prompts/lint-chat.md";
+import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
-import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder } from "../wiki-path";
+import { domainWikiFolder } from "../wiki-path";
 import { upsertIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
 import { ensureDomainConfig } from "../domain-config";
@@ -37,7 +38,7 @@ export async function* runLintFixChat(
   // 1. Load domain pages (Glob emitted immediately — before any async I/O)
   yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**` } };
   await ensureDomainConfig(vaultTools, wikiVaultPath);
-  const schemaContent = await tryRead(vaultTools, GLOBAL_WIKI_SCHEMA_PATH);
+  const schemaContent = wikiSchemaTemplate;
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
   const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
@@ -115,8 +116,4 @@ export async function* runLintFixChat(
 
   // 5. Emit result
   yield { kind: "result", durationMs: Date.now() - start, text: parsed.summary, outputTokens: result.outputTokens || undefined };
-}
-
-async function tryRead(vaultTools: VaultTools, path: string): Promise<string> {
-  try { return await vaultTools.read(path); } catch { return ""; }
 }

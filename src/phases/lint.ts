@@ -8,8 +8,9 @@ import { EntityTypesDeltaSchema, LintOutputSchema } from "./zod-schemas";
 import type { LintOutput } from "./zod-schemas";
 import lintTemplate from "../../prompts/lint.md";
 import lintActualizeTemplate from "../../prompts/lint-actualize.md";
+import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
-import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, domainIndexPath, WIKI_ROOT } from "../wiki-path";
+import { domainWikiFolder, domainIndexPath, WIKI_ROOT } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, filterStaleWikiLinks, validateAndRepairWikiPageFrontmatter, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
 import { checkGraphStructure, pageId, bfsExpand } from "../wiki-graph";
 import { checkWikiLinks, fixWikiLinks } from "../wiki-link-validator";
@@ -196,7 +197,7 @@ export async function* runLint(
 
     yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
     await ensureDomainConfig(vaultTools, wikiVaultPath);
-    const schemaContent = await tryRead(vaultTools, GLOBAL_WIKI_SCHEMA_PATH);
+    const schemaContent = wikiSchemaTemplate;
     const allFiles = await vaultTools.listFiles(wikiVaultPath);
     const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
     yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
