@@ -176,6 +176,7 @@ describe("format sentinel retry/salvage", () => {
     expect(events.some((e) => (e as { kind: string }).kind === "format_preview")).toBe(true);
   });
 
+  // @lat: [[tests#Format Sentinel Retry#Vision resume from temp store]]
   it("resume: second runFormat with same store does not re-analyze (cache hit)", async () => {
     const analyzeMock = vi.mocked(analyzeSingleAttachment);
     analyzeMock.mockClear();

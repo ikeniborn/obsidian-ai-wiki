@@ -390,6 +390,30 @@ When `runOperation` hangs on the first attempt and the idle timer fires, `AgentR
 
 When every `runOperation` attempt hangs and `maxRetries` is exhausted, `AgentRunner.run` throws a `DOMException` with message matching `/idle timeout/i`.
 
+### Heartbeat on tool events
+
+When an operation emits `tool_use`/`tool_result` events spaced under the idle threshold but totalling more than it, the idle timer is reset on each event so no retry fires and the final `result` is yielded.
+
+## Vision Temp Store
+
+Unit tests for [[src/phases/vision-temp-store.ts#VisionTempStore]] — per-run caching of vision descriptions and excalidraw PNGs under the plugin directory.
+
+### Description round-trip
+
+`putDescription` then `getDescription` for the same embed path returns the stored description; a missing path returns `null`.
+
+### PNG written to plugin dir
+
+`putPng` writes the decoded bytes to a `.png` file under the run directory, not the vault content tree.
+
+### Cleanup removes run dir
+
+`cleanup` calls the adapter's recursive `rmdir` on the run directory.
+
+### Methods swallow adapter errors
+
+Every store method resolves without throwing when the underlying adapter rejects.
+
 ## Format Sentinel Retry
 
 Integration tests for sentinel retry and salvage in `src/phases/format.ts`. Covers the retry loop, retry system prompt content, double failure, truncated-response salvage, and vision embed preservation.
@@ -413,3 +437,7 @@ When the LLM response contains `<<<REPORT>>>` and `<<<FORMATTED>>>` but no `<<<E
 ### Vision embed preserved
 
 When vision settings are enabled and the LLM returns a sentinel with vision markers listing an embed path that appears as `![[path]]` in the formatted content, Zod validation succeeds and `format_preview` is emitted.
+
+### Vision resume from temp store
+
+A second `runFormat` sharing the same `VisionTempStore` serves descriptions from the cache and does not call `analyzeSingleAttachment` again; both runs still emit `format_preview`.

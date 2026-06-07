@@ -30,6 +30,7 @@ describe("base64ToArrayBuffer", () => {
 });
 
 describe("VisionTempStore", () => {
+  // @lat: [[tests#Vision Temp Store#Description round-trip]]
   it("round-trips a description by embed path", async () => {
     const { vt } = memVault();
     const store = new VisionTempStore(vt, DIR);
@@ -43,6 +44,7 @@ describe("VisionTempStore", () => {
     expect(await store.getDescription("img/missing.png")).toBeNull();
   });
 
+  // @lat: [[tests#Vision Temp Store#PNG written to plugin dir]]
   it("writes PNG under the plugin dir, not the vault content tree", async () => {
     const { vt, bin } = memVault();
     const store = new VisionTempStore(vt, DIR);
@@ -53,6 +55,7 @@ describe("VisionTempStore", () => {
     expect(keys[0].endsWith(".png")).toBe(true);
   });
 
+  // @lat: [[tests#Vision Temp Store#Cleanup removes run dir]]
   it("cleanup removes the run dir recursively", async () => {
     const { vt, removed } = memVault();
     const store = new VisionTempStore(vt, DIR);
@@ -68,6 +71,7 @@ describe("VisionTempStore", () => {
     expect(await store.getDescription("img/a.png")).toBeNull();
   });
 
+  // @lat: [[tests#Vision Temp Store#Methods swallow adapter errors]]
   it("swallows adapter errors — never throws", async () => {
     const adapter: VaultAdapter = {
       read: () => Promise.reject(new Error("boom")),
