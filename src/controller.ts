@@ -556,7 +556,7 @@ export class WikiController {
         : openaiClient;
     }
 
-    return new AgentRunner(llm, s, vaultTools, vaultName, domains);
+    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? undefined);
   }
 
   private async logEvent(_vaultRoot: string, sessionId: string, op: WikiOperation, domainId: string | undefined, ev: RunEvent): Promise<void> {
