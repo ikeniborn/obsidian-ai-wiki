@@ -11,6 +11,7 @@ import { fixWikiLinks } from "../wiki-link-validator";
 import { FormatBaseSchema, FormatWithVisionSchema } from "./zod-schemas";
 import { structuralErrorCounter } from "../structural-error-counter";
 import { extractObsidianEmbedPaths, analyzeSingleAttachment } from "./attachment-analyzer";
+import type { VisionTempStore } from "./vision-temp-store";
 
 function parseFormatOutput(
   text: string,
@@ -69,6 +70,7 @@ export async function* runFormat(
   wikiVaultPath?: string,
   wikiLinkValidationRetries: number = 3,
   visionSettings: { enabled: boolean; model: string; language?: "auto" | "ru" | "en" | "es" } = { enabled: false, model: "" },
+  visionTempStore?: VisionTempStore,
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
   const filePath = args[0];
@@ -106,10 +108,17 @@ export async function* runFormat(
         if (signal.aborted) break;
         const filename = path.split("/").pop() ?? path;
         yield { kind: "tool_use", name: "Vision", input: { file_path: filename, model: visionSettings.model } };
+        const cached = await visionTempStore?.getDescription(path);
+        if (cached != null) {
+          visionDescriptions.set(path, cached);
+          yield { kind: "tool_result", ok: true, preview: cached };
+          continue;
+        }
         try {
-          const description = await analyzeSingleAttachment(path, vaultTools, llm, visionSettings.model, signal, filePath, lang);
+          const description = await analyzeSingleAttachment(path, vaultTools, llm, visionSettings.model, signal, filePath, lang, visionTempStore);
           if (description !== null) {
             visionDescriptions.set(path, description);
+            await visionTempStore?.putDescription(path, description);
             yield { kind: "tool_result", ok: true, preview: description };
           } else {
             yield { kind: "tool_result", ok: false, preview: "unknown extension" };
