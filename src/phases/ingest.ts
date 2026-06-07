@@ -10,6 +10,7 @@ import { WikiPagesOutputSchema, EntitiesOutputSchema } from "./zod-schemas";
 import type { WikiPagesOutput, EntitiesOutput } from "./zod-schemas";
 import ingestTemplate from "../../prompts/ingest.md";
 import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
+import fixPathsTemplate from "../../prompts/ingest-fix-paths.md";
 import { render } from "./template";
 import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
@@ -594,7 +595,7 @@ async function retryInvalidPaths(
     ...originalMessages,
     {
       role: "user",
-      content: `Пути нарушают правило 4 сегментов (!Wiki/<d>/<e>/<f>.md): ${invalidList}. Верни исправленный JSON-массив только для этих страниц.`,
+      content: render(fixPathsTemplate, { paths: invalidList }),
     },
   ];
   const retryParams = buildChatParams(model, retryMessages, opts, false);

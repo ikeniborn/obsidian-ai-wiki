@@ -1,5 +1,7 @@
 import type { LlmClient, LlmCallOptions } from "../types";
 import { buildChatParams, extractUsage } from "./llm-utils";
+import { render } from "./template";
+import queryFixLinksTemplate from "../../prompts/query-fix-links.md";
 import type OpenAI from "openai";
 
 export interface QueryLinkValidationResult {
@@ -37,11 +39,10 @@ export async function rewriteWithValidLinks(
   opts: LlmCallOptions,
   signal: AbortSignal,
 ): Promise<{ text: string; outputTokens: number }> {
-  const systemPrompt = [
-    `В ответе есть ссылки на несуществующие wiki-страницы: ${broken.join(", ")}.`,
-    `Перепиши ответ, используя только страницы из доступного списка: ${contextStems.join(", ")}.`,
-    `Не добавляй новых фактов. Сохраняй структуру и форматирование ответа.`,
-  ].join("\n");
+  const systemPrompt = render(queryFixLinksTemplate, {
+    broken: broken.join(", "),
+    available: contextStems.join(", "),
+  });
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },

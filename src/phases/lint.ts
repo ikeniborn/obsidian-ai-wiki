@@ -7,6 +7,7 @@ import { parseWithRetry } from "./parse-with-retry";
 import { EntityTypesDeltaSchema, LintOutputSchema } from "./zod-schemas";
 import type { LintOutput } from "./zod-schemas";
 import lintTemplate from "../../prompts/lint.md";
+import lintActualizeTemplate from "../../prompts/lint-actualize.md";
 import { render } from "./template";
 import { GLOBAL_WIKI_SCHEMA_PATH, domainWikiFolder, domainIndexPath, WIKI_ROOT } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, filterStaleWikiLinks, validateAndRepairWikiPageFrontmatter, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
@@ -657,20 +658,7 @@ async function actualizeDomainConfig(
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     {
       role: "system",
-      content: [
-        `Ты — архитектор wiki-базы знаний. Проанализируй текущий конфиг домена и реальное содержимое wiki.`,
-        `Верни ТОЛЬКО валидный JSON с обновлёнными полями:`,
-        `{`,
-        `  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"..."}],`,
-        `  "language_notes": "..."`,
-        `}`,
-        `Правила обновления:`,
-        `- Сохраняй существующие типы если они полезны, уточняй описания по реальному контенту`,
-        `- Добавляй новые типы если в wiki есть паттерны, не покрытые текущим конфигом`,
-        `- Убирай типы с нулевым покрытием только если уверен что они нерелевантны`,
-        `- Обновляй extraction_cues по реальным словам из wiki-страниц`,
-        `- language_notes — правила написания терминов, которые агент должен соблюдать`,
-      ].join("\n"),
+      content: lintActualizeTemplate,
     },
     {
       role: "user",

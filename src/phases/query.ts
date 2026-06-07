@@ -6,6 +6,7 @@ import { buildChatParams, extractStreamDeltas, extractUsage, wrapStreamWithStats
 import { parseWithRetry } from "./parse-with-retry";
 import { SeedsSchema } from "./zod-schemas";
 import queryTemplate from "../../prompts/query.md";
+import querySeedsTemplate from "../../prompts/query-seeds.md";
 import { render } from "./template";
 import { domainWikiFolder, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
@@ -287,14 +288,12 @@ async function llmSelectSeeds(
     if (ann) annotatedLines.push(`${id}: ${ann}`);
     else unindexedIds.push(id);
   }
-  const prompt = [
-    `Question: "${question}"`,
-    `Wiki index with annotations:\n${annotatedLines.join("\n")}`,
-    unindexedIds.length ? `Pages not yet indexed: ${unindexedIds.join(", ")}` : "",
-    `\nReturn JSON only matching this shape (most relevant page names — bare names, no path, no .md):`,
-    `\n## Output JSON Example`,
+  const prompt = render(querySeedsTemplate, {
+    question,
+    annotated: annotatedLines.join("\n"),
+    unindexed: unindexedIds.length ? `\nPages not yet indexed: ${unindexedIds.join(", ")}` : "",
     example,
-  ].filter(Boolean).join("\n");
+  });
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "user", content: prompt },

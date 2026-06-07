@@ -2,6 +2,27 @@
 
 How LLM calls are assembled, executed, and validated. All calls go through `buildChatParams`; structured calls go through `parseWithRetry`.
 
+## Prompt Files
+
+All LLM instruction text lives in `prompts/*.md`, imported as a string via the esbuild `.md` text loader (type declared in [[src/md-modules.d.ts]]) and substituted with [[src/phases/template.ts#render]] (`{{key}}` placeholders). No prompt text is hardcoded in `.ts` source.
+
+Beyond the per-phase prompts (`base.md`, `chat.md`, `query.md`, `ingest.md`, `lint.md`, …), these were extracted from inline string literals:
+
+| File | Used by | Placeholders |
+|---|---|---|
+| `vision-structure.md` | shared rules for image/pdf | — |
+| `vision-image.md` | [[src/phases/attachment-analyzer.ts#imageSystem]] | `structure_rules`, `lang` |
+| `vision-pdf.md` | [[src/phases/attachment-analyzer.ts#pdfSystem]] | `structure_rules`, `lang` |
+| `vision-excalidraw.md` | [[src/phases/attachment-analyzer.ts#excalidrawSystem]] | `lang` |
+| `lint-actualize.md` | `actualizeDomainConfig` in [[src/phases/lint.ts]] | — (static) |
+| `query-seeds.md` | seed selection in [[src/phases/query.ts]] | `question`, `annotated`, `unindexed`, `example` |
+| `query-fix-links.md` | [[src/phases/query-link-validator.ts#rewriteWithValidLinks]] | `broken`, `available` |
+| `repair-json.md` | [[src/phases/parse-with-retry.ts#formatZodFeedback]] | `detail` |
+| `format-restore-tokens.md` | token-restore retry in [[src/phases/format.ts]] | `tokens` |
+| `ingest-fix-paths.md` | path-correction retry in [[src/phases/ingest.ts]] | `paths` |
+
+The dynamic parts (error bullets, JSON example, language switch via `langInstruction`, token/path lists) stay in code; only the instruction text moved to `.md`. Short user-message scaffolding labels (`Источник: `, `Вопрос: `) remain inline — data framing, not prompts. Contract checks in [[tests/prompts.test.ts]] assert each file's placeholders and that `render` leaves no leftover braces.
+
 ## buildChatParams
 
 Assembles the final `messages[]` array for an LLM call. Always prepends `base.md` as the system message via `prependBaseContract`. If `opts.systemPrompt` is set, appends `## Уточнение\n<prompt>` to the system message.

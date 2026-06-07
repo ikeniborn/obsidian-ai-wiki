@@ -9,6 +9,8 @@ import {
 } from "./llm-utils";
 import type { LlmStreamStats } from "./llm-utils";
 import { structuralErrorCounter } from "../structural-error-counter";
+import { render } from "./template";
+import repairJson from "../../prompts/repair-json.md";
 
 export type CallSite =
   | "init.bootstrap"
@@ -49,24 +51,15 @@ export interface ParseWithRetryResult<T> {
 
 export function formatZodFeedback(err: ZodError | null, raw: string): string {
   if (err === null) {
-    return [
-      "Previous response was not valid JSON.",
-      `Raw output (truncated):`,
-      raw.slice(0, 2000),
-      "",
-      "Return ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary.",
-    ].join("\n");
+    const detail = ["Previous response was not valid JSON.", `Raw output (truncated):`, raw.slice(0, 2000)].join("\n");
+    return render(repairJson, { detail });
   }
   const bullets = err.issues.slice(0, 20).map((i) => {
     const path = i.path.length ? i.path.join(".") : "(root)";
     return `- ${path}: ${i.message}`;
   }).join("\n");
-  return [
-    "Previous response failed validation:",
-    bullets,
-    "",
-    "Return ONLY a single valid JSON object matching the schema. No markdown fences, no <think> tags, no commentary.",
-  ].join("\n");
+  const detail = ["Previous response failed validation:", bullets].join("\n");
+  return render(repairJson, { detail });
 }
 
 async function streamOnce(

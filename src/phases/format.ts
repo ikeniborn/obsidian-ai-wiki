@@ -3,6 +3,7 @@ import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types"
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas, extractUsage, wrapStreamWithStats, buildLlmCallStatsEvent } from "./llm-utils";
 import formatTemplate from "../../prompts/format.md";
+import restoreTokensTemplate from "../../prompts/format-restore-tokens.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
 import { missingTokensWithContext, appendMissingLines, restoreObsidianEmbeds, missingObsidianEmbeds, parseSentinelOutput } from "./format-utils";
@@ -294,7 +295,7 @@ export async function* runFormat(
       { role: "assistant", content: fullText },
       {
         role: "user",
-        content: `ВОССТАНОВИ ТОКЕНЫ: следующие значения из оригинала отсутствуют в форматированном тексте. Верни полный ответ используя маркеры <<<REPORT>>>...<<<END>>> где formatted содержит все перечисленные токены.\nПропущенные: ${tokenList}`,
+        content: render(restoreTokensTemplate, { tokens: tokenList }),
       },
     ];
     const restoreParams = buildChatParams(model, restoreMessages, opts, true);
