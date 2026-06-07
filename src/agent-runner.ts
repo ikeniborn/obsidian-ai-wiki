@@ -7,6 +7,7 @@ import { runLintFixChat } from "./phases/lint-chat";
 import { runInit } from "./phases/init";
 import { runEvaluator } from "./phases/evaluator";
 import { runFormat } from "./phases/format";
+import { VisionTempStore } from "./phases/vision-temp-store";
 import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, RunEvent, RunRequest } from "./types";
 import type { VaultTools } from "./vault-tools";
 import { wrapWithJsonFallback } from "./phases/llm-utils";
@@ -21,6 +22,7 @@ export class AgentRunner {
     private vaultTools: VaultTools,
     private vaultName: string,
     private domains: DomainEntry[],
+    private visionTempBaseDir?: string,
   ) {
     this.llm = wrapWithJsonFallback(llm);
   }
@@ -86,6 +88,7 @@ export class AgentRunner {
     vaultRoot: string,
     domains: DomainEntry[],
     similarity: PageSimilarityService | undefined,
+    visionTempStore?: VisionTempStore,
   ): AsyncGenerator<RunEvent, void, void> {
     switch (req.operation) {
       case "ingest":
@@ -123,7 +126,7 @@ export class AgentRunner {
         const formatArgs = req.args.filter((a) => a !== "--no-vision");
         const baseVisionSettings = this.settings.vision ?? { enabled: false, model: "", language: "auto" as const };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
-        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings);
+        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore);
         break;
       }
       default: {
@@ -155,6 +158,13 @@ export class AgentRunner {
     const maxRetries = this.settings.llmIdleRetries ?? 3;
     let attempt = 0;
 
+    let visionTempStore: VisionTempStore | undefined;
+    if (req.operation === "format" && this.settings.vision?.enabled && this.visionTempBaseDir) {
+      const runId = Date.now().toString(36);
+      visionTempStore = new VisionTempStore(this.vaultTools, `${this.visionTempBaseDir}/.vision-tmp/${runId}`);
+    }
+
+    try {
     while (true) {
       const idleCtrl = new AbortController();
       const signalAny = (AbortSignal as unknown as { any(this: void, signals: AbortSignal[]): AbortSignal }).any;
@@ -172,7 +182,7 @@ export class AgentRunner {
 
       let finalResultText = "";
       try {
-        for await (const ev of this.runOperation({ ...req, signal: combined }, model, opts, vaultRoot, domains, similarity)) {
+        for await (const ev of this.runOperation({ ...req, signal: combined }, model, opts, vaultRoot, domains, similarity, visionTempStore)) {
           if (
             ev.kind === "llm_call_stats" || ev.kind === "assistant_text" ||
             ev.kind === "tool_use" || ev.kind === "tool_result"
@@ -228,6 +238,9 @@ export class AgentRunner {
         }
         throw err;
       }
+    }
+    } finally {
+      await visionTempStore?.cleanup();
     }
   }
 
