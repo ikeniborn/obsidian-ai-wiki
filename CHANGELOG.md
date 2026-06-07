@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.164 — 2026-06-07
+
+### Новое
+- feat(vision): diagram annotations are now exhaustive verbatim descriptions — every node, label, and connection transcribed exactly, not a brief summary
+- feat(vision): image diagrams recreate the structure as a mermaid block (flow/architecture) or a markdown table (grid/matrix) after the verbatim description
+- feat(vision): PDF diagrams add the same mermaid/table recreation after the verbatim description
+- feat(vision): dedicated Excalidraw prompt — always treats the render as a scheme, emits element-by-element verbatim description (no mermaid)
+
+---
+
 ## 0.1.163 — 2026-06-07
 
 ### Новое
