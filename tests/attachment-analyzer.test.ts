@@ -4,6 +4,7 @@ import {
   insertDescriptions,
   analyzeImage,
   analyzeAttachments,
+  analyzeSingleAttachment,
   getMimeType,
   stripImageDataUriPrefix,
 } from "../src/phases/attachment-analyzer";
@@ -250,5 +251,21 @@ describe("analyzeAttachments — excalidraw", () => {
     const desc = result.get("flow.excalidraw")!;
     expect(desc).toContain("A login flow");
     expect(desc).toContain("```mermaid");
+  });
+
+  it("persists the rendered PNG to the temp store via putPng", async () => {
+    const vaultTools = makeVaultTools();
+    (vaultTools.adapter.renderExcalidrawPng as ReturnType<typeof vi.fn>).mockResolvedValue("RENDEREDB64");
+    const llm = makeLlm("A flowchart.");
+    const store = {
+      getDescription: vi.fn(),
+      putDescription: vi.fn(),
+      putPng: vi.fn().mockResolvedValue(undefined),
+      cleanup: vi.fn(),
+    } as unknown as import("../src/phases/vision-temp-store").VisionTempStore;
+
+    await analyzeSingleAttachment("draw.excalidraw", vaultTools, llm, "gpt-4o-mini", new AbortController().signal, "", "auto", store);
+
+    expect(store.putPng).toHaveBeenCalledWith("draw.excalidraw", "RENDEREDB64");
   });
 });

@@ -6,6 +6,7 @@ import visionStructure from "../../prompts/vision-structure.md";
 import visionImage from "../../prompts/vision-image.md";
 import visionPdf from "../../prompts/vision-pdf.md";
 import visionExcalidraw from "../../prompts/vision-excalidraw.md";
+import type { VisionTempStore } from "./vision-temp-store";
 
 export function extractObsidianEmbedPaths(md: string): string[] {
   const paths: string[] = [];
@@ -186,6 +187,7 @@ export async function analyzeSingleAttachment(
   signal: AbortSignal,
   sourcePath: string = "",
   language: VisionLanguage = "auto",
+  visionTempStore?: VisionTempStore,
 ): Promise<string | null> {
   const resolved = vaultTools.resolveLink(path, sourcePath);
   // Skip embeds Obsidian can't resolve to an indexed vault file — a traversal
@@ -197,6 +199,7 @@ export async function analyzeSingleAttachment(
   if (isExcalidraw) {
     const b64 = await vaultTools.renderExcalidrawPng(resolved);
     if (!b64) return null;            // no host plugin / render failed → skip
+    await visionTempStore?.putPng(path, b64);
     return analyzeExcalidraw(b64, llm, model, signal, language);
   }
   if (ext === "pdf") {
