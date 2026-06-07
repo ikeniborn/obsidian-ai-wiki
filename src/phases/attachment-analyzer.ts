@@ -28,8 +28,9 @@ export function insertDescriptions(md: string, descriptions: Map<string, string>
     if (nextNonEmpty.startsWith("> *[Vision]")) continue;
     const desc = descriptions.get(path)!;
     if (desc.includes("\n")) {
-      // Multi-line (prose + mermaid/table): a marker line, a blank line, then the
-      // description verbatim at top level so the fence/table renders.
+      // Multi-line (verbatim diagram description + mermaid/table, or fenced code):
+      // a marker line, a blank line, then the description verbatim at top level so
+      // any fence/table/list renders.
       out.push("> *[Vision]*");
       out.push("");
       out.push(desc);
@@ -98,11 +99,11 @@ const STRUCTURE_RULES = `Return STRUCTURED markdown matching the content type. C
 - Ordered steps / sequence / pipeline → numbered list.
 - Unordered items / enumeration / set of features → bullet list with "- ".
 - Hierarchy / tree / nested structure → nested bullet list with indentation.
-- Diagram / flow / architecture (boxes + arrows) → FIRST a short prose description (what it depicts, the key nodes and how they connect), THEN a mermaid code block (\`\`\`mermaid ... \`\`\`) recreating it.
+- Diagram / flow / architecture / scheme (boxes, shapes, arrows) → FIRST a DETAILED, VERBATIM description of everything drawn: transcribe every node/box/label text exactly as written; describe every connection with its direction and any edge label (e.g. "A → B labelled 'retry'"); note groupings, containers, swimlanes, and the overall spatial layout; mention shape, color, or icon only when it carries meaning — be exhaustive, describe literally what is on the diagram, not a summary. THEN recreate the structure: a mermaid code block (\`\`\`mermaid ... \`\`\`) for flow / architecture / graph schemes, or a markdown table for grid / matrix schemes.
 - Math / formula / equation → LaTeX inside $...$ or $$...$$.
 - Code / config / terminal → fenced code block with language tag.
 - Single concept / photo / illustration → 1–3 plain sentences.
-Do NOT add boilerplate intros ("Here is...", "This image shows..."). Output ONLY the requested content (diagrams: the description + mermaid; other types: the single structured form).
+Do NOT add boilerplate intros ("Here is...", "This image shows..."). Output ONLY the requested content (diagrams: the verbatim description followed by the mermaid/table recreation; other types: the single structured form).
 Do NOT add headings (# or ##) — caller controls section structure.
 Do NOT add the marker "[Vision]" or any prefix — caller adds it if needed.
 Preserve any text visible in the source verbatim where it is data; transcribe — do not paraphrase.`;
@@ -112,7 +113,19 @@ function imageSystem(language: VisionLanguage): string {
 }
 
 function pdfSystem(language: VisionLanguage): string {
-  return `You are a precise document analyst. Extract the content of this multi-page document as STRUCTURED markdown.\nCover key sections, data tables, lists, and conclusions. Preserve table structure as markdown tables.\n${STRUCTURE_RULES}\n${langInstruction(language)}`;
+  return `You are a precise document analyst. Extract the content of this multi-page document as STRUCTURED markdown.\nCover key sections, data tables, lists, and conclusions. Preserve table structure as markdown tables. For any diagram or scheme, give a detailed verbatim description then recreate it as a mermaid block (flow / architecture) or a markdown table (grid / matrix).\n${STRUCTURE_RULES}\n${langInstruction(language)}`;
+}
+
+function excalidrawSystem(language: VisionLanguage): string {
+  return `You are a precise diagram analyst. The image is a rendered Excalidraw drawing — always a hand-drawn diagram, scheme, or flow, never a photo or document.
+Produce a DETAILED, VERBATIM description of everything drawn:
+- Transcribe every node, box, sticky-note, and label text EXACTLY as written — do not paraphrase or summarize.
+- Describe every connection with its direction and any edge label (e.g. "Auth → DB labelled 'query'"); list arrows, lines, and what they join.
+- Note groupings, containers, frames, swimlanes, and the overall spatial layout (top/bottom, left/right, columns).
+- Mention shape, color, or icon only when it carries meaning.
+Be exhaustive — describe literally what is on the canvas, element by element, not a high-level summary.
+Do NOT add boilerplate intros ("Here is...", "This diagram shows..."). Do NOT add headings (# or ##). Do NOT add the marker "[Vision]" or any prefix. Do NOT output a mermaid block — prose and lists only.
+${langInstruction(language)}`;
 }
 
 export async function analyzeImage(
@@ -176,7 +189,7 @@ export async function analyzeExcalidraw(
   signal: AbortSignal,
   language: VisionLanguage = "auto",
 ): Promise<string> {
-  return callVisionLlm(llm, model, imageSystem(language), [
+  return callVisionLlm(llm, model, excalidrawSystem(language), [
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } },
   ], signal);
 }

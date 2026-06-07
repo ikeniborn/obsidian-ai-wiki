@@ -39434,11 +39434,11 @@ var STRUCTURE_RULES = `Return STRUCTURED markdown matching the content type. Cho
 - Ordered steps / sequence / pipeline \u2192 numbered list.
 - Unordered items / enumeration / set of features \u2192 bullet list with "- ".
 - Hierarchy / tree / nested structure \u2192 nested bullet list with indentation.
-- Diagram / flow / architecture (boxes + arrows) \u2192 FIRST a short prose description (what it depicts, the key nodes and how they connect), THEN a mermaid code block (\`\`\`mermaid ... \`\`\`) recreating it.
+- Diagram / flow / architecture / scheme (boxes, shapes, arrows) \u2192 FIRST a DETAILED, VERBATIM description of everything drawn: transcribe every node/box/label text exactly as written; describe every connection with its direction and any edge label (e.g. "A \u2192 B labelled 'retry'"); note groupings, containers, swimlanes, and the overall spatial layout; mention shape, color, or icon only when it carries meaning \u2014 be exhaustive, describe literally what is on the diagram, not a summary. THEN recreate the structure: a mermaid code block (\`\`\`mermaid ... \`\`\`) for flow / architecture / graph schemes, or a markdown table for grid / matrix schemes.
 - Math / formula / equation \u2192 LaTeX inside $...$ or $$...$$.
 - Code / config / terminal \u2192 fenced code block with language tag.
 - Single concept / photo / illustration \u2192 1\u20133 plain sentences.
-Do NOT add boilerplate intros ("Here is...", "This image shows..."). Output ONLY the requested content (diagrams: the description + mermaid; other types: the single structured form).
+Do NOT add boilerplate intros ("Here is...", "This image shows..."). Output ONLY the requested content (diagrams: the verbatim description followed by the mermaid/table recreation; other types: the single structured form).
 Do NOT add headings (# or ##) \u2014 caller controls section structure.
 Do NOT add the marker "[Vision]" or any prefix \u2014 caller adds it if needed.
 Preserve any text visible in the source verbatim where it is data; transcribe \u2014 do not paraphrase.`;
@@ -39449,8 +39449,19 @@ ${langInstruction(language)}`;
 }
 function pdfSystem(language) {
   return `You are a precise document analyst. Extract the content of this multi-page document as STRUCTURED markdown.
-Cover key sections, data tables, lists, and conclusions. Preserve table structure as markdown tables.
+Cover key sections, data tables, lists, and conclusions. Preserve table structure as markdown tables. For any diagram or scheme, give a detailed verbatim description then recreate it as a mermaid block (flow / architecture) or a markdown table (grid / matrix).
 ${STRUCTURE_RULES}
+${langInstruction(language)}`;
+}
+function excalidrawSystem(language) {
+  return `You are a precise diagram analyst. The image is a rendered Excalidraw drawing \u2014 always a hand-drawn diagram, scheme, or flow, never a photo or document.
+Produce a DETAILED, VERBATIM description of everything drawn:
+- Transcribe every node, box, sticky-note, and label text EXACTLY as written \u2014 do not paraphrase or summarize.
+- Describe every connection with its direction and any edge label (e.g. "Auth \u2192 DB labelled 'query'"); list arrows, lines, and what they join.
+- Note groupings, containers, frames, swimlanes, and the overall spatial layout (top/bottom, left/right, columns).
+- Mention shape, color, or icon only when it carries meaning.
+Be exhaustive \u2014 describe literally what is on the canvas, element by element, not a high-level summary.
+Do NOT add boilerplate intros ("Here is...", "This diagram shows..."). Do NOT add headings (# or ##). Do NOT add the marker "[Vision]" or any prefix. Do NOT output a mermaid block \u2014 prose and lists only.
 ${langInstruction(language)}`;
 }
 async function analyzeImage(buffer, mimeType, llm, model, signal, language = "auto") {
@@ -39478,7 +39489,7 @@ async function analyzePdf(buffer, llm, model, signal, language = "auto") {
   return callVisionLlm(llm, model, pdfSystem(language), parts, signal);
 }
 async function analyzeExcalidraw(b64, llm, model, signal, language = "auto") {
-  return callVisionLlm(llm, model, imageSystem(language), [
+  return callVisionLlm(llm, model, excalidrawSystem(language), [
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } }
   ], signal);
 }
