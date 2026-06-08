@@ -39466,7 +39466,7 @@ async function analyzeExcalidraw(b64, llm, model, signal, language = "auto") {
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } }
   ], signal);
 }
-async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, sourcePath = "", language = "auto") {
+async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, sourcePath = "", language = "auto", visionTempStore) {
   const resolved = vaultTools.resolveLink(path2, sourcePath);
   if (resolved === null) return null;
   const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
@@ -39474,6 +39474,7 @@ async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, so
   if (isExcalidraw) {
     const b64 = await vaultTools.renderExcalidrawPng(resolved);
     if (!b64) return null;
+    await visionTempStore?.putPng(path2, b64);
     return analyzeExcalidraw(b64, llm, model, signal, language);
   }
   if (ext === "pdf") {
@@ -39522,7 +39523,7 @@ function extractImagePaths(md) {
 function truncationHint(backend) {
   return backend === "claude-agent" ? "\u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442: env CLAUDE_CODE_MAX_OUTPUT_TOKENS \u0432 iclaude.sh" : "\u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442: Settings \u2192 per-operation \u2192 format \u2192 maxTokens";
 }
-async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, signal, opts = {}, backend = "native-agent", wikiVaultPath, wikiLinkValidationRetries = 3, visionSettings = { enabled: false, model: "" }) {
+async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, signal, opts = {}, backend = "native-agent", wikiVaultPath, wikiLinkValidationRetries = 3, visionSettings = { enabled: false, model: "" }, visionTempStore) {
   const start = Date.now();
   const filePath = args[0];
   if (!filePath) {
@@ -39555,10 +39556,17 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
         if (signal.aborted) break;
         const filename = path2.split("/").pop() ?? path2;
         yield { kind: "tool_use", name: "Vision", input: { file_path: filename, model: visionSettings.model } };
+        const cached = await visionTempStore?.getDescription(path2);
+        if (cached != null) {
+          visionDescriptions.set(path2, cached);
+          yield { kind: "tool_result", ok: true, preview: cached };
+          continue;
+        }
         try {
-          const description = await analyzeSingleAttachment(path2, vaultTools, llm, visionSettings.model, signal, filePath, lang);
+          const description = await analyzeSingleAttachment(path2, vaultTools, llm, visionSettings.model, signal, filePath, lang, visionTempStore);
           if (description !== null) {
             visionDescriptions.set(path2, description);
+            await visionTempStore?.putDescription(path2, description);
             yield { kind: "tool_result", ok: true, preview: description };
           } else {
             yield { kind: "tool_result", ok: false, preview: "unknown extension" };
@@ -39762,6 +39770,55 @@ ${original}${visionBlock}`;
   yield { kind: "format_preview", tempPath, report: finalReport, missingTokens: missingFinal };
   yield { kind: "result", durationMs: Date.now() - start, text: finalReport, outputTokens: outputTokens || void 0 };
 }
+
+// src/phases/vision-temp-store.ts
+function base64ToArrayBuffer(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+function keyFor(path2) {
+  return path2.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "x";
+}
+var VisionTempStore = class {
+  constructor(vaultTools, dir) {
+    this.vaultTools = vaultTools;
+    this.dir = dir;
+  }
+  vaultTools;
+  dir;
+  async getDescription(path2) {
+    try {
+      const p = `${this.dir}/${keyFor(path2)}.json`;
+      if (!await this.vaultTools.exists(p)) return null;
+      const obj = JSON.parse(await this.vaultTools.read(p));
+      return typeof obj.desc === "string" && obj.path === path2 ? obj.desc : null;
+    } catch {
+      return null;
+    }
+  }
+  async putDescription(path2, desc) {
+    try {
+      const p = `${this.dir}/${keyFor(path2)}.json`;
+      await this.vaultTools.write(p, JSON.stringify({ path: path2, desc }));
+    } catch {
+    }
+  }
+  async putPng(path2, b64) {
+    try {
+      const p = `${this.dir}/${keyFor(path2)}.png`;
+      await this.vaultTools.writeBinary(p, base64ToArrayBuffer(b64));
+    } catch {
+    }
+  }
+  async cleanup() {
+    try {
+      await this.vaultTools.adapter.rmdir?.(this.dir, true);
+    } catch {
+    }
+  }
+};
 
 // src/page-similarity.ts
 var import_obsidian6 = require("obsidian");
@@ -40141,17 +40198,19 @@ var PageSimilarityService = class {
 
 // src/agent-runner.ts
 var AgentRunner = class {
-  constructor(llm, settings, vaultTools, vaultName, domains) {
+  constructor(llm, settings, vaultTools, vaultName, domains, visionTempBaseDir) {
     this.settings = settings;
     this.vaultTools = vaultTools;
     this.vaultName = vaultName;
     this.domains = domains;
+    this.visionTempBaseDir = visionTempBaseDir;
     this.llm = wrapWithJsonFallback(llm);
   }
   settings;
   vaultTools;
   vaultName;
   domains;
+  visionTempBaseDir;
   llm;
   buildOptsFor(op) {
     const key = op === "chat" || op === "lint-chat" ? "lint" : op;
@@ -40196,7 +40255,7 @@ var AgentRunner = class {
     } catch {
     }
   }
-  async *runOperation(req, model, opts, vaultRoot, domains, similarity) {
+  async *runOperation(req, model, opts, vaultRoot, domains, similarity, visionTempStore) {
     switch (req.operation) {
       case "ingest":
         yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, similarity, void 0, this.settings.graphDepth, this.settings.wikiLinkValidationRetries);
@@ -40237,7 +40296,7 @@ var AgentRunner = class {
         const formatArgs = req.args.filter((a) => a !== "--no-vision");
         const baseVisionSettings = this.settings.vision ?? { enabled: false, model: "", language: "auto" };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
-        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings);
+        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore);
         break;
       }
       default: {
@@ -40259,68 +40318,77 @@ var AgentRunner = class {
     const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1e3;
     const maxRetries = this.settings.llmIdleRetries ?? 3;
     let attempt = 0;
-    while (true) {
-      const idleCtrl = new AbortController();
-      const signalAny = AbortSignal.any;
-      const combined = idleTimeoutMs > 0 ? signalAny([req.signal, idleCtrl.signal]) : req.signal;
-      let idleTimer = idleTimeoutMs > 0 ? window.setTimeout(() => idleCtrl.abort(), idleTimeoutMs) : null;
-      const resetTimer = () => {
-        if (!idleTimer) return;
-        window.clearTimeout(idleTimer);
-        idleTimer = window.setTimeout(() => idleCtrl.abort(), idleTimeoutMs);
-      };
-      let finalResultText = "";
-      try {
-        for await (const ev of this.runOperation({ ...req, signal: combined }, model, opts, vaultRoot, domains, similarity)) {
-          if (ev.kind === "llm_call_stats" || ev.kind === "assistant_text") resetTimer();
-          if (ev.kind === "result") finalResultText = ev.text;
-          yield ev;
-        }
-        if (idleTimer) window.clearTimeout(idleTimer);
-        if (idleCtrl.signal.aborted && !req.signal.aborted) {
-          if (attempt < maxRetries) {
+    let visionTempStore;
+    if (req.operation === "format" && this.settings.vision?.enabled && this.visionTempBaseDir) {
+      const runId = Date.now().toString(36);
+      visionTempStore = new VisionTempStore(this.vaultTools, `${this.visionTempBaseDir}/.vision-tmp/${runId}`);
+    }
+    try {
+      while (true) {
+        const idleCtrl = new AbortController();
+        const signalAny = AbortSignal.any;
+        const combined = idleTimeoutMs > 0 ? signalAny([req.signal, idleCtrl.signal]) : req.signal;
+        let idleTimer = idleTimeoutMs > 0 ? window.setTimeout(() => idleCtrl.abort(), idleTimeoutMs) : null;
+        const resetTimer = () => {
+          if (!idleTimer) return;
+          window.clearTimeout(idleTimer);
+          idleTimer = window.setTimeout(() => idleCtrl.abort(), idleTimeoutMs);
+        };
+        let finalResultText = "";
+        try {
+          for await (const ev of this.runOperation({ ...req, signal: combined }, model, opts, vaultRoot, domains, similarity, visionTempStore)) {
+            if (ev.kind === "llm_call_stats" || ev.kind === "assistant_text" || ev.kind === "tool_use" || ev.kind === "tool_result") resetTimer();
+            if (ev.kind === "result") finalResultText = ev.text;
+            yield ev;
+          }
+          if (idleTimer) window.clearTimeout(idleTimer);
+          if (idleCtrl.signal.aborted && !req.signal.aborted) {
+            if (attempt < maxRetries) {
+              attempt++;
+              const sec = Math.round(idleTimeoutMs / 1e3);
+              yield { kind: "system", message: `LLM idle ${sec}s \u2014 retrying (${attempt}/${maxRetries})` };
+              continue;
+            }
+            throw new DOMException(
+              `LLM idle timeout (${Math.round(idleTimeoutMs / 1e3)}s) exhausted after ${maxRetries} retries`,
+              "AbortError"
+            );
+          }
+          if (this.settings.devMode?.enabled && finalResultText) {
+            const taskInput = req.args.join(" ") || req.operation;
+            await this.writeDevLog(vaultRoot, {
+              operation: req.operation,
+              model,
+              systemPrompt: opts.systemPrompt ?? "",
+              userMessage: taskInput,
+              result: finalResultText,
+              durationMs: Date.now() - startMs
+            });
+            if (this.settings.devMode.evaluatorModel) {
+              const evalModel = this.settings.devMode.evaluatorModel;
+              for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal)) {
+                yield ev;
+                if (ev.kind === "eval_result") {
+                  await this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);
+                }
+              }
+            }
+          }
+          return;
+        } catch (err) {
+          if (idleTimer) window.clearTimeout(idleTimer);
+          const isIdleAbort = !req.signal.aborted && err.name === "AbortError";
+          if (isIdleAbort && attempt < maxRetries) {
             attempt++;
             const sec = Math.round(idleTimeoutMs / 1e3);
             yield { kind: "system", message: `LLM idle ${sec}s \u2014 retrying (${attempt}/${maxRetries})` };
             continue;
           }
-          throw new DOMException(
-            `LLM idle timeout (${Math.round(idleTimeoutMs / 1e3)}s) exhausted after ${maxRetries} retries`,
-            "AbortError"
-          );
+          throw err;
         }
-        if (this.settings.devMode?.enabled && finalResultText) {
-          const taskInput = req.args.join(" ") || req.operation;
-          await this.writeDevLog(vaultRoot, {
-            operation: req.operation,
-            model,
-            systemPrompt: opts.systemPrompt ?? "",
-            userMessage: taskInput,
-            result: finalResultText,
-            durationMs: Date.now() - startMs
-          });
-          if (this.settings.devMode.evaluatorModel) {
-            const evalModel = this.settings.devMode.evaluatorModel;
-            for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal)) {
-              yield ev;
-              if (ev.kind === "eval_result") {
-                await this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);
-              }
-            }
-          }
-        }
-        return;
-      } catch (err) {
-        if (idleTimer) window.clearTimeout(idleTimer);
-        const isIdleAbort = !req.signal.aborted && err.name === "AbortError";
-        if (isIdleAbort && attempt < maxRetries) {
-          attempt++;
-          const sec = Math.round(idleTimeoutMs / 1e3);
-          yield { kind: "system", message: `LLM idle ${sec}s \u2014 retrying (${attempt}/${maxRetries})` };
-          continue;
-        }
-        throw err;
       }
+    } finally {
+      await visionTempStore?.cleanup();
     }
   }
   async updateDevLogEval(_vaultRoot, score, reasoning) {
@@ -40416,6 +40484,25 @@ var VaultTools = class {
   async readBinary(vaultPath) {
     if (!this.adapter.readBinary) throw new Error("readBinary not supported by this adapter");
     return this.adapter.readBinary(vaultPath);
+  }
+  async writeBinary(vaultPath, data) {
+    if (!this.adapter.writeBinary) throw new Error("writeBinary not supported by this adapter");
+    const segments = vaultPath.split("/").slice(0, -1);
+    for (let i = 1; i <= segments.length; i++) {
+      const partial = segments.slice(0, i).join("/");
+      let exists = false;
+      try {
+        exists = await this.adapter.exists(partial);
+      } catch {
+      }
+      if (!exists) {
+        try {
+          await this.adapter.mkdir(partial);
+        } catch {
+        }
+      }
+    }
+    await this.adapter.writeBinary(vaultPath, data);
   }
   /**
    * Resolve an Obsidian wiki-link to a vault-relative path. Returns null when the
@@ -48601,7 +48688,7 @@ var WikiController = class {
       });
       llm = import_obsidian10.Platform.isMobile ? wrapMobileNoStream(openaiClient) : openaiClient;
     }
-    return new AgentRunner(llm, s, vaultTools, vaultName, domains);
+    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? void 0);
   }
   async logEvent(_vaultRoot, sessionId, op, domainId, ev) {
     if (!(this._currentLogMeta?.agentLogEnabled ?? this.plugin.settings.agentLogEnabled)) return;

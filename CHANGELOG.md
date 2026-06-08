@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.167 — 2026-06-08
+
+### Новое
+- feat(vision): per-run VisionTempStore caches each attachment's description and rendered excalidraw PNG under the plugin directory, enabling resume across idle-retries
+- feat(format): resume vision descriptions from the temp store with write-through on analyze — each attachment is sent to the LLM at most once per run
+- feat(vault-tools): add writeBinary for binary attachment persistence
+
+### Исправления
+- fix(agent-runner): reset the idle watchdog on tool_use/tool_result so per-attachment vision progress no longer trips a cumulative-time abort (format on pages with several excalidraw attachments no longer loops)
+- fix(vision): guard the VisionTempStore cache against keyFor path collisions
+
+---
+
 ## 0.1.166 — 2026-06-07
 
 ### Новое
