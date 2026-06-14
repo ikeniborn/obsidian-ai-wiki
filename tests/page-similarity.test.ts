@@ -54,15 +54,20 @@ describe("PageSimilarityService (Jaccard)", () => {
   });
 
   // @lat: [[tests#Multi-Vector Retrieval#Offline Jaccard finds a section keyword]]
-  it("offline Jaccard matches a body-section keyword via the enriched annotation", async () => {
+  it("offline Jaccard: a body-section keyword in the enriched annotation is load-bearing", async () => {
     const svc = new PageSimilarityService({ mode: "jaccard", topK: 1 });
-    // annotation now carries a keyword that lives only in the body section
     const result = await svc.selectRelevant(
       "idempotency retry",
-      new Map([["Orders", "Order processing. Термины: idempotency, retry, dedup, saga"]]),
-      ["!Wiki/d/x/Orders.md"],
+      new Map([
+        // old-style summary-only annotation — the body fact is absent
+        ["OrdersPlain", "Order processing."],
+        // enriched annotation — Термины harvests keywords from every body section
+        ["OrdersRich", "Order processing. Термины: idempotency, retry, dedup, saga"],
+      ]),
+      ["!Wiki/d/x/OrdersPlain.md", "!Wiki/d/x/OrdersRich.md"],
     );
-    expect(result).toEqual(["!Wiki/d/x/Orders.md"]);
+    // Only the enriched page surfaces; the plain summary-only annotation does not match the body fact.
+    expect(result).toEqual(["!Wiki/d/x/OrdersRich.md"]);
   });
 });
 
