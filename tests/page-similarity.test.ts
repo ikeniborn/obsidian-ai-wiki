@@ -457,6 +457,44 @@ describe("refreshCache v2 (multi-vector, incremental)", () => {
     expect(written.entries.Alpha.chunks[0].kind).toBe("summary");
   });
 
+  it("preserves section chunks for a pid whose body is not supplied (incremental ingest)", async () => {
+    const annotation = "rich annotation";
+    const body = "# T\n\n## Alpha\n\nAlpha body.\n\n## Beta\n\nBeta body.";
+    const n = buildChunkInputs(annotation, body, DEFAULT_CHUNKING).length; // summary + 2 sections
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: Array.from({ length: n }, () => ({ embedding: [1, 0, 0] })) }),
+      headers: { "content-type": "application/json" },
+    });
+    const svc = new PageSimilarityService(cfg);
+    const vt = makeVaultTools();
+    // Full embed of Alpha (summary + 2 sections)
+    await svc.refreshCache("domainRoot", vt, new Map([["Alpha", annotation]]), new Map([["Alpha", body]]));
+    const after1 = JSON.parse((vt as any).files.get("domainRoot/_config/_embeddings.json")!);
+    expect(after1.entries.Alpha.chunks).toHaveLength(n);
+
+    // Incremental ingest: annotations list BOTH pages, but only Beta's body is supplied.
+    __clearRequestUrlCalls();
+    const betaBody = "# T\n\n## Gamma\n\nGamma body.";
+    const betaN = buildChunkInputs("beta annot", betaBody, DEFAULT_CHUNKING).length;
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: Array.from({ length: betaN }, () => ({ embedding: [0, 1, 0] })) }),
+      headers: { "content-type": "application/json" },
+    });
+    await svc.refreshCache(
+      "domainRoot", vt,
+      new Map([["Alpha", annotation], ["Beta", "beta annot"]]),
+      new Map([["Beta", betaBody]]),
+    );
+    const after2 = JSON.parse((vt as any).files.get("domainRoot/_config/_embeddings.json")!);
+    // Alpha's section chunks survive (NOT pruned to summary-only)
+    expect(after2.entries.Alpha.chunks).toHaveLength(n);
+    expect(after2.entries.Alpha.chunks.filter((c: { kind: string }) => c.kind === "section")).toHaveLength(2);
+    // Beta embedded fresh
+    expect(after2.entries.Beta.chunks.length).toBe(betaN);
+  });
+
   it("skips chunks when the API returns fewer vectors than requested", async () => {
     const annotation = "rich annotation";
     const body = "# T\n\n## Alpha\n\nAlpha body.\n\n## Beta\n\nBeta body."; // summary + 2 sections = 3 chunks

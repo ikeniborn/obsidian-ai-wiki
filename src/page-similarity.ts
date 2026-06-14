@@ -622,6 +622,14 @@ export class PageSimilarityService {
     let changed = false;
 
     for (const [pid, annotation] of indexAnnotations) {
+      // A caller may refresh only a subset (incremental ingest supplies bodies only for the
+      // pages it rewrote). For a pid with no supplied body, keep its cached chunks untouched
+      // rather than rebuilding from an empty body — otherwise unchanged pages lose their
+      // section vectors. A pid genuinely present with an empty-string body still rebuilds.
+      if (!pageBodies.has(pid) && cacheFile.entries[pid]) {
+        desired.set(pid, cacheFile.entries[pid].chunks);
+        continue;
+      }
       const body = pageBodies.get(pid) ?? "";
       const inputs = buildChunkInputs(annotation, body, chunking);
       const oldByHash = new Map(
