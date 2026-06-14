@@ -267,3 +267,34 @@ describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
     expect(results.get("Q2::")).toEqual([]);
   });
 });
+
+describe("cache schema v2", () => {
+  it("loadCache rejects an old { vector, hash } cache (no version: 2)", async () => {
+    const svc = new PageSimilarityService({
+      mode: "embedding", topK: 3, model: "m", dimensions: 3,
+      baseUrl: "http://x", apiKey: "k",
+    });
+    const oldCache = JSON.stringify({
+      model: "m", dimensions: 3,
+      entries: { Alpha: { vector: "AAAA", hash: "x" } },
+    });
+    const vaultTools = { read: async () => oldCache } as never;
+    await svc.loadCache("domainRoot", vaultTools);
+    // Old schema → cache stays null → no crash on subsequent select
+    expect((svc as unknown as { cache: unknown }).cache).toBeNull();
+  });
+
+  it("loadCache accepts a version: 2 cache", async () => {
+    const svc = new PageSimilarityService({
+      mode: "embedding", topK: 3, model: "m", dimensions: 3,
+      baseUrl: "http://x", apiKey: "k",
+    });
+    const v2 = JSON.stringify({
+      version: 2, model: "m", dimensions: 3,
+      entries: { Alpha: { chunks: [{ vector: "AAAA", hash: "x", kind: "summary" }] } },
+    });
+    const vaultTools = { read: async () => v2 } as never;
+    await svc.loadCache("domainRoot", vaultTools);
+    expect((svc as unknown as { cache: unknown }).cache).not.toBeNull();
+  });
+});

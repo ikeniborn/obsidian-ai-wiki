@@ -4,6 +4,20 @@ import { pageId } from "./wiki-graph";
 import type { VaultTools } from "./vault-tools";
 import { domainEmbeddingsPath } from "./wiki-path";
 
+export interface ChunkingConfig {
+  maxChars: number;
+  overlapChars: number;
+  minChars: number;
+  maxCount: number;
+}
+
+export const DEFAULT_CHUNKING: ChunkingConfig = {
+  maxChars: 1200,
+  overlapChars: 200,
+  minChars: 200,
+  maxCount: 12,
+};
+
 export interface SimilarityConfig {
   mode: "jaccard" | "embedding";
   model?: string;
@@ -11,14 +25,21 @@ export interface SimilarityConfig {
   topK: number;
   baseUrl?: string;
   apiKey?: string;
+  chunking?: ChunkingConfig;
+}
+
+export interface EmbeddingChunk {
+  vector: string;  // base64 Float32Array
+  hash: string;
+  kind: "summary" | "section";
 }
 
 export interface EmbeddingCacheEntry {
-  vector: string;  // base64 Float32Array
-  hash: string;
+  chunks: EmbeddingChunk[];
 }
 
 export interface EmbeddingCacheFile {
+  version: 2;
   model: string;
   dimensions: number;
   entries: Record<string, EmbeddingCacheEntry>;
@@ -452,7 +473,7 @@ export class PageSimilarityService {
     try {
       const raw = await vaultTools.read(domainEmbeddingsPath(domainRoot));
       const parsed = JSON.parse(raw) as EmbeddingCacheFile;
-      if (parsed.model === model && parsed.dimensions === dimensions) {
+      if (parsed.version === 2 && parsed.model === model && parsed.dimensions === dimensions) {
         this.cache = parsed;
       }
     } catch { /* cache missing or unreadable — stay null */ }
