@@ -589,58 +589,74 @@ export class PageSimilarityService {
     domainRoot: string,
     vaultTools: VaultTools,
     indexAnnotations: Map<string, string>,
+    pageBodies: Map<string, string>,
   ): Promise<{ updated: number }> {
     if (this.config.mode !== "embedding") return { updated: 0 };
     const { baseUrl, apiKey, model, dimensions } = this.config;
     if (!baseUrl || !model || !dimensions) return { updated: 0 };
+    const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
 
     const cachePath = domainEmbeddingsPath(domainRoot);
     let cacheFile: EmbeddingCacheFile;
-
     try {
-      const raw = await vaultTools.read(cachePath);
-      const parsed = JSON.parse(raw) as EmbeddingCacheFile;
-      // Invalidate if model or dimensions changed
-      if (parsed.model !== model || parsed.dimensions !== dimensions) {
-        cacheFile = { model, dimensions, entries: {} };
-      } else {
-        cacheFile = parsed;
-      }
+      const parsed = JSON.parse(await vaultTools.read(cachePath)) as EmbeddingCacheFile;
+      cacheFile =
+        parsed.version === 2 && parsed.model === model && parsed.dimensions === dimensions
+          ? parsed
+          : { version: 2, model, dimensions, entries: {} };
     } catch {
-      cacheFile = { model, dimensions, entries: {} };
+      cacheFile = { version: 2, model, dimensions, entries: {} };
     }
 
-    // Find stale entries
-    const toEmbed: { pid: string; annotation: string }[] = [];
+    // Build the desired chunk set per pid, reusing cached vectors whose hash matches.
+    interface Pending { pid: string; idx: number; embedText: string; }
+    const desired = new Map<string, EmbeddingChunk[]>();
+    const pending: Pending[] = [];
+    let changed = false;
+
     for (const [pid, annotation] of indexAnnotations) {
-      const hash = annotationHash(annotation);
-      const existing = cacheFile.entries[pid];
-      if (!existing || existing.hash !== hash) {
-        toEmbed.push({ pid, annotation });
+      const body = pageBodies.get(pid) ?? "";
+      const inputs = buildChunkInputs(annotation, body, chunking);
+      const oldByHash = new Map(
+        (cacheFile.entries[pid]?.chunks ?? []).map((c) => [c.hash, c.vector]),
+      );
+      const chunks: EmbeddingChunk[] = [];
+      for (const { kind, embedText, hash } of inputs) {
+        const reuse = oldByHash.get(hash);
+        if (reuse !== undefined) {
+          chunks.push({ vector: reuse, hash, kind });
+        } else {
+          pending.push({ pid, idx: chunks.length, embedText });
+          chunks.push({ vector: "", hash, kind });
+        }
       }
+      if ((cacheFile.entries[pid]?.chunks.length ?? 0) !== chunks.length) changed = true;
+      desired.set(pid, chunks);
     }
 
-    if (toEmbed.length === 0) return { updated: 0 };
-
-    // Embed in batches
-    for (let i = 0; i < toEmbed.length; i += EMBEDDING_BATCH_SIZE) {
-      const batch = toEmbed.slice(i, i + EMBEDDING_BATCH_SIZE);
+    // Embed the new chunks in batches.
+    for (let i = 0; i < pending.length; i += EMBEDDING_BATCH_SIZE) {
+      const batch = pending.slice(i, i + EMBEDDING_BATCH_SIZE);
       let vecs: Float32Array[];
       try {
-        vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.map((x) => x.annotation));
+        vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.map((p) => p.embedText));
       } catch {
         continue;
       }
       for (let j = 0; j < batch.length; j++) {
-        cacheFile.entries[batch[j].pid] = {
-          vector: encodeVector(vecs[j]),
-          hash: annotationHash(batch[j].annotation),
-        };
+        desired.get(batch[j].pid)![batch[j].idx].vector = encodeVector(vecs[j]);
       }
+    }
+
+    if (pending.length === 0 && !changed) return { updated: 0 };
+
+    for (const [pid, chunks] of desired) {
+      const filled = chunks.filter((c) => c.vector !== "");
+      if (filled.length > 0) cacheFile.entries[pid] = { chunks: filled };
     }
 
     await vaultTools.write(cachePath, JSON.stringify(cacheFile, null, 2));
     this.cache = cacheFile;
-    return { updated: toEmbed.length };
+    return { updated: pending.length };
   }
 }

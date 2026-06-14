@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { PageSimilarityService, encodeVector, decodeVector } from "../src/page-similarity";
+import { PageSimilarityService, encodeVector, decodeVector, DEFAULT_CHUNKING, buildChunkInputs } from "../src/page-similarity";
 import { __requestUrlCalls, __clearRequestUrlCalls, __setRequestUrlResponse } from "../vitest.mock";
 
 const makeService = (topK = 3) =>
@@ -49,7 +49,7 @@ describe("PageSimilarityService (Jaccard)", () => {
 
   it("refreshCache returns { updated: 0 } in Jaccard mode", async () => {
     const svc = makeService(5);
-    const result = await svc.refreshCache("domainRoot", {} as never, new Map());
+    const result = await svc.refreshCache("domainRoot", {} as never, new Map(), new Map());
     expect(result).toEqual({ updated: 0 });
   });
 });
@@ -296,5 +296,143 @@ describe("cache schema v2", () => {
     const vaultTools = { read: async () => v2 } as never;
     await svc.loadCache("domainRoot", vaultTools);
     expect((svc as unknown as { cache: unknown }).cache).not.toBeNull();
+  });
+});
+
+function makeVaultTools() {
+  const files = new Map<string, string>();
+  return {
+    files,
+    read: async (p: string) => {
+      const v = files.get(p);
+      if (v == null) throw new Error(`ENOENT: ${p}`);
+      return v;
+    },
+    write: async (p: string, c: string) => { files.set(p, c); },
+  } as never;
+}
+
+describe("refreshCache v2 (multi-vector, incremental)", () => {
+  beforeEach(() => __clearRequestUrlCalls());
+
+  const cfg = {
+    mode: "embedding" as const, topK: 3, model: "m", dimensions: 3,
+    baseUrl: "http://x", apiKey: "k", chunking: DEFAULT_CHUNKING,
+  };
+
+  it("embeds summary + one vector per section and round-trips the v2 cache", async () => {
+    const annotation = "rich annotation";
+    const body = "# T\n\n## Alpha\n\nAlpha body.\n\n## Beta\n\nBeta body.";
+    const expectedChunks = buildChunkInputs(annotation, body, DEFAULT_CHUNKING).length; // summary + 2
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({
+        data: Array.from({ length: expectedChunks }, () => ({ embedding: [1, 0, 0] })),
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const svc = new PageSimilarityService(cfg);
+    const vt = makeVaultTools();
+    const { updated } = await svc.refreshCache(
+      "domainRoot", vt,
+      new Map([["Alpha", annotation]]),
+      new Map([["Alpha", body]]),
+    );
+    expect(updated).toBe(expectedChunks);
+
+    const written = JSON.parse((vt as any).files.get("domainRoot/_config/_embeddings.json")!);
+    expect(written.version).toBe(2);
+    expect(written.entries.Alpha.chunks).toHaveLength(expectedChunks);
+    expect(written.entries.Alpha.chunks[0].kind).toBe("summary");
+    expect(written.entries.Alpha.chunks[1].kind).toBe("section");
+  });
+
+  it("re-embeds nothing when body and annotation are unchanged", async () => {
+    const annotation = "rich annotation";
+    const body = "# T\n\n## Alpha\n\nAlpha body.";
+    const n = buildChunkInputs(annotation, body, DEFAULT_CHUNKING).length;
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: Array.from({ length: n }, () => ({ embedding: [1, 0, 0] })) }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const svc = new PageSimilarityService(cfg);
+    const vt = makeVaultTools();
+    const anns = new Map([["Alpha", annotation]]);
+    const bodies = new Map([["Alpha", body]]);
+    await svc.refreshCache("domainRoot", vt, anns, bodies);
+
+    __clearRequestUrlCalls();
+    const second = await svc.refreshCache("domainRoot", vt, anns, bodies);
+    expect(second.updated).toBe(0);
+    expect(__requestUrlCalls).toHaveLength(0); // no HTTP — all hashes hit
+  });
+
+  it("re-embeds only the changed section (one chunk)", async () => {
+    const annotation = "rich annotation";
+    const body1 = "# T\n\n## Alpha\n\nAlpha body.\n\n## Beta\n\nBeta body.";
+    const n = buildChunkInputs(annotation, body1, DEFAULT_CHUNKING).length; // 3
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: Array.from({ length: n }, () => ({ embedding: [1, 0, 0] })) }),
+      headers: { "content-type": "application/json" },
+    });
+    const svc = new PageSimilarityService(cfg);
+    const vt = makeVaultTools();
+    await svc.refreshCache("domainRoot", vt, new Map([["Alpha", annotation]]), new Map([["Alpha", body1]]));
+
+    // Change ONLY Beta's body. Summary + Alpha chunk hashes are unchanged.
+    const body2 = "# T\n\n## Alpha\n\nAlpha body.\n\n## Beta\n\nBeta body CHANGED.";
+    __clearRequestUrlCalls();
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: [{ embedding: [0, 1, 0] }] }), // exactly one chunk re-embedded
+      headers: { "content-type": "application/json" },
+    });
+    const r = await svc.refreshCache("domainRoot", vt, new Map([["Alpha", annotation]]), new Map([["Alpha", body2]]));
+    expect(r.updated).toBe(1);
+    expect(__requestUrlCalls).toHaveLength(1);
+    const reqBody = JSON.parse(__requestUrlCalls[0].body as string);
+    expect(reqBody.input).toHaveLength(1);
+    expect(reqBody.input[0]).toContain("CHANGED");
+  });
+
+  it("discards an old { vector, hash } cache and rebuilds as v2", async () => {
+    const annotation = "rich annotation";
+    const body = "# T\n\n## Alpha\n\nAlpha body.";
+    const n = buildChunkInputs(annotation, body, DEFAULT_CHUNKING).length;
+    const svc = new PageSimilarityService(cfg);
+    const vt = makeVaultTools();
+    (vt as any).files.set("domainRoot/_config/_embeddings.json", JSON.stringify({
+      model: "m", dimensions: 3, entries: { Alpha: { vector: "AAAA", hash: "old" } },
+    }));
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: Array.from({ length: n }, () => ({ embedding: [1, 0, 0] })) }),
+      headers: { "content-type": "application/json" },
+    });
+    await svc.refreshCache("domainRoot", vt, new Map([["Alpha", annotation]]), new Map([["Alpha", body]]));
+    const written = JSON.parse((vt as any).files.get("domainRoot/_config/_embeddings.json")!);
+    expect(written.version).toBe(2);
+    expect(written.entries.Alpha.chunks).toBeDefined();
+  });
+
+  it("embeds only the summary chunk for a pid with no body", async () => {
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: [{ embedding: [1, 0, 0] }] }),
+      headers: { "content-type": "application/json" },
+    });
+    const svc = new PageSimilarityService(cfg);
+    const vt = makeVaultTools();
+    const { updated } = await svc.refreshCache(
+      "domainRoot", vt, new Map([["Alpha", "annot"]]), new Map(),
+    );
+    expect(updated).toBe(1);
+    const written = JSON.parse((vt as any).files.get("domainRoot/_config/_embeddings.json")!);
+    expect(written.entries.Alpha.chunks).toHaveLength(1);
+    expect(written.entries.Alpha.chunks[0].kind).toBe("summary");
   });
 });
