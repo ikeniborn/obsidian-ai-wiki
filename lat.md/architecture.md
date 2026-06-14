@@ -75,9 +75,13 @@ Two modes: `jaccard` (default, no API calls) uses token overlap scoring via `sco
 
 `encodeVector`/`decodeVector` serialize Float32Array to base64 using `btoa`/`atob` with chunked `String.fromCharCode` (8192-byte chunks). **Must not use `Buffer`** — unavailable in Obsidian mobile (browser environment).
 
+Embedding vectors are cached per domain at `_config/_embeddings.json` as schema **v2**: each page entry holds a `chunks` array — one `summary` vector (the one-line annotation) plus one `section` vector per body section window. `splitSections` builds the windows (strip frontmatter + H1, H2 units with H3+ folded in, short units merged, long units windowed with overlap, capped at `chunkMaxCount` with the fold made visible in the final heading). `buildChunkInputs` prepends the annotation and H2 heading to each section window for whole-article grounding, and hashes that embed text per chunk. `refreshCache` reuses cached vectors whose hash matches and embeds only new chunks, so a single changed section re-embeds one vector. Page score is the **max** cosine across the page's chunk vectors — one matching body section surfaces the page. Old `{ vector, hash }` caches lack `version: 2`; `loadCache` returns null for them and `refreshCache` rebuilds. Chunking is tunable via `nativeAgent.chunk*` settings, defaulted in `buildSimilarity`.
+
+See [[src/page-similarity.ts#splitSections]], [[src/page-similarity.ts#buildChunkInputs]], [[src/page-similarity.ts#PageSimilarityService#refreshCache]].
+
 `loadCache()` reads `_embeddings.json` into memory before `selectRelevant()` so ingest, query, and lint don't re-fetch vectors from the API on every run. Called by ingest, query, and lint phases before `selectRelevant` or `refreshCache`.
 
-`refreshCache` returns `{ updated: number }` — the count of newly embedded pages written to the cache. Returns `{ updated: 0 }` when in `jaccard` mode, when config is incomplete, or when no entries need updating.
+`refreshCache` returns `{ updated: number }` — the count of newly embedded **chunks** written to the cache. Returns `{ updated: 0 }` when in `jaccard` mode, when config is incomplete, or when no entries need updating.
 
 Ingest uses `selectByEntities` for per-entity vector top-K; query/lint/format/init continue to use `selectRelevant` + BFS via `wiki-graph`.
 

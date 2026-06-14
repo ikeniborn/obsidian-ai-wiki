@@ -4,6 +4,7 @@ import { splitSections, DEFAULT_CHUNKING, buildChunkInputs } from "../src/page-s
 const body = (s: string) => s.replace(/^\n/, "");
 
 describe("splitSections", () => {
+  // @lat: [[tests#Multi-Vector Retrieval#Chunker splits H2 sections]]
   it("splits H2 sections and strips frontmatter + H1", () => {
     const md = body(`
 ---
@@ -66,6 +67,7 @@ short
     expect(out[0].window).toContain("short");
   });
 
+  // @lat: [[tests#Multi-Vector Retrieval#Chunker merges short sections and windows long ones]]
   it("windows a long section with overlap", () => {
     const long = "abcdefghij ".repeat(200); // ~2200 chars
     const md = body(`# T\n\n## Long\n\n${long}`);
@@ -78,6 +80,7 @@ short
     expect(out[1].window.includes(tail.trim().slice(0, 20))).toBe(true);
   });
 
+  // @lat: [[tests#Multi-Vector Retrieval#Chunker caps at maxCount and makes the fold visible]]
   it("caps at maxCount and makes the fold visible (no silent cap)", () => {
     const sections = Array.from({ length: 8 }, (_, i) => `## S${i}\n\nbody ${i} ${"y ".repeat(150)}`).join("\n\n");
     const md = body(`# T\n\n${sections}`);
@@ -107,6 +110,7 @@ describe("buildChunkInputs", () => {
     expect(inputs[0].embedText).toBe("ANNOT");
   });
 
+  // @lat: [[tests#Multi-Vector Retrieval#Chunk embed text prepends annotation and heading]]
   it("section chunk prepends annotation + heading + window", () => {
     const md = "# T\n\n## Alpha\n\nAlpha detail body.";
     const inputs = buildChunkInputs("ANNOT", md, DEFAULT_CHUNKING);

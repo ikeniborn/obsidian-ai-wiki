@@ -52,6 +52,18 @@ describe("PageSimilarityService (Jaccard)", () => {
     const result = await svc.refreshCache("domainRoot", {} as never, new Map(), new Map());
     expect(result).toEqual({ updated: 0 });
   });
+
+  // @lat: [[tests#Multi-Vector Retrieval#Offline Jaccard finds a section keyword]]
+  it("offline Jaccard matches a body-section keyword via the enriched annotation", async () => {
+    const svc = new PageSimilarityService({ mode: "jaccard", topK: 1 });
+    // annotation now carries a keyword that lives only in the body section
+    const result = await svc.selectRelevant(
+      "idempotency retry",
+      new Map([["Orders", "Order processing. Термины: idempotency, retry, dedup, saga"]]),
+      ["!Wiki/d/x/Orders.md"],
+    );
+    expect(result).toEqual(["!Wiki/d/x/Orders.md"]);
+  });
 });
 
 describe("vector encoding", () => {
@@ -269,6 +281,7 @@ describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
 });
 
 describe("cache schema v2", () => {
+  // @lat: [[tests#Multi-Vector Retrieval#Old cache schema loads as null]]
   it("loadCache rejects an old { vector, hash } cache (no version: 2)", async () => {
     const svc = new PageSimilarityService({
       mode: "embedding", topK: 3, model: "m", dimensions: 3,
@@ -320,6 +333,7 @@ describe("refreshCache v2 (multi-vector, incremental)", () => {
     baseUrl: "http://x", apiKey: "k", chunking: DEFAULT_CHUNKING,
   };
 
+  // @lat: [[tests#Multi-Vector Retrieval#Cache v2 round-trips multiple chunks]]
   it("embeds summary + one vector per section and round-trips the v2 cache", async () => {
     const annotation = "rich annotation";
     const body = "# T\n\n## Alpha\n\nAlpha body.\n\n## Beta\n\nBeta body.";
@@ -370,6 +384,7 @@ describe("refreshCache v2 (multi-vector, incremental)", () => {
     expect(__requestUrlCalls).toHaveLength(0); // no HTTP — all hashes hit
   });
 
+  // @lat: [[tests#Multi-Vector Retrieval#Incremental re-embed touches only changed chunks]]
   it("re-embeds only the changed section (one chunk)", async () => {
     const annotation = "rich annotation";
     const body1 = "# T\n\n## Alpha\n\nAlpha body.\n\n## Beta\n\nBeta body.";
@@ -459,6 +474,7 @@ describe("refreshCache v2 (multi-vector, incremental)", () => {
 describe("max-pool scoring", () => {
   beforeEach(() => __clearRequestUrlCalls());
 
+  // @lat: [[tests#Multi-Vector Retrieval#Max-pool surfaces a body-section match]]
   it("surfaces a page whose only match is a body-section vector", async () => {
     // Query vector points along axis 2 (the body section), NOT the summary axis.
     __setRequestUrlResponse({
