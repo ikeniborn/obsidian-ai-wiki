@@ -153,7 +153,11 @@ export function splitSections(body: string, chunking: ChunkingConfig): SectionWi
   return windows;
 }
 
-export interface ChunkInput { kind: "summary" | "section"; embedText: string; hash: string; }
+export interface ChunkInput {
+  kind: "summary" | "section";
+  embedText: string;
+  hash: string;
+}
 
 export function buildChunkInputs(
   annotation: string,

@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { splitSections, DEFAULT_CHUNKING } from "../src/page-similarity";
-import { buildChunkInputs } from "../src/page-similarity";
+import { splitSections, DEFAULT_CHUNKING, buildChunkInputs } from "../src/page-similarity";
 
 const body = (s: string) => s.replace(/^\n/, "");
 
@@ -113,7 +112,7 @@ describe("buildChunkInputs", () => {
     const inputs = buildChunkInputs("ANNOT", md, DEFAULT_CHUNKING);
     const section = inputs.find((c) => c.kind === "section")!;
     expect(section.embedText.startsWith("ANNOT\n\n")).toBe(true);
-    expect(section.embedText).toContain("Alpha");
+    expect(section.embedText).toContain("## Alpha");
     expect(section.embedText).toContain("Alpha detail body.");
   });
 
