@@ -71,7 +71,7 @@ function annotationHash(s: string): string {
 export interface SectionWindow { heading: string; window: string; }
 
 function stripFrontmatterAndTitle(body: string): string {
-  const noFm = body.replace(/^---\n[\s\S]*?\n---\n?/, "");
+  const noFm = body.replace(/^---\n[\s\S]*?\n---\n?/, "").trimStart();
   // drop a single leading "# H1" title line
   return noFm.replace(/^#\s+[^\n]*\n?/, "");
 }

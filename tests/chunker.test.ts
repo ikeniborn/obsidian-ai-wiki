@@ -91,4 +91,11 @@ short
     expect(splitSections("", DEFAULT_CHUNKING)).toEqual([]);
     expect(splitSections("---\nx: 1\n---\n# OnlyTitle\n", DEFAULT_CHUNKING)).toEqual([]);
   });
+
+  it("strips the H1 even with a blank line between frontmatter and title", () => {
+    const md = "---\nwiki_status: stub\n---\n\n# Title\n\n## Alpha\n\nAlpha body text here.\n";
+    const out = splitSections(md, DEFAULT_CHUNKING);
+    expect(out.every((c) => !c.window.includes("# Title"))).toBe(true);
+    expect(out.some((c) => c.heading.includes("Alpha"))).toBe(true);
+  });
 });
