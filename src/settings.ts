@@ -641,6 +641,28 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               }),
           );
 
+        const chunkField = (
+          name: string, desc: string, placeholder: string,
+          get: () => number, set: (n: number) => void,
+        ) =>
+          new Setting(containerEl).setName(name).setDesc(desc).addText((t) =>
+            t.setPlaceholder(placeholder)
+              .setValue(String(get()))
+              .onChange(async (v) => {
+                const n = Number(v);
+                if (Number.isFinite(n) && n > 0) { set(Math.floor(n)); await this.plugin.saveSettings(); }
+              }),
+          );
+
+        chunkField("Chunk size (chars)", "Max characters per section window. Default: 1200.",
+          "1200", () => s.nativeAgent.chunkMaxChars ?? 1200, (n) => { s.nativeAgent.chunkMaxChars = n; });
+        chunkField("Chunk overlap (chars)", "Overlap between consecutive windows of a long section. Default: 200.",
+          "200", () => s.nativeAgent.chunkOverlapChars ?? 200, (n) => { s.nativeAgent.chunkOverlapChars = n; });
+        chunkField("Min chunk size (merge)", "Sections shorter than this merge into a neighbour. Default: 200.",
+          "200", () => s.nativeAgent.chunkMinChars ?? 200, (n) => { s.nativeAgent.chunkMinChars = n; });
+        chunkField("Max chunks per page", "Cap on vectors per page (summary + sections). Default: 12.",
+          "12", () => s.nativeAgent.chunkMaxCount ?? 12, (n) => { s.nativeAgent.chunkMaxCount = n; });
+
         new Setting(containerEl)
           .setName(T.settings.mergeDeleteWarnThreshold_name)
           .setDesc(T.settings.mergeDeleteWarnThreshold_desc)

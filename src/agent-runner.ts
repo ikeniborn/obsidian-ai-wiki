@@ -12,7 +12,7 @@ import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, RunEvent, RunReq
 import type { VaultTools } from "./vault-tools";
 import { wrapWithJsonFallback } from "./phases/llm-utils";
 import { GLOBAL_DEV_LOG_PATH, domainWikiFolder } from "./wiki-path";
-import { PageSimilarityService } from "./page-similarity";
+import { PageSimilarityService, DEFAULT_CHUNKING } from "./page-similarity";
 
 export class AgentRunner {
   private llm: LlmClient;
@@ -58,6 +58,12 @@ export class AgentRunner {
       topK: na.relevantPagesTopK ?? 15,
       baseUrl: na.baseUrl,
       apiKey: na.apiKey,
+      chunking: {
+        maxChars: na.chunkMaxChars ?? DEFAULT_CHUNKING.maxChars,
+        overlapChars: na.chunkOverlapChars ?? DEFAULT_CHUNKING.overlapChars,
+        minChars: na.chunkMinChars ?? DEFAULT_CHUNKING.minChars,
+        maxCount: na.chunkMaxCount ?? DEFAULT_CHUNKING.maxCount,
+      },
     });
   }
 
