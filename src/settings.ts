@@ -5,6 +5,7 @@ import type { LlmWikiPluginSettings, OpKey } from "./types";
 import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
 import { resolveEffective } from "./effective-settings";
+import { DEFAULT_CHUNKING } from "./page-similarity";
 import type { LocalConfig } from "./local-config";
 
 async function checkClaudeAvailability(iclaudePath: string): Promise<void> {
@@ -640,6 +641,40 @@ export class LlmWikiSettingTab extends PluginSettingTab {
                 }
               }),
           );
+
+        const chunkField = (
+          name: string, desc: string, placeholder: string,
+          get: () => number, set: (n: number) => void,
+        ) =>
+          new Setting(containerEl).setName(name).setDesc(desc).addText((t) =>
+            t.setPlaceholder(placeholder)
+              .setValue(String(get()))
+              .onChange(async (v) => {
+                const n = Number(v);
+                if (Number.isFinite(n) && n > 0) { set(Math.floor(n)); await this.plugin.saveSettings(); }
+              }),
+          );
+
+        chunkField("Chunk size (chars)",
+          `Max characters per section window. Default: ${DEFAULT_CHUNKING.maxChars}.`,
+          String(DEFAULT_CHUNKING.maxChars),
+          () => s.nativeAgent.chunkMaxChars ?? DEFAULT_CHUNKING.maxChars,
+          (n) => { s.nativeAgent.chunkMaxChars = n; });
+        chunkField("Chunk overlap (chars)",
+          `Overlap between consecutive windows of a long section. Default: ${DEFAULT_CHUNKING.overlapChars}.`,
+          String(DEFAULT_CHUNKING.overlapChars),
+          () => s.nativeAgent.chunkOverlapChars ?? DEFAULT_CHUNKING.overlapChars,
+          (n) => { s.nativeAgent.chunkOverlapChars = n; });
+        chunkField("Min chunk size (merge)",
+          `Sections shorter than this merge into a neighbour. Default: ${DEFAULT_CHUNKING.minChars}.`,
+          String(DEFAULT_CHUNKING.minChars),
+          () => s.nativeAgent.chunkMinChars ?? DEFAULT_CHUNKING.minChars,
+          (n) => { s.nativeAgent.chunkMinChars = n; });
+        chunkField("Max chunks per page",
+          `Cap on vectors per page (summary + sections). Default: ${DEFAULT_CHUNKING.maxCount}.`,
+          String(DEFAULT_CHUNKING.maxCount),
+          () => s.nativeAgent.chunkMaxCount ?? DEFAULT_CHUNKING.maxCount,
+          (n) => { s.nativeAgent.chunkMaxCount = n; });
 
         new Setting(containerEl)
           .setName(T.settings.mergeDeleteWarnThreshold_name)

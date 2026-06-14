@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { PageSimilarityService, encodeVector, decodeVector } from "../src/page-similarity";
+import { PageSimilarityService, encodeVector, decodeVector, DEFAULT_CHUNKING, buildChunkInputs } from "../src/page-similarity";
 import { __requestUrlCalls, __clearRequestUrlCalls, __setRequestUrlResponse } from "../vitest.mock";
 
 const makeService = (topK = 3) =>
@@ -49,8 +49,25 @@ describe("PageSimilarityService (Jaccard)", () => {
 
   it("refreshCache returns { updated: 0 } in Jaccard mode", async () => {
     const svc = makeService(5);
-    const result = await svc.refreshCache("domainRoot", {} as never, new Map());
+    const result = await svc.refreshCache("domainRoot", {} as never, new Map(), new Map());
     expect(result).toEqual({ updated: 0 });
+  });
+
+  // @lat: [[tests#Multi-Vector Retrieval#Offline Jaccard finds a section keyword]]
+  it("offline Jaccard: a body-section keyword in the enriched annotation is load-bearing", async () => {
+    const svc = new PageSimilarityService({ mode: "jaccard", topK: 1 });
+    const result = await svc.selectRelevant(
+      "idempotency retry",
+      new Map([
+        // old-style summary-only annotation — the body fact is absent
+        ["OrdersPlain", "Order processing."],
+        // enriched annotation — Термины harvests keywords from every body section
+        ["OrdersRich", "Order processing. Термины: idempotency, retry, dedup, saga"],
+      ]),
+      ["!Wiki/d/x/OrdersPlain.md", "!Wiki/d/x/OrdersRich.md"],
+    );
+    // Only the enriched page surfaces; the plain summary-only annotation does not match the body fact.
+    expect(result).toEqual(["!Wiki/d/x/OrdersRich.md"]);
   });
 });
 
@@ -189,10 +206,10 @@ describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
       baseUrl: "http://x", apiKey: "k",
     });
     (svc as unknown as { cache: unknown }).cache = {
-      model: "m", dimensions: 3,
+      version: 2, model: "m", dimensions: 3,
       entries: {
-        Alpha: { vector: encodeVector(new Float32Array([1, 0, 0])), hash: "x" },
-        Beta:  { vector: encodeVector(new Float32Array([0, 1, 0])), hash: "x" },
+        Alpha: { chunks: [{ vector: encodeVector(new Float32Array([1, 0, 0])), hash: "x", kind: "summary" }] },
+        Beta:  { chunks: [{ vector: encodeVector(new Float32Array([0, 1, 0])), hash: "x", kind: "summary" }] },
       },
     };
 
@@ -219,10 +236,10 @@ describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
       baseUrl: "http://x", apiKey: "k",
     });
     (svc as unknown as { cache: unknown }).cache = {
-      model: "m", dimensions: 3,
+      version: 2, model: "m", dimensions: 3,
       entries: {
-        Alpha: { vector: encodeVector(new Float32Array([1, 0, 0])), hash: "x" },
-        Beta:  { vector: encodeVector(new Float32Array([0, 1, 0])), hash: "x" },
+        Alpha: { chunks: [{ vector: encodeVector(new Float32Array([1, 0, 0])), hash: "x", kind: "summary" }] },
+        Beta:  { chunks: [{ vector: encodeVector(new Float32Array([0, 1, 0])), hash: "x", kind: "summary" }] },
       },
     };
 
@@ -265,5 +282,285 @@ describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
     expect(allFailed).toBe(false);
     expect(results.get("Q1::")).toEqual([]);
     expect(results.get("Q2::")).toEqual([]);
+  });
+});
+
+describe("cache schema v2", () => {
+  // @lat: [[tests#Multi-Vector Retrieval#Old cache schema loads as null]]
+  it("loadCache rejects an old { vector, hash } cache (no version: 2)", async () => {
+    const svc = new PageSimilarityService({
+      mode: "embedding", topK: 3, model: "m", dimensions: 3,
+      baseUrl: "http://x", apiKey: "k",
+    });
+    const oldCache = JSON.stringify({
+      model: "m", dimensions: 3,
+      entries: { Alpha: { vector: "AAAA", hash: "x" } },
+    });
+    const vaultTools = { read: async () => oldCache } as never;
+    await svc.loadCache("domainRoot", vaultTools);
+    // Old schema → cache stays null → no crash on subsequent select
+    expect((svc as unknown as { cache: unknown }).cache).toBeNull();
+  });
+
+  it("loadCache accepts a version: 2 cache", async () => {
+    const svc = new PageSimilarityService({
+      mode: "embedding", topK: 3, model: "m", dimensions: 3,
+      baseUrl: "http://x", apiKey: "k",
+    });
+    const v2 = JSON.stringify({
+      version: 2, model: "m", dimensions: 3,
+      entries: { Alpha: { chunks: [{ vector: "AAAA", hash: "x", kind: "summary" }] } },
+    });
+    const vaultTools = { read: async () => v2 } as never;
+    await svc.loadCache("domainRoot", vaultTools);
+    expect((svc as unknown as { cache: unknown }).cache).not.toBeNull();
+  });
+});
+
+function makeVaultTools() {
+  const files = new Map<string, string>();
+  return {
+    files,
+    read: async (p: string) => {
+      const v = files.get(p);
+      if (v == null) throw new Error(`ENOENT: ${p}`);
+      return v;
+    },
+    write: async (p: string, c: string) => { files.set(p, c); },
+  } as never;
+}
+
+describe("refreshCache v2 (multi-vector, incremental)", () => {
+  beforeEach(() => __clearRequestUrlCalls());
+
+  const cfg = {
+    mode: "embedding" as const, topK: 3, model: "m", dimensions: 3,
+    baseUrl: "http://x", apiKey: "k", chunking: DEFAULT_CHUNKING,
+  };
+
+  // @lat: [[tests#Multi-Vector Retrieval#Cache v2 round-trips multiple chunks]]
+  it("embeds summary + one vector per section and round-trips the v2 cache", async () => {
+    const annotation = "rich annotation";
+    const body = "# T\n\n## Alpha\n\nAlpha body.\n\n## Beta\n\nBeta body.";
+    const expectedChunks = buildChunkInputs(annotation, body, DEFAULT_CHUNKING).length; // summary + 2
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({
+        data: Array.from({ length: expectedChunks }, () => ({ embedding: [1, 0, 0] })),
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const svc = new PageSimilarityService(cfg);
+    const vt = makeVaultTools();
+    const { updated } = await svc.refreshCache(
+      "domainRoot", vt,
+      new Map([["Alpha", annotation]]),
+      new Map([["Alpha", body]]),
+    );
+    expect(updated).toBe(expectedChunks);
+
+    const written = JSON.parse((vt as any).files.get("domainRoot/_config/_embeddings.json")!);
+    expect(written.version).toBe(2);
+    expect(written.entries.Alpha.chunks).toHaveLength(expectedChunks);
+    expect(written.entries.Alpha.chunks[0].kind).toBe("summary");
+    expect(written.entries.Alpha.chunks[1].kind).toBe("section");
+  });
+
+  it("re-embeds nothing when body and annotation are unchanged", async () => {
+    const annotation = "rich annotation";
+    const body = "# T\n\n## Alpha\n\nAlpha body.";
+    const n = buildChunkInputs(annotation, body, DEFAULT_CHUNKING).length;
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: Array.from({ length: n }, () => ({ embedding: [1, 0, 0] })) }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const svc = new PageSimilarityService(cfg);
+    const vt = makeVaultTools();
+    const anns = new Map([["Alpha", annotation]]);
+    const bodies = new Map([["Alpha", body]]);
+    await svc.refreshCache("domainRoot", vt, anns, bodies);
+
+    __clearRequestUrlCalls();
+    const second = await svc.refreshCache("domainRoot", vt, anns, bodies);
+    expect(second.updated).toBe(0);
+    expect(__requestUrlCalls).toHaveLength(0); // no HTTP — all hashes hit
+  });
+
+  // @lat: [[tests#Multi-Vector Retrieval#Incremental re-embed touches only changed chunks]]
+  it("re-embeds only the changed section (one chunk)", async () => {
+    const annotation = "rich annotation";
+    const body1 = "# T\n\n## Alpha\n\nAlpha body.\n\n## Beta\n\nBeta body.";
+    const n = buildChunkInputs(annotation, body1, DEFAULT_CHUNKING).length; // 3
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: Array.from({ length: n }, () => ({ embedding: [1, 0, 0] })) }),
+      headers: { "content-type": "application/json" },
+    });
+    const svc = new PageSimilarityService(cfg);
+    const vt = makeVaultTools();
+    await svc.refreshCache("domainRoot", vt, new Map([["Alpha", annotation]]), new Map([["Alpha", body1]]));
+
+    // Change ONLY Beta's body. Summary + Alpha chunk hashes are unchanged.
+    const body2 = "# T\n\n## Alpha\n\nAlpha body.\n\n## Beta\n\nBeta body CHANGED.";
+    __clearRequestUrlCalls();
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: [{ embedding: [0, 1, 0] }] }), // exactly one chunk re-embedded
+      headers: { "content-type": "application/json" },
+    });
+    const r = await svc.refreshCache("domainRoot", vt, new Map([["Alpha", annotation]]), new Map([["Alpha", body2]]));
+    expect(r.updated).toBe(1);
+    expect(__requestUrlCalls).toHaveLength(1);
+    const reqBody = JSON.parse(__requestUrlCalls[0].body as string);
+    expect(reqBody.input).toHaveLength(1);
+    expect(reqBody.input[0]).toContain("CHANGED");
+  });
+
+  it("discards an old { vector, hash } cache and rebuilds as v2", async () => {
+    const annotation = "rich annotation";
+    const body = "# T\n\n## Alpha\n\nAlpha body.";
+    const n = buildChunkInputs(annotation, body, DEFAULT_CHUNKING).length;
+    const svc = new PageSimilarityService(cfg);
+    const vt = makeVaultTools();
+    (vt as any).files.set("domainRoot/_config/_embeddings.json", JSON.stringify({
+      model: "m", dimensions: 3, entries: { Alpha: { vector: "AAAA", hash: "old" } },
+    }));
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: Array.from({ length: n }, () => ({ embedding: [1, 0, 0] })) }),
+      headers: { "content-type": "application/json" },
+    });
+    await svc.refreshCache("domainRoot", vt, new Map([["Alpha", annotation]]), new Map([["Alpha", body]]));
+    const written = JSON.parse((vt as any).files.get("domainRoot/_config/_embeddings.json")!);
+    expect(written.version).toBe(2);
+    expect(written.entries.Alpha.chunks.length).toBeGreaterThan(0);
+    expect(written.entries.Alpha.chunks[0].kind).toBe("summary");
+  });
+
+  it("embeds only the summary chunk for a pid with no body", async () => {
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: [{ embedding: [1, 0, 0] }] }),
+      headers: { "content-type": "application/json" },
+    });
+    const svc = new PageSimilarityService(cfg);
+    const vt = makeVaultTools();
+    const { updated } = await svc.refreshCache(
+      "domainRoot", vt, new Map([["Alpha", "annot"]]), new Map(),
+    );
+    expect(updated).toBe(1);
+    const written = JSON.parse((vt as any).files.get("domainRoot/_config/_embeddings.json")!);
+    expect(written.entries.Alpha.chunks).toHaveLength(1);
+    expect(written.entries.Alpha.chunks[0].kind).toBe("summary");
+  });
+
+  it("preserves section chunks for a pid whose body is not supplied (incremental ingest)", async () => {
+    const annotation = "rich annotation";
+    const body = "# T\n\n## Alpha\n\nAlpha body.\n\n## Beta\n\nBeta body.";
+    const n = buildChunkInputs(annotation, body, DEFAULT_CHUNKING).length; // summary + 2 sections
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: Array.from({ length: n }, () => ({ embedding: [1, 0, 0] })) }),
+      headers: { "content-type": "application/json" },
+    });
+    const svc = new PageSimilarityService(cfg);
+    const vt = makeVaultTools();
+    // Full embed of Alpha (summary + 2 sections)
+    await svc.refreshCache("domainRoot", vt, new Map([["Alpha", annotation]]), new Map([["Alpha", body]]));
+    const after1 = JSON.parse((vt as any).files.get("domainRoot/_config/_embeddings.json")!);
+    expect(after1.entries.Alpha.chunks).toHaveLength(n);
+
+    // Incremental ingest: annotations list BOTH pages, but only Beta's body is supplied.
+    __clearRequestUrlCalls();
+    const betaBody = "# T\n\n## Gamma\n\nGamma body.";
+    const betaN = buildChunkInputs("beta annot", betaBody, DEFAULT_CHUNKING).length;
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: Array.from({ length: betaN }, () => ({ embedding: [0, 1, 0] })) }),
+      headers: { "content-type": "application/json" },
+    });
+    await svc.refreshCache(
+      "domainRoot", vt,
+      new Map([["Alpha", annotation], ["Beta", "beta annot"]]),
+      new Map([["Beta", betaBody]]),
+    );
+    const after2 = JSON.parse((vt as any).files.get("domainRoot/_config/_embeddings.json")!);
+    // Alpha's section chunks survive (NOT pruned to summary-only)
+    expect(after2.entries.Alpha.chunks).toHaveLength(n);
+    expect(after2.entries.Alpha.chunks.filter((c: { kind: string }) => c.kind === "section")).toHaveLength(2);
+    // Beta embedded fresh
+    expect(after2.entries.Beta.chunks.length).toBe(betaN);
+  });
+
+  it("skips chunks when the API returns fewer vectors than requested", async () => {
+    const annotation = "rich annotation";
+    const body = "# T\n\n## Alpha\n\nAlpha body.\n\n## Beta\n\nBeta body."; // summary + 2 sections = 3 chunks
+    // API returns only ONE vector for a 3-input request (truncated response)
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: [{ embedding: [1, 0, 0] }] }),
+      headers: { "content-type": "application/json" },
+    });
+    const svc = new PageSimilarityService(cfg);
+    const vt = makeVaultTools();
+    await svc.refreshCache("domainRoot", vt, new Map([["Alpha", annotation]]), new Map([["Alpha", body]]));
+    const written = JSON.parse((vt as any).files.get("domainRoot/_config/_embeddings.json")!);
+    // only the chunk that actually got a vector is persisted; no garbage/empty vectors
+    expect(written.entries.Alpha.chunks.every((c: { vector: string }) => c.vector !== "")).toBe(true);
+    expect(written.entries.Alpha.chunks.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("max-pool scoring", () => {
+  beforeEach(() => __clearRequestUrlCalls());
+
+  // @lat: [[tests#Multi-Vector Retrieval#Max-pool surfaces a body-section match]]
+  it("surfaces a page whose only match is a body-section vector", async () => {
+    // Query vector points along axis 2 (the body section), NOT the summary axis.
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: [{ embedding: [0, 0, 1] }] }),
+      headers: { "content-type": "application/json" },
+    });
+    const svc = new PageSimilarityService({
+      mode: "embedding", topK: 1, model: "m", dimensions: 3,
+      baseUrl: "http://x", apiKey: "k",
+    });
+    (svc as unknown as { cache: unknown }).cache = {
+      version: 2, model: "m", dimensions: 3,
+      entries: {
+        Alpha: { chunks: [
+          { vector: encodeVector(new Float32Array([1, 0, 0])), hash: "s", kind: "summary" },
+          { vector: encodeVector(new Float32Array([0, 0, 1])), hash: "b", kind: "section" }, // body match
+        ] },
+        Beta: { chunks: [
+          { vector: encodeVector(new Float32Array([1, 0, 0])), hash: "s", kind: "summary" },
+        ] },
+      },
+    };
+    const result = await svc.selectRelevant(
+      "body section query",
+      new Map([["Alpha", "a"], ["Beta", "b"]]),
+      ["!Wiki/d/x/Alpha.md", "!Wiki/d/x/Beta.md"],
+    );
+    expect(result).toEqual(["!Wiki/d/x/Alpha.md"]); // body-section vector wins via max-pool
+  });
+
+  it("falls back to Jaccard for a page whose vectors all failed", async () => {
+    __setRequestUrlResponse({ status: 500, text: "err", headers: {} });
+    const svc = new PageSimilarityService({
+      mode: "embedding", topK: 1, model: "m", dimensions: 3,
+      baseUrl: "http://x", apiKey: "k",
+    });
+    const result = await svc.selectRelevant(
+      "neural network",
+      new Map([["Alpha", "neural network deep learning"]]),
+      ["!Wiki/d/x/Alpha.md"],
+    );
+    // query embedding throws → whole call falls to Jaccard → Alpha matches on tokens
+    expect(result).toEqual(["!Wiki/d/x/Alpha.md"]);
   });
 });

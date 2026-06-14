@@ -38,6 +38,46 @@ An entity with no annotation matches receives `[]` and is treated by LLM #2 as a
 
 When the wiki is empty (`allPaths` is `[]`), `jaccardFallbackAll` returns `allFailed: false` — no pages to process is not a failure.
 
+## Multi-Vector Retrieval
+
+Tests for section-aware chunking, the schema-v2 cache, incremental re-embedding, and max-pool scoring that lifts body-fact recall on both retrieval paths.
+
+### Chunker splits H2 sections
+
+`splitSections` strips frontmatter and the H1 title, emits one unit per H2 section, and folds H3+ content into the parent H2.
+
+### Chunker merges short sections and windows long ones
+
+Sections shorter than `minChars` merge into a neighbour; sections longer than `maxChars` are windowed with `overlapChars` overlap, each window carrying the section heading.
+
+### Chunker caps at maxCount and makes the fold visible
+
+When windows exceed `maxCount`, the first `maxCount - 1` are kept and the rest are folded into one final window whose heading announces the folded count — no silent cap.
+
+### Chunk embed text prepends annotation and heading
+
+`buildChunkInputs` produces a summary chunk equal to the annotation alone and section chunks that prepend the annotation and H2 heading to the window for whole-article grounding.
+
+### Cache v2 round-trips multiple chunks
+
+`refreshCache` writes a `version: 2` cache whose page entry holds one summary chunk plus one section chunk per body section, serialized and parsed without loss.
+
+### Incremental re-embed touches only changed chunks
+
+An unchanged body re-embeds nothing; changing a single section re-embeds exactly that one chunk while summary and other section vectors are reused by hash.
+
+### Max-pool surfaces a body-section match
+
+A page whose only matching vector is a body section outranks a page that matches only on its summary, because page score is the max cosine across the page's vectors.
+
+### Old cache schema loads as null
+
+A pre-v2 `{ vector, hash }` cache is rejected by `loadCache` (returns null, no crash); `refreshCache` discards it and rebuilds as v2.
+
+### Offline Jaccard finds a section keyword
+
+With no API key, the enriched one-line annotation lets `scoreSeed` match a query phrased with a keyword that lives in a body section.
+
 ## Merge Handling
 
 Tests that validate `deletes[]` on `WikiPagesOutputSchema` and the delete loop.

@@ -87,6 +87,8 @@ Seeds are wiki page IDs most relevant to the question. Both embedding and Jaccar
 
 Each page's match text is its `_index.md` annotation, which is now a rich single-line structured string (summary + `Затрагивает:` entities + `Тип:` + `Термины:` synonyms), not a single sentence. `upsertIndexAnnotation` collapses any whitespace/newlines to single spaces so the richer text stays one line and `parseIndexAnnotations` reads it whole. Richer text gives embedding cosine and Jaccard more terms to match, improving recall for queries phrased with synonyms absent from the page title. Coverage is gradual — existing pages upgrade only on re-ingest/re-lint; a changed annotation triggers a per-page re-embed via `annotationHash`. See [[src/wiki-index.ts#upsertIndexAnnotation]], [[src/wiki-index.ts#parseIndexAnnotations]].
 
+On the embedding path, each page is represented by **multiple vectors** (a summary vector over the annotation plus one vector per body section). The seed score is the **max** cosine over those vectors, so a query matching a fact that lives only in the page body still surfaces the page. The offline Jaccard path is unchanged structurally but benefits from richer annotations: the one-line `_index.md` string now carries section keywords surfaced by the annotation prompt, so `scoreSeed` term mass covers body facts with no API. See [[src/page-similarity.ts#PageSimilarityService#selectRelevant]].
+
 If seed selection yields nothing, `llmSelectSeeds` asks the LLM to pick from all annotated page IDs. See [[src/wiki-seeds.ts#selectSeeds]], [[src/phases/query.ts#llmSelectSeeds]], [[src/page-similarity.ts#PageSimilarityService]].
 
 ### BFS Expansion

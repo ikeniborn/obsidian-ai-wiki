@@ -182,6 +182,10 @@ export interface LlmWikiPluginSettings {
     embeddingDimensions?: number;
     relevantPagesTopK?: number;
     mergeDeleteWarnThreshold?: number;
+    chunkMaxChars?: number;
+    chunkOverlapChars?: number;
+    chunkMinChars?: number;
+    chunkMaxCount?: number;
   };
   proxy: {
     enabled: boolean;

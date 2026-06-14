@@ -480,7 +480,12 @@ export async function* runIngest(
     try {
       const updatedIndex = await vaultTools.read(domainIndexPath(wikiVaultPath)).catch(() => "");
       const updatedAnnotations = parseIndexAnnotations(updatedIndex);
-      await similarity.refreshCache(domainRoot, vaultTools, updatedAnnotations);
+      const writtenSet = new Set(written);
+      const pageBodies = new Map<string, string>();
+      for (const page of pages) {
+        if (writtenSet.has(page.path)) pageBodies.set(pageId(page.path), page.content);
+      }
+      await similarity.refreshCache(domainRoot, vaultTools, updatedAnnotations, pageBodies);
     } catch { /* non-critical */ }
   }
 

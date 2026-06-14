@@ -4,6 +4,20 @@ import { pageId } from "./wiki-graph";
 import type { VaultTools } from "./vault-tools";
 import { domainEmbeddingsPath } from "./wiki-path";
 
+export interface ChunkingConfig {
+  maxChars: number;
+  overlapChars: number;
+  minChars: number;
+  maxCount: number;
+}
+
+export const DEFAULT_CHUNKING: ChunkingConfig = {
+  maxChars: 1200,
+  overlapChars: 200,
+  minChars: 200,
+  maxCount: 12,
+};
+
 export interface SimilarityConfig {
   mode: "jaccard" | "embedding";
   model?: string;
@@ -11,14 +25,21 @@ export interface SimilarityConfig {
   topK: number;
   baseUrl?: string;
   apiKey?: string;
+  chunking?: ChunkingConfig;
+}
+
+export interface EmbeddingChunk {
+  vector: string;  // base64 Float32Array
+  hash: string;
+  kind: "summary" | "section";
 }
 
 export interface EmbeddingCacheEntry {
-  vector: string;  // base64 Float32Array
-  hash: string;
+  chunks: EmbeddingChunk[];
 }
 
 export interface EmbeddingCacheFile {
+  version: 2;
   model: string;
   dimensions: number;
   entries: Record<string, EmbeddingCacheEntry>;
@@ -47,6 +68,112 @@ function annotationHash(s: string): string {
   return (h >>> 0).toString(36);
 }
 
+export interface SectionWindow { heading: string; window: string; }
+
+function stripFrontmatterAndTitle(body: string): string {
+  const noFm = body.replace(/^---\n[\s\S]*?\n---\n?/, "").trimStart();
+  // drop a single leading "# H1" title line
+  return noFm.replace(/^#\s+[^\n]*\n?/, "");
+}
+
+interface RawUnit { heading: string; body: string; }
+
+function toUnits(text: string): RawUnit[] {
+  const lines = text.split("\n");
+  const units: RawUnit[] = [];
+  let cur: RawUnit | null = null;
+  for (const line of lines) {
+    if (/^##\s+/.test(line)) {                 // new H2 — H3+ stays inside the current unit
+      if (cur) units.push(cur);
+      cur = { heading: line.trim(), body: "" };
+    } else if (!cur) {
+      // lead text before the first H2 — its own headless unit
+      cur = { heading: "", body: line + "\n" };
+    } else {
+      cur.body += line + "\n";
+    }
+  }
+  if (cur) units.push(cur);
+  // drop units that are entirely whitespace
+  return units
+    .map((u) => ({ heading: u.heading, body: u.body.trim() }))
+    .filter((u) => u.heading.length > 0 || u.body.length > 0);
+}
+
+function unitLen(u: RawUnit): number { return u.heading.length + u.body.length; }
+
+function mergeShort(units: RawUnit[], minChars: number): RawUnit[] {
+  const out: RawUnit[] = [];
+  for (const u of units) {
+    const prev = out.length > 0 ? out[out.length - 1] : null;
+    // Only merge a short unit into the previous one when prev is a headed section
+    // that is itself long enough (>= minChars). This prevents two consecutive short
+    // sections from collapsing into a single unit and losing both H2 labels.
+    if (unitLen(u) < minChars && prev !== null && prev.heading.length > 0 && unitLen(prev) >= minChars) {
+      prev.body = `${prev.body}\n\n${u.heading} ${u.body}`.trim();
+    } else {
+      out.push({ heading: u.heading, body: u.body });
+    }
+  }
+  return out;
+}
+
+function windowUnit(u: RawUnit, maxChars: number, overlapChars: number): SectionWindow[] {
+  const text = u.body;
+  if (text.length <= maxChars) return [{ heading: u.heading, window: text }];
+  const windows: SectionWindow[] = [];
+  const step = Math.max(1, maxChars - overlapChars);
+  for (let i = 0; i < text.length; i += step) {
+    windows.push({ heading: u.heading, window: text.slice(i, i + maxChars) });
+    if (i + maxChars >= text.length) break;
+  }
+  return windows;
+}
+
+export function splitSections(body: string, chunking: ChunkingConfig): SectionWindow[] {
+  const stripped = stripFrontmatterAndTitle(body).trim();
+  if (!stripped) return [];
+  const merged = mergeShort(toUnits(stripped), chunking.minChars);
+  let windows: SectionWindow[] = [];
+  for (const u of merged) {
+    windows.push(...windowUnit(u, chunking.maxChars, chunking.overlapChars));
+  }
+  if (windows.length === 0) return [];
+  if (windows.length > chunking.maxCount) {
+    const kept = windows.slice(0, chunking.maxCount - 1);
+    const foldedCount = windows.length - kept.length;
+    const foldedBody = windows
+      .slice(chunking.maxCount - 1)
+      .map((w) => `${w.heading} ${w.window}`)
+      .join("\n\n")
+      .slice(0, chunking.maxChars);
+    kept.push({ heading: `## (+${foldedCount} sections folded)`, window: foldedBody });
+    windows = kept;
+  }
+  return windows;
+}
+
+export interface ChunkInput {
+  kind: "summary" | "section";
+  embedText: string;
+  hash: string;
+}
+
+export function buildChunkInputs(
+  annotation: string,
+  body: string,
+  chunking: ChunkingConfig,
+): ChunkInput[] {
+  const inputs: ChunkInput[] = [
+    { kind: "summary", embedText: annotation, hash: annotationHash(annotation) },
+  ];
+  for (const { heading, window } of splitSections(body, chunking)) {
+    const embedText = `${annotation}\n\n${heading}\n${window}`;
+    inputs.push({ kind: "section", embedText, hash: annotationHash(embedText) });
+  }
+  return inputs;
+}
+
 function cosine(a: Float32Array, b: Float32Array): number {
   let dot = 0, na = 0, nb = 0;
   for (let i = 0; i < a.length; i++) {
@@ -56,6 +183,19 @@ function cosine(a: Float32Array, b: Float32Array): number {
   }
   const denom = Math.sqrt(na) * Math.sqrt(nb);
   return denom === 0 ? 0 : dot / denom;
+}
+
+// Page score = best cosine across the page's chunk vectors. Floors at 0: a page whose
+// chunks are all orthogonal/antipodal to the query scores 0 and is dropped by the
+// caller's `score > 0` filter — matching the old single-vector behaviour.
+function maxCosine(query: Float32Array, vecs: Float32Array[]): number {
+  let best = 0;
+  for (const v of vecs) {
+    if (v.length === 0) continue;
+    const c = cosine(query, v);
+    if (c > best) best = c;
+  }
+  return best;
 }
 
 const EMBEDDING_BATCH_SIZE = 100;
@@ -100,6 +240,8 @@ function entityKey(e: { name: string; type?: string }): string {
 function entityQuery(e: ExtractedEntity): string {
   return [e.name, e.type, e.context_snippet].filter(Boolean).join(" — ");
 }
+
+interface Pending { pid: string; idx: number; embedText: string; }
 
 export class PageSimilarityService {
   private cache: EmbeddingCacheFile | null = null;
@@ -202,12 +344,12 @@ export class PageSimilarityService {
 
     const pids = allPaths.map((p) => pageId(p));
     const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
-    const pageVecs = new Map<string, Float32Array>();
+    const pageVecs = new Map<string, Float32Array[]>();
 
     if (this.cache && this.cache.model === model) {
       for (let i = 0; i < pids.length; i++) {
         const entry = this.cache.entries[pids[i]];
-        if (entry) pageVecs.set(pids[i], decodeVector(entry.vector));
+        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
       }
     }
 
@@ -228,11 +370,9 @@ export class PageSimilarityService {
     for (const batch of batches) {
       try {
         const vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
-        for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], vecs[i]);
+        for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], [vecs[i]]);
       } catch {
-        for (let i = 0; i < batch.pids.length; i++) {
-          pageVecs.set(batch.pids[i], new Float32Array(0));
-        }
+        for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], []);
       }
     }
 
@@ -244,11 +384,11 @@ export class PageSimilarityService {
       const scored: { path: string; score: number }[] = [];
       for (let pi = 0; pi < allPaths.length; pi++) {
         const pid = pids[pi];
-        const vec = pageVecs.get(pid);
-        if (!vec) continue;
-        const score = vec.length === 0
+        const vecs = pageVecs.get(pid);
+        if (!vecs) continue;
+        const score = vecs.length === 0
           ? scoreSeed(queryTokens, pid, "", annotations[pi])
-          : cosine(queryVec, vec);
+          : maxCosine(queryVec, vecs);
         if (score > 0) scored.push({ path: allPaths[pi], score });
       }
       scored.sort((a, b) => b.score - a.score);
@@ -300,15 +440,13 @@ export class PageSimilarityService {
     // Page vectors — process in batches
     const pids = allPaths.map((p) => pageId(p));
     const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
-    const pageVecs = new Map<string, Float32Array>();
+    const pageVecs = new Map<string, Float32Array[]>();
 
-    // Load vectors from in-memory cache (populated by refreshCache)
+    // Load chunk vectors from in-memory cache (populated by refreshCache)
     if (this.cache && this.cache.model === model) {
       for (let i = 0; i < pids.length; i++) {
         const entry = this.cache.entries[pids[i]];
-        if (entry) {
-          pageVecs.set(pids[i], decodeVector(entry.vector));
-        }
+        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
       }
     }
 
@@ -331,17 +469,16 @@ export class PageSimilarityService {
       try {
         vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
       } catch {
-        // Fallback: use Jaccard for this batch's pages
+        // Fallback: mark this batch's pages for Jaccard (empty vector list)
         for (const pid of batch.pids) {
           const annotation = indexAnnotations.get(pid) ?? "";
           const score = scoreSeed(queryTokens, pid, "", annotation);
-          // Store a sentinel Float32Array of length 0 to indicate Jaccard fallback
-          if (score > 0) pageVecs.set(pid, new Float32Array(0));
+          if (score > 0) pageVecs.set(pid, []);
         }
         continue;
       }
       for (let i = 0; i < batch.pids.length; i++) {
-        pageVecs.set(batch.pids[i], vecs[i]);
+        pageVecs.set(batch.pids[i], [vecs[i]]);
       }
     }
 
@@ -349,15 +486,11 @@ export class PageSimilarityService {
     const scored: { path: string; score: number }[] = [];
     for (let i = 0; i < allPaths.length; i++) {
       const pid = pids[i];
-      const vec = pageVecs.get(pid);
-      if (!vec) continue;
-      let score: number;
-      if (vec.length === 0) {
-        // Jaccard fallback sentinel
-        score = scoreSeed(queryTokens, pid, "", annotations[i]);
-      } else {
-        score = cosine(queryVec, vec);
-      }
+      const vecs = pageVecs.get(pid);
+      if (!vecs) continue;
+      const score = vecs.length === 0
+        ? scoreSeed(queryTokens, pid, "", annotations[i])
+        : maxCosine(queryVec, vecs);
       if (score > 0) scored.push({ path: allPaths[i], score });
     }
     scored.sort((a, b) => b.score - a.score);
@@ -402,12 +535,12 @@ export class PageSimilarityService {
 
     const pids = allPaths.map((p) => pageId(p));
     const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
-    const pageVecs = new Map<string, Float32Array>();
+    const pageVecs = new Map<string, Float32Array[]>();
 
     if (this.cache && this.cache.model === model) {
       for (let i = 0; i < pids.length; i++) {
         const entry = this.cache.entries[pids[i]];
-        if (entry) pageVecs.set(pids[i], decodeVector(entry.vector));
+        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
       }
     }
 
@@ -424,20 +557,20 @@ export class PageSimilarityService {
     for (const batch of batches) {
       try {
         const vecs = await fetchEmbeddings(baseUrl, apiKey!, model, batch.texts);
-        for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], vecs[i]);
+        for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], [vecs[i]]);
       } catch {
-        for (const pid of batch.pids) pageVecs.set(pid, new Float32Array(0));
+        for (const pid of batch.pids) pageVecs.set(pid, []);
       }
     }
 
     const scored: { path: string; score: number }[] = [];
     for (let i = 0; i < allPaths.length; i++) {
       const pid = pids[i];
-      const vec = pageVecs.get(pid);
-      if (!vec) continue;
-      const score = vec.length === 0
+      const vecs = pageVecs.get(pid);
+      if (!vecs) continue;
+      const score = vecs.length === 0
         ? scoreSeed(queryTokens, pid, "", annotations[i])
-        : cosine(queryVec, vec);
+        : maxCosine(queryVec, vecs);
       if (score > 0) scored.push({ path: allPaths[i], score });
     }
     scored.sort((a, b) => b.score - a.score);
@@ -452,7 +585,7 @@ export class PageSimilarityService {
     try {
       const raw = await vaultTools.read(domainEmbeddingsPath(domainRoot));
       const parsed = JSON.parse(raw) as EmbeddingCacheFile;
-      if (parsed.model === model && parsed.dimensions === dimensions) {
+      if (parsed.version === 2 && parsed.model === model && parsed.dimensions === dimensions) {
         this.cache = parsed;
       }
     } catch { /* cache missing or unreadable — stay null */ }
@@ -462,58 +595,83 @@ export class PageSimilarityService {
     domainRoot: string,
     vaultTools: VaultTools,
     indexAnnotations: Map<string, string>,
+    pageBodies: Map<string, string>,
   ): Promise<{ updated: number }> {
     if (this.config.mode !== "embedding") return { updated: 0 };
     const { baseUrl, apiKey, model, dimensions } = this.config;
     if (!baseUrl || !model || !dimensions) return { updated: 0 };
+    const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
 
     const cachePath = domainEmbeddingsPath(domainRoot);
     let cacheFile: EmbeddingCacheFile;
-
     try {
-      const raw = await vaultTools.read(cachePath);
-      const parsed = JSON.parse(raw) as EmbeddingCacheFile;
-      // Invalidate if model or dimensions changed
-      if (parsed.model !== model || parsed.dimensions !== dimensions) {
-        cacheFile = { model, dimensions, entries: {} };
-      } else {
-        cacheFile = parsed;
-      }
+      const parsed = JSON.parse(await vaultTools.read(cachePath)) as EmbeddingCacheFile;
+      cacheFile =
+        parsed.version === 2 && parsed.model === model && parsed.dimensions === dimensions
+          ? parsed
+          : { version: 2, model, dimensions, entries: {} };
     } catch {
-      cacheFile = { model, dimensions, entries: {} };
+      cacheFile = { version: 2, model, dimensions, entries: {} };
     }
 
-    // Find stale entries
-    const toEmbed: { pid: string; annotation: string }[] = [];
+    // Build the desired chunk set per pid, reusing cached vectors whose hash matches.
+    const desired = new Map<string, EmbeddingChunk[]>();
+    const pending: Pending[] = [];
+    // Tracks chunk-count change so a write is triggered even when nothing is pending
+    // (e.g. a section deleted: surviving hashes all hit oldByHash, but count shrinks).
+    let changed = false;
+
     for (const [pid, annotation] of indexAnnotations) {
-      const hash = annotationHash(annotation);
-      const existing = cacheFile.entries[pid];
-      if (!existing || existing.hash !== hash) {
-        toEmbed.push({ pid, annotation });
+      // A caller may refresh only a subset (incremental ingest supplies bodies only for the
+      // pages it rewrote). For a pid with no supplied body, keep its cached chunks untouched
+      // rather than rebuilding from an empty body — otherwise unchanged pages lose their
+      // section vectors. A pid genuinely present with an empty-string body still rebuilds.
+      if (!pageBodies.has(pid) && cacheFile.entries[pid]) {
+        desired.set(pid, cacheFile.entries[pid].chunks);
+        continue;
       }
+      const body = pageBodies.get(pid) ?? "";
+      const inputs = buildChunkInputs(annotation, body, chunking);
+      const oldByHash = new Map(
+        (cacheFile.entries[pid]?.chunks ?? []).map((c) => [c.hash, c.vector]),
+      );
+      const chunks: EmbeddingChunk[] = [];
+      for (const { kind, embedText, hash } of inputs) {
+        const reuse = oldByHash.get(hash);
+        if (reuse !== undefined) {
+          chunks.push({ vector: reuse, hash, kind });
+        } else {
+          pending.push({ pid, idx: chunks.length, embedText });
+          chunks.push({ vector: "", hash, kind });
+        }
+      }
+      if ((cacheFile.entries[pid]?.chunks.length ?? 0) !== chunks.length) changed = true;
+      desired.set(pid, chunks);
     }
 
-    if (toEmbed.length === 0) return { updated: 0 };
-
-    // Embed in batches
-    for (let i = 0; i < toEmbed.length; i += EMBEDDING_BATCH_SIZE) {
-      const batch = toEmbed.slice(i, i + EMBEDDING_BATCH_SIZE);
+    // Embed the new chunks in batches.
+    for (let i = 0; i < pending.length; i += EMBEDDING_BATCH_SIZE) {
+      const batch = pending.slice(i, i + EMBEDDING_BATCH_SIZE);
       let vecs: Float32Array[];
       try {
-        vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.map((x) => x.annotation));
+        vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.map((p) => p.embedText));
       } catch {
         continue;
       }
       for (let j = 0; j < batch.length; j++) {
-        cacheFile.entries[batch[j].pid] = {
-          vector: encodeVector(vecs[j]),
-          hash: annotationHash(batch[j].annotation),
-        };
+        if (vecs[j]) desired.get(batch[j].pid)![batch[j].idx].vector = encodeVector(vecs[j]);
       }
+    }
+
+    if (pending.length === 0 && !changed) return { updated: 0 };
+
+    for (const [pid, chunks] of desired) {
+      const filled = chunks.filter((c) => c.vector !== "");
+      if (filled.length > 0) cacheFile.entries[pid] = { chunks: filled };
     }
 
     await vaultTools.write(cachePath, JSON.stringify(cacheFile, null, 2));
     this.cache = cacheFile;
-    return { updated: toEmbed.length };
+    return { updated: pending.length };
   }
 }
