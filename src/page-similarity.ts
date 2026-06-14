@@ -228,6 +228,8 @@ function entityQuery(e: ExtractedEntity): string {
   return [e.name, e.type, e.context_snippet].filter(Boolean).join(" — ");
 }
 
+interface Pending { pid: string; idx: number; embedText: string; }
+
 export class PageSimilarityService {
   private cache: EmbeddingCacheFile | null = null;
 
@@ -609,9 +611,10 @@ export class PageSimilarityService {
     }
 
     // Build the desired chunk set per pid, reusing cached vectors whose hash matches.
-    interface Pending { pid: string; idx: number; embedText: string; }
     const desired = new Map<string, EmbeddingChunk[]>();
     const pending: Pending[] = [];
+    // Tracks chunk-count change so a write is triggered even when nothing is pending
+    // (e.g. a section deleted: surviving hashes all hit oldByHash, but count shrinks).
     let changed = false;
 
     for (const [pid, annotation] of indexAnnotations) {
@@ -644,7 +647,7 @@ export class PageSimilarityService {
         continue;
       }
       for (let j = 0; j < batch.length; j++) {
-        desired.get(batch[j].pid)![batch[j].idx].vector = encodeVector(vecs[j]);
+        if (vecs[j]) desired.get(batch[j].pid)![batch[j].idx].vector = encodeVector(vecs[j]);
       }
     }
 

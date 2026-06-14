@@ -416,7 +416,8 @@ describe("refreshCache v2 (multi-vector, incremental)", () => {
     await svc.refreshCache("domainRoot", vt, new Map([["Alpha", annotation]]), new Map([["Alpha", body]]));
     const written = JSON.parse((vt as any).files.get("domainRoot/_config/_embeddings.json")!);
     expect(written.version).toBe(2);
-    expect(written.entries.Alpha.chunks).toBeDefined();
+    expect(written.entries.Alpha.chunks.length).toBeGreaterThan(0);
+    expect(written.entries.Alpha.chunks[0].kind).toBe("summary");
   });
 
   it("embeds only the summary chunk for a pid with no body", async () => {
@@ -434,5 +435,23 @@ describe("refreshCache v2 (multi-vector, incremental)", () => {
     const written = JSON.parse((vt as any).files.get("domainRoot/_config/_embeddings.json")!);
     expect(written.entries.Alpha.chunks).toHaveLength(1);
     expect(written.entries.Alpha.chunks[0].kind).toBe("summary");
+  });
+
+  it("skips chunks when the API returns fewer vectors than requested", async () => {
+    const annotation = "rich annotation";
+    const body = "# T\n\n## Alpha\n\nAlpha body.\n\n## Beta\n\nBeta body."; // summary + 2 sections = 3 chunks
+    // API returns only ONE vector for a 3-input request (truncated response)
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: [{ embedding: [1, 0, 0] }] }),
+      headers: { "content-type": "application/json" },
+    });
+    const svc = new PageSimilarityService(cfg);
+    const vt = makeVaultTools();
+    await svc.refreshCache("domainRoot", vt, new Map([["Alpha", annotation]]), new Map([["Alpha", body]]));
+    const written = JSON.parse((vt as any).files.get("domainRoot/_config/_embeddings.json")!);
+    // only the chunk that actually got a vector is persisted; no garbage/empty vectors
+    expect(written.entries.Alpha.chunks.every((c: { vector: string }) => c.vector !== "")).toBe(true);
+    expect(written.entries.Alpha.chunks.length).toBeGreaterThanOrEqual(1);
   });
 });
