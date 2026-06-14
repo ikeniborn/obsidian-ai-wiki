@@ -1,3 +1,24 @@
+---
+review:
+  spec_hash: d44a9a345a014221
+  last_run: 2026-06-15
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: INFO
+      section: "Components / 4. Retrieval orchestration"
+      section_hash: c2e2cdefea083839
+      text: '"dense" (CLI config name) and "embedding" (service mode / cache type) name two levels of the same retrieval path; bridged explicitly at the dense->embedding step, so not a defect — noted for term-consistency.'
+      verdict: open
+      verdict_at: null
+chain:
+  intent: docs/superpowers/intents/2026-06-14-rag-query-quality-intent.md
+---
 # Design: Retrieval eval harness (RAG quality — Phase 1)
 
 **Date:** 2026-06-15
