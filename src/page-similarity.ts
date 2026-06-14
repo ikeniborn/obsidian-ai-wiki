@@ -185,6 +185,16 @@ function cosine(a: Float32Array, b: Float32Array): number {
   return denom === 0 ? 0 : dot / denom;
 }
 
+function maxCosine(query: Float32Array, vecs: Float32Array[]): number {
+  let best = 0;
+  for (const v of vecs) {
+    if (v.length === 0) continue;
+    const c = cosine(query, v);
+    if (c > best) best = c;
+  }
+  return best;
+}
+
 const EMBEDDING_BATCH_SIZE = 100;
 
 async function fetchEmbeddings(
@@ -331,12 +341,12 @@ export class PageSimilarityService {
 
     const pids = allPaths.map((p) => pageId(p));
     const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
-    const pageVecs = new Map<string, Float32Array>();
+    const pageVecs = new Map<string, Float32Array[]>();
 
     if (this.cache && this.cache.model === model) {
       for (let i = 0; i < pids.length; i++) {
         const entry = this.cache.entries[pids[i]];
-        if (entry) pageVecs.set(pids[i], decodeVector(entry.vector));
+        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
       }
     }
 
@@ -357,11 +367,9 @@ export class PageSimilarityService {
     for (const batch of batches) {
       try {
         const vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
-        for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], vecs[i]);
+        for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], [vecs[i]]);
       } catch {
-        for (let i = 0; i < batch.pids.length; i++) {
-          pageVecs.set(batch.pids[i], new Float32Array(0));
-        }
+        for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], []);
       }
     }
 
@@ -373,11 +381,11 @@ export class PageSimilarityService {
       const scored: { path: string; score: number }[] = [];
       for (let pi = 0; pi < allPaths.length; pi++) {
         const pid = pids[pi];
-        const vec = pageVecs.get(pid);
-        if (!vec) continue;
-        const score = vec.length === 0
+        const vecs = pageVecs.get(pid);
+        if (!vecs) continue;
+        const score = vecs.length === 0
           ? scoreSeed(queryTokens, pid, "", annotations[pi])
-          : cosine(queryVec, vec);
+          : maxCosine(queryVec, vecs);
         if (score > 0) scored.push({ path: allPaths[pi], score });
       }
       scored.sort((a, b) => b.score - a.score);
@@ -429,15 +437,13 @@ export class PageSimilarityService {
     // Page vectors — process in batches
     const pids = allPaths.map((p) => pageId(p));
     const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
-    const pageVecs = new Map<string, Float32Array>();
+    const pageVecs = new Map<string, Float32Array[]>();
 
-    // Load vectors from in-memory cache (populated by refreshCache)
+    // Load chunk vectors from in-memory cache (populated by refreshCache)
     if (this.cache && this.cache.model === model) {
       for (let i = 0; i < pids.length; i++) {
         const entry = this.cache.entries[pids[i]];
-        if (entry) {
-          pageVecs.set(pids[i], decodeVector(entry.vector));
-        }
+        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
       }
     }
 
@@ -460,17 +466,16 @@ export class PageSimilarityService {
       try {
         vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
       } catch {
-        // Fallback: use Jaccard for this batch's pages
+        // Fallback: mark this batch's pages for Jaccard (empty vector list)
         for (const pid of batch.pids) {
           const annotation = indexAnnotations.get(pid) ?? "";
           const score = scoreSeed(queryTokens, pid, "", annotation);
-          // Store a sentinel Float32Array of length 0 to indicate Jaccard fallback
-          if (score > 0) pageVecs.set(pid, new Float32Array(0));
+          if (score > 0) pageVecs.set(pid, []);
         }
         continue;
       }
       for (let i = 0; i < batch.pids.length; i++) {
-        pageVecs.set(batch.pids[i], vecs[i]);
+        pageVecs.set(batch.pids[i], [vecs[i]]);
       }
     }
 
@@ -478,15 +483,11 @@ export class PageSimilarityService {
     const scored: { path: string; score: number }[] = [];
     for (let i = 0; i < allPaths.length; i++) {
       const pid = pids[i];
-      const vec = pageVecs.get(pid);
-      if (!vec) continue;
-      let score: number;
-      if (vec.length === 0) {
-        // Jaccard fallback sentinel
-        score = scoreSeed(queryTokens, pid, "", annotations[i]);
-      } else {
-        score = cosine(queryVec, vec);
-      }
+      const vecs = pageVecs.get(pid);
+      if (!vecs) continue;
+      const score = vecs.length === 0
+        ? scoreSeed(queryTokens, pid, "", annotations[i])
+        : maxCosine(queryVec, vecs);
       if (score > 0) scored.push({ path: allPaths[i], score });
     }
     scored.sort((a, b) => b.score - a.score);
@@ -531,12 +532,12 @@ export class PageSimilarityService {
 
     const pids = allPaths.map((p) => pageId(p));
     const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
-    const pageVecs = new Map<string, Float32Array>();
+    const pageVecs = new Map<string, Float32Array[]>();
 
     if (this.cache && this.cache.model === model) {
       for (let i = 0; i < pids.length; i++) {
         const entry = this.cache.entries[pids[i]];
-        if (entry) pageVecs.set(pids[i], decodeVector(entry.vector));
+        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
       }
     }
 
@@ -553,20 +554,20 @@ export class PageSimilarityService {
     for (const batch of batches) {
       try {
         const vecs = await fetchEmbeddings(baseUrl, apiKey!, model, batch.texts);
-        for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], vecs[i]);
+        for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], [vecs[i]]);
       } catch {
-        for (const pid of batch.pids) pageVecs.set(pid, new Float32Array(0));
+        for (const pid of batch.pids) pageVecs.set(pid, []);
       }
     }
 
     const scored: { path: string; score: number }[] = [];
     for (let i = 0; i < allPaths.length; i++) {
       const pid = pids[i];
-      const vec = pageVecs.get(pid);
-      if (!vec) continue;
-      const score = vec.length === 0
+      const vecs = pageVecs.get(pid);
+      if (!vecs) continue;
+      const score = vecs.length === 0
         ? scoreSeed(queryTokens, pid, "", annotations[i])
-        : cosine(queryVec, vec);
+        : maxCosine(queryVec, vecs);
       if (score > 0) scored.push({ path: allPaths[i], score });
     }
     scored.sort((a, b) => b.score - a.score);

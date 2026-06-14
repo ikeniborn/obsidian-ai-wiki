@@ -189,10 +189,10 @@ describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
       baseUrl: "http://x", apiKey: "k",
     });
     (svc as unknown as { cache: unknown }).cache = {
-      model: "m", dimensions: 3,
+      version: 2, model: "m", dimensions: 3,
       entries: {
-        Alpha: { vector: encodeVector(new Float32Array([1, 0, 0])), hash: "x" },
-        Beta:  { vector: encodeVector(new Float32Array([0, 1, 0])), hash: "x" },
+        Alpha: { chunks: [{ vector: encodeVector(new Float32Array([1, 0, 0])), hash: "x", kind: "summary" }] },
+        Beta:  { chunks: [{ vector: encodeVector(new Float32Array([0, 1, 0])), hash: "x", kind: "summary" }] },
       },
     };
 
@@ -219,10 +219,10 @@ describe("PageSimilarityService.selectByEntities (embedding mode)", () => {
       baseUrl: "http://x", apiKey: "k",
     });
     (svc as unknown as { cache: unknown }).cache = {
-      model: "m", dimensions: 3,
+      version: 2, model: "m", dimensions: 3,
       entries: {
-        Alpha: { vector: encodeVector(new Float32Array([1, 0, 0])), hash: "x" },
-        Beta:  { vector: encodeVector(new Float32Array([0, 1, 0])), hash: "x" },
+        Alpha: { chunks: [{ vector: encodeVector(new Float32Array([1, 0, 0])), hash: "x", kind: "summary" }] },
+        Beta:  { chunks: [{ vector: encodeVector(new Float32Array([0, 1, 0])), hash: "x", kind: "summary" }] },
       },
     };
 
@@ -453,5 +453,55 @@ describe("refreshCache v2 (multi-vector, incremental)", () => {
     // only the chunk that actually got a vector is persisted; no garbage/empty vectors
     expect(written.entries.Alpha.chunks.every((c: { vector: string }) => c.vector !== "")).toBe(true);
     expect(written.entries.Alpha.chunks.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("max-pool scoring", () => {
+  beforeEach(() => __clearRequestUrlCalls());
+
+  it("surfaces a page whose only match is a body-section vector", async () => {
+    // Query vector points along axis 2 (the body section), NOT the summary axis.
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: [{ embedding: [0, 0, 1] }] }),
+      headers: { "content-type": "application/json" },
+    });
+    const svc = new PageSimilarityService({
+      mode: "embedding", topK: 1, model: "m", dimensions: 3,
+      baseUrl: "http://x", apiKey: "k",
+    });
+    (svc as unknown as { cache: unknown }).cache = {
+      version: 2, model: "m", dimensions: 3,
+      entries: {
+        Alpha: { chunks: [
+          { vector: encodeVector(new Float32Array([1, 0, 0])), hash: "s", kind: "summary" },
+          { vector: encodeVector(new Float32Array([0, 0, 1])), hash: "b", kind: "section" }, // body match
+        ] },
+        Beta: { chunks: [
+          { vector: encodeVector(new Float32Array([1, 0, 0])), hash: "s", kind: "summary" },
+        ] },
+      },
+    };
+    const result = await svc.selectRelevant(
+      "body section query",
+      new Map([["Alpha", "a"], ["Beta", "b"]]),
+      ["!Wiki/d/x/Alpha.md", "!Wiki/d/x/Beta.md"],
+    );
+    expect(result).toEqual(["!Wiki/d/x/Alpha.md"]); // body-section vector wins via max-pool
+  });
+
+  it("falls back to Jaccard for a page whose vectors all failed", async () => {
+    __setRequestUrlResponse({ status: 500, text: "err", headers: {} });
+    const svc = new PageSimilarityService({
+      mode: "embedding", topK: 1, model: "m", dimensions: 3,
+      baseUrl: "http://x", apiKey: "k",
+    });
+    const result = await svc.selectRelevant(
+      "neural network",
+      new Map([["Alpha", "neural network deep learning"]]),
+      ["!Wiki/d/x/Alpha.md"],
+    );
+    // query embedding throws → whole call falls to Jaccard → Alpha matches on tokens
+    expect(result).toEqual(["!Wiki/d/x/Alpha.md"]);
   });
 });
