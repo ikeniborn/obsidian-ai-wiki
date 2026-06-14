@@ -1,3 +1,15 @@
+---
+review:
+  intent_hash: 5d1be493efed4924
+  last_run: 2026-06-14
+  phases:
+    structure:    { status: passed }
+    completeness: { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+    alignment:    { status: passed }   # advisory — вне CRITICAL-gate
+  findings: []
+---
 # Intent: RAG query quality (graph health → fusion → rerank)
 
 **Date:** 2026-06-14
@@ -37,8 +49,9 @@ way to measure whether a change helps. Metrics unblock the rest.
   working. New features (rerank, hybrid) are optional enhancements, never make an API key required.
 - **Query token budget** — ~6800 input tok/call does not grow. RRF/rerank shrink the context, never
   inflate it.
-- **Query latency** — answer time does not grow noticeably. Rerank/hybrid add no heavy synchronous
-  calls to the hot path beyond what the chosen trade-off allows.
+- **Query latency** — with new features OFF (default), p50 Query latency is unchanged vs the current
+  baseline. With rerank/hybrid ON, p50 grows ≤ 20% vs the flags-off baseline, measured on the eval
+  set. Rerank/hybrid add no heavy synchronous call to the hot path while their flags are off.
 - **Existing test suite** — the whole current suite stays green; no new `tsc` errors in touched
   files; `lint` clean.
 
@@ -99,7 +112,8 @@ way to measure whether a change helps. Metrics unblock the rest.
 - **Escalate if:** a Tier 1/2 feature can only meet its outcome by making an external endpoint or
   API key mandatory (No-autonomy zone).
 - **Done when (BOTH hold):**
-  1. Each feature works and is covered — feature behind its flag, tests pass, `lint`+`tsc` clean on
-     touched files, all four Health Metrics intact; AND
-  2. The eval harness shows Recall@k/MRR measured before/after, and the hybrid+rerank config
-     demonstrates an improvement over the dense-only baseline on the fixed set.
+  1. *Ship gate* — each feature works and is covered: feature behind its flag, tests pass,
+     `lint`+`tsc` clean on touched files, all four Health Metrics intact; AND
+  2. *Observable outcome* — the eval harness shows Recall@k/MRR measured before/after on the fixed
+     set, and the hybrid+rerank config demonstrates a measurable improvement over the dense-only
+     baseline. Clause 2 is the real "done" signal; clause 1 is the release gate that guards it.
