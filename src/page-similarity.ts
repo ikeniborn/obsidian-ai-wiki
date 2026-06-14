@@ -153,6 +153,23 @@ export function splitSections(body: string, chunking: ChunkingConfig): SectionWi
   return windows;
 }
 
+export interface ChunkInput { kind: "summary" | "section"; embedText: string; hash: string; }
+
+export function buildChunkInputs(
+  annotation: string,
+  body: string,
+  chunking: ChunkingConfig,
+): ChunkInput[] {
+  const inputs: ChunkInput[] = [
+    { kind: "summary", embedText: annotation, hash: annotationHash(annotation) },
+  ];
+  for (const { heading, window } of splitSections(body, chunking)) {
+    const embedText = `${annotation}\n\n${heading}\n${window}`;
+    inputs.push({ kind: "section", embedText, hash: annotationHash(embedText) });
+  }
+  return inputs;
+}
+
 function cosine(a: Float32Array, b: Float32Array): number {
   let dot = 0, na = 0, nb = 0;
   for (let i = 0; i < a.length; i++) {

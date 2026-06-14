@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { splitSections, DEFAULT_CHUNKING } from "../src/page-similarity";
+import { buildChunkInputs } from "../src/page-similarity";
 
 const body = (s: string) => s.replace(/^\n/, "");
 
@@ -97,5 +98,29 @@ short
     const out = splitSections(md, DEFAULT_CHUNKING);
     expect(out.every((c) => !c.window.includes("# Title"))).toBe(true);
     expect(out.some((c) => c.heading.includes("Alpha"))).toBe(true);
+  });
+});
+
+describe("buildChunkInputs", () => {
+  it("summary chunk embed text is the annotation alone", () => {
+    const inputs = buildChunkInputs("ANNOT", "", DEFAULT_CHUNKING);
+    expect(inputs[0].kind).toBe("summary");
+    expect(inputs[0].embedText).toBe("ANNOT");
+  });
+
+  it("section chunk prepends annotation + heading + window", () => {
+    const md = "# T\n\n## Alpha\n\nAlpha detail body.";
+    const inputs = buildChunkInputs("ANNOT", md, DEFAULT_CHUNKING);
+    const section = inputs.find((c) => c.kind === "section")!;
+    expect(section.embedText.startsWith("ANNOT\n\n")).toBe(true);
+    expect(section.embedText).toContain("Alpha");
+    expect(section.embedText).toContain("Alpha detail body.");
+  });
+
+  it("changing the annotation changes every chunk hash", () => {
+    const md = "# T\n\n## Alpha\n\nbody";
+    const a = buildChunkInputs("ANNOT-A", md, DEFAULT_CHUNKING).map((c) => c.hash);
+    const b = buildChunkInputs("ANNOT-B", md, DEFAULT_CHUNKING).map((c) => c.hash);
+    expect(a.every((h, i) => h !== b[i])).toBe(true);
   });
 });
