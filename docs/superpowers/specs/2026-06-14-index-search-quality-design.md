@@ -1,4 +1,37 @@
 ---
+review:
+  spec_hash: af58d6eb0fa3825e
+  last_run: 2026-06-14
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "Acceptance (from intent)"
+      section_hash: ddf33daf8a83e5b9
+      text: "Cost/latency 'reasonable bound' has no measurable threshold — qualitative only (carried from intent)."
+      verdict: fixed
+      verdict_at: 2026-06-14
+    - id: F-002
+      phase: clarity
+      severity: WARNING
+      section: "Stop rules (from intent)"
+      section_hash: c5ff1b00e7872c86
+      text: "Done-when 'recall beats the baseline' defines no minimum margin and no benchmark-set size / pass criterion for the synthetic retrieval gate."
+      verdict: wontfix
+      verdict_at: 2026-06-14
+    - id: F-003
+      phase: clarity
+      severity: INFO
+      section: "Component 2 — Chunker (splitSections)"
+      section_hash: 87e29f60433b0694
+      text: "Term 'general description' denotes the annotation/summary chunk; use one consistent term (annotation / summary / general description)."
+      verdict: fixed
+      verdict_at: 2026-06-14
 chain:
   intent: docs/superpowers/intents/2026-06-14-index-search-quality-intent.md
 ---
@@ -40,7 +73,10 @@ averaged vector dilutes as text grows, so distinct body facts still blur togethe
 - Embedding incrementality — re-embed only changed content via hash, not the whole
   vault per run.
 - Precision — higher recall must not flood results with noise.
-- Cost/latency may grow for quality, only to a reasonable bound.
+- Cost/latency may grow for quality within a bounded budget: ≤ `1 + chunkMaxCount`
+  vectors per page (default ≤ 13); incremental re-embed touches only changed chunks,
+  never the whole vault per run; query seed-selection latency ≤ +15% vs the
+  single-vector baseline on the same query set.
 
 ## Approach: Hybrid
 
@@ -133,7 +169,7 @@ splitSections(body, chunking) -> { heading: string, window: string }[]:
     (no silent cap)
 ```
 
-Per-chunk **embed text** (request: prepend the article's general description):
+Per-chunk **embed text** (prepend the page annotation for whole-article grounding):
 ```
 embedText = annotation + "\n\n" + <H2 heading> + "\n" + window
 ```
