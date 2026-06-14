@@ -428,7 +428,9 @@ export async function* runLint(
       // Rebuild graph + refresh vectors after state changes
       ({ graph } = graphCache.get(domain.id, pages));
       if (similarity) {
-        const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, annotations);
+        const pageBodies = new Map<string, string>();
+        for (const [path, content] of pages) pageBodies.set(pageId(path), content);
+        const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, annotations, pageBodies);
         if (similarity.config.mode === "embedding" && updated > 0) {
           yield { kind: "info_text", icon: "📤", summary: `обновлено векторов: ${updated}` };
         }
