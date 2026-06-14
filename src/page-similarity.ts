@@ -68,6 +68,91 @@ function annotationHash(s: string): string {
   return (h >>> 0).toString(36);
 }
 
+export interface SectionWindow { heading: string; window: string; }
+
+function stripFrontmatterAndTitle(body: string): string {
+  const noFm = body.replace(/^---\n[\s\S]*?\n---\n?/, "");
+  // drop a single leading "# H1" title line
+  return noFm.replace(/^#\s+[^\n]*\n?/, "");
+}
+
+interface RawUnit { heading: string; body: string; }
+
+function toUnits(text: string): RawUnit[] {
+  const lines = text.split("\n");
+  const units: RawUnit[] = [];
+  let cur: RawUnit | null = null;
+  for (const line of lines) {
+    if (/^##\s+/.test(line)) {                 // new H2 — H3+ stays inside the current unit
+      if (cur) units.push(cur);
+      cur = { heading: line.trim(), body: "" };
+    } else if (!cur) {
+      // lead text before the first H2 — its own headless unit
+      cur = { heading: "", body: line + "\n" };
+    } else {
+      cur.body += line + "\n";
+    }
+  }
+  if (cur) units.push(cur);
+  // drop units that are entirely whitespace
+  return units
+    .map((u) => ({ heading: u.heading, body: u.body.trim() }))
+    .filter((u) => u.heading.length > 0 || u.body.length > 0);
+}
+
+function unitLen(u: RawUnit): number { return u.heading.length + u.body.length; }
+
+function mergeShort(units: RawUnit[], minChars: number): RawUnit[] {
+  const out: RawUnit[] = [];
+  for (const u of units) {
+    const prev = out.length > 0 ? out[out.length - 1] : null;
+    // Only merge a short unit into the previous one when prev is a headed section
+    // that is itself long enough (>= minChars). This prevents two consecutive short
+    // sections from collapsing into a single unit and losing both H2 labels.
+    if (unitLen(u) < minChars && prev !== null && prev.heading.length > 0 && unitLen(prev) >= minChars) {
+      prev.body = `${prev.body}\n\n${u.heading} ${u.body}`.trim();
+    } else {
+      out.push({ heading: u.heading, body: u.body });
+    }
+  }
+  return out;
+}
+
+function windowUnit(u: RawUnit, maxChars: number, overlapChars: number): SectionWindow[] {
+  const text = u.body;
+  if (text.length <= maxChars) return [{ heading: u.heading, window: text }];
+  const windows: SectionWindow[] = [];
+  const step = Math.max(1, maxChars - overlapChars);
+  for (let i = 0; i < text.length; i += step) {
+    windows.push({ heading: u.heading, window: text.slice(i, i + maxChars) });
+    if (i + maxChars >= text.length) break;
+  }
+  return windows;
+}
+
+export function splitSections(body: string, chunking: ChunkingConfig): SectionWindow[] {
+  const stripped = stripFrontmatterAndTitle(body).trim();
+  if (!stripped) return [];
+  const merged = mergeShort(toUnits(stripped), chunking.minChars);
+  let windows: SectionWindow[] = [];
+  for (const u of merged) {
+    windows.push(...windowUnit(u, chunking.maxChars, chunking.overlapChars));
+  }
+  if (windows.length === 0) return [];
+  if (windows.length > chunking.maxCount) {
+    const kept = windows.slice(0, chunking.maxCount - 1);
+    const foldedCount = windows.length - kept.length;
+    const foldedBody = windows
+      .slice(chunking.maxCount - 1)
+      .map((w) => `${w.heading} ${w.window}`)
+      .join("\n\n")
+      .slice(0, chunking.maxChars);
+    kept.push({ heading: `## (+${foldedCount} sections folded)`, window: foldedBody });
+    windows = kept;
+  }
+  return windows;
+}
+
 function cosine(a: Float32Array, b: Float32Array): number {
   let dot = 0, na = 0, nb = 0;
   for (let i = 0; i < a.length; i++) {
