@@ -185,6 +185,9 @@ function cosine(a: Float32Array, b: Float32Array): number {
   return denom === 0 ? 0 : dot / denom;
 }
 
+// Page score = best cosine across the page's chunk vectors. Floors at 0: a page whose
+// chunks are all orthogonal/antipodal to the query scores 0 and is dropped by the
+// caller's `score > 0` filter — matching the old single-vector behaviour.
 function maxCosine(query: Float32Array, vecs: Float32Array[]): number {
   let best = 0;
   for (const v of vecs) {
