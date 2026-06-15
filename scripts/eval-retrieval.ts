@@ -45,21 +45,22 @@ export async function makeRunner(cfg: ConfigRecord, inputs: RunInputs): Promise<
     [...annotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""]),
   );
 
-  if (cfg.mode === "embedding") {
+  if (cfg.mode === "embedding" || cfg.mode === "hybrid") {
     const service = new PageSimilarityService({
-      mode: "embedding",
+      mode: cfg.mode,
       model: embed.model,
       dimensions: embed.dimensions,
       baseUrl: embed.baseUrl,
       apiKey: embed.apiKey,
       topK: cfg.topK,
+      rrfK: 60,
     });
     // loadCache only needs `read`; cast the fs shim to the VaultTools shape.
     await service.loadCache(wikiVaultPath, fs as unknown as VaultTools);
     if (!embed.baseUrl || !embed.model) {
       console.warn(
-        `[eval] config "${cfg.name}" requested dense, but no embedding endpoint/model configured ` +
-          `(EVAL_EMBED_BASE_URL + cached model). Falling back to jaccard internally.`,
+        `[eval] config "${cfg.name}" requested ${cfg.mode}, but no embedding endpoint/model ` +
+          `configured. Dense half falls back to jaccard internally.`,
       );
     }
     return async (question) => {
