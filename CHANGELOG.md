@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.169 — 2026-06-15
+
+### Новое
+- feat(settings): localized numeric setting descriptions with examples and recommended ranges (en/ru/es)
+
+---
+
 ## 0.1.168 — 2026-06-15
 
 ### Новое
