@@ -1,6 +1,6 @@
 ---
 review:
-  spec_hash: f983e4b66e20fde3
+  spec_hash: b227f5fd52b5fc02
   last_run: 2026-06-15
   phases:
     structure:    { status: passed }
@@ -12,14 +12,14 @@ review:
       phase: clarity
       severity: INFO
       section: "Component 1 — Fusion"
-      text: "'extract or duplicate minimally' is a non-binding impl hint; binding requirement (factor inDegree helper) is explicit"
-      verdict: accepted
+      text: "vague 'minimally' replaced with explicit exported inDegree(graph) helper shared by both call sites"
+      verdict: fixed
     - id: F-002
       phase: clarity
       severity: INFO
       section: "Goals"
-      text: "'graceful' fallback summarized; criterion is the explicit jaccard→llm→error chain in Component 2"
-      verdict: accepted
+      text: "vague 'graceful' replaced with explicit fallback chain (Jaccard→llmSelectSeeds→error, no new mechanism)"
+      verdict: fixed
 chain:
   intent: null
 ---
@@ -53,8 +53,9 @@ Tier 2 closes three gaps from the recommendation doc:
 ## Goals
 
 - Order the Query context by a scale-free fusion of vector rank and graph rank (RRF).
-- Gate weak embedding seeds behind a tunable similarity threshold with a graceful,
-  reuse-only fallback chain.
+- Gate weak embedding seeds behind a tunable similarity threshold; below it, fall back
+  through existing paths only (Jaccard → `llmSelectSeeds` → empty-seeds error), adding no
+  new retrieval mechanism.
 - Ship both as **opt-in, default-off** toggles that are measurable on the existing eval
   harness, with zero regression when off.
 
@@ -107,9 +108,10 @@ fuseVectorGraph(
   hop 0); backlink count from graph `inDegree`. Sort hop asc, then `inDegree` desc, then
   stable.
 - Calls `rrf([vectorList, graphList], rrfK)` and returns ordered ids.
-- Pure — unit-testable with no Obsidian APIs. A small backlink-count helper
-  (`inDegree` over `WikiGraph`) is factored out (the same computation already exists inline
-  in `checkGraphStructure`); extract or duplicate minimally to keep `fusion.ts` standalone.
+- Pure — unit-testable with no Obsidian APIs. Backlink counts come from a new exported
+  helper `inDegree(graph: WikiGraph): Map<string, number>`; extract the existing inline
+  computation from `checkGraphStructure` into this shared helper and call it from both
+  sites (no duplication).
 
 ### Component 2 — Threshold + fallback (`src/phases/query.ts#runQuery`)
 
