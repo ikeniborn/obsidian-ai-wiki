@@ -1,6 +1,6 @@
 ---
 review:
-  spec_hash: d44a9a345a014221
+  spec_hash: 3147eff51cb9f531
   last_run: 2026-06-15
   phases:
     structure:    { status: passed }
@@ -14,8 +14,9 @@ review:
       section: "Components / 4. Retrieval orchestration"
       section_hash: c2e2cdefea083839
       text: '"dense" (CLI config name) and "embedding" (service mode / cache type) name two levels of the same retrieval path; bridged explicitly at the dense->embedding step, so not a defect — noted for term-consistency.'
-      verdict: open
-      verdict_at: null
+      verdict: fixed
+      verdict_at: 2026-06-15
+      resolution: 'Pinned the dense<->embedding mapping at the --config flag definition (Component 1); "dense" = config name, "embedding" = mechanism, stated once and used consistently.'
 chain:
   intent: docs/superpowers/intents/2026-06-14-rag-query-quality-intent.md
 ---
@@ -82,6 +83,10 @@ tsx scripts/eval.ts --vault <path> --gold <gold.json> [--config dense|jaccard]
 - `--vault` — path to the vault root (contains the wiki folder).
 - `--gold` — path to the gold-set JSON.
 - `--config` — which config(s) to run. Repeatable or comma-list. Default: `dense,jaccard`.
+  Config names map to a `PageSimilarityService` mode: **`dense`** = embedding-vector retrieval
+  (`mode: "embedding"`, the embedding cache + `selectRelevantScored`); **`jaccard`** = offline
+  token-overlap (`mode: "jaccard"`, keyless). Throughout this doc "dense" is the config name and
+  "embedding" is its underlying mechanism — they refer to the same path.
 - `--bfs-depth` — BFS hops for the union layer. `0` = seed-only. Default: `1`.
 - `--top-k` — seed top-k passed to retrieval. Default: `8`.
 - `--out` — write a JSON snapshot of this run.
