@@ -31,6 +31,8 @@ function buildEntry(domainId: string, event: LogOperation): string {
       } else if (e.action === "ОБНОВЛЕНА") {
         const status = e.statusFrom ? `${e.statusFrom}→${e.statusTo}` : (e.statusTo ?? "unknown");
         lines.push(`- ОБНОВЛЕНА: ${e.path} (${status})`);
+      } else if (e.action === "ОБЪЕДИНЕНА") {
+        lines.push(`- ОБЪЕДИНЕНА: ${e.path}`);
       } else {
         lines.push(`- УДАЛЕНА: ${e.path}`);
       }

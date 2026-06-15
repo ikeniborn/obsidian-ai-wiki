@@ -453,7 +453,8 @@ export async function* runIngest(
   const createdCount = logEntries.filter(e => e.action === "СОЗДАНА").length;
   const updatedCount = logEntries.filter(e => e.action === "ОБНОВЛЕНА").length;
   const mergedCount  = logEntries.filter(e => e.action === "УДАЛЕНА").length;
-  const resultText = buildIngestSummary(domain.id, sourceVaultPath, createdCount, updatedCount, mergedCount, pages.length);
+  const dedupMergedCount = logEntries.filter(e => e.action === "ОБЪЕДИНЕНА").length;
+  const resultText = buildIngestSummary(domain.id, sourceVaultPath, createdCount, updatedCount, mergedCount, dedupMergedCount, pages.length);
   yield { kind: "assistant_text", delta: resultText };
 
   const deletedStems = new Set(deletedPaths.map((p) => p.split("/").pop()!.replace(/\.md$/, "")));
@@ -548,10 +549,11 @@ function buildIngestSummary(
   createdCount: number,
   updatedCount: number,
   mergedCount: number,
+  dedupMergedCount: number,
   total: number,
 ): string {
   const src = sourcePath.split("/").pop() ?? sourcePath;
-  const totalActed = createdCount + updatedCount + mergedCount;
+  const totalActed = createdCount + updatedCount + mergedCount + dedupMergedCount;
   if (totalActed === 0) {
     return `Источник «${src}» обработан — новых или изменённых страниц нет.`;
   }
@@ -559,8 +561,9 @@ function buildIngestSummary(
   if (createdCount > 0) parts.push(`создано ${createdCount}`);
   if (updatedCount > 0) parts.push(`обновлено ${updatedCount}`);
   if (mergedCount  > 0) parts.push(`объединено ${mergedCount}`);
+  if (dedupMergedCount > 0) parts.push(`дублей объединено ${dedupMergedCount}`);
   const countStr = parts.length === 1 ? `${parts[0]} стр.` : parts.join(", ");
-  const skipped = total - (createdCount + updatedCount);
+  const skipped = total - (createdCount + updatedCount + dedupMergedCount);
   const errStr = skipped > 0 ? `, ошибок ${skipped}` : "";
   return `Источник «${src}» → домен «${domainId}»: ${countStr}${errStr}`;
 }

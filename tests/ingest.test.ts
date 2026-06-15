@@ -183,5 +183,13 @@ describe("dedup gate", () => {
     );
     expect(dedupEvents).toHaveLength(1);
     expect(dedupEvents[0].icon).toBe("🔁");
+
+    // The summary reports the dedup-merge correctly — not as an error.
+    const summaryText = events
+      .filter((e) => e.kind === "assistant_text")
+      .map((e) => (e as Extract<RunEvent, { kind: "assistant_text" }>).delta)
+      .join("");
+    expect(summaryText).toContain("дублей объединено 1");
+    expect(summaryText).not.toContain("ошибок");
   });
 });
