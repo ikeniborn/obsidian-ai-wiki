@@ -28,3 +28,33 @@ describe("mrr", () => {
     expect(mrr(["X", "Y"], ["A"])).toBe(0);
   });
 });
+
+import { averageLayer, K_VALUES } from "../scripts/eval-metrics";
+
+describe("averageLayer", () => {
+  it("averages recall per k and mrr across questions", () => {
+    const ranked = [
+      ["A", "B", "C"], // q1
+      ["X", "A", "Y"], // q2
+    ];
+    const gold = [
+      ["A"], // q1: A at rank 1
+      ["A"], // q2: A at rank 2
+    ];
+    const m = averageLayer(ranked, gold, [3]);
+    // recall@3: q1 hit (1.0) + q2 hit (1.0) → 1.0
+    expect(m.recall[3]).toBe(1);
+    // mrr: (1/1 + 1/2) / 2 = 0.75
+    expect(m.mrr).toBe(0.75);
+  });
+
+  it("exposes the fixed k set [3,5,8]", () => {
+    expect([...K_VALUES]).toEqual([3, 5, 8]);
+  });
+
+  it("returns zeros for an empty question set", () => {
+    const m = averageLayer([], [], [3, 5, 8]);
+    expect(m.mrr).toBe(0);
+    expect(m.recall[3]).toBe(0);
+  });
+});

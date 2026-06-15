@@ -18,3 +18,32 @@ export function mrr(ranked: string[], gold: string[]): number {
   }
   return 0;
 }
+
+/** Fixed reporting cut-offs for Recall@k. MRR is unbounded rank. */
+export const K_VALUES = [3, 5, 8] as const;
+
+export interface LayerMetrics {
+  recall: Record<number, number>; // keyed by k
+  mrr: number;
+}
+
+/**
+ * Average recall (per k) and mrr over aligned per-question ranked/gold lists.
+ * `ranked[i]` and `gold[i]` describe the same question.
+ */
+export function averageLayer(
+  ranked: string[][],
+  gold: string[][],
+  ks: number[],
+): LayerMetrics {
+  const n = ranked.length;
+  const recall: Record<number, number> = {};
+  for (const k of ks) {
+    let sum = 0;
+    for (let i = 0; i < n; i++) sum += recallAt(ranked[i], gold[i], k);
+    recall[k] = n ? sum / n : 0;
+  }
+  let mrrSum = 0;
+  for (let i = 0; i < n; i++) mrrSum += mrr(ranked[i], gold[i]);
+  return { recall, mrr: n ? mrrSum / n : 0 };
+}
