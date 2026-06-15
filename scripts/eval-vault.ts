@@ -7,6 +7,9 @@ import { join, dirname } from "node:path";
 import { WIKI_ROOT, domainWikiFolder, domainIndexPath, domainEmbeddingsPath } from "../src/wiki-path";
 import { parseIndexAnnotations } from "../src/wiki-index";
 
+// Meta files excluded from the page set, matching src/phases/query.ts.
+const META_FILES = ["_index.md", "_log.md"];
+
 export interface FsShim {
   read(vaultPath: string): Promise<string>;
   write(vaultPath: string, data: string): Promise<void>;
@@ -65,19 +68,33 @@ export async function loadIndexAnnotations(fs: FsShim, wikiVaultPath: string): P
 }
 
 /**
- * Read every wiki .md page into a Map<vaultRelativePath, content>, excluding
- * meta files (_index.md, _log.md) and anything under _config/. Mirrors the file
- * filter in query.ts so pageId() yields the same ids the retrieval layer returns.
+ * Read every wiki .md page into a Map<vaultRelativePath, content>, recursing into
+ * subfolders. Mirrors src/phases/query.ts: it collects the recursive `**\/*.md`
+ * set (production uses VaultTools.listFiles, which is recursive), then excludes
+ * meta files (_index.md, _log.md) and anything under _config/. Wiki pages live in
+ * nested subfolders (e.g. systems/, applications/), so a non-recursive read would
+ * miss them and pageId() would diverge from the ids the retrieval layer returns.
  */
 export async function loadWikiPages(vaultRoot: string, wikiVaultPath: string): Promise<Map<string, string>> {
-  const dirAbs = join(vaultRoot, wikiVaultPath);
-  const names = await readdir(dirAbs, { withFileTypes: true });
+  const mdFiles: string[] = [];
+  const walk = async (relDir: string): Promise<void> => {
+    const entries = await readdir(join(vaultRoot, relDir), { withFileTypes: true });
+    for (const e of entries) {
+      const vaultRel = `${relDir}/${e.name}`;
+      if (e.isDirectory()) {
+        await walk(vaultRel);
+      } else if (e.isFile() && e.name.endsWith(".md")) {
+        mdFiles.push(vaultRel);
+      }
+    }
+  };
+  await walk(wikiVaultPath);
+  const files = mdFiles.filter(
+    (f) => !META_FILES.some((m) => f.endsWith(m)) && !f.includes("/_config/"),
+  );
   const pages = new Map<string, string>();
-  for (const e of names) {
-    if (!e.isFile() || !e.name.endsWith(".md")) continue;
-    if (e.name === "_index.md" || e.name === "_log.md") continue;
-    const vaultRel = `${wikiVaultPath}/${e.name}`;
-    pages.set(vaultRel, await readFile(join(dirAbs, e.name), "utf8"));
+  for (const f of files) {
+    pages.set(f, await readFile(join(vaultRoot, f), "utf8"));
   }
   return pages;
 }
