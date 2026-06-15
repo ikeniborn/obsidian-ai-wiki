@@ -26185,6 +26185,8 @@ var DEFAULT_SETTINGS = {
     structuredRetries: 1,
     hybridRetrieval: false,
     rrfK: 60,
+    bfsFusion: false,
+    seedSimilarityThreshold: 0,
     dedupOnIngest: false,
     dedupThreshold: 0.85,
     lintNearDuplicate: false,
@@ -27718,6 +27720,40 @@ function bfsExpand(seeds, graph, depth) {
   }
   return visited;
 }
+function bfsExpandWithHops(seeds, graph, depth) {
+  if (seeds.length === 0) return { expanded: /* @__PURE__ */ new Set(), byHop: {} };
+  const reverse = /* @__PURE__ */ new Map();
+  for (const [src, targets] of graph) {
+    for (const tgt of targets) {
+      if (!reverse.has(tgt)) reverse.set(tgt, /* @__PURE__ */ new Set());
+      reverse.get(tgt).add(src);
+    }
+  }
+  const visited = new Set(seeds);
+  let frontier = new Set(seeds);
+  const byHop = {};
+  for (let hop = 1; hop <= depth; hop++) {
+    const next = /* @__PURE__ */ new Set();
+    for (const node of frontier) {
+      for (const neighbor of graph.get(node) ?? []) {
+        if (!visited.has(neighbor) && graph.has(neighbor)) {
+          visited.add(neighbor);
+          next.add(neighbor);
+        }
+      }
+      for (const neighbor of reverse.get(node) ?? []) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          next.add(neighbor);
+        }
+      }
+    }
+    if (next.size === 0) break;
+    byHop[hop] = [...next];
+    frontier = next;
+  }
+  return { expanded: visited, byHop };
+}
 async function bfsExpandRanked(seeds, graph, depth, pages, query, bfsTopK, annotations, similarity) {
   const allBfs = bfsExpand(seeds, graph, depth);
   const seedSet = new Set(seeds);
@@ -27760,18 +27796,22 @@ async function bfsExpandRanked(seeds, graph, depth, pages, query, bfsTopK, annot
   for (const { pid, score } of top) expandedScores[pid] = score;
   return { selectedIds: /* @__PURE__ */ new Set([...seedSet, ...Object.keys(expandedScores)]), expandedScores };
 }
-function checkGraphStructure(graph) {
-  const inDegree = /* @__PURE__ */ new Map();
+function inDegree(graph) {
+  const deg = /* @__PURE__ */ new Map();
   for (const node of graph.keys()) {
-    if (!inDegree.has(node)) inDegree.set(node, 0);
+    if (!deg.has(node)) deg.set(node, 0);
     for (const tgt of graph.get(node)) {
-      inDegree.set(tgt, (inDegree.get(tgt) ?? 0) + 1);
+      deg.set(tgt, (deg.get(tgt) ?? 0) + 1);
     }
   }
+  return deg;
+}
+function checkGraphStructure(graph) {
+  const deg = inDegree(graph);
   const issues = [];
   for (const [node, neighbors] of graph) {
     const outDeg = neighbors.size;
-    const inDeg = inDegree.get(node) ?? 0;
+    const inDeg = deg.get(node) ?? 0;
     if (inDeg === 0 && outDeg === 0) {
       issues.push(`- ${node}: isolated node (no links in or out)`);
     }
@@ -29090,6 +29130,21 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
             }
           })
         );
+        new import_obsidian4.Setting(containerEl).setName("BFS fusion (vector \u2295 graph)").setDesc("\u0423\u043F\u043E\u0440\u044F\u0434\u043E\u0447\u0438\u0442\u044C \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u0437\u0430\u043F\u0440\u043E\u0441\u0430 \u0447\u0435\u0440\u0435\u0437 RRF-\u0444\u044C\u044E\u0437 \u0432\u0435\u043A\u0442\u043E\u0440\u0430 \u0438 \u0433\u0440\u0430\u0444\u0430. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E \u0432\u044B\u043A\u043B.").addToggle(
+          (t) => t.setValue(s.nativeAgent.bfsFusion ?? false).onChange(async (v) => {
+            s.nativeAgent.bfsFusion = v;
+            await this.plugin.saveSettings();
+          })
+        );
+        new import_obsidian4.Setting(containerEl).setName("Seed similarity threshold").setDesc("\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u044B\u0439 max-score seed; \u043D\u0438\u0436\u0435 \u2014 \u0444\u043E\u043B\u043B\u0431\u044D\u043A \u043D\u0430 Jaccard \u2192 llmSelectSeeds. 0 = \u0432\u044B\u043A\u043B.").addText(
+          (t) => t.setValue(String(s.nativeAgent.seedSimilarityThreshold ?? 0)).onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n >= 0) {
+              s.nativeAgent.seedSimilarityThreshold = n;
+              await this.plugin.saveSettings();
+            }
+          })
+        );
         new import_obsidian4.Setting(containerEl).setName("Graph health").setHeading();
         new import_obsidian4.Setting(containerEl).setName("Dedup on ingest").setDesc("\u041D\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u0438 near-duplicate \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u2014 \u0441\u043B\u0438\u0442\u044C \u0432 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0443\u044E \u0447\u0435\u0440\u0435\u0437 LLM-merge.").addToggle(
           (t) => t.setValue(s.nativeAgent.dedupOnIngest ?? false).onChange(async (v) => {
@@ -30201,6 +30256,9 @@ function formatGraphStatsLines(ev, agentLogEnabled) {
   const lines = [`Seeds (${totalSeeds})${cacheHint}`];
   for (const part of seedParts) lines.push(`  ${part}`);
   if (remainder > 0) lines.push(`  \u2026+${remainder}`);
+  if (ev.seedFallback && ev.seedFallback !== "none") {
+    lines.push(`Seed fallback: ${ev.seedFallback}`);
+  }
   if (ev.expandedPages.length > 0) {
     lines.push(`BFS expanded (${ev.expandedPages.length}):`);
     for (const id of ev.expandedPages) {
@@ -38522,6 +38580,30 @@ var query_default = "\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0
 // prompts/query-seeds.md
 var query_seeds_default = 'Question: "{{question}}"\nWiki index with annotations:\n{{annotated}}{{unindexed}}\n\nReturn JSON only matching this shape (most relevant page names \u2014 bare names, no path, no .md):\n\n## Output JSON Example\n{{example}}';
 
+// src/fusion.ts
+function fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, graph, depth, rrfK) {
+  const union = [...selectedIds];
+  if (union.length === 0) return [];
+  const scoreOf = (id) => seedScores[id] ?? expandedScores[id] ?? 0;
+  const vectorList = [...union].sort((a, b) => scoreOf(b) - scoreOf(a));
+  const { byHop } = bfsExpandWithHops(seeds, graph, depth);
+  const hopOf = /* @__PURE__ */ new Map();
+  for (const s of seeds) hopOf.set(s, 0);
+  for (const [hop, ids] of Object.entries(byHop)) {
+    const h = Number(hop);
+    for (const id of ids) if (!hopOf.has(id)) hopOf.set(id, h);
+  }
+  const missingHop = depth + 1;
+  const deg = inDegree(graph);
+  const graphList = [...union].sort((a, b) => {
+    const ha = hopOf.get(a) ?? missingHop;
+    const hb = hopOf.get(b) ?? missingHop;
+    if (ha !== hb) return ha - hb;
+    return (deg.get(b) ?? 0) - (deg.get(a) ?? 0);
+  });
+  return rrf([vectorList, graphList], rrfK).map((x) => x.id);
+}
+
 // src/wiki-graph-cache.ts
 function hashPages(pages) {
   const parts = [];
@@ -38591,7 +38673,7 @@ ${originalAnswer}` }
 
 // src/phases/query.ts
 var META_FILES = ["_index.md", "_log.md"];
-async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1, bfsTopK = 10, similarity, wikiLinkValidationRetries = 3) {
+async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1, bfsTopK = 10, similarity, wikiLinkValidationRetries = 3, seedSimilarityThreshold = 0, bfsFusion = false, rrfK = 60) {
   const question = args[0]?.trim();
   if (!question) {
     yield { kind: "error", message: "query: question required" };
@@ -38619,6 +38701,10 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   let outputTokens = 0;
   let seeds;
   let seedScores = {};
+  let seedFallback = "none";
+  const syntheticPages = new Map(
+    [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""])
+  );
   if (similarity && (similarity.config.mode === "embedding" || similarity.config.mode === "hybrid")) {
     await similarity.loadCache(wikiVaultPath, vaultTools);
     const allAnnotatedPaths = [...indexAnnotations.keys()].map((id) => `${wikiVaultPath}/${id}.md`);
@@ -38626,10 +38712,20 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
     const topSelected = selected.slice(0, topK);
     seeds = topSelected.map((x) => pageId(x.path));
     seedScores = Object.fromEntries(topSelected.map((x) => [pageId(x.path), x.score]));
+    const maxSeedScore = seeds.length ? Math.max(...Object.values(seedScores)) : 0;
+    if (maxSeedScore < seedSimilarityThreshold) {
+      const jaccardSeeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+      if (jaccardSeeds.length > 0) {
+        seeds = jaccardSeeds.map((x) => x.id);
+        seedScores = Object.fromEntries(jaccardSeeds.map((x) => [x.id, x.score]));
+        seedFallback = "jaccard";
+      } else {
+        seeds = [];
+        seedScores = {};
+        seedFallback = "llm";
+      }
+    }
   } else {
-    const syntheticPages = new Map(
-      [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""])
-    );
     const seedResults = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
     seeds = seedResults.map((x) => x.id);
     seedScores = Object.fromEntries(seedResults.map((x) => [x.id, x.score]));
@@ -38673,8 +38769,9 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   );
   const seedSet = new Set(seeds);
   const expandedPages = [...selectedIds].filter((id) => !seedSet.has(id));
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores };
-  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, seedFallback };
+  const fusedOrder = bfsFusion ? fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, graphResult.graph, graphDepth, rrfK) : void 0;
+  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3, fusedOrder);
   const entityTypesBlock = buildEntityTypesBlock2(domain);
   const systemPrompt = render(query_default, {
     domain_name: domain.name,
@@ -38851,7 +38948,25 @@ Pages not yet indexed: ${unindexedIds.join(", ")}` : "",
     return { seeds: [], outputTokens: 0 };
   }
 }
-function buildContextBlock(pages, seeds, selectedIds, maxPages) {
+function buildContextBlock(pages, seeds, selectedIds, maxPages, order) {
+  if (order && order.length > 0) {
+    const pidToPath = /* @__PURE__ */ new Map();
+    for (const path2 of pages.keys()) pidToPath.set(pageId(path2), path2);
+    let block2 = "";
+    let count = 0;
+    for (const id of order) {
+      if (count >= maxPages) break;
+      if (!selectedIds.has(id)) continue;
+      const path2 = pidToPath.get(id);
+      if (path2 === void 0) continue;
+      block2 += `--- ${path2} ---
+${pages.get(path2) ?? ""}
+
+`;
+      count++;
+    }
+    return block2;
+  }
   const seedPages = [];
   const bfsPages = [];
   for (const [path2, content] of pages) {
@@ -40707,7 +40822,7 @@ var AgentRunner = class {
         yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, similarity, void 0, this.settings.graphDepth, this.settings.wikiLinkValidationRetries);
         break;
       case "query":
-        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, this.settings.bfsTopK, similarity, this.settings.wikiLinkValidationRetries ?? 3);
+        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, this.settings.bfsTopK, similarity, this.settings.wikiLinkValidationRetries ?? 3, this.settings.nativeAgent.seedSimilarityThreshold ?? 0, this.settings.nativeAgent.bfsFusion ?? false, this.settings.nativeAgent.rrfK ?? 60);
         break;
       case "lint":
         yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.wikiLinkValidationRetries, opts, similarity, req.lintOpts?.useLlm ?? true, req.lintOpts?.entityTypeFilter ?? []);
