@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { pageId, buildWikiGraph, bfsExpand, bfsExpandWithHops, checkGraphStructure, bfsExpandRanked } from "../src/wiki-graph";
+import { pageId, buildWikiGraph, bfsExpand, bfsExpandWithHops, checkGraphStructure, bfsExpandRanked, inDegree } from "../src/wiki-graph";
 import type { PageSimilarityService } from "../src/page-similarity";
 
 describe("pageId", () => {
@@ -197,6 +197,33 @@ describe("checkGraphStructure", () => {
       ["B", new Set(["A"])],
     ]);
     expect(checkGraphStructure(graph)).toBe("");
+  });
+});
+
+describe("inDegree", () => {
+  // @lat: [[tests#Tier 2 — Query Fusion#inDegree counts backlinks per page]]
+  it("counts incoming edges per node, including phantom targets", () => {
+    const graph = new Map<string, Set<string>>([
+      ["A", new Set(["B", "C"])],
+      ["B", new Set(["C"])],
+      ["C", new Set<string>()],
+    ]);
+    const deg = inDegree(graph);
+    expect(deg.get("A")).toBe(0);
+    expect(deg.get("B")).toBe(1);
+    expect(deg.get("C")).toBe(2);
+  });
+
+  it("returns 0 for every node of an edgeless graph", () => {
+    const graph = new Map<string, Set<string>>([["X", new Set()], ["Y", new Set()]]);
+    const deg = inDegree(graph);
+    expect(deg.get("X")).toBe(0);
+    expect(deg.get("Y")).toBe(0);
+  });
+
+  it("counts a backlink to a target absent from graph.keys()", () => {
+    const graph = new Map<string, Set<string>>([["A", new Set(["Phantom"])]]);
+    expect(inDegree(graph).get("Phantom")).toBe(1);
   });
 });
 
