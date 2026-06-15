@@ -3,7 +3,8 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "obsidian": ["./obsidian-shim.ts"]
+      "obsidian": ["./obsidian-shim.ts"],
+      "path-browserify": ["./path-browserify-shim.ts"]
     },
     "noEmit": true
   },
