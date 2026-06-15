@@ -1,4 +1,29 @@
 ---
+review:
+  spec_hash: 62a03434c3393df2
+  last_run: 2026-06-15
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "B2. hybrid similarity mode"
+      section_hash: 986f64839043a901
+      text: '"widened candidate pool ... bounded to keep cost flat" — no explicit numeric bound for the pre-RRF candidate pool; the exact value is deferred to the implementation plan.'
+      verdict: accepted
+      verdict_at: 2026-06-15
+    - id: F-002
+      phase: clarity
+      severity: INFO
+      section: "A2. Lint near-duplicate report"
+      section_hash: 7bd705fb9386baa7
+      text: '"default cap generous enough for typical wikis" — the pairwise-cost page cap default is unspecified; pinned in the plan.'
+      verdict: accepted
+      verdict_at: 2026-06-15
 chain:
   intent: docs/superpowers/intents/2026-06-14-rag-query-quality-intent.md
   depends_on: docs/superpowers/specs/2026-06-15-rag-eval-harness-design.md
