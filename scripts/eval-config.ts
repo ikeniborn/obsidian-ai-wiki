@@ -6,6 +6,7 @@ export interface ConfigRecord {
   mode: "embedding" | "jaccard" | "hybrid"; // PageSimilarityService mode
   bfsDepth: number;
   topK: number;
+  fuse?: boolean; // dense+rrf: apply fuseVectorGraph to the union layer
 }
 
 // "dense" is the config name; "embedding" is its underlying mechanism (the
@@ -14,6 +15,7 @@ const NAME_TO_MODE: Record<string, ConfigRecord["mode"]> = {
   dense: "embedding",
   jaccard: "jaccard",
   hybrid: "hybrid",
+  "dense+rrf": "embedding",
 };
 
 export function resolveConfigs(
@@ -28,8 +30,8 @@ export function resolveConfigs(
   return names.map((name) => {
     const mode = NAME_TO_MODE[name];
     if (!mode) {
-      throw new Error(`unknown --config "${name}" (expected: dense, jaccard, hybrid)`);
+      throw new Error(`unknown --config "${name}" (expected: dense, jaccard, hybrid, dense+rrf)`);
     }
-    return { name, mode, bfsDepth, topK };
+    return { name, mode, bfsDepth, topK, ...(name === "dense+rrf" ? { fuse: true } : {}) };
   });
 }

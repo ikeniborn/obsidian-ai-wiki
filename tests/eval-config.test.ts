@@ -28,4 +28,15 @@ describe("resolveConfigs", () => {
   it("throws on an unknown config name", () => {
     expect(() => resolveConfigs("bogus", 1, 8)).toThrow(/bogus/);
   });
+
+  // @lat: [[tests#Tier 2 — Query Fusion#Eval resolves the dense+rrf config]]
+  it("resolves dense+rrf to embedding mode with fuse=true", () => {
+    const cfgs = resolveConfigs("dense+rrf", 1, 8);
+    expect(cfgs[0]).toMatchObject({ name: "dense+rrf", mode: "embedding", fuse: true, bfsDepth: 1, topK: 8 });
+  });
+
+  it("leaves fuse falsy for a plain dense config", () => {
+    const cfgs = resolveConfigs("dense", 1, 8);
+    expect(cfgs[0].fuse).toBeFalsy();
+  });
 });
