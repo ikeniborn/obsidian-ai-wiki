@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { PageSimilarityService, encodeVector, decodeVector, DEFAULT_CHUNKING, buildChunkInputs } from "../src/page-similarity";
+import { PageSimilarityService, encodeVector, decodeVector, DEFAULT_CHUNKING, buildChunkInputs, probeEmbeddingDimensions } from "../src/page-similarity";
 import { __requestUrlCalls, __clearRequestUrlCalls, __setRequestUrlResponse } from "../vitest.mock";
 import { rrf } from "../src/rrf";
 
@@ -622,5 +622,80 @@ describe("pairwiseNearDuplicates", () => {
     const over = svc.pairwiseNearDuplicates(0.9, 2);
     expect(over.skippedPageCount).toBe(3);
     expect(over.pairs).toEqual([]);
+  });
+});
+
+describe("refreshCache persists in hybrid mode", () => {
+  beforeEach(() => __clearRequestUrlCalls());
+
+  // @lat: [[tests#Multi-Vector Retrieval#Hybrid persists the embeddings cache]]
+  it("writes the v2 cache in hybrid mode (not just embedding mode)", async () => {
+    const annotation = "rich annotation";
+    const body = "# T\n\n## Alpha\n\nAlpha body.";
+    const n = buildChunkInputs(annotation, body, DEFAULT_CHUNKING).length;
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: Array.from({ length: n }, () => ({ embedding: [1, 0, 0] })) }),
+      headers: { "content-type": "application/json" },
+    });
+    const svc = new PageSimilarityService({
+      mode: "hybrid", topK: 3, model: "m", dimensions: 3,
+      baseUrl: "http://x", apiKey: "k", chunking: DEFAULT_CHUNKING,
+    });
+    const vt = makeVaultTools();
+    const { updated } = await svc.refreshCache(
+      "domainRoot", vt,
+      new Map([["Alpha", annotation]]),
+      new Map([["Alpha", body]]),
+    );
+    expect(updated).toBe(n);
+    const written = JSON.parse((vt as any).files.get("domainRoot/_config/_embeddings.json")!);
+    expect(written.version).toBe(2);
+    expect(written.entries.Alpha.chunks).toHaveLength(n);
+  });
+});
+
+describe("probeEmbeddingDimensions", () => {
+  beforeEach(() => __clearRequestUrlCalls());
+
+  // @lat: [[tests#Multi-Vector Retrieval#Probe detects model output dimension]]
+  it("detects native dimension when no value is requested (sends no dimensions field)", async () => {
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3, 0.4] }] }),
+      headers: { "content-type": "application/json" },
+    });
+    const probe = await probeEmbeddingDimensions("http://x", "k", "m");
+    expect(probe).toEqual({ actual: 4, requested: undefined, honored: true });
+    const body = JSON.parse(__requestUrlCalls[0].body as string);
+    expect(body.input).toEqual(["ping"]);
+    expect(body.dimensions).toBeUndefined();
+  });
+
+  // @lat: [[tests#Multi-Vector Retrieval#Probe verifies a requested dimension]]
+  it("sends the requested dimension and reports honored when the model returns it", async () => {
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: [{ embedding: [1, 2, 3] }] }),
+      headers: { "content-type": "application/json" },
+    });
+    const probe = await probeEmbeddingDimensions("http://x", "k", "m", 3);
+    expect(probe).toEqual({ actual: 3, requested: 3, honored: true });
+    expect(JSON.parse(__requestUrlCalls[0].body as string).dimensions).toBe(3);
+  });
+
+  it("reports not honored when the model ignores the requested dimension", async () => {
+    __setRequestUrlResponse({
+      status: 200,
+      text: JSON.stringify({ data: [{ embedding: [1, 2, 3, 4, 5, 6] }] }),
+      headers: { "content-type": "application/json" },
+    });
+    const probe = await probeEmbeddingDimensions("http://x", "k", "m", 512);
+    expect(probe).toEqual({ actual: 6, requested: 512, honored: false });
+  });
+
+  it("returns null on HTTP error", async () => {
+    __setRequestUrlResponse({ status: 500, text: "err", headers: {} });
+    expect(await probeEmbeddingDimensions("http://x", "k", "m", 3)).toBeNull();
   });
 });

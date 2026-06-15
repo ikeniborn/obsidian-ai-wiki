@@ -28204,8 +28204,10 @@ function maxCosine(query, vecs) {
 }
 var EMBEDDING_BATCH_SIZE = 100;
 var RRF_CANDIDATE_POOL = 50;
-async function fetchEmbeddings(baseUrl, apiKey, model, inputs) {
+async function fetchEmbeddings(baseUrl, apiKey, model, inputs, dimensions) {
   const url = `${baseUrl.replace(/\/$/, "")}/embeddings`;
+  const body = { model, input: inputs };
+  if (dimensions && dimensions > 0) body.dimensions = dimensions;
   const resp = await (0, import_obsidian3.requestUrl)({
     url,
     method: "POST",
@@ -28213,12 +28215,25 @@ async function fetchEmbeddings(baseUrl, apiKey, model, inputs) {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${apiKey}`
     },
-    body: JSON.stringify({ model, input: inputs }),
+    body: JSON.stringify(body),
     throw: false
   });
   if (resp.status >= 400) throw new Error(`Embedding API error: ${resp.status}`);
   const json = JSON.parse(resp.text);
   return json.data.map((d) => new Float32Array(d.embedding));
+}
+async function probeEmbeddingDimensions(baseUrl, apiKey, model, requested) {
+  try {
+    const [vec] = await fetchEmbeddings(baseUrl, apiKey, model, ["ping"], requested);
+    if (!vec || vec.length === 0) return null;
+    return {
+      actual: vec.length,
+      requested: requested && requested > 0 ? requested : void 0,
+      honored: !requested || requested <= 0 || vec.length === requested
+    };
+  } catch {
+    return null;
+  }
 }
 function entityKey(e) {
   return `${e.name}::${e.type ?? ""}`;
@@ -28288,7 +28303,7 @@ var PageSimilarityService = class {
     if (!this.cache || !baseUrl || !model) return { pid: "", score: 0 };
     let candVec;
     try {
-      [candVec] = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [candidateText.slice(0, 2e3)]);
+      [candVec] = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [candidateText.slice(0, 2e3)], this.config.dimensions);
     } catch {
       return { pid: "", score: 0 };
     }
@@ -28361,7 +28376,7 @@ var PageSimilarityService = class {
     }
     let entityVecs;
     try {
-      entityVecs = await fetchEmbeddings(baseUrl, apiKey, model, entities.map(entityQuery));
+      entityVecs = await fetchEmbeddings(baseUrl, apiKey, model, entities.map(entityQuery), this.config.dimensions);
     } catch {
       return this.jaccardFallbackAll(entities, indexAnnotations, allPaths);
     }
@@ -28389,7 +28404,7 @@ var PageSimilarityService = class {
     if (cur.pids.length > 0) batches.push(cur);
     for (const batch of batches) {
       try {
-        const vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
+        const vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts, this.config.dimensions);
         for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], [vecs[i]]);
       } catch {
         for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], []);
@@ -28435,7 +28450,7 @@ var PageSimilarityService = class {
     let queryVec;
     try {
       const truncated = sourceContent.slice(0, 2e3);
-      [queryVec] = await fetchEmbeddings(baseUrl, apiKey, model, [truncated]);
+      [queryVec] = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [truncated], this.config.dimensions);
     } catch {
       return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
     }
@@ -28464,7 +28479,7 @@ var PageSimilarityService = class {
     for (const batch of batches) {
       let vecs;
       try {
-        vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
+        vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.texts, this.config.dimensions);
       } catch {
         for (const pid of batch.pids) {
           const annotation = indexAnnotations.get(pid) ?? "";
@@ -28508,7 +28523,7 @@ var PageSimilarityService = class {
     let queryVec;
     try {
       const truncated = sourceContent.slice(0, 2e3);
-      [queryVec] = await fetchEmbeddings(baseUrl, apiKey, model, [truncated]);
+      [queryVec] = await fetchEmbeddings(baseUrl, apiKey, model, [truncated], this.config.dimensions);
     } catch {
       return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2);
     }
@@ -28535,7 +28550,7 @@ var PageSimilarityService = class {
     if (cur.pids.length > 0) batches.push(cur);
     for (const batch of batches) {
       try {
-        const vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
+        const vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts, this.config.dimensions);
         for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], [vecs[i]]);
       } catch {
         for (const pid of batch.pids) pageVecs.set(pid, []);
@@ -28576,7 +28591,7 @@ var PageSimilarityService = class {
     }
   }
   async refreshCache(domainRoot, vaultTools, indexAnnotations, pageBodies) {
-    if (this.config.mode !== "embedding") return { updated: 0 };
+    if (this.config.mode === "jaccard") return { updated: 0 };
     const { baseUrl, apiKey, model, dimensions } = this.config;
     if (!baseUrl || !model || !dimensions) return { updated: 0 };
     const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
@@ -28618,7 +28633,7 @@ var PageSimilarityService = class {
       const batch = pending.slice(i, i + EMBEDDING_BATCH_SIZE);
       let vecs;
       try {
-        vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.map((p) => p.embedText));
+        vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.map((p) => p.embedText), dimensions);
       } catch {
         continue;
       }
@@ -28748,6 +28763,64 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
     } catch (e) {
       new import_obsidian4.Notice(`Failed to fetch models: ${e.message}`);
     }
+  }
+  // CHECK: verify the entered dimension against the model. Probes twice — the model's
+  // native size (no `dimensions` sent) and the requested size — then reports the relation.
+  // Servers like Ollama blindly truncate to ANY requested size (even a useless 1) and cap
+  // over-large requests at native, so "the model returned N" alone is misleading; showing
+  // the native size lets the user see that e.g. 1-of-1024 is a degenerate truncation.
+  // Read-only — does not overwrite the field.
+  async checkDimensions() {
+    const na = this.plugin.settings.nativeAgent;
+    if (!na.baseUrl || !na.embeddingModel) {
+      new import_obsidian4.Notice("Set Base URL and embedding model first");
+      return;
+    }
+    if (!na.embeddingDimensions) {
+      new import_obsidian4.Notice("Enter a dimension value to check, or use Default");
+      return;
+    }
+    const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
+    const requested = na.embeddingDimensions;
+    const probe = await probeEmbeddingDimensions(na.baseUrl, apiKey, na.embeddingModel, requested);
+    if (probe == null) {
+      new import_obsidian4.Notice("Dimension check failed: API error");
+      return;
+    }
+    const nativeProbe = await probeEmbeddingDimensions(na.baseUrl, apiKey, na.embeddingModel);
+    const native = nativeProbe?.actual;
+    const nativeStr = native != null ? String(native) : "?";
+    if (!probe.honored) {
+      new import_obsidian4.Notice(`Not supported \u2014 model returns ${probe.actual} (native ${nativeStr}), not ${requested}. Use Default.`);
+    } else if (native != null && requested === native) {
+      new import_obsidian4.Notice(`OK \u2014 native dimension ${native}`);
+    } else if (native != null && requested < native) {
+      new import_obsidian4.Notice(`Truncated \u2014 ${requested} of ${native} native. Smaller dimensions reduce retrieval quality.`);
+    } else {
+      new import_obsidian4.Notice(`OK \u2014 model returns ${probe.actual} (native ${nativeStr}).`);
+    }
+  }
+  // Default: fetch the model's native output dimension (no `dimensions` sent) and store it.
+  // silent=true skips notices when auto-triggered on model change.
+  async setDefaultDimensions(silent = false) {
+    const na = this.plugin.settings.nativeAgent;
+    if (!na.baseUrl || !na.embeddingModel) {
+      if (!silent) new import_obsidian4.Notice("Set Base URL and embedding model first");
+      return;
+    }
+    const probe = await probeEmbeddingDimensions(
+      na.baseUrl,
+      this.localCache.nativeAgent?.apiKey ?? "",
+      na.embeddingModel
+    );
+    if (probe == null) {
+      if (!silent) new import_obsidian4.Notice("Failed to detect dimensions from API");
+      return;
+    }
+    na.embeddingDimensions = probe.actual;
+    await this.plugin.saveSettings();
+    if (!silent) new import_obsidian4.Notice(`Default dimensions for model: ${probe.actual}`);
+    this.display();
   }
   addModelControl(s, currentValue, onChange) {
     s.addButton(
@@ -29136,15 +29209,22 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           async (v) => {
             s.nativeAgent.embeddingModel = v || void 0;
             await this.plugin.saveSettings();
+            if (v) await this.setDefaultDimensions(true);
           }
         );
-        new import_obsidian4.Setting(containerEl).setName("Embedding dimensions").setDesc(T.settings.embeddingDimensions_desc).addText(
+        new import_obsidian4.Setting(containerEl).setName("Embedding dimensions").setDesc(T.settings.embeddingDimensions_desc).addButton(
+          (b) => b.setButtonText("Check").setTooltip("Verify the entered dimension is supported by the model").onClick(() => {
+            void this.checkDimensions();
+          })
+        ).addButton(
+          (b) => b.setButtonText("Default").setTooltip("Use the model's native dimension").onClick(() => {
+            void this.setDefaultDimensions();
+          })
+        ).addText(
           (t) => t.setPlaceholder("512").setValue(String(s.nativeAgent.embeddingDimensions ?? "")).onChange(async (v) => {
             const n = Number(v);
-            if (Number.isFinite(n) && n > 0) {
-              s.nativeAgent.embeddingDimensions = Math.floor(n);
-              await this.plugin.saveSettings();
-            }
+            s.nativeAgent.embeddingDimensions = Number.isFinite(n) && n > 0 ? Math.floor(n) : void 0;
+            await this.plugin.saveSettings();
           })
         );
         const chunkField = (name, desc, placeholder, get, set) => new import_obsidian4.Setting(containerEl).setName(name).setDesc(desc).addText(
