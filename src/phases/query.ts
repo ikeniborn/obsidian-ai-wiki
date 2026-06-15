@@ -69,7 +69,7 @@ export async function* runQuery(
   // Phase 2: seed selection from index annotations (no file content needed)
   let seeds: string[];
   let seedScores: Record<string, number> = {};
-  if (similarity && similarity.config.mode === "embedding") {
+  if (similarity && (similarity.config.mode === "embedding" || similarity.config.mode === "hybrid")) {
     await similarity.loadCache(wikiVaultPath, vaultTools);
     const allAnnotatedPaths = [...indexAnnotations.keys()].map((id) => `${wikiVaultPath}/${id}.md`);
     const selected = await similarity.selectRelevantScored(question, indexAnnotations, allAnnotatedPaths);

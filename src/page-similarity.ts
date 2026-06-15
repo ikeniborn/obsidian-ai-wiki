@@ -612,7 +612,7 @@ export class PageSimilarityService {
   }
 
   async loadCache(domainRoot: string, vaultTools: VaultTools): Promise<void> {
-    if (this.config.mode !== "embedding") return;
+    if (this.config.mode === "jaccard") return;
     if (this.cache) return;
     const { model, dimensions } = this.config;
     if (!model || !dimensions) return;
