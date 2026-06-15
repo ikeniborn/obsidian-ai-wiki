@@ -525,3 +525,31 @@ When Ingest proposes a new page near-identical to an existing one (score ≥ thr
 ### Lint surfaces near-duplicate page pairs
 
 `pairwiseNearDuplicates()` returns existing page pairs whose max-pool cosine ≥ threshold and skips entirely (reporting the page count) when the vault exceeds the page cap.
+
+## Tier 2 — Query Fusion
+
+Specs for Tier 2: RRF fusion of the vector and graph signals over the seed+BFS union, the seed similarity threshold with Jaccard→LLM fallback, and the eval `dense+rrf` config. All opt-in and default-off. See [[operations#Query#Fusion]].
+
+### Fusion orders the union by vector and graph RRF
+
+`fuseVectorGraph` builds a vector list (union by similarity score desc) and a graph list (hop asc, then backlink inDegree desc) and fuses them with `rrf`; every union page appears in both lists and the result is a permutation of the union. Verifies [[src/fusion.ts#fuseVectorGraph]].
+
+### inDegree counts backlinks per page
+
+`inDegree(graph)` returns the number of incoming links per node — including phantom targets that appear only as link destinations — shared by the graph health check and fusion's tie-break. Verifies [[src/wiki-graph.ts#inDegree]].
+
+### Threshold gate falls back from weak seeds
+
+When the max seed score is below `seedSimilarityThreshold`, `runQuery` falls back to Jaccard seeds; if Jaccard is empty too, seeds stay empty for `llmSelectSeeds`. Branch taken is in `graph_stats.seedFallback`; `0` disables the gate.
+
+### Context ordering follows the fused order
+
+When `bfsFusion` is on, `buildContextBlock` emits pages in the fused order (capped at the page count), skipping ids outside the selection; when off it keeps the seeds-first concat. Verifies [[src/phases/query.ts#buildContextBlock]].
+
+### Eval resolves the dense+rrf config
+
+`resolveConfigs("dense+rrf", …)` resolves to `mode: "embedding"` with `fuse: true`, carrying bfsDepth and topK, so the harness can measure fused retrieval against the dense baseline.
+
+### Eval runner applies the fused order
+
+The eval runner for a `fuse` config applies `fuseVectorGraph` to the union layer, returning a permutation of the plain dense union that still contains the seeds. Verifies [[scripts/eval-retrieval.ts#makeRunner]].

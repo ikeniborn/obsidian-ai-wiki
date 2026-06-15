@@ -38,6 +38,10 @@ export function formatGraphStatsLines(
   for (const part of seedParts) lines.push(`  ${part}`);
   if (remainder > 0) lines.push(`  …+${remainder}`);
 
+  if (ev.seedFallback && ev.seedFallback !== "none") {
+    lines.push(`Seed fallback: ${ev.seedFallback}`);
+  }
+
   if (ev.expandedPages.length > 0) {
     lines.push(`BFS expanded (${ev.expandedPages.length}):`);
     for (const id of ev.expandedPages) {

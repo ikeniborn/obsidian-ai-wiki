@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { DEFAULT_SETTINGS } from "../src/types";
 import type { ClaudeOperationConfig, NativeOperationConfig, LlmCallOptions, RunEvent } from "../src/types";
 
@@ -39,4 +40,13 @@ it("RunEvent accepts info_text with icon, summary, details", () => {
 it("RunEvent info_text details is optional", () => {
   const ev: RunEvent = { kind: "info_text", icon: "📋", summary: "no pages" };
   expect(ev.kind).toBe("info_text");
+});
+
+describe("Tier 2 nativeAgent defaults", () => {
+  it("defaults bfsFusion to false (opt-in)", () => {
+    expect(DEFAULT_SETTINGS.nativeAgent.bfsFusion).toBe(false);
+  });
+  it("defaults seedSimilarityThreshold to 0 (gate off)", () => {
+    expect(DEFAULT_SETTINGS.nativeAgent.seedSimilarityThreshold).toBe(0);
+  });
 });

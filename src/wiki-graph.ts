@@ -174,19 +174,29 @@ export async function bfsExpandRanked(
   return { selectedIds: new Set([...seedSet, ...Object.keys(expandedScores)]), expandedScores };
 }
 
-export function checkGraphStructure(graph: WikiGraph): string {
-  const inDegree = new Map<string, number>();
+/**
+ * Backlink count per node: how many pages link TO each node. Targets that appear
+ * only as link destinations (phantom pages) are counted too. Shared by the graph
+ * health check and Tier 2 fusion's graph-proximity tie-break.
+ */
+export function inDegree(graph: WikiGraph): Map<string, number> {
+  const deg = new Map<string, number>();
   for (const node of graph.keys()) {
-    if (!inDegree.has(node)) inDegree.set(node, 0);
+    if (!deg.has(node)) deg.set(node, 0);
     for (const tgt of graph.get(node)!) {
-      inDegree.set(tgt, (inDegree.get(tgt) ?? 0) + 1);
+      deg.set(tgt, (deg.get(tgt) ?? 0) + 1);
     }
   }
+  return deg;
+}
+
+export function checkGraphStructure(graph: WikiGraph): string {
+  const deg = inDegree(graph);
 
   const issues: string[] = [];
   for (const [node, neighbors] of graph) {
     const outDeg = neighbors.size;
-    const inDeg = inDegree.get(node) ?? 0;
+    const inDeg = deg.get(node) ?? 0;
 
     if (inDeg === 0 && outDeg === 0) {
       issues.push(`- ${node}: isolated node (no links in or out)`);

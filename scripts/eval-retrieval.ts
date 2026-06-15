@@ -6,6 +6,7 @@
 import type { VaultTools } from "../src/vault-tools";
 import { PageSimilarityService } from "../src/page-similarity";
 import { buildWikiGraph, pageId, bfsExpandRanked, type WikiGraph } from "../src/wiki-graph";
+import { fuseVectorGraph } from "../src/fusion";
 import { selectSeeds } from "../src/wiki-seeds";
 import type { ConfigRecord } from "./eval-config";
 import type { FsShim } from "./eval-vault";
@@ -65,11 +66,16 @@ export async function makeRunner(cfg: ConfigRecord, inputs: RunInputs): Promise<
     }
     return async (question) => {
       const scored = await service.selectRelevantScored(question, annotations, allAnnotatedPaths);
-      const seeds = scored.slice(0, cfg.topK).map((x) => pageId(x.path));
-      const { selectedIds } = await bfsExpandRanked(
+      const top = scored.slice(0, cfg.topK);
+      const seeds = top.map((x) => pageId(x.path));
+      const seedScores = Object.fromEntries(top.map((x) => [pageId(x.path), x.score]));
+      const { selectedIds, expandedScores } = await bfsExpandRanked(
         seeds, graph, cfg.bfsDepth, pages, question, UNION_BFS_TOPK, annotations, service,
       );
-      return { seed: seeds, union: [...selectedIds] };
+      const union = cfg.fuse
+        ? fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, graph, cfg.bfsDepth, 60)
+        : [...selectedIds];
+      return { seed: seeds, union };
     };
   }
 

@@ -11,6 +11,7 @@ import { render } from "./template";
 import { domainWikiFolder, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
 import { pageId, bfsExpandRanked } from "../wiki-graph";
+import { fuseVectorGraph } from "../fusion";
 import { graphCache } from "../wiki-graph-cache";
 import { selectSeeds } from "../wiki-seeds";
 import { parseIndexAnnotations } from "../wiki-index";
@@ -35,6 +36,9 @@ export async function* runQuery(
   bfsTopK: number = 10,
   similarity?: PageSimilarityService,
   wikiLinkValidationRetries: number = 3,
+  seedSimilarityThreshold: number = 0,
+  bfsFusion: boolean = false,
+  rrfK: number = 60,
 ): AsyncGenerator<RunEvent> {
   const question = args[0]?.trim();
   if (!question) {
@@ -69,6 +73,10 @@ export async function* runQuery(
   // Phase 2: seed selection from index annotations (no file content needed)
   let seeds: string[];
   let seedScores: Record<string, number> = {};
+  let seedFallback: "none" | "jaccard" | "llm" = "none";
+  const syntheticPages = new Map<string, string>(
+    [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""]),
+  );
   if (similarity && (similarity.config.mode === "embedding" || similarity.config.mode === "hybrid")) {
     await similarity.loadCache(wikiVaultPath, vaultTools);
     const allAnnotatedPaths = [...indexAnnotations.keys()].map((id) => `${wikiVaultPath}/${id}.md`);
@@ -76,10 +84,22 @@ export async function* runQuery(
     const topSelected = selected.slice(0, topK);
     seeds = topSelected.map((x) => pageId(x.path));
     seedScores = Object.fromEntries(topSelected.map((x) => [pageId(x.path), x.score]));
+
+    // Threshold gate: weak seeds fall back to Jaccard, then to llmSelectSeeds.
+    const maxSeedScore = seeds.length ? Math.max(...Object.values(seedScores)) : 0;
+    if (maxSeedScore < seedSimilarityThreshold) {
+      const jaccardSeeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+      if (jaccardSeeds.length > 0) {
+        seeds = jaccardSeeds.map((x) => x.id);
+        seedScores = Object.fromEntries(jaccardSeeds.map((x) => [x.id, x.score]));
+        seedFallback = "jaccard";
+      } else {
+        seeds = [];
+        seedScores = {};
+        seedFallback = "llm"; // existing empty-seeds guard runs llmSelectSeeds below
+      }
+    }
   } else {
-    const syntheticPages = new Map<string, string>(
-      [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""])
-    );
     const seedResults = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
     seeds = seedResults.map((x) => x.id);
     seedScores = Object.fromEntries(seedResults.map((x) => [x.id, x.score]));
@@ -132,8 +152,11 @@ export async function* runQuery(
   );
   const seedSet = new Set(seeds);
   const expandedPages = [...selectedIds].filter(id => !seedSet.has(id));
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores };
-  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, seedFallback };
+  const fusedOrder = bfsFusion
+    ? fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, graphResult.graph, graphDepth, rrfK)
+    : undefined;
+  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3, fusedOrder);
 
   const entityTypesBlock = buildEntityTypesBlock(domain);
 
@@ -314,12 +337,31 @@ async function llmSelectSeeds(
   }
 }
 
-function buildContextBlock(
+export function buildContextBlock(
   pages: Map<string, string>,
   seeds: Set<string>,
   selectedIds: Set<string>,
   maxPages: number,
+  order?: string[],
 ): string {
+  // Fused ordering (Tier 2): emit pages in `order`, capped at maxPages.
+  if (order && order.length > 0) {
+    const pidToPath = new Map<string, string>();
+    for (const path of pages.keys()) pidToPath.set(pageId(path), path);
+    let block = "";
+    let count = 0;
+    for (const id of order) {
+      if (count >= maxPages) break;
+      if (!selectedIds.has(id)) continue;
+      const path = pidToPath.get(id);
+      if (path === undefined) continue;
+      block += `--- ${path} ---\n${pages.get(path) ?? ""}\n\n`;
+      count++;
+    }
+    return block;
+  }
+
+  // Default: seeds first, then BFS-expanded pages (unchanged behavior).
   const seedPages: [string, string][] = [];
   const bfsPages: [string, string][] = [];
   for (const [path, content] of pages) {
