@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { PageSimilarityService, encodeVector, decodeVector, DEFAULT_CHUNKING, buildChunkInputs } from "../src/page-similarity";
 import { __requestUrlCalls, __clearRequestUrlCalls, __setRequestUrlResponse } from "../vitest.mock";
+import { rrf } from "../src/rrf";
 
 const makeService = (topK = 3) =>
   new PageSimilarityService({ mode: "jaccard", topK });
@@ -562,5 +563,20 @@ describe("max-pool scoring", () => {
     );
     // query embedding throws → whole call falls to Jaccard → Alpha matches on tokens
     expect(result).toEqual(["!Wiki/d/x/Alpha.md"]);
+  });
+});
+
+describe("hybrid mode", () => {
+  // @lat: [[tests#Tier 1 — Graph Health + Hybrid#Hybrid mode fuses dense and jaccard seeds]]
+  it("hybrid with no embedding endpoint degrades to jaccard (keyless)", async () => {
+    const svc = new PageSimilarityService({ mode: "hybrid", topK: 3, rrfK: 60 });
+    const annotations = new Map<string, string>([
+      ["alpha", "alpha api flag error code"],
+      ["beta", "beta unrelated text"],
+    ]);
+    const paths = ["W/d/e/alpha.md", "W/d/e/beta.md"];
+    const out = await svc.selectRelevantScored("api flag error", annotations, paths);
+    expect(out.length).toBeGreaterThan(0);
+    expect(out[0].path).toBe("W/d/e/alpha.md"); // jaccard-on-both fusion still ranks the match first
   });
 });
