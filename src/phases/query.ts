@@ -35,6 +35,7 @@ export async function* runQuery(
   bfsTopK: number = 10,
   similarity?: PageSimilarityService,
   wikiLinkValidationRetries: number = 3,
+  seedSimilarityThreshold: number = 0,
 ): AsyncGenerator<RunEvent> {
   const question = args[0]?.trim();
   if (!question) {
@@ -69,6 +70,10 @@ export async function* runQuery(
   // Phase 2: seed selection from index annotations (no file content needed)
   let seeds: string[];
   let seedScores: Record<string, number> = {};
+  let seedFallback: "none" | "jaccard" | "llm" = "none";
+  const syntheticPages = new Map<string, string>(
+    [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""]),
+  );
   if (similarity && (similarity.config.mode === "embedding" || similarity.config.mode === "hybrid")) {
     await similarity.loadCache(wikiVaultPath, vaultTools);
     const allAnnotatedPaths = [...indexAnnotations.keys()].map((id) => `${wikiVaultPath}/${id}.md`);
@@ -76,10 +81,22 @@ export async function* runQuery(
     const topSelected = selected.slice(0, topK);
     seeds = topSelected.map((x) => pageId(x.path));
     seedScores = Object.fromEntries(topSelected.map((x) => [pageId(x.path), x.score]));
+
+    // Threshold gate: weak seeds fall back to Jaccard, then to llmSelectSeeds.
+    const maxSeedScore = seeds.length ? Math.max(...Object.values(seedScores)) : 0;
+    if (maxSeedScore < seedSimilarityThreshold) {
+      const jaccardSeeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+      if (jaccardSeeds.length > 0) {
+        seeds = jaccardSeeds.map((x) => x.id);
+        seedScores = Object.fromEntries(jaccardSeeds.map((x) => [x.id, x.score]));
+        seedFallback = "jaccard";
+      } else {
+        seeds = [];
+        seedScores = {};
+        seedFallback = "llm"; // existing empty-seeds guard runs llmSelectSeeds below
+      }
+    }
   } else {
-    const syntheticPages = new Map<string, string>(
-      [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""])
-    );
     const seedResults = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
     seeds = seedResults.map((x) => x.id);
     seedScores = Object.fromEntries(seedResults.map((x) => [x.id, x.score]));
@@ -132,7 +149,7 @@ export async function* runQuery(
   );
   const seedSet = new Set(seeds);
   const expandedPages = [...selectedIds].filter(id => !seedSet.has(id));
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores };
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, seedFallback };
   const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);
 
   const entityTypesBlock = buildEntityTypesBlock(domain);

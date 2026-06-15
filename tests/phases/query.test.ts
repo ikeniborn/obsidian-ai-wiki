@@ -3,6 +3,7 @@ import { runQuery } from "../../src/phases/query";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
+import { PageSimilarityService } from "../../src/page-similarity";
 
 function mockAdapter(overrides: Partial<VaultAdapter> = {}): VaultAdapter {
   return {
@@ -286,5 +287,60 @@ describe("runQuery", () => {
     // "neural" keyword matches "Neural-network" page; "Unrelated" excluded at depth=0
     expect(userContent).toContain("Neural-network");
     expect(userContent).not.toContain("Unrelated");
+  });
+});
+
+describe("runQuery — seed threshold gate", () => {
+  function embeddingSim(): PageSimilarityService {
+    // embedding mode with no baseUrl/model → selectRelevantScored degrades to
+    // deterministic Jaccard scoring. Good enough to exercise the gate branches.
+    return new PageSimilarityService({ mode: "embedding", topK: 5 });
+  }
+
+  function vaultAdapter() {
+    return mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Alpha.md", "!Wiki/work/Beta.md"], folders: [] }),
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p.endsWith("_index.md")) return "- [[Alpha]] Alpha.md — machine learning\n- [[Beta]] Beta.md — cooking";
+        if (p.endsWith("Alpha.md")) return "# Alpha\nmachine learning content";
+        if (p.endsWith("Beta.md")) return "# Beta\ncooking content";
+        return "";
+      }),
+    });
+  }
+
+  // @lat: [[tests#Tier 2 — Query Fusion#Threshold gate falls back from weak seeds]]
+  it("threshold 0 keeps embedding seeds (seedFallback none)", async () => {
+    const vt = new VaultTools(vaultAdapter(), VAULT_ROOT);
+    const events = await collect(
+      runQuery(["machine learning"], false, vt, makeLlm("answer"), "model", [domain], VAULT_ROOT,
+        new AbortController().signal, 1, {}, 5, 0.0, 10, embeddingSim(), 3, 0 /* threshold */),
+    );
+    const stats = events.find((e: any) => e.kind === "graph_stats") as any;
+    expect(stats.seedFallback).toBe("none");
+    expect(stats.seeds).toContain("Alpha");
+  });
+
+  it("threshold above max score falls back to Jaccard seeds", async () => {
+    const vt = new VaultTools(vaultAdapter(), VAULT_ROOT);
+    const events = await collect(
+      runQuery(["machine learning"], false, vt, makeLlm("answer"), "model", [domain], VAULT_ROOT,
+        new AbortController().signal, 1, {}, 5, 0.0, 10, embeddingSim(), 3, 2.0 /* threshold > any score */),
+    );
+    const stats = events.find((e: any) => e.kind === "graph_stats") as any;
+    expect(stats.seedFallback).toBe("jaccard");
+    expect(stats.seeds).toContain("Alpha");
+  });
+
+  it("threshold high + non-matching question falls through to llmSelectSeeds", async () => {
+    const vt = new VaultTools(vaultAdapter(), VAULT_ROOT);
+    const events = await collect(
+      runQuery(["zzzznomatch"], false, vt, makeLlm("answer"), "model", [domain], VAULT_ROOT,
+        new AbortController().signal, 1, {}, 5, 0.0, 10, embeddingSim(), 3, 2.0),
+    );
+    // Jaccard returns nothing → empty-seeds guard emits the SelectSeeds tool_use.
+    const selectSeedsUse = events.find((e: any) => e.kind === "tool_use" && e.name === "SelectSeeds");
+    expect(selectSeedsUse).toBeDefined();
   });
 });
