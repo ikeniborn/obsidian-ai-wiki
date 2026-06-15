@@ -676,6 +676,22 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           () => s.nativeAgent.chunkMaxCount ?? DEFAULT_CHUNKING.maxCount,
           (n) => { s.nativeAgent.chunkMaxCount = n; });
 
+        new Setting(containerEl).setName("Retrieval").setHeading();
+        new Setting(containerEl)
+          .setName("Hybrid retrieval (dense ⊕ sparse)")
+          .setDesc("Фьюзить embedding и jaccard через RRF. Требует embedding-модель; без неё — обычный jaccard.")
+          .addToggle((t) =>
+            t.setValue(s.nativeAgent.hybridRetrieval ?? false)
+              .onChange(async (v) => { s.nativeAgent.hybridRetrieval = v; await this.plugin.saveSettings(); }),
+          );
+        new Setting(containerEl)
+          .setName("RRF k")
+          .setDesc("Константа RRF. По умолчанию 60.")
+          .addText((t) =>
+            t.setValue(String(s.nativeAgent.rrfK ?? 60))
+              .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0) { s.nativeAgent.rrfK = Math.floor(n); await this.plugin.saveSettings(); } }),
+          );
+
         new Setting(containerEl)
           .setName(T.settings.mergeDeleteWarnThreshold_name)
           .setDesc(T.settings.mergeDeleteWarnThreshold_desc)

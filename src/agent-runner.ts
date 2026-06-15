@@ -52,12 +52,16 @@ export class AgentRunner {
     if (this.settings.backend !== "native-agent") return undefined;
     const na = this.settings.nativeAgent;
     return new PageSimilarityService({
-      mode: na.embeddingModel !== undefined ? "embedding" : "jaccard",
+      mode:
+        na.embeddingModel === undefined ? "jaccard"
+        : na.hybridRetrieval ? "hybrid"
+        : "embedding",
       model: na.embeddingModel,
       dimensions: na.embeddingDimensions,
       topK: na.relevantPagesTopK ?? 15,
       baseUrl: na.baseUrl,
       apiKey: na.apiKey,
+      rrfK: na.rrfK ?? 60,
       chunking: {
         maxChars: na.chunkMaxChars ?? DEFAULT_CHUNKING.maxChars,
         overlapChars: na.chunkOverlapChars ?? DEFAULT_CHUNKING.overlapChars,

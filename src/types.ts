@@ -186,6 +186,12 @@ export interface LlmWikiPluginSettings {
     chunkOverlapChars?: number;
     chunkMinChars?: number;
     chunkMaxCount?: number;
+    hybridRetrieval?: boolean;
+    rrfK?: number;
+    dedupOnIngest?: boolean;
+    dedupThreshold?: number;
+    lintNearDuplicate?: boolean;
+    nearDupThreshold?: number;
   };
   proxy: {
     enabled: boolean;
@@ -249,6 +255,12 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
       format: { model: "llama3.2", maxTokens: 32768, temperature: 0.2 },
     },
     structuredRetries: 1,
+    hybridRetrieval: false,
+    rrfK: 60,
+    dedupOnIngest: false,
+    dedupThreshold: 0.85,
+    lintNearDuplicate: false,
+    nearDupThreshold: 0.80,
   },
   proxy: { enabled: false, url: "" },
   devMode: {
