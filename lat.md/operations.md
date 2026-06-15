@@ -101,6 +101,14 @@ Forward traversal guards against phantom nodes: `[[links]]` whose targets have n
 
 See [[src/wiki-graph.ts#bfsExpandRanked]], [[wiki-graph#Query Graph Traversal]].
 
+### Fusion
+
+Opt-in (`nativeAgent.bfsFusion`, default off). Orders the final context by an RRF fusion of the vector and graph signals over the `seeds ∪ BFS-expanded` union instead of seeds-first concat.
+
+The vector list ranks the union by similarity score descending; the graph list ranks it by hop distance ascending (seed = hop 0) tie-broken by backlink `inDegree` descending. `rrf` fuses the two. A separate gate, `nativeAgent.seedSimilarityThreshold` (default `0` = off), drops weak embedding seeds below the threshold and falls back through Jaccard → `llmSelectSeeds`; the branch taken is recorded in `graph_stats.seedFallback`. Both reuse the existing `rrfK` setting.
+
+See [[src/fusion.ts#fuseVectorGraph]], [[src/phases/query.ts#buildContextBlock]].
+
 ### Answer Generation
 
 System prompt loaded from `prompts/query.md`. Injected variables: `domain_name`, `entity_types_block`, `index_block`. User message contains `Вопрос: {question}` followed by the context block of selected wiki pages.
@@ -222,3 +230,11 @@ Three opt-in capabilities added in Tier 1; all default to off and are safe to en
 **Ingest dedup gate** (`nativeAgent.dedupOnIngest: true`, requires `dedupThreshold`): After the LLM proposes a new page, `maxSimilarityToExisting()` compares it against the existing vault. If the closest match scores ≥ threshold, the ingest phase runs one LLM merge call and writes the merged result into the existing page rather than creating a duplicate.
 
 **Lint near-duplicate report** (`nativeAgent.lintNearDuplicate: true`, threshold `nearDupThreshold`): In embedding or hybrid mode, Lint calls `pairwiseNearDuplicates()` over the cached page vectors and reports pairs whose max-pool cosine ≥ threshold. In jaccard mode (no embedding cache) it does nothing. The scan is skipped and reported as such when the vault exceeds the configured page cap.
+
+## Tier 2 Features
+
+Two opt-in retrieval refinements for the native Query pipeline; both default to off and are measurable on the eval harness.
+
+**BFS fusion** (`nativeAgent.bfsFusion: true`): the Query context is ordered by an RRF fusion of the vector rank and the graph rank over the seed+BFS union ([[src/fusion.ts#fuseVectorGraph]]), rather than seeds-first concat. Reuses `rrfK`.
+
+**Seed similarity threshold** (`nativeAgent.seedSimilarityThreshold > 0`): embedding/hybrid seeds whose max score is below the threshold are dropped in favor of Jaccard seeds, falling through to `llmSelectSeeds` when Jaccard is also empty. The eval `dense+rrf` config measures fusion against the dense baseline ([[operations#Retrieval Eval Harness]]).
