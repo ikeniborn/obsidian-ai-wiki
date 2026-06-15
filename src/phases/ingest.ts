@@ -318,7 +318,7 @@ export async function* runIngest(
   const dedupThreshold = opts.dedupThreshold ?? 0.85;
   const pidToPath = new Map(nonMetaPaths.map((p) => [pageId(p), p]));
   const createdThisRun = new Set<string>();
-  if (dedupOn && similarity!.config.mode === "jaccard") similarity!.setJaccardCorpus(annotations);
+  if (dedupOn && similarity?.config.mode === "jaccard") similarity.setJaccardCorpus(annotations);
   for (const page of pages) {
     if (!page.path.startsWith(wikiVaultPath + "/")) {
       yield { kind: "tool_use", name: "Write", input: { path: page.path } };
@@ -332,7 +332,7 @@ export async function* runIngest(
     if (dedupOn && existingContent === null) {
       const candidateText = `${page.annotation ?? ""}\n\n${page.content}`;
       const exclude = new Set<string>([pageId(page.path), ...createdThisRun]);
-      const hit = await similarity!.maxSimilarityToExisting(candidateText, exclude);
+      const hit = await similarity.maxSimilarityToExisting(candidateText, exclude);
       if (hit.pid && hit.score >= dedupThreshold) {
         const targetPath = pidToPath.get(hit.pid);
         let existingTarget: string | null = null;
