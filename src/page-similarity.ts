@@ -599,13 +599,12 @@ export class PageSimilarityService {
     queryTokens: Set<string>,
   ): Promise<{ path: string; score: number }[]> {
     const pool = Math.max(this.config.topK, RRF_CANDIDATE_POOL);
+    // Keyless: selectEmbeddingScored degrades to jaccard, so both sides run jaccard
+    // and RRF of two identical lists preserves the jaccard order — correct, just redundant.
     const [dense, sparse] = await Promise.all([
       this.selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens, pool),
       Promise.resolve(this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, pool)),
     ]);
-    const byPath = new Map<string, number>();
-    for (const r of dense) byPath.set(r.path, r.score);
-    for (const r of sparse) if (!byPath.has(r.path)) byPath.set(r.path, r.score);
     const fused = rrf([dense.map((x) => x.path), sparse.map((x) => x.path)], this.config.rrfK ?? 60);
     return fused
       .slice(0, this.config.topK)
