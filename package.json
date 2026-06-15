@@ -9,7 +9,8 @@
     "lint": "eslint \"src/**/*.ts\"",
     "test": "vitest run",
     "test:watch": "vitest",
-    "migrate:wiki-prefix": "tsx scripts/migrate-wiki-prefix.ts"
+    "migrate:wiki-prefix": "tsx scripts/migrate-wiki-prefix.ts",
+    "eval": "TSX_TSCONFIG_PATH=scripts/tsconfig.eval.json tsx scripts/eval.ts"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
@@ -18,6 +19,7 @@
     "eslint": "^9.39.4",
     "eslint-plugin-obsidianmd": "^0.3.0",
     "obsidian": "^1.5.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.4.0",
     "typescript-eslint": "^8.60.1",
     "vitest": "^4.1.7",
