@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runQuery } from "../../src/phases/query";
+import { runQuery, buildContextBlock } from "../../src/phases/query";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 import type { LlmClient } from "../../src/types";
 import type { DomainEntry } from "../../src/domain";
@@ -342,5 +342,65 @@ describe("runQuery — seed threshold gate", () => {
     // Jaccard returns nothing → empty-seeds guard emits the SelectSeeds tool_use.
     const selectSeedsUse = events.find((e: any) => e.kind === "tool_use" && e.name === "SelectSeeds");
     expect(selectSeedsUse).toBeDefined();
+  });
+});
+
+describe("buildContextBlock", () => {
+  const pages = new Map<string, string>([
+    ["!Wiki/work/Alpha.md", "alpha body"],
+    ["!Wiki/work/Beta.md", "beta body"],
+    ["!Wiki/work/Gamma.md", "gamma body"],
+  ]);
+  const seedSet = new Set(["Alpha"]);
+  const selectedIds = new Set(["Alpha", "Beta", "Gamma"]);
+
+  it("without order: seeds first, then BFS pages (unchanged behavior)", () => {
+    const block = buildContextBlock(pages, seedSet, selectedIds, 10);
+    expect(block.indexOf("Alpha.md")).toBeLessThan(block.indexOf("Beta.md"));
+    expect(block).toContain("alpha body");
+  });
+
+  // @lat: [[tests#Tier 2 — Query Fusion#Context ordering follows the fused order]]
+  it("with order: emits pages in the given fused order", () => {
+    const order = ["Gamma", "Alpha", "Beta"];
+    const block = buildContextBlock(pages, seedSet, selectedIds, 10, order);
+    expect(block.indexOf("Gamma.md")).toBeLessThan(block.indexOf("Alpha.md"));
+    expect(block.indexOf("Alpha.md")).toBeLessThan(block.indexOf("Beta.md"));
+  });
+
+  it("with order: caps at maxPages and skips ids outside the selection", () => {
+    const order = ["Gamma", "Alpha", "Beta"];
+    const block = buildContextBlock(pages, seedSet, selectedIds, 2, order);
+    const count = (block.match(/^--- /gm) ?? []).length;
+    expect(count).toBe(2);
+    expect(block).toContain("Gamma.md");
+    expect(block).toContain("Alpha.md");
+    expect(block).not.toContain("Beta.md");
+  });
+});
+
+describe("runQuery — fusion ordering smoke", () => {
+  it("bfsFusion on still returns the selected pages in context", async () => {
+    const adapter = mockAdapter({
+      exists: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue({ files: ["!Wiki/work/Alpha.md", "!Wiki/work/Beta.md"], folders: [] }),
+      read: vi.fn().mockImplementation(async (p: string) => {
+        if (p.endsWith("_index.md")) return "- [[Alpha]] Alpha.md — machine learning\n- [[Beta]] Beta.md — learning systems";
+        if (p.endsWith("Alpha.md")) return "# Alpha\n[[Beta]]\nmachine learning content";
+        if (p.endsWith("Beta.md")) return "# Beta\nlearning systems content";
+        return "";
+      }),
+    });
+    const vt = new VaultTools(adapter, VAULT_ROOT);
+    const llm = makeLlm("answer");
+    await collect(
+      runQuery(["machine learning"], false, vt, llm, "model", [domain], VAULT_ROOT,
+        new AbortController().signal, 1, {}, 5, 0.0, 10, undefined, 3, 0,
+        true /* bfsFusion */, 60 /* rrfK */),
+    );
+    const createMock = llm.chat.completions.create as ReturnType<typeof vi.fn>;
+    const streamCall = createMock.mock.calls.find((c: any) => c[0]?.stream === true);
+    const userContent = streamCall?.[0]?.messages?.find((m: any) => m.role === "user")?.content ?? "";
+    expect(userContent).toContain("Alpha");
   });
 });

@@ -11,6 +11,7 @@ import { render } from "./template";
 import { domainWikiFolder, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
 import { pageId, bfsExpandRanked } from "../wiki-graph";
+import { fuseVectorGraph } from "../fusion";
 import { graphCache } from "../wiki-graph-cache";
 import { selectSeeds } from "../wiki-seeds";
 import { parseIndexAnnotations } from "../wiki-index";
@@ -36,6 +37,8 @@ export async function* runQuery(
   similarity?: PageSimilarityService,
   wikiLinkValidationRetries: number = 3,
   seedSimilarityThreshold: number = 0,
+  bfsFusion: boolean = false,
+  rrfK: number = 60,
 ): AsyncGenerator<RunEvent> {
   const question = args[0]?.trim();
   if (!question) {
@@ -150,7 +153,10 @@ export async function* runQuery(
   const seedSet = new Set(seeds);
   const expandedPages = [...selectedIds].filter(id => !seedSet.has(id));
   yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, seedFallback };
-  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3);
+  const fusedOrder = bfsFusion
+    ? fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, graphResult.graph, graphDepth, rrfK)
+    : undefined;
+  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3, fusedOrder);
 
   const entityTypesBlock = buildEntityTypesBlock(domain);
 
@@ -331,12 +337,31 @@ async function llmSelectSeeds(
   }
 }
 
-function buildContextBlock(
+export function buildContextBlock(
   pages: Map<string, string>,
   seeds: Set<string>,
   selectedIds: Set<string>,
   maxPages: number,
+  order?: string[],
 ): string {
+  // Fused ordering (Tier 2): emit pages in `order`, capped at maxPages.
+  if (order && order.length > 0) {
+    const pidToPath = new Map<string, string>();
+    for (const path of pages.keys()) pidToPath.set(pageId(path), path);
+    let block = "";
+    let count = 0;
+    for (const id of order) {
+      if (count >= maxPages) break;
+      if (!selectedIds.has(id)) continue;
+      const path = pidToPath.get(id);
+      if (path === undefined) continue;
+      block += `--- ${path} ---\n${pages.get(path) ?? ""}\n\n`;
+      count++;
+    }
+    return block;
+  }
+
+  // Default: seeds first, then BFS-expanded pages (unchanged behavior).
   const seedPages: [string, string][] = [];
   const bfsPages: [string, string][] = [];
   for (const [path, content] of pages) {
