@@ -26182,7 +26182,13 @@ var DEFAULT_SETTINGS = {
       init: { model: "llama3.2", maxTokens: 8192, temperature: 0.2 },
       format: { model: "llama3.2", maxTokens: 32768, temperature: 0.2 }
     },
-    structuredRetries: 1
+    structuredRetries: 1,
+    hybridRetrieval: false,
+    rrfK: 60,
+    dedupOnIngest: false,
+    dedupThreshold: 0.85,
+    lintNearDuplicate: false,
+    nearDupThreshold: 0.8
   },
   proxy: { enabled: false, url: "" },
   devMode: {
@@ -26202,7 +26208,7 @@ var DEFAULT_SETTINGS = {
 };
 
 // src/settings.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 
 // src/modals.ts
 var import_obsidian2 = require("obsidian");
@@ -27658,640 +27664,234 @@ function resolveEffective(s, l) {
   };
 }
 
-// src/settings.ts
-async function checkClaudeAvailability(iclaudePath) {
-  const { access, constants } = require("node:fs/promises");
-  await access(iclaudePath, constants.X_OK);
-}
-async function checkNativeAvailability(baseUrl, apiKey, model) {
-  let timerId;
-  const timeoutP = new Promise((_, rej) => {
-    timerId = window.setTimeout(() => rej(new DOMException("Request timed out", "AbortError")), 3e4);
-  });
-  try {
-    const resp = await Promise.race([
-      (0, import_obsidian3.requestUrl)({
-        url: `${baseUrl.replace(/\/$/, "")}/chat/completions`,
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model, messages: [{ role: "user", content: "\u041F\u0440\u0438\u0432\u0435\u0442, AI Wiki! \u041F\u043E\u0440\u0430\u0431\u043E\u0442\u0430\u0435\u043C?" }], max_tokens: 50, stream: false }),
-        throw: false
-      }),
-      timeoutP
-    ]);
-    if (resp.status >= 400) throw new Error(`HTTP ${resp.status}`);
-  } finally {
-    if (timerId !== void 0) window.clearTimeout(timerId);
-  }
-}
-function parseTimeoutString(v) {
-  const parts = v.split("/").map((x) => Number(x.trim()));
-  if (parts.length === 5 && parts.every((n) => Number.isFinite(n) && n >= 0)) {
-    return { ingest: parts[0], query: parts[1], lint: parts[2], init: parts[3], format: parts[4] };
-  }
-  return null;
-}
-var LlmWikiSettingTab = class extends import_obsidian3.PluginSettingTab {
-  constructor(app, plugin) {
-    super(app, plugin);
-    this.plugin = plugin;
-  }
-  plugin;
-  cachedDomains = [];
-  localCache = { iclaudePath: "" };
-  _availableModels = [];
-  get _chatModels() {
-    return this._availableModels.filter((m) => !/embed|rerank|moderat/i.test(m));
-  }
-  display() {
-    void this.refresh();
-  }
-  async refresh() {
-    try {
-      this.cachedDomains = await this.plugin.domainStore.load();
-    } catch (e) {
-      this.cachedDomains = [];
-      new import_obsidian3.Notice(`Domain map load failed: ${e.message}`);
-    }
-    this.localCache = await this.plugin.localConfigStore.load();
-    this.render();
-  }
-  async patchLocal(patch) {
-    this.localCache = { ...this.localCache, ...patch };
-    await this.plugin.localConfigStore.save(patch);
-  }
-  async patchLocalNativeApiKey(apiKey) {
-    await this.patchLocal({ nativeAgent: { apiKey } });
-  }
-  async patchLocalProxyPassword(password) {
-    const cur = this.localCache.proxy ?? {};
-    await this.patchLocal({ proxy: { ...cur, password } });
-  }
-  async patchProxy(patch) {
-    this.plugin.settings.proxy = { ...this.plugin.settings.proxy ?? { enabled: false, url: "" }, ...patch };
-    await this.plugin.saveSettings();
-  }
-  async fetchModels() {
-    const na = this.plugin.settings.nativeAgent;
-    if (!na.baseUrl) {
-      new import_obsidian3.Notice("Set Base URL first");
-      return;
-    }
-    const url = `${na.baseUrl.replace(/\/$/, "")}/models`;
-    try {
-      const resp = await (0, import_obsidian3.requestUrl)({
-        url,
-        headers: { Authorization: `Bearer ${this.localCache.nativeAgent?.apiKey ?? ""}` },
-        throw: false
-      });
-      if (resp.status >= 400) throw new Error(`${resp.status}`);
-      const json = JSON.parse(resp.text);
-      this._availableModels = json.data.map((m) => m.id).sort();
-      this.display();
-    } catch (e) {
-      new import_obsidian3.Notice(`Failed to fetch models: ${e.message}`);
-    }
-  }
-  addModelControl(s, models, currentValue, onChange) {
-    s.addButton(
-      (b) => b.setIcon("refresh-cw").setTooltip("Fetch available models from base URL").onClick(() => {
-        void this.fetchModels();
-      })
-    );
-    if (models.length > 0) {
-      s.addDropdown((d) => {
-        if (!currentValue) d.addOption("", "\u2014 select \u2014");
-        for (const m of models) d.addOption(m, m);
-        d.setValue(currentValue);
-        d.onChange((v) => {
-          void onChange(v);
-        });
-      });
-    } else {
-      s.addText(
-        (t) => t.setValue(currentValue).onChange((v) => {
-          void onChange(v.trim());
-        })
-      );
-    }
-  }
-  render() {
-    const { containerEl } = this;
-    const scrollEl = containerEl.closest(".vertical-tab-content") ?? containerEl.closest(".modal-content") ?? containerEl.parentElement ?? containerEl;
-    const savedScroll = scrollEl.scrollTop;
-    containerEl.empty();
-    const s = this.plugin.settings;
-    const eff = resolveEffective(s, this.localCache);
-    const T = i18n();
-    const busy = this.plugin.controller.running;
-    new import_obsidian3.Setting(containerEl).setName(T.settings.h3_general).setHeading();
-    new import_obsidian3.Setting(containerEl).setName(T.settings.systemPrompt_name).setDesc(T.settings.systemPrompt_desc).addTextArea((t) => {
-      t.inputEl.addClass("ai-wiki-settings-textarea");
-      t.setValue(s.systemPrompt).onChange(async (v) => {
-        s.systemPrompt = v;
-        await this.plugin.saveSettings();
-      });
-      return t;
-    });
-    new import_obsidian3.Setting(containerEl).setName(T.settings.timeouts_name).setDesc(T.settings.timeouts_desc).addText(
-      (t) => t.setValue(`${s.timeouts.ingest}/${s.timeouts.query}/${s.timeouts.lint}/${s.timeouts.init}/${s.timeouts.format}`).onChange(async (v) => {
-        const parsed = parseTimeoutString(v);
-        if (parsed) {
-          s.timeouts = { ...s.timeouts, ...parsed };
-          await this.plugin.saveSettings();
-        }
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.llmIdleTimeout_name).setDesc(T.settings.llmIdleTimeout_desc).addText(
-      (t) => t.setPlaceholder("300").setValue(String(s.llmIdleTimeoutSec)).onChange(async (v) => {
-        const n = Number(v);
-        if (Number.isFinite(n) && n >= 0) {
-          s.llmIdleTimeoutSec = Math.floor(n);
-          await this.plugin.saveSettings();
-        }
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.llmIdleRetries_name).setDesc(T.settings.llmIdleRetries_desc).addText(
-      (t) => t.setPlaceholder("3").setValue(String(s.llmIdleRetries)).onChange(async (v) => {
-        const n = Number(v);
-        if (Number.isInteger(n) && n >= 0) {
-          s.llmIdleRetries = n;
-          await this.plugin.saveSettings();
-        }
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.historyLimit_name).setDesc(T.settings.historyLimit_desc).addText(
-      (t) => t.setValue(String(s.historyLimit)).onChange(async (v) => {
-        const n = Number(v);
-        if (Number.isFinite(n) && n > 0) {
-          s.historyLimit = Math.floor(n);
-          await this.plugin.saveSettings();
-        }
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.agentLog_name).setDesc(T.settings.agentLog_desc).addToggle(
-      (t) => t.setValue(eff.agentLogEnabled).onChange(async (v) => {
-        await this.patchLocal({ agentLogEnabled: v });
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.domains_heading).setHeading();
-    if (busy) {
-      containerEl.createEl("div", {
-        cls: "ai-wiki-settings-busy-banner"
-      }).createEl("span", { text: `\u26A0 ${T.settings.busyBanner}` });
-    }
-    const domains = this.cachedDomains;
-    if (domains.length === 0) {
-      containerEl.createEl("p", {
-        text: T.settings.domains_empty,
-        cls: "setting-item-description"
-      });
-    } else {
-      for (let i = 0; i < domains.length; i++) {
-        const d = domains[i];
-        new import_obsidian3.Setting(containerEl).setName(d.name || d.id).setDesc(d.id).addButton((b) => {
-          b.setButtonText(T.settings.editDomain).setDisabled(busy).onClick(() => {
-            new EditDomainModal(this.plugin.app, d, (updated) => {
-              void (async () => {
-                const cur = await this.plugin.domainStore.load();
-                const idx = cur.findIndex((x) => x.id === updated.id);
-                if (idx >= 0) cur[idx] = updated;
-                await this.plugin.domainStore.save(cur);
-                await this.refresh();
-              })();
-            }).open();
-          });
-        }).addButton((b) => {
-          b.setButtonText(T.settings.deleteDomain).setWarning().setDisabled(busy).onClick(() => {
-            new ConfirmModal(this.plugin.app, T.settings.confirmDeleteDomain(d.id), [], () => {
-              void (async () => {
-                new import_obsidian3.Notice(T.settings.domainDeleted(d.id));
-                const cur = await this.plugin.domainStore.load();
-                await this.plugin.domainStore.save(cur.filter((x) => x.id !== d.id));
-                await this.refresh();
-              })();
-            }).open();
-          });
-        });
-      }
-    }
-    new import_obsidian3.Setting(containerEl).setName(T.settings.h3_backend).setHeading();
-    if (!import_obsidian3.Platform.isMobile) {
-      new import_obsidian3.Setting(containerEl).setName(T.settings.backend_name).setDesc(T.settings.backend_desc).addDropdown((d) => {
-        let backendDd;
-        backendDd = d.addOption("claude-agent", T.settings.claudeCodeAgent).addOption("native-agent", T.settings.nativeAgent).setValue(eff.backend).onChange(async (v) => {
-          if (v === "claude-agent") {
-            backendDd.setValue(eff.backend);
-            new ShellConsentModal(this.plugin.app, this.localCache.iclaudePath, async () => {
-              await this.patchLocal({ shellConsentGiven: true, backend: "claude-agent" });
-              this.display();
-            }).open();
-            return;
-          }
-          await this.patchLocal({ backend: v });
-          this.display();
-        });
-        return d;
-      });
-    } else {
-      const p = containerEl.createEl("p", {
-        text: "Mobile: cloud LLM (native-agent) only. setup guide: ",
-        cls: "setting-item-description"
-      });
-      p.createEl("a", {
-        text: "ikeniborn/obsidian-llm-wiki \u2014 mobile-cloud-ollama.md",
-        href: "https://github.com/ikeniborn/obsidian-llm-wiki/blob/master/docs/mobile-cloud-ollama.md"
-      });
-    }
-    if (eff.backend === "claude-agent" && !import_obsidian3.Platform.isMobile) {
-      new import_obsidian3.Setting(containerEl).setName(T.settings.iclaudePath_name).setDesc(T.settings.iclaudePath_desc).addText(
-        (t) => t.setPlaceholder("/home/user/Documents/Project/iclaude/iclaude.sh").setValue(this.localCache.iclaudePath).onChange(async (v) => {
-          await this.patchLocal({ iclaudePath: v.trim() });
-        })
-      ).addButton((b) => {
-        b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").onClick(async () => {
-          b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430\u2026").setDisabled(true);
-          try {
-            await checkClaudeAvailability(this.localCache.iclaudePath);
-            new import_obsidian3.Notice("\u2705 Claude \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D");
-          } catch (e) {
-            new import_obsidian3.Notice(`\u274C ${e.message}`);
-          } finally {
-            b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").setDisabled(false);
-          }
-        });
-        return b;
-      });
-      if (!s.claudeAgent.perOperation) {
-        new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_claude).addText(
-          (t) => t.setPlaceholder("").setValue(eff.claudeAgent.model).onChange(async (v) => {
-            s.claudeAgent.model = v.trim();
-            await this.plugin.saveSettings();
-          })
-        );
-      }
-      new import_obsidian3.Setting(containerEl).setName(T.settings.allowedTools_name).setDesc(T.settings.allowedTools_desc).addText(
-        (t) => t.setPlaceholder("Bash,read,write").setValue(eff.claudeAgent.allowedTools).onChange(async (v) => {
-          s.claudeAgent.allowedTools = v.trim();
-          await this.plugin.saveSettings();
-        })
-      );
-      new import_obsidian3.Setting(containerEl).setName("Effort level").setDesc("\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u0440\u0430\u0437\u043C\u044B\u0448\u043B\u0435\u043D\u0438\u044F Claude (--effort). \u041F\u0443\u0441\u0442\u043E = \u0431\u0435\u0437 thinking. \u0412 per-op \u0440\u0435\u0436\u0438\u043C\u0435 \u2014 \u0433\u043B\u043E\u0431\u0430\u043B\u044C\u043D\u044B\u0439 fallback.").addDropdown((d) => {
-        d.addOption("", "\u041E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E");
-        for (const lv of ["low", "medium", "high", "xhigh", "max"]) d.addOption(lv, lv);
-        d.setValue(eff.claudeAgent.effort ?? "");
-        d.onChange(async (v) => {
-          s.claudeAgent.effort = v || void 0;
-          await this.plugin.saveSettings();
-        });
-        return d;
-      });
-      new import_obsidian3.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
-        (t) => t.setValue(s.claudeAgent.perOperation).onChange(async (v) => {
-          s.claudeAgent.perOperation = v;
-          await this.plugin.saveSettings();
-          this.display();
-        })
-      );
-      if (s.claudeAgent.perOperation) {
-        const ops = [
-          { key: "ingest", label: T.settings.op_ingest },
-          { key: "query", label: T.settings.op_query },
-          { key: "lint", label: T.settings.op_lint },
-          { key: "init", label: T.settings.op_init },
-          { key: "format", label: T.settings.op_format }
-        ];
-        for (const { key, label } of ops) {
-          new import_obsidian3.Setting(containerEl).setName(label).setHeading();
-          new import_obsidian3.Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc).addText(
-            (t) => t.setValue(s.claudeAgent.operations[key].model).onChange(async (v) => {
-              s.claudeAgent.operations[key].model = v.trim();
-              await this.plugin.saveSettings();
-            })
-          );
-          new import_obsidian3.Setting(containerEl).setName("Effort level").addDropdown((d) => {
-            d.addOption("", "\u0423\u043D\u0430\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u044C");
-            for (const lv of ["low", "medium", "high", "xhigh", "max"]) d.addOption(lv, lv);
-            d.setValue(s.claudeAgent.operations[key].effort ?? "");
-            d.onChange(async (v) => {
-              s.claudeAgent.operations[key].effort = v || void 0;
-              await this.plugin.saveSettings();
-            });
-            return d;
-          });
-        }
-      }
-    } else {
-      new import_obsidian3.Setting(containerEl).setName(T.settings.baseUrl_name).setDesc(T.settings.baseUrl_desc).addText(
-        (t) => t.setPlaceholder("").setValue(eff.nativeAgent.baseUrl).onChange(async (v) => {
-          s.nativeAgent.baseUrl = v.trim();
-          await this.plugin.saveSettings();
-        })
-      );
-      new import_obsidian3.Setting(containerEl).setName(T.settings.apiKey_name).setDesc(T.settings.apiKey_desc).addText(
-        (t) => t.setPlaceholder("Ollama").setValue(eff.nativeAgent.apiKey).onChange(async (v) => {
-          await this.patchLocalNativeApiKey(v.trim());
-        })
-      );
-      new import_obsidian3.Setting(containerEl).setName("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u0435").setDesc("\u041E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u0442 \u0442\u0435\u0441\u0442\u043E\u0432\u044B\u0439 \u043F\u0440\u043E\u043C\u043F\u0442 \u043A endpoint \u0434\u043B\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E\u0441\u0442\u0438.").addButton((b) => {
-        b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").onClick(async () => {
-          b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430\u2026").setDisabled(true);
-          const na = eff.nativeAgent;
-          try {
-            await checkNativeAvailability(na.baseUrl, na.apiKey, na.model);
-            new import_obsidian3.Notice("\u2705 \u041C\u043E\u0434\u0435\u043B\u044C \u043E\u0442\u0432\u0435\u0447\u0430\u0435\u0442");
-          } catch (e) {
-            new import_obsidian3.Notice(`\u274C ${e.message}`);
-          } finally {
-            b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").setDisabled(false);
-          }
-        });
-        return b;
-      });
-      if (!s.nativeAgent.perOperation) {
-        this.addModelControl(
-          new import_obsidian3.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
-          this._chatModels,
-          eff.nativeAgent.model,
-          async (v) => {
-            s.nativeAgent.model = v;
-            await this.plugin.saveSettings();
-          }
-        );
-        new import_obsidian3.Setting(containerEl).setName(T.settings.maxTokens_name).setDesc(T.settings.maxTokens_desc).addText(
-          (t) => t.setPlaceholder("4096").setValue(String(s.nativeAgent.maxTokens)).onChange(async (v) => {
-            const n = Number(v);
-            if (Number.isFinite(n) && n > 0) {
-              s.nativeAgent.maxTokens = Math.floor(n);
-              await this.plugin.saveSettings();
-            }
-          })
-        );
-        new import_obsidian3.Setting(containerEl).setName("Thinking budget tokens").setDesc("\u041C\u0430\u043A\u0441. \u0442\u043E\u043A\u0435\u043D\u044B \u0434\u043B\u044F \u0440\u0430\u0437\u043C\u044B\u0448\u043B\u0435\u043D\u0438\u044F. 0 \u0438\u043B\u0438 \u043F\u0443\u0441\u0442\u043E = \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E.").addText(
-          (t) => t.setPlaceholder("0").setValue(String(s.nativeAgent.thinkingBudgetTokens ?? 0)).onChange(async (v) => {
-            const n = Number(v);
-            s.nativeAgent.thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : void 0;
-            await this.plugin.saveSettings();
-          })
-        );
-        new import_obsidian3.Setting(containerEl).setName(T.settings.temperature_name).setDesc(T.settings.temperature_desc).addText(
-          (t) => t.setPlaceholder("0.2").setValue(String(eff.nativeAgent.temperature)).onChange(async (v) => {
-            const n = Number(v);
-            if (Number.isFinite(n) && n >= 0 && n <= 2) {
-              s.nativeAgent.temperature = n;
-              await this.plugin.saveSettings();
-            }
-          })
-        );
-      }
-      new import_obsidian3.Setting(containerEl).setName(T.settings.structuredRetries_name).setDesc(T.settings.structuredRetries_desc).addText(
-        (t) => t.setPlaceholder("1").setValue(String(s.nativeAgent.structuredRetries)).onChange(async (v) => {
-          const n = Number(v);
-          if (!Number.isFinite(n) || n < 0 || n > 3) return;
-          s.nativeAgent.structuredRetries = Math.floor(n);
-          await this.plugin.saveSettings();
-        })
-      );
-      new import_obsidian3.Setting(containerEl).setName(T.settings.wikiLinkValidationRetries_name).setDesc(T.settings.wikiLinkValidationRetries_desc).addText(
-        (t) => t.setPlaceholder("3").setValue(String(s.wikiLinkValidationRetries)).onChange(async (v) => {
-          const n = Number(v);
-          if (Number.isInteger(n) && n >= 0) {
-            s.wikiLinkValidationRetries = n;
-            await this.plugin.saveSettings();
-          }
-        })
-      );
-      if (!import_obsidian3.Platform.isMobile) {
-        new import_obsidian3.Setting(containerEl).setName("Per-operation models").setHeading();
-        new import_obsidian3.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
-          (t) => t.setValue(s.nativeAgent.perOperation).onChange(async (v) => {
-            s.nativeAgent.perOperation = v;
-            await this.plugin.saveSettings();
-            this.display();
-          })
-        );
-      }
-      if (s.nativeAgent.perOperation) {
-        const ops = [
-          { key: "ingest", label: T.settings.op_ingest },
-          { key: "query", label: T.settings.op_query },
-          { key: "lint", label: T.settings.op_lint },
-          { key: "init", label: T.settings.op_init },
-          { key: "format", label: T.settings.op_format }
-        ];
-        for (const { key, label } of ops) {
-          new import_obsidian3.Setting(containerEl).setName(label).setHeading();
-          this.addModelControl(
-            new import_obsidian3.Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc),
-            this._chatModels,
-            s.nativeAgent.operations[key].model,
-            async (v) => {
-              s.nativeAgent.operations[key].model = v;
-              await this.plugin.saveSettings();
-            }
-          );
-          new import_obsidian3.Setting(containerEl).setName(T.settings.opMaxTokens_name).setDesc(T.settings.opMaxTokens_desc).addText(
-            (t) => t.setValue(String(s.nativeAgent.operations[key].maxTokens)).onChange(async (v) => {
-              const n = Number(v);
-              if (Number.isFinite(n) && n > 0) {
-                s.nativeAgent.operations[key].maxTokens = Math.floor(n);
-                await this.plugin.saveSettings();
-              }
-            })
-          );
-          new import_obsidian3.Setting(containerEl).setName("Thinking budget tokens").addText(
-            (t) => t.setPlaceholder("0").setValue(String(s.nativeAgent.operations[key].thinkingBudgetTokens ?? 0)).onChange(async (v) => {
-              const n = Number(v);
-              s.nativeAgent.operations[key].thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : void 0;
-              await this.plugin.saveSettings();
-            })
-          );
-          new import_obsidian3.Setting(containerEl).setName(T.settings.opTemperature_name).setDesc(T.settings.opTemperature_desc).addText(
-            (t) => t.setValue(String(s.nativeAgent.operations[key].temperature)).onChange(async (v) => {
-              const n = Number(v);
-              if (Number.isFinite(n) && n >= 0 && n <= 2) {
-                s.nativeAgent.operations[key].temperature = n;
-                await this.plugin.saveSettings();
-              }
-            })
-          );
-        }
-      }
-      new import_obsidian3.Setting(containerEl).setName("Semantic Search").setHeading();
-      new import_obsidian3.Setting(containerEl).setName("Enable semantic similarity (embeddings)").setDesc("Use embedding vectors for relevant page selection. Requires native backend with an embeddings-capable model.").addToggle(
-        (t) => t.setValue(s.nativeAgent.embeddingModel !== void 0).onChange(async (v) => {
-          if (!v) {
-            s.nativeAgent.embeddingModel = void 0;
-            s.nativeAgent.embeddingDimensions = void 0;
-            await this.plugin.saveSettings();
-            this.display();
-          } else {
-            s.nativeAgent.embeddingModel = "";
-            await this.plugin.saveSettings();
-            this.display();
-          }
-        })
-      );
-      if (s.nativeAgent.embeddingModel !== void 0) {
-        new import_obsidian3.Setting(containerEl).setName("Relevant pages (top-K)").setDesc("Max wiki pages loaded per ingest call. Lower = faster, less context. Default: 15.").addText(
-          (t) => t.setPlaceholder("15").setValue(String(s.nativeAgent.relevantPagesTopK ?? 15)).onChange(async (v) => {
-            const n = Number(v);
-            if (Number.isFinite(n) && n > 0) {
-              s.nativeAgent.relevantPagesTopK = Math.floor(n);
-              await this.plugin.saveSettings();
-            }
-          })
-        );
-        const embModels = this._availableModels.filter((m) => /embed/i.test(m));
-        this.addModelControl(
-          new import_obsidian3.Setting(containerEl).setName("Embedding model").setDesc("Model name for embeddings, e.g. text-embedding-3-small"),
-          embModels,
-          s.nativeAgent.embeddingModel ?? "",
-          async (v) => {
-            s.nativeAgent.embeddingModel = v || void 0;
-            await this.plugin.saveSettings();
-          }
-        );
-        new import_obsidian3.Setting(containerEl).setName("Embedding dimensions").setDesc("Vector dimensions, e.g. 512 or 1536").addText(
-          (t) => t.setPlaceholder("512").setValue(String(s.nativeAgent.embeddingDimensions ?? "")).onChange(async (v) => {
-            const n = Number(v);
-            if (Number.isFinite(n) && n > 0) {
-              s.nativeAgent.embeddingDimensions = Math.floor(n);
-              await this.plugin.saveSettings();
-            }
-          })
-        );
-        new import_obsidian3.Setting(containerEl).setName(T.settings.mergeDeleteWarnThreshold_name).setDesc(T.settings.mergeDeleteWarnThreshold_desc).addSlider(
-          (sl) => sl.setLimits(1, 20, 1).setDynamicTooltip().setValue(s.nativeAgent.mergeDeleteWarnThreshold ?? 5).onChange(async (v) => {
-            s.nativeAgent.mergeDeleteWarnThreshold = v;
-            await this.plugin.saveSettings();
-          })
-        );
-      }
-    }
-    new import_obsidian3.Setting(containerEl).setName("Vision").setHeading();
-    new import_obsidian3.Setting(containerEl).setName("Enable vision analysis").setDesc("Analyse embedded images, PDFs, and Excalidraw files before formatting. Uses the same baseUrl and API key as the main backend.").addToggle(
-      (t) => t.setValue(s.vision.enabled).onChange(async (v) => {
-        s.vision.enabled = v;
-        await this.plugin.saveSettings();
-        this.display();
-      })
-    );
-    if (s.vision.enabled) {
-      this.addModelControl(
-        new import_obsidian3.Setting(containerEl).setName("Vision model").setDesc("Model name for vision calls, e.g. gpt-4o-mini or claude-3-haiku-20240307"),
-        this._chatModels,
-        s.vision.model,
-        async (v) => {
-          s.vision.model = v;
-          await this.plugin.saveSettings();
-        }
-      );
-      new import_obsidian3.Setting(containerEl).setName("Vision response language").setDesc("Language for image/PDF descriptions inserted into the note.").addDropdown(
-        (d) => d.addOptions({ auto: "Auto (match note language)", ru: "Russian", en: "English", es: "Spanish" }).setValue(s.vision.language ?? "auto").onChange(async (v) => {
-          s.vision.language = v;
-          await this.plugin.saveSettings();
-        })
-      );
-    }
-    new import_obsidian3.Setting(containerEl).setName(T.settings.h3_graph).setHeading();
-    new import_obsidian3.Setting(containerEl).setName(T.settings.graphDepth_name).setDesc(T.settings.graphDepth_desc).addText(
-      (t) => t.setPlaceholder("1").setValue(String(s.graphDepth)).onChange(async (v) => {
-        const n = Number(v);
-        if (Number.isInteger(n) && n >= 0 && n <= 3) {
-          s.graphDepth = n;
-          await this.plugin.saveSettings();
-        }
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.bfsTopK_name).setDesc(T.settings.bfsTopK_desc).addText(
-      (t) => t.setPlaceholder("10").setValue(String(s.bfsTopK)).onChange(async (v) => {
-        const n = Number(v);
-        if (Number.isInteger(n) && n >= 0) {
-          s.bfsTopK = n;
-          await this.plugin.saveSettings();
-        }
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.h3_jaccard).setHeading();
-    new import_obsidian3.Setting(containerEl).setName(T.settings.seedTopK_name).setDesc(T.settings.seedTopK_desc).addText(
-      (t) => t.setPlaceholder("5").setValue(String(s.seedTopK)).onChange(async (v) => {
-        const n = Number(v);
-        if (Number.isInteger(n) && n >= 1 && n <= 50) {
-          s.seedTopK = n;
-          await this.plugin.saveSettings();
-        }
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(T.settings.seedMinScore_name).setDesc(T.settings.seedMinScore_desc).addText(
-      (t) => t.setPlaceholder("0.1").setValue(String(s.seedMinScore)).onChange(async (v) => {
-        const n = Number(v);
-        if (Number.isFinite(n) && n >= 0 && n <= 1) {
-          s.seedMinScore = n;
-          await this.plugin.saveSettings();
-        }
-      })
-    );
-    if (eff.backend !== "claude-agent" && !import_obsidian3.Platform.isMobile) {
-      const proxy = eff.proxy;
-      new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
-      new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_enabled_name).setDesc(T.settings.proxy_enabled_desc).addToggle(
-        (t) => t.setValue(proxy.enabled).onChange(async (v) => {
-          await this.patchProxy({ enabled: v });
-          this.display();
-        })
-      );
-      if (proxy.enabled) {
-        new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_url_name).setDesc(T.settings.proxy_url_desc).addText(
-          (t) => t.setPlaceholder("http://proxy.example.com:8080").setValue(proxy.url).onChange(async (v) => {
-            await this.patchProxy({ url: v.trim() });
-          })
-        );
-        new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_username_name).setDesc(T.settings.proxy_username_desc).addText(
-          (t) => t.setValue(proxy.username ?? "").onChange(async (v) => {
-            await this.patchProxy({ username: v });
-          })
-        );
-        new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_password_name).setDesc(T.settings.proxy_password_desc).addText((t) => {
-          t.setValue(proxy.password ?? "").onChange(async (v) => {
-            await this.patchLocalProxyPassword(v);
-          });
-          t.inputEl.type = "password";
-        });
-        new import_obsidian3.Setting(containerEl).setName(T.settings.proxy_noProxy_name).setDesc(T.settings.proxy_noProxy_desc).addText(
-          (t) => t.setPlaceholder("localhost,127.0.0.1").setValue(proxy.noProxy ?? "").onChange(async (v) => {
-            await this.patchProxy({ noProxy: v.trim() });
-          })
-        );
-        containerEl.createEl("p", { text: T.settings.proxy_hint, cls: "setting-item-description" });
-      }
-    }
-    if (!import_obsidian3.Platform.isMobile) {
-      new import_obsidian3.Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
-      new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_enabled_name).setDesc(T.settings.devMode_enabled_desc).addToggle(
-        (t) => t.setValue(s.devMode.enabled).onChange(async (v) => {
-          s.devMode.enabled = v;
-          await this.plugin.saveSettings();
-          this.display();
-        })
-      );
-      if (s.devMode.enabled) {
-        new import_obsidian3.Setting(containerEl).setName(T.settings.devMode_evaluatorModel_name).setDesc(T.settings.devMode_evaluatorModel_desc).addText(
-          (t) => t.setPlaceholder("").setValue(s.devMode.evaluatorModel).onChange(async (v) => {
-            s.devMode.evaluatorModel = v.trim();
-            await this.plugin.saveSettings();
-          })
-        );
-      }
-    }
-    window.requestAnimationFrame(() => {
-      scrollEl.scrollTop = savedScroll;
-    });
-  }
-};
+// src/page-similarity.ts
+var import_obsidian3 = require("obsidian");
 
-// src/view.ts
-var import_obsidian5 = require("obsidian");
+// src/wiki-graph.ts
+var import_path_browserify = __toESM(require_path_browserify(), 1);
+function pageId(vaultPath) {
+  return (0, import_path_browserify.basename)(vaultPath, ".md");
+}
+function buildWikiGraph(pages) {
+  const graph = /* @__PURE__ */ new Map();
+  for (const vaultPath of pages.keys()) {
+    graph.set(pageId(vaultPath), /* @__PURE__ */ new Set());
+  }
+  for (const [vaultPath, content] of pages) {
+    const src = pageId(vaultPath);
+    for (const match of content.matchAll(/\[\[([^\]|#]+)/g)) {
+      const tgt = match[1].trim();
+      if (tgt) graph.get(src).add(tgt);
+    }
+  }
+  return graph;
+}
+function bfsExpand(seeds, graph, depth) {
+  if (seeds.length === 0) return /* @__PURE__ */ new Set();
+  const reverse = /* @__PURE__ */ new Map();
+  for (const [src, targets] of graph) {
+    for (const tgt of targets) {
+      if (!reverse.has(tgt)) reverse.set(tgt, /* @__PURE__ */ new Set());
+      reverse.get(tgt).add(src);
+    }
+  }
+  const visited = new Set(seeds);
+  let frontier = new Set(seeds);
+  for (let hop = 0; hop < depth; hop++) {
+    const next = /* @__PURE__ */ new Set();
+    for (const node of frontier) {
+      for (const neighbor of graph.get(node) ?? []) {
+        if (!visited.has(neighbor) && graph.has(neighbor)) {
+          visited.add(neighbor);
+          next.add(neighbor);
+        }
+      }
+      for (const neighbor of reverse.get(node) ?? []) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          next.add(neighbor);
+        }
+      }
+    }
+    if (next.size === 0) break;
+    frontier = next;
+  }
+  return visited;
+}
+async function bfsExpandRanked(seeds, graph, depth, pages, query, bfsTopK, annotations, similarity) {
+  const allBfs = bfsExpand(seeds, graph, depth);
+  const seedSet = new Set(seeds);
+  if (bfsTopK <= 0) return { selectedIds: allBfs, expandedScores: {} };
+  const nonSeeds = [...allBfs].filter((pid) => !seedSet.has(pid));
+  if (nonSeeds.length === 0) return { selectedIds: new Set(seedSet), expandedScores: {} };
+  const pidToPath = /* @__PURE__ */ new Map();
+  for (const vaultPath of pages.keys()) {
+    pidToPath.set(pageId(vaultPath), vaultPath);
+  }
+  const nonSeedPaths = nonSeeds.flatMap((pid) => {
+    const p = pidToPath.get(pid);
+    return p ? [p] : [];
+  });
+  if (similarity) {
+    try {
+      const scored2 = await similarity.selectRelevantScored(
+        query,
+        annotations ?? /* @__PURE__ */ new Map(),
+        nonSeedPaths
+      );
+      const top2 = scored2.slice(0, bfsTopK);
+      const expandedScores2 = {};
+      for (const { path: path2, score } of top2) expandedScores2[pageId(path2)] = score;
+      return { selectedIds: /* @__PURE__ */ new Set([...seedSet, ...Object.keys(expandedScores2)]), expandedScores: expandedScores2 };
+    } catch (err) {
+      console.warn("[bfsExpandRanked] similarity threw, returning full BFS:", err);
+      return { selectedIds: allBfs, expandedScores: {} };
+    }
+  }
+  const questionTokens = tokenize(query);
+  const scored = nonSeeds.map((pid) => {
+    const path2 = pidToPath.get(pid);
+    const content = path2 ? pages.get(path2) ?? "" : "";
+    return { pid, score: scoreSeed(questionTokens, pid, content) };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  const top = scored.slice(0, bfsTopK);
+  const expandedScores = {};
+  for (const { pid, score } of top) expandedScores[pid] = score;
+  return { selectedIds: /* @__PURE__ */ new Set([...seedSet, ...Object.keys(expandedScores)]), expandedScores };
+}
+function checkGraphStructure(graph) {
+  const inDegree = /* @__PURE__ */ new Map();
+  for (const node of graph.keys()) {
+    if (!inDegree.has(node)) inDegree.set(node, 0);
+    for (const tgt of graph.get(node)) {
+      inDegree.set(tgt, (inDegree.get(tgt) ?? 0) + 1);
+    }
+  }
+  const issues = [];
+  for (const [node, neighbors] of graph) {
+    const outDeg = neighbors.size;
+    const inDeg = inDegree.get(node) ?? 0;
+    if (inDeg === 0 && outDeg === 0) {
+      issues.push(`- ${node}: isolated node (no links in or out)`);
+    }
+    for (const tgt of neighbors) {
+      if (graph.has(tgt) && !graph.get(tgt).has(node)) {
+        issues.push(`- ${node} \u2192 [[${tgt}]] not reciprocated`);
+      }
+    }
+  }
+  return issues.join("\n");
+}
+
+// src/wiki-seeds.ts
+var STOP_WORDS = /* @__PURE__ */ new Set([
+  // EN
+  "the",
+  "and",
+  "for",
+  "are",
+  "was",
+  "were",
+  "with",
+  "that",
+  "this",
+  "from",
+  "have",
+  "has",
+  "had",
+  "but",
+  "not",
+  "you",
+  "your",
+  "our",
+  "their",
+  "his",
+  "her",
+  "its",
+  "into",
+  "about",
+  "what",
+  "which",
+  "when",
+  "where",
+  "how",
+  "here",
+  // RU
+  "\u0447\u0442\u043E",
+  "\u043A\u0430\u043A",
+  "\u0434\u043B\u044F",
+  "\u0438\u043B\u0438",
+  "\u044D\u0442\u043E",
+  "\u043F\u0440\u0438",
+  "\u0431\u0435\u0437",
+  "\u0442\u043E\u0442",
+  "\u0435\u0433\u043E",
+  "\u043E\u043D\u0430",
+  "\u043E\u043D\u0438",
+  "\u0431\u044B\u043B",
+  "\u0431\u044B\u043B\u0430",
+  "\u0431\u044B\u0442\u044C",
+  "\u0442\u043E\u0436\u0435",
+  "\u0442\u0430\u043A\u0436\u0435",
+  "\u0435\u0441\u043B\u0438",
+  "\u0442\u043E\u0433\u0434\u0430",
+  "\u043F\u043E\u0442\u043E\u043C",
+  "\u043A\u043E\u0433\u0434\u0430",
+  "\u043E\u0447\u0435\u043D\u044C",
+  "\u0431\u043E\u043B\u0435\u0435",
+  "\u043C\u0435\u043D\u0435\u0435",
+  "\u043D\u0435\u0442",
+  "\u0443\u0436\u0435",
+  "\u0435\u0449\u0451",
+  "\u0435\u0449\u0435"
+]);
+var BODY_CAP = 500;
+function tokenize(s) {
+  const out = /* @__PURE__ */ new Set();
+  if (!s) return out;
+  for (const raw of s.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
+    if (raw.length <= 2) continue;
+    if (STOP_WORDS.has(raw)) continue;
+    out.add(raw);
+  }
+  return out;
+}
+function bodyContent(content) {
+  const m = content.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)/);
+  return (m ? m[1] : content).slice(0, BODY_CAP);
+}
+function parseFmKeywords(content) {
+  const m = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!m) return /* @__PURE__ */ new Set();
+  const kw = m[1].match(/wiki_keywords:\s*\[(.*?)\]/);
+  if (!kw) return /* @__PURE__ */ new Set();
+  return new Set(kw[1].split(",").map((s) => s.trim().replace(/['"]/g, "").toLowerCase()));
+}
+function scoreSeed(questionTokens, pageIdValue, content, annotation) {
+  if (questionTokens.size === 0) return 0;
+  const p = tokenize(pageIdValue);
+  for (const t of parseFmKeywords(content)) p.add(t);
+  for (const t of tokenize(bodyContent(content))) p.add(t);
+  if (annotation) for (const t of tokenize(annotation)) p.add(t);
+  if (p.size === 0) return 0;
+  let inter = 0;
+  for (const t of questionTokens) if (p.has(t)) inter++;
+  return inter / questionTokens.size;
+}
+function selectSeeds(question, pages, topK, minScore, indexAnnotations) {
+  const q = tokenize(question);
+  if (q.size === 0) return [];
+  const scored = [];
+  for (const [path2, content] of pages) {
+    const id = pageId(path2);
+    const annotation = indexAnnotations?.get(id);
+    const score = scoreSeed(q, id, content, annotation);
+    if (score >= minScore && score > 0) scored.push({ id, score });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, topK);
+}
 
 // src/wiki-path.ts
 var WIKI_ROOT = "!Wiki";
@@ -28335,6 +27935,1322 @@ function domainLogPath(domainFolder) {
 function domainEmbeddingsPath(domainFolder) {
   return `${domainConfigDir(domainFolder)}/_embeddings.json`;
 }
+
+// src/rrf.ts
+function rrf(rankedLists, k = 60) {
+  const score = /* @__PURE__ */ new Map();
+  const firstSeen = /* @__PURE__ */ new Map();
+  let order = 0;
+  for (const list of rankedLists) {
+    for (let rank = 0; rank < list.length; rank++) {
+      const id = list[rank];
+      score.set(id, (score.get(id) ?? 0) + 1 / (k + rank + 1));
+      if (!firstSeen.has(id)) firstSeen.set(id, order++);
+    }
+  }
+  return [...score.entries()].map(([id, s]) => ({ id, score: s })).sort((a, b) => b.score - a.score || firstSeen.get(a.id) - firstSeen.get(b.id));
+}
+
+// src/page-similarity.ts
+var DEFAULT_CHUNKING = {
+  maxChars: 1200,
+  overlapChars: 200,
+  minChars: 200,
+  maxCount: 12
+};
+function encodeVector(v) {
+  const bytes = new Uint8Array(v.buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 8192)
+    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  return btoa(binary);
+}
+function decodeVector(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Float32Array(bytes.buffer);
+}
+function annotationHash(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = Math.imul(31, h) + s.charCodeAt(i) | 0;
+  }
+  return (h >>> 0).toString(36);
+}
+function stripFrontmatterAndTitle(body) {
+  const noFm = body.replace(/^---\n[\s\S]*?\n---\n?/, "").trimStart();
+  return noFm.replace(/^#\s+[^\n]*\n?/, "");
+}
+function toUnits(text) {
+  const lines = text.split("\n");
+  const units = [];
+  let cur = null;
+  for (const line of lines) {
+    if (/^##\s+/.test(line)) {
+      if (cur) units.push(cur);
+      cur = { heading: line.trim(), body: "" };
+    } else if (!cur) {
+      cur = { heading: "", body: line + "\n" };
+    } else {
+      cur.body += line + "\n";
+    }
+  }
+  if (cur) units.push(cur);
+  return units.map((u) => ({ heading: u.heading, body: u.body.trim() })).filter((u) => u.heading.length > 0 || u.body.length > 0);
+}
+function unitLen(u) {
+  return u.heading.length + u.body.length;
+}
+function mergeShort(units, minChars) {
+  const out = [];
+  for (const u of units) {
+    const prev = out.length > 0 ? out[out.length - 1] : null;
+    if (unitLen(u) < minChars && prev !== null && prev.heading.length > 0 && unitLen(prev) >= minChars) {
+      prev.body = `${prev.body}
+
+${u.heading} ${u.body}`.trim();
+    } else {
+      out.push({ heading: u.heading, body: u.body });
+    }
+  }
+  return out;
+}
+function windowUnit(u, maxChars, overlapChars) {
+  const text = u.body;
+  if (text.length <= maxChars) return [{ heading: u.heading, window: text }];
+  const windows = [];
+  const step = Math.max(1, maxChars - overlapChars);
+  for (let i = 0; i < text.length; i += step) {
+    windows.push({ heading: u.heading, window: text.slice(i, i + maxChars) });
+    if (i + maxChars >= text.length) break;
+  }
+  return windows;
+}
+function splitSections(body, chunking) {
+  const stripped = stripFrontmatterAndTitle(body).trim();
+  if (!stripped) return [];
+  const merged = mergeShort(toUnits(stripped), chunking.minChars);
+  let windows = [];
+  for (const u of merged) {
+    windows.push(...windowUnit(u, chunking.maxChars, chunking.overlapChars));
+  }
+  if (windows.length === 0) return [];
+  if (windows.length > chunking.maxCount) {
+    const kept = windows.slice(0, chunking.maxCount - 1);
+    const foldedCount = windows.length - kept.length;
+    const foldedBody = windows.slice(chunking.maxCount - 1).map((w) => `${w.heading} ${w.window}`).join("\n\n").slice(0, chunking.maxChars);
+    kept.push({ heading: `## (+${foldedCount} sections folded)`, window: foldedBody });
+    windows = kept;
+  }
+  return windows;
+}
+function buildChunkInputs(annotation, body, chunking) {
+  const inputs = [
+    { kind: "summary", embedText: annotation, hash: annotationHash(annotation) }
+  ];
+  for (const { heading, window: window2 } of splitSections(body, chunking)) {
+    const embedText = `${annotation}
+
+${heading}
+${window2}`;
+    inputs.push({ kind: "section", embedText, hash: annotationHash(embedText) });
+  }
+  return inputs;
+}
+function jaccardCoeff(a, b) {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  for (const t of a) if (b.has(t)) inter++;
+  const union = a.size + b.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+function cosine(a, b) {
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  const denom = Math.sqrt(na) * Math.sqrt(nb);
+  return denom === 0 ? 0 : dot / denom;
+}
+function maxCosine(query, vecs) {
+  let best = 0;
+  for (const v of vecs) {
+    if (v.length === 0) continue;
+    const c = cosine(query, v);
+    if (c > best) best = c;
+  }
+  return best;
+}
+var EMBEDDING_BATCH_SIZE = 100;
+var RRF_CANDIDATE_POOL = 50;
+async function fetchEmbeddings(baseUrl, apiKey, model, inputs) {
+  const url = `${baseUrl.replace(/\/$/, "")}/embeddings`;
+  const resp = await (0, import_obsidian3.requestUrl)({
+    url,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({ model, input: inputs }),
+    throw: false
+  });
+  if (resp.status >= 400) throw new Error(`Embedding API error: ${resp.status}`);
+  const json = JSON.parse(resp.text);
+  return json.data.map((d) => new Float32Array(d.embedding));
+}
+function entityKey(e) {
+  return `${e.name}::${e.type ?? ""}`;
+}
+function entityQuery(e) {
+  return [e.name, e.type, e.context_snippet].filter(Boolean).join(" \u2014 ");
+}
+var PageSimilarityService = class {
+  constructor(config) {
+    this.config = config;
+  }
+  config;
+  cache = null;
+  // Corpus for jaccard-mode dedup scoring (pid -> annotation). Set by the caller
+  // (Ingest) which already holds the index annotations; also settable in tests.
+  jaccardCorpus = /* @__PURE__ */ new Map();
+  setJaccardCorpus(corpus) {
+    this.jaccardCorpus = corpus;
+  }
+  setCacheForTest(cache) {
+    this.cache = cache;
+  }
+  /**
+   * All unordered page pairs whose max-pool cosine ≥ threshold. Embedding-only (uses the
+   * loaded cache). Skips entirely when the page count exceeds maxPages (cost guard);
+   * the caller logs skippedPageCount.
+   */
+  pairwiseNearDuplicates(threshold, maxPages) {
+    if (!this.cache) return { pairs: [], skippedPageCount: 0 };
+    const pids = Object.keys(this.cache.entries);
+    if (pids.length > maxPages) return { pairs: [], skippedPageCount: pids.length };
+    const vecs = new Map(
+      pids.map((pid) => [pid, this.cache.entries[pid].chunks.map((c) => decodeVector(c.vector))])
+    );
+    const pairs = [];
+    for (let i = 0; i < pids.length; i++) {
+      for (let j = i + 1; j < pids.length; j++) {
+        const va = vecs.get(pids[i]), vb = vecs.get(pids[j]);
+        let best = 0;
+        for (const x of va) for (const y of vb) {
+          const c = cosine(x, y);
+          if (c > best) best = c;
+        }
+        if (best >= threshold) pairs.push({ a: pids[i], b: pids[j], score: best });
+      }
+    }
+    pairs.sort((p, q) => q.score - p.score);
+    return { pairs, skippedPageCount: 0 };
+  }
+  /**
+   * Max similarity of `candidateText` to any existing page, excluding `excludePids`.
+   * embedding/hybrid: max-pool cosine over the loaded cache. jaccard: Jaccard coefficient
+   * over the supplied corpus. Returns { pid:"", score:0 } when nothing scores or on embed failure.
+   */
+  async maxSimilarityToExisting(candidateText, excludePids) {
+    if (this.config.mode === "jaccard") {
+      const cand = tokenize(candidateText);
+      let best2 = { pid: "", score: 0 };
+      for (const [pid, annotation] of this.jaccardCorpus) {
+        if (excludePids.has(pid)) continue;
+        const score = jaccardCoeff(cand, tokenize(annotation));
+        if (score > best2.score) best2 = { pid, score };
+      }
+      return best2;
+    }
+    const { baseUrl, apiKey, model } = this.config;
+    if (!this.cache || !baseUrl || !model) return { pid: "", score: 0 };
+    let candVec;
+    try {
+      [candVec] = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [candidateText.slice(0, 2e3)]);
+    } catch {
+      return { pid: "", score: 0 };
+    }
+    let best = { pid: "", score: 0 };
+    for (const [pid, entry] of Object.entries(this.cache.entries)) {
+      if (excludePids.has(pid)) continue;
+      const vecs = entry.chunks.map((c) => decodeVector(c.vector));
+      const score = maxCosine(candVec, vecs);
+      if (score > best.score) best = { pid, score };
+    }
+    return best;
+  }
+  async selectRelevant(sourceContent, indexAnnotations, allPaths) {
+    const queryTokens = tokenize(sourceContent);
+    if (queryTokens.size === 0) return [];
+    if (this.config.mode === "jaccard") {
+      return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
+    }
+    if (this.config.mode === "hybrid") {
+      return (await this.selectHybridScored(sourceContent, indexAnnotations, allPaths, queryTokens)).map((x) => x.path);
+    }
+    return this.selectEmbedding(sourceContent, indexAnnotations, allPaths, queryTokens);
+  }
+  async selectRelevantScored(sourceContent, indexAnnotations, allPaths) {
+    const queryTokens = tokenize(sourceContent);
+    if (queryTokens.size === 0) return [];
+    if (this.config.mode === "jaccard") {
+      return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths);
+    }
+    if (this.config.mode === "hybrid") {
+      return this.selectHybridScored(sourceContent, indexAnnotations, allPaths, queryTokens);
+    }
+    return this.selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens);
+  }
+  async selectByEntities(entities, indexAnnotations, allPaths) {
+    if (entities.length === 0) return { results: /* @__PURE__ */ new Map(), allFailed: false };
+    if (this.config.mode === "jaccard") {
+      return this.jaccardFallbackAll(entities, indexAnnotations, allPaths);
+    }
+    return this.selectByEntitiesEmbedding(entities, indexAnnotations, allPaths);
+  }
+  scoreJaccardOnce(queryTokens, indexAnnotations, allPaths) {
+    if (queryTokens.size === 0) return [];
+    const scored = [];
+    for (const path2 of allPaths) {
+      const pid = pageId(path2);
+      const annotation = indexAnnotations.get(pid);
+      if (!annotation) continue;
+      const score = scoreSeed(queryTokens, pid, "", annotation);
+      if (score > 0) scored.push({ path: path2, score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, this.config.topK).map((x) => x.path);
+  }
+  jaccardFallbackAll(entities, indexAnnotations, allPaths) {
+    const results = /* @__PURE__ */ new Map();
+    let anySuccess = false;
+    for (const e of entities) {
+      const top = this.scoreJaccardOnce(tokenize(entityQuery(e)), indexAnnotations, allPaths);
+      results.set(entityKey(e), top);
+      if (indexAnnotations.size > 0) anySuccess = true;
+    }
+    return { results, allFailed: allPaths.length > 0 && !anySuccess };
+  }
+  async selectByEntitiesEmbedding(entities, indexAnnotations, allPaths) {
+    const { baseUrl, apiKey, model, topK } = this.config;
+    const results = /* @__PURE__ */ new Map();
+    if (!baseUrl || !model || !apiKey) {
+      return this.jaccardFallbackAll(entities, indexAnnotations, allPaths);
+    }
+    let entityVecs;
+    try {
+      entityVecs = await fetchEmbeddings(baseUrl, apiKey, model, entities.map(entityQuery));
+    } catch {
+      return this.jaccardFallbackAll(entities, indexAnnotations, allPaths);
+    }
+    const pids = allPaths.map((p) => pageId(p));
+    const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
+    const pageVecs = /* @__PURE__ */ new Map();
+    if (this.cache && this.cache.model === model) {
+      for (let i = 0; i < pids.length; i++) {
+        const entry = this.cache.entries[pids[i]];
+        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
+      }
+    }
+    const batches = [];
+    let cur = { pids: [], texts: [] };
+    for (let i = 0; i < pids.length; i++) {
+      if (!annotations[i]) continue;
+      if (pageVecs.has(pids[i])) continue;
+      cur.pids.push(pids[i]);
+      cur.texts.push(annotations[i]);
+      if (cur.pids.length >= EMBEDDING_BATCH_SIZE) {
+        batches.push(cur);
+        cur = { pids: [], texts: [] };
+      }
+    }
+    if (cur.pids.length > 0) batches.push(cur);
+    for (const batch of batches) {
+      try {
+        const vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
+        for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], [vecs[i]]);
+      } catch {
+        for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], []);
+      }
+    }
+    let anySuccess = false;
+    for (let ei = 0; ei < entities.length; ei++) {
+      const e = entities[ei];
+      const queryVec = entityVecs[ei];
+      const queryTokens = tokenize(entityQuery(e));
+      const scored = [];
+      for (let pi = 0; pi < allPaths.length; pi++) {
+        const pid = pids[pi];
+        const vecs = pageVecs.get(pid);
+        if (!vecs) continue;
+        const score = vecs.length === 0 ? scoreSeed(queryTokens, pid, "", annotations[pi]) : maxCosine(queryVec, vecs);
+        if (score > 0) scored.push({ path: allPaths[pi], score });
+      }
+      scored.sort((a, b) => b.score - a.score);
+      const top = scored.slice(0, topK).map((x) => x.path);
+      results.set(entityKey(e), top);
+      if (indexAnnotations.size > 0) anySuccess = true;
+    }
+    return { results, allFailed: allPaths.length > 0 && !anySuccess };
+  }
+  selectJaccard(queryTokens, indexAnnotations, allPaths) {
+    const scored = [];
+    for (const path2 of allPaths) {
+      const pid = pageId(path2);
+      const annotation = indexAnnotations.get(pid);
+      if (!annotation) continue;
+      const score = scoreSeed(queryTokens, pid, "", annotation);
+      if (score > 0) scored.push({ path: path2, score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, this.config.topK).map((x) => x.path);
+  }
+  async selectEmbedding(sourceContent, indexAnnotations, allPaths, queryTokens) {
+    const { baseUrl, apiKey, model, topK } = this.config;
+    if (!baseUrl || !model) {
+      return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
+    }
+    let queryVec;
+    try {
+      const truncated = sourceContent.slice(0, 2e3);
+      [queryVec] = await fetchEmbeddings(baseUrl, apiKey, model, [truncated]);
+    } catch {
+      return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
+    }
+    const pids = allPaths.map((p) => pageId(p));
+    const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
+    const pageVecs = /* @__PURE__ */ new Map();
+    if (this.cache && this.cache.model === model) {
+      for (let i = 0; i < pids.length; i++) {
+        const entry = this.cache.entries[pids[i]];
+        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
+      }
+    }
+    const batches = [];
+    let cur = { pids: [], texts: [] };
+    for (let i = 0; i < pids.length; i++) {
+      if (!annotations[i]) continue;
+      if (pageVecs.has(pids[i])) continue;
+      cur.pids.push(pids[i]);
+      cur.texts.push(annotations[i]);
+      if (cur.pids.length >= EMBEDDING_BATCH_SIZE) {
+        batches.push(cur);
+        cur = { pids: [], texts: [] };
+      }
+    }
+    if (cur.pids.length > 0) batches.push(cur);
+    for (const batch of batches) {
+      let vecs;
+      try {
+        vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
+      } catch {
+        for (const pid of batch.pids) {
+          const annotation = indexAnnotations.get(pid) ?? "";
+          const score = scoreSeed(queryTokens, pid, "", annotation);
+          if (score > 0) pageVecs.set(pid, []);
+        }
+        continue;
+      }
+      for (let i = 0; i < batch.pids.length; i++) {
+        pageVecs.set(batch.pids[i], [vecs[i]]);
+      }
+    }
+    const scored = [];
+    for (let i = 0; i < allPaths.length; i++) {
+      const pid = pids[i];
+      const vecs = pageVecs.get(pid);
+      if (!vecs) continue;
+      const score = vecs.length === 0 ? scoreSeed(queryTokens, pid, "", annotations[i]) : maxCosine(queryVec, vecs);
+      if (score > 0) scored.push({ path: allPaths[i], score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, topK).map((x) => x.path);
+  }
+  selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2 = this.config.topK) {
+    const scored = [];
+    for (const path2 of allPaths) {
+      const pid = pageId(path2);
+      const annotation = indexAnnotations.get(pid);
+      if (!annotation) continue;
+      const score = scoreSeed(queryTokens, pid, "", annotation);
+      if (score > 0) scored.push({ path: path2, score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, limit2);
+  }
+  async selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens, limit2 = this.config.topK) {
+    const { baseUrl, apiKey, model } = this.config;
+    if (!baseUrl || !model) {
+      return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2);
+    }
+    let queryVec;
+    try {
+      const truncated = sourceContent.slice(0, 2e3);
+      [queryVec] = await fetchEmbeddings(baseUrl, apiKey, model, [truncated]);
+    } catch {
+      return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2);
+    }
+    const pids = allPaths.map((p) => pageId(p));
+    const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
+    const pageVecs = /* @__PURE__ */ new Map();
+    if (this.cache && this.cache.model === model) {
+      for (let i = 0; i < pids.length; i++) {
+        const entry = this.cache.entries[pids[i]];
+        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
+      }
+    }
+    const batches = [];
+    let cur = { pids: [], texts: [] };
+    for (let i = 0; i < pids.length; i++) {
+      if (!annotations[i] || pageVecs.has(pids[i])) continue;
+      cur.pids.push(pids[i]);
+      cur.texts.push(annotations[i]);
+      if (cur.pids.length >= EMBEDDING_BATCH_SIZE) {
+        batches.push(cur);
+        cur = { pids: [], texts: [] };
+      }
+    }
+    if (cur.pids.length > 0) batches.push(cur);
+    for (const batch of batches) {
+      try {
+        const vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
+        for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], [vecs[i]]);
+      } catch {
+        for (const pid of batch.pids) pageVecs.set(pid, []);
+      }
+    }
+    const scored = [];
+    for (let i = 0; i < allPaths.length; i++) {
+      const pid = pids[i];
+      const vecs = pageVecs.get(pid);
+      if (!vecs) continue;
+      const score = vecs.length === 0 ? scoreSeed(queryTokens, pid, "", annotations[i]) : maxCosine(queryVec, vecs);
+      if (score > 0) scored.push({ path: allPaths[i], score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, limit2);
+  }
+  async selectHybridScored(sourceContent, indexAnnotations, allPaths, queryTokens) {
+    const pool = Math.max(this.config.topK, RRF_CANDIDATE_POOL);
+    const [dense, sparse] = await Promise.all([
+      this.selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens, pool),
+      Promise.resolve(this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, pool))
+    ]);
+    const fused = rrf([dense.map((x) => x.path), sparse.map((x) => x.path)], this.config.rrfK ?? 60);
+    return fused.slice(0, this.config.topK).map((f) => ({ path: f.id, score: f.score }));
+  }
+  async loadCache(domainRoot, vaultTools) {
+    if (this.config.mode === "jaccard") return;
+    if (this.cache) return;
+    const { model, dimensions } = this.config;
+    if (!model || !dimensions) return;
+    try {
+      const raw = await vaultTools.read(domainEmbeddingsPath(domainRoot));
+      const parsed = JSON.parse(raw);
+      if (parsed.version === 2 && parsed.model === model && parsed.dimensions === dimensions) {
+        this.cache = parsed;
+      }
+    } catch {
+    }
+  }
+  async refreshCache(domainRoot, vaultTools, indexAnnotations, pageBodies) {
+    if (this.config.mode !== "embedding") return { updated: 0 };
+    const { baseUrl, apiKey, model, dimensions } = this.config;
+    if (!baseUrl || !model || !dimensions) return { updated: 0 };
+    const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
+    const cachePath = domainEmbeddingsPath(domainRoot);
+    let cacheFile;
+    try {
+      const parsed = JSON.parse(await vaultTools.read(cachePath));
+      cacheFile = parsed.version === 2 && parsed.model === model && parsed.dimensions === dimensions ? parsed : { version: 2, model, dimensions, entries: {} };
+    } catch {
+      cacheFile = { version: 2, model, dimensions, entries: {} };
+    }
+    const desired = /* @__PURE__ */ new Map();
+    const pending = [];
+    let changed = false;
+    for (const [pid, annotation] of indexAnnotations) {
+      if (!pageBodies.has(pid) && cacheFile.entries[pid]) {
+        desired.set(pid, cacheFile.entries[pid].chunks);
+        continue;
+      }
+      const body = pageBodies.get(pid) ?? "";
+      const inputs = buildChunkInputs(annotation, body, chunking);
+      const oldByHash = new Map(
+        (cacheFile.entries[pid]?.chunks ?? []).map((c) => [c.hash, c.vector])
+      );
+      const chunks = [];
+      for (const { kind, embedText, hash } of inputs) {
+        const reuse = oldByHash.get(hash);
+        if (reuse !== void 0) {
+          chunks.push({ vector: reuse, hash, kind });
+        } else {
+          pending.push({ pid, idx: chunks.length, embedText });
+          chunks.push({ vector: "", hash, kind });
+        }
+      }
+      if ((cacheFile.entries[pid]?.chunks.length ?? 0) !== chunks.length) changed = true;
+      desired.set(pid, chunks);
+    }
+    for (let i = 0; i < pending.length; i += EMBEDDING_BATCH_SIZE) {
+      const batch = pending.slice(i, i + EMBEDDING_BATCH_SIZE);
+      let vecs;
+      try {
+        vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.map((p) => p.embedText));
+      } catch {
+        continue;
+      }
+      for (let j = 0; j < batch.length; j++) {
+        if (vecs[j]) desired.get(batch[j].pid)[batch[j].idx].vector = encodeVector(vecs[j]);
+      }
+    }
+    if (pending.length === 0 && !changed) return { updated: 0 };
+    for (const [pid, chunks] of desired) {
+      const filled = chunks.filter((c) => c.vector !== "");
+      if (filled.length > 0) cacheFile.entries[pid] = { chunks: filled };
+    }
+    await vaultTools.write(cachePath, JSON.stringify(cacheFile, null, 2));
+    this.cache = cacheFile;
+    return { updated: pending.length };
+  }
+};
+
+// src/settings.ts
+async function checkClaudeAvailability(iclaudePath) {
+  const { access, constants } = require("node:fs/promises");
+  await access(iclaudePath, constants.X_OK);
+}
+async function checkNativeAvailability(baseUrl, apiKey, model) {
+  let timerId;
+  const timeoutP = new Promise((_, rej) => {
+    timerId = window.setTimeout(() => rej(new DOMException("Request timed out", "AbortError")), 3e4);
+  });
+  try {
+    const resp = await Promise.race([
+      (0, import_obsidian4.requestUrl)({
+        url: `${baseUrl.replace(/\/$/, "")}/chat/completions`,
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, messages: [{ role: "user", content: "\u041F\u0440\u0438\u0432\u0435\u0442, AI Wiki! \u041F\u043E\u0440\u0430\u0431\u043E\u0442\u0430\u0435\u043C?" }], max_tokens: 50, stream: false }),
+        throw: false
+      }),
+      timeoutP
+    ]);
+    if (resp.status >= 400) throw new Error(`HTTP ${resp.status}`);
+  } finally {
+    if (timerId !== void 0) window.clearTimeout(timerId);
+  }
+}
+function parseTimeoutString(v) {
+  const parts = v.split("/").map((x) => Number(x.trim()));
+  if (parts.length === 5 && parts.every((n) => Number.isFinite(n) && n >= 0)) {
+    return { ingest: parts[0], query: parts[1], lint: parts[2], init: parts[3], format: parts[4] };
+  }
+  return null;
+}
+var ModelInputSuggest = class extends import_obsidian4.AbstractInputSuggest {
+  constructor(app, input, getModels, onPick) {
+    super(app, input);
+    this.getModels = getModels;
+    this.onPick = onPick;
+    this.onSelect((model) => {
+      this.setValue(model);
+      onPick(model);
+      this.close();
+    });
+  }
+  getModels;
+  onPick;
+  getSuggestions(query) {
+    const q = query.toLowerCase();
+    return this.getModels().filter((m) => m.toLowerCase().includes(q)).slice(0, 10);
+  }
+  renderSuggestion(model, el) {
+    el.setText(model);
+  }
+};
+var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
+  constructor(app, plugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+  plugin;
+  cachedDomains = [];
+  localCache = { iclaudePath: "" };
+  _availableModels = [];
+  display() {
+    void this.refresh();
+  }
+  async refresh() {
+    try {
+      this.cachedDomains = await this.plugin.domainStore.load();
+    } catch (e) {
+      this.cachedDomains = [];
+      new import_obsidian4.Notice(`Domain map load failed: ${e.message}`);
+    }
+    this.localCache = await this.plugin.localConfigStore.load();
+    this.render();
+  }
+  async patchLocal(patch) {
+    this.localCache = { ...this.localCache, ...patch };
+    await this.plugin.localConfigStore.save(patch);
+  }
+  async patchLocalNativeApiKey(apiKey) {
+    await this.patchLocal({ nativeAgent: { apiKey } });
+  }
+  async patchLocalProxyPassword(password) {
+    const cur = this.localCache.proxy ?? {};
+    await this.patchLocal({ proxy: { ...cur, password } });
+  }
+  async patchProxy(patch) {
+    this.plugin.settings.proxy = { ...this.plugin.settings.proxy ?? { enabled: false, url: "" }, ...patch };
+    await this.plugin.saveSettings();
+  }
+  async fetchModels() {
+    const na = this.plugin.settings.nativeAgent;
+    if (!na.baseUrl) {
+      new import_obsidian4.Notice("Set Base URL first");
+      return;
+    }
+    const url = `${na.baseUrl.replace(/\/$/, "")}/models`;
+    try {
+      const resp = await (0, import_obsidian4.requestUrl)({
+        url,
+        headers: { Authorization: `Bearer ${this.localCache.nativeAgent?.apiKey ?? ""}` },
+        throw: false
+      });
+      if (resp.status >= 400) throw new Error(`${resp.status}`);
+      const json = JSON.parse(resp.text);
+      this._availableModels = json.data.map((m) => m.id).sort();
+      this.display();
+    } catch (e) {
+      new import_obsidian4.Notice(`Failed to fetch models: ${e.message}`);
+    }
+  }
+  addModelControl(s, currentValue, onChange) {
+    s.addButton(
+      (b) => b.setIcon("refresh-cw").setTooltip("Fetch available models from base URL").onClick(() => {
+        void this.fetchModels();
+      })
+    );
+    s.addText((t) => {
+      t.setPlaceholder("Type to search models\u2026").setValue(currentValue);
+      t.inputEl.addEventListener("focus", () => {
+        if (this._availableModels.length === 0) void this.fetchModels();
+      });
+      new ModelInputSuggest(this.app, t.inputEl, () => this._availableModels, (v) => {
+        void onChange(v);
+      });
+    });
+  }
+  render() {
+    const { containerEl } = this;
+    const scrollEl = containerEl.closest(".vertical-tab-content") ?? containerEl.closest(".modal-content") ?? containerEl.parentElement ?? containerEl;
+    const savedScroll = scrollEl.scrollTop;
+    containerEl.empty();
+    const s = this.plugin.settings;
+    const eff = resolveEffective(s, this.localCache);
+    const T = i18n();
+    const busy = this.plugin.controller.running;
+    new import_obsidian4.Setting(containerEl).setName(T.settings.h3_general).setHeading();
+    new import_obsidian4.Setting(containerEl).setName(T.settings.systemPrompt_name).setDesc(T.settings.systemPrompt_desc).addTextArea((t) => {
+      t.inputEl.addClass("ai-wiki-settings-textarea");
+      t.setValue(s.systemPrompt).onChange(async (v) => {
+        s.systemPrompt = v;
+        await this.plugin.saveSettings();
+      });
+      return t;
+    });
+    new import_obsidian4.Setting(containerEl).setName(T.settings.timeouts_name).setDesc(T.settings.timeouts_desc).addText(
+      (t) => t.setValue(`${s.timeouts.ingest}/${s.timeouts.query}/${s.timeouts.lint}/${s.timeouts.init}/${s.timeouts.format}`).onChange(async (v) => {
+        const parsed = parseTimeoutString(v);
+        if (parsed) {
+          s.timeouts = { ...s.timeouts, ...parsed };
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian4.Setting(containerEl).setName(T.settings.llmIdleTimeout_name).setDesc(T.settings.llmIdleTimeout_desc).addText(
+      (t) => t.setPlaceholder("300").setValue(String(s.llmIdleTimeoutSec)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isFinite(n) && n >= 0) {
+          s.llmIdleTimeoutSec = Math.floor(n);
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian4.Setting(containerEl).setName(T.settings.llmIdleRetries_name).setDesc(T.settings.llmIdleRetries_desc).addText(
+      (t) => t.setPlaceholder("3").setValue(String(s.llmIdleRetries)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isInteger(n) && n >= 0) {
+          s.llmIdleRetries = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian4.Setting(containerEl).setName(T.settings.historyLimit_name).setDesc(T.settings.historyLimit_desc).addText(
+      (t) => t.setValue(String(s.historyLimit)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isFinite(n) && n > 0) {
+          s.historyLimit = Math.floor(n);
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian4.Setting(containerEl).setName(T.settings.agentLog_name).setDesc(T.settings.agentLog_desc).addToggle(
+      (t) => t.setValue(eff.agentLogEnabled).onChange(async (v) => {
+        await this.patchLocal({ agentLogEnabled: v });
+      })
+    );
+    new import_obsidian4.Setting(containerEl).setName(T.settings.domains_heading).setHeading();
+    if (busy) {
+      containerEl.createEl("div", {
+        cls: "ai-wiki-settings-busy-banner"
+      }).createEl("span", { text: `\u26A0 ${T.settings.busyBanner}` });
+    }
+    const domains = this.cachedDomains;
+    if (domains.length === 0) {
+      containerEl.createEl("p", {
+        text: T.settings.domains_empty,
+        cls: "setting-item-description"
+      });
+    } else {
+      for (let i = 0; i < domains.length; i++) {
+        const d = domains[i];
+        new import_obsidian4.Setting(containerEl).setName(d.name || d.id).setDesc(d.id).addButton((b) => {
+          b.setButtonText(T.settings.editDomain).setDisabled(busy).onClick(() => {
+            new EditDomainModal(this.plugin.app, d, (updated) => {
+              void (async () => {
+                const cur = await this.plugin.domainStore.load();
+                const idx = cur.findIndex((x) => x.id === updated.id);
+                if (idx >= 0) cur[idx] = updated;
+                await this.plugin.domainStore.save(cur);
+                await this.refresh();
+              })();
+            }).open();
+          });
+        }).addButton((b) => {
+          b.setButtonText(T.settings.deleteDomain).setWarning().setDisabled(busy).onClick(() => {
+            new ConfirmModal(this.plugin.app, T.settings.confirmDeleteDomain(d.id), [], () => {
+              void (async () => {
+                new import_obsidian4.Notice(T.settings.domainDeleted(d.id));
+                const cur = await this.plugin.domainStore.load();
+                await this.plugin.domainStore.save(cur.filter((x) => x.id !== d.id));
+                await this.refresh();
+              })();
+            }).open();
+          });
+        });
+      }
+    }
+    new import_obsidian4.Setting(containerEl).setName(T.settings.h3_backend).setHeading();
+    if (!import_obsidian4.Platform.isMobile) {
+      new import_obsidian4.Setting(containerEl).setName(T.settings.backend_name).setDesc(T.settings.backend_desc).addDropdown((d) => {
+        let backendDd;
+        backendDd = d.addOption("claude-agent", T.settings.claudeCodeAgent).addOption("native-agent", T.settings.nativeAgent).setValue(eff.backend).onChange(async (v) => {
+          if (v === "claude-agent") {
+            backendDd.setValue(eff.backend);
+            new ShellConsentModal(this.plugin.app, this.localCache.iclaudePath, async () => {
+              await this.patchLocal({ shellConsentGiven: true, backend: "claude-agent" });
+              this.display();
+            }).open();
+            return;
+          }
+          await this.patchLocal({ backend: v });
+          this.display();
+        });
+        return d;
+      });
+    } else {
+      const p = containerEl.createEl("p", {
+        text: "Mobile: cloud LLM (native-agent) only. setup guide: ",
+        cls: "setting-item-description"
+      });
+      p.createEl("a", {
+        text: "ikeniborn/obsidian-llm-wiki \u2014 mobile-cloud-ollama.md",
+        href: "https://github.com/ikeniborn/obsidian-llm-wiki/blob/master/docs/mobile-cloud-ollama.md"
+      });
+    }
+    if (eff.backend === "claude-agent" && !import_obsidian4.Platform.isMobile) {
+      new import_obsidian4.Setting(containerEl).setName(T.settings.iclaudePath_name).setDesc(T.settings.iclaudePath_desc).addText(
+        (t) => t.setPlaceholder("/home/user/Documents/Project/iclaude/iclaude.sh").setValue(this.localCache.iclaudePath).onChange(async (v) => {
+          await this.patchLocal({ iclaudePath: v.trim() });
+        })
+      ).addButton((b) => {
+        b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").onClick(async () => {
+          b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430\u2026").setDisabled(true);
+          try {
+            await checkClaudeAvailability(this.localCache.iclaudePath);
+            new import_obsidian4.Notice("\u2705 Claude \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D");
+          } catch (e) {
+            new import_obsidian4.Notice(`\u274C ${e.message}`);
+          } finally {
+            b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").setDisabled(false);
+          }
+        });
+        return b;
+      });
+      if (!s.claudeAgent.perOperation) {
+        new import_obsidian4.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_claude).addText(
+          (t) => t.setPlaceholder("").setValue(eff.claudeAgent.model).onChange(async (v) => {
+            s.claudeAgent.model = v.trim();
+            await this.plugin.saveSettings();
+          })
+        );
+      }
+      new import_obsidian4.Setting(containerEl).setName(T.settings.allowedTools_name).setDesc(T.settings.allowedTools_desc).addText(
+        (t) => t.setPlaceholder("Bash,read,write").setValue(eff.claudeAgent.allowedTools).onChange(async (v) => {
+          s.claudeAgent.allowedTools = v.trim();
+          await this.plugin.saveSettings();
+        })
+      );
+      new import_obsidian4.Setting(containerEl).setName("Effort level").setDesc("\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u0440\u0430\u0437\u043C\u044B\u0448\u043B\u0435\u043D\u0438\u044F Claude (--effort). \u041F\u0443\u0441\u0442\u043E = \u0431\u0435\u0437 thinking. \u0412 per-op \u0440\u0435\u0436\u0438\u043C\u0435 \u2014 \u0433\u043B\u043E\u0431\u0430\u043B\u044C\u043D\u044B\u0439 fallback.").addDropdown((d) => {
+        d.addOption("", "\u041E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E");
+        for (const lv of ["low", "medium", "high", "xhigh", "max"]) d.addOption(lv, lv);
+        d.setValue(eff.claudeAgent.effort ?? "");
+        d.onChange(async (v) => {
+          s.claudeAgent.effort = v || void 0;
+          await this.plugin.saveSettings();
+        });
+        return d;
+      });
+      new import_obsidian4.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
+        (t) => t.setValue(s.claudeAgent.perOperation).onChange(async (v) => {
+          s.claudeAgent.perOperation = v;
+          await this.plugin.saveSettings();
+          this.display();
+        })
+      );
+      if (s.claudeAgent.perOperation) {
+        const ops = [
+          { key: "ingest", label: T.settings.op_ingest },
+          { key: "query", label: T.settings.op_query },
+          { key: "lint", label: T.settings.op_lint },
+          { key: "init", label: T.settings.op_init },
+          { key: "format", label: T.settings.op_format }
+        ];
+        for (const { key, label } of ops) {
+          new import_obsidian4.Setting(containerEl).setName(label).setHeading();
+          new import_obsidian4.Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc).addText(
+            (t) => t.setValue(s.claudeAgent.operations[key].model).onChange(async (v) => {
+              s.claudeAgent.operations[key].model = v.trim();
+              await this.plugin.saveSettings();
+            })
+          );
+          new import_obsidian4.Setting(containerEl).setName("Effort level").addDropdown((d) => {
+            d.addOption("", "\u0423\u043D\u0430\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u044C");
+            for (const lv of ["low", "medium", "high", "xhigh", "max"]) d.addOption(lv, lv);
+            d.setValue(s.claudeAgent.operations[key].effort ?? "");
+            d.onChange(async (v) => {
+              s.claudeAgent.operations[key].effort = v || void 0;
+              await this.plugin.saveSettings();
+            });
+            return d;
+          });
+        }
+      }
+    } else {
+      new import_obsidian4.Setting(containerEl).setName(T.settings.baseUrl_name).setDesc(T.settings.baseUrl_desc).addText(
+        (t) => t.setPlaceholder("").setValue(eff.nativeAgent.baseUrl).onChange(async (v) => {
+          s.nativeAgent.baseUrl = v.trim();
+          await this.plugin.saveSettings();
+        })
+      );
+      new import_obsidian4.Setting(containerEl).setName(T.settings.apiKey_name).setDesc(T.settings.apiKey_desc).addText(
+        (t) => t.setPlaceholder("Ollama").setValue(eff.nativeAgent.apiKey).onChange(async (v) => {
+          await this.patchLocalNativeApiKey(v.trim());
+        })
+      );
+      new import_obsidian4.Setting(containerEl).setName("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u0435").setDesc("\u041E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u0442 \u0442\u0435\u0441\u0442\u043E\u0432\u044B\u0439 \u043F\u0440\u043E\u043C\u043F\u0442 \u043A endpoint \u0434\u043B\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E\u0441\u0442\u0438.").addButton((b) => {
+        b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").onClick(async () => {
+          b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430\u2026").setDisabled(true);
+          const na = eff.nativeAgent;
+          try {
+            await checkNativeAvailability(na.baseUrl, na.apiKey, na.model);
+            new import_obsidian4.Notice("\u2705 \u041C\u043E\u0434\u0435\u043B\u044C \u043E\u0442\u0432\u0435\u0447\u0430\u0435\u0442");
+          } catch (e) {
+            new import_obsidian4.Notice(`\u274C ${e.message}`);
+          } finally {
+            b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").setDisabled(false);
+          }
+        });
+        return b;
+      });
+      if (!s.nativeAgent.perOperation) {
+        this.addModelControl(
+          new import_obsidian4.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
+          eff.nativeAgent.model,
+          async (v) => {
+            s.nativeAgent.model = v;
+            await this.plugin.saveSettings();
+          }
+        );
+        new import_obsidian4.Setting(containerEl).setName(T.settings.maxTokens_name).setDesc(T.settings.maxTokens_desc).addText(
+          (t) => t.setPlaceholder("4096").setValue(String(s.nativeAgent.maxTokens)).onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n > 0) {
+              s.nativeAgent.maxTokens = Math.floor(n);
+              await this.plugin.saveSettings();
+            }
+          })
+        );
+        new import_obsidian4.Setting(containerEl).setName("Thinking budget tokens").setDesc("\u041C\u0430\u043A\u0441. \u0442\u043E\u043A\u0435\u043D\u044B \u0434\u043B\u044F \u0440\u0430\u0437\u043C\u044B\u0448\u043B\u0435\u043D\u0438\u044F. 0 \u0438\u043B\u0438 \u043F\u0443\u0441\u0442\u043E = \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E.").addText(
+          (t) => t.setPlaceholder("0").setValue(String(s.nativeAgent.thinkingBudgetTokens ?? 0)).onChange(async (v) => {
+            const n = Number(v);
+            s.nativeAgent.thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : void 0;
+            await this.plugin.saveSettings();
+          })
+        );
+        new import_obsidian4.Setting(containerEl).setName(T.settings.temperature_name).setDesc(T.settings.temperature_desc).addText(
+          (t) => t.setPlaceholder("0.2").setValue(String(eff.nativeAgent.temperature)).onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n >= 0 && n <= 2) {
+              s.nativeAgent.temperature = n;
+              await this.plugin.saveSettings();
+            }
+          })
+        );
+      }
+      new import_obsidian4.Setting(containerEl).setName(T.settings.structuredRetries_name).setDesc(T.settings.structuredRetries_desc).addText(
+        (t) => t.setPlaceholder("1").setValue(String(s.nativeAgent.structuredRetries)).onChange(async (v) => {
+          const n = Number(v);
+          if (!Number.isFinite(n) || n < 0 || n > 3) return;
+          s.nativeAgent.structuredRetries = Math.floor(n);
+          await this.plugin.saveSettings();
+        })
+      );
+      new import_obsidian4.Setting(containerEl).setName(T.settings.wikiLinkValidationRetries_name).setDesc(T.settings.wikiLinkValidationRetries_desc).addText(
+        (t) => t.setPlaceholder("3").setValue(String(s.wikiLinkValidationRetries)).onChange(async (v) => {
+          const n = Number(v);
+          if (Number.isInteger(n) && n >= 0) {
+            s.wikiLinkValidationRetries = n;
+            await this.plugin.saveSettings();
+          }
+        })
+      );
+      if (!import_obsidian4.Platform.isMobile) {
+        new import_obsidian4.Setting(containerEl).setName("Per-operation models").setHeading();
+        new import_obsidian4.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
+          (t) => t.setValue(s.nativeAgent.perOperation).onChange(async (v) => {
+            s.nativeAgent.perOperation = v;
+            await this.plugin.saveSettings();
+            this.display();
+          })
+        );
+      }
+      if (s.nativeAgent.perOperation) {
+        const ops = [
+          { key: "ingest", label: T.settings.op_ingest },
+          { key: "query", label: T.settings.op_query },
+          { key: "lint", label: T.settings.op_lint },
+          { key: "init", label: T.settings.op_init },
+          { key: "format", label: T.settings.op_format }
+        ];
+        for (const { key, label } of ops) {
+          new import_obsidian4.Setting(containerEl).setName(label).setHeading();
+          this.addModelControl(
+            new import_obsidian4.Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc),
+            s.nativeAgent.operations[key].model,
+            async (v) => {
+              s.nativeAgent.operations[key].model = v;
+              await this.plugin.saveSettings();
+            }
+          );
+          new import_obsidian4.Setting(containerEl).setName(T.settings.opMaxTokens_name).setDesc(T.settings.opMaxTokens_desc).addText(
+            (t) => t.setValue(String(s.nativeAgent.operations[key].maxTokens)).onChange(async (v) => {
+              const n = Number(v);
+              if (Number.isFinite(n) && n > 0) {
+                s.nativeAgent.operations[key].maxTokens = Math.floor(n);
+                await this.plugin.saveSettings();
+              }
+            })
+          );
+          new import_obsidian4.Setting(containerEl).setName("Thinking budget tokens").addText(
+            (t) => t.setPlaceholder("0").setValue(String(s.nativeAgent.operations[key].thinkingBudgetTokens ?? 0)).onChange(async (v) => {
+              const n = Number(v);
+              s.nativeAgent.operations[key].thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : void 0;
+              await this.plugin.saveSettings();
+            })
+          );
+          new import_obsidian4.Setting(containerEl).setName(T.settings.opTemperature_name).setDesc(T.settings.opTemperature_desc).addText(
+            (t) => t.setValue(String(s.nativeAgent.operations[key].temperature)).onChange(async (v) => {
+              const n = Number(v);
+              if (Number.isFinite(n) && n >= 0 && n <= 2) {
+                s.nativeAgent.operations[key].temperature = n;
+                await this.plugin.saveSettings();
+              }
+            })
+          );
+        }
+      }
+      new import_obsidian4.Setting(containerEl).setName("Semantic Search").setHeading();
+      new import_obsidian4.Setting(containerEl).setName("Enable semantic similarity (embeddings)").setDesc("Use embedding vectors for relevant page selection. Requires native backend with an embeddings-capable model.").addToggle(
+        (t) => t.setValue(s.nativeAgent.embeddingModel !== void 0).onChange(async (v) => {
+          if (!v) {
+            s.nativeAgent.embeddingModel = void 0;
+            s.nativeAgent.embeddingDimensions = void 0;
+            await this.plugin.saveSettings();
+            this.display();
+          } else {
+            s.nativeAgent.embeddingModel = "";
+            await this.plugin.saveSettings();
+            this.display();
+          }
+        })
+      );
+      if (s.nativeAgent.embeddingModel !== void 0) {
+        new import_obsidian4.Setting(containerEl).setName("Relevant pages (top-K)").setDesc("Max wiki pages loaded per ingest call. Lower = faster, less context. Default: 15.").addText(
+          (t) => t.setPlaceholder("15").setValue(String(s.nativeAgent.relevantPagesTopK ?? 15)).onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n > 0) {
+              s.nativeAgent.relevantPagesTopK = Math.floor(n);
+              await this.plugin.saveSettings();
+            }
+          })
+        );
+        this.addModelControl(
+          new import_obsidian4.Setting(containerEl).setName("Embedding model").setDesc("Model name for embeddings, e.g. text-embedding-3-small"),
+          s.nativeAgent.embeddingModel ?? "",
+          async (v) => {
+            s.nativeAgent.embeddingModel = v || void 0;
+            await this.plugin.saveSettings();
+          }
+        );
+        new import_obsidian4.Setting(containerEl).setName("Embedding dimensions").setDesc("Vector dimensions, e.g. 512 or 1536").addText(
+          (t) => t.setPlaceholder("512").setValue(String(s.nativeAgent.embeddingDimensions ?? "")).onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n > 0) {
+              s.nativeAgent.embeddingDimensions = Math.floor(n);
+              await this.plugin.saveSettings();
+            }
+          })
+        );
+        const chunkField = (name, desc, placeholder, get, set) => new import_obsidian4.Setting(containerEl).setName(name).setDesc(desc).addText(
+          (t) => t.setPlaceholder(placeholder).setValue(String(get())).onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n > 0) {
+              set(Math.floor(n));
+              await this.plugin.saveSettings();
+            }
+          })
+        );
+        chunkField(
+          "Chunk size (chars)",
+          `Max characters per section window. Default: ${DEFAULT_CHUNKING.maxChars}.`,
+          String(DEFAULT_CHUNKING.maxChars),
+          () => s.nativeAgent.chunkMaxChars ?? DEFAULT_CHUNKING.maxChars,
+          (n) => {
+            s.nativeAgent.chunkMaxChars = n;
+          }
+        );
+        chunkField(
+          "Chunk overlap (chars)",
+          `Overlap between consecutive windows of a long section. Default: ${DEFAULT_CHUNKING.overlapChars}.`,
+          String(DEFAULT_CHUNKING.overlapChars),
+          () => s.nativeAgent.chunkOverlapChars ?? DEFAULT_CHUNKING.overlapChars,
+          (n) => {
+            s.nativeAgent.chunkOverlapChars = n;
+          }
+        );
+        chunkField(
+          "Min chunk size (merge)",
+          `Sections shorter than this merge into a neighbour. Default: ${DEFAULT_CHUNKING.minChars}.`,
+          String(DEFAULT_CHUNKING.minChars),
+          () => s.nativeAgent.chunkMinChars ?? DEFAULT_CHUNKING.minChars,
+          (n) => {
+            s.nativeAgent.chunkMinChars = n;
+          }
+        );
+        chunkField(
+          "Max chunks per page",
+          `Cap on vectors per page (summary + sections). Default: ${DEFAULT_CHUNKING.maxCount}.`,
+          String(DEFAULT_CHUNKING.maxCount),
+          () => s.nativeAgent.chunkMaxCount ?? DEFAULT_CHUNKING.maxCount,
+          (n) => {
+            s.nativeAgent.chunkMaxCount = n;
+          }
+        );
+        new import_obsidian4.Setting(containerEl).setName("Retrieval").setHeading();
+        new import_obsidian4.Setting(containerEl).setName("Hybrid retrieval (dense \u2295 sparse)").setDesc("\u0424\u044C\u044E\u0437\u0438\u0442\u044C embedding \u0438 jaccard \u0447\u0435\u0440\u0435\u0437 RRF. \u0422\u0440\u0435\u0431\u0443\u0435\u0442 embedding-\u043C\u043E\u0434\u0435\u043B\u044C; \u0431\u0435\u0437 \u043D\u0435\u0451 \u2014 \u043E\u0431\u044B\u0447\u043D\u044B\u0439 jaccard.").addToggle(
+          (t) => t.setValue(s.nativeAgent.hybridRetrieval ?? false).onChange(async (v) => {
+            s.nativeAgent.hybridRetrieval = v;
+            await this.plugin.saveSettings();
+          })
+        );
+        new import_obsidian4.Setting(containerEl).setName("RRF k").setDesc("\u041A\u043E\u043D\u0441\u0442\u0430\u043D\u0442\u0430 RRF. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 60.").addText(
+          (t) => t.setValue(String(s.nativeAgent.rrfK ?? 60)).onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n > 0) {
+              s.nativeAgent.rrfK = Math.floor(n);
+              await this.plugin.saveSettings();
+            }
+          })
+        );
+        new import_obsidian4.Setting(containerEl).setName("Graph health").setHeading();
+        new import_obsidian4.Setting(containerEl).setName("Dedup on ingest").setDesc("\u041D\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u0438 near-duplicate \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u2014 \u0441\u043B\u0438\u0442\u044C \u0432 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0443\u044E \u0447\u0435\u0440\u0435\u0437 LLM-merge.").addToggle(
+          (t) => t.setValue(s.nativeAgent.dedupOnIngest ?? false).onChange(async (v) => {
+            s.nativeAgent.dedupOnIngest = v;
+            await this.plugin.saveSettings();
+          })
+        );
+        new import_obsidian4.Setting(containerEl).setName("Dedup threshold").setDesc("\u041F\u043E\u0440\u043E\u0433 \u043F\u043E\u0445\u043E\u0436\u0435\u0441\u0442\u0438 \u0434\u043B\u044F \u0434\u0435\u0434\u0443\u043F\u0430 (0..1). \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 0.85.").addText(
+          (t) => t.setValue(String(s.nativeAgent.dedupThreshold ?? 0.85)).onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n > 0 && n <= 1) {
+              s.nativeAgent.dedupThreshold = n;
+              await this.plugin.saveSettings();
+            }
+          })
+        );
+        new import_obsidian4.Setting(containerEl).setName("Lint near-duplicate report").setDesc("\u0412 Lint \u043F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u043F\u0430\u0440\u044B \u0431\u043B\u0438\u0437\u043A\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043F\u043E embedding-\u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0443.").addToggle(
+          (t) => t.setValue(s.nativeAgent.lintNearDuplicate ?? false).onChange(async (v) => {
+            s.nativeAgent.lintNearDuplicate = v;
+            await this.plugin.saveSettings();
+          })
+        );
+        new import_obsidian4.Setting(containerEl).setName("Near-duplicate threshold").setDesc("\u041F\u043E\u0440\u043E\u0433 \u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0430 \u0434\u043B\u044F near-duplicate \u043E\u0442\u0447\u0451\u0442\u0430 (0..1). \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 0.80.").addText(
+          (t) => t.setValue(String(s.nativeAgent.nearDupThreshold ?? 0.8)).onChange(async (v) => {
+            const n = Number(v);
+            if (Number.isFinite(n) && n > 0 && n <= 1) {
+              s.nativeAgent.nearDupThreshold = n;
+              await this.plugin.saveSettings();
+            }
+          })
+        );
+        new import_obsidian4.Setting(containerEl).setName(T.settings.mergeDeleteWarnThreshold_name).setDesc(T.settings.mergeDeleteWarnThreshold_desc).addSlider(
+          (sl) => sl.setLimits(1, 20, 1).setDynamicTooltip().setValue(s.nativeAgent.mergeDeleteWarnThreshold ?? 5).onChange(async (v) => {
+            s.nativeAgent.mergeDeleteWarnThreshold = v;
+            await this.plugin.saveSettings();
+          })
+        );
+      }
+    }
+    new import_obsidian4.Setting(containerEl).setName("Vision").setHeading();
+    new import_obsidian4.Setting(containerEl).setName("Enable vision analysis").setDesc("Analyse embedded images, PDFs, and Excalidraw files before formatting. Uses the same baseUrl and API key as the main backend.").addToggle(
+      (t) => t.setValue(s.vision.enabled).onChange(async (v) => {
+        s.vision.enabled = v;
+        await this.plugin.saveSettings();
+        this.display();
+      })
+    );
+    if (s.vision.enabled) {
+      this.addModelControl(
+        new import_obsidian4.Setting(containerEl).setName("Vision model").setDesc("Model name for vision calls, e.g. gpt-4o-mini or claude-3-haiku-20240307"),
+        s.vision.model,
+        async (v) => {
+          s.vision.model = v;
+          await this.plugin.saveSettings();
+        }
+      );
+      new import_obsidian4.Setting(containerEl).setName("Vision response language").setDesc("Language for image/PDF descriptions inserted into the note.").addDropdown(
+        (d) => d.addOptions({ auto: "Auto (match note language)", ru: "Russian", en: "English", es: "Spanish" }).setValue(s.vision.language ?? "auto").onChange(async (v) => {
+          s.vision.language = v;
+          await this.plugin.saveSettings();
+        })
+      );
+    }
+    new import_obsidian4.Setting(containerEl).setName(T.settings.h3_graph).setHeading();
+    new import_obsidian4.Setting(containerEl).setName(T.settings.graphDepth_name).setDesc(T.settings.graphDepth_desc).addText(
+      (t) => t.setPlaceholder("1").setValue(String(s.graphDepth)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isInteger(n) && n >= 0 && n <= 3) {
+          s.graphDepth = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian4.Setting(containerEl).setName(T.settings.bfsTopK_name).setDesc(T.settings.bfsTopK_desc).addText(
+      (t) => t.setPlaceholder("10").setValue(String(s.bfsTopK)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isInteger(n) && n >= 0) {
+          s.bfsTopK = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian4.Setting(containerEl).setName(T.settings.h3_jaccard).setHeading();
+    new import_obsidian4.Setting(containerEl).setName(T.settings.seedTopK_name).setDesc(T.settings.seedTopK_desc).addText(
+      (t) => t.setPlaceholder("5").setValue(String(s.seedTopK)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isInteger(n) && n >= 1 && n <= 50) {
+          s.seedTopK = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    new import_obsidian4.Setting(containerEl).setName(T.settings.seedMinScore_name).setDesc(T.settings.seedMinScore_desc).addText(
+      (t) => t.setPlaceholder("0.1").setValue(String(s.seedMinScore)).onChange(async (v) => {
+        const n = Number(v);
+        if (Number.isFinite(n) && n >= 0 && n <= 1) {
+          s.seedMinScore = n;
+          await this.plugin.saveSettings();
+        }
+      })
+    );
+    if (eff.backend !== "claude-agent" && !import_obsidian4.Platform.isMobile) {
+      const proxy = eff.proxy;
+      new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
+      new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_enabled_name).setDesc(T.settings.proxy_enabled_desc).addToggle(
+        (t) => t.setValue(proxy.enabled).onChange(async (v) => {
+          await this.patchProxy({ enabled: v });
+          this.display();
+        })
+      );
+      if (proxy.enabled) {
+        new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_url_name).setDesc(T.settings.proxy_url_desc).addText(
+          (t) => t.setPlaceholder("http://proxy.example.com:8080").setValue(proxy.url).onChange(async (v) => {
+            await this.patchProxy({ url: v.trim() });
+          })
+        );
+        new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_username_name).setDesc(T.settings.proxy_username_desc).addText(
+          (t) => t.setValue(proxy.username ?? "").onChange(async (v) => {
+            await this.patchProxy({ username: v });
+          })
+        );
+        new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_password_name).setDesc(T.settings.proxy_password_desc).addText((t) => {
+          t.setValue(proxy.password ?? "").onChange(async (v) => {
+            await this.patchLocalProxyPassword(v);
+          });
+          t.inputEl.type = "password";
+        });
+        new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_noProxy_name).setDesc(T.settings.proxy_noProxy_desc).addText(
+          (t) => t.setPlaceholder("localhost,127.0.0.1").setValue(proxy.noProxy ?? "").onChange(async (v) => {
+            await this.patchProxy({ noProxy: v.trim() });
+          })
+        );
+        containerEl.createEl("p", { text: T.settings.proxy_hint, cls: "setting-item-description" });
+      }
+    }
+    if (!import_obsidian4.Platform.isMobile) {
+      new import_obsidian4.Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
+      new import_obsidian4.Setting(containerEl).setName(T.settings.devMode_enabled_name).setDesc(T.settings.devMode_enabled_desc).addToggle(
+        (t) => t.setValue(s.devMode.enabled).onChange(async (v) => {
+          s.devMode.enabled = v;
+          await this.plugin.saveSettings();
+          this.display();
+        })
+      );
+      if (s.devMode.enabled) {
+        new import_obsidian4.Setting(containerEl).setName(T.settings.devMode_evaluatorModel_name).setDesc(T.settings.devMode_evaluatorModel_desc).addText(
+          (t) => t.setPlaceholder("").setValue(s.devMode.evaluatorModel).onChange(async (v) => {
+            s.devMode.evaluatorModel = v.trim();
+            await this.plugin.saveSettings();
+          })
+        );
+      }
+    }
+    window.requestAnimationFrame(() => {
+      scrollEl.scrollTop = savedScroll;
+    });
+  }
+};
+
+// src/view.ts
+var import_obsidian6 = require("obsidian");
 
 // prompts/base.md
 var base_default = "\u0422\u044B \u2014 wiki-\u0430\u0433\u0435\u043D\u0442. \u0421\u043B\u0435\u0434\u0443\u0439 \u044D\u0442\u0438\u043C \u043F\u0440\u0430\u0432\u0438\u043B\u0430\u043C \u043D\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043C\u043E \u043E\u0442 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.\n\n## \u0414\u043E\u0441\u0442\u043E\u0432\u0435\u0440\u043D\u043E\u0441\u0442\u044C\n\u041E\u0442\u0432\u0435\u0447\u0430\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430.\n\u041D\u0435 \u0432\u044B\u0434\u0443\u043C\u044B\u0432\u0430\u0439 \u0444\u0430\u043A\u0442\u044B, \u043A\u043E\u0442\u043E\u0440\u044B\u0445 \u043D\u0435\u0442 \u0432 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0435.\n\u0415\u0441\u043B\u0438 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E \u2014 \u0441\u043A\u0430\u0436\u0438 \u043E\u0431 \u044D\u0442\u043E\u043C \u043F\u0440\u044F\u043C\u043E.\n\n## \u0424\u043E\u0440\u043C\u0430\u0442\n\u0412\u043E\u0437\u0432\u0440\u0430\u0449\u0430\u0439 \u0440\u043E\u0432\u043D\u043E \u0442\u043E, \u0447\u0442\u043E \u0437\u0430\u043F\u0440\u043E\u0448\u0435\u043D\u043E.\n\u0415\u0441\u043B\u0438 \u043E\u0436\u0438\u0434\u0430\u0435\u0442\u0441\u044F JSON \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON, \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439 \u0432\u043E\u043A\u0440\u0443\u0433.\n\u0415\u0441\u043B\u0438 \u043E\u0436\u0438\u0434\u0430\u0435\u0442\u0441\u044F \u0442\u0435\u043A\u0441\u0442 \u2014 \u0431\u0435\u0437 \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u043C\u0435\u0442\u043E\u043A \u0438 \u0442\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0445 \u0430\u0440\u0442\u0435\u0444\u0430\u043A\u0442\u043E\u0432.\n\n## \u041C\u0438\u043D\u0438\u043C\u0430\u043B\u0438\u0437\u043C\n\u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u0442\u043E, \u043E \u0447\u0451\u043C \u043D\u0435 \u043F\u0440\u043E\u0441\u0438\u043B\u0438.\n\u041D\u0435 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0438\u0440\u0443\u0439 \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u044B\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F, \u0435\u0441\u043B\u0438 \u044D\u0442\u043E \u043D\u0435 \u0447\u0430\u0441\u0442\u044C \u0437\u0430\u0434\u0430\u0447\u0438.\n";
@@ -29241,14 +30157,14 @@ function computeSpeedText(stats) {
 }
 
 // src/view.ts
-var import_path_browserify = __toESM(require_path_browserify(), 1);
+var import_path_browserify2 = __toESM(require_path_browserify(), 1);
 
 // src/utils/vault-walk.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 function walkFolder(folder, out) {
   for (const child of folder.children) {
-    if (child instanceof import_obsidian4.TFolder) walkFolder(child, out);
-    else if (child instanceof import_obsidian4.TFile && child.extension === "md") out.push(child);
+    if (child instanceof import_obsidian5.TFolder) walkFolder(child, out);
+    else if (child instanceof import_obsidian5.TFile && child.extension === "md") out.push(child);
   }
 }
 function collectMdInPaths(vault, sourcePaths) {
@@ -29304,7 +30220,7 @@ function registerLinkHandler(el, app) {
   });
 }
 var PREVIEW_INLINE = 140;
-var LlmWikiView = class extends import_obsidian5.ItemView {
+var LlmWikiView = class extends import_obsidian6.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.plugin = plugin;
@@ -29390,7 +30306,7 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
     root.empty();
     root.addClass("ai-wiki-view");
     const T = i18n();
-    const isMobile = import_obsidian5.Platform.isMobile;
+    const isMobile = import_obsidian6.Platform.isMobile;
     const header = root.createDiv("ai-wiki-header");
     header.createEl("h3", { text: "AI wiki" });
     this.statusEl = header.createDiv("ai-wiki-status");
@@ -29479,23 +30395,23 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
     });
     if (opts.withActions) {
       this.addSourceBtn = domainRow.createEl("button", { attr: { title: T.view.addSourceTitle } });
-      (0, import_obsidian5.setIcon)(this.addSourceBtn, "folder-plus");
+      (0, import_obsidian6.setIcon)(this.addSourceBtn, "folder-plus");
       this.addSourceBtn.disabled = true;
       this.addSourceBtn.addEventListener("click", () => void this.openManageSources());
       this.reinitBtn = domainRow.createEl("button", { attr: { title: T.view.reinitTitle } });
-      (0, import_obsidian5.setIcon)(this.reinitBtn, "recycle");
+      (0, import_obsidian6.setIcon)(this.reinitBtn, "recycle");
       this.reinitBtn.disabled = true;
       this.reinitBtn.addEventListener("click", () => void this.runReinit());
       this.openLogLink = domainRow.createEl("a", {
         cls: "internal-link ai-wiki-domain-file-link",
         attr: { title: "Open _log.md", "data-href": "" }
       });
-      (0, import_obsidian5.setIcon)(this.openLogLink, "scroll-text");
+      (0, import_obsidian6.setIcon)(this.openLogLink, "scroll-text");
       this.openIndexLink = domainRow.createEl("a", {
         cls: "internal-link ai-wiki-domain-file-link",
         attr: { title: "Open _index.md", "data-href": "" }
       });
-      (0, import_obsidian5.setIcon)(this.openIndexLink, "list");
+      (0, import_obsidian6.setIcon)(this.openIndexLink, "list");
       domainRow.addEventListener("click", (e) => {
         const a = e.target.closest("a.ai-wiki-domain-file-link");
         if (!a) return;
@@ -29530,7 +30446,7 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
             void this.app.workspace.openLinkText(filename, domainFolder, false);
           } else {
             const isLog = href.endsWith("_log.md");
-            new import_obsidian5.Notice(isLog ? "_log.md not found \u2014 run ingest or lint first." : "_index.md not found \u2014 run init first.");
+            new import_obsidian6.Notice(isLog ? "_log.md not found \u2014 run ingest or lint first." : "_index.md not found \u2014 run init first.");
           }
         })();
       });
@@ -29559,7 +30475,7 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
       this.ingestBtn.addEventListener("click", () => {
         const file = this.plugin.app.workspace.getActiveFile();
         if (!file) {
-          new import_obsidian5.Notice(i18n().view.noActiveFile);
+          new import_obsidian6.Notice(i18n().view.noActiveFile);
           return;
         }
         const domainId = this.domainSelect.value || void 0;
@@ -29633,7 +30549,7 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
   openAddDomain() {
     const cwd = this.plugin.controller.cwdOrEmpty();
     if (!cwd) {
-      new import_obsidian5.Notice(i18n().view.cwdNotSet);
+      new import_obsidian6.Notice(i18n().view.cwdNotSet);
       return;
     }
     new AddDomainModal(this.app, (input) => {
@@ -29674,14 +30590,14 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
     if (!entry) return;
     const sourcePaths = entry.source_paths ?? [];
     if (sourcePaths.length === 0) {
-      new import_obsidian5.Notice(i18n().view.reinitNoSources);
+      new import_obsidian6.Notice(i18n().view.reinitNoSources);
       return;
     }
     const T = i18n().modal;
     const base = this.plugin.controller.cwdOrEmpty();
     const toVaultRel = (p) => {
-      if (!base || !(0, import_path_browserify.isAbsolute)(p)) return p;
-      const rel = (0, import_path_browserify.relative)(base, p);
+      if (!base || !(0, import_path_browserify2.isAbsolute)(p)) return p;
+      const rel = (0, import_path_browserify2.relative)(base, p);
       return rel.startsWith("..") ? p : rel;
     };
     const mdFiles = collectMdInPaths(this.app.vault, sourcePaths.map(toVaultRel));
@@ -29713,8 +30629,8 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
       const T = i18n().modal;
       const base = this.plugin.controller.cwdOrEmpty();
       const toVaultRel = (p) => {
-        if (!base || !(0, import_path_browserify.isAbsolute)(p)) return p;
-        const rel = (0, import_path_browserify.relative)(base, p);
+        if (!base || !(0, import_path_browserify2.isAbsolute)(p)) return p;
+        const rel = (0, import_path_browserify2.relative)(base, p);
         return rel.startsWith("..") ? p : rel;
       };
       const mdFiles = collectMdInPaths(this.app.vault, newPaths.map(toVaultRel));
@@ -29727,7 +30643,7 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
         async () => {
           await this.plugin.controller.updateDomainSources(original.id, newPaths);
           const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
-          if (deleted > 0) new import_obsidian5.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
+          if (deleted > 0) new import_obsidian6.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
           void this.plugin.controller.init(original.id, false, newPaths, true);
         }
       ).open();
@@ -29736,7 +30652,7 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
     if (removed.length > 0) {
       await this.plugin.controller.updateDomainSources(original.id, newPaths);
       const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
-      if (deleted > 0) new import_obsidian5.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
+      if (deleted > 0) new import_obsidian6.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
       return;
     }
     if (added.length > 0) {
@@ -29751,11 +30667,11 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
   submitQuery() {
     const q = this.queryInput.value.trim();
     if (!q) {
-      new import_obsidian5.Notice(i18n().view.enterQuestion);
+      new import_obsidian6.Notice(i18n().view.enterQuestion);
       return;
     }
     if (this.state === "running") {
-      new import_obsidian5.Notice(i18n().view.operationInProgress);
+      new import_obsidian6.Notice(i18n().view.operationInProgress);
       return;
     }
     void this.plugin.controller.query(q, this.domainSelect?.value || void 0);
@@ -29812,7 +30728,7 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
     this.liveStatusIconEl?.setText("");
     this.liveStatusTextEl?.setText("");
     this.scheduleMetricsTick();
-    if (import_obsidian5.Platform.isMobile) {
+    if (import_obsidian6.Platform.isMobile) {
       const placeholder = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step-pending");
       placeholder.setText(i18n().view.mobileWaiting);
       this.mobileWaitingEl = placeholder;
@@ -30003,9 +30919,9 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
     } else if (ev.kind === "eval_result") {
       const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
       const text = `**[eval: ${ev.score}/10]** ${ev.reasoning}`;
-      const comp = new import_obsidian5.Component();
+      const comp = new import_obsidian6.Component();
       comp.load();
-      void import_obsidian5.MarkdownRenderer.render(this.app, text, el, "", comp);
+      void import_obsidian6.MarkdownRenderer.render(this.app, text, el, "", comp);
     }
     this.updateMetrics();
   }
@@ -30023,9 +30939,9 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
     void link;
     registerLinkHandler(this.formatPreviewSection, this.app);
     const reportEl = this.formatPreviewSection.createDiv("ai-wiki-format-report");
-    const comp = new import_obsidian5.Component();
+    const comp = new import_obsidian6.Component();
     comp.load();
-    void import_obsidian5.MarkdownRenderer.render(this.app, report, reportEl, "", comp).then(() => sanitizeLinks(reportEl));
+    void import_obsidian6.MarkdownRenderer.render(this.app, report, reportEl, "", comp).then(() => sanitizeLinks(reportEl));
     if (missing.length > 0) {
       const warn = this.formatPreviewSection.createEl("details", { cls: "ai-wiki-format-warn" });
       const summary = warn.createEl("summary");
@@ -30084,9 +31000,9 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
     this.resultSpeedEl?.setText(this.buildSpeedText());
     this.finalEl.empty();
     if (entry.finalText) {
-      const comp = new import_obsidian5.Component();
+      const comp = new import_obsidian6.Component();
       comp.load();
-      await import_obsidian5.MarkdownRenderer.render(this.app, entry.finalText, this.finalEl, "", comp);
+      await import_obsidian6.MarkdownRenderer.render(this.app, entry.finalText, this.finalEl, "", comp);
       sanitizeLinks(this.finalEl);
       this.resultSection.removeClass("ai-wiki-hidden");
       this.finalEl.removeClass("ai-wiki-hidden");
@@ -30133,7 +31049,7 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
       if (ctx.operation === "lint" || ctx.operation === "lint-chat") {
         const domainId = (ctx.domainId ?? this.domainSelect?.value) || void 0;
         if (!domainId) {
-          new import_obsidian5.Notice(i18n().view.selectDomainFirst ?? "Select a domain first");
+          new import_obsidian6.Notice(i18n().view.selectDomainFirst ?? "Select a domain first");
           return;
         }
         void this.plugin.controller.lintApplyFromChat(
@@ -30159,17 +31075,17 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
     if (role === "user") {
       el.setText(text);
     } else {
-      const comp = new import_obsidian5.Component();
+      const comp = new import_obsidian6.Component();
       comp.load();
-      void import_obsidian5.MarkdownRenderer.render(this.app, text, el, "", comp).then(() => sanitizeLinks(el));
+      void import_obsidian6.MarkdownRenderer.render(this.app, text, el, "", comp).then(() => sanitizeLinks(el));
       registerLinkHandler(el, this.app);
     }
     const copyBtn = el.createEl("button", { cls: "ai-wiki-copy-btn", attr: { "aria-label": "Copy" } });
-    (0, import_obsidian5.setIcon)(copyBtn, "copy");
+    (0, import_obsidian6.setIcon)(copyBtn, "copy");
     copyBtn.addEventListener("click", () => {
       void navigator.clipboard.writeText(text).then(() => {
-        (0, import_obsidian5.setIcon)(copyBtn, "check");
-        window.setTimeout(() => (0, import_obsidian5.setIcon)(copyBtn, "copy"), 1500);
+        (0, import_obsidian6.setIcon)(copyBtn, "check");
+        window.setTimeout(() => (0, import_obsidian6.setIcon)(copyBtn, "copy"), 1500);
       });
     });
     el.scrollIntoView({ block: "end" });
@@ -30236,10 +31152,10 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
         this.currentChatBubble.addClass("ai-wiki-chat-msg--error");
         this.currentChatBubble.setText(msg.content);
       } else {
-        const comp = new import_obsidian5.Component();
+        const comp = new import_obsidian6.Component();
         comp.load();
         const bubble = this.currentChatBubble;
-        void import_obsidian5.MarkdownRenderer.render(this.app, msg.content, bubble, "", comp).then(() => sanitizeLinks(bubble));
+        void import_obsidian6.MarkdownRenderer.render(this.app, msg.content, bubble, "", comp).then(() => sanitizeLinks(bubble));
         registerLinkHandler(bubble, this.app);
       }
       this.currentChatBubble = null;
@@ -30366,9 +31282,9 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
       }
       row.addEventListener("click", () => {
         this.finalEl.empty();
-        const comp = new import_obsidian5.Component();
+        const comp = new import_obsidian6.Component();
         comp.load();
-        void import_obsidian5.MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, "", comp).then(() => sanitizeLinks(this.finalEl));
+        void import_obsidian6.MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, "", comp).then(() => sanitizeLinks(this.finalEl));
         this.resultSection.removeClass("ai-wiki-hidden");
         this.finalEl.removeClass("ai-wiki-hidden");
         this.resultOpen = true;
@@ -30383,7 +31299,7 @@ var LlmWikiView = class extends import_obsidian5.ItemView {
     });
   }
 };
-var FileContentModal = class extends import_obsidian5.Modal {
+var FileContentModal = class extends import_obsidian6.Modal {
   constructor(app, filePath, content) {
     super(app);
     this.filePath = filePath;
@@ -30401,15 +31317,15 @@ var FileContentModal = class extends import_obsidian5.Modal {
       require("electron").shell.openPath(absPath);
     });
     this.contentEl.addClass("ai-wiki-busy-modal-content");
-    const comp = new import_obsidian5.Component();
+    const comp = new import_obsidian6.Component();
     comp.load();
-    void import_obsidian5.MarkdownRenderer.render(this.app, this.content, this.contentEl, this.filePath, comp);
+    void import_obsidian6.MarkdownRenderer.render(this.app, this.content, this.contentEl, this.filePath, comp);
   }
   onClose() {
     this.contentEl.empty();
   }
 };
-var WikiQuestionModal = class extends import_obsidian5.Modal {
+var WikiQuestionModal = class extends import_obsidian6.Modal {
   constructor(app, question, options, resolve, reject) {
     super(app);
     this.question = question;
@@ -30524,9 +31440,9 @@ var import_obsidian10 = require("obsidian");
 var import_path_browserify7 = __toESM(require_path_browserify(), 1);
 
 // src/source-paths.ts
-var import_path_browserify2 = __toESM(require_path_browserify(), 1);
+var import_path_browserify3 = __toESM(require_path_browserify(), 1);
 function consolidateSourcePaths(existing, newPath, vaultRoot) {
-  const toAbs = (p) => (0, import_path_browserify2.isAbsolute)(p) ? p : (0, import_path_browserify2.join)(vaultRoot, p);
+  const toAbs = (p) => (0, import_path_browserify3.isAbsolute)(p) ? p : (0, import_path_browserify3.join)(vaultRoot, p);
   const normed = (p) => {
     const a = toAbs(p);
     return a.endsWith("/") ? a : a + "/";
@@ -36185,6 +37101,11 @@ var WikiPageSchema = external_exports.object({
     });
   }
 });
+var MergedPageOutputSchema = external_exports.object({
+  reasoning: external_exports.string().optional(),
+  content: external_exports.string(),
+  annotation: external_exports.string().optional()
+});
 var EntitiesOutputSchema = external_exports.object({
   reasoning: external_exports.string(),
   entities: external_exports.array(external_exports.object({
@@ -36251,7 +37172,10 @@ var FormatOutputSchema = FormatBaseSchema.superRefine((val, ctx) => {
 });
 
 // prompts/ingest.md
-var ingest_default = '\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0441\u0438\u043D\u0442\u0435\u0437\u0430 wiki-\u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0418\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439/\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n\n\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:\n{{entity_types_block}}\n{{lang_notes}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- CREATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 wiki, \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 >= min_mentions_for_page\n- UPDATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2192 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E, \u041D\u0415 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E\n- SKIP: \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u043E \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0435\u0441\u0442\u044C\n- \u0418\u041C\u042F \u0424\u0410\u0419\u041B\u0410 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u0441\u0442\u0435\u043C \u0431\u0435\u0437 `.md`) \u041E\u0411\u042F\u0417\u0410\u0422\u0415\u041B\u042C\u041D\u041E \u0438\u043C\u0435\u0435\u0442 \u0432\u0438\u0434 `wiki_{{domain_id}}_<entity_slug>`:\n  - `<entity_slug>` = ASCII-\u0438\u043C\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0432 lowercase snake_case (\u0442\u043E\u043B\u044C\u043A\u043E \u0441\u0438\u043C\u0432\u043E\u043B\u044B `[a-z0-9_]`, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432, \u0434\u0438\u0430\u043A\u0440\u0438\u0442\u0438\u043A\u0438 \u0438 \u0437\u0430\u0433\u043B\u0430\u0432\u043D\u044B\u0445 \u0431\u0443\u043A\u0432).\n  - \u041F\u0440\u0438\u043C\u0435\u0440: `wiki_{{domain_id}}_neural_networks.md`.\n- \u0421\u0442\u0435\u043C wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u041D\u0415 \u0434\u043E\u043B\u0436\u0435\u043D \u0441\u043E\u0432\u043F\u0430\u0434\u0430\u0442\u044C \u0441 \u043B\u044E\u0431\u044B\u043C \u0438\u043C\u0435\u043D\u0435\u043C \u0438\u0437 \u0441\u0435\u043A\u0446\u0438\u0438 \xAB\u0417\u0410\u041F\u0420\u0415\u0429\u0401\u041D\u041D\u042B\u0415 \u0418\u041C\u0415\u041D\u0410\xBB \u2014 \u044D\u0442\u043E \u0444\u0430\u0439\u043B\u044B \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432 \u044D\u0442\u043E\u0433\u043E \u0434\u043E\u043C\u0435\u043D\u0430. Wiki \u043E\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u0438\u0437\u0432\u043B\u0435\u0447\u0451\u043D\u043D\u044B\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438, \u0430 \u043D\u0435 \u0434\u0443\u0431\u043B\u0438\u0440\u0443\u0435\u0442 \u0438\u0441\u0445\u043E\u0434\u043D\u044B\u0435 \u0444\u0430\u0439\u043B\u044B.\n- \u0418\u043C\u044F wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u041D\u0415 \u0434\u043E\u043B\u0436\u043D\u043E \u0441\u043E\u0432\u043F\u0430\u0434\u0430\u0442\u044C \u0441 \u0438\u043C\u0435\u043D\u0435\u043C \u0442\u0435\u043A\u0443\u0449\u0435\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 `{{source_stem}}` (\u0447\u0430\u0441\u0442\u043D\u044B\u0439 \u0441\u043B\u0443\u0447\u0430\u0439 \u043F\u0440\u0435\u0434\u044B\u0434\u0443\u0449\u0435\u0433\u043E \u043F\u0440\u0430\u0432\u0438\u043B\u0430).\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043A\u043E\u043D\u0444\u0438\u0433\u0438/SQL \u043C\u043E\u0436\u043D\u043E \u0446\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445.\n- \u041F\u0443\u0442\u044C \u0441\u0442\u0430\u0442\u044C\u0438 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u0435\u0442\u0441\u044F \u0442\u0438\u043F\u043E\u043C \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u2014 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u043E\u0447\u043D\u044B\u0439 \u0448\u0430\u0431\u043B\u043E\u043D \u0438\u0437 \u0441\u0435\u043A\u0446\u0438\u0438 \xAB\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410\xBB (\u0432\u044B\u0448\u0435, \u0434\u043E \u0431\u043B\u043E\u043A\u0430 \u041F\u0420\u0410\u0412\u0418\u041B\u0410), \u043F\u043E\u0434\u0441\u0442\u0430\u0432\u0438\u0432 \u0438\u043C\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0432\u043C\u0435\u0441\u0442\u043E <EntityName>\n- \u0415\u0441\u043B\u0438 \u0442\u0438\u043F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u043D\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0451\u043D \u0438\u043B\u0438 \u0443 \u0434\u043E\u043C\u0435\u043D\u0430 \u043D\u0435\u0442 entity_types \u2192 \u043F\u0443\u0442\u044C \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- tags: \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 (category/subcategory). \u041F\u0435\u0440\u0435\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u0435\u0433\u0438 \u0438\u0437 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446 (\u043F\u0435\u0440\u0435\u0434\u0430\u043D\u044B \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435). \u0421\u043E\u0437\u0434\u0430\u0432\u0430\u0439 \u043D\u043E\u0432\u044B\u0435 \u043F\u043E \u0442\u043E\u0439 \u0436\u0435 \u0441\u0445\u0435\u043C\u0435 \u0435\u0441\u043B\u0438 \u043D\u0443\u0436\u043D\u043E. \u0424\u043E\u0440\u043C\u0430\u0442: \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0447\u0435\u0440\u0435\u0437 `/`, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432, \u0431\u0435\u0437 `#`\n- wiki_sources: \u0422\u041E\u041B\u042C\u041A\u041E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438 (\u0444\u0430\u0439\u043B\u044B \u0432\u043D\u0435 !Wiki/) \u2014 bare \u0438\u043C\u044F \u0431\u0435\u0437 \u043F\u0443\u0442\u0438: [[\u0418\u043C\u044F\u0424\u0430\u0439\u043B\u0430]]. \u041D\u0438\u043A\u043E\u0433\u0434\u0430 [[wiki_domain_page]]\n- wiki_outgoing_links: \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0438\u043A\u0438-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u0444\u0430\u0439\u043B\u044B \u0432\u043D\u0443\u0442\u0440\u0438 !Wiki/) \u2014 bare \u0438\u043C\u044F \u0431\u0435\u0437 \u043F\u0443\u0442\u0438: [[wiki_domain_page]]. \u041D\u0438\u043A\u043E\u0433\u0434\u0430 [[\u0418\u043C\u044F\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430]]\n  \u274C \u0417\u0410\u041F\u0420\u0415\u0429\u0415\u041D\u041E: [[\u0418\u043C\u044F\u0422\u0435\u043A\u0443\u0449\u0435\u0433\u043E\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430]] \u0438\u043B\u0438 [[\u041B\u044E\u0431\u043E\u0439\u0414\u0440\u0443\u0433\u043E\u0439\u0424\u0430\u0439\u043B-\u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A]] \u0432 wiki_outgoing_links.\n     \u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0443\u0436\u0435 \u0437\u0430\u043F\u0438\u0441\u0430\u043D \u0432 wiki_sources \u2014 \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 outgoing_links \u043D\u0435 \u043D\u0443\u0436\u043D\u043E.\n     \u041F\u0440\u0438\u043C\u0435\u0440: \u043E\u0431\u0440\u0430\u0431\u0430\u0442\u044B\u0432\u0430\u0435\u043C \xAB\u0424\u0430\u0440\u043C\u0438\u043D\u0433 \u043B\u0438\u043A\u0432\u0438\u0434\u043D\u043E\u0441\u0442\u0438.md\xBB \u2192 \u041D\u0415\u041B\u042C\u0417\u042F [[\u0424\u0430\u0440\u043C\u0438\u043D\u0433 \u043B\u0438\u043A\u0432\u0438\u0434\u043D\u043E\u0441\u0442\u0438]] \u0432 outgoing_links.\n- \u0412 \u0442\u0435\u043B\u0435 \u0441\u0442\u0430\u0442\u0435\u0439: \u0422\u041E\u041B\u042C\u041A\u041E [[stem]] \u2014 \u043D\u0438\u043A\u043E\u0433\u0434\u0430 [[stem|\u0430\u043B\u0438\u0430\u0441]]. \u0421\u0438\u043D\u0442\u0430\u043A\u0441\u0438\u0441 [[A|B]] \u0437\u0430\u043F\u0440\u0435\u0449\u0451\u043D.\n- \u0420\u0430\u0437\u0434\u0435\u043B "## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438" \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D \u0434\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0444\u0438\u043A\u0441\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 "## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439" \u0441 \u0434\u0430\u0442\u043E\u0439 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u043C\n- "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438" \u2014 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043A \u0441\u0432\u044F\u0437\u044F\u043C\n- \u0414\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0434\u043E\u0431\u0430\u0432\u044C \u043F\u043E\u043B\u0435 "annotation" \u0432 JSON: \u0431\u043E\u0433\u0430\u0442\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0434\u043B\u044F \u0441\u0435\u043C\u0430\u043D\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u043F\u043E\u0438\u0441\u043A\u0430 (embedding + Jaccard). \u041D\u0430 \u041E\u0414\u041D\u041E\u0419 \u0441\u0442\u0440\u043E\u043A\u0435, \u0431\u0435\u0437 \u043F\u0435\u0440\u0435\u043D\u043E\u0441\u043E\u0432. \u041E\u0440\u0438\u0435\u043D\u0442\u0438\u0440 ~500 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432. \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430: <summary 1-2 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0441\u0443\u0442\u0438> \u0417\u0430\u0442\u0440\u0430\u0433\u0438\u0432\u0430\u0435\u0442: <\u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438, \u0442\u0430\u0431\u043B\u0438\u0446\u044B, \u0441\u0438\u0441\u0442\u0435\u043C\u044B, Jira-ID \u0447\u0435\u0440\u0435\u0437 \u0437\u0430\u043F\u044F\u0442\u0443\u044E>. \u0422\u0438\u043F: <\u0442\u0438\u043F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438/\u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F>. \u0422\u0435\u0440\u043C\u0438\u043D\u044B: <\u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B \u0438 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430, \u043A\u043E\u0442\u043E\u0440\u044B\u0445 \u043C\u043E\u0436\u0435\u0442 \u043D\u0435 \u0431\u044B\u0442\u044C \u0432 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0435>. \u041E\u043F\u0438\u0440\u0430\u0439\u0441\u044F \u043D\u0430 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u0441\u0430\u043C\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B. \u041A\u043E\u043D\u043A\u0440\u0435\u0442\u0438\u043A\u0430, \u0431\u0435\u0437 \u0432\u043E\u0434\u044B \u0438 boilerplate \u2014 \u043E\u0431\u0449\u0438\u0435 \u0444\u0440\u0430\u0437\u044B \u043F\u043E\u0434\u043D\u0438\u043C\u0430\u044E\u0442 \u0448\u0443\u043C \u0432 \u043F\u043E\u0438\u0441\u043A\u0435.\n- \u041F\u043E\u043B\u0435 `annotation` \u2014 \u0422\u041E\u041B\u042C\u041A\u041E \u0432 JSON-\u043E\u0442\u0432\u0435\u0442\u0435. \u041D\u0415 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 `annotation:` \u0432\u043E frontmatter \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n- \u041C\u0401\u0420\u0422\u0412\u042B\u0415 \u0421\u0421\u042B\u041B\u041A\u0418: \u043A\u0430\u0436\u0434\u044B\u0439 [[wiki_domain_slug]] \u0432 wiki_outgoing_links \u0438 \u0432 \u0442\u0435\u043B\u0435 \u0441\u0442\u0430\u0442\u044C\u0438 \u043E\u0431\u044F\u0437\u0430\u043D\n  \u043B\u0438\u0431\u043E \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C \u0441\u0440\u0435\u0434\u0438 \xAB\u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\xBB (\u043F\u0435\u0440\u0435\u0434\u0430\u043D\u044B \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435), \u043B\u0438\u0431\u043E\n  \u043F\u0440\u0438\u0441\u0443\u0442\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C \u0432 \u0441\u043F\u0438\u0441\u043A\u0435 pages \u044D\u0442\u043E\u0433\u043E \u043E\u0442\u0432\u0435\u0442\u0430. \u041D\u0435\u0442 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u2014 \u043D\u0435 \u043F\u0438\u0448\u0438 \u0441\u0441\u044B\u043B\u043A\u0443.\n{{schema_block}}\n{{forbidden_stems_block}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u041E \u041F\u0423\u0422\u0415\u0419: \u043F\u0443\u0442\u044C \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0430\u0442\u044C\u0438 = !Wiki/<domain>/<entity>/<Article>.md \u2014 \u0440\u043E\u0432\u043D\u043E 4 \u0441\u0435\u0433\u043C\u0435\u043D\u0442\u0430.\n\u041D\u0435\u043B\u044C\u0437\u044F: !Wiki/os/os/network/NFS.md (\u0434\u043E\u043C\u0435\u043D \u0434\u0432\u0430\u0436\u0434\u044B), !Wiki/os/network/nfs/NFS.md (5 \u0441\u0435\u0433\u043C\u0435\u043D\u0442\u043E\u0432).\n\u041C\u043E\u0436\u043D\u043E:  !Wiki/os/network/NFS.md\n\n\u041E\u0411\u041E\u0413\u0410\u0429\u0415\u041D\u0418\u0415 \u0422\u0418\u041F\u041E\u0412 (entity_types_delta):\n\u0415\u0441\u043B\u0438 \u043F\u0440\u0438 \u0430\u043D\u0430\u043B\u0438\u0437\u0435 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0442\u044B \u043E\u0431\u043D\u0430\u0440\u0443\u0436\u0438\u0432\u0430\u0435\u0448\u044C:\n- \u043D\u043E\u0432\u044B\u0435 \u0442\u0438\u043F\u044B \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0435\u0439 (\u043A\u043B\u044E\u0447 type \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 \u0442\u0435\u043A\u0443\u0449\u0435\u043C \u0441\u043F\u0438\u0441\u043A\u0435 \u0432\u044B\u0448\u0435), \u0438\u043B\u0438\n- \u0443\u043B\u0443\u0447\u0448\u0435\u043D\u0438\u044F \u043A \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u043C \u0442\u0438\u043F\u0430\u043C (\u0431\u043E\u043B\u0435\u0435 \u0442\u043E\u0447\u043D\u043E\u0435 description \u0438\u043B\u0438 \u0434\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0435 extraction_cues \u0434\u043B\u044F \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0433\u043E \u043A\u043B\u044E\u0447\u0430 type) \u2014\n\u0434\u043E\u0431\u0430\u0432\u044C \u043F\u043E\u043B\u0435 entity_types_delta \u0432 JSON-\u043E\u0442\u0432\u0435\u0442. \u0415\u0441\u043B\u0438 \u043D\u0438\u0447\u0435\u0433\u043E \u043D\u043E\u0432\u043E\u0433\u043E \u2014 \u043F\u0440\u043E\u0441\u0442\u043E \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0430\u0439 \u044D\u0442\u043E \u043F\u043E\u043B\u0435.\n\n\u041E\u0411\u042A\u0415\u0414\u0418\u041D\u0415\u041D\u0418\u0415 \u0414\u0423\u0411\u041B\u0418\u041A\u0410\u0422\u041E\u0412 (merge):\n\u0415\u0441\u043B\u0438 \u0441\u0440\u0435\u0434\u0438 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043D\u0430\u0448\u043B\u0438\u0441\u044C \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u043E, \u043E\u043F\u0438\u0441\u044B\u0432\u0430\u044E\u0449\u0438\u0445 \u043E\u0434\u043D\u0443 \u0438 \u0442\u0443 \u0436\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C:\n- \u044D\u043C\u0438\u0442\u044C \u043E\u0434\u043D\u0443 \u043D\u043E\u0432\u0443\u044E \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0432 pages (\u0441 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0451\u043D\u043D\u044B\u043C \u043A\u043E\u043D\u0442\u0435\u043D\u0442\u043E\u043C \u0438 \u043A\u0430\u043D\u043E\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u043C \u043F\u0443\u0442\u0451\u043C)\n- \u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u0438\u0442\u044C \u0441\u0442\u0430\u0440\u044B\u0435 \u043F\u0443\u0442\u0438 \u0432 \u043F\u043E\u043B\u0435 deletes: [{path}, ...]\n\u0421\u0442\u0430\u0440\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0431\u0443\u0434\u0443\u0442 \u0443\u0434\u0430\u043B\u0435\u043D\u044B, \u0438\u043D\u0434\u0435\u043A\u0441 \u043F\u043E\u0447\u0438\u0449\u0435\u043D, backlinks \u0432 \u0442\u0435\u043A\u0443\u0449\u0435\u043C \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0435 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u044B \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 \u2014 \u043D\u0438\u043A\u0430\u043A\u043E\u0433\u043E \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n{"reasoning":"\u041E\u0431\u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0435: \u043A\u0430\u043A\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437\u0432\u043B\u0435\u0447\u0435\u043D\u044B \u0438 \u043F\u043E\u0447\u0435\u043C\u0443","pages":[{"path":"{{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md","content":"---\\nwiki_sources: [\\"[[{{source_stem}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncont\u0435\u043D\u0442...","annotation":"\u0421\u0443\u0442\u044C \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0432 1-2 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F\u0445. \u0417\u0430\u0442\u0440\u0430\u0433\u0438\u0432\u0430\u0435\u0442: \u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438, \u0441\u0438\u0441\u0442\u0435\u043C\u044B, \u0442\u0430\u0431\u043B\u0438\u0446\u044B. \u0422\u0438\u043F: \u0441\u043F\u0440\u0430\u0432\u043E\u0447\u043D\u0430\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C. \u0422\u0435\u0440\u043C\u0438\u043D\u044B: \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B \u0438 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430."}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}\n';
+var ingest_default = '\u0422\u044B \u2014 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442 \u0441\u0438\u043D\u0442\u0435\u0437\u0430 wiki-\u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0418\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0439/\u043E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n\n\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:\n{{entity_types_block}}\n{{lang_notes}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u0410:\n- CREATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 wiki, \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 >= min_mentions_for_page\n- UPDATE: \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442 \u2192 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E, \u041D\u0415 \u0443\u0434\u0430\u043B\u044F\u0442\u044C \u0441\u0442\u0430\u0440\u0443\u044E\n- SKIP: \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u0430\u043B\u043E \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0435\u0441\u0442\u044C\n- \u0418\u041C\u042F \u0424\u0410\u0419\u041B\u0410 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u0441\u0442\u0435\u043C \u0431\u0435\u0437 `.md`) \u041E\u0411\u042F\u0417\u0410\u0422\u0415\u041B\u042C\u041D\u041E \u0438\u043C\u0435\u0435\u0442 \u0432\u0438\u0434 `wiki_{{domain_id}}_<entity_slug>`:\n  - `<entity_slug>` = ASCII-\u0438\u043C\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0432 lowercase snake_case (\u0442\u043E\u043B\u044C\u043A\u043E \u0441\u0438\u043C\u0432\u043E\u043B\u044B `[a-z0-9_]`, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432, \u0434\u0438\u0430\u043A\u0440\u0438\u0442\u0438\u043A\u0438 \u0438 \u0437\u0430\u0433\u043B\u0430\u0432\u043D\u044B\u0445 \u0431\u0443\u043A\u0432).\n  - \u041F\u0440\u0438\u043C\u0435\u0440: `wiki_{{domain_id}}_neural_networks.md`.\n- \u0421\u0442\u0435\u043C wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u041D\u0415 \u0434\u043E\u043B\u0436\u0435\u043D \u0441\u043E\u0432\u043F\u0430\u0434\u0430\u0442\u044C \u0441 \u043B\u044E\u0431\u044B\u043C \u0438\u043C\u0435\u043D\u0435\u043C \u0438\u0437 \u0441\u0435\u043A\u0446\u0438\u0438 \xAB\u0417\u0410\u041F\u0420\u0415\u0429\u0401\u041D\u041D\u042B\u0415 \u0418\u041C\u0415\u041D\u0410\xBB \u2014 \u044D\u0442\u043E \u0444\u0430\u0439\u043B\u044B \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432 \u044D\u0442\u043E\u0433\u043E \u0434\u043E\u043C\u0435\u043D\u0430. Wiki \u043E\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u0438\u0437\u0432\u043B\u0435\u0447\u0451\u043D\u043D\u044B\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438, \u0430 \u043D\u0435 \u0434\u0443\u0431\u043B\u0438\u0440\u0443\u0435\u0442 \u0438\u0441\u0445\u043E\u0434\u043D\u044B\u0435 \u0444\u0430\u0439\u043B\u044B.\n- \u0418\u043C\u044F wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u041D\u0415 \u0434\u043E\u043B\u0436\u043D\u043E \u0441\u043E\u0432\u043F\u0430\u0434\u0430\u0442\u044C \u0441 \u0438\u043C\u0435\u043D\u0435\u043C \u0442\u0435\u043A\u0443\u0449\u0435\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 `{{source_stem}}` (\u0447\u0430\u0441\u0442\u043D\u044B\u0439 \u0441\u043B\u0443\u0447\u0430\u0439 \u043F\u0440\u0435\u0434\u044B\u0434\u0443\u0449\u0435\u0433\u043E \u043F\u0440\u0430\u0432\u0438\u043B\u0430).\n- \u0421\u0438\u043D\u0442\u0435\u0437, \u043D\u0435 \u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u043A\u043E\u043D\u0444\u0438\u0433\u0438/SQL \u043C\u043E\u0436\u043D\u043E \u0446\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 code-\u0431\u043B\u043E\u043A\u0430\u0445.\n- \u041F\u0443\u0442\u044C \u0441\u0442\u0430\u0442\u044C\u0438 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u0435\u0442\u0441\u044F \u0442\u0438\u043F\u043E\u043C \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u2014 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u043E\u0447\u043D\u044B\u0439 \u0448\u0430\u0431\u043B\u043E\u043D \u0438\u0437 \u0441\u0435\u043A\u0446\u0438\u0438 \xAB\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410\xBB (\u0432\u044B\u0448\u0435, \u0434\u043E \u0431\u043B\u043E\u043A\u0430 \u041F\u0420\u0410\u0412\u0418\u041B\u0410), \u043F\u043E\u0434\u0441\u0442\u0430\u0432\u0438\u0432 \u0438\u043C\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0432\u043C\u0435\u0441\u0442\u043E <EntityName>\n- \u0415\u0441\u043B\u0438 \u0442\u0438\u043F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u043D\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0451\u043D \u0438\u043B\u0438 \u0443 \u0434\u043E\u043C\u0435\u043D\u0430 \u043D\u0435\u0442 entity_types \u2192 \u043F\u0443\u0442\u044C \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- tags: \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 (category/subcategory). \u041F\u0435\u0440\u0435\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u0435\u0433\u0438 \u0438\u0437 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446 (\u043F\u0435\u0440\u0435\u0434\u0430\u043D\u044B \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435). \u0421\u043E\u0437\u0434\u0430\u0432\u0430\u0439 \u043D\u043E\u0432\u044B\u0435 \u043F\u043E \u0442\u043E\u0439 \u0436\u0435 \u0441\u0445\u0435\u043C\u0435 \u0435\u0441\u043B\u0438 \u043D\u0443\u0436\u043D\u043E. \u0424\u043E\u0440\u043C\u0430\u0442: \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0447\u0435\u0440\u0435\u0437 `/`, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432, \u0431\u0435\u0437 `#`\n- wiki_sources: \u0422\u041E\u041B\u042C\u041A\u041E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438 (\u0444\u0430\u0439\u043B\u044B \u0432\u043D\u0435 !Wiki/) \u2014 bare \u0438\u043C\u044F \u0431\u0435\u0437 \u043F\u0443\u0442\u0438: [[\u0418\u043C\u044F\u0424\u0430\u0439\u043B\u0430]]. \u041D\u0438\u043A\u043E\u0433\u0434\u0430 [[wiki_domain_page]]\n- wiki_outgoing_links: \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0438\u043A\u0438-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u0444\u0430\u0439\u043B\u044B \u0432\u043D\u0443\u0442\u0440\u0438 !Wiki/) \u2014 bare \u0438\u043C\u044F \u0431\u0435\u0437 \u043F\u0443\u0442\u0438: [[wiki_domain_page]]. \u041D\u0438\u043A\u043E\u0433\u0434\u0430 [[\u0418\u043C\u044F\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430]]\n  \u274C \u0417\u0410\u041F\u0420\u0415\u0429\u0415\u041D\u041E: [[\u0418\u043C\u044F\u0422\u0435\u043A\u0443\u0449\u0435\u0433\u043E\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430]] \u0438\u043B\u0438 [[\u041B\u044E\u0431\u043E\u0439\u0414\u0440\u0443\u0433\u043E\u0439\u0424\u0430\u0439\u043B-\u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A]] \u0432 wiki_outgoing_links.\n     \u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0443\u0436\u0435 \u0437\u0430\u043F\u0438\u0441\u0430\u043D \u0432 wiki_sources \u2014 \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 outgoing_links \u043D\u0435 \u043D\u0443\u0436\u043D\u043E.\n     \u041F\u0440\u0438\u043C\u0435\u0440: \u043E\u0431\u0440\u0430\u0431\u0430\u0442\u044B\u0432\u0430\u0435\u043C \xAB\u0424\u0430\u0440\u043C\u0438\u043D\u0433 \u043B\u0438\u043A\u0432\u0438\u0434\u043D\u043E\u0441\u0442\u0438.md\xBB \u2192 \u041D\u0415\u041B\u042C\u0417\u042F [[\u0424\u0430\u0440\u043C\u0438\u043D\u0433 \u043B\u0438\u043A\u0432\u0438\u0434\u043D\u043E\u0441\u0442\u0438]] \u0432 outgoing_links.\n- \u0412 \u0442\u0435\u043B\u0435 \u0441\u0442\u0430\u0442\u0435\u0439: \u0422\u041E\u041B\u042C\u041A\u041E [[stem]] \u2014 \u043D\u0438\u043A\u043E\u0433\u0434\u0430 [[stem|\u0430\u043B\u0438\u0430\u0441]]. \u0421\u0438\u043D\u0442\u0430\u043A\u0441\u0438\u0441 [[A|B]] \u0437\u0430\u043F\u0440\u0435\u0449\u0451\u043D.\n- \u0420\u0430\u0437\u0434\u0435\u043B "## \u041E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0445\u0430\u0440\u0430\u043A\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043A\u0438" \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D \u0434\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\n- \u041F\u0440\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0438\u0437 \u043D\u043E\u0432\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u2014 \u0444\u0438\u043A\u0441\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432 "## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439" \u0441 \u0434\u0430\u0442\u043E\u0439 \u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u043C\n- "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438" \u2014 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438 \u043D\u0430\u043B\u0438\u0447\u0438\u0438 \u043F\u043E\u044F\u0441\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u043A \u0441\u0432\u044F\u0437\u044F\u043C\n- \u0414\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0434\u043E\u0431\u0430\u0432\u044C \u043F\u043E\u043B\u0435 "annotation" \u0432 JSON: \u0431\u043E\u0433\u0430\u0442\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0434\u043B\u044F \u0441\u0435\u043C\u0430\u043D\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u043F\u043E\u0438\u0441\u043A\u0430 (embedding + Jaccard). \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430: <summary 1-2 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F, \u043E\u0445\u0432\u0430\u0442\u044B\u0432\u0430\u0435\u0442 \u041E\u0421\u041D\u041E\u0412\u041D\u042B\u0415 \u0440\u0430\u0437\u0434\u0435\u043B\u044B \u0442\u0435\u043B\u0430, \u043D\u0435 \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0435\u0440\u0432\u044B\u0439 \u0430\u0431\u0437\u0430\u0446> \u0417\u0430\u0442\u0440\u0430\u0433\u0438\u0432\u0430\u0435\u0442: <\u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438, \u0442\u0430\u0431\u043B\u0438\u0446\u044B, \u0441\u0438\u0441\u0442\u0435\u043C\u044B, Jira-ID \u0447\u0435\u0440\u0435\u0437 \u0437\u0430\u043F\u044F\u0442\u0443\u044E>. \u0422\u0438\u043F: <\u0442\u0438\u043F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438/\u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F>. \u0422\u0435\u0440\u043C\u0438\u043D\u044B: <\u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430 \u0438\u0437 \u041A\u0410\u0416\u0414\u041E\u0413\u041E \u0440\u0430\u0437\u0434\u0435\u043B\u0430 \u2014 \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B, ID, \u0442\u0435\u0440\u043C\u0438\u043D\u044B, \u043A\u043E\u0442\u043E\u0440\u044B\u0445 \u043D\u0435\u0442 \u0432 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0435>. \u041E\u0440\u0438\u0435\u043D\u0442\u0438\u0440 ~600\u2013800 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432, \u0432\u0441\u0451 \u043D\u0430 \u041E\u0414\u041D\u041E\u0419 \u0441\u0442\u0440\u043E\u043A\u0435 \u0431\u0435\u0437 \u043F\u0435\u0440\u0435\u043D\u043E\u0441\u043E\u0432. \u041E\u043F\u0438\u0440\u0430\u0439\u0441\u044F \u043D\u0430 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u0441\u0430\u043C\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B. \u041A\u043E\u043D\u043A\u0440\u0435\u0442\u0438\u043A\u0430, \u0431\u0435\u0437 \u0432\u043E\u0434\u044B \u0438 boilerplate \u2014 \u043E\u0431\u0449\u0438\u0435 \u0444\u0440\u0430\u0437\u044B \u043F\u043E\u0434\u043D\u0438\u043C\u0430\u044E\u0442 \u0448\u0443\u043C \u0432 \u043F\u043E\u0438\u0441\u043A\u0435.\n- \u041F\u043E\u043B\u0435 `annotation` \u2014 \u0422\u041E\u041B\u042C\u041A\u041E \u0432 JSON-\u043E\u0442\u0432\u0435\u0442\u0435. \u041D\u0415 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 `annotation:` \u0432\u043E frontmatter \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n- \u041C\u0401\u0420\u0422\u0412\u042B\u0415 \u0421\u0421\u042B\u041B\u041A\u0418: \u043A\u0430\u0436\u0434\u044B\u0439 [[wiki_domain_slug]] \u0432 wiki_outgoing_links \u0438 \u0432 \u0442\u0435\u043B\u0435 \u0441\u0442\u0430\u0442\u044C\u0438 \u043E\u0431\u044F\u0437\u0430\u043D\n  \u043B\u0438\u0431\u043E \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C \u0441\u0440\u0435\u0434\u0438 \xAB\u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\xBB (\u043F\u0435\u0440\u0435\u0434\u0430\u043D\u044B \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435), \u043B\u0438\u0431\u043E\n  \u043F\u0440\u0438\u0441\u0443\u0442\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C \u0432 \u0441\u043F\u0438\u0441\u043A\u0435 pages \u044D\u0442\u043E\u0433\u043E \u043E\u0442\u0432\u0435\u0442\u0430. \u041D\u0435\u0442 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u2014 \u043D\u0435 \u043F\u0438\u0448\u0438 \u0441\u0441\u044B\u043B\u043A\u0443.\n{{schema_block}}\n{{forbidden_stems_block}}\n\n\u041F\u0420\u0410\u0412\u0418\u041B\u041E \u041F\u0423\u0422\u0415\u0419: \u043F\u0443\u0442\u044C \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0430\u0442\u044C\u0438 = !Wiki/<domain>/<entity>/<Article>.md \u2014 \u0440\u043E\u0432\u043D\u043E 4 \u0441\u0435\u0433\u043C\u0435\u043D\u0442\u0430.\n\u041D\u0435\u043B\u044C\u0437\u044F: !Wiki/os/os/network/NFS.md (\u0434\u043E\u043C\u0435\u043D \u0434\u0432\u0430\u0436\u0434\u044B), !Wiki/os/network/nfs/NFS.md (5 \u0441\u0435\u0433\u043C\u0435\u043D\u0442\u043E\u0432).\n\u041C\u043E\u0436\u043D\u043E:  !Wiki/os/network/NFS.md\n\n\u041E\u0411\u041E\u0413\u0410\u0429\u0415\u041D\u0418\u0415 \u0422\u0418\u041F\u041E\u0412 (entity_types_delta):\n\u0415\u0441\u043B\u0438 \u043F\u0440\u0438 \u0430\u043D\u0430\u043B\u0438\u0437\u0435 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0442\u044B \u043E\u0431\u043D\u0430\u0440\u0443\u0436\u0438\u0432\u0430\u0435\u0448\u044C:\n- \u043D\u043E\u0432\u044B\u0435 \u0442\u0438\u043F\u044B \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0435\u0439 (\u043A\u043B\u044E\u0447 type \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 \u0442\u0435\u043A\u0443\u0449\u0435\u043C \u0441\u043F\u0438\u0441\u043A\u0435 \u0432\u044B\u0448\u0435), \u0438\u043B\u0438\n- \u0443\u043B\u0443\u0447\u0448\u0435\u043D\u0438\u044F \u043A \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u043C \u0442\u0438\u043F\u0430\u043C (\u0431\u043E\u043B\u0435\u0435 \u0442\u043E\u0447\u043D\u043E\u0435 description \u0438\u043B\u0438 \u0434\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0435 extraction_cues \u0434\u043B\u044F \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0433\u043E \u043A\u043B\u044E\u0447\u0430 type) \u2014\n\u0434\u043E\u0431\u0430\u0432\u044C \u043F\u043E\u043B\u0435 entity_types_delta \u0432 JSON-\u043E\u0442\u0432\u0435\u0442. \u0415\u0441\u043B\u0438 \u043D\u0438\u0447\u0435\u0433\u043E \u043D\u043E\u0432\u043E\u0433\u043E \u2014 \u043F\u0440\u043E\u0441\u0442\u043E \u043D\u0435 \u0432\u043A\u043B\u044E\u0447\u0430\u0439 \u044D\u0442\u043E \u043F\u043E\u043B\u0435.\n\n\u041E\u0411\u042A\u0415\u0414\u0418\u041D\u0415\u041D\u0418\u0415 \u0414\u0423\u0411\u041B\u0418\u041A\u0410\u0422\u041E\u0412 (merge):\n\u0415\u0441\u043B\u0438 \u0441\u0440\u0435\u0434\u0438 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0445 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043D\u0430\u0448\u043B\u0438\u0441\u044C \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u043E, \u043E\u043F\u0438\u0441\u044B\u0432\u0430\u044E\u0449\u0438\u0445 \u043E\u0434\u043D\u0443 \u0438 \u0442\u0443 \u0436\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C:\n- \u044D\u043C\u0438\u0442\u044C \u043E\u0434\u043D\u0443 \u043D\u043E\u0432\u0443\u044E \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0432 pages (\u0441 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0451\u043D\u043D\u044B\u043C \u043A\u043E\u043D\u0442\u0435\u043D\u0442\u043E\u043C \u0438 \u043A\u0430\u043D\u043E\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u043C \u043F\u0443\u0442\u0451\u043C)\n- \u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u0438\u0442\u044C \u0441\u0442\u0430\u0440\u044B\u0435 \u043F\u0443\u0442\u0438 \u0432 \u043F\u043E\u043B\u0435 deletes: [{path}, ...]\n\u0421\u0442\u0430\u0440\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0431\u0443\u0434\u0443\u0442 \u0443\u0434\u0430\u043B\u0435\u043D\u044B, \u0438\u043D\u0434\u0435\u043A\u0441 \u043F\u043E\u0447\u0438\u0449\u0435\u043D, backlinks \u0432 \u0442\u0435\u043A\u0443\u0449\u0435\u043C \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0435 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u044B \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 \u2014 \u043D\u0438\u043A\u0430\u043A\u043E\u0433\u043E \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n{"reasoning":"\u041E\u0431\u043E\u0441\u043D\u043E\u0432\u0430\u043D\u0438\u0435: \u043A\u0430\u043A\u0438\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0438\u0437\u0432\u043B\u0435\u0447\u0435\u043D\u044B \u0438 \u043F\u043E\u0447\u0435\u043C\u0443","pages":[{"path":"{{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md","content":"---\\nwiki_sources: [\\"[[{{source_stem}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncont\u0435\u043D\u0442...","annotation":"\u0421\u0443\u0442\u044C \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0432 1-2 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F\u0445. \u0417\u0430\u0442\u0440\u0430\u0433\u0438\u0432\u0430\u0435\u0442: \u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438, \u0441\u0438\u0441\u0442\u0435\u043C\u044B, \u0442\u0430\u0431\u043B\u0438\u0446\u044B. \u0422\u0438\u043F: \u0441\u043F\u0440\u0430\u0432\u043E\u0447\u043D\u0430\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C. \u0422\u0435\u0440\u043C\u0438\u043D\u044B: \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B \u0438 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430."}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}\n';
+
+// prompts/ingest-merge.md
+var ingest_merge_default = '<!-- prompts/ingest-merge.md -->\n\u0422\u044B \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u044F\u0435\u0448\u044C \u0434\u0432\u0435 \u0432\u0438\u043A\u0438-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u043E\u0431 \u043E\u0434\u043D\u043E\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0432 \u043E\u0434\u043D\u0443.\n\n\u0421\u0423\u0429\u0415\u0421\u0422\u0412\u0423\u042E\u0429\u0410\u042F \u0421\u0422\u0420\u0410\u041D\u0418\u0426\u0410 (\u0441\u043E\u0445\u0440\u0430\u043D\u0438 \u0435\u0451 frontmatter, \u043F\u0443\u0442\u044C \u0438 wiki_sources):\n{{existing}}\n\n\u041D\u041E\u0412\u042B\u0419 \u0427\u0415\u0420\u041D\u041E\u0412\u0418\u041A (\u0442\u0430 \u0436\u0435 \u0442\u0435\u043C\u0430, \u0434\u043E\u0431\u0430\u0432\u044C \u0443\u043D\u0438\u043A\u0430\u043B\u044C\u043D\u044B\u0435 \u0444\u0430\u043A\u0442\u044B \u0438\u0437 \u043D\u0435\u0433\u043E):\n{{incoming}}\n\n\u041F\u0440\u0430\u0432\u0438\u043B\u0430:\n- \u0412\u0435\u0440\u043D\u0438 \u041E\u0414\u041D\u0423 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0451\u043D\u043D\u0443\u044E \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443. \u041D\u0435 \u0442\u0435\u0440\u044F\u0439 \u0444\u0430\u043A\u0442\u044B \u043D\u0438 \u0438\u0437 \u043E\u0434\u043D\u043E\u0439 \u0438\u0437 \u043D\u0438\u0445.\n- \u0421\u043E\u0445\u0440\u0430\u043D\u0438 frontmatter \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B; \u0434\u043E\u0431\u0430\u0432\u044C \u043D\u0435\u0434\u043E\u0441\u0442\u0430\u044E\u0449\u0438\u0435 wiki_sources \u0438\u0437 \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A\u0430.\n- \u041D\u0435 \u0434\u0443\u0431\u043B\u0438\u0440\u0443\u0439 \u0440\u0430\u0437\u0434\u0435\u043B\u044B; \u0441\u043B\u0438\u0432\u0430\u0439 \u0431\u043B\u0438\u0437\u043A\u0438\u0435.\n- \u0424\u043E\u0440\u043C\u0430\u0442 \u043E\u0442\u0432\u0435\u0442\u0430 \u2014 \u0441\u0442\u0440\u043E\u0433\u043E JSON: { "content": "<\u043F\u043E\u043B\u043D\u044B\u0439 markdown \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B>", "annotation": "<\u043E\u0434\u043D\u0430 \u0441\u0442\u0440\u043E\u043A\u0430 \u0434\u043B\u044F \u0438\u043D\u0434\u0435\u043A\u0441\u0430>" }.\n';
 
 // prompts/ingest-entities.md
 var ingest_entities_default = '\u0422\u044B \u2014 \u0438\u0437\u0432\u043B\u0435\u043A\u0430\u0442\u0435\u043B\u044C \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0435\u0439 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\n\u0422\u0418\u041F\u042B \u0421\u0423\u0429\u041D\u041E\u0421\u0422\u0415\u0419 \u0414\u041E\u041C\u0415\u041D\u0410:\n{{entity_types_block}}\n{{lang_notes}}\n\n\u0417\u0410\u0414\u0410\u0427\u0410:\n- \u041F\u0440\u043E\u0447\u0438\u0442\u0430\u0439 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A.\n- \u0412\u0435\u0440\u043D\u0438 \u0432\u0441\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438, \u0434\u043E\u0441\u0442\u043E\u0439\u043D\u044B\u0435 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E\u0439 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B:\n  - \u0415\u0441\u043B\u0438 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u0441\u043E\u043E\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0442\u0438\u043F\u0443 \u0432\u044B\u0448\u0435 \u2192 \u0443\u043A\u0430\u0436\u0438 type.\n  - \u0415\u0441\u043B\u0438 \u043D\u0435 \u0441\u043E\u043E\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u043D\u0438 \u043E\u0434\u043D\u043E\u043C\u0443 \u0442\u0438\u043F\u0443, \u043D\u043E \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u044F \u0437\u043D\u0430\u0447\u0438\u043C\u0430 \u2192 \u0432\u0435\u0440\u043D\u0438 \u0431\u0435\u0437 type (\u043D\u043E\u0432\u044B\u0439 \u0442\u0438\u043F, \u0431\u0443\u0434\u0435\u0442 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0451\u043D \u043F\u0440\u0438 \u0441\u0438\u043D\u0442\u0435\u0437\u0435).\n  - \u041D\u0435 \u0432\u043E\u0437\u0432\u0440\u0430\u0449\u0430\u0439 \u043F\u0443\u0441\u0442\u043E\u0439 \u0441\u043F\u0438\u0441\u043E\u043A, \u0435\u0441\u043B\u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0437\u043D\u0430\u0447\u0438\u043C\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438.\n- \u0414\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438:\n  - name: \u043A\u0430\u043D\u043E\u043D\u0438\u0447\u0435\u0441\u043A\u043E\u0435 \u0438\u043C\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 (\u0431\u0435\u0437 \u043A\u0430\u0432\u044B\u0447\u0435\u043A, \u043A\u0430\u043A \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A \u0431\u0443\u0434\u0443\u0449\u0435\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B)\n  - type: \u0442\u0438\u043F \u0438\u0437 \u0441\u043F\u0438\u0441\u043A\u0430 \u0432\u044B\u0448\u0435 (\u043E\u043F\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u043E)\n  - context_snippet: \u043E\u0434\u043D\u0430 \u0444\u0440\u0430\u0437\u0430 \u0438\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430, \u043F\u043E\u044F\u0441\u043D\u044F\u044E\u0449\u0430\u044F \u0437\u0430\u0447\u0435\u043C \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C \u043D\u0443\u0436\u043D\u0430 (\u043E\u043F\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u043E)\n\n\u041D\u0435 \u0434\u0443\u0431\u043B\u0438\u0440\u0443\u0439: \u043E\u0434\u0438\u043D name \u2192 \u043E\u0434\u043D\u0430 \u0437\u0430\u043F\u0438\u0441\u044C. \u041D\u0435 \u0438\u0437\u0432\u043B\u0435\u043A\u0430\u0439 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438 \u0441 min_mentions_for_page > 1, \u0435\u0441\u043B\u0438 \u043E\u043D\u0438 \u0443\u043F\u043E\u043C\u044F\u043D\u0443\u0442\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u0440\u0430\u0437.\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON:\n{"reasoning":"...","entities":[{"name":"...","type":"...","context_snippet":"..."},{"name":"...","context_snippet":"..."}]}\n';
@@ -36720,234 +37644,6 @@ async function removeIndexAnnotation(vaultTools, wikiFolder, pid) {
   await vaultTools.write(indexPath, without.join("\n"));
 }
 
-// src/wiki-graph.ts
-var import_path_browserify3 = __toESM(require_path_browserify(), 1);
-
-// src/wiki-seeds.ts
-var STOP_WORDS = /* @__PURE__ */ new Set([
-  // EN
-  "the",
-  "and",
-  "for",
-  "are",
-  "was",
-  "were",
-  "with",
-  "that",
-  "this",
-  "from",
-  "have",
-  "has",
-  "had",
-  "but",
-  "not",
-  "you",
-  "your",
-  "our",
-  "their",
-  "his",
-  "her",
-  "its",
-  "into",
-  "about",
-  "what",
-  "which",
-  "when",
-  "where",
-  "how",
-  "here",
-  // RU
-  "\u0447\u0442\u043E",
-  "\u043A\u0430\u043A",
-  "\u0434\u043B\u044F",
-  "\u0438\u043B\u0438",
-  "\u044D\u0442\u043E",
-  "\u043F\u0440\u0438",
-  "\u0431\u0435\u0437",
-  "\u0442\u043E\u0442",
-  "\u0435\u0433\u043E",
-  "\u043E\u043D\u0430",
-  "\u043E\u043D\u0438",
-  "\u0431\u044B\u043B",
-  "\u0431\u044B\u043B\u0430",
-  "\u0431\u044B\u0442\u044C",
-  "\u0442\u043E\u0436\u0435",
-  "\u0442\u0430\u043A\u0436\u0435",
-  "\u0435\u0441\u043B\u0438",
-  "\u0442\u043E\u0433\u0434\u0430",
-  "\u043F\u043E\u0442\u043E\u043C",
-  "\u043A\u043E\u0433\u0434\u0430",
-  "\u043E\u0447\u0435\u043D\u044C",
-  "\u0431\u043E\u043B\u0435\u0435",
-  "\u043C\u0435\u043D\u0435\u0435",
-  "\u043D\u0435\u0442",
-  "\u0443\u0436\u0435",
-  "\u0435\u0449\u0451",
-  "\u0435\u0449\u0435"
-]);
-var BODY_CAP = 500;
-function tokenize(s) {
-  const out = /* @__PURE__ */ new Set();
-  if (!s) return out;
-  for (const raw of s.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
-    if (raw.length <= 2) continue;
-    if (STOP_WORDS.has(raw)) continue;
-    out.add(raw);
-  }
-  return out;
-}
-function bodyContent(content) {
-  const m = content.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)/);
-  return (m ? m[1] : content).slice(0, BODY_CAP);
-}
-function parseFmKeywords(content) {
-  const m = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!m) return /* @__PURE__ */ new Set();
-  const kw = m[1].match(/wiki_keywords:\s*\[(.*?)\]/);
-  if (!kw) return /* @__PURE__ */ new Set();
-  return new Set(kw[1].split(",").map((s) => s.trim().replace(/['"]/g, "").toLowerCase()));
-}
-function scoreSeed(questionTokens, pageIdValue, content, annotation) {
-  if (questionTokens.size === 0) return 0;
-  const p = tokenize(pageIdValue);
-  for (const t of parseFmKeywords(content)) p.add(t);
-  for (const t of tokenize(bodyContent(content))) p.add(t);
-  if (annotation) for (const t of tokenize(annotation)) p.add(t);
-  if (p.size === 0) return 0;
-  let inter = 0;
-  for (const t of questionTokens) if (p.has(t)) inter++;
-  return inter / questionTokens.size;
-}
-function selectSeeds(question, pages, topK, minScore, indexAnnotations) {
-  const q = tokenize(question);
-  if (q.size === 0) return [];
-  const scored = [];
-  for (const [path2, content] of pages) {
-    const id = pageId(path2);
-    const annotation = indexAnnotations?.get(id);
-    const score = scoreSeed(q, id, content, annotation);
-    if (score >= minScore && score > 0) scored.push({ id, score });
-  }
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, topK);
-}
-
-// src/wiki-graph.ts
-function pageId(vaultPath) {
-  return (0, import_path_browserify3.basename)(vaultPath, ".md");
-}
-function buildWikiGraph(pages) {
-  const graph = /* @__PURE__ */ new Map();
-  for (const vaultPath of pages.keys()) {
-    graph.set(pageId(vaultPath), /* @__PURE__ */ new Set());
-  }
-  for (const [vaultPath, content] of pages) {
-    const src = pageId(vaultPath);
-    for (const match of content.matchAll(/\[\[([^\]|#]+)/g)) {
-      const tgt = match[1].trim();
-      if (tgt) graph.get(src).add(tgt);
-    }
-  }
-  return graph;
-}
-function bfsExpand(seeds, graph, depth) {
-  if (seeds.length === 0) return /* @__PURE__ */ new Set();
-  const reverse = /* @__PURE__ */ new Map();
-  for (const [src, targets] of graph) {
-    for (const tgt of targets) {
-      if (!reverse.has(tgt)) reverse.set(tgt, /* @__PURE__ */ new Set());
-      reverse.get(tgt).add(src);
-    }
-  }
-  const visited = new Set(seeds);
-  let frontier = new Set(seeds);
-  for (let hop = 0; hop < depth; hop++) {
-    const next = /* @__PURE__ */ new Set();
-    for (const node of frontier) {
-      for (const neighbor of graph.get(node) ?? []) {
-        if (!visited.has(neighbor) && graph.has(neighbor)) {
-          visited.add(neighbor);
-          next.add(neighbor);
-        }
-      }
-      for (const neighbor of reverse.get(node) ?? []) {
-        if (!visited.has(neighbor)) {
-          visited.add(neighbor);
-          next.add(neighbor);
-        }
-      }
-    }
-    if (next.size === 0) break;
-    frontier = next;
-  }
-  return visited;
-}
-async function bfsExpandRanked(seeds, graph, depth, pages, query, bfsTopK, annotations, similarity) {
-  const allBfs = bfsExpand(seeds, graph, depth);
-  const seedSet = new Set(seeds);
-  if (bfsTopK <= 0) return { selectedIds: allBfs, expandedScores: {} };
-  const nonSeeds = [...allBfs].filter((pid) => !seedSet.has(pid));
-  if (nonSeeds.length === 0) return { selectedIds: new Set(seedSet), expandedScores: {} };
-  const pidToPath = /* @__PURE__ */ new Map();
-  for (const vaultPath of pages.keys()) {
-    pidToPath.set(pageId(vaultPath), vaultPath);
-  }
-  const nonSeedPaths = nonSeeds.flatMap((pid) => {
-    const p = pidToPath.get(pid);
-    return p ? [p] : [];
-  });
-  if (similarity) {
-    try {
-      const scored2 = await similarity.selectRelevantScored(
-        query,
-        annotations ?? /* @__PURE__ */ new Map(),
-        nonSeedPaths
-      );
-      const top2 = scored2.slice(0, bfsTopK);
-      const expandedScores2 = {};
-      for (const { path: path2, score } of top2) expandedScores2[pageId(path2)] = score;
-      return { selectedIds: /* @__PURE__ */ new Set([...seedSet, ...Object.keys(expandedScores2)]), expandedScores: expandedScores2 };
-    } catch (err) {
-      console.warn("[bfsExpandRanked] similarity threw, returning full BFS:", err);
-      return { selectedIds: allBfs, expandedScores: {} };
-    }
-  }
-  const questionTokens = tokenize(query);
-  const scored = nonSeeds.map((pid) => {
-    const path2 = pidToPath.get(pid);
-    const content = path2 ? pages.get(path2) ?? "" : "";
-    return { pid, score: scoreSeed(questionTokens, pid, content) };
-  });
-  scored.sort((a, b) => b.score - a.score);
-  const top = scored.slice(0, bfsTopK);
-  const expandedScores = {};
-  for (const { pid, score } of top) expandedScores[pid] = score;
-  return { selectedIds: /* @__PURE__ */ new Set([...seedSet, ...Object.keys(expandedScores)]), expandedScores };
-}
-function checkGraphStructure(graph) {
-  const inDegree = /* @__PURE__ */ new Map();
-  for (const node of graph.keys()) {
-    if (!inDegree.has(node)) inDegree.set(node, 0);
-    for (const tgt of graph.get(node)) {
-      inDegree.set(tgt, (inDegree.get(tgt) ?? 0) + 1);
-    }
-  }
-  const issues = [];
-  for (const [node, neighbors] of graph) {
-    const outDeg = neighbors.size;
-    const inDeg = inDegree.get(node) ?? 0;
-    if (inDeg === 0 && outDeg === 0) {
-      issues.push(`- ${node}: isolated node (no links in or out)`);
-    }
-    for (const tgt of neighbors) {
-      if (graph.has(tgt) && !graph.get(tgt).has(node)) {
-        issues.push(`- ${node} \u2192 [[${tgt}]] not reciprocated`);
-      }
-    }
-  }
-  return issues.join("\n");
-}
-
 // src/wiki-log.ts
 function ts() {
   return (/* @__PURE__ */ new Date()).toISOString().slice(0, 19);
@@ -36965,6 +37661,8 @@ function buildEntry(domainId, event) {
       } else if (e.action === "\u041E\u0411\u041D\u041E\u0412\u041B\u0415\u041D\u0410") {
         const status = e.statusFrom ? `${e.statusFrom}\u2192${e.statusTo}` : e.statusTo ?? "unknown";
         lines.push(`- \u041E\u0411\u041D\u041E\u0412\u041B\u0415\u041D\u0410: ${e.path} (${status})`);
+      } else if (e.action === "\u041E\u0411\u042A\u0415\u0414\u0418\u041D\u0415\u041D\u0410") {
+        lines.push(`- \u041E\u0411\u042A\u0415\u0414\u0418\u041D\u0415\u041D\u0410: ${e.path}`);
       } else {
         lines.push(`- \u0423\u0414\u0410\u041B\u0415\u041D\u0410: ${e.path}`);
       }
@@ -37412,6 +38110,11 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   pages = pages.map((p) => ({ ...p, content: wlFixResult.fixed.get(p.path) ?? p.content }));
   const written = [];
   const logEntries = [];
+  const dedupOn = (opts.dedupOnIngest ?? false) && (opts.dedupThreshold ?? 0) > 0 && !!similarity;
+  const dedupThreshold = opts.dedupThreshold ?? 0.85;
+  const pidToPath = new Map(nonMetaPaths.map((p) => [pageId(p), p]));
+  const createdThisRun = /* @__PURE__ */ new Set();
+  if (dedupOn && similarity.config.mode === "jaccard") similarity.setJaccardCorpus(annotations);
   for (const page of pages) {
     if (!page.path.startsWith(wikiVaultPath + "/")) {
       yield { kind: "tool_use", name: "Write", input: { path: page.path } };
@@ -37423,6 +38126,62 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
       existingContent = await vaultTools.read(page.path);
     } catch {
     }
+    if (dedupOn && existingContent === null) {
+      const candidateText = `${page.annotation ?? ""}
+
+${page.content}`;
+      const exclude = /* @__PURE__ */ new Set([pageId(page.path), ...createdThisRun]);
+      const hit = await similarity.maxSimilarityToExisting(candidateText, exclude);
+      if (hit.pid && hit.score >= dedupThreshold) {
+        const targetPath = pidToPath.get(hit.pid);
+        let existingTarget = null;
+        if (targetPath) {
+          try {
+            existingTarget = await vaultTools.read(targetPath);
+          } catch {
+          }
+        }
+        if (targetPath && existingTarget !== null) {
+          yield {
+            kind: "info_text",
+            icon: "\u{1F501}",
+            summary: `\u0414\u0443\u0431\u043B\u044C: ${pageId(page.path)} \u2248 ${hit.pid} (cosine ${hit.score.toFixed(2)}) \u2192 merge`,
+            details: [targetPath]
+          };
+          const mergeMsgs = [{ role: "user", content: render(ingest_merge_default, { existing: existingTarget, incoming: page.content }) }];
+          try {
+            const merged = await parseWithRetry({
+              llm,
+              model,
+              baseMessages: mergeMsgs,
+              opts,
+              schema: MergedPageOutputSchema,
+              maxRetries: opts.structuredRetries ?? 1,
+              callSite: "ingest.merge",
+              signal,
+              onEvent: () => {
+              }
+            });
+            yield { kind: "tool_use", name: "Update", input: { path: targetPath } };
+            await vaultTools.write(targetPath, merged.value.content);
+            written.push(targetPath);
+            yield { kind: "tool_result", ok: true, preview: `merged \u2190 ${pageId(page.path)}` };
+            const relTarget = targetPath.slice(wikiVaultPath.length + 1);
+            logEntries.push({ path: relTarget, action: "\u041E\u0411\u042A\u0415\u0414\u0418\u041D\u0415\u041D\u0410" });
+            if (merged.value.annotation) {
+              try {
+                await upsertIndexAnnotation(vaultTools, wikiVaultPath, hit.pid, merged.value.annotation, targetPath);
+              } catch {
+              }
+            }
+            continue;
+          } catch (e) {
+            yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: `merge \u043D\u0435 \u0443\u0434\u0430\u043B\u0441\u044F, \u0441\u043E\u0437\u0434\u0430\u044E \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E: ${e.message}` };
+          }
+        }
+      }
+    }
+    if (existingContent === null) createdThisRun.add(pageId(page.path));
     const { content: repairedPage, warnings: pageWarnings } = validateAndRepairWikiPageFrontmatter(page.content);
     if (pageWarnings.length > 0) {
       yield {
@@ -37500,7 +38259,8 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   const createdCount = logEntries.filter((e) => e.action === "\u0421\u041E\u0417\u0414\u0410\u041D\u0410").length;
   const updatedCount = logEntries.filter((e) => e.action === "\u041E\u0411\u041D\u041E\u0412\u041B\u0415\u041D\u0410").length;
   const mergedCount = logEntries.filter((e) => e.action === "\u0423\u0414\u0410\u041B\u0415\u041D\u0410").length;
-  const resultText = buildIngestSummary(domain.id, sourceVaultPath, createdCount, updatedCount, mergedCount, pages.length);
+  const dedupMergedCount = logEntries.filter((e) => e.action === "\u041E\u0411\u042A\u0415\u0414\u0418\u041D\u0415\u041D\u0410").length;
+  const resultText = buildIngestSummary(domain.id, sourceVaultPath, createdCount, updatedCount, mergedCount, dedupMergedCount, pages.length);
   yield { kind: "assistant_text", delta: resultText };
   const deletedStems = new Set(deletedPaths.map((p) => p.split("/").pop().replace(/\.md$/, "")));
   if (written.length > 0 || deletedPaths.length > 0) {
@@ -37563,7 +38323,12 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     try {
       const updatedIndex = await vaultTools.read(domainIndexPath(wikiVaultPath)).catch(() => "");
       const updatedAnnotations = parseIndexAnnotations(updatedIndex);
-      await similarity.refreshCache(domainRoot, vaultTools, updatedAnnotations);
+      const writtenSet = new Set(written);
+      const pageBodies = /* @__PURE__ */ new Map();
+      for (const page of pages) {
+        if (writtenSet.has(page.path)) pageBodies.set(pageId(page.path), page.content);
+      }
+      await similarity.refreshCache(domainRoot, vaultTools, updatedAnnotations, pageBodies);
     } catch {
     }
   }
@@ -37572,9 +38337,9 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   }
   yield { kind: "result", durationMs: Date.now() - start, text: resultText, outputTokens: outputTokens || void 0 };
 }
-function buildIngestSummary(domainId, sourcePath, createdCount, updatedCount, mergedCount, total) {
+function buildIngestSummary(domainId, sourcePath, createdCount, updatedCount, mergedCount, dedupMergedCount, total) {
   const src = sourcePath.split("/").pop() ?? sourcePath;
-  const totalActed = createdCount + updatedCount + mergedCount;
+  const totalActed = createdCount + updatedCount + mergedCount + dedupMergedCount;
   if (totalActed === 0) {
     return `\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \xAB${src}\xBB \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u0430\u043D \u2014 \u043D\u043E\u0432\u044B\u0445 \u0438\u043B\u0438 \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043D\u0435\u0442.`;
   }
@@ -37582,8 +38347,9 @@ function buildIngestSummary(domainId, sourcePath, createdCount, updatedCount, me
   if (createdCount > 0) parts.push(`\u0441\u043E\u0437\u0434\u0430\u043D\u043E ${createdCount}`);
   if (updatedCount > 0) parts.push(`\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E ${updatedCount}`);
   if (mergedCount > 0) parts.push(`\u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0435\u043D\u043E ${mergedCount}`);
+  if (dedupMergedCount > 0) parts.push(`\u0434\u0443\u0431\u043B\u0435\u0439 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0435\u043D\u043E ${dedupMergedCount}`);
   const countStr = parts.length === 1 ? `${parts[0]} \u0441\u0442\u0440.` : parts.join(", ");
-  const skipped = total - (createdCount + updatedCount);
+  const skipped = total - (createdCount + updatedCount + dedupMergedCount);
   const errStr = skipped > 0 ? `, \u043E\u0448\u0438\u0431\u043E\u043A ${skipped}` : "";
   return `\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \xAB${src}\xBB \u2192 \u0434\u043E\u043C\u0435\u043D \xAB${domainId}\xBB: ${countStr}${errStr}`;
 }
@@ -37853,7 +38619,7 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   let outputTokens = 0;
   let seeds;
   let seedScores = {};
-  if (similarity && similarity.config.mode === "embedding") {
+  if (similarity && (similarity.config.mode === "embedding" || similarity.config.mode === "hybrid")) {
     await similarity.loadCache(wikiVaultPath, vaultTools);
     const allAnnotatedPaths = [...indexAnnotations.keys()].map((id) => `${wikiVaultPath}/${id}.md`);
     const selected = await similarity.selectRelevantScored(question, indexAnnotations, allAnnotatedPaths);
@@ -38118,7 +38884,7 @@ ${types}${notes}`;
 var import_path_browserify5 = __toESM(require_path_browserify(), 1);
 
 // prompts/lint.md
-var lint_default = '\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u0438 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0410\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0439 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u043E wiki: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442, \u0431\u0438\u0442\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438.\n\u041E\u0434\u043D\u043E\u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043F\u043E\u0434\u0433\u043E\u0442\u043E\u0432\u044C \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0435 \u0432\u0435\u0440\u0441\u0438\u0438 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446.\n{{entity_types_block}}\n{{schema_block}}\n\n\u041F\u0440\u0438 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0441\u0442\u0440\u0430\u043D\u0438\u0446:\n- tags: \u043F\u0440\u043E\u0432\u0435\u0440\u044C \u0438 \u043E\u0431\u043D\u043E\u0432\u0438 \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 (category/subcategory). \u041F\u0435\u0440\u0435\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u0435\u0433\u0438 \u0438\u0437 \u0434\u0440\u0443\u0433\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0434\u043E\u043C\u0435\u043D\u0430 (\u043F\u0435\u0440\u0435\u0434\u0430\u043D\u044B \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435). \u0424\u043E\u0440\u043C\u0430\u0442: \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0447\u0435\u0440\u0435\u0437 `/`, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432, \u0431\u0435\u0437 `#`\n- "annotation": \u0431\u043E\u0433\u0430\u0442\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0434\u043B\u044F \u0441\u0435\u043C\u0430\u043D\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u043F\u043E\u0438\u0441\u043A\u0430 (embedding + Jaccard). \u041D\u0430 \u041E\u0414\u041D\u041E\u0419 \u0441\u0442\u0440\u043E\u043A\u0435, \u0431\u0435\u0437 \u043F\u0435\u0440\u0435\u043D\u043E\u0441\u043E\u0432. \u041E\u0440\u0438\u0435\u043D\u0442\u0438\u0440 ~500 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432. \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430: <summary 1-2 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0441\u0443\u0442\u0438> \u0417\u0430\u0442\u0440\u0430\u0433\u0438\u0432\u0430\u0435\u0442: <\u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438, \u0442\u0430\u0431\u043B\u0438\u0446\u044B, \u0441\u0438\u0441\u0442\u0435\u043C\u044B, Jira-ID \u0447\u0435\u0440\u0435\u0437 \u0437\u0430\u043F\u044F\u0442\u0443\u044E>. \u0422\u0438\u043F: <\u0442\u0438\u043F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438/\u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F>. \u0422\u0435\u0440\u043C\u0438\u043D\u044B: <\u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B \u0438 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430, \u043A\u043E\u0442\u043E\u0440\u044B\u0445 \u043C\u043E\u0436\u0435\u0442 \u043D\u0435 \u0431\u044B\u0442\u044C \u0432 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0435>. \u041E\u043F\u0438\u0440\u0430\u0439\u0441\u044F \u043D\u0430 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u0441\u0430\u043C\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B. \u041A\u043E\u043D\u043A\u0440\u0435\u0442\u0438\u043A\u0430, \u0431\u0435\u0437 \u0432\u043E\u0434\u044B \u0438 boilerplate \u2014 \u043E\u0431\u0449\u0438\u0435 \u0444\u0440\u0430\u0437\u044B \u043F\u043E\u0434\u043D\u0438\u043C\u0430\u044E\u0442 \u0448\u0443\u043C \u0432 \u043F\u043E\u0438\u0441\u043A\u0435.\n- \u041F\u043E\u043B\u0435 `annotation` \u2014 \u0422\u041E\u041B\u042C\u041A\u041E \u0432 JSON-\u043E\u0442\u0432\u0435\u0442\u0435. \u041D\u0415 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 `annotation:` \u0432\u043E frontmatter \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n- \u043C\u0451\u0440\u0442\u0432\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438 [[X]] \u0443\u0431\u0435\u0440\u0438 \u0438\u043B\u0438 \u0437\u0430\u043C\u0435\u043D\u0438; \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0439 frontmatter \u0434\u043E\u0431\u0430\u0432\u044C; \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0438\n- WikiLink \u0431\u0435\u0437 \u0430\u043B\u0438\u0430\u0441\u043E\u0432: \u0442\u043E\u043B\u044C\u043A\u043E `[[target]]`, \u043D\u0438\u043A\u043E\u0433\u0434\u0430 `[[target|alias]]`\n- wiki_sources: \u043A\u0430\u0436\u0434\u044B\u0439 \u044D\u043B\u0435\u043C\u0435\u043D\u0442 \u0441\u043F\u0438\u0441\u043A\u0430 \u041E\u0411\u042F\u0417\u0410\u0422\u0415\u041B\u042C\u041D\u041E \u0432 \u0434\u0432\u043E\u0439\u043D\u044B\u0445 \u043A\u0430\u0432\u044B\u0447\u043A\u0430\u0445: `"[[\u0418\u043C\u044F\u0424\u0430\u0439\u043B\u0430]]"`. \u0411\u0435\u0437 \u043A\u0430\u0432\u044B\u0447\u0435\u043A YAML \u043F\u0430\u0440\u0441\u0438\u0442 `[[...]]` \u043A\u0430\u043A \u0432\u043B\u043E\u0436\u0435\u043D\u043D\u044B\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u2014 \u044D\u0442\u043E \u0441\u043B\u043E\u043C\u0430\u0435\u0442 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443.\n\n\u041F\u0440\u0438 \u043E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u0438\u0438 \u0434\u0443\u0431\u043B\u0438\u0440\u0443\u044E\u0449\u0438\u0445\u0441\u044F \u0441\u0442\u0430\u0442\u0435\u0439 \u0432 \u043F\u0435\u0440\u0435\u0434\u0430\u043D\u043D\u043E\u043C \u043D\u0430\u0431\u043E\u0440\u0435:\n- \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0438 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0434\u0443\u0431\u043B\u0435\u0439 \u0432 \u043E\u0441\u043D\u043E\u0432\u043D\u0443\u044E \u0441\u0442\u0430\u0442\u044C\u044E (\u0432\u043A\u043B\u044E\u0447\u0438 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0451\u043D\u043D\u0443\u044E \u0441\u0442\u0430\u0442\u044C\u044E \u0432 fixes[])\n- \u0443\u043A\u0430\u0436\u0438 \u043F\u0443\u0442\u0438 \u0434\u0443\u0431\u043B\u0435\u0439 \u0432 \u043F\u043E\u043B\u0435 deletes[].path\n- \u0443\u043A\u0430\u0436\u0438 \u043F\u0443\u0442\u044C \u043E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u0441\u0442\u0430\u0442\u044C\u0438 \u0432 deletes[].redirect_to \u0434\u043B\u044F \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0441\u0441\u044B\u043B\u043E\u043A\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 \u2014 \u043D\u0438\u043A\u0430\u043A\u043E\u0433\u043E \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n{"reasoning":"\u0446\u0435\u043F\u043E\u0447\u043A\u0430 \u0440\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439","report":"## \u041E\u0442\u0447\u0451\u0442 lint\\n\\n\u0410\u043D\u0430\u043B\u0438\u0437 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 Markdown...","fixes":[{"path":"!Wiki/domain/type/Entity.md","content":"\u043F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B","annotation":"\u0421\u0443\u0442\u044C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0432 1-2 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F\u0445. \u0417\u0430\u0442\u0440\u0430\u0433\u0438\u0432\u0430\u0435\u0442: \u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438, \u0441\u0438\u0441\u0442\u0435\u043C\u044B, \u0442\u0430\u0431\u043B\u0438\u0446\u044B. \u0422\u0438\u043F: \u0441\u043F\u0440\u0430\u0432\u043E\u0447\u043D\u0430\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C. \u0422\u0435\u0440\u043C\u0438\u043D\u044B: \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B \u0438 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430."}],"deletes":[{"path":"!Wiki/domain/type/Duplicate.md","redirect_to":"!Wiki/domain/type/Entity.md"}]}\n\n\u041F\u043E\u043B\u0435 `fixes` \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0422\u041E\u041B\u042C\u041A\u041E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0435\u0441\u043B\u0438 \u043F\u0440\u0430\u0432\u043E\u043A \u043D\u0435\u0442).\n\u041F\u043E\u043B\u0435 `deletes` \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B-\u0434\u0443\u0431\u043B\u0438 \u0434\u043B\u044F \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F (\u043F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0438\u043B\u0438 \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0435\u0441\u043B\u0438 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u0439 \u043D\u0435\u0442).\n\u041F\u043E\u043B\u0435 `report` \u2014 \u043F\u043E\u043B\u043D\u044B\u0439 markdown-\u043E\u0442\u0447\u0451\u0442 \u0434\u043B\u044F \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F.\n';
+var lint_default = '\u0422\u044B \u2014 \u0440\u0435\u0446\u0435\u043D\u0437\u0435\u043D\u0442 \u0438 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u0410\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0439 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u043E wiki: \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0431\u0435\u043B\u044B, \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F, \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0438\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442, \u0431\u0438\u0442\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438.\n\u041E\u0434\u043D\u043E\u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043F\u043E\u0434\u0433\u043E\u0442\u043E\u0432\u044C \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0435 \u0432\u0435\u0440\u0441\u0438\u0438 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446.\n{{entity_types_block}}\n{{schema_block}}\n\n\u041F\u0440\u0438 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0438 \u0441\u0442\u0440\u0430\u043D\u0438\u0446:\n- tags: \u043F\u0440\u043E\u0432\u0435\u0440\u044C \u0438 \u043E\u0431\u043D\u043E\u0432\u0438 \u0438\u0435\u0440\u0430\u0440\u0445\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0442\u0435\u0433\u0438 (category/subcategory). \u041F\u0435\u0440\u0435\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u0442\u0435\u0433\u0438 \u0438\u0437 \u0434\u0440\u0443\u0433\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0434\u043E\u043C\u0435\u043D\u0430 (\u043F\u0435\u0440\u0435\u0434\u0430\u043D\u044B \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435). \u0424\u043E\u0440\u043C\u0430\u0442: \u0441\u0442\u0440\u043E\u0447\u043D\u044B\u0435, \u0447\u0435\u0440\u0435\u0437 `/`, \u0431\u0435\u0437 \u043F\u0440\u043E\u0431\u0435\u043B\u043E\u0432, \u0431\u0435\u0437 `#`\n- "annotation": \u0431\u043E\u0433\u0430\u0442\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0434\u043B\u044F \u0441\u0435\u043C\u0430\u043D\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u043F\u043E\u0438\u0441\u043A\u0430 (embedding + Jaccard). \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430: <summary 1-2 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F, \u043E\u0445\u0432\u0430\u0442\u044B\u0432\u0430\u0435\u0442 \u041E\u0421\u041D\u041E\u0412\u041D\u042B\u0415 \u0440\u0430\u0437\u0434\u0435\u043B\u044B \u0442\u0435\u043B\u0430, \u043D\u0435 \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0435\u0440\u0432\u044B\u0439 \u0430\u0431\u0437\u0430\u0446> \u0417\u0430\u0442\u0440\u0430\u0433\u0438\u0432\u0430\u0435\u0442: <\u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438, \u0442\u0430\u0431\u043B\u0438\u0446\u044B, \u0441\u0438\u0441\u0442\u0435\u043C\u044B, Jira-ID \u0447\u0435\u0440\u0435\u0437 \u0437\u0430\u043F\u044F\u0442\u0443\u044E>. \u0422\u0438\u043F: <\u0442\u0438\u043F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438/\u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F>. \u0422\u0435\u0440\u043C\u0438\u043D\u044B: <\u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430 \u0438\u0437 \u041A\u0410\u0416\u0414\u041E\u0413\u041E \u0440\u0430\u0437\u0434\u0435\u043B\u0430 \u2014 \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B, ID, \u0442\u0435\u0440\u043C\u0438\u043D\u044B, \u043A\u043E\u0442\u043E\u0440\u044B\u0445 \u043D\u0435\u0442 \u0432 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0435>. \u041E\u0440\u0438\u0435\u043D\u0442\u0438\u0440 ~600\u2013800 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432, \u0432\u0441\u0451 \u043D\u0430 \u041E\u0414\u041D\u041E\u0419 \u0441\u0442\u0440\u043E\u043A\u0435 \u0431\u0435\u0437 \u043F\u0435\u0440\u0435\u043D\u043E\u0441\u043E\u0432. \u041E\u043F\u0438\u0440\u0430\u0439\u0441\u044F \u043D\u0430 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 \u0441\u0430\u043C\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B. \u041A\u043E\u043D\u043A\u0440\u0435\u0442\u0438\u043A\u0430, \u0431\u0435\u0437 \u0432\u043E\u0434\u044B \u0438 boilerplate \u2014 \u043E\u0431\u0449\u0438\u0435 \u0444\u0440\u0430\u0437\u044B \u043F\u043E\u0434\u043D\u0438\u043C\u0430\u044E\u0442 \u0448\u0443\u043C \u0432 \u043F\u043E\u0438\u0441\u043A\u0435.\n- \u041F\u043E\u043B\u0435 `annotation` \u2014 \u0422\u041E\u041B\u042C\u041A\u041E \u0432 JSON-\u043E\u0442\u0432\u0435\u0442\u0435. \u041D\u0415 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 `annotation:` \u0432\u043E frontmatter \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.\n- \u043C\u0451\u0440\u0442\u0432\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438 [[X]] \u0443\u0431\u0435\u0440\u0438 \u0438\u043B\u0438 \u0437\u0430\u043C\u0435\u043D\u0438; \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0439 frontmatter \u0434\u043E\u0431\u0430\u0432\u044C; \u0434\u0443\u0431\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0438\n- WikiLink \u0431\u0435\u0437 \u0430\u043B\u0438\u0430\u0441\u043E\u0432: \u0442\u043E\u043B\u044C\u043A\u043E `[[target]]`, \u043D\u0438\u043A\u043E\u0433\u0434\u0430 `[[target|alias]]`\n- wiki_sources: \u043A\u0430\u0436\u0434\u044B\u0439 \u044D\u043B\u0435\u043C\u0435\u043D\u0442 \u0441\u043F\u0438\u0441\u043A\u0430 \u041E\u0411\u042F\u0417\u0410\u0422\u0415\u041B\u042C\u041D\u041E \u0432 \u0434\u0432\u043E\u0439\u043D\u044B\u0445 \u043A\u0430\u0432\u044B\u0447\u043A\u0430\u0445: `"[[\u0418\u043C\u044F\u0424\u0430\u0439\u043B\u0430]]"`. \u0411\u0435\u0437 \u043A\u0430\u0432\u044B\u0447\u0435\u043A YAML \u043F\u0430\u0440\u0441\u0438\u0442 `[[...]]` \u043A\u0430\u043A \u0432\u043B\u043E\u0436\u0435\u043D\u043D\u044B\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u2014 \u044D\u0442\u043E \u0441\u043B\u043E\u043C\u0430\u0435\u0442 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443.\n\n\u041F\u0440\u0438 \u043E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u0438\u0438 \u0434\u0443\u0431\u043B\u0438\u0440\u0443\u044E\u0449\u0438\u0445\u0441\u044F \u0441\u0442\u0430\u0442\u0435\u0439 \u0432 \u043F\u0435\u0440\u0435\u0434\u0430\u043D\u043D\u043E\u043C \u043D\u0430\u0431\u043E\u0440\u0435:\n- \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0438 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0434\u0443\u0431\u043B\u0435\u0439 \u0432 \u043E\u0441\u043D\u043E\u0432\u043D\u0443\u044E \u0441\u0442\u0430\u0442\u044C\u044E (\u0432\u043A\u043B\u044E\u0447\u0438 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0451\u043D\u043D\u0443\u044E \u0441\u0442\u0430\u0442\u044C\u044E \u0432 fixes[])\n- \u0443\u043A\u0430\u0436\u0438 \u043F\u0443\u0442\u0438 \u0434\u0443\u0431\u043B\u0435\u0439 \u0432 \u043F\u043E\u043B\u0435 deletes[].path\n- \u0443\u043A\u0430\u0436\u0438 \u043F\u0443\u0442\u044C \u043E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u0441\u0442\u0430\u0442\u044C\u0438 \u0432 deletes[].redirect_to \u0434\u043B\u044F \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0441\u0441\u044B\u043B\u043E\u043A\n\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E JSON-\u043E\u0431\u044A\u0435\u043A\u0442 \u2014 \u043D\u0438\u043A\u0430\u043A\u043E\u0433\u043E \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u0442\u0435\u043A\u0441\u0442\u0430:\n{"reasoning":"\u0446\u0435\u043F\u043E\u0447\u043A\u0430 \u0440\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0439","report":"## \u041E\u0442\u0447\u0451\u0442 lint\\n\\n\u0410\u043D\u0430\u043B\u0438\u0437 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 Markdown...","fixes":[{"path":"!Wiki/domain/type/Entity.md","content":"\u043F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0435\u043D\u0442 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B","annotation":"\u0421\u0443\u0442\u044C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0432 1-2 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F\u0445. \u0417\u0430\u0442\u0440\u0430\u0433\u0438\u0432\u0430\u0435\u0442: \u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438, \u0441\u0438\u0441\u0442\u0435\u043C\u044B, \u0442\u0430\u0431\u043B\u0438\u0446\u044B. \u0422\u0438\u043F: \u0441\u043F\u0440\u0430\u0432\u043E\u0447\u043D\u0430\u044F \u0441\u0443\u0449\u043D\u043E\u0441\u0442\u044C. \u0422\u0435\u0440\u043C\u0438\u043D\u044B: \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B \u0438 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430 \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430."}],"deletes":[{"path":"!Wiki/domain/type/Duplicate.md","redirect_to":"!Wiki/domain/type/Entity.md"}]}\n\n\u041F\u043E\u043B\u0435 `fixes` \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0422\u041E\u041B\u042C\u041A\u041E \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0435\u0441\u043B\u0438 \u043F\u0440\u0430\u0432\u043E\u043A \u043D\u0435\u0442).\n\u041F\u043E\u043B\u0435 `deletes` \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B-\u0434\u0443\u0431\u043B\u0438 \u0434\u043B\u044F \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F (\u043F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432 \u0438\u043B\u0438 \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0435\u0441\u043B\u0438 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u0439 \u043D\u0435\u0442).\n\u041F\u043E\u043B\u0435 `report` \u2014 \u043F\u043E\u043B\u043D\u044B\u0439 markdown-\u043E\u0442\u0447\u0451\u0442 \u0434\u043B\u044F \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F.\n';
 
 // prompts/lint-actualize.md
 var lint_actualize_default = '\u0422\u044B \u2014 \u0430\u0440\u0445\u0438\u0442\u0435\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439. \u041F\u0440\u043E\u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0439 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u043A\u043E\u043D\u0444\u0438\u0433 \u0434\u043E\u043C\u0435\u043D\u0430 \u0438 \u0440\u0435\u0430\u043B\u044C\u043D\u043E\u0435 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u043C\u043E\u0435 wiki.\n\u0412\u0435\u0440\u043D\u0438 \u0422\u041E\u041B\u042C\u041A\u041E \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441 \u043E\u0431\u043D\u043E\u0432\u043B\u0451\u043D\u043D\u044B\u043C\u0438 \u043F\u043E\u043B\u044F\u043C\u0438:\n{\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"..."}],\n  "language_notes": "..."\n}\n\u041F\u0440\u0430\u0432\u0438\u043B\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F:\n- \u0421\u043E\u0445\u0440\u0430\u043D\u044F\u0439 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u0442\u0438\u043F\u044B \u0435\u0441\u043B\u0438 \u043E\u043D\u0438 \u043F\u043E\u043B\u0435\u0437\u043D\u044B, \u0443\u0442\u043E\u0447\u043D\u044F\u0439 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u044F \u043F\u043E \u0440\u0435\u0430\u043B\u044C\u043D\u043E\u043C\u0443 \u043A\u043E\u043D\u0442\u0435\u043D\u0442\u0443\n- \u0414\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u043D\u043E\u0432\u044B\u0435 \u0442\u0438\u043F\u044B \u0435\u0441\u043B\u0438 \u0432 wiki \u0435\u0441\u0442\u044C \u043F\u0430\u0442\u0442\u0435\u0440\u043D\u044B, \u043D\u0435 \u043F\u043E\u043A\u0440\u044B\u0442\u044B\u0435 \u0442\u0435\u043A\u0443\u0449\u0438\u043C \u043A\u043E\u043D\u0444\u0438\u0433\u043E\u043C\n- \u0423\u0431\u0438\u0440\u0430\u0439 \u0442\u0438\u043F\u044B \u0441 \u043D\u0443\u043B\u0435\u0432\u044B\u043C \u043F\u043E\u043A\u0440\u044B\u0442\u0438\u0435\u043C \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u0443\u0432\u0435\u0440\u0435\u043D \u0447\u0442\u043E \u043E\u043D\u0438 \u043D\u0435\u0440\u0435\u043B\u0435\u0432\u0430\u043D\u0442\u043D\u044B\n- \u041E\u0431\u043D\u043E\u0432\u043B\u044F\u0439 extraction_cues \u043F\u043E \u0440\u0435\u0430\u043B\u044C\u043D\u044B\u043C \u0441\u043B\u043E\u0432\u0430\u043C \u0438\u0437 wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\n- language_notes \u2014 \u043F\u0440\u0430\u0432\u0438\u043B\u0430 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u044F \u0442\u0435\u0440\u043C\u0438\u043D\u043E\u0432, \u043A\u043E\u0442\u043E\u0440\u044B\u0435 \u0430\u0433\u0435\u043D\u0442 \u0434\u043E\u043B\u0436\u0435\u043D \u0441\u043E\u0431\u043B\u044E\u0434\u0430\u0442\u044C';
@@ -38282,9 +39048,30 @@ Wiki folder outside vault \u2014 skipped.`);
         return subfolder && p.includes(`/${subfolder}/`);
       })
     ) : articlePaths;
-    if (similarity?.config.mode === "embedding") {
+    if (similarity && similarity.config.mode !== "jaccard") {
       yield { kind: "info_text", icon: "\u{1F4E5}", summary: "\u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043A\u044D\u0448\u0430 \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432..." };
       await similarity.loadCache(wikiVaultPath, vaultTools);
+    }
+    if (similarity && similarity.config.mode !== "jaccard" && (opts.lintNearDuplicate ?? false)) {
+      const LINT_NEARDUP_MAX_PAGES = 500;
+      const { pairs, skippedPageCount } = similarity.pairwiseNearDuplicates(
+        opts.nearDupThreshold ?? 0.8,
+        LINT_NEARDUP_MAX_PAGES
+      );
+      if (skippedPageCount > 0) {
+        yield {
+          kind: "info_text",
+          icon: "\u26A0\uFE0F",
+          summary: `near-duplicate \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u0430: ${skippedPageCount} \u0441\u0442\u0440\u0430\u043D\u0438\u0446 > ${LINT_NEARDUP_MAX_PAGES}`
+        };
+      } else if (pairs.length > 0) {
+        yield {
+          kind: "info_text",
+          icon: "\u{1F501}",
+          summary: `near-duplicate \u043A\u0430\u043D\u0434\u0438\u0434\u0430\u0442\u044B: ${pairs.length} \u043F\u0430\u0440`,
+          details: pairs.map((p) => `${p.a} \u2248 ${p.b} (${p.score.toFixed(2)})`)
+        };
+      }
     }
     const entityTypesBlock = buildEntityTypesBlock3(domain);
     const systemContent = render(lint_default, {
@@ -38434,7 +39221,9 @@ ${lintResult.value.report}`);
         }
         ({ graph } = graphCache.get(domain.id, pages));
         if (similarity) {
-          const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, annotations);
+          const pageBodies = /* @__PURE__ */ new Map();
+          for (const [path2, content] of pages) pageBodies.set(pageId(path2), content);
+          const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, annotations, pageBodies);
           if (similarity.config.mode === "embedding" && updated > 0) {
             yield { kind: "info_text", icon: "\u{1F4E4}", summary: `\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432: ${updated}` };
           }
@@ -38732,7 +39521,7 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
 }
 
 // prompts/lint-chat.md
-var lint_chat_default = '\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041F\u0440\u0438\u043C\u0438 \u0437\u0430\u0434\u0430\u043D\u0438\u0435 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F \u0438 lint-\u043E\u0442\u0447\u0451\u0442, \u0438\u0441\u043F\u0440\u0430\u0432\u044C \u0443\u043A\u0430\u0437\u0430\u043D\u043D\u044B\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B \u0432 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430\u0445.\n\n\u0414\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u043F\u043E\u043B\u0435 "annotation" \u2014 \u0431\u043E\u0433\u0430\u0442\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0434\u043B\u044F \u0441\u0435\u043C\u0430\u043D\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u043F\u043E\u0438\u0441\u043A\u0430 (embedding + Jaccard). \u041D\u0430 \u041E\u0414\u041D\u041E\u0419 \u0441\u0442\u0440\u043E\u043A\u0435, \u0431\u0435\u0437 \u043F\u0435\u0440\u0435\u043D\u043E\u0441\u043E\u0432. \u041E\u0440\u0438\u0435\u043D\u0442\u0438\u0440 ~500 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432. \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430: <summary 1-2 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0441\u0443\u0442\u0438> \u0417\u0430\u0442\u0440\u0430\u0433\u0438\u0432\u0430\u0435\u0442: <\u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438, \u0442\u0430\u0431\u043B\u0438\u0446\u044B, \u0441\u0438\u0441\u0442\u0435\u043C\u044B, Jira-ID \u0447\u0435\u0440\u0435\u0437 \u0437\u0430\u043F\u044F\u0442\u0443\u044E>. \u0422\u0438\u043F: <\u0442\u0438\u043F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438/\u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F>. \u0422\u0435\u0440\u043C\u0438\u043D\u044B: <\u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B \u0438 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430, \u043A\u043E\u0442\u043E\u0440\u044B\u0445 \u043C\u043E\u0436\u0435\u0442 \u043D\u0435 \u0431\u044B\u0442\u044C \u0432 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0435>. \u041A\u043E\u043D\u043A\u0440\u0435\u0442\u0438\u043A\u0430, \u0431\u0435\u0437 \u0432\u043E\u0434\u044B \u0438 boilerplate.\n\n\u0412\u0435\u0440\u043D\u0438 JSON:\n{"summary":"## markdown \u0447\u0442\u043E \u0441\u0434\u0435\u043B\u0430\u043D\u043E","pages":[{"path":"...","content":"...","annotation":"<\u0431\u043E\u0433\u0430\u0442\u043E\u0435 \u043E\u0434\u043D\u043E\u0441\u0442\u0440\u043E\u0447\u043D\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435: summary + \u0417\u0430\u0442\u0440\u0430\u0433\u0438\u0432\u0430\u0435\u0442 + \u0422\u0438\u043F + \u0422\u0435\u0440\u043C\u0438\u043D\u044B>"}]}\n\u0415\u0441\u043B\u0438 \u043F\u0440\u0430\u0432\u043E\u043A \u043D\u0435\u0442 \u2014 pages \u043F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432, summary \u2014 \u0442\u0435\u043A\u0441\u0442\u043E\u0432\u044B\u0439 \u043E\u0442\u0432\u0435\u0442.\n{{schema_block}}\n\nLINT-\u041E\u0422\u0427\u0401\u0422:\n{{lint_report}}\n\u0421\u0422\u0420\u0410\u041D\u0418\u0426\u042B \u0414\u041E\u041C\u0415\u041D\u0410:\n{{pages_block}}\n';
+var lint_chat_default = '\u0422\u044B \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 wiki-\u0431\u0430\u0437\u044B \u0437\u043D\u0430\u043D\u0438\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB{{domain_name}}\xBB.\n\u041F\u0440\u0438\u043C\u0438 \u0437\u0430\u0434\u0430\u043D\u0438\u0435 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F \u0438 lint-\u043E\u0442\u0447\u0451\u0442, \u0438\u0441\u043F\u0440\u0430\u0432\u044C \u0443\u043A\u0430\u0437\u0430\u043D\u043D\u044B\u0435 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B \u0432 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430\u0445.\n\n\u0414\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u043F\u043E\u043B\u0435 "annotation" \u2014 \u0431\u043E\u0433\u0430\u0442\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0434\u043B\u044F \u0441\u0435\u043C\u0430\u043D\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u043F\u043E\u0438\u0441\u043A\u0430 (embedding + Jaccard). \u0421\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0430: <summary 1-2 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F, \u043E\u0445\u0432\u0430\u0442\u044B\u0432\u0430\u0435\u0442 \u041E\u0421\u041D\u041E\u0412\u041D\u042B\u0415 \u0440\u0430\u0437\u0434\u0435\u043B\u044B \u0442\u0435\u043B\u0430, \u043D\u0435 \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0435\u0440\u0432\u044B\u0439 \u0430\u0431\u0437\u0430\u0446> \u0417\u0430\u0442\u0440\u0430\u0433\u0438\u0432\u0430\u0435\u0442: <\u0441\u0443\u0449\u043D\u043E\u0441\u0442\u0438, \u0442\u0430\u0431\u043B\u0438\u0446\u044B, \u0441\u0438\u0441\u0442\u0435\u043C\u044B, Jira-ID \u0447\u0435\u0440\u0435\u0437 \u0437\u0430\u043F\u044F\u0442\u0443\u044E>. \u0422\u0438\u043F: <\u0442\u0438\u043F \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438/\u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F>. \u0422\u0435\u0440\u043C\u0438\u043D\u044B: <\u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430 \u0438\u0437 \u041A\u0410\u0416\u0414\u041E\u0413\u041E \u0440\u0430\u0437\u0434\u0435\u043B\u0430 \u2014 \u0441\u0438\u043D\u043E\u043D\u0438\u043C\u044B, ID, \u0442\u0435\u0440\u043C\u0438\u043D\u044B, \u043A\u043E\u0442\u043E\u0440\u044B\u0445 \u043D\u0435\u0442 \u0432 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0435>. \u041E\u0440\u0438\u0435\u043D\u0442\u0438\u0440 ~600\u2013800 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432, \u0432\u0441\u0451 \u043D\u0430 \u041E\u0414\u041D\u041E\u0419 \u0441\u0442\u0440\u043E\u043A\u0435 \u0431\u0435\u0437 \u043F\u0435\u0440\u0435\u043D\u043E\u0441\u043E\u0432. \u041A\u043E\u043D\u043A\u0440\u0435\u0442\u0438\u043A\u0430, \u0431\u0435\u0437 \u0432\u043E\u0434\u044B \u0438 boilerplate.\n\n\u0412\u0435\u0440\u043D\u0438 JSON:\n{"summary":"## markdown \u0447\u0442\u043E \u0441\u0434\u0435\u043B\u0430\u043D\u043E","pages":[{"path":"...","content":"...","annotation":"<\u0431\u043E\u0433\u0430\u0442\u043E\u0435 \u043E\u0434\u043D\u043E\u0441\u0442\u0440\u043E\u0447\u043D\u043E\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435: summary + \u0417\u0430\u0442\u0440\u0430\u0433\u0438\u0432\u0430\u0435\u0442 + \u0422\u0438\u043F + \u0422\u0435\u0440\u043C\u0438\u043D\u044B>"}]}\n\u0415\u0441\u043B\u0438 \u043F\u0440\u0430\u0432\u043E\u043A \u043D\u0435\u0442 \u2014 pages \u043F\u0443\u0441\u0442\u043E\u0439 \u043C\u0430\u0441\u0441\u0438\u0432, summary \u2014 \u0442\u0435\u043A\u0441\u0442\u043E\u0432\u044B\u0439 \u043E\u0442\u0432\u0435\u0442.\n{{schema_block}}\n\nLINT-\u041E\u0422\u0427\u0401\u0422:\n{{lint_report}}\n\u0421\u0422\u0420\u0410\u041D\u0418\u0426\u042B \u0414\u041E\u041C\u0415\u041D\u0410:\n{{pages_block}}\n';
 
 // src/phases/lint-chat.ts
 var META_FILES3 = ["_index.md", "_log.md"];
@@ -39820,382 +40609,6 @@ var VisionTempStore = class {
   }
 };
 
-// src/page-similarity.ts
-var import_obsidian6 = require("obsidian");
-function encodeVector(v) {
-  const bytes = new Uint8Array(v.buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += 8192)
-    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-  return btoa(binary);
-}
-function decodeVector(b64) {
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new Float32Array(bytes.buffer);
-}
-function annotationHash(s) {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = Math.imul(31, h) + s.charCodeAt(i) | 0;
-  }
-  return (h >>> 0).toString(36);
-}
-function cosine(a, b) {
-  let dot = 0, na = 0, nb = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    na += a[i] * a[i];
-    nb += b[i] * b[i];
-  }
-  const denom = Math.sqrt(na) * Math.sqrt(nb);
-  return denom === 0 ? 0 : dot / denom;
-}
-var EMBEDDING_BATCH_SIZE = 100;
-async function fetchEmbeddings(baseUrl, apiKey, model, inputs) {
-  const url = `${baseUrl.replace(/\/$/, "")}/embeddings`;
-  const resp = await (0, import_obsidian6.requestUrl)({
-    url,
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({ model, input: inputs }),
-    throw: false
-  });
-  if (resp.status >= 400) throw new Error(`Embedding API error: ${resp.status}`);
-  const json = JSON.parse(resp.text);
-  return json.data.map((d) => new Float32Array(d.embedding));
-}
-function entityKey(e) {
-  return `${e.name}::${e.type ?? ""}`;
-}
-function entityQuery(e) {
-  return [e.name, e.type, e.context_snippet].filter(Boolean).join(" \u2014 ");
-}
-var PageSimilarityService = class {
-  constructor(config) {
-    this.config = config;
-  }
-  config;
-  cache = null;
-  async selectRelevant(sourceContent, indexAnnotations, allPaths) {
-    const queryTokens = tokenize(sourceContent);
-    if (queryTokens.size === 0) return [];
-    if (this.config.mode === "jaccard") {
-      return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
-    }
-    return this.selectEmbedding(sourceContent, indexAnnotations, allPaths, queryTokens);
-  }
-  async selectRelevantScored(sourceContent, indexAnnotations, allPaths) {
-    const queryTokens = tokenize(sourceContent);
-    if (queryTokens.size === 0) return [];
-    if (this.config.mode === "jaccard") {
-      return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths);
-    }
-    return this.selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens);
-  }
-  async selectByEntities(entities, indexAnnotations, allPaths) {
-    if (entities.length === 0) return { results: /* @__PURE__ */ new Map(), allFailed: false };
-    if (this.config.mode === "jaccard") {
-      return this.jaccardFallbackAll(entities, indexAnnotations, allPaths);
-    }
-    return this.selectByEntitiesEmbedding(entities, indexAnnotations, allPaths);
-  }
-  scoreJaccardOnce(queryTokens, indexAnnotations, allPaths) {
-    if (queryTokens.size === 0) return [];
-    const scored = [];
-    for (const path2 of allPaths) {
-      const pid = pageId(path2);
-      const annotation = indexAnnotations.get(pid);
-      if (!annotation) continue;
-      const score = scoreSeed(queryTokens, pid, "", annotation);
-      if (score > 0) scored.push({ path: path2, score });
-    }
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, this.config.topK).map((x) => x.path);
-  }
-  jaccardFallbackAll(entities, indexAnnotations, allPaths) {
-    const results = /* @__PURE__ */ new Map();
-    let anySuccess = false;
-    for (const e of entities) {
-      const top = this.scoreJaccardOnce(tokenize(entityQuery(e)), indexAnnotations, allPaths);
-      results.set(entityKey(e), top);
-      if (indexAnnotations.size > 0) anySuccess = true;
-    }
-    return { results, allFailed: allPaths.length > 0 && !anySuccess };
-  }
-  async selectByEntitiesEmbedding(entities, indexAnnotations, allPaths) {
-    const { baseUrl, apiKey, model, topK } = this.config;
-    const results = /* @__PURE__ */ new Map();
-    if (!baseUrl || !model || !apiKey) {
-      return this.jaccardFallbackAll(entities, indexAnnotations, allPaths);
-    }
-    let entityVecs;
-    try {
-      entityVecs = await fetchEmbeddings(baseUrl, apiKey, model, entities.map(entityQuery));
-    } catch {
-      return this.jaccardFallbackAll(entities, indexAnnotations, allPaths);
-    }
-    const pids = allPaths.map((p) => pageId(p));
-    const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
-    const pageVecs = /* @__PURE__ */ new Map();
-    if (this.cache && this.cache.model === model) {
-      for (let i = 0; i < pids.length; i++) {
-        const entry = this.cache.entries[pids[i]];
-        if (entry) pageVecs.set(pids[i], decodeVector(entry.vector));
-      }
-    }
-    const batches = [];
-    let cur = { pids: [], texts: [] };
-    for (let i = 0; i < pids.length; i++) {
-      if (!annotations[i]) continue;
-      if (pageVecs.has(pids[i])) continue;
-      cur.pids.push(pids[i]);
-      cur.texts.push(annotations[i]);
-      if (cur.pids.length >= EMBEDDING_BATCH_SIZE) {
-        batches.push(cur);
-        cur = { pids: [], texts: [] };
-      }
-    }
-    if (cur.pids.length > 0) batches.push(cur);
-    for (const batch of batches) {
-      try {
-        const vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
-        for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], vecs[i]);
-      } catch {
-        for (let i = 0; i < batch.pids.length; i++) {
-          pageVecs.set(batch.pids[i], new Float32Array(0));
-        }
-      }
-    }
-    let anySuccess = false;
-    for (let ei = 0; ei < entities.length; ei++) {
-      const e = entities[ei];
-      const queryVec = entityVecs[ei];
-      const queryTokens = tokenize(entityQuery(e));
-      const scored = [];
-      for (let pi = 0; pi < allPaths.length; pi++) {
-        const pid = pids[pi];
-        const vec = pageVecs.get(pid);
-        if (!vec) continue;
-        const score = vec.length === 0 ? scoreSeed(queryTokens, pid, "", annotations[pi]) : cosine(queryVec, vec);
-        if (score > 0) scored.push({ path: allPaths[pi], score });
-      }
-      scored.sort((a, b) => b.score - a.score);
-      const top = scored.slice(0, topK).map((x) => x.path);
-      results.set(entityKey(e), top);
-      if (indexAnnotations.size > 0) anySuccess = true;
-    }
-    return { results, allFailed: allPaths.length > 0 && !anySuccess };
-  }
-  selectJaccard(queryTokens, indexAnnotations, allPaths) {
-    const scored = [];
-    for (const path2 of allPaths) {
-      const pid = pageId(path2);
-      const annotation = indexAnnotations.get(pid);
-      if (!annotation) continue;
-      const score = scoreSeed(queryTokens, pid, "", annotation);
-      if (score > 0) scored.push({ path: path2, score });
-    }
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, this.config.topK).map((x) => x.path);
-  }
-  async selectEmbedding(sourceContent, indexAnnotations, allPaths, queryTokens) {
-    const { baseUrl, apiKey, model, topK } = this.config;
-    if (!baseUrl || !model) {
-      return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
-    }
-    let queryVec;
-    try {
-      const truncated = sourceContent.slice(0, 2e3);
-      [queryVec] = await fetchEmbeddings(baseUrl, apiKey, model, [truncated]);
-    } catch {
-      return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
-    }
-    const pids = allPaths.map((p) => pageId(p));
-    const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
-    const pageVecs = /* @__PURE__ */ new Map();
-    if (this.cache && this.cache.model === model) {
-      for (let i = 0; i < pids.length; i++) {
-        const entry = this.cache.entries[pids[i]];
-        if (entry) {
-          pageVecs.set(pids[i], decodeVector(entry.vector));
-        }
-      }
-    }
-    const batches = [];
-    let cur = { pids: [], texts: [] };
-    for (let i = 0; i < pids.length; i++) {
-      if (!annotations[i]) continue;
-      if (pageVecs.has(pids[i])) continue;
-      cur.pids.push(pids[i]);
-      cur.texts.push(annotations[i]);
-      if (cur.pids.length >= EMBEDDING_BATCH_SIZE) {
-        batches.push(cur);
-        cur = { pids: [], texts: [] };
-      }
-    }
-    if (cur.pids.length > 0) batches.push(cur);
-    for (const batch of batches) {
-      let vecs;
-      try {
-        vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
-      } catch {
-        for (const pid of batch.pids) {
-          const annotation = indexAnnotations.get(pid) ?? "";
-          const score = scoreSeed(queryTokens, pid, "", annotation);
-          if (score > 0) pageVecs.set(pid, new Float32Array(0));
-        }
-        continue;
-      }
-      for (let i = 0; i < batch.pids.length; i++) {
-        pageVecs.set(batch.pids[i], vecs[i]);
-      }
-    }
-    const scored = [];
-    for (let i = 0; i < allPaths.length; i++) {
-      const pid = pids[i];
-      const vec = pageVecs.get(pid);
-      if (!vec) continue;
-      let score;
-      if (vec.length === 0) {
-        score = scoreSeed(queryTokens, pid, "", annotations[i]);
-      } else {
-        score = cosine(queryVec, vec);
-      }
-      if (score > 0) scored.push({ path: allPaths[i], score });
-    }
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, topK).map((x) => x.path);
-  }
-  selectJaccardScored(queryTokens, indexAnnotations, allPaths) {
-    const scored = [];
-    for (const path2 of allPaths) {
-      const pid = pageId(path2);
-      const annotation = indexAnnotations.get(pid);
-      if (!annotation) continue;
-      const score = scoreSeed(queryTokens, pid, "", annotation);
-      if (score > 0) scored.push({ path: path2, score });
-    }
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, this.config.topK);
-  }
-  async selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens) {
-    const { baseUrl, apiKey, model, topK } = this.config;
-    if (!baseUrl || !model) {
-      return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths);
-    }
-    let queryVec;
-    try {
-      const truncated = sourceContent.slice(0, 2e3);
-      [queryVec] = await fetchEmbeddings(baseUrl, apiKey, model, [truncated]);
-    } catch {
-      return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths);
-    }
-    const pids = allPaths.map((p) => pageId(p));
-    const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
-    const pageVecs = /* @__PURE__ */ new Map();
-    if (this.cache && this.cache.model === model) {
-      for (let i = 0; i < pids.length; i++) {
-        const entry = this.cache.entries[pids[i]];
-        if (entry) pageVecs.set(pids[i], decodeVector(entry.vector));
-      }
-    }
-    const batches = [];
-    let cur = { pids: [], texts: [] };
-    for (let i = 0; i < pids.length; i++) {
-      if (!annotations[i] || pageVecs.has(pids[i])) continue;
-      cur.pids.push(pids[i]);
-      cur.texts.push(annotations[i]);
-      if (cur.pids.length >= EMBEDDING_BATCH_SIZE) {
-        batches.push(cur);
-        cur = { pids: [], texts: [] };
-      }
-    }
-    if (cur.pids.length > 0) batches.push(cur);
-    for (const batch of batches) {
-      try {
-        const vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
-        for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], vecs[i]);
-      } catch {
-        for (const pid of batch.pids) pageVecs.set(pid, new Float32Array(0));
-      }
-    }
-    const scored = [];
-    for (let i = 0; i < allPaths.length; i++) {
-      const pid = pids[i];
-      const vec = pageVecs.get(pid);
-      if (!vec) continue;
-      const score = vec.length === 0 ? scoreSeed(queryTokens, pid, "", annotations[i]) : cosine(queryVec, vec);
-      if (score > 0) scored.push({ path: allPaths[i], score });
-    }
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, topK);
-  }
-  async loadCache(domainRoot, vaultTools) {
-    if (this.config.mode !== "embedding") return;
-    if (this.cache) return;
-    const { model, dimensions } = this.config;
-    if (!model || !dimensions) return;
-    try {
-      const raw = await vaultTools.read(domainEmbeddingsPath(domainRoot));
-      const parsed = JSON.parse(raw);
-      if (parsed.model === model && parsed.dimensions === dimensions) {
-        this.cache = parsed;
-      }
-    } catch {
-    }
-  }
-  async refreshCache(domainRoot, vaultTools, indexAnnotations) {
-    if (this.config.mode !== "embedding") return { updated: 0 };
-    const { baseUrl, apiKey, model, dimensions } = this.config;
-    if (!baseUrl || !model || !dimensions) return { updated: 0 };
-    const cachePath = domainEmbeddingsPath(domainRoot);
-    let cacheFile;
-    try {
-      const raw = await vaultTools.read(cachePath);
-      const parsed = JSON.parse(raw);
-      if (parsed.model !== model || parsed.dimensions !== dimensions) {
-        cacheFile = { model, dimensions, entries: {} };
-      } else {
-        cacheFile = parsed;
-      }
-    } catch {
-      cacheFile = { model, dimensions, entries: {} };
-    }
-    const toEmbed = [];
-    for (const [pid, annotation] of indexAnnotations) {
-      const hash = annotationHash(annotation);
-      const existing = cacheFile.entries[pid];
-      if (!existing || existing.hash !== hash) {
-        toEmbed.push({ pid, annotation });
-      }
-    }
-    if (toEmbed.length === 0) return { updated: 0 };
-    for (let i = 0; i < toEmbed.length; i += EMBEDDING_BATCH_SIZE) {
-      const batch = toEmbed.slice(i, i + EMBEDDING_BATCH_SIZE);
-      let vecs;
-      try {
-        vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.map((x) => x.annotation));
-      } catch {
-        continue;
-      }
-      for (let j = 0; j < batch.length; j++) {
-        cacheFile.entries[batch[j].pid] = {
-          vector: encodeVector(vecs[j]),
-          hash: annotationHash(batch[j].annotation)
-        };
-      }
-    }
-    await vaultTools.write(cachePath, JSON.stringify(cacheFile, null, 2));
-    this.cache = cacheFile;
-    return { updated: toEmbed.length };
-  }
-};
-
 // src/agent-runner.ts
 var AgentRunner = class {
   constructor(llm, settings, vaultTools, vaultName, domains, visionTempBaseDir) {
@@ -40225,19 +40638,52 @@ var AgentRunner = class {
     const na = s.nativeAgent;
     const c = na.perOperation ? na.operations[key] : void 0;
     const budgetTokens = c?.thinkingBudgetTokens ?? na.thinkingBudgetTokens;
-    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold } };
-    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold } };
+    if (c) return { model: c.model, opts: {
+      maxTokens: c.maxTokens,
+      temperature: c.temperature,
+      topP: na.topP,
+      thinkingBudgetTokens: budgetTokens,
+      systemPrompt: s.systemPrompt,
+      jsonMode: "json_object",
+      structuredRetries,
+      mergeDeleteWarnThreshold,
+      dedupOnIngest: na.dedupOnIngest,
+      dedupThreshold: na.dedupThreshold,
+      lintNearDuplicate: na.lintNearDuplicate,
+      nearDupThreshold: na.nearDupThreshold
+    } };
+    return { model: na.model, opts: {
+      maxTokens: na.maxTokens,
+      temperature: na.temperature,
+      topP: na.topP,
+      thinkingBudgetTokens: budgetTokens,
+      systemPrompt: s.systemPrompt,
+      jsonMode: "json_object",
+      structuredRetries,
+      mergeDeleteWarnThreshold,
+      dedupOnIngest: na.dedupOnIngest,
+      dedupThreshold: na.dedupThreshold,
+      lintNearDuplicate: na.lintNearDuplicate,
+      nearDupThreshold: na.nearDupThreshold
+    } };
   }
   buildSimilarity() {
     if (this.settings.backend !== "native-agent") return void 0;
     const na = this.settings.nativeAgent;
     return new PageSimilarityService({
-      mode: na.embeddingModel !== void 0 ? "embedding" : "jaccard",
+      mode: na.embeddingModel === void 0 ? "jaccard" : na.hybridRetrieval ? "hybrid" : "embedding",
       model: na.embeddingModel,
       dimensions: na.embeddingDimensions,
       topK: na.relevantPagesTopK ?? 15,
       baseUrl: na.baseUrl,
-      apiKey: na.apiKey
+      apiKey: na.apiKey,
+      rrfK: na.rrfK ?? 60,
+      chunking: {
+        maxChars: na.chunkMaxChars ?? DEFAULT_CHUNKING.maxChars,
+        overlapChars: na.chunkOverlapChars ?? DEFAULT_CHUNKING.overlapChars,
+        minChars: na.chunkMinChars ?? DEFAULT_CHUNKING.minChars,
+        maxCount: na.chunkMaxCount ?? DEFAULT_CHUNKING.maxCount
+      }
     });
   }
   async writeDevLog(_vaultRoot, entry) {

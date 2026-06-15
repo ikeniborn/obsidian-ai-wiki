@@ -69,7 +69,7 @@ export type RunEvent =
   | { kind: "format_applied"; path: string }
   | { kind: "format_cancelled" }
   | { kind: "structural_error";
-      callSite: "init.bootstrap" | "init.delta" | "lint.patch" | "lint.fix" | "lint-chat.fix" | "query.seeds" | "ingest.entities" | "ingest.pages" | "format.output";
+      callSite: "init.bootstrap" | "init.delta" | "lint.patch" | "lint.fix" | "lint-chat.fix" | "query.seeds" | "ingest.entities" | "ingest.pages" | "ingest.merge" | "format.output";
       errorType: "json_parse" | "schema_validate";
       retryAttempt: number;
       succeeded: boolean | null;
@@ -109,6 +109,10 @@ export interface LlmCallOptions {
   structuredRetries?: number;
   thinkingBudgetTokens?: number;
   mergeDeleteWarnThreshold?: number;
+  dedupOnIngest?: boolean;
+  dedupThreshold?: number;
+  lintNearDuplicate?: boolean;
+  nearDupThreshold?: number;
 }
 
 /** Минимальный интерфейс OpenAI-клиента, используемый фазами. */
@@ -186,6 +190,12 @@ export interface LlmWikiPluginSettings {
     chunkOverlapChars?: number;
     chunkMinChars?: number;
     chunkMaxCount?: number;
+    hybridRetrieval?: boolean;
+    rrfK?: number;
+    dedupOnIngest?: boolean;
+    dedupThreshold?: number;
+    lintNearDuplicate?: boolean;
+    nearDupThreshold?: number;
   };
   proxy: {
     enabled: boolean;
@@ -249,6 +259,12 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
       format: { model: "llama3.2", maxTokens: 32768, temperature: 0.2 },
     },
     structuredRetries: 1,
+    hybridRetrieval: false,
+    rrfK: 60,
+    dedupOnIngest: false,
+    dedupThreshold: 0.85,
+    lintNearDuplicate: false,
+    nearDupThreshold: 0.80,
   },
   proxy: { enabled: false, url: "" },
   devMode: {

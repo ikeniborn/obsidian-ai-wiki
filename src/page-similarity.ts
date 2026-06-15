@@ -3,6 +3,7 @@ import { tokenize, scoreSeed } from "./wiki-seeds";
 import { pageId } from "./wiki-graph";
 import type { VaultTools } from "./vault-tools";
 import { domainEmbeddingsPath } from "./wiki-path";
+import { rrf } from "./rrf";
 
 export interface ChunkingConfig {
   maxChars: number;
@@ -19,13 +20,14 @@ export const DEFAULT_CHUNKING: ChunkingConfig = {
 };
 
 export interface SimilarityConfig {
-  mode: "jaccard" | "embedding";
+  mode: "jaccard" | "embedding" | "hybrid";
   model?: string;
   dimensions?: number;
   topK: number;
   baseUrl?: string;
   apiKey?: string;
   chunking?: ChunkingConfig;
+  rrfK?: number;
 }
 
 export interface EmbeddingChunk {
@@ -174,6 +176,14 @@ export function buildChunkInputs(
   return inputs;
 }
 
+function jaccardCoeff(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  for (const t of a) if (b.has(t)) inter++;
+  const union = a.size + b.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
 function cosine(a: Float32Array, b: Float32Array): number {
   let dot = 0, na = 0, nb = 0;
   for (let i = 0; i < a.length; i++) {
@@ -199,6 +209,10 @@ function maxCosine(query: Float32Array, vecs: Float32Array[]): number {
 }
 
 const EMBEDDING_BATCH_SIZE = 100;
+
+// Per-side candidate pool before RRF fusion in hybrid mode. Fixed (not the full
+// vault) so cost stays flat; RRF then returns the caller's topK.
+const RRF_CANDIDATE_POOL = 50;
 
 async function fetchEmbeddings(
   baseUrl: string,
@@ -248,6 +262,79 @@ export class PageSimilarityService {
 
   constructor(readonly config: SimilarityConfig) {}
 
+  // Corpus for jaccard-mode dedup scoring (pid -> annotation). Set by the caller
+  // (Ingest) which already holds the index annotations; also settable in tests.
+  private jaccardCorpus: Map<string, string> = new Map();
+  setJaccardCorpus(corpus: Map<string, string>): void { this.jaccardCorpus = corpus; }
+
+  setCacheForTest(cache: EmbeddingCacheFile): void { this.cache = cache; }
+
+  /**
+   * All unordered page pairs whose max-pool cosine ≥ threshold. Embedding-only (uses the
+   * loaded cache). Skips entirely when the page count exceeds maxPages (cost guard);
+   * the caller logs skippedPageCount.
+   */
+  pairwiseNearDuplicates(
+    threshold: number,
+    maxPages: number,
+  ): { pairs: { a: string; b: string; score: number }[]; skippedPageCount: number } {
+    if (!this.cache) return { pairs: [], skippedPageCount: 0 };
+    const pids = Object.keys(this.cache.entries);
+    if (pids.length > maxPages) return { pairs: [], skippedPageCount: pids.length };
+    const vecs = new Map<string, Float32Array[]>(
+      pids.map((pid) => [pid, this.cache!.entries[pid].chunks.map((c) => decodeVector(c.vector))]),
+    );
+    const pairs: { a: string; b: string; score: number }[] = [];
+    for (let i = 0; i < pids.length; i++) {
+      for (let j = i + 1; j < pids.length; j++) {
+        const va = vecs.get(pids[i])!, vb = vecs.get(pids[j])!;
+        let best = 0;
+        for (const x of va) for (const y of vb) { const c = cosine(x, y); if (c > best) best = c; }
+        if (best >= threshold) pairs.push({ a: pids[i], b: pids[j], score: best });
+      }
+    }
+    pairs.sort((p, q) => q.score - p.score);
+    return { pairs, skippedPageCount: 0 };
+  }
+
+  /**
+   * Max similarity of `candidateText` to any existing page, excluding `excludePids`.
+   * embedding/hybrid: max-pool cosine over the loaded cache. jaccard: Jaccard coefficient
+   * over the supplied corpus. Returns { pid:"", score:0 } when nothing scores or on embed failure.
+   */
+  async maxSimilarityToExisting(
+    candidateText: string,
+    excludePids: Set<string>,
+  ): Promise<{ pid: string; score: number }> {
+    if (this.config.mode === "jaccard") {
+      const cand = tokenize(candidateText);
+      let best = { pid: "", score: 0 };
+      for (const [pid, annotation] of this.jaccardCorpus) {
+        if (excludePids.has(pid)) continue;
+        const score = jaccardCoeff(cand, tokenize(annotation));
+        if (score > best.score) best = { pid, score };
+      }
+      return best;
+    }
+    // embedding / hybrid
+    const { baseUrl, apiKey, model } = this.config;
+    if (!this.cache || !baseUrl || !model) return { pid: "", score: 0 };
+    let candVec: Float32Array;
+    try {
+      [candVec] = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [candidateText.slice(0, 2000)]);
+    } catch {
+      return { pid: "", score: 0 }; // never fire the gate on a failed signal
+    }
+    let best = { pid: "", score: 0 };
+    for (const [pid, entry] of Object.entries(this.cache.entries)) {
+      if (excludePids.has(pid)) continue;
+      const vecs = entry.chunks.map((c) => decodeVector(c.vector));
+      const score = maxCosine(candVec, vecs);
+      if (score > best.score) best = { pid, score };
+    }
+    return best;
+  }
+
   async selectRelevant(
     sourceContent: string,
     indexAnnotations: Map<string, string>,
@@ -258,6 +345,10 @@ export class PageSimilarityService {
 
     if (this.config.mode === "jaccard") {
       return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
+    }
+    if (this.config.mode === "hybrid") {
+      return (await this.selectHybridScored(sourceContent, indexAnnotations, allPaths, queryTokens))
+        .map((x) => x.path);
     }
     return this.selectEmbedding(sourceContent, indexAnnotations, allPaths, queryTokens);
   }
@@ -272,6 +363,9 @@ export class PageSimilarityService {
 
     if (this.config.mode === "jaccard") {
       return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths);
+    }
+    if (this.config.mode === "hybrid") {
+      return this.selectHybridScored(sourceContent, indexAnnotations, allPaths, queryTokens);
     }
     return this.selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens);
   }
@@ -501,6 +595,7 @@ export class PageSimilarityService {
     queryTokens: Set<string>,
     indexAnnotations: Map<string, string>,
     allPaths: string[],
+    limit: number = this.config.topK,
   ): { path: string; score: number }[] {
     const scored: { path: string; score: number }[] = [];
     for (const path of allPaths) {
@@ -511,7 +606,7 @@ export class PageSimilarityService {
       if (score > 0) scored.push({ path, score });
     }
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, this.config.topK);
+    return scored.slice(0, limit);
   }
 
   private async selectEmbeddingScored(
@@ -519,10 +614,11 @@ export class PageSimilarityService {
     indexAnnotations: Map<string, string>,
     allPaths: string[],
     queryTokens: Set<string>,
+    limit: number = this.config.topK,
   ): Promise<{ path: string; score: number }[]> {
-    const { baseUrl, apiKey, model, topK } = this.config;
+    const { baseUrl, apiKey, model } = this.config;
     if (!baseUrl || !model) {
-      return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths);
+      return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit);
     }
 
     let queryVec: Float32Array;
@@ -530,7 +626,7 @@ export class PageSimilarityService {
       const truncated = sourceContent.slice(0, 2000);
       [queryVec] = await fetchEmbeddings(baseUrl, apiKey!, model, [truncated]);
     } catch {
-      return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths);
+      return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit);
     }
 
     const pids = allPaths.map((p) => pageId(p));
@@ -574,11 +670,30 @@ export class PageSimilarityService {
       if (score > 0) scored.push({ path: allPaths[i], score });
     }
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, topK);
+    return scored.slice(0, limit);
+  }
+
+  private async selectHybridScored(
+    sourceContent: string,
+    indexAnnotations: Map<string, string>,
+    allPaths: string[],
+    queryTokens: Set<string>,
+  ): Promise<{ path: string; score: number }[]> {
+    const pool = Math.max(this.config.topK, RRF_CANDIDATE_POOL);
+    // Keyless: selectEmbeddingScored degrades to jaccard, so both sides run jaccard
+    // and RRF of two identical lists preserves the jaccard order — correct, just redundant.
+    const [dense, sparse] = await Promise.all([
+      this.selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens, pool),
+      Promise.resolve(this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, pool)),
+    ]);
+    const fused = rrf([dense.map((x) => x.path), sparse.map((x) => x.path)], this.config.rrfK ?? 60);
+    return fused
+      .slice(0, this.config.topK)
+      .map((f) => ({ path: f.id, score: f.score }));
   }
 
   async loadCache(domainRoot: string, vaultTools: VaultTools): Promise<void> {
-    if (this.config.mode !== "embedding") return;
+    if (this.config.mode === "jaccard") return;
     if (this.cache) return;
     const { model, dimensions } = this.config;
     if (!model || !dimensions) return;

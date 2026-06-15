@@ -3,7 +3,7 @@
 
 export interface ConfigRecord {
   name: string;
-  mode: "embedding" | "jaccard"; // PageSimilarityService mode
+  mode: "embedding" | "jaccard" | "hybrid"; // PageSimilarityService mode
   bfsDepth: number;
   topK: number;
 }
@@ -13,6 +13,7 @@ export interface ConfigRecord {
 const NAME_TO_MODE: Record<string, ConfigRecord["mode"]> = {
   dense: "embedding",
   jaccard: "jaccard",
+  hybrid: "hybrid",
 };
 
 export function resolveConfigs(
@@ -27,7 +28,7 @@ export function resolveConfigs(
   return names.map((name) => {
     const mode = NAME_TO_MODE[name];
     if (!mode) {
-      throw new Error(`unknown --config "${name}" (expected: dense, jaccard)`);
+      throw new Error(`unknown --config "${name}" (expected: dense, jaccard, hybrid)`);
     }
     return { name, mode, bfsDepth, topK };
   });

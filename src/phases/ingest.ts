@@ -6,9 +6,10 @@ import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas } from "./llm-utils";
 import { parseWithRetry } from "./parse-with-retry";
-import { WikiPagesOutputSchema, EntitiesOutputSchema } from "./zod-schemas";
+import { WikiPagesOutputSchema, EntitiesOutputSchema, MergedPageOutputSchema } from "./zod-schemas";
 import type { WikiPagesOutput, EntitiesOutput } from "./zod-schemas";
 import ingestTemplate from "../../prompts/ingest.md";
+import ingestMerge from "../../prompts/ingest-merge.md";
 import ingestEntitiesTemplate from "../../prompts/ingest-entities.md";
 import fixPathsTemplate from "../../prompts/ingest-fix-paths.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
@@ -313,6 +314,11 @@ export async function* runIngest(
 
   const written: string[] = [];
   const logEntries: IngestLogEntry[] = [];
+  const dedupOn = (opts.dedupOnIngest ?? false) && (opts.dedupThreshold ?? 0) > 0 && !!similarity;
+  const dedupThreshold = opts.dedupThreshold ?? 0.85;
+  const pidToPath = new Map(nonMetaPaths.map((p) => [pageId(p), p]));
+  const createdThisRun = new Set<string>();
+  if (dedupOn && similarity.config.mode === "jaccard") similarity.setJaccardCorpus(annotations);
   for (const page of pages) {
     if (!page.path.startsWith(wikiVaultPath + "/")) {
       yield { kind: "tool_use", name: "Write", input: { path: page.path } };
@@ -322,6 +328,46 @@ export async function* runIngest(
 
     let existingContent: string | null = null;
     try { existingContent = await vaultTools.read(page.path); } catch { /* new page */ }
+
+    if (dedupOn && existingContent === null) {
+      const candidateText = `${page.annotation ?? ""}\n\n${page.content}`;
+      const exclude = new Set<string>([pageId(page.path), ...createdThisRun]);
+      const hit = await similarity.maxSimilarityToExisting(candidateText, exclude);
+      if (hit.pid && hit.score >= dedupThreshold) {
+        const targetPath = pidToPath.get(hit.pid);
+        let existingTarget: string | null = null;
+        if (targetPath) { try { existingTarget = await vaultTools.read(targetPath); } catch { /* gone */ } }
+        if (targetPath && existingTarget !== null) {
+          yield { kind: "info_text", icon: "🔁",
+            summary: `Дубль: ${pageId(page.path)} ≈ ${hit.pid} (cosine ${hit.score.toFixed(2)}) → merge`,
+            details: [targetPath] };
+          const mergeMsgs = [{ role: "user" as const, content:
+            render(ingestMerge, { existing: existingTarget, incoming: page.content }) }];
+          try {
+            const merged = await parseWithRetry({
+              llm, model, baseMessages: mergeMsgs, opts,
+              schema: MergedPageOutputSchema,
+              maxRetries: opts.structuredRetries ?? 1,
+              callSite: "ingest.merge", signal, onEvent: () => {},
+            });
+            yield { kind: "tool_use", name: "Update", input: { path: targetPath } };
+            await vaultTools.write(targetPath, merged.value.content);
+            written.push(targetPath);
+            yield { kind: "tool_result", ok: true, preview: `merged ← ${pageId(page.path)}` };
+            const relTarget = targetPath.slice(wikiVaultPath.length + 1);
+            logEntries.push({ path: relTarget, action: "ОБЪЕДИНЕНА" });
+            if (merged.value.annotation) {
+              try { await upsertIndexAnnotation(vaultTools, wikiVaultPath, hit.pid, merged.value.annotation, targetPath); } catch { /* non-critical */ }
+            }
+            continue; // skip the normal create
+          } catch (e) {
+            // merge failed — fall through to a normal create rather than lose the new content
+            yield { kind: "info_text", icon: "⚠️", summary: `merge не удался, создаю отдельно: ${(e as Error).message}` };
+          }
+        }
+      }
+    }
+    if (existingContent === null) createdThisRun.add(pageId(page.path));
 
     const { content: repairedPage, warnings: pageWarnings } =
       validateAndRepairWikiPageFrontmatter(page.content);
@@ -407,7 +453,8 @@ export async function* runIngest(
   const createdCount = logEntries.filter(e => e.action === "СОЗДАНА").length;
   const updatedCount = logEntries.filter(e => e.action === "ОБНОВЛЕНА").length;
   const mergedCount  = logEntries.filter(e => e.action === "УДАЛЕНА").length;
-  const resultText = buildIngestSummary(domain.id, sourceVaultPath, createdCount, updatedCount, mergedCount, pages.length);
+  const dedupMergedCount = logEntries.filter(e => e.action === "ОБЪЕДИНЕНА").length;
+  const resultText = buildIngestSummary(domain.id, sourceVaultPath, createdCount, updatedCount, mergedCount, dedupMergedCount, pages.length);
   yield { kind: "assistant_text", delta: resultText };
 
   const deletedStems = new Set(deletedPaths.map((p) => p.split("/").pop()!.replace(/\.md$/, "")));
@@ -502,10 +549,11 @@ function buildIngestSummary(
   createdCount: number,
   updatedCount: number,
   mergedCount: number,
+  dedupMergedCount: number,
   total: number,
 ): string {
   const src = sourcePath.split("/").pop() ?? sourcePath;
-  const totalActed = createdCount + updatedCount + mergedCount;
+  const totalActed = createdCount + updatedCount + mergedCount + dedupMergedCount;
   if (totalActed === 0) {
     return `Источник «${src}» обработан — новых или изменённых страниц нет.`;
   }
@@ -513,8 +561,9 @@ function buildIngestSummary(
   if (createdCount > 0) parts.push(`создано ${createdCount}`);
   if (updatedCount > 0) parts.push(`обновлено ${updatedCount}`);
   if (mergedCount  > 0) parts.push(`объединено ${mergedCount}`);
+  if (dedupMergedCount > 0) parts.push(`дублей объединено ${dedupMergedCount}`);
   const countStr = parts.length === 1 ? `${parts[0]} стр.` : parts.join(", ");
-  const skipped = total - (createdCount + updatedCount);
+  const skipped = total - (createdCount + updatedCount + dedupMergedCount);
   const errStr = skipped > 0 ? `, ошибок ${skipped}` : "";
   return `Источник «${src}» → домен «${domainId}»: ${countStr}${errStr}`;
 }

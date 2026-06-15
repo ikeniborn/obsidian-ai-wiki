@@ -18,6 +18,7 @@ export type CallSite =
   | "query.seeds"
   | "ingest.entities"
   | "ingest.pages"
+  | "ingest.merge"
   | "format.output";
 
 export class StructuredValidationError extends Error {

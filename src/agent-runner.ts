@@ -44,20 +44,30 @@ export class AgentRunner {
     const na = s.nativeAgent;
     const c = na.perOperation ? na.operations[key] : undefined;
     const budgetTokens = c?.thinkingBudgetTokens ?? na.thinkingBudgetTokens;
-    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold } };
-    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold } };
+    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold,
+      dedupOnIngest: na.dedupOnIngest, dedupThreshold: na.dedupThreshold,
+      lintNearDuplicate: na.lintNearDuplicate, nearDupThreshold: na.nearDupThreshold,
+    } };
+    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold,
+      dedupOnIngest: na.dedupOnIngest, dedupThreshold: na.dedupThreshold,
+      lintNearDuplicate: na.lintNearDuplicate, nearDupThreshold: na.nearDupThreshold,
+    } };
   }
 
   private buildSimilarity(): PageSimilarityService | undefined {
     if (this.settings.backend !== "native-agent") return undefined;
     const na = this.settings.nativeAgent;
     return new PageSimilarityService({
-      mode: na.embeddingModel !== undefined ? "embedding" : "jaccard",
+      mode:
+        na.embeddingModel === undefined ? "jaccard"
+        : na.hybridRetrieval ? "hybrid"
+        : "embedding",
       model: na.embeddingModel,
       dimensions: na.embeddingDimensions,
       topK: na.relevantPagesTopK ?? 15,
       baseUrl: na.baseUrl,
       apiKey: na.apiKey,
+      rrfK: na.rrfK ?? 60,
       chunking: {
         maxChars: na.chunkMaxChars ?? DEFAULT_CHUNKING.maxChars,
         overlapChars: na.chunkOverlapChars ?? DEFAULT_CHUNKING.overlapChars,

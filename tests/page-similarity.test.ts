@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { PageSimilarityService, encodeVector, decodeVector, DEFAULT_CHUNKING, buildChunkInputs } from "../src/page-similarity";
 import { __requestUrlCalls, __clearRequestUrlCalls, __setRequestUrlResponse } from "../vitest.mock";
+import { rrf } from "../src/rrf";
 
 const makeService = (topK = 3) =>
   new PageSimilarityService({ mode: "jaccard", topK });
@@ -562,5 +563,64 @@ describe("max-pool scoring", () => {
     );
     // query embedding throws → whole call falls to Jaccard → Alpha matches on tokens
     expect(result).toEqual(["!Wiki/d/x/Alpha.md"]);
+  });
+});
+
+describe("hybrid mode", () => {
+  // @lat: [[tests#Tier 1 — Graph Health + Hybrid#Hybrid mode fuses dense and jaccard seeds]]
+  it("hybrid with no embedding endpoint degrades to jaccard (keyless)", async () => {
+    const svc = new PageSimilarityService({ mode: "hybrid", topK: 3, rrfK: 60 });
+    const annotations = new Map<string, string>([
+      ["alpha", "alpha api flag error code"],
+      ["beta", "beta unrelated text"],
+    ]);
+    const paths = ["W/d/e/alpha.md", "W/d/e/beta.md"];
+    const out = await svc.selectRelevantScored("api flag error", annotations, paths);
+    expect(out.length).toBeGreaterThan(0);
+    expect(out[0].path).toBe("W/d/e/alpha.md"); // jaccard-on-both fusion still ranks the match first
+  });
+});
+
+describe("maxSimilarityToExisting (dedup scoring)", () => {
+  // @lat: [[tests#Tier 1 — Graph Health + Hybrid#Dedup gate scores a candidate against existing pages]]
+  it("jaccard mode: returns the closest existing page by token overlap, 0..1", async () => {
+    const svc = new PageSimilarityService({ mode: "jaccard", topK: 5 });
+    // jaccard mode needs annotations as the existing-page corpus
+    svc.setJaccardCorpus(new Map([
+      ["docker-net", "docker network bridge driver"],
+      ["k8s-pod",    "kubernetes pod lifecycle"],
+    ]));
+    const out = await svc.maxSimilarityToExisting("docker network driver", new Set());
+    expect(out.pid).toBe("docker-net");
+    expect(out.score).toBeGreaterThan(0);
+    expect(out.score).toBeLessThanOrEqual(1);
+  });
+
+  it("respects excludePids", async () => {
+    const svc = new PageSimilarityService({ mode: "jaccard", topK: 5 });
+    svc.setJaccardCorpus(new Map([["docker-net", "docker network bridge driver"]]));
+    const out = await svc.maxSimilarityToExisting("docker network", new Set(["docker-net"]));
+    expect(out).toEqual({ pid: "", score: 0 });
+  });
+});
+
+describe("pairwiseNearDuplicates", () => {
+  // @lat: [[tests#Tier 1 — Graph Health + Hybrid#Lint surfaces near-duplicate page pairs]]
+  it("returns pairs at/above threshold and skips when over the page cap", () => {
+    const svc = new PageSimilarityService({ mode: "embedding", model: "m", dimensions: 2, topK: 5 });
+    svc.setCacheForTest({
+      version: 2, model: "m", dimensions: 2,
+      entries: {
+        a: { chunks: [{ vector: encodeVector(new Float32Array([1, 0])), hash: "h", kind: "summary" }] },
+        b: { chunks: [{ vector: encodeVector(new Float32Array([1, 0])), hash: "h", kind: "summary" }] },
+        c: { chunks: [{ vector: encodeVector(new Float32Array([0, 1])), hash: "h", kind: "summary" }] },
+      },
+    });
+    const { pairs, skippedPageCount } = svc.pairwiseNearDuplicates(0.9, 500);
+    expect(skippedPageCount).toBe(0);
+    expect(pairs).toEqual([{ a: "a", b: "b", score: 1 }]); // a≈b (cosine 1), c orthogonal
+    const over = svc.pairwiseNearDuplicates(0.9, 2);
+    expect(over.skippedPageCount).toBe(3);
+    expect(over.pairs).toEqual([]);
   });
 });

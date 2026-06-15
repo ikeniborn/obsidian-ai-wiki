@@ -212,3 +212,13 @@ Standalone CLI (`scripts/eval.ts`) measuring retrieval quality — Recall@k (k=3
 It runs against a real vault on disk: it mirrors the seed-selection + BFS block of [[src/phases/query.ts]] ("approach A" — same public functions, no `runQuery`), calling [[src/wiki-seeds.ts#selectSeeds]] / [[src/page-similarity.ts#PageSimilarityService#selectRelevantScored]] for seeds and [[src/wiki-graph.ts#bfsExpandRanked]] for the union layer. Because `src/page-similarity.ts` imports `requestUrl` from the type-only `obsidian` package, the harness aliases `obsidian` to `scripts/obsidian-shim.ts` (a `fetch`-based `requestUrl`) via `scripts/tsconfig.eval.json`.
 
 Run: `npm run eval -- --vault <path> --gold <gold.json> [--config dense|jaccard] [--bfs-depth N] [--top-k N] [--out run.json] [--baseline run.json]`. Dense mode reads embedding `model`/`dimensions` from the cache header and `baseUrl`/`apiKey` from `EVAL_EMBED_BASE_URL`/`EVAL_EMBED_API_KEY` (key optional); with no endpoint it logs a warning and falls back to jaccard. Gold sets live in `scripts/eval/` and are vault-specific. Metric/report specs: [[tests#Retrieval Eval Harness]].
+
+## Tier 1 Features
+
+Three opt-in capabilities added in Tier 1; all default to off and are safe to enable independently.
+
+**Hybrid retrieval** (`nativeAgent.hybridRetrieval: true`): Query and lint use `mode: "hybrid"` in `PageSimilarityService`, which fuses the embedding and jaccard seed rankings via RRF before BFS expansion. Requires an embedding endpoint; without one it degrades to jaccard.
+
+**Ingest dedup gate** (`nativeAgent.dedupOnIngest: true`, requires `dedupThreshold`): After the LLM proposes a new page, `maxSimilarityToExisting()` compares it against the existing vault. If the closest match scores ≥ threshold, the ingest phase runs one LLM merge call and writes the merged result into the existing page rather than creating a duplicate.
+
+**Lint near-duplicate report** (`nativeAgent.lintNearDuplicate: true`, threshold `nearDupThreshold`): In embedding or hybrid mode, Lint calls `pairwiseNearDuplicates()` over the cached page vectors and reports pairs whose max-pool cosine ≥ threshold. In jaccard mode (no embedding cache) it does nothing. The scan is skipped and reported as such when the vault exceeds the configured page cap.

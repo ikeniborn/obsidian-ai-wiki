@@ -497,3 +497,31 @@ Spec for the standalone retrieval eval harness (`scripts/eval.ts`) pure function
 ### Report table renders metrics and baseline deltas
 
 `formatTable` renders one row per config with the eight `s*/u*` metric cells, and — given a baseline snapshot — annotates each cell with a `▲/▼` signed delta.
+
+## Tier 1 — Graph Health + Hybrid
+
+Specs for the Tier 1 work: reciprocal-rank-fusion hybrid retrieval, ingest-time dedup, and the lint near-duplicate report.
+
+### RRF fuses ranked lists by reciprocal rank
+
+`rrf()` fuses several ranked ID lists by Σ 1/(k+rank); an item ranked high in multiple lists wins, ties break by first-seen, empty lists are ignored. Verifies [[src/rrf.ts#rrf]].
+
+### Hybrid mode fuses dense and jaccard seeds
+
+`PageSimilarityService` in `hybrid` mode fuses the embedding and jaccard rankings via RRF; with no embedding endpoint the dense half degrades to jaccard so the matching page still ranks first.
+
+### Eval harness resolves the hybrid config
+
+`resolveConfigs("hybrid", …)` resolves to a record with `mode: "hybrid"`, carrying bfsDepth and topK, so the eval harness can measure hybrid alongside dense and jaccard.
+
+### Dedup gate scores a candidate against existing pages
+
+`maxSimilarityToExisting()` returns the closest existing page and its score (Jaccard coefficient in jaccard mode, max-pool cosine otherwise), respecting an exclude set and returning a zero score when nothing matches.
+
+### Dedup gate merges a near-duplicate create
+
+When Ingest proposes a new page near-identical to an existing one (score ≥ threshold), the gate runs one LLM merge call and writes the merged content into the existing page instead of spawning a duplicate.
+
+### Lint surfaces near-duplicate page pairs
+
+`pairwiseNearDuplicates()` returns existing page pairs whose max-pool cosine ≥ threshold and skips entirely (reporting the page count) when the vault exceeds the page cap.

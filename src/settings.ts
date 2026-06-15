@@ -1,4 +1,4 @@
-import { App, DropdownComponent, Notice, Platform, PluginSettingTab, requestUrl, Setting } from "obsidian";
+import { AbstractInputSuggest, App, DropdownComponent, Notice, Platform, PluginSettingTab, requestUrl, Setting } from "obsidian";
 import { ConfirmModal, EditDomainModal, ShellConsentModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { LlmWikiPluginSettings, OpKey } from "./types";
@@ -44,11 +44,27 @@ export function parseTimeoutString(v: string): { ingest: number; query: number; 
   return null;
 }
 
+class ModelInputSuggest extends AbstractInputSuggest<string> {
+  constructor(
+    app: App,
+    input: HTMLInputElement,
+    private getModels: () => string[],
+    private onPick: (v: string) => void,
+  ) {
+    super(app, input);
+    this.onSelect((model) => { this.setValue(model); onPick(model); this.close(); });
+  }
+  protected getSuggestions(query: string): string[] {
+    const q = query.toLowerCase();
+    return this.getModels().filter((m) => m.toLowerCase().includes(q)).slice(0, 10);
+  }
+  renderSuggestion(model: string, el: HTMLElement): void { el.setText(model); }
+}
+
 export class LlmWikiSettingTab extends PluginSettingTab {
   private cachedDomains: DomainEntry[] = [];
   private localCache: LocalConfig = { iclaudePath: "" };
   private _availableModels: string[] = [];
-  private get _chatModels() { return this._availableModels.filter((m) => !/embed|rerank|moderat/i.test(m)); }
 
   constructor(app: App, private plugin: LlmWikiPlugin) {
     super(app, plugin);
@@ -109,7 +125,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
 
   private addModelControl(
     s: Setting,
-    models: string[],
     currentValue: string,
     onChange: (v: string) => Promise<void>,
   ): void {
@@ -117,19 +132,13 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       b.setIcon("refresh-cw").setTooltip("Fetch available models from base URL")
         .onClick(() => { void this.fetchModels(); }),
     );
-    if (models.length > 0) {
-      s.addDropdown((d) => {
-        if (!currentValue) d.addOption("", "— select —");
-        for (const m of models) d.addOption(m, m);
-        d.setValue(currentValue);
-        d.onChange((v) => { void onChange(v); });
+    s.addText((t) => {
+      t.setPlaceholder("Type to search models…").setValue(currentValue);
+      t.inputEl.addEventListener("focus", () => {
+        if (this._availableModels.length === 0) void this.fetchModels();
       });
-    } else {
-      s.addText((t) =>
-        t.setValue(currentValue)
-          .onChange((v) => { void onChange(v.trim()); }),
-      );
-    }
+      new ModelInputSuggest(this.app, t.inputEl, () => this._availableModels, (v) => { void onChange(v); });
+    });
   }
 
   private render(): void {
@@ -451,7 +460,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       if (!s.nativeAgent.perOperation) {
         this.addModelControl(
           new Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
-          this._chatModels,
           eff.nativeAgent.model,
           async (v) => { s.nativeAgent.model = v; await this.plugin.saveSettings(); },
         );
@@ -549,7 +557,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           new Setting(containerEl).setName(label).setHeading();
           this.addModelControl(
             new Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc),
-            this._chatModels,
             s.nativeAgent.operations[key].model,
             async (v) => { s.nativeAgent.operations[key].model = v; await this.plugin.saveSettings(); },
           );
@@ -620,10 +627,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               }),
           );
 
-        const embModels = this._availableModels.filter((m) => /embed/i.test(m));
         this.addModelControl(
           new Setting(containerEl).setName("Embedding model").setDesc("Model name for embeddings, e.g. text-embedding-3-small"),
-          embModels,
           s.nativeAgent.embeddingModel ?? "",
           async (v) => { s.nativeAgent.embeddingModel = v || undefined; await this.plugin.saveSettings(); },
         );
@@ -676,6 +681,52 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           () => s.nativeAgent.chunkMaxCount ?? DEFAULT_CHUNKING.maxCount,
           (n) => { s.nativeAgent.chunkMaxCount = n; });
 
+        new Setting(containerEl).setName("Retrieval").setHeading();
+        new Setting(containerEl)
+          .setName("Hybrid retrieval (dense ⊕ sparse)")
+          .setDesc("Фьюзить embedding и jaccard через RRF. Требует embedding-модель; без неё — обычный jaccard.")
+          .addToggle((t) =>
+            t.setValue(s.nativeAgent.hybridRetrieval ?? false)
+              .onChange(async (v) => { s.nativeAgent.hybridRetrieval = v; await this.plugin.saveSettings(); }),
+          );
+        new Setting(containerEl)
+          .setName("RRF k")
+          .setDesc("Константа RRF. По умолчанию 60.")
+          .addText((t) =>
+            t.setValue(String(s.nativeAgent.rrfK ?? 60))
+              .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0) { s.nativeAgent.rrfK = Math.floor(n); await this.plugin.saveSettings(); } }),
+          );
+
+        new Setting(containerEl).setName("Graph health").setHeading();
+        new Setting(containerEl)
+          .setName("Dedup on ingest")
+          .setDesc("На создании near-duplicate страницы — слить в существующую через LLM-merge.")
+          .addToggle((t) =>
+            t.setValue(s.nativeAgent.dedupOnIngest ?? false)
+              .onChange(async (v) => { s.nativeAgent.dedupOnIngest = v; await this.plugin.saveSettings(); }),
+          );
+        new Setting(containerEl)
+          .setName("Dedup threshold")
+          .setDesc("Порог похожести для дедупа (0..1). По умолчанию 0.85.")
+          .addText((t) =>
+            t.setValue(String(s.nativeAgent.dedupThreshold ?? 0.85))
+              .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0 && n <= 1) { s.nativeAgent.dedupThreshold = n; await this.plugin.saveSettings(); } }),
+          );
+        new Setting(containerEl)
+          .setName("Lint near-duplicate report")
+          .setDesc("В Lint показывать пары близких страниц по embedding-косинусу.")
+          .addToggle((t) =>
+            t.setValue(s.nativeAgent.lintNearDuplicate ?? false)
+              .onChange(async (v) => { s.nativeAgent.lintNearDuplicate = v; await this.plugin.saveSettings(); }),
+          );
+        new Setting(containerEl)
+          .setName("Near-duplicate threshold")
+          .setDesc("Порог косинуса для near-duplicate отчёта (0..1). По умолчанию 0.80.")
+          .addText((t) =>
+            t.setValue(String(s.nativeAgent.nearDupThreshold ?? 0.80))
+              .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0 && n <= 1) { s.nativeAgent.nearDupThreshold = n; await this.plugin.saveSettings(); } }),
+          );
+
         new Setting(containerEl)
           .setName(T.settings.mergeDeleteWarnThreshold_name)
           .setDesc(T.settings.mergeDeleteWarnThreshold_desc)
@@ -711,7 +762,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         new Setting(containerEl)
           .setName("Vision model")
           .setDesc("Model name for vision calls, e.g. gpt-4o-mini or claude-3-haiku-20240307"),
-        this._chatModels,
         s.vision.model,
         async (v) => { s.vision.model = v; await this.plugin.saveSettings(); },
       );

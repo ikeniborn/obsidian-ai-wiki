@@ -19,7 +19,13 @@ describe("resolveConfigs", () => {
     expect(cfgs.map((c) => c.name)).toEqual(["jaccard", "dense"]);
   });
 
+  // @lat: [[tests#Tier 1 — Graph Health + Hybrid#Eval harness resolves the hybrid config]]
+  it("resolves hybrid config to hybrid mode", () => {
+    const cfgs = resolveConfigs("hybrid", 1, 8);
+    expect(cfgs[0]).toMatchObject({ name: "hybrid", mode: "hybrid", bfsDepth: 1, topK: 8 });
+  });
+
   it("throws on an unknown config name", () => {
-    expect(() => resolveConfigs("hybrid", 1, 8)).toThrow(/hybrid/);
+    expect(() => resolveConfigs("bogus", 1, 8)).toThrow(/bogus/);
   });
 });

@@ -87,6 +87,8 @@ Ingest uses `selectByEntities` for per-entity vector top-K; query/lint/format/in
 
 See [[src/page-similarity.ts#PageSimilarityService]], [[src/agent-runner.ts#AgentRunner]], [[operations#Ingest#Per-Entity Retrieval]].
 
+A `hybrid` mode fuses embedding and jaccard rankings via the reusable [[src/rrf.ts#rrf]] util (Reciprocal Rank Fusion), so both overlap and semantic signals contribute to the final ranking. `maxSimilarityToExisting()` scores a candidate text against all cached pages for ingest dedup; `pairwiseNearDuplicates()` compares all page pairs for the lint near-duplicate report.
+
 ## VaultTools
 
 Thin adapter over Obsidian's vault API. Used by all phase functions for read, write, list, mkdir, remove, and rmdir. Decouples phases from Obsidian internals and enables testing.
