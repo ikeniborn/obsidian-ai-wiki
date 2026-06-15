@@ -580,3 +580,26 @@ describe("hybrid mode", () => {
     expect(out[0].path).toBe("W/d/e/alpha.md"); // jaccard-on-both fusion still ranks the match first
   });
 });
+
+describe("maxSimilarityToExisting (dedup scoring)", () => {
+  // @lat: [[tests#Tier 1 — Graph Health + Hybrid#Dedup gate scores a candidate against existing pages]]
+  it("jaccard mode: returns the closest existing page by token overlap, 0..1", async () => {
+    const svc = new PageSimilarityService({ mode: "jaccard", topK: 5 });
+    // jaccard mode needs annotations as the existing-page corpus
+    svc.setJaccardCorpus(new Map([
+      ["docker-net", "docker network bridge driver"],
+      ["k8s-pod",    "kubernetes pod lifecycle"],
+    ]));
+    const out = await svc.maxSimilarityToExisting("docker network driver", new Set());
+    expect(out.pid).toBe("docker-net");
+    expect(out.score).toBeGreaterThan(0);
+    expect(out.score).toBeLessThanOrEqual(1);
+  });
+
+  it("respects excludePids", async () => {
+    const svc = new PageSimilarityService({ mode: "jaccard", topK: 5 });
+    svc.setJaccardCorpus(new Map([["docker-net", "docker network bridge driver"]]));
+    const out = await svc.maxSimilarityToExisting("docker network", new Set(["docker-net"]));
+    expect(out).toEqual({ pid: "", score: 0 });
+  });
+});

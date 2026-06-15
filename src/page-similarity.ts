@@ -176,6 +176,14 @@ export function buildChunkInputs(
   return inputs;
 }
 
+function jaccardCoeff(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  for (const t of a) if (b.has(t)) inter++;
+  const union = a.size + b.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
 function cosine(a: Float32Array, b: Float32Array): number {
   let dot = 0, na = 0, nb = 0;
   for (let i = 0; i < a.length; i++) {
@@ -253,6 +261,49 @@ export class PageSimilarityService {
   private cache: EmbeddingCacheFile | null = null;
 
   constructor(readonly config: SimilarityConfig) {}
+
+  // Corpus for jaccard-mode dedup scoring (pid -> annotation). Set by the caller
+  // (Ingest) which already holds the index annotations; also settable in tests.
+  private jaccardCorpus: Map<string, string> = new Map();
+  setJaccardCorpus(corpus: Map<string, string>): void { this.jaccardCorpus = corpus; }
+
+  /**
+   * Max similarity of `candidateText` to any existing page, excluding `excludePids`.
+   * embedding/hybrid: max-pool cosine over the loaded cache. jaccard: Jaccard coefficient
+   * over the supplied corpus. Returns { pid:"", score:0 } when nothing scores or on embed failure.
+   */
+  async maxSimilarityToExisting(
+    candidateText: string,
+    excludePids: Set<string>,
+  ): Promise<{ pid: string; score: number }> {
+    if (this.config.mode === "jaccard") {
+      const cand = tokenize(candidateText);
+      let best = { pid: "", score: 0 };
+      for (const [pid, annotation] of this.jaccardCorpus) {
+        if (excludePids.has(pid)) continue;
+        const score = jaccardCoeff(cand, tokenize(annotation));
+        if (score > best.score) best = { pid, score };
+      }
+      return best;
+    }
+    // embedding / hybrid
+    const { baseUrl, apiKey, model } = this.config;
+    if (!this.cache || !baseUrl || !model) return { pid: "", score: 0 };
+    let candVec: Float32Array;
+    try {
+      [candVec] = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [candidateText.slice(0, 2000)]);
+    } catch {
+      return { pid: "", score: 0 }; // never fire the gate on a failed signal
+    }
+    let best = { pid: "", score: 0 };
+    for (const [pid, entry] of Object.entries(this.cache.entries)) {
+      if (excludePids.has(pid)) continue;
+      const vecs = entry.chunks.map((c) => decodeVector(c.vector));
+      const score = maxCosine(candVec, vecs);
+      if (score > best.score) best = { pid, score };
+    }
+    return best;
+  }
 
   async selectRelevant(
     sourceContent: string,
