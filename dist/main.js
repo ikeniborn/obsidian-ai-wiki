@@ -26224,7 +26224,7 @@ var en = {
     systemPrompt_name: "User prompt",
     systemPrompt_desc: "Appended to the system prompt of every operation. Empty by default.",
     maxTokens_name: "Max tokens",
-    maxTokens_desc: "Maximum tokens in the response. Recommended \u2265 4096.",
+    maxTokens_desc: "Max tokens in the response. Default 4096. \u2191 longer answers, slower/costlier \xB7 \u2193 risk of truncation. Recommended \u2265 4096.",
     domains_heading: "Domains",
     editDomain: "Edit",
     deleteDomain: "Delete",
@@ -26233,9 +26233,9 @@ var en = {
     busyBanner: "Operation in progress \u2014 domain editing is disabled.",
     domains_empty: "No domains. Use 'Add domain' in the sidebar panel to create one.",
     timeouts_name: "Timeouts (seconds)",
-    timeouts_desc: "ingest / query / lint / init / format (0 = no limit)",
+    timeouts_desc: "ingest / query / lint / init / format, sec (0 = no limit). Default 300/300/900/3600/600. \u2191 fewer aborts on big tasks \xB7 \u2193 catches hangs sooner.",
     historyLimit_name: "History limit",
-    historyLimit_desc: "Maximum operations in the sidebar history.",
+    historyLimit_desc: "Max operations kept in the sidebar history. Default 20. \u2191 longer history, more memory \xB7 \u2193 leaner.",
     agentLog_name: "Agent log (JSONL)",
     agentLog_desc: "Log agent events to <vault>/!Wiki/_config/_agent.jsonl.",
     backend_name: "Backend",
@@ -26252,7 +26252,7 @@ var en = {
     apiKey_desc: 'For Ollama enter "ollama". For OpenAI \u2014 key sk-...',
     model_desc_native: "Model name: llama3.2, mistral, gpt-4o, etc.",
     temperature_name: "Temperature",
-    temperature_desc: "0.0\u20131.0.",
+    temperature_desc: "Sampling randomness, 0.0\u20132.0. Default 0.2. \u2191 more creative/varied \xB7 \u2193 more deterministic/precise. Recommended 0.1\u20130.3 for extraction.",
     topP_name: "Top-p",
     topP_desc: "0.0\u20131.0, or empty \u2014 disable.",
     allowedTools_name: "Allowed tools",
@@ -26267,9 +26267,9 @@ var en = {
     opModel_name: "Model",
     opModel_desc: "Model name for this operation.",
     opMaxTokens_name: "Max tokens",
-    opMaxTokens_desc: "Max tokens for this operation.",
+    opMaxTokens_desc: "Max tokens for this operation. Default 4096 (lint/init 8192, format 32768). \u2191 longer output, slower \xB7 \u2193 risk of truncation.",
     opTemperature_name: "Temperature",
-    opTemperature_desc: "Temperature for this operation (0\u20132).",
+    opTemperature_desc: "Temperature for this operation, 0.0\u20132.0. Default 0.2. \u2191 more varied \xB7 \u2193 more precise.",
     h3_devmode: "Developer",
     devMode_enabled_name: "Dev mode",
     devMode_enabled_desc: "Enable dev logger and evaluator after each operation.",
@@ -26295,23 +26295,49 @@ var en = {
     h3_graph: "Graph",
     h3_jaccard: "Jaccard",
     graphDepth_name: "BFS depth",
-    graphDepth_desc: "Query: hops from seed pages. 0 = seeds only, max sensible: 3.",
+    graphDepth_desc: "Query: hops from seed pages. 0 = seeds only, max sensible 3. Default 1. \u2191 wider context, more pages/tokens \xB7 \u2193 tighter, faster.",
     bfsTopK_name: "BFS context top-K",
-    bfsTopK_desc: "Max BFS-expanded pages ranked by similarity and added to query context. 0 = all pages.",
+    bfsTopK_desc: "Max BFS-expanded pages ranked by similarity added to query context. 0 = all. Default 10. \u2191 more recall, more tokens \xB7 \u2193 tighter, cheaper.",
     wikiLinkValidationRetries_name: "WikiLink fix passes",
-    wikiLinkValidationRetries_desc: "Max programmatic fix passes for WikiLink format errors. 0 = validate only.",
+    wikiLinkValidationRetries_desc: "Max programmatic fix passes for WikiLink format errors. 0 = validate only. Default 3. \u2191 fixes more links, slower \xB7 \u2193 faster, leaves more errors.",
     seedTopK_name: "Seed top-K",
-    seedTopK_desc: "Maximum seed pages selected by keyword score (1\u201350).",
+    seedTopK_desc: "Max seed pages selected by keyword score, 1\u201350. Default 5. \u2191 more entry points, broader & slower \xB7 \u2193 focused, faster.",
     seedMinScore_name: "Seed min score",
-    seedMinScore_desc: "Minimum Jaccard score for a page to be considered a seed (0.0\u20131.0).",
+    seedMinScore_desc: "Min Jaccard score for a page to qualify as a seed, 0.0\u20131.0. Default 0.1. \u2191 stricter, fewer/cleaner seeds \xB7 \u2193 looser, more recall.",
     mergeDeleteWarnThreshold_name: "Merge delete warning threshold",
-    mergeDeleteWarnThreshold_desc: "Ingest emits a warning when LLM requests deletion of more pages than this in a single merge. Default: 5.",
+    mergeDeleteWarnThreshold_desc: "Ingest warns when the LLM requests deleting more pages than this in one merge. Default 5. \u2191 fewer warnings, risk of bulk loss \xB7 \u2193 flags merges earlier.",
     structuredRetries_name: "Structured output retries",
-    structuredRetries_desc: "Retries on schema validation failure (0-3, default 1). Higher values improve success rate on weaker models at cost of latency/tokens.",
+    structuredRetries_desc: "Retries on schema validation failure, 0\u20133. Default 1. \u2191 higher success on weaker models, more latency/tokens \xB7 \u2193 faster, more failures.",
     llmIdleTimeout_name: "LLM idle timeout (seconds)",
-    llmIdleTimeout_desc: "Seconds of LLM silence before aborting the attempt. 0 = disabled.",
+    llmIdleTimeout_desc: "Seconds of LLM silence before aborting the attempt. 0 = disabled. Default 300. \u2191 more patience for slow models \xB7 \u2193 catches stalls sooner.",
     llmIdleRetries_name: "LLM idle retries",
-    llmIdleRetries_desc: "Max retry attempts after idle abort (0 = no retry)."
+    llmIdleRetries_desc: "Max retry attempts after an idle abort. 0 = no retry. Default 3. \u2191 more resilient to transient stalls, slower \xB7 \u2193 fails fast.",
+    effort_desc: "Claude reasoning level (--effort). Empty = no thinking. In per-op mode \u2014 global fallback.",
+    effort_off: "Disabled",
+    effort_inherit: "Inherit",
+    thinkingBudget_desc: "Max tokens for model reasoning. 0 or empty = disabled. Example: 2048. \u2191 deeper reasoning, slower/costlier \xB7 \u2193 faster.",
+    testConnection_name: "Test connection",
+    testConnection_desc: "Sends a test prompt to the endpoint to check availability.",
+    testConnection_btn: "Test",
+    testConnection_btnBusy: "Testing\u2026",
+    testConnection_ok: "\u2705 Model responds",
+    claudeAvailable_ok: "\u2705 Claude available",
+    semanticEnable_desc: "Use embedding vectors for relevant page selection. Requires native backend with an embeddings-capable model.",
+    relevantTopK_desc: "Max wiki pages loaded per ingest/query call. Default 15. \u2191 more context, slower/costlier \xB7 \u2193 faster, leaner.",
+    embeddingModel_desc: "Model name for embeddings, e.g. text-embedding-3-small",
+    embeddingDimensions_desc: "Vector dimensions, e.g. 512 or 1536",
+    chunkSize_desc: (d) => `Max characters per section window. Default ${d}. \u2191 fewer, larger chunks (more context each) \xB7 \u2193 finer chunks, better recall.`,
+    chunkOverlap_desc: (d) => `Overlap between consecutive windows of a long section. Default ${d}. \u2191 less context lost at edges, more vectors \xB7 \u2193 leaner.`,
+    chunkMin_desc: (d) => `Sections shorter than this merge into a neighbour. Default ${d}. \u2191 fewer tiny chunks \xB7 \u2193 keeps small sections separate.`,
+    chunkMaxCount_desc: (d) => `Cap on vectors per page (summary + sections). Default ${d}. \u2191 better section recall, more embedding cost \xB7 \u2193 cheaper, coarser.`,
+    hybridRetrieval_desc: "Fuse embedding and Jaccard via RRF. Requires an embedding model; without one \u2014 plain Jaccard.",
+    rrfK_desc: "RRF smoothing constant. Default 60. \u2191 flatter rank contribution (softer top) \xB7 \u2193 stronger weight on top results. Rarely change.",
+    bfsFusion_desc: "Order query context via RRF fusion of vector and graph. Off by default.",
+    seedSimilarityThreshold_desc: "Min max-score for a seed; below it \u2014 fallback to Jaccard \u2192 llmSelectSeeds. Example: 0.3 \xB7 0 = off, 1 = exact match. \u2191 stricter (fewer seeds, more precise) \xB7 \u2193 wider coverage. Recommended 0.25\u20130.4.",
+    dedupOnIngest_desc: "On creating a near-duplicate page \u2014 merge into the existing one via LLM-merge.",
+    dedupThreshold_desc: "Cosine threshold for dedup on ingest (0..1). Default 0.85. \u2191 merges only near-duplicates (safer) \xB7 \u2193 more aggressive, risk of false merges. Recommended 0.83\u20130.90.",
+    lintNearDuplicate_desc: "In Lint, report pairs of close pages by embedding cosine.",
+    nearDupThreshold_desc: "Cosine threshold for the near-duplicate report in Lint (0..1). Default 0.80. \u2191 fewer pairs, only clear duplicates \xB7 \u2193 more pairs, noisier. Recommended 0.78\u20130.85."
   },
   view: {
     refreshTitle: "Refresh domains",
@@ -26461,7 +26487,7 @@ var ru = {
     systemPrompt_name: "User prompt",
     systemPrompt_desc: "\u0414\u043E\u0431\u0430\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u0432 \u043A\u043E\u043D\u0435\u0446 \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u0433\u043E \u043F\u0440\u043E\u043C\u0442\u0430 \u043A\u0430\u0436\u0434\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E \u043F\u0443\u0441\u0442.",
     maxTokens_name: "Max tokens",
-    maxTokens_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u0432 \u043E\u0442\u0432\u0435\u0442\u0435. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u0435\u0442\u0441\u044F \u2265 4096.",
+    maxTokens_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u0432 \u043E\u0442\u0432\u0435\u0442\u0435. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 4096. \u2191 \u0434\u043B\u0438\u043D\u043D\u0435\u0435 \u043E\u0442\u0432\u0435\u0442, \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u0435\u0435/\u0434\u043E\u0440\u043E\u0436\u0435 \xB7 \u2193 \u0440\u0438\u0441\u043A \u043E\u0431\u0440\u044B\u0432\u0430. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u044E \u2265 4096.",
     domains_heading: "\u0414\u043E\u043C\u0435\u043D\u044B",
     editDomain: "\u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C",
     deleteDomain: "\u0423\u0434\u0430\u043B\u0438\u0442\u044C",
@@ -26470,9 +26496,9 @@ var ru = {
     busyBanner: "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F \u2014 \u0440\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0434\u043E\u043C\u0435\u043D\u043E\u0432 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E.",
     domains_empty: "\u0414\u043E\u043C\u0435\u043D\u044B \u043D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u044B. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 '\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D' \u0432 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438.",
     timeouts_name: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442\u044B (\u0441\u0435\u043A\u0443\u043D\u0434\u044B)",
-    timeouts_desc: "ingest / query / lint / init / format (0 = \u0431\u0435\u0437 \u043B\u0438\u043C\u0438\u0442\u0430)",
+    timeouts_desc: "ingest / query / lint / init / format, \u0441\u0435\u043A (0 = \u0431\u0435\u0437 \u043B\u0438\u043C\u0438\u0442\u0430). \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 300/300/900/3600/600. \u2191 \u043C\u0435\u043D\u044C\u0448\u0435 \u043E\u0431\u0440\u044B\u0432\u043E\u0432 \u043D\u0430 \u0431\u043E\u043B\u044C\u0448\u0438\u0445 \u0437\u0430\u0434\u0430\u0447\u0430\u0445 \xB7 \u2193 \u0431\u044B\u0441\u0442\u0440\u0435\u0435 \u043B\u043E\u0432\u0438\u0442 \u0437\u0430\u0432\u0438\u0441\u0430\u043D\u0438\u044F.",
     historyLimit_name: "\u041B\u0438\u043C\u0438\u0442 \u0438\u0441\u0442\u043E\u0440\u0438\u0438",
-    historyLimit_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439 \u0432 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438.",
+    historyLimit_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0439 \u0432 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 20. \u2191 \u0434\u043B\u0438\u043D\u043D\u0435\u0435 \u0438\u0441\u0442\u043E\u0440\u0438\u044F, \u0431\u043E\u043B\u044C\u0448\u0435 \u043F\u0430\u043C\u044F\u0442\u0438 \xB7 \u2193 \u043A\u043E\u043C\u043F\u0430\u043A\u0442\u043D\u0435\u0435.",
     agentLog_name: "\u041B\u043E\u0433 \u0430\u0433\u0435\u043D\u0442\u0430 (JSONL)",
     agentLog_desc: "\u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u0441\u043E\u0431\u044B\u0442\u0438\u044F \u0430\u0433\u0435\u043D\u0442\u0430 \u0432 <vault>/!Wiki/_config/_agent.jsonl.",
     backend_name: "Backend",
@@ -26489,7 +26515,7 @@ var ru = {
     apiKey_desc: '\u0414\u043B\u044F Ollama \u0432\u0432\u0435\u0434\u0438\u0442\u0435 "ollama". \u0414\u043B\u044F OpenAI \u2014 \u043A\u043B\u044E\u0447 sk-...',
     model_desc_native: "\u0418\u043C\u044F \u043C\u043E\u0434\u0435\u043B\u0438: llama3.2, mistral, gpt-4o \u0438 \u0442.\u043F.",
     temperature_name: "Temperature",
-    temperature_desc: "0.0\u20131.0.",
+    temperature_desc: "\u0421\u043B\u0443\u0447\u0430\u0439\u043D\u043E\u0441\u0442\u044C \u0441\u044D\u043C\u043F\u043B\u0438\u043D\u0433\u0430, 0.0\u20132.0. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 0.2. \u2191 \u043A\u0440\u0435\u0430\u0442\u0438\u0432\u043D\u0435\u0435/\u0440\u0430\u0437\u043D\u043E\u043E\u0431\u0440\u0430\u0437\u043D\u0435\u0435 \xB7 \u2193 \u0434\u0435\u0442\u0435\u0440\u043C\u0438\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u0435\u0435/\u0442\u043E\u0447\u043D\u0435\u0435. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u044E 0.1\u20130.3 \u0434\u043B\u044F \u0438\u0437\u0432\u043B\u0435\u0447\u0435\u043D\u0438\u044F.",
     topP_name: "Top-p",
     topP_desc: "0.0\u20131.0, \u0438\u043B\u0438 \u043F\u0443\u0441\u0442\u043E \u2014 \u043E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u044C.",
     allowedTools_name: "\u0420\u0430\u0437\u0440\u0435\u0448\u0451\u043D\u043D\u044B\u0435 \u0438\u043D\u0441\u0442\u0440\u0443\u043C\u0435\u043D\u0442\u044B",
@@ -26504,9 +26530,9 @@ var ru = {
     opModel_name: "\u041C\u043E\u0434\u0435\u043B\u044C",
     opModel_desc: "\u0418\u043C\u044F \u043C\u043E\u0434\u0435\u043B\u0438 \u0434\u043B\u044F \u044D\u0442\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.",
     opMaxTokens_name: "Max tokens",
-    opMaxTokens_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u0434\u043B\u044F \u044D\u0442\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.",
+    opMaxTokens_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u0434\u043B\u044F \u044D\u0442\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 4096 (lint/init 8192, format 32768). \u2191 \u0434\u043B\u0438\u043D\u043D\u0435\u0435 \u043E\u0442\u0432\u0435\u0442, \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u0435\u0435 \xB7 \u2193 \u0440\u0438\u0441\u043A \u043E\u0431\u0440\u044B\u0432\u0430.",
     opTemperature_name: "Temperature",
-    opTemperature_desc: "Temperature \u0434\u043B\u044F \u044D\u0442\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438 (0\u20132).",
+    opTemperature_desc: "Temperature \u0434\u043B\u044F \u044D\u0442\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438, 0.0\u20132.0. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 0.2. \u2191 \u0440\u0430\u0437\u043D\u043E\u043E\u0431\u0440\u0430\u0437\u043D\u0435\u0435 \xB7 \u2193 \u0442\u043E\u0447\u043D\u0435\u0435.",
     h3_devmode: "\u0420\u0430\u0437\u0440\u0430\u0431\u043E\u0442\u043A\u0430",
     devMode_enabled_name: "Dev \u0440\u0435\u0436\u0438\u043C",
     devMode_enabled_desc: "\u0412\u043A\u043B\u044E\u0447\u0438\u0442\u044C dev-\u043B\u043E\u0433\u0433\u0435\u0440 \u0438 \u043E\u0446\u0435\u043D\u0449\u0438\u043A \u043F\u043E\u0441\u043B\u0435 \u043A\u0430\u0436\u0434\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.",
@@ -26532,23 +26558,49 @@ var ru = {
     h3_graph: "\u0413\u0440\u0430\u0444",
     h3_jaccard: "Jaccard",
     graphDepth_name: "\u0413\u043B\u0443\u0431\u0438\u043D\u0430 BFS",
-    graphDepth_desc: "Query: \u0448\u0430\u0433\u043E\u0432 \u043E\u0442 seed-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. 0 = \u0442\u043E\u043B\u044C\u043A\u043E seeds, \u0440\u0430\u0437\u0443\u043C\u043D\u044B\u0439 \u043C\u0430\u043A\u0441\u0438\u043C\u0443\u043C: 3.",
+    graphDepth_desc: "Query: \u0448\u0430\u0433\u043E\u0432 \u043E\u0442 seed-\u0441\u0442\u0440\u0430\u043D\u0438\u0446. 0 = \u0442\u043E\u043B\u044C\u043A\u043E seeds, \u0440\u0430\u0437\u0443\u043C\u043D\u044B\u0439 \u043C\u0430\u043A\u0441\u0438\u043C\u0443\u043C 3. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 1. \u2191 \u0448\u0438\u0440\u0435 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442, \u0431\u043E\u043B\u044C\u0448\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446/\u0442\u043E\u043A\u0435\u043D\u043E\u0432 \xB7 \u2193 \u0443\u0436\u0435 \u0438 \u0431\u044B\u0441\u0442\u0440\u0435\u0435.",
     bfsTopK_name: "BFS top-K",
-    bfsTopK_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u0441\u0442\u0440\u0430\u043D\u0438\u0446 BFS, \u043E\u0442\u0440\u0430\u043D\u0436\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0445 \u043F\u043E \u0441\u0445\u043E\u0436\u0435\u0441\u0442\u0438 \u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u0437\u0430\u043F\u0440\u043E\u0441\u0430. 0 = \u0432\u0441\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.",
+    bfsTopK_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u0441\u0442\u0440\u0430\u043D\u0438\u0446 BFS \u043F\u043E \u0441\u0445\u043E\u0436\u0435\u0441\u0442\u0438, \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0435\u043C\u044B\u0445 \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u0437\u0430\u043F\u0440\u043E\u0441\u0430. 0 = \u0432\u0441\u0435. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 10. \u2191 \u0432\u044B\u0448\u0435 \u043F\u043E\u043B\u043D\u043E\u0442\u0430, \u0431\u043E\u043B\u044C\u0448\u0435 \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \xB7 \u2193 \u0443\u0436\u0435 \u0438 \u0434\u0435\u0448\u0435\u0432\u043B\u0435.",
     wikiLinkValidationRetries_name: "\u041F\u0440\u043E\u0445\u043E\u0434\u043E\u0432 \u0444\u0438\u043A\u0441\u0435\u0440\u0430 WikiLinks",
-    wikiLinkValidationRetries_desc: "\u041C\u0430\u043A\u0441. \u0447\u0438\u0441\u043B\u043E \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u043D\u044B\u0445 \u043F\u0440\u043E\u0445\u043E\u0434\u043E\u0432 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u0444\u043E\u0440\u043C\u0430\u0442\u0430 WikiLinks. 0 \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0432\u0430\u043B\u0438\u0434\u0430\u0446\u0438\u044F.",
+    wikiLinkValidationRetries_desc: "\u041C\u0430\u043A\u0441. \u0447\u0438\u0441\u043B\u043E \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u043D\u044B\u0445 \u043F\u0440\u043E\u0445\u043E\u0434\u043E\u0432 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u0444\u043E\u0440\u043C\u0430\u0442\u0430 WikiLinks. 0 = \u0442\u043E\u043B\u044C\u043A\u043E \u0432\u0430\u043B\u0438\u0434\u0430\u0446\u0438\u044F. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 3. \u2191 \u0447\u0438\u043D\u0438\u0442 \u0431\u043E\u043B\u044C\u0448\u0435 \u0441\u0441\u044B\u043B\u043E\u043A, \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u0435\u0435 \xB7 \u2193 \u0431\u044B\u0441\u0442\u0440\u0435\u0435, \u0431\u043E\u043B\u044C\u0448\u0435 \u043E\u0448\u0438\u0431\u043E\u043A \u043E\u0441\u0442\u0430\u0451\u0442\u0441\u044F.",
     seedTopK_name: "Seed top-K",
-    seedTopK_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C seed-\u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043F\u043E keyword-score (1\u201350).",
+    seedTopK_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C seed-\u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043F\u043E keyword-score, 1\u201350. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 5. \u2191 \u0431\u043E\u043B\u044C\u0448\u0435 \u0442\u043E\u0447\u0435\u043A \u0432\u0445\u043E\u0434\u0430, \u0448\u0438\u0440\u0435 \u0438 \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u0435\u0435 \xB7 \u2193 \u0444\u043E\u043A\u0443\u0441\u043D\u0435\u0435 \u0438 \u0431\u044B\u0441\u0442\u0440\u0435\u0435.",
     seedMinScore_name: "\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u044B\u0439 score seed",
-    seedMinScore_desc: "\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u044B\u0439 Jaccard score, \u0447\u0442\u043E\u0431\u044B \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 \u043F\u043E\u043F\u0430\u043B\u0430 \u0432 seeds (0.0\u20131.0).",
+    seedMinScore_desc: "\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u044B\u0439 Jaccard score, \u0447\u0442\u043E\u0431\u044B \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 \u043F\u043E\u043F\u0430\u043B\u0430 \u0432 seeds, 0.0\u20131.0. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 0.1. \u2191 \u0441\u0442\u0440\u043E\u0436\u0435, \u043C\u0435\u043D\u044C\u0448\u0435/\u0447\u0438\u0449\u0435 seeds \xB7 \u2193 \u043C\u044F\u0433\u0447\u0435, \u0432\u044B\u0448\u0435 \u043F\u043E\u043B\u043D\u043E\u0442\u0430.",
     mergeDeleteWarnThreshold_name: "\u041F\u043E\u0440\u043E\u0433 \u043F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0435\u043D\u0438\u044F \u043E merge-\u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F\u0445",
-    mergeDeleteWarnThreshold_desc: "Ingest \u043F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0430\u0435\u0442, \u0435\u0441\u043B\u0438 LLM \u043F\u0440\u043E\u0441\u0438\u0442 \u0443\u0434\u0430\u043B\u0438\u0442\u044C \u0431\u043E\u043B\u044C\u0448\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043F\u0440\u0438 merge. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E: 5.",
+    mergeDeleteWarnThreshold_desc: "Ingest \u043F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0430\u0435\u0442, \u0435\u0441\u043B\u0438 LLM \u043F\u0440\u043E\u0441\u0438\u0442 \u0443\u0434\u0430\u043B\u0438\u0442\u044C \u0431\u043E\u043B\u044C\u0448\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0437\u0430 \u043E\u0434\u0438\u043D merge. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 5. \u2191 \u0440\u0435\u0436\u0435 \u043F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0435\u043D\u0438\u044F, \u0440\u0438\u0441\u043A \u043C\u0430\u0441\u0441\u043E\u0432\u043E\u0433\u043E \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \xB7 \u2193 \u0440\u0430\u043D\u044C\u0448\u0435 \u043B\u043E\u0432\u0438\u0442 merge.",
     structuredRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u043F\u0440\u0438 \u043E\u0448\u0438\u0431\u043A\u0435 \u0441\u0445\u0435\u043C\u044B",
-    structuredRetries_desc: "\u0421\u043A\u043E\u043B\u044C\u043A\u043E \u0440\u0430\u0437 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u0432\u044B\u0437\u043E\u0432 LLM \u043F\u0440\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0435 \u043E\u0442\u0432\u0435\u0442\u0430 (0-3, \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 1). \u0412\u044B\u0448\u0435 \u2014 \u043D\u0430\u0434\u0451\u0436\u043D\u0435\u0435 \u043D\u0430 \u0441\u043B\u0430\u0431\u044B\u0445 \u043C\u043E\u0434\u0435\u043B\u044F\u0445, \u0434\u043E\u0440\u043E\u0436\u0435 \u043F\u043E \u0442\u043E\u043A\u0435\u043D\u0430\u043C.",
+    structuredRetries_desc: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u0432\u044B\u0437\u043E\u0432\u0430 LLM \u043F\u0440\u0438 \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u043E\u0439 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0435 \u043E\u0442\u0432\u0435\u0442\u0430, 0\u20133. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 1. \u2191 \u043D\u0430\u0434\u0451\u0436\u043D\u0435\u0435 \u043D\u0430 \u0441\u043B\u0430\u0431\u044B\u0445 \u043C\u043E\u0434\u0435\u043B\u044F\u0445, \u0434\u043E\u0440\u043E\u0436\u0435 \u043F\u043E \u0442\u043E\u043A\u0435\u043D\u0430\u043C/\u0432\u0440\u0435\u043C\u0435\u043D\u0438 \xB7 \u2193 \u0431\u044B\u0441\u0442\u0440\u0435\u0435, \u0431\u043E\u043B\u044C\u0448\u0435 \u043E\u0442\u043A\u0430\u0437\u043E\u0432.",
     llmIdleTimeout_name: "\u0422\u0430\u0439\u043C\u0430\u0443\u0442 \u043F\u0440\u043E\u0441\u0442\u043E\u044F LLM (\u0441\u0435\u043A\u0443\u043D\u0434\u044B)",
-    llmIdleTimeout_desc: "\u0421\u0435\u043A\u0443\u043D\u0434 \u0442\u0438\u0448\u0438\u043D\u044B LLM \u0434\u043E \u043F\u0440\u0435\u0440\u044B\u0432\u0430\u043D\u0438\u044F \u043F\u043E\u043F\u044B\u0442\u043A\u0438. 0 = \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E.",
+    llmIdleTimeout_desc: "\u0421\u0435\u043A\u0443\u043D\u0434 \u0442\u0438\u0448\u0438\u043D\u044B LLM \u0434\u043E \u043F\u0440\u0435\u0440\u044B\u0432\u0430\u043D\u0438\u044F \u043F\u043E\u043F\u044B\u0442\u043A\u0438. 0 = \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 300. \u2191 \u0442\u0435\u0440\u043F\u0435\u043B\u0438\u0432\u0435\u0435 \u043A \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u044B\u043C \u043C\u043E\u0434\u0435\u043B\u044F\u043C \xB7 \u2193 \u0440\u0430\u043D\u044C\u0448\u0435 \u043B\u043E\u0432\u0438\u0442 \u0437\u0430\u0432\u0438\u0441\u0430\u043D\u0438\u044F.",
     llmIdleRetries_name: "\u041F\u043E\u0432\u0442\u043E\u0440\u044B \u043F\u0440\u0438 \u043F\u0440\u043E\u0441\u0442\u043E\u0435 LLM",
-    llmIdleRetries_desc: "\u041C\u0430\u043A\u0441. \u0447\u0438\u0441\u043B\u043E \u043F\u043E\u0432\u0442\u043E\u0440\u043E\u0432 \u043F\u043E\u0441\u043B\u0435 \u043F\u0440\u0435\u0440\u044B\u0432\u0430\u043D\u0438\u044F \u043F\u043E \u043F\u0440\u043E\u0441\u0442\u043E\u044E (0 = \u0431\u0435\u0437 \u043F\u043E\u0432\u0442\u043E\u0440\u043E\u0432)."
+    llmIdleRetries_desc: "\u041C\u0430\u043A\u0441. \u0447\u0438\u0441\u043B\u043E \u043F\u043E\u0432\u0442\u043E\u0440\u043E\u0432 \u043F\u043E\u0441\u043B\u0435 \u043F\u0440\u0435\u0440\u044B\u0432\u0430\u043D\u0438\u044F \u043F\u043E \u043F\u0440\u043E\u0441\u0442\u043E\u044E. 0 = \u0431\u0435\u0437 \u043F\u043E\u0432\u0442\u043E\u0440\u043E\u0432. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 3. \u2191 \u0443\u0441\u0442\u043E\u0439\u0447\u0438\u0432\u0435\u0435 \u043A \u0440\u0430\u0437\u043E\u0432\u044B\u043C \u0437\u0430\u0432\u0438\u0441\u0430\u043D\u0438\u044F\u043C, \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u0435\u0435 \xB7 \u2193 \u0431\u044B\u0441\u0442\u0440\u044B\u0439 \u043E\u0442\u043A\u0430\u0437.",
+    effort_desc: "\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u0440\u0430\u0437\u043C\u044B\u0448\u043B\u0435\u043D\u0438\u044F Claude (--effort). \u041F\u0443\u0441\u0442\u043E = \u0431\u0435\u0437 thinking. \u0412 per-op \u0440\u0435\u0436\u0438\u043C\u0435 \u2014 \u0433\u043B\u043E\u0431\u0430\u043B\u044C\u043D\u044B\u0439 fallback.",
+    effort_off: "\u041E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E",
+    effort_inherit: "\u0423\u043D\u0430\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u044C",
+    thinkingBudget_desc: "\u041C\u0430\u043A\u0441. \u0442\u043E\u043A\u0435\u043D\u044B \u043D\u0430 \u0440\u0430\u0437\u043C\u044B\u0448\u043B\u0435\u043D\u0438\u0435 \u043C\u043E\u0434\u0435\u043B\u0438. 0 \u0438\u043B\u0438 \u043F\u0443\u0441\u0442\u043E = \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E. \u041F\u0440\u0438\u043C\u0435\u0440: 2048. \u2191 \u0433\u043B\u0443\u0431\u0436\u0435 \u0440\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u0435, \u0434\u043E\u0440\u043E\u0436\u0435/\u043C\u0435\u0434\u043B\u0435\u043D\u043D\u0435\u0435 \xB7 \u2193 \u0431\u044B\u0441\u0442\u0440\u0435\u0435.",
+    testConnection_name: "\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u0435",
+    testConnection_desc: "\u041E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u0442 \u0442\u0435\u0441\u0442\u043E\u0432\u044B\u0439 \u043F\u0440\u043E\u043C\u043F\u0442 \u043A endpoint \u0434\u043B\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E\u0441\u0442\u0438.",
+    testConnection_btn: "\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C",
+    testConnection_btnBusy: "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430\u2026",
+    testConnection_ok: "\u2705 \u041C\u043E\u0434\u0435\u043B\u044C \u043E\u0442\u0432\u0435\u0447\u0430\u0435\u0442",
+    claudeAvailable_ok: "\u2705 Claude \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D",
+    semanticEnable_desc: "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u044C embedding-\u0432\u0435\u043A\u0442\u043E\u0440\u044B \u0434\u043B\u044F \u0432\u044B\u0431\u043E\u0440\u0430 \u0440\u0435\u043B\u0435\u0432\u0430\u043D\u0442\u043D\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u0422\u0440\u0435\u0431\u0443\u0435\u0442 native-\u0431\u044D\u043A\u0435\u043D\u0434 \u0441 \u043C\u043E\u0434\u0435\u043B\u044C\u044E \u044D\u043C\u0431\u0435\u0434\u0434\u0438\u043D\u0433\u043E\u0432.",
+    relevantTopK_desc: "\u041C\u0430\u043A\u0441. wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043D\u0430 \u0432\u044B\u0437\u043E\u0432 ingest/query. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 15. \u2191 \u0431\u043E\u043B\u044C\u0448\u0435 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430, \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u0435\u0435/\u0434\u043E\u0440\u043E\u0436\u0435 \xB7 \u2193 \u0431\u044B\u0441\u0442\u0440\u0435\u0435 \u0438 \u043B\u0435\u0433\u0447\u0435.",
+    embeddingModel_desc: "\u0418\u043C\u044F \u043C\u043E\u0434\u0435\u043B\u0438 \u044D\u043C\u0431\u0435\u0434\u0434\u0438\u043D\u0433\u043E\u0432, \u043D\u0430\u043F\u0440. text-embedding-3-small",
+    embeddingDimensions_desc: "\u0420\u0430\u0437\u043C\u0435\u0440\u043D\u043E\u0441\u0442\u044C \u0432\u0435\u043A\u0442\u043E\u0440\u0430, \u043D\u0430\u043F\u0440. 512 \u0438\u043B\u0438 1536",
+    chunkSize_desc: (d) => `\u041C\u0430\u043A\u0441. \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432 \u0432 \u043E\u043A\u043D\u0435 \u0441\u0435\u043A\u0446\u0438\u0438. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. ${d}. \u2191 \u043C\u0435\u043D\u044C\u0448\u0435 \u043A\u0440\u0443\u043F\u043D\u044B\u0445 \u0447\u0430\u043D\u043A\u043E\u0432 (\u0431\u043E\u043B\u044C\u0448\u0435 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0430 \u0432 \u043A\u0430\u0436\u0434\u043E\u043C) \xB7 \u2193 \u043C\u0435\u043B\u044C\u0447\u0435 \u0447\u0430\u043D\u043A\u0438, \u0432\u044B\u0448\u0435 recall.`,
+    chunkOverlap_desc: (d) => `\u041F\u0435\u0440\u0435\u043A\u0440\u044B\u0442\u0438\u0435 \u043C\u0435\u0436\u0434\u0443 \u0441\u043E\u0441\u0435\u0434\u043D\u0438\u043C\u0438 \u043E\u043A\u043D\u0430\u043C\u0438 \u0434\u043B\u0438\u043D\u043D\u043E\u0439 \u0441\u0435\u043A\u0446\u0438\u0438. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. ${d}. \u2191 \u043C\u0435\u043D\u044C\u0448\u0435 \u0442\u0435\u0440\u044F\u0435\u0442\u0441\u044F \u043D\u0430 \u0441\u0442\u044B\u043A\u0430\u0445, \u0431\u043E\u043B\u044C\u0448\u0435 \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432 \xB7 \u2193 \u043B\u0435\u0433\u0447\u0435.`,
+    chunkMin_desc: (d) => `\u0421\u0435\u043A\u0446\u0438\u0438 \u043A\u043E\u0440\u043E\u0447\u0435 \u044D\u0442\u043E\u0433\u043E \u0441\u043B\u0438\u0432\u0430\u044E\u0442\u0441\u044F \u0441 \u0441\u043E\u0441\u0435\u0434\u043D\u0435\u0439. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. ${d}. \u2191 \u043C\u0435\u043D\u044C\u0448\u0435 \u043A\u0440\u043E\u0448\u0435\u0447\u043D\u044B\u0445 \u0447\u0430\u043D\u043A\u043E\u0432 \xB7 \u2193 \u043C\u0435\u043B\u043A\u0438\u0435 \u0441\u0435\u043A\u0446\u0438\u0438 \u043E\u0441\u0442\u0430\u044E\u0442\u0441\u044F \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u043C\u0438.`,
+    chunkMaxCount_desc: (d) => `\u041B\u0438\u043C\u0438\u0442 \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 (summary + \u0441\u0435\u043A\u0446\u0438\u0438). \u041F\u043E \u0443\u043C\u043E\u043B\u0447. ${d}. \u2191 \u0432\u044B\u0448\u0435 recall \u0441\u0435\u043A\u0446\u0438\u0439, \u0434\u043E\u0440\u043E\u0436\u0435 \u044D\u043C\u0431\u0435\u0434\u0434\u0438\u043D\u0433\u0438 \xB7 \u2193 \u0434\u0435\u0448\u0435\u0432\u043B\u0435, \u0433\u0440\u0443\u0431\u0435\u0435.`,
+    hybridRetrieval_desc: "\u0424\u044C\u044E\u0437\u0438\u0442\u044C embedding \u0438 jaccard \u0447\u0435\u0440\u0435\u0437 RRF. \u0422\u0440\u0435\u0431\u0443\u0435\u0442 embedding-\u043C\u043E\u0434\u0435\u043B\u044C; \u0431\u0435\u0437 \u043D\u0435\u0451 \u2014 \u043E\u0431\u044B\u0447\u043D\u044B\u0439 jaccard.",
+    rrfK_desc: "\u041A\u043E\u043D\u0441\u0442\u0430\u043D\u0442\u0430 \u0441\u0433\u043B\u0430\u0436\u0438\u0432\u0430\u043D\u0438\u044F RRF. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 60. \u2191 \u0440\u043E\u0432\u043D\u0435\u0435 \u0432\u043A\u043B\u0430\u0434 \u0440\u0430\u043D\u0433\u043E\u0432 (\u043C\u044F\u0433\u0447\u0435 \u0442\u043E\u043F) \xB7 \u2193 \u0441\u0438\u043B\u044C\u043D\u0435\u0435 \u0432\u0435\u0441 \u0442\u043E\u043F\u043E\u0432\u044B\u0445 \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u043E\u0432. \u041C\u0435\u043D\u044F\u0439\u0442\u0435 \u0440\u0435\u0434\u043A\u043E.",
+    bfsFusion_desc: "\u0423\u043F\u043E\u0440\u044F\u0434\u043E\u0447\u0438\u0442\u044C \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u0437\u0430\u043F\u0440\u043E\u0441\u0430 \u0447\u0435\u0440\u0435\u0437 RRF-\u0444\u044C\u044E\u0437 \u0432\u0435\u043A\u0442\u043E\u0440\u0430 \u0438 \u0433\u0440\u0430\u0444\u0430. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E \u0432\u044B\u043A\u043B.",
+    seedSimilarityThreshold_desc: "\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u044B\u0439 max-score seed; \u043D\u0438\u0436\u0435 \u2014 \u0444\u043E\u043B\u043B\u0431\u044D\u043A \u043D\u0430 Jaccard \u2192 llmSelectSeeds. \u041F\u0440\u0438\u043C\u0435\u0440: 0.3 \xB7 0 = \u0432\u044B\u043A\u043B, 1 = \u0442\u043E\u0447\u043D\u043E\u0435 \u0441\u043E\u0432\u043F\u0430\u0434\u0435\u043D\u0438\u0435. \u2191 \u0441\u0442\u0440\u043E\u0436\u0435 (\u043C\u0435\u043D\u044C\u0448\u0435 seeds, \u0442\u043E\u0447\u043D\u0435\u0435) \xB7 \u2193 \u0448\u0438\u0440\u0435 \u043E\u0445\u0432\u0430\u0442. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u044E 0.25\u20130.4.",
+    dedupOnIngest_desc: "\u041D\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u0438 near-duplicate \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u2014 \u0441\u043B\u0438\u0442\u044C \u0432 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0443\u044E \u0447\u0435\u0440\u0435\u0437 LLM-merge.",
+    dedupThreshold_desc: "\u041F\u043E\u0440\u043E\u0433 \u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0430 \u0434\u043B\u044F \u0434\u0435\u0434\u0443\u043F\u0430 \u043F\u0440\u0438 ingest (0..1). \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 0.85. \u2191 \u0441\u043B\u0438\u0432\u0430\u0435\u0442 \u0442\u043E\u043B\u044C\u043A\u043E near-duplicate (\u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u0435\u0435) \xB7 \u2193 \u0430\u0433\u0440\u0435\u0441\u0441\u0438\u0432\u043D\u0435\u0435, \u0440\u0438\u0441\u043A \u043B\u043E\u0436\u043D\u044B\u0445 merge. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u044E 0.83\u20130.90.",
+    lintNearDuplicate_desc: "\u0412 Lint \u043F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u043F\u0430\u0440\u044B \u0431\u043B\u0438\u0437\u043A\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043F\u043E embedding-\u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0443.",
+    nearDupThreshold_desc: "\u041F\u043E\u0440\u043E\u0433 \u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0430 \u0434\u043B\u044F near-duplicate \u043E\u0442\u0447\u0451\u0442\u0430 \u0432 Lint (0..1). \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 0.80. \u2191 \u043C\u0435\u043D\u044C\u0448\u0435 \u043F\u0430\u0440, \u0442\u043E\u043B\u044C\u043A\u043E \u044F\u0432\u043D\u044B\u0435 \u0434\u0443\u0431\u043B\u0438 \xB7 \u2193 \u0431\u043E\u043B\u044C\u0448\u0435 \u043F\u0430\u0440, \u0448\u0443\u043C\u043D\u0435\u0435. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u044E 0.78\u20130.85."
   },
   view: {
     refreshTitle: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D\u044B",
@@ -26698,7 +26750,7 @@ var es = {
     systemPrompt_name: "User prompt",
     systemPrompt_desc: "Se a\xF1ade al final del prompt del sistema de cada operaci\xF3n. Vac\xEDo por defecto.",
     maxTokens_name: "M\xE1x. tokens",
-    maxTokens_desc: "M\xE1ximo de tokens en la respuesta. Recomendado \u2265 4096.",
+    maxTokens_desc: "M\xE1x. tokens en la respuesta. Por defecto 4096. \u2191 respuestas m\xE1s largas, m\xE1s lento/caro \xB7 \u2193 riesgo de truncado. Recomendado \u2265 4096.",
     domains_heading: "Dominios",
     editDomain: "Editar",
     deleteDomain: "Eliminar",
@@ -26707,9 +26759,9 @@ var es = {
     busyBanner: "Operaci\xF3n en curso \u2014 la edici\xF3n de dominios est\xE1 desactivada.",
     domains_empty: "No hay dominios. Use 'A\xF1adir dominio' en el panel lateral.",
     timeouts_name: "Tiempos de espera (segundos)",
-    timeouts_desc: "ingest / query / lint / init / format (0 = sin l\xEDmite)",
+    timeouts_desc: "ingest / query / lint / init / format, seg (0 = sin l\xEDmite). Por defecto 300/300/900/3600/600. \u2191 menos abortos en tareas grandes \xB7 \u2193 detecta cuelgues antes.",
     historyLimit_name: "L\xEDmite de historial",
-    historyLimit_desc: "M\xE1ximo de operaciones en el historial del panel lateral.",
+    historyLimit_desc: "M\xE1x. operaciones en el historial lateral. Por defecto 20. \u2191 m\xE1s historial, m\xE1s memoria \xB7 \u2193 m\xE1s ligero.",
     agentLog_name: "Log del agente (JSONL)",
     agentLog_desc: "Registra eventos del agente en <vault>/!Wiki/_config/_agent.jsonl.",
     backend_name: "Backend",
@@ -26726,7 +26778,7 @@ var es = {
     apiKey_desc: 'Para Ollama introduce "ollama". Para OpenAI \u2014 clave sk-...',
     model_desc_native: "Nombre del modelo: llama3.2, mistral, gpt-4o, etc.",
     temperature_name: "Temperatura",
-    temperature_desc: "0.0\u20131.0.",
+    temperature_desc: "Aleatoriedad del muestreo, 0.0\u20132.0. Por defecto 0.2. \u2191 m\xE1s creativo/variado \xB7 \u2193 m\xE1s determinista/preciso. Recomendado 0.1\u20130.3 para extracci\xF3n.",
     topP_name: "Top-p",
     topP_desc: "0.0\u20131.0, o vac\xEDo \u2014 desactivar.",
     allowedTools_name: "Herramientas permitidas",
@@ -26741,9 +26793,9 @@ var es = {
     opModel_name: "Modelo",
     opModel_desc: "Nombre del modelo para esta operaci\xF3n.",
     opMaxTokens_name: "M\xE1x. tokens",
-    opMaxTokens_desc: "M\xE1ximo de tokens para esta operaci\xF3n.",
+    opMaxTokens_desc: "M\xE1x. tokens para esta operaci\xF3n. Por defecto 4096 (lint/init 8192, format 32768). \u2191 salida m\xE1s larga, m\xE1s lento \xB7 \u2193 riesgo de truncado.",
     opTemperature_name: "Temperatura",
-    opTemperature_desc: "Temperatura para esta operaci\xF3n (0\u20132).",
+    opTemperature_desc: "Temperatura para esta operaci\xF3n, 0.0\u20132.0. Por defecto 0.2. \u2191 m\xE1s variado \xB7 \u2193 m\xE1s preciso.",
     h3_devmode: "Desarrollo",
     devMode_enabled_name: "Modo dev",
     devMode_enabled_desc: "Activar el registrador dev y el evaluador tras cada operaci\xF3n.",
@@ -26769,23 +26821,49 @@ var es = {
     h3_graph: "Grafo",
     h3_jaccard: "Jaccard",
     graphDepth_name: "Profundidad BFS",
-    graphDepth_desc: "Query: saltos desde p\xE1ginas semilla. 0 = solo semillas, m\xE1x recomendado: 3.",
+    graphDepth_desc: "Query: saltos desde p\xE1ginas semilla. 0 = solo semillas, m\xE1x recomendado 3. Por defecto 1. \u2191 contexto m\xE1s amplio, m\xE1s p\xE1ginas/tokens \xB7 \u2193 m\xE1s ajustado y r\xE1pido.",
     bfsTopK_name: "BFS top-K",
-    bfsTopK_desc: "M\xE1x. p\xE1ginas BFS rankeadas por similitud agregadas al contexto. 0 = todas.",
+    bfsTopK_desc: "M\xE1x. p\xE1ginas BFS por similitud a\xF1adidas al contexto. 0 = todas. Por defecto 10. \u2191 m\xE1s exhaustivo, m\xE1s tokens \xB7 \u2193 m\xE1s ajustado y barato.",
     wikiLinkValidationRetries_name: "Pasadas del fijador de WikiLinks",
-    wikiLinkValidationRetries_desc: "M\xE1x. pasadas program\xE1ticas para corregir formato de WikiLinks. 0 = solo validar.",
+    wikiLinkValidationRetries_desc: "M\xE1x. pasadas program\xE1ticas para corregir formato de WikiLinks. 0 = solo validar. Por defecto 3. \u2191 corrige m\xE1s enlaces, m\xE1s lento \xB7 \u2193 m\xE1s r\xE1pido, deja m\xE1s errores.",
     seedTopK_name: "Top-K semillas",
-    seedTopK_desc: "M\xE1ximo de p\xE1ginas semilla por puntuaci\xF3n de palabras clave (1\u201350).",
+    seedTopK_desc: "M\xE1x. p\xE1ginas semilla por puntuaci\xF3n de palabras clave, 1\u201350. Por defecto 5. \u2191 m\xE1s puntos de entrada, m\xE1s amplio y lento \xB7 \u2193 m\xE1s enfocado y r\xE1pido.",
     seedMinScore_name: "Puntuaci\xF3n m\xEDnima semilla",
-    seedMinScore_desc: "Puntuaci\xF3n Jaccard m\xEDnima para considerar una p\xE1gina como semilla (0.0\u20131.0).",
+    seedMinScore_desc: "Puntuaci\xF3n Jaccard m\xEDnima para que una p\xE1gina sea semilla, 0.0\u20131.0. Por defecto 0.1. \u2191 m\xE1s estricto, menos/mejores semillas \xB7 \u2193 m\xE1s laxo, m\xE1s exhaustivo.",
     mergeDeleteWarnThreshold_name: "Umbral de aviso de merge-deletes",
-    mergeDeleteWarnThreshold_desc: "Ingest avisa cuando el LLM pide borrar m\xE1s p\xE1ginas que este umbral en un merge. Por defecto: 5.",
+    mergeDeleteWarnThreshold_desc: "Ingest avisa cuando el LLM pide borrar m\xE1s p\xE1ginas que esto en un merge. Por defecto 5. \u2191 menos avisos, riesgo de p\xE9rdida masiva \xB7 \u2193 marca merges antes.",
     structuredRetries_name: "Structured output retries",
-    structuredRetries_desc: "Retries on schema validation failure (0-3, default 1). Higher values improve success rate on weaker models at cost of latency/tokens.",
+    structuredRetries_desc: "Reintentos ante fallo de validaci\xF3n de esquema, 0\u20133. Por defecto 1. \u2191 m\xE1s \xE9xito en modelos d\xE9biles, m\xE1s latencia/tokens \xB7 \u2193 m\xE1s r\xE1pido, m\xE1s fallos.",
     llmIdleTimeout_name: "Tiempo de espera de inactividad LLM (segundos)",
-    llmIdleTimeout_desc: "Segundos de silencio LLM antes de abortar el intento. 0 = desactivado.",
+    llmIdleTimeout_desc: "Segundos de silencio del LLM antes de abortar el intento. 0 = desactivado. Por defecto 300. \u2191 m\xE1s paciencia con modelos lentos \xB7 \u2193 detecta bloqueos antes.",
     llmIdleRetries_name: "Reintentos por inactividad LLM",
-    llmIdleRetries_desc: "M\xE1x. reintentos tras aborto por inactividad (0 = sin reintentos)."
+    llmIdleRetries_desc: "M\xE1x. reintentos tras un aborto por inactividad. 0 = sin reintentos. Por defecto 3. \u2191 m\xE1s resistente a bloqueos transitorios, m\xE1s lento \xB7 \u2193 falla r\xE1pido.",
+    effort_desc: "Nivel de razonamiento de Claude (--effort). Vac\xEDo = sin thinking. En modo per-op \u2014 fallback global.",
+    effort_off: "Desactivado",
+    effort_inherit: "Heredar",
+    thinkingBudget_desc: "M\xE1x. tokens para el razonamiento del modelo. 0 o vac\xEDo = desactivado. Ejemplo: 2048. \u2191 razonamiento m\xE1s profundo, m\xE1s lento/caro \xB7 \u2193 m\xE1s r\xE1pido.",
+    testConnection_name: "Probar conexi\xF3n",
+    testConnection_desc: "Env\xEDa un prompt de prueba al endpoint para comprobar la disponibilidad.",
+    testConnection_btn: "Probar",
+    testConnection_btnBusy: "Probando\u2026",
+    testConnection_ok: "\u2705 El modelo responde",
+    claudeAvailable_ok: "\u2705 Claude disponible",
+    semanticEnable_desc: "Usar vectores de embedding para seleccionar p\xE1ginas relevantes. Requiere backend native con un modelo de embeddings.",
+    relevantTopK_desc: "M\xE1x. p\xE1ginas wiki cargadas por llamada ingest/query. Por defecto 15. \u2191 m\xE1s contexto, m\xE1s lento/caro \xB7 \u2193 m\xE1s r\xE1pido y ligero.",
+    embeddingModel_desc: "Nombre del modelo de embeddings, p. ej. text-embedding-3-small",
+    embeddingDimensions_desc: "Dimensiones del vector, p. ej. 512 o 1536",
+    chunkSize_desc: (d) => `M\xE1x. caracteres por ventana de secci\xF3n. Por defecto ${d}. \u2191 menos fragmentos grandes (m\xE1s contexto cada uno) \xB7 \u2193 fragmentos m\xE1s finos, mejor recall.`,
+    chunkOverlap_desc: (d) => `Solapamiento entre ventanas consecutivas de una secci\xF3n larga. Por defecto ${d}. \u2191 menos contexto perdido en los bordes, m\xE1s vectores \xB7 \u2193 m\xE1s ligero.`,
+    chunkMin_desc: (d) => `Las secciones m\xE1s cortas que esto se fusionan con una vecina. Por defecto ${d}. \u2191 menos fragmentos diminutos \xB7 \u2193 mantiene secciones peque\xF1as separadas.`,
+    chunkMaxCount_desc: (d) => `L\xEDmite de vectores por p\xE1gina (resumen + secciones). Por defecto ${d}. \u2191 mejor recall de secciones, m\xE1s coste de embeddings \xB7 \u2193 m\xE1s barato, m\xE1s grueso.`,
+    hybridRetrieval_desc: "Fusiona embedding y Jaccard mediante RRF. Requiere un modelo de embedding; sin \xE9l \u2014 Jaccard simple.",
+    rrfK_desc: "Constante de suavizado RRF. Por defecto 60. \u2191 contribuci\xF3n de rangos m\xE1s plana (top m\xE1s suave) \xB7 \u2193 m\xE1s peso en los primeros resultados. Cambiar rara vez.",
+    bfsFusion_desc: "Ordenar el contexto de consulta mediante fusi\xF3n RRF de vector y grafo. Desactivado por defecto.",
+    seedSimilarityThreshold_desc: "Max-score m\xEDnimo para un seed; por debajo \u2014 fallback a Jaccard \u2192 llmSelectSeeds. Ejemplo: 0.3 \xB7 0 = off, 1 = coincidencia exacta. \u2191 m\xE1s estricto (menos seeds, m\xE1s preciso) \xB7 \u2193 cobertura m\xE1s amplia. Recomendado 0.25\u20130.4.",
+    dedupOnIngest_desc: "Al crear una p\xE1gina casi duplicada \u2014 fusionar con la existente mediante LLM-merge.",
+    dedupThreshold_desc: "Umbral de coseno para dedup en ingest (0..1). Por defecto 0.85. \u2191 fusiona solo casi duplicados (m\xE1s seguro) \xB7 \u2193 m\xE1s agresivo, riesgo de fusiones falsas. Recomendado 0.83\u20130.90.",
+    lintNearDuplicate_desc: "En Lint, mostrar pares de p\xE1ginas cercanas por coseno de embedding.",
+    nearDupThreshold_desc: "Umbral de coseno para el informe de casi duplicados en Lint (0..1). Por defecto 0.80. \u2191 menos pares, solo duplicados claros \xB7 \u2193 m\xE1s pares, m\xE1s ruido. Recomendado 0.78\u20130.85."
   },
   view: {
     refreshTitle: "Actualizar dominios",
@@ -28821,15 +28899,15 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           await this.patchLocal({ iclaudePath: v.trim() });
         })
       ).addButton((b) => {
-        b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").onClick(async () => {
-          b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430\u2026").setDisabled(true);
+        b.setButtonText(T.settings.testConnection_btn).onClick(async () => {
+          b.setButtonText(T.settings.testConnection_btnBusy).setDisabled(true);
           try {
             await checkClaudeAvailability(this.localCache.iclaudePath);
-            new import_obsidian4.Notice("\u2705 Claude \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D");
+            new import_obsidian4.Notice(T.settings.claudeAvailable_ok);
           } catch (e) {
             new import_obsidian4.Notice(`\u274C ${e.message}`);
           } finally {
-            b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").setDisabled(false);
+            b.setButtonText(T.settings.testConnection_btn).setDisabled(false);
           }
         });
         return b;
@@ -28848,8 +28926,8 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           await this.plugin.saveSettings();
         })
       );
-      new import_obsidian4.Setting(containerEl).setName("Effort level").setDesc("\u0423\u0440\u043E\u0432\u0435\u043D\u044C \u0440\u0430\u0437\u043C\u044B\u0448\u043B\u0435\u043D\u0438\u044F Claude (--effort). \u041F\u0443\u0441\u0442\u043E = \u0431\u0435\u0437 thinking. \u0412 per-op \u0440\u0435\u0436\u0438\u043C\u0435 \u2014 \u0433\u043B\u043E\u0431\u0430\u043B\u044C\u043D\u044B\u0439 fallback.").addDropdown((d) => {
-        d.addOption("", "\u041E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E");
+      new import_obsidian4.Setting(containerEl).setName("Effort level").setDesc(T.settings.effort_desc).addDropdown((d) => {
+        d.addOption("", T.settings.effort_off);
         for (const lv of ["low", "medium", "high", "xhigh", "max"]) d.addOption(lv, lv);
         d.setValue(eff.claudeAgent.effort ?? "");
         d.onChange(async (v) => {
@@ -28882,7 +28960,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
             })
           );
           new import_obsidian4.Setting(containerEl).setName("Effort level").addDropdown((d) => {
-            d.addOption("", "\u0423\u043D\u0430\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u044C");
+            d.addOption("", T.settings.effort_inherit);
             for (const lv of ["low", "medium", "high", "xhigh", "max"]) d.addOption(lv, lv);
             d.setValue(s.claudeAgent.operations[key].effort ?? "");
             d.onChange(async (v) => {
@@ -28905,17 +28983,17 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           await this.patchLocalNativeApiKey(v.trim());
         })
       );
-      new import_obsidian4.Setting(containerEl).setName("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u0435").setDesc("\u041E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u0442 \u0442\u0435\u0441\u0442\u043E\u0432\u044B\u0439 \u043F\u0440\u043E\u043C\u043F\u0442 \u043A endpoint \u0434\u043B\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E\u0441\u0442\u0438.").addButton((b) => {
-        b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").onClick(async () => {
-          b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430\u2026").setDisabled(true);
+      new import_obsidian4.Setting(containerEl).setName(T.settings.testConnection_name).setDesc(T.settings.testConnection_desc).addButton((b) => {
+        b.setButtonText(T.settings.testConnection_btn).onClick(async () => {
+          b.setButtonText(T.settings.testConnection_btnBusy).setDisabled(true);
           const na = eff.nativeAgent;
           try {
             await checkNativeAvailability(na.baseUrl, na.apiKey, na.model);
-            new import_obsidian4.Notice("\u2705 \u041C\u043E\u0434\u0435\u043B\u044C \u043E\u0442\u0432\u0435\u0447\u0430\u0435\u0442");
+            new import_obsidian4.Notice(T.settings.testConnection_ok);
           } catch (e) {
             new import_obsidian4.Notice(`\u274C ${e.message}`);
           } finally {
-            b.setButtonText("\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C").setDisabled(false);
+            b.setButtonText(T.settings.testConnection_btn).setDisabled(false);
           }
         });
         return b;
@@ -28938,7 +29016,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
             }
           })
         );
-        new import_obsidian4.Setting(containerEl).setName("Thinking budget tokens").setDesc("\u041C\u0430\u043A\u0441. \u0442\u043E\u043A\u0435\u043D\u044B \u0434\u043B\u044F \u0440\u0430\u0437\u043C\u044B\u0448\u043B\u0435\u043D\u0438\u044F. 0 \u0438\u043B\u0438 \u043F\u0443\u0441\u0442\u043E = \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E.").addText(
+        new import_obsidian4.Setting(containerEl).setName("Thinking budget tokens").setDesc(T.settings.thinkingBudget_desc).addText(
           (t) => t.setPlaceholder("0").setValue(String(s.nativeAgent.thinkingBudgetTokens ?? 0)).onChange(async (v) => {
             const n = Number(v);
             s.nativeAgent.thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : void 0;
@@ -29028,7 +29106,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         }
       }
       new import_obsidian4.Setting(containerEl).setName("Semantic Search").setHeading();
-      new import_obsidian4.Setting(containerEl).setName("Enable semantic similarity (embeddings)").setDesc("Use embedding vectors for relevant page selection. Requires native backend with an embeddings-capable model.").addToggle(
+      new import_obsidian4.Setting(containerEl).setName("Enable semantic similarity (embeddings)").setDesc(T.settings.semanticEnable_desc).addToggle(
         (t) => t.setValue(s.nativeAgent.embeddingModel !== void 0).onChange(async (v) => {
           if (!v) {
             s.nativeAgent.embeddingModel = void 0;
@@ -29043,7 +29121,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         })
       );
       if (s.nativeAgent.embeddingModel !== void 0) {
-        new import_obsidian4.Setting(containerEl).setName("Relevant pages (top-K)").setDesc("Max wiki pages loaded per ingest call. Lower = faster, less context. Default: 15.").addText(
+        new import_obsidian4.Setting(containerEl).setName("Relevant pages (top-K)").setDesc(T.settings.relevantTopK_desc).addText(
           (t) => t.setPlaceholder("15").setValue(String(s.nativeAgent.relevantPagesTopK ?? 15)).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n > 0) {
@@ -29053,14 +29131,14 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           })
         );
         this.addModelControl(
-          new import_obsidian4.Setting(containerEl).setName("Embedding model").setDesc("Model name for embeddings, e.g. text-embedding-3-small"),
+          new import_obsidian4.Setting(containerEl).setName("Embedding model").setDesc(T.settings.embeddingModel_desc),
           s.nativeAgent.embeddingModel ?? "",
           async (v) => {
             s.nativeAgent.embeddingModel = v || void 0;
             await this.plugin.saveSettings();
           }
         );
-        new import_obsidian4.Setting(containerEl).setName("Embedding dimensions").setDesc("Vector dimensions, e.g. 512 or 1536").addText(
+        new import_obsidian4.Setting(containerEl).setName("Embedding dimensions").setDesc(T.settings.embeddingDimensions_desc).addText(
           (t) => t.setPlaceholder("512").setValue(String(s.nativeAgent.embeddingDimensions ?? "")).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n > 0) {
@@ -29080,7 +29158,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         );
         chunkField(
           "Chunk size (chars)",
-          `Max characters per section window. Default: ${DEFAULT_CHUNKING.maxChars}.`,
+          T.settings.chunkSize_desc(DEFAULT_CHUNKING.maxChars),
           String(DEFAULT_CHUNKING.maxChars),
           () => s.nativeAgent.chunkMaxChars ?? DEFAULT_CHUNKING.maxChars,
           (n) => {
@@ -29089,7 +29167,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         );
         chunkField(
           "Chunk overlap (chars)",
-          `Overlap between consecutive windows of a long section. Default: ${DEFAULT_CHUNKING.overlapChars}.`,
+          T.settings.chunkOverlap_desc(DEFAULT_CHUNKING.overlapChars),
           String(DEFAULT_CHUNKING.overlapChars),
           () => s.nativeAgent.chunkOverlapChars ?? DEFAULT_CHUNKING.overlapChars,
           (n) => {
@@ -29098,7 +29176,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         );
         chunkField(
           "Min chunk size (merge)",
-          `Sections shorter than this merge into a neighbour. Default: ${DEFAULT_CHUNKING.minChars}.`,
+          T.settings.chunkMin_desc(DEFAULT_CHUNKING.minChars),
           String(DEFAULT_CHUNKING.minChars),
           () => s.nativeAgent.chunkMinChars ?? DEFAULT_CHUNKING.minChars,
           (n) => {
@@ -29107,7 +29185,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         );
         chunkField(
           "Max chunks per page",
-          `Cap on vectors per page (summary + sections). Default: ${DEFAULT_CHUNKING.maxCount}.`,
+          T.settings.chunkMaxCount_desc(DEFAULT_CHUNKING.maxCount),
           String(DEFAULT_CHUNKING.maxCount),
           () => s.nativeAgent.chunkMaxCount ?? DEFAULT_CHUNKING.maxCount,
           (n) => {
@@ -29115,13 +29193,13 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           }
         );
         new import_obsidian4.Setting(containerEl).setName("Retrieval").setHeading();
-        new import_obsidian4.Setting(containerEl).setName("Hybrid retrieval (dense \u2295 sparse)").setDesc("\u0424\u044C\u044E\u0437\u0438\u0442\u044C embedding \u0438 jaccard \u0447\u0435\u0440\u0435\u0437 RRF. \u0422\u0440\u0435\u0431\u0443\u0435\u0442 embedding-\u043C\u043E\u0434\u0435\u043B\u044C; \u0431\u0435\u0437 \u043D\u0435\u0451 \u2014 \u043E\u0431\u044B\u0447\u043D\u044B\u0439 jaccard.").addToggle(
+        new import_obsidian4.Setting(containerEl).setName("Hybrid retrieval (dense \u2295 sparse)").setDesc(T.settings.hybridRetrieval_desc).addToggle(
           (t) => t.setValue(s.nativeAgent.hybridRetrieval ?? false).onChange(async (v) => {
             s.nativeAgent.hybridRetrieval = v;
             await this.plugin.saveSettings();
           })
         );
-        new import_obsidian4.Setting(containerEl).setName("RRF k").setDesc("\u041A\u043E\u043D\u0441\u0442\u0430\u043D\u0442\u0430 RRF. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 60.").addText(
+        new import_obsidian4.Setting(containerEl).setName("RRF k").setDesc(T.settings.rrfK_desc).addText(
           (t) => t.setValue(String(s.nativeAgent.rrfK ?? 60)).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n > 0) {
@@ -29130,13 +29208,13 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
             }
           })
         );
-        new import_obsidian4.Setting(containerEl).setName("BFS fusion (vector \u2295 graph)").setDesc("\u0423\u043F\u043E\u0440\u044F\u0434\u043E\u0447\u0438\u0442\u044C \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u0437\u0430\u043F\u0440\u043E\u0441\u0430 \u0447\u0435\u0440\u0435\u0437 RRF-\u0444\u044C\u044E\u0437 \u0432\u0435\u043A\u0442\u043E\u0440\u0430 \u0438 \u0433\u0440\u0430\u0444\u0430. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E \u0432\u044B\u043A\u043B.").addToggle(
+        new import_obsidian4.Setting(containerEl).setName("BFS fusion (vector \u2295 graph)").setDesc(T.settings.bfsFusion_desc).addToggle(
           (t) => t.setValue(s.nativeAgent.bfsFusion ?? false).onChange(async (v) => {
             s.nativeAgent.bfsFusion = v;
             await this.plugin.saveSettings();
           })
         );
-        new import_obsidian4.Setting(containerEl).setName("Seed similarity threshold").setDesc("\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u044B\u0439 max-score seed; \u043D\u0438\u0436\u0435 \u2014 \u0444\u043E\u043B\u043B\u0431\u044D\u043A \u043D\u0430 Jaccard \u2192 llmSelectSeeds. 0 = \u0432\u044B\u043A\u043B.").addText(
+        new import_obsidian4.Setting(containerEl).setName("Seed similarity threshold").setDesc(T.settings.seedSimilarityThreshold_desc).addText(
           (t) => t.setValue(String(s.nativeAgent.seedSimilarityThreshold ?? 0)).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n >= 0) {
@@ -29146,13 +29224,13 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           })
         );
         new import_obsidian4.Setting(containerEl).setName("Graph health").setHeading();
-        new import_obsidian4.Setting(containerEl).setName("Dedup on ingest").setDesc("\u041D\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u0438 near-duplicate \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u2014 \u0441\u043B\u0438\u0442\u044C \u0432 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0443\u044E \u0447\u0435\u0440\u0435\u0437 LLM-merge.").addToggle(
+        new import_obsidian4.Setting(containerEl).setName("Dedup on ingest").setDesc(T.settings.dedupOnIngest_desc).addToggle(
           (t) => t.setValue(s.nativeAgent.dedupOnIngest ?? false).onChange(async (v) => {
             s.nativeAgent.dedupOnIngest = v;
             await this.plugin.saveSettings();
           })
         );
-        new import_obsidian4.Setting(containerEl).setName("Dedup threshold").setDesc("\u041F\u043E\u0440\u043E\u0433 \u043F\u043E\u0445\u043E\u0436\u0435\u0441\u0442\u0438 \u0434\u043B\u044F \u0434\u0435\u0434\u0443\u043F\u0430 (0..1). \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 0.85.").addText(
+        new import_obsidian4.Setting(containerEl).setName("Dedup threshold").setDesc(T.settings.dedupThreshold_desc).addText(
           (t) => t.setValue(String(s.nativeAgent.dedupThreshold ?? 0.85)).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n > 0 && n <= 1) {
@@ -29161,13 +29239,13 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
             }
           })
         );
-        new import_obsidian4.Setting(containerEl).setName("Lint near-duplicate report").setDesc("\u0412 Lint \u043F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u0442\u044C \u043F\u0430\u0440\u044B \u0431\u043B\u0438\u0437\u043A\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u043F\u043E embedding-\u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0443.").addToggle(
+        new import_obsidian4.Setting(containerEl).setName("Lint near-duplicate report").setDesc(T.settings.lintNearDuplicate_desc).addToggle(
           (t) => t.setValue(s.nativeAgent.lintNearDuplicate ?? false).onChange(async (v) => {
             s.nativeAgent.lintNearDuplicate = v;
             await this.plugin.saveSettings();
           })
         );
-        new import_obsidian4.Setting(containerEl).setName("Near-duplicate threshold").setDesc("\u041F\u043E\u0440\u043E\u0433 \u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0430 \u0434\u043B\u044F near-duplicate \u043E\u0442\u0447\u0451\u0442\u0430 (0..1). \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E 0.80.").addText(
+        new import_obsidian4.Setting(containerEl).setName("Near-duplicate threshold").setDesc(T.settings.nearDupThreshold_desc).addText(
           (t) => t.setValue(String(s.nativeAgent.nearDupThreshold ?? 0.8)).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n > 0 && n <= 1) {

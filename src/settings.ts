@@ -332,15 +332,15 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             }),
         )
         .addButton(b => {
-          b.setButtonText("Проверить").onClick(async () => {
-            b.setButtonText("Проверка…").setDisabled(true);
+          b.setButtonText(T.settings.testConnection_btn).onClick(async () => {
+            b.setButtonText(T.settings.testConnection_btnBusy).setDisabled(true);
             try {
               await checkClaudeAvailability(this.localCache.iclaudePath);
-              new Notice("✅ Claude доступен");
+              new Notice(T.settings.claudeAvailable_ok);
             } catch (e) {
               new Notice(`❌ ${(e as Error).message}`);
             } finally {
-              b.setButtonText("Проверить").setDisabled(false);
+              b.setButtonText(T.settings.testConnection_btn).setDisabled(false);
             }
           });
           return b;
@@ -368,9 +368,9 @@ export class LlmWikiSettingTab extends PluginSettingTab {
 
       new Setting(containerEl)
         .setName("Effort level")
-        .setDesc("Уровень размышления Claude (--effort). Пусто = без thinking. В per-op режиме — глобальный fallback.")
+        .setDesc(T.settings.effort_desc)
         .addDropdown(d => {
-          d.addOption("", "Отключено");
+          d.addOption("", T.settings.effort_off);
           for (const lv of ["low", "medium", "high", "xhigh", "max"] as const) d.addOption(lv, lv);
           d.setValue(eff.claudeAgent.effort ?? "");
           d.onChange(async v => {
@@ -407,7 +407,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           new Setting(containerEl)
             .setName("Effort level")
             .addDropdown(d => {
-              d.addOption("", "Унаследовать");
+              d.addOption("", T.settings.effort_inherit);
               for (const lv of ["low", "medium", "high", "xhigh", "max"] as const) d.addOption(lv, lv);
               d.setValue(s.claudeAgent.operations[key].effort ?? "");
               d.onChange(async v => {
@@ -439,19 +439,19 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         );
 
       new Setting(containerEl)
-        .setName("Проверить соединение")
-        .setDesc("Отправляет тестовый промпт к endpoint для проверки доступности.")
+        .setName(T.settings.testConnection_name)
+        .setDesc(T.settings.testConnection_desc)
         .addButton(b => {
-          b.setButtonText("Проверить").onClick(async () => {
-            b.setButtonText("Проверка…").setDisabled(true);
+          b.setButtonText(T.settings.testConnection_btn).onClick(async () => {
+            b.setButtonText(T.settings.testConnection_btnBusy).setDisabled(true);
             const na = eff.nativeAgent;
             try {
               await checkNativeAvailability(na.baseUrl, na.apiKey, na.model);
-              new Notice("✅ Модель отвечает");
+              new Notice(T.settings.testConnection_ok);
             } catch (e) {
               new Notice(`❌ ${(e as Error).message}`);
             } finally {
-              b.setButtonText("Проверить").setDisabled(false);
+              b.setButtonText(T.settings.testConnection_btn).setDisabled(false);
             }
           });
           return b;
@@ -481,7 +481,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
           .setName("Thinking budget tokens")
-          .setDesc("Макс. токены для размышления. 0 или пусто = отключено.")
+          .setDesc(T.settings.thinkingBudget_desc)
           .addText(t =>
             t.setPlaceholder("0")
               .setValue(String(s.nativeAgent.thinkingBudgetTokens ?? 0))
@@ -598,7 +598,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
 
       new Setting(containerEl)
         .setName("Enable semantic similarity (embeddings)")
-        .setDesc("Use embedding vectors for relevant page selection. Requires native backend with an embeddings-capable model.")
+        .setDesc(T.settings.semanticEnable_desc)
         .addToggle((t) =>
           t.setValue(s.nativeAgent.embeddingModel !== undefined)
             .onChange(async (v) => {
@@ -615,7 +615,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       if (s.nativeAgent.embeddingModel !== undefined) {
         new Setting(containerEl)
           .setName("Relevant pages (top-K)")
-          .setDesc("Max wiki pages loaded per ingest call. Lower = faster, less context. Default: 15.")
+          .setDesc(T.settings.relevantTopK_desc)
           .addText((t) =>
             t.setPlaceholder("15")
               .setValue(String(s.nativeAgent.relevantPagesTopK ?? 15))
@@ -628,14 +628,14 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           );
 
         this.addModelControl(
-          new Setting(containerEl).setName("Embedding model").setDesc("Model name for embeddings, e.g. text-embedding-3-small"),
+          new Setting(containerEl).setName("Embedding model").setDesc(T.settings.embeddingModel_desc),
           s.nativeAgent.embeddingModel ?? "",
           async (v) => { s.nativeAgent.embeddingModel = v || undefined; await this.plugin.saveSettings(); },
         );
 
         new Setting(containerEl)
           .setName("Embedding dimensions")
-          .setDesc("Vector dimensions, e.g. 512 or 1536")
+          .setDesc(T.settings.embeddingDimensions_desc)
           .addText((t) =>
             t.setPlaceholder("512")
               .setValue(String(s.nativeAgent.embeddingDimensions ?? ""))
@@ -661,22 +661,22 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           );
 
         chunkField("Chunk size (chars)",
-          `Max characters per section window. Default: ${DEFAULT_CHUNKING.maxChars}.`,
+          T.settings.chunkSize_desc(DEFAULT_CHUNKING.maxChars),
           String(DEFAULT_CHUNKING.maxChars),
           () => s.nativeAgent.chunkMaxChars ?? DEFAULT_CHUNKING.maxChars,
           (n) => { s.nativeAgent.chunkMaxChars = n; });
         chunkField("Chunk overlap (chars)",
-          `Overlap between consecutive windows of a long section. Default: ${DEFAULT_CHUNKING.overlapChars}.`,
+          T.settings.chunkOverlap_desc(DEFAULT_CHUNKING.overlapChars),
           String(DEFAULT_CHUNKING.overlapChars),
           () => s.nativeAgent.chunkOverlapChars ?? DEFAULT_CHUNKING.overlapChars,
           (n) => { s.nativeAgent.chunkOverlapChars = n; });
         chunkField("Min chunk size (merge)",
-          `Sections shorter than this merge into a neighbour. Default: ${DEFAULT_CHUNKING.minChars}.`,
+          T.settings.chunkMin_desc(DEFAULT_CHUNKING.minChars),
           String(DEFAULT_CHUNKING.minChars),
           () => s.nativeAgent.chunkMinChars ?? DEFAULT_CHUNKING.minChars,
           (n) => { s.nativeAgent.chunkMinChars = n; });
         chunkField("Max chunks per page",
-          `Cap on vectors per page (summary + sections). Default: ${DEFAULT_CHUNKING.maxCount}.`,
+          T.settings.chunkMaxCount_desc(DEFAULT_CHUNKING.maxCount),
           String(DEFAULT_CHUNKING.maxCount),
           () => s.nativeAgent.chunkMaxCount ?? DEFAULT_CHUNKING.maxCount,
           (n) => { s.nativeAgent.chunkMaxCount = n; });
@@ -684,28 +684,28 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         new Setting(containerEl).setName("Retrieval").setHeading();
         new Setting(containerEl)
           .setName("Hybrid retrieval (dense ⊕ sparse)")
-          .setDesc("Фьюзить embedding и jaccard через RRF. Требует embedding-модель; без неё — обычный jaccard.")
+          .setDesc(T.settings.hybridRetrieval_desc)
           .addToggle((t) =>
             t.setValue(s.nativeAgent.hybridRetrieval ?? false)
               .onChange(async (v) => { s.nativeAgent.hybridRetrieval = v; await this.plugin.saveSettings(); }),
           );
         new Setting(containerEl)
           .setName("RRF k")
-          .setDesc("Константа RRF. По умолчанию 60.")
+          .setDesc(T.settings.rrfK_desc)
           .addText((t) =>
             t.setValue(String(s.nativeAgent.rrfK ?? 60))
               .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0) { s.nativeAgent.rrfK = Math.floor(n); await this.plugin.saveSettings(); } }),
           );
         new Setting(containerEl)
           .setName("BFS fusion (vector ⊕ graph)")
-          .setDesc("Упорядочить контекст запроса через RRF-фьюз вектора и графа. По умолчанию выкл.")
+          .setDesc(T.settings.bfsFusion_desc)
           .addToggle((t) =>
             t.setValue(s.nativeAgent.bfsFusion ?? false)
               .onChange(async (v) => { s.nativeAgent.bfsFusion = v; await this.plugin.saveSettings(); }),
           );
         new Setting(containerEl)
           .setName("Seed similarity threshold")
-          .setDesc("Минимальный max-score seed; ниже — фоллбэк на Jaccard → llmSelectSeeds. 0 = выкл.")
+          .setDesc(T.settings.seedSimilarityThreshold_desc)
           .addText((t) =>
             t.setValue(String(s.nativeAgent.seedSimilarityThreshold ?? 0))
               .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n >= 0) { s.nativeAgent.seedSimilarityThreshold = n; await this.plugin.saveSettings(); } }),
@@ -714,28 +714,28 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         new Setting(containerEl).setName("Graph health").setHeading();
         new Setting(containerEl)
           .setName("Dedup on ingest")
-          .setDesc("На создании near-duplicate страницы — слить в существующую через LLM-merge.")
+          .setDesc(T.settings.dedupOnIngest_desc)
           .addToggle((t) =>
             t.setValue(s.nativeAgent.dedupOnIngest ?? false)
               .onChange(async (v) => { s.nativeAgent.dedupOnIngest = v; await this.plugin.saveSettings(); }),
           );
         new Setting(containerEl)
           .setName("Dedup threshold")
-          .setDesc("Порог похожести для дедупа (0..1). По умолчанию 0.85.")
+          .setDesc(T.settings.dedupThreshold_desc)
           .addText((t) =>
             t.setValue(String(s.nativeAgent.dedupThreshold ?? 0.85))
               .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0 && n <= 1) { s.nativeAgent.dedupThreshold = n; await this.plugin.saveSettings(); } }),
           );
         new Setting(containerEl)
           .setName("Lint near-duplicate report")
-          .setDesc("В Lint показывать пары близких страниц по embedding-косинусу.")
+          .setDesc(T.settings.lintNearDuplicate_desc)
           .addToggle((t) =>
             t.setValue(s.nativeAgent.lintNearDuplicate ?? false)
               .onChange(async (v) => { s.nativeAgent.lintNearDuplicate = v; await this.plugin.saveSettings(); }),
           );
         new Setting(containerEl)
           .setName("Near-duplicate threshold")
-          .setDesc("Порог косинуса для near-duplicate отчёта (0..1). По умолчанию 0.80.")
+          .setDesc(T.settings.nearDupThreshold_desc)
           .addText((t) =>
             t.setValue(String(s.nativeAgent.nearDupThreshold ?? 0.80))
               .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0 && n <= 1) { s.nativeAgent.nearDupThreshold = n; await this.plugin.saveSettings(); } }),
