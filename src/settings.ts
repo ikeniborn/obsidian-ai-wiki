@@ -696,6 +696,20 @@ export class LlmWikiSettingTab extends PluginSettingTab {
             t.setValue(String(s.nativeAgent.rrfK ?? 60))
               .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0) { s.nativeAgent.rrfK = Math.floor(n); await this.plugin.saveSettings(); } }),
           );
+        new Setting(containerEl)
+          .setName("BFS fusion (vector ⊕ graph)")
+          .setDesc("Упорядочить контекст запроса через RRF-фьюз вектора и графа. По умолчанию выкл.")
+          .addToggle((t) =>
+            t.setValue(s.nativeAgent.bfsFusion ?? false)
+              .onChange(async (v) => { s.nativeAgent.bfsFusion = v; await this.plugin.saveSettings(); }),
+          );
+        new Setting(containerEl)
+          .setName("Seed similarity threshold")
+          .setDesc("Минимальный max-score seed; ниже — фоллбэк на Jaccard → llmSelectSeeds. 0 = выкл.")
+          .addText((t) =>
+            t.setValue(String(s.nativeAgent.seedSimilarityThreshold ?? 0))
+              .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n >= 0) { s.nativeAgent.seedSimilarityThreshold = n; await this.plugin.saveSettings(); } }),
+          );
 
         new Setting(containerEl).setName("Graph health").setHeading();
         new Setting(containerEl)
