@@ -219,8 +219,14 @@ async function fetchEmbeddings(
   apiKey: string,
   model: string,
   inputs: string[],
+  dimensions?: number,
 ): Promise<Float32Array[]> {
   const url = `${baseUrl.replace(/\/$/, "")}/embeddings`;
+  // Send `dimensions` (OpenAI-standard MRL truncation) when configured, so the whole
+  // pipeline and the probe agree on the requested size. Models that don't support it
+  // either ignore the field (return native size) or error — the probe surfaces which.
+  const body: Record<string, unknown> = { model, input: inputs };
+  if (dimensions && dimensions > 0) body.dimensions = dimensions;
   const resp = await requestUrl({
     url,
     method: "POST",
@@ -228,12 +234,47 @@ async function fetchEmbeddings(
       "Content-Type": "application/json",
       "Authorization": `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({ model, input: inputs }),
+    body: JSON.stringify(body),
     throw: false,
   });
   if (resp.status >= 400) throw new Error(`Embedding API error: ${resp.status}`);
   const json = JSON.parse(resp.text) as { data: { embedding: number[] }[] };
   return json.data.map((d) => new Float32Array(d.embedding));
+}
+
+export interface DimensionProbe {
+  /** Vector length the model actually returned. */
+  actual: number;
+  /** The dimension we asked for (the configured value), if any. */
+  requested?: number;
+  /** True when a `requested` size was sent and the model honored it exactly. */
+  honored: boolean;
+}
+
+/**
+ * Probe an embedding model by embedding a single tiny input and reading the returned
+ * vector length. When `requested` is given it is sent as the `dimensions` field so the
+ * model can either honor it (MRL truncation) or ignore it (returns its native size) —
+ * the caller compares `actual` vs `requested` to tell the user whether their configured
+ * value is valid. Returns null on any HTTP/parse failure (the "или ошибка" case).
+ */
+export async function probeEmbeddingDimensions(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  requested?: number,
+): Promise<DimensionProbe | null> {
+  try {
+    const [vec] = await fetchEmbeddings(baseUrl, apiKey, model, ["ping"], requested);
+    if (!vec || vec.length === 0) return null;
+    return {
+      actual: vec.length,
+      requested: requested && requested > 0 ? requested : undefined,
+      honored: !requested || requested <= 0 || vec.length === requested,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export interface ExtractedEntity {
@@ -321,7 +362,7 @@ export class PageSimilarityService {
     if (!this.cache || !baseUrl || !model) return { pid: "", score: 0 };
     let candVec: Float32Array;
     try {
-      [candVec] = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [candidateText.slice(0, 2000)]);
+      [candVec] = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [candidateText.slice(0, 2000)], this.config.dimensions);
     } catch {
       return { pid: "", score: 0 }; // never fire the gate on a failed signal
     }
@@ -431,7 +472,7 @@ export class PageSimilarityService {
 
     let entityVecs: Float32Array[];
     try {
-      entityVecs = await fetchEmbeddings(baseUrl, apiKey, model, entities.map(entityQuery));
+      entityVecs = await fetchEmbeddings(baseUrl, apiKey, model, entities.map(entityQuery), this.config.dimensions);
     } catch {
       return this.jaccardFallbackAll(entities, indexAnnotations, allPaths);
     }
@@ -463,7 +504,7 @@ export class PageSimilarityService {
 
     for (const batch of batches) {
       try {
-        const vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
+        const vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts, this.config.dimensions);
         for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], [vecs[i]]);
       } catch {
         for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], []);
@@ -526,7 +567,7 @@ export class PageSimilarityService {
     let queryVec: Float32Array;
     try {
       const truncated = sourceContent.slice(0, 2000);
-      [queryVec] = await fetchEmbeddings(baseUrl, apiKey, model, [truncated]);
+      [queryVec] = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [truncated], this.config.dimensions);
     } catch {
       return this.selectJaccard(queryTokens, indexAnnotations, allPaths);
     }
@@ -561,7 +602,7 @@ export class PageSimilarityService {
     for (const batch of batches) {
       let vecs: Float32Array[];
       try {
-        vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.texts);
+        vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.texts, this.config.dimensions);
       } catch {
         // Fallback: mark this batch's pages for Jaccard (empty vector list)
         for (const pid of batch.pids) {
@@ -624,7 +665,7 @@ export class PageSimilarityService {
     let queryVec: Float32Array;
     try {
       const truncated = sourceContent.slice(0, 2000);
-      [queryVec] = await fetchEmbeddings(baseUrl, apiKey!, model, [truncated]);
+      [queryVec] = await fetchEmbeddings(baseUrl, apiKey!, model, [truncated], this.config.dimensions);
     } catch {
       return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit);
     }
@@ -652,7 +693,7 @@ export class PageSimilarityService {
 
     for (const batch of batches) {
       try {
-        const vecs = await fetchEmbeddings(baseUrl, apiKey!, model, batch.texts);
+        const vecs = await fetchEmbeddings(baseUrl, apiKey!, model, batch.texts, this.config.dimensions);
         for (let i = 0; i < batch.pids.length; i++) pageVecs.set(batch.pids[i], [vecs[i]]);
       } catch {
         for (const pid of batch.pids) pageVecs.set(pid, []);
@@ -712,7 +753,9 @@ export class PageSimilarityService {
     indexAnnotations: Map<string, string>,
     pageBodies: Map<string, string>,
   ): Promise<{ updated: number }> {
-    if (this.config.mode !== "embedding") return { updated: 0 };
+    // Persist the embeddings cache for both embedding and hybrid modes — hybrid's dense
+    // side reuses it on every query. Only pure jaccard has no vectors to write.
+    if (this.config.mode === "jaccard") return { updated: 0 };
     const { baseUrl, apiKey, model, dimensions } = this.config;
     if (!baseUrl || !model || !dimensions) return { updated: 0 };
     const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
@@ -769,7 +812,7 @@ export class PageSimilarityService {
       const batch = pending.slice(i, i + EMBEDDING_BATCH_SIZE);
       let vecs: Float32Array[];
       try {
-        vecs = await fetchEmbeddings(baseUrl, apiKey, model, batch.map((p) => p.embedText));
+        vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.map((p) => p.embedText), dimensions);
       } catch {
         continue;
       }

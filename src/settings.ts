@@ -5,7 +5,7 @@ import type { LlmWikiPluginSettings, OpKey } from "./types";
 import type { DomainEntry } from "./domain";
 import { i18n } from "./i18n";
 import { resolveEffective } from "./effective-settings";
-import { DEFAULT_CHUNKING } from "./page-similarity";
+import { DEFAULT_CHUNKING, probeEmbeddingDimensions } from "./page-similarity";
 import type { LocalConfig } from "./local-config";
 
 async function checkClaudeAvailability(iclaudePath: string): Promise<void> {
@@ -121,6 +121,52 @@ export class LlmWikiSettingTab extends PluginSettingTab {
     } catch (e) {
       new Notice(`Failed to fetch models: ${(e as Error).message}`);
     }
+  }
+
+  // CHECK: verify the entered dimension against the model. Probes twice — the model's
+  // native size (no `dimensions` sent) and the requested size — then reports the relation.
+  // Servers like Ollama blindly truncate to ANY requested size (even a useless 1) and cap
+  // over-large requests at native, so "the model returned N" alone is misleading; showing
+  // the native size lets the user see that e.g. 1-of-1024 is a degenerate truncation.
+  // Read-only — does not overwrite the field.
+  private async checkDimensions(): Promise<void> {
+    const na = this.plugin.settings.nativeAgent;
+    if (!na.baseUrl || !na.embeddingModel) { new Notice("Set Base URL and embedding model first"); return; }
+    if (!na.embeddingDimensions) { new Notice("Enter a dimension value to check, or use Default"); return; }
+    const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
+    const requested = na.embeddingDimensions;
+    const probe = await probeEmbeddingDimensions(na.baseUrl, apiKey, na.embeddingModel, requested);
+    if (probe == null) { new Notice("Dimension check failed: API error"); return; }
+    const nativeProbe = await probeEmbeddingDimensions(na.baseUrl, apiKey, na.embeddingModel);
+    const native = nativeProbe?.actual;
+    const nativeStr = native != null ? String(native) : "?";
+
+    if (!probe.honored) {
+      // Requested size not produced — server ignored or capped it (e.g. > native).
+      new Notice(`Not supported — model returns ${probe.actual} (native ${nativeStr}), not ${requested}. Use Default.`);
+    } else if (native != null && requested === native) {
+      new Notice(`OK — native dimension ${native}`);
+    } else if (native != null && requested < native) {
+      // Honored via truncation — valid but lossy; tiny values are effectively useless.
+      new Notice(`Truncated — ${requested} of ${native} native. Smaller dimensions reduce retrieval quality.`);
+    } else {
+      new Notice(`OK — model returns ${probe.actual} (native ${nativeStr}).`);
+    }
+  }
+
+  // Default: fetch the model's native output dimension (no `dimensions` sent) and store it.
+  // silent=true skips notices when auto-triggered on model change.
+  private async setDefaultDimensions(silent = false): Promise<void> {
+    const na = this.plugin.settings.nativeAgent;
+    if (!na.baseUrl || !na.embeddingModel) { if (!silent) new Notice("Set Base URL and embedding model first"); return; }
+    const probe = await probeEmbeddingDimensions(
+      na.baseUrl, this.localCache.nativeAgent?.apiKey ?? "", na.embeddingModel,
+    );
+    if (probe == null) { if (!silent) new Notice("Failed to detect dimensions from API"); return; }
+    na.embeddingDimensions = probe.actual;
+    await this.plugin.saveSettings();
+    if (!silent) new Notice(`Default dimensions for model: ${probe.actual}`);
+    this.display();
   }
 
   private addModelControl(
@@ -630,20 +676,33 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         this.addModelControl(
           new Setting(containerEl).setName("Embedding model").setDesc(T.settings.embeddingModel_desc),
           s.nativeAgent.embeddingModel ?? "",
-          async (v) => { s.nativeAgent.embeddingModel = v || undefined; await this.plugin.saveSettings(); },
+          async (v) => {
+            s.nativeAgent.embeddingModel = v || undefined;
+            await this.plugin.saveSettings();
+            if (v) await this.setDefaultDimensions(true);  // seed the model's native dimension
+          },
         );
 
         new Setting(containerEl)
           .setName("Embedding dimensions")
           .setDesc(T.settings.embeddingDimensions_desc)
+          .addButton((b) =>
+            b.setButtonText("Check").setTooltip("Verify the entered dimension is supported by the model")
+              .onClick(() => { void this.checkDimensions(); }),
+          )
+          .addButton((b) =>
+            b.setButtonText("Default").setTooltip("Use the model's native dimension")
+              .onClick(() => { void this.setDefaultDimensions(); }),
+          )
           .addText((t) =>
             t.setPlaceholder("512")
               .setValue(String(s.nativeAgent.embeddingDimensions ?? ""))
               .onChange(async (v) => {
+                // Clear on empty/0/invalid so a stale value isn't silently kept — otherwise
+                // Check would validate the old stored value while the field shows 0.
                 const n = Number(v);
-                if (Number.isFinite(n) && n > 0) {
-                  s.nativeAgent.embeddingDimensions = Math.floor(n); await this.plugin.saveSettings();
-                }
+                s.nativeAgent.embeddingDimensions = Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
+                await this.plugin.saveSettings();
               }),
           );
 

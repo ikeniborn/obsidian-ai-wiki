@@ -78,6 +78,18 @@ A pre-v2 `{ vector, hash }` cache is rejected by `loadCache` (returns null, no c
 
 With no API key, the enriched one-line annotation lets `scoreSeed` match a query phrased with a keyword that lives in a body section.
 
+### Hybrid persists the embeddings cache
+
+[[src/page-similarity.ts#PageSimilarityService#refreshCache]] writes the `version: 2` cache in `hybrid` mode as well as `embedding` mode — only pure `jaccard` returns early — so hybrid's dense side reuses persisted vectors instead of re-embedding the whole corpus on every query.
+
+### Probe detects model output dimension
+
+[[src/page-similarity.ts#probeEmbeddingDimensions]] embeds a single `"ping"` input and, with no requested size, sends no `dimensions` field and returns the model's native vector length; returns null on HTTP/parse failure.
+
+### Probe verifies a requested dimension
+
+When given a `requested` size, the probe sends it as the `dimensions` field and sets `honored` by comparing it to the returned length — so the UI can tell whether the model truncates to it or ignores the field.
+
 ## Merge Handling
 
 Tests that validate `deletes[]` on `WikiPagesOutputSchema` and the delete loop.
