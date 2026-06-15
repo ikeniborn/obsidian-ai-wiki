@@ -8,7 +8,7 @@ span pages, so `gold` can hold more than one id.
 `example.gold.json` is a template — replace the questions and ids with ones that
 reference your own vault, then run:
 
-    npm run eval -- --vault /path/to/vault --gold eval/your-vault.gold.json
+    npm run eval -- --vault /path/to/vault --gold scripts/eval/your-vault.gold.json
 
 Gold files contain only questions + page ids — no vault content — so they are
 safe to commit.
