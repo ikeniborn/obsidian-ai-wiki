@@ -1,6 +1,6 @@
 ---
 review:
-  spec_hash: 62a03434c3393df2
+  spec_hash: 6de72479705def09
   last_run: 2026-06-15
   phases:
     structure:    { status: passed }
@@ -12,18 +12,20 @@ review:
       phase: clarity
       severity: WARNING
       section: "B2. hybrid similarity mode"
-      section_hash: 986f64839043a901
-      text: '"widened candidate pool ... bounded to keep cost flat" — no explicit numeric bound for the pre-RRF candidate pool; the exact value is deferred to the implementation plan.'
-      verdict: accepted
+      section_hash: 49e9792c1142ec07
+      text: '"widened candidate pool ... bounded to keep cost flat" — no explicit numeric bound for the pre-RRF candidate pool.'
+      verdict: fixed
       verdict_at: 2026-06-15
+      resolution: 'Pinned RRF_CANDIDATE_POOL = 50 per side (constant); each scored method called with effective limit max(topK, 50), top topK returned after RRF.'
     - id: F-002
       phase: clarity
       severity: INFO
       section: "A2. Lint near-duplicate report"
-      section_hash: 7bd705fb9386baa7
-      text: '"default cap generous enough for typical wikis" — the pairwise-cost page cap default is unspecified; pinned in the plan.'
-      verdict: accepted
+      section_hash: bfb42009537b19e4
+      text: '"default cap generous enough for typical wikis" — the pairwise-cost page cap default was unspecified.'
+      verdict: fixed
       verdict_at: 2026-06-15
+      resolution: 'Pinned LINT_NEARDUP_MAX_PAGES = 500 (constant); above it the near-dup pass is skipped with an info_text warning naming the page count.'
 chain:
   intent: docs/superpowers/intents/2026-06-14-rag-query-quality-intent.md
   depends_on: docs/superpowers/specs/2026-06-15-rag-eval-harness-design.md
@@ -148,9 +150,10 @@ all pages; collect unordered pairs with `score >= nearDupThreshold`. Emit each p
 **report-only** (proposal-first / HUMAN CHECKPOINT per intent) — it does not auto-merge; the user or
 a later Lint merge handles it.
 
-**Cost guard:** O(N²) over pages × O(chunks²) per pair. For large vaults, cap at a configurable page
-count and `log()` what was skipped (no silent truncation). Default cap generous enough for typical
-wikis.
+**Cost guard:** O(N²) over pages × O(chunks²) per pair. The pass runs only when the vault has
+≤ `LINT_NEARDUP_MAX_PAGES = 500` annotated pages (constant). Above that, the near-dup pass is
+skipped and an `info_text` warning names the actual page count (no silent truncation). 500 pages
+≈ 125k unordered pairs — acceptable for a one-shot Lint pass off the hot path.
 
 **Flags:** `lintNearDuplicate: boolean` (default **false**), `nearDupThreshold: number`
 (default **0.80**). No-op when no embedding cache exists (keyless).
@@ -179,8 +182,11 @@ interface, so Query picks it up transparently.
 
 - `SimilarityConfig.mode` gains `"hybrid"` (currently `"jaccard" | "embedding"`).
 - `selectRelevantScored` / `selectRelevant` in `hybrid` mode:
-  1. Run `selectEmbeddingScored` and `selectJaccardScored` over a **widened candidate pool** (not
-     pre-truncated to `topK`, so RRF sees full ranks; bounded to keep cost flat).
+  1. Run `selectEmbeddingScored` and `selectJaccardScored` over a **widened candidate pool** of
+     `RRF_CANDIDATE_POOL = 50` entries per side (constant, not a user setting). Each scored method
+     is called with an effective limit of `max(topK, 50)` instead of `topK`, so RRF sees fuller
+     ranks rather than two lists pre-truncated to a small `topK`. The pool is fixed (not the full
+     vault) to keep cost flat.
   2. Feed the two ranked `path` lists into `rrf(..., rrfK)`.
   3. Return the top `topK` fused entries in the existing `{ path, score }[]` shape.
 - **Keyless degradation:** in `hybrid` with no embedding endpoint, `selectEmbedding*` already falls
