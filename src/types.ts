@@ -85,6 +85,7 @@ export type RunEvent =
       expandedPages: string[];
       expandedScores: Record<string, number>;
       expandedByHop?: Record<number, string[]>;
+      seedFallback?: "none" | "jaccard" | "llm";
     };
 
 export interface RunHistoryEntry {
@@ -192,6 +193,8 @@ export interface LlmWikiPluginSettings {
     chunkMaxCount?: number;
     hybridRetrieval?: boolean;
     rrfK?: number;
+    bfsFusion?: boolean;
+    seedSimilarityThreshold?: number;
     dedupOnIngest?: boolean;
     dedupThreshold?: number;
     lintNearDuplicate?: boolean;
@@ -261,6 +264,8 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     structuredRetries: 1,
     hybridRetrieval: false,
     rrfK: 60,
+    bfsFusion: false,
+    seedSimilarityThreshold: 0,
     dedupOnIngest: false,
     dedupThreshold: 0.85,
     lintNearDuplicate: false,
