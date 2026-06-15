@@ -82,6 +82,13 @@ export const WikiPageSchema = z.object({
   }
 });
 
+export const MergedPageOutputSchema = z.object({
+  reasoning: z.string().optional(),
+  content: z.string(),
+  annotation: z.string().optional(),
+});
+export type MergedPageOutput = z.infer<typeof MergedPageOutputSchema>;
+
 export const EntitiesOutputSchema = z.object({
   reasoning: z.string(),
   entities: z.array(z.object({
