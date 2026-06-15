@@ -318,7 +318,7 @@ export async function* runIngest(
   const dedupThreshold = opts.dedupThreshold ?? 0.85;
   const pidToPath = new Map(nonMetaPaths.map((p) => [pageId(p), p]));
   const createdThisRun = new Set<string>();
-  if (dedupOn && similarity?.config.mode === "jaccard") similarity.setJaccardCorpus(annotations);
+  if (dedupOn && similarity.config.mode === "jaccard") similarity.setJaccardCorpus(annotations);
   for (const page of pages) {
     if (!page.path.startsWith(wikiVaultPath + "/")) {
       yield { kind: "tool_use", name: "Write", input: { path: page.path } };

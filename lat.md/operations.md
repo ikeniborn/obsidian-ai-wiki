@@ -221,4 +221,4 @@ Three opt-in capabilities added in Tier 1; all default to off and are safe to en
 
 **Ingest dedup gate** (`nativeAgent.dedupOnIngest: true`, requires `dedupThreshold`): After the LLM proposes a new page, `maxSimilarityToExisting()` compares it against the existing vault. If the closest match scores ≥ threshold, the ingest phase runs one LLM merge call and writes the merged result into the existing page rather than creating a duplicate.
 
-**Lint near-duplicate report** (`nativeAgent.lintNearDuplicate: true`, requires `dedupThreshold`): Lint calls `pairwiseNearDuplicates()` on all vault pages and reports pairs whose max-pool cosine ≥ threshold. The scan is skipped and reported as such when the vault exceeds the configured page cap.
+**Lint near-duplicate report** (`nativeAgent.lintNearDuplicate: true`, threshold `nearDupThreshold`): In embedding or hybrid mode, Lint calls `pairwiseNearDuplicates()` over the cached page vectors and reports pairs whose max-pool cosine ≥ threshold. In jaccard mode (no embedding cache) it does nothing. The scan is skipped and reported as such when the vault exceeds the configured page cap.
