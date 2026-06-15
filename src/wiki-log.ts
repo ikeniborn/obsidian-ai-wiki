@@ -3,7 +3,7 @@ import type { VaultTools } from "./vault-tools";
 
 export interface IngestLogEntry {
   path: string;
-  action: "СОЗДАНА" | "ОБНОВЛЕНА" | "УДАЛЕНА";
+  action: "СОЗДАНА" | "ОБНОВЛЕНА" | "УДАЛЕНА" | "ОБЪЕДИНЕНА";
   statusFrom?: string;
   statusTo?: string;
 }

@@ -109,6 +109,10 @@ export interface LlmCallOptions {
   structuredRetries?: number;
   thinkingBudgetTokens?: number;
   mergeDeleteWarnThreshold?: number;
+  dedupOnIngest?: boolean;
+  dedupThreshold?: number;
+  lintNearDuplicate?: boolean;
+  nearDupThreshold?: number;
 }
 
 /** Минимальный интерфейс OpenAI-клиента, используемый фазами. */
