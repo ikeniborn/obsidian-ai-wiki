@@ -603,3 +603,24 @@ describe("maxSimilarityToExisting (dedup scoring)", () => {
     expect(out).toEqual({ pid: "", score: 0 });
   });
 });
+
+describe("pairwiseNearDuplicates", () => {
+  // @lat: [[tests#Tier 1 — Graph Health + Hybrid#Lint surfaces near-duplicate page pairs]]
+  it("returns pairs at/above threshold and skips when over the page cap", () => {
+    const svc = new PageSimilarityService({ mode: "embedding", model: "m", dimensions: 2, topK: 5 });
+    svc.setCacheForTest({
+      version: 2, model: "m", dimensions: 2,
+      entries: {
+        a: { chunks: [{ vector: encodeVector(new Float32Array([1, 0])), hash: "h", kind: "summary" }] },
+        b: { chunks: [{ vector: encodeVector(new Float32Array([1, 0])), hash: "h", kind: "summary" }] },
+        c: { chunks: [{ vector: encodeVector(new Float32Array([0, 1])), hash: "h", kind: "summary" }] },
+      },
+    });
+    const { pairs, skippedPageCount } = svc.pairwiseNearDuplicates(0.9, 500);
+    expect(skippedPageCount).toBe(0);
+    expect(pairs).toEqual([{ a: "a", b: "b", score: 1 }]); // a≈b (cosine 1), c orthogonal
+    const over = svc.pairwiseNearDuplicates(0.9, 2);
+    expect(over.skippedPageCount).toBe(3);
+    expect(over.pairs).toEqual([]);
+  });
+});

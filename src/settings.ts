@@ -692,6 +692,36 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0) { s.nativeAgent.rrfK = Math.floor(n); await this.plugin.saveSettings(); } }),
           );
 
+        new Setting(containerEl).setName("Graph health").setHeading();
+        new Setting(containerEl)
+          .setName("Dedup on ingest")
+          .setDesc("На создании near-duplicate страницы — слить в существующую через LLM-merge.")
+          .addToggle((t) =>
+            t.setValue(s.nativeAgent.dedupOnIngest ?? false)
+              .onChange(async (v) => { s.nativeAgent.dedupOnIngest = v; await this.plugin.saveSettings(); }),
+          );
+        new Setting(containerEl)
+          .setName("Dedup threshold")
+          .setDesc("Порог похожести для дедупа (0..1). По умолчанию 0.85.")
+          .addText((t) =>
+            t.setValue(String(s.nativeAgent.dedupThreshold ?? 0.85))
+              .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0 && n <= 1) { s.nativeAgent.dedupThreshold = n; await this.plugin.saveSettings(); } }),
+          );
+        new Setting(containerEl)
+          .setName("Lint near-duplicate report")
+          .setDesc("В Lint показывать пары близких страниц по embedding-косинусу.")
+          .addToggle((t) =>
+            t.setValue(s.nativeAgent.lintNearDuplicate ?? false)
+              .onChange(async (v) => { s.nativeAgent.lintNearDuplicate = v; await this.plugin.saveSettings(); }),
+          );
+        new Setting(containerEl)
+          .setName("Near-duplicate threshold")
+          .setDesc("Порог косинуса для near-duplicate отчёта (0..1). По умолчанию 0.80.")
+          .addText((t) =>
+            t.setValue(String(s.nativeAgent.nearDupThreshold ?? 0.80))
+              .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0 && n <= 1) { s.nativeAgent.nearDupThreshold = n; await this.plugin.saveSettings(); } }),
+          );
+
         new Setting(containerEl)
           .setName(T.settings.mergeDeleteWarnThreshold_name)
           .setDesc(T.settings.mergeDeleteWarnThreshold_desc)

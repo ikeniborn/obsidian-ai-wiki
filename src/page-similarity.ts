@@ -267,6 +267,36 @@ export class PageSimilarityService {
   private jaccardCorpus: Map<string, string> = new Map();
   setJaccardCorpus(corpus: Map<string, string>): void { this.jaccardCorpus = corpus; }
 
+  setCacheForTest(cache: EmbeddingCacheFile): void { this.cache = cache; }
+
+  /**
+   * All unordered page pairs whose max-pool cosine ≥ threshold. Embedding-only (uses the
+   * loaded cache). Skips entirely when the page count exceeds maxPages (cost guard);
+   * the caller logs skippedPageCount.
+   */
+  pairwiseNearDuplicates(
+    threshold: number,
+    maxPages: number,
+  ): { pairs: { a: string; b: string; score: number }[]; skippedPageCount: number } {
+    if (!this.cache) return { pairs: [], skippedPageCount: 0 };
+    const pids = Object.keys(this.cache.entries);
+    if (pids.length > maxPages) return { pairs: [], skippedPageCount: pids.length };
+    const vecs = new Map<string, Float32Array[]>(
+      pids.map((pid) => [pid, this.cache!.entries[pid].chunks.map((c) => decodeVector(c.vector))]),
+    );
+    const pairs: { a: string; b: string; score: number }[] = [];
+    for (let i = 0; i < pids.length; i++) {
+      for (let j = i + 1; j < pids.length; j++) {
+        const va = vecs.get(pids[i])!, vb = vecs.get(pids[j])!;
+        let best = 0;
+        for (const x of va) for (const y of vb) { const c = cosine(x, y); if (c > best) best = c; }
+        if (best >= threshold) pairs.push({ a: pids[i], b: pids[j], score: best });
+      }
+    }
+    pairs.sort((p, q) => q.score - p.score);
+    return { pairs, skippedPageCount: 0 };
+  }
+
   /**
    * Max similarity of `candidateText` to any existing page, excluding `excludePids`.
    * embedding/hybrid: max-pool cosine over the loaded cache. jaccard: Jaccard coefficient

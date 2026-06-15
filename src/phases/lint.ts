@@ -250,9 +250,24 @@ export async function* runLint(
       : articlePaths;
 
     // Load embedding cache before loop
-    if (similarity?.config.mode === "embedding") {
+    if (similarity && similarity.config.mode !== "jaccard") {
       yield { kind: "info_text", icon: "📥", summary: "загрузка кэша векторов..." };
       await similarity.loadCache(wikiVaultPath, vaultTools);
+    }
+
+    if (similarity && similarity.config.mode !== "jaccard" && (opts.lintNearDuplicate ?? false)) {
+      const LINT_NEARDUP_MAX_PAGES = 500;
+      const { pairs, skippedPageCount } = similarity.pairwiseNearDuplicates(
+        opts.nearDupThreshold ?? 0.80, LINT_NEARDUP_MAX_PAGES,
+      );
+      if (skippedPageCount > 0) {
+        yield { kind: "info_text", icon: "⚠️",
+          summary: `near-duplicate проверка пропущена: ${skippedPageCount} страниц > ${LINT_NEARDUP_MAX_PAGES}` };
+      } else if (pairs.length > 0) {
+        yield { kind: "info_text", icon: "🔁",
+          summary: `near-duplicate кандидаты: ${pairs.length} пар`,
+          details: pairs.map((p) => `${p.a} ≈ ${p.b} (${p.score.toFixed(2)})`) };
+      }
     }
 
     const entityTypesBlock = buildEntityTypesBlock(domain);
