@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.1.168 — 2026-06-15
+
+### Новое
+- feat(search): multi-vector hybrid index — per-section chunking + max-pool scoring for recall-first retrieval
+- feat(search): hybrid retrieval mode fusing dense embeddings with Jaccard via reciprocal rank fusion (RRF)
+- feat(query): query-time vector⊕graph fusion (RRF over seeds + BFS union) behind a BFS-fusion toggle
+- feat(query): seed similarity threshold with Jaccard→LLM fallback, surfaced in the query trace
+- feat(ingest): near-duplicate dedup gate — cosine pre-filter + LLM-merge on ingest
+- feat(lint): near-duplicate page report with settings toggles
+- feat(settings): new toggles — chunking controls, hybrid retrieval + rrfK, BFS fusion, seed similarity threshold, graph-health flags
+- feat(eval): RAG retrieval eval harness — gold-set parser, recall@k/MRR metrics, config matrix, CLI report
+
+### Исправления
+- fix(similarity): preserve section vectors for pages ingested without a body (incremental ingest)
+- fix(similarity): guard truncated embeddings response
+- fix(similarity): strip H1 even with a blank line after frontmatter
+- fix(ingest): count and log dedup-merges correctly
+- fix(eval): loadWikiPages recurses into wiki subfolders
+
+### Прочее
+- refactor(graph): extract shared inDegree helper from checkGraphStructure
+- refactor(similarity): drop dead byPath map in hybrid scoring
+
+---
+
 ## 0.1.167 — 2026-06-08
 
 ### Новое
