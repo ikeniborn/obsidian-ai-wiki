@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.170 — 2026-06-16
+
+### Исправления
+- fix(embeddings): persist embedding cache in hybrid retrieval mode (previously only pure-embedding mode persisted, so hybrid re-embedded the corpus on every query or fell back to Jaccard after restart)
+- fix(embeddings): send `dimensions` to the /embeddings API when configured (OpenAI MRL) instead of using it as a cache-key label only; add dimension probe plus Check/Default buttons in settings with auto-detect on model select
+
+---
+
 ## 0.1.169 — 2026-06-15
 
 ### Новое
