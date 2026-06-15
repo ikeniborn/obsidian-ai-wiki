@@ -1,3 +1,28 @@
+---
+review:
+  spec_hash: f983e4b66e20fde3
+  last_run: 2026-06-15
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: INFO
+      section: "Component 1 — Fusion"
+      text: "'extract or duplicate minimally' is a non-binding impl hint; binding requirement (factor inDegree helper) is explicit"
+      verdict: accepted
+    - id: F-002
+      phase: clarity
+      severity: INFO
+      section: "Goals"
+      text: "'graceful' fallback summarized; criterion is the explicit jaccard→llm→error chain in Component 2"
+      verdict: accepted
+chain:
+  intent: null
+---
 # Tier 2 — Query Fusion + Threshold Fallback (Design)
 
 Date: 2026-06-15
