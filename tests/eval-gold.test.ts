@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseGold } from "../scripts/eval-gold";
 
+// @lat: [[tests#Retrieval Eval Harness#Gold set parsing rejects malformed input]]
 describe("parseGold", () => {
   it("parses an array of {q, gold} pairs", () => {
     const raw = JSON.stringify([

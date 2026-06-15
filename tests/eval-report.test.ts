@@ -14,6 +14,7 @@ const snap: Snapshot = {
   ],
 };
 
+// @lat: [[tests#Retrieval Eval Harness#Report table renders metrics and baseline deltas]]
 describe("formatTable", () => {
   it("renders a header and one row per config with all 8 metric cells", () => {
     const out = formatTable(snap);

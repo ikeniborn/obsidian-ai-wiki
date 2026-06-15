@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { recallAt, mrr } from "../scripts/eval-metrics";
 
+// @lat: [[tests#Retrieval Eval Harness#Recall and MRR over a ranked list]]
 describe("recallAt", () => {
   it("counts gold hits within the top-k window, divided by |gold|", () => {
     // gold = 2 ids, both in top-3 → 1.0

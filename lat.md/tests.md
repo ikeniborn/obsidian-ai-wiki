@@ -481,3 +481,19 @@ When vision settings are enabled and the LLM returns a sentinel with vision mark
 ### Vision resume from temp store
 
 A second `runFormat` sharing the same `VisionTempStore` serves descriptions from the cache and does not call `analyzeSingleAttachment` again; both runs still emit `format_preview`.
+
+## Retrieval Eval Harness
+
+Spec for the standalone retrieval eval harness (`scripts/eval.ts`) pure functions — Recall@k, MRR, gold-set parsing, and the console report formatter. See [[operations#Retrieval Eval Harness]].
+
+### Recall and MRR over a ranked list
+
+`recallAt(ranked, gold, k)` returns `|gold ∩ ranked[0..k)| / |gold|` (0 for empty gold); `mrr(ranked, gold)` returns the reciprocal rank of the first gold hit, or 0 if none appear. `averageLayer` averages both across all gold pairs per k.
+
+### Gold set parsing rejects malformed input
+
+`parseGold` accepts a non-empty JSON array of `{ q, gold }` pairs and throws a descriptive error on an empty set, a missing/empty `q`, an empty `gold` array, or malformed JSON.
+
+### Report table renders metrics and baseline deltas
+
+`formatTable` renders one row per config with the eight `s*/u*` metric cells, and — given a baseline snapshot — annotates each cell with a `▲/▼` signed delta.
