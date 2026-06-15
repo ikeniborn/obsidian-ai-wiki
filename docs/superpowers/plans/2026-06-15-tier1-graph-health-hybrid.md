@@ -6,6 +6,10 @@ review:
     coverage: {status: passed}
     risks: {status: passed}
   findings: []
+result_check:
+  verdict: OK
+  plan_hash: a251d719b21a2d08
+  last_run: 2026-06-15
 ---
 # Tier 1 — Graph Health + Hybrid Retrieval Implementation Plan
 
