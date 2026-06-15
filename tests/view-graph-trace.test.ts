@@ -84,4 +84,15 @@ describe("formatGraphStatsLines", () => {
     // ArticleZ with score 0 should not appear as "(0.00)"
     expect(lines[0]).not.toContain("(0.00)");
   });
+
+  it("trace mode: shows seed fallback when not none", () => {
+    const ev = { ...baseEvent, seedFallback: "jaccard" as const };
+    const lines = formatGraphStatsLines(ev, true);
+    expect(lines.some(l => l.includes("Seed fallback: jaccard"))).toBe(true);
+  });
+
+  it("trace mode: omits seed fallback line when none/absent", () => {
+    const lines = formatGraphStatsLines(baseEvent, true);
+    expect(lines.some(l => l.includes("Seed fallback"))).toBe(false);
+  });
 });
