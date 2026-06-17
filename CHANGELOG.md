@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.172 — 2026-06-17
+
+### Исправления
+- fix(vault-tools): self-healing NFC/NFD read with diagnostics
+- fix(vault-tools): write-guard resolves NFC/NFD target to avoid duplicates
+
+---
+
 ## 0.1.171 — 2026-06-17
 
 ### Новое
