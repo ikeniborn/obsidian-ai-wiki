@@ -16,6 +16,8 @@ When `opts.outputLanguage` is set, appends a `## Language` directive (from `lang
 
 The `base.md` `## Terms` contract governs what survives translation: ALL natural-language content — including sentences, descriptions, notes, and field values quoted/copied from the source (e.g. CJK) — is rendered in the output language. Only atomic items stay verbatim: code and fenced code blocks, file paths, identifiers, commands, product/proper names, abbreviations, and Obsidian embeds. This prevents quoted source prose (e.g. eval-set prompt/expected fields) from leaking the source language onto generated pages.
 
+The page-generation phases (`ingest`, `lint`, `init`) reinforce this in `templates/_wiki_schema.md` (`## Language and style`): table cell values, field values, list items, and quoted sentences copied from the source must also be translated, while `[[wiki-link]]` targets stay verbatim (they are filenames). Compliance is model-dependent — strongly-instruction-following models translate these reliably, but some models still preserve recognizable literal data (e.g. eval `prompt`/`expected` test inputs) regardless; this is a prompt-contract guideline, not a hard post-generation guard.
+
 ## Evaluator Prompt Pattern
 
 Only phase that sends no system message to `buildChatParams` (`src/phases/evaluator.ts`). `prependBaseContract` creates `system = base.md` from scratch; `evaluator.md` renders into the user role — unlike all other phases where the phase prompt is the system message.
