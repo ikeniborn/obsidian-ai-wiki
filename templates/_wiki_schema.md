@@ -2,6 +2,8 @@
 
 ## Language and style
 - Primary language: follow the configured output-language directive (from settings); when it is "auto", match the source/article language.
+- The output language applies to ALL natural-language text, including content copied from the source: table cell values, field values (prompt, expected, notes, descriptions), list items, and quoted sentences. These are content — translate them. A full sentence in another language (incl. CJK) is never a "term".
+- Verbatim preservation is ONLY for: fenced code blocks, file paths, identifiers, commands, URLs, proper names, and `[[wiki-link]]` targets (they are filenames — never translate a link target).
 - Do not translate technical terms: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML
 - System names — keep the original spelling (RT.DataExporter, CRM B2C, ЦХД)
 - Expand abbreviations on first use on the page
