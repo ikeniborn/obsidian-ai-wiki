@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.174 — 2026-06-17
+
+### Исправления
+- fix(ingest): pass vault-relative path, not OS-absolute — fixes Windows path doubling on CJK directory/file names (issue #14)
+
+---
+
 ## 0.1.173 — 2026-06-17
 
 ### Исправления
