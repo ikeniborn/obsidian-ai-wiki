@@ -17,11 +17,11 @@ After EVERY task, before responding to the user:
 
 These rules govern all development. They must NOT be broken without explicit user agreement.
 
-1. **Every development starts from the `dev` branch.** Before starting work, merge `master` into `dev` so `dev` is up to date, then branch from there.
-2. **`fix` branches are created from `dev`** — never directly from `master`.
-3. **`fix` branches always merge back into `dev`** (or via a pull request targeting `dev`) — never directly into `master`.
+1. **All development happens in `dev/*` branches** (e.g. `dev/cjk-filename-read`). Create the branch from an up-to-date `master`: `git checkout master && git pull`, then `git checkout -b dev/<topic>`.
+2. **There is no standalone `dev` branch.** Do not create, use, or push a bare `dev` branch — only the `dev/*` namespace.
+3. **`dev/*` branches merge back into `master`** via a pull request targeting `master`.
 
-Do not deviate from this flow (e.g. branching from `master`, merging a `fix` into `master`) without first confirming with the user.
+Do not deviate from this flow (e.g. committing directly to `master`, or reviving a bare `dev` branch) without first confirming with the user.
 
 ---
 
