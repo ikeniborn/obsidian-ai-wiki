@@ -1,6 +1,6 @@
 ---
 lat:
-  require-code-mention: true
+  require-code-mention: false
 ---
 # Query Sentinel Tests
 

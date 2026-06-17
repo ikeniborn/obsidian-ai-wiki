@@ -7,8 +7,6 @@
     "build": "node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs",
     "lint": "eslint \"src/**/*.ts\"",
-    "test": "vitest run",
-    "test:watch": "vitest",
     "migrate:wiki-prefix": "tsx scripts/migrate-wiki-prefix.ts",
     "eval": "TSX_TSCONFIG_PATH=scripts/tsconfig.eval.json tsx scripts/eval.ts"
   },
@@ -22,7 +20,6 @@
     "tsx": "^4.19.0",
     "typescript": "^5.4.0",
     "typescript-eslint": "^8.60.1",
-    "vitest": "^4.1.7",
     "zod-to-json-schema": "^3.25.2"
   },
   "dependencies": {

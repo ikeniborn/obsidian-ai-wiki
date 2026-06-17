@@ -1,5 +1,5 @@
 // Pure retrieval metrics over a ranked pageId list and a gold pageId set.
-// Obsidian-free and fs-free so they unit-test under vitest without aliases.
+// Obsidian-free and fs-free for easy reuse without aliases.
 
 /** Recall@k = |gold ∩ ranked[0..k)| / |gold|. 0 when gold is empty. */
 export function recallAt(ranked: string[], gold: string[], k: number): number {

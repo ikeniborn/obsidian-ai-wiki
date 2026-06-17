@@ -21,7 +21,7 @@ Beyond the per-phase prompts (`base.md`, `chat.md`, `query.md`, `ingest.md`, `li
 | `format-restore-tokens.md` | token-restore retry in [[src/phases/format.ts]] | `tokens` |
 | `ingest-fix-paths.md` | path-correction retry in [[src/phases/ingest.ts]] | `paths` |
 
-The dynamic parts (error bullets, JSON example, language switch via `langInstruction`, token/path lists) stay in code; only the instruction text moved to `.md`. Short user-message scaffolding labels (`Источник: `, `Вопрос: `) remain inline — data framing, not prompts. Contract checks in [[tests/prompts.test.ts]] assert each file's placeholders and that `render` leaves no leftover braces.
+The dynamic parts (error bullets, JSON example, language switch via `langInstruction`, token/path lists) stay in code; only the instruction text moved to `.md`. Short user-message scaffolding labels (`Источник: `, `Вопрос: `) remain inline — data framing, not prompts.
 
 ## buildChatParams
 

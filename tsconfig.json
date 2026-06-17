@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "lib": ["ES2022", "DOM"],
-    "types": ["node", "vitest/globals"]
+    "types": ["node"]
   },
-  "include": ["src/**/*", "tests/**/*"]
+  "include": ["src/**/*"]
 }

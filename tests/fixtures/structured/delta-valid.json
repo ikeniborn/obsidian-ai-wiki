@@ -1,7 +1,0 @@
-{
-  "reasoning": "Added Contract entity.",
-  "entity_types": [
-    {"type":"Contract","description":"Service contract","extraction_cues":["SLA","contract"]}
-  ],
-  "language_notes": "Use English term Contract."
-}

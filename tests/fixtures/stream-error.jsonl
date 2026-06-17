@@ -1,2 +1,0 @@
-{"type":"system","subtype":"init","session_id":"e1"}
-{"type":"result","subtype":"error","is_error":true,"result":"API rate limit exceeded","duration_ms":1200}
