@@ -4,8 +4,12 @@ import { domainIndexPath } from "./wiki-path";
 export function parseIndexAnnotations(content: string): Map<string, string> {
   const map = new Map<string, string>();
   for (const line of content.split("\n")) {
-    const m = line.match(/^- \[\[([^\]]+)\]\] [^ ]+ — (.+)$/);
-    if (m) map.set(m[1], m[2].trim());
+    const m = line.match(/^- (.+?) — (.+)$/);
+    if (!m) continue;
+    let pid = m[1].trim();
+    const old = pid.match(/^\[\[([^\]]+)\]\]/); // old format: "[[pid]] relpath"
+    if (old) pid = old[1];
+    map.set(pid, m[2].trim());
   }
   return map;
 }
@@ -18,14 +22,21 @@ function deriveSection(wikiFolder: string, fullPath?: string): string {
   return parts.length >= 2 ? parts[0] : "general";
 }
 
+// Matches a pid's index line in BOTH the old `- [[pid]] relpath — …` and the new
+// `- pid — …` format. The trailing space anchors the pid as a full token, so `pid`
+// does not collide with `pid_2`.
+function pidLineRegex(pid: string): RegExp {
+  const esc = pid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^- (?:\\[\\[${esc}\\]\\]|${esc}) `);
+}
+
 function upsertInSection(content: string, section: string, pid: string, entryLine: string): string {
   if (!content.trim()) {
     return `# Wiki Index\n\n## ${section}\n${entryLine}\n`;
   }
 
   const sectionHeader = `## ${section}`;
-  const escaped = pid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pidRe = new RegExp(`^- \\[\\[${escaped}\\]\\]`);
+  const pidRe = pidLineRegex(pid);
 
   const lines = content.split("\n");
   const sectionIdx = lines.findIndex((l) => l === sectionHeader);
@@ -87,8 +98,7 @@ export async function removeIndexAnnotation(
   let content = "";
   try { content = await vaultTools.read(indexPath); } catch { return; }
 
-  const escaped = pid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pidRe = new RegExp(`^- \\[\\[${escaped}\\]\\]`);
+  const pidRe = pidLineRegex(pid);
 
   const lines = content.split("\n");
   const targetIdx = lines.findIndex((l) => pidRe.test(l));
