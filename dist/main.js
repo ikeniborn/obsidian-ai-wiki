@@ -26140,7 +26140,7 @@ __export(main_exports, {
   migrateToLocalV2: () => migrateToLocalV2
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian12 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_SETTINGS = {
@@ -37802,12 +37802,8 @@ function hasFrontmatterField(content, field) {
 function parseIndexAnnotations(content) {
   const map = /* @__PURE__ */ new Map();
   for (const line of content.split("\n")) {
-    const m = line.match(/^- (.+?) — (.+)$/);
-    if (!m) continue;
-    let pid = m[1].trim();
-    const old = pid.match(/^\[\[([^\]]+)\]\]/);
-    if (old) pid = old[1];
-    map.set(pid, m[2].trim());
+    const m = line.match(/^- \[\[([^\]]+)\]\] [^ ]+ — (.+)$/);
+    if (m) map.set(m[1], m[2].trim());
   }
   return map;
 }
@@ -37818,10 +37814,6 @@ function deriveSection(wikiFolder, fullPath) {
   const parts = rel.split("/");
   return parts.length >= 2 ? parts[0] : "general";
 }
-function pidLineRegex(pid) {
-  const esc = pid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^- (?:\\[\\[${esc}\\]\\]|${esc}) `);
-}
 function upsertInSection(content, section, pid, entryLine) {
   if (!content.trim()) {
     return `# Wiki Index
@@ -37831,7 +37823,8 @@ ${entryLine}
 `;
   }
   const sectionHeader = `## ${section}`;
-  const pidRe = pidLineRegex(pid);
+  const escaped = pid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pidRe = new RegExp(`^- \\[\\[${escaped}\\]\\]`);
   const lines = content.split("\n");
   const sectionIdx = lines.findIndex((l) => l === sectionHeader);
   if (sectionIdx === -1) {
@@ -37864,8 +37857,10 @@ async function upsertIndexAnnotation(vaultTools, wikiFolder, pid, annotation, fu
   } catch {
   }
   const section = deriveSection(wikiFolder, fullPath);
+  const prefix = wikiFolder + "/";
+  const relPath = fullPath ? fullPath.startsWith(prefix) ? fullPath.slice(prefix.length) : fullPath : pid;
   const oneLineAnnotation = annotation.replace(/\s+/g, " ").trim();
-  const entryLine = `- ${pid} \u2014 ${oneLineAnnotation}`;
+  const entryLine = `- [[${pid}]] ${relPath} \u2014 ${oneLineAnnotation}`;
   await vaultTools.write(indexPath, upsertInSection(content, section, pid, entryLine));
 }
 async function removeIndexAnnotation(vaultTools, wikiFolder, pid) {
@@ -37876,7 +37871,8 @@ async function removeIndexAnnotation(vaultTools, wikiFolder, pid) {
   } catch {
     return;
   }
-  const pidRe = pidLineRegex(pid);
+  const escaped = pid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pidRe = new RegExp(`^- \\[\\[${escaped}\\]\\]`);
   const lines = content.split("\n");
   const targetIdx = lines.findIndex((l) => pidRe.test(l));
   if (targetIdx === -1) return;
@@ -49770,62 +49766,8 @@ async function cleanDir(adapter, dir, knownFiles) {
   }
 }
 
-// src/migrate-index-format.ts
-var import_obsidian11 = require("obsidian");
-var OLD_ENTRY = /^- \[\[([^\]]+)\]\] \S+ — (.+)$/;
-var NEW_ENTRY = /^- \S+ — .+$/;
-function migrateLine(line) {
-  if (!line.startsWith("- ")) return { out: line, changed: false, unknown: false };
-  const old = line.match(OLD_ENTRY);
-  if (old) return { out: `- ${old[1]} \u2014 ${old[2]}`, changed: true, unknown: false };
-  if (NEW_ENTRY.test(line)) return { out: line, changed: false, unknown: false };
-  return { out: line, changed: false, unknown: true };
-}
-async function migrateIndexFormat(vault, domains) {
-  const adapter = vault.adapter;
-  let filesChanged = 0;
-  let linesChanged = 0;
-  for (const domain of domains) {
-    const wikiFolder = domainWikiFolder(domain.wiki_folder);
-    const indexPath = domainIndexPath(wikiFolder);
-    if (!await adapter.exists(indexPath)) continue;
-    const raw = await adapter.read(indexPath);
-    const before = parseIndexAnnotations(raw);
-    const out = [];
-    let changed = 0;
-    let unknown = false;
-    for (const line of raw.split("\n")) {
-      const r = migrateLine(line);
-      if (r.unknown) {
-        console.error(`[AI Wiki] index migration: unrecognized line in ${indexPath}: ${line}`);
-        unknown = true;
-        break;
-      }
-      out.push(r.out);
-      if (r.changed) changed++;
-    }
-    if (unknown) continue;
-    if (changed === 0) continue;
-    const newContent = out.join("\n");
-    const after = parseIndexAnnotations(newContent);
-    const preserved = before.size === after.size && [...before.keys()].every((k) => after.has(k));
-    if (!preserved) {
-      console.error(
-        `[AI Wiki] index migration: annotation key mismatch in ${indexPath} (${before.size} \u2192 ${after.size}); skipping`
-      );
-      continue;
-    }
-    await adapter.write(indexPath, newContent);
-    filesChanged++;
-    linesChanged += changed;
-  }
-  if (filesChanged > 0) {
-    new import_obsidian11.Notice(`AI Wiki: index format migrated \u2014 ${filesChanged} files, ${linesChanged} lines`);
-  }
-}
-
 // src/main.ts
-var LlmWikiPlugin = class extends import_obsidian12.Plugin {
+var LlmWikiPlugin = class extends import_obsidian11.Plugin {
   settings;
   controller;
   settingTab;
@@ -49838,7 +49780,7 @@ var LlmWikiPlugin = class extends import_obsidian12.Plugin {
       await runStorageMigration(this.app.vault);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian12.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
+      new import_obsidian11.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] storage migration error:", e);
     }
     await cleanupBundledSchemaCopies(this.app.vault);
@@ -49846,14 +49788,6 @@ var LlmWikiPlugin = class extends import_obsidian12.Plugin {
     await this.loadSettings();
     await migrateToLocalV1(this, this.localConfigStore);
     await migrateToLocalV2(this, this.localConfigStore);
-    try {
-      const domains = await this.domainStore.load();
-      await migrateIndexFormat(this.app.vault, domains);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian12.Notice(`AI Wiki: index format migration failed \u2014 ${msg}`, 0);
-      console.error("[AI Wiki] index format migration error:", e);
-    }
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
     this.controller.onBusyChange = () => this.settingTab?.display();
     this.registerView(AI_WIKI_VIEW_TYPE, (leaf) => new LlmWikiView(leaf, this));
@@ -49866,7 +49800,7 @@ var LlmWikiPlugin = class extends import_obsidian12.Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
-    if (!import_obsidian12.Platform.isMobile) {
+    if (!import_obsidian11.Platform.isMobile) {
       const statusBar = this.addStatusBarItem();
       statusBar.setText("schema: 0/0");
       statusBar.setAttribute("aria-label", "validation: 0 ok, 0 retried, 0 failed");
@@ -49889,7 +49823,7 @@ var LlmWikiPlugin = class extends import_obsidian12.Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
-    if (!import_obsidian12.Platform.isMobile) {
+    if (!import_obsidian11.Platform.isMobile) {
       this.addCommand({
         id: "ingest-current",
         name: T.cmd.ingestActive,
@@ -49901,7 +49835,7 @@ var LlmWikiPlugin = class extends import_obsidian12.Plugin {
       name: T.cmd.query,
       callback: () => new QueryModal(this.app, (q) => void this.controller.query(q)).open()
     });
-    if (!import_obsidian12.Platform.isMobile) {
+    if (!import_obsidian11.Platform.isMobile) {
       this.addCommand({
         id: "lint",
         name: T.cmd.lint,
@@ -50044,11 +49978,11 @@ var LlmWikiPlugin = class extends import_obsidian12.Plugin {
       if (data && data.model && !this.settings.claudeAgent.model)
         this.settings.claudeAgent.model = data.model;
     }
-    if (import_obsidian12.Platform.isMobile && this.settings.backend === "claude-agent") {
+    if (import_obsidian11.Platform.isMobile && this.settings.backend === "claude-agent") {
       this.settings.backend = "native-agent";
       await this.saveData(this.settings);
     }
-    if (import_obsidian12.Platform.isMobile) {
+    if (import_obsidian11.Platform.isMobile) {
       let dirty = false;
       if (this.settings.nativeAgent.perOperation) {
         this.settings.nativeAgent.perOperation = false;
