@@ -77,14 +77,10 @@ export async function upsertIndexAnnotation(
   try { content = await vaultTools.read(indexPath); } catch { /* first write */ }
 
   const section = deriveSection(wikiFolder, fullPath);
-  const prefix = wikiFolder + "/";
-  const relPath = fullPath
-    ? (fullPath.startsWith(prefix) ? fullPath.slice(prefix.length) : fullPath)
-    : pid;
   // collapse newlines / whitespace runs → single space; enforce single-line invariant
   // (not truncation — all content is preserved, only whitespace is normalized)
   const oneLineAnnotation = annotation.replace(/\s+/g, " ").trim();
-  const entryLine = `- [[${pid}]] ${relPath} — ${oneLineAnnotation}`;
+  const entryLine = `- ${pid} — ${oneLineAnnotation}`;
 
   await vaultTools.write(indexPath, upsertInSection(content, section, pid, entryLine));
 }
