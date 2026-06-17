@@ -1,3 +1,16 @@
+---
+review:
+  spec_hash: f25d3e2a7ba2331d
+  last_run: 2026-06-17
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings: []
+chain:
+  intent: docs/superpowers/intents/2026-06-17-index-drop-wikilinks-intent.md
+---
 # Design: Drop wikilinks from `_index.md`
 
 **Date:** 2026-06-17
