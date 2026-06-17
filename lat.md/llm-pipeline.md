@@ -27,6 +27,8 @@ The dynamic parts (error bullets, JSON example, language switch via `langInstruc
 
 Assembles the final `messages[]` array for an LLM call. Always prepends `base.md` as the system message via `prependBaseContract`. If `opts.systemPrompt` is set, appends `## Уточнение\n<prompt>` to the system message.
 
+When `opts.outputLanguage` is set, it also appends a `## Язык` directive (from [[src/phases/llm-utils.ts#langInstruction]]) to the system message.
+
 Also applies model params: `temperature`, `maxTokens`, `topP`, `response_format`, `thinkingBudgetTokens`. Thinking mode removes `response_format`, `temperature`, `top_p`. See [[src/phases/llm-utils.ts#buildChatParams]].
 
 ## Evaluator Prompt Pattern

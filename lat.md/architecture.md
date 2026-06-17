@@ -109,6 +109,8 @@ Settings are split into two stores to avoid syncing secrets across devices.
 
 `resolveEffective` merges both stores at runtime: spreads `data.json` settings, overlays only `apiKey` from local nativeAgent and `password` from local proxy. See [[src/effective-settings.ts#resolveEffective]].
 
+A global `outputLanguage` (`auto | ru | en | es`, default `auto`) fixes the response language across all operations, including vision; `auto` binds to the source/article language. It replaced the former `vision.language`.
+
 `lintOptions.useLlm` is stored in `data.json` and preserved as the default value for the lint modal toggle, but it is no longer exposed in the plugin settings panel — the toggle was removed to keep settings focused on persistent configuration rather than per-run choices. See [[src/settings.ts]].
 
 `LlmWikiSettingTab.render()` saves `scrollTop` before `containerEl.empty()` and restores it via `requestAnimationFrame` after rebuild — preventing scroll reset when onChange handlers call `display()` to re-render the panel. The scrollable container is resolved via `containerEl.closest('.vertical-tab-content') ?? containerEl.closest('.modal-content') ?? containerEl.parentElement` — **do not use `containerEl.parentElement` alone**, it is not the scrollable element in Obsidian's settings modal.
