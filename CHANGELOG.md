@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.175 — 2026-06-17
+
+### Исправления
+- fix(prompt): translate source field values (table cells, eval prompt/expected/notes), not just narrative — reinforced in the wiki schema; `[[wiki-link]]` targets, code, and proper names stay verbatim (compliance is model-dependent)
+
+---
+
 ## 0.1.174 — 2026-06-17
 
 ### Исправления
