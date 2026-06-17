@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.171 — 2026-06-17
+
+### Новое
+- feat: global outputLanguage setting across all operations
+- feat(prompt): add term-preservation rule to base contract
+- feat(wiki-index): tolerant parseIndexAnnotations + shared pidLineRegex
+- feat(wiki-index): upsert emits bracketless '- pid — annotation' lines
+- feat(migrate-index-format): content-detecting _index.md format migration
+- feat(main): run migrateIndexFormat on plugin load
+- i18n(prompts): translate all prompts/templates to English
+
+---
+
 ## 0.1.170 — 2026-06-16
 
 ### Исправления
