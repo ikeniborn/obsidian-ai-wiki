@@ -1,3 +1,19 @@
+---
+review:
+  plan_hash: 2dbb92b7ece4120e
+  spec_hash: f25d3e2a7ba2331d
+  last_run: 2026-06-17
+  phases:
+    structure:     { status: passed }
+    coverage:      { status: passed }
+    dependencies:  { status: passed }
+    verifiability: { status: passed }
+    consistency:   { status: passed }
+  findings: []
+chain:
+  intent: docs/superpowers/intents/2026-06-17-index-drop-wikilinks-intent.md
+  spec: docs/superpowers/specs/2026-06-17-index-drop-wikilinks-design.md
+---
 # Drop Wikilinks from `_index.md` Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
