@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spec Check — CJK / Unicode Filename Read (Issue #14)</title>
+<style>
+:root{
+  --bg:#fafafa; --surface:#ffffff; --fg:#333344;
+  --accent:#5c6bc0; --border:#d0d0e0; --line:#888888;
+  --zebra:#f3f3f8; --ok:#43a047; --warn:#fb8c00; --danger:#e53935; --info:#5c6bc0;
+}
+body:has(#theme-toggle:checked){
+  --bg:#1e1e2e; --surface:#313244; --fg:#cdd6f4;
+  --accent:#89b4fa; --border:#45475a; --line:#888888;
+  --zebra:#282838; --ok:#a6e3a1; --warn:#f9e2af; --danger:#f38ba8; --info:#89b4fa;
+}
+body{
+  margin:0; padding:1.5rem;
+  font:16px/1.55 system-ui, sans-serif;
+  background:var(--bg); color:var(--fg);
+  transition:background .3s, color .3s;
+}
+.theme-btn{
+  position:sticky; top:.5rem; float:right; z-index:10;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+.report{ max-width:960px; margin:0 auto; }
+h1{ font-size:1.5rem; margin:.2rem 0 .2rem; }
+h2{ font-size:1.15rem; margin:1.8rem 0 .6rem; border-bottom:2px solid var(--accent); padding-bottom:.2rem; }
+.sub{ color:var(--fg); opacity:.75; margin:.1rem 0 1rem; font-size:.9rem; }
+code{ background:var(--zebra); padding:.05rem .35rem; border-radius:4px; font-size:.88em; }
+
+.verdict-banner{
+  display:inline-block; margin:.4rem 0; padding:.4rem 1rem; border-radius:999px;
+  font-weight:700; letter-spacing:.04em;
+  background:var(--ok); color:#06270c;
+}
+body:has(#theme-toggle:checked) .verdict-banner{ color:#06270c; }
+
+.rpt-table{ border-collapse:collapse; width:100%; background:var(--surface); margin:.4rem 0 1rem; }
+.rpt-table th, .rpt-table td{ border:1px solid var(--border); padding:.5rem .75rem; text-align:left; vertical-align:top; }
+.rpt-table thead th{ position:sticky; top:0; background:var(--accent); color:var(--bg); }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ outline:2px solid var(--accent); outline-offset:-2px; }
+
+.badge{ display:inline-block; padding:.1rem .55rem; border-radius:999px; font-size:.78rem; font-weight:700; color:#fff; }
+.b-pass{ background:var(--ok); color:#06270c; }
+.b-info{ background:var(--info); color:#fff; }
+.b-warn{ background:var(--warn); color:#3a2400; }
+.b-crit{ background:var(--danger); color:#fff; }
+.b-open{ background:transparent; color:var(--fg); border:1px solid var(--border); }
+
+.rpt-states{ display:flex; align-items:center; gap:0; flex-wrap:wrap; margin:1rem 0; }
+.rpt-states .state{
+  border:2px solid var(--ok); border-radius:999px; padding:.5rem 1rem;
+  background:var(--surface); font-weight:600; position:relative;
+}
+.rpt-states .state.active{ border-color:var(--accent); animation:pulse 1.6s ease-in-out infinite; }
+.rpt-states .state small{ display:block; font-weight:400; opacity:.7; font-size:.72rem; }
+.rpt-states .edge{ flex:0 0 2.4rem; height:2px; background:var(--line); position:relative; }
+.rpt-states .edge::after{
+  content:""; position:absolute; right:0; top:-4px;
+  border:5px solid transparent; border-left-color:var(--line);
+}
+@keyframes pulse{ 0%,100%{ box-shadow:0 0 0 0 var(--accent); } 50%{ box-shadow:0 0 0 4px transparent; } }
+
+.rpt-flow{ display:flex; align-items:center; gap:0; margin:1rem 0; flex-wrap:wrap; }
+.rpt-flow .node{
+  background:var(--surface); color:var(--fg);
+  border:1px solid var(--border); border-radius:8px; padding:.6rem 1rem; font-weight:600;
+}
+.rpt-flow .node.muted{ opacity:.55; font-style:italic; font-weight:400; }
+.rpt-flow .arrow{ flex:0 0 2.5rem; height:2px; background:var(--line); position:relative; }
+.rpt-flow .arrow::after{
+  content:""; position:absolute; right:0; top:-4px;
+  border:5px solid transparent; border-left-color:var(--line);
+}
+
+.cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:.8rem; margin:.6rem 0 1rem; }
+.card{ background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:.8rem 1rem; text-align:center; }
+.card .n{ font-size:1.8rem; font-weight:800; line-height:1.1; }
+.card.crit .n{ color:var(--danger); }
+.card.warn .n{ color:var(--warn); }
+.card.info .n{ color:var(--info); }
+.card .l{ font-size:.78rem; opacity:.75; text-transform:uppercase; letter-spacing:.05em; }
+
+details{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.5rem .8rem; margin:.4rem 0; }
+summary{ cursor:pointer; font-weight:600; }
+ul{ margin:.3rem 0 .3rem 1.1rem; padding:0; }
+.meta{ font-size:.85rem; opacity:.8; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Toggle dark/light">🌙 / ☀️</label>
+
+<main class="report">
+  <h1>Spec Check — CJK / Unicode Filename Read</h1>
+  <p class="sub">Issue #14 · <code>2026-06-17-cjk-filename-read-design.md</code> · spec_hash <code>a3d7cc7601ed0ff1</code> · run 2026-06-17</p>
+  <span class="verdict-banner">VERDICT: OK</span>
+
+  <h2>Chain</h2>
+  <figure class="rpt-flow">
+    <div class="node muted">intent — (none)</div>
+    <div class="arrow"></div>
+    <div class="node">spec — this file</div>
+  </figure>
+  <p class="meta">No intent doc found for topic <code>cjk-filename-read</code>; chain.intent = null (non-blocking).</p>
+
+  <h2>Phase results</h2>
+  <figure class="rpt-states">
+    <div class="state">structure<small>passed · 0</small></div>
+    <div class="edge"></div>
+    <div class="state">coverage<small>passed · 0</small></div>
+    <div class="edge"></div>
+    <div class="state active">clarity<small>passed · 1 INFO</small></div>
+    <div class="edge"></div>
+    <div class="state">consistency<small>passed · baseline</small></div>
+  </figure>
+  <table class="rpt-table">
+    <thead><tr><th>Phase</th><th>Status</th><th>New findings</th><th>Checklist</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge b-pass">passed</span></td><td>0</td><td>No placeholders; §3 ref valid; Design 1–4 sequential; no dup headings.</td></tr>
+      <tr><td>coverage</td><td><span class="badge b-pass">passed</span></td><td>0</td><td>All 5 tasks covered; no orphan requirements; no contradictions.</td></tr>
+      <tr><td>clarity</td><td><span class="badge b-pass">passed</span></td><td>1</td><td>DoD present (§Verification); one cosmetic term inconsistency (F-001).</td></tr>
+      <tr><td>consistency</td><td><span class="badge b-pass">passed</span></td><td>0</td><td>First run — baseline section hashes recorded.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Findings</h2>
+  <table class="rpt-table">
+    <thead><tr><th>ID</th><th>Severity</th><th>Section</th><th>Text</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>F-001</td>
+        <td><span class="badge b-info">INFO</span></td>
+        <td><code>### 3. Diagnostic log (diagnose)</code></td>
+        <td>Parent dirents cap stated inconsistently — “≤20” in the log example, “~20” in prose. Pick one exact number.</td>
+        <td><span class="badge b-open">open</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Summary</h2>
+  <div class="cards">
+    <div class="card crit"><div class="n">0</div><div class="l">CRITICAL open</div></div>
+    <div class="card warn"><div class="n">0</div><div class="l">WARNING open</div></div>
+    <div class="card info"><div class="n">1</div><div class="l">INFO open</div></div>
+  </div>
+  <p class="meta">INFO findings do not block. Verdict: <strong>OK</strong>.</p>
+
+  <h2>Spec summary — requirements</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Section</th><th>Requirement</th></tr></thead>
+    <tbody>
+      <tr><td>Problem</td><td>ingest/format fail “cannot read file” for non-ASCII filenames. Root cause confirmed on Linux: NFC/NFD mismatch raises <code>ENOENT</code> on byte-exact FS. Pure Han ideographs are NOT decomposable (NFC==NFD) → unaffected; diagnostic must detect that. Source note is the primary failing read.</td></tr>
+      <tr><td>Scope</td><td>Platform-independent; two centralized changes in <code>src/vault-tools.ts</code> (no caller changes). Out of scope: bulk re-normalization, UI.</td></tr>
+      <tr><td>Design 1 — <code>resolveOnDiskPath</code></td><td>Return existing on-disk form (as-is → NFC → NFD via <code>adapter.exists</code>); else caller form for new files.</td></tr>
+      <tr><td>Design 2 — self-healing read</td><td>Hot path unchanged; on not-found → diagnose + retry resolved form; rethrow original error if no form matches.</td></tr>
+      <tr><td>Design 3 — diagnostic</td><td><code>console.warn</code> with filename codepoints (hex), nfc!=nfd, per-form retry result, parent dirents (on-disk form).</td></tr>
+      <tr><td>Design 4 — write-guard</td><td>Write resolves target via <code>resolveOnDiskPath</code> to avoid duplicating a recovered file (ingest backlink write to source, <code>ingest.ts:510</code>).</td></tr>
+      <tr><td>Edge cases</td><td>Non-not-found errors bypass; mobile supported (<code>adapter.exists</code>); <code>readAll</code> recovers; detectDomain/source_paths noted as follow-up.</td></tr>
+      <tr><td>Verification</td><td>No test suite → <code>npm run build</code> + lint clean; standalone probe (NFD on disk, read NFC path recovers, write no dup dirent); <code>lat check</code> + <code>lat.md</code> update.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Success criteria</h2>
+  <ul>
+    <li>build &amp; lint clean</li>
+    <li>probe recovers an NFD-named file via the NFC path; write produces no duplicate dirent</li>
+    <li><code>lat check</code> passes</li>
+  </ul>
+
+  <details>
+    <summary>Coverage map — tasks → requirements</summary>
+    <ul>
+      <li>Fix CJK/Unicode read failure → Design 2</li>
+      <li>Platform-independent → Scope + <code>resolveOnDiskPath</code> (via <code>exists</code>)</li>
+      <li>Diagnostics first (codepoints, distinguish hanzi) → Design 3</li>
+      <li>Cover <strong>source notes</strong>, not only wiki → Problem + centralized read</li>
+      <li>Write-guard against duplication → Design 4</li>
+    </ul>
+  </details>
+</main>
+</body>
+</html>
