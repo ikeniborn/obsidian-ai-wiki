@@ -26,6 +26,10 @@ review:
       text: "Spec footer 'Branch workflow' says the PR targets dev, never master. Plan Task 5 targets master, following project CLAUDE.md (newer authority) over the stale spec footer. Documented deviation (plan Decision 2); plan contradicts spec text."
       verdict: accepted
       verdict_at: 2026-06-17
+result_check:
+  verdict: OK
+  plan_hash: c1f6de1fdb471900
+  last_run: 2026-06-17
 chain:
   intent: null
   spec: docs/superpowers/specs/2026-06-17-cjk-filename-read-design.md
