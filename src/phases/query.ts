@@ -163,12 +163,12 @@ export async function* runQuery(
   const systemPrompt = render(queryTemplate, {
     domain_name: domain.name,
     entity_types_block: entityTypesBlock,
-    index_block: indexContent ? `\nВики-индекс (_index.md):\n${indexContent}` : "",
+    index_block: indexContent ? `\nWiki index (_index.md):\n${indexContent}` : "",
   });
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },
-    { role: "user", content: `Вопрос: ${question}\n\nWiki-страницы:\n${contextBlock}` },
+    { role: "user", content: `Question: ${question}\n\nWiki pages:\n${contextBlock}` },
   ];
 
   const params = buildChatParams(model, messages, opts, true);
@@ -384,6 +384,6 @@ function buildEntityTypesBlock(domain: DomainEntry): string {
   const types = domain.entity_types
     .map((et) => `  - ${et.type}: ${et.description}`)
     .join("\n");
-  const notes = domain.language_notes ? `\nЯзыковые правила: ${domain.language_notes}` : "";
-  return `Типы сущностей домена «${domain.name}»:\n${types}${notes}`;
+  const notes = domain.language_notes ? `\nLanguage rules: ${domain.language_notes}` : "";
+  return `Entity types of the domain "${domain.name}":\n${types}${notes}`;
 }

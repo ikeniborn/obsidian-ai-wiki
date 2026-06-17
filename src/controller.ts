@@ -265,9 +265,9 @@ export class WikiController {
     view.setChatRunning();
 
     const OPERATION_LABELS: Partial<Record<WikiOperation, string>> = {
-      lint: "Lint-проверка wiki",
-      ingest: "Извлечение знаний (ingest)",
-      query: "Ответ на запрос (query)",
+      lint: "Wiki lint check",
+      ingest: "Knowledge extraction (ingest)",
+      query: "Query answer (query)",
     };
     const operationHeader = OPERATION_LABELS[operation] ?? operation;
 

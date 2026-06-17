@@ -1,54 +1,42 @@
 # Wiki Schema
 
-## Язык и стиль
-- Основной язык: русский
-- Технические термины не переводить: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML
-- Имена систем — оригинальное написание (RT.DataExporter, CRM B2C, ЦХД)
-- Аббревиатуры расшифровывать при первом использовании на странице
-- Стиль: нейтральный, информативный, без оценочных суждений
-- Запрещено: "Очевидно, что...", "Лучший способ...", местоимения "я", "мы", "наш"
+## Language and style
+- Primary language: follow the configured output-language directive (from settings); when it is "auto", match the source/article language.
+- Do not translate technical terms: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML
+- System names — keep the original spelling (RT.DataExporter, CRM B2C, ЦХД)
+- Expand abbreviations on first use on the page
+- Style: neutral, informative, no value judgements
+- Forbidden: "Obviously...", "The best way...", the pronouns "I", "we", "our"
 
-## Именование файлов и папок
-- Файлы: kebab-case, кириллица допустима, без пробелов и спецсимволов кроме дефиса
-  - Примеры: `версионирование-scd.md`, `clickhouse-обзор.md`
-- Папки доменов: нижний регистр, латиница (`ai/`, `databases/`)
-- Заголовок H1: русское название; техтермин в скобках при необходимости
+## File and folder naming
+- Files: kebab-case, Cyrillic allowed, no spaces or special characters except the hyphen
+  - Examples: `версионирование-scd.md`, `clickhouse-обзор.md`
+- Domain folders: lowercase, Latin script (`ai/`, `databases/`)
+- H1 heading: the page title in the configured output language; a technical term in parentheses when needed
 
-## Структура страницы (обязательный порядок)
-1. Frontmatter (YAML)
-2. Заголовок H1
-3. Вводный абзац — 1-3 предложения без заголовка, сразу после H1
-4. `## Основные характеристики` — ключевые свойства и параметры
-
-## Опциональные разделы
-- `## Применение в контексте [Домен]`
-- `## Примеры`
-- `## Ограничения`
-- `## Best Practices`
-- `## Связанные концепции` — только если нужен пояснительный контекст к связям; без описательного контекста раздел не создавать
-- `## История изменений`
+{{section_conventions}}
 
 ## Frontmatter
 
-| Поле | Правило |
+| Field | Rule |
 |------|---------|
-| `wiki_sources` | Массив реальных путей от корня репозитория. Только прочитанные файлы. При UPDATE — добавлять, не удалять. Тип свойства в Obsidian: **Links** (не list/text) — только тогда ссылки участвуют в Graph View. Значения обязательно в формате `[[page-name]]`: `["[[page-a]]", "[[page-b]]"] |
+| `wiki_sources` | Array of real paths from the repository root. Read files only. On UPDATE — add, do not remove. Obsidian property type: **Links** (not list/text) — only then do the links participate in Graph View. Values must be in the `[[page-name]]` format: `["[[page-a]]", "[[page-b]]"] |
 | `wiki_updated` | YYYY-MM-DD |
-| `wiki_status` | `stub` (<2 источников, <10 предложений) / `developing` (≥2 источника, ≥10 предложений, основные разделы заполнены) / `mature` (≥4 источника, все разделы) |
-| `wiki_type` | Тип файла: `page \| index \| log \| schema`. Только для служебных файлов (`_index.md`, `_log.md`, `_wiki_schema.md`). Обычные страницы не указывают это поле. |
-| `tags` | YAML-список: `[category/subcategory, domain/topic]`. Иерархия через `/`, строчные, без пробелов, без `#`. Переиспользуй теги из существующих страниц домена; создавай новые по той же схеме. Obsidian распознаёт ключ `tags` автоматически — тип явно не указывать. |
-| `aliases` | Аббревиатуры, английские варианты, синонимы |
-| `wiki_outgoing_links` | Массив WikiLinks на связанные страницы. Тип свойства в Obsidian: **Links** (не list/text) — только тогда ссылки участвуют в Graph View. Значения обязательно в формате `[[page-name]]`: `["[[page-a]]", "[[page-b]]"]`. Пустой массив допустим. |
-| `wiki_external_links` | Массив внешних URL (`http://` или `https://`). Не формируют граф Obsidian — только справочные ресурсы и документация. |
+| `wiki_status` | `stub` (<2 sources, <10 sentences) / `developing` (≥2 sources, ≥10 sentences, main sections filled in) / `mature` (≥4 sources, all sections) |
+| `wiki_type` | File type: `page \| index \| log \| schema`. Only for service files (`_index.md`, `_log.md`, `_wiki_schema.md`). Regular pages do not set this field. |
+| `tags` | YAML list: `[category/subcategory, domain/topic]`. Hierarchy via `/`, lowercase, no spaces, no `#`. Reuse tags from existing domain pages; create new ones following the same scheme. Obsidian recognizes the `tags` key automatically — do not set the type explicitly. |
+| `aliases` | Abbreviations, English variants, synonyms |
+| `wiki_outgoing_links` | Array of WikiLinks to related pages. Obsidian property type: **Links** (not list/text) — only then do the links participate in Graph View. Values must be in the `[[page-name]]` format: `["[[page-a]]", "[[page-b]]"]`. An empty array is allowed. |
+| `wiki_external_links` | Array of external URLs (`http://` or `https://`). They do not form the Obsidian graph — reference resources and documentation only. |
 
-## Частые ошибки (запрещено)
+## Common mistakes (forbidden)
 
-| Ошибка | Почему плохо | Правильно |
+| Mistake | Why it is bad | Correct |
 |--------|-------------|-----------|
-| `tags: - "[[wiki_fin_...]]"` | WikiLink не является тегом; валидатор удалит | Ставь в `wiki_outgoing_links` |
-| `tags: - {type: ..., name: ...}` | tags — только строки | `tags: - finance/technical-analysis` |
-| `wiki_outgoing_links: ["[[a]]", "[[b]]"]` | Inline JSON не парсится wiki-link-validator | Block list: `- "[[a]]"` на отдельных строках |
-| Ссылка в теле без записи в `wiki_outgoing_links` | Граф Obsidian не видит связь | Каждый `[[link]]` в теле → в `wiki_outgoing_links` |
+| `tags: - "[[wiki_fin_...]]"` | A WikiLink is not a tag; the validator will remove it | Put it in `wiki_outgoing_links` |
+| `tags: - {type: ..., name: ...}` | tags — strings only | `tags: - finance/technical-analysis` |
+| `wiki_outgoing_links: ["[[a]]", "[[b]]"]` | Inline JSON is not parsed by the wiki-link-validator | Block list: `- "[[a]]"` on separate lines |
+| A link in the body without a record in `wiki_outgoing_links` | The Obsidian graph does not see the connection | Every `[[link]]` in the body → in `wiki_outgoing_links` |
 
 ## Forbidden Frontmatter Patterns
 
@@ -75,10 +63,10 @@
 
 `wiki_outgoing_links` MUST contain every `[[link]]` found in the page body.
 
-## Контент
-- Синтез, не копирование — переработать информацию из источников
-- Дословные цитаты только в code-блоках (SQL, конфигурации)
-- При добавлении информации из нового источника — указывать дату и источник в `## История изменений`
-- Запрещено: placeholder-текст (TODO, "см. источник"), пустые разделы, удаление существующей информации
-- Таблицы: markdown с выравниванием (`| Параметр | Значение |` + `|----------|----------|`)
-- Кодовые блоки: всегда указывать язык (` ```sql `, ` ```yaml `, ` ```json `)
+## Content
+- Synthesis, not copying — rework the information from the sources
+- Verbatim quotes only in code blocks (SQL, configurations)
+- When adding information from a new source — record the date and source in the change-history section (see the section conventions above)
+- Forbidden: placeholder text (TODO, "see source"), empty sections, removing existing information
+- Tables: markdown with alignment (`| Parameter | Value |` + `|----------|----------|`)
+- Code blocks: always specify the language (` ```sql `, ` ```yaml `, ` ```json `)

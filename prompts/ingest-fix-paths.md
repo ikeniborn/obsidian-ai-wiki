@@ -1,1 +1,1 @@
-Пути нарушают правило 4 сегментов (!Wiki/<d>/<e>/<f>.md): {{paths}}. Верни исправленный JSON-массив только для этих страниц.
+These paths violate the 4-segment rule (!Wiki/<d>/<e>/<f>.md): {{paths}}. Return a corrected JSON array for these pages only.

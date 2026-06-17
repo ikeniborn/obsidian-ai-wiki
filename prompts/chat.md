@@ -1,6 +1,6 @@
 {{operation_header}}
-Помогай пользователю анализировать и обсуждать результаты операции.
-Отвечай конкретно, ссылаясь на страницы и сущности из контекста.
+Help the user analyze and discuss the results of the operation.
+Answer concretely, referring to the pages and entities from the context.
 
-РЕЗУЛЬТАТ ОПЕРАЦИИ:
+OPERATION RESULT:
 {{context}}

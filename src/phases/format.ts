@@ -134,12 +134,12 @@ export async function* runFormat(
 
   const visionDescBlock = visionDescriptions.size > 0
     ? [
-        "При наличии описаний вложений добавь после <<<FORMATTED>>> дополнительные маркеры:",
+        "If there are attachment descriptions, add extra markers after <<<FORMATTED>>>:",
         "<<<VISION_COUNT>>>",
-        "<количество описаний, целое число>",
+        "<number of descriptions, an integer>",
         "<<<EMBEDS>>>",
-        "<пути через |: img/a.png|img/b.png>",
-        "Эти маркеры ставь ПОСЛЕ formatted и ДО <<<END>>>.",
+        "<paths separated by |: img/a.png|img/b.png>",
+        "Place these markers AFTER formatted and BEFORE <<<END>>>.",
       ].join("\n")
     : "";
 
@@ -156,10 +156,10 @@ export async function* runFormat(
     for (const [path, desc] of visionDescriptions) {
       items.push(`### ![[${path}]]\n${desc}`);
     }
-    visionBlock = `\n---\nОПИСАНИЯ ВЛОЖЕНИЙ (vision-распознавание; интегрируй СРАЗУ ПОД соответствующей вставкой \`![[путь]]\` как структурированный markdown — таблица/список/код по форме исходника; для ДИАГРАММ сохрани оба элемента: сначала текстовое описание, затем блок \`\`\`mermaid\`\`\` — не выбрасывай ни описание, ни mermaid; НЕ оборачивай в blockquote, НЕ добавляй маркер [Vision], НЕ цитируй пути):\n${items.join("\n\n")}`;
+    visionBlock = `\n---\nATTACHMENT DESCRIPTIONS (vision recognition; integrate IMMEDIATELY BELOW the corresponding \`![[path]]\` embed as structured markdown — table/list/code following the source's form; for DIAGRAMS keep both elements: first the text description, then a \`\`\`mermaid\`\`\` block — do not drop either the description or the mermaid; do NOT wrap in a blockquote, do NOT add a [Vision] marker, do NOT quote the paths):\n${items.join("\n\n")}`;
   }
 
-  const userInitial = `Исходный файл: ${filePath}\n---\n${original}${visionBlock}`;
+  const userInitial = `Source file: ${filePath}\n---\n${original}${visionBlock}`;
 
   const imagePaths = hasVision ? extractImagePaths(original) : [];
 
@@ -247,7 +247,7 @@ export async function* runFormat(
     yield { kind: "tool_result", ok: false, preview: "invalid sentinel — retrying" };
     yield { kind: "assistant_text", delta: "\n[Sentinel невалиден — повторяю запрос]\n" };
     const zodHint = parsedResult.hint;
-    const retrySystemContent = systemContent + `\n\nПредыдущая попытка не прошла: ${zodHint}. Исправь и верни заново используя маркеры <<<REPORT>>>...<<<END>>>.`;
+    const retrySystemContent = systemContent + `\n\nThe previous attempt failed: ${zodHint}. Fix it and return again using the markers <<<REPORT>>>...<<<END>>>.`;
     const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: "system", content: retrySystemContent },
       { role: "user", content: userContent },

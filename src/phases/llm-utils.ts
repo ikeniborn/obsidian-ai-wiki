@@ -13,6 +13,60 @@ export function langInstruction(lang: OutputLanguage): string {
   }
 }
 
+/**
+ * Mandatory + optional wiki section headings, rendered in the configured output language.
+ * Fed into `_wiki_schema.md` via the `{{section_conventions}}` placeholder so generated
+ * pages use headings that match the selected language. `auto` falls back to Russian,
+ * preserving the historical default.
+ */
+export function wikiSections(lang: OutputLanguage): string {
+  const headings = {
+    ru: {
+      mandatory: "## Основные характеристики",
+      usage: "## Применение в контексте [Домен]",
+      examples: "## Примеры",
+      limitations: "## Ограничения",
+      best: "## Best Practices",
+      related: "## Связанные концепции",
+      history: "## История изменений",
+    },
+    en: {
+      mandatory: "## Key characteristics",
+      usage: "## Usage in the [Domain] context",
+      examples: "## Examples",
+      limitations: "## Limitations",
+      best: "## Best Practices",
+      related: "## Related concepts",
+      history: "## Change history",
+    },
+    es: {
+      mandatory: "## Características principales",
+      usage: "## Uso en el contexto de [Dominio]",
+      examples: "## Ejemplos",
+      limitations: "## Limitaciones",
+      best: "## Best Practices",
+      related: "## Conceptos relacionados",
+      history: "## Historial de cambios",
+    },
+  };
+  const h = lang === "en" ? headings.en : lang === "es" ? headings.es : headings.ru;
+  return [
+    "Page structure (mandatory order). The headings below are already in the configured output language — use them verbatim:",
+    "1. Frontmatter (YAML)",
+    "2. H1 heading — the page title",
+    "3. Intro paragraph — 1-3 sentences without a heading, immediately after H1",
+    `4. ${h.mandatory} — key properties and parameters (MANDATORY on every page)`,
+    "",
+    "Optional sections (include only when relevant, use these exact headings):",
+    `- ${h.usage}`,
+    `- ${h.examples}`,
+    `- ${h.limitations}`,
+    `- ${h.best}`,
+    `- ${h.related} — only when there is explanatory context for the links; do not create it without descriptive context`,
+    `- ${h.history} — record the date and source when adding information from a new source`,
+  ].join("\n");
+}
+
 /** Remove <think>...</think> blocks leaked into content by thinking models. */
 export function stripThinking(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
@@ -123,12 +177,12 @@ function prependBaseContract(
   return [{ role: "system", content: baseContract }, ...messages];
 }
 
-/** Appends `## Язык\n<directive>` to the first system message. */
+/** Appends `## Language\n<directive>` to the first system message. */
 function injectLanguageDirective(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   lang: OutputLanguage,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
-  const directive = `## Язык\n${langInstruction(lang)}`;
+  const directive = `## Language\n${langInstruction(lang)}`;
   const firstSystem = messages.findIndex((m) => m.role === "system");
   if (firstSystem >= 0) {
     const updated = [...messages];
@@ -253,7 +307,7 @@ function injectSystemPrompt(
   systemPrompt: string,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   if (!systemPrompt) return messages;
-  const section = `## Уточнение\n${systemPrompt}`;
+  const section = `## Clarification\n${systemPrompt}`;
   const firstSystem = messages.findIndex((m) => m.role === "system");
   if (firstSystem >= 0) {
     const updated = [...messages];
