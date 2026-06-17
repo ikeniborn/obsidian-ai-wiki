@@ -14,6 +14,8 @@ Persists domain mutations from events via `DomainStore`. `logEvent` writes JSONL
 
 `mobileFetch` (mobile LLM HTTP path) must convert `Headers` instances to `Record<string, string>` before `requestUrl` — the OpenAI SDK passes a `Headers` class instance, and without conversion `Content-Type`/`Authorization` are silently dropped.
 
+Dispatch passes **vault-relative** paths (Obsidian `TFile.path`, forward slashes) to operations — never `adapter.getFullPath()`. The phase layer uses `path-browserify` (POSIX), whose `isAbsolute` does not recognise Windows drive paths (`D:\…`); feeding it an OS-absolute path makes `runIngest` re-root it under the vault, and the adapter then doubles the prefix → `ENOENT` on CJK and non-CJK paths alike (issue #14). `runIngest` re-derives the absolute path from `vaultRoot` for domain detection.
+
 ## AgentRunner
 
 Stateless execution engine (`src/agent-runner.ts`). Receives a `RunRequest`, selects LLM call options per operation, and delegates to the correct phase function. Wraps the LLM client in `wrapWithJsonFallback` at construction.

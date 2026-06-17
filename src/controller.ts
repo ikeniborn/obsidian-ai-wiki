@@ -189,8 +189,12 @@ export class WikiController {
   async ingestActive(domainId?: string): Promise<void> {
     const file = this.app.workspace.getActiveFile();
     if (!file) { new Notice(i18n().ctrl.noActiveFile); return; }
-    const abs = (this.app.vault.adapter as { getFullPath: (p: string) => string }).getFullPath(file.path);
-    await this.dispatch("ingest", [abs], domainId);
+    // Pass the vault-relative path (forward slashes), NOT adapter.getFullPath():
+    // an OS-absolute Windows path ("D:\…") is not recognised as absolute by
+    // path-browserify, so runIngest re-roots it under the vault and the adapter
+    // doubles the prefix → ENOENT (issue #14). runIngest re-derives the absolute
+    // path from vaultRoot itself.
+    await this.dispatch("ingest", [file.path], domainId);
   }
 
   async query(question: string, domainId?: string): Promise<void> {
