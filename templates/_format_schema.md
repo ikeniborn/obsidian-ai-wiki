@@ -1,54 +1,54 @@
-# Format Schema (правила форматирования не-wiki страниц)
+# Format Schema (formatting rules for non-wiki pages)
 
 ## Frontmatter
 
-| Поле | Правило |
+| Field | Rule |
 |------|---------|
-| `tags` | YAML-список: `[category/subcategory, domain/topic]`. Иерархия через `/`, строчные, без пробелов, без `#`. Переиспользуй теги из существующих страниц; создавай новые по той же схеме. Только при наличии тематической классификации. |
-| `aliases` | Аббревиатуры, синонимы, английские варианты |
-| `created` | YYYY-MM-DD при наличии в источнике или при первом форматировании |
-| `updated` | YYYY-MM-DD текущая дата форматирования |
-| `external_links` | Массив URL — только если в теле есть `http(s)://` ссылки |
-| `related` | Массив `[[wikilinks]]` — только если в теле уже встречаются ссылки на другие страницы |
+| `tags` | YAML list: `[category/subcategory, domain/topic]`. Hierarchy via `/`, lowercase, no spaces, no `#`. Reuse tags from existing pages; create new ones following the same scheme. Only when a thematic classification exists. |
+| `aliases` | Abbreviations, synonyms, English variants |
+| `created` | YYYY-MM-DD when present in the source or at first formatting |
+| `updated` | YYYY-MM-DD the current formatting date |
+| `external_links` | Array of URLs — only if the body has `http(s)://` links |
+| `related` | Array of `[[wikilinks]]` — only if the body already contains links to other pages |
 
-Поля `wiki_*` — не включать в вывод. Они управляются программно и будут восстановлены автоматически.
+The `wiki_*` fields — do not include them in the output. They are managed programmatically and will be restored automatically.
 
-## Структура
+## Structure
 
-- H1 — название страницы
-- Вводный абзац 1-3 предложения сразу после H1, без подзаголовка
-- `##` разделы по логике контента; иерархия без скачков (H2 → H3 → H4)
-- Запрещены пустые разделы и placeholder-текст
+- H1 — the page title
+- Intro paragraph 1-3 sentences immediately after H1, without a subheading
+- `##` sections by content logic; hierarchy without jumps (H2 → H3 → H4)
+- Empty sections and placeholder text are forbidden
 
-## Таблицы
+## Tables
 
-Markdown с выравниванием. Применять при структурных перечислениях параметров/сравнений. Не превращать повествовательный текст в таблицы.
+Markdown with alignment. Use for structured enumerations of parameters/comparisons. Do not turn narrative text into tables.
 
 ## Mermaid
 
-` ```mermaid ` блоки для процессов, последовательностей, связей.
-- Описанные в тексте процессы → flowchart/sequenceDiagram
-- Содержимое схем из изображений (только при vision-backend) → отдельный mermaid-блок ниже изображения. Само изображение сохраняется.
+` ```mermaid ` blocks for processes, sequences, relationships.
+- Processes described in text → flowchart/sequenceDiagram
+- Content of diagrams from images (vision backend only) → a separate mermaid block below the image. The image itself is preserved.
 
-## Изображения
+## Images
 
-- Каждой картинке — описательная подпись непосредственно под ней
-- При `has_vision=true`: дополнительно текстовое описание. Для схем/диаграмм — структурированное логическое описание смысла (назначение, компоненты, как связан поток), а не дословная транскрипция элементов; ниже при необходимости mermaid-блок (процесс/архитектура) или таблица (сетка/матрица). Для прочих изображений — связный текст или таблица параметров.
-- При `has_vision=false`: используем только alt и существующие подписи; новой информации не сочиняем
+- Each image gets a descriptive caption directly below it
+- When `has_vision=true`: an additional text description. For diagrams/schemes — a structured logical description of the meaning (purpose, components, how the flow is connected), not a verbatim transcription of elements; below, when needed, a mermaid block (process/architecture) or a table (grid/matrix). For other images — coherent text or a parameter table.
+- When `has_vision=false`: use only alt and existing captions; do not invent new information
 
-## Код
+## Code
 
-Fenced blocks всегда с указанием языка.
+Fenced blocks always with a language tag.
 
-## Стиль
+## Style
 
-- Нейтральный, информативный, без оценочных суждений
-- Технические термины — оригинальное написание (SQL, API, LLM)
-- Запрещено: «очевидно», «лучший способ», местоимения «я/мы/наш»
+- Neutral, informative, no value judgements
+- Technical terms — original spelling (SQL, API, LLM)
+- Forbidden: "obviously", "the best way", the pronouns "I/we/our"
 
-## Жёсткие запреты
+## Hard prohibitions
 
-- Не добавлять факты, отсутствующие в исходнике (исключение: текстовое извлечение из изображений при `has_vision=true`)
-- Не удалять факты
-- Не искажать смысл; перефраз для ясности разрешён
-- Все изменения перечислять в `report`
+- Do not add facts absent from the source (exception: text extraction from images when `has_vision=true`)
+- Do not remove facts
+- Do not distort the meaning; rephrasing for clarity is allowed
+- List all changes in `report`

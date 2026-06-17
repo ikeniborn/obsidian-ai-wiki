@@ -25,7 +25,7 @@ async function checkNativeAvailability(baseUrl: string, apiKey: string, model: s
         url: `${baseUrl.replace(/\/$/, "")}/chat/completions`,
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model, messages: [{ role: "user", content: "Привет, AI Wiki! Поработаем?" }], max_tokens: 50, stream: false }),
+        body: JSON.stringify({ model, messages: [{ role: "user", content: "Hi, AI Wiki! Ready to work?" }], max_tokens: 50, stream: false }),
         throw: false,
       }),
       timeoutP,

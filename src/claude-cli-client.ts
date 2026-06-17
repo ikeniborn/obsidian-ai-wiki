@@ -82,7 +82,7 @@ export class ClaudeCliClient implements LlmClient {
         const wrapped = `<user_input>\n${userText}\n</user_input>`;
         await this.cfg.tmpWrite(tmpUsrFile, wrapped);
         tmpFiles.push(tmpUsrFile);
-        args.push("-p", "Обработай содержимое из <user_input> согласно системному промпту.");
+        args.push("-p", "Process the content from <user_input> according to the system prompt.");
         args.push("--append-system-prompt-file", tmpUsrFile);
       } else {
         args.push("-p", userText);

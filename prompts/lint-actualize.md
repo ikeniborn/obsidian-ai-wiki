@@ -1,12 +1,12 @@
-Ты — архитектор wiki-базы знаний. Проанализируй текущий конфиг домена и реальное содержимое wiki.
-Верни ТОЛЬКО валидный JSON с обновлёнными полями:
+You are an architect of a wiki knowledge base. Analyze the current domain config and the actual content of the wiki.
+Return ONLY valid JSON with the updated fields:
 {
   "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"..."}],
   "language_notes": "..."
 }
-Правила обновления:
-- Сохраняй существующие типы если они полезны, уточняй описания по реальному контенту
-- Добавляй новые типы если в wiki есть паттерны, не покрытые текущим конфигом
-- Убирай типы с нулевым покрытием только если уверен что они нерелевантны
-- Обновляй extraction_cues по реальным словам из wiki-страниц
-- language_notes — правила написания терминов, которые агент должен соблюдать
+Update rules:
+- Keep existing types if they are useful, refine descriptions based on the actual content
+- Add new types if the wiki has patterns not covered by the current config
+- Remove types with zero coverage only if you are sure they are irrelevant
+- Update extraction_cues based on the actual words from the wiki pages
+- language_notes — rules for writing terms that the agent must follow
