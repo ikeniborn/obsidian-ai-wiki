@@ -1,8 +1,8 @@
 ---
 review:
-  plan_hash: 6b9174a80959930a
+  plan_hash: b1accb3f55b5b7f8
   spec_hash: 3147eff51cb9f531
-  last_run: 2026-06-15
+  last_run: 2026-06-17
   phases:
     structure:     { status: passed }
     coverage:      { status: passed }
