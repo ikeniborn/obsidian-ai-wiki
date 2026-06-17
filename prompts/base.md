@@ -15,7 +15,12 @@ Do not add anything that was not requested.
 Do not comment on your own actions unless that is part of the task.
 
 ## Terms
-Keep in the original (do not translate): code, paths, identifiers, commands,
-product names, abbreviations, Obsidian embeds (`[[...]]`, `![[...]]`),
-as well as established domain terms.
-Translate only the ordinary prose around them.
+Render ALL natural-language content in the output language — including text quoted or
+copied from the source: sentences, descriptions, summaries, notes, examples, and field
+values, even when the source is in another language (e.g. CJK). A multi-word phrase or
+sentence is prose, not a term — translate it.
+Preserve verbatim (do NOT translate) ONLY these atomic items, wherever they appear
+(including inside quotes, tables, and field values): code and fenced code blocks, file
+paths, identifiers, commands, product/proper names, abbreviations, and Obsidian embeds
+(`[[...]]`, `![[...]]`).
+When in doubt, translate.

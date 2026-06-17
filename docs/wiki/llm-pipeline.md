@@ -14,6 +14,8 @@ Assembles the final `messages[]` array for an LLM call (`src/phases/llm-utils.ts
 
 When `opts.outputLanguage` is set, appends a `## Language` directive (from `langInstruction`). Applies model params: `temperature`, `maxTokens`, `topP`, `response_format`, `thinkingBudgetTokens`. Thinking mode removes `response_format`, `temperature`, `top_p`.
 
+The `base.md` `## Terms` contract governs what survives translation: ALL natural-language content — including sentences, descriptions, notes, and field values quoted/copied from the source (e.g. CJK) — is rendered in the output language. Only atomic items stay verbatim: code and fenced code blocks, file paths, identifiers, commands, product/proper names, abbreviations, and Obsidian embeds. This prevents quoted source prose (e.g. eval-set prompt/expected fields) from leaking the source language onto generated pages.
+
 ## Evaluator Prompt Pattern
 
 Only phase that sends no system message to `buildChatParams` (`src/phases/evaluator.ts`). `prependBaseContract` creates `system = base.md` from scratch; `evaluator.md` renders into the user role — unlike all other phases where the phase prompt is the system message.
