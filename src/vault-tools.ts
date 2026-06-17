@@ -71,7 +71,10 @@ export class VaultTools {
   }
 
   async write(vaultPath: string, content: string): Promise<void> {
-    const segments = vaultPath.split("/").slice(0, -1);
+    // Overwrite an existing file in its on-disk normalization form instead of
+    // creating a duplicate in the caller's form. New files keep vaultPath as-is.
+    const target = await this.resolveOnDiskPath(vaultPath);
+    const segments = target.split("/").slice(0, -1);
     for (let i = 1; i <= segments.length; i++) {
       const partial = segments.slice(0, i).join("/");
       let exists = false;
@@ -81,19 +84,19 @@ export class VaultTools {
       }
     }
     if (this.vault) {
-      const indexed = this.vault.getAbstractFileByPath(vaultPath);
+      const indexed = this.vault.getAbstractFileByPath(target);
       if (indexed) {
         await this.vault.modify(indexed, content);
       } else {
         try {
-          await this.vault.create(vaultPath, content);
+          await this.vault.create(target, content);
         } catch {
           // Obsidian doesn't index hidden dirs (.config) — vault.create() throws if file exists on disk
-          await this.adapter.write(vaultPath, content);
+          await this.adapter.write(target, content);
         }
       }
     } else {
-      await this.adapter.write(vaultPath, content);
+      await this.adapter.write(target, content);
     }
   }
 
