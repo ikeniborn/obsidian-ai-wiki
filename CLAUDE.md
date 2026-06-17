@@ -13,6 +13,18 @@ After EVERY task, before responding to the user:
 
 ---
 
+# Branch workflow rules (REQUIRED — do not violate without approval)
+
+These rules govern all development. They must NOT be broken without explicit user agreement.
+
+1. **Every development starts from the `dev` branch.** Before starting work, merge `master` into `dev` so `dev` is up to date, then branch from there.
+2. **`fix` branches are created from `dev`** — never directly from `master`.
+3. **`fix` branches always merge back into `dev`** (or via a pull request targeting `dev`) — never directly into `master`.
+
+Do not deviate from this flow (e.g. branching from `master`, merging a `fix` into `master`) without first confirming with the user.
+
+---
+
 # What is lat.md?
 
 This project uses [lat.md](https://www.npmjs.com/package/lat.md) to maintain a structured knowledge graph of its architecture, design decisions, and test specs in the `lat.md/` directory. It is a set of cross-linked markdown files that describe **what** this project does and **why** — the domain concepts, key design decisions, business logic, and test specifications. Use it to ground your work in the actual architecture rather than guessing.
