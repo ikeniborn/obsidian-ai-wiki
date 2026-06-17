@@ -10,6 +10,7 @@ import lintTemplate from "../../prompts/lint.md";
 import lintActualizeTemplate from "../../prompts/lint-actualize.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
+import { wikiSections } from "./llm-utils";
 import { domainWikiFolder, domainIndexPath, WIKI_ROOT } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, filterStaleWikiLinks, validateAndRepairWikiPageFrontmatter, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
 import { checkGraphStructure, pageId, bfsExpand } from "../wiki-graph";
@@ -197,7 +198,7 @@ export async function* runLint(
 
     yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
     await ensureDomainConfig(vaultTools, wikiVaultPath);
-    const schemaContent = wikiSchemaTemplate;
+    const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(opts.outputLanguage ?? "auto") });
     const allFiles = await vaultTools.listFiles(wikiVaultPath);
     const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
     yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
@@ -273,8 +274,8 @@ export async function* runLint(
     const entityTypesBlock = buildEntityTypesBlock(domain);
     const systemContent = render(lintTemplate, {
       domain_name: domain.name,
-      entity_types_block: entityTypesBlock ? `\nТИПЫ СУЩНОСТЕЙ ДОМЕНА:\n${entityTypesBlock}` : "",
-      schema_block: schemaContent ? `\nКонвенции (_wiki_schema.md):\n${schemaContent}` : "",
+      entity_types_block: entityTypesBlock ? `\nDOMAIN ENTITY TYPES:\n${entityTypesBlock}` : "",
+      schema_block: schemaContent ? `\nConventions (_wiki_schema.md):\n${schemaContent}` : "",
     });
 
     yield { kind: "assistant_text", delta: `Evaluating domain "${domain.id}" quality...\n` };
@@ -310,7 +311,7 @@ export async function* runLint(
       const articleIssues = allStructuralIssues
         .split("\n")
         .filter(l => l.includes(articleName) || l.includes(targetPath))
-        .join("\n") || "Нет.";
+        .join("\n") || "None.";
 
       // Build user message
       const contextBlock = contextPaths
@@ -321,14 +322,14 @@ export async function* runLint(
         {
           role: "user",
           content: [
-            `Домен: ${domain.id} (${domain.name})`,
-            `Анализируемая статья: ${targetPath}`,
-            `Автоматические проблемы:\n${articleIssues}`,
+            `Domain: ${domain.id} (${domain.name})`,
+            `Article under analysis: ${targetPath}`,
+            `Automatic issues:\n${articleIssues}`,
             "",
             `--- ${targetPath} ---`,
             articleContent,
             "",
-            contextBlock ? `--- Контекст (связанные статьи) ---\n${contextBlock}` : "",
+            contextBlock ? `--- Context (related articles) ---\n${contextBlock}` : "",
           ].filter(l => l !== undefined).join("\n"),
         },
       ];
@@ -681,27 +682,27 @@ async function actualizeDomainConfig(
     {
       role: "user",
       content: [
-        `Домен: ${domain.id} (${domain.name})`,
+        `Domain: ${domain.id} (${domain.name})`,
         ``,
-        `Текущий конфиг:`,
+        `Current config:`,
         `\`\`\`json`,
         currentConfig,
         `\`\`\``,
         ``,
-        `Wiki-страницы (фрагменты):`,
-        pagesSnippet || "(нет страниц)",
+        `Wiki pages (snippets):`,
+        pagesSnippet || "(no pages)",
       ].join("\n"),
     },
   ];
 
   // JSON example appended to system prompt for stronger structural guidance.
   const systemContent = (messages[0].content as string) + `\n\n## Output JSON Example\n\n` + JSON.stringify({
-    reasoning: "Сохранил Process, добавил Contract по новым страницам.",
+    reasoning: "Kept Process, added Contract based on new pages.",
     entity_types: [
-      { type: "Process", description: "Бизнес-процесс", extraction_cues: ["BPMN","workflow"], wiki_subfolder: "processes" },
-      { type: "Contract", description: "Договор/SLA", extraction_cues: ["SLA","договор"], wiki_subfolder: "contracts" },
+      { type: "Process", description: "Business process", extraction_cues: ["BPMN","workflow"], wiki_subfolder: "processes" },
+      { type: "Contract", description: "Contract/SLA", extraction_cues: ["SLA","contract"], wiki_subfolder: "contracts" },
     ],
-    language_notes: "Использовать русский для бизнес-терминов.",
+    language_notes: "Use the configured output language for business terms.",
   }, null, 2);
   messages[0] = { role: "system", content: systemContent };
 

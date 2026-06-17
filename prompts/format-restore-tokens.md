@@ -1,2 +1,2 @@
-ВОССТАНОВИ ТОКЕНЫ: следующие значения из оригинала отсутствуют в форматированном тексте. Верни полный ответ используя маркеры <<<REPORT>>>...<<<END>>> где formatted содержит все перечисленные токены.
-Пропущенные: {{tokens}}
+RESTORE TOKENS: the following values from the original are missing in the formatted text. Return the full answer using the markers <<<REPORT>>>...<<<END>>> where formatted contains all the listed tokens.
+Missing: {{tokens}}

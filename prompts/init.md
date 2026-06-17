@@ -1,8 +1,8 @@
-Ты — архитектор wiki-базы знаний. Сгенерируй запись домена для domain-map.json.
-Верни ТОЛЬКО валидный JSON следующей структуры:
+You are an architect of a wiki knowledge base. Generate a domain entry for domain-map.json.
+Return ONLY valid JSON of the following structure:
 {
   "id": "{{domain_id}}",
-  "name": "Человекочитаемое название",
+  "name": "Human-readable name",
   "wiki_folder": "{{domain_id}}",
   "source_paths": [],
   "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"processes"}],
@@ -11,31 +11,30 @@
 {{schema_block}}
 {{index_block}}
 
-Включи поле `reasoning` первым в JSON-ответе: пошаговое обоснование выбранной структуры домена.
+Include the `reasoning` field first in the JSON response: a step-by-step rationale for the chosen domain structure.
 
 ## Output JSON Example
 
 {
-  "reasoning": "Проанализировал источники. Выявил сущности: Process, ServiceContract, Customer.",
+  "reasoning": "Analyzed the sources. Identified entities: Process, ServiceContract, Customer.",
   "id": "{{domain_id}}",
   "name": "Telecom Operations",
   "wiki_folder": "{{domain_id}}",
   "entity_types": [
     {
       "type": "Process",
-      "description": "Бизнес-процесс или шаг workflow",
-      "extraction_cues": ["BPMN", "workflow", "процесс"],
+      "description": "A business process or workflow step",
+      "extraction_cues": ["BPMN", "workflow", "process"],
       "min_mentions_for_page": 1,
       "wiki_subfolder": "processes"
     }
   ],
-  "language_notes": "Смесь русского/английского; сохраняй оригинальное написание product-имён."
+  "language_notes": "Mix of Russian/English; preserve the original spelling of product names."
 }
 
 ## Wiki Page Conventions
 
-Страницы wiki используют поле `tags` во frontmatter: иерархические теги (category/subcategory, строчные, через `/`, без `#`). При ingest LLM переиспользует теги из существующих страниц и создаёт новые по той же схеме.
+Wiki pages use the `tags` field in the frontmatter: hierarchical tags (category/subcategory, lowercase, separated by `/`, no `#`). During ingest the LLM reuses tags from existing pages and creates new ones following the same scheme.
 
-ПРАВИЛО wiki_subfolder: одно слово, без слэшей, без domain_id.
-Нельзя: "os/network", "os_network". Можно: "network", "processes", "protocols".
-
+wiki_subfolder RULE: one word, no slashes, no domain_id.
+Not allowed: "os/network", "os_network". Allowed: "network", "processes", "protocols".

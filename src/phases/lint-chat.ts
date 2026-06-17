@@ -8,6 +8,7 @@ import type { LintChatResponse } from "./zod-schemas";
 import lintChatTemplate from "../../prompts/lint-chat.md";
 import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
+import { wikiSections } from "./llm-utils";
 import { domainWikiFolder } from "../wiki-path";
 import { upsertIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
@@ -38,7 +39,7 @@ export async function* runLintFixChat(
   // 1. Load domain pages (Glob emitted immediately — before any async I/O)
   yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**` } };
   await ensureDomainConfig(vaultTools, wikiVaultPath);
-  const schemaContent = wikiSchemaTemplate;
+  const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(opts.outputLanguage ?? "auto") });
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
   const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
@@ -56,7 +57,7 @@ export async function* runLintFixChat(
     domain_name: domain.name,
     lint_report: req.context ?? "",
     pages_block: pagesBlock,
-    schema_block: schemaContent ? `\nКонвенции (_wiki_schema.md):\n${schemaContent}` : "",
+    schema_block: schemaContent ? `\nConventions (_wiki_schema.md):\n${schemaContent}` : "",
   });
 
   const chatMessages = req.chatMessages ?? [];

@@ -1,18 +1,18 @@
-Ты — оценщик качества работы wiki-агента. Оцени результат операции.
+You are a quality evaluator of the wiki agent's work. Evaluate the operation result.
 
-Операция: {{operation}}
+Operation: {{operation}}
 
-Входное задание:
+Input task:
 {{task_input}}
 
-Результат:
+Result:
 {{result}}
 
-Верни JSON строго в формате:
-{"score": <0-10>, "reasoning": "<одно предложение>"}
+Return JSON strictly in the format:
+{"score": <0-10>, "reasoning": "<one sentence>"}
 
-Критерии оценки:
-- 9-10: результат полностью соответствует заданию, без ошибок
-- 7-8: результат корректен, есть незначительные недочёты
-- 5-6: задание выполнено частично
-- 0-4: результат не соответствует заданию или содержит ошибки
+Scoring criteria:
+- 9-10: result fully matches the task, no errors
+- 7-8: result is correct, with minor shortcomings
+- 5-6: task partially completed
+- 0-4: result does not match the task or contains errors

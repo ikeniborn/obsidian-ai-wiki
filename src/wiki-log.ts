@@ -3,7 +3,7 @@ import type { VaultTools } from "./vault-tools";
 
 export interface IngestLogEntry {
   path: string;
-  action: "СОЗДАНА" | "ОБНОВЛЕНА" | "УДАЛЕНА" | "ОБЪЕДИНЕНА";
+  action: "CREATED" | "UPDATED" | "DELETED" | "MERGED";
   statusFrom?: string;
   statusTo?: string;
 }
@@ -22,31 +22,31 @@ function buildEntry(domainId: string, event: LogOperation): string {
   const lines: string[] = [header];
 
   if (event.op === "ingest") {
-    lines.push(`**Источник:** ${event.sourcePath}`);
-    lines.push(`**Токены:** ${event.outputTokens}`);
+    lines.push(`**Source:** ${event.sourcePath}`);
+    lines.push(`**Tokens:** ${event.outputTokens}`);
     lines.push("");
     for (const e of event.entries) {
-      if (e.action === "СОЗДАНА") {
-        lines.push(`- СОЗДАНА: ${e.path} (${e.statusTo ?? "unknown"})`);
-      } else if (e.action === "ОБНОВЛЕНА") {
+      if (e.action === "CREATED") {
+        lines.push(`- CREATED: ${e.path} (${e.statusTo ?? "unknown"})`);
+      } else if (e.action === "UPDATED") {
         const status = e.statusFrom ? `${e.statusFrom}→${e.statusTo}` : (e.statusTo ?? "unknown");
-        lines.push(`- ОБНОВЛЕНА: ${e.path} (${status})`);
-      } else if (e.action === "ОБЪЕДИНЕНА") {
-        lines.push(`- ОБЪЕДИНЕНА: ${e.path}`);
+        lines.push(`- UPDATED: ${e.path} (${status})`);
+      } else if (e.action === "MERGED") {
+        lines.push(`- MERGED: ${e.path}`);
       } else {
-        lines.push(`- УДАЛЕНА: ${e.path}`);
+        lines.push(`- DELETED: ${e.path}`);
       }
     }
   } else if (event.op === "lint") {
-    lines.push(`**Токены:** ${event.outputTokens}`);
-    lines.push(`**Проверено:** ${event.checkedCount} | **Исправлено:** ${event.fixed.length}`);
+    lines.push(`**Tokens:** ${event.outputTokens}`);
+    lines.push(`**Checked:** ${event.checkedCount} | **Fixed:** ${event.fixed.length}`);
     lines.push("");
-    for (const p of event.fixed) lines.push(`- ИСПРАВЛЕНА: ${p}`);
+    for (const p of event.fixed) lines.push(`- FIXED: ${p}`);
   } else {
-    lines.push(`**Файл:** ${event.filePath}`);
-    lines.push(`**Токены:** ${event.outputTokens}`);
+    lines.push(`**File:** ${event.filePath}`);
+    lines.push(`**Tokens:** ${event.outputTokens}`);
     lines.push("");
-    for (const p of event.fixed) lines.push(`- ИСПРАВЛЕНА: ${p}`);
+    for (const p of event.fixed) lines.push(`- FIXED: ${p}`);
   }
 
   lines.push("", "---");

@@ -25,7 +25,7 @@ export function findBrokenLinks(links: string[], knownStems: Set<string>): strin
 
 export function annotateBroken(text: string, broken: Set<string>): string {
   return text.replace(/\[\[([^\]|#/]+?)\]\]/g, (full: string, stem: string) => {
-    return broken.has(stem.trim()) ? `${full} *(нет в wiki)*` : full;
+    return broken.has(stem.trim()) ? `${full} *(not in wiki)*` : full;
   });
 }
 
@@ -46,7 +46,7 @@ export async function rewriteWithValidLinks(
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },
-    { role: "user", content: `Вопрос: ${question}\n\nОтвет для исправления:\n${originalAnswer}` },
+    { role: "user", content: `Question: ${question}\n\nAnswer to fix:\n${originalAnswer}` },
   ];
 
   const params = buildChatParams(model, messages, { ...opts, thinkingBudgetTokens: undefined }, false);

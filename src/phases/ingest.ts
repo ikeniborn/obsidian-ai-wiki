@@ -4,7 +4,7 @@ import type { DomainEntry } from "../domain";
 import { mergeEntityTypes } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import { buildChatParams, extractStreamDeltas } from "./llm-utils";
+import { buildChatParams, extractStreamDeltas, wikiSections } from "./llm-utils";
 import { parseWithRetry } from "./parse-with-retry";
 import { WikiPagesOutputSchema, EntitiesOutputSchema, MergedPageOutputSchema } from "./zod-schemas";
 import type { WikiPagesOutput, EntitiesOutput } from "./zod-schemas";
@@ -105,7 +105,7 @@ export async function* runIngest(
 
   await ensureDomainConfig(vaultTools, domainRoot);
   void graphDepth;
-  const schemaContent = wikiSchemaTemplate;
+  const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(opts.outputLanguage ?? "auto") });
   const indexContent = await tryRead(vaultTools, domainIndexPath(domainRoot));
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
   const nonMetaPaths = existingPaths.filter((f) => !f.endsWith("_index.md"));
@@ -355,7 +355,7 @@ export async function* runIngest(
             written.push(targetPath);
             yield { kind: "tool_result", ok: true, preview: `merged ← ${pageId(page.path)}` };
             const relTarget = targetPath.slice(wikiVaultPath.length + 1);
-            logEntries.push({ path: relTarget, action: "ОБЪЕДИНЕНА" });
+            logEntries.push({ path: relTarget, action: "MERGED" });
             if (merged.value.annotation) {
               try { await upsertIndexAnnotation(vaultTools, wikiVaultPath, hit.pid, merged.value.annotation, targetPath); } catch { /* non-critical */ }
             }
@@ -399,9 +399,9 @@ export async function* runIngest(
         : page.path;
       const statusTo = parseWikiStatus(repairedPage);
       if (existingContent === null) {
-        logEntries.push({ path: relPath, action: "СОЗДАНА", statusTo });
+        logEntries.push({ path: relPath, action: "CREATED", statusTo });
       } else {
-        logEntries.push({ path: relPath, action: "ОБНОВЛЕНА", statusFrom: parseWikiStatus(existingContent), statusTo });
+        logEntries.push({ path: relPath, action: "UPDATED", statusFrom: parseWikiStatus(existingContent), statusTo });
       }
 
       if (page.annotation) {
@@ -443,17 +443,17 @@ export async function* runIngest(
       try { await removeIndexAnnotation(vaultTools, wikiVaultPath, pageId(d.path)); } catch { /* non-critical */ }
       deletedPaths.push(d.path);
       const relPath = d.path.slice(wikiVaultPath.length + 1);
-      logEntries.push({ path: relPath, action: "УДАЛЕНА" });
+      logEntries.push({ path: relPath, action: "DELETED" });
       yield { kind: "tool_result", ok: true };
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: (e as Error).message };
     }
   }
 
-  const createdCount = logEntries.filter(e => e.action === "СОЗДАНА").length;
-  const updatedCount = logEntries.filter(e => e.action === "ОБНОВЛЕНА").length;
-  const mergedCount  = logEntries.filter(e => e.action === "УДАЛЕНА").length;
-  const dedupMergedCount = logEntries.filter(e => e.action === "ОБЪЕДИНЕНА").length;
+  const createdCount = logEntries.filter(e => e.action === "CREATED").length;
+  const updatedCount = logEntries.filter(e => e.action === "UPDATED").length;
+  const mergedCount  = logEntries.filter(e => e.action === "DELETED").length;
+  const dedupMergedCount = logEntries.filter(e => e.action === "MERGED").length;
   const resultText = buildIngestSummary(domain.id, sourceVaultPath, createdCount, updatedCount, mergedCount, dedupMergedCount, pages.length);
   yield { kind: "assistant_text", delta: resultText };
 
@@ -675,12 +675,12 @@ export function buildEntityTypesBlock(domain: DomainEntry, wikiVaultPath: string
       ? `${wikiVaultPath}/${et.wiki_subfolder}/<EntityName>.md`
       : `${wikiVaultPath}/<EntityName>.md`;
     return [
-      `### Тип: ${et.type}`,
-      `Описание: ${et.description}`,
-      `Ключевые слова: ${et.extraction_cues.join(", ")}`,
-      et.min_mentions_for_page != null ? `Мин. упоминаний для страницы: ${et.min_mentions_for_page}` : "",
-      et.wiki_subfolder ? `Подпапка в wiki: ${et.wiki_subfolder}` : "",
-      `Путь для сущностей этого типа: ${pathTemplate}`,
+      `### Type: ${et.type}`,
+      `Description: ${et.description}`,
+      `Keywords: ${et.extraction_cues.join(", ")}`,
+      et.min_mentions_for_page != null ? `Min. mentions for a page: ${et.min_mentions_for_page}` : "",
+      et.wiki_subfolder ? `Wiki subfolder: ${et.wiki_subfolder}` : "",
+      `Path for entities of this type: ${pathTemplate}`,
     ].filter(Boolean).join("\n");
   }).join("\n\n");
 }
@@ -691,15 +691,15 @@ function buildExtractMessages(
   domain: DomainEntry,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const entityTypesBlock = buildEntityTypesBlock(domain, "");
-  const langNotes = domain.language_notes ? `Языковые правила: ${domain.language_notes}` : "";
+  const langNotes = domain.language_notes ? `Language rules: ${domain.language_notes}` : "";
   const systemContent = render(ingestEntitiesTemplate, {
     domain_name: domain.name,
-    entity_types_block: entityTypesBlock || "(не заданы)",
+    entity_types_block: entityTypesBlock || "(none defined)",
     lang_notes: langNotes,
   });
   return [
     { role: "system", content: systemContent },
-    { role: "user", content: `Источник: ${sourcePath}\n\n${sourceContent}` },
+    { role: "user", content: `Source: ${sourcePath}\n\n${sourceContent}` },
   ];
 }
 
@@ -716,24 +716,24 @@ function buildIngestMessages(
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const existing = existingPages.size > 0
     ? [...existingPages.entries()].map(([p, c]) => `${p}:\n${c}`).join("\n\n")
-    : "Нет.";
+    : "None.";
 
   const today = new Date().toISOString().slice(0, 10);
   const entityTypesBlock = buildEntityTypesBlock(domain, wikiVaultPath);
-  const langNotes = domain.language_notes ? `Языковые правила: ${domain.language_notes}` : "";
+  const langNotes = domain.language_notes ? `Language rules: ${domain.language_notes}` : "";
 
   const forbiddenStemsBlock = sourceStems.size > 0
-    ? `ЗАПРЕЩЁННЫЕ ИМЕНА (источники в этом домене):\n${[...sourceStems].sort().map((s) => `- ${s}`).join("\n")}`
+    ? `FORBIDDEN NAMES (sources in this domain):\n${[...sourceStems].sort().map((s) => `- ${s}`).join("\n")}`
     : "";
 
   const systemContent = render(ingestTemplate, {
     domain_name: domain.name,
     domain_id: domain.id,
-    entity_types_block: entityTypesBlock || "(не заданы)",
+    entity_types_block: entityTypesBlock || "(none defined)",
     lang_notes: langNotes,
     wiki_path: wikiVaultPath,
     today,
-    schema_block: schemaContent ? `КОНВЕНЦИИ (_wiki_schema.md):\n${schemaContent}` : "",
+    schema_block: schemaContent ? `CONVENTIONS (_wiki_schema.md):\n${schemaContent}` : "",
     source_path: sourcePath,
     source_stem: sourcePath.split("/").pop()!.replace(/\.md$/, ""),
     forbidden_stems_block: forbiddenStemsBlock,
@@ -751,7 +751,7 @@ function buildIngestMessages(
     return head + snippet + tail;
   });
   const entitiesBlock = entityLines.length > 0
-    ? `\nИзвлечённые сущности:\n${entityLines.join("\n")}\n`
+    ? `\nExtracted entities:\n${entityLines.join("\n")}\n`
     : "";
 
   return [
@@ -759,15 +759,15 @@ function buildIngestMessages(
     {
       role: "user",
       content: [
-        `Домен: ${domain.id} (${domain.name})`,
-        `Wiki-папка: ${wikiVaultPath}`,
+        `Domain: ${domain.id} (${domain.name})`,
+        `Wiki folder: ${wikiVaultPath}`,
         ``,
-        `Источник: ${sourcePath}`,
+        `Source: ${sourcePath}`,
         sourceContent,
         ``,
-        `Существующие wiki-страницы:\n${existing}`,
+        `Existing wiki pages:\n${existing}`,
         entitiesBlock,
-        indexContent ? `\nИндекс wiki (_index.md):\n${indexContent}` : "",
+        indexContent ? `\nWiki index (_index.md):\n${indexContent}` : "",
       ].filter(Boolean).join("\n"),
     },
   ];

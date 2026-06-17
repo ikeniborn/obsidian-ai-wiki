@@ -1,14 +1,14 @@
 <!-- prompts/ingest-merge.md -->
-Ты объединяешь две вики-страницы об одной сущности в одну.
+You are merging two wiki pages about the same entity into one.
 
-СУЩЕСТВУЮЩАЯ СТРАНИЦА (сохрани её frontmatter, путь и wiki_sources):
+EXISTING PAGE (keep its frontmatter, path, and wiki_sources):
 {{existing}}
 
-НОВЫЙ ЧЕРНОВИК (та же тема, добавь уникальные факты из него):
+NEW DRAFT (same topic, add unique facts from it):
 {{incoming}}
 
-Правила:
-- Верни ОДНУ объединённую страницу. Не теряй факты ни из одной из них.
-- Сохрани frontmatter существующей страницы; добавь недостающие wiki_sources из черновика.
-- Не дублируй разделы; сливай близкие.
-- Формат ответа — строго JSON: { "content": "<полный markdown страницы>", "annotation": "<одна строка для индекса>" }.
+Rules:
+- Return ONE merged page. Do not lose facts from either of them.
+- Keep the existing page's frontmatter; add the missing wiki_sources from the draft.
+- Do not duplicate sections; merge close ones.
+- Response format — strictly JSON: { "content": "<full page markdown>", "annotation": "<one line for the index>" }.

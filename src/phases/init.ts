@@ -7,6 +7,7 @@ import { DomainEntrySchema } from "./zod-schemas";
 import schemaTemplate from "../../templates/_wiki_schema.md";
 import initTemplate from "../../prompts/init.md";
 import { render } from "./template";
+import { wikiSections } from "./llm-utils";
 import { runIngest } from "./ingest";
 import { GLOBAL_CONFIG_DIR, domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath } from "../wiki-path";
 import type { PageSimilarityService } from "../page-similarity";
@@ -149,7 +150,7 @@ export async function* runInitWithSources(
   }
 
   const initialDomainRoot = existing ? domainWikiFolder(existing.wiki_folder) : wikiRootGuess;
-  const schemaContent = schemaTemplate;
+  const schemaContent = render(schemaTemplate, { section_conventions: wikiSections(opts.outputLanguage ?? "auto") });
   const indexContent = await tryRead(vaultTools, domainIndexPath(initialDomainRoot));
 
   let annotationsCache = parseIndexAnnotations(indexContent);
@@ -179,8 +180,8 @@ export async function* runInitWithSources(
       const systemContent = render(initTemplate, {
         domain_id: domainId,
         vault_name: vaultName,
-        schema_block: schemaContent ? `\nКонвенции вики (_wiki_schema.md):\n${schemaContent}` : "",
-        index_block: indexContent ? `\nСуществующая структура (_index.md):\n${indexContent}` : "",
+        schema_block: schemaContent ? `\nWiki conventions (_wiki_schema.md):\n${schemaContent}` : "",
+        index_block: indexContent ? `\nExisting structure (_index.md):\n${indexContent}` : "",
       });
 
       const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
