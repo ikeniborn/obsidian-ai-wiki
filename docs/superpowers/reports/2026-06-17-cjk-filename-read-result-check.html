@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Result Check — CJK / Unicode Filename Read</title>
+<style>
+:root{
+  --bg:#fafafa; --surface:#ffffff; --fg:#333344;
+  --accent:#5c6bc0; --border:#d0d0e0; --line:#888888;
+  --zebra:#f3f3f8; --ok:#43a047; --warn:#fb8c00; --danger:#e53935; --muted:#777;
+}
+body:has(#theme-toggle:checked){
+  --bg:#1e1e2e; --surface:#313244; --fg:#cdd6f4;
+  --accent:#89b4fa; --border:#45475a; --line:#888888;
+  --zebra:#282838; --ok:#a6e3a1; --warn:#f9e2af; --danger:#f38ba8; --muted:#9399b2;
+}
+body{margin:0; padding:1.5rem; font:16px/1.55 system-ui, sans-serif; background:var(--bg); color:var(--fg); transition:background .3s, color .3s;}
+.theme-btn{position:sticky; top:.5rem; float:right; cursor:pointer; user-select:none; padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface);}
+.report{max-width:1000px; margin:0 auto;}
+h1{color:var(--accent); font-size:1.6rem; margin:.2rem 0 .3rem;}
+h2{color:var(--accent); font-size:1.2rem; margin:1.8rem 0 .6rem; border-bottom:1px solid var(--border); padding-bottom:.25rem;}
+h3{color:var(--accent); font-size:1rem; margin:1rem 0 .4rem;}
+.sub{color:var(--muted); margin:.1rem 0 1rem;}
+code{background:var(--zebra); padding:.05rem .35rem; border-radius:4px; font-size:.88em;}
+table{border-collapse:collapse; width:100%; margin:.4rem 0 1rem; background:var(--surface); font-size:.92rem;}
+th,td{border:1px solid var(--border); padding:.5rem .6rem; text-align:left; vertical-align:top;}
+th{background:var(--accent); color:#fff;}
+tbody tr:nth-child(even){background:var(--zebra);}
+.badge{display:inline-block; padding:.08rem .55rem; border-radius:999px; font-size:.8rem; font-weight:600; color:#fff;}
+.b-done{background:var(--ok);} .b-partial{background:var(--warn);} .b-missing{background:var(--danger);}
+.b-info{background:var(--accent);} .b-warn{background:var(--warn);} .b-crit{background:var(--danger);}
+.chain{display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin:.5rem 0 0;}
+.chain .node{background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:.3rem .6rem; font-size:.85rem;}
+.chain .arrow{color:var(--line); font-weight:700;}
+.kv{display:grid; grid-template-columns:max-content 1fr; gap:.2rem 1rem; margin:.3rem 0;}
+.kv div:nth-child(odd){color:var(--muted);}
+.summary-box{display:flex; gap:1rem; flex-wrap:wrap; margin:.6rem 0;}
+.stat{background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.7rem 1.1rem; text-align:center; min-width:96px;}
+.stat .n{font-size:1.6rem; font-weight:700; display:block;}
+.stat .l{color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.04em;}
+.verdict{font-size:1.1rem; font-weight:700; padding:.7rem 1rem; border-radius:8px; margin:.8rem 0; border:2px solid var(--ok); color:var(--ok); background:var(--surface);}
+.foot{color:var(--muted); font-size:.82rem; margin-top:2rem; border-top:1px solid var(--border); padding-top:.6rem;}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Тёмная / светлая тема">🌙 / ☀️</label>
+
+<main class="report">
+<h1>Result Check: CJK / Unicode Filename Read Failure</h1>
+<p class="sub">Сверка результата с цепью IDD→SDD · дата прогона 2026-06-17 · вердикт OK</p>
+
+<h2>1. Резюме сверки</h2>
+<div class="kv">
+  <div>План</div><div><code>docs/superpowers/plans/2026-06-17-cjk-filename-read.md</code> · plan_hash <code>c1f6de1fdb471900</code></div>
+  <div>Спека</div><div><code>docs/superpowers/specs/2026-06-17-cjk-filename-read-design.md</code></div>
+  <div>Intent</div><div>— (chain.intent: null — intent-документа нет)</div>
+  <div>База diff</div><div><code>git diff 430dc01</code> (старт плана; <code>git diff HEAD</code> пуст — всё закоммичено) · 4 файла</div>
+  <div>PR</div><div><code>#17</code> OPEN → <code>master</code> (соответствует Decision 2)</div>
+  <div>Цепочка</div>
+  <div class="chain">
+    <span class="node">intent: —</span><span class="arrow">→</span>
+    <span class="node">spec: …design.md</span><span class="arrow">→</span>
+    <span class="node">plan: …cjk-filename-read.md</span>
+  </div>
+</div>
+
+<h2>2. Покрытие шагов плана</h2>
+<div class="summary-box">
+  <div class="stat"><span class="n" style="color:var(--ok)">5</span><span class="l">DONE</span></div>
+  <div class="stat"><span class="n" style="color:var(--warn)">0</span><span class="l">PARTIAL</span></div>
+  <div class="stat"><span class="n" style="color:var(--danger)">0</span><span class="l">MISSING</span></div>
+</div>
+<table>
+  <thead><tr><th>Задача</th><th>Статус</th><th>Свидетельство в diff</th></tr></thead>
+  <tbody>
+    <tr><td>Task 1 — Падающая проба <code>/tmp/cjk-probe/probe.ts</code></td><td><span class="badge b-done">DONE</span></td><td>Throwaway по дизайну — в репозиторий не входит (план: «Create — not committed»). Исполнена: ревью подтвердили оба CHECK PASS. См. INFO ниже.</td></tr>
+    <tr><td>Task 2 — Self-healing read</td><td><span class="badge b-done">DONE</span></td><td><code>src/vault-tools.ts</code>: +<code>codePointsHex</code>, +<code>isNotFound</code>, +<code>resolveOnDiskPath</code>, +<code>diagnose</code>, переписан <code>read</code> (hot-path, re-throw оригинала, <code>read recovered</code>).</td></tr>
+    <tr><td>Task 3 — Write-guard</td><td><span class="badge b-done">DONE</span></td><td><code>src/vault-tools.ts</code>: <code>const target = await this.resolveOnDiskPath(vaultPath)</code> + <code>target</code> во всех 4 destination.</td></tr>
+    <tr><td>Task 4 — Docs (architecture.md)</td><td><span class="badge b-done">DONE</span></td><td><code>docs/wiki/architecture.md</code> +2 строки: абзац про normalization-tolerant read/write.</td></tr>
+    <tr><td>Task 5 — Push + PR в master</td><td><span class="badge b-done">DONE</span></td><td>Не diff-артефакт. PR <code>#17</code> OPEN, base <code>master</code>. Проба удалена.</td></tr>
+  </tbody>
+</table>
+
+<h2>3. Findings</h2>
+<table>
+  <thead><tr><th>Severity</th><th>Шаг / область</th><th>Plan</th><th>Diff</th><th>Fix options</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="badge b-info">INFO</span></td>
+      <td>Task 1 (проба)</td>
+      <td>Создать <code>/tmp/cjk-probe/probe.ts</code> как throwaway, НЕ коммитить.</td>
+      <td>Файла нет в diff — ожидаемо по дизайну (вне репозитория, в <code>/tmp</code>; удалён на Task 5).</td>
+      <td>Действий не требуется. Исполнение подтверждено отчётами ревью (оба CHECK PASS).</td>
+    </tr>
+    <tr>
+      <td><span class="badge b-warn">WARNING</span></td>
+      <td>Excess: артефакты процесса</td>
+      <td>Нет явного шага «закоммитить план / check-отчёт».</td>
+      <td><code>docs/superpowers/plans/2026-06-17-cjk-filename-read.md</code> и <code>…/reports/…-check.html</code> закоммичены (d87ce54).</td>
+      <td>Принять как трейл процесса IDD (норма); либо вынести из PR, если нежелательны. Benign — не scope creep кода.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>4. Покрытие Intent / Spec</h2>
+<div class="kv">
+  <div>Desired Outcomes</div><div>N/A — intent-документа нет (<code>chain.intent: null</code>)</div>
+  <div>Spec requirements</div><div><strong>покрыто, с задокументированными отклонениями</strong></div>
+</div>
+<table>
+  <thead><tr><th>Требование спеки</th><th>Покрытие</th></tr></thead>
+  <tbody>
+    <tr><td>§1 <code>resolveOnDiskPath</code> (вход → NFC → NFD)</td><td><span class="badge b-done">в diff</span></td></tr>
+    <tr><td>§2 Self-healing <code>read</code> (hot-path, re-throw оригинала)</td><td><span class="badge b-done">в diff</span></td></tr>
+    <tr><td>§3 <code>diagnose</code> (codepoints, nfc!=nfd, forms, dirents ≤20)</td><td><span class="badge b-done">в diff</span></td></tr>
+    <tr><td>§4 Write-guard</td><td><span class="badge b-done">в diff</span></td></tr>
+    <tr><td>Edge cases (non-ENOENT bypass, новые файлы, readAll)</td><td><span class="badge b-done">покрыто логикой</span></td></tr>
+    <tr><td>Verification: build / lint / проба / docs</td><td><span class="badge b-done">выполнено</span></td></tr>
+    <tr><td>Verification §3: «lat check + lat.md»</td><td><span class="badge b-warn">отклонение F-001 (accepted)</span> → iwiki/docs/wiki</td></tr>
+    <tr><td>Branch workflow footer (PR → dev)</td><td><span class="badge b-warn">отклонение F-002 (accepted)</span> → PR → master</td></tr>
+  </tbody>
+</table>
+
+<h2>5. Сводка</h2>
+<div class="summary-box">
+  <div class="stat"><span class="n" style="color:var(--ok)">0</span><span class="l">CRITICAL</span></div>
+  <div class="stat"><span class="n" style="color:var(--warn)">1</span><span class="l">WARNING</span></div>
+  <div class="stat"><span class="n" style="color:var(--accent)">1</span><span class="l">INFO</span></div>
+</div>
+<div class="verdict">Вердикт: OK</div>
+<p class="sub">Нет MISSING-шагов. Все 5 задач плана отражены в diff (либо исполнены вне репозитория по дизайну). Спека покрыта; два отклонения (F-001 lat→iwiki, F-002 dev→master) ранее приняты в check-plan. <code>result_check.verdict: OK</code> записан во frontmatter плана (merge-gate сигнал).</p>
+
+<div class="foot">
+  Previous step: <code>docs/superpowers/plans/2026-06-17-cjk-filename-read.md</code><br>
+  Chain: — → <code>…cjk-filename-read-design.md</code> → <code>…cjk-filename-read.md</code>
+</div>
+</main>
+</body>
+</html>

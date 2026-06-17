@@ -39,6 +39,8 @@ Thin adapter over Obsidian's vault API (`src/vault-tools.ts`). Used by all phase
 
 `resolveLink(linkpath, sourcePath)` resolves a wiki-link to a vault-relative path; returns `null` when unresolvable rather than echoing the raw path — this blocks path traversal (an embed like `![[../../secret.png]]` would otherwise escape the vault root). The vision pre-step skips attachments resolving to `null`.
 
+`read` is normalization-tolerant: on a not-found error it retries the NFC and NFD forms of the path (`resolveOnDiskPath`) and logs one diagnostic `console.warn` per miss. `write` resolves the same way so an existing file in a different normalization form (e.g. an NFD source note synced from macOS) is overwritten in place rather than duplicated. ASCII paths are unaffected.
+
 ## Query Link Validator
 
 Post-stream module (`src/phases/query-link-validator.ts`) validating wiki links in a query answer against actual vault contents, after the LLM stream completes. See [[operations#Post-Stream Link Validation]].
