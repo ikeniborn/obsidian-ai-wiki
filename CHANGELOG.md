@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.173 — 2026-06-17
+
+### Исправления
+- fix(prompt): translate quoted source prose into output language
+
+---
+
 ## 0.1.172 — 2026-06-17
 
 ### Исправления
