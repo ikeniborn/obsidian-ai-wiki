@@ -1,7 +1,17 @@
 import type OpenAI from "openai";
-import type { LlmCallOptions, LlmClient, RunEvent } from "../types";
+import type { LlmCallOptions, LlmClient, OutputLanguage, RunEvent } from "../types";
 import baseContract from "../../prompts/base.md";
 import { jsonrepair } from "jsonrepair";
+
+/** Maps an output-language choice to a one-line directive for the system prompt. */
+export function langInstruction(lang: OutputLanguage): string {
+  switch (lang) {
+    case "ru": return "Always reply in Russian, regardless of the source language.";
+    case "en": return "Always reply in English, regardless of the source language.";
+    case "es": return "Always reply in Spanish, regardless of the source language.";
+    default:   return "Reply in the same language as the source/article.";
+  }
+}
 
 /** Remove <think>...</think> blocks leaked into content by thinking models. */
 export function stripThinking(text: string): string {
@@ -73,6 +83,7 @@ export function buildChatParams(
   stream: boolean = false,
 ): Record<string, unknown> {
   let msgs = prependBaseContract(messages);
+  if (opts.outputLanguage) msgs = injectLanguageDirective(msgs, opts.outputLanguage);
   msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
   const params: Record<string, unknown> = { model, messages: msgs };
   if (opts.temperature !== undefined) params.temperature = opts.temperature;
@@ -110,6 +121,22 @@ function prependBaseContract(
     return updated;
   }
   return [{ role: "system", content: baseContract }, ...messages];
+}
+
+/** Appends `## Язык\n<directive>` to the first system message. */
+function injectLanguageDirective(
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  lang: OutputLanguage,
+): OpenAI.Chat.ChatCompletionMessageParam[] {
+  const directive = `## Язык\n${langInstruction(lang)}`;
+  const firstSystem = messages.findIndex((m) => m.role === "system");
+  if (firstSystem >= 0) {
+    const updated = [...messages];
+    const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
+    updated[firstSystem] = { role: "system", content: `${existing}\n\n${directive}` };
+    return updated;
+  }
+  return [{ role: "system", content: directive }, ...messages];
 }
 
 const JSON_MODE_KEYWORDS = ["response_format", "json_object", "json mode", "unsupported"];

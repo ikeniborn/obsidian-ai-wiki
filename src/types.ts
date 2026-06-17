@@ -105,6 +105,7 @@ export interface LlmCallOptions {
   maxTokens?: number;
   topP?: number | null;
   systemPrompt?: string;
+  outputLanguage?: OutputLanguage;
   jsonMode?: "json_object" | "json_schema" | false;
   jsonSchema?: { name: string; schema: object };
   structuredRetries?: number;
@@ -132,6 +133,8 @@ export type LlmClient = {
   };
 };
 
+export type OutputLanguage = "auto" | "ru" | "en" | "es";
+
 export type OpKey = "ingest" | "query" | "lint" | "init" | "format";
 export type OpMap<T> = Record<OpKey, T>;
 
@@ -150,6 +153,7 @@ export interface NativeOperationConfig {
 export interface LlmWikiPluginSettings {
   backend: "claude-agent" | "native-agent";
   systemPrompt: string;
+  outputLanguage: OutputLanguage;
   agentLogEnabled: boolean;
   historyLimit: number;
   graphDepth: number;
@@ -216,7 +220,6 @@ export interface LlmWikiPluginSettings {
   vision: {
     enabled: boolean;
     model: string;
-    language: "auto" | "ru" | "en" | "es";
   };
   llmIdleTimeoutSec: number;
   llmIdleRetries: number;
@@ -225,6 +228,7 @@ export interface LlmWikiPluginSettings {
 export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   backend: "native-agent",
   systemPrompt: "",
+  outputLanguage: "auto",
   agentLogEnabled: false,
   historyLimit: 20,
   graphDepth: 1,
@@ -282,7 +286,6 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   vision: {
     enabled: false,
     model: "",
-    language: "auto",
   },
   llmIdleTimeoutSec: 300,
   llmIdleRetries: 3,

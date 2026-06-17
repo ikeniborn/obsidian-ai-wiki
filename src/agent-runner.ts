@@ -38,17 +38,17 @@ export class AgentRunner {
       // плагин его не плумит — параметр был бы избыточным.
       const c = s.claudeAgent.perOperation ? s.claudeAgent.operations[key] : undefined;
       const model = c ? c.model : s.claudeAgent.model;
-      return { model, opts: { systemPrompt: s.systemPrompt, structuredRetries, mergeDeleteWarnThreshold } };
+      return { model, opts: { systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, structuredRetries, mergeDeleteWarnThreshold } };
     }
 
     const na = s.nativeAgent;
     const c = na.perOperation ? na.operations[key] : undefined;
     const budgetTokens = c?.thinkingBudgetTokens ?? na.thinkingBudgetTokens;
-    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold,
+    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold,
       dedupOnIngest: na.dedupOnIngest, dedupThreshold: na.dedupThreshold,
       lintNearDuplicate: na.lintNearDuplicate, nearDupThreshold: na.nearDupThreshold,
     } };
-    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold,
+    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold,
       dedupOnIngest: na.dedupOnIngest, dedupThreshold: na.dedupThreshold,
       lintNearDuplicate: na.lintNearDuplicate, nearDupThreshold: na.nearDupThreshold,
     } };
@@ -140,7 +140,11 @@ export class AgentRunner {
         const wikiVaultPath = formatDomain ? domainWikiFolder(formatDomain.wiki_folder) : undefined;
         const noVision = req.args.includes("--no-vision");
         const formatArgs = req.args.filter((a) => a !== "--no-vision");
-        const baseVisionSettings = this.settings.vision ?? { enabled: false, model: "", language: "auto" as const };
+        const baseVisionSettings = {
+          enabled: this.settings.vision?.enabled ?? false,
+          model: this.settings.vision?.model ?? "",
+          language: this.settings.outputLanguage ?? "auto",
+        };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
         yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore);
         break;

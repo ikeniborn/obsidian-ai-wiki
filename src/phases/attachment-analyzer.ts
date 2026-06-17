@@ -1,5 +1,7 @@
 import type { VaultTools } from "../vault-tools";
 import type { LlmClient } from "../types";
+import type { OutputLanguage } from "../types";
+import { langInstruction } from "./llm-utils";
 import type OpenAI from "openai";
 import { render } from "./template";
 import visionStructure from "../../prompts/vision-structure.md";
@@ -89,26 +91,15 @@ async function callVisionLlm(
   return resp.choices[0]?.message?.content ?? "";
 }
 
-export type VisionLanguage = "auto" | "ru" | "en" | "es";
-
-function langInstruction(language: VisionLanguage): string {
-  switch (language) {
-    case "ru": return "Always reply in Russian.";
-    case "en": return "Always reply in English.";
-    case "es": return "Always reply in Spanish.";
-    default:   return "Reply in Russian if the note is in Russian, otherwise in English.";
-  }
-}
-
-function imageSystem(language: VisionLanguage): string {
+function imageSystem(language: OutputLanguage): string {
   return render(visionImage, { structure_rules: visionStructure, lang: langInstruction(language) });
 }
 
-function pdfSystem(language: VisionLanguage): string {
+function pdfSystem(language: OutputLanguage): string {
   return render(visionPdf, { structure_rules: visionStructure, lang: langInstruction(language) });
 }
 
-function excalidrawSystem(language: VisionLanguage): string {
+function excalidrawSystem(language: OutputLanguage): string {
   return render(visionExcalidraw, { lang: langInstruction(language) });
 }
 
@@ -118,7 +109,7 @@ export async function analyzeImage(
   llm: LlmClient,
   model: string,
   signal: AbortSignal,
-  language: VisionLanguage = "auto",
+  language: OutputLanguage = "auto",
 ): Promise<string> {
   const b64 = arrayBufferToBase64(buffer);
   return callVisionLlm(llm, model, imageSystem(language), [
@@ -143,7 +134,7 @@ export async function analyzePdf(
   llm: LlmClient,
   model: string,
   signal: AbortSignal,
-  language: VisionLanguage = "auto",
+  language: OutputLanguage = "auto",
 ): Promise<string> {
   const pdfjs = (window as unknown as { pdfjsLib?: PdfjsLib }).pdfjsLib;
   if (!pdfjs) throw new Error("pdfjsLib unavailable");
@@ -171,7 +162,7 @@ export async function analyzeExcalidraw(
   llm: LlmClient,
   model: string,
   signal: AbortSignal,
-  language: VisionLanguage = "auto",
+  language: OutputLanguage = "auto",
 ): Promise<string> {
   return callVisionLlm(llm, model, excalidrawSystem(language), [
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } },
@@ -186,7 +177,7 @@ export async function analyzeSingleAttachment(
   model: string,
   signal: AbortSignal,
   sourcePath: string = "",
-  language: VisionLanguage = "auto",
+  language: OutputLanguage = "auto",
   visionTempStore?: VisionTempStore,
 ): Promise<string | null> {
   const resolved = vaultTools.resolveLink(path, sourcePath);
@@ -221,7 +212,7 @@ export async function analyzeAttachments(
   model: string,
   signal: AbortSignal,
   sourcePath: string = "",
-  language: VisionLanguage = "auto",
+  language: OutputLanguage = "auto",
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   for (const path of [...new Set(embedPaths)]) {

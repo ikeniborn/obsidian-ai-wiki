@@ -189,6 +189,17 @@ export default class LlmWikiPlugin extends Plugin {
     if (!data?.systemPrompt && (caData.systemPrompt || naData.systemPrompt))
       this.settings.systemPrompt = (caData.systemPrompt ?? naData.systemPrompt) as string;
 
+    // Schema v4: vision.language promoted to top-level outputLanguage
+    {
+      const visionData = (data?.vision as { language?: string } | undefined) ?? undefined;
+      if (typeof data?.outputLanguage !== "string" && typeof visionData?.language === "string") {
+        this.settings.outputLanguage = visionData.language as LlmWikiPluginSettings["outputLanguage"];
+      }
+      if (this.settings.vision && "language" in this.settings.vision) {
+        delete (this.settings.vision as unknown as Record<string, unknown>).language;
+      }
+    }
+
     // Schema v3: maxTokens moves to nativeAgent.maxTokens; numCtx dropped
     let schemaV3Dirty = false;
     const legacyTop = typeof data?.maxTokens === "number" ? data.maxTokens : undefined;

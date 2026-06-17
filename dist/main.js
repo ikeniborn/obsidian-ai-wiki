@@ -26140,12 +26140,13 @@ __export(main_exports, {
   migrateToLocalV2: () => migrateToLocalV2
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian11 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_SETTINGS = {
   backend: "native-agent",
   systemPrompt: "",
+  outputLanguage: "auto",
   agentLogEnabled: false,
   historyLimit: 20,
   graphDepth: 1,
@@ -26202,8 +26203,7 @@ var DEFAULT_SETTINGS = {
   },
   vision: {
     enabled: false,
-    model: "",
-    language: "auto"
+    model: ""
   },
   llmIdleTimeoutSec: 300,
   llmIdleRetries: 3
@@ -26223,6 +26223,8 @@ var en = {
     h3_backend: "Backend settings",
     systemPrompt_name: "User prompt",
     systemPrompt_desc: "Appended to the system prompt of every operation. Empty by default.",
+    outputLanguage_name: "Response language",
+    outputLanguage_desc: "Language for all generated content. Auto = match the source/article language. Technical and domain terms are never translated.",
     maxTokens_name: "Max tokens",
     maxTokens_desc: "Max tokens in the response. Default 4096. \u2191 longer answers, slower/costlier \xB7 \u2193 risk of truncation. Recommended \u2265 4096.",
     domains_heading: "Domains",
@@ -26486,6 +26488,8 @@ var ru = {
     h3_backend: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u0431\u044D\u043A\u0435\u043D\u0434\u0430",
     systemPrompt_name: "User prompt",
     systemPrompt_desc: "\u0414\u043E\u0431\u0430\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u0432 \u043A\u043E\u043D\u0435\u0446 \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u0433\u043E \u043F\u0440\u043E\u043C\u0442\u0430 \u043A\u0430\u0436\u0434\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E \u043F\u0443\u0441\u0442.",
+    outputLanguage_name: "Response language",
+    outputLanguage_desc: "\u042F\u0437\u044B\u043A \u0432\u0441\u0435\u0433\u043E \u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0435\u043C\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043D\u0442\u0430. Auto = \u044F\u0437\u044B\u043A \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430/\u0441\u0442\u0430\u0442\u044C\u0438. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0438 \u0434\u043E\u043C\u0435\u043D\u043D\u044B\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u043D\u0435 \u043F\u0435\u0440\u0435\u0432\u043E\u0434\u044F\u0442\u0441\u044F.",
     maxTokens_name: "Max tokens",
     maxTokens_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u0432 \u043E\u0442\u0432\u0435\u0442\u0435. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 4096. \u2191 \u0434\u043B\u0438\u043D\u043D\u0435\u0435 \u043E\u0442\u0432\u0435\u0442, \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u0435\u0435/\u0434\u043E\u0440\u043E\u0436\u0435 \xB7 \u2193 \u0440\u0438\u0441\u043A \u043E\u0431\u0440\u044B\u0432\u0430. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u044E \u2265 4096.",
     domains_heading: "\u0414\u043E\u043C\u0435\u043D\u044B",
@@ -26749,6 +26753,8 @@ var es = {
     h3_backend: "Configuraci\xF3n del backend",
     systemPrompt_name: "User prompt",
     systemPrompt_desc: "Se a\xF1ade al final del prompt del sistema de cada operaci\xF3n. Vac\xEDo por defecto.",
+    outputLanguage_name: "Response language",
+    outputLanguage_desc: "Idioma de todo el contenido generado. Auto = idioma de la fuente/art\xEDculo. Los t\xE9rminos t\xE9cnicos y de dominio no se traducen.",
     maxTokens_name: "M\xE1x. tokens",
     maxTokens_desc: "M\xE1x. tokens en la respuesta. Por defecto 4096. \u2191 respuestas m\xE1s largas, m\xE1s lento/caro \xB7 \u2193 riesgo de truncado. Recomendado \u2265 4096.",
     domains_heading: "Dominios",
@@ -28856,6 +28862,12 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
       });
       return t;
     });
+    new import_obsidian4.Setting(containerEl).setName(T.settings.outputLanguage_name).setDesc(T.settings.outputLanguage_desc).addDropdown(
+      (d) => d.addOptions({ auto: "Auto (match source)", ru: "Russian", en: "English", es: "Spanish" }).setValue(s.outputLanguage ?? "auto").onChange(async (v) => {
+        s.outputLanguage = v;
+        await this.plugin.saveSettings();
+      })
+    );
     new import_obsidian4.Setting(containerEl).setName(T.settings.timeouts_name).setDesc(T.settings.timeouts_desc).addText(
       (t) => t.setValue(`${s.timeouts.ingest}/${s.timeouts.query}/${s.timeouts.lint}/${s.timeouts.init}/${s.timeouts.format}`).onChange(async (v) => {
         const parsed = parseTimeoutString(v);
@@ -29358,12 +29370,6 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           s.vision.model = v;
           await this.plugin.saveSettings();
         }
-      );
-      new import_obsidian4.Setting(containerEl).setName("Vision response language").setDesc("Language for image/PDF descriptions inserted into the note.").addDropdown(
-        (d) => d.addOptions({ auto: "Auto (match note language)", ru: "Russian", en: "English", es: "Spanish" }).setValue(s.vision.language ?? "auto").onChange(async (v) => {
-          s.vision.language = v;
-          await this.plugin.saveSettings();
-        })
       );
     }
     new import_obsidian4.Setting(containerEl).setName(T.settings.h3_graph).setHeading();
@@ -30135,6 +30141,18 @@ function atEndOfBlockComment(text, i) {
 }
 
 // src/phases/llm-utils.ts
+function langInstruction(lang) {
+  switch (lang) {
+    case "ru":
+      return "Always reply in Russian, regardless of the source language.";
+    case "en":
+      return "Always reply in English, regardless of the source language.";
+    case "es":
+      return "Always reply in Spanish, regardless of the source language.";
+    default:
+      return "Reply in the same language as the source/article.";
+  }
+}
 function stripThinking(text) {
   return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 }
@@ -30191,6 +30209,7 @@ function extractUsage(resp) {
 }
 function buildChatParams(model, messages, opts, stream = false) {
   let msgs = prependBaseContract(messages);
+  if (opts.outputLanguage) msgs = injectLanguageDirective(msgs, opts.outputLanguage);
   msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
   const params = { model, messages: msgs };
   if (opts.temperature !== void 0) params.temperature = opts.temperature;
@@ -30224,6 +30243,20 @@ ${existing}` };
     return updated;
   }
   return [{ role: "system", content: base_default }, ...messages];
+}
+function injectLanguageDirective(messages, lang) {
+  const directive = `## \u042F\u0437\u044B\u043A
+${langInstruction(lang)}`;
+  const firstSystem = messages.findIndex((m) => m.role === "system");
+  if (firstSystem >= 0) {
+    const updated = [...messages];
+    const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
+    updated[firstSystem] = { role: "system", content: `${existing}
+
+${directive}` };
+    return updated;
+  }
+  return [{ role: "system", content: directive }, ...messages];
 }
 var JSON_MODE_KEYWORDS = ["response_format", "json_object", "json mode", "unsupported"];
 function isJsonModeError(e) {
@@ -37769,8 +37802,12 @@ function hasFrontmatterField(content, field) {
 function parseIndexAnnotations(content) {
   const map = /* @__PURE__ */ new Map();
   for (const line of content.split("\n")) {
-    const m = line.match(/^- \[\[([^\]]+)\]\] [^ ]+ — (.+)$/);
-    if (m) map.set(m[1], m[2].trim());
+    const m = line.match(/^- (.+?) — (.+)$/);
+    if (!m) continue;
+    let pid = m[1].trim();
+    const old = pid.match(/^\[\[([^\]]+)\]\]/);
+    if (old) pid = old[1];
+    map.set(pid, m[2].trim());
   }
   return map;
 }
@@ -37781,6 +37818,10 @@ function deriveSection(wikiFolder, fullPath) {
   const parts = rel.split("/");
   return parts.length >= 2 ? parts[0] : "general";
 }
+function pidLineRegex(pid) {
+  const esc = pid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^- (?:\\[\\[${esc}\\]\\]|${esc}) `);
+}
 function upsertInSection(content, section, pid, entryLine) {
   if (!content.trim()) {
     return `# Wiki Index
@@ -37790,8 +37831,7 @@ ${entryLine}
 `;
   }
   const sectionHeader = `## ${section}`;
-  const escaped = pid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pidRe = new RegExp(`^- \\[\\[${escaped}\\]\\]`);
+  const pidRe = pidLineRegex(pid);
   const lines = content.split("\n");
   const sectionIdx = lines.findIndex((l) => l === sectionHeader);
   if (sectionIdx === -1) {
@@ -37824,10 +37864,8 @@ async function upsertIndexAnnotation(vaultTools, wikiFolder, pid, annotation, fu
   } catch {
   }
   const section = deriveSection(wikiFolder, fullPath);
-  const prefix = wikiFolder + "/";
-  const relPath = fullPath ? fullPath.startsWith(prefix) ? fullPath.slice(prefix.length) : fullPath : pid;
   const oneLineAnnotation = annotation.replace(/\s+/g, " ").trim();
-  const entryLine = `- [[${pid}]] ${relPath} \u2014 ${oneLineAnnotation}`;
+  const entryLine = `- ${pid} \u2014 ${oneLineAnnotation}`;
   await vaultTools.write(indexPath, upsertInSection(content, section, pid, entryLine));
 }
 async function removeIndexAnnotation(vaultTools, wikiFolder, pid) {
@@ -37838,8 +37876,7 @@ async function removeIndexAnnotation(vaultTools, wikiFolder, pid) {
   } catch {
     return;
   }
-  const escaped = pid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pidRe = new RegExp(`^- \\[\\[${escaped}\\]\\]`);
+  const pidRe = pidLineRegex(pid);
   const lines = content.split("\n");
   const targetIdx = lines.findIndex((l) => pidRe.test(l));
   if (targetIdx === -1) return;
@@ -40478,18 +40515,6 @@ async function callVisionLlm(llm, model, systemPrompt, contentParts, signal) {
   }, { signal });
   return resp.choices[0]?.message?.content ?? "";
 }
-function langInstruction(language) {
-  switch (language) {
-    case "ru":
-      return "Always reply in Russian.";
-    case "en":
-      return "Always reply in English.";
-    case "es":
-      return "Always reply in Spanish.";
-    default:
-      return "Reply in Russian if the note is in Russian, otherwise in English.";
-  }
-}
 function imageSystem(language) {
   return render(vision_image_default, { structure_rules: vision_structure_default, lang: langInstruction(language) });
 }
@@ -40906,7 +40931,7 @@ var AgentRunner = class {
     if (s.backend === "claude-agent") {
       const c2 = s.claudeAgent.perOperation ? s.claudeAgent.operations[key] : void 0;
       const model = c2 ? c2.model : s.claudeAgent.model;
-      return { model, opts: { systemPrompt: s.systemPrompt, structuredRetries, mergeDeleteWarnThreshold } };
+      return { model, opts: { systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, structuredRetries, mergeDeleteWarnThreshold } };
     }
     const na = s.nativeAgent;
     const c = na.perOperation ? na.operations[key] : void 0;
@@ -40917,6 +40942,7 @@ var AgentRunner = class {
       topP: na.topP,
       thinkingBudgetTokens: budgetTokens,
       systemPrompt: s.systemPrompt,
+      outputLanguage: s.outputLanguage,
       jsonMode: "json_object",
       structuredRetries,
       mergeDeleteWarnThreshold,
@@ -40931,6 +40957,7 @@ var AgentRunner = class {
       topP: na.topP,
       thinkingBudgetTokens: budgetTokens,
       systemPrompt: s.systemPrompt,
+      outputLanguage: s.outputLanguage,
       jsonMode: "json_object",
       structuredRetries,
       mergeDeleteWarnThreshold,
@@ -41013,7 +41040,11 @@ var AgentRunner = class {
         const wikiVaultPath = formatDomain ? domainWikiFolder(formatDomain.wiki_folder) : void 0;
         const noVision = req.args.includes("--no-vision");
         const formatArgs = req.args.filter((a) => a !== "--no-vision");
-        const baseVisionSettings = this.settings.vision ?? { enabled: false, model: "", language: "auto" };
+        const baseVisionSettings = {
+          enabled: this.settings.vision?.enabled ?? false,
+          model: this.settings.vision?.model ?? "",
+          language: this.settings.outputLanguage ?? "auto"
+        };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
         yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore);
         break;
@@ -49739,8 +49770,62 @@ async function cleanDir(adapter, dir, knownFiles) {
   }
 }
 
+// src/migrate-index-format.ts
+var import_obsidian11 = require("obsidian");
+var OLD_ENTRY = /^- \[\[([^\]]+)\]\] \S+ — (.+)$/;
+var NEW_ENTRY = /^- \S+ — .+$/;
+function migrateLine(line) {
+  if (!line.startsWith("- ")) return { out: line, changed: false, unknown: false };
+  const old = line.match(OLD_ENTRY);
+  if (old) return { out: `- ${old[1]} \u2014 ${old[2]}`, changed: true, unknown: false };
+  if (NEW_ENTRY.test(line)) return { out: line, changed: false, unknown: false };
+  return { out: line, changed: false, unknown: true };
+}
+async function migrateIndexFormat(vault, domains) {
+  const adapter = vault.adapter;
+  let filesChanged = 0;
+  let linesChanged = 0;
+  for (const domain of domains) {
+    const wikiFolder = domainWikiFolder(domain.wiki_folder);
+    const indexPath = domainIndexPath(wikiFolder);
+    if (!await adapter.exists(indexPath)) continue;
+    const raw = await adapter.read(indexPath);
+    const before = parseIndexAnnotations(raw);
+    const out = [];
+    let changed = 0;
+    let unknown = false;
+    for (const line of raw.split("\n")) {
+      const r = migrateLine(line);
+      if (r.unknown) {
+        console.error(`[AI Wiki] index migration: unrecognized line in ${indexPath}: ${line}`);
+        unknown = true;
+        break;
+      }
+      out.push(r.out);
+      if (r.changed) changed++;
+    }
+    if (unknown) continue;
+    if (changed === 0) continue;
+    const newContent = out.join("\n");
+    const after = parseIndexAnnotations(newContent);
+    const preserved = before.size === after.size && [...before.keys()].every((k) => after.has(k));
+    if (!preserved) {
+      console.error(
+        `[AI Wiki] index migration: annotation key mismatch in ${indexPath} (${before.size} \u2192 ${after.size}); skipping`
+      );
+      continue;
+    }
+    await adapter.write(indexPath, newContent);
+    filesChanged++;
+    linesChanged += changed;
+  }
+  if (filesChanged > 0) {
+    new import_obsidian11.Notice(`AI Wiki: index format migrated \u2014 ${filesChanged} files, ${linesChanged} lines`);
+  }
+}
+
 // src/main.ts
-var LlmWikiPlugin = class extends import_obsidian11.Plugin {
+var LlmWikiPlugin = class extends import_obsidian12.Plugin {
   settings;
   controller;
   settingTab;
@@ -49753,7 +49838,7 @@ var LlmWikiPlugin = class extends import_obsidian11.Plugin {
       await runStorageMigration(this.app.vault);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian11.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
+      new import_obsidian12.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] storage migration error:", e);
     }
     await cleanupBundledSchemaCopies(this.app.vault);
@@ -49761,6 +49846,14 @@ var LlmWikiPlugin = class extends import_obsidian11.Plugin {
     await this.loadSettings();
     await migrateToLocalV1(this, this.localConfigStore);
     await migrateToLocalV2(this, this.localConfigStore);
+    try {
+      const domains = await this.domainStore.load();
+      await migrateIndexFormat(this.app.vault, domains);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      new import_obsidian12.Notice(`AI Wiki: index format migration failed \u2014 ${msg}`, 0);
+      console.error("[AI Wiki] index format migration error:", e);
+    }
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
     this.controller.onBusyChange = () => this.settingTab?.display();
     this.registerView(AI_WIKI_VIEW_TYPE, (leaf) => new LlmWikiView(leaf, this));
@@ -49773,7 +49866,7 @@ var LlmWikiPlugin = class extends import_obsidian11.Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
-    if (!import_obsidian11.Platform.isMobile) {
+    if (!import_obsidian12.Platform.isMobile) {
       const statusBar = this.addStatusBarItem();
       statusBar.setText("schema: 0/0");
       statusBar.setAttribute("aria-label", "validation: 0 ok, 0 retried, 0 failed");
@@ -49796,7 +49889,7 @@ var LlmWikiPlugin = class extends import_obsidian11.Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
-    if (!import_obsidian11.Platform.isMobile) {
+    if (!import_obsidian12.Platform.isMobile) {
       this.addCommand({
         id: "ingest-current",
         name: T.cmd.ingestActive,
@@ -49808,7 +49901,7 @@ var LlmWikiPlugin = class extends import_obsidian11.Plugin {
       name: T.cmd.query,
       callback: () => new QueryModal(this.app, (q) => void this.controller.query(q)).open()
     });
-    if (!import_obsidian11.Platform.isMobile) {
+    if (!import_obsidian12.Platform.isMobile) {
       this.addCommand({
         id: "lint",
         name: T.cmd.lint,
@@ -49917,6 +50010,15 @@ var LlmWikiPlugin = class extends import_obsidian11.Plugin {
     };
     if (!data?.systemPrompt && (caData.systemPrompt || naData.systemPrompt))
       this.settings.systemPrompt = caData.systemPrompt ?? naData.systemPrompt;
+    {
+      const visionData = data?.vision ?? void 0;
+      if (typeof data?.outputLanguage !== "string" && typeof visionData?.language === "string") {
+        this.settings.outputLanguage = visionData.language;
+      }
+      if (this.settings.vision && "language" in this.settings.vision) {
+        delete this.settings.vision.language;
+      }
+    }
     let schemaV3Dirty = false;
     const legacyTop = typeof data?.maxTokens === "number" ? data.maxTokens : void 0;
     const legacyCA = typeof caData.maxTokens === "number" ? caData.maxTokens : void 0;
@@ -49942,11 +50044,11 @@ var LlmWikiPlugin = class extends import_obsidian11.Plugin {
       if (data && data.model && !this.settings.claudeAgent.model)
         this.settings.claudeAgent.model = data.model;
     }
-    if (import_obsidian11.Platform.isMobile && this.settings.backend === "claude-agent") {
+    if (import_obsidian12.Platform.isMobile && this.settings.backend === "claude-agent") {
       this.settings.backend = "native-agent";
       await this.saveData(this.settings);
     }
-    if (import_obsidian11.Platform.isMobile) {
+    if (import_obsidian12.Platform.isMobile) {
       let dirty = false;
       if (this.settings.nativeAgent.perOperation) {
         this.settings.nativeAgent.perOperation = false;

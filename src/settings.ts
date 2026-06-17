@@ -217,6 +217,18 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
+      .setName(T.settings.outputLanguage_name)
+      .setDesc(T.settings.outputLanguage_desc)
+      .addDropdown((d) =>
+        d.addOptions({ auto: "Auto (match source)", ru: "Russian", en: "English", es: "Spanish" })
+          .setValue(s.outputLanguage ?? "auto")
+          .onChange(async (v) => {
+            s.outputLanguage = v as "auto" | "ru" | "en" | "es";
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
       .setName(T.settings.timeouts_name)
       .setDesc(T.settings.timeouts_desc)
       .addText((t) =>
@@ -839,17 +851,6 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         async (v) => { s.vision.model = v; await this.plugin.saveSettings(); },
       );
 
-      new Setting(containerEl)
-        .setName("Vision response language")
-        .setDesc("Language for image/PDF descriptions inserted into the note.")
-        .addDropdown((d) =>
-          d.addOptions({ auto: "Auto (match note language)", ru: "Russian", en: "English", es: "Spanish" })
-            .setValue(s.vision.language ?? "auto")
-            .onChange(async (v) => {
-              s.vision.language = v as "auto" | "ru" | "en" | "es";
-              await this.plugin.saveSettings();
-            }),
-        );
     }
 
     // ── Graph settings ────────────────────────────────────────────────────────
