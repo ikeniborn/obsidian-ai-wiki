@@ -49271,8 +49271,7 @@ var WikiController = class {
       new import_obsidian10.Notice(i18n().ctrl.noActiveFile);
       return;
     }
-    const abs = this.app.vault.adapter.getFullPath(file.path);
-    await this.dispatch("ingest", [abs], domainId);
+    await this.dispatch("ingest", [file.path], domainId);
   }
   async query(question, domainId) {
     if (!question.trim()) return;
