@@ -22,7 +22,7 @@ import type { LocalConfig, LocalConfigStore } from "./local-config";
 import type { LlmWikiPluginSettings } from "./types";
 import { FileErrorModal, FormatVisionModal, InfoModal, ShellConsentModal } from "./modals";
 import { domainWikiFolder, GLOBAL_AGENT_LOG_PATH } from "./wiki-path";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, validateAndRepairSourceFrontmatter } from "./utils/raw-frontmatter";
+import { restoreSourceFrontmatter } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
 import { collectMdInPaths, parseWikiSources } from "./utils/vault-walk";
 
@@ -36,21 +36,6 @@ interface ExcalidrawHostPlugin {
   ea?: ExcalidrawAutomateLike;
 }
 
-function patchWikiFields(originalContent: string, formattedContent: string): string {
-  const wikiUpdatedMatch = /^wiki_updated:[ \t]*(.+)$/m.exec(originalContent);
-  if (!wikiUpdatedMatch) return formattedContent;
-  const wikiUpdated = wikiUpdatedMatch[1].trim();
-  const wikiAddedMatch = /^wiki_added:[ \t]*(.+)$/m.exec(originalContent);
-  const wikiAdded = wikiAddedMatch?.[1].trim();
-  const wikiArticles = parseWikiArticlesFromFm(originalContent);
-  const patched = upsertRawFrontmatter(formattedContent, {
-    wiki_added: wikiAdded,
-    wiki_updated: wikiUpdated,
-    wiki_articles: wikiArticles,
-  });
-  const { content } = validateAndRepairSourceFrontmatter(patched);
-  return content;
-}
 
 export class WikiController {
   private current: AbortController | null = null;
@@ -132,7 +117,7 @@ export class WikiController {
         }
         const originalContent = await adapter.read(p.originalPath);
         const formattedContent = await adapter.read(p.tempPath);
-        const patched = patchWikiFields(originalContent, formattedContent);
+        const patched = restoreSourceFrontmatter(originalContent, formattedContent);
         if (adapter.rename) {
           await adapter.write(p.tempPath, patched);
           await adapter.rename(p.originalPath, deprecatedPath);
@@ -146,7 +131,7 @@ export class WikiController {
       } else {
         const originalContent = await adapter.read(p.originalPath);
         const content = await adapter.read(p.tempPath);
-        const patched = patchWikiFields(originalContent, content);
+        const patched = restoreSourceFrontmatter(originalContent, content);
         const origFile = this.app.vault.getAbstractFileByPath(p.originalPath);
         if (origFile instanceof TFile) {
           await this.app.vault.modify(origFile, patched);

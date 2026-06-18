@@ -318,6 +318,27 @@ export function validateAndRepairSourceFrontmatter(
   return validateAndRepairFrontmatter(content, SOURCE_RULES);
 }
 
+/**
+ * Restores a source page's frontmatter onto formatted output.
+ * - Preserves the wiki tracking fields (wiki_added / wiki_updated / wiki_articles)
+ *   from `original` when it carries a wiki_updated value.
+ * - ALWAYS normalizes the result (dedupe keys, drop invalid values, re-serialize YAML),
+ *   independent of wiki_updated presence.
+ * Idempotent: re-running on already-restored content yields the same content.
+ */
+export function restoreSourceFrontmatter(original: string, formatted: string): string {
+  const wikiUpdatedMatch = /^wiki_updated:[ \t]*(.+)$/m.exec(original);
+  if (wikiUpdatedMatch) {
+    const wiki_updated = wikiUpdatedMatch[1].trim();
+    const wikiAddedMatch = /^wiki_added:[ \t]*(.+)$/m.exec(original);
+    const wiki_added = wikiAddedMatch?.[1].trim();
+    const wiki_articles = parseWikiArticlesFromFm(original);
+    formatted = upsertRawFrontmatter(formatted, { wiki_added, wiki_updated, wiki_articles });
+  }
+  const { content } = validateAndRepairSourceFrontmatter(formatted);
+  return content;
+}
+
 const WIKI_PAGE_RULES: FieldRule[] = [
   { field: "wiki_sources",        kind: "list-wikilinks-sources-only" },
   { field: "wiki_updated",        kind: "date-scalar" },
