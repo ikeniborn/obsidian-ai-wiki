@@ -21,6 +21,10 @@ review:
 chain:
   intent: null
   spec: docs/superpowers/specs/2026-06-18-format-frontmatter-repair-and-progress-language-design.md
+result_check:
+  verdict: OK
+  plan_hash: ac9c66362d322a72
+  last_run: 2026-06-18
 ---
 # Format Frontmatter Repair + Progress Language Implementation Plan
 

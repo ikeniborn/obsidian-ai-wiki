@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка результата — Format Frontmatter Repair + Progress Language</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #1a2129; --panel-2: #222c36; --border: #313d4a;
+    --text: #e6edf3; --muted: #9bb0c3; --accent: #58a6ff; --accent-2: #7ee787;
+    --ok: #3fb950; --info: #58a6ff; --warn: #d29922; --crit: #f85149;
+    --chip-bg: #21303f; --shadow: 0 2px 14px rgba(0,0,0,.45);
+  }
+  [data-theme="light"] {
+    --bg: #f5f7fa; --panel: #ffffff; --panel-2: #eef2f6; --border: #d3dce4;
+    --text: #1b2733; --muted: #5a6b7b; --accent: #0969da; --accent-2: #1a7f37;
+    --ok: #1a7f37; --info: #0969da; --warn: #9a6700; --crit: #cf222e;
+    --chip-bg: #e6eef7; --shadow: 0 2px 12px rgba(20,40,70,.12);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 0 64px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.55;
+    transition: background .25s, color .25s;
+  }
+  header {
+    padding: 28px 32px 20px; border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--panel) 0%, var(--bg) 100%);
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between;
+  }
+  header h1 { margin: 0; font-size: 21px; letter-spacing: .2px; }
+  header .sub { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  main { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  section { margin-top: 30px; }
+  h2 { font-size: 17px; border-left: 3px solid var(--accent); padding-left: 10px; margin: 0 0 14px; }
+  .verdict-banner {
+    display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px;
+    padding: 9px 18px; border-radius: 8px; border: 1px solid var(--ok); color: var(--ok);
+    background: color-mix(in srgb, var(--ok) 12%, transparent);
+  }
+  .toggle {
+    cursor: pointer; border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
+    border-radius: 8px; padding: 8px 14px; font-size: 13px; transition: background .2s;
+  }
+  .toggle:hover { background: var(--chip-bg); }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; box-shadow: var(--shadow);
+  }
+  .card .n { font-size: 30px; font-weight: 700; line-height: 1; }
+  .card .l { color: var(--muted); font-size: 12px; margin-top: 8px; text-transform: uppercase; letter-spacing: .6px; }
+  .meta { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 4px 0; box-shadow: var(--shadow); }
+  .meta dl { display: grid; grid-template-columns: 200px 1fr; margin: 0; }
+  .meta dt { padding: 9px 18px; color: var(--muted); font-size: 13px; border-bottom: 1px solid var(--border); }
+  .meta dd { padding: 9px 18px; margin: 0; font-size: 13px; border-bottom: 1px solid var(--border); font-family: ui-monospace, "SF Mono", Menlo, monospace; word-break: break-all; }
+  .meta dl > :nth-last-child(1), .meta dl > :nth-last-child(2) { border-bottom: none; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); font-size: 13.5px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--panel-2); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--chip-bg); }
+  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 20px; letter-spacing: .4px; white-space: nowrap; }
+  .b-done { color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, transparent); border: 1px solid var(--ok); }
+  .b-info { color: var(--info); background: color-mix(in srgb, var(--info) 16%, transparent); border: 1px solid var(--info); }
+  .b-warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); border: 1px solid var(--warn); }
+  .b-crit { color: var(--crit); background: color-mix(in srgb, var(--crit) 16%, transparent); border: 1px solid var(--crit); }
+  .b-na { color: var(--muted); background: var(--panel-2); border: 1px solid var(--border); }
+  .note {
+    border-left: 3px solid var(--accent); background: var(--panel-2); border-radius: 0 8px 8px 0;
+    padding: 12px 16px; margin: 14px 0; font-size: 13.5px; color: var(--text);
+  }
+  .note.info { border-left-color: var(--info); }
+  .note strong { color: var(--accent); }
+  ul.clean { margin: 8px 0; padding-left: 20px; }
+  ul.clean li { margin: 5px 0; font-size: 13.5px; }
+  footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 40px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Проверка результата (check-result)</h1>
+    <div class="sub">Format Frontmatter Repair + Progress Language &middot; ветка <code>dev/format-fm-repair-progress-lang</code> &middot; 2026-06-18</div>
+  </div>
+  <div style="display:flex; gap:14px; align-items:center;">
+    <span class="verdict-banner">&#10003; ВЕРДИКТ: OK</span>
+    <button class="toggle" id="themeBtn" type="button">&#9788; Тема</button>
+  </div>
+</header>
+
+<main>
+
+  <section>
+    <h2>Сводка цепочки</h2>
+    <div class="meta">
+      <dl>
+        <dt>Intent</dt><dd>null (отсутствует)</dd>
+        <dt>Спецификация</dt><dd>docs/superpowers/specs/2026-06-18-format-frontmatter-repair-and-progress-language-design.md</dd>
+        <dt>План</dt><dd>docs/superpowers/plans/2026-06-18-format-frontmatter-repair-and-progress-language.md</dd>
+        <dt>База diff</dt><dd>git diff master..HEAD (вся работа закоммичена; diff HEAD пуст)</dd>
+        <dt>Хэш тела плана</dt><dd>ac9c66362d322a72 (подтверждён, не изменён)</dd>
+        <dt>Гейты</dt><dd>npm run build: PASS &middot; npm run lint: 0 errors (2 warnings в нетронутых файлах) &middot; eval 42/42 PASS</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section>
+    <h2>Сводные счётчики</h2>
+    <div class="grid">
+      <div class="card"><div class="n" style="color:var(--ok)">7 / 7</div><div class="l">Задачи DONE</div></div>
+      <div class="card"><div class="n" style="color:var(--ok)">4 / 4</div><div class="l">Покрытие спеки</div></div>
+      <div class="card"><div class="n" style="color:var(--crit)">0</div><div class="l">CRITICAL</div></div>
+      <div class="card"><div class="n" style="color:var(--info)">3</div><div class="l">INFO</div></div>
+      <div class="card"><div class="n" style="color:var(--ok)">0</div><div class="l">MISSING / PARTIAL</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Покрытие шагов плана</h2>
+    <table>
+      <thead><tr><th>Задача</th><th>Описание</th><th>Файлы в diff</th><th>Статус</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>T1</td>
+          <td>Извлечь <code>restoreSourceFrontmatter</code>, переключить контроллер с <code>patchWikiFields</code></td>
+          <td>raw-frontmatter.ts, controller.ts</td>
+          <td><span class="badge b-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>T2</td>
+          <td>Восстановление frontmatter в превью (вызов <code>restoreSourceFrontmatter</code> перед записью temp)</td>
+          <td>format.ts</td>
+          <td><span class="badge b-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>T3</td>
+          <td>i18n <code>formatProgress</code> (en/ru/es) + <code>i18nFor</code> + <code>resolveProgressLang</code></td>
+          <td>i18n.ts</td>
+          <td><span class="badge b-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>T4</td>
+          <td>Локализация стрима прогресса; передача bundle из agent-runner</td>
+          <td>format.ts, agent-runner.ts</td>
+          <td><span class="badge b-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>T5</td>
+          <td>Re-ingest восстанавливает <code>wiki_*</code> бэклинки (Bug 3) — <code>recoverSourceFrontmatter</code> (переименовано из <code>repairSourceFence</code>)</td>
+          <td>raw-frontmatter.ts, ingest.ts</td>
+          <td><span class="badge b-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>T6</td>
+          <td>Усиление промпта для битого frontmatter</td>
+          <td>templates/_format_schema.md, prompts/format.md</td>
+          <td><span class="badge b-done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>T7</td>
+          <td>Документация + финальная верификация (lat &rarr; iwiki адаптация)</td>
+          <td>docs/wiki/operations.md</td>
+          <td><span class="badge b-done">DONE</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Находки (severity / шаг / План / Diff / Исправление)</h2>
+    <table>
+      <thead><tr><th>Severity</th><th>Шаг</th><th>План говорит</th><th>Diff показывает</th><th>Исправление</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="badge b-info">INFO</span></td>
+          <td>T5</td>
+          <td>Функция <code>repairSourceFence</code> (заворачивает ведущий run скалярных key-строк)</td>
+          <td>Реализована как <code>recoverSourceFrontmatter</code> — после eval доказала, что <code>repairSourceFence</code> падала на всех реальных формах (dup keys, block-list, body-stranded)</td>
+          <td>Не требуется. Семантическое расхождение задокументировано в спеке (Bug 3 §Behavior "Revision 2026-06-18 (post-eval)"); коммит 096da4c заменил коммит fe69e2b; net diff показывает только <code>recoverSourceFrontmatter</code></td>
+        </tr>
+        <tr>
+          <td><span class="badge b-info">INFO</span></td>
+          <td>T4</td>
+          <td>Локальный алиас <code>type FormatProgress = I18n["formatProgress"]</code></td>
+          <td>Тип <code>FormatProgress</code> экспортирован явно из i18n.ts; добавлен compile-time check <code>_formatProgressShapeCheck</code>, фиксирующий <code>en</code> к контракту</td>
+          <td>Не требуется. Документированное отклонение Task 4 — усиливает защиту от дрейфа ключей, поведенчески эквивалентно</td>
+        </tr>
+        <tr>
+          <td><span class="badge b-info">INFO</span></td>
+          <td>T7</td>
+          <td>Обновить <code>lat.md/</code>, выполнить <code>lat check</code></td>
+          <td><code>lat</code>/<code>lat.md</code> в этом репозитории не существуют; адаптировано к iwiki — обновлён <code>docs/wiki/operations.md</code> (секции Frontmatter Restore, Progress Language, recovery в ingest)</td>
+          <td>Не требуется. Адаптация lat&rarr;iwiki ожидаема; <code>lat check</code> N/A</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Покрытие требований спецификации (4 / 4)</h2>
+    <table>
+      <thead><tr><th>Требование спеки</th><th>Где в diff</th><th>Статус</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Bug 1 — восстановление битого frontmatter в превью (preserve <code>wiki_*</code>, всегда normalize, превью == apply, идемпотентно)</td>
+          <td><code>restoreSourceFrontmatter</code> (raw-frontmatter.ts) вызывается в <code>runFormat</code> перед записью temp (format.ts); контроллер переиспользует ту же функцию</td>
+          <td><span class="badge b-done">ПОКРЫТО</span></td>
+        </tr>
+        <tr>
+          <td>Bug 2 — язык прогресса следует настройкам (<code>resolveProgressLang</code>, auto&rarr;moment, phases без obsidian-импорта)</td>
+          <td><code>resolveProgressLang</code>/<code>i18nFor</code> + bundle <code>formatProgress</code> (i18n.ts); резолв в agent-runner.ts; type-only импорт в format.ts; 0 кириллицы в format.ts</td>
+          <td><span class="badge b-done">ПОКРЫТО</span></td>
+        </tr>
+        <tr>
+          <td>Bug 3 — re-ingest восстанавливает <code>wiki_*</code> бэклинки (tolerant к unfenced/dup/block-list/body-stranded)</td>
+          <td><code>recoverSourceFrontmatter</code> (raw-frontmatter.ts); <code>normalizedSource</code> используется для всех 3 чтений + upsert (ingest.ts)</td>
+          <td><span class="badge b-done">ПОКРЫТО</span></td>
+        </tr>
+        <tr>
+          <td>Усиление промпта (secondary) — инструкция LLM перестраивать битый frontmatter</td>
+          <td>Строка в templates/_format_schema.md и bullet в HARD RULES prompts/format.md</td>
+          <td><span class="badge b-done">ПОКРЫТО</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="note info">
+      <strong>Верификация спеки.</strong> Сборка/линт-гейты пройдены (build PASS, lint 0 errors).
+      Детерминированная логика всех трёх багов подтверждена out-of-vault eval-харнессом:
+      <strong>42/42 PASS</strong> (см. <code>docs/superpowers/evals/2026-06-18-format-frontmatter-repair-eval.md</code>).
+      Ручные in-vault проверки (рендер сайдбара превью, live-LLM, полный pipeline ingest) — единственное,
+      что харнесс покрыть не может.
+    </div>
+  </section>
+
+  <section>
+    <h2>Избыточные изменения (excess)</h2>
+    <table>
+      <thead><tr><th>Файлы</th><th>Что это</th><th>Классификация</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>eval/format-frontmatter/run.ts</code>, <code>obsidian-stub.ts</code>, <code>.gitignore</code></td>
+          <td>Out-of-vault eval-харнесс — добавлен по явному запросу пользователя в процессе исполнения ("создать eval-документ, тестировать вне prod-vault")</td>
+          <td><span class="badge b-info">INFO / оправдано</span></td>
+        </tr>
+        <tr>
+          <td><code>docs/superpowers/evals/2026-06-18-format-frontmatter-repair-eval.md</code></td>
+          <td>Eval-документ, фиксирующий 42/42 PASS и историю редизайна <code>repairSourceFence</code> &rarr; <code>recoverSourceFrontmatter</code></td>
+          <td><span class="badge b-info">INFO / оправдано</span></td>
+        </tr>
+        <tr>
+          <td>docs/superpowers/*-check.html, спека, план</td>
+          <td>Артефакты check-spec / check-plan и сами spec/plan документы</td>
+          <td><span class="badge b-info">INFO / артефакты процесса</span></td>
+        </tr>
+        <tr>
+          <td><code>docs/wiki/.iwiki/index.jsonl</code>, <code>log.jsonl</code></td>
+          <td>Автогенерируемые артефакты индекса iwiki (от ingest docs)</td>
+          <td><span class="badge b-na">N/A</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Итог</h2>
+    <div class="note">
+      Все 7 задач плана реализованы (DONE), все 4 требования спецификации покрыты в diff.
+      Найдено <strong>0 CRITICAL</strong> и 0 действительно MISSING/PARTIAL шагов. Три находки уровня INFO —
+      документированные расхождения (<code>repairSourceFence</code>&rarr;<code>recoverSourceFrontmatter</code>, явный экспорт
+      <code>FormatProgress</code>, адаптация lat&rarr;iwiki), не дефекты. Избыточные изменения (eval-харнесс и eval-документ)
+      добавлены по явной просьбе пользователя.
+    </div>
+    <ul class="clean">
+      <li>Хэш тела плана подтверждён неизменным: <code>ac9c66362d322a72</code>.</li>
+      <li>Гейт-блок <code>result_check</code> записан во frontmatter плана: verdict OK.</li>
+      <li>Build PASS, lint 0 errors (2 pre-existing warnings в нетронутых файлах), eval 42/42 PASS.</li>
+    </ul>
+    <p style="margin-top:18px;"><span class="verdict-banner">&#10003; ВЕРДИКТ: OK</span></p>
+  </section>
+
+  <footer>Автогенерируемый артефакт check-result &middot; 2026-06-18</footer>
+</main>
+
+<script>
+  (function () {
+    var btn = document.getElementById('themeBtn');
+    var root = document.documentElement;
+    function set(t) { root.setAttribute('data-theme', t); }
+    var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+    set(prefersLight ? 'light' : 'dark');
+    btn.addEventListener('click', function () {
+      set(root.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+    });
+  })();
+</script>
+</body>
+</html>
