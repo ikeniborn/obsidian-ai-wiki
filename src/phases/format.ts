@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types";
+import type { FormatProgress } from "../i18n";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas, extractUsage, wrapStreamWithStats, buildLlmCallStatsEvent } from "./llm-utils";
 import formatTemplate from "../../prompts/format.md";
@@ -52,11 +53,28 @@ function extractImagePaths(md: string): string[] {
   return out;
 }
 
-function truncationHint(backend: "claude-agent" | "native-agent"): string {
-  return backend === "claude-agent"
-    ? "увеличьте лимит: env CLAUDE_CODE_MAX_OUTPUT_TOKENS в iclaude.sh"
-    : "увеличьте лимит: Settings → per-operation → format → maxTokens";
+function truncationHint(backend: "claude-agent" | "native-agent", p: FormatProgress): string {
+  return backend === "claude-agent" ? p.truncationHintEnv : p.truncationHintSettings;
 }
+
+// English fallback so runFormat is usable without an explicit bundle.
+// Mirrors `en.formatProgress` in i18n.ts — keep the two in sync (format.ts must not
+// import the runtime i18n bundle, only the FormatProgress type, to keep phases/ obsidian-free).
+const enFormatProgressFallback: FormatProgress = {
+  analysing: (path: string) => `Analysing file ${path}...\n`,
+  truncatedSalvageSummary: "Format: response truncated — salvage",
+  truncatedSalvageRetrySummary: "Format: retry response truncated — salvage",
+  truncatedSalvageDetail: "Marker <<<END>>> missing; partial output used.",
+  outputTruncated: (hint: string) =>
+    `Format: response truncated by the model output limit — shorten the page or ${hint}`,
+  outputTruncatedAfterRetry: (hint: string) =>
+    `Format: response truncated by the model output limit (after retry) — shorten the page or ${hint}`,
+  sentinelInvalidRetry: "\n[Sentinel invalid — retrying]\n",
+  sentinelInvalidAfterRetry: "Format: LLM returned an invalid sentinel (after retry)",
+  writeFailed: (err: string) => `Format: writing the formatted file failed — ${err}`,
+  truncationHintEnv: "raise the limit: env CLAUDE_CODE_MAX_OUTPUT_TOKENS in iclaude.sh",
+  truncationHintSettings: "raise the limit: Settings → per-operation → format → maxTokens",
+};
 
 export async function* runFormat(
   args: string[],
@@ -72,6 +90,7 @@ export async function* runFormat(
   wikiLinkValidationRetries: number = 3,
   visionSettings: { enabled: boolean; model: string; language?: "auto" | "ru" | "en" | "es" } = { enabled: false, model: "" },
   visionTempStore?: VisionTempStore,
+  progress: FormatProgress = enFormatProgressFallback,
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
   const filePath = args[0];
@@ -181,7 +200,7 @@ export async function* runFormat(
     ...chatHistory.map((m) => ({ role: m.role, content: m.content })),
   ];
 
-  yield { kind: "assistant_text", delta: `Анализ файла ${filePath}...\n` };
+  yield { kind: "assistant_text", delta: progress.analysing(filePath) };
 
   const baseParams = buildChatParams(model, messages, opts, true);
 
@@ -231,22 +250,22 @@ export async function* runFormat(
   if (parsedResult.truncated) {
     yield {
       kind: "info_text", icon: "⚠️",
-      summary: "Format: ответ обрезан — salvage",
-      details: ["Маркер <<<END>>> отсутствует; использован частичный вывод."],
+      summary: progress.truncatedSalvageSummary,
+      details: [progress.truncatedSalvageDetail],
     };
   }
 
   const truncated = !parsed && lastFinishReason === "length";
   if (!parsed && truncated) {
     yield { kind: "tool_result", ok: false, preview: "response truncated" };
-    yield { kind: "error", message: `Format: ответ обрезан по лимиту вывода модели — сократите страницу или ${truncationHint(backend)}` };
+    yield { kind: "error", message: progress.outputTruncated(truncationHint(backend, progress)) };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
     return;
   }
 
   if (!parsed) {
     yield { kind: "tool_result", ok: false, preview: "invalid sentinel — retrying" };
-    yield { kind: "assistant_text", delta: "\n[Sentinel невалиден — повторяю запрос]\n" };
+    yield { kind: "assistant_text", delta: progress.sentinelInvalidRetry };
     const zodHint = parsedResult.hint;
     const retrySystemContent = systemContent + `\n\nThe previous attempt failed: ${zodHint}. Fix it and return again using the markers <<<REPORT>>>...<<<END>>>.`;
     const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -262,8 +281,8 @@ export async function* runFormat(
     if (parsedResult.truncated) {
       yield {
         kind: "info_text", icon: "⚠️",
-        summary: "Format: retry ответ обрезан — salvage",
-        details: ["Маркер <<<END>>> отсутствует; использован частичный вывод."],
+        summary: progress.truncatedSalvageRetrySummary,
+        details: [progress.truncatedSalvageDetail],
       };
     }
   }
@@ -271,8 +290,8 @@ export async function* runFormat(
   if (!parsed) {
     const retryTruncated = lastFinishReason === "length";
     const msg = retryTruncated
-      ? `Format: ответ обрезан по лимиту вывода модели (после retry) — сократите страницу или ${truncationHint(backend)}`
-      : "Format: LLM вернул невалидный sentinel (после retry)";
+      ? progress.outputTruncatedAfterRetry(truncationHint(backend, progress))
+      : progress.sentinelInvalidAfterRetry;
     yield { kind: "tool_result", ok: false, preview: msg };
     yield { kind: "error", message: msg };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || undefined };
@@ -329,7 +348,7 @@ export async function* runFormat(
   try {
     await vaultTools.write(tempPath, finalFormatted);
   } catch (e) {
-    yield { kind: "error", message: `Format: запись формата не удалась — ${(e as Error).message}` };
+    yield { kind: "error", message: progress.writeFailed((e as Error).message) };
     return;
   }
 

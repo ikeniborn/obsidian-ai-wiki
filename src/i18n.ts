@@ -284,6 +284,20 @@ const en = {
 
 type I18n = typeof en;
 
+export type FormatProgress = {
+  analysing: (path: string) => string;
+  truncatedSalvageSummary: string;
+  truncatedSalvageRetrySummary: string;
+  truncatedSalvageDetail: string;
+  outputTruncated: (hint: string) => string;
+  outputTruncatedAfterRetry: (hint: string) => string;
+  sentinelInvalidRetry: string;
+  sentinelInvalidAfterRetry: string;
+  writeFailed: (err: string) => string;
+  truncationHintEnv: string;
+  truncationHintSettings: string;
+};
+
 const ru: I18n = {
   settings: {
     h3_general: "Общие настройки",
