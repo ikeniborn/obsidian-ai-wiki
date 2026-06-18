@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка плана — format frontmatter repair + progress language</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --border:#2a2f3a;
+    --fg:#e6e9ef; --muted:#9aa3b2; --accent:#5ea0ff; --accent2:#7ee0c0;
+    --ok:#56d364; --warn:#e3b341; --crit:#f06a6a; --info:#58a6ff;
+    --node:#202634; --node-new:#1d3a30; --edge:#5b6675;
+    --shadow:0 2px 10px rgba(0,0,0,.35);
+  }
+  :root[data-theme="light"]{
+    --bg:#f5f7fb; --panel:#ffffff; --panel2:#f0f3f8; --border:#d8deea;
+    --fg:#1c2330; --muted:#5a6473; --accent:#2563eb; --accent2:#0f9d77;
+    --ok:#1a7f37; --warn:#9a6700; --crit:#cf222e; --info:#0969da;
+    --node:#eef2f9; --node-new:#e4f5ee; --edge:#9aa6b8;
+    --shadow:0 2px 10px rgba(20,40,80,.10);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 22px 70px;}
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+  h1{font-size:22px;margin:.2em 0}
+  h2{font-size:18px;margin:1.8em 0 .6em;padding-bottom:.3em;border-bottom:1px solid var(--border)}
+  h3{font-size:15px;margin:1.3em 0 .5em;color:var(--accent)}
+  .sub{color:var(--muted);font-size:13px}
+  code{background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:.05em .4em;font-size:.86em;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .grid{display:grid;gap:14px}
+  .cards4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:760px){.cards4{grid-template-columns:repeat(2,1fr)}}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;box-shadow:var(--shadow)}
+  .card .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .card .v{font-size:16px;font-weight:700;margin-top:4px}
+  .pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;border:1px solid transparent}
+  .pill.passed{color:var(--ok);border-color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,transparent)}
+  .pill.warn{color:var(--warn);border-color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent)}
+  .pill.info{color:var(--info);border-color:var(--info);background:color-mix(in srgb,var(--info) 12%,transparent)}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--border);
+    border-radius:12px;overflow:hidden;margin:.4em 0 .2em}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;font-size:13px}
+  th{background:var(--panel2);color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+  tr:last-child td{border-bottom:none}
+  td code{white-space:nowrap}
+  .note{background:color-mix(in srgb,var(--accent) 8%,var(--panel));border:1px solid var(--border);
+    border-left:3px solid var(--accent);border-radius:8px;padding:10px 14px;margin:.6em 0;font-size:13px}
+  .toggle{cursor:pointer;background:var(--panel);border:1px solid var(--border);color:var(--fg);
+    border-radius:999px;padding:7px 14px;font-size:13px;display:inline-flex;gap:7px;align-items:center}
+  figure{margin:1em 0}
+  figcaption{color:var(--muted);font-size:12px;margin-top:6px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
+  .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:5px}
+  .chain{display:inline-flex;align-items:center;gap:8px;font-size:13px;flex-wrap:wrap}
+  .chain .seg{background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:3px 10px}
+  .ov{background:color-mix(in srgb,var(--accent2) 18%,transparent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Проверка плана</h1>
+      <div class="sub">format frontmatter repair + progress language · Bug 1/2/3 · 2026-06-18</div>
+    </div>
+    <button class="toggle" id="tg" onclick="tt()">🌙 Тема</button>
+  </header>
+
+  <div class="grid cards4" style="margin-top:14px">
+    <div class="card"><div class="k">Вердикт</div><div class="v" style="color:var(--ok)">OK</div></div>
+    <div class="card"><div class="k">CRITICAL / WARNING</div><div class="v">0 / 0</div></div>
+    <div class="card"><div class="k">INFO</div><div class="v" style="color:var(--info)">1 (accepted)</div></div>
+    <div class="card"><div class="k">Tasks</div><div class="v">7</div></div>
+  </div>
+
+  <div class="note">
+    План: <code>…/plans/2026-06-18-format-frontmatter-repair-and-progress-language.md</code> ·
+    plan_hash <code>ac9c6636…</code><br>
+    Спека: <code>…/specs/…-design.md</code> · spec_hash <code>eaa0961c…</code> (расширена Bug 3) ·
+    5 фаз — все <b>passed</b>.
+  </div>
+
+  <!-- БЛОК 1 -->
+  <h2>1 · Резюме плана</h2>
+  <table>
+    <thead><tr><th>Таск</th><th>Файлы</th><th>Критерий готовности (DoD)</th></tr></thead>
+    <tbody>
+      <tr><td><b>T1</b> Extract <code>restoreSourceFrontmatter</code> + rewire controller</td>
+        <td><code>raw-frontmatter.ts</code>, <code>controller.ts</code></td>
+        <td>lint+build PASS; <code>patchWikiFields</code> удалён; импорты починены.</td></tr>
+      <tr><td><b>T2</b> Restore frontmatter on format preview</td>
+        <td><code>phases/format.ts</code></td>
+        <td>lint+build PASS; <code>restoreSourceFrontmatter</code> вызывается перед записью tempPath.</td></tr>
+      <tr><td><b>T3</b> i18n <code>formatProgress</code> + <code>i18nFor</code> + <code>resolveProgressLang</code></td>
+        <td><code>i18n.ts</code></td>
+        <td>lint+build PASS (ru/es удовлетворяют <code>I18n</code> shape).</td></tr>
+      <tr><td><b>T4</b> Localize format progress stream</td>
+        <td><code>phases/format.ts</code>, <code>agent-runner.ts</code></td>
+        <td>grep RU-строк в <code>format.ts</code> пуст; lint+build PASS.</td></tr>
+      <tr><td><b>T5</b> Re-ingest source <code>wiki_*</code> backlinks <span class="pill info">Bug 3</span></td>
+        <td><code>raw-frontmatter.ts</code> (<code>repairSourceFence</code>), <code>ingest.ts</code></td>
+        <td>lint+build PASS; <code>normalizedSource</code> используется в reads+upsert.</td></tr>
+      <tr><td><b>T6</b> Prompt reinforcement <span class="muted">(secondary)</span></td>
+        <td><code>_format_schema.md</code>, <code>format.md</code></td>
+        <td>build PASS.</td></tr>
+      <tr><td><b>T7</b> Docs <code>lat.md</code> + final verification</td>
+        <td><code>lat.md</code></td>
+        <td><code>lat check</code> PASS; lint+build PASS; ручные прогоны format и re-ingest.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- БЛОК 2 -->
+  <h2>2 · Зависимости и пересечения</h2>
+
+  <h3>Граф зависимостей шагов (M → N, M&lt;N)</h3>
+  <figure>
+    <svg viewBox="0 0 900 320" width="100%" role="img" aria-label="Граф зависимостей тасков">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/>
+        </marker>
+        <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1.5" stdDeviation="2" flood-color="#000" flood-opacity="0.30"/>
+        </filter>
+      </defs>
+      <style>
+        .n rect{fill:var(--node);stroke:var(--border);stroke-width:1.2;filter:url(#ds)}
+        .n text{fill:var(--fg);font:12px sans-serif;font-weight:700}
+        .n .s{fill:var(--muted);font-weight:400;font-size:10px}
+        .e{stroke:var(--edge);stroke-width:1.7;fill:none;marker-end:url(#ar)}
+        .el{fill:var(--muted);font:9.5px sans-serif}
+      </style>
+      <!-- edges -->
+      <path class="e" d="M150,86 C150,120 150,120 150,150"/>     <!-- T1->T2 -->
+      <path class="e" d="M470,86 C470,120 470,120 470,150"/>     <!-- T3->T4 -->
+      <path class="e" d="M200,178 C400,230 600,250 720,250"/>    <!-- T2->T7 -->
+      <path class="e" d="M520,178 C600,210 660,232 730,244"/>    <!-- T4->T7 -->
+      <path class="e" d="M730,120 C760,170 770,205 778,232"/>    <!-- T5->T7 -->
+      <path class="e" d="M760,300 C770,290 775,275 778,268"/>    <!-- T6->T7 (short) -->
+      <text class="el" x="156" y="120">restoreSourceFrontmatter</text>
+      <text class="el" x="476" y="120">i18n helpers</text>
+      <!-- nodes -->
+      <g class="n"><rect x="90" y="50" width="120" height="36" rx="9"/><text x="106" y="68">T1</text><text x="106" y="80" class="s">raw-fm / controller</text></g>
+      <g class="n"><rect x="90" y="150" width="120" height="36" rx="9"/><text x="106" y="168">T2</text><text x="106" y="180" class="s">format preview</text></g>
+      <g class="n"><rect x="410" y="50" width="120" height="36" rx="9"/><text x="426" y="68">T3</text><text x="426" y="80" class="s">i18n bundle</text></g>
+      <g class="n"><rect x="410" y="150" width="120" height="36" rx="9"/><text x="426" y="168">T4</text><text x="426" y="180" class="s">localize stream</text></g>
+      <g class="n"><rect x="670" y="84" width="120" height="36" rx="9"/><text x="686" y="102">T5</text><text x="686" y="114" class="s">re-ingest Bug3</text></g>
+      <g class="n"><rect x="700" y="300" width="120" height="0"/></g>
+      <g class="n"><rect x="700" y="285" width="120" height="34" rx="9"/><text x="716" y="303">T6</text><text x="716" y="314" class="s">prompt</text></g>
+      <g class="n"><rect x="720" y="232" width="130" height="38" rx="9"/><text x="736" y="251">T7</text><text x="736" y="263" class="s">docs + verify</text></g>
+    </svg>
+    <div class="legend"><span>→ «результат шага M используется в N»</span><span>Циклов нет · нарушений порядка нет</span></div>
+    <figcaption>T1→T2 и T3→T4 — цепочки по артефактам. T5 (Bug 3) независим от T1–T4. T2/T4/T5/T6 сходятся в T7 (финальная верификация).</figcaption>
+  </figure>
+
+  <h3>Пересечения по артефактам (файл → таски)</h3>
+  <table>
+    <thead><tr><th>Файл</th><th>Таски</th><th>Замечание</th></tr></thead>
+    <tbody>
+      <tr class="ov"><td><code>raw-frontmatter.ts</code></td><td>T1, T5</td><td>Разные функции (<code>restoreSourceFrontmatter</code> vs <code>repairSourceFence</code>) — overlap без конфликта.</td></tr>
+      <tr class="ov"><td><code>phases/format.ts</code></td><td>T2, T4</td><td>T2 — вызов restore; T4 — локализация строк. Разные участки.</td></tr>
+      <tr><td><code>i18n.ts</code></td><td>T3</td><td>—</td></tr>
+      <tr><td><code>agent-runner.ts</code></td><td>T4</td><td>—</td></tr>
+      <tr><td><code>ingest.ts</code></td><td>T5</td><td>—</td></tr>
+      <tr><td><code>controller.ts</code></td><td>T1</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Карта покрытия (требование → таски)</h3>
+  <table>
+    <thead><tr><th>Требование спеки</th><th>Таски</th></tr></thead>
+    <tbody>
+      <tr><td><b>Bug 1</b> — restore broken frontmatter in preview</td><td>T1, T2, T6</td></tr>
+      <tr><td><b>Bug 2</b> — progress language follows settings</td><td>T3, T4</td></tr>
+      <tr><td><b>Bug 3</b> — re-ingest source wiki_* backlinks</td><td>T5</td></tr>
+      <tr><td><b>Verification</b></td><td>T7</td></tr>
+    </tbody>
+  </table>
+
+  <!-- БЛОК 3 -->
+  <h2>3 · Результаты проверки</h2>
+  <div class="grid cards4">
+    <div class="card"><div class="k">structure</div><div class="v"><span class="pill passed">passed</span></div></div>
+    <div class="card"><div class="k">coverage</div><div class="v"><span class="pill passed">passed</span></div></div>
+    <div class="card"><div class="k">dependencies</div><div class="v"><span class="pill passed">passed</span></div></div>
+    <div class="card"><div class="k">verifiability</div><div class="v"><span class="pill passed">passed</span></div></div>
+  </div>
+  <div class="grid cards4" style="margin-top:14px">
+    <div class="card"><div class="k">consistency</div><div class="v"><span class="pill passed">passed</span></div></div>
+    <div class="card"><div class="k">CRITICAL open</div><div class="v">0</div></div>
+    <div class="card"><div class="k">WARNING open</div><div class="v">0</div></div>
+    <div class="card"><div class="k">Вердикт</div><div class="v" style="color:var(--ok)">OK</div></div>
+  </div>
+
+  <h3>Findings</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>F-001</code></td>
+        <td><span class="pill info">INFO</span></td>
+        <td>per-task Step titles</td>
+        <td>Повтор заголовков шагов между тасками (<code>Step 5: Commit</code> и т.п.) — намеренная per-task структура шаблона writing-plans, не дефект.</td>
+        <td><span class="pill passed">accepted</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Chain</h3>
+  <div class="note">
+    <span class="chain">
+      <span class="seg muted">intent: null</span> →
+      <span class="seg">spec <code>eaa0961c…</code></span> →
+      <span class="seg">plan <code>ac9c6636…</code></span>
+    </span>
+  </div>
+  <div class="note"><b>Финальный вердикт: OK</b> — 0 critical, 0 warning, 1 info (accepted). План готов к исполнению.</div>
+
+</div>
+<script>
+  function tt(){var r=document.documentElement;var l=r.getAttribute('data-theme')==='light';
+    r.setAttribute('data-theme',l?'dark':'light');
+    document.getElementById('tg').textContent=(l?'🌙':'☀️')+' Тема';}
+</script>
+</body>
+</html>
