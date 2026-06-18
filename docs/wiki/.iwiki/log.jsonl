@@ -1,1 +1,2 @@
 {"op":"ingest","source":"lat.md/ + src/","page":"docs/wiki/*.md (8 pages)","date":"2026-06-17"}
+{"op":"ingest","source":"src/phases/format.ts,src/phases/ingest.ts,src/utils/raw-frontmatter.ts,src/i18n.ts","page":"operations.md","date":"2026-06-18"}
