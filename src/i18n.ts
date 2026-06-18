@@ -298,6 +298,12 @@ export type FormatProgress = {
   truncationHintSettings: string;
 };
 
+// Pin the live `en` bundle to the FormatProgress contract: if en.formatProgress drops or
+// renames a key, this is a compile error (tsc) instead of a silent ship. format.ts holds a
+// hand-copied enFormatProgressFallback because it must not import this runtime bundle.
+const _formatProgressShapeCheck: FormatProgress = en.formatProgress;
+void _formatProgressShapeCheck;
+
 const ru: I18n = {
   settings: {
     h3_general: "Общие настройки",
