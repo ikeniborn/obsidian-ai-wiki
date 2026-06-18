@@ -13,6 +13,7 @@ import type { VaultTools } from "./vault-tools";
 import { wrapWithJsonFallback } from "./phases/llm-utils";
 import { GLOBAL_DEV_LOG_PATH, domainWikiFolder } from "./wiki-path";
 import { PageSimilarityService, DEFAULT_CHUNKING } from "./page-similarity";
+import { resolveProgressLang, i18nFor } from "./i18n";
 
 export class AgentRunner {
   private llm: LlmClient;
@@ -146,7 +147,8 @@ export class AgentRunner {
           language: this.settings.outputLanguage ?? "auto",
         };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
-        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore);
+        const progress = i18nFor(resolveProgressLang(this.settings.outputLanguage)).formatProgress;
+        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore, progress);
         break;
       }
       default: {

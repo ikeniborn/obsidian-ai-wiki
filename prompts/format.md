@@ -8,6 +8,7 @@ HARD RULES:
 - Describe all changes in the report field.
 - Obsidian embeds (`![[path]]`, `![[path|alias]]`) — copy exactly as they are. Do not convert them to standard Markdown (`![alt](path)`).
 - If the user message contains an "ATTACHMENT DESCRIPTIONS" block: integrate each description IMMEDIATELY BELOW the corresponding `![[path]]` embed in formatted. Keep the description's structural form (table / list / mermaid / code) as is — do not wrap it in a blockquote, do not add a `[Vision]` marker, do not quote the `![[path]]` heading inside the description. If a description is already present in the source (old format `> *[Vision] ...*` or a duplicate) — remove the old variant and keep only the structured version.
+- If the source frontmatter is broken (missing/duplicated `---` fences, invalid YAML, keys outside a fenced block), reconstruct a single valid YAML frontmatter block, preserving real field values (the `wiki_*` fields are excluded — they are restored automatically). Do not drop existing field values.
 
 FORMATTING RULES:
 {{format_schema}}

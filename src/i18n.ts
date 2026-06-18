@@ -1,4 +1,5 @@
 import { moment } from "obsidian";
+import type { OutputLanguage } from "./types";
 
 const en = {
   settings: {
@@ -176,6 +177,21 @@ const en = {
     initialising: "Initialising",
     selectDomainFirst: "Select a domain first",
   },
+  formatProgress: {
+    analysing: (path: string) => `Analysing file ${path}...\n`,
+    truncatedSalvageSummary: "Format: response truncated — salvage",
+    truncatedSalvageRetrySummary: "Format: retry response truncated — salvage",
+    truncatedSalvageDetail: "Marker <<<END>>> missing; partial output used.",
+    outputTruncated: (hint: string) =>
+      `Format: response truncated by the model output limit — shorten the page or ${hint}`,
+    outputTruncatedAfterRetry: (hint: string) =>
+      `Format: response truncated by the model output limit (after retry) — shorten the page or ${hint}`,
+    sentinelInvalidRetry: "\n[Sentinel invalid — retrying]\n",
+    sentinelInvalidAfterRetry: "Format: LLM returned an invalid sentinel (after retry)",
+    writeFailed: (err: string) => `Format: writing the formatted file failed — ${err}`,
+    truncationHintEnv: "raise the limit: env CLAUDE_CODE_MAX_OUTPUT_TOKENS in iclaude.sh",
+    truncationHintSettings: "raise the limit: Settings → per-operation → format → maxTokens",
+  },
   ctrl: {
     cancelling: "Cancelling…",
     noActiveFile: "No active file",
@@ -267,6 +283,26 @@ const en = {
 };
 
 type I18n = typeof en;
+
+export type FormatProgress = {
+  analysing: (path: string) => string;
+  truncatedSalvageSummary: string;
+  truncatedSalvageRetrySummary: string;
+  truncatedSalvageDetail: string;
+  outputTruncated: (hint: string) => string;
+  outputTruncatedAfterRetry: (hint: string) => string;
+  sentinelInvalidRetry: string;
+  sentinelInvalidAfterRetry: string;
+  writeFailed: (err: string) => string;
+  truncationHintEnv: string;
+  truncationHintSettings: string;
+};
+
+// Pin the live `en` bundle to the FormatProgress contract: if en.formatProgress drops or
+// renames a key, this is a compile error (tsc) instead of a silent ship. format.ts holds a
+// hand-copied enFormatProgressFallback because it must not import this runtime bundle.
+const _formatProgressShapeCheck: FormatProgress = en.formatProgress;
+void _formatProgressShapeCheck;
 
 const ru: I18n = {
   settings: {
@@ -443,6 +479,21 @@ const ru: I18n = {
     starting: "Запуск",
     initialising: "Инициализация",
     selectDomainFirst: "Выберите домен",
+  },
+  formatProgress: {
+    analysing: (path: string) => `Анализ файла ${path}...\n`,
+    truncatedSalvageSummary: "Format: ответ обрезан — salvage",
+    truncatedSalvageRetrySummary: "Format: retry ответ обрезан — salvage",
+    truncatedSalvageDetail: "Маркер <<<END>>> отсутствует; использован частичный вывод.",
+    outputTruncated: (hint: string) =>
+      `Format: ответ обрезан по лимиту вывода модели — сократите страницу или ${hint}`,
+    outputTruncatedAfterRetry: (hint: string) =>
+      `Format: ответ обрезан по лимиту вывода модели (после retry) — сократите страницу или ${hint}`,
+    sentinelInvalidRetry: "\n[Sentinel невалиден — повторяю запрос]\n",
+    sentinelInvalidAfterRetry: "Format: LLM вернул невалидный sentinel (после retry)",
+    writeFailed: (err: string) => `Format: запись формата не удалась — ${err}`,
+    truncationHintEnv: "увеличьте лимит: env CLAUDE_CODE_MAX_OUTPUT_TOKENS в iclaude.sh",
+    truncationHintSettings: "увеличьте лимит: Settings → per-operation → format → maxTokens",
   },
   ctrl: {
     cancelling: "Отмена…",
@@ -710,6 +761,21 @@ const es: I18n = {
     initialising: "Inicializando",
     selectDomainFirst: "Selecciona un dominio primero",
   },
+  formatProgress: {
+    analysing: (path: string) => `Analizando archivo ${path}...\n`,
+    truncatedSalvageSummary: "Format: respuesta truncada — recuperación",
+    truncatedSalvageRetrySummary: "Format: reintento truncado — recuperación",
+    truncatedSalvageDetail: "Falta el marcador <<<END>>>; se usó la salida parcial.",
+    outputTruncated: (hint: string) =>
+      `Format: respuesta truncada por el límite de salida del modelo — acorta la página o ${hint}`,
+    outputTruncatedAfterRetry: (hint: string) =>
+      `Format: respuesta truncada por el límite de salida del modelo (tras reintento) — acorta la página o ${hint}`,
+    sentinelInvalidRetry: "\n[Sentinel inválido — reintentando]\n",
+    sentinelInvalidAfterRetry: "Format: el LLM devolvió un sentinel inválido (tras reintento)",
+    writeFailed: (err: string) => `Format: falló la escritura del archivo formateado — ${err}`,
+    truncationHintEnv: "aumenta el límite: env CLAUDE_CODE_MAX_OUTPUT_TOKENS en iclaude.sh",
+    truncationHintSettings: "aumenta el límite: Settings → per-operation → format → maxTokens",
+  },
   ctrl: {
     cancelling: "Cancelando…",
     noActiveFile: "No hay archivo activo",
@@ -805,4 +871,25 @@ const locales: Record<string, I18n> = { ru, es };
 export function i18n(): I18n {
   const locale = moment.locale();
   return locales[locale] ?? en;
+}
+
+const langBundles: Record<"ru" | "en" | "es", I18n> = { ru, en, es };
+
+/** Returns the bundle for an explicit language, bypassing moment.locale(). */
+export function i18nFor(lang: "ru" | "en" | "es"): I18n {
+  return langBundles[lang];
+}
+
+/**
+ * Resolves the language for operation progress strings.
+ * Explicit outputLanguage wins; `auto`/undefined falls back to the Obsidian UI locale.
+ */
+export function resolveProgressLang(outputLanguage: OutputLanguage | undefined): "ru" | "en" | "es" {
+  if (outputLanguage === "ru" || outputLanguage === "en" || outputLanguage === "es") {
+    return outputLanguage;
+  }
+  const loc = moment.locale();
+  if (loc.startsWith("ru")) return "ru";
+  if (loc.startsWith("es")) return "es";
+  return "en";
 }

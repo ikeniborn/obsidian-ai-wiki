@@ -13,6 +13,8 @@
 
 The `wiki_*` fields — do not include them in the output. They are managed programmatically and will be restored automatically.
 
+If the source frontmatter is broken — missing or duplicated `---` fences, invalid YAML, or fields placed outside a fenced block — rebuild it into a single valid YAML frontmatter block, preserving the real field values (excluding the `wiki_*` fields, which are managed separately). Never emit two `---` fences in a row or leave frontmatter keys in the body.
+
 ## Structure
 
 - H1 — the page title

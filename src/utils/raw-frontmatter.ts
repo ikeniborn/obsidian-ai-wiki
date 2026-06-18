@@ -8,6 +8,64 @@ const WIKILINK_RE = /^\[\[.+\]\]$/;
 const URL_RE = /^https?:\/\//;
 const TAG_RE = /^[a-z][a-z0-9-]*(?:[/_][a-z0-9-]+)*$/;
 
+const FM_KEY_LINE = /^(wiki_[\w]+|tags|aliases|created|updated|external_links|related):/;
+
+/**
+ * Recovers a source page's frontmatter into a single valid fenced block, tolerant of
+ * the broken shapes seen in the wild:
+ *  - fully unfenced frontmatter (keys at the top with no `---` delimiters);
+ *  - duplicate keys (e.g. two `wiki_updated:` lines) — last occurrence wins;
+ *  - block-list values (`wiki_articles:` followed by indented `- "[[…]]"` items);
+ *  - `wiki_*` keys stranded in the body directly after an otherwise-valid leading fence.
+ *
+ * It collects the leading fenced YAML (if any) plus the leading run of frontmatter-key
+ * lines from the body (including their indented list items), merges them with last-wins
+ * dedup, strips them from the body, and re-serialises a single `---` block. A page that
+ * already has a valid leading fence and no stray frontmatter in the body, or one with no
+ * frontmatter at all, is returned unchanged (so the function is idempotent). If the
+ * collected frontmatter cannot be parsed, the content is returned unchanged for the
+ * downstream validator to handle.
+ */
+export function recoverSourceFrontmatter(content: string): string {
+  const fenceMatch = FM_RE.exec(content);
+  const lead = fenceMatch ? fenceMatch[1] : "";
+  const rest = fenceMatch ? content.slice(fenceMatch[0].length) : content;
+
+  // Peel the leading run of frontmatter lines from the body (skipping leading blanks).
+  const lines = rest.split("\n");
+  let i = 0;
+  while (i < lines.length && lines[i].trim() === "") i++;
+  const runStart = i;
+  let sawKey = false;
+  while (i < lines.length) {
+    if (FM_KEY_LINE.test(lines[i])) { sawKey = true; i++; continue; }
+    if (sawKey && /^\s+\S/.test(lines[i])) { i++; continue; } // indented list item or YAML continuation
+    break;
+  }
+  const strayFm = sawKey ? lines.slice(runStart, i).join("\n") : "";
+  const body = sawKey ? lines.slice(i).join("\n") : rest;
+
+  // Nothing to recover: valid fence with no stray frontmatter, or a frontmatter-less page.
+  if (!strayFm && (fenceMatch || !lead)) return content;
+  // Only recover when the stray run carries a wiki_* field (the backlink data ingest needs).
+  // This avoids fabricating a fence around body prose that merely starts with a
+  // frontmatter-like key (e.g. "updated: see the appendix below").
+  if (strayFm && !/^wiki_[\w]+:/m.test(strayFm)) return content;
+
+  const fmText = [lead, strayFm].filter((s) => s.trim().length > 0).join("\n");
+  let parsed: unknown;
+  try {
+    parsed = yamlParse(fmText, { uniqueKeys: false });
+  } catch {
+    return content; // unrecoverable — leave it for validateAndRepairSourceFrontmatter
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return content;
+
+  const fm = yamlStringify(parsed).replace(/\n+$/, "");
+  const cleanBody = body.replace(/^\n+/, "");
+  return `---\n${fm}\n---\n${cleanBody}`;
+}
+
 export type FieldRule =
   | { field: string; kind: "list-wikilinks" }
   | { field: string; kind: "list-wikilinks-stem-only" }
@@ -316,6 +374,27 @@ export function validateAndRepairSourceFrontmatter(
   content: string,
 ): { content: string; warnings: string[] } {
   return validateAndRepairFrontmatter(content, SOURCE_RULES);
+}
+
+/**
+ * Restores a source page's frontmatter onto formatted output.
+ * - Preserves the wiki tracking fields (wiki_added / wiki_updated / wiki_articles)
+ *   from `original` when it carries a wiki_updated value.
+ * - ALWAYS normalizes the result (dedupe keys, drop invalid values, re-serialize YAML),
+ *   independent of wiki_updated presence.
+ * Idempotent: re-running on already-restored content yields the same content.
+ */
+export function restoreSourceFrontmatter(original: string, formatted: string): string {
+  const wikiUpdatedMatch = /^wiki_updated:[ \t]*(.+)$/m.exec(original);
+  if (wikiUpdatedMatch) {
+    const wiki_updated = wikiUpdatedMatch[1].trim();
+    const wikiAddedMatch = /^wiki_added:[ \t]*(.+)$/m.exec(original);
+    const wiki_added = wikiAddedMatch?.[1].trim();
+    const wiki_articles = parseWikiArticlesFromFm(original);
+    formatted = upsertRawFrontmatter(formatted, { wiki_added, wiki_updated, wiki_articles });
+  }
+  const { content } = validateAndRepairSourceFrontmatter(formatted);
+  return content;
 }
 
 const WIKI_PAGE_RULES: FieldRule[] = [

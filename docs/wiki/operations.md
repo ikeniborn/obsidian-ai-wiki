@@ -43,6 +43,8 @@ When LLM #2 emits `deletes[]`, ingest removes each listed page via `vaultTools.r
 
 When `deletes.length` exceeds `mergeDeleteWarnThreshold` (default 5), ingest yields a `Large merge: K deletions` warning. Deleted pages are logged as `УДАЛЕНА` in the wiki log. The source's `wiki_articles` is filtered to drop links pointing at deleted stems before new links merge in.
 
+When the source frontmatter is broken, `runIngest` recovers it via `recoverSourceFrontmatter` (`src/utils/raw-frontmatter.ts`) before reading `wiki_added`/`wiki_articles` and upserting the backlinks. It tolerates the shapes seen in the wild: fully unfenced keys, duplicate keys (e.g. two `wiki_updated:` lines), block-list `wiki_articles`, and `wiki_*` keys stranded in the body after a leading fence. It merges the leading fenced YAML with the stray frontmatter run (dedup last-wins, list items kept), strips those lines from the body, and re-serialises a single `---` block — so the existing creation date and accumulated backlinks are recovered instead of being reset to today or dropped. A page already valid (or with no frontmatter) is returned unchanged, so the recovery is idempotent.
+
 ### Result Summary
 
 After writes and deletes, ingest emits a result text broken down by action: `создано C, обновлено U, объединено M`. Nonzero terms are joined with commas in that order; the `стр.` suffix is appended only when exactly one term is nonzero. Zero-write runs report no changes.
@@ -118,6 +120,18 @@ Free-form conversation after any operation (`src/phases/chat.ts`). Takes `contex
 Reformats a non-wiki markdown page without changing facts (`src/phases/format.ts`). The LLM returns sentinel-marked output with `report` and `formatted` sections; the preview is written to a temp file and the user applies or cancels via sidebar. See [[llm-pipeline#Format Sentinel]].
 
 Output parsing uses sentinel markers instead of JSON for robustness. Iterative refinement via `formatRefine`. When `vision.enabled` and `vision.model` are set, a pre-step analyzes embedded images, PDFs, and Excalidraw files (`src/phases/attachment-analyzer.ts`); descriptions are inserted into the formatted output only — the source file is never modified.
+
+### Frontmatter Restore
+
+`runFormat` restores the source frontmatter onto the LLM output before writing the preview, via the shared `restoreSourceFrontmatter` (`src/utils/raw-frontmatter.ts`) — so preview and apply are identical.
+
+It preserves the source `wiki_*` tracking fields (`wiki_added`/`wiki_updated`/`wiki_articles`) when the original carries a `wiki_updated`, and ALWAYS normalizes the YAML (dedupe keys, drop invalid values, re-serialize). The temp preview and the `format_preview` event therefore reflect the restored frontmatter, not only the applied file. The function is idempotent, so the controller's apply-time call is a no-op on already-restored content.
+
+### Progress Language
+
+The format progress stream follows the configured language. `AgentRunner` resolves it with `resolveProgressLang(outputLanguage)` and passes the matching `formatProgress` bundle into `runFormat` (`src/i18n.ts`).
+
+An explicit `ru`/`en`/`es` wins; `auto`/undefined falls back to the Obsidian UI locale (`moment.locale()`). Every progress string — analysing, salvage/truncation notices, sentinel-invalid, write-failure — is a bundle lookup. `format.ts` type-only-imports `FormatProgress` to stay free of an `obsidian` runtime dependency, and an English fallback keeps `runFormat` usable without an explicit bundle.
 
 ### Vision Pre-Step
 

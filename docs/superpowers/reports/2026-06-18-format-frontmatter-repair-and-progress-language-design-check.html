@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка спецификации — format frontmatter repair + progress language</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --border:#2a2f3a;
+    --fg:#e6e9ef; --muted:#9aa3b2; --accent:#5ea0ff; --accent2:#7ee0c0;
+    --ok:#56d364; --warn:#e3b341; --crit:#f06a6a; --info:#58a6ff;
+    --node:#202634; --node-new:#1d3a30; --edge:#5b6675;
+    --shadow:0 2px 10px rgba(0,0,0,.35);
+  }
+  :root[data-theme="light"]{
+    --bg:#f5f7fb; --panel:#ffffff; --panel2:#f0f3f8; --border:#d8deea;
+    --fg:#1c2330; --muted:#5a6473; --accent:#2563eb; --accent2:#0f9d77;
+    --ok:#1a7f37; --warn:#9a6700; --crit:#cf222e; --info:#0969da;
+    --node:#eef2f9; --node-new:#e4f5ee; --edge:#9aa6b8;
+    --shadow:0 2px 10px rgba(20,40,80,.10);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 22px 70px;}
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+  h1{font-size:22px;margin:.2em 0}
+  h2{font-size:18px;margin:1.8em 0 .6em;padding-bottom:.3em;border-bottom:1px solid var(--border)}
+  h3{font-size:15px;margin:1.3em 0 .5em;color:var(--accent)}
+  .sub{color:var(--muted);font-size:13px}
+  code{background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:.05em .4em;font-size:.88em;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .verdict{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:15px;
+    background:var(--panel);border:1px solid var(--border);border-radius:999px;padding:7px 16px}
+  .dot{width:11px;height:11px;border-radius:50%}
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.crit{background:var(--crit)}
+  .grid{display:grid;gap:14px}
+  .cards4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:760px){.cards4{grid-template-columns:repeat(2,1fr)}}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;box-shadow:var(--shadow)}
+  .card .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .card .v{font-size:16px;font-weight:700;margin-top:4px}
+  .pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;border:1px solid transparent}
+  .pill.passed{color:var(--ok);border-color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,transparent)}
+  .pill.warn{color:var(--warn);border-color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent)}
+  .pill.crit{color:var(--crit);border-color:var(--crit);background:color-mix(in srgb,var(--crit) 12%,transparent)}
+  .pill.info{color:var(--info);border-color:var(--info);background:color-mix(in srgb,var(--info) 12%,transparent)}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--border);
+    border-radius:12px;overflow:hidden;margin:.4em 0 .2em}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;font-size:13.5px}
+  th{background:var(--panel2);color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+  tr:last-child td{border-bottom:none}
+  td code{white-space:nowrap}
+  .note{background:color-mix(in srgb,var(--accent) 8%,var(--panel));border:1px solid var(--border);
+    border-left:3px solid var(--accent);border-radius:8px;padding:10px 14px;margin:.6em 0;font-size:13.5px}
+  .toggle{cursor:pointer;background:var(--panel);border:1px solid var(--border);color:var(--fg);
+    border-radius:999px;padding:7px 14px;font-size:13px;display:inline-flex;gap:7px;align-items:center}
+  /* CSS block/flow diagram */
+  .flow{display:flex;flex-direction:column;gap:10px}
+  .lane{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .lane .lbl{min-width:104px;font-size:12px;color:var(--muted);font-weight:700}
+  .blk{background:var(--node);border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-size:13px;
+    box-shadow:var(--shadow);position:relative}
+  .blk.new{background:var(--node-new);border-color:var(--accent2)}
+  .blk .t{font-weight:700} .blk .d{color:var(--muted);font-size:11.5px;margin-top:2px}
+  .arr{color:var(--edge);font-weight:700;font-size:18px;line-height:1}
+  .tag-new{position:absolute;top:-9px;right:-7px;font-size:9px;font-weight:800;background:var(--accent2);
+    color:#06281f;border-radius:999px;padding:1px 6px;letter-spacing:.04em}
+  figure{margin:1em 0}
+  figcaption{color:var(--muted);font-size:12px;margin-top:6px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
+  .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:5px}
+  details{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:6px 14px;margin:.5em 0}
+  summary{cursor:pointer;font-weight:600}
+  .muted{color:var(--muted)}
+  .chain{display:inline-flex;align-items:center;gap:8px;font-size:13px}
+  .chain .seg{background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:3px 10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Проверка спецификации</h1>
+      <div class="sub">format: восстановление фронтматтера в превью + язык прогресса по настройкам · 2026-06-18</div>
+    </div>
+    <button class="toggle" id="tg" onclick="tt()">🌙 Тема</button>
+  </header>
+
+  <div class="grid cards4" style="margin-top:14px">
+    <div class="card"><div class="k">Вердикт</div><div class="v" style="color:var(--ok)">OK</div></div>
+    <div class="card"><div class="k">CRITICAL open</div><div class="v">0</div></div>
+    <div class="card"><div class="k">WARNING open</div><div class="v" style="color:var(--warn)">1</div></div>
+    <div class="card"><div class="k">spec_hash</div><div class="v"><code>e88cb6eb…</code></div></div>
+  </div>
+
+  <div class="note">
+    Файл: <code>docs/superpowers/specs/2026-06-18-format-frontmatter-repair-and-progress-language-design.md</code><br>
+    Фазы: structure / coverage / clarity / consistency — все <b>passed</b>. Один WARNING (не блокирует).
+  </div>
+
+  <!-- ============ БЛОК 1 ============ -->
+  <h2>1 · Резюме спецификации</h2>
+
+  <h3>Требования по секциям</h3>
+  <table>
+    <thead><tr><th>Секция</th><th>Требование</th></tr></thead>
+    <tbody>
+      <tr><td><b>Bug 1 · Behavior</b></td><td>Восстановление фронтматтера в <code>runFormat</code> до записи tempPath:
+        <b>(a)</b> preserve <code>wiki_*</code> (<code>wiki_added/wiki_updated/wiki_articles</code>) из <code>original</code> через <code>upsertRawFrontmatter</code>, когда есть <code>wiki_updated</code>;
+        <b>(b)</b> безусловный <code>validateAndRepairSourceFrontmatter</code> на выводе LLM;
+        <b>(c)</b> нормализованный контент в превью и событии <code>format_preview</code>.</td></tr>
+      <tr><td><b>Bug 1 · Reuse</b></td><td>Вынести тело <code>patchWikiFields</code> в общую чистую функцию <code>restoreSourceFrontmatter(original, formatted)</code> в <code>raw-frontmatter.ts</code>; <code>formatApply</code> переиспользует (идемпотентно).</td></tr>
+      <tr><td><b>Bug 1 · Prompt</b> <span class="pill info">вторично</span></td><td>Строка в <code>_format_schema.md</code> / <code>format.md</code>: чинить битый фронтматтер (нет/дубль <code>---</code>, невалидный YAML), сохраняя реальные значения.</td></tr>
+      <tr><td><b>Bug 1 · Out of scope</b></td><td>Глубокий YAML-репейр принципиально неразбираемых блоков отложен; покрытие — LLM-ребилд + dedup safety net.</td></tr>
+      <tr><td><b>Bug 2 · Language resolution</b></td><td><code>resolveProgressLang(outputLanguage)</code> → <code>ru/en/es</code>; <code>auto</code> → <code>moment.locale()</code> (<code>ru*→ru</code>, <code>es*→es</code>, иначе <code>en</code>); резолв в <code>agent-runner.ts</code> (format-кейс), <code>progressLang</code> прокидывается в <code>runFormat</code>; слой <code>phases/</code> без <code>obsidian</code>-импорта.</td></tr>
+      <tr><td><b>Bug 2 · i18n</b></td><td>Секция <code>formatProgress</code> в <code>i18n.ts</code> (en/ru/es) на все хардкод-строки <code>format.ts</code> (56,57,183,233,234,241,248,264,265,273,274,329); аксессор <code>i18n(lang?)</code> / <code>i18nFor(lang)</code>; включён <code>truncationHint</code>.</td></tr>
+      <tr><td><b>Bug 2 · Out of scope</b></td><td><code>report</code> и reasoning LLM уже следуют <code>outputLanguage</code> (директива <code>## Language</code>); прочий UI плагина — по <code>moment.locale()</code>.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Success Criteria (§Verification)</h3>
+  <table>
+    <thead><tr><th>#</th><th>Критерий приёмки</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><code>npm build</code> / typecheck зелёный.</td></tr>
+      <tr><td>2</td><td>Повторный прогон format на «Шакшука…md» → превью содержит валидный <code>---</code> с сохранённым <code>wiki_updated</code>.</td></tr>
+      <tr><td>3</td><td><code>outputLanguage=en</code> → прогресс полностью EN, без RU→EN рассинхрона.</td></tr>
+      <tr><td>4</td><td><code>outputLanguage=ru</code> → прогресс RU.</td></tr>
+      <tr><td>5</td><td><code>outputLanguage=auto</code> → прогресс по UI-локали Obsidian.</td></tr>
+      <tr><td>6</td><td><code>lat check</code> зелёный.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ============ БЛОК 2 ============ -->
+  <h2>2 · Схемы решения и зависимостей</h2>
+
+  <h3>Схема решения (поток format)</h3>
+  <figure>
+    <div class="flow">
+      <div class="lane">
+        <div class="lbl">runFormat</div>
+        <div class="blk"><div class="t">read original</div><div class="d">vaultTools.read</div></div>
+        <span class="arr">→</span>
+        <div class="blk"><div class="t">LLM</div><div class="d">sentinel → finalFormatted</div></div>
+        <span class="arr">→</span>
+        <div class="blk new"><span class="tag-new">НОВОЕ</span><div class="t">restoreSourceFrontmatter</div><div class="d">preserve wiki_* + validateAndRepair</div></div>
+        <span class="arr">→</span>
+        <div class="blk"><div class="t">write tempPath</div><div class="d">*.formatted.md</div></div>
+        <span class="arr">→</span>
+        <div class="blk"><div class="t">format_preview</div><div class="d">событие в UI</div></div>
+      </div>
+      <div class="lane">
+        <div class="lbl">formatApply</div>
+        <div class="blk new"><span class="tag-new">REUSE</span><div class="t">restoreSourceFrontmatter</div><div class="d">идемпотентно (no-op)</div></div>
+        <span class="arr">→</span>
+        <div class="blk"><div class="t">write original</div><div class="d">vault.modify</div></div>
+      </div>
+      <div class="lane">
+        <div class="lbl">progress lang</div>
+        <div class="blk"><div class="t">agent-runner</div><div class="d">resolveProgressLang(outputLanguage)</div></div>
+        <span class="arr">→</span>
+        <div class="blk new"><span class="tag-new">НОВОЕ</span><div class="t">progressLang → runFormat</div><div class="d">i18nFor(progressLang)</div></div>
+        <span class="arr">→</span>
+        <div class="blk"><div class="t">строки прогресса</div><div class="d">formatProgress.*</div></div>
+      </div>
+    </div>
+    <div class="legend"><span><i style="background:var(--node-new);border:1px solid var(--accent2)"></i>новый/изменённый шаг</span><span><i style="background:var(--node);border:1px solid var(--border)"></i>существующий</span></div>
+    <figcaption>Восстановление фронтматтера перенесено в <code>runFormat</code> → превью сразу корректное; <code>formatApply</code> вызывает ту же функцию (идемпотентно).</figcaption>
+  </figure>
+
+  <h3>Граф зависимостей</h3>
+  <figure>
+    <svg viewBox="0 0 920 430" width="100%" role="img" aria-label="Граф зависимостей компонентов">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/>
+        </marker>
+        <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1.5" stdDeviation="2" flood-color="#000" flood-opacity="0.30"/>
+        </filter>
+      </defs>
+      <style>
+        .n rect{fill:var(--node);stroke:var(--border);stroke-width:1.2;rx:9;filter:url(#ds)}
+        .n.new rect{fill:var(--node-new);stroke:var(--accent2)}
+        .n text{fill:var(--fg);font:12px sans-serif;font-weight:600}
+        .n .s{fill:var(--muted);font-weight:400;font-size:10.5px}
+        .e{stroke:var(--edge);stroke-width:1.6;fill:none;marker-end:url(#ar)}
+      </style>
+      <!-- edges -->
+      <path class="e" d="M150,70 C150,120 150,120 150,150"/>            <!-- agent-runner -> resolveProgressLang -->
+      <path class="e" d="M210,55 C420,55 600,80 690,95"/>               <!-- agent-runner -> runFormat -->
+      <path class="e" d="M150,210 C150,250 150,250 150,270"/>           <!-- resolveProgressLang -> moment -->
+      <path class="e" d="M740,135 C740,175 600,200 470,215"/>           <!-- runFormat -> restoreSourceFrontmatter -->
+      <path class="e" d="M760,135 C800,210 800,250 770,285"/>           <!-- runFormat -> i18nFor -->
+      <path class="e" d="M770,345 C770,375 700,388 660,392"/>           <!-- i18nFor -> formatProgress -->
+      <path class="e" d="M400,250 C320,275 270,300 240,320"/>           <!-- restoreSourceFrontmatter -> raw-frontmatter utils -->
+      <path class="e" d="M470,250 C520,290 520,320 500,340"/>           <!-- restoreSourceFrontmatter -> controller -->
+      <!-- nodes -->
+      <g class="n"><rect x="80" y="30" width="140" height="42" rx="9"/><text x="96" y="50">agent-runner.ts</text><text x="96" y="64" class="s">format case</text></g>
+      <g class="n new"><rect x="60" y="150" width="180" height="46" rx="9"/><text x="74" y="170">resolveProgressLang</text><text x="74" y="185" class="s">outputLanguage → ru/en/es</text></g>
+      <g class="n"><rect x="90" y="270" width="120" height="40" rx="9"/><text x="104" y="295">moment.locale</text></g>
+      <g class="n new"><rect x="680" y="92" width="150" height="44" rx="9"/><text x="700" y="113">runFormat</text><text x="700" y="127" class="s">phases/format.ts</text></g>
+      <g class="n new"><rect x="350" y="210" width="170" height="44" rx="9"/><text x="364" y="231">restoreSource-</text><text x="364" y="246" class="s">Frontmatter()</text></g>
+      <g class="n"><rect x="120" y="320" width="180" height="56" rx="9"/><text x="134" y="340">raw-frontmatter.ts</text><text x="134" y="356" class="s">upsertRawFrontmatter,</text><text x="134" y="369" class="s">validateAndRepair…</text></g>
+      <g class="n"><rect x="430" y="340" width="180" height="44" rx="9"/><text x="444" y="361">controller.ts</text><text x="444" y="375" class="s">patchWikiFields / formatApply</text></g>
+      <g class="n new"><rect x="700" y="285" width="140" height="44" rx="9"/><text x="716" y="306">i18nFor(lang)</text><text x="716" y="320" class="s">explicit-lang accessor</text></g>
+      <g class="n new"><rect x="540" y="382" width="120" height="40" rx="9"/><text x="554" y="406">formatProgress</text></g>
+    </svg>
+    <div class="legend"><span><i style="background:var(--node-new);border:1px solid var(--accent2)"></i>новый/изменённый</span><span><i style="background:var(--node);border:1px solid var(--border)"></i>существующий</span><span>→ «использует / зависит от»</span></div>
+    <figcaption>Узлы — компоненты решения, рёбра — «использует / зависит от». <code>restoreSourceFrontmatter</code> делит чистые утилиты <code>raw-frontmatter.ts</code> между <code>runFormat</code> и <code>controller</code>.</figcaption>
+  </figure>
+
+  <h3>Карта покрытия (задача → требования)</h3>
+  <table>
+    <thead><tr><th>Задача из обсуждения</th><th>Покрывающие требования спеки</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td><b>Bug 1</b> — восстановление битого фронтматтера (невалидный YAML · потеря wiki_* · битый <code>---</code>)</td>
+        <td>Bug 1 · Behavior (a,b,c) · Reuse · Prompt</td><td><span class="pill passed">покрыто</span></td></tr>
+      <tr><td><b>Bug 2</b> — язык прогресса по настройкам (outputLanguage, fallback UI)</td>
+        <td>Bug 2 · Language resolution · i18n</td><td><span class="pill passed">покрыто</span></td></tr>
+    </tbody>
+  </table>
+
+  <!-- ============ БЛОК 3 ============ -->
+  <h2>3 · Результаты проверки</h2>
+
+  <h3>Фазы</h3>
+  <div class="grid cards4">
+    <div class="card"><div class="k">structure</div><div class="v"><span class="pill passed">passed</span></div></div>
+    <div class="card"><div class="k">coverage</div><div class="v"><span class="pill passed">passed</span></div></div>
+    <div class="card"><div class="k">clarity</div><div class="v"><span class="pill passed">passed</span></div></div>
+    <div class="card"><div class="k">consistency</div><div class="v"><span class="pill passed">passed</span></div></div>
+  </div>
+
+  <h3>Findings</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>F-001</code></td>
+        <td><span class="pill warn">WARNING</span></td>
+        <td>Out of scope (Bug 1 / Bug 2)</td>
+        <td>Дублирующийся заголовок <code>### Out of scope</code> встречается дважды (стр. 90, 145). Семантически валидно — разные H2-родители; закрытый чек-лист structure это помечает.</td>
+        <td><span class="pill info">open</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Сводка</h3>
+  <div class="grid cards4">
+    <div class="card"><div class="k">CRITICAL open</div><div class="v">0</div></div>
+    <div class="card"><div class="k">WARNING open</div><div class="v" style="color:var(--warn)">1</div></div>
+    <div class="card"><div class="k">Вердикт</div><div class="v" style="color:var(--ok)">OK</div></div>
+    <div class="card"><div class="k">Chain</div><div class="v" style="font-size:13px"><span class="chain"><span class="seg muted">intent: null</span> → <span class="seg">spec</span></span></div></div>
+  </div>
+  <div class="note"><b>Финальный вердикт: OK</b> — 1 warning open, не блокирует переход к плану. Intent-doc не найден (<code>intent = null</code>).</div>
+
+</div>
+<script>
+  function tt(){var r=document.documentElement;var l=r.getAttribute('data-theme')==='light';
+    r.setAttribute('data-theme',l?'dark':'light');
+    document.getElementById('tg').textContent=(l?'🌙':'☀️')+' Тема';}
+</script>
+</body>
+</html>
