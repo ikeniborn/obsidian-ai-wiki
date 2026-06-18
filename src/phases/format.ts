@@ -8,6 +8,7 @@ import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
 import { missingTokensWithContext, appendMissingLines, restoreObsidianEmbeds, missingObsidianEmbeds, parseSentinelOutput } from "./format-utils";
 import { fixWikiLinks } from "../wiki-link-validator";
+import { restoreSourceFrontmatter } from "../utils/raw-frontmatter";
 import { FormatBaseSchema, FormatWithVisionSchema } from "./zod-schemas";
 import { structuralErrorCounter } from "../structural-error-counter";
 import { extractObsidianEmbedPaths, analyzeSingleAttachment } from "./attachment-analyzer";
@@ -322,6 +323,8 @@ export async function* runFormat(
 
   const wlFix = fixWikiLinks(new Map([[filePath, finalFormatted]]), wikiLinkValidationRetries);
   finalFormatted = wlFix.fixed.get(filePath) ?? finalFormatted;
+
+  finalFormatted = restoreSourceFrontmatter(original, finalFormatted);
 
   try {
     await vaultTools.write(tempPath, finalFormatted);
