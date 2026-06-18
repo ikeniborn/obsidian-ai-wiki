@@ -26393,6 +26393,20 @@ var en = {
     initialising: "Initialising",
     selectDomainFirst: "Select a domain first"
   },
+  formatProgress: {
+    analysing: (path2) => `Analysing file ${path2}...
+`,
+    truncatedSalvageSummary: "Format: response truncated \u2014 salvage",
+    truncatedSalvageRetrySummary: "Format: retry response truncated \u2014 salvage",
+    truncatedSalvageDetail: "Marker <<<END>>> missing; partial output used.",
+    outputTruncated: (hint) => `Format: response truncated by the model output limit \u2014 shorten the page or ${hint}`,
+    outputTruncatedAfterRetry: (hint) => `Format: response truncated by the model output limit (after retry) \u2014 shorten the page or ${hint}`,
+    sentinelInvalidRetry: "\n[Sentinel invalid \u2014 retrying]\n",
+    sentinelInvalidAfterRetry: "Format: LLM returned an invalid sentinel (after retry)",
+    writeFailed: (err) => `Format: writing the formatted file failed \u2014 ${err}`,
+    truncationHintEnv: "raise the limit: env CLAUDE_CODE_MAX_OUTPUT_TOKENS in iclaude.sh",
+    truncationHintSettings: "raise the limit: Settings \u2192 per-operation \u2192 format \u2192 maxTokens"
+  },
   ctrl: {
     cancelling: "Cancelling\u2026",
     noActiveFile: "No active file",
@@ -26482,6 +26496,7 @@ Security note: this backend runs an autonomous agent without per-action permissi
     formatVisionWithout: "Without vision"
   }
 };
+var _formatProgressShapeCheck = en.formatProgress;
 var ru = {
   settings: {
     h3_general: "\u041E\u0431\u0449\u0438\u0435 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438",
@@ -26657,6 +26672,20 @@ var ru = {
     starting: "\u0417\u0430\u043F\u0443\u0441\u043A",
     initialising: "\u0418\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F",
     selectDomainFirst: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0434\u043E\u043C\u0435\u043D"
+  },
+  formatProgress: {
+    analysing: (path2) => `\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u0430 ${path2}...
+`,
+    truncatedSalvageSummary: "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u2014 salvage",
+    truncatedSalvageRetrySummary: "Format: retry \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u2014 salvage",
+    truncatedSalvageDetail: "\u041C\u0430\u0440\u043A\u0435\u0440 <<<END>>> \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442; \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D \u0447\u0430\u0441\u0442\u0438\u0447\u043D\u044B\u0439 \u0432\u044B\u0432\u043E\u0434.",
+    outputTruncated: (hint) => `Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 ${hint}`,
+    outputTruncatedAfterRetry: (hint) => `Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 (\u043F\u043E\u0441\u043B\u0435 retry) \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 ${hint}`,
+    sentinelInvalidRetry: "\n[Sentinel \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u2014 \u043F\u043E\u0432\u0442\u043E\u0440\u044F\u044E \u0437\u0430\u043F\u0440\u043E\u0441]\n",
+    sentinelInvalidAfterRetry: "Format: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 sentinel (\u043F\u043E\u0441\u043B\u0435 retry)",
+    writeFailed: (err) => `Format: \u0437\u0430\u043F\u0438\u0441\u044C \u0444\u043E\u0440\u043C\u0430\u0442\u0430 \u043D\u0435 \u0443\u0434\u0430\u043B\u0430\u0441\u044C \u2014 ${err}`,
+    truncationHintEnv: "\u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442: env CLAUDE_CODE_MAX_OUTPUT_TOKENS \u0432 iclaude.sh",
+    truncationHintSettings: "\u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442: Settings \u2192 per-operation \u2192 format \u2192 maxTokens"
   },
   ctrl: {
     cancelling: "\u041E\u0442\u043C\u0435\u043D\u0430\u2026",
@@ -26923,6 +26952,20 @@ var es = {
     initialising: "Inicializando",
     selectDomainFirst: "Selecciona un dominio primero"
   },
+  formatProgress: {
+    analysing: (path2) => `Analizando archivo ${path2}...
+`,
+    truncatedSalvageSummary: "Format: respuesta truncada \u2014 recuperaci\xF3n",
+    truncatedSalvageRetrySummary: "Format: reintento truncado \u2014 recuperaci\xF3n",
+    truncatedSalvageDetail: "Falta el marcador <<<END>>>; se us\xF3 la salida parcial.",
+    outputTruncated: (hint) => `Format: respuesta truncada por el l\xEDmite de salida del modelo \u2014 acorta la p\xE1gina o ${hint}`,
+    outputTruncatedAfterRetry: (hint) => `Format: respuesta truncada por el l\xEDmite de salida del modelo (tras reintento) \u2014 acorta la p\xE1gina o ${hint}`,
+    sentinelInvalidRetry: "\n[Sentinel inv\xE1lido \u2014 reintentando]\n",
+    sentinelInvalidAfterRetry: "Format: el LLM devolvi\xF3 un sentinel inv\xE1lido (tras reintento)",
+    writeFailed: (err) => `Format: fall\xF3 la escritura del archivo formateado \u2014 ${err}`,
+    truncationHintEnv: "aumenta el l\xEDmite: env CLAUDE_CODE_MAX_OUTPUT_TOKENS en iclaude.sh",
+    truncationHintSettings: "aumenta el l\xEDmite: Settings \u2192 per-operation \u2192 format \u2192 maxTokens"
+  },
   ctrl: {
     cancelling: "Cancelando\u2026",
     noActiveFile: "No hay archivo activo",
@@ -27016,6 +27059,19 @@ var locales = { ru, es };
 function i18n() {
   const locale = import_obsidian.moment.locale();
   return locales[locale] ?? en;
+}
+var langBundles = { ru, en, es };
+function i18nFor(lang) {
+  return langBundles[lang];
+}
+function resolveProgressLang(outputLanguage) {
+  if (outputLanguage === "ru" || outputLanguage === "en" || outputLanguage === "es") {
+    return outputLanguage;
+  }
+  const loc = import_obsidian.moment.locale();
+  if (loc.startsWith("ru")) return "ru";
+  if (loc.startsWith("es")) return "es";
+  return "en";
 }
 
 // src/modals.ts
@@ -37521,6 +37577,47 @@ var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 var WIKILINK_RE = /^\[\[.+\]\]$/;
 var URL_RE = /^https?:\/\//;
 var TAG_RE = /^[a-z][a-z0-9-]*(?:[/_][a-z0-9-]+)*$/;
+var FM_KEY_LINE = /^(wiki_[\w]+|tags|aliases|created|updated|external_links|related):/;
+function recoverSourceFrontmatter(content) {
+  const fenceMatch = FM_RE.exec(content);
+  const lead = fenceMatch ? fenceMatch[1] : "";
+  const rest = fenceMatch ? content.slice(fenceMatch[0].length) : content;
+  const lines = rest.split("\n");
+  let i = 0;
+  while (i < lines.length && lines[i].trim() === "") i++;
+  const runStart = i;
+  let sawKey = false;
+  while (i < lines.length) {
+    if (FM_KEY_LINE.test(lines[i])) {
+      sawKey = true;
+      i++;
+      continue;
+    }
+    if (sawKey && /^\s+\S/.test(lines[i])) {
+      i++;
+      continue;
+    }
+    break;
+  }
+  const strayFm = sawKey ? lines.slice(runStart, i).join("\n") : "";
+  const body = sawKey ? lines.slice(i).join("\n") : rest;
+  if (!strayFm && (fenceMatch || !lead)) return content;
+  if (strayFm && !/^wiki_[\w]+:/m.test(strayFm)) return content;
+  const fmText = [lead, strayFm].filter((s) => s.trim().length > 0).join("\n");
+  let parsed;
+  try {
+    parsed = (0, import_yaml.parse)(fmText, { uniqueKeys: false });
+  } catch {
+    return content;
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return content;
+  const fm = (0, import_yaml.stringify)(parsed).replace(/\n+$/, "");
+  const cleanBody = body.replace(/^\n+/, "");
+  return `---
+${fm}
+---
+${cleanBody}`;
+}
 function validateAndRepairFrontmatter(content, rules) {
   const warnings = [];
   const fmMatch = FM_RE.exec(content);
@@ -37781,6 +37878,18 @@ var SOURCE_RULES = [
 ];
 function validateAndRepairSourceFrontmatter(content) {
   return validateAndRepairFrontmatter(content, SOURCE_RULES);
+}
+function restoreSourceFrontmatter(original, formatted) {
+  const wikiUpdatedMatch = /^wiki_updated:[ \t]*(.+)$/m.exec(original);
+  if (wikiUpdatedMatch) {
+    const wiki_updated = wikiUpdatedMatch[1].trim();
+    const wikiAddedMatch = /^wiki_added:[ \t]*(.+)$/m.exec(original);
+    const wiki_added = wikiAddedMatch?.[1].trim();
+    const wiki_articles = parseWikiArticlesFromFm(original);
+    formatted = upsertRawFrontmatter(formatted, { wiki_added, wiki_updated, wiki_articles });
+  }
+  const { content } = validateAndRepairSourceFrontmatter(formatted);
+  return content;
 }
 var WIKI_PAGE_RULES = [
   { field: "wiki_sources", kind: "list-wikilinks-sources-only" },
@@ -38590,14 +38699,15 @@ ${page.content}`;
       }
     }
     const backlinkToday = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-    const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
-    const existingArticles = parseWikiArticlesFromFm(sourceContent).filter((link) => {
+    const normalizedSource = recoverSourceFrontmatter(sourceContent);
+    const isFirstTime = !hasFrontmatterField(normalizedSource, "wiki_added");
+    const existingArticles = parseWikiArticlesFromFm(normalizedSource).filter((link) => {
       const stem = link.replace(/^\[\[/, "").replace(/\]\]$/, "");
       return !deletedStems.has(stem);
     });
     const writtenLinks = written.map((p) => `[[${p.split("/").pop().replace(/\.md$/, "")}]]`);
     const mergedArticles = [.../* @__PURE__ */ new Set([...existingArticles, ...writtenLinks])];
-    const updatedSource = upsertRawFrontmatter(sourceContent, {
+    const updatedSource = upsertRawFrontmatter(normalizedSource, {
       wiki_added: isFirstTime ? backlinkToday : void 0,
       wiki_updated: backlinkToday,
       wiki_articles: mergedArticles
@@ -40404,13 +40514,13 @@ async function* runEvaluator(llm, model, operation, taskInput, result, signal, o
 }
 
 // prompts/format.md
-var format_default = 'You are an editor of a markdown page outside the wiki knowledge base.\n\nYour task is to analyze the page and propose formatting according to the rules below.\n\nHARD RULES:\n- Do not add or remove facts, names, numbers, URLs.\n- Do not distort the meaning. Rephrasing for clarity is allowed.\n- Describe all changes in the report field.\n- Obsidian embeds (`![[path]]`, `![[path|alias]]`) \u2014 copy exactly as they are. Do not convert them to standard Markdown (`![alt](path)`).\n- If the user message contains an "ATTACHMENT DESCRIPTIONS" block: integrate each description IMMEDIATELY BELOW the corresponding `![[path]]` embed in formatted. Keep the description\'s structural form (table / list / mermaid / code) as is \u2014 do not wrap it in a blockquote, do not add a `[Vision]` marker, do not quote the `![[path]]` heading inside the description. If a description is already present in the source (old format `> *[Vision] ...*` or a duplicate) \u2014 remove the old variant and keep only the structured version.\n\nFORMATTING RULES:\n{{format_schema}}\n\nVISION: {{has_vision}}\n- When has_vision=true: extract the content of diagrams and images, create tables or mermaid blocks below the image. Keep the image itself.\n- When has_vision=false: work only with alt text and captions, do not invent new information.\n\nReturn the answer strictly in the following format. No text before the first `<<<REPORT>>>` marker.\n\n<<<REPORT>>>\n<markdown list of changes>\n<<<FORMATTED>>>\n<full formatted markdown, starting from the frontmatter --->\n<<<END>>>\n\n{{has_vision_descriptions_block}}\n\nRequirements:\n- Each `<<<...>>>` marker on its own line.\n- After `<<<FORMATTED>>>` comes the frontmatter (`---`).\n- `<<<END>>>` \u2014 the last line of the answer.\n- If context is insufficient: shorten the report, not formatted.\n';
+var format_default = 'You are an editor of a markdown page outside the wiki knowledge base.\n\nYour task is to analyze the page and propose formatting according to the rules below.\n\nHARD RULES:\n- Do not add or remove facts, names, numbers, URLs.\n- Do not distort the meaning. Rephrasing for clarity is allowed.\n- Describe all changes in the report field.\n- Obsidian embeds (`![[path]]`, `![[path|alias]]`) \u2014 copy exactly as they are. Do not convert them to standard Markdown (`![alt](path)`).\n- If the user message contains an "ATTACHMENT DESCRIPTIONS" block: integrate each description IMMEDIATELY BELOW the corresponding `![[path]]` embed in formatted. Keep the description\'s structural form (table / list / mermaid / code) as is \u2014 do not wrap it in a blockquote, do not add a `[Vision]` marker, do not quote the `![[path]]` heading inside the description. If a description is already present in the source (old format `> *[Vision] ...*` or a duplicate) \u2014 remove the old variant and keep only the structured version.\n- If the source frontmatter is broken (missing/duplicated `---` fences, invalid YAML, keys outside a fenced block), reconstruct a single valid YAML frontmatter block, preserving real field values (the `wiki_*` fields are excluded \u2014 they are restored automatically). Do not drop existing field values.\n\nFORMATTING RULES:\n{{format_schema}}\n\nVISION: {{has_vision}}\n- When has_vision=true: extract the content of diagrams and images, create tables or mermaid blocks below the image. Keep the image itself.\n- When has_vision=false: work only with alt text and captions, do not invent new information.\n\nReturn the answer strictly in the following format. No text before the first `<<<REPORT>>>` marker.\n\n<<<REPORT>>>\n<markdown list of changes>\n<<<FORMATTED>>>\n<full formatted markdown, starting from the frontmatter --->\n<<<END>>>\n\n{{has_vision_descriptions_block}}\n\nRequirements:\n- Each `<<<...>>>` marker on its own line.\n- After `<<<FORMATTED>>>` comes the frontmatter (`---`).\n- `<<<END>>>` \u2014 the last line of the answer.\n- If context is insufficient: shorten the report, not formatted.\n';
 
 // prompts/format-restore-tokens.md
 var format_restore_tokens_default = "RESTORE TOKENS: the following values from the original are missing in the formatted text. Return the full answer using the markers <<<REPORT>>>...<<<END>>> where formatted contains all the listed tokens.\nMissing: {{tokens}}";
 
 // templates/_format_schema.md
-var format_schema_default = '# Format Schema (formatting rules for non-wiki pages)\n\n## Frontmatter\n\n| Field | Rule |\n|------|---------|\n| `tags` | YAML list: `[category/subcategory, domain/topic]`. Hierarchy via `/`, lowercase, no spaces, no `#`. Reuse tags from existing pages; create new ones following the same scheme. Only when a thematic classification exists. |\n| `aliases` | Abbreviations, synonyms, English variants |\n| `created` | YYYY-MM-DD when present in the source or at first formatting |\n| `updated` | YYYY-MM-DD the current formatting date |\n| `external_links` | Array of URLs \u2014 only if the body has `http(s)://` links |\n| `related` | Array of `[[wikilinks]]` \u2014 only if the body already contains links to other pages |\n\nThe `wiki_*` fields \u2014 do not include them in the output. They are managed programmatically and will be restored automatically.\n\n## Structure\n\n- H1 \u2014 the page title\n- Intro paragraph 1-3 sentences immediately after H1, without a subheading\n- `##` sections by content logic; hierarchy without jumps (H2 \u2192 H3 \u2192 H4)\n- Empty sections and placeholder text are forbidden\n\n## Tables\n\nMarkdown with alignment. Use for structured enumerations of parameters/comparisons. Do not turn narrative text into tables.\n\n## Mermaid\n\n` ```mermaid ` blocks for processes, sequences, relationships.\n- Processes described in text \u2192 flowchart/sequenceDiagram\n- Content of diagrams from images (vision backend only) \u2192 a separate mermaid block below the image. The image itself is preserved.\n\n## Images\n\n- Each image gets a descriptive caption directly below it\n- When `has_vision=true`: an additional text description. For diagrams/schemes \u2014 a structured logical description of the meaning (purpose, components, how the flow is connected), not a verbatim transcription of elements; below, when needed, a mermaid block (process/architecture) or a table (grid/matrix). For other images \u2014 coherent text or a parameter table.\n- When `has_vision=false`: use only alt and existing captions; do not invent new information\n\n## Code\n\nFenced blocks always with a language tag.\n\n## Style\n\n- Neutral, informative, no value judgements\n- Technical terms \u2014 original spelling (SQL, API, LLM)\n- Forbidden: "obviously", "the best way", the pronouns "I/we/our"\n\n## Hard prohibitions\n\n- Do not add facts absent from the source (exception: text extraction from images when `has_vision=true`)\n- Do not remove facts\n- Do not distort the meaning; rephrasing for clarity is allowed\n- List all changes in `report`\n';
+var format_schema_default = '# Format Schema (formatting rules for non-wiki pages)\n\n## Frontmatter\n\n| Field | Rule |\n|------|---------|\n| `tags` | YAML list: `[category/subcategory, domain/topic]`. Hierarchy via `/`, lowercase, no spaces, no `#`. Reuse tags from existing pages; create new ones following the same scheme. Only when a thematic classification exists. |\n| `aliases` | Abbreviations, synonyms, English variants |\n| `created` | YYYY-MM-DD when present in the source or at first formatting |\n| `updated` | YYYY-MM-DD the current formatting date |\n| `external_links` | Array of URLs \u2014 only if the body has `http(s)://` links |\n| `related` | Array of `[[wikilinks]]` \u2014 only if the body already contains links to other pages |\n\nThe `wiki_*` fields \u2014 do not include them in the output. They are managed programmatically and will be restored automatically.\n\nIf the source frontmatter is broken \u2014 missing or duplicated `---` fences, invalid YAML, or fields placed outside a fenced block \u2014 rebuild it into a single valid YAML frontmatter block, preserving the real field values (excluding the `wiki_*` fields, which are managed separately). Never emit two `---` fences in a row or leave frontmatter keys in the body.\n\n## Structure\n\n- H1 \u2014 the page title\n- Intro paragraph 1-3 sentences immediately after H1, without a subheading\n- `##` sections by content logic; hierarchy without jumps (H2 \u2192 H3 \u2192 H4)\n- Empty sections and placeholder text are forbidden\n\n## Tables\n\nMarkdown with alignment. Use for structured enumerations of parameters/comparisons. Do not turn narrative text into tables.\n\n## Mermaid\n\n` ```mermaid ` blocks for processes, sequences, relationships.\n- Processes described in text \u2192 flowchart/sequenceDiagram\n- Content of diagrams from images (vision backend only) \u2192 a separate mermaid block below the image. The image itself is preserved.\n\n## Images\n\n- Each image gets a descriptive caption directly below it\n- When `has_vision=true`: an additional text description. For diagrams/schemes \u2014 a structured logical description of the meaning (purpose, components, how the flow is connected), not a verbatim transcription of elements; below, when needed, a mermaid block (process/architecture) or a table (grid/matrix). For other images \u2014 coherent text or a parameter table.\n- When `has_vision=false`: use only alt and existing captions; do not invent new information\n\n## Code\n\nFenced blocks always with a language tag.\n\n## Style\n\n- Neutral, informative, no value judgements\n- Technical terms \u2014 original spelling (SQL, API, LLM)\n- Forbidden: "obviously", "the best way", the pronouns "I/we/our"\n\n## Hard prohibitions\n\n- Do not add facts absent from the source (exception: text extraction from images when `has_vision=true`)\n- Do not remove facts\n- Do not distort the meaning; rephrasing for clarity is allowed\n- List all changes in `report`\n';
 
 // src/phases/format-utils.ts
 var STOP_WORDS2 = /* @__PURE__ */ new Set([
@@ -40700,10 +40810,24 @@ function extractImagePaths(md) {
   }
   return out;
 }
-function truncationHint(backend) {
-  return backend === "claude-agent" ? "\u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442: env CLAUDE_CODE_MAX_OUTPUT_TOKENS \u0432 iclaude.sh" : "\u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442: Settings \u2192 per-operation \u2192 format \u2192 maxTokens";
+function truncationHint(backend, p) {
+  return backend === "claude-agent" ? p.truncationHintEnv : p.truncationHintSettings;
 }
-async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, signal, opts = {}, backend = "native-agent", wikiVaultPath, wikiLinkValidationRetries = 3, visionSettings = { enabled: false, model: "" }, visionTempStore) {
+var enFormatProgressFallback = {
+  analysing: (path2) => `Analysing file ${path2}...
+`,
+  truncatedSalvageSummary: "Format: response truncated \u2014 salvage",
+  truncatedSalvageRetrySummary: "Format: retry response truncated \u2014 salvage",
+  truncatedSalvageDetail: "Marker <<<END>>> missing; partial output used.",
+  outputTruncated: (hint) => `Format: response truncated by the model output limit \u2014 shorten the page or ${hint}`,
+  outputTruncatedAfterRetry: (hint) => `Format: response truncated by the model output limit (after retry) \u2014 shorten the page or ${hint}`,
+  sentinelInvalidRetry: "\n[Sentinel invalid \u2014 retrying]\n",
+  sentinelInvalidAfterRetry: "Format: LLM returned an invalid sentinel (after retry)",
+  writeFailed: (err) => `Format: writing the formatted file failed \u2014 ${err}`,
+  truncationHintEnv: "raise the limit: env CLAUDE_CODE_MAX_OUTPUT_TOKENS in iclaude.sh",
+  truncationHintSettings: "raise the limit: Settings \u2192 per-operation \u2192 format \u2192 maxTokens"
+};
+async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, signal, opts = {}, backend = "native-agent", wikiVaultPath, wikiLinkValidationRetries = 3, visionSettings = { enabled: false, model: "" }, visionTempStore, progress = enFormatProgressFallback) {
   const start = Date.now();
   const filePath = args[0];
   if (!filePath) {
@@ -40801,8 +40925,7 @@ ${original}${visionBlock}`;
     { role: "user", content: userContent },
     ...chatHistory.map((m) => ({ role: m.role, content: m.content }))
   ];
-  yield { kind: "assistant_text", delta: `\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u0430 ${filePath}...
-` };
+  yield { kind: "assistant_text", delta: progress.analysing(filePath) };
   const baseParams = buildChatParams(model, messages, opts, true);
   let lastFinishReason = null;
   let outputTokens = 0;
@@ -40850,20 +40973,20 @@ ${original}${visionBlock}`;
     yield {
       kind: "info_text",
       icon: "\u26A0\uFE0F",
-      summary: "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u2014 salvage",
-      details: ["\u041C\u0430\u0440\u043A\u0435\u0440 <<<END>>> \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442; \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D \u0447\u0430\u0441\u0442\u0438\u0447\u043D\u044B\u0439 \u0432\u044B\u0432\u043E\u0434."]
+      summary: progress.truncatedSalvageSummary,
+      details: [progress.truncatedSalvageDetail]
     };
   }
   const truncated = !parsed && lastFinishReason === "length";
   if (!parsed && truncated) {
     yield { kind: "tool_result", ok: false, preview: "response truncated" };
-    yield { kind: "error", message: `Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 ${truncationHint(backend)}` };
+    yield { kind: "error", message: progress.outputTruncated(truncationHint(backend, progress)) };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
     return;
   }
   if (!parsed) {
     yield { kind: "tool_result", ok: false, preview: "invalid sentinel \u2014 retrying" };
-    yield { kind: "assistant_text", delta: "\n[Sentinel \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u0435\u043D \u2014 \u043F\u043E\u0432\u0442\u043E\u0440\u044F\u044E \u0437\u0430\u043F\u0440\u043E\u0441]\n" };
+    yield { kind: "assistant_text", delta: progress.sentinelInvalidRetry };
     const zodHint = parsedResult.hint;
     const retrySystemContent = systemContent + `
 
@@ -40882,14 +41005,14 @@ The previous attempt failed: ${zodHint}. Fix it and return again using the marke
       yield {
         kind: "info_text",
         icon: "\u26A0\uFE0F",
-        summary: "Format: retry \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u2014 salvage",
-        details: ["\u041C\u0430\u0440\u043A\u0435\u0440 <<<END>>> \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442; \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D \u0447\u0430\u0441\u0442\u0438\u0447\u043D\u044B\u0439 \u0432\u044B\u0432\u043E\u0434."]
+        summary: progress.truncatedSalvageRetrySummary,
+        details: [progress.truncatedSalvageDetail]
       };
     }
   }
   if (!parsed) {
     const retryTruncated = lastFinishReason === "length";
-    const msg = retryTruncated ? `Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u043F\u043E \u043B\u0438\u043C\u0438\u0442\u0443 \u0432\u044B\u0432\u043E\u0434\u0430 \u043C\u043E\u0434\u0435\u043B\u0438 (\u043F\u043E\u0441\u043B\u0435 retry) \u2014 \u0441\u043E\u043A\u0440\u0430\u0442\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0438\u043B\u0438 ${truncationHint(backend)}` : "Format: LLM \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 sentinel (\u043F\u043E\u0441\u043B\u0435 retry)";
+    const msg = retryTruncated ? progress.outputTruncatedAfterRetry(truncationHint(backend, progress)) : progress.sentinelInvalidAfterRetry;
     yield { kind: "tool_result", ok: false, preview: msg };
     yield { kind: "error", message: msg };
     yield { kind: "result", durationMs: Date.now() - start, text: "", outputTokens: outputTokens || void 0 };
@@ -40934,10 +41057,11 @@ The previous attempt failed: ${zodHint}. Fix it and return again using the marke
   const embedWarnings = missingObsidianEmbeds(original, finalFormatted);
   const wlFix = fixWikiLinks(/* @__PURE__ */ new Map([[filePath, finalFormatted]]), wikiLinkValidationRetries);
   finalFormatted = wlFix.fixed.get(filePath) ?? finalFormatted;
+  finalFormatted = restoreSourceFrontmatter(original, finalFormatted);
   try {
     await vaultTools.write(tempPath, finalFormatted);
   } catch (e) {
-    yield { kind: "error", message: `Format: \u0437\u0430\u043F\u0438\u0441\u044C \u0444\u043E\u0440\u043C\u0430\u0442\u0430 \u043D\u0435 \u0443\u0434\u0430\u043B\u0430\u0441\u044C \u2014 ${e.message}` };
+    yield { kind: "error", message: progress.writeFailed(e.message) };
     return;
   }
   if (embedWarnings.length > 0) {
@@ -41139,7 +41263,8 @@ var AgentRunner = class {
           language: this.settings.outputLanguage ?? "auto"
         };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
-        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore);
+        const progress = i18nFor(resolveProgressLang(this.settings.outputLanguage)).formatProgress;
+        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore, progress);
         break;
       }
       default: {
@@ -49106,21 +49231,6 @@ var DomainStore = class {
 };
 
 // src/controller.ts
-function patchWikiFields(originalContent, formattedContent) {
-  const wikiUpdatedMatch = /^wiki_updated:[ \t]*(.+)$/m.exec(originalContent);
-  if (!wikiUpdatedMatch) return formattedContent;
-  const wikiUpdated = wikiUpdatedMatch[1].trim();
-  const wikiAddedMatch = /^wiki_added:[ \t]*(.+)$/m.exec(originalContent);
-  const wikiAdded = wikiAddedMatch?.[1].trim();
-  const wikiArticles = parseWikiArticlesFromFm(originalContent);
-  const patched = upsertRawFrontmatter(formattedContent, {
-    wiki_added: wikiAdded,
-    wiki_updated: wikiUpdated,
-    wiki_articles: wikiArticles
-  });
-  const { content } = validateAndRepairSourceFrontmatter(patched);
-  return content;
-}
 var WikiController = class {
   constructor(app, plugin, domainStore, localConfigStore) {
     this.app = app;
@@ -49206,7 +49316,7 @@ var WikiController = class {
         }
         const originalContent = await adapter.read(p.originalPath);
         const formattedContent = await adapter.read(p.tempPath);
-        const patched = patchWikiFields(originalContent, formattedContent);
+        const patched = restoreSourceFrontmatter(originalContent, formattedContent);
         if (adapter.rename) {
           await adapter.write(p.tempPath, patched);
           await adapter.rename(p.originalPath, deprecatedPath);
@@ -49219,7 +49329,7 @@ var WikiController = class {
       } else {
         const originalContent = await adapter.read(p.originalPath);
         const content = await adapter.read(p.tempPath);
-        const patched = patchWikiFields(originalContent, content);
+        const patched = restoreSourceFrontmatter(originalContent, content);
         const origFile = this.app.vault.getAbstractFileByPath(p.originalPath);
         if (origFile instanceof import_obsidian10.TFile) {
           await this.app.vault.modify(origFile, patched);

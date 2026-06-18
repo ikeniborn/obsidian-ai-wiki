@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.176 — 2026-06-18
+
+### Исправления
+- fix(ingest): recover and re-fence broken source frontmatter (dup keys, block-list, stranded body) so wiki_* backlinks are restored
+- fix(format): restore broken frontmatter in the preview, not only on apply
+- fix(format): progress stream follows outputLanguage (fallback UI locale)
+
+### Прочее
+- refactor(format): extract restoreSourceFrontmatter, always normalize on apply
+
+---
+
 ## 0.1.175 — 2026-06-17
 
 ### Исправления
