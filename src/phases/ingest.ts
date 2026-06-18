@@ -16,7 +16,7 @@ import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
 import { domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureWikiSources, stripInvalidWikiArticles, repairSourceFence } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureWikiSources, stripInvalidWikiArticles, recoverSourceFrontmatter } from "../utils/raw-frontmatter";
 import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
 import type { PageSimilarityService, ExtractedEntity } from "../page-similarity";
@@ -472,7 +472,7 @@ export async function* runIngest(
     }
 
     const backlinkToday = new Date().toISOString().slice(0, 10);
-    const normalizedSource = repairSourceFence(sourceContent);
+    const normalizedSource = recoverSourceFrontmatter(sourceContent);
     const isFirstTime = !hasFrontmatterField(normalizedSource, "wiki_added");
     const existingArticles = parseWikiArticlesFromFm(normalizedSource).filter((link) => {
       const stem = link.replace(/^\[\[/, "").replace(/\]\]$/, "");

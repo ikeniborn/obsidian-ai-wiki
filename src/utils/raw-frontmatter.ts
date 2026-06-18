@@ -11,25 +11,59 @@ const TAG_RE = /^[a-z][a-z0-9-]*(?:[/_][a-z0-9-]+)*$/;
 const FM_KEY_LINE = /^(wiki_[\w]+|tags|aliases|created|updated|external_links|related):/;
 
 /**
- * Re-fences a source page whose frontmatter lost its `---` delimiters.
- * If the content already has a valid fenced frontmatter, returns it unchanged.
- * Otherwise wraps the leading run of frontmatter-key lines in a `---` block so the
- * standard FM_RE-based readers/repairers work. A page with no leading FM-key lines
- * is returned unchanged.
- * Note: FM_KEY_LINE only matches scalar key lines (key: value), not indented list items.
- * A block-list wiki_articles in an unfenced source would have its items stranded in the body.
- * In practice this does not occur: upsertRawFrontmatter always writes valid fenced YAML,
- * so any previously-ingested source already passes FM_RE.test and bypasses this path.
+ * Recovers a source page's frontmatter into a single valid fenced block, tolerant of
+ * the broken shapes seen in the wild:
+ *  - fully unfenced frontmatter (keys at the top with no `---` delimiters);
+ *  - duplicate keys (e.g. two `wiki_updated:` lines) — last occurrence wins;
+ *  - block-list values (`wiki_articles:` followed by indented `- "[[…]]"` items);
+ *  - `wiki_*` keys stranded in the body directly after an otherwise-valid leading fence.
+ *
+ * It collects the leading fenced YAML (if any) plus the leading run of frontmatter-key
+ * lines from the body (including their indented list items), merges them with last-wins
+ * dedup, strips them from the body, and re-serialises a single `---` block. A page that
+ * already has a valid leading fence and no stray frontmatter in the body, or one with no
+ * frontmatter at all, is returned unchanged (so the function is idempotent). If the
+ * collected frontmatter cannot be parsed, the content is returned unchanged for the
+ * downstream validator to handle.
  */
-export function repairSourceFence(content: string): string {
-  if (FM_RE.test(content)) return content;
-  const lines = content.split("\n");
+export function recoverSourceFrontmatter(content: string): string {
+  const fenceMatch = FM_RE.exec(content);
+  const lead = fenceMatch ? fenceMatch[1] : "";
+  const rest = fenceMatch ? content.slice(fenceMatch[0].length) : content;
+
+  // Peel the leading run of frontmatter lines from the body (skipping leading blanks).
+  const lines = rest.split("\n");
   let i = 0;
-  while (i < lines.length && FM_KEY_LINE.test(lines[i])) i++;
-  if (i === 0) return content;
-  const fm = lines.slice(0, i).join("\n");
-  const body = lines.slice(i).join("\n");
-  return `---\n${fm}\n---\n${body}`;
+  while (i < lines.length && lines[i].trim() === "") i++;
+  const runStart = i;
+  let sawKey = false;
+  while (i < lines.length) {
+    if (FM_KEY_LINE.test(lines[i])) { sawKey = true; i++; continue; }
+    if (sawKey && /^\s+\S/.test(lines[i])) { i++; continue; } // indented list item or YAML continuation
+    break;
+  }
+  const strayFm = sawKey ? lines.slice(runStart, i).join("\n") : "";
+  const body = sawKey ? lines.slice(i).join("\n") : rest;
+
+  // Nothing to recover: valid fence with no stray frontmatter, or a frontmatter-less page.
+  if (!strayFm && (fenceMatch || !lead)) return content;
+  // Only recover when the stray run carries a wiki_* field (the backlink data ingest needs).
+  // This avoids fabricating a fence around body prose that merely starts with a
+  // frontmatter-like key (e.g. "updated: see the appendix below").
+  if (strayFm && !/^wiki_[\w]+:/m.test(strayFm)) return content;
+
+  const fmText = [lead, strayFm].filter((s) => s.trim().length > 0).join("\n");
+  let parsed: unknown;
+  try {
+    parsed = yamlParse(fmText, { uniqueKeys: false });
+  } catch {
+    return content; // unrecoverable — leave it for validateAndRepairSourceFrontmatter
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return content;
+
+  const fm = yamlStringify(parsed).replace(/\n+$/, "");
+  const cleanBody = body.replace(/^\n+/, "");
+  return `---\n${fm}\n---\n${cleanBody}`;
 }
 
 export type FieldRule =

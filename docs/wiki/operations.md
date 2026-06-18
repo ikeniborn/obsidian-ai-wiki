@@ -43,7 +43,7 @@ When LLM #2 emits `deletes[]`, ingest removes each listed page via `vaultTools.r
 
 When `deletes.length` exceeds `mergeDeleteWarnThreshold` (default 5), ingest yields a `Large merge: K deletions` warning. Deleted pages are logged as `УДАЛЕНА` in the wiki log. The source's `wiki_articles` is filtered to drop links pointing at deleted stems before new links merge in.
 
-When the source frontmatter is broken (its `---` fences were lost), `runIngest` re-fences it via `repairSourceFence` (`src/utils/raw-frontmatter.ts`) before reading `wiki_added`/`wiki_articles` and upserting the backlinks — so the existing creation date and accumulated backlinks are recovered from the now-fenced block instead of being reset to today or dropped. A page with valid fences, or one with no leading frontmatter-key lines, is returned unchanged.
+When the source frontmatter is broken, `runIngest` recovers it via `recoverSourceFrontmatter` (`src/utils/raw-frontmatter.ts`) before reading `wiki_added`/`wiki_articles` and upserting the backlinks. It tolerates the shapes seen in the wild: fully unfenced keys, duplicate keys (e.g. two `wiki_updated:` lines), block-list `wiki_articles`, and `wiki_*` keys stranded in the body after a leading fence. It merges the leading fenced YAML with the stray frontmatter run (dedup last-wins, list items kept), strips those lines from the body, and re-serialises a single `---` block — so the existing creation date and accumulated backlinks are recovered instead of being reset to today or dropped. A page already valid (or with no frontmatter) is returned unchanged, so the recovery is idempotent.
 
 ### Result Summary
 

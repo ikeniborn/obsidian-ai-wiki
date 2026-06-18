@@ -14,7 +14,7 @@ reproduce the spec's corruption cases.
 This eval covers the **deterministic logic** the fixes depend on:
 - Bug 1 — `restoreSourceFrontmatter` (preview == apply, idempotent).
 - Bug 2 — `resolveProgressLang` / `i18nFor` (progress language resolution).
-- Bug 3 — `repairSourceFence` + the `runIngest` backlink-write sequence (source `wiki_*` recovery).
+- Bug 3 — `recoverSourceFrontmatter` + the `runIngest` backlink-write sequence (source `wiki_*` recovery).
 
 **Out of scope** (requires the Obsidian runtime / a live LLM, must be checked manually in a throwaway vault):
 the actual `format_preview` sidebar render, the LLM rebuilding broken frontmatter (Task 6 prompt
@@ -47,65 +47,58 @@ the `src/phases/ingest.ts` backlink-write block verbatim.
 | E | **unfenced, block-list `wiki_articles`** | The shape `upsertRawFrontmatter` writes |
 | F | **valid leading fence (title) + `wiki_*` stranded in body** | The real on-disk artifact (spec §Root cause) |
 | G | already-valid fenced source | Positive control (normal re-ingest) |
+| H | D/E/F shapes, recovery applied twice | Bug 3 idempotency |
+| I | page with no frontmatter | Bug 3 leaves non-frontmatter pages untouched |
+| J | prose whose first line is a frontmatter-like key with no `wiki_*` | Bug 3 does not fabricate a fence around body prose |
 | P1–P14 | — | Bug 2 language resolution + bundle contents |
 
-## Results
+## Results (current)
 
-`TOTAL: 34 passed, 5 failed`
+`TOTAL: 42 passed, 0 failed`
 
 | Bug | Verdict | Cases |
 |-----|---------|-------|
 | Bug 1 — preview frontmatter restore | ✅ PASS | A1–A5, B1, C1 |
 | Bug 2 — progress language | ✅ PASS | P1–P14 |
-| Bug 3 — re-ingest source backlinks | ❌ FAIL | D1, E2, F1, F2, F3 fail; only G (control) passes |
+| Bug 3 — re-ingest source backlinks | ✅ PASS | D1–D5, E1–E5, F1–F3, G1–G5, H1, I1, J1 |
 
-### Failing assertions
+## History — the original `repairSourceFence` failed (motivated the redesign)
 
-- **D1** — `wiki_added` is dropped entirely (not preserved) on the spec's exact reproduction shape.
-- **E2** — the existing block-list `wiki_articles` backlink is lost (not unioned).
-- **F1** — `wiki_added` is reset to today.
-- **F2** — the existing backlink is lost.
-- **F3** — orphaned `wiki_*` lines remain in the body.
+The first Bug 3 implementation, `repairSourceFence`, only wrapped a **leading run of scalar `key:`
+lines** in a fence. Running this eval against it produced `34 passed, 5 failed` — it failed every
+realistic broken shape:
 
-## Root-cause analysis (Bug 3)
+1. **D — duplicate keys defeat `upsertRawFrontmatter`.** Fencing the two `wiki_updated` lines produced
+   a block with duplicate keys; `upsertRawFrontmatter`'s `yaml.parse` **throws** `"Map keys must be
+   unique"`, its `try/catch` sets `existing = {}`, and `wiki_added` is lost before the downstream
+   dedup ever runs.
+2. **E — block-list items stranded.** `FM_KEY_LINE` matched `wiki_articles:` but not its indented
+   `- "[[…]]"` items, so the closing `---` split the key from its items and `parseWikiArticlesFromFm`
+   returned `[]` — dropping the existing backlink.
+3. **F — `FM_RE.test()` short-circuited recovery.** A valid leading fence made `repairSourceFence`
+   return unchanged, so body-stranded `wiki_*` were never recovered: `wiki_added` reset to today, the
+   backlink was lost, and orphan lines stayed in the body.
 
-`repairSourceFence` only re-fences a **fully unfenced, leading run of scalar `key:` lines**. The three
-realistic corruption shapes each defeat it:
+## Fix — `recoverSourceFrontmatter`
 
-1. **D — duplicate keys defeat `upsertRawFrontmatter`, not just the fence.**
-   `repairSourceFence` fences the three leading lines (including the two `wiki_updated`), producing a
-   fenced block with duplicate keys. `upsertRawFrontmatter` then calls `yaml.parse`, which **throws**
-   `"Map keys must be unique"`; its `try/catch` swallows the error and sets `existing = {}`, so the
-   existing `wiki_added` is lost before `validateAndRepairSourceFrontmatter` (the dedup pass) ever runs.
-   The spec assumed the downstream dedup would rescue duplicates — but `upsertRawFrontmatter` runs
-   first and discards the recovered fields on a parse failure.
+`repairSourceFence` was replaced by `recoverSourceFrontmatter`, which:
 
-2. **E — block-list items are stranded.**
-   `FM_KEY_LINE` matches the `wiki_articles:` parent line but not its indented `  - "[[…]]"` items, so
-   the closing `---` is inserted between the key and its items. `parseWikiArticlesFromFm` then finds no
-   items inside the fence → returns `[]` → the existing backlink drops out of the union. Since
-   `upsertRawFrontmatter` always serialises `wiki_articles` as a block list (`yamlStringify`), this is
-   the *common* shape, not an edge case.
+- seeds from the leading fenced YAML (if any);
+- peels the leading run of frontmatter-key lines from the body, **including** indented block-list
+  items and continuations, skipping leading blanks;
+- merges seed + stray run and parses with `yaml.parse(..., { uniqueKeys: false })` (last-wins dedup),
+  so duplicate keys no longer crash the parse and `wiki_added` survives;
+- re-serialises a single `---` block and strips the stray lines from the body;
+- returns content unchanged when there is a valid leading fence with no stray frontmatter, or no
+  frontmatter at all (idempotent), and when the collected frontmatter is unparseable;
+- only recovers when the stray run carries a `wiki_*` field, so body prose whose first line merely
+  looks like a frontmatter key (e.g. `updated: see the appendix below`) is left untouched (case J).
 
-3. **F — `FM_RE.test()` short-circuits recovery.**
-   A valid leading fence (even one holding only `title`) makes `FM_RE.test()` return `true`, so
-   `repairSourceFence` returns the content unchanged. The `wiki_*` fields stranded in the body below the
-   fence are never read: `wiki_added` resets to today, the backlink is lost, and the orphan lines
-   persist in the output. This is the artifact the spec itself describes as the corruption's origin.
-
-`G` (an already-valid fenced source) passes — but that case never needed repair.
+With this function the eval moved from `34/5` to `42/0`: D/E/F now pass, the positive control G still
+passes, and the new idempotency (H), frontmatter-less (I), and prose-guard (J) cases pass.
 
 ## Verdict
 
-- **Bug 1 and Bug 2 are correct, integrated, and verified** by this eval and can ship.
-- **Bug 3's fix does not satisfy its spec for any realistic broken source.** `repairSourceFence` as
-  implemented (leading scalar run only) handles a shape that does not occur in practice. A correct fix
-  must additionally: dedup duplicate keys *before* `upsertRawFrontmatter` reads them; recover block-list
-  list-item lines; and recover `wiki_*` keys stranded in the body after a valid leading fence
-  (i.e. not gate the whole repair on `FM_RE.test()`).
-
-## Recommendation
-
-Hold the Bug 3 commit (`fix(ingest): re-fence broken source frontmatter …`). Either redesign the
-recovery to handle shapes D/E/F, or re-scope Bug 3 explicitly (with corrected verification criteria)
-and get user sign-off. Bug 1 + Bug 2 may proceed independently.
+All three bugs are correct and verified by this out-of-vault eval. Manual in-vault checks (sidebar
+preview render, live-LLM frontmatter rebuild, full ingest pipeline) remain as the only steps this
+harness cannot cover — see the spec's verification criteria.

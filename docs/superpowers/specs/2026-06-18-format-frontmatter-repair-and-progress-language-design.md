@@ -199,23 +199,39 @@ tolerant of.
 
 ### Behavior
 
-Add a pure helper `repairSourceFence(content): string` to
-`src/utils/raw-frontmatter.ts`:
+> **Revision 2026-06-18 (post-eval).** The original design below proposed
+> `repairSourceFence`, which only wrapped a leading run of scalar key lines. The
+> out-of-vault eval (`docs/superpowers/evals/2026-06-18-format-frontmatter-repair-eval.md`)
+> proved it failed every realistic broken shape: duplicate keys crashed
+> `upsertRawFrontmatter`'s `yaml.parse` (losing `wiki_added`), block-list `wiki_articles`
+> items were stranded outside the fence, and a valid leading fence made `FM_RE.test`
+> short-circuit recovery of body-stranded `wiki_*`. It was replaced by
+> `recoverSourceFrontmatter` (below).
 
-- If `FM_RE` already matches (valid fenced frontmatter) → return unchanged.
-- Else, collect the leading consecutive lines that match a known frontmatter key
-  (`wiki_*`, `tags`, `aliases`, `created`, `updated`, `external_links`, `related`);
-  if any exist, wrap them in a `---` … `---` block and keep the rest as body. If no
-  leading frontmatter-key lines exist, return unchanged (a genuinely frontmatter-less
-  page).
+Add a pure helper `recoverSourceFrontmatter(content): string` to
+`src/utils/raw-frontmatter.ts` that recovers a single valid fenced block, tolerant of:
+
+- fully unfenced frontmatter (keys at the top, no `---`);
+- duplicate keys (e.g. two `wiki_updated:` lines) — last occurrence wins;
+- block-list values (`wiki_articles:` followed by indented `- "[[…]]"` items);
+- `wiki_*` keys stranded in the body directly after an otherwise-valid leading fence.
+
+Algorithm: take the leading fenced YAML (if any) as a seed; peel the leading run of
+frontmatter-key lines from the body (skipping leading blanks, including indented list
+items / continuations); merge seed + stray run and `yaml.parse(..., { uniqueKeys: false })`
+(last-wins dedup); re-serialise a single `---` block and strip the stray lines from the
+body. A page that already has a valid leading fence with no stray frontmatter, or one
+with no frontmatter at all, is returned unchanged (idempotent). An unparseable collection
+is returned unchanged for the downstream validator to handle.
 
 In `runIngest`, before computing `isFirstTime` / `existingArticles` and before
 `upsertRawFrontmatter` (line 474+), normalize the source once:
-`const normalizedSource = repairSourceFence(sourceContent)` and use `normalizedSource`
-for all three reads and the upsert. The existing `validateAndRepairSourceFrontmatter`
-pass (line 487) then deduplicates the now-fenced duplicate keys (its duplicate-key
-pre-merge logic), and `wiki_articles` becomes the correct union of the recovered
-existing links and the newly written links.
+`const normalizedSource = recoverSourceFrontmatter(sourceContent)` and use
+`normalizedSource` for all three reads and the upsert. Because the recovered block is
+already deduped and single-fenced, `upsertRawFrontmatter` parses it cleanly (preserving
+`wiki_added`), and `wiki_articles` becomes the correct union of the recovered existing
+links and the newly written links. The downstream `validateAndRepairSourceFrontmatter`
+pass (line 487) still runs as a final normalization.
 
 ### Field / merge policy (per decision)
 
@@ -236,8 +252,8 @@ applies whenever the block runs (the normal re-ingest case, which writes ≥1 pa
 
 - `src/phases/format.ts` — restore frontmatter on output; localize progress strings;
   new `progressLang` parameter.
-- `src/utils/raw-frontmatter.ts` — extract shared `restoreSourceFrontmatter`; add `repairSourceFence`.
-- `src/phases/ingest.ts` — normalize source frontmatter via `repairSourceFence` before the backlink reads/upsert (Bug 3).
+- `src/utils/raw-frontmatter.ts` — extract shared `restoreSourceFrontmatter`; add `recoverSourceFrontmatter`.
+- `src/phases/ingest.ts` — normalize source frontmatter via `recoverSourceFrontmatter` before the backlink reads/upsert (Bug 3).
 - `src/controller.ts` — `patchWikiFields` reuses/aliases the shared function.
 - `src/agent-runner.ts` — resolve `progressLang`, pass into `runFormat`.
 - `src/i18n.ts` — `formatProgress` section (en/ru/es) + explicit-language accessor.

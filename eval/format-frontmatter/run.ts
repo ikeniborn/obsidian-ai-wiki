@@ -10,7 +10,7 @@
  */
 import {
   restoreSourceFrontmatter,
-  repairSourceFence,
+  recoverSourceFrontmatter,
   hasFrontmatterField,
   parseWikiArticlesFromFm,
   upsertRawFrontmatter,
@@ -47,7 +47,7 @@ function simulateIngestBacklink(
   deletedStems: Set<string>,
 ): string {
   const backlinkToday = TODAY;
-  const normalizedSource = repairSourceFence(sourceContent);
+  const normalizedSource = recoverSourceFrontmatter(sourceContent);
   const isFirstTime = !hasFrontmatterField(normalizedSource, "wiki_added");
   const existingArticles = parseWikiArticlesFromFm(normalizedSource).filter((link) => {
     const stem = link.replace(/^\[\[/, "").replace(/\]\]$/, "");
@@ -132,7 +132,7 @@ reformatted`;
 }
 
 // =====================================================================
-// BUG 3 — re-ingest restores source wiki_* backlinks (repairSourceFence)
+// BUG 3 — re-ingest restores source wiki_* backlinks (recoverSourceFrontmatter)
 // =====================================================================
 section("Bug 3 — re-ingest source backlink recovery");
 
@@ -213,6 +213,37 @@ wiki_articles:
   check("G3 new backlink merged", arts.includes(NEW_LINK), out);
   check("G4 single valid fence", fenceCount === 2, `fenceCount=${fenceCount}\n${out}`);
   check("G5 no wiki_* in body", !bodyHasWikiKey(body), out);
+}
+
+{
+  // H: recoverSourceFrontmatter is idempotent — recover(recover(x)) == recover(x)
+  //    across all broken shapes.
+  const shapes = [
+    `wiki_added: ${OLD_ADDED}\nwiki_updated: 2026-06-16\nwiki_updated: 2026-06-16\n# T\nx`,
+    `wiki_added: ${OLD_ADDED}\nwiki_articles:\n  - "${EXISTING_LINK}"\n# T\nx`,
+    `---\ntitle: T\n---\nwiki_added: ${OLD_ADDED}\nwiki_articles:\n  - "${EXISTING_LINK}"\n# T\nx`,
+  ];
+  let allIdem = true;
+  shapes.forEach((s, idx) => {
+    const once = recoverSourceFrontmatter(s);
+    const twice = recoverSourceFrontmatter(once);
+    if (once !== twice) { allIdem = false; console.log(`        shape ${idx} not idempotent:\n${once}\n---\n${twice}`); }
+  });
+  check("H1 recoverSourceFrontmatter is idempotent", allIdem);
+}
+
+{
+  // I: a genuinely frontmatter-less page is returned unchanged.
+  const src = `# Just a heading\n\nsome prose without any frontmatter`;
+  check("I1 frontmatter-less page unchanged", recoverSourceFrontmatter(src) === src);
+}
+
+{
+  // J: prose whose first line looks like a frontmatter key but carries NO wiki_* field
+  //    must NOT be lifted into a fabricated fence.
+  const src = `updated: see the appendix below\n\nThe rest of the article continues here.`;
+  check("J1 frontmatter-like prose (no wiki_*) unchanged", recoverSourceFrontmatter(src) === src,
+    recoverSourceFrontmatter(src));
 }
 
 // =====================================================================
