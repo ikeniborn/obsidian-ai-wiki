@@ -8,6 +8,30 @@ const WIKILINK_RE = /^\[\[.+\]\]$/;
 const URL_RE = /^https?:\/\//;
 const TAG_RE = /^[a-z][a-z0-9-]*(?:[/_][a-z0-9-]+)*$/;
 
+const FM_KEY_LINE = /^(wiki_[\w]+|tags|aliases|created|updated|external_links|related):/;
+
+/**
+ * Re-fences a source page whose frontmatter lost its `---` delimiters.
+ * If the content already has a valid fenced frontmatter, returns it unchanged.
+ * Otherwise wraps the leading run of frontmatter-key lines in a `---` block so the
+ * standard FM_RE-based readers/repairers work. A page with no leading FM-key lines
+ * is returned unchanged.
+ * Note: FM_KEY_LINE only matches scalar key lines (key: value), not indented list items.
+ * A block-list wiki_articles in an unfenced source would have its items stranded in the body.
+ * In practice this does not occur: upsertRawFrontmatter always writes valid fenced YAML,
+ * so any previously-ingested source already passes FM_RE.test and bypasses this path.
+ */
+export function repairSourceFence(content: string): string {
+  if (FM_RE.test(content)) return content;
+  const lines = content.split("\n");
+  let i = 0;
+  while (i < lines.length && FM_KEY_LINE.test(lines[i])) i++;
+  if (i === 0) return content;
+  const fm = lines.slice(0, i).join("\n");
+  const body = lines.slice(i).join("\n");
+  return `---\n${fm}\n---\n${body}`;
+}
+
 export type FieldRule =
   | { field: string; kind: "list-wikilinks" }
   | { field: string; kind: "list-wikilinks-stem-only" }

@@ -16,7 +16,7 @@ import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
 import { domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureWikiSources, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureWikiSources, stripInvalidWikiArticles, repairSourceFence } from "../utils/raw-frontmatter";
 import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
 import type { PageSimilarityService, ExtractedEntity } from "../page-similarity";
@@ -472,14 +472,15 @@ export async function* runIngest(
     }
 
     const backlinkToday = new Date().toISOString().slice(0, 10);
-    const isFirstTime = !hasFrontmatterField(sourceContent, "wiki_added");
-    const existingArticles = parseWikiArticlesFromFm(sourceContent).filter((link) => {
+    const normalizedSource = repairSourceFence(sourceContent);
+    const isFirstTime = !hasFrontmatterField(normalizedSource, "wiki_added");
+    const existingArticles = parseWikiArticlesFromFm(normalizedSource).filter((link) => {
       const stem = link.replace(/^\[\[/, "").replace(/\]\]$/, "");
       return !deletedStems.has(stem);
     });
     const writtenLinks = written.map((p) => `[[${p.split("/").pop()!.replace(/\.md$/, "")}]]`);
     const mergedArticles = [...new Set([...existingArticles, ...writtenLinks])];
-    const updatedSource = upsertRawFrontmatter(sourceContent, {
+    const updatedSource = upsertRawFrontmatter(normalizedSource, {
       wiki_added: isFirstTime ? backlinkToday : undefined,
       wiki_updated: backlinkToday,
       wiki_articles: mergedArticles,
