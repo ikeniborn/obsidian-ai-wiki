@@ -229,6 +229,18 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName(T.settings.reasoningLanguage_name)
+      .setDesc(T.settings.reasoningLanguage_desc)
+      .addDropdown((d) =>
+        d.addOptions({ auto: "Auto (match response)", en: "English", ru: "Russian", es: "Spanish" })
+          .setValue(s.reasoningLanguage ?? "en")
+          .onChange(async (v) => {
+            s.reasoningLanguage = v as "auto" | "ru" | "en" | "es";
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
       .setName(T.settings.timeouts_name)
       .setDesc(T.settings.timeouts_desc)
       .addText((t) =>
