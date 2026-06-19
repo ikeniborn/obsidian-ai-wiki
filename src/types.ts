@@ -106,6 +106,7 @@ export interface LlmCallOptions {
   topP?: number | null;
   systemPrompt?: string;
   outputLanguage?: OutputLanguage;
+  reasoningLanguage?: OutputLanguage;
   jsonMode?: "json_object" | "json_schema" | false;
   jsonSchema?: { name: string; schema: object };
   structuredRetries?: number;
@@ -154,6 +155,7 @@ export interface LlmWikiPluginSettings {
   backend: "claude-agent" | "native-agent";
   systemPrompt: string;
   outputLanguage: OutputLanguage;
+  reasoningLanguage: OutputLanguage;
   agentLogEnabled: boolean;
   historyLimit: number;
   graphDepth: number;
@@ -229,6 +231,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   backend: "native-agent",
   systemPrompt: "",
   outputLanguage: "auto",
+  reasoningLanguage: "en",
   agentLogEnabled: false,
   historyLimit: 20,
   graphDepth: 1,

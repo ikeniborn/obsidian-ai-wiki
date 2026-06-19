@@ -45,11 +45,11 @@ export class AgentRunner {
     const na = s.nativeAgent;
     const c = na.perOperation ? na.operations[key] : undefined;
     const budgetTokens = c?.thinkingBudgetTokens ?? na.thinkingBudgetTokens;
-    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold,
+    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, reasoningLanguage: s.reasoningLanguage, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold,
       dedupOnIngest: na.dedupOnIngest, dedupThreshold: na.dedupThreshold,
       lintNearDuplicate: na.lintNearDuplicate, nearDupThreshold: na.nearDupThreshold,
     } };
-    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold,
+    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, reasoningLanguage: s.reasoningLanguage, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold,
       dedupOnIngest: na.dedupOnIngest, dedupThreshold: na.dedupThreshold,
       lintNearDuplicate: na.lintNearDuplicate, nearDupThreshold: na.nearDupThreshold,
     } };

@@ -2,7 +2,7 @@ import type OpenAI from "openai";
 import type { LlmCallOptions, LlmClient, OutputLanguage, RunEvent } from "../types";
 import baseContract from "../../prompts/base.md";
 import { jsonrepair } from "jsonrepair";
-import { resolveLang } from "../i18n";
+import { resolveLang, resolveReasoningLang } from "../i18n";
 
 /** Maps a concrete output language to a one-line reply directive for the system prompt. */
 export function langInstruction(lang: "ru" | "en" | "es"): string {
@@ -138,6 +138,7 @@ export function buildChatParams(
 ): Record<string, unknown> {
   let msgs = prependBaseContract(messages);
   if (opts.outputLanguage) msgs = injectLanguageDirective(msgs, resolveLang(opts.outputLanguage));
+  msgs = injectReasoningDirective(msgs, resolveReasoningLang(opts.reasoningLanguage, opts.outputLanguage));
   msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
   const params: Record<string, unknown> = { model, messages: msgs };
   if (opts.temperature !== undefined) params.temperature = opts.temperature;
@@ -183,6 +184,28 @@ function injectLanguageDirective(
   lang: "ru" | "en" | "es",
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const directive = `## Language\n${langInstruction(lang)}`;
+  const firstSystem = messages.findIndex((m) => m.role === "system");
+  if (firstSystem >= 0) {
+    const updated = [...messages];
+    const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
+    updated[firstSystem] = { role: "system", content: `${existing}\n\n${directive}` };
+    return updated;
+  }
+  return [{ role: "system", content: directive }, ...messages];
+}
+
+const REASONING_LANG_NAME: Record<"ru" | "en" | "es", string> = {
+  ru: "Russian",
+  en: "English",
+  es: "Spanish",
+};
+
+/** Appends `## Reasoning language\n<directive>` to the first system message. */
+function injectReasoningDirective(
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  lang: "ru" | "en" | "es",
+): OpenAI.Chat.ChatCompletionMessageParam[] {
+  const directive = `## Reasoning language\nThink and reason in ${REASONING_LANG_NAME[lang]}.`;
   const firstSystem = messages.findIndex((m) => m.role === "system");
   if (firstSystem >= 0) {
     const updated = [...messages];
