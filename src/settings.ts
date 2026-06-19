@@ -220,7 +220,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
       .setName(T.settings.outputLanguage_name)
       .setDesc(T.settings.outputLanguage_desc)
       .addDropdown((d) =>
-        d.addOptions({ auto: "Auto (match source)", ru: "Russian", en: "English", es: "Spanish" })
+        d.addOptions({ auto: "Auto (match UI language)", ru: "Russian", en: "English", es: "Spanish" })
           .setValue(s.outputLanguage ?? "auto")
           .onChange(async (v) => {
             s.outputLanguage = v as "auto" | "ru" | "en" | "es";

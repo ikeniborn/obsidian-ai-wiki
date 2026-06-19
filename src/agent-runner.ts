@@ -240,7 +240,7 @@ export class AgentRunner {
           });
           if (this.settings.devMode.evaluatorModel) {
             const evalModel = this.settings.devMode.evaluatorModel;
-            for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal)) {
+            for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal, { reasoningLanguage: this.settings.reasoningLanguage, outputLanguage: this.settings.outputLanguage })) {
               yield ev;
               if (ev.kind === "eval_result") {
                 await this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);

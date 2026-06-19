@@ -106,7 +106,7 @@ export async function* runIngest(
 
   await ensureDomainConfig(vaultTools, domainRoot);
   void graphDepth;
-  const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(opts.outputLanguage ?? "auto") });
+  const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
   const indexContent = await tryRead(vaultTools, domainIndexPath(domainRoot));
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
   const nonMetaPaths = existingPaths.filter((f) => !f.endsWith("_index.md"));

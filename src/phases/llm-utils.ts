@@ -1,5 +1,5 @@
 import type OpenAI from "openai";
-import type { LlmCallOptions, LlmClient, OutputLanguage, RunEvent } from "../types";
+import type { LlmCallOptions, LlmClient, RunEvent } from "../types";
 import baseContract from "../../prompts/base.md";
 import { jsonrepair } from "jsonrepair";
 import { resolveLang, resolveReasoningLang } from "../i18n";
@@ -19,7 +19,7 @@ export function langInstruction(lang: "ru" | "en" | "es"): string {
  * pages use headings that match the selected language. `auto` falls back to Russian,
  * preserving the historical default.
  */
-export function wikiSections(lang: OutputLanguage): string {
+export function wikiSections(lang: "ru" | "en" | "es"): string {
   const headings = {
     ru: {
       mandatory: "## Основные характеристики",

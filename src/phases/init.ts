@@ -151,7 +151,7 @@ export async function* runInitWithSources(
   }
 
   const initialDomainRoot = existing ? domainWikiFolder(existing.wiki_folder) : wikiRootGuess;
-  const schemaContent = render(schemaTemplate, { section_conventions: wikiSections(opts.outputLanguage ?? "auto") });
+  const schemaContent = render(schemaTemplate, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
   const indexContent = await tryRead(vaultTools, domainIndexPath(initialDomainRoot));
 
   let annotationsCache = parseIndexAnnotations(indexContent);

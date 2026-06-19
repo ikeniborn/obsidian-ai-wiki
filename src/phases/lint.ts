@@ -199,7 +199,7 @@ export async function* runLint(
 
     yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
     await ensureDomainConfig(vaultTools, wikiVaultPath);
-    const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(opts.outputLanguage ?? "auto") });
+    const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
     const allFiles = await vaultTools.listFiles(wikiVaultPath);
     const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
     yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
