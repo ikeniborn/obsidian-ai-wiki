@@ -17,6 +17,7 @@ export interface LocalConfig {
   proxy?: { password?: string };
   migrated_v1?: boolean;
   migrated_v2?: boolean;
+  migrated_drop_sections?: boolean;
   shellConsentGiven?: boolean;
   lastDomain?: string;
 }
