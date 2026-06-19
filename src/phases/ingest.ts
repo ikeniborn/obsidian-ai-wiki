@@ -24,6 +24,7 @@ import { appendWikiLog } from "../wiki-log";
 import type { IngestLogEntry } from "../wiki-log";
 import { fixWikiLinks } from "../wiki-link-validator";
 import { GENERIC_WIKI_STEM_REGEX, stemRegex } from "../wiki-stem";
+import { i18nFor, resolveLang } from "../i18n";
 
 function parseWikiStatus(content: string): string {
   const m = /^---\n[\s\S]*?^wiki_status:[ \t]*(.+)$/m.exec(content);
@@ -105,13 +106,13 @@ export async function* runIngest(
 
   await ensureDomainConfig(vaultTools, domainRoot);
   void graphDepth;
-  const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(opts.outputLanguage ?? "auto") });
+  const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
   const indexContent = await tryRead(vaultTools, domainIndexPath(domainRoot));
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
   const nonMetaPaths = existingPaths.filter((f) => !f.endsWith("_index.md"));
   const annotations = cachedAnnotations ?? parseIndexAnnotations(indexContent);
 
-  yield { kind: "assistant_text", delta: `Synthesizing wiki pages for domain "${domain.id}"...\n` };
+  yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).ingestProgress.synthesizing(domain.id) };
   const start = Date.now();
 
   // === LLM #1: extract entities =========================================

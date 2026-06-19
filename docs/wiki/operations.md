@@ -129,7 +129,7 @@ It preserves the source `wiki_*` tracking fields (`wiki_added`/`wiki_updated`/`w
 
 ### Progress Language
 
-The format progress stream follows the configured language. `AgentRunner` resolves it with `resolveProgressLang(outputLanguage)` and passes the matching `formatProgress` bundle into `runFormat` (`src/i18n.ts`).
+The format progress stream follows the configured language. `AgentRunner` resolves it with `resolveLang(outputLanguage)` (layer A) and passes the matching `formatProgress` bundle into `runFormat` (`src/i18n.ts`). The same `resolveLang` resolver is used for ingest, lint, and init status strings.
 
 An explicit `ru`/`en`/`es` wins; `auto`/undefined falls back to the Obsidian UI locale (`moment.locale()`). Every progress string — analysing, salvage/truncation notices, sentinel-invalid, write-failure — is a bundle lookup. `format.ts` type-only-imports `FormatProgress` to stay free of an `obsidian` runtime dependency, and an English fallback keeps `runFormat` usable without an explicit bundle.
 

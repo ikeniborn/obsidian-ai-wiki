@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Check-spec — Progress &amp; Reasoning Language</title>
+<style>
+  :root[data-theme="dark"]{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1f242d; --bd:#2a313c;
+    --fg:#e6e9ef; --mut:#9aa4b2; --acc:#5aa9ff; --ok:#3fb950; --warn:#d29922; --crit:#f85149;
+    --node:#1f262f; --nodebd:#33404f; --edge:#5b6776;
+  }
+  :root[data-theme="light"]{
+    --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f6; --bd:#d0d7de;
+    --fg:#1f2328; --mut:#57606a; --acc:#0969da; --ok:#1a7f37; --warn:#9a6700; --crit:#cf222e;
+    --node:#ffffff; --nodebd:#c4ccd4; --edge:#8a97a5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:15px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:32px;max-width:1080px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px} h2{font-size:19px;margin:32px 0 12px;border-bottom:1px solid var(--bd);padding-bottom:6px}
+  h3{font-size:16px;margin:20px 0 8px;color:var(--mut)}
+  .sub{color:var(--mut);font-size:13px;margin-bottom:18px}
+  .panel{background:var(--panel);border:1px solid var(--bd);border-radius:10px;padding:16px 18px;margin:14px 0}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0}
+  th,td{border:1px solid var(--bd);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);font-weight:600}
+  code{background:var(--panel2);border:1px solid var(--bd);border-radius:4px;padding:0 5px;font-size:12.5px}
+  .badge{display:inline-block;padding:1px 9px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid}
+  .b-ok{color:var(--ok);border-color:var(--ok)} .b-warn{color:var(--warn);border-color:var(--warn)}
+  .b-crit{color:var(--crit);border-color:var(--crit)} .b-acc{color:var(--acc);border-color:var(--acc)}
+  .note{background:var(--panel2);border-left:3px solid var(--acc);border-radius:6px;padding:10px 14px;margin:12px 0;font-size:13.5px}
+  .toggle{position:fixed;top:18px;right:18px;background:var(--panel);color:var(--fg);border:1px solid var(--bd);
+    border-radius:20px;padding:6px 14px;cursor:pointer;font-size:13px}
+  .flow{display:flex;flex-wrap:wrap;gap:12px;align-items:stretch}
+  .col{flex:1 1 220px;background:var(--panel2);border:1px solid var(--bd);border-radius:8px;padding:12px}
+  .col h4{margin:0 0 8px;font-size:14px}
+  .col ul{margin:0;padding-left:18px} .col li{margin:3px 0;font-size:13px}
+  .arrowrow{text-align:center;color:var(--acc);font-size:20px;margin:4px 0}
+  svg{width:100%;height:auto;display:block}
+  .nd{fill:var(--node);stroke:var(--nodebd)} .nl{fill:var(--fg);font-size:12px;font-weight:600}
+  .ns{fill:var(--mut);font-size:10px} .ttl{fill:var(--acc);font-size:11px;font-weight:700}
+  footer{color:var(--mut);font-size:12px;margin-top:32px;border-top:1px solid var(--bd);padding-top:10px}
+</style>
+</head>
+<body>
+<button class="toggle" onclick="t()">🌓 Тема</button>
+
+<h1>Проверка спецификации — Progress &amp; Reasoning Language</h1>
+<div class="sub">Файл: <code>docs/superpowers/specs/2026-06-19-progress-reasoning-language-design.md</code> ·
+spec_hash <code>1d70686d65f09008</code> · прогон 2026-06-19 ·
+вердикт <span class="badge b-ok">OK</span></div>
+
+<h2>1. Резюме спецификации</h2>
+<p>Задача: язык вывода плагина разнесён на три независимых слоя. Спека чинит баг локализации статусов,
+добавляет управление языком рассуждения модели и делает <code>auto</code>-язык контента управляемым.</p>
+<table>
+<thead><tr><th>ID</th><th>Слой</th><th>Требование</th></tr></thead>
+<tbody>
+<tr><td>A1</td><td>A</td><td>Per-phase progress-ключи для ingest/lint/init в бандлы en/ru/es; запинить <code>en.&lt;phase&gt;Progress</code> к типу.</td></tr>
+<tr><td>A2</td><td>A</td><td>Заменить хардкод-литералы статусов на бандл через <code>i18nFor(resolveLang(opts.outputLanguage))</code> — <code>ingest.ts:114</code>, <code>lint.ts:281/489</code>, <code>init.ts:57/61/175</code>.</td></tr>
+<tr><td>A3</td><td>A</td><td>Локализовать <code>view.ts:633/639/759/762</code> по настройке: <code>resolveLang(settings.outputLanguage)</code>.</td></tr>
+<tr><td>A4</td><td>A</td><td>Переименовать <code>resolveProgressLang → resolveLang</code> (общая для A и C).</td></tr>
+<tr><td>B1</td><td>B</td><td><code>types.ts</code>: поле <code>reasoningLanguage: OutputLanguage</code>, дефолт <code>"en"</code>; добавить в <code>LlmCallOptions</code>.</td></tr>
+<tr><td>B2</td><td>B</td><td><code>settings.ts</code>: дропдаун Reasoning language (auto/en/ru/es) + i18n-лейблы.</td></tr>
+<tr><td>B3</td><td>B</td><td><code>i18n.ts</code>: <code>resolveReasoningLang(reasoningLanguage, outputLanguage)</code>.</td></tr>
+<tr><td>B4</td><td>B</td><td><code>llm-utils.ts</code>: инъекция директивы reasoning в системный промпт (best-effort).</td></tr>
+<tr><td>C1</td><td>C</td><td><code>langInstruction</code> принимает только конкретный <code>ru|en|es</code>; ветка <code>auto→follow source</code> убрана.</td></tr>
+<tr><td>C2</td><td>C</td><td><code>auto</code>-контент следует языку Obsidian UI.</td></tr>
+</tbody>
+</table>
+
+<h3>Success Criteria</h3>
+<div class="panel">
+<ul>
+<li><code>tsc</code>/lint чисто; type-pinning ловит дрейф бандлов.</li>
+<li><code>outputLanguage=ru</code> → статусы ingest/lint/format русские.</li>
+<li><code>auto</code> + Obsidian-ru → статусы русские.</li>
+<li>Reasoning по умолчанию English; <code>reasoningLanguage=auto</code> → язык контента.</li>
+<li><code>auto</code> + Obsidian-en → контент English.</li>
+<li><code>lat check</code> проходит (ссылки + code-refs).</li>
+</ul>
+</div>
+
+<h2>2. Схема решения</h2>
+<p>Настройки резолвятся в конкретный язык, дальше расходятся по трём слоям. Резолверы живут в <code>i18n.ts</code>,
+инъекция директив языка — централизованно в <code>llm-utils.ts</code>.</p>
+<div class="flow">
+  <div class="col">
+    <h4>Источник</h4>
+    <ul><li><code>Settings.outputLanguage</code></li><li><code>Settings.reasoningLanguage</code></li><li>Obsidian UI locale</li></ul>
+  </div>
+  <div class="col">
+    <h4>Резолверы <code>i18n.ts</code></h4>
+    <ul><li><code>resolveLang</code> → ru|en|es (auto→Obsidian)</li><li><code>resolveReasoningLang</code> → ru|en|es (auto→resolveLang)</li></ul>
+  </div>
+  <div class="col">
+    <h4>Потребители</h4>
+    <ul>
+      <li><b>A:</b> phases ingest/lint/init + view.ts → бандлы en/ru/es</li>
+      <li><b>B:</b> llm-utils → reasoning-директива</li>
+      <li><b>C:</b> llm-utils <code>langInstruction</code> (конкретный язык)</li>
+    </ul>
+  </div>
+</div>
+<div class="arrowrow">▼ фазы получают <code>opts.outputLanguage</code>; llm-utils инъектит директивы контента и reasoning ▼</div>
+
+<h2>3. Граф зависимостей требований</h2>
+<p>Узлы — требования, рёбра — «зависит от». <code>A4 (resolveLang)</code> — базовый узел: на него опираются оба слоя A/C и через цепочку — B.</p>
+<svg viewBox="0 0 780 540" role="img" aria-label="Граф зависимостей требований">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/>
+    </marker>
+    <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  <!-- edges -->
+  <g stroke="var(--edge)" stroke-width="1.6" fill="none" marker-end="url(#ar)">
+    <line x1="300" y1="100" x2="190" y2="150"/>            <!-- A2->A1 -->
+    <line x1="300" y1="180" x2="190" y2="155"/>            <!-- A3->A1 -->
+    <line x1="300" y1="195" x2="190" y2="330"/>            <!-- A3->A4 -->
+    <line x1="300" y1="110" x2="190" y2="325"/>            <!-- A2->A4 -->
+    <line x1="560" y1="330" x2="200" y2="345"/>            <!-- B3->A4 -->
+    <line x1="650" y1="300" x2="650" y2="270"/>            <!-- B4->B3? adjust below -->
+    <line x1="620" y1="310" x2="600" y2="345"/>            <!-- B4->B3 -->
+    <line x1="650" y1="300" x2="650" y2="120"/>            <!-- B4->B1 -->
+    <line x1="650" y1="190" x2="650" y2="120"/>            <!-- B2->B1 -->
+    <line x1="600" y1="470" x2="450" y2="475"/>            <!-- C2->C1 -->
+    <line x1="370" y1="470" x2="180" y2="360"/>            <!-- C1->A4 -->
+  </g>
+  <!-- nodes -->
+  <g filter="url(#ds)">
+    <g><rect class="nd" x="110" y="120" rx="8" width="90" height="44"/><text class="ttl" x="120" y="138">A1</text><text class="ns" x="120" y="154">bundles</text></g>
+    <g><rect class="nd" x="300" y="76"  rx="8" width="100" height="44"/><text class="ttl" x="310" y="94">A2</text><text class="ns" x="310" y="110">phase status</text></g>
+    <g><rect class="nd" x="300" y="160" rx="8" width="100" height="44"/><text class="ttl" x="310" y="178">A3</text><text class="ns" x="310" y="194">view.ts</text></g>
+    <g><rect class="nd" x="110" y="318" rx="8" width="100" height="48"/><text class="ttl" x="120" y="338">A4</text><text class="ns" x="120" y="354">resolveLang</text></g>
+    <g><rect class="nd" x="600" y="76"  rx="8" width="100" height="44"/><text class="ttl" x="610" y="94">B1</text><text class="ns" x="610" y="110">types</text></g>
+    <g><rect class="nd" x="600" y="146" rx="8" width="100" height="44"/><text class="ttl" x="610" y="164">B2</text><text class="ns" x="610" y="180">settings</text></g>
+    <g><rect class="nd" x="540" y="318" rx="8" width="120" height="48"/><text class="ttl" x="550" y="338">B3</text><text class="ns" x="550" y="354">resolveReasoning</text></g>
+    <g><rect class="nd" x="600" y="278" rx="8" width="110" height="40"/><text class="ttl" x="610" y="296">B4</text><text class="ns" x="610" y="311">directive</text></g>
+    <g><rect class="nd" x="370" y="452" rx="8" width="110" height="44"/><text class="ttl" x="380" y="470">C1</text><text class="ns" x="380" y="486">langInstruction</text></g>
+    <g><rect class="nd" x="600" y="452" rx="8" width="110" height="44"/><text class="ttl" x="610" y="470">C2</text><text class="ns" x="610" y="486">auto→Obsidian</text></g>
+  </g>
+</svg>
+<div class="note">Граф ацикличен; единственный базовый узел — <code>A4 resolveLang</code>. Слой C (<code>C1</code>) и слой B (<code>B3</code>) оба зависят от него, поэтому A4 реализуется первым.</div>
+
+<h2>4. Карта покрытия (задача → требования)</h2>
+<table>
+<thead><tr><th>Задача</th><th>Покрывающие требования</th></tr></thead>
+<tbody>
+<tr><td>T1 — статусы локализовать по настройке</td><td>A1, A2, A3, A4</td></tr>
+<tr><td>T2 — настройка языка рассуждения</td><td>B1, B2, B3, B4</td></tr>
+<tr><td>T3 — content <code>auto</code> управляем, <code>auto</code>→Obsidian</td><td>C1, C2</td></tr>
+</tbody>
+</table>
+
+<h2>5. Результаты проверки</h2>
+<table>
+<thead><tr><th>Фаза</th><th>Статус</th></tr></thead>
+<tbody>
+<tr><td>structure</td><td><span class="badge b-ok">passed</span></td></tr>
+<tr><td>coverage</td><td><span class="badge b-ok">passed</span></td></tr>
+<tr><td>clarity</td><td><span class="badge b-ok">passed</span></td></tr>
+<tr><td>consistency</td><td><span class="badge b-ok">passed</span></td></tr>
+</tbody>
+</table>
+
+<h3>Findings</h3>
+<table>
+<thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Текст</th><th>Вердикт</th></tr></thead>
+<tbody>
+<tr><td>F-001</td><td><span class="badge b-warn">WARNING</span></td><td>Design</td>
+<td>query указан как цель локализации статусов, но <code>query.ts</code> не содержит хардкод-статусов; query-статусы в <code>view.ts</code> (шаг 3).</td>
+<td><span class="badge b-ok">fixed</span></td></tr>
+<tr><td>F-002</td><td><span class="badge b-warn">WARNING</span></td><td>Language resolution model</td>
+<td><code>resolveProgressLang</code> (старое) и <code>resolveLang</code> (новое) оба встречаются; осознанный rename, документирован в шаге 4.</td>
+<td><span class="badge b-acc">accepted</span></td></tr>
+</tbody>
+</table>
+
+<div class="panel">
+<b>Сводка:</b> CRITICAL open = 0 · WARNING open = 0 · Финальный вердикт
+<span class="badge b-ok">OK</span><br>
+<b>Chain:</b> intent = <code>null</code> → spec = <code>2026-06-19-progress-reasoning-language-design.md</code> · spec_hash <code>1d70686d65f09008</code>
+</div>
+
+<footer>Автогенерируемый артефакт <code>/check-spec</code> · obsidian-ai-wiki · 2026-06-19</footer>
+
+<script>
+  function t(){var r=document.documentElement;r.setAttribute("data-theme",r.getAttribute("data-theme")==="dark"?"light":"dark")}
+  document.documentElement.setAttribute("data-theme","dark");
+</script>
+</body>
+</html>

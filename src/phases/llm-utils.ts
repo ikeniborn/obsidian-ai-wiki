@@ -1,15 +1,15 @@
 import type OpenAI from "openai";
-import type { LlmCallOptions, LlmClient, OutputLanguage, RunEvent } from "../types";
+import type { LlmCallOptions, LlmClient, RunEvent } from "../types";
 import baseContract from "../../prompts/base.md";
 import { jsonrepair } from "jsonrepair";
+import { resolveLang, resolveReasoningLang } from "../i18n";
 
-/** Maps an output-language choice to a one-line directive for the system prompt. */
-export function langInstruction(lang: OutputLanguage): string {
+/** Maps a concrete output language to a one-line reply directive for the system prompt. */
+export function langInstruction(lang: "ru" | "en" | "es"): string {
   switch (lang) {
     case "ru": return "Always reply in Russian, regardless of the source language.";
     case "en": return "Always reply in English, regardless of the source language.";
     case "es": return "Always reply in Spanish, regardless of the source language.";
-    default:   return "Reply in the same language as the source/article.";
   }
 }
 
@@ -19,7 +19,7 @@ export function langInstruction(lang: OutputLanguage): string {
  * pages use headings that match the selected language. `auto` falls back to Russian,
  * preserving the historical default.
  */
-export function wikiSections(lang: OutputLanguage): string {
+export function wikiSections(lang: "ru" | "en" | "es"): string {
   const headings = {
     ru: {
       mandatory: "## Основные характеристики",
@@ -129,7 +129,8 @@ export function buildChatParams(
   stream: boolean = false,
 ): Record<string, unknown> {
   let msgs = prependBaseContract(messages);
-  if (opts.outputLanguage) msgs = injectLanguageDirective(msgs, opts.outputLanguage);
+  if (opts.outputLanguage) msgs = injectLanguageDirective(msgs, resolveLang(opts.outputLanguage));
+  msgs = injectReasoningDirective(msgs, resolveReasoningLang(opts.reasoningLanguage, opts.outputLanguage));
   msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
   const params: Record<string, unknown> = { model, messages: msgs };
   if (opts.temperature !== undefined) params.temperature = opts.temperature;
@@ -172,9 +173,31 @@ function prependBaseContract(
 /** Appends `## Language\n<directive>` to the first system message. */
 function injectLanguageDirective(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
-  lang: OutputLanguage,
+  lang: "ru" | "en" | "es",
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const directive = `## Language\n${langInstruction(lang)}`;
+  const firstSystem = messages.findIndex((m) => m.role === "system");
+  if (firstSystem >= 0) {
+    const updated = [...messages];
+    const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
+    updated[firstSystem] = { role: "system", content: `${existing}\n\n${directive}` };
+    return updated;
+  }
+  return [{ role: "system", content: directive }, ...messages];
+}
+
+const REASONING_LANG_NAME: Record<"ru" | "en" | "es", string> = {
+  ru: "Russian",
+  en: "English",
+  es: "Spanish",
+};
+
+/** Appends `## Reasoning language\n<directive>` to the first system message. */
+function injectReasoningDirective(
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  lang: "ru" | "en" | "es",
+): OpenAI.Chat.ChatCompletionMessageParam[] {
+  const directive = `## Reasoning language\nThink and reason in ${REASONING_LANG_NAME[lang]}.`;
   const firstSystem = messages.findIndex((m) => m.role === "system");
   if (firstSystem >= 0) {
     const updated = [...messages];

@@ -13,7 +13,7 @@ import type { VaultTools } from "./vault-tools";
 import { wrapWithJsonFallback } from "./phases/llm-utils";
 import { GLOBAL_DEV_LOG_PATH, domainWikiFolder } from "./wiki-path";
 import { PageSimilarityService, DEFAULT_CHUNKING } from "./page-similarity";
-import { resolveProgressLang, i18nFor } from "./i18n";
+import { resolveLang, i18nFor } from "./i18n";
 
 export class AgentRunner {
   private llm: LlmClient;
@@ -45,11 +45,11 @@ export class AgentRunner {
     const na = s.nativeAgent;
     const c = na.perOperation ? na.operations[key] : undefined;
     const budgetTokens = c?.thinkingBudgetTokens ?? na.thinkingBudgetTokens;
-    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold,
+    if (c) return { model: c.model, opts: { maxTokens: c.maxTokens, temperature: c.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, reasoningLanguage: s.reasoningLanguage, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold,
       dedupOnIngest: na.dedupOnIngest, dedupThreshold: na.dedupThreshold,
       lintNearDuplicate: na.lintNearDuplicate, nearDupThreshold: na.nearDupThreshold,
     } };
-    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold,
+    return { model: na.model, opts: { maxTokens: na.maxTokens, temperature: na.temperature, topP: na.topP, thinkingBudgetTokens: budgetTokens, systemPrompt: s.systemPrompt, outputLanguage: s.outputLanguage, reasoningLanguage: s.reasoningLanguage, jsonMode: "json_object", structuredRetries, mergeDeleteWarnThreshold,
       dedupOnIngest: na.dedupOnIngest, dedupThreshold: na.dedupThreshold,
       lintNearDuplicate: na.lintNearDuplicate, nearDupThreshold: na.nearDupThreshold,
     } };
@@ -147,7 +147,7 @@ export class AgentRunner {
           language: this.settings.outputLanguage ?? "auto",
         };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
-        const progress = i18nFor(resolveProgressLang(this.settings.outputLanguage)).formatProgress;
+        const progress = i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress;
         yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore, progress);
         break;
       }
@@ -240,7 +240,7 @@ export class AgentRunner {
           });
           if (this.settings.devMode.evaluatorModel) {
             const evalModel = this.settings.devMode.evaluatorModel;
-            for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal)) {
+            for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal, { reasoningLanguage: this.settings.reasoningLanguage, outputLanguage: this.settings.outputLanguage })) {
               yield ev;
               if (ev.kind === "eval_result") {
                 await this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);

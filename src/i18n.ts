@@ -8,7 +8,9 @@ const en = {
     systemPrompt_name: "User prompt",
     systemPrompt_desc: "Appended to the system prompt of every operation. Empty by default.",
     outputLanguage_name: "Response language",
-    outputLanguage_desc: "Language for all generated content. Auto = match the source/article language. Technical and domain terms are never translated.",
+    outputLanguage_desc: "Language for all generated content. Auto = match the Obsidian UI language. Technical and domain terms are never translated.",
+    reasoningLanguage_name: "Reasoning language",
+    reasoningLanguage_desc: "Language the model reasons in. Default English (models reason best in English). Auto = follow the response language, then the Obsidian UI language. Best-effort — actual support depends on the model.",
     maxTokens_name: "Max tokens",
     maxTokens_desc: "Max tokens in the response. Default 4096. ↑ longer answers, slower/costlier · ↓ risk of truncation. Recommended ≥ 4096.",
     domains_heading: "Domains",
@@ -130,6 +132,8 @@ const en = {
     mobileWaiting: "⏳ Waiting for LLM response…",
     analysing: "Analysing…",
     formingResponse: "Forming response…",
+    ingestingFiles: "Ingesting files…",
+    analysingFiles: "Analysing files…",
     reinitTitle: "Re-init domain (wipe + rebuild)",
     reinitNoSources: "Domain has no source_paths — re-init not possible",
     addSourceTitle: "Manage sources for domain",
@@ -191,6 +195,18 @@ const en = {
     writeFailed: (err: string) => `Format: writing the formatted file failed — ${err}`,
     truncationHintEnv: "raise the limit: env CLAUDE_CODE_MAX_OUTPUT_TOKENS in iclaude.sh",
     truncationHintSettings: "raise the limit: Settings → per-operation → format → maxTokens",
+  },
+  ingestProgress: {
+    synthesizing: (domainId: string) => `Synthesizing wiki pages for domain "${domainId}"...\n`,
+  },
+  lintProgress: {
+    evaluating: (domainId: string) => `Evaluating domain "${domainId}" quality...\n`,
+    actualizing: (domainId: string) => `\nActualizing domain config for "${domainId}"...\n`,
+  },
+  initProgress: {
+    reinitWiping: (folder: string) => `Re-init: wiping ${folder}...\n`,
+    removedFiles: (n: number) => `removed ${n} files\n`,
+    fileChars: (file: string, n: number) => `ℹ ${file}: ${n} chars\n`,
   },
   ctrl: {
     cancelling: "Cancelling…",
@@ -311,7 +327,9 @@ const ru: I18n = {
     systemPrompt_name: "User prompt",
     systemPrompt_desc: "Добавляется в конец системного промта каждой операции. По умолчанию пуст.",
     outputLanguage_name: "Response language",
-    outputLanguage_desc: "Язык всего генерируемого контента. Auto = язык источника/статьи. Технические и доменные термины не переводятся.",
+    outputLanguage_desc: "Язык всего генерируемого контента. Auto = язык интерфейса Obsidian. Технические и доменные термины не переводятся.",
+    reasoningLanguage_name: "Reasoning language",
+    reasoningLanguage_desc: "Язык, на котором рассуждает модель. По умолчанию English (модели рассуждают лучше на английском). Auto = язык ответа, затем язык интерфейса Obsidian. Best-effort — фактическая поддержка зависит от модели.",
     maxTokens_name: "Max tokens",
     maxTokens_desc: "Максимум токенов в ответе. По умолч. 4096. ↑ длиннее ответ, медленнее/дороже · ↓ риск обрыва. Рекомендую ≥ 4096.",
     domains_heading: "Домены",
@@ -433,6 +451,8 @@ const ru: I18n = {
     mobileWaiting: "⏳ Ожидание ответа от LLM…",
     analysing: "Анализирует…",
     formingResponse: "Формирует ответ…",
+    ingestingFiles: "Загрузка файлов…",
+    analysingFiles: "Анализ файлов…",
     reinitTitle: "Переинициализация домена (wipe + заново)",
     reinitNoSources: "У домена нет source_paths — re-init невозможен",
     addSourceTitle: "Управление источниками домена",
@@ -494,6 +514,18 @@ const ru: I18n = {
     writeFailed: (err: string) => `Format: запись формата не удалась — ${err}`,
     truncationHintEnv: "увеличьте лимит: env CLAUDE_CODE_MAX_OUTPUT_TOKENS в iclaude.sh",
     truncationHintSettings: "увеличьте лимит: Settings → per-operation → format → maxTokens",
+  },
+  ingestProgress: {
+    synthesizing: (domainId: string) => `Синтез вики-страниц для домена «${domainId}»...\n`,
+  },
+  lintProgress: {
+    evaluating: (domainId: string) => `Оценка качества домена «${domainId}»...\n`,
+    actualizing: (domainId: string) => `\nАктуализация конфигурации домена «${domainId}»...\n`,
+  },
+  initProgress: {
+    reinitWiping: (folder: string) => `Re-init: очистка ${folder}...\n`,
+    removedFiles: (n: number) => `удалено файлов: ${n}\n`,
+    fileChars: (file: string, n: number) => `ℹ ${file}: символов ${n}\n`,
   },
   ctrl: {
     cancelling: "Отмена…",
@@ -592,7 +624,9 @@ const es: I18n = {
     systemPrompt_name: "User prompt",
     systemPrompt_desc: "Se añade al final del prompt del sistema de cada operación. Vacío por defecto.",
     outputLanguage_name: "Response language",
-    outputLanguage_desc: "Idioma de todo el contenido generado. Auto = idioma de la fuente/artículo. Los términos técnicos y de dominio no se traducen.",
+    outputLanguage_desc: "Idioma de todo el contenido generado. Auto = idioma de la interfaz de Obsidian. Los términos técnicos y de dominio no se traducen.",
+    reasoningLanguage_name: "Reasoning language",
+    reasoningLanguage_desc: "Idioma en el que razona el modelo. Por defecto English (los modelos razonan mejor en inglés). Auto = sigue el idioma de respuesta y luego el de la interfaz de Obsidian. Best-effort — el soporte real depende del modelo.",
     maxTokens_name: "Máx. tokens",
     maxTokens_desc: "Máx. tokens en la respuesta. Por defecto 4096. ↑ respuestas más largas, más lento/caro · ↓ riesgo de truncado. Recomendado ≥ 4096.",
     domains_heading: "Dominios",
@@ -714,6 +748,8 @@ const es: I18n = {
     mobileWaiting: "⏳ Esperando respuesta del LLM…",
     analysing: "Analizando…",
     formingResponse: "Formando respuesta…",
+    ingestingFiles: "Ingiriendo archivos…",
+    analysingFiles: "Analizando archivos…",
     reinitTitle: "Re-init del dominio (borrar + reconstruir)",
     reinitNoSources: "El dominio no tiene source_paths — re-init imposible",
     addSourceTitle: "Gestionar fuentes del dominio",
@@ -775,6 +811,18 @@ const es: I18n = {
     writeFailed: (err: string) => `Format: falló la escritura del archivo formateado — ${err}`,
     truncationHintEnv: "aumenta el límite: env CLAUDE_CODE_MAX_OUTPUT_TOKENS en iclaude.sh",
     truncationHintSettings: "aumenta el límite: Settings → per-operation → format → maxTokens",
+  },
+  ingestProgress: {
+    synthesizing: (domainId: string) => `Sintetizando páginas wiki para el dominio "${domainId}"...\n`,
+  },
+  lintProgress: {
+    evaluating: (domainId: string) => `Evaluando la calidad del dominio "${domainId}"...\n`,
+    actualizing: (domainId: string) => `\nActualizando la configuración del dominio "${domainId}"...\n`,
+  },
+  initProgress: {
+    reinitWiping: (folder: string) => `Re-init: limpiando ${folder}...\n`,
+    removedFiles: (n: number) => `archivos eliminados: ${n}\n`,
+    fileChars: (file: string, n: number) => `ℹ ${file}: ${n} caracteres\n`,
   },
   ctrl: {
     cancelling: "Cancelando…",
@@ -881,15 +929,33 @@ export function i18nFor(lang: "ru" | "en" | "es"): I18n {
 }
 
 /**
- * Resolves the language for operation progress strings.
+ * Resolves a concrete language for status strings (layer A) and generated content (layer C).
  * Explicit outputLanguage wins; `auto`/undefined falls back to the Obsidian UI locale.
  */
-export function resolveProgressLang(outputLanguage: OutputLanguage | undefined): "ru" | "en" | "es" {
+export function resolveLang(outputLanguage: OutputLanguage | undefined): "ru" | "en" | "es" {
   if (outputLanguage === "ru" || outputLanguage === "en" || outputLanguage === "es") {
     return outputLanguage;
   }
   const loc = moment.locale();
   if (loc.startsWith("ru")) return "ru";
   if (loc.startsWith("es")) return "es";
+  return "en";
+}
+
+/**
+ * Resolves the language for the model's reasoning directive (layer B).
+ * Explicit reasoningLanguage wins; `auto` chains to the content resolver
+ * (setting → Obsidian); undefined defaults to English.
+ */
+export function resolveReasoningLang(
+  reasoningLanguage: OutputLanguage | undefined,
+  outputLanguage: OutputLanguage | undefined,
+): "ru" | "en" | "es" {
+  if (reasoningLanguage === "ru" || reasoningLanguage === "en" || reasoningLanguage === "es") {
+    return reasoningLanguage;
+  }
+  if (reasoningLanguage === "auto") {
+    return resolveLang(outputLanguage);
+  }
   return "en";
 }
