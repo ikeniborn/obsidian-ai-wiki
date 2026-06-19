@@ -140,10 +140,101 @@ check("H6 addOutgoingLinks unions the body-only link into wiki_outgoing_links",
 check("H7 addOutgoingLinks is a no-op when all links already present",
   addOutgoingLinks(unioned, ["[[scd2]]"]) === unioned);
 
-// ---------- summary ----------
-console.log(`\n========================================`);
-console.log(`TOTAL: ${pass} passed, ${fail} failed`);
-if (fail > 0) {
-  console.log(`FAILED: ${failures.join(", ")}`);
-  process.exitCode = 1;
+// =====================================================================
+// Retrieval A/B — only when an embedding key is configured
+// =====================================================================
+async function runEmbeddingAB(): Promise<void> {
+  section("Retrieval A/B (embeddings)");
+
+  // Explicit, named assertion bounds (from the spec).
+  const EPS_ONTOPIC = 0.02;     // max allowed cosine delta for on-topic queries
+  const MIN_NOISE_DROP = 0.05;  // min required cosine drop for noise-probe queries
+
+  const EMBED_BASE_URL = process.env.EVAL_EMBED_BASE_URL;
+  const EMBED_API_KEY = process.env.EVAL_EMBED_API_KEY;
+  const EMBED_MODEL = process.env.EVAL_EMBED_MODEL;
+  const EMBED_DIMENSIONS = process.env.EVAL_EMBED_DIMENSIONS
+    ? Number(process.env.EVAL_EMBED_DIMENSIONS) : undefined;
+
+  const ON_TOPIC = ["SCD1 версионирование", "перезапись таблицы"];
+  const NOISE_PROBES = ["когда создана страница", "история изменений", "связанные концепции"];
+
+  async function embed(texts: string[]): Promise<number[][]> {
+    const url = `${EMBED_BASE_URL!.replace(/\/$/, "")}/embeddings`;
+    const body: Record<string, unknown> = { model: EMBED_MODEL, input: texts };
+    if (EMBED_DIMENSIONS && EMBED_DIMENSIONS > 0) body.dimensions = EMBED_DIMENSIONS;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${EMBED_API_KEY}` },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) throw new Error(`Embedding API error: ${resp.status}`);
+    const json = (await resp.json()) as { data: { embedding: number[] }[] };
+    return json.data.map((d) => d.embedding);
+  }
+
+  function cosine(a: number[], b: number[]): number {
+    let dot = 0, na = 0, nb = 0;
+    for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+    const denom = Math.sqrt(na) * Math.sqrt(nb);
+    return denom === 0 ? 0 : dot / denom;
+  }
+
+  /** Page score = best cosine of `query` over `chunks`, plus the winning chunk's embed-text. */
+  function maxChunk(query: number[], chunks: { vec: number[]; embedText: string }[]): { score: number; winner: string } {
+    let best = { score: 0, winner: "" };
+    for (const c of chunks) {
+      const s = cosine(query, c.vec);
+      if (s > best.score) best = { score: s, winner: c.embedText };
+    }
+    return best;
+  }
+
+  if (!EMBED_BASE_URL || !EMBED_API_KEY || !EMBED_MODEL) {
+    console.log("  SKIP  embedding A/B — set EVAL_EMBED_BASE_URL, EVAL_EMBED_API_KEY, EVAL_EMBED_MODEL to enable");
+  } else {
+    try {
+      const withTexts = inputsWith.map((c) => c.embedText);
+      const withoutTexts = inputsWithout.map((c) => c.embedText);
+      const queries = [...ON_TOPIC, ...NOISE_PROBES];
+
+      const [withVecs, withoutVecs, queryVecs] = await Promise.all([
+        embed(withTexts), embed(withoutTexts), embed(queries),
+      ]);
+      const withChunks = inputsWith.map((c, i) => ({ vec: withVecs[i], embedText: c.embedText }));
+      const withoutChunks = inputsWithout.map((c, i) => ({ vec: withoutVecs[i], embedText: c.embedText }));
+
+      queries.forEach((q, qi) => {
+        const qv = queryVecs[qi];
+        const a = maxChunk(qv, withChunks);
+        const b = maxChunk(qv, withoutChunks);
+        const isNoise = qi >= ON_TOPIC.length;
+        const delta = a.score - b.score; // with − without (noise: expected positive = a drop)
+        console.log(`  [${isNoise ? "noise" : "ontopic"}] "${q}"  with=${a.score.toFixed(4)} without=${b.score.toFixed(4)} Δ=${delta.toFixed(4)}`);
+        // buildChunkInputs embed-text is `${annotation}\n\n${heading}\n${window}` — the
+        // second-to-last line is the section heading; fall back to a prefix if the shape changes.
+        console.log(`        winner(with)=${a.winner.split("\n").slice(-2, -1)[0] ?? a.winner.slice(0, 40)}`);
+        if (isNoise) {
+          check(`E noise "${q}" drops ≥ ${MIN_NOISE_DROP}`, delta >= MIN_NOISE_DROP, `Δ=${delta.toFixed(4)}`);
+        } else {
+          check(`E ontopic "${q}" |Δ| < ${EPS_ONTOPIC}`, Math.abs(delta) < EPS_ONTOPIC, `Δ=${delta.toFixed(4)}`);
+        }
+      });
+    } catch (e) {
+      check("E embedding A/B ran", false, (e as Error).message);
+    }
+  }
 }
+
+// ---------- summary ----------
+runEmbeddingAB().then(() => {
+  console.log(`\n========================================`);
+  console.log(`TOTAL: ${pass} passed, ${fail} failed`);
+  if (fail > 0) {
+    console.log(`FAILED: ${failures.join(", ")}`);
+    process.exitCode = 1;
+  }
+}).catch((e) => {
+  console.error(e);
+  process.exitCode = 1;
+});
