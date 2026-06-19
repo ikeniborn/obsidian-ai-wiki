@@ -1,3 +1,24 @@
+---
+review:
+  spec_hash: b5817842867f5851
+  last_run: 2026-06-19
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: WARNING
+      section: "4. A/B eval (out of vault)"
+      section_hash: c6aa57b4fedde471
+      text: "'Δ negligible' / 'on-topic scores ≈ equal' lacks a numeric threshold; set an explicit epsilon (e.g. |Δ| < 0.02 cosine) as the assertion bound."
+      verdict: open
+      verdict_at: null
+chain:
+  intent: null
+---
 # Drop legacy wiki sections (Related concepts + Change history) — Design
 
 ## Problem

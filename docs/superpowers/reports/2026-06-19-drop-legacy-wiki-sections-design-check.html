@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка спецификации — Drop legacy wiki sections</title>
+<style>
+  :root[data-theme="dark"]{
+    --bg:#0f1419; --panel:#171c24; --panel2:#1e2530; --border:#2b3442;
+    --fg:#e6edf3; --muted:#9aa7b4; --accent:#4aa3ff; --accent2:#7c5cff;
+    --ok:#3fb950; --warn:#d29922; --crit:#f85149; --edge:#5b6675;
+  }
+  :root[data-theme="light"]{
+    --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f6; --border:#d0d7de;
+    --fg:#1f2328; --muted:#57606a; --accent:#0969da; --accent2:#6639ba;
+    --ok:#1a7f37; --warn:#9a6700; --crit:#cf222e; --edge:#8c959f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 80px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+  h1{font-size:23px;margin:0}
+  h2{font-size:18px;margin:34px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+  h3{font-size:15px;margin:20px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .sub{color:var(--muted);font-size:13px;margin:2px 0 0}
+  .verdict{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:15px;
+    background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 14px}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.crit{background:var(--crit)}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--border);
+    border-radius:8px;overflow:hidden;margin:10px 0}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top}
+  th{background:var(--panel2);font-size:12.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  tr:last-child td{border-bottom:none}
+  code{background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:12.5px}
+  .badge{display:inline-block;font-size:11.5px;font-weight:700;border-radius:20px;padding:2px 10px}
+  .b-ok{background:rgba(63,185,80,.16);color:var(--ok);border:1px solid var(--ok)}
+  .b-warn{background:rgba(210,153,34,.16);color:var(--warn);border:1px solid var(--warn)}
+  .b-crit{background:rgba(248,81,73,.16);color:var(--crit);border:1px solid var(--crit)}
+  .b-id{background:var(--panel2);color:var(--fg);border:1px solid var(--border)}
+  .note{background:var(--panel2);border-left:3px solid var(--accent);border-radius:6px;padding:10px 14px;margin:12px 0;color:var(--muted)}
+  .toggle{cursor:pointer;background:var(--panel2);color:var(--fg);border:1px solid var(--border);
+    border-radius:8px;padding:7px 12px;font-size:13px}
+  /* block/flow diagram */
+  .flow{display:flex;flex-direction:column;gap:14px;margin:14px 0}
+  .row{display:flex;gap:14px;flex-wrap:wrap;align-items:stretch}
+  .node{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;flex:1;min-width:170px}
+  .node .t{font-weight:700;font-size:13.5px}
+  .node .d{color:var(--muted);font-size:12px;margin-top:4px}
+  .node.acc{border-color:var(--accent)} .node.acc2{border-color:var(--accent2)}
+  .node.vec{border-color:var(--ok)}
+  .arrowcol{display:flex;align-items:center;justify-content:center;color:var(--edge);font-size:20px;min-width:24px}
+  figure{margin:14px 0}
+  figcaption{color:var(--muted);font-size:12.5px;margin-top:6px;text-align:center}
+  svg{max-width:100%;height:auto;background:var(--panel);border:1px solid var(--border);border-radius:10px}
+  .legend{font-size:12px;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>Проверка спецификации</h1>
+    <p class="sub">Drop legacy wiki sections (Related concepts + Change history)</p>
+    <p class="sub">spec_hash <code>b5817842867f5851</code> · chain: intent(null) → spec · 2026-06-19</p>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <span class="verdict"><span class="dot ok"></span>Вердикт: OK</span>
+    <button class="toggle" onclick="(function(r){r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'})(document.documentElement)">◐ Тема</button>
+  </div>
+</header>
+
+<!-- ============ BLOCK 1 ============ -->
+<h2>1. Резюме спецификации</h2>
+<table>
+  <thead><tr><th>ID</th><th>Секция</th><th>Требование</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge b-id">R1</span></td><td>§1 Schema/template</td>
+      <td>Убрать <code>related</code>+<code>history</code> из <code>wikiSections()</code> (ru/en/es) и правило change-history из <code>templates/_wiki_schema.md</code>; проверить, что <code>format.ts</code>/<code>lint.ts</code> не пере-добавляют разделы.</td></tr>
+    <tr><td><span class="badge b-id">R2</span></td><td>§2 Pure helper</td>
+      <td>Новый чистый <code>stripLegacySections(body)</code> — срезает обе H2-секции на 3 языках до следующего H2/EOF, сохраняет frontmatter/H1/прочее.</td></tr>
+    <tr><td><span class="badge b-id">R3</span></td><td>§3 Auto-migration</td>
+      <td><code>src/migrate-drop-sections.ts</code>, wired в <code>main.ts onload</code>, идемпотентна, флаг в local config; safety-net union <code>[[ссылок]]</code> из «Связанных концепций» в <code>wiki_outgoing_links</code> перед срезкой; пропуск служебных файлов; затем <code>refreshCache</code>.</td></tr>
+    <tr><td><span class="badge b-id">R4</span></td><td>§4 A/B eval</td>
+      <td><code>eval/legacy-sections/run.ts</code> вне волта: детерминированная часть (chunk-diff на фикстуре scd1) + retrieval A/B при наличии embedding env (on-topic Δ≈0, noise-probe score падает); SKIP без ключа; eval doc.</td></tr>
+    <tr><td><span class="badge b-id">R5</span></td><td>§5 Docs</td>
+      <td>Обновить <code>lat.md</code>, <code>lat check</code> зелёный.</td></tr>
+  </tbody>
+</table>
+
+<h3>Success Criteria</h3>
+<table>
+  <tbody>
+    <tr><td><span class="badge b-ok">SC1</span></td><td><code>npm run build</code> (tsc + esbuild) зелёный</td></tr>
+    <tr><td><span class="badge b-ok">SC2</span></td><td><code>eval/legacy-sections/run.ts</code> — все ассерты pass</td></tr>
+    <tr><td><span class="badge b-ok">SC3</span></td><td>Миграция идемпотентна — 2-й прогон no-op (флаг)</td></tr>
+    <tr><td><span class="badge b-ok">SC4</span></td><td><code>lat check</code> без ошибок</td></tr>
+  </tbody>
+</table>
+
+<!-- ============ BLOCK 2 ============ -->
+<h2>2. Схемы решения и зависимостей</h2>
+
+<h3>Схема решения (data/control flow)</h3>
+<div class="flow">
+  <div class="row">
+    <div class="node acc"><div class="t">R1 · Schema/template</div><div class="d">wikiSections() + _wiki_schema.md — LLM перестаёт генерировать разделы</div></div>
+    <div class="node acc2"><div class="t">R3 · Auto-migration</div><div class="d">main.ts onload → срезка тел всех статей</div></div>
+  </div>
+  <div class="row"><div class="arrowcol">↓ &nbsp; используют &nbsp; ↓</div></div>
+  <div class="row">
+    <div class="node"><div class="t">R2 · stripLegacySections(body)</div><div class="d">чистая функция — общая для R1-проверки, R3 и R4</div></div>
+    <div class="node"><div class="t">R4 · eval вне волта</div><div class="d">импортирует R2 + splitSections/buildChunkInputs</div></div>
+  </div>
+  <div class="row"><div class="arrowcol">↓</div></div>
+  <div class="row">
+    <div class="node vec"><div class="t">refreshCache → embeddings cache</div><div class="d">хэш-чанки: шумовые чанки выпадают (vectors)</div></div>
+    <div class="node"><div class="t">Graph ← frontmatter wiki_outgoing_links</div><div class="d">тело не участвует — граф не меняется</div></div>
+  </div>
+  <div class="row"><div class="arrowcol">↘ &nbsp; RRF(vector ⊕ graph) &nbsp; ↙</div></div>
+  <div class="row">
+    <div class="node acc"><div class="t">Query (hybrid retrieval)</div><div class="d">precision↑, recall не меняется</div></div>
+  </div>
+</div>
+
+<h3>Граф зависимостей</h3>
+<figure>
+<svg viewBox="0 0 760 320" role="img" aria-label="Граф зависимостей требований">
+  <defs>
+    <marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="var(--edge)"></path>
+    </marker>
+    <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-opacity="0.35"></feDropShadow>
+    </filter>
+  </defs>
+  <!-- edges -->
+  <g stroke="var(--edge)" stroke-width="1.6" fill="none" marker-end="url(#ar)">
+    <line x1="180" y1="70" x2="330" y2="150"></line>
+    <line x1="180" y1="240" x2="330" y2="170"></line>
+    <line x1="560" y1="240" x2="430" y2="170"></line>
+    <line x1="180" y1="240" x2="180" y2="300" stroke="none"></line>
+    <line x1="430" y1="160" x2="560" y2="120"></line>
+    <line x1="120" y1="95" x2="120" y2="300"></line>
+  </g>
+  <!-- nodes -->
+  <g font-family="inherit" font-size="12.5" text-anchor="middle">
+    <g filter="url(#ds)"><rect x="60" y="46" width="120" height="44" rx="9" fill="var(--panel2)" stroke="var(--accent)"></rect>
+      <text x="120" y="64" fill="var(--fg)" font-weight="700">R1</text><text x="120" y="80" fill="var(--muted)">schema</text></g>
+    <g filter="url(#ds)"><rect x="60" y="216" width="120" height="44" rx="9" fill="var(--panel2)" stroke="var(--accent2)"></rect>
+      <text x="120" y="234" fill="var(--fg)" font-weight="700">R3</text><text x="120" y="250" fill="var(--muted)">migration</text></g>
+    <g filter="url(#ds)"><rect x="330" y="134" width="100" height="44" rx="9" fill="var(--panel2)" stroke="var(--fg)"></rect>
+      <text x="380" y="152" fill="var(--fg)" font-weight="700">R2</text><text x="380" y="168" fill="var(--muted)">helper</text></g>
+    <g filter="url(#ds)"><rect x="500" y="216" width="120" height="44" rx="9" fill="var(--panel2)" stroke="var(--fg)"></rect>
+      <text x="560" y="234" fill="var(--fg)" font-weight="700">R4</text><text x="560" y="250" fill="var(--muted)">eval</text></g>
+    <g filter="url(#ds)"><rect x="500" y="92" width="170" height="44" rx="9" fill="var(--panel2)" stroke="var(--ok)"></rect>
+      <text x="585" y="110" fill="var(--fg)" font-weight="700">refreshCache</text><text x="585" y="126" fill="var(--muted)">vectors</text></g>
+    <g filter="url(#ds)"><rect x="36" y="290" width="168" height="22" rx="7" fill="var(--panel2)" stroke="var(--border)"></rect>
+      <text x="120" y="305" fill="var(--muted)">R5 docs ← документирует R1</text></g>
+  </g>
+</svg>
+<figcaption>Рёбра — «uses» (R1/R3/R4 → R2) и «depends on» (R3 → refreshCache → vectors; R5 → R1).</figcaption>
+</figure>
+
+<h3>Карта покрытия (задача → требование)</h3>
+<table>
+  <thead><tr><th>Задача (из диалога)</th><th>Покрывающие требования</th></tr></thead>
+  <tbody>
+    <tr><td>Полностью убрать оба раздела</td><td><span class="badge b-id">R1</span></td></tr>
+    <tr><td>Оценить влияние — оба этапа (анализ + A/B)</td><td>§«Why removal» (analytical proof) + <span class="badge b-id">R4</span></td></tr>
+    <tr><td>Авто-миграция при загрузке + переиндексация</td><td><span class="badge b-id">R3</span></td></tr>
+    <tr><td>Зачистить все статьи</td><td><span class="badge b-id">R3</span></td></tr>
+    <tr><td>Тест вне волта на scd1</td><td><span class="badge b-id">R4</span></td></tr>
+  </tbody>
+</table>
+
+<!-- ============ BLOCK 3 ============ -->
+<h2>3. Результаты проверки</h2>
+<table>
+  <thead><tr><th>Фаза</th><th>Статус</th></tr></thead>
+  <tbody>
+    <tr><td>structure</td><td><span class="badge b-ok">passed</span></td></tr>
+    <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td></tr>
+    <tr><td>clarity</td><td><span class="badge b-ok">passed</span></td></tr>
+    <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Findings</h3>
+<table>
+  <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Текст</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="badge b-id">F-001</span></td>
+      <td><span class="badge b-warn">WARNING</span></td>
+      <td>4. A/B eval (out of vault)</td>
+      <td>«Δ negligible» / «≈ equal» без числового порога; задать эпсилон, напр. <code>|Δ| &lt; 0.02</code> cosine как границу ассерта.</td>
+      <td><span class="badge b-warn">open</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <b>Сводка:</b> CRITICAL open = 0 · WARNING open = 1.<br>
+  <b>Финальный вердикт:</b> <span class="badge b-ok">OK</span> — блокеров нет; WARNING необязателен к закрытию.<br>
+  <b>Chain:</b> intent(null) → spec(<code>2026-06-19-drop-legacy-wiki-sections-design.md</code>).
+</div>
+
+</div>
+</body>
+</html>
