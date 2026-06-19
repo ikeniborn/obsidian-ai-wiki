@@ -12,6 +12,7 @@ import { runIngest } from "./ingest";
 import { GLOBAL_CONFIG_DIR, domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSubfolder, domainIndexPath } from "../wiki-path";
 import type { PageSimilarityService } from "../page-similarity";
 import { parseIndexAnnotations } from "../wiki-index";
+import { i18nFor, resolveLang } from "../i18n";
 
 export async function* runInit(
   args: string[],
@@ -54,11 +55,11 @@ export async function* runInit(
       return;
     }
 
-    yield { kind: "assistant_text", delta: `Re-init: wiping ${domainWikiFolder(existing.wiki_folder)}...\n` };
+    yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.reinitWiping(domainWikiFolder(existing.wiki_folder)) };
     yield { kind: "tool_use", name: "WipeDomain", input: { folder: existing.wiki_folder } };
     const wiped = await wipeDomainFolder(vaultTools, existing.wiki_folder);
     yield { kind: "tool_result", ok: true };
-    yield { kind: "assistant_text", delta: `removed ${wiped.length} files\n` };
+    yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.removedFiles(wiped.length) };
 
     yield {
       kind: "domain_updated", domainId,
@@ -172,7 +173,7 @@ export async function* runInitWithSources(
       continue;
     }
 
-    yield { kind: "assistant_text", delta: `ℹ ${file}: ${fileContent.length} chars\n` };
+    yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.fileChars(file, fileContent.length) };
 
     // --- Step 1: Analyze ---
     if (i === 0 && !isResuming) {
