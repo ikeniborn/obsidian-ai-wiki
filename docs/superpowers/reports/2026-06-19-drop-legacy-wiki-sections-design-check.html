@@ -195,14 +195,14 @@
       <td><span class="badge b-id">F-001</span></td>
       <td><span class="badge b-warn">WARNING</span></td>
       <td>4. A/B eval (out of vault)</td>
-      <td>«Δ negligible» / «≈ equal» без числового порога; задать эпсилон, напр. <code>|Δ| &lt; 0.02</code> cosine как границу ассерта.</td>
-      <td><span class="badge b-warn">open</span></td>
+      <td>«Δ negligible» / «≈ equal» без числового порога. <b>Исправлено:</b> заданы параметры <code>EPS_ONTOPIC=0.02</code> и <code>MIN_NOISE_DROP=0.05</code> как границы ассертов.</td>
+      <td><span class="badge b-ok">fixed</span></td>
     </tr>
   </tbody>
 </table>
 
 <div class="note">
-  <b>Сводка:</b> CRITICAL open = 0 · WARNING open = 1.<br>
+  <b>Сводка:</b> CRITICAL open = 0 · WARNING open = 0 (F-001 fixed).<br>
   <b>Финальный вердикт:</b> <span class="badge b-ok">OK</span> — блокеров нет; WARNING необязателен к закрытию.<br>
   <b>Chain:</b> intent(null) → spec(<code>2026-06-19-drop-legacy-wiki-sections-design.md</code>).
 </div>

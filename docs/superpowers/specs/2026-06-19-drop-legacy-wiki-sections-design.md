@@ -1,6 +1,6 @@
 ---
 review:
-  spec_hash: b5817842867f5851
+  spec_hash: 5a11c7d464f29ff9
   last_run: 2026-06-19
   phases:
     structure:    { status: passed }
@@ -12,10 +12,10 @@ review:
       phase: clarity
       severity: WARNING
       section: "4. A/B eval (out of vault)"
-      section_hash: c6aa57b4fedde471
+      section_hash: baa6745bc0f2a56f
       text: "'Δ negligible' / 'on-topic scores ≈ equal' lacks a numeric threshold; set an explicit epsilon (e.g. |Δ| < 0.02 cosine) as the assertion bound."
-      verdict: open
-      verdict_at: null
+      verdict: fixed
+      verdict_at: 2026-06-19
 chain:
   intent: null
 ---
@@ -121,10 +121,16 @@ live plugin.
   - on-topic: "SCD1 версионирование", "перезапись таблицы"
   - noise probes: "когда создана страница", "история изменений", "связанные концепции"
 
-  Compute `maxCosine` page score per variant. Assert:
-  - on-topic scores are ≈ equal across variants (Δ negligible — content chunk wins
-    in both),
-  - noise-probe scores **drop** after removal (the spurious match is gone),
+  Compute `maxCosine` page score per variant. Thresholds are explicit named
+  parameters at the top of the harness:
+  - `EPS_ONTOPIC = 0.02` — max allowed cosine delta for on-topic queries.
+  - `MIN_NOISE_DROP = 0.05` — min required cosine drop for noise-probe queries.
+
+  Assert:
+  - on-topic queries: `|score_with − score_without| < EPS_ONTOPIC` (content chunk
+    wins in both variants),
+  - noise-probe queries: `score_with − score_without ≥ MIN_NOISE_DROP` (the spurious
+    match is removed),
   - additionally report *which chunk wins* per query to show the noise chunk is the
     max only for off-topic probes.
 
