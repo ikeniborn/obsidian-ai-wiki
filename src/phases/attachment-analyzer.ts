@@ -2,6 +2,7 @@ import type { VaultTools } from "../vault-tools";
 import type { LlmClient } from "../types";
 import type { OutputLanguage } from "../types";
 import { langInstruction } from "./llm-utils";
+import { resolveLang } from "../i18n";
 import type OpenAI from "openai";
 import { render } from "./template";
 import visionStructure from "../../prompts/vision-structure.md";
@@ -92,15 +93,15 @@ async function callVisionLlm(
 }
 
 function imageSystem(language: OutputLanguage): string {
-  return render(visionImage, { structure_rules: visionStructure, lang: langInstruction(language) });
+  return render(visionImage, { structure_rules: visionStructure, lang: langInstruction(resolveLang(language)) });
 }
 
 function pdfSystem(language: OutputLanguage): string {
-  return render(visionPdf, { structure_rules: visionStructure, lang: langInstruction(language) });
+  return render(visionPdf, { structure_rules: visionStructure, lang: langInstruction(resolveLang(language)) });
 }
 
 function excalidrawSystem(language: OutputLanguage): string {
-  return render(visionExcalidraw, { lang: langInstruction(language) });
+  return render(visionExcalidraw, { lang: langInstruction(resolveLang(language)) });
 }
 
 export async function analyzeImage(
