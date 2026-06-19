@@ -13,6 +13,10 @@ review:
 chain:
   intent: null
   spec: docs/superpowers/specs/2026-06-19-format-vision-sentinel-sweep-design.md
+result_check:
+  verdict: OK
+  plan_hash: 891a49580d721c58
+  last_run: 2026-06-19
 ---
 # Format Vision Sentinel-Marker Sweep Implementation Plan
 
