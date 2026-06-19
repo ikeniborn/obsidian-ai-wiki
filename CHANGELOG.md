@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.1.177 — 2026-06-19
+
+### Новое
+- feat(lang): add reasoning-language setting with dropdown and reasoning-directive injection
+- feat(lang): content auto-language now follows the Obsidian locale (dropped follow-source mode)
+- feat(i18n): localized progress groups and view file labels for ingest/lint/init (en/ru/es)
+- feat: one-shot on-load migration removing legacy wiki sections
+- feat(schema): stop generating related-concepts and change-history sections
+
+### Исправления
+- fix(format): strip residual sentinel markers with a final-sweep helper before write
+- fix(format): order-robust parseSentinelOutput vision body slice
+- fix(lang): resolve wikiSections and evaluator language; correct auto dropdown label
+- fix(progress): localize view, ingest, lint and init status strings by output language
+
+### Прочее
+- refactor(i18n): rename resolveProgressLang to resolveLang (shared across progress + reasoning)
+
+---
+
 ## 0.1.176 — 2026-06-18
 
 ### Исправления
