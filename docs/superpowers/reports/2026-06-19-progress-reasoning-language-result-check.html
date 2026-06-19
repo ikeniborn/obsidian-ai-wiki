@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Result Check · progress-reasoning-language · 2026-06-19</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+.theme-btn{
+  position:sticky; top:.5rem; float:right;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface); font-size:.9rem;
+}
+h1{ font-size:1.5rem; margin:.5rem 0 .25rem; color:var(--accent); }
+h2{ font-size:1.15rem; margin:2rem 0 .5rem; border-bottom:2px solid var(--border); padding-bottom:.3rem; color:var(--accent); }
+h3{ font-size:1rem; margin:1.2rem 0 .35rem; color:var(--fg); }
+.lead{ font-size:1.08rem; margin:.2rem 0 .8rem; }
+.sub{ color:var(--muted); font-size:.9rem; margin:.1rem 0; }
+.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
+  background:color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius:0 8px 8px 0;
+  box-shadow:0 1px 8px var(--shadow); }
+.note.ok{ border-left-color:var(--ok); background:color-mix(in srgb, var(--ok) 8%, var(--surface)); }
+.note.warn{ border-left-color:var(--warn); background:color-mix(in srgb, var(--warn) 8%, var(--surface)); }
+.note.info{ border-left-color:var(--muted); background:color-mix(in srgb, var(--muted) 6%, var(--surface)); }
+
+/* Tables */
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:1rem 0; font-size:.88rem; border:1px solid var(--border); border-radius:10px;
+  overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.45rem .7rem; text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg); position:sticky; top:0; font-size:.85rem; }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.rpt-table td code{ white-space:nowrap; font-size:.82rem; background:color-mix(in srgb,var(--accent) 8%,var(--surface)); padding:.05rem .3rem; border-radius:3px; }
+
+/* Badges */
+.badge{ display:inline-block; font-size:.72rem; font-weight:700; padding:.1rem .55rem; border-radius:999px; border:1px solid; white-space:nowrap; }
+.badge.done{ color:var(--ok-2); border-color:var(--ok); background:color-mix(in srgb,var(--ok) 10%,transparent); }
+.badge.warn{ color:var(--warn-2); border-color:var(--warn); background:color-mix(in srgb,var(--warn) 10%,transparent); }
+.badge.info{ color:var(--muted); border-color:var(--line); background:color-mix(in srgb,var(--muted) 8%,transparent); }
+.badge.ok-big{ color:var(--ok-2); border-color:var(--ok); font-size:.88rem; padding:.2rem .8rem; }
+.badge.covered{ color:var(--ok-2); border-color:var(--ok); background:color-mix(in srgb,var(--ok) 10%,transparent); }
+
+/* Score bar */
+.score-bar{ display:flex; gap:1.5rem; margin:1rem 0; flex-wrap:wrap; }
+.score-cell{ background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:.7rem 1.2rem; min-width:110px; text-align:center; box-shadow:0 1px 6px var(--shadow); }
+.score-cell .num{ font-size:2rem; font-weight:700; line-height:1.1; }
+.score-cell .lbl{ font-size:.78rem; color:var(--muted); }
+.score-cell.done-cell .num{ color:var(--ok-2); }
+.score-cell.warn-cell .num{ color:var(--warn-2); }
+.score-cell.crit-cell .num{ color:var(--danger-2); }
+
+/* Details */
+details{ background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:.7rem 1rem; margin:.7rem 0; box-shadow:0 1px 8px var(--shadow); }
+details summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+details[open] summary{ margin-bottom:.55rem; }
+ul.tight li{ margin:.28rem 0; }
+
+/* Finding card */
+.finding{ border:1px solid var(--border); border-radius:10px; padding:.8rem 1rem; margin:.8rem 0;
+  background:var(--surface); box-shadow:0 1px 8px var(--shadow); }
+.finding.warning{ border-left:4px solid var(--warn); }
+.finding.info{ border-left:4px solid var(--muted); }
+.finding dl{ display:grid; grid-template-columns:70px 1fr; gap:.2rem .6rem; margin:.5rem 0 0; font-size:.9rem; }
+.finding dt{ font-weight:600; color:var(--muted); padding-top:.1rem; }
+.finding dd{ margin:0; }
+.finding ul{ margin:.4rem 0 0; padding-left:1.2rem; font-size:.87rem; }
+
+/* Chain flow */
+.chain{ display:flex; align-items:center; gap:0; flex-wrap:wrap; margin:.8rem 0; }
+.chain-node{ background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  padding:.45rem .85rem; font-size:.85rem; box-shadow:0 1px 4px var(--shadow); }
+.chain-node.missing{ color:var(--muted); border-style:dashed; }
+.chain-arrow{ flex:0 0 2rem; height:2px; background:var(--line); position:relative; }
+.chain-arrow::after{ content:""; position:absolute; right:0; top:-4px;
+  border:5px solid transparent; border-left-color:var(--line); }
+
+/* Verdict banner */
+.verdict-banner{ display:flex; align-items:center; gap:1rem; padding:1rem 1.4rem; border-radius:12px; margin:1.5rem 0;
+  background:color-mix(in srgb, var(--ok) 12%, var(--surface));
+  border:1.5px solid var(--ok); box-shadow:0 2px 12px var(--shadow); }
+.verdict-banner .icon{ font-size:2rem; }
+.verdict-banner .text{ }
+.verdict-banner .text strong{ font-size:1.1rem; color:var(--ok-2); }
+</style>
+</head>
+<body>
+
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Тёмная / светлая тема">🌙 / ☀️</label>
+
+<main class="report">
+
+<h1>Result Check · Progress &amp; Reasoning Language</h1>
+<p class="lead">Сверка выполнения плана с цепочкой IDD→SDD</p>
+<p class="sub">
+  Дата: <strong>2026-06-19</strong> &nbsp;·&nbsp;
+  Ветка: <code>dev/progress-reasoning-lang</code> &nbsp;·&nbsp;
+  Diff base: <code>1ed92df</code> &nbsp;·&nbsp;
+  21 файл изменён, +1614 / −84
+</p>
+
+<!-- CHAIN -->
+<h2>Цепочка документов</h2>
+<div class="chain">
+  <div class="chain-node missing">Intent: отсутствует (chain.intent: null)</div>
+  <div class="chain-arrow"></div>
+  <div class="chain-node">Spec: <code>docs/superpowers/specs/2026-06-19-progress-reasoning-language-design.md</code></div>
+  <div class="chain-arrow"></div>
+  <div class="chain-node">Plan: <code>docs/superpowers/plans/2026-06-19-progress-reasoning-language.md</code></div>
+</div>
+<div class="note info">Хеш тела плана: <code>73216f921d92a4a2</code> — совпадает с frontmatter. Intent отсутствует (фича не имела IDD-документа).</div>
+
+<!-- VERDICT BANNER -->
+<div class="verdict-banner">
+  <div class="icon">✅</div>
+  <div class="text">
+    <strong>Вердикт: OK</strong><br>
+    Все 10 задач плана выполнены полностью. Spec A1–C2 покрыт 10/10. Критических findings нет.
+  </div>
+</div>
+
+<!-- SUMMARY COUNTERS -->
+<h2>Сводка</h2>
+<div class="score-bar">
+  <div class="score-cell done-cell"><div class="num">10</div><div class="lbl">DONE</div></div>
+  <div class="score-cell"><div class="num" style="color:var(--muted)">0</div><div class="lbl">PARTIAL</div></div>
+  <div class="score-cell"><div class="num" style="color:var(--muted)">0</div><div class="lbl">MISSING</div></div>
+  <div class="score-cell"><div class="num" style="color:var(--muted)">0</div><div class="lbl">CRITICAL</div></div>
+  <div class="score-cell warn-cell"><div class="num">2</div><div class="lbl">WARNING</div></div>
+  <div class="score-cell"><div class="num" style="color:var(--muted)">5</div><div class="lbl">INFO</div></div>
+  <div class="score-cell done-cell"><div class="num">10/10</div><div class="lbl">Spec A1–C2</div></div>
+</div>
+
+<!-- PLAN STEP COVERAGE -->
+<h2>Покрытие шагов плана (10 / 10 DONE)</h2>
+
+<table class="rpt-table">
+  <thead>
+    <tr>
+      <th>Задача</th>
+      <th>Статус</th>
+      <th>Файлы в diff</th>
+      <th>Детали</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Task 1</strong><br>rename <code>resolveProgressLang</code>→<code>resolveLang</code></td>
+      <td><span class="badge done">DONE</span></td>
+      <td>
+        <code>src/i18n.ts</code><br>
+        <code>src/agent-runner.ts</code><br>
+        <code>eval/format-frontmatter/run.ts</code><br>
+        <code>eval/…/obsidian-stub.ts</code>
+      </td>
+      <td>Переименование в i18n.ts (определение + docstring), agent-runner.ts (import + call site), eval/run.ts (все 9 вызовов). Стейлых ссылок нет.</td>
+    </tr>
+    <tr>
+      <td><strong>Task 2</strong><br>add <code>resolveReasoningLang</code></td>
+      <td><span class="badge done">DONE</span></td>
+      <td><code>src/i18n.ts</code></td>
+      <td>Функция добавлена с точным кодом из плана: explicit win → <code>auto</code> chains → default <code>en</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Task 3</strong><br>Layer C — <code>langInstruction</code> concrete, <code>buildChatParams</code>, attachment-analyzer</td>
+      <td><span class="badge done">DONE</span></td>
+      <td>
+        <code>src/phases/llm-utils.ts</code><br>
+        <code>src/phases/attachment-analyzer.ts</code>
+      </td>
+      <td><code>langInstruction</code> принимает <code>"ru"|"en"|"es"</code>, ветка <code>auto</code> удалена; <code>injectLanguageDirective</code> сигнатура сужена; <code>buildChatParams</code> вызывает <code>resolveLang(opts.outputLanguage)</code>; 3 builder-а в attachment-analyzer обёрнуты в <code>resolveLang()</code>. Review-fix (6427a6d): <code>wikiSections</code> тоже сужен — justified EXCESS.</td>
+    </tr>
+    <tr>
+      <td><strong>Task 4</strong><br>Layer B — <code>reasoningLanguage</code> type/default + directive</td>
+      <td><span class="badge done">DONE</span></td>
+      <td>
+        <code>src/types.ts</code><br>
+        <code>src/agent-runner.ts</code><br>
+        <code>src/phases/llm-utils.ts</code>
+      </td>
+      <td><code>reasoningLanguage</code> добавлен в <code>LlmWikiPluginSettings</code> (default <code>"en"</code>) и <code>LlmCallOptions</code>; agent-runner плумбит в обе ветки nativeOpts; <code>REASONING_LANG_NAME</code> + <code>injectReasoningDirective</code> добавлены; <code>buildChatParams</code> инжектит reasoning directive безусловно.</td>
+    </tr>
+    <tr>
+      <td><strong>Task 5</strong><br>Settings dropdown + labels en/ru/es + <code>outputLanguage_desc</code> fix</td>
+      <td><span class="badge done">DONE</span></td>
+      <td>
+        <code>src/settings.ts</code><br>
+        <code>src/i18n.ts</code>
+      </td>
+      <td>Dropdown добавлен; <code>outputLanguage_desc</code> исправлен во всех 3 бандлах ("Auto = Obsidian UI language"); <code>reasoningLanguage_name/_desc</code> добавлены. Review-fix: dropdown label изменён на "Auto (match UI language)".</td>
+    </tr>
+    <tr>
+      <td><strong>Task 6</strong><br><code>ingestProgress</code>/<code>lintProgress</code>/<code>initProgress</code> + view keys en/ru/es</td>
+      <td><span class="badge done">DONE</span></td>
+      <td><code>src/i18n.ts</code></td>
+      <td>Все 3 группы добавлены в en/ru/es с идентичными функциональными подписями; <code>view.ingestingFiles</code>/<code>analysingFiles</code> добавлены во все 3 бандла.</td>
+    </tr>
+    <tr>
+      <td><strong>Task 7</strong><br>ingest/lint/init — локализация status yields</td>
+      <td><span class="badge done">DONE</span></td>
+      <td>
+        <code>src/phases/ingest.ts</code><br>
+        <code>src/phases/lint.ts</code><br>
+        <code>src/phases/init.ts</code>
+      </td>
+      <td>Все 6 hardcoded English литералов заменены на <code>i18nFor(resolveLang(opts.outputLanguage)).&lt;group&gt;.&lt;key&gt;</code>. Импорты добавлены во все 3 файла.</td>
+    </tr>
+    <tr>
+      <td><strong>Task 8</strong><br>view.ts — 4 локализованных label</td>
+      <td><span class="badge done">DONE</span></td>
+      <td><code>src/view.ts</code></td>
+      <td>Импорт расширен до <code>{i18n, i18nFor, resolveLang}</code>; 4 hardcoded строки заменены на bundle-lookup по <code>this.plugin.settings.outputLanguage</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Task 9</strong><br>Docs updated</td>
+      <td><span class="badge done">DONE</span></td>
+      <td>
+        <code>docs/wiki/backends-and-config.md</code><br>
+        <code>docs/wiki/llm-pipeline.md</code><br>
+        <code>docs/wiki/operations.md</code>
+      </td>
+      <td>Секция "Output Language" расширена разделами Three-Layer Resolution + reasoningLanguage Setting; llm-pipeline.md обновлён; operations.md — ссылка переименована. Примечание: план указывал <code>lat.md/</code>, но проект мигрировал на <code>docs/wiki/</code> — правильная цель использована.</td>
+    </tr>
+    <tr>
+      <td><strong>Task 10</strong><br>Final verification (build/tsc)</td>
+      <td><span class="badge done">DONE</span></td>
+      <td><code>dist/main.js</code></td>
+      <td>Финальный rebuild в dist (коммит <code>84132a1</code>). Process task — кодового артефакта не ожидалось.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- SPEC COVERAGE -->
+<h2>Покрытие Spec (A1–C2): 10 / 10</h2>
+
+<table class="rpt-table">
+  <thead>
+    <tr><th>ID</th><th>Описание требования</th><th>Статус</th><th>Покрыто в</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>A1</strong></td><td>status bundles: ingestProgress / lintProgress / initProgress</td><td><span class="badge covered">COVERED</span></td><td>Task 6</td></tr>
+    <tr><td><strong>A2</strong></td><td>hardcoded phase literals replaced</td><td><span class="badge covered">COVERED</span></td><td>Task 7</td></tr>
+    <tr><td><strong>A3</strong></td><td>view.ts localized (4 labels)</td><td><span class="badge covered">COVERED</span></td><td>Task 8</td></tr>
+    <tr><td><strong>A4</strong></td><td>rename resolveProgressLang → resolveLang</td><td><span class="badge covered">COVERED</span></td><td>Task 1</td></tr>
+    <tr><td><strong>B1</strong></td><td>reasoningLanguage type/default/options в types.ts</td><td><span class="badge covered">COVERED</span></td><td>Task 4</td></tr>
+    <tr><td><strong>B2</strong></td><td>settings dropdown + labels en/ru/es</td><td><span class="badge covered">COVERED</span></td><td>Task 5</td></tr>
+    <tr><td><strong>B3</strong></td><td>resolveReasoningLang добавлен</td><td><span class="badge covered">COVERED</span></td><td>Task 2</td></tr>
+    <tr><td><strong>B4</strong></td><td>reasoning directive injection в buildChatParams</td><td><span class="badge covered">COVERED</span></td><td>Task 4</td></tr>
+    <tr><td><strong>C1</strong></td><td>langInstruction concrete (drop auto→follow-source)</td><td><span class="badge covered">COVERED</span></td><td>Task 3</td></tr>
+    <tr><td><strong>C2</strong></td><td>content auto → Obsidian UI locale</td><td><span class="badge covered">COVERED</span></td><td>Task 3</td></tr>
+  </tbody>
+</table>
+
+<!-- FINDINGS -->
+<h2>Findings</h2>
+
+<div class="note ok">Нет CRITICAL findings. Все задачи плана выполнены полностью.</div>
+
+<div class="finding warning">
+  <p><span class="badge warn">WARNING</span> &nbsp;<strong>src/phases/lint-chat.ts — избыточный файл без шага плана</strong></p>
+  <dl>
+    <dt>Plan</dt>
+    <dd><code>lint-chat.ts</code> не упомянут ни в одной из 10 задач</dd>
+    <dt>Diff</dt>
+    <dd>Коммит <code>6427a6d</code>: <code>wikiSections(opts.outputLanguage ?? "auto")</code> → <code>wikiSections(resolveLang(opts.outputLanguage))</code> — review-fix после сужения сигнатуры <code>wikiSections</code> в Task 3</dd>
+    <dt>Обоснование</dt>
+    <dd>Justified: <code>wikiSections</code> стал принимать только конкретный язык → TypeScript потребовал бы исправить вызов в любом случае. Review-driven, не дефект.</dd>
+  </dl>
+  <ul>
+    <li>Принять как justified review-driven fix.</li>
+    <li>Ретроспективно добавить <code>lint-chat.ts</code> в описание Task 3 при следующем редактировании плана.</li>
+  </ul>
+</div>
+
+<div class="finding warning">
+  <p><span class="badge warn">WARNING</span> &nbsp;<strong>src/agent-runner.ts:runEvaluator — проброс reasoningLanguage без шага плана</strong></p>
+  <dl>
+    <dt>Plan</dt>
+    <dd>Task 4 не упоминает путь <code>runEvaluator</code></dd>
+    <dt>Diff</dt>
+    <dd>Коммит <code>6427a6d</code>: <code>runEvaluator(..., { reasoningLanguage: this.settings.reasoningLanguage, outputLanguage: this.settings.outputLanguage })</code></dd>
+    <dt>Обоснование</dt>
+    <dd>Justified: evaluator тоже вызывает <code>buildChatParams</code>, который теперь безусловно инжектит reasoning directive — без проброса directive применялся бы с <code>undefined</code>.</dd>
+  </dl>
+  <ul>
+    <li>Принять как justified (корректность поведения).</li>
+    <li>Можно считать INFO, не дефектом.</li>
+  </ul>
+</div>
+
+<!-- EXCESS CHANGES -->
+<h2>Избыточные изменения</h2>
+
+<table class="rpt-table">
+  <thead>
+    <tr><th>Файл</th><th>Изменение</th><th>Классификация</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>src/phases/lint-chat.ts</code></td>
+      <td>wikiSections → resolveLang wrap (review fix)</td>
+      <td><span class="badge warn">WARNING</span> justified</td>
+    </tr>
+    <tr>
+      <td><code>src/agent-runner.ts:runEvaluator</code></td>
+      <td>reasoningLanguage/outputLanguage в runEvaluator (review fix)</td>
+      <td><span class="badge info">INFO</span> justified</td>
+    </tr>
+    <tr>
+      <td><code>dist/main.js</code></td>
+      <td>rebuild bundle (коммит 84132a1)</td>
+      <td><span class="badge info">INFO</span> ожидаемо</td>
+    </tr>
+    <tr>
+      <td><code>docs/superpowers/plans/…</code></td>
+      <td>Сам план (создан в том же diff)</td>
+      <td><span class="badge info">INFO</span></td>
+    </tr>
+    <tr>
+      <td><code>docs/superpowers/specs/…</code></td>
+      <td>Сам spec (создан в том же diff)</td>
+      <td><span class="badge info">INFO</span></td>
+    </tr>
+    <tr>
+      <td><code>docs/superpowers/reports/*-check.html</code></td>
+      <td>HTML-отчёты прошлых прогонов (check-plan/check-spec)</td>
+      <td><span class="badge info">INFO</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- INTENT COVERAGE NOTE -->
+<h2>Intent Coverage</h2>
+<div class="note info">
+  <strong>Intent отсутствует</strong> — <code>chain.intent: null</code>. Покрытие желаемых outcomes проверялось напрямую по Spec (Design → Problem + Verification), которая полностью покрыта (10/10 требований A1–C2).
+</div>
+
+<!-- COMMITS -->
+<h2>История коммитов (от merge-base <code>1ed92df</code>)</h2>
+<details>
+  <summary>14 коммитов (нажмите для раскрытия)</summary>
+  <table class="rpt-table" style="margin-top:.5rem">
+    <thead><tr><th>Hash</th><th>Сообщение</th></tr></thead>
+    <tbody>
+      <tr><td><code>84132a1</code></td><td>chore(build): rebuild dist bundle for language feature</td></tr>
+      <tr><td><code>6427a6d</code></td><td>fix(lang): resolve wikiSections + evaluator language; correct auto dropdown label</td></tr>
+      <tr><td><code>d90b1f8</code></td><td>docs(lat): document three-layer language resolution + reasoning setting</td></tr>
+      <tr><td><code>cb5df2f</code></td><td>fix(progress): localize view.ts progress labels by outputLanguage</td></tr>
+      <tr><td><code>019d1b2</code></td><td>fix(progress): localize ingest/lint/init status strings by outputLanguage</td></tr>
+      <tr><td><code>24cd483</code></td><td>feat(i18n): add ingest/lint/init progress groups + view file labels (en/ru/es)</td></tr>
+      <tr><td><code>477a459</code></td><td>feat(settings): reasoning-language dropdown + labels; fix auto-language description</td></tr>
+      <tr><td><code>70d24dc</code></td><td>feat(lang): add reasoningLanguage setting and reasoning-directive injection</td></tr>
+      <tr><td><code>5f14d4e</code></td><td>feat(lang): content auto-language follows Obsidian locale, drop follow-source</td></tr>
+      <tr><td><code>96a4491</code></td><td>feat(i18n): add resolveReasoningLang resolver</td></tr>
+      <tr><td><code>9299230</code></td><td>refactor(eval): rename remaining resolveProgressLang refs to resolveLang</td></tr>
+      <tr><td><code>8f221a2</code></td><td>refactor(i18n): rename resolveProgressLang to resolveLang (shared A+C)</td></tr>
+      <tr><td><code>3155ee3</code></td><td>docs(plan): progress &amp; reasoning language implementation plan + check-plan report</td></tr>
+      <tr><td><code>8cba50b</code></td><td>docs(spec): progress &amp; reasoning language design + check-spec report</td></tr>
+    </tbody>
+  </table>
+</details>
+
+</main>
+</body>
+</html>

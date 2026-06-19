@@ -37,6 +37,10 @@ review:
 chain:
   intent: null
   spec: docs/superpowers/specs/2026-06-19-progress-reasoning-language-design.md
+result_check:
+  verdict: OK
+  plan_hash: 73216f921d92a4a2
+  last_run: 2026-06-19
 ---
 
 # Progress & Reasoning Language Implementation Plan
