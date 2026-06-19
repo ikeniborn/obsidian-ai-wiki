@@ -53,7 +53,7 @@ The one-shot vault migration renaming legacy unprefixed pages and rewriting back
 `_wiki_schema.md` and `_format_schema.md` are compiled into the plugin (esbuild `.md` text loader from `templates/`) and are the single source of truth. New versions ship only via a plugin release.
 
 - **Read at runtime** directly from bundled constants by ingest, lint, lint-chat, init (`schemaTemplate`) and format (`formatSchemaDefault`).
-- **Localized headings.** `_wiki_schema.md` carries a `{{section_conventions}}` placeholder; the four wiki-generating phases render it via `src/phases/llm-utils.ts#wikiSections` with `opts.outputLanguage`, emitting mandatory/optional page headings in the selected language (`auto` → Russian). Instruction text stays English.
+- **Localized headings.** `_wiki_schema.md` carries a `{{section_conventions}}` placeholder; the four wiki-generating phases render it via `src/phases/llm-utils.ts#wikiSections` with `resolveLang(opts.outputLanguage)`, emitting mandatory/optional page headings in the resolved content language. `wikiSections` takes a concrete `ru|en|es`; `auto` resolves to the Obsidian UI locale (matching the reply-language directive — see [[backends-and-config#Three-Layer Resolution]]), not a fixed Russian fallback. Instruction text stays English.
 - **Never written to the vault.** `!Wiki/_config/` holds no schema files. `cleanupBundledSchemaCopies` deletes stale copies left by older versions on load. See [[architecture#Storage Migration]].
 
 ## Frontmatter Validator
