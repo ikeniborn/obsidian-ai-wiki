@@ -26140,7 +26140,7 @@ __export(main_exports, {
   migrateToLocalV2: () => migrateToLocalV2
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian12 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_SETTINGS = {
@@ -30299,27 +30299,21 @@ function wikiSections(lang) {
       usage: "## \u041F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435 [\u0414\u043E\u043C\u0435\u043D]",
       examples: "## \u041F\u0440\u0438\u043C\u0435\u0440\u044B",
       limitations: "## \u041E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F",
-      best: "## Best Practices",
-      related: "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438",
-      history: "## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439"
+      best: "## Best Practices"
     },
     en: {
       mandatory: "## Key characteristics",
       usage: "## Usage in the [Domain] context",
       examples: "## Examples",
       limitations: "## Limitations",
-      best: "## Best Practices",
-      related: "## Related concepts",
-      history: "## Change history"
+      best: "## Best Practices"
     },
     es: {
       mandatory: "## Caracter\xEDsticas principales",
       usage: "## Uso en el contexto de [Dominio]",
       examples: "## Ejemplos",
       limitations: "## Limitaciones",
-      best: "## Best Practices",
-      related: "## Conceptos relacionados",
-      history: "## Historial de cambios"
+      best: "## Best Practices"
     }
   };
   const h = lang === "en" ? headings.en : lang === "es" ? headings.es : headings.ru;
@@ -30334,9 +30328,7 @@ function wikiSections(lang) {
     `- ${h.usage}`,
     `- ${h.examples}`,
     `- ${h.limitations}`,
-    `- ${h.best}`,
-    `- ${h.related} \u2014 only when there is explanatory context for the links; do not create it without descriptive context`,
-    `- ${h.history} \u2014 record the date and source when adding information from a new source`
+    `- ${h.best}`
   ].join("\n");
 }
 function stripThinking(text) {
@@ -37627,7 +37619,7 @@ var FormatOutputSchema = FormatBaseSchema.superRefine((val, ctx) => {
 });
 
 // prompts/ingest.md
-var ingest_default = 'You are a wiki-knowledge synthesis assistant for the domain "{{domain_name}}".\nExtract entities from the source and create/update wiki pages.\n\nDOMAIN ENTITY TYPES:\n{{entity_types_block}}\n{{lang_notes}}\n\nRULES:\n- CREATE: the entity does not exist in the wiki, mentions >= min_mentions_for_page\n- UPDATE: the entity exists \u2192 add new information, do NOT remove the old\n- SKIP: too few mentions or the information is already present\n- The wiki page FILE NAME (stem without `.md`) MUST have the form `wiki_{{domain_id}}_<entity_slug>`:\n  - `<entity_slug>` = the ASCII entity name in lowercase snake_case (only `[a-z0-9_]` characters, no spaces, diacritics, or uppercase letters).\n  - Example: `wiki_{{domain_id}}_neural_networks.md`.\n- The wiki page stem must NOT match any name from the "FORBIDDEN NAMES" section \u2014 those are the source files of this domain. The wiki describes extracted entities, it does not duplicate the source files.\n- The wiki page name must NOT match the name of the current source `{{source_stem}}` (a special case of the previous rule).\n- Synthesis, not copying. Technical configs/SQL may be quoted in code blocks.\n- The article path is determined by the entity type \u2014 use the exact template from the "DOMAIN ENTITY TYPES" section (above, before the RULES block), substituting the entity name for <EntityName>\n- If the entity type is undefined or the domain has no entity_types \u2192 default path: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter is mandatory: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- tags: hierarchical tags (category/subcategory). Reuse tags from existing wiki pages (provided in the context). Create new ones following the same scheme if needed. Format: lowercase, separated by `/`, no spaces, no `#`\n- wiki_sources: ONLY sources (files outside !Wiki/) \u2014 bare name without path: [[FileName]]. Never [[wiki_domain_page]]\n- wiki_outgoing_links: ONLY wiki pages (files inside !Wiki/) \u2014 bare name without path: [[wiki_domain_page]]. Never [[SourceName]]\n  \u274C FORBIDDEN: [[CurrentSourceName]] or [[AnyOtherSourceFile]] in wiki_outgoing_links.\n     The source is already recorded in wiki_sources \u2014 there is no need to duplicate it in outgoing_links.\n     Example: processing "Liquidity farming.md" \u2192 you must NOT put [[Liquidity farming]] in outgoing_links.\n- In article bodies: ONLY [[stem]] \u2014 never [[stem|alias]]. The [[A|B]] syntax is forbidden.\n- Use the mandatory and optional section headings defined in the conventions block (_wiki_schema.md) below, exactly as written there. Each page must include the mandatory characteristics section.\n- When adding from a new source \u2014 record it in the change-history section with the date and the source.\n- Create the related-concepts section only when there is explanatory context for the links.\n- For each page, add an "annotation" field to the JSON: a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section \u2014 synonyms, IDs, terms that are not in the heading>. Aim for ~600\u2013800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate \u2014 generic phrases raise noise in search.\n- The `annotation` field \u2014 ONLY in the JSON response. Do NOT add `annotation:` to the page frontmatter.\n- DEAD LINKS: every [[wiki_domain_slug]] in wiki_outgoing_links and in the article body must\n  either exist among the "Existing wiki pages" (provided in the context), or\n  be present in the pages list of this response. No page \u2014 do not write the link.\n{{schema_block}}\n{{forbidden_stems_block}}\n\nPATH RULE: each article path = !Wiki/<domain>/<entity>/<Article>.md \u2014 exactly 4 segments.\nNot allowed: !Wiki/os/os/network/NFS.md (domain twice), !Wiki/os/network/nfs/NFS.md (5 segments).\nAllowed:  !Wiki/os/network/NFS.md\n\nTYPE ENRICHMENT (entity_types_delta):\nIf, while analyzing the source, you discover:\n- new entity types (the type key is absent from the current list above), or\n- improvements to existing types (a more precise description or additional extraction_cues for an already existing type key) \u2014\nadd the entity_types_delta field to the JSON response. If nothing is new \u2014 simply do not include this field.\n\nDUPLICATE MERGING (merge):\nIf among the existing wiki pages you find several describing the same entity:\n- emit one new page in pages (with merged content and the canonical path)\n- list the old paths in the deletes field: [{path}, ...]\nThe old pages will be deleted, the index cleaned, and backlinks in the current source updated automatically.\n\nReturn ONLY a JSON object \u2014 no other text:\n{"reasoning":"Rationale: which entities were extracted and why","pages":[{"path":"{{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md","content":"---\\nwiki_sources: [\\"[[{{source_stem}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncontent...","annotation":"The essence of the entity in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search."}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}\n';
+var ingest_default = 'You are a wiki-knowledge synthesis assistant for the domain "{{domain_name}}".\nExtract entities from the source and create/update wiki pages.\n\nDOMAIN ENTITY TYPES:\n{{entity_types_block}}\n{{lang_notes}}\n\nRULES:\n- CREATE: the entity does not exist in the wiki, mentions >= min_mentions_for_page\n- UPDATE: the entity exists \u2192 add new information, do NOT remove the old\n- SKIP: too few mentions or the information is already present\n- The wiki page FILE NAME (stem without `.md`) MUST have the form `wiki_{{domain_id}}_<entity_slug>`:\n  - `<entity_slug>` = the ASCII entity name in lowercase snake_case (only `[a-z0-9_]` characters, no spaces, diacritics, or uppercase letters).\n  - Example: `wiki_{{domain_id}}_neural_networks.md`.\n- The wiki page stem must NOT match any name from the "FORBIDDEN NAMES" section \u2014 those are the source files of this domain. The wiki describes extracted entities, it does not duplicate the source files.\n- The wiki page name must NOT match the name of the current source `{{source_stem}}` (a special case of the previous rule).\n- Synthesis, not copying. Technical configs/SQL may be quoted in code blocks.\n- The article path is determined by the entity type \u2014 use the exact template from the "DOMAIN ENTITY TYPES" section (above, before the RULES block), substituting the entity name for <EntityName>\n- If the entity type is undefined or the domain has no entity_types \u2192 default path: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter is mandatory: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- tags: hierarchical tags (category/subcategory). Reuse tags from existing wiki pages (provided in the context). Create new ones following the same scheme if needed. Format: lowercase, separated by `/`, no spaces, no `#`\n- wiki_sources: ONLY sources (files outside !Wiki/) \u2014 bare name without path: [[FileName]]. Never [[wiki_domain_page]]\n- wiki_outgoing_links: ONLY wiki pages (files inside !Wiki/) \u2014 bare name without path: [[wiki_domain_page]]. Never [[SourceName]]\n  \u274C FORBIDDEN: [[CurrentSourceName]] or [[AnyOtherSourceFile]] in wiki_outgoing_links.\n     The source is already recorded in wiki_sources \u2014 there is no need to duplicate it in outgoing_links.\n     Example: processing "Liquidity farming.md" \u2192 you must NOT put [[Liquidity farming]] in outgoing_links.\n- In article bodies: ONLY [[stem]] \u2014 never [[stem|alias]]. The [[A|B]] syntax is forbidden.\n- Use the mandatory and optional section headings defined in the conventions block (_wiki_schema.md) below, exactly as written there. Each page must include the mandatory characteristics section.\n- For each page, add an "annotation" field to the JSON: a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section \u2014 synonyms, IDs, terms that are not in the heading>. Aim for ~600\u2013800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate \u2014 generic phrases raise noise in search.\n- The `annotation` field \u2014 ONLY in the JSON response. Do NOT add `annotation:` to the page frontmatter.\n- DEAD LINKS: every [[wiki_domain_slug]] in wiki_outgoing_links and in the article body must\n  either exist among the "Existing wiki pages" (provided in the context), or\n  be present in the pages list of this response. No page \u2014 do not write the link.\n{{schema_block}}\n{{forbidden_stems_block}}\n\nPATH RULE: each article path = !Wiki/<domain>/<entity>/<Article>.md \u2014 exactly 4 segments.\nNot allowed: !Wiki/os/os/network/NFS.md (domain twice), !Wiki/os/network/nfs/NFS.md (5 segments).\nAllowed:  !Wiki/os/network/NFS.md\n\nTYPE ENRICHMENT (entity_types_delta):\nIf, while analyzing the source, you discover:\n- new entity types (the type key is absent from the current list above), or\n- improvements to existing types (a more precise description or additional extraction_cues for an already existing type key) \u2014\nadd the entity_types_delta field to the JSON response. If nothing is new \u2014 simply do not include this field.\n\nDUPLICATE MERGING (merge):\nIf among the existing wiki pages you find several describing the same entity:\n- emit one new page in pages (with merged content and the canonical path)\n- list the old paths in the deletes field: [{path}, ...]\nThe old pages will be deleted, the index cleaned, and backlinks in the current source updated automatically.\n\nReturn ONLY a JSON object \u2014 no other text:\n{"reasoning":"Rationale: which entities were extracted and why","pages":[{"path":"{{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md","content":"---\\nwiki_sources: [\\"[[{{source_stem}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncontent...","annotation":"The essence of the entity in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search."}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}\n';
 
 // prompts/ingest-merge.md
 var ingest_merge_default = `<!-- prompts/ingest-merge.md -->
@@ -37653,7 +37645,7 @@ var ingest_entities_default = 'You are an entity extractor from a source for the
 var ingest_fix_paths_default = "These paths violate the 4-segment rule (!Wiki/<d>/<e>/<f>.md): {{paths}}. Return a corrected JSON array for these pages only.";
 
 // templates/_wiki_schema.md
-var wiki_schema_default = '# Wiki Schema\n\n## Language and style\n- Primary language: follow the configured output-language directive (from settings); when it is "auto", match the source/article language.\n- The output language applies to ALL natural-language text, including content copied from the source: table cell values, field values (prompt, expected, notes, descriptions), list items, and quoted sentences. These are content \u2014 translate them. A full sentence in another language (incl. CJK) is never a "term".\n- Verbatim preservation is ONLY for: fenced code blocks, file paths, identifiers, commands, URLs, proper names, and `[[wiki-link]]` targets (they are filenames \u2014 never translate a link target).\n- Do not translate technical terms: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML\n- System names \u2014 keep the original spelling (RT.DataExporter, CRM B2C, \u0426\u0425\u0414)\n- Expand abbreviations on first use on the page\n- Style: neutral, informative, no value judgements\n- Forbidden: "Obviously...", "The best way...", the pronouns "I", "we", "our"\n\n## File and folder naming\n- Files: kebab-case, Cyrillic allowed, no spaces or special characters except the hyphen\n  - Examples: `\u0432\u0435\u0440\u0441\u0438\u043E\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435-scd.md`, `clickhouse-\u043E\u0431\u0437\u043E\u0440.md`\n- Domain folders: lowercase, Latin script (`ai/`, `databases/`)\n- H1 heading: the page title in the configured output language; a technical term in parentheses when needed\n\n{{section_conventions}}\n\n## Frontmatter\n\n| Field | Rule |\n|------|---------|\n| `wiki_sources` | Array of real paths from the repository root. Read files only. On UPDATE \u2014 add, do not remove. Obsidian property type: **Links** (not list/text) \u2014 only then do the links participate in Graph View. Values must be in the `[[page-name]]` format: `["[[page-a]]", "[[page-b]]"] |\n| `wiki_updated` | YYYY-MM-DD |\n| `wiki_status` | `stub` (<2 sources, <10 sentences) / `developing` (\u22652 sources, \u226510 sentences, main sections filled in) / `mature` (\u22654 sources, all sections) |\n| `wiki_type` | File type: `page \\| index \\| log \\| schema`. Only for service files (`_index.md`, `_log.md`, `_wiki_schema.md`). Regular pages do not set this field. |\n| `tags` | YAML list: `[category/subcategory, domain/topic]`. Hierarchy via `/`, lowercase, no spaces, no `#`. Reuse tags from existing domain pages; create new ones following the same scheme. Obsidian recognizes the `tags` key automatically \u2014 do not set the type explicitly. |\n| `aliases` | Abbreviations, English variants, synonyms |\n| `wiki_outgoing_links` | Array of WikiLinks to related pages. Obsidian property type: **Links** (not list/text) \u2014 only then do the links participate in Graph View. Values must be in the `[[page-name]]` format: `["[[page-a]]", "[[page-b]]"]`. An empty array is allowed. |\n| `wiki_external_links` | Array of external URLs (`http://` or `https://`). They do not form the Obsidian graph \u2014 reference resources and documentation only. |\n\n## Common mistakes (forbidden)\n\n| Mistake | Why it is bad | Correct |\n|--------|-------------|-----------|\n| `tags: - "[[wiki_fin_...]]"` | A WikiLink is not a tag; the validator will remove it | Put it in `wiki_outgoing_links` |\n| `tags: - {type: ..., name: ...}` | tags \u2014 strings only | `tags: - finance/technical-analysis` |\n| `wiki_outgoing_links: ["[[a]]", "[[b]]"]` | Inline JSON is not parsed by the wiki-link-validator | Block list: `- "[[a]]"` on separate lines |\n| A link in the body without a record in `wiki_outgoing_links` | The Obsidian graph does not see the connection | Every `[[link]]` in the body \u2192 in `wiki_outgoing_links` |\n\n## Forbidden Frontmatter Patterns\n\n| Example | Problem | Fix |\n|---------|---------|-----|\n| `wiki_sources: ["[[wiki_work_foo]]"]` | Wiki-page stem in sources field | Move to `wiki_outgoing_links` |\n| `wiki_outgoing_links: ["[[MyNote]]"]` | Source stem in wiki-links field | Move to `wiki_sources` |\n\n## WikiLinks\n\n- Only `[[page-name]]` \u2014 no aliases, no folder paths\n- \u274C Forbidden: `[[Page|alias]]`, `[[folder/page]]`\n- \u2705 Correct: `[[page-name]]`, `[[\u041A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430]]`, `[[Scalability]]`\n- Link only to existing pages; dead links yield a warning\n\n`wiki_outgoing_links` \u2014 YAML block list (not inline JSON):\n- \u2705 Correct:\n  ```yaml\n  wiki_outgoing_links:\n    - "[[page-a]]"\n    - "[[page-b]]"\n  ```\n- \u274C Forbidden: `wiki_outgoing_links: ["[[page-a]]", "[[page-b]]"]`\n\n`wiki_outgoing_links` MUST contain every `[[link]]` found in the page body.\n\n## Content\n- Synthesis, not copying \u2014 rework the information from the sources\n- Verbatim quotes only in code blocks (SQL, configurations)\n- When adding information from a new source \u2014 record the date and source in the change-history section (see the section conventions above)\n- Forbidden: placeholder text (TODO, "see source"), empty sections, removing existing information\n- Tables: markdown with alignment (`| Parameter | Value |` + `|----------|----------|`)\n- Code blocks: always specify the language (` ```sql `, ` ```yaml `, ` ```json `)\n';
+var wiki_schema_default = '# Wiki Schema\n\n## Language and style\n- Primary language: follow the configured output-language directive (from settings); when it is "auto", match the source/article language.\n- The output language applies to ALL natural-language text, including content copied from the source: table cell values, field values (prompt, expected, notes, descriptions), list items, and quoted sentences. These are content \u2014 translate them. A full sentence in another language (incl. CJK) is never a "term".\n- Verbatim preservation is ONLY for: fenced code blocks, file paths, identifiers, commands, URLs, proper names, and `[[wiki-link]]` targets (they are filenames \u2014 never translate a link target).\n- Do not translate technical terms: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML\n- System names \u2014 keep the original spelling (RT.DataExporter, CRM B2C, \u0426\u0425\u0414)\n- Expand abbreviations on first use on the page\n- Style: neutral, informative, no value judgements\n- Forbidden: "Obviously...", "The best way...", the pronouns "I", "we", "our"\n\n## File and folder naming\n- Files: kebab-case, Cyrillic allowed, no spaces or special characters except the hyphen\n  - Examples: `\u0432\u0435\u0440\u0441\u0438\u043E\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435-scd.md`, `clickhouse-\u043E\u0431\u0437\u043E\u0440.md`\n- Domain folders: lowercase, Latin script (`ai/`, `databases/`)\n- H1 heading: the page title in the configured output language; a technical term in parentheses when needed\n\n{{section_conventions}}\n\n## Frontmatter\n\n| Field | Rule |\n|------|---------|\n| `wiki_sources` | Array of real paths from the repository root. Read files only. On UPDATE \u2014 add, do not remove. Obsidian property type: **Links** (not list/text) \u2014 only then do the links participate in Graph View. Values must be in the `[[page-name]]` format: `["[[page-a]]", "[[page-b]]"] |\n| `wiki_updated` | YYYY-MM-DD |\n| `wiki_status` | `stub` (<2 sources, <10 sentences) / `developing` (\u22652 sources, \u226510 sentences, main sections filled in) / `mature` (\u22654 sources, all sections) |\n| `wiki_type` | File type: `page \\| index \\| log \\| schema`. Only for service files (`_index.md`, `_log.md`, `_wiki_schema.md`). Regular pages do not set this field. |\n| `tags` | YAML list: `[category/subcategory, domain/topic]`. Hierarchy via `/`, lowercase, no spaces, no `#`. Reuse tags from existing domain pages; create new ones following the same scheme. Obsidian recognizes the `tags` key automatically \u2014 do not set the type explicitly. |\n| `aliases` | Abbreviations, English variants, synonyms |\n| `wiki_outgoing_links` | Array of WikiLinks to related pages. Obsidian property type: **Links** (not list/text) \u2014 only then do the links participate in Graph View. Values must be in the `[[page-name]]` format: `["[[page-a]]", "[[page-b]]"]`. An empty array is allowed. |\n| `wiki_external_links` | Array of external URLs (`http://` or `https://`). They do not form the Obsidian graph \u2014 reference resources and documentation only. |\n\n## Common mistakes (forbidden)\n\n| Mistake | Why it is bad | Correct |\n|--------|-------------|-----------|\n| `tags: - "[[wiki_fin_...]]"` | A WikiLink is not a tag; the validator will remove it | Put it in `wiki_outgoing_links` |\n| `tags: - {type: ..., name: ...}` | tags \u2014 strings only | `tags: - finance/technical-analysis` |\n| `wiki_outgoing_links: ["[[a]]", "[[b]]"]` | Inline JSON is not parsed by the wiki-link-validator | Block list: `- "[[a]]"` on separate lines |\n| A link in the body without a record in `wiki_outgoing_links` | The Obsidian graph does not see the connection | Every `[[link]]` in the body \u2192 in `wiki_outgoing_links` |\n\n## Forbidden Frontmatter Patterns\n\n| Example | Problem | Fix |\n|---------|---------|-----|\n| `wiki_sources: ["[[wiki_work_foo]]"]` | Wiki-page stem in sources field | Move to `wiki_outgoing_links` |\n| `wiki_outgoing_links: ["[[MyNote]]"]` | Source stem in wiki-links field | Move to `wiki_sources` |\n\n## WikiLinks\n\n- Only `[[page-name]]` \u2014 no aliases, no folder paths\n- \u274C Forbidden: `[[Page|alias]]`, `[[folder/page]]`\n- \u2705 Correct: `[[page-name]]`, `[[\u041A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430]]`, `[[Scalability]]`\n- Link only to existing pages; dead links yield a warning\n\n`wiki_outgoing_links` \u2014 YAML block list (not inline JSON):\n- \u2705 Correct:\n  ```yaml\n  wiki_outgoing_links:\n    - "[[page-a]]"\n    - "[[page-b]]"\n  ```\n- \u274C Forbidden: `wiki_outgoing_links: ["[[page-a]]", "[[page-b]]"]`\n\n`wiki_outgoing_links` MUST contain every `[[link]]` found in the page body.\n\n## Content\n- Synthesis, not copying \u2014 rework the information from the sources\n- Verbatim quotes only in code blocks (SQL, configurations)\n- Forbidden: placeholder text (TODO, "see source"), empty sections, removing existing information\n- Tables: markdown with alignment (`| Parameter | Value |` + `|----------|----------|`)\n- Code blocks: always specify the language (` ```sql `, ` ```yaml `, ` ```json `)\n';
 
 // src/domain-config.ts
 async function ensureDomainConfig(vaultTools, domainFolder) {
@@ -50221,8 +50213,110 @@ async function migrateIndexFormat(vault, domains) {
   }
 }
 
+// src/migrate-drop-sections.ts
+var import_obsidian12 = require("obsidian");
+
+// src/strip-legacy-sections.ts
+var import_yaml2 = __toESM(require_dist(), 1);
+var LEGACY_HEADINGS = /* @__PURE__ */ new Set([
+  "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438",
+  "## Related concepts",
+  "## Conceptos relacionados",
+  "## \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439",
+  "## Change history",
+  "## Historial de cambios"
+]);
+var RELATED_HEADINGS = /* @__PURE__ */ new Set([
+  "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438",
+  "## Related concepts",
+  "## Conceptos relacionados"
+]);
+var FM_RE2 = /^---\n([\s\S]*?)\n---\n?/;
+function isH2(line) {
+  return /^##\s+/.test(line);
+}
+function stripLegacySections(content) {
+  const out = [];
+  let skipping = false;
+  for (const line of content.split("\n")) {
+    if (isH2(line)) {
+      skipping = LEGACY_HEADINGS.has(line.trim());
+      if (skipping) continue;
+    }
+    if (!skipping) out.push(line);
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/\s*$/, "\n");
+}
+function extractRelatedLinks(content) {
+  const links = [];
+  let inRelated = false;
+  for (const line of content.split("\n")) {
+    if (isH2(line)) {
+      inRelated = RELATED_HEADINGS.has(line.trim());
+      continue;
+    }
+    if (inRelated) {
+      for (const m of line.matchAll(/\[\[([^\]|#]+)/g)) {
+        const t = m[1].trim();
+        if (t) links.push(`[[${t}]]`);
+      }
+    }
+  }
+  return [...new Set(links)];
+}
+function addOutgoingLinks(content, links) {
+  if (links.length === 0) return content;
+  const m = FM_RE2.exec(content);
+  if (!m) return content;
+  let fm;
+  try {
+    const parsed = (0, import_yaml2.parse)(m[1]);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return content;
+    fm = parsed;
+  } catch {
+    return content;
+  }
+  const existing = Array.isArray(fm.wiki_outgoing_links) ? fm.wiki_outgoing_links.map((x) => String(x)) : [];
+  const existingSet = new Set(existing);
+  const missing = links.filter((l) => !existingSet.has(l));
+  if (missing.length === 0) return content;
+  fm.wiki_outgoing_links = [...existing, ...missing];
+  return `---
+${(0, import_yaml2.stringify)(fm)}---
+${content.slice(m[0].length)}`;
+}
+
+// src/migrate-drop-sections.ts
+async function migrateDropSections(vault, domains, localConfigStore) {
+  const local = await localConfigStore.load();
+  if (local.migrated_drop_sections) return;
+  const adapter = vault.adapter;
+  let filesChanged = 0;
+  for (const domain of domains) {
+    const wikiFolder = domainWikiFolder(domain.wiki_folder);
+    for (const file of collectMdInPaths(vault, [wikiFolder])) {
+      if (file.basename.startsWith("_")) continue;
+      try {
+        const content = await adapter.read(file.path);
+        const related = extractRelatedLinks(content);
+        const stripped = stripLegacySections(addOutgoingLinks(content, related));
+        if (stripped !== content) {
+          await adapter.write(file.path, stripped);
+          filesChanged++;
+        }
+      } catch (e) {
+        console.error(`[AI Wiki] drop-sections migration: error processing ${file.path}`, e);
+      }
+    }
+  }
+  await localConfigStore.save({ migrated_drop_sections: true });
+  if (filesChanged > 0) {
+    new import_obsidian12.Notice(`AI Wiki: legacy wiki sections removed \u2014 ${filesChanged} pages`);
+  }
+}
+
 // src/main.ts
-var LlmWikiPlugin = class extends import_obsidian12.Plugin {
+var LlmWikiPlugin = class extends import_obsidian13.Plugin {
   settings;
   controller;
   settingTab;
@@ -50235,7 +50329,7 @@ var LlmWikiPlugin = class extends import_obsidian12.Plugin {
       await runStorageMigration(this.app.vault);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian12.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
+      new import_obsidian13.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] storage migration error:", e);
     }
     await cleanupBundledSchemaCopies(this.app.vault);
@@ -50248,8 +50342,16 @@ var LlmWikiPlugin = class extends import_obsidian12.Plugin {
       await migrateIndexFormat(this.app.vault, domains);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian12.Notice(`AI Wiki: index format migration failed \u2014 ${msg}`, 0);
+      new import_obsidian13.Notice(`AI Wiki: index format migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] index format migration error:", e);
+    }
+    try {
+      const domains = await this.domainStore.load();
+      await migrateDropSections(this.app.vault, domains, this.localConfigStore);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      new import_obsidian13.Notice(`AI Wiki: drop-sections migration failed \u2014 ${msg}`, 0);
+      console.error("[AI Wiki] drop-sections migration error:", e);
     }
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
     this.controller.onBusyChange = () => this.settingTab?.display();
@@ -50263,7 +50365,7 @@ var LlmWikiPlugin = class extends import_obsidian12.Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
-    if (!import_obsidian12.Platform.isMobile) {
+    if (!import_obsidian13.Platform.isMobile) {
       const statusBar = this.addStatusBarItem();
       statusBar.setText("schema: 0/0");
       statusBar.setAttribute("aria-label", "validation: 0 ok, 0 retried, 0 failed");
@@ -50286,7 +50388,7 @@ var LlmWikiPlugin = class extends import_obsidian12.Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
-    if (!import_obsidian12.Platform.isMobile) {
+    if (!import_obsidian13.Platform.isMobile) {
       this.addCommand({
         id: "ingest-current",
         name: T.cmd.ingestActive,
@@ -50298,7 +50400,7 @@ var LlmWikiPlugin = class extends import_obsidian12.Plugin {
       name: T.cmd.query,
       callback: () => new QueryModal(this.app, (q) => void this.controller.query(q)).open()
     });
-    if (!import_obsidian12.Platform.isMobile) {
+    if (!import_obsidian13.Platform.isMobile) {
       this.addCommand({
         id: "lint",
         name: T.cmd.lint,
@@ -50441,11 +50543,11 @@ var LlmWikiPlugin = class extends import_obsidian12.Plugin {
       if (data && data.model && !this.settings.claudeAgent.model)
         this.settings.claudeAgent.model = data.model;
     }
-    if (import_obsidian12.Platform.isMobile && this.settings.backend === "claude-agent") {
+    if (import_obsidian13.Platform.isMobile && this.settings.backend === "claude-agent") {
       this.settings.backend = "native-agent";
       await this.saveData(this.settings);
     }
-    if (import_obsidian12.Platform.isMobile) {
+    if (import_obsidian13.Platform.isMobile) {
       let dirty = false;
       if (this.settings.nativeAgent.perOperation) {
         this.settings.nativeAgent.perOperation = false;

@@ -11,6 +11,7 @@ import { LocalConfigStore } from "./local-config";
 import { structuralErrorCounter } from "./structural-error-counter";
 import { runStorageMigration, cleanupBundledSchemaCopies } from "./storage-migration";
 import { migrateIndexFormat } from "./migrate-index-format";
+import { migrateDropSections } from "./migrate-drop-sections";
 import { GLOBAL_DOMAIN_PATH, domainWikiFolder } from "./wiki-path";
 
 export default class LlmWikiPlugin extends Plugin {
@@ -43,6 +44,14 @@ export default class LlmWikiPlugin extends Plugin {
       const msg = e instanceof Error ? e.message : String(e);
       new Notice(`AI Wiki: index format migration failed — ${msg}`, 0);
       console.error("[AI Wiki] index format migration error:", e);
+    }
+    try {
+      const domains = await this.domainStore.load();
+      await migrateDropSections(this.app.vault, domains, this.localConfigStore);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      new Notice(`AI Wiki: drop-sections migration failed — ${msg}`, 0);
+      console.error("[AI Wiki] drop-sections migration error:", e);
     }
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
     this.controller.onBusyChange = () => this.settingTab?.display();

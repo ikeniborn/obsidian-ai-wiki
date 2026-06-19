@@ -26,8 +26,6 @@ RULES:
      Example: processing "Liquidity farming.md" → you must NOT put [[Liquidity farming]] in outgoing_links.
 - In article bodies: ONLY [[stem]] — never [[stem|alias]]. The [[A|B]] syntax is forbidden.
 - Use the mandatory and optional section headings defined in the conventions block (_wiki_schema.md) below, exactly as written there. Each page must include the mandatory characteristics section.
-- When adding from a new source — record it in the change-history section with the date and the source.
-- Create the related-concepts section only when there is explanatory context for the links.
 - For each page, add an "annotation" field to the JSON: a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section — synonyms, IDs, terms that are not in the heading>. Aim for ~600–800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate — generic phrases raise noise in search.
 - The `annotation` field — ONLY in the JSON response. Do NOT add `annotation:` to the page frontmatter.
 - DEAD LINKS: every [[wiki_domain_slug]] in wiki_outgoing_links and in the article body must

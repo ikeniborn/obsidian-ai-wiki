@@ -27,8 +27,6 @@ export function wikiSections(lang: "ru" | "en" | "es"): string {
       examples: "## Примеры",
       limitations: "## Ограничения",
       best: "## Best Practices",
-      related: "## Связанные концепции",
-      history: "## История изменений",
     },
     en: {
       mandatory: "## Key characteristics",
@@ -36,8 +34,6 @@ export function wikiSections(lang: "ru" | "en" | "es"): string {
       examples: "## Examples",
       limitations: "## Limitations",
       best: "## Best Practices",
-      related: "## Related concepts",
-      history: "## Change history",
     },
     es: {
       mandatory: "## Características principales",
@@ -45,8 +41,6 @@ export function wikiSections(lang: "ru" | "en" | "es"): string {
       examples: "## Ejemplos",
       limitations: "## Limitaciones",
       best: "## Best Practices",
-      related: "## Conceptos relacionados",
-      history: "## Historial de cambios",
     },
   };
   const h = lang === "en" ? headings.en : lang === "es" ? headings.es : headings.ru;
@@ -62,8 +56,6 @@ export function wikiSections(lang: "ru" | "en" | "es"): string {
     `- ${h.examples}`,
     `- ${h.limitations}`,
     `- ${h.best}`,
-    `- ${h.related} — only when there is explanatory context for the links; do not create it without descriptive context`,
-    `- ${h.history} — record the date and source when adding information from a new source`,
   ].join("\n");
 }
 

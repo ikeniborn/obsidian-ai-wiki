@@ -68,7 +68,6 @@
 ## Content
 - Synthesis, not copying — rework the information from the sources
 - Verbatim quotes only in code blocks (SQL, configurations)
-- When adding information from a new source — record the date and source in the change-history section (see the section conventions above)
 - Forbidden: placeholder text (TODO, "see source"), empty sections, removing existing information
 - Tables: markdown with alignment (`| Parameter | Value |` + `|----------|----------|`)
 - Code blocks: always specify the language (` ```sql `, ` ```yaml `, ` ```json `)
