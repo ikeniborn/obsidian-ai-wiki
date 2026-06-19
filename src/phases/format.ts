@@ -7,7 +7,7 @@ import formatTemplate from "../../prompts/format.md";
 import restoreTokensTemplate from "../../prompts/format-restore-tokens.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
-import { missingTokensWithContext, appendMissingLines, restoreObsidianEmbeds, missingObsidianEmbeds, parseSentinelOutput } from "./format-utils";
+import { missingTokensWithContext, appendMissingLines, restoreObsidianEmbeds, missingObsidianEmbeds, parseSentinelOutput, stripSentinelMarkers } from "./format-utils";
 import { fixWikiLinks } from "../wiki-link-validator";
 import { restoreSourceFrontmatter } from "../utils/raw-frontmatter";
 import { FormatBaseSchema, FormatWithVisionSchema } from "./zod-schemas";
@@ -344,6 +344,18 @@ export async function* runFormat(
   finalFormatted = wlFix.fixed.get(filePath) ?? finalFormatted;
 
   finalFormatted = restoreSourceFrontmatter(original, finalFormatted);
+
+  // Final defensive sweep: no sentinel marker may reach the written note.
+  const swept = stripSentinelMarkers(finalFormatted);
+  finalFormatted = swept.clean;
+  if (swept.removed.length > 0) {
+    yield {
+      kind: "info_text",
+      icon: "⚠️",
+      summary: "Sentinel markers stripped",
+      details: swept.removed,
+    };
+  }
 
   try {
     await vaultTools.write(tempPath, finalFormatted);
