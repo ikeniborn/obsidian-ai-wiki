@@ -881,10 +881,10 @@ export function i18nFor(lang: "ru" | "en" | "es"): I18n {
 }
 
 /**
- * Resolves the language for operation progress strings.
+ * Resolves a concrete language for status strings (layer A) and generated content (layer C).
  * Explicit outputLanguage wins; `auto`/undefined falls back to the Obsidian UI locale.
  */
-export function resolveProgressLang(outputLanguage: OutputLanguage | undefined): "ru" | "en" | "es" {
+export function resolveLang(outputLanguage: OutputLanguage | undefined): "ru" | "en" | "es" {
   if (outputLanguage === "ru" || outputLanguage === "en" || outputLanguage === "es") {
     return outputLanguage;
   }
