@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Проверка плана — Format Vision Sentinel-Marker Sweep</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --fg: #e6edf3; --muted: #9aa7b4; --accent: #58a6ff; --ok: #3fb950;
+    --warn: #d29922; --crit: #f85149; --edge: #6e7d8f; --node: #1f2937;
+    --node-stroke: #3d4f63; --shadow: rgba(0,0,0,.5);
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f8fa; --panel: #ffffff; --panel2: #eef2f7; --border: #d0d7de;
+    --fg: #1f2328; --muted: #57606a; --accent: #0969da; --ok: #1a7f37;
+    --warn: #9a6700; --crit: #cf222e; --edge: #8c98a6; --node: #ffffff;
+    --node-stroke: #c4cdd8; --shadow: rgba(140,150,160,.25);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 0 4rem; background: var(--bg); color: var(--fg);
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.55; transition: background .25s, color .25s;
+  }
+  header {
+    padding: 1.6rem 2rem 1.2rem; border-bottom: 1px solid var(--border);
+    background: var(--panel); position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+  }
+  header h1 { margin: 0 0 .3rem; font-size: 1.35rem; }
+  header .sub { color: var(--muted); font-size: .85rem; }
+  main { max-width: 1080px; margin: 0 auto; padding: 1.5rem 2rem; }
+  section { margin: 2.2rem 0; }
+  h2 {
+    font-size: 1.1rem; border-left: 3px solid var(--accent); padding-left: .6rem;
+    margin: 0 0 1rem;
+  }
+  h3 { font-size: .95rem; color: var(--muted); margin: 1.4rem 0 .6rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; margin: .5rem 0 1rem; }
+  th, td { text-align: left; padding: .5rem .6rem; border: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--panel2); font-weight: 600; }
+  tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel2) 45%, transparent); }
+  code { background: var(--panel2); padding: .08rem .35rem; border-radius: 4px; font-size: .82em; }
+  .badge {
+    display: inline-block; padding: .12rem .55rem; border-radius: 999px;
+    font-size: .72rem; font-weight: 700; letter-spacing: .02em;
+  }
+  .b-ok { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok); border: 1px solid var(--ok); }
+  .b-warn { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); border: 1px solid var(--warn); }
+  .b-crit { background: color-mix(in srgb, var(--crit) 22%, transparent); color: var(--crit); border: 1px solid var(--crit); }
+  .note {
+    background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    padding: .8rem 1rem; border-radius: 6px; margin: 1rem 0; font-size: .85rem;
+  }
+  .note.ok { border-left-color: var(--ok); }
+  figure { margin: 1rem 0; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
+  figcaption { color: var(--muted); font-size: .8rem; margin-top: .6rem; text-align: center; }
+  .chain { font-size: .85rem; color: var(--muted); }
+  .chain code { color: var(--fg); }
+  .toggle {
+    cursor: pointer; background: var(--panel2); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 999px; padding: .4rem .9rem; font-size: .8rem; white-space: nowrap;
+  }
+  .toggle:hover { border-color: var(--accent); }
+  .legend { display: flex; gap: 1.2rem; flex-wrap: wrap; font-size: .78rem; color: var(--muted); margin-top: .4rem; }
+  .legend span { display: inline-flex; align-items: center; gap: .35rem; }
+  .swatch { width: 14px; height: 3px; display: inline-block; border-radius: 2px; }
+  .ov { text-align: center; font-weight: 700; }
+  .ov-hit { background: color-mix(in srgb, var(--accent) 28%, transparent); color: var(--accent); }
+  .ov-multi { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+  details { margin: .4rem 0; }
+  summary { cursor: pointer; font-weight: 600; }
+  .kpis { display: flex; gap: 1rem; flex-wrap: wrap; margin: .5rem 0 0; }
+  .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: .7rem 1.1rem; min-width: 120px; }
+  .kpi .n { font-size: 1.5rem; font-weight: 800; }
+  .kpi .l { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Проверка плана — Format Vision Sentinel-Marker Sweep</h1>
+    <div class="sub">IDD-гейт <code>check-plan</code> · дата прогона: 2026-06-19 · ветка <code>dev/format-sentinel-sweep</code></div>
+  </div>
+  <button class="toggle" id="themeBtn" onclick="toggleTheme()">🌙 / ☀️ тема</button>
+</header>
+
+<main>
+
+  <section>
+    <h2>Итог</h2>
+    <div class="kpis">
+      <div class="kpi"><div class="n" style="color:var(--ok)">OK</div><div class="l">Вердикт</div></div>
+      <div class="kpi"><div class="n" style="color:var(--ok)">5 / 5</div><div class="l">Фазы passed</div></div>
+      <div class="kpi"><div class="n" style="color:var(--crit)">0</div><div class="l">CRITICAL open</div></div>
+      <div class="kpi"><div class="n" style="color:var(--warn)">0</div><div class="l">WARNING open</div></div>
+    </div>
+    <div class="note ok">
+      План прошёл независимую проверку в чистом контексте по всем 5 фазам. Якоря строк, цитируемый
+      old/new код, сигнатуры возврата, команды esbuild, ожидаемые значения фикстур и арифметика
+      прогонов (9 → 18) сверены с актуальным исходником и спекой. Расхождений нет.
+    </div>
+    <table>
+      <tr><th>Файл</th><th>Путь</th><th>Хеш тела (short)</th></tr>
+      <tr><td>План</td><td><code>docs/superpowers/plans/2026-06-19-format-vision-sentinel-sweep.md</code></td><td><code>891a49580d721c58</code></td></tr>
+      <tr><td>Спека</td><td><code>docs/superpowers/specs/2026-06-19-format-vision-sentinel-sweep-design.md</code></td><td><code>61c8f31eaa420b97</code></td></tr>
+    </table>
+    <p class="chain">Цепочка: <code>intent: null</code> → <code>spec</code> → <code>plan</code> (intent для этой задачи отсутствует).</p>
+  </section>
+
+  <section>
+    <h2>1. Резюме плана — шаги и критерии готовности (DoD)</h2>
+
+    <h3>Задача 1 — Order-robust <code>parseSentinelOutput</code> (+ каркас eval-харнеса)</h3>
+    <table>
+      <tr><th style="width:38px">#</th><th>Шаг</th><th>Критерий готовности (DoD)</th></tr>
+      <tr><td>1</td><td>Создать <code>eval/format-sentinel-sweep/.gitignore</code></td><td>Файл содержит <code>*.cjs</code></td></tr>
+      <tr><td>2</td><td>Написать падающий eval-харнес <code>run.ts</code> (PARSE-1..3)</td><td>Файл создан, импортирует реальные <code>parseSentinelOutput</code>/<code>stripSentinelMarkers</code></td></tr>
+      <tr><td>3</td><td>Собрать esbuild → cjs, запустить (red)</td><td>Бандл OK; прогон FAIL на <code>parse-1</code> (тело содержит <code>&lt;&lt;&lt;END&gt;&gt;&gt;</code>)</td></tr>
+      <tr><td>4</td><td>Сделать vision-ветку order-robust (<code>tail</code>/<code>Math.min</code>)</td><td>Код заменён ровно в найденном блоке <code>format-utils.ts:248-252</code></td></tr>
+      <tr><td>5</td><td>Пересобрать и запустить (green)</td><td><code>TOTAL: 9 passed, 0 failed</code></td></tr>
+      <tr><td>6</td><td>Commit</td><td>Закоммичены 3 файла с conventional-сообщением</td></tr>
+    </table>
+
+    <h3>Задача 2 — Чистая функция <code>stripSentinelMarkers</code></h3>
+    <table>
+      <tr><th style="width:38px">#</th><th>Шаг</th><th>Критерий готовности (DoD)</th></tr>
+      <tr><td>1</td><td>Добавить STRIP-1..5 в харнес (перед summary)</td><td>Блок Component 2 вставлен в <code>run.ts</code></td></tr>
+      <tr><td>2</td><td>Собрать esbuild (red — только бандл)</td><td>esbuild FAIL: <code>No matching export … stripSentinelMarkers</code></td></tr>
+      <tr><td>3</td><td>Реализовать <code>stripSentinelMarkers</code></td><td>Функция добавлена после <code>parseSentinelOutput</code>, возврат <code>{clean,removed}</code></td></tr>
+      <tr><td>4</td><td>Пересобрать и запустить (green)</td><td><code>TOTAL: 18 passed, 0 failed</code></td></tr>
+      <tr><td>5</td><td>Commit</td><td>Закоммичены <code>format-utils.ts</code> + <code>run.ts</code></td></tr>
+    </table>
+
+    <h3>Задача 3 — Интеграция в точку записи <code>format.ts</code></h3>
+    <table>
+      <tr><th style="width:38px">#</th><th>Шаг</th><th>Критерий готовности (DoD)</th></tr>
+      <tr><td>1</td><td>Добавить <code>stripSentinelMarkers</code> в импорт <code>format.ts:10</code></td><td>Строка импорта заменена дословно</td></tr>
+      <tr><td>2</td><td>Вставить sweep-гейт перед <code>vaultTools.write</code></td><td>Блок после <code>restoreSourceFrontmatter</code>, warning при <code>removed.length&gt;0</code></td></tr>
+      <tr><td>3</td><td><code>npm run build</code></td><td>esbuild prod exit 0</td></tr>
+      <tr><td>4</td><td><code>npm run lint</code></td><td>Нет НОВЫХ ошибок в двух тронутых файлах</td></tr>
+      <tr><td>5</td><td>Commit</td><td>Закоммичен <code>format.ts</code></td></tr>
+    </table>
+
+    <h3>Задача 4 — Eval-док + iwiki-синхронизация + финальная проверка</h3>
+    <table>
+      <tr><th style="width:38px">#</th><th>Шаг</th><th>Критерий готовности (DoD)</th></tr>
+      <tr><td>1</td><td>Написать eval-док</td><td>Создан <code>docs/superpowers/evals/2026-06-19-format-sentinel-sweep-eval.md</code></td></tr>
+      <tr><td>2</td><td>Прогнать eval ещё раз</td><td><code>TOTAL: 18 passed</code> совпадает с «Results» в доке</td></tr>
+      <tr><td>3</td><td><code>iwiki:iwiki-ingest</code> по двум источникам</td><td>Обновлены затронутые страницы <code>docs/wiki/</code></td></tr>
+      <tr><td>4</td><td><code>iwiki:iwiki-lint</code></td><td>Нет битых <code>[[refs]]</code>, сирот, stale</td></tr>
+      <tr><td>5</td><td><code>npm run build &amp;&amp; npm run lint</code></td><td>build exit 0; нет новых lint-ошибок</td></tr>
+      <tr><td>6</td><td>Commit доков</td><td>Закоммичены eval-док + <code>docs/wiki/</code></td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>2. Зависимости и пересечения</h2>
+
+    <h3>Граф зависимостей (по задачам, рёбра помечены общим артефактом)</h3>
+    <figure>
+      <svg viewBox="0 0 980 300" width="100%" role="img" aria-label="Граф зависимостей задач плана">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/>
+          </marker>
+          <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="var(--shadow)"/>
+          </filter>
+        </defs>
+
+        <!-- nodes -->
+        <g font-size="13" font-weight="700" text-anchor="middle">
+          <g filter="url(#ds)">
+            <rect x="40" y="120" width="180" height="64" rx="10" fill="var(--node)" stroke="var(--node-stroke)"/>
+          </g>
+          <text x="130" y="146" fill="var(--fg)">Задача 1</text>
+          <text x="130" y="166" fill="var(--muted)" font-size="11" font-weight="500">parse fix + харнес</text>
+
+          <g filter="url(#ds)">
+            <rect x="290" y="120" width="180" height="64" rx="10" fill="var(--node)" stroke="var(--node-stroke)"/>
+          </g>
+          <text x="380" y="146" fill="var(--fg)">Задача 2</text>
+          <text x="380" y="166" fill="var(--muted)" font-size="11" font-weight="500">stripSentinelMarkers</text>
+
+          <g filter="url(#ds)">
+            <rect x="540" y="120" width="180" height="64" rx="10" fill="var(--node)" stroke="var(--node-stroke)"/>
+          </g>
+          <text x="630" y="146" fill="var(--fg)">Задача 3</text>
+          <text x="630" y="166" fill="var(--muted)" font-size="11" font-weight="500">интеграция format.ts</text>
+
+          <g filter="url(#ds)">
+            <rect x="790" y="120" width="160" height="64" rx="10" fill="var(--node)" stroke="var(--node-stroke)"/>
+          </g>
+          <text x="870" y="146" fill="var(--fg)">Задача 4</text>
+          <text x="870" y="166" fill="var(--muted)" font-size="11" font-weight="500">eval-док + iwiki</text>
+        </g>
+
+        <!-- edges -->
+        <g stroke="var(--edge)" stroke-width="2" fill="none">
+          <path d="M220,152 L288,152" marker-end="url(#arrow)"/>
+          <path d="M470,152 L538,152" marker-end="url(#arrow)"/>
+          <path d="M720,152 L788,152" marker-end="url(#arrow)"/>
+          <!-- T1 + T2 -> T4 (curved over the top) -->
+          <path d="M130,120 C130,40 870,40 870,118" marker-end="url(#arrow)" stroke-dasharray="5 4"/>
+          <path d="M380,120 C380,70 850,70 862,118" marker-end="url(#arrow)" stroke-dasharray="5 4"/>
+        </g>
+        <g font-size="10.5" fill="var(--muted)" text-anchor="middle">
+          <text x="254" y="142">run.ts (append)</text>
+          <text x="504" y="142">import fn</text>
+          <text x="754" y="142">build/lint</text>
+          <text x="500" y="32">код + прогон eval (T1, T2) → доки</text>
+        </g>
+      </svg>
+      <figcaption>
+        Линейная цепочка T1 → T2 → T3 → T4 без циклов и нарушений порядка (фаза dependencies — passed).
+        Пунктир: доки Задачи 4 зависят от кода и зелёного прогона eval из Задач 1–2.
+        Внутри Задач 1–2 — намеренная TDD-последовательность red → green (не нарушение зависимостей).
+      </figcaption>
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--edge)"></span> прямая зависимость (артефакт M→N)</span>
+        <span><span class="swatch" style="background:var(--edge);opacity:.6"></span> отложенная зависимость (доки)</span>
+      </div>
+    </figure>
+
+    <h3>Пересечения по артефактам (какие задачи трогают один файл)</h3>
+    <table>
+      <tr><th>Артефакт</th><th class="ov">T1</th><th class="ov">T2</th><th class="ov">T3</th><th class="ov">T4</th></tr>
+      <tr><td><code>src/phases/format-utils.ts</code></td><td class="ov ov-multi">✓</td><td class="ov ov-multi">✓</td><td class="ov"></td><td class="ov"></td></tr>
+      <tr><td><code>eval/format-sentinel-sweep/run.ts</code></td><td class="ov ov-multi">✓</td><td class="ov ov-multi">✓</td><td class="ov"></td><td class="ov"></td></tr>
+      <tr><td><code>eval/format-sentinel-sweep/.gitignore</code></td><td class="ov ov-hit">✓</td><td class="ov"></td><td class="ov"></td><td class="ov"></td></tr>
+      <tr><td><code>src/phases/format.ts</code></td><td class="ov"></td><td class="ov"></td><td class="ov ov-hit">✓</td><td class="ov"></td></tr>
+      <tr><td><code>docs/superpowers/evals/…eval.md</code></td><td class="ov"></td><td class="ov"></td><td class="ov"></td><td class="ov ov-hit">✓</td></tr>
+      <tr><td><code>docs/wiki/</code> (iwiki)</td><td class="ov"></td><td class="ov"></td><td class="ov"></td><td class="ov ov-hit">✓</td></tr>
+    </table>
+    <p class="chain"><span class="badge b-warn">overlap</span> — жёлтым отмечены два артефакта, которые трогают сразу две задачи
+    (<code>format-utils.ts</code>, <code>run.ts</code>): T1 создаёт/правит, T2 дополняет. Пересечения упорядочены
+    по времени (T1 раньше T2), конфликта нет.</p>
+
+    <h3>Покрытие требований спеки (требование × задача)</h3>
+    <table>
+      <tr><th>Требование спеки</th><th class="ov">T1</th><th class="ov">T2</th><th class="ov">T3</th><th class="ov">T4</th></tr>
+      <tr><td>Component 1 — order-robust parse</td><td class="ov ov-hit">✓</td><td class="ov"></td><td class="ov"></td><td class="ov"></td></tr>
+      <tr><td>Component 2 — <code>stripSentinelMarkers</code></td><td class="ov"></td><td class="ov ov-hit">✓</td><td class="ov"></td><td class="ov"></td></tr>
+      <tr><td>Integration — sweep-гейт перед записью</td><td class="ov"></td><td class="ov"></td><td class="ov ov-hit">✓</td><td class="ov"></td></tr>
+      <tr><td>Verification — inline-прогоны + build + доки</td><td class="ov ov-multi">✓</td><td class="ov ov-multi">✓</td><td class="ov ov-multi">✓</td><td class="ov ov-multi">✓</td></tr>
+    </table>
+    <p class="chain">Out-of-scope (Zod-схемы, <code>format.md</code>, испорченный файл, другие фазы) — ни одна задача их не трогает;
+    подтверждено явной секцией «Spec coverage check» в плане.</p>
+  </section>
+
+  <section>
+    <h2>3. Результаты проверки по фазам</h2>
+    <table>
+      <tr><th>Фаза</th><th>Статус</th><th>Что проверено</th></tr>
+      <tr><td>structure</td><td><span class="badge b-ok">passed</span></td><td>Нет плейсхолдеров (TODO/TBD/???/FIXME); нумерация задач 1–4 и шагов без пропусков/дублей; заголовки шагов уникальны</td></tr>
+      <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td><td>Все 5 требований спеки покрыты ≥1 шагом; лишних (scope-creep) шагов нет</td></tr>
+      <tr><td>dependencies</td><td><span class="badge b-ok">passed</span></td><td>Порядок M&lt;N соблюдён; циклов нет; old-код-якоря сверены дословно с <code>format-utils.ts:251-252</code>, <code>format.ts:10</code>, <code>format.ts:346-349</code>, <code>types.ts:47</code></td></tr>
+      <tr><td>verifiability</td><td><span class="badge b-ok">passed</span></td><td>У каждого шага измеримый DoD и команда проверки; арифметика прогонов независимо пересчитана: 3+4+2=9, затем +9=18</td></tr>
+      <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td><td>Сигнатура <code>{clean,removed}</code> едина во всех 3 точках; команда esbuild идентична; фикстуры PARSE-1/2/3, STRIP-1/4/5 трассированы вручную — совпали</td></tr>
+    </table>
+
+    <h3>Findings</h3>
+    <table>
+      <tr><th>ID</th><th>Severity</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr>
+      <tr><td colspan="5" style="text-align:center;color:var(--muted)">Findings нет — все фазы passed</td></tr>
+    </table>
+
+    <div class="note">
+      <strong>Замечание (вне 5 закрытых чек-листов):</strong> спека в разделе Verification упоминает
+      <code>lat check</code>; план осознанно заменяет это на iwiki, т.к. <code>lat</code> CLI/каталог в репозитории
+      отсутствуют (зафиксировано в Context-блоке плана и Задаче 4). Это явно обоснованное отклонение, не дефект.
+    </div>
+
+    <h3>Сводка</h3>
+    <div class="kpis">
+      <div class="kpi"><div class="n" style="color:var(--crit)">0</div><div class="l">CRITICAL open</div></div>
+      <div class="kpi"><div class="n" style="color:var(--warn)">0</div><div class="l">WARNING open</div></div>
+      <div class="kpi"><div class="n" style="color:var(--ok)">OK</div><div class="l">Финальный вердикт</div></div>
+    </div>
+    <p class="chain">Цепочка IDD: <code>intent: null</code> → <code>docs/superpowers/specs/2026-06-19-format-vision-sentinel-sweep-design.md</code> → <code>docs/superpowers/plans/2026-06-19-format-vision-sentinel-sweep.md</code></p>
+  </section>
+
+</main>
+
+<script>
+  function toggleTheme() {
+    var root = document.documentElement;
+    var cur = root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    root.setAttribute('data-theme', cur === 'light' ? 'dark' : 'light');
+  }
+</script>
+</body>
+</html>
