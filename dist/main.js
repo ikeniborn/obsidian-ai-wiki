@@ -26147,6 +26147,7 @@ var DEFAULT_SETTINGS = {
   backend: "native-agent",
   systemPrompt: "",
   outputLanguage: "auto",
+  reasoningLanguage: "en",
   agentLogEnabled: false,
   historyLimit: 20,
   graphDepth: 1,
@@ -26224,7 +26225,9 @@ var en = {
     systemPrompt_name: "User prompt",
     systemPrompt_desc: "Appended to the system prompt of every operation. Empty by default.",
     outputLanguage_name: "Response language",
-    outputLanguage_desc: "Language for all generated content. Auto = match the source/article language. Technical and domain terms are never translated.",
+    outputLanguage_desc: "Language for all generated content. Auto = match the Obsidian UI language. Technical and domain terms are never translated.",
+    reasoningLanguage_name: "Reasoning language",
+    reasoningLanguage_desc: "Language the model reasons in. Default English (models reason best in English). Auto = follow the response language, then the Obsidian UI language. Best-effort \u2014 actual support depends on the model.",
     maxTokens_name: "Max tokens",
     maxTokens_desc: "Max tokens in the response. Default 4096. \u2191 longer answers, slower/costlier \xB7 \u2193 risk of truncation. Recommended \u2265 4096.",
     domains_heading: "Domains",
@@ -26346,6 +26349,8 @@ var en = {
     mobileWaiting: "\u23F3 Waiting for LLM response\u2026",
     analysing: "Analysing\u2026",
     formingResponse: "Forming response\u2026",
+    ingestingFiles: "Ingesting files\u2026",
+    analysingFiles: "Analysing files\u2026",
     reinitTitle: "Re-init domain (wipe + rebuild)",
     reinitNoSources: "Domain has no source_paths \u2014 re-init not possible",
     addSourceTitle: "Manage sources for domain",
@@ -26406,6 +26411,25 @@ var en = {
     writeFailed: (err) => `Format: writing the formatted file failed \u2014 ${err}`,
     truncationHintEnv: "raise the limit: env CLAUDE_CODE_MAX_OUTPUT_TOKENS in iclaude.sh",
     truncationHintSettings: "raise the limit: Settings \u2192 per-operation \u2192 format \u2192 maxTokens"
+  },
+  ingestProgress: {
+    synthesizing: (domainId) => `Synthesizing wiki pages for domain "${domainId}"...
+`
+  },
+  lintProgress: {
+    evaluating: (domainId) => `Evaluating domain "${domainId}" quality...
+`,
+    actualizing: (domainId) => `
+Actualizing domain config for "${domainId}"...
+`
+  },
+  initProgress: {
+    reinitWiping: (folder) => `Re-init: wiping ${folder}...
+`,
+    removedFiles: (n) => `removed ${n} files
+`,
+    fileChars: (file, n) => `\u2139 ${file}: ${n} chars
+`
   },
   ctrl: {
     cancelling: "Cancelling\u2026",
@@ -26504,7 +26528,9 @@ var ru = {
     systemPrompt_name: "User prompt",
     systemPrompt_desc: "\u0414\u043E\u0431\u0430\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u0432 \u043A\u043E\u043D\u0435\u0446 \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u0433\u043E \u043F\u0440\u043E\u043C\u0442\u0430 \u043A\u0430\u0436\u0434\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E \u043F\u0443\u0441\u0442.",
     outputLanguage_name: "Response language",
-    outputLanguage_desc: "\u042F\u0437\u044B\u043A \u0432\u0441\u0435\u0433\u043E \u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0435\u043C\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043D\u0442\u0430. Auto = \u044F\u0437\u044B\u043A \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430/\u0441\u0442\u0430\u0442\u044C\u0438. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0438 \u0434\u043E\u043C\u0435\u043D\u043D\u044B\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u043D\u0435 \u043F\u0435\u0440\u0435\u0432\u043E\u0434\u044F\u0442\u0441\u044F.",
+    outputLanguage_desc: "\u042F\u0437\u044B\u043A \u0432\u0441\u0435\u0433\u043E \u0433\u0435\u043D\u0435\u0440\u0438\u0440\u0443\u0435\u043C\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0435\u043D\u0442\u0430. Auto = \u044F\u0437\u044B\u043A \u0438\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441\u0430 Obsidian. \u0422\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0435 \u0438 \u0434\u043E\u043C\u0435\u043D\u043D\u044B\u0435 \u0442\u0435\u0440\u043C\u0438\u043D\u044B \u043D\u0435 \u043F\u0435\u0440\u0435\u0432\u043E\u0434\u044F\u0442\u0441\u044F.",
+    reasoningLanguage_name: "Reasoning language",
+    reasoningLanguage_desc: "\u042F\u0437\u044B\u043A, \u043D\u0430 \u043A\u043E\u0442\u043E\u0440\u043E\u043C \u0440\u0430\u0441\u0441\u0443\u0436\u0434\u0430\u0435\u0442 \u043C\u043E\u0434\u0435\u043B\u044C. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E English (\u043C\u043E\u0434\u0435\u043B\u0438 \u0440\u0430\u0441\u0441\u0443\u0436\u0434\u0430\u044E\u0442 \u043B\u0443\u0447\u0448\u0435 \u043D\u0430 \u0430\u043D\u0433\u043B\u0438\u0439\u0441\u043A\u043E\u043C). Auto = \u044F\u0437\u044B\u043A \u043E\u0442\u0432\u0435\u0442\u0430, \u0437\u0430\u0442\u0435\u043C \u044F\u0437\u044B\u043A \u0438\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441\u0430 Obsidian. Best-effort \u2014 \u0444\u0430\u043A\u0442\u0438\u0447\u0435\u0441\u043A\u0430\u044F \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u043A\u0430 \u0437\u0430\u0432\u0438\u0441\u0438\u0442 \u043E\u0442 \u043C\u043E\u0434\u0435\u043B\u0438.",
     maxTokens_name: "Max tokens",
     maxTokens_desc: "\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C \u0442\u043E\u043A\u0435\u043D\u043E\u0432 \u0432 \u043E\u0442\u0432\u0435\u0442\u0435. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 4096. \u2191 \u0434\u043B\u0438\u043D\u043D\u0435\u0435 \u043E\u0442\u0432\u0435\u0442, \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u0435\u0435/\u0434\u043E\u0440\u043E\u0436\u0435 \xB7 \u2193 \u0440\u0438\u0441\u043A \u043E\u0431\u0440\u044B\u0432\u0430. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u044E \u2265 4096.",
     domains_heading: "\u0414\u043E\u043C\u0435\u043D\u044B",
@@ -26626,6 +26652,8 @@ var ru = {
     mobileWaiting: "\u23F3 \u041E\u0436\u0438\u0434\u0430\u043D\u0438\u0435 \u043E\u0442\u0432\u0435\u0442\u0430 \u043E\u0442 LLM\u2026",
     analysing: "\u0410\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0435\u0442\u2026",
     formingResponse: "\u0424\u043E\u0440\u043C\u0438\u0440\u0443\u0435\u0442 \u043E\u0442\u0432\u0435\u0442\u2026",
+    ingestingFiles: "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0444\u0430\u0439\u043B\u043E\u0432\u2026",
+    analysingFiles: "\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u043E\u0432\u2026",
     reinitTitle: "\u041F\u0435\u0440\u0435\u0438\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F \u0434\u043E\u043C\u0435\u043D\u0430 (wipe + \u0437\u0430\u043D\u043E\u0432\u043E)",
     reinitNoSources: "\u0423 \u0434\u043E\u043C\u0435\u043D\u0430 \u043D\u0435\u0442 source_paths \u2014 re-init \u043D\u0435\u0432\u043E\u0437\u043C\u043E\u0436\u0435\u043D",
     addSourceTitle: "\u0423\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430\u043C\u0438 \u0434\u043E\u043C\u0435\u043D\u0430",
@@ -26686,6 +26714,25 @@ var ru = {
     writeFailed: (err) => `Format: \u0437\u0430\u043F\u0438\u0441\u044C \u0444\u043E\u0440\u043C\u0430\u0442\u0430 \u043D\u0435 \u0443\u0434\u0430\u043B\u0430\u0441\u044C \u2014 ${err}`,
     truncationHintEnv: "\u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442: env CLAUDE_CODE_MAX_OUTPUT_TOKENS \u0432 iclaude.sh",
     truncationHintSettings: "\u0443\u0432\u0435\u043B\u0438\u0447\u044C\u0442\u0435 \u043B\u0438\u043C\u0438\u0442: Settings \u2192 per-operation \u2192 format \u2192 maxTokens"
+  },
+  ingestProgress: {
+    synthesizing: (domainId) => `\u0421\u0438\u043D\u0442\u0435\u0437 \u0432\u0438\u043A\u0438-\u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0434\u043B\u044F \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${domainId}\xBB...
+`
+  },
+  lintProgress: {
+    evaluating: (domainId) => `\u041E\u0446\u0435\u043D\u043A\u0430 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${domainId}\xBB...
+`,
+    actualizing: (domainId) => `
+\u0410\u043A\u0442\u0443\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${domainId}\xBB...
+`
+  },
+  initProgress: {
+    reinitWiping: (folder) => `Re-init: \u043E\u0447\u0438\u0441\u0442\u043A\u0430 ${folder}...
+`,
+    removedFiles: (n) => `\u0443\u0434\u0430\u043B\u0435\u043D\u043E \u0444\u0430\u0439\u043B\u043E\u0432: ${n}
+`,
+    fileChars: (file, n) => `\u2139 ${file}: \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432 ${n}
+`
   },
   ctrl: {
     cancelling: "\u041E\u0442\u043C\u0435\u043D\u0430\u2026",
@@ -26783,7 +26830,9 @@ var es = {
     systemPrompt_name: "User prompt",
     systemPrompt_desc: "Se a\xF1ade al final del prompt del sistema de cada operaci\xF3n. Vac\xEDo por defecto.",
     outputLanguage_name: "Response language",
-    outputLanguage_desc: "Idioma de todo el contenido generado. Auto = idioma de la fuente/art\xEDculo. Los t\xE9rminos t\xE9cnicos y de dominio no se traducen.",
+    outputLanguage_desc: "Idioma de todo el contenido generado. Auto = idioma de la interfaz de Obsidian. Los t\xE9rminos t\xE9cnicos y de dominio no se traducen.",
+    reasoningLanguage_name: "Reasoning language",
+    reasoningLanguage_desc: "Idioma en el que razona el modelo. Por defecto English (los modelos razonan mejor en ingl\xE9s). Auto = sigue el idioma de respuesta y luego el de la interfaz de Obsidian. Best-effort \u2014 el soporte real depende del modelo.",
     maxTokens_name: "M\xE1x. tokens",
     maxTokens_desc: "M\xE1x. tokens en la respuesta. Por defecto 4096. \u2191 respuestas m\xE1s largas, m\xE1s lento/caro \xB7 \u2193 riesgo de truncado. Recomendado \u2265 4096.",
     domains_heading: "Dominios",
@@ -26905,6 +26954,8 @@ var es = {
     mobileWaiting: "\u23F3 Esperando respuesta del LLM\u2026",
     analysing: "Analizando\u2026",
     formingResponse: "Formando respuesta\u2026",
+    ingestingFiles: "Ingiriendo archivos\u2026",
+    analysingFiles: "Analizando archivos\u2026",
     reinitTitle: "Re-init del dominio (borrar + reconstruir)",
     reinitNoSources: "El dominio no tiene source_paths \u2014 re-init imposible",
     addSourceTitle: "Gestionar fuentes del dominio",
@@ -26965,6 +27016,25 @@ var es = {
     writeFailed: (err) => `Format: fall\xF3 la escritura del archivo formateado \u2014 ${err}`,
     truncationHintEnv: "aumenta el l\xEDmite: env CLAUDE_CODE_MAX_OUTPUT_TOKENS en iclaude.sh",
     truncationHintSettings: "aumenta el l\xEDmite: Settings \u2192 per-operation \u2192 format \u2192 maxTokens"
+  },
+  ingestProgress: {
+    synthesizing: (domainId) => `Sintetizando p\xE1ginas wiki para el dominio "${domainId}"...
+`
+  },
+  lintProgress: {
+    evaluating: (domainId) => `Evaluando la calidad del dominio "${domainId}"...
+`,
+    actualizing: (domainId) => `
+Actualizando la configuraci\xF3n del dominio "${domainId}"...
+`
+  },
+  initProgress: {
+    reinitWiping: (folder) => `Re-init: limpiando ${folder}...
+`,
+    removedFiles: (n) => `archivos eliminados: ${n}
+`,
+    fileChars: (file, n) => `\u2139 ${file}: ${n} caracteres
+`
   },
   ctrl: {
     cancelling: "Cancelando\u2026",
@@ -27064,13 +27134,22 @@ var langBundles = { ru, en, es };
 function i18nFor(lang) {
   return langBundles[lang];
 }
-function resolveProgressLang(outputLanguage) {
+function resolveLang(outputLanguage) {
   if (outputLanguage === "ru" || outputLanguage === "en" || outputLanguage === "es") {
     return outputLanguage;
   }
   const loc = import_obsidian.moment.locale();
   if (loc.startsWith("ru")) return "ru";
   if (loc.startsWith("es")) return "es";
+  return "en";
+}
+function resolveReasoningLang(reasoningLanguage, outputLanguage) {
+  if (reasoningLanguage === "ru" || reasoningLanguage === "en" || reasoningLanguage === "es") {
+    return reasoningLanguage;
+  }
+  if (reasoningLanguage === "auto") {
+    return resolveLang(outputLanguage);
+  }
   return "en";
 }
 
@@ -28919,8 +28998,14 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
       return t;
     });
     new import_obsidian4.Setting(containerEl).setName(T.settings.outputLanguage_name).setDesc(T.settings.outputLanguage_desc).addDropdown(
-      (d) => d.addOptions({ auto: "Auto (match source)", ru: "Russian", en: "English", es: "Spanish" }).setValue(s.outputLanguage ?? "auto").onChange(async (v) => {
+      (d) => d.addOptions({ auto: "Auto (match UI language)", ru: "Russian", en: "English", es: "Spanish" }).setValue(s.outputLanguage ?? "auto").onChange(async (v) => {
         s.outputLanguage = v;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian4.Setting(containerEl).setName(T.settings.reasoningLanguage_name).setDesc(T.settings.reasoningLanguage_desc).addDropdown(
+      (d) => d.addOptions({ auto: "Auto (match response)", en: "English", ru: "Russian", es: "Spanish" }).setValue(s.reasoningLanguage ?? "en").onChange(async (v) => {
+        s.reasoningLanguage = v;
         await this.plugin.saveSettings();
       })
     );
@@ -30205,8 +30290,6 @@ function langInstruction(lang) {
       return "Always reply in English, regardless of the source language.";
     case "es":
       return "Always reply in Spanish, regardless of the source language.";
-    default:
-      return "Reply in the same language as the source/article.";
   }
 }
 function wikiSections(lang) {
@@ -30312,7 +30395,8 @@ function extractUsage(resp) {
 }
 function buildChatParams(model, messages, opts, stream = false) {
   let msgs = prependBaseContract(messages);
-  if (opts.outputLanguage) msgs = injectLanguageDirective(msgs, opts.outputLanguage);
+  if (opts.outputLanguage) msgs = injectLanguageDirective(msgs, resolveLang(opts.outputLanguage));
+  msgs = injectReasoningDirective(msgs, resolveReasoningLang(opts.reasoningLanguage, opts.outputLanguage));
   msgs = opts.systemPrompt ? injectSystemPrompt(msgs, opts.systemPrompt) : msgs;
   const params = { model, messages: msgs };
   if (opts.temperature !== void 0) params.temperature = opts.temperature;
@@ -30350,6 +30434,25 @@ ${existing}` };
 function injectLanguageDirective(messages, lang) {
   const directive = `## Language
 ${langInstruction(lang)}`;
+  const firstSystem = messages.findIndex((m) => m.role === "system");
+  if (firstSystem >= 0) {
+    const updated = [...messages];
+    const existing = typeof updated[firstSystem].content === "string" ? updated[firstSystem].content : "";
+    updated[firstSystem] = { role: "system", content: `${existing}
+
+${directive}` };
+    return updated;
+  }
+  return [{ role: "system", content: directive }, ...messages];
+}
+var REASONING_LANG_NAME = {
+  ru: "Russian",
+  en: "English",
+  es: "Spanish"
+};
+function injectReasoningDirective(messages, lang) {
+  const directive = `## Reasoning language
+Think and reason in ${REASONING_LANG_NAME[lang]}.`;
   const firstSystem = messages.findIndex((m) => m.role === "system");
   if (firstSystem >= 0) {
     const updated = [...messages];
@@ -31106,13 +31209,13 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
       if (this.progressEl) {
         this.progressEl.setText(`0 / ${ev.totalFiles} \u0444\u0430\u0439\u043B\u043E\u0432`);
         if (this.progressPhaseEl) {
-          const label = ev.phase === "ingest" ? "Ingesting files\u2026" : "Analysing files\u2026";
+          const label = ev.phase === "ingest" ? i18nFor(resolveLang(this.plugin.settings.outputLanguage)).view.ingestingFiles : i18nFor(resolveLang(this.plugin.settings.outputLanguage)).view.analysingFiles;
           this.progressPhaseEl.setText(label);
         }
       } else {
         const step = this.stepsEl.createDiv("ai-wiki-step ai-wiki-progress");
         step.createSpan({ cls: "ai-wiki-step-icon" }).setText("\u{1F4C2}");
-        const label = ev.phase === "ingest" ? "Ingesting files\u2026" : "Analysing files\u2026";
+        const label = ev.phase === "ingest" ? i18nFor(resolveLang(this.plugin.settings.outputLanguage)).view.ingestingFiles : i18nFor(resolveLang(this.plugin.settings.outputLanguage)).view.analysingFiles;
         this.progressPhaseEl = step.createSpan({ cls: "ai-wiki-progress-phase" });
         this.progressPhaseEl.setText(label);
         this.progressEl = step.createSpan({ cls: "ai-wiki-progress-text" });
@@ -31236,10 +31339,10 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
           });
         }
         this.liveStatusIconEl?.setText("\u{1F9E0}");
-        this.liveStatusTextEl?.setText("Analysing...");
+        this.liveStatusTextEl?.setText(i18nFor(resolveLang(this.plugin.settings.outputLanguage)).view.analysing);
       } else {
         this.liveStatusIconEl?.setText("\u{1F4AC}");
-        this.liveStatusTextEl?.setText("Forming response...");
+        this.liveStatusTextEl?.setText(i18nFor(resolveLang(this.plugin.settings.outputLanguage)).view.formingResponse);
       }
     } else if (ev.kind === "info_text") {
       this.stopWaiting();
@@ -38330,13 +38433,12 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   const domainRoot = wikiVaultPath;
   await ensureDomainConfig(vaultTools, domainRoot);
   void graphDepth;
-  const schemaContent = render(wiki_schema_default, { section_conventions: wikiSections(opts.outputLanguage ?? "auto") });
+  const schemaContent = render(wiki_schema_default, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
   const indexContent = await tryRead(vaultTools, domainIndexPath(domainRoot));
   const existingPaths = await vaultTools.listFiles(wikiVaultPath);
   const nonMetaPaths = existingPaths.filter((f) => !f.endsWith("_index.md"));
   const annotations = cachedAnnotations ?? parseIndexAnnotations(indexContent);
-  yield { kind: "assistant_text", delta: `Synthesizing wiki pages for domain "${domain.id}"...
-` };
+  yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).ingestProgress.synthesizing(domain.id) };
   const start = Date.now();
   const messages_extract = buildExtractMessages(sourceVaultPath, sourceContent, domain);
   yield { kind: "tool_use", name: "Extracting entities", input: {} };
@@ -39492,7 +39594,7 @@ Wiki folder outside vault \u2014 skipped.`);
     }
     yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
     await ensureDomainConfig(vaultTools, wikiVaultPath);
-    const schemaContent = render(wiki_schema_default, { section_conventions: wikiSections(opts.outputLanguage ?? "auto") });
+    const schemaContent = render(wiki_schema_default, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
     const allFiles = await vaultTools.listFiles(wikiVaultPath);
     const files = allFiles.filter((f) => !META_FILES2.some((m) => f.endsWith(m)));
     yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
@@ -39564,8 +39666,7 @@ ${entityTypesBlock}` : "",
 Conventions (_wiki_schema.md):
 ${schemaContent}` : ""
     });
-    yield { kind: "assistant_text", delta: `Evaluating domain "${domain.id}" quality...
-` };
+    yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).lintProgress.evaluating(domain.id) };
     const deletedRefs = [];
     const writtenPaths = [];
     const skippedArticles = [];
@@ -39735,9 +39836,7 @@ ${lintResult.value.report}`);
 ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
       }
       if (signal.aborted) return;
-      yield { kind: "assistant_text", delta: `
-Actualizing domain config for "${domain.id}"...
-` };
+      yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).lintProgress.actualizing(domain.id) };
       yield { kind: "tool_use", name: "Updating config", input: {} };
       const patchRes = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
       yield { kind: "tool_result", ok: true, preview: patchRes.patch ? "config updated" : "no changes" };
@@ -40030,7 +40129,7 @@ async function* runLintFixChat(req, vaultTools, _vaultRoot, domain, llm, model, 
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
   yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**` } };
   await ensureDomainConfig(vaultTools, wikiVaultPath);
-  const schemaContent = render(wiki_schema_default, { section_conventions: wikiSections(opts.outputLanguage ?? "auto") });
+  const schemaContent = render(wiki_schema_default, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
   const allFiles = await vaultTools.listFiles(wikiVaultPath);
   const files = allFiles.filter((f) => !META_FILES3.some((m) => f.endsWith(m)));
   yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
@@ -40129,13 +40228,11 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
       yield { kind: "error", message: "force: no sources to re-analyze" };
       return;
     }
-    yield { kind: "assistant_text", delta: `Re-init: wiping ${domainWikiFolder(existing.wiki_folder)}...
-` };
+    yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.reinitWiping(domainWikiFolder(existing.wiki_folder)) };
     yield { kind: "tool_use", name: "WipeDomain", input: { folder: existing.wiki_folder } };
     const wiped = await wipeDomainFolder(vaultTools, existing.wiki_folder);
     yield { kind: "tool_result", ok: true };
-    yield { kind: "assistant_text", delta: `removed ${wiped.length} files
-` };
+    yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.removedFiles(wiped.length) };
     yield {
       kind: "domain_updated",
       domainId,
@@ -40223,7 +40320,7 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
     return;
   }
   const initialDomainRoot = existing ? domainWikiFolder(existing.wiki_folder) : wikiRootGuess;
-  const schemaContent = render(wiki_schema_default, { section_conventions: wikiSections(opts.outputLanguage ?? "auto") });
+  const schemaContent = render(wiki_schema_default, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
   const indexContent = await tryRead4(vaultTools, domainIndexPath(initialDomainRoot));
   let annotationsCache = parseIndexAnnotations(indexContent);
   let currentDomain = existing ?? null;
@@ -40240,8 +40337,7 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
       yield { kind: "file_done", file };
       continue;
     }
-    yield { kind: "assistant_text", delta: `\u2139 ${file}: ${fileContent.length} chars
-` };
+    yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).initProgress.fileChars(file, fileContent.length) };
     if (i === 0 && !isResuming) {
       const systemContent = render(init_default, {
         domain_id: domainId,
@@ -40719,13 +40815,13 @@ async function callVisionLlm(llm, model, systemPrompt, contentParts, signal) {
   return resp.choices[0]?.message?.content ?? "";
 }
 function imageSystem(language) {
-  return render(vision_image_default, { structure_rules: vision_structure_default, lang: langInstruction(language) });
+  return render(vision_image_default, { structure_rules: vision_structure_default, lang: langInstruction(resolveLang(language)) });
 }
 function pdfSystem(language) {
-  return render(vision_pdf_default, { structure_rules: vision_structure_default, lang: langInstruction(language) });
+  return render(vision_pdf_default, { structure_rules: vision_structure_default, lang: langInstruction(resolveLang(language)) });
 }
 function excalidrawSystem(language) {
-  return render(vision_excalidraw_default, { lang: langInstruction(language) });
+  return render(vision_excalidraw_default, { lang: langInstruction(resolveLang(language)) });
 }
 async function analyzeImage(buffer, mimeType, llm, model, signal, language = "auto") {
   const b64 = arrayBufferToBase64(buffer);
@@ -41160,6 +41256,7 @@ var AgentRunner = class {
       thinkingBudgetTokens: budgetTokens,
       systemPrompt: s.systemPrompt,
       outputLanguage: s.outputLanguage,
+      reasoningLanguage: s.reasoningLanguage,
       jsonMode: "json_object",
       structuredRetries,
       mergeDeleteWarnThreshold,
@@ -41175,6 +41272,7 @@ var AgentRunner = class {
       thinkingBudgetTokens: budgetTokens,
       systemPrompt: s.systemPrompt,
       outputLanguage: s.outputLanguage,
+      reasoningLanguage: s.reasoningLanguage,
       jsonMode: "json_object",
       structuredRetries,
       mergeDeleteWarnThreshold,
@@ -41263,7 +41361,7 @@ var AgentRunner = class {
           language: this.settings.outputLanguage ?? "auto"
         };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
-        const progress = i18nFor(resolveProgressLang(this.settings.outputLanguage)).formatProgress;
+        const progress = i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress;
         yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore, progress);
         break;
       }
@@ -41334,7 +41432,7 @@ var AgentRunner = class {
             });
             if (this.settings.devMode.evaluatorModel) {
               const evalModel = this.settings.devMode.evaluatorModel;
-              for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal)) {
+              for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal, { reasoningLanguage: this.settings.reasoningLanguage, outputLanguage: this.settings.outputLanguage })) {
                 yield ev;
                 if (ev.kind === "eval_result") {
                   await this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);
