@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка плана — Drop legacy wiki sections</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg); transition:background .3s, color .3s;
+}
+h1,h2,h3{ line-height:1.2; }
+h1{ color:var(--accent); margin-bottom:.2rem; }
+h2{ color:var(--accent-2); margin-top:2.2rem; border-bottom:1px solid var(--border); padding-bottom:.3rem; }
+code{ background:color-mix(in srgb, var(--accent) 12%, var(--surface)); padding:.05rem .35rem; border-radius:4px; font-size:.88em; }
+.theme-btn{ position:sticky; top:.5rem; float:right; cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface); z-index:5; }
+.lead{ font-size:1.08rem; }
+.sub{ color:var(--muted); font-size:.95rem; }
+.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
+  background:color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius:0 8px 8px 0;
+  box-shadow:0 1px 8px var(--shadow); }
+.verdict-ok{ border-left-color:var(--ok); background:color-mix(in srgb, var(--ok) 12%, var(--surface)); }
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:1rem 0; font-size:.92rem; border:1px solid var(--border); border-radius:10px;
+  overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.5rem .75rem; text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg); position:sticky; top:0; }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.rpt-table td code{ white-space:nowrap; }
+.center{ text-align:center; }
+.badge{ display:inline-block; font-size:.72rem; padding:.05rem .5rem; border-radius:999px; border:1px solid var(--border); white-space:nowrap; }
+.badge.ok{ color:var(--ok-2); border-color:var(--ok); }
+.badge.warn{ color:var(--warn-2); border-color:var(--warn); }
+.badge.danger{ color:var(--danger-2); border-color:var(--danger); }
+.badge.skip{ color:var(--muted); }
+.hit{ background:color-mix(in srgb, var(--accent) 30%, var(--surface)); border-radius:4px; font-weight:600; }
+.x{ color:var(--muted); }
+figure{ margin:1rem 0; }
+.rpt-graph{ background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1rem; box-shadow:0 1px 8px var(--shadow); overflow-x:auto; }
+ul.tight li{ margin:.28rem 0; }
+.chain{ display:flex; gap:.4rem; align-items:center; flex-wrap:wrap; font-size:.9rem; }
+.chain .step{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.4rem .7rem; }
+.chain .arr{ color:var(--line); font-weight:700; }
+.chain .nullstep{ color:var(--muted); font-style:italic; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Светлая / тёмная тема">🌙 / ☀️</label>
+
+<h1>Проверка плана — Drop legacy wiki sections</h1>
+<p class="sub">IDD-гейт <code>/check-plan</code> · ветка <code>dev/drop-legacy-wiki-sections</code> · дата прогона 2026-06-19</p>
+<p class="lead">Удаление секций <code>Связанные концепции</code> / <code>Related concepts</code> и
+<code>История изменений</code> / <code>Change history</code> из вики-страниц: остановка генерации,
+чистый pure-хелпер, одноразовая on-load миграция и out-of-vault A/B-эвал.</p>
+
+<div class="note verdict-ok"><b>Итоговый вердикт: OK.</b> Все 5 фаз — <code>passed</code>.
+Открытых CRITICAL: 0. Открытых WARNING: 0. Одна задокументированная WARNING-находка (F-001, verdict = accepted).</div>
+
+<h2>Файлы и хеши</h2>
+<table class="rpt-table">
+  <thead><tr><th>Артефакт</th><th>Путь</th><th>Хеш тела (short)</th></tr></thead>
+  <tbody>
+    <tr><td>План</td><td><code>docs/superpowers/plans/2026-06-19-drop-legacy-wiki-sections.md</code></td><td><code>f9375527635f2a0c</code></td></tr>
+    <tr><td>Спецификация</td><td><code>docs/superpowers/specs/2026-06-19-drop-legacy-wiki-sections-design.md</code></td><td><code>5a11c7d464f29ff9</code></td></tr>
+  </tbody>
+</table>
+<p class="sub">Хеши вычислены каноническим алгоритмом через Bash (тело без frontmatter, <code>sha256sum | cut -c1-16</code>).
+<code>spec_hash</code> совпадает с записью во frontmatter спеки — согласованность подтверждена.
+У плана изначально не было блока <code>review:</code> — он инициализирован этим прогоном.</p>
+
+<h2>Резюме плана — задачи и критерии готовности (DoD)</h2>
+<table class="rpt-table">
+  <thead><tr><th>Задача</th><th>Шаги</th><th>Критерий готовности (DoD)</th><th>section_hash</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>Task 1</b><br>Stop generating both sections (schema + template)</td>
+      <td>1–5</td>
+      <td>В <code>wikiSections()</code> и <code>_wiki_schema.md</code> нет <code>related</code>/<code>history</code>;
+        <code>grep</code> по <code>src/</code>+<code>templates/</code> — нет совпадений; <code>npm run build</code> зелёный; коммит.</td>
+      <td><code>9794b7e04938fe1a</code></td>
+    </tr>
+    <tr>
+      <td><b>Task 2</b><br>Pure-хелпер <code>stripLegacySections</code> + детерминированный эвал (TDD)</td>
+      <td>1–7</td>
+      <td>Бандл сначала падает (red — модуля нет), после реализации — <code>TOTAL: 12 passed, 0 failed</code> (D1–D5, H1–H7);
+        <code>npm run lint &amp;&amp; npm run build</code> чисто; коммит.</td>
+      <td><code>134c70e53f624871</code></td>
+    </tr>
+    <tr>
+      <td><b>Task 3</b><br>Retrieval A/B (embeddings) + eval-док</td>
+      <td>1–5</td>
+      <td>Без ключа — <code>12 passed</code> + строка <code>SKIP</code>, exit 0; с ключом — on-topic <code>|Δ|&lt;0.02</code>,
+        noise <code>Δ≥0.05</code>; создан eval-док; коммит.</td>
+      <td><code>0c5d67ff96e7c7de</code></td>
+    </tr>
+    <tr>
+      <td><b>Task 4</b><br>Auto-миграция on-load</td>
+      <td>1–7</td>
+      <td>Флаг <code>migrated_drop_sections</code> в <code>LocalConfig</code>; модуль миграции + проводка в <code>onload()</code>;
+        build+lint чисто; эвал без регрессий; ручной in-vault smoke (нотис, идемпотентность, флаг, –2 чанка); коммит.</td>
+      <td><code>c6062508076e7eb0</code></td>
+    </tr>
+    <tr>
+      <td><b>Task 5</b><br>Документация (iwiki) + финальная верификация</td>
+      <td>1–5</td>
+      <td>iwiki-ingest изменённых исходников; <code>iwiki-lint</code> без ошибок; финальный прогон build+lint+эвал+grep;
+        коммит доков; открытие PR в <code>master</code>.</td>
+      <td><code>feea1bbc83c5b2a6</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Граф зависимостей шагов</h2>
+<p class="sub">Узлы — задачи плана; рёбра — «результат задачи M используется в задаче N» (M&lt;N). Циклов и нарушений порядка фаза <code>dependencies</code> не нашла.</p>
+<figure class="rpt-graph">
+  <svg viewBox="0 0 720 200" width="100%" role="img" aria-label="Граф зависимостей задач плана">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+      </marker>
+    </defs>
+    <!-- edges: 1->5, 2->3, 2->4, 2->5, 3->5, 4->5 -->
+    <line x1="80"  y1="60" x2="600" y2="60"  stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="200" y1="60" x2="320" y2="60"  stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="200" y1="80" x2="440" y2="135" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="200" y1="80" x2="600" y2="80"  stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="360" y1="80" x2="600" y2="95"  stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="480" y1="135" x2="610" y2="95" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- nodes -->
+    <g>
+      <circle cx="60"  cy="60"  r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2.5"/>
+      <text x="60"  y="65"  text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">T1</text>
+      <text x="60"  y="100" text-anchor="middle" fill="var(--muted)" font-size="10">схема</text>
+
+      <circle cx="180" cy="70"  r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2.5"/>
+      <text x="180" y="75"  text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">T2</text>
+      <text x="180" y="110" text-anchor="middle" fill="var(--muted)" font-size="10">хелпер+эвал</text>
+
+      <circle cx="340" cy="60"  r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2.5"/>
+      <text x="340" y="65"  text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">T3</text>
+      <text x="340" y="30"  text-anchor="middle" fill="var(--muted)" font-size="10">A/B эвал</text>
+
+      <circle cx="460" cy="140" r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2.5"/>
+      <text x="460" y="145" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">T4</text>
+      <text x="460" y="180" text-anchor="middle" fill="var(--muted)" font-size="10">миграция</text>
+
+      <circle cx="630" cy="80"  r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2.5"/>
+      <text x="630" y="85"  text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="700">T5</text>
+      <text x="630" y="120" text-anchor="middle" fill="var(--muted)" font-size="10">docs+верификация</text>
+    </g>
+  </svg>
+</figure>
+<div class="note"><b>TDD-нюанс (не нарушение порядка):</b> эвал в Task 2 ссылается на
+<code>strip-legacy-sections.ts</code> в шаге 2 (red) ещё до его создания в шаге 4 — это намеренный
+TDD-цикл, шаг 3 явно требует, чтобы бандл <em>упал</em> с <code>Could not resolve</code>, затем шаг 4 создаёт модуль.</div>
+
+<h2>Пересечения: матрица «задачи × артефакты»</h2>
+<p class="sub">Где несколько задач затрагивают один файл — потенциальный overlap. Реальное пересечение здесь — только <code>eval/legacy-sections/run.ts</code> (создаётся в T2, расширяется в T3) и <code>strip-legacy-sections.ts</code> (создаётся в T2, потребляется в T4).</p>
+<table class="rpt-table">
+  <thead><tr><th>Артефакт</th><th class="center">T1</th><th class="center">T2</th><th class="center">T3</th><th class="center">T4</th><th class="center">T5</th></tr></thead>
+  <tbody>
+    <tr><td><code>src/phases/llm-utils.ts</code></td><td class="center hit">✎</td><td class="center x">·</td><td class="center x">·</td><td class="center x">·</td><td class="center x">·</td></tr>
+    <tr><td><code>templates/_wiki_schema.md</code></td><td class="center hit">✎</td><td class="center x">·</td><td class="center x">·</td><td class="center x">·</td><td class="center x">·</td></tr>
+    <tr><td><code>src/strip-legacy-sections.ts</code></td><td class="center x">·</td><td class="center hit">＋</td><td class="center x">·</td><td class="center hit">↻</td><td class="center x">·</td></tr>
+    <tr><td><code>eval/legacy-sections/run.ts</code></td><td class="center x">·</td><td class="center hit">＋</td><td class="center hit">✎</td><td class="center hit">↻</td><td class="center hit">↻</td></tr>
+    <tr><td><code>eval/legacy-sections/obsidian-stub.ts, .gitignore</code></td><td class="center x">·</td><td class="center hit">＋</td><td class="center x">·</td><td class="center x">·</td><td class="center x">·</td></tr>
+    <tr><td><code>src/local-config.ts</code></td><td class="center x">·</td><td class="center x">·</td><td class="center x">·</td><td class="center hit">✎</td><td class="center x">·</td></tr>
+    <tr><td><code>src/migrate-drop-sections.ts</code></td><td class="center x">·</td><td class="center x">·</td><td class="center x">·</td><td class="center hit">＋</td><td class="center x">·</td></tr>
+    <tr><td><code>src/main.ts</code></td><td class="center x">·</td><td class="center x">·</td><td class="center x">·</td><td class="center hit">✎</td><td class="center x">·</td></tr>
+    <tr><td><code>docs/superpowers/evals/…-eval.md</code></td><td class="center x">·</td><td class="center x">·</td><td class="center hit">＋</td><td class="center x">·</td><td class="center x">·</td></tr>
+    <tr><td><code>docs/wiki/</code> (iwiki)</td><td class="center x">·</td><td class="center x">·</td><td class="center x">·</td><td class="center x">·</td><td class="center hit">✎</td></tr>
+  </tbody>
+</table>
+<p class="sub">＋ создаёт · ✎ изменяет · ↻ использует/прогоняет · · нет</p>
+
+<h2>Пересечения: покрытие требований спеки</h2>
+<p class="sub">Каждый компонент спеки покрыт ≥1 задачей; лишних задач нет. Компонент 4 закрывается двумя задачами (T2 — детерминированная часть, T3 — embedding A/B).</p>
+<table class="rpt-table">
+  <thead><tr><th>Требование спеки</th><th>Покрывающие задачи</th><th>Статус</th></tr></thead>
+  <tbody>
+    <tr><td>Компонент 1 — схема/шаблон: перестать генерировать обе секции</td><td>Task 1</td><td><span class="badge ok">покрыто</span></td></tr>
+    <tr><td>Компонент 2 — pure-хелпер <code>stripLegacySections</code></td><td>Task 2</td><td><span class="badge ok">покрыто</span></td></tr>
+    <tr><td>Компонент 3 — auto-миграция on-load (safety-net + флаг)</td><td>Task 4</td><td><span class="badge ok">покрыто</span></td></tr>
+    <tr><td>Компонент 4 — A/B-эвал (детерминированный + embedding)</td><td>Task 2 + Task 3</td><td><span class="badge ok">покрыто ×2</span></td></tr>
+    <tr><td>Компонент 5 — документация (<code>lat.md</code> → <code>docs/wiki/</code> + iwiki)</td><td>Task 5</td><td><span class="badge ok">покрыто</span> <span class="badge warn">deviation</span></td></tr>
+    <tr><td>Раздел Verification спеки</td><td>Task 5 шаг 3 + Task 4 шаг 6</td><td><span class="badge ok">покрыто</span></td></tr>
+    <tr><td>Компонент 3 — «trigger refreshCache» после переписи</td><td>Task 4 (намеренно опущено, self-heal)</td><td><span class="badge warn">F-001 accepted</span></td></tr>
+  </tbody>
+</table>
+
+<h2>Результаты по фазам</h2>
+<table class="rpt-table">
+  <thead><tr><th>Фаза</th><th>Статус</th><th>Что проверено (закрытый чек-лист)</th></tr></thead>
+  <tbody>
+    <tr><td><b>1. structure</b></td><td><span class="badge ok">passed</span></td><td>Плейсхолдеры (TODO/TBD/???/FIXME) — нет; нумерация задач 1–5 и шагов — без пропусков/дублей; дублирующихся заголовков нет.</td></tr>
+    <tr><td><b>2. coverage</b></td><td><span class="badge ok">passed</span></td><td>Все 5 компонентов спеки + раздел Verification покрыты ≥1 задачей; лишних задач нет. Одна WARNING-находка (refreshCache).</td></tr>
+    <tr><td><b>3. dependencies</b></td><td><span class="badge ok">passed</span></td><td>Порядок задач корректен (T2→T3, T2→T4, всё→T5); циклов нет; артефакты доступны к моменту использования; TDD red→green легитимен.</td></tr>
+    <tr><td><b>4. verifiability</b></td><td><span class="badge ok">passed</span></td><td>У каждого шага измеримый DoD: <code>Run:</code>+<code>Expected:</code>, конкретные команды build/lint/эвал/grep, перечисляемый ручной smoke-чек.</td></tr>
+    <tr><td><b>5. consistency</b></td><td><span class="badge ok">passed</span></td><td>Хеш тела спеки совпадает с её frontmatter; план — первый прогон, дрейфа секций нет; section_hash зафиксированы как базлайн.</td></tr>
+  </tbody>
+</table>
+
+<h2>Находки</h2>
+<table class="rpt-table">
+  <thead><tr><th>ID</th><th>Severity</th><th>Фаза</th><th>Секция</th><th>Текст</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>F-001</code></td>
+      <td><span class="badge warn">WARNING</span></td>
+      <td>coverage</td>
+      <td>Task 4: Auto-migration on load</td>
+      <td>Компонент 3 спеки указывает «trigger refreshCache» после переписи страниц; план намеренно опускает load-time вызов
+        <code>refreshCache</code> и опирается на свойство self-heal из раздела спеки «Current state» (кэш согласуется при следующем
+        ingest/lint). Задокументировано в Self-Review плана и в docstring миграции. Решение подтверждено пользователем —
+        принятое отклонение, не пробел покрытия.</td>
+      <td><span class="badge ok">accepted</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Сводка</h2>
+<table class="rpt-table">
+  <tbody>
+    <tr><td>Открытых CRITICAL</td><td><b>0</b></td></tr>
+    <tr><td>Открытых WARNING</td><td><b>0</b> (F-001 — accepted)</td></tr>
+    <tr><td>Фазы passed</td><td><b>5 / 5</b></td></tr>
+    <tr><td>Итоговый вердикт</td><td><span class="badge ok">OK</span></td></tr>
+  </tbody>
+</table>
+
+<h2>Цепочка IDD → SDD</h2>
+<div class="chain">
+  <span class="step nullstep">intent: null</span>
+  <span class="arr">→</span>
+  <span class="step">spec: <code>2026-06-19-drop-legacy-wiki-sections-design.md</code></span>
+  <span class="arr">→</span>
+  <span class="step">plan: <code>2026-06-19-drop-legacy-wiki-sections.md</code></span>
+</div>
+<p class="sub">Intent отсутствует: файла <code>*drop-legacy*intent.md</code> в <code>docs/superpowers/intents/</code> нет, и
+<code>chain.intent</code> во frontmatter спеки = <code>null</code>.</p>
+
+<p class="sub" style="margin-top:2rem">Автогенерируемый артефакт гейта <code>/check-plan</code>. Тема — светлая по умолчанию, переключатель в правом верхнем углу.</p>
+</body>
+</html>
