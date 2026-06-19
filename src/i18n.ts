@@ -132,6 +132,8 @@ const en = {
     mobileWaiting: "⏳ Waiting for LLM response…",
     analysing: "Analysing…",
     formingResponse: "Forming response…",
+    ingestingFiles: "Ingesting files…",
+    analysingFiles: "Analysing files…",
     reinitTitle: "Re-init domain (wipe + rebuild)",
     reinitNoSources: "Domain has no source_paths — re-init not possible",
     addSourceTitle: "Manage sources for domain",
@@ -193,6 +195,18 @@ const en = {
     writeFailed: (err: string) => `Format: writing the formatted file failed — ${err}`,
     truncationHintEnv: "raise the limit: env CLAUDE_CODE_MAX_OUTPUT_TOKENS in iclaude.sh",
     truncationHintSettings: "raise the limit: Settings → per-operation → format → maxTokens",
+  },
+  ingestProgress: {
+    synthesizing: (domainId: string) => `Synthesizing wiki pages for domain "${domainId}"...\n`,
+  },
+  lintProgress: {
+    evaluating: (domainId: string) => `Evaluating domain "${domainId}" quality...\n`,
+    actualizing: (domainId: string) => `\nActualizing domain config for "${domainId}"...\n`,
+  },
+  initProgress: {
+    reinitWiping: (folder: string) => `Re-init: wiping ${folder}...\n`,
+    removedFiles: (n: number) => `removed ${n} files\n`,
+    fileChars: (file: string, n: number) => `ℹ ${file}: ${n} chars\n`,
   },
   ctrl: {
     cancelling: "Cancelling…",
@@ -437,6 +451,8 @@ const ru: I18n = {
     mobileWaiting: "⏳ Ожидание ответа от LLM…",
     analysing: "Анализирует…",
     formingResponse: "Формирует ответ…",
+    ingestingFiles: "Загрузка файлов…",
+    analysingFiles: "Анализ файлов…",
     reinitTitle: "Переинициализация домена (wipe + заново)",
     reinitNoSources: "У домена нет source_paths — re-init невозможен",
     addSourceTitle: "Управление источниками домена",
@@ -498,6 +514,18 @@ const ru: I18n = {
     writeFailed: (err: string) => `Format: запись формата не удалась — ${err}`,
     truncationHintEnv: "увеличьте лимит: env CLAUDE_CODE_MAX_OUTPUT_TOKENS в iclaude.sh",
     truncationHintSettings: "увеличьте лимит: Settings → per-operation → format → maxTokens",
+  },
+  ingestProgress: {
+    synthesizing: (domainId: string) => `Синтез вики-страниц для домена «${domainId}»...\n`,
+  },
+  lintProgress: {
+    evaluating: (domainId: string) => `Оценка качества домена «${domainId}»...\n`,
+    actualizing: (domainId: string) => `\nАктуализация конфигурации домена «${domainId}»...\n`,
+  },
+  initProgress: {
+    reinitWiping: (folder: string) => `Re-init: очистка ${folder}...\n`,
+    removedFiles: (n: number) => `удалено файлов: ${n}\n`,
+    fileChars: (file: string, n: number) => `ℹ ${file}: символов ${n}\n`,
   },
   ctrl: {
     cancelling: "Отмена…",
@@ -720,6 +748,8 @@ const es: I18n = {
     mobileWaiting: "⏳ Esperando respuesta del LLM…",
     analysing: "Analizando…",
     formingResponse: "Formando respuesta…",
+    ingestingFiles: "Ingiriendo archivos…",
+    analysingFiles: "Analizando archivos…",
     reinitTitle: "Re-init del dominio (borrar + reconstruir)",
     reinitNoSources: "El dominio no tiene source_paths — re-init imposible",
     addSourceTitle: "Gestionar fuentes del dominio",
@@ -781,6 +811,18 @@ const es: I18n = {
     writeFailed: (err: string) => `Format: falló la escritura del archivo formateado — ${err}`,
     truncationHintEnv: "aumenta el límite: env CLAUDE_CODE_MAX_OUTPUT_TOKENS en iclaude.sh",
     truncationHintSettings: "aumenta el límite: Settings → per-operation → format → maxTokens",
+  },
+  ingestProgress: {
+    synthesizing: (domainId: string) => `Sintetizando páginas wiki para el dominio "${domainId}"...\n`,
+  },
+  lintProgress: {
+    evaluating: (domainId: string) => `Evaluando la calidad del dominio "${domainId}"...\n`,
+    actualizing: (domainId: string) => `\nActualizando la configuración del dominio "${domainId}"...\n`,
+  },
+  initProgress: {
+    reinitWiping: (folder: string) => `Re-init: limpiando ${folder}...\n`,
+    removedFiles: (n: number) => `archivos eliminados: ${n}\n`,
+    fileChars: (file: string, n: number) => `ℹ ${file}: ${n} caracteres\n`,
   },
   ctrl: {
     cancelling: "Cancelando…",
