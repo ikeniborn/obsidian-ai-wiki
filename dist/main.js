@@ -40733,7 +40733,8 @@ function parseSentinelOutput(text, hasVisionDescriptions) {
     const visionIdx = text.indexOf("<<<VISION_COUNT>>>", formattedIdx);
     const embedsIdx = text.indexOf("<<<EMBEDS>>>", formattedIdx);
     if (visionIdx === -1 || embedsIdx === -1) return null;
-    formattedEnd = visionIdx;
+    const tail = [visionIdx, embedsIdx, endIdx].filter((i) => i > formattedIdx);
+    formattedEnd = tail.length ? Math.min(...tail) : text.length;
     visionCount = parseInt(text.slice(visionIdx + "<<<VISION_COUNT>>>".length, embedsIdx).trim(), 10);
     const embedsEnd = endIdx === -1 ? text.length : endIdx;
     embeds = text.slice(embedsIdx + "<<<EMBEDS>>>".length, embedsEnd).trim().split("|").map((s) => s.trim()).filter(Boolean);
@@ -40744,6 +40745,23 @@ function parseSentinelOutput(text, hasVisionDescriptions) {
   }
   const formatted = text.slice(formattedIdx + "<<<FORMATTED>>>".length, formattedEnd).trim();
   return { report, formatted, visionCount, embeds, truncated };
+}
+var SENTINEL_RE = /<<<[A-Z_]+>>>/g;
+function stripSentinelMarkers(text) {
+  const removed = text.match(SENTINEL_RE) ?? [];
+  if (removed.length === 0) return { clean: text, removed };
+  const out = [];
+  for (const line of text.split("\n")) {
+    const stripped = line.replace(SENTINEL_RE, "");
+    if (stripped === line) {
+      out.push(line);
+      continue;
+    }
+    if (stripped.trim() === "") continue;
+    out.push(stripped);
+  }
+  const clean = out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
+  return { clean, removed };
 }
 
 // prompts/vision-structure.md
@@ -41154,6 +41172,16 @@ The previous attempt failed: ${zodHint}. Fix it and return again using the marke
   const wlFix = fixWikiLinks(/* @__PURE__ */ new Map([[filePath, finalFormatted]]), wikiLinkValidationRetries);
   finalFormatted = wlFix.fixed.get(filePath) ?? finalFormatted;
   finalFormatted = restoreSourceFrontmatter(original, finalFormatted);
+  const swept = stripSentinelMarkers(finalFormatted);
+  finalFormatted = swept.clean;
+  if (swept.removed.length > 0) {
+    yield {
+      kind: "info_text",
+      icon: "\u26A0\uFE0F",
+      summary: "Sentinel markers stripped",
+      details: swept.removed
+    };
+  }
   try {
     await vaultTools.write(tempPath, finalFormatted);
   } catch (e) {
