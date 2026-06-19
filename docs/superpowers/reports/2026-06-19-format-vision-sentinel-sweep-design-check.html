@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Проверка спецификации — Format vision: зачистка sentinel-маркеров</title>
+<style>
+  :root[data-theme="dark"] {
+    --bg: #0f1419; --panel: #1a212b; --panel2: #232c38; --fg: #e6edf3;
+    --muted: #8b98a9; --border: #2d3848; --accent: #4ea1ff; --ok: #3fb950;
+    --warn: #d29922; --crit: #f85149; --node: #233044; --node-br: #3a4a63;
+    --shadow: rgba(0,0,0,.45);
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f8fa; --panel: #ffffff; --panel2: #eef2f6; --fg: #1f2328;
+    --muted: #5a6675; --border: #d5dbe2; --accent: #0969da; --ok: #1a7f37;
+    --warn: #9a6700; --crit: #cf222e; --node: #eef4ff; --node-br: #c5d6f0;
+    --shadow: rgba(140,150,170,.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1.25rem 4rem; background: var(--bg); color: var(--fg);
+    font: 15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    max-width: 1080px; margin-inline: auto; transition: background .25s, color .25s;
+  }
+  h1 { font-size: 1.55rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.2rem; margin: 2.4rem 0 .8rem; padding-bottom: .35rem; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 1rem; margin: 1.4rem 0 .5rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .sub { color: var(--muted); margin: 0 0 1rem; }
+  code { background: var(--panel2); padding: .1em .4em; border-radius: 4px; font-size: .88em;
+    font-family: "SF Mono",Menlo,Consolas,monospace; }
+  table { width: 100%; border-collapse: collapse; margin: .5rem 0 1rem; background: var(--panel); }
+  th, td { text-align: left; padding: .55rem .7rem; border: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--panel2); font-weight: 600; }
+  td.id { white-space: nowrap; font-family: "SF Mono",Menlo,monospace; color: var(--accent); }
+  .badge { display: inline-block; padding: .1em .55em; border-radius: 999px; font-size: .78em;
+    font-weight: 600; border: 1px solid; }
+  .b-ok   { color: var(--ok);   border-color: var(--ok);   }
+  .b-warn { color: var(--warn); border-color: var(--warn); }
+  .b-crit { color: var(--crit); border-color: var(--crit); }
+  .b-info { color: var(--accent); border-color: var(--accent); }
+  .verdict { font-size: 1.1rem; font-weight: 700; padding: .8rem 1rem; border-radius: 8px;
+    border: 1px solid var(--ok); color: var(--ok); background: var(--panel); display: inline-block; }
+  .note { border-left: 3px solid var(--accent); background: var(--panel); padding: .6rem .9rem;
+    border-radius: 0 6px 6px 0; margin: 1rem 0; color: var(--muted); }
+  /* data-flow */
+  .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: .4rem; margin: 1rem 0; }
+  .flow .step { background: var(--node); border: 1px solid var(--node-br); border-radius: 8px;
+    padding: .6rem .8rem; flex: 1 1 130px; box-shadow: 0 2px 6px var(--shadow); }
+  .flow .step b { display: block; font-size: .92rem; }
+  .flow .step span { font-size: .78rem; color: var(--muted); }
+  .flow .arrow { align-self: center; color: var(--accent); font-size: 1.3rem; font-weight: 700; }
+  .flow .gate { border-color: var(--ok); }
+  .toggle { position: fixed; top: 1rem; right: 1rem; background: var(--panel); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 999px; padding: .45rem .9rem; cursor: pointer;
+    font-size: .85rem; box-shadow: 0 2px 8px var(--shadow); }
+  figure { margin: 1rem 0; }
+  figcaption { color: var(--muted); font-size: .85rem; margin-top: .4rem; }
+  svg { max-width: 100%; height: auto; }
+  .phgrid { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: .7rem; margin: 1rem 0; }
+  .phcard { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: .8rem; }
+  .phcard b { display: block; margin-bottom: .3rem; }
+  .phcard small { color: var(--muted); display: block; margin-top: .4rem; line-height: 1.4; }
+</style>
+</head>
+<body>
+<button class="toggle" id="tg" onclick="tog()">🌙 / ☀️ тема</button>
+
+<h1>Проверка спецификации</h1>
+<p class="sub">Format vision — зачистка остаточных sentinel-маркеров (<code>&lt;&lt;&lt;END&gt;&gt;&gt;</code> и т.п.) после обработки LLM · 2026-06-19</p>
+<p><span class="verdict">Финальный вердикт: OK ✓</span></p>
+
+<h2>1. Резюме спецификации</h2>
+<p class="sub">Файл: <code>docs/superpowers/specs/2026-06-19-format-vision-sentinel-sweep-design.md</code></p>
+
+<h3>Требования</h3>
+<table>
+  <thead><tr><th>ID</th><th>Секция</th><th>Требование</th></tr></thead>
+  <tbody>
+    <tr><td class="id">R1</td><td>Component 1 · <code>parseSentinelOutput</code></td>
+      <td>Vision-ветка парсинга — независима от порядка маркеров. <code>formattedEnd</code> = минимальная позиция среди присутствующих хвостовых маркеров (<code>VISION_COUNT</code>, <code>EMBEDS</code>, <code>END</code>) после <code>&lt;&lt;&lt;FORMATTED&gt;&gt;&gt;</code>, иначе конец текста. Семантика <code>truncated</code> и парсинг <code>visionCount</code>/<code>embeds</code> сохранены.</td></tr>
+    <tr><td class="id">R2</td><td>Component 2 · <code>stripSentinelMarkers</code></td>
+      <td>Новая чистая функция: удаляет токены вида <code>&lt;&lt;&lt;[A-Z_]+&gt;&gt;&gt;</code> (строки-маркеры и инлайн-остатки), схлопывает осиротевшие пустые строки, <code>trimEnd</code>; возвращает <code>{ clean, removed }</code>.</td></tr>
+    <tr><td class="id">R3</td><td>Integration · <code>format.ts</code></td>
+      <td>Единый чок-поинт перед <code>vaultTools.write</code>: прогнать <code>stripSentinelMarkers</code> над <code>finalFormatted</code>, при <code>removed.length&gt;0</code> — <code>info_text</code> warning. Покрывает все пути (base, vision, token-restore <code>parsed2</code>).</td></tr>
+    <tr><td class="id">R4</td><td>Decisions · Scope</td>
+      <td>Только sentinel-маркеры <code>&lt;&lt;&lt;...&gt;&gt;&gt;</code>; без широкой зачистки прочих артефактов.</td></tr>
+    <tr><td class="id">R5</td><td>Out of scope</td>
+      <td>Не трогать zod-схемы (retry-путь отклонён), prompt <code>format.md</code>, испорченный файл-пример, прочие фазы.</td></tr>
+  </tbody>
+</table>
+
+<h3>Success Criteria</h3>
+<table>
+  <thead><tr><th>ID</th><th>Критерий приёмки</th></tr></thead>
+  <tbody>
+    <tr><td class="id">SC1</td><td>Inline-проверка <code>stripSentinelMarkers</code>: вход с <code>&lt;&lt;&lt;END&gt;&gt;&gt;</code> в конце → маркер удалён, контент цел.</td></tr>
+    <tr><td class="id">SC2</td><td>Inline-проверка <code>parseSentinelOutput</code>: vision-вывод, где <code>&lt;&lt;&lt;END&gt;&gt;&gt;</code> идёт перед <code>&lt;&lt;&lt;VISION_COUNT&gt;&gt;&gt;</code> → <code>formatted</code> не содержит <code>&lt;&lt;&lt;END&gt;&gt;&gt;</code>.</td></tr>
+    <tr><td class="id">SC3</td><td><code>npm run build</code> проходит.</td></tr>
+    <tr><td class="id">SC4</td><td><code>lat check</code> проходит.</td></tr>
+  </tbody>
+</table>
+
+<h2>2. Схемы решения и зависимостей</h2>
+
+<h3>Схема решения (data flow)</h3>
+<figure>
+  <div class="flow">
+    <div class="step"><b>LLM output</b><span>сырой ответ с маркерами</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>parseSentinelOutput</b><span>order-robust parse (R1)</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>transforms</b><span>token restore, embeds, wiki links, frontmatter</span></div>
+    <div class="arrow">→</div>
+    <div class="step gate"><b>stripSentinelMarkers</b><span>final gate (R2/R3)</span></div>
+    <div class="arrow">→</div>
+    <div class="step"><b>vaultTools.write</b><span>запись заметки</span></div>
+  </div>
+  <figcaption>Sentinel-маркер физически не может дойти до заметки: два барьера — устойчивый парс (R1) и финальный гейт (R2/R3).</figcaption>
+</figure>
+
+<h3>Граф зависимостей</h3>
+<figure>
+<svg viewBox="0 0 760 360" role="img" aria-label="Граф зависимостей требований">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--accent)"/>
+    </marker>
+    <marker id="arrR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--crit)"/>
+    </marker>
+    <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="var(--shadow)"/>
+    </filter>
+  </defs>
+  <style>
+    .nd rect { fill: var(--node); stroke: var(--node-br); stroke-width: 1.5; rx: 8; filter: url(#ds); }
+    .nd text { fill: var(--fg); font: 600 13px sans-serif; }
+    .nd tspan.s { fill: var(--muted); font: 400 10px monospace; }
+    .ed { stroke: var(--accent); stroke-width: 1.6; fill: none; marker-end: url(#arr); }
+    .ed.x { stroke: var(--crit); stroke-dasharray: 5 4; marker-end: url(#arrR); }
+    .el { fill: var(--muted); font: 400 10px sans-serif; }
+  </style>
+
+  <!-- edges -->
+  <path class="ed" d="M380 70 L210 130"/>
+  <path class="ed" d="M380 70 L545 130"/>
+  <text class="el" x="262" y="98">использует</text>
+  <text class="el" x="470" y="98">использует</text>
+  <path class="ed x" d="M150 285 L185 175"/>
+  <text class="el" x="120" y="240">ограничивает</text>
+  <path class="ed x" d="M540 285 L420 70"/>
+  <text class="el" x="470" y="220">исключает</text>
+
+  <!-- nodes -->
+  <g class="nd"><rect x="300" y="30" width="160" height="46"/><text x="318" y="52">format.ts <tspan class="s">(R3)</tspan><tspan class="s" x="318" y="66">choke-point</tspan></text></g>
+  <g class="nd"><rect x="110" y="132" width="200" height="46"/><text x="126" y="154">parseSentinelOutput <tspan class="s">(R1)</tspan><tspan class="s" x="126" y="168">format-utils.ts</tspan></text></g>
+  <g class="nd"><rect x="450" y="132" width="200" height="46"/><text x="466" y="154">stripSentinelMarkers <tspan class="s">(R2)</tspan><tspan class="s" x="466" y="168">format-utils.ts</tspan></text></g>
+  <g class="nd"><rect x="60" y="288" width="180" height="46"/><text x="76" y="310">Scope <tspan class="s">(R4)</tspan><tspan class="s" x="76" y="324">только &lt;&lt;&lt;...&gt;&gt;&gt;</tspan></text></g>
+  <g class="nd"><rect x="470" y="288" width="200" height="46"/><text x="486" y="310">Out of scope <tspan class="s">(R5)</tspan><tspan class="s" x="486" y="324">zod / prompt / файл</tspan></text></g>
+</svg>
+  <figcaption>Сплошные синие рёбра — «использует»; пунктирные красные — ограничения области (R4 ограничивает R2, R5 исключает части из R3/решения). R1 и R2 живут в общем модуле <code>src/phases/format-utils.ts</code>.</figcaption>
+</figure>
+
+<h3>Карта покрытия (задача → требования)</h3>
+<table>
+  <thead><tr><th>Задача / решение</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th><th>R5</th></tr></thead>
+  <tbody>
+    <tr><td>Валидация + удаление временных/технических символов после LLM в format/vision</td>
+      <td>✓</td><td>✓</td><td>✓</td><td></td><td></td></tr>
+    <tr><td>Баг: <code>&lt;&lt;&lt;END&gt;&gt;&gt;</code> с операцией vision не удалён</td>
+      <td>✓<br><small>корень</small></td><td></td><td>✓<br><small>сетка</small></td><td></td><td></td></tr>
+    <tr><td>Решение: scope «только sentinel»</td>
+      <td></td><td></td><td></td><td>✓</td><td></td></tr>
+    <tr><td>Решение: не трогать файл-пример, без retry</td>
+      <td></td><td></td><td></td><td></td><td>✓</td></tr>
+  </tbody>
+</table>
+<div class="note">Все задачи покрыты ≥1 требованием; «осиротевших» требований нет.</div>
+
+<h2>3. Результаты проверки</h2>
+<p class="sub">
+  Файл: <code>...2026-06-19-format-vision-sentinel-sweep-design.md</code> ·
+  <code>spec_hash: 61c8f31eaa420b97</code> · <code>prev_hash: — (первый прогон)</code>
+</p>
+
+<div class="phgrid">
+  <div class="phcard"><b>1 · structure <span class="badge b-ok">passed</span></b>
+    <small>Нет TODO/TBD/???/FIXME, битых §-ссылок, проблем нумерации, дублей заголовков.</small></div>
+  <div class="phcard"><b>2 · coverage <span class="badge b-ok">passed</span></b>
+    <small>Задача покрыта R1+R2+R3; решения отражены R4/R5; лишних требований и противоречий нет.</small></div>
+  <div class="phcard"><b>3 · clarity <span class="badge b-ok">passed</span></b>
+    <small>Pattern <code>&lt;&lt;&lt;[A-Z_]+&gt;&gt;&gt;</code> задан явно; DoD в Verification; термины согласованы.</small></div>
+  <div class="phcard"><b>4 · consistency <span class="badge b-ok">passed</span></b>
+    <small>Первый прогон, prev отсутствует.</small></div>
+</div>
+
+<h3>Findings</h3>
+<table>
+  <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Текст</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr><td colspan="5" style="text-align:center;color:var(--muted)">— findings нет —</td></tr>
+  </tbody>
+</table>
+
+<h3>Сводка</h3>
+<table>
+  <tbody>
+    <tr><th>CRITICAL open</th><td><span class="badge b-ok">0</span></td></tr>
+    <tr><th>WARNING open</th><td><span class="badge b-ok">0</span></td></tr>
+    <tr><th>Вердикт</th><td><span class="badge b-ok">OK</span></td></tr>
+    <tr><th>Chain</th><td>intent → spec — intent отсутствует (<code>intent_path = null</code>), цепочка начинается со спеки.</td></tr>
+  </tbody>
+</table>
+
+<script>
+  function tog(){
+    var r=document.documentElement;
+    r.setAttribute("data-theme", r.getAttribute("data-theme")==="dark"?"light":"dark");
+  }
+  document.documentElement.setAttribute("data-theme","dark");
+</script>
+</body>
+</html>

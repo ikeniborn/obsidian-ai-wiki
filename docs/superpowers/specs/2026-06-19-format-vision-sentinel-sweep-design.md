@@ -1,3 +1,16 @@
+---
+review:
+  spec_hash: 61c8f31eaa420b97
+  last_run: 2026-06-19
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings: []
+chain:
+  intent: null
+---
 # Format vision: sentinel-marker sweep
 
 **Date:** 2026-06-19
