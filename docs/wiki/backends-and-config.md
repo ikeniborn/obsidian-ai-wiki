@@ -23,7 +23,19 @@ Settings are split into two stores to avoid syncing secrets across devices. `res
 
 ## Output Language
 
-A global `outputLanguage` (`auto | ru | en | es`, default `auto`) fixes the response language across all operations, including vision; `auto` binds to the source/article language. It replaced the former `vision.language`. Drives the localized wiki section headings via [[domain-model#Bundled Schemas]].
+Language settings govern three independent layers resolved at call time (`src/i18n.ts`). `outputLanguage` (`auto | ru | en | es`, default `auto`) is the primary content setting; `reasoningLanguage` (default `en`) controls the model's internal reasoning language.
+
+### Three-Layer Resolution
+
+Language resolution is split into three layers, each with its own resolver and default.
+
+- **Layer A — Status strings** (`resolveLang(outputLanguage)`): localizes progress/status messages shown in the UI (ingest, lint, init, format, view labels). Explicit `ru|en|es` wins; `auto`/undefined falls back to the Obsidian UI locale (`moment.locale()` → ru/es, otherwise en).
+- **Layer B — Reasoning language** (`resolveReasoningLang(reasoningLanguage, outputLanguage)`): injects a `## Reasoning language` directive into the system prompt (best-effort). Explicit `ru|en|es` wins; `auto` chains to `resolveLang(outputLanguage)`; undefined defaults to `en` (models reason most reliably in English).
+- **Layer C — Generated content** (`resolveLang(outputLanguage)` via `langInstruction`): injects `## Language` into the system prompt to set the output language. Explicit `ru|en|es` wins; `auto`/undefined follows the Obsidian UI locale — **not** the source note language (deliberate change: `auto` no longer follows the source). Drives the localized wiki section headings via [[domain-model#Bundled Schemas]].
+
+### reasoningLanguage Setting
+
+A new `reasoningLanguage` field (`OutputLanguage`, default `"en"`) in `LlmWikiPluginSettings` (`src/types.ts`) is exposed as a "Reasoning language" dropdown in the settings panel (`src/settings.ts`). It is always injected (layer B is unconditional), unlike the content directive which is skipped when `outputLanguage` is unset.
 
 ## Settings Migration
 
