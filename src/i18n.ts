@@ -893,3 +893,21 @@ export function resolveLang(outputLanguage: OutputLanguage | undefined): "ru" | 
   if (loc.startsWith("es")) return "es";
   return "en";
 }
+
+/**
+ * Resolves the language for the model's reasoning directive (layer B).
+ * Explicit reasoningLanguage wins; `auto` chains to the content resolver
+ * (setting → Obsidian); undefined defaults to English.
+ */
+export function resolveReasoningLang(
+  reasoningLanguage: OutputLanguage | undefined,
+  outputLanguage: OutputLanguage | undefined,
+): "ru" | "en" | "es" {
+  if (reasoningLanguage === "ru" || reasoningLanguage === "en" || reasoningLanguage === "es") {
+    return reasoningLanguage;
+  }
+  if (reasoningLanguage === "auto") {
+    return resolveLang(outputLanguage);
+  }
+  return "en";
+}
