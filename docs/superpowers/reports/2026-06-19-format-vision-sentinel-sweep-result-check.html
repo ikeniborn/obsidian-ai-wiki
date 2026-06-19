@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Result Check — Format Vision Sentinel-Marker Sweep</title>
+<style>
+  :root {
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c2330; --border:#2d3748;
+    --fg:#e6edf3; --muted:#9aa7b4; --accent:#58a6ff; --ok:#3fb950;
+    --warn:#d29922; --crit:#f85149; --info:#58a6ff;
+  }
+  :root[data-theme="light"]{
+    --bg:#f6f8fa; --panel:#fff; --panel2:#eef2f7; --border:#d0d7de;
+    --fg:#1f2328; --muted:#57606a; --accent:#0969da; --ok:#1a7f37;
+    --warn:#9a6700; --crit:#cf222e; --info:#0969da;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;padding:0 0 4rem;background:var(--bg);color:var(--fg);
+    font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;line-height:1.55;
+    transition:background .25s,color .25s;}
+  header{padding:1.6rem 2rem 1.2rem;border-bottom:1px solid var(--border);background:var(--panel);
+    position:sticky;top:0;z-index:10;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;}
+  header h1{margin:0 0 .3rem;font-size:1.3rem;}
+  header .sub{color:var(--muted);font-size:.85rem;}
+  main{max-width:1040px;margin:0 auto;padding:1.5rem 2rem;}
+  section{margin:2.2rem 0;}
+  h2{font-size:1.08rem;border-left:3px solid var(--accent);padding-left:.6rem;margin:0 0 1rem;}
+  h3{font-size:.92rem;color:var(--muted);margin:1.3rem 0 .5rem;}
+  table{width:100%;border-collapse:collapse;font-size:.85rem;margin:.5rem 0 1rem;}
+  th,td{text-align:left;padding:.5rem .6rem;border:1px solid var(--border);vertical-align:top;}
+  th{background:var(--panel2);font-weight:600;}
+  tbody tr:nth-child(even){background:color-mix(in srgb,var(--panel2) 45%,transparent);}
+  code{background:var(--panel2);padding:.08rem .35rem;border-radius:4px;font-size:.82em;}
+  .badge{display:inline-block;padding:.12rem .55rem;border-radius:999px;font-size:.72rem;font-weight:700;}
+  .b-ok{background:color-mix(in srgb,var(--ok) 22%,transparent);color:var(--ok);border:1px solid var(--ok);}
+  .b-info{background:color-mix(in srgb,var(--info) 22%,transparent);color:var(--info);border:1px solid var(--info);}
+  .b-warn{background:color-mix(in srgb,var(--warn) 22%,transparent);color:var(--warn);border:1px solid var(--warn);}
+  .note{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--accent);
+    padding:.8rem 1rem;border-radius:6px;margin:1rem 0;font-size:.85rem;}
+  .note.ok{border-left-color:var(--ok);}
+  .chain{font-size:.85rem;color:var(--muted);}
+  .chain code{color:var(--fg);}
+  .toggle{cursor:pointer;background:var(--panel2);color:var(--fg);border:1px solid var(--border);
+    border-radius:999px;padding:.4rem .9rem;font-size:.8rem;white-space:nowrap;}
+  .toggle:hover{border-color:var(--accent);}
+  .kpis{display:flex;gap:1rem;flex-wrap:wrap;margin:.5rem 0 0;}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:.7rem 1.1rem;min-width:110px;}
+  .kpi .n{font-size:1.5rem;font-weight:800;}
+  .kpi .l{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+  .dot{font-weight:700;}
+  .d-done{color:var(--ok);} .d-part{color:var(--warn);} .d-miss{color:var(--crit);}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Result Check — Format Vision Sentinel-Marker Sweep</h1>
+    <div class="sub">IDD merge-gate <code>check-result</code> · 2026-06-19 · ветка <code>dev/format-sentinel-sweep</code></div>
+  </div>
+  <button class="toggle" onclick="toggleTheme()">🌙 / ☀️ тема</button>
+</header>
+<main>
+
+  <section>
+    <h2>Итог</h2>
+    <div class="kpis">
+      <div class="kpi"><div class="n" style="color:var(--ok)">OK</div><div class="l">Вердикт</div></div>
+      <div class="kpi"><div class="n d-done">14</div><div class="l">DONE</div></div>
+      <div class="kpi"><div class="n d-part">0</div><div class="l">PARTIAL</div></div>
+      <div class="kpi"><div class="n d-miss">0</div><div class="l">MISSING</div></div>
+      <div class="kpi"><div class="n" style="color:var(--info)">1</div><div class="l">INFO</div></div>
+    </div>
+    <div class="note ok">
+      Все шаги плана реализованы в diff. Требования спеки 4/4 и критерии успеха 4/4 покрыты.
+      Неожиданных изменений файлов нет. Единственное расхождение — INFO: счётчик ассертов
+      18→20 (арифметическая описка плана), самодокументировано в eval-доке, расширяет покрытие, не создаёт пробела.
+    </div>
+  </section>
+
+  <section>
+    <h2>1. Резюме сверки</h2>
+    <table>
+      <tr><th>Документ</th><th>Путь</th></tr>
+      <tr><td>Intent</td><td><code>null</code> (для задачи отсутствует)</td></tr>
+      <tr><td>Spec</td><td><code>docs/superpowers/specs/2026-06-19-format-vision-sentinel-sweep-design.md</code></td></tr>
+      <tr><td>Plan</td><td><code>docs/superpowers/plans/2026-06-19-format-vision-sentinel-sweep.md</code> (<code>plan_hash 891a49580d721c58</code>)</td></tr>
+      <tr><td>Diff base</td><td><code>git diff 35dc5d7 HEAD</code> (merge-base; master ушёл вперёд с несвязанной работой) — 13 файлов</td></tr>
+    </table>
+    <p class="chain">Цепочка: <code>intent: null</code> → <code>spec</code> → <code>plan</code> → <code>diff</code></p>
+  </section>
+
+  <section>
+    <h2>2. Покрытие шагов плана</h2>
+    <table>
+      <tr><th>Задача / Шаг</th><th>Класс</th><th>Свидетельство в diff</th></tr>
+      <tr><td><strong>T1.1</strong> создать <code>.gitignore</code></td><td><span class="dot d-done">DONE</span></td><td><code>eval/format-sentinel-sweep/.gitignore</code> = <code>*.cjs</code></td></tr>
+      <tr><td><strong>T1.2</strong> падающий харнес (PARSE-1..3)</td><td><span class="dot d-done">DONE</span></td><td><code>run.ts</code>, блоки PARSE-1/2/3 дословно</td></tr>
+      <tr><td><strong>T1.3</strong> bundle+run (red)</td><td><span class="dot d-done">DONE</span></td><td>commit <code>7b94f90</code> (red транзиентный)</td></tr>
+      <tr><td><strong>T1.4</strong> order-robust slice (Math.min tail)</td><td><span class="dot d-done">DONE</span></td><td><code>format-utils.ts</code>: <code>formattedEnd = Math.min(...tail)</code></td></tr>
+      <tr><td><strong>T1.5</strong> re-run (green 9)</td><td><span class="dot d-done">DONE</span></td><td>commit <code>7b94f90</code></td></tr>
+      <tr><td><strong>T1.6</strong> commit</td><td><span class="dot d-done">DONE</span></td><td><code>7b94f90</code> в git log</td></tr>
+      <tr><td><strong>T2.1</strong> STRIP-1..5 в харнес</td><td><span class="dot d-done">DONE</span></td><td><code>run.ts</code>, Component 2 дословно</td></tr>
+      <tr><td><strong>T2.2</strong> bundle red (missing export)</td><td><span class="dot d-done">DONE</span></td><td>commit <code>72c4b7a</code></td></tr>
+      <tr><td><strong>T2.3</strong> реализация <code>stripSentinelMarkers</code></td><td><span class="dot d-done">DONE</span></td><td><code>format-utils.ts</code>: <code>SENTINEL_RE</code> + export fn</td></tr>
+      <tr><td><strong>T2.4</strong> green (20)</td><td><span class="dot d-done">DONE</span></td><td>eval-док: <code>TOTAL: 20 passed</code></td></tr>
+      <tr><td><strong>T2.5</strong> commit</td><td><span class="dot d-done">DONE</span></td><td><code>72c4b7a</code></td></tr>
+      <tr><td><strong>T3.1</strong> импорт в <code>format.ts</code></td><td><span class="dot d-done">DONE</span></td><td>line 10 import обновлён</td></tr>
+      <tr><td><strong>T3.2</strong> sweep-гейт перед write</td><td><span class="dot d-done">DONE</span></td><td>гейт после <code>restoreSourceFrontmatter</code>, <code>info_text</code> ⟷ <code>types.ts:47</code></td></tr>
+      <tr><td><strong>T3.3</strong> build</td><td><span class="dot d-done">DONE</span></td><td><code>dist/main.js</code> содержит новый код</td></tr>
+      <tr><td><strong>T3.4</strong> lint</td><td><span class="dot d-done">DONE</span></td><td>0 ошибок для тронутых файлов</td></tr>
+      <tr><td><strong>T3.5</strong> commit</td><td><span class="dot d-done">DONE</span></td><td><code>ab3ce7f</code></td></tr>
+      <tr><td><strong>T4.1</strong> eval-док</td><td><span class="dot d-done">DONE</span></td><td><code>…/evals/2026-06-19-format-sentinel-sweep-eval.md</code></td></tr>
+      <tr><td><strong>T4.2</strong> rerun + сверка счёта</td><td><span class="dot d-done">DONE</span></td><td>док: <code>20 passed</code>, объяснение 18→20</td></tr>
+      <tr><td><strong>T4.3</strong> iwiki-ingest</td><td><span class="dot d-done">DONE</span></td><td><code>llm-pipeline.md</code> +2 подсекции; index/log</td></tr>
+      <tr><td><strong>T4.4</strong> iwiki-lint</td><td><span class="dot d-done">DONE</span></td><td>битых рефов/сирот нет</td></tr>
+      <tr><td><strong>T4.5</strong> финальный build+lint</td><td><span class="dot d-done">DONE</span></td><td><code>chore(build)</code> <code>0a09ab0</code></td></tr>
+      <tr><td><strong>T4.6</strong> commit доков</td><td><span class="dot d-done">DONE</span></td><td><code>7f103c2</code></td></tr>
+    </table>
+    <p class="chain"><span class="badge b-ok">DONE 14 групп шагов</span> · PARTIAL 0 · MISSING 0 (verification/commit-шаги засчитаны по наличию артефакта/коммита).</p>
+  </section>
+
+  <section>
+    <h2>3. Покрытие спеки</h2>
+    <h3>Требования (4/4)</h3>
+    <table>
+      <tr><th>Требование</th><th>Покрыто</th><th>Свидетельство</th></tr>
+      <tr><td>Component 1 — order-robust parse</td><td><span class="badge b-ok">да</span></td><td><code>format-utils.ts</code> Math.min(tail); PARSE-1 = репро спеки</td></tr>
+      <tr><td>Component 2 — <code>stripSentinelMarkers {clean,removed}</code></td><td><span class="badge b-ok">да</span></td><td>экспорт fn; STRIP-1..5 покрывают все поведения</td></tr>
+      <tr><td>Integration — единый gate до записи + warning</td><td><span class="badge b-ok">да</span></td><td>гейт в <code>format.ts</code>; <code>info_text</code> при removed&gt;0</td></tr>
+      <tr><td>Out-of-scope не тронут (Zod, prompt, файл, фазы)</td><td><span class="badge b-ok">да</span></td><td>в diff таких файлов нет</td></tr>
+    </table>
+    <h3>Критерии успеха (4/4)</h3>
+    <table>
+      <tr><th>Критерий</th><th>Покрыто</th><th>Свидетельство</th></tr>
+      <tr><td>strip на trailing <code>&lt;&lt;&lt;END&gt;&gt;&gt;</code> → удалён, контент цел</td><td><span class="badge b-ok">да</span></td><td>STRIP-1</td></tr>
+      <tr><td>parse на out-of-order <code>&lt;&lt;&lt;END&gt;&gt;&gt;</code> → нет маркера в body</td><td><span class="badge b-ok">да</span></td><td>PARSE-1</td></tr>
+      <tr><td><code>npm run build</code> проходит</td><td><span class="badge b-ok">да</span></td><td><code>dist/main.js</code> пересобран</td></tr>
+      <tr><td>Доки обновлены (спека: «lat check» → iwiki)</td><td><span class="badge b-ok">да</span></td><td><code>llm-pipeline.md</code> + iwiki index/log</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>4. Избыточные изменения</h2>
+    <table>
+      <tr><th>Файл</th><th>Классификация</th></tr>
+      <tr><td><code>dist/main.js</code></td><td>ожидаемо — генерируемый bundle (<code>chore(build)</code> по конвенции)</td></tr>
+      <tr><td><code>docs/superpowers/plans/…plan.md</code></td><td>ожидаемо — IDD-артефакт (сам план)</td></tr>
+      <tr><td><code>docs/superpowers/specs/…design.md</code></td><td>ожидаемо — IDD-артефакт (спека)</td></tr>
+      <tr><td><code>docs/superpowers/reports/…check.html</code> ×2</td><td>ожидаемо — IDD-артефакты (check-spec/check-plan)</td></tr>
+      <tr><td><code>docs/wiki/.iwiki/{index,log}.jsonl</code></td><td>ожидаемо — регенерация iwiki (T4.3)</td></tr>
+    </table>
+    <p class="chain">Неожиданных избыточных файлов нет.</p>
+  </section>
+
+  <section>
+    <h2>5. Findings</h2>
+    <table>
+      <tr><th>Severity</th><th>Шаг/Область</th><th>Plan</th><th>Diff</th><th>Fix options</th></tr>
+      <tr>
+        <td><span class="badge b-info">INFO</span></td>
+        <td>T2.4 / eval счётчик</td>
+        <td>«TOTAL: 18 passed»</td>
+        <td>харнес ассертит 20 (9 + 11); eval-док фиксирует и объясняет 18→20</td>
+        <td>1) принять (счёт самодокументирован, покрытие шире) — выбрано; 2) переписать «18» в теле плана (churn хеша gate, не требуется)</td>
+      </tr>
+    </table>
+    <h3>Сводка</h3>
+    <div class="kpis">
+      <div class="kpi"><div class="n" style="color:var(--crit)">0</div><div class="l">CRITICAL</div></div>
+      <div class="kpi"><div class="n" style="color:var(--warn)">0</div><div class="l">WARNING</div></div>
+      <div class="kpi"><div class="n" style="color:var(--info)">1</div><div class="l">INFO</div></div>
+      <div class="kpi"><div class="n" style="color:var(--ok)">OK</div><div class="l">Вердикт</div></div>
+    </div>
+    <p class="chain">Цепочка IDD: <code>null</code> → <code>spec</code> → <code>plan</code> → <code>diff (35dc5d7..0a09ab0)</code></p>
+  </section>
+
+</main>
+<script>
+  function toggleTheme(){
+    var r=document.documentElement;
+    r.setAttribute('data-theme', r.getAttribute('data-theme')==='light'?'dark':'light');
+  }
+</script>
+</body>
+</html>

@@ -249,7 +249,11 @@ export function parseSentinelOutput(text: string, hasVisionDescriptions: boolean
     const visionIdx = text.indexOf("<<<VISION_COUNT>>>", formattedIdx);
     const embedsIdx = text.indexOf("<<<EMBEDS>>>", formattedIdx);
     if (visionIdx === -1 || embedsIdx === -1) return null;
-    formattedEnd = visionIdx;
+    // Order-robust: end the formatted body at the EARLIEST trailing marker after
+    // <<<FORMATTED>>>, so a stray <<<END>>> placed before <<<VISION_COUNT>>> can no
+    // longer be swallowed into `formatted`. visionCount/embeds parsing is unchanged.
+    const tail = [visionIdx, embedsIdx, endIdx].filter((i) => i > formattedIdx);
+    formattedEnd = tail.length ? Math.min(...tail) : text.length;
     visionCount = parseInt(text.slice(visionIdx + "<<<VISION_COUNT>>>".length, embedsIdx).trim(), 10);
     const embedsEnd = endIdx === -1 ? text.length : endIdx;
     embeds = text
@@ -266,4 +270,29 @@ export function parseSentinelOutput(text: string, hasVisionDescriptions: boolean
 
   const formatted = text.slice(formattedIdx + "<<<FORMATTED>>>".length, formattedEnd).trim();
   return { report, formatted, visionCount, embeds, truncated };
+}
+
+const SENTINEL_RE = /<<<[A-Z_]+>>>/g;
+
+/**
+ * Final defensive gate: removes any residual sentinel marker (`<<<NAME>>>`) that
+ * survived parsing. Whole marker lines are dropped, inline residues are spliced
+ * out, blank-line runs orphaned by a dropped line are collapsed, and the result is
+ * `trimEnd`-ed. Returns the cleaned text plus the list of removed marker strings
+ * (for the caller's warning). The pattern is narrow (uppercase sentinel shape
+ * only), so legitimate markdown is untouched.
+ */
+export function stripSentinelMarkers(text: string): { clean: string; removed: string[] } {
+  const removed = text.match(SENTINEL_RE) ?? [];
+  if (removed.length === 0) return { clean: text, removed };
+
+  const out: string[] = [];
+  for (const line of text.split("\n")) {
+    const stripped = line.replace(SENTINEL_RE, "");
+    if (stripped === line) { out.push(line); continue; } // no marker on this line
+    if (stripped.trim() === "") continue;                // line was only marker(s) → drop
+    out.push(stripped);                                  // inline residue → keep remainder
+  }
+  const clean = out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
+  return { clean, removed };
 }
