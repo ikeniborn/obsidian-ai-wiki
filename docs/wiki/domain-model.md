@@ -53,8 +53,19 @@ The one-shot vault migration renaming legacy unprefixed pages and rewriting back
 `_wiki_schema.md` and `_format_schema.md` are compiled into the plugin (esbuild `.md` text loader from `templates/`) and are the single source of truth. New versions ship only via a plugin release.
 
 - **Read at runtime** directly from bundled constants by ingest, lint, lint-chat, init (`schemaTemplate`) and format (`formatSchemaDefault`).
-- **Localized headings.** `_wiki_schema.md` carries a `{{section_conventions}}` placeholder; the four wiki-generating phases render it via `src/phases/llm-utils.ts#wikiSections` with `opts.outputLanguage`, emitting mandatory/optional page headings in the selected language (`auto` → Russian). Instruction text stays English.
+- **Localized headings.** `_wiki_schema.md` carries a `{{section_conventions}}` placeholder; the four wiki-generating phases render it via `src/phases/llm-utils.ts#wikiSections` with `opts.outputLanguage`, emitting mandatory/optional page headings in the selected language (`auto` → Russian). Instruction text stays English. The page schema is one mandatory section (key characteristics) plus four optional ones (usage, examples, limitations, best practices); the former related-concepts and change-history sections are no longer generated — see [[domain-model#Legacy Section Removal]].
 - **Never written to the vault.** `!Wiki/_config/` holds no schema files. `cleanupBundledSchemaCopies` deletes stale copies left by older versions on load. See [[architecture#Storage Migration]].
+
+## Legacy Section Removal
+
+The related-concepts and change-history sections were dropped from the page schema because each H2 becomes its own embedding chunk (see [[retrieval#Embedding Cache]]) and these two only ever matched off-topic queries — pure index noise.
+
+`src/strip-legacy-sections.ts` holds the pure logic, reused by both the migration and its eval:
+- `stripLegacySections(content)` removes the two H2 sections in all three languages (ru/en/es), from each heading to the next H2 or EOF, preserving frontmatter, H1, intro, and every other section; idempotent.
+- `extractRelatedLinks(content)` collects `[[links]]` inside the related-concepts section.
+- `addOutgoingLinks(content, links)` unions those links into `wiki_outgoing_links` frontmatter (no-op when all already present).
+
+`src/migrate-drop-sections.ts#migrateDropSections` runs once on load (after `migrateIndexFormat`, guarded by the `migrated_drop_sections` flag in `local.json`). For every domain wiki page it lifts related-section links into frontmatter, then strips both sections. The union is a safety-net: the graph reads `[[links]]` from the whole body (`src/wiki-graph.ts#buildWikiGraph`), so links must reach frontmatter before the section is removed or a graph edge would be lost. No embedding calls happen here — the embeddings cache self-heals on the next ingest/lint, since `refreshCache` (see [[retrieval#Embedding Cache]]) diffs chunks by content hash and drops the now-absent noise chunks. Verified out-of-vault by `eval/legacy-sections/run.ts`.
 
 ## Frontmatter Validator
 

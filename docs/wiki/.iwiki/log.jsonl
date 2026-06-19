@@ -1,2 +1,3 @@
 {"op":"ingest","source":"lat.md/ + src/","page":"docs/wiki/*.md (8 pages)","date":"2026-06-17"}
 {"op":"ingest","source":"src/phases/format.ts,src/phases/ingest.ts,src/utils/raw-frontmatter.ts,src/i18n.ts","page":"operations.md","date":"2026-06-18"}
+{"op":"ingest","source":"src/phases/llm-utils.ts,src/strip-legacy-sections.ts,src/migrate-drop-sections.ts","page":"docs/wiki/domain-model.md","date":"2026-06-19"}
