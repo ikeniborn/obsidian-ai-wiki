@@ -249,7 +249,11 @@ export function parseSentinelOutput(text: string, hasVisionDescriptions: boolean
     const visionIdx = text.indexOf("<<<VISION_COUNT>>>", formattedIdx);
     const embedsIdx = text.indexOf("<<<EMBEDS>>>", formattedIdx);
     if (visionIdx === -1 || embedsIdx === -1) return null;
-    formattedEnd = visionIdx;
+    // Order-robust: end the formatted body at the EARLIEST trailing marker after
+    // <<<FORMATTED>>>, so a stray <<<END>>> placed before <<<VISION_COUNT>>> can no
+    // longer be swallowed into `formatted`. visionCount/embeds parsing is unchanged.
+    const tail = [visionIdx, embedsIdx, endIdx].filter((i) => i > formattedIdx);
+    formattedEnd = tail.length ? Math.min(...tail) : text.length;
     visionCount = parseInt(text.slice(visionIdx + "<<<VISION_COUNT>>>".length, embedsIdx).trim(), 10);
     const embedsEnd = endIdx === -1 ? text.length : endIdx;
     embeds = text
