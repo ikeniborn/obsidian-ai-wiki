@@ -16,7 +16,7 @@ import {
   upsertRawFrontmatter,
   validateAndRepairSourceFrontmatter,
 } from "../../src/utils/raw-frontmatter";
-import { resolveProgressLang, i18nFor } from "../../src/i18n";
+import { resolveLang, i18nFor } from "../../src/i18n";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 const OLD_ADDED = "2026-05-01"; // a creation date that must NOT regress to TODAY
@@ -255,22 +255,22 @@ function setLocale(l: string): void {
   (globalThis as { __MOMENT_LOCALE__?: string }).__MOMENT_LOCALE__ = l;
 }
 
-check("P1 explicit en → en", resolveProgressLang("en") === "en");
-check("P2 explicit ru → ru", resolveProgressLang("ru") === "ru");
-check("P3 explicit es → es", resolveProgressLang("es") === "es");
+check("P1 explicit en → en", resolveLang("en") === "en");
+check("P2 explicit ru → ru", resolveLang("ru") === "ru");
+check("P3 explicit es → es", resolveLang("es") === "es");
 
 setLocale("ru-RU");
-check("P4 auto + ru-RU locale → ru", resolveProgressLang("auto") === "ru");
+check("P4 auto + ru-RU locale → ru", resolveLang("auto") === "ru");
 setLocale("es-419");
-check("P5 auto + es-419 locale → es", resolveProgressLang("auto") === "es");
+check("P5 auto + es-419 locale → es", resolveLang("auto") === "es");
 setLocale("en-GB");
-check("P6 auto + en-GB locale → en", resolveProgressLang("auto") === "en");
+check("P6 auto + en-GB locale → en", resolveLang("auto") === "en");
 setLocale("");
-check("P7 auto + empty locale → en", resolveProgressLang("auto") === "en");
+check("P7 auto + empty locale → en", resolveLang("auto") === "en");
 setLocale("de");
-check("P8 auto + unsupported (de) → en", resolveProgressLang("auto") === "en");
+check("P8 auto + unsupported (de) → en", resolveLang("auto") === "en");
 setLocale("ru");
-check("P9 undefined + ru locale → ru", resolveProgressLang(undefined) === "ru");
+check("P9 undefined + ru locale → ru", resolveLang(undefined) === "ru");
 
 const en = i18nFor("en").formatProgress;
 const ru = i18nFor("ru").formatProgress;

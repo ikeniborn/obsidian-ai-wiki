@@ -21,6 +21,7 @@ import { appendWikiLog } from "../wiki-log";
 import { ensureDomainConfig } from "../domain-config";
 import type { PageSimilarityService } from "../page-similarity";
 import { GENERIC_WIKI_STEM_REGEX } from "../wiki-stem";
+import { i18nFor, resolveLang } from "../i18n";
 
 const META_FILES = ["_index.md", "_log.md"];
 
@@ -198,7 +199,7 @@ export async function* runLint(
 
     yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
     await ensureDomainConfig(vaultTools, wikiVaultPath);
-    const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(opts.outputLanguage ?? "auto") });
+    const schemaContent = render(wikiSchemaTemplate, { section_conventions: wikiSections(resolveLang(opts.outputLanguage)) });
     const allFiles = await vaultTools.listFiles(wikiVaultPath);
     const files = allFiles.filter((f) => !META_FILES.some((m) => f.endsWith(m)));
     yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
@@ -278,7 +279,7 @@ export async function* runLint(
       schema_block: schemaContent ? `\nConventions (_wiki_schema.md):\n${schemaContent}` : "",
     });
 
-    yield { kind: "assistant_text", delta: `Evaluating domain "${domain.id}" quality...\n` };
+    yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).lintProgress.evaluating(domain.id) };
 
     const deletedRefs: { deletedName: string; redirectName: string | null }[] = [];
     const writtenPaths: string[] = [];
@@ -486,7 +487,7 @@ export async function* runLint(
     if (signal.aborted) return;
 
     // actualizeDomainConfig (runs once after loop)
-    yield { kind: "assistant_text", delta: `\nActualizing domain config for "${domain.id}"...\n` };
+    yield { kind: "assistant_text", delta: i18nFor(resolveLang(opts.outputLanguage)).lintProgress.actualizing(domain.id) };
     yield { kind: "tool_use", name: "Updating config", input: {} };
     const patchRes = await actualizeDomainConfig(domain, pages, llm, model, opts, signal);
     yield { kind: "tool_result", ok: true, preview: patchRes.patch ? "config updated" : "no changes" };

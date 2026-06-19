@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Check-plan — Progress &amp; Reasoning Language</title>
+<style>
+  :root[data-theme="dark"]{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1f242d; --bd:#2a313c;
+    --fg:#e6e9ef; --mut:#9aa4b2; --acc:#5aa9ff; --ok:#3fb950; --warn:#d29922; --crit:#f85149;
+    --node:#1f262f; --nodebd:#33404f; --edge:#5b6776; --hl:#3a2c12;
+  }
+  :root[data-theme="light"]{
+    --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f6; --bd:#d0d7de;
+    --fg:#1f2328; --mut:#57606a; --acc:#0969da; --ok:#1a7f37; --warn:#9a6700; --crit:#cf222e;
+    --node:#ffffff; --nodebd:#c4ccd4; --edge:#8a97a5; --hl:#fff3d6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:15px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:32px;max-width:1080px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px} h2{font-size:19px;margin:32px 0 12px;border-bottom:1px solid var(--bd);padding-bottom:6px}
+  .sub{color:var(--mut);font-size:13px;margin-bottom:18px}
+  .panel{background:var(--panel);border:1px solid var(--bd);border-radius:10px;padding:16px 18px;margin:14px 0}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}
+  th,td{border:1px solid var(--bd);padding:6px 9px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);font-weight:600}
+  td.c{text-align:center}
+  code{background:var(--panel2);border:1px solid var(--bd);border-radius:4px;padding:0 5px;font-size:12px}
+  .badge{display:inline-block;padding:1px 9px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid}
+  .b-ok{color:var(--ok);border-color:var(--ok)} .b-warn{color:var(--warn);border-color:var(--warn)}
+  .b-acc{color:var(--acc);border-color:var(--acc)}
+  .note{background:var(--panel2);border-left:3px solid var(--acc);border-radius:6px;padding:10px 14px;margin:12px 0;font-size:13.5px}
+  .toggle{position:fixed;top:18px;right:18px;background:var(--panel);color:var(--fg);border:1px solid var(--bd);
+    border-radius:20px;padding:6px 14px;cursor:pointer;font-size:13px}
+  svg{width:100%;height:auto;display:block}
+  .nd{fill:var(--node);stroke:var(--nodebd)} .ttl{fill:var(--acc);font-size:11px;font-weight:700}
+  .ns{fill:var(--mut);font-size:9.5px}
+  .x{background:var(--hl);text-align:center;font-weight:700;color:var(--warn)}
+  footer{color:var(--mut);font-size:12px;margin-top:32px;border-top:1px solid var(--bd);padding-top:10px}
+</style>
+</head>
+<body>
+<button class="toggle" onclick="t()">🌓 Тема</button>
+
+<h1>Проверка плана — Progress &amp; Reasoning Language</h1>
+<div class="sub">План: <code>2026-06-19-progress-reasoning-language.md</code> · plan_hash <code>73216f921d92a4a2</code> ·
+спека <code>1d70686d65f09008</code> · прогон 2026-06-19 · вердикт <span class="badge b-ok">OK</span></div>
+
+<h2>1. Резюме плана (10 задач, DoD)</h2>
+<table>
+<thead><tr><th>#</th><th>Задача</th><th>Слой</th><th>DoD / критерий готовности</th></tr></thead>
+<tbody>
+<tr><td>T1</td><td>Rename <code>resolveProgressLang→resolveLang</code></td><td>A4</td><td><code>grep resolveProgressLang</code> пусто; tsc+lint чисто</td></tr>
+<tr><td>T2</td><td>Add <code>resolveReasoningLang</code></td><td>B3</td><td>tsc+lint чисто</td></tr>
+<tr><td>T3</td><td>Content auto → Obsidian; <code>langInstruction</code> concrete</td><td>C1,C2</td><td>tsc ловит callers с auto; lint чисто</td></tr>
+<tr><td>T4</td><td>reasoningLanguage plumbing + директива</td><td>B1,B4</td><td>tsc+lint; ручная проверка директивы в промпте</td></tr>
+<tr><td>T5</td><td>Settings dropdown + лейблы</td><td>B2</td><td>tsc (parity en/ru/es); дропдаун рендерится</td></tr>
+<tr><td>T6</td><td>Bundle-группы статусов en/ru/es</td><td>A1</td><td>tsc (parity через <code>: I18n</code>)</td></tr>
+<tr><td>T7</td><td>Wire фазы ingest/lint/init</td><td>A2</td><td>grep литералов пусто; tsc+lint</td></tr>
+<tr><td>T8</td><td>Wire view.ts лейблы</td><td>A3</td><td>grep литералов пусто; ручная локализация</td></tr>
+<tr><td>T9</td><td>Обновить lat.md</td><td>docs</td><td><code>lat check</code> проходит</td></tr>
+<tr><td>T10</td><td>Финальная верификация</td><td>—</td><td>tsc+lint+build; матрица из Success Criteria</td></tr>
+</tbody>
+</table>
+
+<h2>2. Граф зависимостей шагов</h2>
+<p>Узлы — задачи, рёбра M→N: результат M используется в N (M&lt;N). Циклов и нарушений порядка нет.</p>
+<svg viewBox="0 0 820 360" role="img" aria-label="Граф зависимостей задач">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/>
+    </marker>
+    <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  <g stroke="var(--edge)" stroke-width="1.5" fill="none" marker-end="url(#ar)">
+    <line x1="110" y1="60" x2="110" y2="150"/>   <!-- T1->T2 -->
+    <line x1="150" y1="52" x2="280" y2="52"/>    <!-- T1->T3 -->
+    <line x1="150" y1="175" x2="290" y2="70"/>   <!-- T2->T3 -->
+    <line x1="130" y1="70" x2="290" y2="150"/>   <!-- T1->T4 -->
+    <line x1="160" y1="185" x2="300" y2="165"/>  <!-- T2->T4 -->
+    <line x1="360" y1="180" x2="360" y2="250"/>  <!-- T4->T5 (vertical-ish) -->
+    <line x1="360" y1="70" x2="500" y2="150"/>   <!-- T4->T5 alt removed; keep -->
+    <line x1="560" y1="260" x2="700" y2="180"/>  <!-- T6->T7 -->
+    <line x1="560" y1="290" x2="700" y2="290"/>  <!-- T6->T8 -->
+    <line x1="120" y1="70" x2="690" y2="170"/>   <!-- T1->T7 -->
+    <line x1="120" y1="68" x2="690" y2="285"/>   <!-- T1->T8 -->
+  </g>
+  <g filter="url(#ds)">
+    <g><rect class="nd" x="70" y="30" rx="7" width="80" height="38"/><text class="ttl" x="80" y="48">T1</text><text class="ns" x="80" y="61">resolveLang</text></g>
+    <g><rect class="nd" x="70" y="152" rx="7" width="100" height="38"/><text class="ttl" x="80" y="170">T2</text><text class="ns" x="80" y="183">resolveReason.</text></g>
+    <g><rect class="nd" x="285" y="34" rx="7" width="90" height="38"/><text class="ttl" x="295" y="52">T3</text><text class="ns" x="295" y="65">langInstr (C)</text></g>
+    <g><rect class="nd" x="290" y="145" rx="7" width="100" height="40"/><text class="ttl" x="300" y="163">T4</text><text class="ns" x="300" y="177">reason directive</text></g>
+    <g><rect class="nd" x="300" y="252" rx="7" width="90" height="38"/><text class="ttl" x="310" y="270">T5</text><text class="ns" x="310" y="283">settings UI</text></g>
+    <g><rect class="nd" x="470" y="248" rx="7" width="90" height="40"/><text class="ttl" x="480" y="266">T6</text><text class="ns" x="480" y="280">bundles</text></g>
+    <g><rect class="nd" x="700" y="150" rx="7" width="100" height="38"/><text class="ttl" x="710" y="168">T7</text><text class="ns" x="710" y="181">phases</text></g>
+    <g><rect class="nd" x="700" y="270" rx="7" width="100" height="38"/><text class="ttl" x="710" y="288">T8</text><text class="ns" x="710" y="301">view.ts</text></g>
+  </g>
+</svg>
+<div class="note">T9 (docs) и T10 (верификация) — терминальные, зависят от завершения T1–T8; на графе опущены для читаемости.</div>
+
+<h2>3. Пересечения по файлам</h2>
+<p>Задачи, правящие один файл (риск дрейфа якорей — учтён в F-002). <code>i18n.ts</code> — самый горячий файл (4 задачи).</p>
+<table>
+<thead><tr><th>Файл</th><th>T1</th><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th><th>T7</th><th>T8</th></tr></thead>
+<tbody>
+<tr><td><code>src/i18n.ts</code></td><td class="x">✓</td><td class="x">✓</td><td></td><td></td><td class="x">✓</td><td class="x">✓</td><td></td><td></td></tr>
+<tr><td><code>src/agent-runner.ts</code></td><td class="x">✓</td><td></td><td></td><td class="x">✓</td><td></td><td></td><td></td><td></td></tr>
+<tr><td><code>src/phases/llm-utils.ts</code></td><td></td><td></td><td class="x">✓</td><td class="x">✓</td><td></td><td></td><td></td><td></td></tr>
+<tr><td><code>src/types.ts</code></td><td></td><td></td><td></td><td class="c">✓</td><td></td><td></td><td></td><td></td></tr>
+<tr><td><code>src/settings.ts</code></td><td></td><td></td><td></td><td></td><td class="c">✓</td><td></td><td></td><td></td></tr>
+<tr><td><code>src/phases/{ingest,lint,init}.ts</code></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="c">✓</td><td></td></tr>
+<tr><td><code>src/view.ts</code></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="c">✓</td></tr>
+</tbody>
+</table>
+
+<h2>4. Результаты проверки</h2>
+<table>
+<thead><tr><th>Фаза</th><th>Статус</th></tr></thead>
+<tbody>
+<tr><td>structure</td><td><span class="badge b-ok">passed</span></td></tr>
+<tr><td>coverage</td><td><span class="badge b-ok">passed</span></td></tr>
+<tr><td>dependencies</td><td><span class="badge b-ok">passed</span></td></tr>
+<tr><td>verifiability</td><td><span class="badge b-ok">passed</span></td></tr>
+<tr><td>consistency</td><td><span class="badge b-ok">passed</span></td></tr>
+</tbody>
+</table>
+
+<h3>Findings</h3>
+<table>
+<thead><tr><th>ID</th><th>Severity</th><th>Фаза</th><th>Секция</th><th>Текст</th><th>Вердикт</th></tr></thead>
+<tbody>
+<tr><td>F-001</td><td><span class="badge b-warn">WARNING</span></td><td>dependencies</td><td>Task 4</td>
+<td>Формулировка Task 4 Step 6 могла читаться как дублирование <code>injectLanguageDirective</code>; уточнено на explicit replace + нота о единственном вызове.</td>
+<td><span class="badge b-ok">fixed</span></td></tr>
+<tr><td>F-002</td><td><span class="badge b-warn">WARNING</span></td><td>dependencies</td><td>Task 6</td>
+<td>Номера строк <code>i18n.ts</code> в Task 6 — оценка до правок Task 5, могут сместиться; смягчено якорями по содержимому (after formatProgress block).</td>
+<td><span class="badge b-acc">accepted</span></td></tr>
+<tr><td>F-003</td><td><span class="badge b-warn">WARNING</span></td><td>verifiability</td><td>Task 9</td>
+<td>Task 9 Step 2 (контент docs) без детерминированного DoD кроме <code>lat check</code> на Step 3; приемлемо для docs-задачи.</td>
+<td><span class="badge b-acc">accepted</span></td></tr>
+</tbody>
+</table>
+
+<div class="panel">
+<b>Сводка:</b> CRITICAL open = 0 · WARNING open = 0 · Покрытие A1–C2 полное, без orphan-задач · Финальный вердикт
+<span class="badge b-ok">OK</span><br>
+<b>Chain:</b> intent <code>null</code> → spec <code>2026-06-19-progress-reasoning-language-design.md</code> → plan <code>2026-06-19-progress-reasoning-language.md</code>
+</div>
+
+<footer>Автогенерируемый артефакт <code>/check-plan</code> · obsidian-ai-wiki · 2026-06-19</footer>
+
+<script>
+  function t(){var r=document.documentElement;r.setAttribute("data-theme",r.getAttribute("data-theme")==="dark"?"light":"dark")}
+  document.documentElement.setAttribute("data-theme","dark");
+</script>
+</body>
+</html>

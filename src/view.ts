@@ -3,7 +3,7 @@ import { AddDomainModal, BusyCloseModal, ConfirmModal, ManageSourcesModal, Inges
 import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
 import type { DomainEntry } from "./domain";
-import { i18n } from "./i18n";
+import { i18n, i18nFor, resolveLang } from "./i18n";
 import { domainWikiFolder, domainLogPath, domainIndexPath } from "./wiki-path";
 import { computeSpeedText } from "./phases/llm-utils";
 import { isAbsolute, relative } from "path-browserify";
@@ -630,13 +630,17 @@ export class LlmWikiView extends ItemView {
         // Second init_start (Phase 2) — reset existing elements in place
         this.progressEl.setText(`0 / ${ev.totalFiles} файлов`);
         if (this.progressPhaseEl) {
-          const label = ev.phase === "ingest" ? "Ingesting files…" : "Analysing files…";
+          const label = ev.phase === "ingest"
+            ? i18nFor(resolveLang(this.plugin.settings.outputLanguage)).view.ingestingFiles
+            : i18nFor(resolveLang(this.plugin.settings.outputLanguage)).view.analysingFiles;
           this.progressPhaseEl.setText(label);
         }
       } else {
         const step = this.stepsEl.createDiv("ai-wiki-step ai-wiki-progress");
         step.createSpan({ cls: "ai-wiki-step-icon" }).setText("📂");
-        const label = ev.phase === "ingest" ? "Ingesting files…" : "Analysing files…";
+        const label = ev.phase === "ingest"
+          ? i18nFor(resolveLang(this.plugin.settings.outputLanguage)).view.ingestingFiles
+          : i18nFor(resolveLang(this.plugin.settings.outputLanguage)).view.analysingFiles;
         this.progressPhaseEl = step.createSpan({ cls: "ai-wiki-progress-phase" });
         this.progressPhaseEl.setText(label);
         this.progressEl = step.createSpan({ cls: "ai-wiki-progress-text" });
@@ -756,10 +760,10 @@ export class LlmWikiView extends ItemView {
           });
         }
         this.liveStatusIconEl?.setText("🧠");
-        this.liveStatusTextEl?.setText("Analysing...");
+        this.liveStatusTextEl?.setText(i18nFor(resolveLang(this.plugin.settings.outputLanguage)).view.analysing);
       } else {
         this.liveStatusIconEl?.setText("💬");
-        this.liveStatusTextEl?.setText("Forming response...");
+        this.liveStatusTextEl?.setText(i18nFor(resolveLang(this.plugin.settings.outputLanguage)).view.formingResponse);
       }
     } else if (ev.kind === "info_text") {
       this.stopWaiting();
