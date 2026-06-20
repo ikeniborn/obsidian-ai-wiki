@@ -16,7 +16,7 @@ Seven user operations turn notes into a living domain wiki. Each maps to a phase
 | **Format** | Cleans up any markdown note without changing facts |
 | **Chat** | Free-form follow-up after Query or Lint |
 
-Mobile runs Query only; Ingest, Lint, Init, and Format are desktop-only.
+Mobile runs Query and Format (Format with image-only vision); Ingest, Lint, and Init are desktop-only.
 
 ## Architecture map
 

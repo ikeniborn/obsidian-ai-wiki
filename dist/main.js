@@ -27153,6 +27153,70 @@ function resolveReasoningLang(reasoningLanguage, outputLanguage) {
   return "en";
 }
 
+// src/source-paths.ts
+var import_path_browserify = __toESM(require_path_browserify(), 1);
+
+// src/wiki-path.ts
+var WIKI_ROOT = "!Wiki";
+var GLOBAL_CONFIG_DIR = `${WIKI_ROOT}/_config`;
+var GLOBAL_DOMAIN_PATH = `${GLOBAL_CONFIG_DIR}/_domain.json`;
+var GLOBAL_AGENT_LOG_PATH = `${GLOBAL_CONFIG_DIR}/_agent.jsonl`;
+var GLOBAL_DEV_LOG_PATH = `${GLOBAL_CONFIG_DIR}/_dev.jsonl`;
+function domainWikiFolder(subfolder) {
+  return `${WIKI_ROOT}/${subfolder}`;
+}
+function sanitizeWikiFolder(raw) {
+  let s = raw;
+  const vaultMatch = s.match(/^vaults\/[^/]+\//);
+  if (vaultMatch) s = s.slice(vaultMatch[0].length);
+  if (s.startsWith("!Wiki/")) s = s.slice("!Wiki/".length);
+  if (s.includes("/")) return s.split("/").pop();
+  return s;
+}
+function sanitizeWikiSubfolder(raw) {
+  if (!raw.includes("/")) return raw;
+  return raw.split("/").pop();
+}
+function validateArticlePath(path2, wikiVaultPath) {
+  if (path2 === `${wikiVaultPath}/_config/_index.md` || path2 === `${wikiVaultPath}/_config/_log.md`) return true;
+  const prefix = `${wikiVaultPath}/`;
+  if (!path2.startsWith(prefix)) return false;
+  const remainder = path2.slice(prefix.length);
+  if (remainder.includes(".config")) return false;
+  const segments = remainder.split("/");
+  return segments.length === 2 && segments[1].endsWith(".md");
+}
+function domainConfigDir(domainFolder) {
+  return `${domainFolder}/_config`;
+}
+function domainIndexPath(domainFolder) {
+  return `${domainConfigDir(domainFolder)}/_index.md`;
+}
+function domainLogPath(domainFolder) {
+  return `${domainConfigDir(domainFolder)}/_log.md`;
+}
+function domainEmbeddingsPath(domainFolder) {
+  return `${domainConfigDir(domainFolder)}/_embeddings.json`;
+}
+
+// src/source-paths.ts
+function isSelectableSourceFolder(path2) {
+  return path2 !== WIKI_ROOT && !path2.startsWith(`${WIKI_ROOT}/`);
+}
+function consolidateSourcePaths(existing, newPath, vaultRoot) {
+  const toAbs = (p) => (0, import_path_browserify.isAbsolute)(p) ? p : (0, import_path_browserify.join)(vaultRoot, p);
+  const normed = (p) => {
+    const a = toAbs(p);
+    return a.endsWith("/") ? a : a + "/";
+  };
+  const newNormed = normed(newPath);
+  if (existing.some((sp) => newNormed.startsWith(normed(sp)))) {
+    return existing;
+  }
+  const filtered = existing.filter((sp) => !normed(sp).startsWith(newNormed));
+  return [...filtered, newPath];
+}
+
 // src/modals.ts
 var BusyCloseModal = class extends import_obsidian2.Modal {
   constructor(app, onAbort) {
@@ -27338,7 +27402,7 @@ var FolderInputSuggest = class extends import_obsidian2.AbstractInputSuggest {
   }
   getSuggestions(query) {
     const q = query.toLowerCase();
-    return this.app.vault.getAllFolders(true).filter((f) => f.path.toLowerCase().includes(q)).slice(0, 20);
+    return this.app.vault.getAllFolders(true).filter((f) => isSelectableSourceFolder(f.path) && f.path.toLowerCase().includes(q)).slice(0, 20);
   }
   renderSuggestion(folder, el) {
     el.setText(folder.path + "/");
@@ -27889,9 +27953,9 @@ function resolveEffective(s, l) {
 var import_obsidian3 = require("obsidian");
 
 // src/wiki-graph.ts
-var import_path_browserify = __toESM(require_path_browserify(), 1);
+var import_path_browserify2 = __toESM(require_path_browserify(), 1);
 function pageId(vaultPath) {
-  return (0, import_path_browserify.basename)(vaultPath, ".md");
+  return (0, import_path_browserify2.basename)(vaultPath, ".md");
 }
 function buildWikiGraph(pages) {
   const graph = /* @__PURE__ */ new Map();
@@ -28150,49 +28214,6 @@ function selectSeeds(question, pages, topK, minScore, indexAnnotations) {
   }
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, topK);
-}
-
-// src/wiki-path.ts
-var WIKI_ROOT = "!Wiki";
-var GLOBAL_CONFIG_DIR = `${WIKI_ROOT}/_config`;
-var GLOBAL_DOMAIN_PATH = `${GLOBAL_CONFIG_DIR}/_domain.json`;
-var GLOBAL_AGENT_LOG_PATH = `${GLOBAL_CONFIG_DIR}/_agent.jsonl`;
-var GLOBAL_DEV_LOG_PATH = `${GLOBAL_CONFIG_DIR}/_dev.jsonl`;
-function domainWikiFolder(subfolder) {
-  return `${WIKI_ROOT}/${subfolder}`;
-}
-function sanitizeWikiFolder(raw) {
-  let s = raw;
-  const vaultMatch = s.match(/^vaults\/[^/]+\//);
-  if (vaultMatch) s = s.slice(vaultMatch[0].length);
-  if (s.startsWith("!Wiki/")) s = s.slice("!Wiki/".length);
-  if (s.includes("/")) return s.split("/").pop();
-  return s;
-}
-function sanitizeWikiSubfolder(raw) {
-  if (!raw.includes("/")) return raw;
-  return raw.split("/").pop();
-}
-function validateArticlePath(path2, wikiVaultPath) {
-  if (path2 === `${wikiVaultPath}/_config/_index.md` || path2 === `${wikiVaultPath}/_config/_log.md`) return true;
-  const prefix = `${wikiVaultPath}/`;
-  if (!path2.startsWith(prefix)) return false;
-  const remainder = path2.slice(prefix.length);
-  if (remainder.includes(".config")) return false;
-  const segments = remainder.split("/");
-  return segments.length === 2 && segments[1].endsWith(".md");
-}
-function domainConfigDir(domainFolder) {
-  return `${domainFolder}/_config`;
-}
-function domainIndexPath(domainFolder) {
-  return `${domainConfigDir(domainFolder)}/_index.md`;
-}
-function domainLogPath(domainFolder) {
-  return `${domainConfigDir(domainFolder)}/_log.md`;
-}
-function domainEmbeddingsPath(domainFolder) {
-  return `${domainConfigDir(domainFolder)}/_embeddings.json`;
 }
 
 // src/rrf.ts
@@ -28656,17 +28677,18 @@ var PageSimilarityService = class {
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, limit2);
   }
-  async selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens, limit2 = this.config.topK) {
+  /** Embedding-scored selection that also reports dense-cosine confidence and failure. */
+  async selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens, limit2 = this.config.topK) {
     const { baseUrl, apiKey, model } = this.config;
     if (!baseUrl || !model) {
-      return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2);
+      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2), denseMax: 0, embedFailed: false };
     }
     let queryVec;
     try {
       const truncated = sourceContent.slice(0, 2e3);
       [queryVec] = await fetchEmbeddings(baseUrl, apiKey, model, [truncated], this.config.dimensions);
     } catch {
-      return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2);
+      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2), denseMax: 0, embedFailed: true };
     }
     const pids = allPaths.map((p) => pageId(p));
     const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
@@ -28697,25 +28719,50 @@ var PageSimilarityService = class {
         for (const pid of batch.pids) pageVecs.set(pid, []);
       }
     }
+    let denseMax = 0;
     const scored = [];
     for (let i = 0; i < allPaths.length; i++) {
       const pid = pids[i];
       const vecs = pageVecs.get(pid);
       if (!vecs) continue;
-      const score = vecs.length === 0 ? scoreSeed(queryTokens, pid, "", annotations[i]) : maxCosine(queryVec, vecs);
-      if (score > 0) scored.push({ path: allPaths[i], score });
+      if (vecs.length === 0) {
+        const s = scoreSeed(queryTokens, pid, "", annotations[i]);
+        if (s > 0) scored.push({ path: allPaths[i], score: s });
+      } else {
+        const c = maxCosine(queryVec, vecs);
+        if (c > denseMax) denseMax = c;
+        if (c > 0) scored.push({ path: allPaths[i], score: c });
+      }
     }
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, limit2);
+    return { results: scored.slice(0, limit2), denseMax, embedFailed: false };
+  }
+  async selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens, limit2 = this.config.topK) {
+    return (await this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens, limit2)).results;
+  }
+  /** Hybrid (dense ⊕ sparse) selection that also reports dense-cosine confidence. */
+  async selectHybridScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens) {
+    const pool = Math.max(this.config.topK, RRF_CANDIDATE_POOL);
+    const dense = await this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens, pool);
+    const sparse = this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, pool);
+    const fused = rrf([dense.results.map((x) => x.path), sparse.map((x) => x.path)], this.config.rrfK ?? 60);
+    const results = fused.slice(0, this.config.topK).map((f) => ({ path: f.id, score: f.score }));
+    return { results, denseMax: dense.denseMax, embedFailed: dense.embedFailed };
   }
   async selectHybridScored(sourceContent, indexAnnotations, allPaths, queryTokens) {
-    const pool = Math.max(this.config.topK, RRF_CANDIDATE_POOL);
-    const [dense, sparse] = await Promise.all([
-      this.selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens, pool),
-      Promise.resolve(this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, pool))
-    ]);
-    const fused = rrf([dense.map((x) => x.path), sparse.map((x) => x.path)], this.config.rrfK ?? 60);
-    return fused.slice(0, this.config.topK).map((f) => ({ path: f.id, score: f.score }));
+    return (await this.selectHybridScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens)).results;
+  }
+  /** Diagnostics-bearing seed selection used by the query gate. */
+  async selectRelevantScoredDiag(sourceContent, indexAnnotations, allPaths) {
+    const queryTokens = tokenize(sourceContent);
+    if (queryTokens.size === 0) return { results: [], denseMax: 0, embedFailed: false };
+    if (this.config.mode === "jaccard") {
+      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths), denseMax: 0, embedFailed: false };
+    }
+    if (this.config.mode === "hybrid") {
+      return this.selectHybridScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens);
+    }
+    return this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens);
   }
   async loadCache(domainRoot, vaultTools) {
     if (this.config.mode === "jaccard") return;
@@ -29389,42 +29436,44 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
             }
           })
         );
-        chunkField(
-          "Chunk size (chars)",
-          T.settings.chunkSize_desc(DEFAULT_CHUNKING.maxChars),
-          String(DEFAULT_CHUNKING.maxChars),
-          () => s.nativeAgent.chunkMaxChars ?? DEFAULT_CHUNKING.maxChars,
-          (n) => {
-            s.nativeAgent.chunkMaxChars = n;
-          }
-        );
-        chunkField(
-          "Chunk overlap (chars)",
-          T.settings.chunkOverlap_desc(DEFAULT_CHUNKING.overlapChars),
-          String(DEFAULT_CHUNKING.overlapChars),
-          () => s.nativeAgent.chunkOverlapChars ?? DEFAULT_CHUNKING.overlapChars,
-          (n) => {
-            s.nativeAgent.chunkOverlapChars = n;
-          }
-        );
-        chunkField(
-          "Min chunk size (merge)",
-          T.settings.chunkMin_desc(DEFAULT_CHUNKING.minChars),
-          String(DEFAULT_CHUNKING.minChars),
-          () => s.nativeAgent.chunkMinChars ?? DEFAULT_CHUNKING.minChars,
-          (n) => {
-            s.nativeAgent.chunkMinChars = n;
-          }
-        );
-        chunkField(
-          "Max chunks per page",
-          T.settings.chunkMaxCount_desc(DEFAULT_CHUNKING.maxCount),
-          String(DEFAULT_CHUNKING.maxCount),
-          () => s.nativeAgent.chunkMaxCount ?? DEFAULT_CHUNKING.maxCount,
-          (n) => {
-            s.nativeAgent.chunkMaxCount = n;
-          }
-        );
+        if (!import_obsidian4.Platform.isMobile) {
+          chunkField(
+            "Chunk size (chars)",
+            T.settings.chunkSize_desc(DEFAULT_CHUNKING.maxChars),
+            String(DEFAULT_CHUNKING.maxChars),
+            () => s.nativeAgent.chunkMaxChars ?? DEFAULT_CHUNKING.maxChars,
+            (n) => {
+              s.nativeAgent.chunkMaxChars = n;
+            }
+          );
+          chunkField(
+            "Chunk overlap (chars)",
+            T.settings.chunkOverlap_desc(DEFAULT_CHUNKING.overlapChars),
+            String(DEFAULT_CHUNKING.overlapChars),
+            () => s.nativeAgent.chunkOverlapChars ?? DEFAULT_CHUNKING.overlapChars,
+            (n) => {
+              s.nativeAgent.chunkOverlapChars = n;
+            }
+          );
+          chunkField(
+            "Min chunk size (merge)",
+            T.settings.chunkMin_desc(DEFAULT_CHUNKING.minChars),
+            String(DEFAULT_CHUNKING.minChars),
+            () => s.nativeAgent.chunkMinChars ?? DEFAULT_CHUNKING.minChars,
+            (n) => {
+              s.nativeAgent.chunkMinChars = n;
+            }
+          );
+          chunkField(
+            "Max chunks per page",
+            T.settings.chunkMaxCount_desc(DEFAULT_CHUNKING.maxCount),
+            String(DEFAULT_CHUNKING.maxCount),
+            () => s.nativeAgent.chunkMaxCount ?? DEFAULT_CHUNKING.maxCount,
+            (n) => {
+              s.nativeAgent.chunkMaxCount = n;
+            }
+          );
+        }
         new import_obsidian4.Setting(containerEl).setName("Retrieval").setHeading();
         new import_obsidian4.Setting(containerEl).setName("Hybrid retrieval (dense \u2295 sparse)").setDesc(T.settings.hybridRetrieval_desc).addToggle(
           (t) => t.setValue(s.nativeAgent.hybridRetrieval ?? false).onChange(async (v) => {
@@ -29456,43 +29505,45 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
             }
           })
         );
-        new import_obsidian4.Setting(containerEl).setName("Graph health").setHeading();
-        new import_obsidian4.Setting(containerEl).setName("Dedup on ingest").setDesc(T.settings.dedupOnIngest_desc).addToggle(
-          (t) => t.setValue(s.nativeAgent.dedupOnIngest ?? false).onChange(async (v) => {
-            s.nativeAgent.dedupOnIngest = v;
-            await this.plugin.saveSettings();
-          })
-        );
-        new import_obsidian4.Setting(containerEl).setName("Dedup threshold").setDesc(T.settings.dedupThreshold_desc).addText(
-          (t) => t.setValue(String(s.nativeAgent.dedupThreshold ?? 0.85)).onChange(async (v) => {
-            const n = Number(v);
-            if (Number.isFinite(n) && n > 0 && n <= 1) {
-              s.nativeAgent.dedupThreshold = n;
+        if (!import_obsidian4.Platform.isMobile) {
+          new import_obsidian4.Setting(containerEl).setName("Graph health").setHeading();
+          new import_obsidian4.Setting(containerEl).setName("Dedup on ingest").setDesc(T.settings.dedupOnIngest_desc).addToggle(
+            (t) => t.setValue(s.nativeAgent.dedupOnIngest ?? false).onChange(async (v) => {
+              s.nativeAgent.dedupOnIngest = v;
               await this.plugin.saveSettings();
-            }
-          })
-        );
-        new import_obsidian4.Setting(containerEl).setName("Lint near-duplicate report").setDesc(T.settings.lintNearDuplicate_desc).addToggle(
-          (t) => t.setValue(s.nativeAgent.lintNearDuplicate ?? false).onChange(async (v) => {
-            s.nativeAgent.lintNearDuplicate = v;
-            await this.plugin.saveSettings();
-          })
-        );
-        new import_obsidian4.Setting(containerEl).setName("Near-duplicate threshold").setDesc(T.settings.nearDupThreshold_desc).addText(
-          (t) => t.setValue(String(s.nativeAgent.nearDupThreshold ?? 0.8)).onChange(async (v) => {
-            const n = Number(v);
-            if (Number.isFinite(n) && n > 0 && n <= 1) {
-              s.nativeAgent.nearDupThreshold = n;
+            })
+          );
+          new import_obsidian4.Setting(containerEl).setName("Dedup threshold").setDesc(T.settings.dedupThreshold_desc).addText(
+            (t) => t.setValue(String(s.nativeAgent.dedupThreshold ?? 0.85)).onChange(async (v) => {
+              const n = Number(v);
+              if (Number.isFinite(n) && n > 0 && n <= 1) {
+                s.nativeAgent.dedupThreshold = n;
+                await this.plugin.saveSettings();
+              }
+            })
+          );
+          new import_obsidian4.Setting(containerEl).setName("Lint near-duplicate report").setDesc(T.settings.lintNearDuplicate_desc).addToggle(
+            (t) => t.setValue(s.nativeAgent.lintNearDuplicate ?? false).onChange(async (v) => {
+              s.nativeAgent.lintNearDuplicate = v;
               await this.plugin.saveSettings();
-            }
-          })
-        );
-        new import_obsidian4.Setting(containerEl).setName(T.settings.mergeDeleteWarnThreshold_name).setDesc(T.settings.mergeDeleteWarnThreshold_desc).addSlider(
-          (sl) => sl.setLimits(1, 20, 1).setDynamicTooltip().setValue(s.nativeAgent.mergeDeleteWarnThreshold ?? 5).onChange(async (v) => {
-            s.nativeAgent.mergeDeleteWarnThreshold = v;
-            await this.plugin.saveSettings();
-          })
-        );
+            })
+          );
+          new import_obsidian4.Setting(containerEl).setName("Near-duplicate threshold").setDesc(T.settings.nearDupThreshold_desc).addText(
+            (t) => t.setValue(String(s.nativeAgent.nearDupThreshold ?? 0.8)).onChange(async (v) => {
+              const n = Number(v);
+              if (Number.isFinite(n) && n > 0 && n <= 1) {
+                s.nativeAgent.nearDupThreshold = n;
+                await this.plugin.saveSettings();
+              }
+            })
+          );
+          new import_obsidian4.Setting(containerEl).setName(T.settings.mergeDeleteWarnThreshold_name).setDesc(T.settings.mergeDeleteWarnThreshold_desc).addSlider(
+            (sl) => sl.setLimits(1, 20, 1).setDynamicTooltip().setValue(s.nativeAgent.mergeDeleteWarnThreshold ?? 5).onChange(async (v) => {
+              s.nativeAgent.mergeDeleteWarnThreshold = v;
+              await this.plugin.saveSettings();
+            })
+          );
+        }
       }
     }
     new import_obsidian4.Setting(containerEl).setName("Vision").setHeading();
@@ -30601,7 +30652,20 @@ function computeSpeedText(stats) {
 }
 
 // src/view.ts
-var import_path_browserify2 = __toESM(require_path_browserify(), 1);
+var import_path_browserify3 = __toESM(require_path_browserify(), 1);
+
+// src/retrieval-diag.ts
+function seedPassesGate(denseMax, threshold) {
+  return denseMax >= threshold;
+}
+function retrievalTag(mode, seedFallback, reason, denseMax) {
+  if (mode === "jaccard") return "jaccard";
+  if (seedFallback === "llm") return "llm seeds";
+  if (seedFallback === "jaccard") {
+    return reason === "embed-failed" ? "jaccard (embed failed)" : `jaccard (low ${(denseMax ?? 0).toFixed(2)})`;
+  }
+  return "vector";
+}
 
 // src/utils/vault-walk.ts
 var import_obsidian5 = require("obsidian");
@@ -30634,7 +30698,8 @@ function formatGraphStatsLines(ev, agentLogEnabled) {
     const preview = ev.seeds.slice(0, 3).join(", ");
     const extra = ev.seeds.length > 3 ? `, \u2026+${ev.seeds.length - 3}` : "";
     const cacheHint2 = ev.fromCache ? " (cache hit)" : "";
-    return [`\u0413\u0440\u0430\u0444: ${ev.seeds.length} seeds [${preview}${extra}] \u2192 ${ev.expanded} / ${ev.total} \u0441\u0442\u0440\u0430\u043D\u0438\u0446${cacheHint2}`];
+    const tag = ev.retrievalMode ? ` \xB7 ${retrievalTag(ev.retrievalMode, ev.seedFallback ?? "none", ev.seedFallbackReason, ev.denseMax)}` : "";
+    return [`\u0413\u0440\u0430\u0444: ${ev.seeds.length} seeds [${preview}${extra}] \u2192 ${ev.expanded} / ${ev.total} \u0441\u0442\u0440\u0430\u043D\u0438\u0446${cacheHint2}${tag}`];
   }
   const SEED_CAP = 5;
   const cacheHint = ev.fromCache ? "  [cache hit]" : "";
@@ -30645,7 +30710,9 @@ function formatGraphStatsLines(ev, agentLogEnabled) {
   const lines = [`Seeds (${totalSeeds})${cacheHint}`];
   for (const part of seedParts) lines.push(`  ${part}`);
   if (remainder > 0) lines.push(`  \u2026+${remainder}`);
-  if (ev.seedFallback && ev.seedFallback !== "none") {
+  if (ev.retrievalMode) {
+    lines.push(`Retrieval: ${retrievalTag(ev.retrievalMode, ev.seedFallback ?? "none", ev.seedFallbackReason, ev.denseMax)}`);
+  } else if (ev.seedFallback && ev.seedFallback !== "none") {
     lines.push(`Seed fallback: ${ev.seedFallback}`);
   }
   if (ev.expandedPages.length > 0) {
@@ -30767,6 +30834,9 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
     } else {
       root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionDomainMobile });
       this.buildDomainRow(root, { withActions: false });
+      const mobileActions = root.createDiv("ai-wiki-domain-actions");
+      this.formatBtn = mobileActions.createEl("button", { text: T.view.format });
+      this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
     }
     root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionQuery });
     const ask = root.createDiv("ai-wiki-ask");
@@ -31043,8 +31113,8 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
     const T = i18n().modal;
     const base = this.plugin.controller.cwdOrEmpty();
     const toVaultRel = (p) => {
-      if (!base || !(0, import_path_browserify2.isAbsolute)(p)) return p;
-      const rel = (0, import_path_browserify2.relative)(base, p);
+      if (!base || !(0, import_path_browserify3.isAbsolute)(p)) return p;
+      const rel = (0, import_path_browserify3.relative)(base, p);
       return rel.startsWith("..") ? p : rel;
     };
     const mdFiles = collectMdInPaths(this.app.vault, sourcePaths.map(toVaultRel));
@@ -31076,8 +31146,8 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
       const T = i18n().modal;
       const base = this.plugin.controller.cwdOrEmpty();
       const toVaultRel = (p) => {
-        if (!base || !(0, import_path_browserify2.isAbsolute)(p)) return p;
-        const rel = (0, import_path_browserify2.relative)(base, p);
+        if (!base || !(0, import_path_browserify3.isAbsolute)(p)) return p;
+        const rel = (0, import_path_browserify3.relative)(base, p);
         return rel.startsWith("..") ? p : rel;
       };
       const mdFiles = collectMdInPaths(this.app.vault, newPaths.map(toVaultRel));
@@ -31885,22 +31955,6 @@ function translateSystemEvent(message) {
 // src/controller.ts
 var import_obsidian10 = require("obsidian");
 var import_path_browserify7 = __toESM(require_path_browserify(), 1);
-
-// src/source-paths.ts
-var import_path_browserify3 = __toESM(require_path_browserify(), 1);
-function consolidateSourcePaths(existing, newPath, vaultRoot) {
-  const toAbs = (p) => (0, import_path_browserify3.isAbsolute)(p) ? p : (0, import_path_browserify3.join)(vaultRoot, p);
-  const normed = (p) => {
-    const a = toAbs(p);
-    return a.endsWith("/") ? a : a + "/";
-  };
-  const newNormed = normed(newPath);
-  if (existing.some((sp) => newNormed.startsWith(normed(sp)))) {
-    return existing;
-  }
-  const filtered = existing.filter((sp) => !normed(sp).startsWith(newNormed));
-  return [...filtered, newPath];
-}
 
 // src/domain.ts
 function migrateDomainsV2(domains) {
@@ -39162,18 +39216,23 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   let seeds;
   let seedScores = {};
   let seedFallback = "none";
+  let retrievalMode = "jaccard";
+  let denseMax = 0;
+  let seedFallbackReason;
   const syntheticPages = new Map(
     [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""])
   );
   if (similarity && (similarity.config.mode === "embedding" || similarity.config.mode === "hybrid")) {
+    retrievalMode = similarity.config.mode;
     await similarity.loadCache(wikiVaultPath, vaultTools);
     const allAnnotatedPaths = [...indexAnnotations.keys()].map((id) => `${wikiVaultPath}/${id}.md`);
-    const selected = await similarity.selectRelevantScored(question, indexAnnotations, allAnnotatedPaths);
-    const topSelected = selected.slice(0, topK);
+    const diag = await similarity.selectRelevantScoredDiag(question, indexAnnotations, allAnnotatedPaths);
+    denseMax = diag.denseMax;
+    const topSelected = diag.results.slice(0, topK);
     seeds = topSelected.map((x) => pageId(x.path));
     seedScores = Object.fromEntries(topSelected.map((x) => [pageId(x.path), x.score]));
-    const maxSeedScore = seeds.length ? Math.max(...Object.values(seedScores)) : 0;
-    if (maxSeedScore < seedSimilarityThreshold) {
+    if (!seedPassesGate(denseMax, seedSimilarityThreshold)) {
+      seedFallbackReason = diag.embedFailed ? "embed-failed" : "low-similarity";
       const jaccardSeeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
       if (jaccardSeeds.length > 0) {
         seeds = jaccardSeeds.map((x) => x.id);
@@ -39229,7 +39288,7 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   );
   const seedSet = new Set(seeds);
   const expandedPages = [...selectedIds].filter((id) => !seedSet.has(id));
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, seedFallback };
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, seedFallback, retrievalMode, denseMax, seedFallbackReason };
   const fusedOrder = bfsFusion ? fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, graphResult.graph, graphDepth, rrfK) : void 0;
   const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3, fusedOrder);
   const entityTypesBlock = buildEntityTypesBlock2(domain);
@@ -40813,6 +40872,9 @@ function getMimeType(path2) {
       return null;
   }
 }
+function isVisionSupportedOnMobile(path2) {
+  return getMimeType(path2) !== null;
+}
 async function callVisionLlm(llm, model, systemPrompt, contentParts, signal) {
   const resp = await llm.chat.completions.create({
     model,
@@ -40862,9 +40924,10 @@ async function analyzeExcalidraw(b64, llm, model, signal, language = "auto") {
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } }
   ], signal);
 }
-async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, sourcePath = "", language = "auto", visionTempStore) {
+async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, sourcePath = "", language = "auto", visionTempStore, imageOnly = false) {
   const resolved = vaultTools.resolveLink(path2, sourcePath);
   if (resolved === null) return null;
+  if (imageOnly && !isVisionSupportedOnMobile(resolved)) return null;
   const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
   const isExcalidraw = ext === "excalidraw" || resolved.endsWith(".excalidraw.md");
   if (isExcalidraw) {
@@ -40973,14 +41036,15 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
           continue;
         }
         try {
-          const description = await analyzeSingleAttachment(path2, vaultTools, llm, visionSettings.model, signal, filePath, lang, visionTempStore);
+          const description = await analyzeSingleAttachment(path2, vaultTools, llm, visionSettings.model, signal, filePath, lang, visionTempStore, visionSettings.imageOnly ?? false);
           if (description !== null) {
             visionDescriptions.set(path2, description);
             await visionTempStore?.putDescription(path2, description);
             yield { kind: "tool_result", ok: true, preview: description };
           } else {
-            yield { kind: "tool_result", ok: false, preview: "unknown extension" };
-            yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [path2] };
+            const why = visionSettings.imageOnly ?? false ? "unsupported on mobile" : "unknown extension";
+            yield { kind: "tool_result", ok: false, preview: why };
+            yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [`${path2} \u2014 ${why}`] };
           }
         } catch (e) {
           yield { kind: "tool_result", ok: false, preview: e?.message ?? "failed" };
@@ -41242,12 +41306,13 @@ var VisionTempStore = class {
 
 // src/agent-runner.ts
 var AgentRunner = class {
-  constructor(llm, settings, vaultTools, vaultName, domains, visionTempBaseDir) {
+  constructor(llm, settings, vaultTools, vaultName, domains, visionTempBaseDir, isMobile = false) {
     this.settings = settings;
     this.vaultTools = vaultTools;
     this.vaultName = vaultName;
     this.domains = domains;
     this.visionTempBaseDir = visionTempBaseDir;
+    this.isMobile = isMobile;
     this.llm = wrapWithJsonFallback(llm);
   }
   settings;
@@ -41255,6 +41320,7 @@ var AgentRunner = class {
   vaultName;
   domains;
   visionTempBaseDir;
+  isMobile;
   llm;
   buildOptsFor(op) {
     const key = op === "chat" || op === "lint-chat" ? "lint" : op;
@@ -41378,7 +41444,8 @@ var AgentRunner = class {
         const baseVisionSettings = {
           enabled: this.settings.vision?.enabled ?? false,
           model: this.settings.vision?.model ?? "",
-          language: this.settings.outputLanguage ?? "auto"
+          language: this.settings.outputLanguage ?? "auto",
+          imageOnly: this.isMobile
         };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
         const progress = i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress;
@@ -49827,7 +49894,7 @@ var WikiController = class {
       });
       llm = import_obsidian10.Platform.isMobile ? wrapMobileNoStream(openaiClient) : openaiClient;
     }
-    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? void 0);
+    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? void 0, import_obsidian10.Platform.isMobile);
   }
   async logEvent(_vaultRoot, sessionId, op, domainId, ev) {
     if (!(this._currentLogMeta?.agentLogEnabled ?? this.plugin.settings.agentLogEnabled)) return;

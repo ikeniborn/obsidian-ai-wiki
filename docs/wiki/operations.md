@@ -83,7 +83,9 @@ Pipeline: extract links → check against vault stems → if broken and `wikiLin
 
 ### Query Trace UI
 
-When `agentLogEnabled` is true, the `graph_stats` event is rendered with scores and a BFS-by-hop breakdown in multi-line trace format (`src/view.ts#formatGraphStatsLines`, a pure function); when false, a compact single-line form is shown. Integration test specs for the link-validation pipeline live in [[query-sentinel-tests]].
+The `graph_stats` event is rendered by `src/view.ts#formatGraphStatsLines` (a pure function). Integration test specs for the link-validation pipeline live in [[query-sentinel-tests]].
+
+When `agentLogEnabled` is true, scores and a BFS-by-hop breakdown render in multi-line trace format; when false, a compact single-line form is shown. Both forms now include a short retrieval tag (`vector` / `jaccard (low …)` / `jaccard (embed failed)` / `llm seeds`) built by `retrievalTag` from `retrievalMode`/`denseMax`/`seedFallbackReason`.
 
 ## Lint
 
@@ -119,7 +121,7 @@ Free-form conversation after any operation (`src/phases/chat.ts`). Takes `contex
 
 Reformats a non-wiki markdown page without changing facts (`src/phases/format.ts`). The LLM returns sentinel-marked output with `report` and `formatted` sections; the preview is written to a temp file and the user applies or cancels via sidebar. See [[llm-pipeline#Format Sentinel]].
 
-Output parsing uses sentinel markers instead of JSON for robustness. Iterative refinement via `formatRefine`. When `vision.enabled` and `vision.model` are set, a pre-step analyzes embedded images, PDFs, and Excalidraw files (`src/phases/attachment-analyzer.ts`); descriptions are inserted into the formatted output only — the source file is never modified.
+Output parsing uses sentinel markers instead of JSON for robustness. Iterative refinement via `formatRefine`. A mobile Format button makes Format available on mobile too (no longer desktop-only). When `vision.enabled` and `vision.model` are set, a pre-step analyzes embedded images, PDFs, and Excalidraw files (`src/phases/attachment-analyzer.ts`); descriptions are inserted into the formatted output only — the source file is never modified.
 
 ### Frontmatter Restore
 
@@ -135,7 +137,9 @@ An explicit `ru`/`en`/`es` wins; `auto`/undefined falls back to the Obsidian UI 
 
 ### Vision Pre-Step
 
-Image and PDF diagram embeds are processed in two stages: the model reads the drawing literally as a silent internal step, then emits a structured, logical description of what the scheme means (purpose, components, flow), and recreates the structure as a `mermaid` block (flow/architecture) or a markdown table (grid/matrix). Excalidraw uses a dedicated prompt (prose/lists only, no `mermaid`); embeds are rendered to PNG by the host `obsidian-excalidraw-plugin` and skipped when the host is absent or on mobile.
+Image and PDF diagram embeds are processed in two stages: the model reads the drawing literally as a silent internal step, then emits a structured, logical description of what the scheme means (purpose, components, flow), and recreates the structure as a `mermaid` block (flow/architecture) or a markdown table (grid/matrix). Excalidraw uses a dedicated prompt (prose/lists only, no `mermaid`); embeds are rendered to PNG by the host `obsidian-excalidraw-plugin` and skipped when the host is absent.
+
+On mobile, vision is image-only: raster images (png/jpg/jpeg/webp) are still analyzed, but PDF and Excalidraw are skipped because they need a desktop renderer. This is gated by `isVisionSupportedOnMobile` (`getMimeType(path) !== null`) threaded as an `imageOnly` flag; skipped embeds report "unsupported on mobile" instead of "unknown extension".
 
 Vision results are cached per run in a `VisionTempStore` (`src/phases/vision-temp-store.ts`) under the plugin directory, never the vault content tree. Each attachment is analyzed by one LLM call and resumed from the store if the idle-watchdog retries, so completed attachments are never re-sent. The watchdog resets on `tool_use`/`tool_result` as well as stream events, so per-attachment progress prevents a cumulative-time abort.
 
@@ -158,4 +162,4 @@ Three opt-in capabilities; all default to off and are safe to enable independent
 Two opt-in retrieval refinements for the native Query pipeline; both default to off and are measurable on the eval harness. See [[retrieval#Fusion]].
 
 - **BFS fusion** (`nativeAgent.bfsFusion`): query context ordered by an RRF fusion of vector and graph ranks over the seed+BFS union, reusing `rrfK`.
-- **Seed similarity threshold** (`nativeAgent.seedSimilarityThreshold > 0`): embedding/hybrid seeds below the threshold are dropped in favor of Jaccard, falling through to `llmSelectSeeds` when Jaccard is also empty.
+- **Seed similarity threshold** (`nativeAgent.seedSimilarityThreshold > 0`): the threshold is compared against the **dense cosine confidence** (`denseMax`), not the fused score — so the gate actually engages in hybrid mode. Seeds below it are dropped in favor of Jaccard, falling through to `llmSelectSeeds` when Jaccard is also empty.
