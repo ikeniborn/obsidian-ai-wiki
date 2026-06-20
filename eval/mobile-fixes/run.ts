@@ -7,6 +7,7 @@
  */
 import { seedPassesGate, retrievalTag } from "../../src/retrieval-diag";
 import { maxCosine } from "../../src/page-similarity";
+import { isVisionSupportedOnMobile } from "../../src/phases/attachment-analyzer";
 
 let pass = 0, fail = 0;
 const failures: string[] = [];
@@ -39,6 +40,13 @@ check("orthogonal vectors cosine 0", Math.abs(maxCosine(f([1, 0, 0]), [f([0, 1, 
   check("strong denseMax passes gate", seedPassesGate(dense, 0.3) === true);
 }
 check("orthogonal denseMax fails gate", seedPassesGate(maxCosine(f([1, 0]), [f([0, 1])]), 0.3) === false);
+
+section("isVisionSupportedOnMobile");
+check("png supported", isVisionSupportedOnMobile("img/a.png") === true);
+check("jpg supported", isVisionSupportedOnMobile("img/a.JPG") === true);
+check("webp supported", isVisionSupportedOnMobile("img/a.webp") === true);
+check("pdf not supported", isVisionSupportedOnMobile("doc/a.pdf") === false);
+check("excalidraw not supported", isVisionSupportedOnMobile("d/a.excalidraw") === false);
 
 console.log(`\n${fail === 0 ? "ALL PASS" : "FAILURES"}: ${pass} passed, ${fail} failed`);
 if (fail > 0) { console.log(failures.join("\n")); process.exit(1); }
