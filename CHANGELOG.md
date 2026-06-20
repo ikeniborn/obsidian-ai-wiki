@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.178 — 2026-06-20
+
+### Новое
+- feat(view): mobile Format button (vision-capable)
+- feat(vision): mobile vision via imageOnly path — skips PDF/Excalidraw cleanly
+- feat(settings): hide chunking + graph-health on mobile (ingest/lint only)
+- feat(retrieval): obsidian-free seed-gate with denseMax/embedFailed diagnostics + retrieval-tag helpers
+- feat(view): retrieval tag in compact output + trace progress
+- feat(types): expose retrievalMode/denseMax/seedFallbackReason in graph_stats
+
+### Исправления
+- fix(query): gate seeds on dense cosine, not RRF-fused score
+- fix(modals): exclude !Wiki output from domain source-path suggestions
+
+---
+
 ## 0.1.177 — 2026-06-19
 
 ### Новое
