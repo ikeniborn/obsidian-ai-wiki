@@ -6,9 +6,13 @@
 node_modules/.bin/esbuild eval/mobile-fixes/run.ts \
   --bundle --platform=node --format=cjs \
   --alias:obsidian=./eval/mobile-fixes/obsidian-stub.ts \
+  --loader:.md=text \
   --outfile=eval/mobile-fixes/run.cjs
 node eval/mobile-fixes/run.cjs
 ```
+(`--loader:.md=text` is required because the vision helper lives in
+`attachment-analyzer.ts`, whose import tree pulls `.md` prompt files — the same
+text-loader the plugin bundle uses.)
 Expected: `ALL PASS`. Covers seed gate (dense cosine vs RRF-scale), retrieval tag,
 cosine→denseMax, mobile-vision ext, source-folder filter.
 
