@@ -88,7 +88,7 @@ export async function* runFormat(
   backend: "claude-agent" | "native-agent" = "native-agent",
   wikiVaultPath?: string,
   wikiLinkValidationRetries: number = 3,
-  visionSettings: { enabled: boolean; model: string; language?: "auto" | "ru" | "en" | "es" } = { enabled: false, model: "" },
+  visionSettings: { enabled: boolean; model: string; language?: "auto" | "ru" | "en" | "es"; imageOnly?: boolean } = { enabled: false, model: "" },
   visionTempStore?: VisionTempStore,
   progress: FormatProgress = enFormatProgressFallback,
 ): AsyncGenerator<RunEvent> {
@@ -135,14 +135,15 @@ export async function* runFormat(
           continue;
         }
         try {
-          const description = await analyzeSingleAttachment(path, vaultTools, llm, visionSettings.model, signal, filePath, lang, visionTempStore);
+          const description = await analyzeSingleAttachment(path, vaultTools, llm, visionSettings.model, signal, filePath, lang, visionTempStore, visionSettings.imageOnly ?? false);
           if (description !== null) {
             visionDescriptions.set(path, description);
             await visionTempStore?.putDescription(path, description);
             yield { kind: "tool_result", ok: true, preview: description };
           } else {
-            yield { kind: "tool_result", ok: false, preview: "unknown extension" };
-            yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [path] };
+            const why = (visionSettings.imageOnly ?? false) ? "unsupported on mobile" : "unknown extension";
+            yield { kind: "tool_result", ok: false, preview: why };
+            yield { kind: "info_text", icon: "⚠️", summary: "Vision skipped", details: [`${path} — ${why}`] };
           }
         } catch (e) {
           yield { kind: "tool_result", ok: false, preview: (e as Error)?.message ?? "failed" };

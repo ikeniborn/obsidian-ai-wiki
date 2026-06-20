@@ -6,7 +6,9 @@ Two LLM backends are supported and selected in settings; backend choice drives h
 
 OpenAI-compatible HTTP client (`openai` SDK). Works with Ollama, OpenAI, or any compatible server. Supports streaming, `json_object` response format, thinking budget, and per-operation model overrides.
 
-HTTP `timeout` is set per-operation from `settings.timeouts[opKey]`; a value of `0` passes `undefined` (no HTTP timeout). Chat sessions forward `settings.timeouts.lint`. On mobile, streaming is disabled via `wrapMobileNoStream`. This is the only backend that uses [[retrieval#PageSimilarityService]] embeddings.
+HTTP `timeout` is set per-operation from `settings.timeouts[opKey]`; a value of `0` passes `undefined` (no HTTP timeout). Chat sessions forward `settings.timeouts.lint`. On mobile, streaming is disabled via `wrapMobileNoStream`, and the ingest/lint-only settings — the chunking fields and the "Graph health" subsection — are hidden via `!Platform.isMobile` in `src/settings.ts`, since those operations are desktop-only. This is the only backend that uses [[retrieval#PageSimilarityService]] embeddings.
+
+The `!Wiki` output tree is excluded from domain source-folder suggestions: `isSelectableSourceFolder` (`src/source-paths.ts`) drops `WIKI_ROOT` and its descendants, applied in `FolderInputSuggest.getSuggestions` (`src/modals.ts`).
 
 ## Claude Agent
 

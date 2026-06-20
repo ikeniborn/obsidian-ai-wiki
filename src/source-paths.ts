@@ -1,4 +1,10 @@
 import { isAbsolute, join } from "path-browserify";
+import { WIKI_ROOT } from "./wiki-path";
+
+/** A vault folder is a valid domain source iff it is not the wiki output tree. */
+export function isSelectableSourceFolder(path: string): boolean {
+  return path !== WIKI_ROOT && !path.startsWith(`${WIKI_ROOT}/`);
+}
 
 /**
  * Returns updated source_paths after adding newPath with consolidation:

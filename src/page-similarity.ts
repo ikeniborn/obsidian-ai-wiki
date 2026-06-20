@@ -4,6 +4,7 @@ import { pageId } from "./wiki-graph";
 import type { VaultTools } from "./vault-tools";
 import { domainEmbeddingsPath } from "./wiki-path";
 import { rrf } from "./rrf";
+import type { SeedDiag } from "./retrieval-diag";
 
 export interface ChunkingConfig {
   maxChars: number;
@@ -198,7 +199,7 @@ function cosine(a: Float32Array, b: Float32Array): number {
 // Page score = best cosine across the page's chunk vectors. Floors at 0: a page whose
 // chunks are all orthogonal/antipodal to the query scores 0 and is dropped by the
 // caller's `score > 0` filter — matching the old single-vector behaviour.
-function maxCosine(query: Float32Array, vecs: Float32Array[]): number {
+export function maxCosine(query: Float32Array, vecs: Float32Array[]): number {
   let best = 0;
   for (const v of vecs) {
     if (v.length === 0) continue;
@@ -650,16 +651,17 @@ export class PageSimilarityService {
     return scored.slice(0, limit);
   }
 
-  private async selectEmbeddingScored(
+  /** Embedding-scored selection that also reports dense-cosine confidence and failure. */
+  private async selectEmbeddingScoredDiag(
     sourceContent: string,
     indexAnnotations: Map<string, string>,
     allPaths: string[],
     queryTokens: Set<string>,
     limit: number = this.config.topK,
-  ): Promise<{ path: string; score: number }[]> {
+  ): Promise<SeedDiag> {
     const { baseUrl, apiKey, model } = this.config;
     if (!baseUrl || !model) {
-      return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit);
+      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit), denseMax: 0, embedFailed: false };
     }
 
     let queryVec: Float32Array;
@@ -667,7 +669,7 @@ export class PageSimilarityService {
       const truncated = sourceContent.slice(0, 2000);
       [queryVec] = await fetchEmbeddings(baseUrl, apiKey!, model, [truncated], this.config.dimensions);
     } catch {
-      return this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit);
+      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit), denseMax: 0, embedFailed: true };
     }
 
     const pids = allPaths.map((p) => pageId(p));
@@ -700,18 +702,48 @@ export class PageSimilarityService {
       }
     }
 
+    let denseMax = 0;
     const scored: { path: string; score: number }[] = [];
     for (let i = 0; i < allPaths.length; i++) {
       const pid = pids[i];
       const vecs = pageVecs.get(pid);
       if (!vecs) continue;
-      const score = vecs.length === 0
-        ? scoreSeed(queryTokens, pid, "", annotations[i])
-        : maxCosine(queryVec, vecs);
-      if (score > 0) scored.push({ path: allPaths[i], score });
+      if (vecs.length === 0) {
+        const s = scoreSeed(queryTokens, pid, "", annotations[i]);
+        if (s > 0) scored.push({ path: allPaths[i], score: s });
+      } else {
+        const c = maxCosine(queryVec, vecs);
+        if (c > denseMax) denseMax = c;
+        if (c > 0) scored.push({ path: allPaths[i], score: c });
+      }
     }
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, limit);
+    return { results: scored.slice(0, limit), denseMax, embedFailed: false };
+  }
+
+  private async selectEmbeddingScored(
+    sourceContent: string,
+    indexAnnotations: Map<string, string>,
+    allPaths: string[],
+    queryTokens: Set<string>,
+    limit: number = this.config.topK,
+  ): Promise<{ path: string; score: number }[]> {
+    return (await this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens, limit)).results;
+  }
+
+  /** Hybrid (dense ⊕ sparse) selection that also reports dense-cosine confidence. */
+  private async selectHybridScoredDiag(
+    sourceContent: string,
+    indexAnnotations: Map<string, string>,
+    allPaths: string[],
+    queryTokens: Set<string>,
+  ): Promise<SeedDiag> {
+    const pool = Math.max(this.config.topK, RRF_CANDIDATE_POOL);
+    const dense = await this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens, pool);
+    const sparse = this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, pool);
+    const fused = rrf([dense.results.map((x) => x.path), sparse.map((x) => x.path)], this.config.rrfK ?? 60);
+    const results = fused.slice(0, this.config.topK).map((f) => ({ path: f.id, score: f.score }));
+    return { results, denseMax: dense.denseMax, embedFailed: dense.embedFailed };
   }
 
   private async selectHybridScored(
@@ -720,17 +752,24 @@ export class PageSimilarityService {
     allPaths: string[],
     queryTokens: Set<string>,
   ): Promise<{ path: string; score: number }[]> {
-    const pool = Math.max(this.config.topK, RRF_CANDIDATE_POOL);
-    // Keyless: selectEmbeddingScored degrades to jaccard, so both sides run jaccard
-    // and RRF of two identical lists preserves the jaccard order — correct, just redundant.
-    const [dense, sparse] = await Promise.all([
-      this.selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens, pool),
-      Promise.resolve(this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, pool)),
-    ]);
-    const fused = rrf([dense.map((x) => x.path), sparse.map((x) => x.path)], this.config.rrfK ?? 60);
-    return fused
-      .slice(0, this.config.topK)
-      .map((f) => ({ path: f.id, score: f.score }));
+    return (await this.selectHybridScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens)).results;
+  }
+
+  /** Diagnostics-bearing seed selection used by the query gate. */
+  async selectRelevantScoredDiag(
+    sourceContent: string,
+    indexAnnotations: Map<string, string>,
+    allPaths: string[],
+  ): Promise<SeedDiag> {
+    const queryTokens = tokenize(sourceContent);
+    if (queryTokens.size === 0) return { results: [], denseMax: 0, embedFailed: false };
+    if (this.config.mode === "jaccard") {
+      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths), denseMax: 0, embedFailed: false };
+    }
+    if (this.config.mode === "hybrid") {
+      return this.selectHybridScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens);
+    }
+    return this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens);
   }
 
   async loadCache(domainRoot: string, vaultTools: VaultTools): Promise<void> {

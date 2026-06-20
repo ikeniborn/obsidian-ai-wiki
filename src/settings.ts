@@ -743,26 +743,28 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               }),
           );
 
-        chunkField("Chunk size (chars)",
-          T.settings.chunkSize_desc(DEFAULT_CHUNKING.maxChars),
-          String(DEFAULT_CHUNKING.maxChars),
-          () => s.nativeAgent.chunkMaxChars ?? DEFAULT_CHUNKING.maxChars,
-          (n) => { s.nativeAgent.chunkMaxChars = n; });
-        chunkField("Chunk overlap (chars)",
-          T.settings.chunkOverlap_desc(DEFAULT_CHUNKING.overlapChars),
-          String(DEFAULT_CHUNKING.overlapChars),
-          () => s.nativeAgent.chunkOverlapChars ?? DEFAULT_CHUNKING.overlapChars,
-          (n) => { s.nativeAgent.chunkOverlapChars = n; });
-        chunkField("Min chunk size (merge)",
-          T.settings.chunkMin_desc(DEFAULT_CHUNKING.minChars),
-          String(DEFAULT_CHUNKING.minChars),
-          () => s.nativeAgent.chunkMinChars ?? DEFAULT_CHUNKING.minChars,
-          (n) => { s.nativeAgent.chunkMinChars = n; });
-        chunkField("Max chunks per page",
-          T.settings.chunkMaxCount_desc(DEFAULT_CHUNKING.maxCount),
-          String(DEFAULT_CHUNKING.maxCount),
-          () => s.nativeAgent.chunkMaxCount ?? DEFAULT_CHUNKING.maxCount,
-          (n) => { s.nativeAgent.chunkMaxCount = n; });
+        if (!Platform.isMobile) {
+          chunkField("Chunk size (chars)",
+            T.settings.chunkSize_desc(DEFAULT_CHUNKING.maxChars),
+            String(DEFAULT_CHUNKING.maxChars),
+            () => s.nativeAgent.chunkMaxChars ?? DEFAULT_CHUNKING.maxChars,
+            (n) => { s.nativeAgent.chunkMaxChars = n; });
+          chunkField("Chunk overlap (chars)",
+            T.settings.chunkOverlap_desc(DEFAULT_CHUNKING.overlapChars),
+            String(DEFAULT_CHUNKING.overlapChars),
+            () => s.nativeAgent.chunkOverlapChars ?? DEFAULT_CHUNKING.overlapChars,
+            (n) => { s.nativeAgent.chunkOverlapChars = n; });
+          chunkField("Min chunk size (merge)",
+            T.settings.chunkMin_desc(DEFAULT_CHUNKING.minChars),
+            String(DEFAULT_CHUNKING.minChars),
+            () => s.nativeAgent.chunkMinChars ?? DEFAULT_CHUNKING.minChars,
+            (n) => { s.nativeAgent.chunkMinChars = n; });
+          chunkField("Max chunks per page",
+            T.settings.chunkMaxCount_desc(DEFAULT_CHUNKING.maxCount),
+            String(DEFAULT_CHUNKING.maxCount),
+            () => s.nativeAgent.chunkMaxCount ?? DEFAULT_CHUNKING.maxCount,
+            (n) => { s.nativeAgent.chunkMaxCount = n; });
+        }
 
         new Setting(containerEl).setName("Retrieval").setHeading();
         new Setting(containerEl)
@@ -794,47 +796,49 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n >= 0) { s.nativeAgent.seedSimilarityThreshold = n; await this.plugin.saveSettings(); } }),
           );
 
-        new Setting(containerEl).setName("Graph health").setHeading();
-        new Setting(containerEl)
-          .setName("Dedup on ingest")
-          .setDesc(T.settings.dedupOnIngest_desc)
-          .addToggle((t) =>
-            t.setValue(s.nativeAgent.dedupOnIngest ?? false)
-              .onChange(async (v) => { s.nativeAgent.dedupOnIngest = v; await this.plugin.saveSettings(); }),
-          );
-        new Setting(containerEl)
-          .setName("Dedup threshold")
-          .setDesc(T.settings.dedupThreshold_desc)
-          .addText((t) =>
-            t.setValue(String(s.nativeAgent.dedupThreshold ?? 0.85))
-              .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0 && n <= 1) { s.nativeAgent.dedupThreshold = n; await this.plugin.saveSettings(); } }),
-          );
-        new Setting(containerEl)
-          .setName("Lint near-duplicate report")
-          .setDesc(T.settings.lintNearDuplicate_desc)
-          .addToggle((t) =>
-            t.setValue(s.nativeAgent.lintNearDuplicate ?? false)
-              .onChange(async (v) => { s.nativeAgent.lintNearDuplicate = v; await this.plugin.saveSettings(); }),
-          );
-        new Setting(containerEl)
-          .setName("Near-duplicate threshold")
-          .setDesc(T.settings.nearDupThreshold_desc)
-          .addText((t) =>
-            t.setValue(String(s.nativeAgent.nearDupThreshold ?? 0.80))
-              .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0 && n <= 1) { s.nativeAgent.nearDupThreshold = n; await this.plugin.saveSettings(); } }),
-          );
+        if (!Platform.isMobile) {
+          new Setting(containerEl).setName("Graph health").setHeading();
+          new Setting(containerEl)
+            .setName("Dedup on ingest")
+            .setDesc(T.settings.dedupOnIngest_desc)
+            .addToggle((t) =>
+              t.setValue(s.nativeAgent.dedupOnIngest ?? false)
+                .onChange(async (v) => { s.nativeAgent.dedupOnIngest = v; await this.plugin.saveSettings(); }),
+            );
+          new Setting(containerEl)
+            .setName("Dedup threshold")
+            .setDesc(T.settings.dedupThreshold_desc)
+            .addText((t) =>
+              t.setValue(String(s.nativeAgent.dedupThreshold ?? 0.85))
+                .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0 && n <= 1) { s.nativeAgent.dedupThreshold = n; await this.plugin.saveSettings(); } }),
+            );
+          new Setting(containerEl)
+            .setName("Lint near-duplicate report")
+            .setDesc(T.settings.lintNearDuplicate_desc)
+            .addToggle((t) =>
+              t.setValue(s.nativeAgent.lintNearDuplicate ?? false)
+                .onChange(async (v) => { s.nativeAgent.lintNearDuplicate = v; await this.plugin.saveSettings(); }),
+            );
+          new Setting(containerEl)
+            .setName("Near-duplicate threshold")
+            .setDesc(T.settings.nearDupThreshold_desc)
+            .addText((t) =>
+              t.setValue(String(s.nativeAgent.nearDupThreshold ?? 0.80))
+                .onChange(async (v) => { const n = Number(v); if (Number.isFinite(n) && n > 0 && n <= 1) { s.nativeAgent.nearDupThreshold = n; await this.plugin.saveSettings(); } }),
+            );
 
-        new Setting(containerEl)
-          .setName(T.settings.mergeDeleteWarnThreshold_name)
-          .setDesc(T.settings.mergeDeleteWarnThreshold_desc)
-          .addSlider((sl) =>
-            sl.setLimits(1, 20, 1)
-              .setDynamicTooltip()
-              .setValue(s.nativeAgent.mergeDeleteWarnThreshold ?? 5)
-              .onChange(async (v) => {
-                s.nativeAgent.mergeDeleteWarnThreshold = v; await this.plugin.saveSettings();
-              }),
-          );
+          new Setting(containerEl)
+            .setName(T.settings.mergeDeleteWarnThreshold_name)
+            .setDesc(T.settings.mergeDeleteWarnThreshold_desc)
+            .addSlider((sl) =>
+              sl.setLimits(1, 20, 1)
+                .setDynamicTooltip()
+                .setValue(s.nativeAgent.mergeDeleteWarnThreshold ?? 5)
+                .onChange(async (v) => {
+                  s.nativeAgent.mergeDeleteWarnThreshold = v; await this.plugin.saveSettings();
+                }),
+            );
+        }
       }
 
     }

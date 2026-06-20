@@ -4,7 +4,9 @@ How AI Wiki selects which wiki pages to feed the LLM as context. Combines page s
 
 ## PageSimilarityService
 
-Reduces LLM context by pre-selecting top-K relevant wiki pages (`src/page-similarity.ts`). Built by `AgentRunner.buildSimilarity()`. Public methods: `selectRelevant`, `selectRelevantScored` (scored, for query tracing), `selectByEntities`. Only active for the native-agent backend. See [[architecture#Backends]].
+Reduces LLM context by pre-selecting top-K relevant wiki pages (`src/page-similarity.ts`). Built by `AgentRunner.buildSimilarity()`. Only active for the native-agent backend. See [[architecture#Backends]].
+
+Public methods: `selectRelevant`, `selectRelevantScored` (scored, for query tracing), `selectRelevantScoredDiag` (returns `{results, denseMax, embedFailed}` for the seed gate), `selectByEntities`.
 
 Two base modes: `jaccard` (default, no API) uses token overlap via `scoreSeed`; `embedding` fetches vectors from an OpenAI-compatible endpoint (no API key required — supports Ollama), falling back to Jaccard on error. A `hybrid` mode fuses the two rankings via Reciprocal Rank Fusion (`src/rrf.ts#rrf`).
 
@@ -42,4 +44,6 @@ BFS from seed pages up to `graphDepth` hops. The graph is treated as **undirecte
 
 Opt-in query refinement (`nativeAgent.bfsFusion`, default off) ordering the final context by an RRF fusion of the vector and graph signals over the `seeds ∪ BFS-expanded` union, instead of seeds-first concat (`src/fusion.ts#fuseVectorGraph`).
 
-The vector list ranks the union by similarity descending; the graph list ranks by hop distance ascending (seed = hop 0), tie-broken by backlink `inDegree`. A separate gate `nativeAgent.seedSimilarityThreshold` (default 0 = off) drops weak embedding seeds and falls back through Jaccard → `llmSelectSeeds`; the branch is recorded in `graph_stats.seedFallback`. Both reuse the `rrfK` setting. See [[operations#Tier 2 Features]].
+The vector list ranks the union by similarity descending; the graph list ranks by hop distance ascending (seed = hop 0), tie-broken by backlink `inDegree`. Both reuse the `rrfK` setting. See [[operations#Tier 2 Features]].
+
+A separate gate `nativeAgent.seedSimilarityThreshold` (default 0 = off) compares the threshold against the **dense cosine confidence** (`denseMax`, the max raw cosine), not the RRF-fused score — fixing a bug where the fused score (max ≈ 2/(k+1) ≈ 0.033) never cleared a cosine-scaled threshold, so vector/hybrid seeds were always wrongly dropped to Jaccard. It applies in both embedding and hybrid modes via [[retrieval#PageSimilarityService]]'s `selectRelevantScoredDiag` (returns `denseMax`/`embedFailed`), and falls back through Jaccard → `llmSelectSeeds`. The branch is recorded in `graph_stats` as `retrievalMode`/`denseMax`/`seedFallbackReason`, plus a progress retrieval tag (`vector` / `jaccard (low …)` / `jaccard (embed failed)` / `llm seeds`) via `src/retrieval-diag.ts#retrievalTag`.

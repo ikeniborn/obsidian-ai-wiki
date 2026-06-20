@@ -86,6 +86,9 @@ export type RunEvent =
       expandedScores: Record<string, number>;
       expandedByHop?: Record<number, string[]>;
       seedFallback?: "none" | "jaccard" | "llm";
+      retrievalMode?: import("./retrieval-diag").RetrievalMode;
+      denseMax?: number;
+      seedFallbackReason?: import("./retrieval-diag").SeedFallbackReason;
     };
 
 export interface RunHistoryEntry {

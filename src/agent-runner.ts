@@ -24,6 +24,7 @@ export class AgentRunner {
     private vaultName: string,
     private domains: DomainEntry[],
     private visionTempBaseDir?: string,
+    private isMobile: boolean = false,
   ) {
     this.llm = wrapWithJsonFallback(llm);
   }
@@ -145,6 +146,7 @@ export class AgentRunner {
           enabled: this.settings.vision?.enabled ?? false,
           model: this.settings.vision?.model ?? "",
           language: this.settings.outputLanguage ?? "auto",
+          imageOnly: this.isMobile,
         };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
         const progress = i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress;

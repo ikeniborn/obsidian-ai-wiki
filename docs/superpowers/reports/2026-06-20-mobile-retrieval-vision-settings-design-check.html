@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>check-spec — Mobile fixes (retrieval / settings / vision / source-suggest)</title>
+<style>
+  :root{--bg:#0f1115;--card:#171a21;--ln:#262b36;--fg:#e6e8ec;--mut:#9aa3b2;--ok:#3fb950;--info:#58a6ff;--warn:#d29922;--crit:#f85149;--acc:#7c8cff}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 -apple-system,Segoe UI,Roboto,Ubuntu,sans-serif}
+  .wrap{max-width:1040px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:22px;margin:0 0 4px} h2{font-size:17px;margin:30px 0 10px;border-bottom:1px solid var(--ln);padding-bottom:6px}
+  h3{font-size:14px;margin:18px 0 8px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+  .sub{color:var(--mut);margin:0 0 18px}
+  .card{background:var(--card);border:1px solid var(--ln);border-radius:10px;padding:16px;margin:12px 0}
+  table{width:100%;border-collapse:collapse;font-size:13px} th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--ln);vertical-align:top}
+  th{color:var(--mut);font-weight:600} code{background:#0c0e12;border:1px solid var(--ln);border-radius:4px;padding:1px 5px;font-size:12px}
+  .pill{display:inline-block;border-radius:999px;padding:1px 10px;font-size:12px;font-weight:600}
+  .ok{background:rgba(63,185,80,.15);color:var(--ok)} .info{background:rgba(88,166,255,.15);color:var(--info)}
+  .warn{background:rgba(210,153,34,.15);color:var(--warn)} .crit{background:rgba(248,81,73,.15);color:var(--crit)}
+  .verdict{font-size:16px;font-weight:700} .muted{color:var(--mut)}
+  .flow{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}
+  .node{flex:1 1 200px;background:#0c0e12;border:1px solid var(--ln);border-left:3px solid var(--acc);border-radius:8px;padding:10px 12px}
+  .node b{display:block;margin-bottom:3px} .node span{color:var(--mut);font-size:12.5px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--mut);font-size:12px;margin-top:8px}
+  .chain{font-size:13px;color:var(--mut)} .chain b{color:var(--fg)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>check-spec — Mobile fixes: vector-retrieval gate, settings hiding, vision format, source-suggest</h1>
+  <p class="sub">Спека: <code>docs/superpowers/specs/2026-06-20-mobile-retrieval-vision-settings-design.md</code> ·
+     spec_hash <code>232a25cb20a0da09</code> · прогон 2026-06-20 ·
+     <span class="pill ok">Вердикт: OK</span></p>
+
+  <!-- ───────── Блок 1: Резюме спецификации ───────── -->
+  <h2>1. Резюме спецификации</h2>
+  <div class="card">
+    <h3>Требования по секциям</h3>
+    <table>
+      <tr><th>#</th><th>Секция</th><th>Требование</th></tr>
+      <tr><td>R1</td><td>Part 1 — Retrieval</td><td>Гейт seed-качества сравнивает порог с <b>dense-cosine</b> (denseMax), а не с RRF-fused score; при denseMax ≥ порога используются hybrid-RRF seeds (вектор работает).</td></tr>
+      <tr><td>R2</td><td>Part 1 — Observability</td><td><code>graph_stats</code> расширен (<code>retrievalMode</code>, <code>denseMax</code>, причина fallback <code>low-similarity</code>/<code>embed-failed</code>); compact-прогресс печатает retrieval-тег; различает «embedding упал» и «score низкий».</td></tr>
+      <tr><td>R3</td><td>Part 2 — Settings</td><td>На mobile скрыть ingest/lint-only: «Graph health» (dedup/near-dup/merge-warn) и Chunking. timeouts не трогать.</td></tr>
+      <tr><td>R4</td><td>Part 3 — Trigger</td><td>Кнопка Format в mobile-панели <code>view.ts</code>, активна при <code>activeFile &amp;&amp; !path.startsWith("!Wiki/")</code>.</td></tr>
+      <tr><td>R5</td><td>Part 3 — Vision</td><td>Vision на native-agent через <code>vision.enabled</code> + <code>analyzeSingleAttachment</code> (картинки mobile-safe); PDF/Excalidraw — graceful skip по флагу <code>imageOnly</code>.</td></tr>
+      <tr><td>R6</td><td>Part 4 — Source-suggest</td><td><code>FolderInputSuggest.getSuggestions</code> исключает <code>WIKI_ROOT</code> и его поддерево; закрывает петлю ингеста собственного выхода.</td></tr>
+    </table>
+    <h3>Success criteria (DoD)</h3>
+    <table>
+      <tr><th>Часть</th><th>Критерий приёмки</th></tr>
+      <tr><td>1</td><td>Eval-харнес: denseMax ≥ порог → RRF-seeds; &lt; порог → jaccard(low-similarity); throw → embed-failed. Replay лог-запроса → <code>retrievalMode: hybrid</code>, без ложного fallback.</td></tr>
+      <tr><td>2</td><td>Ревью гейтов <code>!Platform.isMobile</code>; desktop-раскладка не изменена; ни одна нужная настройка не завёрнута.</td></tr>
+      <tr><td>3</td><td>Format картинки на mobile → событие Vision + описание под embed; PDF → одна пометка «Vision skipped (unsupported on mobile)», без падения.</td></tr>
+      <tr><td>4</td><td>Юнит <code>getSuggestions</code> исключает любые <code>!Wiki</code>-папки, обычные папки по запросу остаются.</td></tr>
+    </table>
+  </div>
+
+  <!-- ───────── Блок 2: Схемы решения и зависимостей ───────── -->
+  <h2>2. Схемы решения и зависимостей</h2>
+
+  <div class="card">
+    <h3>Схема решения — поток retrieval (Part 1)</h3>
+    <div class="flow">
+      <div class="node"><b>query.ts seed-block</b><span>mode embedding/hybrid → selectRelevantScored</span></div>
+      <div class="node"><b>PageSimilarityService</b><span>возвращает results + denseMax + embedFailed</span></div>
+      <div class="node"><b>Gate</b><span>denseMax &lt; threshold ?</span></div>
+      <div class="node"><b>seeds</b><span>≥ → hybrid-RRF (вектор) · &lt; → jaccard → llm</span></div>
+      <div class="node"><b>graph_stats</b><span>retrievalMode · denseMax · reason</span></div>
+      <div class="node"><b>view.ts compact</b><span>тег · vector / · jaccard(low/failed)</span></div>
+    </div>
+    <h3 style="margin-top:18px">Схема решения — mobile format с vision (Part 3)</h3>
+    <div class="flow">
+      <div class="node"><b>view.ts mobile</b><span>Format-кнопка (canFormat)</span></div>
+      <div class="node"><b>controller.format</b><span>dispatch("format") · isMobile→imageOnly</span></div>
+      <div class="node"><b>runFormat</b><span>visionSettings{enabled, imageOnly}</span></div>
+      <div class="node"><b>analyzeSingleAttachment</b><span>img → описание · pdf/excalidraw → skip</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Граф зависимостей требований</h3>
+    <svg viewBox="0 0 900 300" width="100%" role="img" aria-label="Граф зависимостей требований">
+      <defs><marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#7c8cff"/></marker></defs>
+      <style>
+        .n{fill:#0c0e12;stroke:#262b36;rx:8} .t{fill:#e6e8ec;font:12px sans-serif}
+        .e{stroke:#7c8cff;stroke-width:1.4;fill:none;marker-end:url(#a);opacity:.8}
+        .lbl{fill:#9aa3b2;font:10.5px sans-serif}
+      </style>
+      <!-- edges -->
+      <path class="e" d="M150,70 C230,70 250,150 320,150"/>            <!-- R1 -> R2 -->
+      <path class="e" d="M150,150 C220,150 250,150 320,150"/>          <!-- (R1 box to R2) reinforce -->
+      <path class="e" d="M620,210 C690,210 700,150 740,150"/>          <!-- R5 -> R4? no; keep R4->R5 below -->
+      <path class="e" d="M150,235 C250,235 250,210 320,210"/>          <!-- R4 -> R5 -->
+      <!-- nodes -->
+      <g><rect class="n" x="30" y="48" width="120" height="44"/><text class="t" x="46" y="68">R1 gate</text><text class="lbl" x="46" y="84">dense-cosine</text></g>
+      <g><rect class="n" x="30" y="128" width="120" height="44"/><text class="t" x="46" y="148">R3 settings</text><text class="lbl" x="46" y="164">hide ingest</text></g>
+      <g><rect class="n" x="30" y="213" width="120" height="44"/><text class="t" x="46" y="233">R4 source</text><text class="lbl" x="46" y="249">!Wiki excl.</text></g>
+      <g><rect class="n" x="320" y="128" width="130" height="44"/><text class="t" x="336" y="148">R2 observ.</text><text class="lbl" x="336" y="164">graph_stats</text></g>
+      <g><rect class="n" x="320" y="188" width="130" height="44"/><text class="t" x="336" y="208">R5 vision</text><text class="lbl" x="336" y="224">imageOnly</text></g>
+      <g><rect class="n" x="740" y="128" width="130" height="44"/><text class="t" x="756" y="148">R4 trigger</text><text class="lbl" x="756" y="164">Format btn</text></g>
+      <path class="e" d="M450,210 C600,210 640,150 740,150"/>          <!-- R5 -> R4 trigger -->
+    </svg>
+    <div class="legend">
+      <span>R1 → R2: гейт даёт данные для наблюдаемости</span>
+      <span>R4(source) → R5: оба — mobile-format поток</span>
+      <span>R5 → R4(trigger): vision требует точки запуска</span>
+      <span>R3 — независимо (settings-only)</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Карта покрытия: задача → требования</h3>
+    <table>
+      <tr><th>Задача (из контекста)</th><th>Требования спеки</th><th>Покрыто</th></tr>
+      <tr><td>Ч1. Проверить вектор в mobile-сессии, найти причину, исправить</td><td>R1, R2</td><td><span class="pill ok">да</span></td></tr>
+      <tr><td>Ч2. Скрыть неприменимые настройки на mobile</td><td>R3</td><td><span class="pill ok">да</span></td></tr>
+      <tr><td>Ч3. Добавить vision-форматирование на mobile</td><td>R4 (trigger), R5 (vision)</td><td><span class="pill ok">да</span></td></tr>
+      <tr><td>Ч4. При выборе источника домена скрыть каталог <code>!Wiki</code></td><td>R6</td><td><span class="pill ok">да</span></td></tr>
+    </table>
+  </div>
+
+  <!-- ───────── Блок 3: Результаты проверки ───────── -->
+  <h2>3. Результаты проверки</h2>
+  <div class="card">
+    <table>
+      <tr><th>Фаза</th><th>Статус</th><th>Новые findings</th></tr>
+      <tr><td>structure</td><td><span class="pill ok">passed</span></td><td>F-001 (INFO)</td></tr>
+      <tr><td>coverage</td><td><span class="pill ok">passed</span></td><td>—</td></tr>
+      <tr><td>clarity</td><td><span class="pill ok">passed</span></td><td>—</td></tr>
+      <tr><td>consistency</td><td><span class="pill ok">passed</span></td><td>— (первый прогон)</td></tr>
+    </table>
+    <h3 style="margin-top:16px">Findings</h3>
+    <table>
+      <tr><th>id</th><th>severity</th><th>section</th><th>text</th><th>verdict</th></tr>
+      <tr><td>F-001</td><td><span class="pill info">INFO</span></td><td>(document) repeated subsection headings</td>
+          <td>Подзаголовки «Verification» (×4), «Behavior», «Changes» повторяются в Part 1–4. Безвредно — каждый в своём родителе Part; обычный паттерн спеки.</td>
+          <td><span class="pill ok">accepted</span></td></tr>
+    </table>
+    <p style="margin-top:14px">
+      <span class="muted">CRITICAL open:</span> <b>0</b> &nbsp;·&nbsp;
+      <span class="muted">WARNING open:</span> <b>0</b> &nbsp;·&nbsp;
+      <span class="muted">INFO:</span> 1 (accepted)
+    </p>
+    <p class="verdict"><span class="pill ok">Вердикт: OK</span></p>
+    <p class="chain">chain: <b>intent</b> = null (нет intent для темы <code>mobile-retrieval-vision-settings</code>) → <b>spec</b> = 2026-06-20-mobile-retrieval-vision-settings-design.md</p>
+  </div>
+
+  <p class="sub" style="margin-top:24px">Автогенерируемый артефакт <code>/check-spec</code>. Следующий шаг — ревью спеки пользователем, затем <code>writing-plans</code>.</p>
+</div>
+</body>
+</html>

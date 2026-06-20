@@ -7,6 +7,7 @@ import { i18n, i18nFor, resolveLang } from "./i18n";
 import { domainWikiFolder, domainLogPath, domainIndexPath } from "./wiki-path";
 import { computeSpeedText } from "./phases/llm-utils";
 import { isAbsolute, relative } from "path-browserify";
+import { retrievalTag } from "./retrieval-diag";
 
 import { collectMdInPaths, walkFolder } from "./utils/vault-walk";
 export { collectMdInPaths, walkFolder };
@@ -22,7 +23,10 @@ export function formatGraphStatsLines(
     const preview = ev.seeds.slice(0, 3).join(", ");
     const extra = ev.seeds.length > 3 ? `, …+${ev.seeds.length - 3}` : "";
     const cacheHint = ev.fromCache ? " (cache hit)" : "";
-    return [`Граф: ${ev.seeds.length} seeds [${preview}${extra}] → ${ev.expanded} / ${ev.total} страниц${cacheHint}`];
+    const tag = ev.retrievalMode
+      ? ` · ${retrievalTag(ev.retrievalMode, ev.seedFallback ?? "none", ev.seedFallbackReason, ev.denseMax)}`
+      : "";
+    return [`Граф: ${ev.seeds.length} seeds [${preview}${extra}] → ${ev.expanded} / ${ev.total} страниц${cacheHint}${tag}`];
   }
 
   // Trace form — lines prefixed with "  " are indented items, others are sub-headers
@@ -38,7 +42,9 @@ export function formatGraphStatsLines(
   for (const part of seedParts) lines.push(`  ${part}`);
   if (remainder > 0) lines.push(`  …+${remainder}`);
 
-  if (ev.seedFallback && ev.seedFallback !== "none") {
+  if (ev.retrievalMode) {
+    lines.push(`Retrieval: ${retrievalTag(ev.retrievalMode, ev.seedFallback ?? "none", ev.seedFallbackReason, ev.denseMax)}`);
+  } else if (ev.seedFallback && ev.seedFallback !== "none") {
     lines.push(`Seed fallback: ${ev.seedFallback}`);
   }
 
@@ -170,6 +176,9 @@ export class LlmWikiView extends ItemView {
     } else {
       root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionDomainMobile });
       this.buildDomainRow(root as HTMLElement, { withActions: false });
+      const mobileActions = root.createDiv("ai-wiki-domain-actions");
+      this.formatBtn = mobileActions.createEl("button", { text: T.view.format });
+      this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
     }
 
     // 4. Запрос

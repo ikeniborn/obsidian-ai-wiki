@@ -74,6 +74,11 @@ export function getMimeType(path: string): string | null {
   }
 }
 
+/** True when the embed is a raster image vision can read without rendering (mobile-safe). */
+export function isVisionSupportedOnMobile(path: string): boolean {
+  return getMimeType(path) !== null; // png/jpg/jpeg/webp; PDF/Excalidraw need rendering
+}
+
 async function callVisionLlm(
   llm: LlmClient,
   model: string,
@@ -180,11 +185,13 @@ export async function analyzeSingleAttachment(
   sourcePath: string = "",
   language: OutputLanguage = "auto",
   visionTempStore?: VisionTempStore,
+  imageOnly: boolean = false,
 ): Promise<string | null> {
   const resolved = vaultTools.resolveLink(path, sourcePath);
   // Skip embeds Obsidian can't resolve to an indexed vault file — a traversal
   // payload (`![[../../secret.png]]`) never resolves, so this blocks the read.
   if (resolved === null) return null;
+  if (imageOnly && !isVisionSupportedOnMobile(resolved)) return null; // PDF/Excalidraw skipped on mobile
   const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
   const isExcalidraw = ext === "excalidraw" || resolved.endsWith(".excalidraw.md");
 
