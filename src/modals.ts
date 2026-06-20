@@ -1,6 +1,7 @@
 import { AbstractInputSuggest, App, Modal, Setting, TFolder, ToggleComponent } from "obsidian";
 import type { AddDomainInput, DomainEntry, EntityType } from "./domain";
 import { i18n } from "./i18n";
+import { isSelectableSourceFolder } from "./source-paths";
 
 export class BusyCloseModal extends Modal {
   constructor(app: App, private onAbort: () => void) { super(app); }
@@ -180,7 +181,7 @@ class FolderInputSuggest extends AbstractInputSuggest<TFolder> {
   protected getSuggestions(query: string): TFolder[] {
     const q = query.toLowerCase();
     return this.app.vault.getAllFolders(true)
-      .filter(f => f.path.toLowerCase().includes(q))
+      .filter(f => isSelectableSourceFolder(f.path) && f.path.toLowerCase().includes(q))
       .slice(0, 20);
   }
   renderSuggestion(folder: TFolder, el: HTMLElement): void {

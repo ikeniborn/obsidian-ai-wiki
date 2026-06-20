@@ -8,6 +8,7 @@
 import { seedPassesGate, retrievalTag } from "../../src/retrieval-diag";
 import { maxCosine } from "../../src/page-similarity";
 import { isVisionSupportedOnMobile } from "../../src/phases/attachment-analyzer";
+import { isSelectableSourceFolder } from "../../src/source-paths";
 
 let pass = 0, fail = 0;
 const failures: string[] = [];
@@ -47,6 +48,12 @@ check("jpg supported", isVisionSupportedOnMobile("img/a.JPG") === true);
 check("webp supported", isVisionSupportedOnMobile("img/a.webp") === true);
 check("pdf not supported", isVisionSupportedOnMobile("doc/a.pdf") === false);
 check("excalidraw not supported", isVisionSupportedOnMobile("d/a.excalidraw") === false);
+
+section("isSelectableSourceFolder — exclude !Wiki output");
+check("ordinary folder selectable", isSelectableSourceFolder("Проекты/Bagato") === true);
+check("!Wiki root excluded", isSelectableSourceFolder("!Wiki") === false);
+check("!Wiki subtree excluded", isSelectableSourceFolder("!Wiki/sar/dags") === false);
+check("lookalike not excluded", isSelectableSourceFolder("!WikiNotes/x") === true);
 
 console.log(`\n${fail === 0 ? "ALL PASS" : "FAILURES"}: ${pass} passed, ${fail} failed`);
 if (fail > 0) { console.log(failures.join("\n")); process.exit(1); }
