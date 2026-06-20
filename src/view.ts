@@ -176,6 +176,9 @@ export class LlmWikiView extends ItemView {
     } else {
       root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionDomainMobile });
       this.buildDomainRow(root as HTMLElement, { withActions: false });
+      const mobileActions = root.createDiv("ai-wiki-domain-actions");
+      this.formatBtn = mobileActions.createEl("button", { text: T.view.format });
+      this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
     }
 
     // 4. Запрос
