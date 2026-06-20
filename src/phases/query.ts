@@ -16,6 +16,8 @@ import { graphCache } from "../wiki-graph-cache";
 import { selectSeeds } from "../wiki-seeds";
 import { parseIndexAnnotations } from "../wiki-index";
 import type { PageSimilarityService } from "../page-similarity";
+import { seedPassesGate } from "../retrieval-diag";
+import type { RetrievalMode, SeedFallbackReason } from "../retrieval-diag";
 import { extractAnswerLinks, findBrokenLinks, annotateBroken, rewriteWithValidLinks } from "./query-link-validator";
 
 const META_FILES = ["_index.md", "_log.md"];
@@ -74,20 +76,26 @@ export async function* runQuery(
   let seeds: string[];
   let seedScores: Record<string, number> = {};
   let seedFallback: "none" | "jaccard" | "llm" = "none";
+  let retrievalMode: RetrievalMode = "jaccard";
+  let denseMax = 0;
+  let seedFallbackReason: SeedFallbackReason | undefined;
   const syntheticPages = new Map<string, string>(
     [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""]),
   );
   if (similarity && (similarity.config.mode === "embedding" || similarity.config.mode === "hybrid")) {
+    retrievalMode = similarity.config.mode;
     await similarity.loadCache(wikiVaultPath, vaultTools);
     const allAnnotatedPaths = [...indexAnnotations.keys()].map((id) => `${wikiVaultPath}/${id}.md`);
-    const selected = await similarity.selectRelevantScored(question, indexAnnotations, allAnnotatedPaths);
-    const topSelected = selected.slice(0, topK);
+    const diag = await similarity.selectRelevantScoredDiag(question, indexAnnotations, allAnnotatedPaths);
+    denseMax = diag.denseMax;
+    const topSelected = diag.results.slice(0, topK);
     seeds = topSelected.map((x) => pageId(x.path));
     seedScores = Object.fromEntries(topSelected.map((x) => [pageId(x.path), x.score]));
 
-    // Threshold gate: weak seeds fall back to Jaccard, then to llmSelectSeeds.
-    const maxSeedScore = seeds.length ? Math.max(...Object.values(seedScores)) : 0;
-    if (maxSeedScore < seedSimilarityThreshold) {
+    // Threshold gate on the DENSE COSINE confidence (not the fused/RRF score):
+    // weak embedding signal falls back to Jaccard, then to llmSelectSeeds.
+    if (!seedPassesGate(denseMax, seedSimilarityThreshold)) {
+      seedFallbackReason = diag.embedFailed ? "embed-failed" : "low-similarity";
       const jaccardSeeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
       if (jaccardSeeds.length > 0) {
         seeds = jaccardSeeds.map((x) => x.id);
@@ -152,7 +160,7 @@ export async function* runQuery(
   );
   const seedSet = new Set(seeds);
   const expandedPages = [...selectedIds].filter(id => !seedSet.has(id));
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, seedFallback };
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, seedFallback, retrievalMode, denseMax, seedFallbackReason };
   const fusedOrder = bfsFusion
     ? fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, graphResult.graph, graphDepth, rrfK)
     : undefined;
