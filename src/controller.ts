@@ -20,7 +20,8 @@ import type { DomainStore } from "./domain-store";
 import { DomainCorruptError } from "./domain-store";
 import type { LocalConfig, LocalConfigStore } from "./local-config";
 import type { LlmWikiPluginSettings } from "./types";
-import { FileErrorModal, FormatVisionModal, InfoModal, ShellConsentModal } from "./modals";
+import { DeleteSourceModal, FileErrorModal, FormatVisionModal, InfoModal, ShellConsentModal } from "./modals";
+import { computeDeletionPlan, sourceStem } from "./source-deletion";
 import { domainWikiFolder, GLOBAL_AGENT_LOG_PATH } from "./wiki-path";
 import { restoreSourceFrontmatter } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
@@ -403,6 +404,38 @@ export class WikiController {
     return deleted;
   }
 
+  async deleteSource(domainId: string, path: string): Promise<void> {
+    const domains = await this.loadDomains();
+    const entry = domains.find((d) => d.id === domainId);
+    if (!entry) { new Notice(i18n().ctrl.noActiveFile); return; }
+
+    const wikiFolder = domainWikiFolder(entry.wiki_folder);
+    const pageFiles = collectMdInPaths(this.app.vault, [wikiFolder])
+      .filter((f) => !f.path.includes("/_config/"));
+    const pages = new Map<string, string>();
+    for (const f of pageFiles) {
+      try { pages.set(f.path, await this.app.vault.adapter.read(f.path)); } catch { /* skip */ }
+    }
+
+    const sourceStemToPath = new Map<string, string>();
+    for (const f of collectMdInPaths(this.app.vault, entry.source_paths ?? [])) {
+      if (f.path !== path) sourceStemToPath.set(sourceStem(f.path), f.path);
+    }
+    for (const sp of entry.source_paths ?? []) {
+      if (sp.endsWith(".md") && sp !== path && this.app.vault.getFileByPath(sp)) {
+        sourceStemToPath.set(sourceStem(sp), sp);
+      }
+    }
+
+    const plan = computeDeletionPlan(path, pages, sourceStemToPath);
+
+    new DeleteSourceModal(this.app, entry.id, path, plan, () => {
+      void this.dispatch("delete", [path, domainId], domainId).then(() => {
+        graphCache.invalidate(domainId);
+      });
+    }).open();
+  }
+
   private requireClaudeAgent(local: LocalConfig): string | null {
     const { iclaudePath } = local;
     if (!iclaudePath) {
@@ -647,7 +680,7 @@ export class WikiController {
       for await (const ev of runGen) {
         await this.logEvent(vaultRoot, sessionId, op, domainId, ev);
         this.activeView()?.appendEvent(ev);
-        if (ev.kind === "domain_created" || ev.kind === "domain_updated" || ev.kind === "source_path_added") {
+        if (ev.kind === "domain_created" || ev.kind === "domain_updated" || ev.kind === "source_path_added" || ev.kind === "source_path_removed") {
           try {
             const cur = await this.domainStore.load();
             const next = applyDomainEvent(cur, ev, { vaultRoot });
