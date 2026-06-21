@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка intent — Удаление источника</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --border:#2b3440;
+    --fg:#e6edf3; --muted:#9aa7b4; --accent:#4aa3ff; --accent2:#7c5cff;
+    --ok:#3fb950; --warn:#d29922; --crit:#f85149; --chip:#21303f;
+    --shadow:0 4px 18px rgba(0,0,0,.45);
+  }
+  [data-theme="light"]{
+    --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#d6dee6;
+    --fg:#1f2328; --muted:#5a6671; --accent:#0969da; --accent2:#6639ba;
+    --ok:#1a7f37; --warn:#9a6700; --crit:#cf222e; --chip:#e7eef6;
+    --shadow:0 4px 18px rgba(140,150,160,.25);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--fg);
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans",sans-serif;
+    line-height:1.5;padding:32px 20px 64px;transition:background .25s,color .25s}
+  .wrap{max-width:1080px;margin:0 auto}
+  header.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+  h1{font-size:1.55rem;margin:0 0 6px;line-height:1.25}
+  h2{font-size:1.2rem;margin:38px 0 12px;padding-bottom:6px;border-bottom:2px solid var(--border)}
+  h3{font-size:1rem;margin:22px 0 8px;color:var(--accent)}
+  .sub{color:var(--muted);font-size:.92rem}
+  .meta{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}
+  .chip{background:var(--chip);border:1px solid var(--border);border-radius:999px;
+    padding:3px 11px;font-size:.8rem;color:var(--fg)}
+  .chip.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .toggle{cursor:pointer;background:var(--panel);color:var(--fg);border:1px solid var(--border);
+    border-radius:8px;padding:8px 14px;font-size:.85rem;box-shadow:var(--shadow)}
+  .toggle:hover{border-color:var(--accent)}
+  table{width:100%;border-collapse:collapse;margin:10px 0 6px;background:var(--panel);
+    border:1px solid var(--border);border-radius:10px;overflow:hidden;font-size:.9rem}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{background:var(--panel2);color:var(--muted);font-weight:600;font-size:.82rem;text-transform:uppercase;letter-spacing:.03em}
+  tr:last-child td{border-bottom:none}
+  td.k{white-space:nowrap;font-weight:600;color:var(--accent)}
+  .pill{display:inline-block;border-radius:6px;padding:1px 8px;font-size:.78rem;font-weight:600}
+  .pill.ok{background:rgba(63,185,80,.16);color:var(--ok)}
+  .pill.warn{background:rgba(210,153,34,.16);color:var(--warn)}
+  .pill.crit{background:rgba(248,81,73,.16);color:var(--crit)}
+  .pill.steer{background:rgba(74,163,255,.16);color:var(--accent)}
+  .pill.hard{background:rgba(124,92,255,.18);color:var(--accent2)}
+  /* flow map */
+  .flow{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;margin:14px 0}
+  .stage{flex:1;min-width:210px;background:var(--panel);border:1px solid var(--border);
+    border-radius:12px;padding:14px;box-shadow:var(--shadow);position:relative}
+  .stage h4{margin:0 0 8px;font-size:.95rem;color:var(--accent2)}
+  .stage ul{margin:0;padding-left:18px;font-size:.85rem;color:var(--fg)}
+  .stage li{margin:4px 0}
+  .arrow{align-self:center;color:var(--accent);font-size:1.6rem;font-weight:700}
+  /* autonomy zones */
+  .zones{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:14px 0}
+  .zone{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;box-shadow:var(--shadow)}
+  .zone.full{border-top:4px solid var(--ok)}
+  .zone.guard{border-top:4px solid var(--accent)}
+  .zone.prop{border-top:4px solid var(--warn)}
+  .zone.nogo{border-top:4px solid var(--muted)}
+  .zone h4{margin:0 0 8px;font-size:.92rem}
+  .zone ul{margin:0;padding-left:18px;font-size:.83rem;color:var(--muted)}
+  .zone ul li{margin:3px 0;color:var(--fg)}
+  .verdict{background:var(--panel);border:1px solid var(--border);border-left:5px solid var(--ok);
+    border-radius:10px;padding:16px 18px;margin:18px 0;box-shadow:var(--shadow)}
+  .verdict b{color:var(--ok);font-size:1.05rem}
+  .note{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;
+    font-size:.85rem;color:var(--muted);margin:12px 0}
+  footer{margin-top:42px;padding-top:16px;border-top:2px solid var(--border);color:var(--muted);font-size:.88rem}
+  footer .next{color:var(--accent);font-weight:600}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--panel2);
+    border:1px solid var(--border);border-radius:5px;padding:1px 5px;font-size:.85em}
+  .legend{font-size:.8rem;color:var(--muted);margin:4px 0 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <h1>Проверка intent: Удаление источника с чисткой wiki-артефактов и пересборкой</h1>
+      <div class="sub">intent — корень цепи IDD→SDD; footer смотрит вперёд (brainstorming)</div>
+      <div class="meta">
+        <span class="chip">2026-06-21</span>
+        <span class="chip mono">intent_hash: 9b72328c838f88cc</span>
+        <span class="chip">Status: draft</span>
+        <span class="chip"><span class="pill ok">Вердикт: OK</span></span>
+      </div>
+    </div>
+    <button class="toggle" id="themeBtn" type="button">🌗 Тема</button>
+  </header>
+
+  <!-- ===================== БЛОК 1 ===================== -->
+  <h2>1. Резюме требований</h2>
+
+  <h3>Objective</h3>
+  <table>
+    <tr><td>Удаление источника оставляет осиротевшие wiki-страницы (артефакты), портящие retrieval/граф; нет first-class операции «удалить источник»; ручная чистка трудоёмка; multi-source страницы хранят stale-вклад удалённого источника; в sidebar нет отдельной кнопки удаления.
+    <br><br><b>Решение:</b> добавить операцию <b>Delete source</b> — удаляет source-файл и все связанные wiki-артефакты без остатков; страницы с &gt;1 источником не удаляются, а пересобираются последовательно на оставшихся.</td></tr>
+  </table>
+
+  <h3>Desired Outcomes</h3>
+  <table>
+    <thead><tr><th>#</th><th>Наблюдаемый результат</th></tr></thead>
+    <tbody>
+      <tr><td class="k">1</td><td><b>Preview с цифрами до удаления.</b> Модаль показывает N страниц к удалению (список) и M к пересборке (список); запуск только по явному подтверждению.</td></tr>
+      <tr><td class="k">2</td><td><b>Полная чистка артефактов.</b> Sole-source страницы + сам source-файл удалены; убраны из <code>source_paths</code>/<code>analyzed_sources</code>, <code>_index.md</code>, графа, embeddings, backlinks. Ноль осиротевших.</td></tr>
+      <tr><td class="k">3</td><td><b>Multi-source страницы пересобраны</b> на оставшихся; вклад удалённого источника исчез, <code>wiki_sources</code> обновлён.</td></tr>
+      <tr><td class="k">4</td><td><b>Отдельные кнопки sidebar.</b> Format и Delete — две кнопки; обе активны только на source-файле (non-wiki, в <code>source_paths</code>).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Health Metrics</h3>
+  <table>
+    <tbody>
+      <tr><td class="k">Граф / index</td><td>Нет битых <code>[[ссылок]]</code>, осиротевших строк <code>_index.md</code>, висячих рёбер графа, stale-чанков embeddings; lint чистый.</td></tr>
+      <tr><td class="k">Операции</td><td>ingest / lint / format / query / init продолжают работать; новый код не ломает общие фазы и RunEvent-поток.</td></tr>
+      <tr><td class="k">Guard</td><td>path-traversal guard цел (<code>validateArticlePath</code>); без выхода за домен/vault, без удаления чужих файлов.</td></tr>
+      <tr><td class="k">Платформа</td><td>Работает на mobile (ленивые node-builtins, <code>requestUrl</code>) и на обоих backend (Native / Claude).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Constraints</h3>
+  <table>
+    <thead><tr><th>Тип</th><th>Ограничение</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill steer">steering</span></td><td>Rebuild = <b>wipe + последовательный re-ingest</b> по каждому оставшемуся источнику.</td></tr>
+      <tr><td><span class="pill steer">steering</span></td><td>Failure = <b>continue + collect errors</b> (максимум прогресса за прогон, список сбоев в конце).</td></tr>
+      <tr><td><span class="pill steer">steering</span></td><td>Переиспользовать существующую плумбинг удаления: <code>vaultTools.remove</code>, <code>removeIndexAnnotation</code>, backlink sync, <code>validateArticlePath</code>.</td></tr>
+      <tr><td><span class="pill hard">hard</span></td><td>Удаление source-файла <b>перманентное</b> (не в корзину).</td></tr>
+      <tr><td><span class="pill hard">hard</span></td><td>Delete доступен <b>только для source-файлов</b> (non-wiki в <code>source_paths</code> активного домена).</td></tr>
+      <tr><td><span class="pill hard">hard</span></td><td>Каждый путь удаления валидируется <code>validateArticlePath</code> (<code>&lt;domain&gt;/&lt;file&gt;.md</code>, без <code>..</code>/<code>.</code>).</td></tr>
+      <tr><td><span class="pill hard">hard</span></td><td>Вся разработка в <code>dev/*</code> ветке; merge в <code>master</code> только через PR.</td></tr>
+      <tr><td><span class="pill hard">hard</span></td><td>Работает на mobile и обоих backend; никакого desktop-only API на пути delete/rebuild.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ===================== БЛОК 2 ===================== -->
+  <h2>2. Схемы намерения и процесса</h2>
+
+  <h3>(a) Карта намерения — Objective → Outcomes → Metrics</h3>
+  <div class="flow">
+    <div class="stage">
+      <h4>Objective</h4>
+      <ul>
+        <li>Убрать артефакты при удалении источника</li>
+        <li>First-class операция Delete source</li>
+        <li>Корректность multi-source страниц</li>
+      </ul>
+    </div>
+    <div class="arrow">→</div>
+    <div class="stage">
+      <h4>Desired Outcomes</h4>
+      <ul>
+        <li>Preview с цифрами + confirm</li>
+        <li>Полная чистка (ноль осиротевших)</li>
+        <li>Multi-source пересобраны</li>
+        <li>Отдельные кнопки Format / Delete</li>
+      </ul>
+    </div>
+    <div class="arrow">→</div>
+    <div class="stage">
+      <h4>Health Metrics (чем измеряем)</h4>
+      <ul>
+        <li>Целостность графа/index (lint чистый)</li>
+        <li>Операции не затронуты</li>
+        <li>path-traversal guard цел</li>
+        <li>mobile + оба backend</li>
+      </ul>
+    </div>
+  </div>
+  <p class="legend">Приоритет при конфликте: <b>trust</b> (корректность) над speed/cost.</p>
+
+  <h3>(b) Граф автономии</h3>
+  <div class="zones">
+    <div class="zone full">
+      <h4><span class="pill ok">Full</span> reversible, low risk</h4>
+      <ul>
+        <li>Внутренняя структура delete-фазы</li>
+        <li>Расчёт затронутых страниц</li>
+        <li>Проводка кнопок sidebar</li>
+        <li>unit / eval (out-of-vault) тесты</li>
+        <li><code>dev/*</code> ветка и коммиты</li>
+      </ul>
+    </div>
+    <div class="zone guard">
+      <h4><span class="pill steer">Guarded</span> log + threshold</h4>
+      <ul>
+        <li>reuse vs новые хелперы</li>
+        <li>Тексты preview/progress <code>info_text</code></li>
+      </ul>
+    </div>
+    <div class="zone prop">
+      <h4><span class="pill warn">Proposal-first</span> нужен approval</h4>
+      <ul>
+        <li>Spec/дизайн перед кодом</li>
+        <li>UX модали и кнопок Format/Delete</li>
+        <li>Реальный запуск удаления на vault</li>
+        <li>Создание PR и merge в master</li>
+      </ul>
+    </div>
+    <div class="zone nogo">
+      <h4><span class="pill">No autonomy</span> human only</h4>
+      <ul>
+        <li>N/A — нет сверх proposal-first чекпоинтов</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>(c) Связь ограничений и результатов</h3>
+  <table>
+    <thead><tr><th>Ограничение</th><th>Тип</th><th>Что ограничивает / гарантирует</th></tr></thead>
+    <tbody>
+      <tr><td>Удаление перманентное</td><td><span class="pill hard">hard</span></td><td>Outcome «Полная чистка артефактов» <span class="pill warn">принятый риск F-001/F-002</span></td></tr>
+      <tr><td>wipe + sequential re-ingest</td><td><span class="pill steer">steering</span></td><td>Outcome «Multi-source пересобраны»</td></tr>
+      <tr><td>continue + collect errors</td><td><span class="pill steer">steering</span></td><td>Stop Rule «Done when» — сбои в финальном отчёте</td></tr>
+      <tr><td>Delete только для source-файлов</td><td><span class="pill hard">hard</span></td><td>Outcome «Отдельные кнопки sidebar»</td></tr>
+      <tr><td><code>validateArticlePath</code></td><td><span class="pill hard">hard</span></td><td>Health «path-traversal guard цел»</td></tr>
+      <tr><td><code>dev/*</code> + PR</td><td><span class="pill hard">hard</span></td><td>Autonomy proposal-first «merge в master»</td></tr>
+    </tbody>
+  </table>
+
+  <h3>(d) Stop Rules — условия завершения процесса</h3>
+  <table>
+    <tbody>
+      <tr><td class="k">Halt</td><td>Preview нельзя посчитать точно (нечитаемый <code>wiki_sources</code>) или путь не прошёл <code>validateArticlePath</code> — не удалять наугад.</td></tr>
+      <tr><td class="k">Escalate</td><td>Пересборка трогает файлы вне домена либо source-to-page маппинг неоднозначен (источник назван неразрешимым именем).</td></tr>
+      <tr><td class="k">Done when</td><td>На реальном vault клик <b>Delete</b> показывает корректные счётчики/списки; по подтверждению source-файл перманентно удалён и убран из домена, каждая sole-source страница удалена, каждая multi-source пересобрана на оставшихся; lint/check показывает ноль осиротевших / битых ссылок / stale-артефактов; сбои пересборки — в финальном отчёте, а не молча.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ===================== БЛОК 3 ===================== -->
+  <h2>3. Результаты проверки</h2>
+
+  <h3>Фазы</h3>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th><th>Примечание</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="pill ok">passed</span></td><td>7/7 секций, без плейсхолдеров и дублей</td></tr>
+      <tr><td>completeness</td><td><span class="pill ok">passed</span></td><td>constraints steering XOR hard; 4 зоны; ≥1 Done when</td></tr>
+      <tr><td>clarity</td><td><span class="pill ok">passed</span></td><td>Outcomes наблюдаемы; Done when измерим</td></tr>
+      <tr><td>consistency</td><td><span class="pill ok">passed</span></td><td>2 WARNING (не блокируют)</td></tr>
+      <tr><td>alignment</td><td><span class="pill ok">passed</span></td><td>advisory; lat недоступен — пропущено молча</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Findings</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Описание · рекомендация</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="k">F-001</td><td><span class="pill warn">WARNING</span></td><td>Constraints</td>
+        <td>Перманентное (необратимое) удаление source-файла в напряжении с trust-приоритетом «never lose data». <b>Рекомендация:</b> модаль явно предупреждает о безвозвратности (не восстановить из корзины).</td>
+        <td><span class="pill ok">accepted</span><br><span class="legend">учесть в plan</span></td>
+      </tr>
+      <tr>
+        <td class="k">F-002</td><td><span class="pill warn">WARNING</span></td><td>Constraints</td>
+        <td><code>continue + collect errors</code> + перманентное удаление: сбой пересборки посередине оставит источник удалённым навсегда, часть страниц stale. <b>Рекомендация:</b> удалять source-файл после успешных пересборок.</td>
+        <td><span class="pill ok">accepted</span><br><span class="legend">порядок в plan</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="verdict">
+    <b>Финальный вердикт: OK — ready to approve</b><br>
+    CRITICAL open: 0 · WARNING open: 0 (оба accepted) · alignment notes: 0
+  </div>
+
+  <div class="note">
+    Принятые WARNING переносятся в дизайн: (F-001) confirm-модаль явно пишет «permanent / not recoverable»;
+    (F-002) порядок — сначала пересборка multi-source, затем перманентное удаление source-файла. Обе детали — в plan, тело интента не менялось.
+  </div>
+
+  <footer>
+    intent — корень цепи IDD→SDD; upstream нет. <br>
+    <span class="next">Next step: superpowers:brainstorming</span> — должен прочитать этот intent doc первым и трактовать Objective, Desired Outcomes, Health Metrics, Hard Constraints как фиксированные входы.
+  </footer>
+
+</div>
+
+<script>
+  (function(){
+    var btn=document.getElementById('themeBtn');
+    var root=document.documentElement;
+    btn.addEventListener('click',function(){
+      root.setAttribute('data-theme', root.getAttribute('data-theme')==='dark'?'light':'dark');
+    });
+  })();
+</script>
+</body>
+</html>
