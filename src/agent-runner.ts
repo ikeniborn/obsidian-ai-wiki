@@ -31,7 +31,8 @@ export class AgentRunner {
   }
 
   private buildOptsFor(op: RunRequest["operation"]): { model: string; opts: LlmCallOptions } {
-    const key = (op === "chat" || op === "lint-chat" ? "lint" : op);
+    // delete rebuilds pages by reusing ingest, so it borrows ingest's per-operation config.
+    const key = (op === "chat" || op === "lint-chat" ? "lint" : op === "delete" ? "ingest" : op);
     const s = this.settings;
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
     const mergeDeleteWarnThreshold = s.nativeAgent.mergeDeleteWarnThreshold;
