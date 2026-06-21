@@ -587,6 +587,7 @@ export class LlmWikiView extends ItemView {
     if (this.ingestBtn) this.ingestBtn.disabled = true;
     if (this.lintBtn) this.lintBtn.disabled = true;
     if (this.formatBtn) this.formatBtn.disabled = true;
+    if (this.deleteBtn) this.deleteBtn.disabled = true;
     if (this.reinitBtn) this.reinitBtn.disabled = true;
     if (this.addSourceBtn) this.addSourceBtn.disabled = true;
     this.chatSection?.remove();
