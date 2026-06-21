@@ -26393,6 +26393,7 @@ var en = {
     cwdNotSet: "Working directory is not set",
     enterQuestion: "Enter a question",
     operationInProgress: "Operation already in progress",
+    rerunDomainMissing: "This query's domain is unavailable \u2014 pick a domain manually.",
     stepsCount: (n, s) => `${n} steps \xB7 ${s}s`,
     starting: "Starting",
     initialising: "Initialising",
@@ -26702,6 +26703,7 @@ var ru = {
     cwdNotSet: "\u0420\u0430\u0431\u043E\u0447\u0430\u044F \u0434\u0438\u0440\u0435\u043A\u0442\u043E\u0440\u0438\u044F \u043D\u0435 \u0437\u0430\u0434\u0430\u043D\u0430",
     enterQuestion: "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0432\u043E\u043F\u0440\u043E\u0441",
     operationInProgress: "\u041E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F",
+    rerunDomainMissing: "\u0414\u043E\u043C\u0435\u043D \u044D\u0442\u043E\u0433\u043E \u0437\u0430\u043F\u0440\u043E\u0441\u0430 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u2014 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0434\u043E\u043C\u0435\u043D \u0432\u0440\u0443\u0447\u043D\u0443\u044E.",
     stepsCount: (n, s) => `${n} \u0448\u0430\u0433\u043E\u0432 \xB7 ${s}\u0441`,
     starting: "\u0417\u0430\u043F\u0443\u0441\u043A",
     initialising: "\u0418\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F",
@@ -27010,6 +27012,7 @@ var es = {
     cwdNotSet: "El directorio de trabajo no est\xE1 configurado",
     enterQuestion: "Introduce una pregunta",
     operationInProgress: "Operaci\xF3n ya en curso",
+    rerunDomainMissing: "El dominio de esta consulta no est\xE1 disponible \u2014 elige un dominio manualmente.",
     stepsCount: (n, s) => `${n} pasos \xB7 ${s}s`,
     starting: "Iniciando",
     initialising: "Inicializando",
@@ -29767,6 +29770,14 @@ function isSourceFile(path2, domain) {
   return false;
 }
 
+// src/rerun-domain.ts
+function resolveRerunDomain(entry, domains) {
+  const id = entry.domainId;
+  if (!id) return { ok: false, reason: "missing" };
+  if (!domains.some((d) => d.id === id)) return { ok: false, reason: "not-found" };
+  return { ok: true, domainId: id };
+}
+
 // prompts/base.md
 var base_default = "You are a wiki agent. Follow these rules regardless of the operation.\n\n## Faithfulness\nAnswer strictly based on the provided context.\nDo not invent facts that are not in the source.\nIf the context is insufficient \u2014 say so directly.\n\n## Format\nReturn exactly what is requested.\nIf JSON is expected \u2014 only valid JSON, with no surrounding explanations.\nIf text is expected \u2014 no service markers or technical artifacts.\n\n## Minimalism\nDo not add anything that was not requested.\nDo not comment on your own actions unless that is part of the task.\n\n## Terms\nRender ALL natural-language content in the output language \u2014 including text quoted or\ncopied from the source: sentences, descriptions, summaries, notes, examples, and field\nvalues, even when the source is in another language (e.g. CJK). A multi-word phrase or\nsentence is prose, not a term \u2014 translate it.\nPreserve verbatim (do NOT translate) ONLY these atomic items, wherever they appear\n(including inside quotes, tables, and field values): code and fenced code blocks, file\npaths, identifiers, commands, product/proper names, abbreviations, and Obsidian embeds\n(`[[...]]`, `![[...]]`).\nWhen in doubt, translate.\n";
 
@@ -31910,11 +31921,19 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
         const rerunBtn = row.createEl("button", { text: "\u21BA", attr: { title: "Re-run" } });
         rerunBtn.addEventListener("click", (e) => {
           e.stopPropagation();
-          if (!this.domainSelect) return;
-          this.domainSelect.value = it.domainId ?? "";
-          this.domainSelect.dispatchEvent(new Event("change"));
-          this.queryInput.value = it.args[0] ?? "";
-          this.submitQuery();
+          void (async () => {
+            const domains = await this.plugin.controller.loadDomains();
+            const r = resolveRerunDomain(it, domains);
+            if (!r.ok) {
+              new import_obsidian6.Notice(i18n().view.rerunDomainMissing);
+              return;
+            }
+            if (this.domainSelect) {
+              this.domainSelect.value = r.domainId;
+              this.domainSelect.dispatchEvent(new Event("change"));
+            }
+            void this.plugin.controller.query(it.args[0] ?? "", r.domainId);
+          })();
         });
       }
       row.addEventListener("click", () => {
