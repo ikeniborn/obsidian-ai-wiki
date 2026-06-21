@@ -7,6 +7,7 @@ import { runLintFixChat } from "./phases/lint-chat";
 import { runInit } from "./phases/init";
 import { runEvaluator } from "./phases/evaluator";
 import { runFormat } from "./phases/format";
+import { runDelete } from "./phases/delete";
 import { VisionTempStore } from "./phases/vision-temp-store";
 import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, RunEvent, RunRequest } from "./types";
 import type { VaultTools } from "./vault-tools";
@@ -30,7 +31,8 @@ export class AgentRunner {
   }
 
   private buildOptsFor(op: RunRequest["operation"]): { model: string; opts: LlmCallOptions } {
-    const key = (op === "chat" || op === "lint-chat" ? "lint" : op);
+    // delete rebuilds pages by reusing ingest, so it borrows ingest's per-operation config.
+    const key = (op === "chat" || op === "lint-chat" ? "lint" : op === "delete" ? "ingest" : op);
     const s = this.settings;
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
     const mergeDeleteWarnThreshold = s.nativeAgent.mergeDeleteWarnThreshold;
@@ -153,6 +155,9 @@ export class AgentRunner {
         yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore, progress);
         break;
       }
+      case "delete":
+        yield* runDelete(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, similarity, this.settings.graphDepth, this.settings.wikiLinkValidationRetries);
+        break;
       default: {
         const start = Date.now();
         yield { kind: "error", message: `Unknown operation: ${req.operation as string}` };

@@ -21,6 +21,7 @@ Domain state changes are communicated as `RunEvent` variants and applied by the 
 | `domain_created` | init bootstrap | Adds new DomainEntry |
 | `domain_updated` | ingest delta, lint patch | Merges patch into entry |
 | `source_path_added` | ingest new source | Appends to source_paths |
+| `source_path_removed` | [[operations#Delete]] | Removes the exact `source_paths` entry (folder-based sources unchanged) |
 
 ## Wiki Folder Layout
 

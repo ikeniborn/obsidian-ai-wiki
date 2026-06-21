@@ -53,7 +53,7 @@ export function mergeEntityTypes(current: EntityType[], incoming: EntityType[]):
   return [...map.values()];
 }
 
-type DomainPersistEvent = Extract<RunEvent, { kind: "domain_created" | "domain_updated" | "source_path_added" }>;
+type DomainPersistEvent = Extract<RunEvent, { kind: "domain_created" | "domain_updated" | "source_path_added" | "source_path_removed" }>;
 
 export function applyDomainEvent(
   domains: DomainEntry[],
@@ -70,6 +70,13 @@ export function applyDomainEvent(
   if (i < 0) return next;
   if (ev.kind === "domain_updated") {
     next[i] = { ...next[i], ...ev.patch };
+    return next;
+  }
+  if (ev.kind === "source_path_removed") {
+    const existing = next[i].source_paths ?? [];
+    const updated = existing.filter((p) => p !== ev.path);
+    if (updated.length === existing.length) return domains; // no exact entry (folder-based source) → unchanged
+    next[i] = { ...next[i], source_paths: updated };
     return next;
   }
   // source_path_added

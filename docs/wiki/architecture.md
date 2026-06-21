@@ -65,7 +65,7 @@ Throws `StorageMigrationConflictError` if both `.config/` and `_config/` exist, 
 
 `AiWikiView` (`src/view.ts`) is the Obsidian `ItemView` owning the plugin's sidebar panel — action buttons and the domain selector.
 
-`updateButtonAvailability()` runs on domain/file change and operation end: domain-dependent buttons require a selected domain; `formatBtn` requires an active non-wiki file; `initBtn` is always enabled. Renders `RunEvent` progress steps including LLM `tool_use`/`tool_result` indicators.
+`updateButtonAvailability()` runs on domain/file change and operation end: domain-dependent buttons require a selected domain; `formatBtn` and `deleteBtn` require the active file to be a source of the active domain (`src/source-deletion.ts#isSourceFile` — a non-wiki file in `source_paths`); `initBtn` is always enabled. The separate `deleteBtn` (desktop and mobile) launches the source deletion — see [[operations#Delete]]. Renders `RunEvent` progress steps including LLM `tool_use`/`tool_result` indicators.
 
 ## Run Events
 
