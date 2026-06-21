@@ -8,3 +8,4 @@
 {"op":"ingest","source":"dev/mobile-retrieval-vision","page":"docs/wiki/operations.md","date":"2026-06-20"}
 {"op":"ingest","source":"dev/mobile-retrieval-vision","page":"docs/wiki/index.md","date":"2026-06-20"}
 {"op":"ingest","source":"dev/mobile-retrieval-vision","page":"docs/wiki/backends-and-config.md","date":"2026-06-20"}
+{"op":"ingest","source":"src/view.ts+src/rerun-domain.ts","page":"operations.md#History Re-run","date":"2026-06-21"}

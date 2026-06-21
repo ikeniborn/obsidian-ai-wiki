@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка спецификации — Re-run domain resolution</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #171c23; --panel2: #1e252e; --border: #2b333d;
+    --fg: #e6edf3; --muted: #9aa7b4; --accent: #4ea1ff; --accent2: #7c5cff;
+    --ok: #3fb950; --warn: #d29922; --crit: #f85149; --info: #58a6ff;
+    --node: #1e252e; --node-border: #3a4756; --edge: #6b7785; --shadow: rgba(0,0,0,.45);
+  }
+  [data-theme="light"] {
+    --bg: #f6f8fa; --panel: #ffffff; --panel2: #f0f3f6; --border: #d6dde4;
+    --fg: #1b232b; --muted: #5a6772; --accent: #1f6feb; --accent2: #6639d6;
+    --ok: #1a7f37; --warn: #9a6700; --crit: #cf222e; --info: #0969da;
+    --node: #ffffff; --node-border: #c3ccd6; --edge: #8a97a4; --shadow: rgba(0,0,0,.12);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 0 0 64px;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 16px 28px; background: var(--panel); border-bottom: 1px solid var(--border);
+    box-shadow: 0 2px 12px var(--shadow);
+  }
+  header h1 { font-size: 18px; margin: 0; font-weight: 650; }
+  header .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  main { max-width: 1080px; margin: 0 auto; padding: 28px; }
+  section { margin: 0 0 40px; }
+  h2 {
+    font-size: 20px; margin: 0 0 14px; padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+  }
+  h3 { font-size: 16px; margin: 26px 0 10px; color: var(--fg); }
+  p.lead { color: var(--muted); margin: 0 0 18px; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 18px; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--panel2); font-weight: 600; }
+  tr:nth-child(even) td { background: color-mix(in srgb, var(--panel2) 45%, transparent); }
+  code { background: var(--panel2); padding: 1px 6px; border-radius: 4px; font-size: 13px;
+         font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px;
+           font-weight: 600; letter-spacing: .2px; }
+  .b-pass { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok);
+            border: 1px solid color-mix(in srgb, var(--ok) 45%, transparent); }
+  .b-crit { background: color-mix(in srgb, var(--crit) 20%, transparent); color: var(--crit);
+            border: 1px solid color-mix(in srgb, var(--crit) 45%, transparent); }
+  .b-warn { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn);
+            border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); }
+  .b-info { background: color-mix(in srgb, var(--info) 20%, transparent); color: var(--info);
+            border: 1px solid color-mix(in srgb, var(--info) 45%, transparent); }
+  .verdict-box {
+    display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-radius: 12px;
+    background: color-mix(in srgb, var(--ok) 12%, var(--panel));
+    border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); margin: 8px 0 24px;
+  }
+  .verdict-box .big { font-size: 22px; font-weight: 700; color: var(--ok); }
+  .note {
+    border-left: 3px solid var(--accent); background: var(--panel2);
+    padding: 10px 14px; border-radius: 0 8px 8px 0; color: var(--muted); margin: 14px 0;
+  }
+  .toggle {
+    cursor: pointer; border: 1px solid var(--border); background: var(--panel2);
+    color: var(--fg); border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600;
+  }
+  .toggle:hover { border-color: var(--accent); }
+
+  /* ---- Block / flow diagram (CSS) ---- */
+  .flow { display: flex; flex-direction: column; gap: 0; margin: 14px 0; }
+  .flow-row { display: flex; align-items: stretch; gap: 14px; flex-wrap: wrap; }
+  .blk {
+    background: var(--node); border: 1px solid var(--node-border); border-radius: 10px;
+    padding: 12px 14px; min-width: 150px; flex: 1; box-shadow: 0 2px 8px var(--shadow);
+  }
+  .blk b { display: block; font-size: 14px; margin-bottom: 3px; }
+  .blk small { color: var(--muted); font-size: 12px; }
+  .blk.accent { border-color: var(--accent); }
+  .blk.good { border-color: var(--ok); }
+  .blk.bad { border-color: var(--crit); }
+  .arrow-down { text-align: center; color: var(--edge); font-size: 20px; line-height: 1; margin: 4px 0; }
+
+  figure { margin: 0 0 8px; }
+  figcaption { color: var(--muted); font-size: 13px; margin-top: 6px; text-align: center; }
+  .svg-wrap { width: 100%; overflow-x: auto; background: var(--panel); border: 1px solid var(--border);
+              border-radius: 12px; padding: 14px; }
+  svg text { fill: var(--fg); font-family: inherit; }
+  .summary-row { display: flex; gap: 18px; flex-wrap: wrap; margin: 6px 0 18px; }
+  .stat { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
+          padding: 12px 18px; min-width: 130px; }
+  .stat .n { font-size: 24px; font-weight: 700; }
+  .stat .l { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Проверка спецификации — Re-run domain resolution</h1>
+    <div class="sub">Фазовая проверка (structure · coverage · clarity · consistency) · 2026-06-21</div>
+  </div>
+  <button class="toggle" id="themeToggle" aria-label="Переключить тему">🌙 Тема</button>
+</header>
+
+<main>
+
+  <!-- ============ VERDICT ============ -->
+  <section>
+    <div class="verdict-box">
+      <span class="badge b-pass">PASS</span>
+      <span class="big">OK — спецификация принята</span>
+    </div>
+    <div class="summary-row">
+      <div class="stat"><div class="n" style="color:var(--crit)">0</div><div class="l">CRITICAL open</div></div>
+      <div class="stat"><div class="n" style="color:var(--warn)">0</div><div class="l">WARNING open</div></div>
+      <div class="stat"><div class="n" style="color:var(--info)">1</div><div class="l">INFO (accepted)</div></div>
+      <div class="stat"><div class="n" style="color:var(--ok)">4 / 4</div><div class="l">фаз passed</div></div>
+    </div>
+    <table>
+      <tr><th>Файл</th><td><code>docs/superpowers/specs/2026-06-21-rerun-domain-resolution-design.md</code></td></tr>
+      <tr><th>spec_hash</th><td><code>dcd05242aea020df</code></td></tr>
+      <tr><th>prev_hash</th><td>—  (frontmatter <code>review:</code> отсутствовал, первый прогон)</td></tr>
+      <tr><th>chain.intent</th><td><code>null</code>  (intent-док для темы <code>rerun-domain-resolution</code> не найден)</td></tr>
+    </table>
+  </section>
+
+  <!-- ============ 1. SPEC SUMMARY ============ -->
+  <section>
+    <h2>1. Резюме спецификации</h2>
+    <p class="lead">Спецификация устраняет баг повторного запуска (re-run) из истории: запрос
+       уходил на неверный домен (<code>domains[0]</code>), потому что domainId «прогонялся»
+       через DOM <code>&lt;select&gt;</code> и терялся. Решение — сделать сохранённый
+       <code>RunHistoryEntry.domainId</code> источником истины и валидировать его.</p>
+
+    <h3>Требования по секциям</h3>
+    <table>
+      <thead><tr><th>Секция</th><th>Требование</th></tr></thead>
+      <tbody>
+        <tr><td>Scope</td><td>Чинить <b>только</b> путь re-run-из-истории; использовать сохранённый <code>domainId</code> напрямую, не через DOM.</td></tr>
+        <tr><td>Scope / Out of scope</td><td>Не трогать fallback <code>domains[0]</code> в <code>src/phases/query.ts</code>, путь command-palette, fallback'и <code>detectDomain</code>/<code>DomainModal</code>.</td></tr>
+        <tr><td>Design · Behavior</td><td>При клике ↺: домен берётся из записи истории, а не из select.</td></tr>
+        <tr><td>Design · Behavior</td><td>Если <code>domainId</code> совпадает с существующим доменом — запуск с этим id, переданным <b>напрямую</b> в <code>controller.query</code>.</td></tr>
+        <tr><td>Design · Behavior</td><td>Если <code>domainId</code> отсутствует или не найден — показать <code>Notice</code> и <b>не</b> запускать запрос.</td></tr>
+        <tr><td>Design · Code changes</td><td>Новый чистый модуль <code>src/rerun-domain.ts</code> с функцией <code>resolveRerunDomain(entry, domains)</code> (тестируемой в изоляции).</td></tr>
+        <tr><td>Design · Code changes</td><td>Переписать re-run handler в <code>src/view.ts</code>: <code>loadDomains()</code> → <code>resolveRerunDomain</code> → <code>Notice</code> либо <code>controller.query(..., r.domainId)</code>.</td></tr>
+        <tr><td>Design · i18n</td><td>Добавить ключ(и) сообщения об ошибке во <b>все три</b> локали <code>en/ru/es</code> (иначе падает <code>tsc</code>).</td></tr>
+        <tr><td>Testing</td><td>Unit (headless, esbuild <code>--alias:obsidian=stub</code>) на 3 случая <code>resolveRerunDomain</code>; ручная проверка mobile+desktop.</td></tr>
+        <tr><td>Docs</td><td>Обновить страницы <code>docs/wiki</code> (iwiki) по query / history re-run / domain resolution.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Success Criteria (критерии приёмки)</h3>
+    <table>
+      <thead><tr><th>#</th><th>Критерий</th></tr></thead>
+      <tbody>
+        <tr><td>SC-1</td><td>Re-run запускает запрос против оригинального домена записи истории (mobile + desktop).</td></tr>
+        <tr><td>SC-2</td><td>Re-run записи с удалённым/переименованным доменом показывает <code>Notice</code> и ничего не запускает.</td></tr>
+        <tr><td>SC-3</td><td><code>resolveRerunDomain</code> проходит 3 unit-кейса: valid → <code>ok</code>; empty → <code>missing</code>; not-in-list → <code>not-found</code>.</td></tr>
+        <tr><td>SC-4</td><td><code>tsc</code> зелёный: ключ(и) Notice присутствуют во всех локалях <code>en/ru/es</code>.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ============ 2. SOLUTION + DEPENDENCY DIAGRAMS ============ -->
+  <section>
+    <h2>2. Схемы решения и зависимостей</h2>
+
+    <h3>2.1 Схема решения — поток управления re-run</h3>
+    <p class="lead">Сравнение «было» (DOM как источник истины — баг) и «стало» (запись истории как
+       источник истины с валидацией).</p>
+    <div class="flow">
+      <div class="flow-row">
+        <div class="blk bad">
+          <b>БЫЛО (баг)</b>
+          <small>↺ click → <code>domainSelect.value = it.domainId</code> → dispatch change →
+          <code>submitQuery()</code> → читает <code>select.value</code> обратно. Если option нет →
+          <code>""</code> → <code>undefined</code> → <code>domains[0]</code> (неверный домен).</small>
+        </div>
+        <div class="blk good">
+          <b>СТАЛО (фикс)</b>
+          <small>↺ click → <code>loadDomains()</code> → <code>resolveRerunDomain(it, domains)</code> →
+          либо <code>Notice</code> (stop), либо <code>controller.query(q, r.domainId)</code> напрямую.</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="flow-row"><div class="blk accent"><b>↺ Re-run click</b><small><code>src/view.ts</code> rerunBtn listener</small></div></div>
+      <div class="arrow-down">▼</div>
+      <div class="flow-row"><div class="blk"><b>controller.loadDomains()</b><small>авторитетный список доменов, без гонки select</small></div></div>
+      <div class="arrow-down">▼</div>
+      <div class="flow-row"><div class="blk"><b>resolveRerunDomain(it, domains)</b><small><code>src/rerun-domain.ts</code> — чистая функция</small></div></div>
+      <div class="arrow-down">▼</div>
+      <div class="flow-row">
+        <div class="blk bad"><b>!ok → missing / not-found</b><small><code>new Notice(...)</code> → <code>return</code> (запрос не идёт)</small></div>
+        <div class="blk good"><b>ok → domainId</b><small>sync dropdown → <code>controller.query(it.args[0], r.domainId)</code></small></div>
+      </div>
+    </div>
+
+    <h3>2.2 Граф зависимостей требований / компонентов</h3>
+    <p class="lead">Узлы — компоненты и требования; рёбра — «использует» / «зависит от».</p>
+    <div class="svg-wrap">
+      <figure>
+        <svg viewBox="0 0 880 420" width="880" height="420" role="img" aria-label="Граф зависимостей">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/>
+            </marker>
+            <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="var(--shadow)"/>
+            </filter>
+          </defs>
+          <!-- edges -->
+          <g stroke="var(--edge)" stroke-width="1.6" fill="none" marker-end="url(#arrow)">
+            <line x1="190" y1="80"  x2="350" y2="80"/>   <!-- view -> resolve -->
+            <line x1="350" y1="110" x2="350" y2="170"/>  <!-- resolve -> types -->
+            <line x1="350" y1="110" x2="200" y2="245"/>  <!-- resolve -> domain -->
+            <line x1="120" y1="110" x2="120" y2="170"/>  <!-- view -> loadDomains -->
+            <line x1="190" y1="195" x2="290" y2="80"/>   <!-- loadDomains -> resolve (domains list) -->
+            <line x1="120" y1="225" x2="120" y2="300"/>  <!-- loadDomains -> controller.query -->
+            <line x1="430" y1="95"  x2="540" y2="120"/>  <!-- resolve(!ok) -> Notice -->
+            <line x1="540" y1="160" x2="540" y2="225"/>  <!-- Notice -> i18n -->
+            <line x1="430" y1="95"  x2="200" y2="300"/>  <!-- resolve(ok) -> controller.query -->
+            <line x1="700" y1="80"  x2="560" y2="110"/>  <!-- tests -> resolve -->
+          </g>
+          <!-- nodes -->
+          <g filter="url(#ds)">
+            <g><rect x="40"  y="55"  width="150" height="46" rx="9" fill="var(--node)" stroke="var(--accent)"/>
+               <text x="115" y="76" text-anchor="middle" font-size="13" font-weight="600">view.ts</text>
+               <text x="115" y="92" text-anchor="middle" font-size="11" fill="var(--muted)">re-run handler</text></g>
+            <g><rect x="290" y="55"  width="160" height="46" rx="9" fill="var(--node)" stroke="var(--accent2)"/>
+               <text x="370" y="76" text-anchor="middle" font-size="13" font-weight="600">rerun-domain.ts</text>
+               <text x="370" y="92" text-anchor="middle" font-size="11" fill="var(--muted)">resolveRerunDomain</text></g>
+            <g><rect x="270" y="170" width="170" height="44" rx="9" fill="var(--node)" stroke="var(--node-border)"/>
+               <text x="355" y="190" text-anchor="middle" font-size="12">types.ts</text>
+               <text x="355" y="205" text-anchor="middle" font-size="11" fill="var(--muted)">RunHistoryEntry</text></g>
+            <g><rect x="120" y="245" width="160" height="44" rx="9" fill="var(--node)" stroke="var(--node-border)"/>
+               <text x="200" y="265" text-anchor="middle" font-size="12">domain.ts</text>
+               <text x="200" y="280" text-anchor="middle" font-size="11" fill="var(--muted)">DomainEntry</text></g>
+            <g><rect x="40"  y="170" width="160" height="46" rx="9" fill="var(--node)" stroke="var(--node-border)"/>
+               <text x="120" y="190" text-anchor="middle" font-size="12">controller.ts</text>
+               <text x="120" y="206" text-anchor="middle" font-size="11" fill="var(--muted)">loadDomains()</text></g>
+            <g><rect x="120" y="300" width="160" height="46" rx="9" fill="var(--node)" stroke="var(--ok)"/>
+               <text x="200" y="320" text-anchor="middle" font-size="12">controller.ts</text>
+               <text x="200" y="336" text-anchor="middle" font-size="11" fill="var(--muted)">query(q, domainId)</text></g>
+            <g><rect x="475" y="100" width="130" height="44" rx="9" fill="var(--node)" stroke="var(--crit)"/>
+               <text x="540" y="120" text-anchor="middle" font-size="12">Notice</text>
+               <text x="540" y="135" text-anchor="middle" font-size="11" fill="var(--muted)">missing / not-found</text></g>
+            <g><rect x="475" y="225" width="130" height="44" rx="9" fill="var(--node)" stroke="var(--node-border)"/>
+               <text x="540" y="245" text-anchor="middle" font-size="12">i18n.ts</text>
+               <text x="540" y="260" text-anchor="middle" font-size="11" fill="var(--muted)">en · ru · es</text></g>
+            <g><rect x="690" y="55"  width="150" height="46" rx="9" fill="var(--node)" stroke="var(--node-border)"/>
+               <text x="765" y="76" text-anchor="middle" font-size="12">headless eval</text>
+               <text x="765" y="92" text-anchor="middle" font-size="11" fill="var(--muted)">3 unit-кейса</text></g>
+          </g>
+        </svg>
+        <figcaption>Чистый модуль <code>rerun-domain.ts</code> минимизирует граф импортов — eval тянет лёгкую зависимость, а не весь плагин.</figcaption>
+      </figure>
+    </div>
+
+    <h3>2.3 Карта покрытия (задача → требование спеки)</h3>
+    <table>
+      <thead><tr><th>Задача (из Problem / Scope)</th><th>Покрывающие требования спеки</th><th>Статус</th></tr></thead>
+      <tbody>
+        <tr><td>Re-run использует неверный домен — починить так, чтобы использовался сохранённый <code>domainId</code></td>
+            <td>Scope; Behavior 1–2; Code changes (resolveRerunDomain + handler ok-ветка)</td>
+            <td><span class="badge b-pass">покрыто</span></td></tr>
+        <tr><td>Не падать молча на <code>domains[0]</code> при невалидном домене</td>
+            <td>Design (intro); Behavior 3; helper-ветка <code>not-found</code></td>
+            <td><span class="badge b-pass">покрыто</span></td></tr>
+        <tr><td>Сообщить пользователю об ошибке вместо тихого запуска</td>
+            <td>Behavior 3; i18n (Notice в en/ru/es); handler <code>if(!r.ok)</code></td>
+            <td><span class="badge b-pass">покрыто</span></td></tr>
+        <tr><td>Не задеть прочие пути домен-резолвинга</td>
+            <td>Scope · Out of scope (явно зафиксировано)</td>
+            <td><span class="badge b-pass">покрыто</span></td></tr>
+        <tr><td>Подтвердить корректность изменения</td>
+            <td>Testing (unit headless + manual); Docs (iwiki)</td>
+            <td><span class="badge b-pass">покрыто</span></td></tr>
+      </tbody>
+    </table>
+    <div class="note">Лишних требований (не привязанных к задаче) не найдено. Out-of-scope пункты явно
+      огорожены, противоречий между требованиями нет.</div>
+  </section>
+
+  <!-- ============ 3. CHECK RESULTS ============ -->
+  <section>
+    <h2>3. Результаты проверки</h2>
+
+    <h3>Статус по фазам</h3>
+    <table>
+      <thead><tr><th>Фаза</th><th>Статус</th><th>Замечания</th></tr></thead>
+      <tbody>
+        <tr><td>1. structure</td><td><span class="badge b-pass">passed</span></td>
+            <td>Плейсхолдеров нет; внутренних §-ссылок/якорей нет (нечему ломаться); заголовки описательные, дублей нет.</td></tr>
+        <tr><td>2. coverage</td><td><span class="badge b-pass">passed</span></td>
+            <td>Все задачи Problem/Scope покрыты ≥1 требованием; лишних требований нет; противоречий нет.</td></tr>
+        <tr><td>3. clarity</td><td><span class="badge b-pass">passed</span></td>
+            <td>У каждого требования есть DoD (формы возврата helper'а, 3 тест-кейса, критерии приёмки). 1 INFO по i18n.</td></tr>
+        <tr><td>4. consistency</td><td><span class="badge b-pass">passed</span></td>
+            <td>Первый прогон: 11 секций зафиксированы как baseline; <code>spec_hash</code> сходится (<code>dcd05242aea020df</code>).</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Findings</h3>
+    <table>
+      <thead><tr><th>id</th><th>severity</th><th>секция</th><th>текст</th><th>verdict</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>F-001</code></td>
+          <td><span class="badge b-info">INFO</span></td>
+          <td>i18n</td>
+          <td>Число ключей оставлено открытым («один ключ на каждый» vs один общий ключ для «missing» и «not-found»).
+              Критерий приёмки при этом чёткий (<code>tsc</code> падает на отсутствующем ключе в любой из en/ru/es), поэтому не блокирует.</td>
+          <td><span class="badge b-pass">accepted</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Сводка</h3>
+    <div class="summary-row">
+      <div class="stat"><div class="n" style="color:var(--crit)">0</div><div class="l">CRITICAL open</div></div>
+      <div class="stat"><div class="n" style="color:var(--warn)">0</div><div class="l">WARNING open</div></div>
+      <div class="stat"><div class="n" style="color:var(--info)">1</div><div class="l">INFO accepted</div></div>
+    </div>
+    <div class="verdict-box">
+      <span class="badge b-pass">PASS</span>
+      <span class="big">Вердикт: OK</span>
+    </div>
+
+    <h3>Chain</h3>
+    <div class="note">
+      <code>intent → spec</code>: intent-документ для темы <code>rerun-domain-resolution</code> не найден
+      в <code>docs/superpowers/intents/</code> (<code>chain.intent = null</code>). Проверка проведена без блокировки.
+      Следующий шаг цепочки — реализация по этой спеке.
+    </div>
+
+    <div class="note">
+      Источник истинности проверки — frontmatter <code>review:</code>, записанный в саму спеку.
+      Тело спецификации не редактировалось; изменён только frontmatter (разрешено алгоритмом).
+      Повторный прогон даст <code>OK (cached, hash match)</code>.
+    </div>
+  </section>
+
+</main>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    var btn = document.getElementById('themeToggle');
+    var saved = null;
+    try { saved = localStorage.getItem('specReportTheme'); } catch (e) {}
+    if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved);
+    function label() {
+      var t = root.getAttribute('data-theme') === 'light' ? '🌙 Тёмная' : '☀️ Светлая';
+      btn.textContent = t;
+    }
+    label();
+    btn.addEventListener('click', function () {
+      var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('specReportTheme', next); } catch (e) {}
+      label();
+    });
+  })();
+</script>
+</body>
+</html>
