@@ -26396,7 +26396,8 @@ var en = {
     stepsCount: (n, s) => `${n} steps \xB7 ${s}s`,
     starting: "Starting",
     initialising: "Initialising",
-    selectDomainFirst: "Select a domain first"
+    selectDomainFirst: "Select a domain first",
+    delete: "Delete"
   },
   formatProgress: {
     analysing: (path2) => `Analysing file ${path2}...
@@ -26517,7 +26518,12 @@ Security note: this backend runs an autonomous agent without per-action permissi
     formatVisionTitle: "Format with vision?",
     formatVisionBody: "Vision recognition is enabled. Analyze attachments before formatting?",
     formatVisionWith: "With vision",
-    formatVisionWithout: "Without vision"
+    formatVisionWithout: "Without vision",
+    deleteSourceTitle: (name) => `Delete source: \xAB${name}\xBB`,
+    deleteSourceWarning: "This permanently deletes the source file and cannot be undone (not recoverable from trash).",
+    deleteSourceDeleteCount: (n) => `${n} wiki page(s) will be deleted:`,
+    deleteSourceRebuildCount: (n) => `${n} wiki page(s) will be rebuilt on remaining sources:`,
+    deleteSourceConfirm: "Delete"
   }
 };
 var _formatProgressShapeCheck = en.formatProgress;
@@ -26699,7 +26705,8 @@ var ru = {
     stepsCount: (n, s) => `${n} \u0448\u0430\u0433\u043E\u0432 \xB7 ${s}\u0441`,
     starting: "\u0417\u0430\u043F\u0443\u0441\u043A",
     initialising: "\u0418\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F",
-    selectDomainFirst: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0434\u043E\u043C\u0435\u043D"
+    selectDomainFirst: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0434\u043E\u043C\u0435\u043D",
+    delete: "\u0423\u0434\u0430\u043B\u0438\u0442\u044C"
   },
   formatProgress: {
     analysing: (path2) => `\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u0430 ${path2}...
@@ -26820,7 +26827,12 @@ var ru = {
     formatVisionTitle: "\u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0441 vision?",
     formatVisionBody: "Vision-\u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u0432\u0430\u043D\u0438\u0435 \u0432\u043A\u043B\u044E\u0447\u0435\u043D\u043E. \u041F\u0440\u043E\u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u043F\u0435\u0440\u0435\u0434 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435\u043C?",
     formatVisionWith: "\u0421 vision",
-    formatVisionWithout: "\u0411\u0435\u0437 vision"
+    formatVisionWithout: "\u0411\u0435\u0437 vision",
+    deleteSourceTitle: (name) => `\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A: \xAB${name}\xBB`,
+    deleteSourceWarning: "\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0431\u0443\u0434\u0435\u0442 \u0443\u0434\u0430\u043B\u0451\u043D \u0431\u0435\u0437\u0432\u043E\u0437\u0432\u0440\u0430\u0442\u043D\u043E \u0438 \u043D\u0435 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u0441\u044F \u0438\u0437 \u043A\u043E\u0440\u0437\u0438\u043D\u044B.",
+    deleteSourceDeleteCount: (n) => `\u0411\u0443\u0434\u0435\u0442 \u0443\u0434\u0430\u043B\u0435\u043D\u043E wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446: ${n}:`,
+    deleteSourceRebuildCount: (n) => `\u0411\u0443\u0434\u0435\u0442 \u043F\u0435\u0440\u0435\u0441\u043E\u0431\u0440\u0430\u043D\u043E wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446: ${n}:`,
+    deleteSourceConfirm: "\u0423\u0434\u0430\u043B\u0438\u0442\u044C"
   }
 };
 var es = {
@@ -27001,7 +27013,8 @@ var es = {
     stepsCount: (n, s) => `${n} pasos \xB7 ${s}s`,
     starting: "Iniciando",
     initialising: "Inicializando",
-    selectDomainFirst: "Selecciona un dominio primero"
+    selectDomainFirst: "Selecciona un dominio primero",
+    delete: "Eliminar"
   },
   formatProgress: {
     analysing: (path2) => `Analizando archivo ${path2}...
@@ -27122,7 +27135,12 @@ Nota de seguridad: este backend ejecuta un agente aut\xF3nomo sin solicitar perm
     formatVisionTitle: "\xBFFormatear con vision?",
     formatVisionBody: "El reconocimiento vision est\xE1 activado. \xBFAnalizar adjuntos antes de formatear?",
     formatVisionWith: "Con vision",
-    formatVisionWithout: "Sin vision"
+    formatVisionWithout: "Sin vision",
+    deleteSourceTitle: (name) => `Eliminar fuente: \xAB${name}\xBB`,
+    deleteSourceWarning: "La fuente se eliminar\xE1 de forma permanente y no se puede recuperar de la papelera.",
+    deleteSourceDeleteCount: (n) => `Se eliminar\xE1n ${n} p\xE1gina(s) wiki:`,
+    deleteSourceRebuildCount: (n) => `Se reconstruir\xE1n ${n} p\xE1gina(s) wiki en las fuentes restantes:`,
+    deleteSourceConfirm: "Eliminar"
   }
 };
 var locales = { ru, es };
@@ -27850,6 +27868,45 @@ var ShellConsentModal = class extends import_obsidian2.Modal {
   async enable() {
     await this.onEnable();
     this.close();
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+var DeleteSourceModal = class extends import_obsidian2.Modal {
+  constructor(app, _domainId, sourcePath, plan, onConfirm) {
+    super(app);
+    this._domainId = _domainId;
+    this.sourcePath = sourcePath;
+    this.plan = plan;
+    this.onConfirm = onConfirm;
+  }
+  _domainId;
+  sourcePath;
+  plan;
+  onConfirm;
+  onOpen() {
+    const T = i18n().modal;
+    const { contentEl } = this;
+    const name = this.sourcePath.split("/").pop() ?? this.sourcePath;
+    contentEl.createEl("h3", { text: T.deleteSourceTitle(name) });
+    contentEl.createEl("p", { text: T.deleteSourceWarning, cls: "mod-warning" });
+    if (this.plan.toDelete.length > 0) {
+      contentEl.createEl("p", { text: T.deleteSourceDeleteCount(this.plan.toDelete.length) });
+      const ul = contentEl.createEl("ul");
+      for (const p of this.plan.toDelete) ul.createEl("li", { text: p.split("/").pop() ?? p });
+    }
+    if (this.plan.toRebuild.length > 0) {
+      contentEl.createEl("p", { text: T.deleteSourceRebuildCount(this.plan.toRebuild.length) });
+      const ul = contentEl.createEl("ul");
+      for (const p of this.plan.toRebuild) ul.createEl("li", { text: p.split("/").pop() ?? p });
+    }
+    new import_obsidian2.Setting(contentEl).addButton((b) => b.setButtonText(T.cancel).onClick(() => this.close())).addButton(
+      (b) => b.setButtonText(T.deleteSourceConfirm).setWarning().onClick(() => {
+        this.onConfirm();
+        this.close();
+      })
+    );
   }
   onClose() {
     this.contentEl.empty();
@@ -29663,6 +29720,53 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
 // src/view.ts
 var import_obsidian6 = require("obsidian");
 
+// src/source-deletion.ts
+function sourceStem(path2) {
+  const base = path2.split("/").pop() ?? path2;
+  return base.replace(/\.md$/i, "");
+}
+function stripSourceToken(token) {
+  return token.trim().replace(/^["']|["']$/g, "").replace(/^\[\[|\]\]$/g, "").trim();
+}
+function wikiSourceTokens(content) {
+  const fm = /^---\n([\s\S]*?)\n---/.exec(content);
+  if (!fm) return [];
+  const m = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fm[1]);
+  if (!m) return [];
+  return m[1].split("\n").map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim()).filter(Boolean).map(stripSourceToken);
+}
+function computeDeletionPlan(sourcePath, pages, sourceStemToPath) {
+  const target = sourceStem(sourcePath);
+  const toDelete = [];
+  const toRebuild = [];
+  const remainingStems = /* @__PURE__ */ new Set();
+  for (const [pagePath, content] of pages) {
+    const tokens = wikiSourceTokens(content);
+    if (!tokens.includes(target)) continue;
+    if (tokens.length === 1) {
+      toDelete.push(pagePath);
+    } else {
+      toRebuild.push(pagePath);
+      for (const t of tokens) if (t !== target) remainingStems.add(t);
+    }
+  }
+  const remainingSources = [];
+  for (const stem of remainingStems) {
+    const p = sourceStemToPath.get(stem);
+    if (p) remainingSources.push(p);
+  }
+  return { toDelete, toRebuild, remainingSources };
+}
+function isSourceFile(path2, domain) {
+  if (path2 === WIKI_ROOT || path2.startsWith(`${WIKI_ROOT}/`)) return false;
+  if (!path2.endsWith(".md")) return false;
+  for (const sp of domain.source_paths ?? []) {
+    const norm = sp.replace(/\/+$/, "");
+    if (path2 === norm || path2.startsWith(`${norm}/`)) return true;
+  }
+  return false;
+}
+
 // prompts/base.md
 var base_default = "You are a wiki agent. Follow these rules regardless of the operation.\n\n## Faithfulness\nAnswer strictly based on the provided context.\nDo not invent facts that are not in the source.\nIf the context is insufficient \u2014 say so directly.\n\n## Format\nReturn exactly what is requested.\nIf JSON is expected \u2014 only valid JSON, with no surrounding explanations.\nIf text is expected \u2014 no service markers or technical artifacts.\n\n## Minimalism\nDo not add anything that was not requested.\nDo not comment on your own actions unless that is part of the task.\n\n## Terms\nRender ALL natural-language content in the output language \u2014 including text quoted or\ncopied from the source: sentences, descriptions, summaries, notes, examples, and field\nvalues, even when the source is in another language (e.g. CJK). A multi-word phrase or\nsentence is prose, not a term \u2014 translate it.\nPreserve verbatim (do NOT translate) ONLY these atomic items, wherever they appear\n(including inside quotes, tables, and field values): code and fenced code blocks, file\npaths, identifiers, commands, product/proper names, abbreviations, and Obsidian embeds\n(`[[...]]`, `![[...]]`).\nWhen in doubt, translate.\n";
 
@@ -30762,6 +30866,7 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
   ingestBtn;
   lintBtn;
   formatBtn;
+  deleteBtn;
   reinitBtn;
   addSourceBtn;
   openLogLink;
@@ -30837,6 +30942,12 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
       const mobileActions = root.createDiv("ai-wiki-domain-actions");
       this.formatBtn = mobileActions.createEl("button", { text: T.view.format });
       this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
+      this.deleteBtn = mobileActions.createEl("button", { text: T.view.delete });
+      this.deleteBtn.addEventListener("click", () => {
+        const file = this.plugin.app.workspace.getActiveFile();
+        const domainId = this.domainSelect?.value;
+        if (file && domainId) void this.plugin.controller.deleteSource(domainId, file.path);
+      });
     }
     root.createDiv({ cls: "ai-wiki-section-label", text: T.view.sectionQuery });
     const ask = root.createDiv("ai-wiki-ask");
@@ -30989,6 +31100,12 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
       this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
       this.formatBtn = actionRow.createEl("button", { text: T.view.format });
       this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
+      this.deleteBtn = actionRow.createEl("button", { text: T.view.delete });
+      this.deleteBtn.addEventListener("click", () => {
+        const file = this.plugin.app.workspace.getActiveFile();
+        const domainId = this.domainSelect?.value;
+        if (file && domainId) void this.plugin.controller.deleteSource(domainId, file.path);
+      });
       this.ingestBtn.addEventListener("click", () => {
         const file = this.plugin.app.workspace.getActiveFile();
         if (!file) {
@@ -31031,11 +31148,13 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
   updateButtonAvailability() {
     const hasDomain = !!this.domainSelect?.value;
     const activeFile = this.plugin.app.workspace.getActiveFile();
-    const canFormat = !!activeFile && !activeFile.path.startsWith("!Wiki/");
+    const domain = this.domains.find((d) => d.id === this.domainSelect?.value);
+    const isSource = !!activeFile && !!domain && isSourceFile(activeFile.path, domain);
     if (this.askBtn) this.askBtn.disabled = !hasDomain;
     if (this.ingestBtn) this.ingestBtn.disabled = !hasDomain;
     if (this.lintBtn) this.lintBtn.disabled = !hasDomain;
-    if (this.formatBtn) this.formatBtn.disabled = !canFormat;
+    if (this.formatBtn) this.formatBtn.disabled = !isSource;
+    if (this.deleteBtn) this.deleteBtn.disabled = !isSource;
     if (this.reinitBtn) this.reinitBtn.disabled = !hasDomain;
     if (this.addSourceBtn) this.addSourceBtn.disabled = !hasDomain;
   }
@@ -31205,6 +31324,7 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
     if (this.ingestBtn) this.ingestBtn.disabled = true;
     if (this.lintBtn) this.lintBtn.disabled = true;
     if (this.formatBtn) this.formatBtn.disabled = true;
+    if (this.deleteBtn) this.deleteBtn.disabled = true;
     if (this.reinitBtn) this.reinitBtn.disabled = true;
     if (this.addSourceBtn) this.addSourceBtn.disabled = true;
     this.chatSection?.remove();
@@ -31989,6 +32109,13 @@ function applyDomainEvent(domains, ev, opts) {
   if (i < 0) return next;
   if (ev.kind === "domain_updated") {
     next[i] = { ...next[i], ...ev.patch };
+    return next;
+  }
+  if (ev.kind === "source_path_removed") {
+    const existing2 = next[i].source_paths ?? [];
+    const updated2 = existing2.filter((p) => p !== ev.path);
+    if (updated2.length === existing2.length) return domains;
+    next[i] = { ...next[i], source_paths: updated2 };
     return next;
   }
   const existing = next[i].source_paths ?? [];
@@ -38094,7 +38221,7 @@ function parseWikiSourcesFromFm(content) {
   if (!match) return [];
   return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
 }
-function ensureWikiSources(content, sourceStem) {
+function ensureWikiSources(content, sourceStem2) {
   const sources = parseWikiSourcesFromFm(content);
   if (sources.length > 0) return { content, injected: false };
   const fmMatch = FM_RE.exec(content);
@@ -38106,7 +38233,7 @@ function ensureWikiSources(content, sourceStem) {
     return { content, injected: false };
   }
   const body = content.slice(fmMatch[0].length);
-  parsed.wiki_sources = [`[[${sourceStem}]]`];
+  parsed.wiki_sources = [`[[${sourceStem2}]]`];
   return { content: `---
 ${(0, import_yaml.stringify)(parsed)}---
 ${body}`, injected: true };
@@ -38762,14 +38889,14 @@ ${page.content}`;
         details: pageWarnings
       };
     }
-    const sourceStem = sourceVaultPath.split("/").pop().replace(/\.md$/, "");
-    const { content: sourcedPage, injected } = ensureWikiSources(repairedPage, sourceStem);
+    const sourceStem2 = sourceVaultPath.split("/").pop().replace(/\.md$/, "");
+    const { content: sourcedPage, injected } = ensureWikiSources(repairedPage, sourceStem2);
     if (injected) {
       yield {
         kind: "info_text",
         icon: "\u26A0\uFE0F",
         summary: `wiki_sources injected: ${page.path}`,
-        details: [`Added [[${sourceStem}]] \u2014 LLM did not emit wiki_sources`]
+        details: [`Added [[${sourceStem2}]] \u2014 LLM did not emit wiki_sources`]
       };
     }
     yield { kind: "tool_use", name: existingContent === null ? "Create" : "Update", input: { path: page.path } };
@@ -41255,6 +41382,151 @@ The previous attempt failed: ${zodHint}. Fix it and return again using the marke
   yield { kind: "result", durationMs: Date.now() - start, text: finalReport, outputTokens: outputTokens || void 0 };
 }
 
+// src/phases/delete.ts
+async function* runDelete(args, vaultTools, llm, model, domains, vaultRoot, signal, opts = {}, similarity, graphDepth = 1, wikiLinkValidationRetries = 3) {
+  const start = Date.now();
+  const sourcePath = args[0];
+  const domainId = args[1];
+  if (!sourcePath || !domainId) {
+    yield { kind: "error", message: "delete: source path and domain id required" };
+    yield { kind: "result", durationMs: Date.now() - start, text: "" };
+    return;
+  }
+  const domain = domains.find((d) => d.id === domainId);
+  if (!domain) {
+    yield { kind: "error", message: `delete: domain ${domainId} not found` };
+    yield { kind: "result", durationMs: Date.now() - start, text: "" };
+    return;
+  }
+  const wikiFolder = domainWikiFolder(domain.wiki_folder);
+  const pageFiles = (await vaultTools.listFiles(wikiFolder)).filter(
+    (p) => p.endsWith(".md") && !p.includes("/_config/")
+  );
+  const pages = /* @__PURE__ */ new Map();
+  for (const p of pageFiles) {
+    try {
+      pages.set(p, await vaultTools.read(p));
+    } catch {
+    }
+  }
+  const sourceStemToPath = /* @__PURE__ */ new Map();
+  for (const sp of domain.source_paths ?? []) {
+    let files;
+    try {
+      files = await vaultTools.listFiles(sp);
+    } catch {
+      files = [];
+    }
+    for (const f of files) {
+      if (!f.endsWith(".md") || f === sourcePath) continue;
+      sourceStemToPath.set(sourceStem(f), f);
+    }
+    if (sp.endsWith(".md") && sp !== sourcePath) sourceStemToPath.set(sourceStem(sp), sp);
+  }
+  const plan = computeDeletionPlan(sourcePath, pages, sourceStemToPath);
+  yield {
+    kind: "info_text",
+    icon: "trash",
+    summary: `Deleting source: ${sourceStem(sourcePath)}`,
+    details: [`${plan.toDelete.length} page(s) to delete`, `${plan.toRebuild.length} page(s) to rebuild`]
+  };
+  yield { kind: "source_path_removed", domainId, path: sourcePath };
+  const targetStem = sourceStem(sourcePath);
+  const prunedAnalyzed = (domain.analyzed_sources ?? []).filter(
+    (a) => a !== sourcePath && sourceStem(a) !== targetStem
+  );
+  if (prunedAnalyzed.length !== (domain.analyzed_sources ?? []).length) {
+    yield { kind: "domain_updated", domainId, patch: { analyzed_sources: prunedAnalyzed } };
+  }
+  const safeRemovePage = async (p) => {
+    if (!validateArticlePath(p, wikiFolder)) return false;
+    try {
+      await vaultTools.remove(p);
+      await removeIndexAnnotation(vaultTools, wikiFolder, pageId(p));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  for (const p of plan.toRebuild) {
+    if (signal.aborted) break;
+    if (!await safeRemovePage(p)) {
+      yield { kind: "info_text", icon: "alert-triangle", summary: `Skipped invalid path: ${p}` };
+    }
+  }
+  const failedSources = [];
+  for (const src of plan.remainingSources) {
+    if (signal.aborted) break;
+    let sourceFailed = false;
+    try {
+      for await (const ev of runIngest(
+        [src],
+        vaultTools,
+        llm,
+        model,
+        domains,
+        vaultRoot,
+        signal,
+        opts,
+        similarity,
+        void 0,
+        graphDepth,
+        wikiLinkValidationRetries
+      )) {
+        if (ev.kind === "error") sourceFailed = true;
+        if (ev.kind === "result") continue;
+        yield ev;
+      }
+    } catch (e) {
+      sourceFailed = true;
+      yield { kind: "error", message: `Rebuild failed for ${src}: ${e.message}` };
+    }
+    if (sourceFailed) failedSources.push(src);
+  }
+  let deleted = 0;
+  for (const p of plan.toDelete) {
+    if (signal.aborted) break;
+    if (await safeRemovePage(p)) deleted++;
+    else yield { kind: "info_text", icon: "alert-triangle", summary: `Skipped invalid path: ${p}` };
+  }
+  const remainingPageStems = new Set(
+    (await vaultTools.listFiles(wikiFolder)).filter((p) => p.endsWith(".md") && !p.includes("/_config/")).map((p) => pageId(p))
+  );
+  for (const src of sourceStemToPath.values()) {
+    try {
+      const content = await vaultTools.read(src);
+      const { content: cleaned, warnings } = stripInvalidWikiArticles(content, remainingPageStems);
+      if (warnings.length > 0 && cleaned !== content) await vaultTools.write(src, cleaned);
+    } catch {
+    }
+  }
+  let sourceRemoved = false;
+  if (failedSources.length === 0 && !signal.aborted) {
+    try {
+      await vaultTools.remove(sourcePath);
+      sourceRemoved = true;
+    } catch (e) {
+      yield { kind: "error", message: `Could not delete source file: ${e.message}` };
+    }
+  }
+  const parts = [
+    `Deleted source ${targetStem}`,
+    `pages deleted ${deleted}`,
+    `rebuilt ${plan.toRebuild.length}`
+  ];
+  if (failedSources.length > 0) {
+    parts.push(`${failedSources.length} rebuild failure(s)`);
+  }
+  if (!sourceRemoved) {
+    parts.push(signal.aborted ? "source kept \u2014 cancelled" : "source kept \u2014 retry");
+  }
+  const text = parts.filter(Boolean).join(", ") + ".";
+  if (failedSources.length > 0) {
+    yield { kind: "info_text", icon: "alert-triangle", summary: "Rebuild failures", details: failedSources };
+  }
+  yield { kind: "result", durationMs: Date.now() - start, text };
+}
+
 // src/phases/vision-temp-store.ts
 function base64ToArrayBuffer(b64) {
   const binary = atob(b64);
@@ -41323,7 +41595,7 @@ var AgentRunner = class {
   isMobile;
   llm;
   buildOptsFor(op) {
-    const key = op === "chat" || op === "lint-chat" ? "lint" : op;
+    const key = op === "chat" || op === "lint-chat" ? "lint" : op === "delete" ? "ingest" : op;
     const s = this.settings;
     const structuredRetries = s.nativeAgent.structuredRetries ?? 1;
     const mergeDeleteWarnThreshold = s.nativeAgent.mergeDeleteWarnThreshold;
@@ -41452,6 +41724,9 @@ var AgentRunner = class {
         yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore, progress);
         break;
       }
+      case "delete":
+        yield* runDelete(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, similarity, this.settings.graphDepth, this.settings.wikiLinkValidationRetries);
+        break;
       default: {
         const start = Date.now();
         yield { kind: "error", message: `Unknown operation: ${req.operation}` };
@@ -49769,6 +50044,38 @@ var WikiController = class {
     if (deleted > 0) graphCache.invalidate(domainId);
     return deleted;
   }
+  async deleteSource(domainId, path2) {
+    const domains = await this.loadDomains();
+    const entry = domains.find((d) => d.id === domainId);
+    if (!entry) {
+      new import_obsidian10.Notice(i18n().ctrl.noActiveFile);
+      return;
+    }
+    const wikiFolder = domainWikiFolder(entry.wiki_folder);
+    const pageFiles = collectMdInPaths(this.app.vault, [wikiFolder]).filter((f) => !f.path.includes("/_config/"));
+    const pages = /* @__PURE__ */ new Map();
+    for (const f of pageFiles) {
+      try {
+        pages.set(f.path, await this.app.vault.adapter.read(f.path));
+      } catch {
+      }
+    }
+    const sourceStemToPath = /* @__PURE__ */ new Map();
+    for (const f of collectMdInPaths(this.app.vault, entry.source_paths ?? [])) {
+      if (f.path !== path2) sourceStemToPath.set(sourceStem(f.path), f.path);
+    }
+    for (const sp of entry.source_paths ?? []) {
+      if (sp.endsWith(".md") && sp !== path2 && this.app.vault.getFileByPath(sp)) {
+        sourceStemToPath.set(sourceStem(sp), sp);
+      }
+    }
+    const plan = computeDeletionPlan(path2, pages, sourceStemToPath);
+    new DeleteSourceModal(this.app, entry.id, path2, plan, () => {
+      void this.dispatch("delete", [path2, domainId], domainId).then(() => {
+        graphCache.invalidate(domainId);
+      });
+    }).open();
+  }
   requireClaudeAgent(local) {
     const { iclaudePath } = local;
     if (!iclaudePath) {
@@ -49928,7 +50235,7 @@ var WikiController = class {
       return;
     }
     this._chatSessionId = void 0;
-    if (import_obsidian10.Platform.isMobile && op !== "query" && op !== "format") {
+    if (import_obsidian10.Platform.isMobile && op !== "query" && op !== "format" && op !== "delete") {
       new import_obsidian10.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
@@ -49988,7 +50295,7 @@ var WikiController = class {
       for await (const ev of runGen) {
         await this.logEvent(vaultRoot, sessionId, op, domainId, ev);
         this.activeView()?.appendEvent(ev);
-        if (ev.kind === "domain_created" || ev.kind === "domain_updated" || ev.kind === "source_path_added") {
+        if (ev.kind === "domain_created" || ev.kind === "domain_updated" || ev.kind === "source_path_added" || ev.kind === "source_path_removed") {
           try {
             const cur = await this.domainStore.load();
             const next = applyDomainEvent(cur, ev, { vaultRoot });

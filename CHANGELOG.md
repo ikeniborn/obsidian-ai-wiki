@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.179 — 2026-06-21
+
+### Новое
+- feat(delete): delete a source from the sidebar — Delete button with a confirmation modal (DeleteSourceModal) showing affected page counts and a permanent-deletion warning; Format/Delete gated to source files via isSourceFile
+- feat(delete): runDelete phase wipes generated pages, rebuilds the index via runIngest, and conditionally removes the source file; emits a source_path_removed domain event
+
+### Исправления
+- fix(delete): keep the source file when deletion is cancelled (F-002) and allow delete on mobile
+- fix(delete): disable the Delete button while an operation is running
+- fix(delete): suppress inner ingest result events during rebuild
+- fix(delete): map the delete op to its ingest config key in buildOptsFor
+- fix(delete): stripSourceToken trims whitespace before stripping quotes/brackets
+
+---
+
 ## 0.1.178 — 2026-06-20
 
 ### Новое
