@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка плана — Удаление источника</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --border:#2b3440;
+    --fg:#e6edf3; --muted:#9aa7b4; --accent:#4aa3ff; --accent2:#7c5cff;
+    --ok:#3fb950; --warn:#d29922; --crit:#f85149; --chip:#21303f;
+    --shadow:0 4px 18px rgba(0,0,0,.45); --node:#1c232d; --nodeStroke:#3a4756;
+  }
+  [data-theme="light"]{
+    --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#d6dee6;
+    --fg:#1f2328; --muted:#5a6671; --accent:#0969da; --accent2:#6639ba;
+    --ok:#1a7f37; --warn:#9a6700; --crit:#cf222e; --chip:#e7eef6;
+    --shadow:0 4px 18px rgba(140,150,160,.25); --node:#ffffff; --nodeStroke:#c4cfda;
+  }
+  *{box-sizing:border-box} html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--fg);font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5;padding:32px 20px 64px;transition:background .25s,color .25s}
+  .wrap{max-width:1120px;margin:0 auto}
+  header.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+  h1{font-size:1.5rem;margin:0 0 6px;line-height:1.25}
+  h2{font-size:1.18rem;margin:38px 0 12px;padding-bottom:6px;border-bottom:2px solid var(--border)}
+  h3{font-size:1rem;margin:22px 0 8px;color:var(--accent)}
+  .sub{color:var(--muted);font-size:.92rem}
+  .meta{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}
+  .chip{background:var(--chip);border:1px solid var(--border);border-radius:999px;padding:3px 11px;font-size:.8rem}
+  .chip.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .toggle{cursor:pointer;background:var(--panel);color:var(--fg);border:1px solid var(--border);
+    border-radius:8px;padding:8px 14px;font-size:.85rem;box-shadow:var(--shadow)}
+  .toggle:hover{border-color:var(--accent)}
+  table{width:100%;border-collapse:collapse;margin:10px 0 6px;background:var(--panel);
+    border:1px solid var(--border);border-radius:10px;overflow:hidden;font-size:.88rem}
+  th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{background:var(--panel2);color:var(--muted);font-weight:600;font-size:.78rem;text-transform:uppercase;letter-spacing:.03em}
+  tr:last-child td{border-bottom:none}
+  td.k{white-space:nowrap;font-weight:600;color:var(--accent)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--panel2);
+    border:1px solid var(--border);border-radius:5px;padding:1px 5px;font-size:.85em}
+  .pill{display:inline-block;border-radius:6px;padding:1px 8px;font-size:.78rem;font-weight:600}
+  .pill.ok{background:rgba(63,185,80,.16);color:var(--ok)}
+  .pill.warn{background:rgba(210,153,34,.16);color:var(--warn)}
+  .pill.crit{background:rgba(248,81,73,.16);color:var(--crit)}
+  .pill.fixed{background:rgba(74,163,255,.16);color:var(--accent)}
+  figure{margin:14px 0;background:var(--panel);border:1px solid var(--border);border-radius:12px;
+    padding:10px;box-shadow:var(--shadow);overflow-x:auto}
+  figcaption{color:var(--muted);font-size:.82rem;margin:4px 6px 10px}
+  .verdict{background:var(--panel);border:1px solid var(--border);border-left:5px solid var(--ok);
+    border-radius:10px;padding:16px 18px;margin:18px 0;box-shadow:var(--shadow)}
+  .verdict b{color:var(--ok);font-size:1.05rem}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  footer{margin-top:42px;padding-top:16px;border-top:2px solid var(--border);color:var(--muted);font-size:.88rem}
+  footer .prev{color:var(--accent);font-weight:600}
+  text{font-family:-apple-system,Segoe UI,Roboto,sans-serif}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <h1>Проверка плана: Реализация удаления источника</h1>
+      <div class="sub">chain: intent → spec → <b>plan</b></div>
+      <div class="meta">
+        <span class="chip">2026-06-21</span>
+        <span class="chip mono">plan_hash: 2bf8741eccb71cc1</span>
+        <span class="chip mono">spec_hash: a91c2d4bc0eefc9d</span>
+        <span class="chip"><span class="pill ok">Вердикт: OK</span></span>
+      </div>
+    </div>
+    <button class="toggle" id="themeBtn" type="button">🌗 Тема</button>
+  </header>
+
+  <!-- ===== БЛОК 1 ===== -->
+  <h2>1. Резюме плана (8 тасков, TDD-шаги)</h2>
+  <table>
+    <thead><tr><th>Task</th><th>Файлы</th><th>Критерий готовности (DoD)</th></tr></thead>
+    <tbody>
+      <tr><td class="k">T1 Planner</td><td>+ <code>src/source-deletion.ts</code>, + eval</td><td>eval <code>TOTAL: 11 passed, 0 failed</code>; lint чисто</td></tr>
+      <tr><td class="k">T2 Types</td><td>~ <code>types.ts</code>, ~ <code>domain.ts</code></td><td><code>"delete"</code> + <code>source_path_removed</code>; tsc по touched чисто</td></tr>
+      <tr><td class="k">T3 Phase</td><td>+ <code>src/phases/delete.ts</code></td><td><code>runDelete</code>: wipe→rebuild→delete→backlinks→conditional source-delete; tsc/lint чисто</td></tr>
+      <tr><td class="k">T4 Runner</td><td>~ <code>agent-runner.ts</code></td><td><code>case "delete"</code>; tsc чисто</td></tr>
+      <tr><td class="k">T5 Modal</td><td>~ <code>modals.ts</code>, ~ <code>i18n.ts</code></td><td><code>DeleteSourceModal</code> + warning + counts; tsc/lint чисто</td></tr>
+      <tr><td class="k">T6 Controller</td><td>~ <code>controller.ts</code></td><td><code>deleteSource()</code> строит план, открывает модаль, dispatch; tsc чисто</td></tr>
+      <tr><td class="k">T7 Sidebar</td><td>~ <code>view.ts</code>, ~ <code>i18n.ts</code></td><td><code>deleteBtn</code> (desktop+mobile) + гейт <code>isSourceFile</code>; build OK</td></tr>
+      <tr><td class="k">T8 Verify</td><td>~ <code>docs/wiki</code></td><td>build+lint+eval; реальный vault-прогон (Done when); iwiki-lint; PR в master</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ===== БЛОК 2 ===== -->
+  <h2>2. Зависимости и пересечения</h2>
+
+  <h3>(a) Граф зависимостей шагов (M→N, M&lt;N)</h3>
+  <figure>
+    <svg viewBox="0 0 940 300" width="100%" role="img" aria-label="Граф зависимостей тасков">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+        </marker>
+        <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.30"/>
+        </filter>
+        <style>
+          .n rect{fill:var(--node);stroke:var(--nodeStroke);stroke-width:1.4;filter:url(#ds)}
+          .n text{fill:var(--fg);font-size:12px;font-weight:600}
+          .e{stroke:var(--accent);stroke-width:1.6;fill:none;marker-end:url(#arr);opacity:.85}
+        </style>
+      </defs>
+      <!-- nodes: T1..T8 laid left→right -->
+      <g class="n"><rect x="20"  y="120" width="86" height="36" rx="9"/><text x="44" y="143">T1 plan</text></g>
+      <g class="n"><rect x="20"  y="40"  width="86" height="36" rx="9"/><text x="40" y="63">T2 types</text></g>
+      <g class="n"><rect x="150" y="40"  width="92" height="36" rx="9"/><text x="166" y="63">T3 phase</text></g>
+      <g class="n"><rect x="290" y="40"  width="96" height="36" rx="9"/><text x="304" y="63">T4 runner</text></g>
+      <g class="n"><rect x="150" y="200" width="92" height="36" rx="9"/><text x="166" y="223">T5 modal</text></g>
+      <g class="n"><rect x="320" y="200" width="110" height="36" rx="9"/><text x="332" y="223">T6 controller</text></g>
+      <g class="n"><rect x="490" y="200" width="96" height="36" rx="9"/><text x="502" y="223">T7 sidebar</text></g>
+      <g class="n"><rect x="700" y="120" width="96" height="36" rx="9"/><text x="712" y="143">T8 verify</text></g>
+      <!-- edges -->
+      <path class="e" d="M106,130 C150,110 150,80 150,76"/>      <!-- T1→T3 -->
+      <path class="e" d="M106,138 C140,170 150,196 196,200"/>     <!-- T1→T5(type) -->
+      <path class="e" d="M106,140 C300,140 300,200 320,206"/>     <!-- T1→T6 -->
+      <path class="e" d="M106,146 C420,150 460,196 540,200"/>     <!-- T1→T7 -->
+      <path class="e" d="M106,58 L150,58"/>                       <!-- T2→T3 -->
+      <path class="e" d="M242,58 L290,58"/>                       <!-- T3→T4 -->
+      <path class="e" d="M242,52 C330,70 330,150 338,200"/>       <!-- T2→T4 already; T3→? keep simple -->
+      <path class="e" d="M242,218 L320,218"/>                     <!-- T5→T6 -->
+      <path class="e" d="M430,218 L490,218"/>                     <!-- T6→T7 -->
+      <path class="e" d="M386,58 C600,70 690,110 700,128"/>       <!-- T4→T8 -->
+      <path class="e" d="M586,212 C660,200 690,170 700,150"/>     <!-- T7→T8 -->
+    </svg>
+    <figcaption>Все рёбра идут вперёд (M&lt;N) — циклов и нарушений порядка нет. Критический фикс: <b>T5 modal → T6 controller</b> (раньше было наоборот).</figcaption>
+  </figure>
+
+  <h3>(b) Пересечения по артефактам</h3>
+  <table>
+    <thead><tr><th>Файл</th><th>Таски</th><th>Заметка</th></tr></thead>
+    <tbody>
+      <tr><td><code>src/i18n.ts</code></td><td>T5 (modal-строки) + T7 (view.delete)</td><td>Разные секции (modal vs view) — конфликта нет</td></tr>
+      <tr><td><code>src/types.ts</code></td><td>T2</td><td>единственный писатель</td></tr>
+      <tr><td><code>src/domain.ts</code></td><td>T2</td><td>единственный писатель</td></tr>
+      <tr><td><code>src/controller.ts</code></td><td>T6</td><td>единственный писатель</td></tr>
+      <tr><td><code>src/view.ts</code></td><td>T7</td><td>единственный писатель</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:.82rem;color:var(--muted)">Покрытие: каждое требование спеки (R1–R5 + 4 outcomes) закрыто ≥1 таском; «лишних» тасков нет.</p>
+
+  <!-- ===== БЛОК 3 ===== -->
+  <h2>3. Результаты проверки</h2>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th><th>Примечание</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="pill ok">passed</span></td><td>без плейсхолдеров; Tasks 1–8 без пропусков; дублей шагов нет</td></tr>
+      <tr><td>coverage</td><td><span class="pill ok">passed</span></td><td>все требования спеки покрыты; лишних шагов нет</td></tr>
+      <tr><td>dependencies</td><td><span class="pill ok">passed</span></td><td>2 finding найдено и <b>исправлено</b> (см. ниже)</td></tr>
+      <tr><td>verifiability</td><td><span class="pill ok">passed</span></td><td>у каждого шага измеримый DoD (команда + ожидаемый вывод)</td></tr>
+      <tr><td>consistency</td><td><span class="pill ok">passed</span></td><td>план совпадает со спекой; сигнатуры сквозные</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Findings</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="k">F-001</td><td><span class="pill crit">CRITICAL</span></td><td>Task 6</td>
+        <td>Контроллер импортировал <code>DeleteSourceModal</code> из более позднего таска → typecheck падал при исполнении сверху вниз.</td>
+        <td><span class="pill fixed">fixed</span><br><span style="font-size:.78rem;color:var(--muted)">swap: модаль T5, контроллер T6</span></td>
+      </tr>
+      <tr>
+        <td class="k">F-002</td><td><span class="pill warn">WARNING</span></td><td>Task 7</td>
+        <td>Кнопка Delete создавалась до добавления строки <code>i18n().view.delete</code>.</td>
+        <td><span class="pill fixed">fixed</span><br><span style="font-size:.78rem;color:var(--muted)">i18n — Step 1 Task 7</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="verdict">
+    <b>Финальный вердикт: OK</b><br>
+    CRITICAL open: 0 · WARNING open: 0 · все 5 фаз passed · оба finding fixed
+  </div>
+
+  <footer>
+    Chain: <span class="prev">intent → spec → plan</span><br>
+    Previous step: <code>docs/superpowers/specs/2026-06-21-source-deletion-design.md</code><br>
+    Next step: subagent-driven-development или executing-plans (исполнение плана).
+  </footer>
+
+</div>
+<script>
+  (function(){
+    var btn=document.getElementById('themeBtn'); var root=document.documentElement;
+    btn.addEventListener('click',function(){
+      root.setAttribute('data-theme', root.getAttribute('data-theme')==='dark'?'light':'dark');
+    });
+  })();
+</script>
+</body>
+</html>
