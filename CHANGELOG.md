@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.180 — 2026-06-21
+
+### Новое
+- feat(rerun): pure resolveRerunDomain helper with headless eval coverage
+
+### Исправления
+- fix(rerun): history re-run uses the stored domainId instead of defaulting to domains[0]
+
+---
+
 ## 0.1.179 — 2026-06-21
 
 ### Новое
