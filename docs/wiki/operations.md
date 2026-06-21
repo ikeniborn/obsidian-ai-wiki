@@ -87,6 +87,14 @@ The `graph_stats` event is rendered by `src/view.ts#formatGraphStatsLines` (a pu
 
 When `agentLogEnabled` is true, scores and a BFS-by-hop breakdown render in multi-line trace format; when false, a compact single-line form is shown. Both forms now include a short retrieval tag (`vector` / `jaccard (low …)` / `jaccard (embed failed)` / `llm seeds`) built by `retrievalTag` from `retrievalMode`/`denseMax`/`seedFallbackReason`.
 
+### History Re-run
+
+The history ↺ Re-run button re-runs a stored query against its **original** domain, not the current dropdown selection — resolved from the entry's saved `domainId`, validated, then passed straight to the query.
+
+`src/view.ts` reads a fresh domain list via `controller.loadDomains()` and resolves the entry's `domainId` with `src/rerun-domain.ts#resolveRerunDomain`, then calls `controller.query(question, domainId)` directly. The resolved id is authoritative: it bypasses the DOM `<select>`, closing the prior bug where an option missing from the dropdown (unpopulated select on mobile, or a renamed/deleted domain) silently reset `domainSelect.value` to empty, sent `undefined` downstream, and defaulted to the first domain (`domains[0]` in `src/phases/query.ts`).
+
+`resolveRerunDomain` returns `{ ok: false, reason: "missing" }` when the entry has no `domainId`, or `"not-found"` when the id is absent from the current [[domain-model]] list. On either failure the handler shows the `view.rerunDomainMissing` Notice (en/ru/es) and runs nothing. The select is still synced for display only.
+
 ## Lint
 
 Analyzes wiki pages for a domain one article at a time (`src/phases/lint.ts`). For each article it selects a limited context set via `PageSimilarityService` + BFS, then calls the LLM; results merge into `LintOutputSchema`. Before the loop, `buildTitleMap` reads H1/`title:` from non-wiki files so title-based `wiki_sources` links are not falsely removed.
