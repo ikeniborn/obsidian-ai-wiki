@@ -103,6 +103,9 @@ export async function* runDelete(
         similarity, undefined, graphDepth, wikiLinkValidationRetries,
       )) {
         if (ev.kind === "error") sourceFailed = true;
+        // Suppress the inner per-source `result` event — runDelete emits its own
+        // final `result`; forwarding it would trip the view's stopWaiting() early.
+        if (ev.kind === "result") continue;
         yield ev;
       }
     } catch (e) {
