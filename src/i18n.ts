@@ -180,6 +180,7 @@ const en = {
     starting: "Starting",
     initialising: "Initialising",
     selectDomainFirst: "Select a domain first",
+    delete: "Delete",
   },
   formatProgress: {
     analysing: (path: string) => `Analysing file ${path}...\n`,
@@ -504,6 +505,7 @@ const ru: I18n = {
     starting: "Запуск",
     initialising: "Инициализация",
     selectDomainFirst: "Выберите домен",
+    delete: "Удалить",
   },
   formatProgress: {
     analysing: (path: string) => `Анализ файла ${path}...\n`,
@@ -806,6 +808,7 @@ const es: I18n = {
     starting: "Iniciando",
     initialising: "Inicializando",
     selectDomainFirst: "Selecciona un dominio primero",
+    delete: "Eliminar",
   },
   formatProgress: {
     analysing: (path: string) => `Analizando archivo ${path}...\n`,

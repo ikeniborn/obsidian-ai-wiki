@@ -4,6 +4,7 @@ import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
 import type { DomainEntry } from "./domain";
 import { i18n, i18nFor, resolveLang } from "./i18n";
+import { isSourceFile } from "./source-deletion";
 import { domainWikiFolder, domainLogPath, domainIndexPath } from "./wiki-path";
 import { computeSpeedText } from "./phases/llm-utils";
 import { isAbsolute, relative } from "path-browserify";
@@ -95,6 +96,7 @@ export class LlmWikiView extends ItemView {
   private ingestBtn?: HTMLButtonElement;
   private lintBtn?: HTMLButtonElement;
   private formatBtn?: HTMLButtonElement;
+  private deleteBtn?: HTMLButtonElement;
   private reinitBtn?: HTMLButtonElement;
   private addSourceBtn?: HTMLButtonElement;
   private openLogLink?: HTMLAnchorElement;
@@ -179,6 +181,12 @@ export class LlmWikiView extends ItemView {
       const mobileActions = root.createDiv("ai-wiki-domain-actions");
       this.formatBtn = mobileActions.createEl("button", { text: T.view.format });
       this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
+      this.deleteBtn = mobileActions.createEl("button", { text: T.view.delete });
+      this.deleteBtn.addEventListener("click", () => {
+        const file = this.plugin.app.workspace.getActiveFile();
+        const domainId = this.domainSelect?.value;
+        if (file && domainId) void this.plugin.controller.deleteSource(domainId, file.path);
+      });
     }
 
     // 4. Запрос
@@ -348,6 +356,12 @@ export class LlmWikiView extends ItemView {
       this.lintBtn = actionRow.createEl("button", { text: T.view.lint });
       this.formatBtn = actionRow.createEl("button", { text: T.view.format });
       this.formatBtn.addEventListener("click", () => void this.plugin.controller.format());
+      this.deleteBtn = actionRow.createEl("button", { text: T.view.delete });
+      this.deleteBtn.addEventListener("click", () => {
+        const file = this.plugin.app.workspace.getActiveFile();
+        const domainId = this.domainSelect?.value;
+        if (file && domainId) void this.plugin.controller.deleteSource(domainId, file.path);
+      });
       this.ingestBtn.addEventListener("click", () => {
         const file = this.plugin.app.workspace.getActiveFile();
         if (!file) { new Notice(i18n().view.noActiveFile); return; }
@@ -388,12 +402,14 @@ export class LlmWikiView extends ItemView {
   private updateButtonAvailability(): void {
     const hasDomain = !!(this.domainSelect?.value);
     const activeFile = this.plugin.app.workspace.getActiveFile();
-    const canFormat = !!activeFile && !activeFile.path.startsWith("!Wiki/");
+    const domain = this.domains.find((d) => d.id === this.domainSelect?.value);
+    const isSource = !!activeFile && !!domain && isSourceFile(activeFile.path, domain);
 
     if (this.askBtn)       this.askBtn.disabled       = !hasDomain;
     if (this.ingestBtn)    this.ingestBtn.disabled    = !hasDomain;
     if (this.lintBtn)      this.lintBtn.disabled      = !hasDomain;
-    if (this.formatBtn)    this.formatBtn.disabled    = !canFormat;
+    if (this.formatBtn)    this.formatBtn.disabled    = !isSource;
+    if (this.deleteBtn)    this.deleteBtn.disabled    = !isSource;
     if (this.reinitBtn)    this.reinitBtn.disabled    = !hasDomain;
     if (this.addSourceBtn) this.addSourceBtn.disabled = !hasDomain;
   }
