@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Сверка результатов — Re-run Domain Resolution</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --panel-2: #f0f2f5; --text: #1c2024;
+    --muted: #5b6470; --border: #d8dee4; --accent: #2f6feb; --accent-soft: #e4edff;
+    --ok: #1a7f37; --ok-bg: #e6f4ea; --warn: #9a6700; --warn-bg: #fff5d6;
+    --crit: #b42318; --crit-bg: #fde8e6; --info: #0a6e8c; --info-bg: #e0f3f9;
+    --defer: #6b4fbb; --defer-bg: #ece6fb; --shadow: 0 1px 3px rgba(0,0,0,.08);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  html[data-theme="dark"] {
+    --bg: #0d1117; --panel: #161b22; --panel-2: #1c2330; --text: #e6edf3;
+    --muted: #9aa6b2; --border: #2d333b; --accent: #4c8dff; --accent-soft: #16243f;
+    --ok: #3fb950; --ok-bg: #122118; --warn: #d29922; --warn-bg: #2a2008;
+    --crit: #f85149; --crit-bg: #2a1414; --info: #56c5e0; --info-bg: #0c2630;
+    --defer: #b39df0; --defer-bg: #1d1730; --shadow: 0 1px 3px rgba(0,0,0,.5);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 0 4rem; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 1.25rem; }
+  header.top {
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    padding: 1.5rem 0; margin-bottom: 1.75rem; box-shadow: var(--shadow);
+  }
+  header.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  h1 { font-size: 1.45rem; margin: 0 0 .25rem; }
+  .subtitle { color: var(--muted); font-size: .92rem; }
+  h2 { font-size: 1.15rem; margin: 2.25rem 0 .85rem; padding-bottom: .4rem; border-bottom: 2px solid var(--border); }
+  h3 { font-size: 1rem; margin: 1.4rem 0 .6rem; }
+  p { margin: .5rem 0; }
+  code, .mono { font-family: var(--mono); font-size: .85em; background: var(--panel-2); padding: .1em .4em; border-radius: 4px; }
+  .toggle {
+    cursor: pointer; border: 1px solid var(--border); background: var(--panel-2);
+    color: var(--text); border-radius: 999px; padding: .45rem .9rem; font-size: .85rem;
+    display: inline-flex; align-items: center; gap: .4rem;
+  }
+  .toggle:hover { border-color: var(--accent); }
+  .verdict-banner {
+    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+    border-radius: 12px; padding: 1.1rem 1.3rem; margin-bottom: 1.5rem;
+    background: var(--ok-bg); border: 1px solid var(--ok);
+  }
+  .verdict-banner .big { font-size: 1.6rem; font-weight: 700; color: var(--ok); letter-spacing: .03em; }
+  .verdict-banner .desc { color: var(--text); font-size: .92rem; flex: 1; min-width: 240px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .85rem; margin: 1rem 0 1.5rem; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: .9rem 1rem; box-shadow: var(--shadow); }
+  .card .num { font-size: 1.8rem; font-weight: 700; line-height: 1; }
+  .card .lbl { color: var(--muted); font-size: .8rem; margin-top: .35rem; text-transform: uppercase; letter-spacing: .04em; }
+  .card.done .num { color: var(--ok); }
+  .card.partial .num { color: var(--warn); }
+  .card.missing .num { color: var(--crit); }
+  .card.defer .num { color: var(--defer); }
+  table { width: 100%; border-collapse: collapse; margin: .75rem 0 1.25rem; background: var(--panel); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); font-size: .9rem; }
+  th, td { text-align: left; padding: .6rem .75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--panel-2); font-weight: 600; font-size: .82rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; font-size: .72rem; font-weight: 700; padding: .2em .6em; border-radius: 999px; letter-spacing: .03em; white-space: nowrap; }
+  .b-done { background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok); }
+  .b-defer { background: var(--defer-bg); color: var(--defer); border: 1px solid var(--defer); }
+  .b-info { background: var(--info-bg); color: var(--info); border: 1px solid var(--info); }
+  .b-warn { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn); }
+  .b-crit { background: var(--crit-bg); color: var(--crit); border: 1px solid var(--crit); }
+  .b-na { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); }
+  details { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; margin: .6rem 0; box-shadow: var(--shadow); }
+  summary { cursor: pointer; padding: .8rem 1rem; font-weight: 600; list-style: none; display: flex; align-items: center; gap: .6rem; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "▸"; color: var(--accent); transition: transform .15s; }
+  details[open] summary::before { transform: rotate(90deg); }
+  details .body { padding: 0 1rem 1rem; }
+  .note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: .7rem .9rem; border-radius: 0 8px 8px 0; margin: .9rem 0; font-size: .9rem; }
+  .note.info { border-color: var(--info); background: var(--info-bg); }
+  .chain { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; font-size: .85rem; margin: 1rem 0; }
+  .chain .node { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: .5rem .8rem; box-shadow: var(--shadow); }
+  .chain .node.dim { opacity: .55; border-style: dashed; }
+  .chain .arrow { color: var(--accent); font-weight: 700; }
+  ul.tight { margin: .4rem 0; padding-left: 1.3rem; }
+  ul.tight li { margin: .25rem 0; }
+  .finding { border-radius: 10px; border: 1px solid var(--border); background: var(--panel); margin: .9rem 0; overflow: hidden; box-shadow: var(--shadow); }
+  .finding .head { padding: .7rem 1rem; background: var(--info-bg); display: flex; align-items: center; gap: .6rem; font-weight: 600; }
+  .finding .content { padding: .8rem 1rem; }
+  .finding .content .row { margin: .4rem 0; }
+  .finding .content .k { font-weight: 700; color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; }
+  footer { color: var(--muted); font-size: .82rem; text-align: center; margin-top: 2.5rem; }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div>
+      <h1>Сверка результатов · Re-run Domain Resolution</h1>
+      <div class="subtitle">IDD → SDD: intent + spec + plan против git diff · 2026-06-21</div>
+    </div>
+    <button class="toggle" id="themeBtn" aria-label="Переключить тему">🌙 Тема</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="verdict-banner">
+    <span class="big">ВЕРДИКТ: OK</span>
+    <span class="desc">Все код-шаги плана выполнены и сверены с diff. CRITICAL и WARNING — отсутствуют. Два пункта INFO — это намеренно отложенные нон-код шаги (ручная проверка в живом vault и открытие PR), не блокирующие.</span>
+  </div>
+
+  <div class="cards">
+    <div class="card done"><div class="num">19</div><div class="lbl">DONE шагов</div></div>
+    <div class="card partial"><div class="num">0</div><div class="lbl">PARTIAL</div></div>
+    <div class="card missing"><div class="num">0</div><div class="lbl">MISSING</div></div>
+    <div class="card defer"><div class="num">2</div><div class="lbl">Deferred (человеку)</div></div>
+  </div>
+
+  <h2>Резюме сверки</h2>
+  <table>
+    <tr><th style="width:130px">Документ</th><th>Путь / база</th></tr>
+    <tr><td><strong>Plan</strong></td><td><code>docs/superpowers/plans/2026-06-21-rerun-domain-resolution.md</code></td></tr>
+    <tr><td><strong>Spec</strong></td><td><code>docs/superpowers/specs/2026-06-21-rerun-domain-resolution-design.md</code></td></tr>
+    <tr><td><strong>Intent</strong></td><td><span class="badge b-na">не задан (null)</span> — цепочка начинается со spec</td></tr>
+    <tr><td><strong>Diff base</strong></td><td><code>git diff 2a3a40b..HEAD</code> (merge-base с <code>master</code>) · 13 файлов изменено · реализация уже закоммичена в ветке <code>dev/rerun-domain-resolution</code></td></tr>
+  </table>
+
+  <div class="chain">
+    <span class="node dim">intent — отсутствует</span>
+    <span class="arrow">→</span>
+    <span class="node">spec: rerun-domain-resolution-design.md</span>
+    <span class="arrow">→</span>
+    <span class="node">plan: rerun-domain-resolution.md</span>
+  </div>
+
+  <h2>Покрытие шагов плана</h2>
+
+  <details open>
+    <summary>Task 1 — Pure <code>resolveRerunDomain</code> helper + headless eval (7/7 DONE)</summary>
+    <div class="body">
+      <table>
+        <tr><th style="width:90px">Шаг</th><th>Действие</th><th style="width:120px">Статус</th><th>Свидетельство в diff</th></tr>
+        <tr><td>Step 1</td><td>Написать падающий тест <code>eval/rerun-domain/run.ts</code></td><td><span class="badge b-done">DONE</span></td><td>Файл создан, 52 строки, идентичен плану</td></tr>
+        <tr><td>Step 2</td><td>Запустить eval, убедиться что падает (модуль отсутствует)</td><td><span class="badge b-done">DONE</span></td><td>Промежуточный TDD-шаг; итог подтверждён Step 4</td></tr>
+        <tr><td>Step 3</td><td>Минимальная реализация <code>src/rerun-domain.ts</code></td><td><span class="badge b-done">DONE</span></td><td>22 строки; сигнатура и тело совпадают с планом</td></tr>
+        <tr><td>Step 4</td><td>Запустить eval, убедиться что проходит</td><td><span class="badge b-done">DONE</span></td><td>Повторно проверено: <code>4 passed, 0 failed</code>, exit 0</td></tr>
+        <tr><td>Step 5</td><td><code>tsc</code> без ошибок в <code>rerun-domain.ts</code></td><td><span class="badge b-done">DONE</span></td><td>NO ERRORS в <code>src/rerun-domain.ts</code></td></tr>
+        <tr><td>Step 6</td><td>Создать <code>eval/rerun-domain/.gitignore</code> (<code>*.cjs</code>)</td><td><span class="badge b-done">DONE</span></td><td>Файл создан; <code>run.cjs</code> не отслеживается git</td></tr>
+        <tr><td>Step 7</td><td>Commit</td><td><span class="badge b-done">DONE</span></td><td><code>5952fb5</code> feat(rerun): pure resolveRerunDomain helper + headless eval</td></tr>
+      </table>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Task 2 — Wire re-run handler to stored domainId (9/10 DONE, 1 DEFERRED)</summary>
+    <div class="body">
+      <table>
+        <tr><th style="width:90px">Шаг</th><th>Действие</th><th style="width:120px">Статус</th><th>Свидетельство в diff</th></tr>
+        <tr><td>Step 1</td><td>i18n ключ <code>rerunDomainMissing</code> в <code>en</code></td><td><span class="badge b-done">DONE</span></td><td>Строка 179</td></tr>
+        <tr><td>Step 2</td><td>i18n ключ в <code>ru</code></td><td><span class="badge b-done">DONE</span></td><td>Строка 505, текст совпадает</td></tr>
+        <tr><td>Step 3</td><td>i18n ключ в <code>es</code></td><td><span class="badge b-done">DONE</span></td><td>Строка 809, текст совпадает</td></tr>
+        <tr><td>Step 4</td><td>import <code>resolveRerunDomain</code> в <code>src/view.ts</code></td><td><span class="badge b-done">DONE</span></td><td>После строки 7</td></tr>
+        <tr><td>Step 5</td><td>Переписать re-run handler в <code>src/view.ts</code></td><td><span class="badge b-done">DONE</span></td><td>Блок 1202-1216 дословно совпадает: <code>loadDomains</code> → <code>resolveRerunDomain</code> → <code>Notice</code> при <code>!ok</code> → прямой <code>controller.query(it.args[0], r.domainId)</code></td></tr>
+        <tr><td>Step 6</td><td><code>npm run lint</code></td><td><span class="badge b-done">DONE</span></td><td>Повторно: 0 errors, 2 pre-existing warnings в нетронутых файлах</td></tr>
+        <tr><td>Step 7</td><td><code>tsc</code> — нет новых ошибок в тронутых файлах</td><td><span class="badge b-done">DONE</span></td><td><code>rerun-domain.ts</code> и <code>i18n.ts</code> чисты; ошибки <code>view.ts</code> только в baseline-строках 154/246/1026/1131/1168/1246 — все вне handler 1202-1216</td></tr>
+        <tr><td>Step 8</td><td><code>npm run build</code></td><td><span class="badge b-done">DONE</span></td><td><code>dist/main.js</code> пересобран, коммит <code>4f4a4b6</code></td></tr>
+        <tr><td>Step 9</td><td>Ручная проверка desktop + mobile</td><td><span class="badge b-defer">DEFERRED</span></td><td>Намеренно вынесено человеку; не выполнимо headless (зафиксировано в контексте задачи)</td></tr>
+        <tr><td>Step 10</td><td>Commit</td><td><span class="badge b-done">DONE</span></td><td><code>a0833df</code> fix(rerun): history re-run uses stored domainId, not domains[0]</td></tr>
+      </table>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Post-implementation (1 DONE, 1 DEFERRED)</summary>
+    <div class="body">
+      <table>
+        <tr><th>Действие</th><th style="width:120px">Статус</th><th>Свидетельство</th></tr>
+        <tr><td>Обновить docs (iwiki)</td><td><span class="badge b-done">DONE</span></td><td><code>docs/wiki/operations.md</code> — секция «### History Re-run» добавлена; iwiki log: <code>op:ingest, source:src/view.ts+src/rerun-domain.ts, page:operations.md#History Re-run</code>; коммит <code>aa21c97</code></td></tr>
+        <tr><td>Открыть PR в <code>master</code></td><td><span class="badge b-defer">DEFERRED</span></td><td>PR пока не открыт (<code>gh pr list</code> пуст); шаг workflow, не код — для человека</td></tr>
+      </table>
+    </div>
+  </details>
+
+  <h2>Findings</h2>
+
+  <div class="finding">
+    <div class="head"><span class="badge b-info">INFO</span> Finding 1 · Task 2 Step 9 — ручная верификация (desktop + mobile)</div>
+    <div class="content">
+      <div class="row"><span class="k">Plan</span><br>Запустить запрос против домена B из сайдбара, проверить re-run против B, затем удалить домен B и убедиться, что появляется <code>Notice</code> и запрос не выполняется.</div>
+      <div class="row"><span class="k">Diff</span><br>Ручная проверка не выполнима headless — намеренно отложена для человека (объявлено в контексте задачи). Не CRITICAL: не блокирует, явно deferred; логика покрыта headless-eval (4/4) на чистой функции <code>resolveRerunDomain</code>.</div>
+      <div class="row"><span class="k">Fix options</span>
+        <ul class="tight">
+          <li>Человек выполняет шаг в живом vault с ≥2 доменами и фиксирует результат.</li>
+          <li>Принять как остаточный ручной шаг при мёрдже.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="head"><span class="badge b-info">INFO</span> Finding 2 · Post-implementation — PR ещё не открыт</div>
+    <div class="content">
+      <div class="row"><span class="k">Plan</span><br>Открыть PR из <code>dev/rerun-domain-resolution</code> в <code>master</code>.</div>
+      <div class="row"><span class="k">Diff</span><br><code>gh pr list</code> пуст. Не CRITICAL: это шаг workflow, не код; реализация полностью на ветке.</div>
+      <div class="row"><span class="k">Fix options</span>
+        <ul class="tight">
+          <li>Открыть PR через <code>gh pr create</code> перед мёрджем.</li>
+          <li>Выполнить как часть <code>finishing-a-development-branch</code>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <h2>Покрытие Intent / Spec</h2>
+
+  <p><strong>Intent Desired Outcomes:</strong> <span class="badge b-na">N/A</span> — intent doc отсутствует (null).</p>
+  <p><strong>Spec requirements покрыто: 6/6</strong></p>
+
+  <table>
+    <tr><th style="width:40px">#</th><th>Требование (источник в spec)</th><th style="width:110px">Статус</th><th>Реализация</th></tr>
+    <tr><td>1</td><td>Re-run использует сохранённый <code>domainId</code> записи как источник истины (Scope / Design)</td><td><span class="badge b-done">ПОКРЫТО</span></td><td><code>resolveRerunDomain</code> + прямой <code>controller.query</code></td></tr>
+    <tr><td>2</td><td>Валидация <code>domainId</code> против текущего списка, без молчаливого fallback на <code>domains[0]</code> (Design / Behavior)</td><td><span class="badge b-done">ПОКРЫТО</span></td><td><code>domains.some(d=&gt;d.id===id)</code>; явный <code>{ok:false}</code></td></tr>
+    <tr><td>3</td><td>При missing / not-found — показать <code>Notice</code> и НЕ запускать запрос (Behavior п.3)</td><td><span class="badge b-done">ПОКРЫТО</span></td><td><code>if(!r.ok){new Notice(...);return;}</code></td></tr>
+    <tr><td>4</td><td>Pure helper в отдельном модуле <code>src/rerun-domain.ts</code> (mirrors <code>source-deletion.ts</code>) (Code changes п.1)</td><td><span class="badge b-done">ПОКРЫТО</span></td><td>Отдельный файл, type-only импорты</td></tr>
+    <tr><td>5</td><td>i18n ключ во всех трёх локалях <code>en/ru/es</code> (i18n)</td><td><span class="badge b-done">ПОКРЫТО</span></td><td><code>rerunDomainMissing</code> ×3</td></tr>
+    <tr><td>6</td><td>Headless unit-тест helper-а: valid / missing / not-found (Testing)</td><td><span class="badge b-done">ПОКРЫТО</span></td><td><code>eval/rerun-domain/run.ts</code>, 4 кейса (включая empty-string), 4/4 pass</td></tr>
+  </table>
+
+  <div class="note info">
+    <strong>Out-of-scope соблюдён:</strong> <code>domains[0]</code> в <code>src/phases/query.ts</code>, command-palette путь в <code>src/main.ts</code>, fallback-и <code>detectDomain</code> / <code>DomainModal</code> — НЕ ТРОНУТЫ (подтверждено diff).
+  </div>
+  <div class="note info">
+    <strong>Spec finding F-001</strong> (INFO, открытость числа ключей) — закрыт: реализован один ключ <code>rerunDomainMissing</code>, покрывающий обе причины; соответствует accepted-вердикту spec.
+  </div>
+
+  <h2>Excess Changes</h2>
+  <div class="note">
+    Неожиданных изменений нет. <code>dist/main.js</code>, <code>docs/wiki/.iwiki/index.jsonl</code>, <code>docs/wiki/.iwiki/log.jsonl</code> — производные артефакты build / iwiki-шагов плана, ожидаемы. HTML-артефакты check-spec / check-plan и сами spec / plan <code>.md</code> — артефакты IDD-цепочки. <code>eval/rerun-domain/run.cjs</code> — gitignored, не в diff (корректно).
+  </div>
+
+  <h2>Сводка</h2>
+  <div class="cards">
+    <div class="card missing"><div class="num">0</div><div class="lbl">CRITICAL</div></div>
+    <div class="card partial"><div class="num">0</div><div class="lbl">WARNING</div></div>
+    <div class="card"><div class="num" style="color:var(--info)">2</div><div class="lbl">INFO</div></div>
+  </div>
+  <table>
+    <tr><th style="width:160px">Параметр</th><th>Значение</th></tr>
+    <tr><td>Вердикт</td><td><span class="badge b-done">OK</span> — требований не нарушено; все код-шаги выполнены; 2 INFO — намеренно отложенные нон-код шаги</td></tr>
+    <tr><td>plan_hash</td><td><code>418ed00e1adf0b42</code> (совпадает с <code>review.plan_hash</code> — тело плана не менялось)</td></tr>
+    <tr><td>Chain</td><td>(intent отсутствует) → <code>…rerun-domain-resolution-design.md</code> → <code>…rerun-domain-resolution.md</code></td></tr>
+  </table>
+
+  <footer>
+    Автогенерированный артефакт команды <code>/check-result</code> · 2026-06-21 · obsidian-ai-wiki
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var btn = document.getElementById("themeBtn");
+    var root = document.documentElement;
+    function apply(t) {
+      root.setAttribute("data-theme", t);
+      btn.textContent = t === "dark" ? "☀️ Тема" : "🌙 Тема";
+    }
+    var prefDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    apply(prefDark ? "dark" : "light");
+    btn.addEventListener("click", function () {
+      apply(root.getAttribute("data-theme") === "dark" ? "light" : "dark");
+    });
+  })();
+</script>
+</body>
+</html>

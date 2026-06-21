@@ -2,6 +2,10 @@
 chain:
   intent: null
   spec: docs/superpowers/specs/2026-06-21-rerun-domain-resolution-design.md
+result_check:
+  verdict: OK
+  plan_hash: 418ed00e1adf0b42
+  last_run: 2026-06-21
 review:
   plan_hash: 418ed00e1adf0b42
   spec_hash: dcd05242aea020df
