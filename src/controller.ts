@@ -612,7 +612,7 @@ export class WikiController {
     // Новая операция делает предыдущий чат-контекст нерелевантным.
     this._chatSessionId = undefined;
 
-    if (Platform.isMobile && op !== "query" && op !== "format") {
+    if (Platform.isMobile && op !== "query" && op !== "format" && op !== "delete") {
       new Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }

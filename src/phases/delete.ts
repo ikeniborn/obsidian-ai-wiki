@@ -137,9 +137,11 @@ export async function* runDelete(
     } catch { /* skip */ }
   }
 
-  // --- 6. Delete source file LAST, only if no rebuild failures (F-002) ---
+  // --- 6. Delete source file LAST, only if no rebuild failures AND not aborted (F-002) ---
+  // An abort mid-rebuild leaves wiped pages un-rebuilt; deleting the source then would
+  // be unrecoverable data loss, so keep the source whenever the run did not complete cleanly.
   let sourceRemoved = false;
-  if (failedSources.length === 0) {
+  if (failedSources.length === 0 && !signal.aborted) {
     try { await vaultTools.remove(sourcePath); sourceRemoved = true; }
     catch (e) { yield { kind: "error", message: `Could not delete source file: ${(e as Error).message}` }; }
   }
@@ -152,7 +154,9 @@ export async function* runDelete(
   ];
   if (failedSources.length > 0) {
     parts.push(`${failedSources.length} rebuild failure(s)`);
-    parts.push(sourceRemoved ? "" : "source kept — retry");
+  }
+  if (!sourceRemoved) {
+    parts.push(signal.aborted ? "source kept — cancelled" : "source kept — retry");
   }
   const text = parts.filter(Boolean).join(", ") + ".";
   if (failedSources.length > 0) {
