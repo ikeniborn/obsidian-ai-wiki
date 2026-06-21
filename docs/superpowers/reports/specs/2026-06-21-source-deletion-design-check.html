@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка спецификации — Удаление источника</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --border:#2b3440;
+    --fg:#e6edf3; --muted:#9aa7b4; --accent:#4aa3ff; --accent2:#7c5cff;
+    --ok:#3fb950; --warn:#d29922; --crit:#f85149; --chip:#21303f;
+    --shadow:0 4px 18px rgba(0,0,0,.45);
+    --node:#1c232d; --nodeStroke:#3a4756;
+  }
+  [data-theme="light"]{
+    --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f7; --border:#d6dee6;
+    --fg:#1f2328; --muted:#5a6671; --accent:#0969da; --accent2:#6639ba;
+    --ok:#1a7f37; --warn:#9a6700; --crit:#cf222e; --chip:#e7eef6;
+    --shadow:0 4px 18px rgba(140,150,160,.25);
+    --node:#ffffff; --nodeStroke:#c4cfda;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--fg);
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans",sans-serif;
+    line-height:1.5;padding:32px 20px 64px;transition:background .25s,color .25s}
+  .wrap{max-width:1100px;margin:0 auto}
+  header.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+  h1{font-size:1.5rem;margin:0 0 6px;line-height:1.25}
+  h2{font-size:1.18rem;margin:38px 0 12px;padding-bottom:6px;border-bottom:2px solid var(--border)}
+  h3{font-size:1rem;margin:22px 0 8px;color:var(--accent)}
+  .sub{color:var(--muted);font-size:.92rem}
+  .meta{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}
+  .chip{background:var(--chip);border:1px solid var(--border);border-radius:999px;padding:3px 11px;font-size:.8rem}
+  .chip.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .toggle{cursor:pointer;background:var(--panel);color:var(--fg);border:1px solid var(--border);
+    border-radius:8px;padding:8px 14px;font-size:.85rem;box-shadow:var(--shadow)}
+  .toggle:hover{border-color:var(--accent)}
+  table{width:100%;border-collapse:collapse;margin:10px 0 6px;background:var(--panel);
+    border:1px solid var(--border);border-radius:10px;overflow:hidden;font-size:.9rem}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{background:var(--panel2);color:var(--muted);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.03em}
+  tr:last-child td{border-bottom:none}
+  td.k{white-space:nowrap;font-weight:600;color:var(--accent)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--panel2);
+    border:1px solid var(--border);border-radius:5px;padding:1px 5px;font-size:.85em}
+  .pill{display:inline-block;border-radius:6px;padding:1px 8px;font-size:.78rem;font-weight:600}
+  .pill.ok{background:rgba(63,185,80,.16);color:var(--ok)}
+  .pill.warn{background:rgba(210,153,34,.16);color:var(--warn)}
+  .pill.crit{background:rgba(248,81,73,.16);color:var(--crit)}
+  .pill.steer{background:rgba(74,163,255,.16);color:var(--accent)}
+  .pill.hard{background:rgba(124,92,255,.18);color:var(--accent2)}
+  /* flow */
+  .flow{display:flex;gap:12px;align-items:stretch;flex-wrap:wrap;margin:14px 0}
+  .stage{flex:1;min-width:170px;background:var(--panel);border:1px solid var(--border);
+    border-radius:12px;padding:13px;box-shadow:var(--shadow)}
+  .stage h4{margin:0 0 7px;font-size:.9rem;color:var(--accent2)}
+  .stage ul{margin:0;padding-left:17px;font-size:.82rem}
+  .stage li{margin:3px 0}
+  .arrow{align-self:center;color:var(--accent);font-size:1.5rem;font-weight:700}
+  figure{margin:14px 0;background:var(--panel);border:1px solid var(--border);border-radius:12px;
+    padding:10px;box-shadow:var(--shadow);overflow-x:auto}
+  figcaption{color:var(--muted);font-size:.82rem;margin:4px 6px 10px}
+  .verdict{background:var(--panel);border:1px solid var(--border);border-left:5px solid var(--ok);
+    border-radius:10px;padding:16px 18px;margin:18px 0;box-shadow:var(--shadow)}
+  .verdict b{color:var(--ok);font-size:1.05rem}
+  .legend{font-size:.8rem;color:var(--muted);margin:4px 0 0}
+  footer{margin-top:42px;padding-top:16px;border-top:2px solid var(--border);color:var(--muted);font-size:.88rem}
+  footer .prev{color:var(--accent);font-weight:600}
+  text{font-family:-apple-system,Segoe UI,Roboto,sans-serif}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <h1>Проверка спецификации: Операция удаления источника</h1>
+      <div class="sub">chain: intent → <b>spec</b>; цепь IDD→SDD</div>
+      <div class="meta">
+        <span class="chip">2026-06-21</span>
+        <span class="chip mono">spec_hash: a91c2d4bc0eefc9d</span>
+        <span class="chip">Status: draft</span>
+        <span class="chip"><span class="pill ok">Вердикт: OK</span></span>
+      </div>
+    </div>
+    <button class="toggle" id="themeBtn" type="button">🌗 Тема</button>
+  </header>
+
+  <!-- ===== БЛОК 1 ===== -->
+  <h2>1. Резюме спецификации</h2>
+
+  <h3>Требования (по секциям)</h3>
+  <table>
+    <thead><tr><th>#</th><th>Секция</th><th>Требование</th></tr></thead>
+    <tbody>
+      <tr><td class="k">R1</td><td>Architecture · Pure planner</td><td>Чистый модуль <code>src/source-deletion.ts</code>: <code>computeDeletionPlan</code> → {toDelete, toRebuild, remainingSources}, <code>isSourceFile</code>. Стем-матчинг точный (не <code>includes</code>). Единый источник истины для preview и фазы.</td></tr>
+      <tr><td class="k">R2</td><td>Architecture · Execution phase</td><td>Новая <code>WikiOperation "delete"</code> + фаза <code>runDelete</code> (<code>src/phases/delete.ts</code>). 8 шагов: config-update → wipe → <code>yield* runIngest</code> по remaining → delete sole → backlinks → условное удаление source → cache invalidate → result.</td></tr>
+      <tr><td class="k">R3</td><td>Architecture · UI</td><td><code>deleteBtn</code> рядом с <code>formatBtn</code> (desktop+mobile), отдельная иконка. Общий гейт <code>isSourceFile</code> для обоих. <code>DeleteSourceModal</code> с N/M + списками + предупреждением о безвозвратности.</td></tr>
+      <tr><td class="k">R4</td><td>Error handling</td><td>Сбой пересборки: collect+continue, source сохраняется (F-002). Невалидный путь: <code>validateArticlePath</code> отклоняет. План непосчитуем: halt. Abort между шагами. Mobile/оба backend.</td></tr>
+      <tr><td class="k">R5</td><td>Testing</td><td>Out-of-vault eval <code>eval/source-deletion/run.ts</code> на <code>computeDeletionPlan</code> (7 кейсов) + ручной прогон на реальном vault.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Success Criteria (Done when)</h3>
+  <table>
+    <tbody>
+      <tr><td>Клик Delete → корректные счётчики/списки в модали; по подтверждению source-файл перманентно удалён и убран из домена; каждая sole-source страница удалена; каждая multi-source пересобрана на оставшихся; lint/check — ноль осиротевших/битых ссылок/stale-артефактов; сбои пересборки в финальном отчёте.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ===== БЛОК 2 ===== -->
+  <h2>2. Схемы решения и зависимостей</h2>
+
+  <h3>(a) Схема решения — компоненты и поток</h3>
+  <div class="flow">
+    <div class="stage"><h4>Sidebar</h4><ul><li><code>deleteBtn</code> (гейт isSourceFile)</li><li>+ <code>formatBtn</code></li></ul></div>
+    <div class="arrow">→</div>
+    <div class="stage"><h4>Controller</h4><ul><li><code>deleteSource()</code></li><li>scan → план</li><li><code>DeleteSourceModal</code></li><li>dispatch("delete")</li></ul></div>
+    <div class="arrow">→</div>
+    <div class="stage"><h4>AgentRunner</h4><ul><li>→ <code>runDelete</code> фаза</li></ul></div>
+    <div class="arrow">→</div>
+    <div class="stage"><h4>runDelete</h4><ul><li>recompute план</li><li>wipe / <code>yield* runIngest</code></li><li>delete sole / backlinks</li><li>conditional source delete</li></ul></div>
+    <div class="arrow">→</div>
+    <div class="stage"><h4>Vault / Store</h4><ul><li>RunEvent → dispatch loop</li><li>DomainStore (source_path_removed)</li><li>view: прогресс+result</li></ul></div>
+  </div>
+  <p class="legend">Планировщик <code>computeDeletionPlan</code> зовётся дважды (модаль + фаза) — preview и действие не расходятся.</p>
+
+  <h3>(b) Граф зависимостей</h3>
+  <figure>
+    <svg viewBox="0 0 920 360" width="100%" role="img" aria-label="Граф зависимостей компонентов">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+        </marker>
+        <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.30"/>
+        </filter>
+        <style>
+          .n rect{fill:var(--node);stroke:var(--nodeStroke);stroke-width:1.4;rx:9;filter:url(#ds)}
+          .n text{fill:var(--fg);font-size:12px;font-weight:600}
+          .n tspan.s{fill:var(--muted);font-weight:400;font-size:10.5px}
+          .e{stroke:var(--accent);stroke-width:1.6;fill:none;marker-end:url(#arr);opacity:.85}
+          .lbl{fill:var(--muted);font-size:10px}
+        </style>
+      </defs>
+
+      <!-- edges -->
+      <path class="e" d="M150,70 L150,120"/>
+      <path class="e" d="M150,165 L150,215"/>
+      <path class="e" d="M245,140 C420,140 430,250 510,255"/>
+      <path class="e" d="M245,245 L505,245"/>
+      <path class="e" d="M620,235 C720,235 720,150 770,120"/>
+      <path class="e" d="M620,260 L770,290"/>
+      <path class="e" d="M620,270 C690,300 700,300 770,300" />
+      <path class="e" d="M560,215 L560,120"/>
+
+      <!-- nodes -->
+      <g class="n"><rect x="70" y="35" width="160" height="35" rx="9"/><text x="84" y="57">deleteBtn (view.ts)</text></g>
+      <g class="n"><rect x="60" y="120" width="180" height="45" rx="9"/><text x="74" y="140">controller.deleteSource<tspan class="s" x="74" y="156">scan + modal + dispatch</tspan></text></g>
+      <g class="n"><rect x="60" y="215" width="180" height="45" rx="9"/><text x="74" y="235">DeleteSourceModal<tspan class="s" x="74" y="251">preview N/M + warning</tspan></text></g>
+      <g class="n"><rect x="470" y="120" width="180" height="45" rx="9"/><text x="484" y="140">computeDeletionPlan<tspan class="s" x="484" y="156">pure · src/source-deletion</tspan></text></g>
+      <g class="n"><rect x="505" y="232" width="115" height="42" rx="9"/><text x="519" y="252">runDelete<tspan class="s" x="519" y="267">phase</tspan></text></g>
+      <g class="n"><rect x="760" y="95" width="150" height="42" rx="9"/><text x="774" y="115">runIngest<tspan class="s" x="774" y="130">reused · rebuild</tspan></text></g>
+      <g class="n"><rect x="760" y="270" width="150" height="42" rx="9"/><text x="774" y="290">VaultTools<tspan class="s" x="774" y="305">remove / index / cache</tspan></text></g>
+      <g class="n"><rect x="760" y="200" width="150" height="40" rx="9"/><text x="774" y="224">DomainStore</text></g>
+
+      <text class="lbl" x="250" y="135">uses</text>
+      <text class="lbl" x="330" y="240">uses</text>
+      <text class="lbl" x="660" y="170">yield*</text>
+    </svg>
+    <figcaption>Рёбра — «использует» / «делегирует». <code>computeDeletionPlan</code> — общий узел модали и фазы; <code>runDelete</code> переиспользует <code>runIngest</code> и <code>VaultTools</code>.</figcaption>
+  </figure>
+
+  <h3>(c) Карта покрытия задача → требование</h3>
+  <table>
+    <thead><tr><th>Задача пользователя</th><th>Покрывающие требования</th></tr></thead>
+    <tbody>
+      <tr><td>Удалить источник + связанную wiki-страницу, без артефактов</td><td>R2 (step 4/6), R1 (toDelete)</td></tr>
+      <tr><td>Wiki на &gt;1 источнике — пересобрать последовательно на оставшихся</td><td>R2 (step 3, yield* runIngest), R1 (toRebuild/remainingSources)</td></tr>
+      <tr><td>Отдельные кнопки форматирования и удаления в sidebar</td><td>R3 (deleteBtn + formatBtn, раздельные иконки)</td></tr>
+      <tr><td>Удаление доступно только для источников</td><td>R3 (гейт isSourceFile), R1 (isSourceFile)</td></tr>
+      <tr><td>При запуске показать сколько удалится / что пересоберётся</td><td>R3 (DeleteSourceModal N/M+списки), R1 (план)</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ===== БЛОК 3 ===== -->
+  <h2>3. Результаты проверки</h2>
+
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th><th>Примечание</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="pill ok">passed</span></td><td>Без плейсхолдеров; нумерация 1/2/3 без пропусков; ссылка на intent валидна</td></tr>
+      <tr><td>coverage</td><td><span class="pill ok">passed</span></td><td>5/5 задач покрыты; лишних требований нет; out-of-scope явный</td></tr>
+      <tr><td>clarity</td><td><span class="pill ok">passed</span></td><td>Vague-терминов нет; DoD у каждого требования; термины согласованы</td></tr>
+      <tr><td>consistency</td><td><span class="pill ok">passed</span></td><td>F-002 ordering совпадает; внутренних противоречий нет</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Findings</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="text-align:center;color:var(--muted)">— findings нет —</td></tr>
+    </tbody>
+  </table>
+
+  <div class="verdict">
+    <b>Финальный вердикт: OK</b><br>
+    CRITICAL open: 0 · WARNING open: 0 · все 4 фазы passed
+  </div>
+
+  <footer>
+    chain: <span class="prev">intent</span> → spec. <br>
+    Previous step: <code>docs/superpowers/intents/2026-06-21-source-deletion-intent.md</code><br>
+    Next step: writing-plans (план реализации).
+  </footer>
+
+</div>
+
+<script>
+  (function(){
+    var btn=document.getElementById('themeBtn');
+    var root=document.documentElement;
+    btn.addEventListener('click',function(){
+      root.setAttribute('data-theme', root.getAttribute('data-theme')==='dark'?'light':'dark');
+    });
+  })();
+</script>
+</body>
+</html>
