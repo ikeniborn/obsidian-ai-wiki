@@ -143,6 +143,24 @@ On mobile, vision is image-only: raster images (png/jpg/jpeg/webp) are still ana
 
 Vision results are cached per run in a `VisionTempStore` (`src/phases/vision-temp-store.ts`) under the plugin directory, never the vault content tree. Each attachment is analyzed by one LLM call and resumed from the store if the idle-watchdog retries, so completed attachments are never re-sent. The watchdog resets on `tool_use`/`tool_result` as well as stream events, so per-attachment progress prevents a cumulative-time abort.
 
+## Delete
+
+Removes a source and its wiki artifacts, rebuilding multi-source pages on their remaining sources (`src/phases/delete.ts#runDelete`). The `delete` operation is dispatched from the sidebar Delete button via `WikiController.deleteSource`, gated to source files of the active domain. See [[architecture#Sidebar View]].
+
+Both the preview modal and the phase compute the same plan from the pure `src/source-deletion.ts#computeDeletionPlan` — a wiki page is `toDelete` when the source is its only `wiki_sources` entry, or `toRebuild` (with its remaining sources resolved) when it has others. Stem matching is exact (`note` never matches `note-2`). `src/source-deletion.ts#isSourceFile` gates the Format and Delete buttons to `source_paths` members.
+
+`DeleteSourceModal` (`src/modals.ts`) previews the N pages to delete and M to rebuild with a permanent-deletion warning before any change. Delete is exempt from the mobile dispatch guard, so it works on mobile like Query and Format.
+
+### Execution order
+
+`runDelete` runs: drop the source from `source_paths`/`analyzed_sources` (via `source_path_removed` + `domain_updated`, see [[domain-model#Domain Events]]) → wipe `toRebuild` pages → re-ingest each remaining source sequentially (reusing [[operations#Ingest]], collecting per-source failures without aborting) → delete `toDelete` pages → strip stale `wiki_articles` backlinks → invalidate the graph cache.
+
+Every page removal is `validateArticlePath`-guarded (`<domain>/<file>.md`, no traversal). Inner `runIngest` `result` events are suppressed so only the final result reaches the view.
+
+### Source file deleted last
+
+The source file is permanently removed (`vaultTools.remove`, no trash) **last**, and only when there were zero rebuild failures **and** the run was not aborted. An abort mid-rebuild leaves wiped pages un-rebuilt; deleting the source then would be unrecoverable, so the source is kept and the result reports `source kept — cancelled` / `source kept — retry`.
+
 ## Retrieval Eval Harness
 
 Standalone CLI (`scripts/eval.ts`) measuring retrieval quality — Recall@k (k=3,5,8) and MRR — against a fixed gold set, per layer (seed, union) and config (dense, jaccard). Distinct from the answer-quality evaluator (`src/phases/evaluator.ts`).
