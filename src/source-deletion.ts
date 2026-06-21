@@ -16,9 +16,9 @@ export function sourceStem(path: string): string {
   return base.replace(/\.md$/i, "");
 }
 
-/** Strip surrounding quotes and [[ ]] from a wiki_sources list entry → bare stem/title. */
+/** Strip surrounding whitespace, quotes, and [[ ]] from a wiki_sources list entry → bare stem/title. */
 export function stripSourceToken(token: string): string {
-  return token.replace(/^["']|["']$/g, "").replace(/^\[\[|\]\]$/g, "").trim();
+  return token.trim().replace(/^["']|["']$/g, "").replace(/^\[\[|\]\]$/g, "").trim();
 }
 
 /** Parse the wiki_sources list from a wiki page body into bare tokens. */
