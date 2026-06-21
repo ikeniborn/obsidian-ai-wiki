@@ -5,6 +5,7 @@ import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./ty
 import type { DomainEntry } from "./domain";
 import { i18n, i18nFor, resolveLang } from "./i18n";
 import { isSourceFile } from "./source-deletion";
+import { resolveRerunDomain } from "./rerun-domain";
 import { domainWikiFolder, domainLogPath, domainIndexPath } from "./wiki-path";
 import { computeSpeedText } from "./phases/llm-utils";
 import { isAbsolute, relative } from "path-browserify";
@@ -1200,11 +1201,16 @@ export class LlmWikiView extends ItemView {
         const rerunBtn = row.createEl("button", { text: "↺", attr: { title: "Re-run" } });
         rerunBtn.addEventListener("click", (e) => {
           e.stopPropagation();
-          if (!this.domainSelect) return;
-          this.domainSelect.value = it.domainId ?? "";
-          this.domainSelect.dispatchEvent(new Event("change"));
-          this.queryInput.value = it.args[0] ?? "";
-          this.submitQuery();
+          void (async () => {
+            const domains = await this.plugin.controller.loadDomains();
+            const r = resolveRerunDomain(it, domains);
+            if (!r.ok) { new Notice(i18n().view.rerunDomainMissing); return; }
+            if (this.domainSelect) {
+              this.domainSelect.value = r.domainId;
+              this.domainSelect.dispatchEvent(new Event("change"));
+            }
+            void this.plugin.controller.query(it.args[0] ?? "", r.domainId);
+          })();
         });
       }
       row.addEventListener("click", () => {
