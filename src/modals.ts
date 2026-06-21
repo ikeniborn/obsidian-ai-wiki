@@ -696,6 +696,49 @@ export class ShellConsentModal extends Modal {
   onClose(): void { this.contentEl.empty(); }
 }
 
+export class DeleteSourceModal extends Modal {
+  constructor(
+    app: App,
+    private _domainId: string,
+    private sourcePath: string,
+    private plan: import("./source-deletion").DeletionPlan,
+    private onConfirm: () => void,
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    const T = i18n().modal;
+    const { contentEl } = this;
+    const name = this.sourcePath.split("/").pop() ?? this.sourcePath;
+    contentEl.createEl("h3", { text: T.deleteSourceTitle(name) });
+
+    contentEl.createEl("p", { text: T.deleteSourceWarning, cls: "mod-warning" });
+
+    if (this.plan.toDelete.length > 0) {
+      contentEl.createEl("p", { text: T.deleteSourceDeleteCount(this.plan.toDelete.length) });
+      const ul = contentEl.createEl("ul");
+      for (const p of this.plan.toDelete) ul.createEl("li", { text: p.split("/").pop() ?? p });
+    }
+    if (this.plan.toRebuild.length > 0) {
+      contentEl.createEl("p", { text: T.deleteSourceRebuildCount(this.plan.toRebuild.length) });
+      const ul = contentEl.createEl("ul");
+      for (const p of this.plan.toRebuild) ul.createEl("li", { text: p.split("/").pop() ?? p });
+    }
+
+    new Setting(contentEl)
+      .addButton((b) => b.setButtonText(T.cancel).onClick(() => this.close()))
+      .addButton((b) =>
+        b.setButtonText(T.deleteSourceConfirm).setWarning().onClick(() => {
+          this.onConfirm();
+          this.close();
+        }),
+      );
+  }
+
+  onClose(): void { this.contentEl.empty(); }
+}
+
 export class LintOptionsModal extends Modal {
   private useLlm: boolean;
   private entityTypeFilter: string[];

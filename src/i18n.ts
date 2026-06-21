@@ -295,6 +295,11 @@ const en = {
     formatVisionBody: "Vision recognition is enabled. Analyze attachments before formatting?",
     formatVisionWith: "With vision",
     formatVisionWithout: "Without vision",
+    deleteSourceTitle: (name: string) => `Delete source: «${name}»`,
+    deleteSourceWarning: "This permanently deletes the source file and cannot be undone (not recoverable from trash).",
+    deleteSourceDeleteCount: (n: number) => `${n} wiki page(s) will be deleted:`,
+    deleteSourceRebuildCount: (n: number) => `${n} wiki page(s) will be rebuilt on remaining sources:`,
+    deleteSourceConfirm: "Delete",
   },
 };
 
@@ -614,6 +619,11 @@ const ru: I18n = {
     formatVisionBody: "Vision-распознавание включено. Проанализировать вложения перед форматированием?",
     formatVisionWith: "С vision",
     formatVisionWithout: "Без vision",
+    deleteSourceTitle: (name: string) => `Удалить источник: «${name}»`,
+    deleteSourceWarning: "Источник будет удалён безвозвратно и не восстановится из корзины.",
+    deleteSourceDeleteCount: (n: number) => `Будет удалено wiki-страниц: ${n}:`,
+    deleteSourceRebuildCount: (n: number) => `Будет пересобрано wiki-страниц: ${n}:`,
+    deleteSourceConfirm: "Удалить",
   },
 };
 
@@ -911,6 +921,11 @@ const es: I18n = {
     formatVisionBody: "El reconocimiento vision está activado. ¿Analizar adjuntos antes de formatear?",
     formatVisionWith: "Con vision",
     formatVisionWithout: "Sin vision",
+    deleteSourceTitle: (name: string) => `Eliminar fuente: «${name}»`,
+    deleteSourceWarning: "La fuente se eliminará de forma permanente y no se puede recuperar de la papelera.",
+    deleteSourceDeleteCount: (n: number) => `Se eliminarán ${n} página(s) wiki:`,
+    deleteSourceRebuildCount: (n: number) => `Se reconstruirán ${n} página(s) wiki en las fuentes restantes:`,
+    deleteSourceConfirm: "Eliminar",
   },
 };
 
