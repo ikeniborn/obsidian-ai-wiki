@@ -9,7 +9,7 @@
  *     --outfile=eval/source-deletion/run.cjs
  *   node eval/source-deletion/run.cjs
  */
-import { computeDeletionPlan, isSourceFile } from "../../src/source-deletion";
+import { computeDeletionPlan, isSourceFile, stripSourceToken } from "../../src/source-deletion";
 import type { DomainEntry } from "../../src/domain";
 
 let pass = 0, fail = 0;
@@ -79,6 +79,14 @@ section("isSourceFile");
   check("file under source folder is a source", isSourceFile("src/note.md", domain) === true);
   check("exact file source entry matches", isSourceFile("notes/foo.md", domain) === true);
   check("unrelated file is not a source", isSourceFile("other/x.md", domain) === false);
+}
+
+section("stripSourceToken");
+{
+  check("double-quoted wikilink → bare stem", stripSourceToken(`"[[note]]"`) === "note");
+  check("single-quoted wikilink → bare stem", stripSourceToken(`'[[note]]'`) === "note");
+  check("plain wikilink → bare stem", stripSourceToken("[[note]]") === "note");
+  check("interior whitespace trimmed", stripSourceToken(`  "[[note]]"  `) === "note");
 }
 
 console.log(`\n========================================`);
