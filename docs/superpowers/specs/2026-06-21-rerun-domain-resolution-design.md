@@ -1,3 +1,39 @@
+---
+chain:
+  intent: null
+review:
+  spec_hash: dcd05242aea020df
+  last_run: 2026-06-21
+  phases:
+    structure:   { status: passed }
+    coverage:    { status: passed }
+    clarity:     { status: passed }
+    consistency: { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: INFO
+      section: i18n
+      section_hash: b60595ca866a319b
+      text: >-
+        Key count is left open ("one key each" vs a single key covering both
+        "missing" and "not-found"). Acceptance is still well-defined (tsc fails
+        on a missing key in any of en/ru/es), so this is non-blocking.
+      verdict: accepted
+      verdict_at: 2026-06-21
+  sections:
+    "## Problem": 0f1b1925a904a371
+    "### Reproduction": e000cf0f2f7aef8a
+    "### Root cause": 0c77106dbafb8b67
+    "### Why a direct Ask works but re-run does not": 6d08fa6d320bf40f
+    "## Scope": 88e5b7a2f0143d79
+    "## Design (Approach A)": 3851470edfe0d0b2
+    "### Behavior": a915253b9abf788b
+    "### Code changes": bfb69ec6bf55e644
+    "### i18n": b60595ca866a319b
+    "## Testing": f8b892d882c539a2
+    "## Docs": 34a20472b7b49f58
+---
 # Re-run domain resolution
 
 **Date:** 2026-06-21
