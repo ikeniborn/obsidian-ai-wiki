@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.1.181 — 2026-06-22
+
+### Новое
+- feat(wiki-links): stripDeadLinks — remove dead `[[links]]` from body + re-sync frontmatter
+- feat(ingest): strip dead links + always-index + reconcile index
+- feat(lint): strip dead-link bodies + bidirectional index reconciliation
+- feat(wiki-index): reconcileIndex — bidirectional `_index.md` ↔ disk diff
+- feat(wiki-index): deriveFallbackAnnotation — H1 + first sentence + Type
+- feat(wiki-path): add isWikiArticlePath predicate with headless eval
+
+### Исправления
+- fix(wiki-hygiene): tidy adjacent-link spacing, CRLF frontmatter, code-fence skip
+- fix(wiki-index): replace lookbehind with lookahead (iOS <16.4 compat)
+- fix(view): keep Format button active for any non-wiki markdown file
+
+### Прочее
+- refactor(source-deletion): reuse isWikiArticlePath in isSourceFile
+
+---
+
 ## 0.1.180 — 2026-06-21
 
 ### Новое

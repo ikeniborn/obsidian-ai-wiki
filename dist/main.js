@@ -38281,12 +38281,22 @@ function parseIndexAnnotations(content) {
   return map;
 }
 function deriveFallbackAnnotation(content, entityType) {
-  const body = content.replace(/^---\n[\s\S]*?\n---\n?/, "");
+  const body = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
   const h1 = (body.match(/^#\s+(.+)$/m)?.[1] ?? "").trim() || "(untitled)";
-  const firstLine = body.split("\n").find((l) => {
+  let firstLine = "";
+  let inFence = false;
+  for (const l of body.split("\n")) {
     const t = l.trim();
-    return t && !t.startsWith("#") && !t.startsWith("|") && !t.startsWith("---");
-  }) ?? "";
+    if (t.startsWith("```")) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    if (t && !t.startsWith("#") && !t.startsWith("|") && !t.startsWith("---") && !t.startsWith(">")) {
+      firstLine = l;
+      break;
+    }
+  }
   const trimmed = firstLine.trim();
   const sentence = trimmed.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? trimmed;
   const type = (entityType ?? "").trim() || "general";
@@ -38606,7 +38616,7 @@ function checkWikiLinks(pages) {
   return violations.map((v) => `- ${v.page}: ${v.kind} link ${v.detail}`).join("\n");
 }
 function tidyAfterRemoval(text) {
-  return text.replace(/ +([,.;:)\]])/g, "$1").replace(/[ \t]+$/gm, "");
+  return text.replace(/(\S) {2,}/g, "$1 ").replace(/ +([,.;:)\]])/g, "$1").replace(/[ \t]+$/gm, "");
 }
 function stripDeadLinks(content, knownStems) {
   const parts = splitFrontmatter(content);
