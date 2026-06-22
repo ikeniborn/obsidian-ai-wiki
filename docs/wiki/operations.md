@@ -155,7 +155,7 @@ Vision results are cached per run in a `VisionTempStore` (`src/phases/vision-tem
 
 Removes a source and its wiki artifacts, rebuilding multi-source pages on their remaining sources (`src/phases/delete.ts#runDelete`). The `delete` operation is dispatched from the sidebar Delete button via `WikiController.deleteSource`, gated to source files of the active domain. See [[architecture#Sidebar View]].
 
-Both the preview modal and the phase compute the same plan from the pure `src/source-deletion.ts#computeDeletionPlan` — a wiki page is `toDelete` when the source is its only `wiki_sources` entry, or `toRebuild` (with its remaining sources resolved) when it has others. Stem matching is exact (`note` never matches `note-2`). `src/source-deletion.ts#isSourceFile` gates the Format and Delete buttons to `source_paths` members.
+Both the preview modal and the phase compute the same plan from the pure `src/source-deletion.ts#computeDeletionPlan` — a wiki page is `toDelete` when the source is its only `wiki_sources` entry, or `toRebuild` (with its remaining sources resolved) when it has others. Stem matching is exact (`note` never matches `note-2`). `src/source-deletion.ts#isSourceFile` gates the Delete button to `source_paths` members of the active domain; the Format button is **not** gated this way — it stays active for any non-wiki markdown file via `src/wiki-path.ts#isWikiArticlePath` (see [[architecture#Sidebar View]]).
 
 `DeleteSourceModal` (`src/modals.ts`) previews the N pages to delete and M to rebuild with a permanent-deletion warning before any change. Delete is exempt from the mobile dispatch guard, so it works on mobile like Query and Format.
 
