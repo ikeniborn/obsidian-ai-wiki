@@ -13,6 +13,10 @@ review:
 chain:
   intent: null
   spec: docs/superpowers/specs/2026-06-22-format-button-domain-design.md
+result_check:
+  verdict: OK
+  plan_hash: 4c1e0fe3de2d156b
+  last_run: 2026-06-22
 ---
 # Format Button Activation Decoupled From Domain — Implementation Plan
 
