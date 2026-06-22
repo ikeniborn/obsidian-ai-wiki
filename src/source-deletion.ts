@@ -1,5 +1,5 @@
 import type { DomainEntry } from "./domain";
-import { WIKI_ROOT } from "./wiki-path";
+import { isWikiArticlePath } from "./wiki-path";
 
 export interface DeletionPlan {
   /** sole-source wiki page vault-paths (the deleted source is their only wiki_sources entry) */
@@ -71,7 +71,7 @@ export function computeDeletionPlan(
 
 /** True if `path` is a non-wiki source file of `domain` (member of source_paths). */
 export function isSourceFile(path: string, domain: DomainEntry): boolean {
-  if (path === WIKI_ROOT || path.startsWith(`${WIKI_ROOT}/`)) return false;
+  if (isWikiArticlePath(path)) return false;
   if (!path.endsWith(".md")) return false;
   for (const sp of domain.source_paths ?? []) {
     const norm = sp.replace(/\/+$/, "");

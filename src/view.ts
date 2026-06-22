@@ -6,7 +6,7 @@ import type { DomainEntry } from "./domain";
 import { i18n, i18nFor, resolveLang } from "./i18n";
 import { isSourceFile } from "./source-deletion";
 import { resolveRerunDomain } from "./rerun-domain";
-import { domainWikiFolder, domainLogPath, domainIndexPath } from "./wiki-path";
+import { domainWikiFolder, domainLogPath, domainIndexPath, isWikiArticlePath } from "./wiki-path";
 import { computeSpeedText } from "./phases/llm-utils";
 import { isAbsolute, relative } from "path-browserify";
 import { retrievalTag } from "./retrieval-diag";
@@ -405,11 +405,13 @@ export class LlmWikiView extends ItemView {
     const activeFile = this.plugin.app.workspace.getActiveFile();
     const domain = this.domains.find((d) => d.id === this.domainSelect?.value);
     const isSource = !!activeFile && !!domain && isSourceFile(activeFile.path, domain);
+    const canFormat = !!activeFile && activeFile.extension === "md"
+      && !isWikiArticlePath(activeFile.path);
 
     if (this.askBtn)       this.askBtn.disabled       = !hasDomain;
     if (this.ingestBtn)    this.ingestBtn.disabled    = !hasDomain;
     if (this.lintBtn)      this.lintBtn.disabled      = !hasDomain;
-    if (this.formatBtn)    this.formatBtn.disabled    = !isSource;
+    if (this.formatBtn)    this.formatBtn.disabled    = !canFormat;
     if (this.deleteBtn)    this.deleteBtn.disabled    = !isSource;
     if (this.reinitBtn)    this.reinitBtn.disabled    = !hasDomain;
     if (this.addSourceBtn) this.addSourceBtn.disabled = !hasDomain;

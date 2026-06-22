@@ -27186,6 +27186,9 @@ var GLOBAL_DEV_LOG_PATH = `${GLOBAL_CONFIG_DIR}/_dev.jsonl`;
 function domainWikiFolder(subfolder) {
   return `${WIKI_ROOT}/${subfolder}`;
 }
+function isWikiArticlePath(path2) {
+  return path2 === WIKI_ROOT || path2.startsWith(`${WIKI_ROOT}/`);
+}
 function sanitizeWikiFolder(raw) {
   let s = raw;
   const vaultMatch = s.match(/^vaults\/[^/]+\//);
@@ -29761,7 +29764,7 @@ function computeDeletionPlan(sourcePath, pages, sourceStemToPath) {
   return { toDelete, toRebuild, remainingSources };
 }
 function isSourceFile(path2, domain) {
-  if (path2 === WIKI_ROOT || path2.startsWith(`${WIKI_ROOT}/`)) return false;
+  if (isWikiArticlePath(path2)) return false;
   if (!path2.endsWith(".md")) return false;
   for (const sp of domain.source_paths ?? []) {
     const norm = sp.replace(/\/+$/, "");
@@ -31161,10 +31164,11 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
     const activeFile = this.plugin.app.workspace.getActiveFile();
     const domain = this.domains.find((d) => d.id === this.domainSelect?.value);
     const isSource = !!activeFile && !!domain && isSourceFile(activeFile.path, domain);
+    const canFormat = !!activeFile && activeFile.extension === "md" && !isWikiArticlePath(activeFile.path);
     if (this.askBtn) this.askBtn.disabled = !hasDomain;
     if (this.ingestBtn) this.ingestBtn.disabled = !hasDomain;
     if (this.lintBtn) this.lintBtn.disabled = !hasDomain;
-    if (this.formatBtn) this.formatBtn.disabled = !isSource;
+    if (this.formatBtn) this.formatBtn.disabled = !canFormat;
     if (this.deleteBtn) this.deleteBtn.disabled = !isSource;
     if (this.reinitBtn) this.reinitBtn.disabled = !hasDomain;
     if (this.addSourceBtn) this.addSourceBtn.disabled = !hasDomain;

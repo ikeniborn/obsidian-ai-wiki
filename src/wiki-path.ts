@@ -9,6 +9,11 @@ export function domainWikiFolder(subfolder: string): string {
   return `${WIKI_ROOT}/${subfolder}`;
 }
 
+/** True if `path` is inside the wiki tree (every domain's wiki lives under WIKI_ROOT). */
+export function isWikiArticlePath(path: string): boolean {
+  return path === WIKI_ROOT || path.startsWith(`${WIKI_ROOT}/`);
+}
+
 export function sanitizeWikiFolder(raw: string): string {
   let s = raw;
   const vaultMatch = s.match(/^vaults\/[^/]+\//);
