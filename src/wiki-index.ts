@@ -19,13 +19,20 @@ export function parseIndexAnnotations(content: string): Map<string, string> {
 // still get an index entry (and therefore an embedding) and become retrievable.
 // LLM lint later upgrades it to a full Covers:/Type:/Terms: annotation.
 export function deriveFallbackAnnotation(content: string, entityType?: string): string {
-  const body = content.replace(/^---\n[\s\S]*?\n---\n?/, "");
+  const body = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
   const h1 = (body.match(/^#\s+(.+)$/m)?.[1] ?? "").trim() || "(untitled)";
 
-  const firstLine = body.split("\n").find((l) => {
+  let firstLine = "";
+  let inFence = false;
+  for (const l of body.split("\n")) {
     const t = l.trim();
-    return t && !t.startsWith("#") && !t.startsWith("|") && !t.startsWith("---");
-  }) ?? "";
+    if (t.startsWith("```")) { inFence = !inFence; continue; }
+    if (inFence) continue;
+    if (t && !t.startsWith("#") && !t.startsWith("|") && !t.startsWith("---") && !t.startsWith(">")) {
+      firstLine = l;
+      break;
+    }
+  }
   const trimmed = firstLine.trim();
   const sentence = trimmed.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? trimmed;
 

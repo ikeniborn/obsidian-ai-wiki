@@ -205,6 +205,7 @@ export function checkWikiLinks(pages: Map<string, string>): string {
 
 function tidyAfterRemoval(text: string): string {
   return text
+    .replace(/(\S) {2,}/g, "$1 ")    // collapse mid-line space runs (protects leading indentation)
     .replace(/ +([,.;:)\]])/g, "$1") // drop space before punctuation
     .replace(/[ \t]+$/gm, "");        // trim trailing spaces per line
 }

@@ -55,6 +55,10 @@ console.log("\n=== stripDeadLinks ===");
   const out = stripDeadLinks("plain [[gone]] text", new Set<string>());
   check("no-frontmatter body cleaned", out === "plain text", JSON.stringify(out));
 }
+{
+  const out = stripDeadLinks("a [[x]] [[y]] b", new Set<string>());
+  check("adjacent dead links collapse to single space", out === "a b", JSON.stringify(out));
+}
 
 console.log("\n=== deriveFallbackAnnotation ===");
 {
@@ -87,6 +91,15 @@ console.log("\n=== deriveFallbackAnnotation ===");
   check("wikilink brackets unwrapped in annotation", !a.includes("[[") && a.includes("wiki_x_minio"), a);
 }
 
+{
+  const a = deriveFallbackAnnotation("---\r\nwiki_status: stub\r\n---\r\n# CRLF Title\r\n\r\nFirst sentence here.\r\n", "entities");
+  check("CRLF frontmatter stripped", a.startsWith("CRLF Title — ") && !a.includes("wiki_status"), a);
+}
+{
+  const a = deriveFallbackAnnotation("# Code Page\n\n```sql\nSELECT 1;\n```\n\nReal prose sentence.\n", "entities");
+  check("code fence skipped in fallback", !a.includes("```") && !a.includes("SELECT"), a);
+}
+
 console.log("\n=== reconcileIndex ===");
 {
   const wikiFolder = "!Wiki/dom";
@@ -106,7 +119,7 @@ console.log("\n=== reconcileIndex ===");
   check("orphan flagged for removal", r.removes.includes("wiki_dom_orphan"), JSON.stringify(r.removes));
   check("kept page not re-added", !r.adds.some((a) => a.pid === "wiki_dom_keep"), JSON.stringify(r.adds));
   check("new page added", r.adds.some((a) => a.pid === "wiki_dom_new"), JSON.stringify(r.adds));
-  check("new page got fallback annotation", r.adds.find((a) => a.pid === "wiki_dom_new")?.annotation.includes("New entity body."), JSON.stringify(r.adds));
+  check("new page got fallback annotation", (r.adds.find((a) => a.pid === "wiki_dom_new")?.annotation.includes("New entity body.")) ?? false, JSON.stringify(r.adds));
   check("meta file ignored", !r.adds.some((a) => a.pid.includes("index")), JSON.stringify(r.adds));
 }
 {
