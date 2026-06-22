@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка спецификации — Кнопка форматирования и домен</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg); transition:background .3s, color .3s;
+}
+.theme-btn{
+  position:sticky; top:.5rem; float:right; cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface);
+}
+h1{font-size:1.6rem; margin:.2rem 0 .2rem;}
+h2{font-size:1.2rem; margin:2rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.3rem;}
+.sub{color:var(--muted); margin:.1rem 0 1rem;}
+code{background:color-mix(in srgb,var(--accent) 14%, var(--surface)); padding:.05rem .35rem; border-radius:4px; font-size:.88em;}
+table{border-collapse:collapse; width:100%; margin:.5rem 0 1rem; background:var(--surface); box-shadow:0 1px 3px var(--shadow); border-radius:8px; overflow:hidden;}
+th,td{text-align:left; padding:.5rem .7rem; border-bottom:1px solid var(--border); vertical-align:top;}
+th{background:color-mix(in srgb,var(--accent) 16%, var(--surface)); color:var(--fg);}
+tbody tr:nth-child(even){background:var(--zebra);}
+.badge{display:inline-block; padding:.05rem .5rem; border-radius:999px; font-size:.78rem; font-weight:600; border:1px solid transparent;}
+.b-ok{background:color-mix(in srgb,var(--ok) 22%, var(--surface)); color:var(--ok-2); border-color:var(--ok);}
+.b-warn{background:color-mix(in srgb,var(--warn) 22%, var(--surface)); color:var(--warn-2); border-color:var(--warn);}
+.b-danger{background:color-mix(in srgb,var(--danger) 22%, var(--surface)); color:var(--danger-2); border-color:var(--danger);}
+.b-fix{background:color-mix(in srgb,var(--accent) 20%, var(--surface)); color:var(--accent-2); border-color:var(--accent);}
+.note{background:color-mix(in srgb,var(--accent) 12%, var(--surface)); border-left:4px solid var(--accent); padding:.6rem .9rem; border-radius:0 8px 8px 0; margin:1rem 0;}
+.verdict{font-size:1.15rem; font-weight:700; padding:.7rem 1rem; border-radius:8px; display:inline-block;}
+.verdict.ok{background:color-mix(in srgb,var(--ok) 22%, var(--surface)); color:var(--ok-2); border:1px solid var(--ok);}
+/* flow diagram */
+.flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:.4rem; margin:1rem 0;}
+.node{background:var(--surface); border:2px solid var(--accent); border-radius:10px; padding:.6rem .8rem; min-width:120px; box-shadow:0 2px 6px var(--shadow);}
+.node .t{font-weight:600; font-size:.95rem;}
+.node .d{color:var(--muted); font-size:.78rem;}
+.node.gate{border-color:var(--warn); border-style:dashed;}
+.node.fix{border-color:var(--ok);}
+.arrow{display:flex; align-items:center; color:var(--line); font-size:1.4rem; padding:0 .1rem;}
+figure{margin:1rem 0; padding:1rem; background:var(--surface); border:1px solid var(--border); border-radius:10px;}
+figcaption{color:var(--muted); font-size:.85rem; margin-top:.5rem; text-align:center;}
+.legend{font-size:.8rem; color:var(--muted);}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Тёмная/светлая тема">🌙 / ☀️</label>
+
+<h1>Проверка спецификации</h1>
+<p class="sub">Кнопка форматирования отвязана от членства в домене · <code>2026-06-22-format-button-domain-design.md</code> · ветка <code>dev/format-button-domain</code></p>
+
+<div class="note">
+  <strong>Итог:</strong> <span class="badge b-ok">OK</span> — все 4 фазы passed, 0 CRITICAL, 0 WARNING. <code>spec_hash: 2cc29f507da2037c</code>
+</div>
+
+<!-- ===================== БЛОК 1: РЕЗЮМЕ ===================== -->
+<h2>1. Резюме спецификации</h2>
+
+<h3>Требования (по секциям)</h3>
+<table>
+  <thead><tr><th>#</th><th>Требование</th><th>Секция</th></tr></thead>
+  <tbody>
+    <tr><td>R1</td><td>Кнопка <b>Format</b> активна для любого открытого <code>.md</code>, который НЕ является вики-статьёй, независимо от домена/вики-членства.</td><td>Desired behavior · Changes #3</td></tr>
+    <tr><td>R2</td><td>Кнопка <b>Delete source</b> остаётся гейтированной на <code>isSource</code> — активна только для отслеживаемого источника выбранного домена. Без изменений.</td><td>Desired behavior · Changes #3</td></tr>
+    <tr><td>R3</td><td>Новый чистый предикат <code>isWikiArticlePath(path)</code> в <code>src/wiki-path.ts</code> — <code>path === WIKI_ROOT || startsWith("!Wiki/")</code>.</td><td>Changes #1</td></tr>
+    <tr><td>R4</td><td><code>isSourceFile</code> переиспользует хелпер вместо инлайн-guard (де-дупликация, без смены логики).</td><td>Changes #2</td></tr>
+    <tr><td>R5</td><td>Контроллер остаётся финальным гейтом: вики-статья → InfoModal, не-md → Notice. Предикат кнопки — лишь UX-подсказка.</td><td>Desired behavior</td></tr>
+  </tbody>
+</table>
+
+<h3>Критерии приёмки (Success Criteria)</h3>
+<table>
+  <thead><tr><th>Активный файл</th><th>Кнопка Format</th></tr></thead>
+  <tbody>
+    <tr><td>нет файла</td><td><span class="badge b-danger">disabled</span></td></tr>
+    <tr><td>не <code>.md</code></td><td><span class="badge b-danger">disabled</span></td></tr>
+    <tr><td>под <code>!Wiki/…</code> (любой домен или <code>_config</code>)</td><td><span class="badge b-danger">disabled</span></td></tr>
+    <tr><td><code>!Wiki</code> точно</td><td><span class="badge b-danger">disabled</span></td></tr>
+    <tr><td>источник в <code>source_paths</code></td><td><span class="badge b-ok">enabled</span></td></tr>
+    <tr><td>источник <i>вне</i> <code>source_paths</code></td><td><span class="badge b-ok">enabled</span> ← фикс</td></tr>
+    <tr><td>любой другой <code>.md</code> вне вики</td><td><span class="badge b-ok">enabled</span></td></tr>
+  </tbody>
+</table>
+<p class="legend">Headless eval <code>eval/format-button/run.ts</code>: <code>!Wiki</code>, <code>!Wiki/Alpha/Page.md</code>, <code>!Wiki/_config/_index.md</code> → true; <code>Sources/doc.md</code>, <code>notes/x.md</code>, <code>!WikiOther/z.md</code> → false.</p>
+
+<!-- ===================== БЛОК 2: СХЕМЫ ===================== -->
+<h2>2. Схемы решения и зависимостей</h2>
+
+<h3>Схема решения — поток вычисления доступности кнопок</h3>
+<figure>
+  <div class="flow">
+    <div class="node"><div class="t">file-open / смена домена</div><div class="d">событие</div></div>
+    <div class="arrow">→</div>
+    <div class="node"><div class="t">updateButtonAvailability()</div><div class="d">src/view.ts</div></div>
+    <div class="arrow">→</div>
+    <div class="node fix"><div class="t">canFormat</div><div class="d">activeFile && .md && !isWikiArticlePath</div></div>
+    <div class="arrow">→</div>
+    <div class="node"><div class="t">formatBtn.disabled = !canFormat</div><div class="d">фикс (было !isSource)</div></div>
+  </div>
+  <div class="flow">
+    <div class="node"><div class="t">updateButtonAvailability()</div><div class="d">та же точка</div></div>
+    <div class="arrow">→</div>
+    <div class="node"><div class="t">isSource</div><div class="d">isSourceFile(path, domain)</div></div>
+    <div class="arrow">→</div>
+    <div class="node"><div class="t">deleteBtn.disabled = !isSource</div><div class="d">без изменений</div></div>
+    <div class="arrow">→</div>
+    <div class="node gate"><div class="t">controller.format()</div><div class="d">финальный гейт: InfoModal / Notice</div></div>
+  </div>
+  <figcaption>Сплошная рамка — без изменений · зелёная — фикс · штриховая жёлтая — гейт-инвариант</figcaption>
+</figure>
+
+<h3>Граф зависимостей</h3>
+<figure class="rpt-graph">
+  <svg viewBox="0 0 460 220" width="100%" role="img" aria-label="граф зависимостей компонентов">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+      </marker>
+    </defs>
+    <!-- edges -->
+    <line x1="110" y1="40"  x2="110" y2="100" stroke="var(--line)" stroke-width="2" marker-end="url(#ar)"/>
+    <line x1="110" y1="40"  x2="300" y2="100" stroke="var(--line)" stroke-width="2" marker-end="url(#ar)"/>
+    <line x1="300" y1="135" x2="300" y2="100" stroke="var(--line)" stroke-width="2" marker-end="url(#ar)" opacity="0"/>
+    <line x1="300" y1="40"  x2="300" y2="100" stroke="var(--line)" stroke-width="2" marker-end="url(#ar)"/>
+    <line x1="110" y1="135" x2="110" y2="170" stroke="var(--line)" stroke-width="2" marker-end="url(#ar)"/>
+    <!-- nodes -->
+    <g>
+      <rect x="55" y="14" width="110" height="34" rx="8" fill="var(--surface)" stroke="var(--ok)" stroke-width="2"/>
+      <text x="110" y="35" text-anchor="middle" fill="var(--fg)" font-size="12">isWikiArticlePath</text>
+    </g>
+    <g>
+      <rect x="55" y="100" width="110" height="34" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+      <text x="110" y="121" text-anchor="middle" fill="var(--fg)" font-size="12">view.canFormat</text>
+    </g>
+    <g>
+      <rect x="245" y="100" width="110" height="34" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+      <text x="300" y="121" text-anchor="middle" fill="var(--fg)" font-size="12">isSourceFile</text>
+    </g>
+    <g>
+      <rect x="245" y="14" width="110" height="34" rx="8" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+      <text x="300" y="35" text-anchor="middle" fill="var(--fg)" font-size="11">WIKI_ROOT</text>
+    </g>
+    <g>
+      <rect x="55" y="170" width="110" height="34" rx="8" fill="var(--surface)" stroke="var(--warn)" stroke-width="2" stroke-dasharray="4 3"/>
+      <text x="110" y="191" text-anchor="middle" fill="var(--fg)" font-size="11">formatBtn</text>
+    </g>
+  </svg>
+  <figcaption>Рёбра — «зависит от / использует». Зелёный — новый хелпер, жёлтый штрих — UI-кнопка, серый — константа.</figcaption>
+</figure>
+
+<h3>Карта покрытия (задача → требования)</h3>
+<table>
+  <thead><tr><th>Задача</th><th>Покрывающие требования</th><th>Статус</th></tr></thead>
+  <tbody>
+    <tr><td>T1 — Format активна для не-вики <code>.md</code> независимо от домена</td><td>R1, R3, R4, R5</td><td><span class="badge b-ok">покрыто</span></td></tr>
+    <tr><td>T2 — Delete source гейтирована на <code>isSource</code> (без изменений)</td><td>R2</td><td><span class="badge b-ok">покрыто</span></td></tr>
+  </tbody>
+</table>
+
+<!-- ===================== БЛОК 3: РЕЗУЛЬТАТЫ ===================== -->
+<h2>3. Результаты проверки</h2>
+
+<table>
+  <thead><tr><th>Фаза</th><th>Статус</th><th>Замечания</th></tr></thead>
+  <tbody>
+    <tr><td>1. structure</td><td><span class="badge b-ok">passed</span></td><td>Нет плейсхолдеров, битых ссылок; нумерация Changes 1→2→3 полная; дублей заголовков нет.</td></tr>
+    <tr><td>2. coverage</td><td><span class="badge b-ok">passed</span></td><td>T1 и T2 покрыты; лишних требований нет; противоречий нет.</td></tr>
+    <tr><td>3. clarity</td><td><span class="badge b-ok">passed</span></td><td>Нет размытых формулировок; DoD = таблица граничных случаев + перечень eval-кейсов; термины согласованы.</td></tr>
+    <tr><td>4. consistency</td><td><span class="badge b-ok">passed</span></td><td>Первый прогон, базовой линии хешей нет — все секции новые.</td></tr>
+  </tbody>
+</table>
+
+<h3>Findings</h3>
+<table>
+  <thead><tr><th>id</th><th>severity</th><th>section</th><th>text</th><th>verdict</th></tr></thead>
+  <tbody>
+    <tr><td colspan="5" style="text-align:center; color:var(--muted)">Замечаний нет — <code>findings: []</code></td></tr>
+  </tbody>
+</table>
+
+<h3>Сводка</h3>
+<table>
+  <tbody>
+    <tr><th>CRITICAL open</th><td>0</td></tr>
+    <tr><th>WARNING open</th><td>0</td></tr>
+    <tr><th>spec_hash</th><td><code>2cc29f507da2037c</code></td></tr>
+    <tr><th>chain</th><td>intent → spec · <code>intent: null</code> (intent-doc отсутствует)</td></tr>
+  </tbody>
+</table>
+
+<p><span class="verdict ok">Вердикт: OK</span></p>
+
+</body>
+</html>

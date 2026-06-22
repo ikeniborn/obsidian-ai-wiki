@@ -1,3 +1,16 @@
+---
+review:
+  spec_hash: 2cc29f507da2037c
+  last_run: 2026-06-22
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings: []
+chain:
+  intent: null
+---
 # Format button activation decoupled from domain membership
 
 **Date:** 2026-06-22
