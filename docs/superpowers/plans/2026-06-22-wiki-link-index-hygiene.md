@@ -27,6 +27,10 @@ review:
 chain:
   intent: null
   spec: docs/superpowers/specs/2026-06-22-wiki-dead-links-index-reconciliation-design.md
+result_check:
+  verdict: OK
+  plan_hash: ba2c925c841559e6
+  last_run: 2026-06-22
 ---
 
 # Wiki Dead-Link Removal & Index Reconciliation — Implementation Plan

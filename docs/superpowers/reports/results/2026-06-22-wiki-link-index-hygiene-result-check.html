@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Result Check — 2026-06-22-wiki-link-index-hygiene</title>
+<style>
+/* ── Themes ─────────────────────────────────────────────────────────────── */
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+.theme-btn{
+  position:sticky; top:.5rem; float:right;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+
+/* ── Typography ─────────────────────────────────────────────────────────── */
+h1{ font-size:1.6rem; margin:.6rem 0 .3rem; color:var(--accent); }
+h2{ font-size:1.15rem; margin:2rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.3rem; }
+h3{ font-size:1rem; margin:1.2rem 0 .4rem; color:var(--accent-2); }
+.lead{ font-size:1.08rem; }
+.sub{ color:var(--muted); font-size:.9rem; }
+code{ background:color-mix(in srgb,var(--accent) 10%,var(--surface)); padding:.1rem .35rem; border-radius:4px; font-size:.88em; }
+
+/* ── Note callout ───────────────────────────────────────────────────────── */
+.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
+  background:color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius:0 8px 8px 0;
+  box-shadow:0 1px 8px var(--shadow); }
+
+/* ── Badge ──────────────────────────────────────────────────────────────── */
+.badge{ display:inline-block; font-size:.72rem; padding:.05rem .5rem; border-radius:999px; border:1px solid var(--border); font-weight:600; }
+.badge.ok  { color:var(--ok-2);     border-color:var(--ok);     background:color-mix(in srgb,var(--ok) 10%,var(--surface)); }
+.badge.warn{ color:var(--warn-2);   border-color:var(--warn);   background:color-mix(in srgb,var(--warn) 10%,var(--surface)); }
+.badge.info{ color:var(--accent-2); border-color:var(--accent); background:color-mix(in srgb,var(--accent) 10%,var(--surface)); }
+.badge.miss{ color:var(--danger-2); border-color:var(--danger); background:color-mix(in srgb,var(--danger) 10%,var(--surface)); }
+.badge.big { font-size:.95rem; padding:.15rem .9rem; }
+
+/* ── Table ──────────────────────────────────────────────────────────────── */
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:1rem 0; font-size:.92rem; border:1px solid var(--border); border-radius:10px;
+  overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.5rem .75rem; text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg); }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.rpt-table td code{ white-space:nowrap; }
+
+/* ── Details/expand ─────────────────────────────────────────────────────── */
+details{ background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:.7rem 1rem; margin:.7rem 0; box-shadow:0 1px 8px var(--shadow); }
+details summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+details[open] summary{ margin-bottom:.55rem; }
+ul.tight{ padding-left:1.4rem; }
+ul.tight li{ margin:.28rem 0; }
+
+/* ── Progress bar ───────────────────────────────────────────────────────── */
+.progress-bar{ display:flex; height:1.4rem; border-radius:8px; overflow:hidden; border:1px solid var(--border); margin:.5rem 0 1rem; }
+.progress-bar .seg-ok  { background:var(--ok); }
+.progress-bar .seg-warn{ background:var(--warn); }
+.progress-bar .seg-miss{ background:var(--danger); }
+
+/* ── Verdict banner ─────────────────────────────────────────────────────── */
+.verdict-ok{
+  display:flex; align-items:center; gap:1rem;
+  background:color-mix(in srgb,var(--ok) 12%,var(--surface));
+  border:2px solid var(--ok); border-radius:12px;
+  padding:1rem 1.5rem; margin:1.5rem 0;
+}
+.verdict-ok .v-label{ font-size:1.5rem; font-weight:700; color:var(--ok-2); }
+
+/* ── Chain flow ─────────────────────────────────────────────────────────── */
+.rpt-flow{ display:flex; align-items:center; gap:0; margin:.7rem 0; flex-wrap:wrap; }
+.rpt-flow .node{
+  background:var(--surface); color:var(--fg);
+  border:1px solid var(--border); border-radius:8px; padding:.5rem .9rem; font-size:.88rem;
+  box-shadow:0 1px 6px var(--shadow);
+}
+.rpt-flow .arrow{ flex:0 0 2.5rem; height:2px; background:var(--line); position:relative; }
+.rpt-flow .arrow::after{
+  content:""; position:absolute; right:0; top:-4px;
+  border:5px solid transparent; border-left-color:var(--line);
+}
+.rpt-flow .missing-node{
+  background:color-mix(in srgb,var(--muted) 10%,var(--surface));
+  color:var(--muted);
+  border:1px dashed var(--muted); border-radius:8px; padding:.5rem .9rem; font-size:.88rem;
+  font-style:italic;
+}
+
+/* ── Coverage stats ─────────────────────────────────────────────────────── */
+.stats-row{ display:flex; gap:1.2rem; flex-wrap:wrap; margin:.8rem 0; }
+.stat-card{ background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:.7rem 1.2rem; text-align:center; min-width:7rem; box-shadow:0 1px 6px var(--shadow); }
+.stat-card .num{ font-size:2rem; font-weight:700; line-height:1; }
+.stat-card .lbl{ font-size:.8rem; color:var(--muted); }
+.num-ok  { color:var(--ok-2); }
+.num-warn{ color:var(--warn-2); }
+.num-info{ color:var(--accent-2); }
+.num-miss{ color:var(--danger-2); }
+</style>
+</head>
+<body>
+
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Toggle dark/light">🌙 / ☀️</label>
+
+<main class="report">
+
+<h1>Result Check — Wiki Dead-Link & Index Reconciliation</h1>
+<p class="lead">Сверка реализации с цепочкой IDD: intent → spec → plan vs git diff <code>aa1da1a..HEAD</code></p>
+<p class="sub">Дата проверки: 2026-06-22 &nbsp;·&nbsp; Ветка: <code>dev/wiki-link-index-hygiene</code> &nbsp;·&nbsp; Plan hash: <code>ba2c925c841559e6</code></p>
+
+<!-- ── Documents ─────────────────────────────────────────────────────────── -->
+<h2>Документы цепочки</h2>
+<table class="rpt-table">
+  <thead><tr><th>Роль</th><th>Путь</th><th>Статус</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Plan</strong></td>
+      <td><code>docs/superpowers/plans/2026-06-22-wiki-link-index-hygiene.md</code></td>
+      <td><span class="badge ok">найден</span></td>
+    </tr>
+    <tr>
+      <td><strong>Spec</strong></td>
+      <td><code>docs/superpowers/specs/2026-06-22-wiki-dead-links-index-reconciliation-design.md</code></td>
+      <td><span class="badge ok">найден</span></td>
+    </tr>
+    <tr>
+      <td><strong>Intent</strong></td>
+      <td>—</td>
+      <td><span class="badge warn">не найден (chain.intent: null)</span></td>
+    </tr>
+    <tr>
+      <td><strong>Diff base</strong></td>
+      <td><code>git diff aa1da1a..HEAD</code></td>
+      <td><span class="badge ok">15 файлов, +1904 / −19 строк</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="sub">Реализационные файлы в diff: <code>src/wiki-link-validator.ts</code>, <code>src/wiki-index.ts</code>, <code>src/phases/ingest.ts</code>, <code>src/phases/lint.ts</code>, <code>eval/wiki-hygiene/run.ts</code>, <code>eval/wiki-hygiene/.gitignore</code></p>
+
+<div class="rpt-flow">
+  <div class="missing-node">intent (отсутствует)</div>
+  <div class="arrow"></div>
+  <div class="node">spec<br><small>design.md</small></div>
+  <div class="arrow"></div>
+  <div class="node">plan<br><small>hygiene.md</small></div>
+  <div class="arrow"></div>
+  <div class="node">git diff<br><small>aa1da1a..HEAD</small></div>
+</div>
+
+<!-- ── Plan Step Coverage ────────────────────────────────────────────────── -->
+<h2>Покрытие шагов плана</h2>
+
+<div class="stats-row">
+  <div class="stat-card"><div class="num num-ok">6</div><div class="lbl">DONE</div></div>
+  <div class="stat-card"><div class="num num-warn">0</div><div class="lbl">PARTIAL</div></div>
+  <div class="stat-card"><div class="num num-miss">0</div><div class="lbl">MISSING</div></div>
+</div>
+
+<div class="progress-bar">
+  <div class="seg-ok" style="width:100%"></div>
+</div>
+
+<details open>
+  <summary>Task 1 — <code>stripDeadLinks</code> в <code>wiki-link-validator.ts</code> &nbsp;<span class="badge ok">DONE</span></summary>
+  <ul class="tight">
+    <li><strong>Step 1</strong> Create .gitignore: <code>eval/wiki-hygiene/.gitignore</code> создан, содержит <code>run.cjs</code> ✓</li>
+    <li><strong>Step 2</strong> Write failing eval: <code>eval/wiki-hygiene/run.ts</code> создан, блок stripDeadLinks присутствует ✓</li>
+    <li><strong>Step 3</strong> Run eval (TDD red): подтверждён коммитом ✓</li>
+    <li><strong>Step 4</strong> Implement stripDeadLinks: <code>src/wiki-link-validator.ts</code> +30 строк, функции <code>tidyAfterRemoval</code> и <code>stripDeadLinks</code> экспортированы ✓</li>
+    <li><strong>Step 5</strong> Run eval (green): 23/23 passing ✓</li>
+    <li><strong>Step 6</strong> Type-check: нет новых ошибок в <code>wiki-link-validator.ts</code> ✓</li>
+    <li><strong>Step 7</strong> Commit: функция присутствует в diff ✓</li>
+  </ul>
+  <div class="note"><strong>[INFO]</strong> Eval содержит 4 блока для stripDeadLinks вместо 3 из плана — добавлен тест «adjacent dead links collapse to single space». Расширение coverage, не нарушение.</div>
+</details>
+
+<details open>
+  <summary>Task 2 — <code>deriveFallbackAnnotation</code> в <code>wiki-index.ts</code> &nbsp;<span class="badge ok">DONE</span></summary>
+  <ul class="tight">
+    <li><strong>Step 1</strong> Write failing eval: блок deriveFallbackAnnotation добавлен в <code>run.ts</code> ✓</li>
+    <li><strong>Step 2</strong> Run eval (TDD red): подтверждён ✓</li>
+    <li><strong>Step 3</strong> Implement: <code>src/wiki-index.ts</code> +35 строк, функция экспортирована ✓</li>
+    <li><strong>Step 4</strong> Run eval (green): 23/23 passing ✓</li>
+    <li><strong>Step 5</strong> Type-check: без новых ошибок ✓</li>
+    <li><strong>Step 6</strong> Commit: в diff ✓</li>
+  </ul>
+  <div class="note"><strong>[INFO]</strong> Реализация улучшена vs план: в diff — цикл с пропуском code fences (<code>```</code>) и blockquotes (<code>&gt;</code>) вместо простого <code>find</code>. Eval расширен тестами CRLF-frontmatter и code-fence-skip. Это edge-case coverage — не нарушение, улучшение.</div>
+</details>
+
+<details open>
+  <summary>Task 3 — <code>reconcileIndex</code> в <code>wiki-index.ts</code> &nbsp;<span class="badge ok">DONE</span></summary>
+  <ul class="tight">
+    <li><strong>Step 1</strong> Write failing eval: блок reconcileIndex в <code>run.ts</code> ✓</li>
+    <li><strong>Step 2</strong> Run eval (TDD red): подтверждён ✓</li>
+    <li><strong>Step 3</strong> Implement: интерфейс <code>IndexReconcile</code> + функция <code>reconcileIndex</code> (+38 строк), импорт <code>GENERIC_WIKI_STEM_REGEX</code> ✓</li>
+    <li><strong>Step 4</strong> Run eval (green): 23/23 passing ✓</li>
+    <li><strong>Step 5</strong> Type-check: без новых ошибок ✓</li>
+    <li><strong>Step 6</strong> Commit: в diff ✓</li>
+  </ul>
+</details>
+
+<details open>
+  <summary>Task 4 — Wire в <code>ingest.ts</code> &nbsp;<span class="badge ok">DONE</span></summary>
+  <ul class="tight">
+    <li><strong>Step 1</strong> Imports: расширен импорт <code>wiki-index</code> и <code>wiki-link-validator</code> ✓</li>
+    <li><strong>Step 2</strong> Strip dead links after fixWikiLinks: блок с <code>stripDeadLinks</code> вставлен после <code>wlFixResult</code> ✓</li>
+    <li><strong>Step 3</strong> Always index: <code>if (page.annotation)</code> заменён на unconditional блок с <code>deriveFallbackAnnotation</code>; helper <code>deriveSectionForPath</code> добавлен ✓</li>
+    <li><strong>Step 4</strong> Reconcile after delete loop: блок <code>reconcileIndex</code> вставлен ✓</li>
+    <li><strong>Step 5</strong> Type-check: без новых ошибок ✓</li>
+    <li><strong>Step 6</strong> Lint: 0 ошибок ✓</li>
+    <li><strong>Step 7</strong> Commit: в diff ✓</li>
+  </ul>
+</details>
+
+<details open>
+  <summary>Task 5 — Wire в <code>lint.ts</code> &nbsp;<span class="badge ok">DONE</span></summary>
+  <ul class="tight">
+    <li><strong>Step 1</strong> Imports: расширен импорт <code>stripDeadLinks</code>, <code>reconcileIndex</code>, <code>removeIndexAnnotation</code> ✓</li>
+    <li><strong>Step 2</strong> Strip dead links (post-loop, always-on): цикл <code>stripDeadLinks</code> вставлен перед <code>filterStaleWikiLinks</code> ✓</li>
+    <li><strong>Step 3</strong> Reconcile index both ways: блок <code>reconcileIndex</code> с <code>reportParts.push(...)</code> ✓</li>
+    <li><strong>Step 4</strong> Type-check: без новых ошибок ✓</li>
+    <li><strong>Step 5</strong> Lint: 0 ошибок ✓</li>
+    <li><strong>Step 6</strong> Commit: в diff ✓</li>
+  </ul>
+</details>
+
+<details open>
+  <summary>Task 6 — Build, eval, ручная верификация на <code>rtk-task</code> &nbsp;<span class="badge ok">DONE</span></summary>
+  <ul class="tight">
+    <li><strong>Step 1</strong> npm run build: <code>dist/main.js</code> в diff (+113 строк) ✓</li>
+    <li><strong>Step 2</strong> Full eval: 23/23 passing (stripDeadLinks + deriveFallbackAnnotation + reconcileIndex) ✓</li>
+    <li><strong>Step 3</strong> Backup + lint on rtk-task (no LLM): выполнено ✓</li>
+    <li><strong>Step 4</strong> Verify no dead links: grep на <code>ch_mete_s3_ddrdrg</code> → 0 результатов ✓</li>
+    <li><strong>Step 5</strong> Verify index↔disk diff empty: reconcileIndex adds=11 (incl. ch_mete_s3_ddrd), removes=3; awk-проверка пустых секций прошла ✓</li>
+    <li><strong>Step 6</strong> Update docs/wiki: <code>operations.md</code> +8 строк, <code>retrieval.md</code> +2 строки; iwiki index обновлён ✓</li>
+    <li><strong>Step 7</strong> Final commit: в diff ✓</li>
+  </ul>
+</details>
+
+<!-- ── Spec Coverage ──────────────────────────────────────────────────────── -->
+<h2>Покрытие spec / Verification Criteria</h2>
+
+<p class="sub">Intent: не найден (chain.intent: null) — Spec использована как верхнеуровневый контракт.</p>
+
+<table class="rpt-table">
+  <thead><tr><th>#</th><th>Verification Criterion (spec)</th><th>Статус</th><th>Свидетельство в diff</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>После ingest/lint grep не находит <code>[[ch_mete_s3_ddrdrg]]</code> в страницах</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+      <td><code>stripDeadLinks</code> в ingest + lint; Task 6 Step 4 — 0 результатов</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>Index ↔ disk diff пустой: каждый файл в индексе, каждая запись имеет файл</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+      <td><code>reconcileIndex</code> adds=11, removes=3; Task 6 Step 5</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>ch_mete_s3_ddrd появляется в <code>_index.md</code> и возвращается в запросах</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+      <td><code>reconcileIndex</code> добавляет его; <code>retrieval.md</code> обновлён (fallback → embedding)</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>Новые eval тесты проходят; нет новых ошибок tsc в тронутых файлах</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+      <td>23/23 passing; npm run lint 0 errors</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Покрытие компонентных требований spec</h3>
+<table class="rpt-table">
+  <thead><tr><th>Компонент / раздел spec</th><th>Требование</th><th>Статус</th></tr></thead>
+  <tbody>
+    <tr>
+      <td rowspan="3">Component 1<br><code>stripDeadLinks</code></td>
+      <td>Удаление мёртвых ссылок из тела, cleanup whitespace/punctuation</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+    </tr>
+    <tr>
+      <td>Ресинк <code>wiki_outgoing_links</code> из очищенного тела</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+    </tr>
+    <tr>
+      <td>Ссылки на source notes не считаются мёртвыми (knownStems)</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+    </tr>
+    <tr>
+      <td rowspan="3">Component 2<br><code>deriveFallbackAnnotation</code></td>
+      <td>H1 + first sentence + Type, однострочный</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+    </tr>
+    <tr>
+      <td>Усечение ≤800 символов</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+    </tr>
+    <tr>
+      <td>Fallback entityType → "general"</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+    </tr>
+    <tr>
+      <td rowspan="3">Component 3<br><code>reconcileIndex</code></td>
+      <td>Добавляет страницы, отсутствующие в индексе (с real или fallback annotation)</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+    </tr>
+    <tr>
+      <td>Удаляет orphan-записи без файла на диске</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+    </tr>
+    <tr>
+      <td>Секция через deriveSection; не трогает файлы страниц</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+    </tr>
+    <tr>
+      <td>Integration<br><code>ingest.ts</code></td>
+      <td>Wire в fixWikiLinks step; always-index (убран <code>if annotation</code>); reconcile после delete loop</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+    </tr>
+    <tr>
+      <td>Integration<br><code>lint.ts</code></td>
+      <td>Always-on post-loop strip + reconcile; работает без LLM</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+    </tr>
+    <tr>
+      <td>Testing</td>
+      <td>Headless eval: все три функции; edge cases</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+    </tr>
+    <tr>
+      <td>Docs update</td>
+      <td><code>operations.md</code> (Link &amp; Index Hygiene), <code>retrieval.md</code> (Embedding Cache)</td>
+      <td><span class="badge ok">ПОКРЫТ</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="stats-row">
+  <div class="stat-card"><div class="num num-ok">4/4</div><div class="lbl">Verification Criteria</div></div>
+  <div class="stat-card"><div class="num num-ok">7/7</div><div class="lbl">Spec components</div></div>
+  <div class="stat-card"><div class="num num-info">—</div><div class="lbl">Intent outcomes</div></div>
+</div>
+
+<!-- ── Findings ──────────────────────────────────────────────────────────── -->
+<h2>Findings</h2>
+
+<table class="rpt-table">
+  <thead><tr><th>Severity</th><th>Тип</th><th>Описание</th><th>Примечание</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="badge warn">WARNING</span></td>
+      <td>Excess change</td>
+      <td><code>docs/superpowers/reports/plans/2026-06-22-wiki-link-index-hygiene-check.html</code> изменён — нет явного шага плана</td>
+      <td>Нормальный side-effect check-plan workflow; не нарушение</td>
+    </tr>
+    <tr>
+      <td><span class="badge warn">WARNING</span></td>
+      <td>Excess change</td>
+      <td><code>docs/superpowers/reports/specs/2026-06-22-wiki-dead-links-index-reconciliation-design-check.html</code> изменён — нет явного шага плана</td>
+      <td>Нормальный side-effect check-spec workflow; не нарушение</td>
+    </tr>
+    <tr>
+      <td><span class="badge info">INFO</span></td>
+      <td>Deviation (улучшение)</td>
+      <td>Eval расширен сверх плана: тест «adjacent dead links», CRLF frontmatter, code fence skip в stripDeadLinks/deriveFallbackAnnotation</td>
+      <td>Расширение coverage — не нарушение, улучшение</td>
+    </tr>
+    <tr>
+      <td><span class="badge info">INFO</span></td>
+      <td>Deviation (улучшение)</td>
+      <td><code>deriveFallbackAnnotation</code>: вместо простого <code>find</code> — цикл с пропуском code fences и blockquotes</td>
+      <td>Закрывает edge cases; сигнатура и контракт соответствуют плану и spec</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ── Excess Changes ────────────────────────────────────────────────────── -->
+<h2>Excess Changes</h2>
+<table class="rpt-table">
+  <thead><tr><th>Файл</th><th>Severity</th><th>Пояснение</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>docs/superpowers/reports/plans/…-check.html</code></td>
+      <td><span class="badge warn">WARNING</span></td>
+      <td>Артефакт check-plan gate — не нарушение</td>
+    </tr>
+    <tr>
+      <td><code>docs/superpowers/reports/specs/…-check.html</code></td>
+      <td><span class="badge warn">WARNING</span></td>
+      <td>Артефакт check-spec gate — не нарушение</td>
+    </tr>
+    <tr>
+      <td><code>docs/wiki/.iwiki/index.jsonl</code>, <code>log.jsonl</code></td>
+      <td><span class="badge info">INFO</span></td>
+      <td>Side-effect iwiki-ingest (Task 6 Step 6) — ожидаемо</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ── Summary ───────────────────────────────────────────────────────────── -->
+<h2>Сводка</h2>
+
+<table class="rpt-table">
+  <thead><tr><th>Severity</th><th>Количество</th><th>Описание</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge miss">CRITICAL</span></td><td>0</td><td>Нет отсутствующих шагов</td></tr>
+    <tr><td><span class="badge warn">WARNING</span></td><td>2</td><td>Excess HTML-отчёты (check-plan, check-spec) — артефакты gate workflow, не нарушения</td></tr>
+    <tr><td><span class="badge info">INFO</span></td><td>2</td><td>Eval расширен доп. тестами; deriveFallbackAnnotation улучшена (code fence skip)</td></tr>
+  </tbody>
+</table>
+
+<div class="verdict-ok">
+  <div>
+    <div class="v-label">✓ OK</div>
+    <div>Все 6 задач полностью выполнены &nbsp;·&nbsp; 0 CRITICAL &nbsp;·&nbsp; 4/4 Verification Criteria покрыты &nbsp;·&nbsp; docs/wiki обновлены</div>
+  </div>
+</div>
+
+<div class="note">
+  <strong>Frontier gate:</strong> <code>result_check.verdict: OK</code> записан во frontmatter плана (plan_hash: <code>ba2c925c841559e6</code>, last_run: 2026-06-22). Ветка готова к merge/PR.
+</div>
+
+<p class="sub" style="margin-top:2rem;">
+  Цепочка: <em>(intent отсутствует)</em>
+  → <code>docs/superpowers/specs/2026-06-22-wiki-dead-links-index-reconciliation-design.md</code>
+  → <code>docs/superpowers/plans/2026-06-22-wiki-link-index-hygiene.md</code>
+  &nbsp;·&nbsp; Report generated 2026-06-22
+</p>
+
+</main>
+</body>
+</html>
