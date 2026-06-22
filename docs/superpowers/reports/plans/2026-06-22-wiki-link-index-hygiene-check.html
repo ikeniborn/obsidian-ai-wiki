@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка плана — Wiki Link & Index Hygiene</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+.theme-btn{
+  position:sticky; top:.5rem; float:right; z-index:5;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+h1{font-size:1.6rem; margin:.2rem 0 .2rem; color:var(--accent-2);}
+h2{font-size:1.2rem; margin:2rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.25rem;}
+h3{font-size:1rem; margin:1.2rem 0 .4rem; color:var(--muted);}
+.lead{color:var(--muted); margin:.2rem 0 1rem;}
+code{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.85em;
+  background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .3rem; border-radius:4px;}
+table{border-collapse:collapse; width:100%; margin:.6rem 0; font-size:.92rem;}
+th,td{border:1px solid var(--border); padding:.4rem .55rem; text-align:left; vertical-align:top;}
+th{background:color-mix(in srgb,var(--accent) 16%, var(--surface)); color:var(--fg);}
+tbody tr:nth-child(even){background:var(--zebra);}
+.badge{display:inline-block; padding:.08rem .5rem; border-radius:999px; font-size:.78rem; font-weight:600; white-space:nowrap;}
+.b-ok{background:color-mix(in srgb,var(--ok) 22%, var(--surface)); color:var(--ok-2); border:1px solid var(--ok);}
+.b-warn{background:color-mix(in srgb,var(--warn) 22%, var(--surface)); color:var(--warn-2); border:1px solid var(--warn);}
+.b-danger{background:color-mix(in srgb,var(--danger) 22%, var(--surface)); color:var(--danger-2); border:1px solid var(--danger);}
+.b-fixed{background:color-mix(in srgb,var(--accent) 22%, var(--surface)); color:var(--accent-2); border:1px solid var(--accent);}
+.verdict{font-size:1.25rem; font-weight:700; padding:.6rem 1rem; border-radius:10px; display:inline-block; margin:.4rem 0;
+  background:color-mix(in srgb,var(--ok) 18%, var(--surface)); color:var(--ok-2); border:1px solid var(--ok); box-shadow:0 2px 8px var(--shadow);}
+.note{background:color-mix(in srgb,var(--accent) 10%, var(--surface)); border-left:4px solid var(--accent);
+  padding:.5rem .8rem; border-radius:0 6px 6px 0; margin:.8rem 0; color:var(--muted);}
+.hashrow{font-family:ui-monospace,monospace; font-size:.82rem;}
+figure{margin:.8rem 0; padding:1rem; background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:0 1px 6px var(--shadow);}
+figcaption{color:var(--muted); font-size:.85rem; margin-top:.5rem;}
+.chain{font-family:ui-monospace,monospace; font-size:.82rem; word-break:break-all;}
+.graph circle, .graph rect{transition:stroke-width .15s;}
+.legend{display:flex; gap:1.2rem; flex-wrap:wrap; font-size:.82rem; color:var(--muted); margin-top:.4rem;}
+.legend span::before{content:"●"; margin-right:.3rem;}
+.l-fn::before{color:var(--accent);} .l-wire::before{color:var(--warn);} .l-verify::before{color:var(--ok);}
+.matrix td.hit{background:color-mix(in srgb,var(--accent) 26%, var(--surface)); text-align:center; font-weight:700; color:var(--accent-2);}
+.matrix td.cell{text-align:center; color:var(--muted);}
+details{margin:.4rem 0;} summary{cursor:pointer; font-weight:600;}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+
+<h1>Проверка плана — Wiki Dead-Link Removal &amp; Index Reconciliation</h1>
+<p class="lead">Повторный прогон <code>/check-plan</code> после правок, закрывающих F-001 и F-002. Дата: 2026-06-22.</p>
+
+<div class="verdict">Вердикт: OK — план соответствует спецификации</div>
+
+<h2>Файлы и хеши</h2>
+<table>
+<thead><tr><th>Артефакт</th><th>Путь</th><th>Хеш тела (текущий)</th><th>Прежний</th></tr></thead>
+<tbody>
+<tr><td>План</td><td><code>docs/superpowers/plans/2026-06-22-wiki-link-index-hygiene.md</code></td><td class="hashrow">ba2c925c841559e6</td><td class="hashrow">1047a9f04da9da51</td></tr>
+<tr><td>Спека</td><td><code>docs/superpowers/specs/2026-06-22-wiki-dead-links-index-reconciliation-design.md</code></td><td class="hashrow">5ac0478ad0860003</td><td class="hashrow">5ac0478ad0860003</td></tr>
+</tbody>
+</table>
+<div class="note">Хеш тела плана изменился (правки F-001/F-002) → quick-exit по кэшу не сработал, выполнен полный повторный прогон 5 фаз. Хеш спеки не менялся.</div>
+
+<h2>1. Резюме плана — задачи, шаги и критерии готовности (DoD)</h2>
+<table>
+<thead><tr><th>Задача / Шаг</th><th>Действие</th><th>Критерий готовности (DoD)</th></tr></thead>
+<tbody>
+<tr><td><b>Task 1</b> · <code>stripDeadLinks</code> (wiki-link-validator.ts)</td><td>Удалять мёртвые <code>[[links]]</code> из тела, чистить пробелы/пунктуацию, ре-синк <code>wiki_outgoing_links</code></td><td>Eval <code>=== stripDeadLinks ===</code> зелёный (Step 5); <code>tsc</code> без новых ошибок в файле (Step 6); коммит (Step 7)</td></tr>
+<tr><td><b>Task 2</b> · <code>deriveFallbackAnnotation</code> (wiki-index.ts)</td><td>Детерминированная одностроч. аннотация: H1 + первое предложение + Type</td><td>Eval <code>=== deriveFallbackAnnotation ===</code> зелёный (Step 4); <code>tsc</code> чисто в файле (Step 5); коммит (Step 6)</td></tr>
+<tr><td><b>Task 3</b> · <code>reconcileIndex</code> (wiki-index.ts)</td><td>Двунаправленный diff <code>_index.md</code> ↔ диск: adds (с fallback) и removes (orphan)</td><td>Eval <code>=== reconcileIndex ===</code> зелёный (Step 4); <code>tsc</code> чисто (Step 5); коммит (Step 6)</td></tr>
+<tr><td><b>Task 4</b> · wiring в <code>ingest.ts</code></td><td>Strip после fixWikiLinks; always-index; reconcile после delete-цикла</td><td><code>tsc</code> без новых ошибок (Step 5); <code>npm run lint</code> чисто (Step 6); коммит (Step 7)</td></tr>
+<tr><td><b>Task 5</b> · wiring в <code>lint.ts</code></td><td>Strip всех тел (always-on) + двунаправленный reconcile в post-loop</td><td><code>tsc</code> без новых ошибок (Step 4); <code>npm run lint</code> чисто (Step 5); коммит (Step 6)</td></tr>
+<tr><td><b>Task 6</b> · сборка, eval, ручная проверка на <code>rtk-task</code></td><td>Prod-build; полный eval; lint без LLM на фикстуре; критерии 1-3</td><td>build ок (Step 1); eval 0 failed (Step 2); нет dead-link <code>ddrdrg</code> (Step 4); пустой index↔disk diff + <b>нет пустых секций</b> (Step 5); iwiki (Step 6); коммит (Step 7)</td></tr>
+</tbody>
+</table>
+
+<h2>2. Схемы зависимостей и пересечений</h2>
+
+<h3>Граф зависимостей шагов (узлы — задачи, рёбра M→N: результат M используется в N)</h3>
+<figure class="graph">
+<svg viewBox="0 0 720 280" width="100%" role="img" aria-label="граф зависимостей задач">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+    </marker>
+  </defs>
+  <!-- edges: T1->T4, T1->T5; T2->T3, T2->T4; T3->T4, T3->T5; T4->T6, T5->T6 -->
+  <line x1="95"  y1="60"  x2="350" y2="60"  stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="95"  y1="60"  x2="350" y2="150" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="95"  y1="150" x2="190" y2="150" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="245" y1="150" x2="350" y2="60"  stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="245" y1="150" x2="350" y2="150" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="445" y1="60"  x2="600" y2="135" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="445" y1="150" x2="600" y2="145" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- nodes -->
+  <g>
+    <rect x="40" y="42" width="55" height="36" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+    <text x="67" y="65" text-anchor="middle" font-size="13" fill="var(--fg)">T1</text>
+
+    <rect x="40" y="132" width="55" height="36" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+    <text x="67" y="155" text-anchor="middle" font-size="13" fill="var(--fg)">T2</text>
+
+    <rect x="190" y="132" width="55" height="36" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+    <text x="217" y="155" text-anchor="middle" font-size="13" fill="var(--fg)">T3</text>
+
+    <rect x="350" y="42" width="95" height="36" rx="8" fill="var(--surface)" stroke="var(--warn)" stroke-width="2"/>
+    <text x="397" y="65" text-anchor="middle" font-size="12" fill="var(--fg)">T4 ingest</text>
+
+    <rect x="350" y="132" width="95" height="36" rx="8" fill="var(--surface)" stroke="var(--warn)" stroke-width="2"/>
+    <text x="397" y="155" text-anchor="middle" font-size="12" fill="var(--fg)">T5 lint</text>
+
+    <rect x="600" y="118" width="95" height="40" rx="8" fill="var(--surface)" stroke="var(--ok)" stroke-width="2"/>
+    <text x="647" y="143" text-anchor="middle" font-size="12" fill="var(--fg)">T6 verify</text>
+  </g>
+</svg>
+<figcaption>Все рёбра направлены слева направо (M&lt;N) — циклов и нарушений порядка фаза <code>dependencies</code> не нашла. Чистые функции T1-T3 потребляются wiring-задачами T4/T5, которые проверяются в T6.</figcaption>
+<div class="legend"><span class="l-fn">чистые функции (T1-T3)</span><span class="l-wire">интеграция (T4-T5)</span><span class="l-verify">верификация (T6)</span></div>
+</figure>
+
+<h3>Матрица пересечений по артефактам (какие задачи трогают один файл)</h3>
+<table class="matrix">
+<thead><tr><th>Файл / артефакт</th><th>T1</th><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th></tr></thead>
+<tbody>
+<tr><td><code>src/wiki-link-validator.ts</code></td><td class="hit">✓</td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td></tr>
+<tr><td><code>src/wiki-index.ts</code></td><td class="cell">·</td><td class="hit">✓</td><td class="hit">✓</td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td></tr>
+<tr><td><code>eval/wiki-hygiene/run.ts</code></td><td class="hit">✓</td><td class="hit">✓</td><td class="hit">✓</td><td class="cell">·</td><td class="cell">·</td><td class="hit">✓</td></tr>
+<tr><td><code>src/phases/ingest.ts</code></td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td><td class="hit">✓</td><td class="cell">·</td><td class="cell">·</td></tr>
+<tr><td><code>src/phases/lint.ts</code></td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td><td class="hit">✓</td><td class="cell">·</td></tr>
+</tbody>
+</table>
+<div class="note">Пересечения упорядочены: <code>wiki-index.ts</code> делят только T2 и T3 (T3 идёт после T2 — порядок верный); общий eval-харнесс <code>run.ts</code> расширяется последовательно T1→T2→T3 и запускается целиком в T6. Конфликтов записи в один файл вне порядка нет.</div>
+
+<h3>Покрытие требований спеки (требование → шаги плана)</h3>
+<table>
+<thead><tr><th>Требование спеки</th><th>Покрыто в плане</th></tr></thead>
+<tbody>
+<tr><td>Component 1 — <code>stripDeadLinks</code> (тело + ре-синк fm, unconditional)</td><td>Task 1; интеграция Task 4 Step 2, Task 5 Step 2</td></tr>
+<tr><td>Component 2 — <code>deriveFallbackAnnotation</code> (H1+предложение+Type, ≤800)</td><td>Task 2; always-index Task 4 Step 3</td></tr>
+<tr><td>Component 3 — <code>reconcileIndex</code> (двунаправленный diff)</td><td>Task 3; reconcile Task 4 Step 4, Task 5 Step 3</td></tr>
+<tr><td>Integration ingest / lint (prevention + cure, без LLM)</td><td>Task 4, Task 5</td></tr>
+<tr><td>Testing (3 функции, headless eval)</td><td>Task 1/2/3 evals; полный прогон Task 6 Step 2</td></tr>
+<tr><td>Verification criteria 1-3 на <code>rtk-task</code></td><td>Task 6 Steps 4-5</td></tr>
+</tbody>
+</table>
+
+<h2>3. Результаты проверки</h2>
+<h3>Статусы фаз</h3>
+<table>
+<thead><tr><th>Фаза</th><th>Статус</th><th>Комментарий</th></tr></thead>
+<tbody>
+<tr><td>1. structure</td><td><span class="badge b-ok">passed</span></td><td>Нет плейсхолдеров (TODO/TBD/???/FIXME); Task 1-6 и шаги нумерованы без пропусков/дублей</td></tr>
+<tr><td>2. coverage</td><td><span class="badge b-ok">passed</span></td><td>Все требования спеки (Component 1-3, integration, testing, criteria) покрыты ≥1 шагом; лишних шагов нет</td></tr>
+<tr><td>3. dependencies</td><td><span class="badge b-ok">passed</span></td><td>Порядок T1-T3 (функции) → T4-T5 (wiring) → T6 (verify); циклов нет; импортируемые артефакты создаются раньше потребления</td></tr>
+<tr><td>4. verifiability</td><td><span class="badge b-ok">passed</span></td><td>Каждый шаг имеет команду + ожидаемый вывод (eval/tsc/lint/grep/build)</td></tr>
+<tr><td>5. consistency</td><td><span class="badge b-ok">passed</span></td><td>Хеш тела плана пересчитан; правки локализованы в Notes/deviations + Task 6 Step 5; спека не менялась</td></tr>
+</tbody>
+</table>
+
+<h3>Findings</h3>
+<table>
+<thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Текст</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr>
+  <td>F-001</td><td><span class="badge b-warn">WARNING</span></td>
+  <td>Task 3 / spec Component 3</td>
+  <td>Сигнатура <code>reconcileIndex</code> отличается от иллюстративной формы в спеке; раньше «Notes / deviations» не фиксировала это изменение.</td>
+  <td><span class="badge b-fixed">fixed</span></td>
+</tr>
+<tr>
+  <td>F-002</td><td><span class="badge b-warn">WARNING</span></td>
+  <td>Task 5 Step 3 / spec Testing</td>
+  <td>Спека требует «empty-section cleanup on removal», но в плане не было assertion, что <code>removeIndexAnnotation</code> удаляет опустевшую секцию.</td>
+  <td><span class="badge b-fixed">fixed</span></td>
+</tr>
+</tbody>
+</table>
+
+<details>
+<summary>Как закрыты F-001 и F-002 (детали)</summary>
+<p><b>F-001 — fixed.</b> В раздел «Notes / deviations from spec» (строка 771) добавлен буллет, фиксирующий расхождение сигнатуры: спека рисует <code>reconcileIndex(indexContent, pageFiles, getAnnotation) → adds:{pid,section,annotation}</code>, план использует <code>reconcileIndex(indexContent, wikiFolder, pages[{path,content,annotation?}]) → adds:{pid,annotation,fullPath}</code> с обоснованием (fallback-deriver вызывается внутри, <code>wikiFolder</code> нужен для секции, <code>fullPath</code> — для <code>upsertIndexAnnotation</code>). Жалоба finding'а («секция не записывает изменение») снята.</p>
+<p><b>F-002 — fixed.</b> Добавлен буллет (строка 772): очистка пустых секций делегирована действующей в проде <code>removeIndexAnnotation</code> (<code>src/wiki-index.ts:106-116</code>); headless-eval не добавляется (функция async + завязана на VaultTools, <code>--format=cjs</code> не поддерживает top-level await). Вместо него Task 6 Step 5 содержит явную проверку пустых секций (<code>awk</code>-чек + строка ожидания «закрывает check-plan F-002 end-to-end»). Пробел в покрытии закрыт.</p>
+</details>
+
+<h3>Сводка</h3>
+<table>
+<thead><tr><th>Метрика</th><th>Значение</th></tr></thead>
+<tbody>
+<tr><td>CRITICAL open</td><td><span class="badge b-ok">0</span></td></tr>
+<tr><td>WARNING open</td><td><span class="badge b-ok">0</span></td></tr>
+<tr><td>F-001</td><td><span class="badge b-fixed">fixed</span> (было WARNING / open)</td></tr>
+<tr><td>F-002</td><td><span class="badge b-fixed">fixed</span> (было WARNING / open)</td></tr>
+<tr><td>Новые findings</td><td><span class="badge b-ok">нет</span></td></tr>
+<tr><td><b>Итоговый вердикт</b></td><td><b>OK</b> — план готов к исполнению</td></tr>
+</tbody>
+</table>
+
+<h3>Chain</h3>
+<p class="chain">intent: null → spec: docs/superpowers/specs/2026-06-22-wiki-dead-links-index-reconciliation-design.md → plan: docs/superpowers/plans/2026-06-22-wiki-link-index-hygiene.md</p>
+
+</body>
+</html>

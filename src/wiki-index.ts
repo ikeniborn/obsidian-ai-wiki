@@ -1,5 +1,6 @@
 import type { VaultTools } from "./vault-tools";
 import { domainIndexPath } from "./wiki-path";
+import { GENERIC_WIKI_STEM_REGEX } from "./wiki-stem";
 
 export function parseIndexAnnotations(content: string): Map<string, string> {
   const map = new Map<string, string>();
@@ -12,6 +13,37 @@ export function parseIndexAnnotations(content: string): Map<string, string> {
     map.set(pid, m[2].trim());
   }
   return map;
+}
+
+// Deterministic one-line annotation for pages the LLM left un-annotated, so they
+// still get an index entry (and therefore an embedding) and become retrievable.
+// LLM lint later upgrades it to a full Covers:/Type:/Terms: annotation.
+export function deriveFallbackAnnotation(content: string, entityType?: string): string {
+  const body = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+  const h1 = (body.match(/^#\s+(.+)$/m)?.[1] ?? "").trim() || "(untitled)";
+
+  let firstLine = "";
+  let inFence = false;
+  for (const l of body.split("\n")) {
+    const t = l.trim();
+    if (t.startsWith("```")) { inFence = !inFence; continue; }
+    if (inFence) continue;
+    if (t && !t.startsWith("#") && !t.startsWith("|") && !t.startsWith("---") && !t.startsWith(">")) {
+      firstLine = l;
+      break;
+    }
+  }
+  const trimmed = firstLine.trim();
+  const sentence = trimmed.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? trimmed;
+
+  const type = (entityType ?? "").trim() || "general";
+  const unwrap = (s: string) => s.replace(/\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]/g, "$1");
+
+  let out = `${unwrap(h1)} — ${unwrap(sentence)} Type: ${type}`
+    .replace(/\s+/g, " ")
+    .trim();
+  if (out.length > 800) out = out.slice(0, 797).trimEnd() + "...";
+  return out;
 }
 
 function deriveSection(wikiFolder: string, fullPath?: string): string {
@@ -116,4 +148,39 @@ export async function removeIndexAnnotation(
   }
 
   await vaultTools.write(indexPath, without.join("\n"));
+}
+
+export interface IndexReconcile {
+  adds: Array<{ pid: string; annotation: string; fullPath: string }>;
+  removes: string[];
+}
+
+// Bidirectional diff between _index.md and the on-disk page set.
+// `pages` MUST be the complete domain page set, or live pages would be
+// mis-flagged as orphans. Meta files (_*) and stems failing the wiki mask
+// are ignored. Caller applies adds via upsertIndexAnnotation and removes via
+// removeIndexAnnotation.
+export function reconcileIndex(
+  indexContent: string,
+  wikiFolder: string,
+  pages: Array<{ path: string; content: string; annotation?: string }>,
+): IndexReconcile {
+  const indexed = new Set(parseIndexAnnotations(indexContent).keys());
+  const onDisk = new Set<string>();
+  const adds: IndexReconcile["adds"] = [];
+
+  for (const p of pages) {
+    const stem = p.path.split("/").pop()!.replace(/\.md$/, "");
+    if (stem.startsWith("_") || !GENERIC_WIKI_STEM_REGEX.test(stem)) continue;
+    onDisk.add(stem);
+    if (indexed.has(stem)) continue;
+    const entityType = deriveSection(wikiFolder, p.path);
+    const annotation = (p.annotation && p.annotation.trim())
+      ? p.annotation
+      : deriveFallbackAnnotation(p.content, entityType);
+    adds.push({ pid: stem, annotation, fullPath: p.path });
+  }
+
+  const removes = [...indexed].filter((pid) => !onDisk.has(pid));
+  return { adds, removes };
 }

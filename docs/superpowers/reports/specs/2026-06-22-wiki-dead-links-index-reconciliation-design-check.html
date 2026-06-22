@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка спецификации — Wiki Dead-Link Removal &amp; Index Reconciliation</title>
+<style>
+  :root{
+    --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+    --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+    --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+    --shadow:rgba(40,40,80,.18);
+  }
+  body:has(#theme-toggle:checked){
+    --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+    --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+    --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+    --shadow:rgba(0,0,0,.45);
+  }
+  body{
+    margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1100px;
+    font:16px/1.55 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background:
+      radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+      var(--bg);
+    color:var(--fg);
+    transition:background .3s, color .3s;
+  }
+  .theme-btn{
+    position:sticky; top:.5rem; float:right; z-index:5;
+    cursor:pointer; user-select:none;
+    padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+    background:var(--surface);
+  }
+  h1{font-size:1.7rem; margin:.2rem 0 .3rem; line-height:1.25;}
+  h2{font-size:1.28rem; margin:2.2rem 0 .8rem; padding-bottom:.3rem; border-bottom:2px solid var(--border); color:var(--accent);}
+  h3{font-size:1.05rem; margin:1.4rem 0 .5rem; color:var(--accent-2);}
+  a{color:var(--accent);}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.86em;
+       background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05em .35em; border-radius:4px;}
+  .sub{color:var(--muted); font-size:.95rem;}
+  .meta{display:flex; flex-wrap:wrap; gap:.5rem .8rem; margin:.6rem 0 0;}
+  .pill{display:inline-block; padding:.15rem .6rem; border-radius:999px; border:1px solid var(--border);
+        background:var(--surface); font-size:.83rem;}
+  .verdict-banner{
+    margin:1.4rem 0; padding:1rem 1.2rem; border-radius:10px; font-size:1.15rem; font-weight:700;
+    border:1px solid color-mix(in srgb,var(--ok) 50%, var(--border));
+    background:color-mix(in srgb,var(--ok) 16%, var(--surface)); color:var(--ok-2);
+    box-shadow:0 2px 10px var(--shadow);
+  }
+  table{border-collapse:collapse; width:100%; margin:.6rem 0 1.2rem; background:var(--surface);
+        box-shadow:0 1px 8px var(--shadow); border-radius:8px; overflow:hidden;}
+  th,td{text-align:left; padding:.55rem .7rem; border-bottom:1px solid var(--border); vertical-align:top;}
+  th{background:color-mix(in srgb,var(--accent) 16%, var(--surface)); font-size:.82rem; text-transform:uppercase; letter-spacing:.03em;}
+  tbody tr:nth-child(even){background:var(--zebra);}
+  td.sec{white-space:nowrap; font-weight:600; color:var(--accent-2);}
+  .badge{display:inline-block; min-width:1.4rem; text-align:center; padding:.08rem .5rem; border-radius:6px;
+         font-size:.8rem; font-weight:700; border:1px solid transparent;}
+  .b-ok{background:color-mix(in srgb,var(--ok) 22%, var(--surface)); color:var(--ok-2); border-color:color-mix(in srgb,var(--ok) 45%, transparent);}
+  .b-warn{background:color-mix(in srgb,var(--warn) 22%, var(--surface)); color:var(--warn-2); border-color:color-mix(in srgb,var(--warn) 45%, transparent);}
+  .b-crit{background:color-mix(in srgb,var(--danger) 22%, var(--surface)); color:var(--danger-2); border-color:color-mix(in srgb,var(--danger) 45%, transparent);}
+  .b-zero{background:color-mix(in srgb,var(--accent) 12%, var(--surface)); color:var(--muted);}
+  .note{margin:1rem 0; padding:.7rem 1rem; border-left:4px solid var(--accent);
+        background:color-mix(in srgb,var(--accent) 10%, var(--surface)); border-radius:0 8px 8px 0;}
+  .note.muted{border-left-color:var(--line);}
+  figure{margin:1rem 0 1.6rem;}
+  figcaption{color:var(--muted); font-size:.85rem; margin-top:.4rem; text-align:center;}
+  /* ---- block/flow diagram (CSS) ---- */
+  .flow{display:flex; flex-direction:column; gap:.9rem; padding:1rem; background:var(--surface);
+        border:1px solid var(--border); border-radius:10px; box-shadow:0 1px 8px var(--shadow);}
+  .flow-row{display:flex; flex-wrap:wrap; align-items:stretch; gap:.7rem; justify-content:center;}
+  .node{flex:1 1 200px; min-width:180px; max-width:300px; padding:.6rem .75rem; border-radius:8px;
+        border:1px solid var(--border); background:color-mix(in srgb,var(--accent) 7%, var(--surface));}
+  .node .nt{font-weight:700; font-size:.92rem;}
+  .node .nd{font-size:.8rem; color:var(--muted); margin-top:.2rem;}
+  .node.entry{border-color:color-mix(in srgb,var(--accent) 55%, var(--border)); background:color-mix(in srgb,var(--accent) 16%, var(--surface));}
+  .node.comp{border-color:color-mix(in srgb,var(--warn) 45%, var(--border)); background:color-mix(in srgb,var(--warn) 10%, var(--surface));}
+  .node.art{border-color:color-mix(in srgb,var(--ok) 45%, var(--border)); background:color-mix(in srgb,var(--ok) 10%, var(--surface));}
+  .arrow{align-self:center; color:var(--accent); font-size:1.4rem; line-height:1;}
+  .lane-title{font-size:.78rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); text-align:center; margin-bottom:.1rem;}
+  .legend{display:flex; flex-wrap:wrap; gap:.6rem; margin:.5rem 0 0; font-size:.8rem; color:var(--muted);}
+  .legend span{display:inline-flex; align-items:center; gap:.3rem;}
+  .sw{width:.85rem; height:.85rem; border-radius:3px; display:inline-block; border:1px solid var(--border);}
+  .sw.entry{background:color-mix(in srgb,var(--accent) 30%, var(--surface));}
+  .sw.comp{background:color-mix(in srgb,var(--warn) 30%, var(--surface));}
+  .sw.art{background:color-mix(in srgb,var(--ok) 30%, var(--surface));}
+  .rpt-graph{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:.6rem; box-shadow:0 1px 8px var(--shadow); overflow-x:auto;}
+  .phase-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:.8rem; margin:.6rem 0 1rem;}
+  .phase-card{padding:.8rem .9rem; border-radius:9px; border:1px solid color-mix(in srgb,var(--ok) 40%, var(--border));
+              background:color-mix(in srgb,var(--ok) 9%, var(--surface));}
+  .phase-card .ph{display:flex; justify-content:space-between; align-items:center; font-weight:700;}
+  .phase-card .pd{font-size:.82rem; color:var(--muted); margin-top:.35rem;}
+  .empty{padding:.8rem 1rem; text-align:center; color:var(--muted); font-style:italic;
+         background:var(--surface); border:1px dashed var(--border); border-radius:8px;}
+  footer{margin-top:2.5rem; padding-top:1rem; border-top:1px solid var(--border); color:var(--muted); font-size:.85rem;}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+
+<main class="report">
+  <p class="sub">Отчёт проверки спецификации · <code>/check-spec</code> · фазовая модель + state во frontmatter</p>
+  <h1>Wiki Dead-Link Removal &amp; Index Reconciliation — Design</h1>
+  <div class="meta">
+    <span class="pill">📅 2026-06-22</span>
+    <span class="pill">🌿 <code>dev/wiki-link-index-hygiene</code></span>
+    <span class="pill">🏷 Design — awaiting review</span>
+    <span class="pill">🔑 spec_hash: <code>fe5ffdf2aff9c8e2</code></span>
+  </div>
+
+  <div class="verdict-banner">✅ Вердикт: OK — спецификация прошла проверку (0 CRITICAL, 0 WARNING, 0 INFO)</div>
+
+  <!-- ================= БЛОК 1 ================= -->
+  <h2>1. Резюме спецификации</h2>
+
+  <p class="sub">Спека описывает два детерминированных исправления плагина Obsidian AI-wiki: удаление мёртвых ссылок и двунаправленную реконсиляцию <code>_index.md</code> с fallback-аннотацией. Корень обеих проблем — инварианты были только промпт-инструкциями к LLM, а не принудительно проверяемыми правилами.</p>
+
+  <h3>Требования (по секциям)</h3>
+  <table>
+    <thead><tr><th>Секция</th><th>Требование</th></tr></thead>
+    <tbody>
+      <tr><td class="sec">§Approach · Component 1</td><td><code>stripDeadLinks(content, knownStems)</code> в <code>src/wiki-link-validator.ts</code>: удаляет из <strong>тела</strong> каждый <code>[[stem]]</code>, где <code>stem ∉ knownStems</code>; чистит артефакты (двойные пробелы, висячие <code>,</code>/<code>.</code>/<code>;</code>, trailing); пустые ячейки таблиц оставляет; пере-выводит <code>wiki_outgoing_links</code> из очищенного тела через <code>setFmLinks</code>; запускается <strong>безусловно</strong> внутри <code>fixWikiLinks</code>.</td></tr>
+      <tr><td class="sec">§Approach · Component 2</td><td><code>deriveFallbackAnnotation(content, entityType?)</code> в <code>src/wiki-index.ts</code>: вывод <code>"&lt;H1&gt; — &lt;первое непустое предложение&gt;. Type: &lt;entityType ?? 'general'&gt;"</code>, одна строка, обрезка ~600–800 символов; <code>entityType</code> из подпапки/frontmatter, fallback <code>general</code>.</td></tr>
+      <tr><td class="sec">§Approach · Component 3</td><td><code>reconcileIndex(indexContent, pageFiles, getAnnotation) → {adds, removes}</code> в <code>src/wiki-index.ts</code>. <strong>Add:</strong> файл-страница проходит <code>GENERIC_WIKI_STEM_REGEX</code>, не <code>_*</code>, pid отсутствует в индексе (аннотация = аннотация прогона или <code>deriveFallbackAnnotation</code>; секция через <code>deriveSection</code>). <strong>Remove:</strong> pid в индексе без файла на диске. Применяется через <code>upsertIndexAnnotation</code> / <code>removeIndexAnnotation</code>.</td></tr>
+      <tr><td class="sec">§Integration · ingest.ts</td><td><code>stripDeadLinks</code> встроен в шаг <code>fixWikiLinks</code> (~line 313); в write-loop всегда индексировать <code>page.annotation ?? deriveFallbackAnnotation</code> (заменяет skip на <code>if(page.annotation)</code> @line 408); после write-loop — <code>reconcileIndex</code> по <code>nonMetaPaths</code>.</td></tr>
+      <tr><td class="sec">§Integration · lint.ts</td><td>В always-on post-loop блоке (вне <code>if(useLlm)</code>, ~line 535): <code>stripDeadLinks</code> по каждому телу с vault-wide <code>knownStems</code> (@line 219) + ресинк frontmatter; <code>reconcileIndex</code> по страницам домена — двунаправленно, с LLM и без.</td></tr>
+      <tr><td class="sec">§Error handling</td><td>Записи в индекс не критичны (<code>try/catch /* non-critical */</code>); <code>stripDeadLinks</code> — чистая работа со строкой, на malformed-странице работает по всему контенту как по телу; <code>reconcileIndex</code> никогда не удаляет файлы страниц, только правит <code>_index.md</code>.</td></tr>
+      <tr><td class="sec">§Decisions</td><td>(1) dead link → удалить токен целиком с очисткой; (2) индекс — и предотвращение, и лечение; (3) реконсиляция двунаправленная; (4) fallback annotation = H1 + первое предложение + Type, детерминированно без LLM; (5) всё работает без LLM.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Success Criteria (§Verification criteria)</h3>
+  <table>
+    <thead><tr><th>№</th><th>Критерий приёмки</th></tr></thead>
+    <tbody>
+      <tr><td class="sec">1</td><td>После ingest <strong>или</strong> lint (LLM on/off) на <code>rtk-task</code> <code>grep</code> не находит <code>[[wiki_rtk-task_ch_mete_s3_ddrdrg]]</code> нигде (тело/frontmatter).</td></tr>
+      <tr><td class="sec">2</td><td>Diff индекс ↔ диск пустой: у каждого файла-страницы есть запись в индексе; нет записей без файла.</td></tr>
+      <tr><td class="sec">3</td><td><code>ch_mete_s3_ddrd</code> (и ещё 10 страниц) появляются в <code>_index.md</code> и после <code>refreshCache</code> возвращаются по релевантному запросу.</td></tr>
+      <tr><td class="sec">4</td><td>Новые eval-тесты проходят; нет новых <code>tsc</code>-ошибок в затронутых файлах (baseline не чист — gate только на новые ошибки).</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ================= БЛОК 2 ================= -->
+  <h2>2. Схемы решения и зависимостей</h2>
+
+  <h3>2a. Схема решения (block/flow)</h3>
+  <figure>
+    <div class="flow">
+      <div class="lane-title">Точки входа</div>
+      <div class="flow-row">
+        <div class="node entry"><div class="nt">INGEST · src/phases/ingest.ts</div><div class="nd">fixWikiLinks (~313) · write-loop индексация (@408) · post-loop reconcileIndex(nonMetaPaths)</div></div>
+        <div class="node entry"><div class="nt">LINT · src/phases/lint.ts</div><div class="nd">always-on post-loop (~535, вне if(useLlm)) · knownStems @219 · reconcileIndex по домену</div></div>
+      </div>
+      <div class="arrow">⬇</div>
+      <div class="lane-title">Детерминированные компоненты (чистые функции)</div>
+      <div class="flow-row">
+        <div class="node comp"><div class="nt">stripDeadLinks</div><div class="nd">wiki-link-validator.ts · удаляет dead [[stem]] из тела → пере-выводит wiki_outgoing_links (setFmLinks) · встроен в fixWikiLinks</div></div>
+        <div class="node comp"><div class="nt">deriveFallbackAnnotation</div><div class="nd">wiki-index.ts · H1 + 1-е предложение + Type → однострочная аннотация</div></div>
+        <div class="node comp"><div class="nt">reconcileIndex</div><div class="nd">wiki-index.ts · {adds, removes} · использует deriveFallbackAnnotation + deriveSection + GENERIC_WIKI_STEM_REGEX · применяет через upsert/removeIndexAnnotation</div></div>
+      </div>
+      <div class="arrow">⬇</div>
+      <div class="lane-title">Артефакты на диске</div>
+      <div class="flow-row">
+        <div class="node art"><div class="nt">Тела страниц + frontmatter</div><div class="nd">очищены от dead-links, body ↔ frontmatter синхронны</div></div>
+        <div class="node art"><div class="nt">_index.md</div><div class="nt"></div><div class="nd">страница ↔ индекс согласованы в обе стороны</div></div>
+      </div>
+      <div class="arrow">⬇</div>
+      <div class="lane-title">Ретривал</div>
+      <div class="flow-row">
+        <div class="node"><div class="nt">refreshCache · src/page-similarity.ts</div><div class="nd">эмбеддит per index annotation → summary-вектор на каждую страницу</div></div>
+        <div class="arrow">➡</div>
+        <div class="node"><div class="nt">Retrieval / Query</div><div class="nd">каждая страница на диске становится находимой</div></div>
+      </div>
+      <div class="legend">
+        <span><i class="sw entry"></i>точка входа (фаза)</span>
+        <span><i class="sw comp"></i>новый компонент</span>
+        <span><i class="sw art"></i>артефакт на диске</span>
+      </div>
+    </div>
+    <figcaption>Поток: ingest/lint → детерминированные компоненты → тела страниц / _index.md → refreshCache → retrieval.</figcaption>
+  </figure>
+
+  <h3>2b. Граф зависимостей (SVG node-edge)</h3>
+  <figure class="rpt-graph">
+    <svg viewBox="0 0 920 460" width="100%" role="img" aria-label="граф зависимостей компонентов">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+        </marker>
+        <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="var(--shadow)"/>
+        </filter>
+      </defs>
+
+      <!-- edges -->
+      <g stroke="var(--line)" stroke-width="1.6" marker-end="url(#arr)" fill="none">
+        <!-- stripDeadLinks -> setFmLinks ; -> fixWikiLinks -->
+        <line x1="170" y1="80"  x2="330" y2="55"/>
+        <line x1="170" y1="80"  x2="330" y2="130"/>
+        <!-- fixWikiLinks -> ingest ; -> lint -->
+        <line x1="450" y1="130" x2="760" y2="60"/>
+        <line x1="450" y1="130" x2="760" y2="200"/>
+        <!-- reconcileIndex -> deriveFallbackAnnotation, deriveSection, REGEX -->
+        <line x1="170" y1="300" x2="330" y2="250"/>
+        <line x1="170" y1="300" x2="330" y2="320"/>
+        <line x1="170" y1="300" x2="330" y2="390"/>
+        <!-- reconcileIndex -> upsert / remove IndexAnnotation -->
+        <line x1="170" y1="300" x2="60"  y2="390"/>
+        <line x1="170" y1="300" x2="60"  y2="220"/>
+        <!-- reconcileIndex -> ingest, lint -->
+        <line x1="280" y1="295" x2="760" y2="80"/>
+        <line x1="280" y1="305" x2="760" y2="215"/>
+        <!-- deriveFallbackAnnotation -> ingest (write-loop) -->
+        <line x1="430" y1="245" x2="760" y2="75"/>
+        <!-- ingest/lint -> _index.md -->
+        <line x1="830" y1="80"  x2="830" y2="300"/>
+        <line x1="830" y1="215" x2="830" y2="300"/>
+        <!-- _index.md -> refreshCache -> summary vector -->
+        <line x1="790" y1="335" x2="560" y2="425"/>
+        <line x1="430" y1="425" x2="250" y2="425"/>
+      </g>
+
+      <!-- nodes -->
+      <g font-family="system-ui,sans-serif" font-size="12" text-anchor="middle" filter="url(#ds)">
+        <!-- new components (accent) -->
+        <g><rect x="70" y="62" width="100" height="36" rx="8" fill="color-mix(in srgb,var(--warn) 18%, var(--surface))" stroke="var(--warn-2)" stroke-width="1.6"/><text x="120" y="84" fill="var(--fg)">stripDeadLinks</text></g>
+        <g><rect x="70" y="282" width="120" height="36" rx="8" fill="color-mix(in srgb,var(--warn) 18%, var(--surface))" stroke="var(--warn-2)" stroke-width="1.6"/><text x="130" y="304" fill="var(--fg)">reconcileIndex</text></g>
+        <g><rect x="320" y="228" width="120" height="36" rx="8" fill="color-mix(in srgb,var(--warn) 18%, var(--surface))" stroke="var(--warn-2)" stroke-width="1.6"/><text x="380" y="250" fill="var(--fg)">deriveFallback…</text></g>
+
+        <!-- reused helpers (accent neutral) -->
+        <g><rect x="330" y="38" width="110" height="34" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"/><text x="385" y="59" fill="var(--fg)">setFmLinks</text></g>
+        <g><rect x="330" y="114" width="120" height="34" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"/><text x="390" y="135" fill="var(--fg)">fixWikiLinks</text></g>
+        <g><rect x="330" y="304" width="110" height="34" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"/><text x="385" y="325" fill="var(--fg)">deriveSection</text></g>
+        <g><rect x="316" y="374" width="138" height="34" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"/><text x="385" y="395" fill="var(--fg)">GENERIC_…REGEX</text></g>
+        <g><rect x="10" y="204" width="100" height="34" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"/><text x="60" y="225" fill="var(--fg)">upsertIndex…</text></g>
+        <g><rect x="10" y="374" width="100" height="34" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"/><text x="60" y="395" fill="var(--fg)">removeIndex…</text></g>
+
+        <!-- entry points -->
+        <g><rect x="762" y="46" width="100" height="34" rx="8" fill="color-mix(in srgb,var(--accent) 22%, var(--surface))" stroke="var(--accent-2)" stroke-width="1.8"/><text x="812" y="67" fill="var(--fg)">ingest.ts</text></g>
+        <g><rect x="762" y="190" width="100" height="34" rx="8" fill="color-mix(in srgb,var(--accent) 22%, var(--surface))" stroke="var(--accent-2)" stroke-width="1.8"/><text x="812" y="211" fill="var(--fg)">lint.ts</text></g>
+
+        <!-- artifacts -->
+        <g><rect x="782" y="300" width="100" height="34" rx="8" fill="color-mix(in srgb,var(--ok) 18%, var(--surface))" stroke="var(--ok-2)" stroke-width="1.6"/><text x="832" y="321" fill="var(--fg)">_index.md</text></g>
+        <g><rect x="430" y="408" width="130" height="34" rx="8" fill="color-mix(in srgb,var(--ok) 18%, var(--surface))" stroke="var(--ok-2)" stroke-width="1.6"/><text x="495" y="429" fill="var(--fg)">refreshCache</text></g>
+        <g><rect x="120" y="408" width="130" height="34" rx="8" fill="color-mix(in srgb,var(--ok) 18%, var(--surface))" stroke="var(--ok-2)" stroke-width="1.6"/><text x="185" y="429" fill="var(--fg)">summary-вектор</text></g>
+      </g>
+    </svg>
+    <figcaption>Рёбра — «использует / встроен в / вызывается из / применяется через / питает». Жёлтые узлы — новые компоненты, синие — переиспользуемые хелперы и точки входа, зелёные — артефакты/ретривал.</figcaption>
+  </figure>
+
+  <h3>2c. Карта покрытия (задача → требования)</h3>
+  <table>
+    <thead><tr><th>Задача</th><th>Покрывающие требования спеки</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="sec">A. Удаление dead-links из тел статей и frontmatter</td>
+        <td>Component 1 <code>stripDeadLinks</code> · Integration <code>ingest.ts</code> (в <code>fixWikiLinks</code>) · Integration <code>lint.ts</code> (post-loop <code>stripDeadLinks</code>) · Success Criterion&nbsp;1</td>
+      </tr>
+      <tr>
+        <td class="sec">B. Двунаправленная реконсиляция <code>_index.md</code> + fallback annotation</td>
+        <td>Component 2 <code>deriveFallbackAnnotation</code> · Component 3 <code>reconcileIndex</code> · Integration <code>ingest.ts</code> (<code>reconcileIndex</code> + индексация через fallback) · Integration <code>lint.ts</code> (<code>reconcileIndex</code>) · Success Criteria&nbsp;2 и&nbsp;3</td>
+      </tr>
+      <tr>
+        <td class="sec">Общее (обе задачи)</td>
+        <td>Success Criterion&nbsp;4 (eval-тесты + <code>tsc</code> gate) · Decisions 1–5 · §Error handling · §Testing</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="note">Каждая задача покрыта ≥1 требованием; ни одно требование не «висит» без задачи — coverage двусторонний.</div>
+
+  <!-- ================= БЛОК 3 ================= -->
+  <h2>3. Результаты проверки</h2>
+
+  <table>
+    <tbody>
+      <tr><th>Файл</th><td><code>docs/superpowers/specs/2026-06-22-wiki-dead-links-index-reconciliation-design.md</code></td></tr>
+      <tr><th>spec_hash</th><td><code>fe5ffdf2aff9c8e2</code> <span class="sub">(у файла нет frontmatter → хеш всего файла)</span></td></tr>
+      <tr><th>prev_hash</th><td>отсутствует <span class="sub">(первый прогон)</span></td></tr>
+      <tr><th>state</th><td>Блок <code>review:</code> во frontmatter отсутствовал — инициализирован пустым. Зафиксирован baseline хешей секций.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Статусы фаз</h3>
+  <div class="phase-grid">
+    <div class="phase-card">
+      <div class="ph">Фаза 1 · structure <span class="badge b-ok">passed</span></div>
+      <div class="pd">Плейсхолдеров (TODO/TBD/???/FIXME) нет; битых внутренних ссылок нет; нумерация секций корректна (Component 1–3 и Bug 1–2 последовательны); дублирующихся заголовков нет.</div>
+    </div>
+    <div class="phase-card">
+      <div class="ph">Фаза 2 · coverage <span class="badge b-ok">passed</span></div>
+      <div class="pd">Задача A покрыта Component 1 + интеграциями + Criterion 1; Задача B — Component 2+3 + интеграциями + Criteria 2,3. Лишних требований нет. Противоречий между требованиями нет.</div>
+    </div>
+    <div class="phase-card">
+      <div class="ph">Фаза 3 · clarity <span class="badge b-ok">passed</span></div>
+      <div class="pd">Запрещённых расплывчатых терминов нет; «~600–800 символов» — конкретный числовой критерий с обоснованием, не находка; DoD у каждого компонента через §Testing и §Verification criteria; терминология (stem/pid/annotation/knownStems) согласована.</div>
+    </div>
+    <div class="phase-card">
+      <div class="ph">Фаза 4 · consistency <span class="badge b-ok">passed</span></div>
+      <div class="pd">Первый прогон, прошлых хешей секций нет; зафиксирован baseline; изменившихся секций и связанных findings нет.</div>
+    </div>
+  </div>
+
+  <h3>Findings</h3>
+  <div class="empty">Findings нет ни в одной фазе — таблица пуста.</div>
+
+  <h3>Сводка</h3>
+  <table>
+    <thead><tr><th>Метрика</th><th>Значение</th></tr></thead>
+    <tbody>
+      <tr><td>CRITICAL open</td><td><span class="badge b-zero">0</span></td></tr>
+      <tr><td>WARNING open</td><td><span class="badge b-zero">0</span></td></tr>
+      <tr><td>INFO open</td><td><span class="badge b-zero">0</span></td></tr>
+      <tr><td>Финальный вердикт</td><td><span class="badge b-ok">OK</span> — спецификация прошла проверку</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Chain: intent → spec</h3>
+  <figure>
+    <div class="flow">
+      <div class="flow-row">
+        <div class="node" style="opacity:.6; border-style:dashed;"><div class="nt">intent (предыдущий шаг)</div><div class="nd">intent_path = null — не привязан</div></div>
+        <div class="arrow" style="opacity:.5;">➡</div>
+        <div class="node entry"><div class="nt">spec (текущий шаг)</div><div class="nd">2026-06-22-wiki-dead-links-index-reconciliation-design.md</div></div>
+      </div>
+    </div>
+    <figcaption>Звено intent не привязано: в <code>docs/superpowers/intents/</code> нет intent-файла с темой wiki-dead-links / reconciliation. Проверка продолжена без блокировки.</figcaption>
+  </figure>
+  <div class="note muted">intent_path = null. Точного совпадения по теме спеки не найдено; есть тематически смежные intent-файлы (например <code>2026-06-17-index-drop-wikilinks-intent.md</code>, <code>2026-06-06-index-annotation-quality-intent.md</code>), но ни один не соответствует напрямую — поэтому звено оставлено неразрешённым, как предписывает алгоритм.</div>
+
+  <footer>
+    Автогенерируемый артефакт <code>/check-spec</code> · фазовая модель (structure → coverage → clarity → consistency) со state во frontmatter спеки.
+    Хеши посчитаны каноническим алгоритмом (sha256 · 16 hex). Светлая/тёмная тема — переключатель 🌙 / ☀️ вверху справа.
+  </footer>
+</main>
+</body>
+</html>
