@@ -202,3 +202,32 @@ export function checkWikiLinks(pages: Map<string, string>): string {
   if (violations.length === 0) return "";
   return violations.map((v) => `- ${v.page}: ${v.kind} link ${v.detail}`).join("\n");
 }
+
+function tidyAfterRemoval(text: string): string {
+  return text
+    .replace(/ +([,.;:)\]])/g, "$1") // drop space before punctuation
+    .replace(/[ \t]+$/gm, "");        // trim trailing spaces per line
+}
+
+// Remove [[links]] whose trailing stem is not in knownStems (dead links), then
+// re-derive wiki_outgoing_links from the cleaned body so fm and body stay synced.
+// Deterministic — safe to run unconditionally (no LLM, no retries).
+export function stripDeadLinks(content: string, knownStems: Set<string>): string {
+  const parts = splitFrontmatter(content);
+  const fm = parts ? parts[0] : null;
+  let body = parts ? parts[1] : content;
+
+  body = body.replace(
+    /[ \t]*\[\[([^\]|]+?)(?:\|[^\]]+)?\]\][ \t]*/g,
+    (full: string, link: string) => {
+      const stem = link.trim().split("/").pop()!;
+      return knownStems.has(stem) ? full : " ";
+    },
+  );
+  body = tidyAfterRemoval(body);
+
+  if (fm === null) return body.trim();
+
+  const bodyLinks = [...new Set(extractLinks(body).map((l) => `[[${l}]]`))];
+  return setFmLinks(fm, bodyLinks) + body;
+}
