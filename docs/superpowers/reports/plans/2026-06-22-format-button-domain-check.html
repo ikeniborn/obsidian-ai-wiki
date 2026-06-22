@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка плана — Кнопка форматирования и домен</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg); transition:background .3s, color .3s;
+}
+.theme-btn{position:sticky; top:.5rem; float:right; cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface);}
+h1{font-size:1.6rem; margin:.2rem 0 .2rem;}
+h2{font-size:1.2rem; margin:2rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.3rem;}
+h3{font-size:1.02rem; margin:1.3rem 0 .4rem; color:var(--accent-2);}
+.sub{color:var(--muted); margin:.1rem 0 1rem;}
+code{background:color-mix(in srgb,var(--accent) 14%, var(--surface)); padding:.05rem .35rem; border-radius:4px; font-size:.86em;}
+table{border-collapse:collapse; width:100%; margin:.5rem 0 1rem; background:var(--surface); box-shadow:0 1px 3px var(--shadow); border-radius:8px; overflow:hidden;}
+th,td{text-align:left; padding:.5rem .7rem; border-bottom:1px solid var(--border); vertical-align:top; font-size:.92rem;}
+th{background:color-mix(in srgb,var(--accent) 16%, var(--surface)); color:var(--fg);}
+tbody tr:nth-child(even){background:var(--zebra);}
+.badge{display:inline-block; padding:.05rem .5rem; border-radius:999px; font-size:.76rem; font-weight:600; border:1px solid transparent;}
+.b-ok{background:color-mix(in srgb,var(--ok) 22%, var(--surface)); color:var(--ok-2); border-color:var(--ok);}
+.b-warn{background:color-mix(in srgb,var(--warn) 22%, var(--surface)); color:var(--warn-2); border-color:var(--warn);}
+.b-danger{background:color-mix(in srgb,var(--danger) 22%, var(--surface)); color:var(--danger-2); border-color:var(--danger);}
+.note{background:color-mix(in srgb,var(--accent) 12%, var(--surface)); border-left:4px solid var(--accent); padding:.6rem .9rem; border-radius:0 8px 8px 0; margin:1rem 0;}
+.verdict{font-size:1.15rem; font-weight:700; padding:.7rem 1rem; border-radius:8px; display:inline-block;}
+.verdict.ok{background:color-mix(in srgb,var(--ok) 22%, var(--surface)); color:var(--ok-2); border:1px solid var(--ok);}
+figure{margin:1rem 0; padding:1rem; background:var(--surface); border:1px solid var(--border); border-radius:10px;}
+figcaption{color:var(--muted); font-size:.85rem; margin-top:.5rem; text-align:center;}
+.legend{font-size:.8rem; color:var(--muted);}
+.chain{font-family:ui-monospace,monospace; font-size:.9rem; color:var(--muted);}
+.dot{display:inline-block; width:.7rem; height:.7rem; border-radius:50%; vertical-align:middle; margin-right:.3rem;}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Тёмная/светлая тема">🌙 / ☀️</label>
+
+<h1>Проверка плана реализации</h1>
+<p class="sub">Кнопка форматирования отвязана от домена · <code>2026-06-22-format-button-domain.md</code></p>
+
+<div class="note">
+  <strong>Итог:</strong> <span class="badge b-ok">OK</span> — все 5 фаз passed, 0 CRITICAL, 0 WARNING.
+  <code>plan_hash: 5a6e7f69d9ed4e21</code> · <code>spec_hash: 2cc29f507da2037c</code>
+</div>
+
+<!-- ===================== БЛОК 1: РЕЗЮМЕ ПЛАНА ===================== -->
+<h2>1. Резюме плана</h2>
+<table>
+  <thead><tr><th>Шаг</th><th>Действие</th><th>Критерий готовности (DoD)</th></tr></thead>
+  <tbody>
+    <tr><td><b>T1.1</b></td><td>Написать падающий eval <code>eval/format-button/run.ts</code></td><td>Файл создан, импортирует <code>isWikiArticlePath</code></td></tr>
+    <tr><td><b>T1.2</b></td><td>Запустить eval → падение</td><td>esbuild: <code>No matching export … isWikiArticlePath</code></td></tr>
+    <tr><td><b>T1.3</b></td><td>Реализовать хелпер в <code>src/wiki-path.ts</code></td><td>Экспорт <code>isWikiArticlePath</code> добавлен</td></tr>
+    <tr><td><b>T1.4</b></td><td>Запустить eval → проход</td><td><code>6 passed, 0 failed</code>, exit 0</td></tr>
+    <tr><td><b>T1.5</b></td><td>Коммит</td><td>helper + eval закоммичены</td></tr>
+    <tr><td><b>T2.1</b></td><td>Зафиксировать зелёный baseline <code>eval/source-deletion</code></td><td>PASS, число кейсов записано</td></tr>
+    <tr><td><b>T2.2–2.3</b></td><td>Заменить импорт + использовать хелпер в <code>isSourceFile</code></td><td><code>isWikiArticlePath(path)</code> вместо инлайн-guard</td></tr>
+    <tr><td><b>T2.4</b></td><td>Перезапустить eval → identical</td><td>То же число PASS, 0 fail</td></tr>
+    <tr><td><b>T2.5</b></td><td>Lint</td><td>Нет <code>WIKI_ROOT … never used</code></td></tr>
+    <tr><td><b>T2.6</b></td><td>Коммит</td><td>de-dup закоммичен</td></tr>
+    <tr><td><b>T3.1</b></td><td>Добавить импорт <code>isWikiArticlePath</code> в <code>view.ts</code></td><td>Импорт обновлён (line 9)</td></tr>
+    <tr><td><b>T3.2</b></td><td>Вычислить <code>canFormat</code>, перевести format-кнопку</td><td><code>formatBtn.disabled = !canFormat</code>, delete без изменений</td></tr>
+    <tr><td><b>T3.3</b></td><td>Lint + tsc (новые ошибки)</td><td><code>no view.ts errors</code></td></tr>
+    <tr><td><b>T3.4</b></td><td>Сборка bundle</td><td><code>npm run build</code> без ошибок</td></tr>
+    <tr><td><b>T3.5</b></td><td>Коммит</td><td>fix + main.js закоммичены</td></tr>
+    <tr><td><b>T4.1–4.2</b></td><td>iwiki-ingest изменённых src + /iwiki-lint</td><td>Нет битых <code>[[refs]]</code>, orphan/stale</td></tr>
+    <tr><td><b>T4.3</b></td><td>Полный lint</td><td>Нет новых ошибок в тронутых файлах</td></tr>
+    <tr><td><b>T4.4</b></td><td>Ручная проверка матрицы приёмки в Obsidian</td><td>Format активна для не-доменного источника</td></tr>
+    <tr><td><b>T4.5–4.6</b></td><td>Коммит доков + PR в master</td><td>PR открыт</td></tr>
+  </tbody>
+</table>
+
+<!-- ===================== БЛОК 2: ЗАВИСИМОСТИ И ПЕРЕСЕЧЕНИЯ ===================== -->
+<h2>2. Схемы зависимостей и пересечений</h2>
+
+<h3>Граф зависимостей задач</h3>
+<figure class="rpt-graph">
+  <svg viewBox="0 0 480 200" width="100%" role="img" aria-label="граф зависимостей задач">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+      </marker>
+    </defs>
+    <!-- edges: T1→T2, T1→T3, T2→T4, T3→T4 -->
+    <line x1="110" y1="60" x2="245" y2="35"  stroke="var(--line)" stroke-width="2" marker-end="url(#ar)"/>
+    <line x1="110" y1="60" x2="245" y2="100" stroke="var(--line)" stroke-width="2" marker-end="url(#ar)"/>
+    <line x1="355" y1="35"  x2="400" y2="68" stroke="var(--line)" stroke-width="2" marker-end="url(#ar)"/>
+    <line x1="355" y1="100" x2="400" y2="72" stroke="var(--line)" stroke-width="2" marker-end="url(#ar)"/>
+    <!-- nodes -->
+    <g>
+      <rect x="40" y="42" width="135" height="38" rx="9" fill="var(--surface)" stroke="var(--ok)" stroke-width="2"/>
+      <text x="107" y="60" text-anchor="middle" fill="var(--fg)" font-size="12">T1 isWikiArticlePath</text>
+      <text x="107" y="74" text-anchor="middle" fill="var(--muted)" font-size="10">+ eval</text>
+    </g>
+    <g>
+      <rect x="245" y="17" width="115" height="36" rx="9" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+      <text x="302" y="34" text-anchor="middle" fill="var(--fg)" font-size="12">T2 isSourceFile</text>
+      <text x="302" y="47" text-anchor="middle" fill="var(--muted)" font-size="10">de-dup</text>
+    </g>
+    <g>
+      <rect x="245" y="83" width="115" height="36" rx="9" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+      <text x="302" y="100" text-anchor="middle" fill="var(--fg)" font-size="12">T3 view.ts</text>
+      <text x="302" y="113" text-anchor="middle" fill="var(--muted)" font-size="10">canFormat (фикс)</text>
+    </g>
+    <g>
+      <rect x="400" y="54" width="78" height="36" rx="9" fill="var(--surface)" stroke="var(--warn)" stroke-width="2" stroke-dasharray="4 3"/>
+      <text x="439" y="71" text-anchor="middle" fill="var(--fg)" font-size="12">T4</text>
+      <text x="439" y="84" text-anchor="middle" fill="var(--muted)" font-size="10">docs/PR</text>
+    </g>
+  </svg>
+  <figcaption>Рёбра M→N: результат задачи M используется в N (M&lt;N). Циклов нет, порядок корректен (хелпер раньше потребителей).</figcaption>
+</figure>
+
+<h3>Пересечения по артефактам</h3>
+<p class="legend">Ни один исходный файл не трогается двумя задачами — конфликтов нет.</p>
+<table>
+  <thead><tr><th>Артефакт</th><th>T1</th><th>T2</th><th>T3</th><th>T4</th></tr></thead>
+  <tbody>
+    <tr><td><code>src/wiki-path.ts</code></td><td>✱</td><td></td><td></td><td></td></tr>
+    <tr><td><code>eval/format-button/*</code></td><td>✱</td><td></td><td></td><td></td></tr>
+    <tr><td><code>src/source-deletion.ts</code></td><td></td><td>✱</td><td></td><td></td></tr>
+    <tr><td><code>src/view.ts</code> + <code>main.js</code></td><td></td><td></td><td>✱</td><td></td></tr>
+    <tr><td><code>docs/wiki/</code></td><td></td><td></td><td></td><td>✱</td></tr>
+  </tbody>
+</table>
+
+<h3>Покрытие требований спеки</h3>
+<table>
+  <thead><tr><th>Требование</th><th>Покрывающие шаги</th></tr></thead>
+  <tbody>
+    <tr><td>R1 — Format активна для не-вики <code>.md</code> независимо от домена</td><td>T3.2</td></tr>
+    <tr><td>R2 — Delete гейтирована на <code>isSource</code> (без изменений)</td><td>T3.2, T4.4</td></tr>
+    <tr><td>R3 — хелпер <code>isWikiArticlePath</code></td><td>T1.3</td></tr>
+    <tr><td>R4 — de-dup <code>isSourceFile</code></td><td>T2.2–2.4</td></tr>
+    <tr><td>R5 — контроллер финальный гейт</td><td>T4.4 (ручная проверка)</td></tr>
+    <tr><td>Testing — headless eval хелпера</td><td>T1.1–1.4</td></tr>
+  </tbody>
+</table>
+
+<!-- ===================== БЛОК 3: РЕЗУЛЬТАТЫ ===================== -->
+<h2>3. Результаты проверки</h2>
+<table>
+  <thead><tr><th>Фаза</th><th>Статус</th><th>Замечания</th></tr></thead>
+  <tbody>
+    <tr><td>1. structure</td><td><span class="badge b-ok">passed</span></td><td>Нумерация T1–T4 без пропусков/дублей; «do NOT» — намеренное указание, не плейсхолдер.</td></tr>
+    <tr><td>2. coverage</td><td><span class="badge b-ok">passed</span></td><td>R1–R5 + Testing замаплены; лишних шагов нет.</td></tr>
+    <tr><td>3. dependencies</td><td><span class="badge b-ok">passed</span></td><td>T1 создаёт хелпер до T2/T3; TDD-порядок верный; циклов нет.</td></tr>
+    <tr><td>4. verifiability</td><td><span class="badge b-ok">passed</span></td><td>У каждого шага явный выход или команда проверки + ожидаемый вывод.</td></tr>
+    <tr><td>5. consistency</td><td><span class="badge b-ok">passed</span></td><td>Первый прогон, дрейфа нет.</td></tr>
+  </tbody>
+</table>
+
+<h3>Findings</h3>
+<table>
+  <thead><tr><th>id</th><th>severity</th><th>section</th><th>text</th><th>verdict</th></tr></thead>
+  <tbody>
+    <tr><td colspan="5" style="text-align:center; color:var(--muted)">Замечаний нет — <code>findings: []</code></td></tr>
+  </tbody>
+</table>
+
+<h3>Сводка</h3>
+<table>
+  <tbody>
+    <tr><th>CRITICAL open</th><td>0</td></tr>
+    <tr><th>WARNING open</th><td>0</td></tr>
+    <tr><th>Цепочка</th><td class="chain">intent: null → spec → plan</td></tr>
+  </tbody>
+</table>
+
+<p><span class="verdict ok">Вердикт: OK</span></p>
+<p class="chain">Chain: (intent отсутствует) → docs/superpowers/specs/2026-06-22-format-button-domain-design.md → docs/superpowers/plans/2026-06-22-format-button-domain.md</p>
+
+</body>
+</html>
