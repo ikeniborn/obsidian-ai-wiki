@@ -17,14 +17,21 @@ import { render } from "./template";
 import { domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureWikiSources, stripInvalidWikiArticles, recoverSourceFrontmatter } from "../utils/raw-frontmatter";
-import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation } from "../wiki-index";
+import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation, deriveFallbackAnnotation, reconcileIndex } from "../wiki-index";
 import { pageId } from "../wiki-graph";
 import type { PageSimilarityService, ExtractedEntity } from "../page-similarity";
 import { appendWikiLog } from "../wiki-log";
 import type { IngestLogEntry } from "../wiki-log";
-import { fixWikiLinks } from "../wiki-link-validator";
+import { fixWikiLinks, stripDeadLinks } from "../wiki-link-validator";
 import { GENERIC_WIKI_STEM_REGEX, stemRegex } from "../wiki-stem";
 import { i18nFor, resolveLang } from "../i18n";
+
+function deriveSectionForPath(wikiFolder: string, fullPath: string): string {
+  const prefix = wikiFolder + "/";
+  const rel = fullPath.startsWith(prefix) ? fullPath.slice(prefix.length) : fullPath;
+  const parts = rel.split("/");
+  return parts.length >= 2 ? parts[0] : "general";
+}
 
 function parseWikiStatus(content: string): string {
   const m = /^---\n[\s\S]*?^wiki_status:[ \t]*(.+)$/m.exec(content);
@@ -311,7 +318,10 @@ export async function* runIngest(
     ...[...pagesMap.keys()].map((p) => p.split("/").pop()!.replace(/\.md$/, "")),
   ]);
   const wlFixResult = fixWikiLinks(pagesMap, wikiLinkValidationRetries, knownStems);
-  pages = pages.map((p) => ({ ...p, content: wlFixResult.fixed.get(p.path) ?? p.content }));
+  pages = pages.map((p) => {
+    const fixed = wlFixResult.fixed.get(p.path) ?? p.content;
+    return { ...p, content: stripDeadLinks(fixed, knownStems) };
+  });
 
   const written: string[] = [];
   const logEntries: IngestLogEntry[] = [];
@@ -405,11 +415,12 @@ export async function* runIngest(
         logEntries.push({ path: relPath, action: "UPDATED", statusFrom: parseWikiStatus(existingContent), statusTo });
       }
 
-      if (page.annotation) {
-        try {
-          await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation, page.path);
-        } catch { /* non-critical */ }
-      }
+      try {
+        const annotation = (page.annotation && page.annotation.trim())
+          ? page.annotation
+          : deriveFallbackAnnotation(sourcedPage, deriveSectionForPath(wikiVaultPath, page.path));
+        await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), annotation, page.path);
+      } catch { /* non-critical */ }
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: (e as Error).message };
     }
@@ -450,6 +461,26 @@ export async function* runIngest(
       yield { kind: "tool_result", ok: false, preview: (e as Error).message };
     }
   }
+
+  // Full bidirectional index reconciliation: add any page missing from the index
+  // (legacy un-annotated pages get a deterministic fallback) and drop orphan
+  // entries whose file no longer exists. Non-critical.
+  try {
+    const finalPaths = (await vaultTools.listFiles(wikiVaultPath))
+      .filter((f) => f.endsWith(".md") && !f.endsWith("_index.md") && !f.endsWith("_log.md"));
+    const finalPages = await vaultTools.readAll(finalPaths);
+    const currentIndex = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
+    const recon = reconcileIndex(
+      currentIndex, wikiVaultPath,
+      [...finalPages].map(([path, content]) => ({ path, content })),
+    );
+    for (const a of recon.adds) {
+      await upsertIndexAnnotation(vaultTools, wikiVaultPath, a.pid, a.annotation, a.fullPath);
+    }
+    for (const pid of recon.removes) {
+      await removeIndexAnnotation(vaultTools, wikiVaultPath, pid);
+    }
+  } catch { /* non-critical */ }
 
   const createdCount = logEntries.filter(e => e.action === "CREATED").length;
   const updatedCount = logEntries.filter(e => e.action === "UPDATED").length;
