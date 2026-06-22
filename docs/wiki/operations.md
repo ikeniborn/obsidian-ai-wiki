@@ -53,6 +53,12 @@ After writes and deletes, ingest emits a result text broken down by action: `с�
 
 When the ingest response includes `entity_types_delta`, the runner merges it into `entity_types` via `mergeEntityTypes` and emits `domain_updated`, which the controller persists. Event order: `assistant_text` → source write → `source_path_added` → `domain_updated`. See [[domain-model#Domain Events]].
 
+### Link & Index Hygiene
+
+Deterministic, LLM-free invariants enforced on every ingest (prevention side). After the WikiLink fix pass, ingest runs `stripDeadLinks` (`src/wiki-link-validator.ts`) on every page unconditionally: it removes `[[links]]` whose trailing stem is not in the vault-wide `knownStems`, tidies the surrounding whitespace/punctuation, and re-derives `wiki_outgoing_links` from the cleaned body so frontmatter and body stay synced. Links to source notes (present in `knownStems`) are never treated as dead.
+
+Every written page is indexed regardless of whether LLM #2 emitted an `annotation`: a missing annotation falls back to `deriveFallbackAnnotation` (`src/wiki-index.ts`), which builds `"<H1> — <first body sentence> Type: <section>"` from the page itself. This guarantees the page reaches `_index.md` and therefore the embedding corpus. After the write/delete loops, `reconcileIndex` runs a bidirectional pass over the current domain files — adding pages missing from `_index.md` and removing orphan entries whose file no longer exists. See [[retrieval#Embedding Cache]].
+
 ## Query
 
 Two-phase retrieval (`src/phases/query.ts`): seed selection from `_index.md` annotations, then BFS expansion over the wiki graph. Similarity (embedding or Jaccard) selects seeds; graph traversal expands coverage. See [[retrieval#Query Graph Traversal]].
@@ -110,6 +116,8 @@ Per-article loop: select top-K → BFS expand (depth 1) → LLM call → apply f
 ### Cleanup Pass
 
 Before the Glob step, lint runs `cleanupInvalidPages` to remove stale or malformed pages (files starting with `_` are skipped). A page is deleted if its stem fails `GENERIC_WIKI_STEM_REGEX` or its frontmatter lacks `wiki_sources`. A `step` event is emitted when pages are deleted.
+
+After the per-article loop, in the always-on block that runs with the LLM on or off, lint applies the same deterministic hygiene as ingest (cure side). It strips dead `[[links]]` from every page body via `stripDeadLinks` using the vault-wide `knownStems` (the retained `filterStaleWikiLinks` frontmatter pass is then a no-op on the synced result), then runs `reconcileIndex` bidirectionally over the full domain page set — adding pages missing from `_index.md` with a fallback annotation and removing orphan entries. This heals drift prevention cannot reach (legacy un-annotated pages, renamed/merged files) and emits an `Index reconciled: +A / -R` report line. See [[operations#Link & Index Hygiene]].
 
 ### Backlink Sync
 
