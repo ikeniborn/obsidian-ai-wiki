@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Result Check — format-button-domain — 2026-06-22</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+.theme-btn{
+  position:sticky; top:.5rem; float:right;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface); font-size:.9rem;
+}
+h1{ font-size:1.55rem; margin:.4rem 0 .2rem; color:var(--accent); }
+h2{ font-size:1.15rem; margin:2rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.3rem; color:var(--accent); }
+h3{ font-size:1rem; margin:1.2rem 0 .4rem; color:var(--fg); }
+.lead{ font-size:1.08rem; margin:.2rem 0 1rem; }
+.sub{ color:var(--muted); font-size:.92rem; margin:.1rem 0 1rem; }
+
+/* Tables */
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:1rem 0; font-size:.9rem; border:1px solid var(--border); border-radius:10px;
+  overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.45rem .75rem; text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg); }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.rpt-table td code, .rpt-table th code{ white-space:nowrap; font-size:.83rem; }
+
+/* Badges */
+.badge{ display:inline-block; font-size:.72rem; font-weight:600; padding:.1rem .55rem; border-radius:999px; border:1px solid; }
+.badge-ok{ color:var(--ok-2); border-color:var(--ok); background:color-mix(in srgb,var(--ok) 10%,var(--surface)); }
+.badge-warn{ color:var(--warn-2); border-color:var(--warn); background:color-mix(in srgb,var(--warn) 10%,var(--surface)); }
+.badge-info{ color:var(--accent-2); border-color:var(--accent); background:color-mix(in srgb,var(--accent) 10%,var(--surface)); }
+.badge-missing{ color:var(--danger-2); border-color:var(--danger); background:color-mix(in srgb,var(--danger) 10%,var(--surface)); }
+
+/* Verdict banner */
+.verdict-banner{
+  display:flex; align-items:center; gap:1rem;
+  background:color-mix(in srgb,var(--ok) 12%,var(--surface));
+  border:2px solid var(--ok); border-radius:12px;
+  padding:1rem 1.5rem; margin:1.5rem 0;
+  box-shadow:0 2px 12px var(--shadow);
+}
+.verdict-icon{ font-size:2.2rem; line-height:1; }
+.verdict-label{ font-size:1.3rem; font-weight:700; color:var(--ok-2); }
+.verdict-hash{ color:var(--muted); font-size:.85rem; font-family:monospace; }
+
+/* Note callout */
+.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
+  background:color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius:0 8px 8px 0;
+  box-shadow:0 1px 8px var(--shadow); font-size:.93rem; }
+.note-info{ border-left-color:var(--accent); background:color-mix(in srgb,var(--accent) 8%,var(--surface)); }
+.note b{ color:var(--accent); }
+
+/* Coverage summary cards */
+.coverage-cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:1rem; margin:1rem 0 1.5rem; }
+.ccard{
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:1rem 1.2rem; text-align:center; box-shadow:0 2px 8px var(--shadow);
+}
+.ccard .num{ font-size:2rem; font-weight:700; }
+.ccard .lbl{ font-size:.8rem; color:var(--muted); margin-top:.2rem; }
+.ccard.done .num{ color:var(--ok-2); }
+.ccard.partial .num{ color:var(--warn-2); }
+.ccard.missing .num{ color:var(--danger-2); }
+.ccard.info-c .num{ color:var(--accent); }
+
+/* Chain flow */
+.chain-flow{ display:flex; align-items:center; gap:0; flex-wrap:wrap; margin:1rem 0; }
+.chain-flow .node{
+  background:var(--surface); color:var(--fg);
+  border:1px solid var(--border); border-radius:8px; padding:.5rem .9rem;
+  font-size:.85rem; font-family:monospace;
+}
+.chain-flow .node.null-node{ border-style:dashed; color:var(--muted); }
+.chain-flow .arrow{ flex:0 0 2.5rem; height:2px; background:var(--line); position:relative; }
+.chain-flow .arrow::after{
+  content:""; position:absolute; right:0; top:-4px;
+  border:5px solid transparent; border-left-color:var(--line);
+}
+
+/* Details/expandable */
+details{ background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:.7rem 1rem; margin:.7rem 0; box-shadow:0 1px 8px var(--shadow); }
+details summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+details[open] summary{ margin-bottom:.55rem; }
+ul.tight li{ margin:.3rem 0; line-height:1.5; }
+ul.tight code{ font-size:.83rem; }
+
+/* Findings */
+.finding{ border-radius:10px; border:1px solid var(--border); margin:1rem 0;
+  overflow:hidden; box-shadow:0 1px 8px var(--shadow); }
+.finding-hdr{ padding:.6rem 1rem; font-weight:700; font-size:.93rem; display:flex; align-items:center; gap:.6rem; }
+.finding-hdr.info{ background:color-mix(in srgb,var(--accent) 12%,var(--surface)); color:var(--accent-2); }
+.finding-body{ padding:.7rem 1rem; font-size:.9rem; }
+.finding-body b{ color:var(--accent); }
+.finding-body ol{ margin:.4rem 0 0 1.2rem; padding:0; }
+.finding-body ol li{ margin:.25rem 0; }
+
+/* Summary row */
+.summary-row{ display:flex; gap:2rem; align-items:center; flex-wrap:wrap; margin:1rem 0; }
+.scount{ font-size:1.1rem; font-weight:700; }
+.scount.crit{ color:var(--danger-2); }
+.scount.warn{ color:var(--warn-2); }
+.scount.info-s{ color:var(--accent-2); }
+
+/* Separator */
+hr{ border:none; border-top:1px solid var(--border); margin:2rem 0; }
+footer{ color:var(--muted); font-size:.82rem; margin-top:2.5rem; text-align:center; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn">🌙 / ☀️</label>
+
+<h1>Result Check — Format Button Domain Decoupling</h1>
+<p class="lead">Сверка результатов выполнения плана с цепочкой spec → plan.</p>
+<p class="sub">Ветка: <code>dev/format-button-domain</code> &nbsp;·&nbsp; Diff base: <code>git diff e0ee35b dev/format-button-domain</code> &nbsp;·&nbsp; Дата: 2026-06-22</p>
+
+<!-- Verdict -->
+<div class="verdict-banner">
+  <span class="verdict-icon">✅</span>
+  <div>
+    <div class="verdict-label">ВЕРДИКТ: OK</div>
+    <div class="verdict-hash">plan_hash: <code>4c1e0fe3de2d156b</code></div>
+  </div>
+</div>
+
+<!-- Chain -->
+<h2>Цепочка документов</h2>
+<div class="chain-flow">
+  <div class="node null-node">intent: null</div>
+  <div class="arrow"></div>
+  <div class="node">docs/superpowers/specs/<br>2026-06-22-format-button-domain-design.md</div>
+  <div class="arrow"></div>
+  <div class="node">docs/superpowers/plans/<br>2026-06-22-format-button-domain.md</div>
+</div>
+
+<h2>Резюме сверки — изменённые файлы (12)</h2>
+<table class="rpt-table">
+  <thead><tr><th>Файл</th><th>Роль</th></tr></thead>
+  <tbody>
+    <tr><td><code>src/wiki-path.ts</code></td><td>Новая функция <code>isWikiArticlePath</code></td></tr>
+    <tr><td><code>src/source-deletion.ts</code></td><td>Де-дупликация через <code>isWikiArticlePath</code></td></tr>
+    <tr><td><code>src/view.ts</code></td><td><code>canFormat</code> + <code>formatBtn.disabled = !canFormat</code></td></tr>
+    <tr><td><code>eval/format-button/run.ts</code></td><td>Headless eval (создан)</td></tr>
+    <tr><td><code>eval/format-button/run.cjs</code></td><td>Build artifact eval</td></tr>
+    <tr><td><code>dist/main.js</code></td><td>Пересобранный бандл (ожидаемо)</td></tr>
+    <tr><td><code>docs/wiki/architecture.md</code></td><td>Обновлена документация архитектуры</td></tr>
+    <tr><td><code>docs/wiki/operations.md</code></td><td>Обновлена документация операций</td></tr>
+    <tr><td><code>docs/superpowers/specs/...</code></td><td>Spec с frontmatter (артефакт цепочки)</td></tr>
+    <tr><td><code>docs/superpowers/plans/...</code></td><td>План с <code>result_check</code> (артефакт цепочки)</td></tr>
+    <tr><td><code>docs/superpowers/reports/plans/...</code></td><td>HTML-отчёт /check-plan (ожидаемо)</td></tr>
+    <tr><td><code>docs/superpowers/reports/specs/...</code></td><td>HTML-отчёт /check-spec (ожидаемо)</td></tr>
+  </tbody>
+</table>
+
+<!-- Coverage Summary -->
+<h2>Покрытие шагов плана</h2>
+<div class="coverage-cards">
+  <div class="ccard done"><div class="num">4</div><div class="lbl">DONE (задачи)</div></div>
+  <div class="ccard partial"><div class="num">0</div><div class="lbl">PARTIAL</div></div>
+  <div class="ccard missing"><div class="num">0</div><div class="lbl">MISSING</div></div>
+  <div class="ccard info-c"><div class="num">2</div><div class="lbl">INFO findings</div></div>
+</div>
+
+<!-- Plan steps detail -->
+<h2>Детали по задачам плана</h2>
+
+<details open>
+  <summary>Task 1 — <code>isWikiArticlePath</code> helper + headless eval &nbsp;<span class="badge badge-ok">DONE</span></summary>
+  <ul class="tight">
+    <li><b>Step 1 (Write failing eval):</b> <code>eval/format-button/run.ts</code> создан. Содержимое точно совпадает с планом — все 6 случаев присутствуют: <code>!Wiki</code>, <code>!Wiki/Alpha/Page.md</code>, <code>!Wiki/_config/_index.md</code>, <code>Sources/doc.md</code>, <code>notes/x.md</code>, <code>!WikiOther/z.md</code>.</li>
+    <li><b>Step 3 (Implement helper):</b> В <code>src/wiki-path.ts</code> добавлена <code>isWikiArticlePath</code> с точным телом из плана и спеки.</li>
+    <li><b>Step 5 (Commit):</b> Коммит <code>6112449 feat(wiki-path): add isWikiArticlePath predicate with headless eval</code> — в diff.</li>
+    <li><b>eval/format-button/run.cjs:</b> присутствует в diff (build artifact, соответствует прецеденту <code>eval/rerun-domain/</code>).</li>
+  </ul>
+</details>
+
+<details open>
+  <summary>Task 2 — De-duplicate <code>isSourceFile</code> &nbsp;<span class="badge badge-ok">DONE</span></summary>
+  <ul class="tight">
+    <li><b>Step 2 (Swap import):</b> В <code>src/source-deletion.ts</code> строка 2 — <code>import { WIKI_ROOT }</code> → <code>import { isWikiArticlePath }</code> — подтверждено в diff. Старый импорт удалён (lint clean).</li>
+    <li><b>Step 3 (Use helper):</b> Тело <code>isSourceFile</code> — инлайн-guard <code>path === WIKI_ROOT || path.startsWith(...)</code> заменён на <code>if (isWikiArticlePath(path)) return false;</code>.</li>
+    <li><b>Step 6 (Commit):</b> Коммит <code>69423d0 refactor(source-deletion): reuse isWikiArticlePath in isSourceFile</code> — в diff.</li>
+  </ul>
+</details>
+
+<details open>
+  <summary>Task 3 — Decouple Format button в <code>view.ts</code> &nbsp;<span class="badge badge-ok">DONE</span></summary>
+  <ul class="tight">
+    <li><b>Step 1 (Add import):</b> <code>isWikiArticlePath</code> добавлен в import строка 9 <code>src/view.ts</code> — подтверждено.</li>
+    <li><b>Step 2 (canFormat + rewire):</b> <code>canFormat = !!activeFile && activeFile.extension === "md" && !isWikiArticlePath(activeFile.path)</code> — добавлено; <code>formatBtn.disabled = !canFormat</code> — заменено (было <code>!isSource</code>); <code>deleteBtn.disabled = !isSource</code> — без изменений. Точное соответствие плану.</li>
+    <li><b>Step 4 (Build):</b> <code>dist/main.js</code> присутствует в diff.</li>
+    <li><b>Step 5 (Commit):</b> Коммит <code>f22321a fix(view): keep Format button active for any non-wiki markdown file</code> — в diff.</li>
+  </ul>
+</details>
+
+<details open>
+  <summary>Task 4 — Docs, lint sweep, manual verification &nbsp;<span class="badge badge-ok">DONE</span></summary>
+  <ul class="tight">
+    <li><b>Step 1 (iwiki-ingest):</b> <code>docs/wiki/architecture.md</code> и <code>docs/wiki/operations.md</code> обновлены — подтверждено в diff.</li>
+    <li><b>architecture.md:</b> абзац <code>updateButtonAvailability()</code> переписан — <code>formatBtn</code> описан как активный для любого non-wiki markdown файла, со ссылкой на <code>isWikiArticlePath</code>.</li>
+    <li><b>operations.md:</b> скорректировано описание <code>isSourceFile</code> — явно указано, что Format button не гейтится через <code>isSourceFile</code>, а через <code>isWikiArticlePath</code>.</li>
+  </ul>
+</details>
+
+<!-- Findings -->
+<h2>Findings</h2>
+
+<div class="finding">
+  <div class="finding-hdr info"><span class="badge badge-info">INFO</span> Task 4, Step 2 — Результат <code>/iwiki-lint</code> не зафиксирован в diff</div>
+  <div class="finding-body">
+    <p><b>Plan:</b> Step 2 требует запуска <code>/iwiki-lint</code> и ожидает отсутствие broken refs, orphan/stale pages.</p>
+    <p><b>Diff:</b> Результат lint-прогона не отражён ни в одном файле — ожидаемо: lint не оставляет артефакта. Wiki-ссылки в обновлённых <code>.md</code> выглядят корректно (<code>[[operations#Delete]]</code>, <code>[[architecture#Sidebar View]]</code>).</p>
+    <b>Fix options:</b>
+    <ol>
+      <li>Принять как норму: lint — процессный шаг без артефакта; ссылки в diff валидны.</li>
+      <li>Добавить проверку lint вручную перед PR.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="finding">
+  <div class="finding-hdr info"><span class="badge badge-info">INFO</span> Task 4, Step 4 — Ручная верификация в Obsidian не верифицируется через diff</div>
+  <div class="finding-body">
+    <p><b>Plan:</b> Step 4 требует ручной проверки матрицы Format/Delete button в live vault.</p>
+    <p><b>Diff:</b> Ручная верификация по природе не оставляет артефакта в diff.</p>
+    <b>Fix options:</b>
+    <ol>
+      <li>Принять как норму для UI acceptance-тестов — логика <code>canFormat</code> в коде точно соответствует spec-матрице.</li>
+      <li>При необходимости добавить скриншоты / запись в PR description.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- Spec coverage -->
+<h2>Покрытие Spec Requirements — 6/6</h2>
+<table class="rpt-table">
+  <thead><tr><th>#</th><th>Требование</th><th>Статус</th><th>Свидетельство в diff</th></tr></thead>
+  <tbody>
+    <tr><td>R1</td><td>Format button активен для non-wiki <code>.md</code> независимо от домена</td><td><span class="badge badge-ok">DONE</span></td><td><code>canFormat</code> в <code>src/view.ts</code></td></tr>
+    <tr><td>R2</td><td>Delete button гейтится только <code>isSource</code></td><td><span class="badge badge-ok">DONE</span></td><td><code>deleteBtn.disabled = !isSource</code> — без изменений</td></tr>
+    <tr><td>R3</td><td><code>isWikiArticlePath(path)</code> — чистый предикат в <code>src/wiki-path.ts</code></td><td><span class="badge badge-ok">DONE</span></td><td>Функция добавлена в <code>src/wiki-path.ts</code></td></tr>
+    <tr><td>R4</td><td>Де-дупликация: <code>isSourceFile</code> переиспользует <code>isWikiArticlePath</code></td><td><span class="badge badge-ok">DONE</span></td><td><code>src/source-deletion.ts</code> — импорт и тело изменены</td></tr>
+    <tr><td>R5</td><td>Контроллер <code>format()</code> — финальный gate (без изменений)</td><td><span class="badge badge-ok">DONE</span></td><td><code>src/controller.ts</code> не трогался</td></tr>
+    <tr><td>R6</td><td>Testing eval — headless проверка всех 6 edge-cases</td><td><span class="badge badge-ok">DONE</span></td><td><code>eval/format-button/run.ts</code> с 6 <code>check()</code></td></tr>
+  </tbody>
+</table>
+
+<!-- Edge case matrix -->
+<h2>Success Criteria — матрица edge-cases (7/7)</h2>
+<table class="rpt-table">
+  <thead><tr><th>Active file</th><th>Format button (spec)</th><th>Реализация в diff</th></tr></thead>
+  <tbody>
+    <tr><td>Нет активного файла</td><td>disabled</td><td><code>canFormat</code> требует <code>!!activeFile</code></td></tr>
+    <tr><td>Не <code>.md</code></td><td>disabled</td><td><code>activeFile.extension === "md"</code></td></tr>
+    <tr><td><code>!Wiki/...</code> (любой домен / <code>_config</code>)</td><td>disabled</td><td><code>!isWikiArticlePath(path)</code> → <code>startsWith("!Wiki/")</code></td></tr>
+    <tr><td><code>!Wiki</code> точно</td><td>disabled</td><td><code>path === WIKI_ROOT</code> в предикате</td></tr>
+    <tr><td>Source в <code>domain.source_paths</code></td><td><strong>enabled</strong></td><td><code>canFormat</code> не зависит от <code>isSource</code></td></tr>
+    <tr><td>Source НЕ в <code>domain.source_paths</code></td><td><strong>enabled</strong> <span class="badge badge-ok">THE FIX</span></td><td><code>canFormat</code> не требует членства в домене</td></tr>
+    <tr><td>Любой <code>.md</code> вне вики</td><td><strong>enabled</strong></td><td>Да — <code>canFormat</code> = true для любого non-wiki <code>.md</code></td></tr>
+  </tbody>
+</table>
+
+<!-- Excess changes -->
+<h2>Excess Changes</h2>
+<div class="note note-info">
+  <b>Избыточных изменений нет.</b> Все файлы в diff покрыты шагами плана или являются ожидаемыми артефактами (build, chain docs, HTML reports). Unrelated commits до <code>e0ee35b</code> (<code>.graphify</code>, <code>CLAUDE.md</code>) не появляются в <code>git diff e0ee35b dev/format-button-domain</code> для <code>src/</code> / <code>eval/</code> / <code>docs/wiki/</code> — подтверждено.
+</div>
+
+<table class="rpt-table">
+  <thead><tr><th>Файл / группа</th><th>Статус</th></tr></thead>
+  <tbody>
+    <tr><td><code>docs/superpowers/specs/...</code></td><td>Ожидаемый артефакт цепочки — не excess</td></tr>
+    <tr><td><code>docs/superpowers/plans/...</code></td><td>Ожидаемый артефакт цепочки (result_check) — не excess</td></tr>
+    <tr><td><code>docs/superpowers/reports/plans/...</code></td><td>HTML-отчёт /check-plan — ожидаемый артефакт</td></tr>
+    <tr><td><code>docs/superpowers/reports/specs/...</code></td><td>HTML-отчёт /check-spec — ожидаемый артефакт</td></tr>
+    <tr><td><code>dist/main.js</code></td><td>Ожидаемый build artifact — не excess</td></tr>
+  </tbody>
+</table>
+
+<!-- Summary -->
+<h2>Итоговая сводка</h2>
+<div class="summary-row">
+  <span class="scount crit">CRITICAL: 0</span>
+  <span class="scount warn">WARNING: 0</span>
+  <span class="scount info-s">INFO: 2</span>
+</div>
+
+<div class="verdict-banner">
+  <span class="verdict-icon">✅</span>
+  <div>
+    <div class="verdict-label">ВЕРДИКТ: OK</div>
+    <div class="verdict-hash">
+      plan_hash: <code>4c1e0fe3de2d156b</code> &nbsp;·&nbsp;
+      Spec coverage: 6/6 требований, 7/7 edge-cases &nbsp;·&nbsp;
+      Steps: 4 DONE, 0 PARTIAL, 0 MISSING
+    </div>
+  </div>
+</div>
+
+<hr>
+<footer>
+  Result Check · Plan: <code>docs/superpowers/plans/2026-06-22-format-button-domain.md</code> ·
+  Chain: <em>null (intent)</em> → <code>docs/superpowers/specs/2026-06-22-format-button-domain-design.md</code> → <code>docs/superpowers/plans/2026-06-22-format-button-domain.md</code> ·
+  Сгенерировано: 2026-06-22
+</footer>
+</body>
+</html>
