@@ -47,7 +47,7 @@ console.log("\n=== stripDeadLinks ===");
 {
   // dead link at sentence end → no dangling space before period.
   const out = stripDeadLinks("# T\n\nSee [[gone]].\n", new Set<string>());
-  check("dangling space before period tidied", out.includes("See.") || out.includes("See ."), JSON.stringify(out));
+  check("dangling space before period tidied", out.includes("See."), JSON.stringify(out));
 }
 {
   // no frontmatter → operate on whole content as body, no crash.
