@@ -38276,6 +38276,21 @@ function parseIndexAnnotations(content) {
   }
   return map;
 }
+function deriveFallbackAnnotation(content, entityType) {
+  const body = content.replace(/^---\n[\s\S]*?\n---\n?/, "");
+  const h1 = (body.match(/^#\s+(.+)$/m)?.[1] ?? "").trim() || "(untitled)";
+  const firstLine = body.split("\n").find((l) => {
+    const t = l.trim();
+    return t && !t.startsWith("#") && !t.startsWith("|") && !t.startsWith("---");
+  }) ?? "";
+  const trimmed = firstLine.trim();
+  const sentence = trimmed.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? trimmed;
+  const type = (entityType ?? "").trim() || "general";
+  const unwrap = (s) => s.replace(/\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]/g, "$1");
+  let out = `${unwrap(h1)} \u2014 ${unwrap(sentence)} Type: ${type}`.replace(/\s+/g, " ").trim();
+  if (out.length > 800) out = out.slice(0, 797).trimEnd() + "...";
+  return out;
+}
 function deriveSection(wikiFolder, fullPath) {
   if (!fullPath) return "general";
   const prefix = wikiFolder + "/";
@@ -38360,6 +38375,22 @@ async function removeIndexAnnotation(vaultTools, wikiFolder, pid) {
     if (!hasEntries) without.splice(secIdx, 1);
   }
   await vaultTools.write(indexPath, without.join("\n"));
+}
+function reconcileIndex(indexContent, wikiFolder, pages) {
+  const indexed = new Set(parseIndexAnnotations(indexContent).keys());
+  const onDisk = /* @__PURE__ */ new Set();
+  const adds = [];
+  for (const p of pages) {
+    const stem = p.path.split("/").pop().replace(/\.md$/, "");
+    if (stem.startsWith("_") || !GENERIC_WIKI_STEM_REGEX.test(stem)) continue;
+    onDisk.add(stem);
+    if (indexed.has(stem)) continue;
+    const entityType = deriveSection(wikiFolder, p.path);
+    const annotation = p.annotation && p.annotation.trim() ? p.annotation : deriveFallbackAnnotation(p.content, entityType);
+    adds.push({ pid: stem, annotation, fullPath: p.path });
+  }
+  const removes = [...indexed].filter((pid) => !onDisk.has(pid));
+  return { adds, removes };
 }
 
 // src/wiki-log.ts
@@ -38570,8 +38601,33 @@ function checkWikiLinks(pages) {
   if (violations.length === 0) return "";
   return violations.map((v) => `- ${v.page}: ${v.kind} link ${v.detail}`).join("\n");
 }
+function tidyAfterRemoval(text) {
+  return text.replace(/ +([,.;:)\]])/g, "$1").replace(/[ \t]+$/gm, "");
+}
+function stripDeadLinks(content, knownStems) {
+  const parts = splitFrontmatter(content);
+  const fm = parts ? parts[0] : null;
+  let body = parts ? parts[1] : content;
+  body = body.replace(
+    /[ \t]*\[\[([^\]|]+?)(?:\|[^\]]+)?\]\][ \t]*/g,
+    (full, link) => {
+      const stem = link.trim().split("/").pop();
+      return knownStems.has(stem) ? full : " ";
+    }
+  );
+  body = tidyAfterRemoval(body);
+  if (fm === null) return body.trim();
+  const bodyLinks = [...new Set(extractLinks(body).map((l) => `[[${l}]]`))];
+  return setFmLinks(fm, bodyLinks) + body;
+}
 
 // src/phases/ingest.ts
+function deriveSectionForPath(wikiFolder, fullPath) {
+  const prefix = wikiFolder + "/";
+  const rel = fullPath.startsWith(prefix) ? fullPath.slice(prefix.length) : fullPath;
+  const parts = rel.split("/");
+  return parts.length >= 2 ? parts[0] : "general";
+}
 function parseWikiStatus(content) {
   const m = /^---\n[\s\S]*?^wiki_status:[ \t]*(.+)$/m.exec(content);
   return m ? m[1].trim() : "unknown";
@@ -38824,7 +38880,10 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     ...[...pagesMap.keys()].map((p) => p.split("/").pop().replace(/\.md$/, ""))
   ]);
   const wlFixResult = fixWikiLinks(pagesMap, wikiLinkValidationRetries, knownStems);
-  pages = pages.map((p) => ({ ...p, content: wlFixResult.fixed.get(p.path) ?? p.content }));
+  pages = pages.map((p) => {
+    const fixed = wlFixResult.fixed.get(p.path) ?? p.content;
+    return { ...p, content: stripDeadLinks(fixed, knownStems) };
+  });
   const written = [];
   const logEntries = [];
   const dedupOn = (opts.dedupOnIngest ?? false) && (opts.dedupThreshold ?? 0) > 0 && !!similarity;
@@ -38930,11 +38989,10 @@ ${page.content}`;
       } else {
         logEntries.push({ path: relPath, action: "UPDATED", statusFrom: parseWikiStatus(existingContent), statusTo });
       }
-      if (page.annotation) {
-        try {
-          await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), page.annotation, page.path);
-        } catch {
-        }
+      try {
+        const annotation = page.annotation && page.annotation.trim() ? page.annotation : deriveFallbackAnnotation(sourcedPage, deriveSectionForPath(wikiVaultPath, page.path));
+        await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), annotation, page.path);
+      } catch {
       }
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: e.message };
@@ -38972,6 +39030,23 @@ ${page.content}`;
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: e.message };
     }
+  }
+  try {
+    const finalPaths = (await vaultTools.listFiles(wikiVaultPath)).filter((f) => f.endsWith(".md") && !f.endsWith("_index.md") && !f.endsWith("_log.md"));
+    const finalPages = await vaultTools.readAll(finalPaths);
+    const currentIndex = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
+    const recon = reconcileIndex(
+      currentIndex,
+      wikiVaultPath,
+      [...finalPages].map(([path2, content]) => ({ path: path2, content }))
+    );
+    for (const a of recon.adds) {
+      await upsertIndexAnnotation(vaultTools, wikiVaultPath, a.pid, a.annotation, a.fullPath);
+    }
+    for (const pid of recon.removes) {
+      await removeIndexAnnotation(vaultTools, wikiVaultPath, pid);
+    }
+  } catch {
   }
   const createdCount = logEntries.filter((e) => e.action === "CREATED").length;
   const updatedCount = logEntries.filter((e) => e.action === "UPDATED").length;
@@ -40073,6 +40148,13 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
       ].filter((stem) => !deletedNames.has(stem))
     );
     for (const [wikiPath, wikiContent] of pages) {
+      const cleaned = stripDeadLinks(wikiContent, knownStems);
+      if (cleaned !== wikiContent) {
+        pages.set(wikiPath, cleaned);
+        await vaultTools.write(wikiPath, cleaned);
+      }
+    }
+    for (const [wikiPath, wikiContent] of pages) {
       const { content: filteredWiki } = filterStaleWikiLinks(wikiContent, existingWikiStems, ["wiki_outgoing_links"]);
       if (filteredWiki !== wikiContent) {
         pages.set(wikiPath, filteredWiki);
@@ -40126,6 +40208,25 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
     }
     if (backlinks.size > 0) {
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
+    }
+    try {
+      const reconPages = [...pages.entries()].map(([path2, content]) => {
+        const pid = pageId(path2);
+        const ann = annotations.get(pid);
+        return ann ? { path: path2, content, annotation: ann } : { path: path2, content };
+      });
+      const currentIndex = await tryRead3(vaultTools, domainIndexPath(wikiVaultPath));
+      const recon = reconcileIndex(currentIndex, wikiVaultPath, reconPages);
+      for (const a of recon.adds) {
+        await upsertIndexAnnotation(vaultTools, wikiVaultPath, a.pid, a.annotation, a.fullPath);
+      }
+      for (const pid of recon.removes) {
+        await removeIndexAnnotation(vaultTools, wikiVaultPath, pid);
+      }
+      if (recon.adds.length || recon.removes.length) {
+        reportParts.push(`Index reconciled: +${recon.adds.length} / -${recon.removes.length}`);
+      }
+    } catch {
     }
     try {
       await appendWikiLog(vaultTools, wikiVaultPath, domain.id, {
