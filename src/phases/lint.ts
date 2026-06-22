@@ -14,9 +14,9 @@ import { wikiSections } from "./llm-utils";
 import { domainWikiFolder, domainIndexPath, WIKI_ROOT } from "../wiki-path";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, filterStaleWikiLinks, validateAndRepairWikiPageFrontmatter, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
 import { checkGraphStructure, pageId, bfsExpand } from "../wiki-graph";
-import { checkWikiLinks, fixWikiLinks } from "../wiki-link-validator";
+import { checkWikiLinks, fixWikiLinks, stripDeadLinks } from "../wiki-link-validator";
 import { graphCache } from "../wiki-graph-cache";
-import { upsertIndexAnnotation, parseIndexAnnotations } from "../wiki-index";
+import { upsertIndexAnnotation, parseIndexAnnotations, reconcileIndex, removeIndexAnnotation } from "../wiki-index";
 import { appendWikiLog } from "../wiki-log";
 import { ensureDomainConfig } from "../domain-config";
 import type { PageSimilarityService } from "../page-similarity";
@@ -532,6 +532,16 @@ export async function* runLint(
       ].filter(stem => !deletedNames.has(stem))
     );
 
+    // Deterministic dead-link removal from article bodies (runs with LLM on or off).
+    // Uses the vault-wide knownStems so links to source notes are preserved.
+    for (const [wikiPath, wikiContent] of pages) {
+      const cleaned = stripDeadLinks(wikiContent, knownStems);
+      if (cleaned !== wikiContent) {
+        pages.set(wikiPath, cleaned);
+        await vaultTools.write(wikiPath, cleaned);
+      }
+    }
+
     for (const [wikiPath, wikiContent] of pages) {
       const { content: filteredWiki } =
         filterStaleWikiLinks(wikiContent, existingWikiStems, ["wiki_outgoing_links"]);
@@ -599,6 +609,27 @@ export async function* runLint(
     if (backlinks.size > 0) {
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
     }
+
+    // Full bidirectional index reconciliation — cure: add pages missing from the
+    // index (fallback annotation when none), drop orphan entries. Runs without LLM.
+    try {
+      const reconPages = [...pages.entries()].map(([path, content]) => {
+        const pid = pageId(path);
+        const ann = annotations.get(pid);
+        return ann ? { path, content, annotation: ann } : { path, content };
+      });
+      const currentIndex = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
+      const recon = reconcileIndex(currentIndex, wikiVaultPath, reconPages);
+      for (const a of recon.adds) {
+        await upsertIndexAnnotation(vaultTools, wikiVaultPath, a.pid, a.annotation, a.fullPath);
+      }
+      for (const pid of recon.removes) {
+        await removeIndexAnnotation(vaultTools, wikiVaultPath, pid);
+      }
+      if (recon.adds.length || recon.removes.length) {
+        reportParts.push(`Index reconciled: +${recon.adds.length} / -${recon.removes.length}`);
+      }
+    } catch { /* non-critical */ }
 
     try {
       await appendWikiLog(vaultTools, wikiVaultPath, domain.id, {
