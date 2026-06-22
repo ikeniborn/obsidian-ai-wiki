@@ -25,6 +25,30 @@ export function validateIclaudePath(p: string): void {
   if (p.split("/").includes("..")) throw new Error(`iclaudePath contains path traversal: "${p}"`);
 }
 
+/**
+ * Verify the configured Claude CLI binary exists and runs by spawning it with
+ * `--version` and checking the exit code. Replaces an earlier fs.access(X_OK)
+ * check so the plugin no longer imports the Node `fs` module. Desktop-only;
+ * child_process is loaded lazily so the Node builtin never executes on mobile.
+ */
+export async function probeClaudeBinary(iclaudePath: string): Promise<void> {
+  validateIclaudePath(iclaudePath);
+  if (!Platform.isDesktopApp) throw new Error("Claude CLI backend is desktop-only");
+  const { spawn } = await import("node:child_process");
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(iclaudePath, ["--version"], { stdio: ["ignore", "ignore", "pipe"] });
+    let stderr = "";
+    const timer = window.setTimeout(() => { child.kill("SIGTERM"); reject(new Error("timeout")); }, 5000);
+    child.stderr?.on("data", (d: Buffer) => { stderr += d.toString("utf8"); });
+    child.on("error", (err: Error) => { window.clearTimeout(timer); reject(err); });
+    child.on("close", (code: number | null) => {
+      window.clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(stderr.trim() || `exit ${code}`));
+    });
+  });
+}
+
 export class ClaudeCliClient implements LlmClient {
   /** Session ID of the last completed turn, populated from the system init event. */
   lastSessionId?: string;
