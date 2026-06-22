@@ -1,5 +1,6 @@
 import type { VaultTools } from "./vault-tools";
 import { domainIndexPath } from "./wiki-path";
+import { GENERIC_WIKI_STEM_REGEX } from "./wiki-stem";
 
 export function parseIndexAnnotations(content: string): Map<string, string> {
   const map = new Map<string, string>();
@@ -139,4 +140,39 @@ export async function removeIndexAnnotation(
   }
 
   await vaultTools.write(indexPath, without.join("\n"));
+}
+
+export interface IndexReconcile {
+  adds: Array<{ pid: string; annotation: string; fullPath: string }>;
+  removes: string[];
+}
+
+// Bidirectional diff between _index.md and the on-disk page set.
+// `pages` MUST be the complete domain page set, or live pages would be
+// mis-flagged as orphans. Meta files (_*) and stems failing the wiki mask
+// are ignored. Caller applies adds via upsertIndexAnnotation and removes via
+// removeIndexAnnotation.
+export function reconcileIndex(
+  indexContent: string,
+  wikiFolder: string,
+  pages: Array<{ path: string; content: string; annotation?: string }>,
+): IndexReconcile {
+  const indexed = new Set(parseIndexAnnotations(indexContent).keys());
+  const onDisk = new Set<string>();
+  const adds: IndexReconcile["adds"] = [];
+
+  for (const p of pages) {
+    const stem = p.path.split("/").pop()!.replace(/\.md$/, "");
+    if (stem.startsWith("_") || !GENERIC_WIKI_STEM_REGEX.test(stem)) continue;
+    onDisk.add(stem);
+    if (indexed.has(stem)) continue;
+    const entityType = deriveSection(wikiFolder, p.path);
+    const annotation = (p.annotation && p.annotation.trim())
+      ? p.annotation
+      : deriveFallbackAnnotation(p.content, entityType);
+    adds.push({ pid: stem, annotation, fullPath: p.path });
+  }
+
+  const removes = [...indexed].filter((pid) => !onDisk.has(pid));
+  return { adds, removes };
 }
