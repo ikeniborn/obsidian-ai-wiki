@@ -26,7 +26,8 @@ export function deriveFallbackAnnotation(content: string, entityType?: string): 
     const t = l.trim();
     return t && !t.startsWith("#") && !t.startsWith("|") && !t.startsWith("---");
   }) ?? "";
-  const sentence = firstLine.trim().split(/(?<=[.!?])\s/)[0] ?? "";
+  const trimmed = firstLine.trim();
+  const sentence = trimmed.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? trimmed;
 
   const type = (entityType ?? "").trim() || "general";
   const unwrap = (s: string) => s.replace(/\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]/g, "$1");
