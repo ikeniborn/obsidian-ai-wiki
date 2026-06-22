@@ -14,6 +14,29 @@ export function parseIndexAnnotations(content: string): Map<string, string> {
   return map;
 }
 
+// Deterministic one-line annotation for pages the LLM left un-annotated, so they
+// still get an index entry (and therefore an embedding) and become retrievable.
+// LLM lint later upgrades it to a full Covers:/Type:/Terms: annotation.
+export function deriveFallbackAnnotation(content: string, entityType?: string): string {
+  const body = content.replace(/^---\n[\s\S]*?\n---\n?/, "");
+  const h1 = (body.match(/^#\s+(.+)$/m)?.[1] ?? "").trim() || "(untitled)";
+
+  const firstLine = body.split("\n").find((l) => {
+    const t = l.trim();
+    return t && !t.startsWith("#") && !t.startsWith("|") && !t.startsWith("---");
+  }) ?? "";
+  const sentence = firstLine.trim().split(/(?<=[.!?])\s/)[0] ?? "";
+
+  const type = (entityType ?? "").trim() || "general";
+  const unwrap = (s: string) => s.replace(/\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]/g, "$1");
+
+  let out = `${unwrap(h1)} — ${unwrap(sentence)} Type: ${type}`
+    .replace(/\s+/g, " ")
+    .trim();
+  if (out.length > 800) out = out.slice(0, 797).trimEnd() + "...";
+  return out;
+}
+
 function deriveSection(wikiFolder: string, fullPath?: string): string {
   if (!fullPath) return "general";
   const prefix = wikiFolder + "/";
