@@ -1,5 +1,6 @@
 import { AbstractInputSuggest, App, DropdownComponent, Notice, Platform, PluginSettingTab, requestUrl, Setting } from "obsidian";
 import { ConfirmModal, EditDomainModal, ShellConsentModal } from "./modals";
+import { probeClaudeBinary } from "./claude-cli-client";
 import type LlmWikiPlugin from "./main";
 import type { LlmWikiPluginSettings, OpKey } from "./types";
 import type { DomainEntry } from "./domain";
@@ -7,12 +8,6 @@ import { i18n } from "./i18n";
 import { resolveEffective } from "./effective-settings";
 import { DEFAULT_CHUNKING, probeEmbeddingDimensions } from "./page-similarity";
 import type { LocalConfig } from "./local-config";
-
-async function checkClaudeAvailability(iclaudePath: string): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node.js fs check for Claude CLI executable, desktop only
-  const { access, constants } = require("node:fs/promises") as typeof import("node:fs/promises");
-  await access(iclaudePath, constants.X_OK);
-}
 
 async function checkNativeAvailability(baseUrl: string, apiKey: string, model: string): Promise<void> {
   let timerId: number | undefined;
@@ -405,7 +400,7 @@ export class LlmWikiSettingTab extends PluginSettingTab {
           b.setButtonText(T.settings.testConnection_btn).onClick(async () => {
             b.setButtonText(T.settings.testConnection_btnBusy).setDisabled(true);
             try {
-              await checkClaudeAvailability(this.localCache.iclaudePath);
+              await probeClaudeBinary(this.localCache.iclaudePath);
               new Notice(T.settings.claudeAvailable_ok);
             } catch (e) {
               new Notice(`❌ ${(e as Error).message}`);

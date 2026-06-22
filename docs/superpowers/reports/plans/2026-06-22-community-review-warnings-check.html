@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>check-plan — community-review warnings</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#161b22; --panel2:#1c2330; --border:#2d3748;
+    --fg:#e6edf3; --muted:#8b98a9; --accent:#58a6ff; --accent2:#7ee787;
+    --warn:#e3b341; --crit:#f85149; --info:#79c0ff; --ok:#3fb950;
+    --t1:#1f3a5f; --t2:#23423a; --t3:#3d2b4f; --t4:#4a3520; --pre:#2a2f3a;
+    --edge:#5b6b82; --shadow:0 2px 8px rgba(0,0,0,.45);
+  }
+  :root[data-theme="light"]{
+    --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f6; --border:#d0d7de;
+    --fg:#1f2328; --muted:#59636e; --accent:#0969da; --accent2:#1a7f37;
+    --warn:#9a6700; --crit:#cf222e; --info:#0550ae; --ok:#1a7f37;
+    --t1:#ddeaff; --t2:#d7f0e4; --t3:#f3e1fb; --t4:#fbeed6; --pre:#e7ecf2;
+    --edge:#8c9bab; --shadow:0 2px 8px rgba(140,149,159,.25);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:0 0 64px}
+  header{position:sticky;top:0;z-index:10;background:var(--panel);border-bottom:1px solid var(--border);
+    padding:18px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px;box-shadow:var(--shadow)}
+  header h1{font-size:18px;margin:0;font-weight:650}
+  header .sub{color:var(--muted);font-size:13px;margin-top:3px}
+  main{max-width:1080px;margin:0 auto;padding:28px}
+  section{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+    padding:22px 24px;margin:0 0 24px;box-shadow:var(--shadow)}
+  h2{font-size:16px;margin:0 0 16px;display:flex;align-items:center;gap:9px;
+    border-bottom:1px solid var(--border);padding-bottom:10px}
+  h2 .n{color:var(--accent);font-variant-numeric:tabular-nums}
+  h3{font-size:13px;color:var(--muted);margin:22px 0 10px;text-transform:uppercase;letter-spacing:.04em}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0}
+  th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{color:var(--muted);font-weight:600;background:var(--panel2)}
+  tr:last-child td{border-bottom:none}
+  code{background:var(--panel2);padding:1.5px 6px;border-radius:5px;
+    font:12px/1.4 "SF Mono",ui-monospace,Menlo,Consolas,monospace;color:var(--accent2)}
+  .tk{display:inline-block;padding:1px 8px;border-radius:6px;font-size:11.5px;font-weight:700}
+  .tk.t1{background:var(--t1)} .tk.t2{background:var(--t2)} .tk.t3{background:var(--t3)} .tk.t4{background:var(--t4)}
+  .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:650}
+  .b-pass{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok);border:1px solid color-mix(in srgb,var(--ok) 45%,transparent)}
+  .b-info{background:color-mix(in srgb,var(--info) 18%,transparent);color:var(--info);border:1px solid color-mix(in srgb,var(--info) 45%,transparent)}
+  .verdict-ok{color:var(--ok);font-weight:700;font-size:18px}
+  .note{border-left:3px solid var(--accent);background:var(--panel2);padding:11px 15px;border-radius:0 8px 8px 0;margin:14px 0;font-size:13px}
+  .summary-row{display:flex;gap:14px;flex-wrap:wrap;margin:4px 0 0}
+  .stat{flex:1;min-width:130px;background:var(--panel2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;text-align:center}
+  .stat .v{font-size:26px;font-weight:750;font-variant-numeric:tabular-nums}
+  .stat .l{color:var(--muted);font-size:12px;margin-top:3px;text-transform:uppercase;letter-spacing:.04em}
+  button#tt{background:var(--panel2);color:var(--fg);border:1px solid var(--border);border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600}
+  button#tt:hover{border-color:var(--accent)}
+  .mono{font:12px/1.4 "SF Mono",ui-monospace,Menlo,monospace;color:var(--muted)}
+  figure{margin:0}
+  svg{max-width:100%;height:auto;display:block}
+  .ok-cell{color:var(--ok);font-weight:700}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>check-plan — Community-review warning remediation</h1>
+    <div class="sub">план реализации · ветка <code>dev/community-review-warnings</code> → PR в <code>master</code> · 2026-06-22</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <span class="verdict-ok">OK ✓</span>
+    <button id="tt" onclick="tog()">☾ тема</button>
+  </div>
+</header>
+
+<main>
+
+<section>
+  <h2><span class="n">1</span> Резюме плана</h2>
+  <div class="mono">plan_hash: 72557ecb915d6ae4 · spec_hash: 42da2e6a0ad4af29 · 4 таска / 23 шага</div>
+  <table>
+    <thead><tr><th style="width:60px">Таск</th><th style="width:48px">Шаг</th><th>Действие</th><th style="width:34%">DoD / проверка</th></tr></thead>
+    <tbody>
+      <tr><td><span class="tk t1">T1</span></td><td>S1</td><td>package.json undici <code>^6.25.0→^6.27.0</code></td><td>строка изменена</td></tr>
+      <tr><td><span class="tk t1">T1</span></td><td>S2</td><td><code>npm install</code></td><td>lockfile резолвит 6.27.0</td></tr>
+      <tr><td><span class="tk t1">T1</span></td><td>S3</td><td><code>npm ls undici</code></td><td>undici@6.27.0</td></tr>
+      <tr><td><span class="tk t1">T1</span></td><td>S4</td><td><code>npm audit</code></td><td>«no undici advisory»</td></tr>
+      <tr><td><span class="tk t1">T1</span></td><td>S5</td><td>commit</td><td>package.json + lock закоммичены</td></tr>
+      <tr><td><span class="tk t2">T2</span></td><td>S1</td><td>написать eval run.ts + obsidian-stub + .gitignore</td><td>файлы созданы</td></tr>
+      <tr><td><span class="tk t2">T2</span></td><td>S2</td><td>esbuild bundle eval</td><td>падает: «No matching export … probeClaudeBinary» (red)</td></tr>
+      <tr><td><span class="tk t2">T2</span></td><td>S3</td><td>реализовать <code>probeClaudeBinary</code> в claude-cli-client.ts</td><td>validate→import child_process→spawn --version→5с timeout→resolve exit0/reject</td></tr>
+      <tr><td><span class="tk t2">T2</span></td><td>S4</td><td>rebuild + <code>node run.cjs</code></td><td>«5 passed, 0 failed»</td></tr>
+      <tr><td><span class="tk t2">T2</span></td><td>S5</td><td>lint + tsc grep</td><td>нет новых ошибок в claude-cli-client.ts</td></tr>
+      <tr><td><span class="tk t2">T2</span></td><td>S6</td><td>commit</td><td>src + eval закоммичены</td></tr>
+      <tr><td><span class="tk t3">T3</span></td><td>S1</td><td>удалить <code>checkClaudeAvailability</code> (fs/promises)</td><td>функция удалена</td></tr>
+      <tr><td><span class="tk t3">T3</span></td><td>S2</td><td>import <code>probeClaudeBinary</code></td><td>импорт добавлен</td></tr>
+      <tr><td><span class="tk t3">T3</span></td><td>S3</td><td>кнопка зовёт probeClaudeBinary</td><td>вызов заменён</td></tr>
+      <tr><td><span class="tk t3">T3</span></td><td>S4</td><td>grep fs в src/</td><td class="ok-cell">«no fs imports in src/»</td></tr>
+      <tr><td><span class="tk t3">T3</span></td><td>S5</td><td>lint + tsc grep</td><td>чисто для settings.ts</td></tr>
+      <tr><td><span class="tk t3">T3</span></td><td>S6</td><td>commit</td><td>settings.ts закоммичен</td></tr>
+      <tr><td><span class="tk t4">T4</span></td><td>S1</td><td><code>npm run build</code> (production)</td><td>баннер «dist/ updated…», exit 0</td></tr>
+      <tr><td><span class="tk t4">T4</span></td><td>S2</td><td>grep ProxyAgent dist/main.js</td><td>счётчик &gt; 0 (proxy цел)</td></tr>
+      <tr><td><span class="tk t4">T4</span></td><td>S3</td><td>acceptance: grep fs / audit / lint</td><td>все OK</td></tr>
+      <tr><td><span class="tk t4">T4</span></td><td>S4</td><td>ручной smoke: Test connection</td><td>валидный→ok / битый→❌ / пустой→❌</td></tr>
+      <tr><td><span class="tk t4">T4</span></td><td>S5</td><td>iwiki-ingest settings.ts + proxy-deps; iwiki-lint</td><td>нет битых [[refs]], нет orphan/stale</td></tr>
+      <tr><td><span class="tk t4">T4</span></td><td>S6</td><td>commit dist + docs</td><td>артефакт + docs закоммичены</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Global Constraints (verbatim)</h3>
+  <table><tbody>
+    <tr><td>undici floor <code>^6.27.0</code>; ноль <code>fs</code>/<code>fs/promises</code> импортов в src/.</td></tr>
+    <tr><td>node-builtins lazy (<code>await import</code>) + desktop-guarded (<code>Platform.isDesktopApp</code>).</td></tr>
+    <tr><td><code>child_process</code> остаётся external + consent-gated, НЕ удаляется; proxy + Claude-CLI backend целы.</td></tr>
+    <tr><td>tsc-gate на НОВЫЕ ошибки в тронутых файлах (baseline ~135); без bump версии/релиза (publish-version отдельно).</td></tr>
+    <tr><td>Ветка <code>dev/community-review-warnings</code>, PR → <code>master</code>.</td></tr>
+  </tbody></table>
+</section>
+
+<section>
+  <h2><span class="n">2</span> Граф зависимостей шагов <span class="badge b-pass" style="font-size:11px">DAG · порядок ок</span></h2>
+  <figure>
+  <svg viewBox="0 0 820 300" role="img" aria-label="Граф зависимостей тасков">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/>
+      </marker>
+      <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1.5" stdDeviation="2" flood-color="#000" flood-opacity="0.35"/>
+      </filter>
+    </defs>
+    <style>
+      .nd rect{stroke:var(--border);stroke-width:1;filter:url(#ds)}
+      .nd text{fill:var(--fg);font:600 12.5px sans-serif}
+      .nd .sm{font:500 10.5px sans-serif;fill:var(--muted)}
+      .ed{stroke:var(--edge);stroke-width:1.8;fill:none;marker-end:url(#ar)}
+      .edl{fill:var(--muted);font:600 10px sans-serif}
+    </style>
+    <!-- edges -->
+    <path class="ed" d="M210,70 C320,70 360,120 410,144"/>      <!-- T1 -> T4 -->
+    <path class="ed" d="M150,118 L150,182"/>                     <!-- T2 -> T3 -->
+    <path class="ed" d="M260,210 C340,200 360,190 410,176"/>    <!-- T3 -> T4 -->
+    <path class="ed" d="M470,70 L470,140"/>                      <!-- pre-existing validate -> ... visual only -->
+    <text class="edl" x="300" y="96">rebuild несёт 6.27</text>
+    <text class="edl" x="158" y="158">produces→consumes</text>
+    <text class="edl" x="300" y="214">drops fs → verify</text>
+
+    <!-- nodes -->
+    <g class="nd"><rect x="40" y="48" width="170" height="44" rx="9" fill="var(--t1)"/>
+      <text x="58" y="68">T1 · bump undici</text><text class="sm" x="58" y="84">package.json ^6.27.0</text></g>
+    <g class="nd"><rect x="64" y="96" width="170" height="44" rx="9" fill="var(--t2)"/>
+      <text x="82" y="116">T2 · probeClaudeBinary</text><text class="sm" x="82" y="132">+ eval (produces)</text></g>
+    <g class="nd"><rect x="90" y="184" width="170" height="44" rx="9" fill="var(--t3)"/>
+      <text x="108" y="204">T3 · settings swap</text><text class="sm" x="108" y="220">consumes · drops fs</text></g>
+    <g class="nd"><rect x="410" y="140" width="170" height="44" rx="9" fill="var(--t4)"/>
+      <text x="428" y="160">T4 · build + verify</text><text class="sm" x="428" y="176">единая пересборка dist</text></g>
+    <g class="nd"><rect x="400" y="40" width="190" height="40" rx="9" fill="var(--pre)"/>
+      <text x="416" y="58">validateIclaudePath</text><text class="sm" x="416" y="72">pre-existing (вне плана)</text></g>
+  </svg>
+  </figure>
+  <div class="mono">Рёбра M→N: результат таска M используется в N (M&lt;N). T2→T3 (producer→consumer), T1→T4 и T3→T4 (единая пересборка). TDD red-state внутри T2 (S1→S2→S3→S4) намеренный, не нарушение порядка. Циклов нет.</div>
+</section>
+
+<section>
+  <h2><span class="n">3</span> Пересечения и покрытие</h2>
+  <h3>Артефакт → таски</h3>
+  <table>
+    <thead><tr><th>Артефакт</th><th>Таск(и)</th></tr></thead>
+    <tbody>
+      <tr><td><code>package.json</code> / <code>package-lock.json</code></td><td><span class="tk t1">T1</span></td></tr>
+      <tr><td><code>src/claude-cli-client.ts</code></td><td><span class="tk t2">T2</span> (+probeClaudeBinary)</td></tr>
+      <tr><td><code>eval/claude-probe/*</code></td><td><span class="tk t2">T2</span></td></tr>
+      <tr><td><code>src/settings.ts</code></td><td><span class="tk t3">T3</span></td></tr>
+      <tr><td><code>dist/main.js</code> + <code>manifest.json</code></td><td><span class="tk t4">T4</span> (единственная пересборка)</td></tr>
+      <tr><td><code>docs/wiki/</code></td><td><span class="tk t4">T4</span></td></tr>
+    </tbody>
+  </table>
+  <div class="note">Overlap: <code>dist</code> собирается ровно один раз (T4) и несёт ОБА изменения (undici-bump из T1 + spawn-probe из T2/T3). Двойной пересборки нет.</div>
+
+  <h3>Требование спеки → шаги</h3>
+  <table>
+    <thead><tr><th style="width:54%">Требование</th><th>Шаги</th></tr></thead>
+    <tbody>
+      <tr><td>(a) убрать fs из src/</td><td>T3.S1, T3.S4, T4.S3</td></tr>
+      <tr><td>(b) bump undici + install + rebuild</td><td>T1.S1–3, T4.S1</td></tr>
+      <tr><td>(c) кнопка Test connection жива</td><td>T3.S3, T4.S4</td></tr>
+      <tr><td>(d) proxy + Claude-CLI backend целы</td><td>Constraints, T1-интерфейс, T4.S2</td></tr>
+      <tr><td>(e) spawn-проба (--version/5с/exit0/reject, validateIclaudePath)</td><td>T2.S3</td></tr>
+      <tr><td>(f) child_process external+lazy+desktop-guarded+consent</td><td>Constraints, T2.S3, T2.S5</td></tr>
+      <tr><td>(g) verification (grep/audit/lint/tsc/manual/iwiki)</td><td>T2.S5, T3.S4–5, T4.S3–5</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2><span class="n">4</span> Результаты проверки</h2>
+  <div class="summary-row">
+    <div class="stat"><div class="v" style="color:var(--crit)">0</div><div class="l">CRITICAL open</div></div>
+    <div class="stat"><div class="v" style="color:var(--warn)">0</div><div class="l">WARNING open</div></div>
+    <div class="stat"><div class="v" style="color:var(--info)">1</div><div class="l">INFO (accepted)</div></div>
+    <div class="stat"><div class="v" style="color:var(--ok)">OK</div><div class="l">Вердикт</div></div>
+  </div>
+
+  <h3>Фазы</h3>
+  <table>
+    <thead><tr><th style="width:140px">Фаза</th><th style="width:80px">Статус</th><th>Заметка</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge b-pass">passed</span></td><td>Нет плейсхолдеров; нумерация тасков 1→4 и шагов сплошная; нет дублей.</td></tr>
+      <tr><td>coverage</td><td><span class="badge b-pass">passed</span></td><td>Все требования a–g покрыты ≥1 шагом; нет orphan-шагов.</td></tr>
+      <tr><td>dependencies</td><td><span class="badge b-pass">passed</span></td><td>T2→T3 producer→consumer; T1→T4; validateIclaudePath pre-existing; TDD red-state намеренный; циклов нет.</td></tr>
+      <tr><td>verifiability</td><td><span class="badge b-pass">passed</span></td><td>Каждый шаг с измеримым DoD/командой + ожидаемым выводом.</td></tr>
+      <tr><td>consistency</td><td><span class="badge b-pass">passed</span></td><td>Сигнатура probeClaudeBinary идентична в T2/T3; undici ^6.27.0 везде.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Findings</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Текст</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>F-001</code></td>
+        <td><span class="badge b-info">INFO</span></td>
+        <td>Task 2 — probe + eval</td>
+        <td>Проба слушает <code>child.on('close')</code> вместо <code>'exit'</code> из сниппета спеки — оба несут exit-code, <code>close</code> гарантирует слив stdio до чтения stderr; намеренное безопасное улучшение.</td>
+        <td><span class="badge b-pass">accepted</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note"><b>Chain:</b> intent → spec → plan · intent = <code>null</code> · spec = <code>2026-06-22-community-review-warnings-design.md</code> · plan = <code>2026-06-22-community-review-warnings.md</code>.</div>
+</section>
+
+</main>
+
+<script>
+  function tog(){
+    var r=document.documentElement;
+    var cur=r.getAttribute('data-theme')==='light'?'dark':'light';
+    r.setAttribute('data-theme',cur);
+    document.getElementById('tt').textContent=(cur==='light'?'☀ тема':'☾ тема');
+  }
+</script>
+</body>
+</html>
