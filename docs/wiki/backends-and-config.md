@@ -16,6 +16,8 @@ Wraps `ClaudeCliClient` (`src/claude-cli-client.ts`) — spawns `iclaude.sh` / `
 
 Per-operation effort levels map to Claude's extended thinking. The subprocess kill timer is skipped when `requestTimeoutSec = 0` (no-limit mode). On this backend, format vision is enabled and chat sessions resume via `sessionId`.
 
+The settings **Test connection** button verifies the configured binary via `probeClaudeBinary` (`src/claude-cli-client.ts`): it spawns `<iclaudePath> --version` through a lazy, desktop-guarded `node:child_process` import (reusing `validateIclaudePath`) and reports success on exit 0, failure otherwise. This replaced an earlier `fs.access(X_OK)` check — the plugin no longer imports the Node `fs` module anywhere in `src/`, so it makes no direct filesystem access outside the vault API.
+
 ## Split Settings Stores
 
 Settings are split into two stores to avoid syncing secrets across devices. `resolveEffective` (`src/effective-settings.ts`) merges them at runtime: spreads `data.json`, overlays only `apiKey` from local nativeAgent and `password` from local proxy.

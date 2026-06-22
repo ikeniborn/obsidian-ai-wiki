@@ -9555,6 +9555,7 @@ var require_dispatcher_base = __commonJS({
       }
       get webSocketOptions() {
         return {
+          maxFragments: this[kWebSocketOptions].maxFragments ?? 131072,
           maxPayloadSize: this[kWebSocketOptions].maxPayloadSize ?? 128 * 1024 * 1024
         };
       }
@@ -13209,6 +13210,9 @@ var require_client_h1 = __commonJS({
     var FastBuffer = Buffer[Symbol.species];
     var addListener = util2.addListener;
     var removeAllListeners = util2.removeAllListeners;
+    var kIdleSocketValidation = /* @__PURE__ */ Symbol("kIdleSocketValidation");
+    var kIdleSocketValidationTimeout = /* @__PURE__ */ Symbol("kIdleSocketValidationTimeout");
+    var kSocketUsed = /* @__PURE__ */ Symbol("kSocketUsed");
     var extractBody;
     async function lazyllhttp() {
       const llhttpWasmData = process.env.JEST_WORKER_ID ? require_llhttp_wasm() : void 0;
@@ -13371,23 +13375,54 @@ var require_client_h1 = __commonJS({
             currentBufferRef = null;
           }
           const offset = llhttp.llhttp_get_error_pos(this.ptr) - currentBufferPtr;
-          if (ret === constants.ERROR.PAUSED_UPGRADE) {
-            this.onUpgrade(data.slice(offset));
-          } else if (ret === constants.ERROR.PAUSED) {
-            this.paused = true;
-            socket.unshift(data.slice(offset));
-          } else if (ret !== constants.ERROR.OK) {
-            const ptr = llhttp.llhttp_get_error_reason(this.ptr);
-            let message = "";
-            if (ptr) {
-              const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
-              message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
+          if (ret !== constants.ERROR.OK) {
+            const body = data.subarray(offset);
+            if (ret === constants.ERROR.PAUSED_UPGRADE) {
+              this.onUpgrade(body);
+            } else if (ret === constants.ERROR.PAUSED) {
+              this.paused = true;
+              socket.unshift(body);
+            } else {
+              throw this.createError(ret, body);
             }
-            throw new HTTPParserError(message, constants.ERROR[ret], data.slice(offset));
           }
         } catch (err) {
           util2.destroy(socket, err);
         }
+      }
+      finish() {
+        assert(currentParser === null);
+        assert(this.ptr != null);
+        assert(!this.paused);
+        const { llhttp } = this;
+        let ret;
+        try {
+          currentParser = this;
+          ret = llhttp.llhttp_finish(this.ptr);
+        } finally {
+          currentParser = null;
+        }
+        if (ret === constants.ERROR.OK) {
+          return null;
+        }
+        if (ret === constants.ERROR.PAUSED || ret === constants.ERROR.PAUSED_UPGRADE) {
+          this.paused = true;
+          return null;
+        }
+        return this.createError(ret, EMPTY_BUF);
+      }
+      createError(ret, data) {
+        const { llhttp, contentLength, bytesRead } = this;
+        if (contentLength && bytesRead !== parseInt(contentLength, 10)) {
+          return new ResponseContentLengthMismatchError();
+        }
+        const ptr = llhttp.llhttp_get_error_reason(this.ptr);
+        let message = "";
+        if (ptr) {
+          const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
+          message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
+        }
+        return new HTTPParserError(message, constants.ERROR[ret], data);
       }
       destroy() {
         assert(this.ptr != null);
@@ -13406,6 +13441,10 @@ var require_client_h1 = __commonJS({
       onMessageBegin() {
         const { socket, client } = this;
         if (socket.destroyed) {
+          return -1;
+        }
+        if (client[kRunning] === 0) {
+          util2.destroy(socket, new SocketError("bad response", util2.getSocketInfo(socket)));
           return -1;
         }
         const request = client[kQueue][client[kRunningIdx]];
@@ -13485,6 +13524,10 @@ var require_client_h1 = __commonJS({
       onHeadersComplete(statusCode, upgrade, shouldKeepAlive) {
         const { client, socket, headers, statusText } = this;
         if (socket.destroyed) {
+          return -1;
+        }
+        if (client[kRunning] === 0) {
+          util2.destroy(socket, new SocketError("bad response", util2.getSocketInfo(socket)));
           return -1;
         }
         const request = client[kQueue][client[kRunningIdx]];
@@ -13612,6 +13655,7 @@ var require_client_h1 = __commonJS({
         }
         request.onComplete(headers);
         client[kQueue][client[kRunningIdx]++] = null;
+        socket[kSocketUsed] = true;
         if (socket[kWriting]) {
           assert(client[kRunning] === 0);
           util2.destroy(socket, new InformationalError("reset"));
@@ -13655,12 +13699,19 @@ var require_client_h1 = __commonJS({
       socket[kWriting] = false;
       socket[kReset] = false;
       socket[kBlocking] = false;
+      socket[kIdleSocketValidation] = 0;
+      socket[kIdleSocketValidationTimeout] = null;
+      socket[kSocketUsed] = false;
       socket[kParser] = new Parser(client, socket, llhttpInstance);
       addListener(socket, "error", function(err) {
         assert(err.code !== "ERR_TLS_CERT_ALTNAME_INVALID");
         const parser = this[kParser];
         if (err.code === "ECONNRESET" && parser.statusCode && !parser.shouldKeepAlive) {
-          parser.onMessageComplete();
+          const parserErr = parser.finish();
+          if (parserErr) {
+            this[kError] = parserErr;
+            this[kClient][kOnError](parserErr);
+          }
           return;
         }
         this[kError] = err;
@@ -13675,7 +13726,10 @@ var require_client_h1 = __commonJS({
       addListener(socket, "end", function() {
         const parser = this[kParser];
         if (parser.statusCode && !parser.shouldKeepAlive) {
-          parser.onMessageComplete();
+          const parserErr = parser.finish();
+          if (parserErr) {
+            util2.destroy(this, parserErr);
+          }
           return;
         }
         util2.destroy(this, new SocketError("other side closed", util2.getSocketInfo(this)));
@@ -13683,9 +13737,10 @@ var require_client_h1 = __commonJS({
       addListener(socket, "close", function() {
         const client2 = this[kClient];
         const parser = this[kParser];
+        clearIdleSocketValidation(this);
         if (parser) {
           if (!this[kError] && parser.statusCode && !parser.shouldKeepAlive) {
-            parser.onMessageComplete();
+            this[kError] = parser.finish() || this[kError];
           }
           this[kParser].destroy();
           this[kParser] = null;
@@ -13734,7 +13789,7 @@ var require_client_h1 = __commonJS({
           return socket.destroyed;
         },
         busy(request) {
-          if (socket[kWriting] || socket[kReset] || socket[kBlocking]) {
+          if (socket[kWriting] || socket[kReset] || socket[kBlocking] || socket[kIdleSocketValidation] === 1) {
             return true;
           }
           if (request) {
@@ -13752,6 +13807,24 @@ var require_client_h1 = __commonJS({
         }
       };
     }
+    function clearIdleSocketValidation(socket) {
+      if (socket[kIdleSocketValidationTimeout]) {
+        clearTimeout(socket[kIdleSocketValidationTimeout]);
+        socket[kIdleSocketValidationTimeout] = null;
+      }
+      socket[kIdleSocketValidation] = 0;
+    }
+    function scheduleIdleSocketValidation(client, socket) {
+      socket[kIdleSocketValidation] = 1;
+      socket[kIdleSocketValidationTimeout] = setTimeout(() => {
+        socket[kIdleSocketValidationTimeout] = null;
+        socket[kIdleSocketValidation] = 2;
+        if (client[kSocket] === socket && !socket.destroyed) {
+          client[kResume]();
+        }
+      }, 0);
+      socket[kIdleSocketValidationTimeout].unref?.();
+    }
     function resumeH1(client) {
       const socket = client[kSocket];
       if (socket && !socket.destroyed) {
@@ -13763,6 +13836,29 @@ var require_client_h1 = __commonJS({
         } else if (socket[kNoRef] && socket.ref) {
           socket.ref();
           socket[kNoRef] = false;
+        }
+        if (client[kRunning] === 0 && client[kPending] > 0 && socket[kSocketUsed]) {
+          if (socket[kIdleSocketValidation] === 0) {
+            scheduleIdleSocketValidation(client, socket);
+            socket[kParser].readMore();
+            if (socket.destroyed) {
+              return;
+            }
+            return;
+          }
+          if (socket[kIdleSocketValidation] === 1) {
+            socket[kParser].readMore();
+            if (socket.destroyed) {
+              return;
+            }
+            return;
+          }
+        }
+        if (client[kRunning] === 0) {
+          socket[kParser].readMore();
+          if (socket.destroyed) {
+            return;
+          }
         }
         if (client[kSize] === 0) {
           if (socket[kParser].timeoutType !== TIMEOUT_KEEP_ALIVE) {
@@ -13816,6 +13912,7 @@ var require_client_h1 = __commonJS({
         process.emitWarning(new RequestContentLengthMismatchError());
       }
       const socket = client[kSocket];
+      clearIdleSocketValidation(socket);
       const abort = (err) => {
         if (request.aborted || request.completed) {
           return;
@@ -23600,18 +23697,14 @@ var require_parse = __commonJS({
       } else if (attributeNameLowercase === "httponly") {
         cookieAttributeList.httpOnly = true;
       } else if (attributeNameLowercase === "samesite") {
-        let enforcement = "Default";
         const attributeValueLowercase = attributeValue.toLowerCase();
-        if (attributeValueLowercase.includes("none")) {
-          enforcement = "None";
+        if (attributeValueLowercase === "none") {
+          cookieAttributeList.sameSite = "None";
+        } else if (attributeValueLowercase === "strict") {
+          cookieAttributeList.sameSite = "Strict";
+        } else if (attributeValueLowercase === "lax") {
+          cookieAttributeList.sameSite = "Lax";
         }
-        if (attributeValueLowercase.includes("strict")) {
-          enforcement = "Strict";
-        }
-        if (attributeValueLowercase.includes("lax")) {
-          enforcement = "Lax";
-        }
-        cookieAttributeList.sameSite = enforcement;
       } else {
         cookieAttributeList.unparsed ??= [];
         cookieAttributeList.unparsed.push(`${attributeName}=${attributeValue}`);
@@ -24633,6 +24726,10 @@ var require_receiver = __commonJS({
     var { closeWebSocketConnection } = require_connection();
     var { PerMessageDeflate } = require_permessage_deflate();
     var { MessageSizeExceededError } = require_errors2();
+    function failWebsocketConnectionWithCode(ws, code, reason) {
+      closeWebSocketConnection(ws, code, reason, Buffer.byteLength(reason));
+      failWebsocketConnection(ws, reason);
+    }
     var ByteParser = class extends Writable {
       #buffers = [];
       #fragmentsBytes = 0;
@@ -24644,16 +24741,19 @@ var require_receiver = __commonJS({
       /** @type {Map<string, PerMessageDeflate>} */
       #extensions;
       /** @type {number} */
+      #maxFragments;
+      /** @type {number} */
       #maxPayloadSize;
       /**
        * @param {import('./websocket').WebSocket} ws
        * @param {Map<string, string>|null} extensions
-       * @param {{ maxPayloadSize?: number }} [options]
+       * @param {{ maxFragments?: number, maxPayloadSize?: number }} [options]
        */
       constructor(ws, extensions, options = {}) {
         super();
         this.ws = ws;
         this.#extensions = extensions == null ? /* @__PURE__ */ new Map() : extensions;
+        this.#maxFragments = options.maxFragments ?? 0;
         this.#maxPayloadSize = options.maxPayloadSize ?? 0;
         if (this.#extensions.has("permessage-deflate")) {
           this.#extensions.set("permessage-deflate", new PerMessageDeflate(extensions, options));
@@ -24670,8 +24770,8 @@ var require_receiver = __commonJS({
         this.run(callback);
       }
       #validatePayloadLength() {
-        if (this.#maxPayloadSize > 0 && !isControlFrame(this.#info.opcode) && this.#info.payloadLength > this.#maxPayloadSize) {
-          failWebsocketConnection(this.ws, "Payload size exceeds maximum allowed size");
+        if (this.#maxPayloadSize > 0 && !isControlFrame(this.#info.opcode) && this.#info.payloadLength + this.#fragmentsBytes > this.#maxPayloadSize) {
+          failWebsocketConnectionWithCode(this.ws, 1009, "Payload size exceeds maximum allowed size");
           return false;
         }
         return true;
@@ -24787,9 +24887,11 @@ var require_receiver = __commonJS({
               this.#state = parserStates.INFO;
             } else {
               if (!this.#info.compressed) {
-                this.writeFragments(body);
+                if (!this.writeFragments(body)) {
+                  return;
+                }
                 if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
-                  failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
+                  failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
                   return;
                 }
                 if (!this.#info.fragmented && this.#info.fin) {
@@ -24802,12 +24904,15 @@ var require_receiver = __commonJS({
                   this.#info.fin,
                   (error, data) => {
                     if (error) {
-                      failWebsocketConnection(this.ws, error.message);
+                      const code = error instanceof MessageSizeExceededError ? 1009 : 1007;
+                      failWebsocketConnectionWithCode(this.ws, code, error.message);
                       return;
                     }
-                    this.writeFragments(data);
+                    if (!this.writeFragments(data)) {
+                      return;
+                    }
                     if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
-                      failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
+                      failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
                       return;
                     }
                     if (!this.#info.fin) {
@@ -24865,8 +24970,13 @@ var require_receiver = __commonJS({
         return buffer;
       }
       writeFragments(fragment) {
+        if (this.#maxFragments > 0 && this.#fragments.length === this.#maxFragments) {
+          failWebsocketConnectionWithCode(this.ws, 1008, "Too many message fragments");
+          return false;
+        }
         this.#fragmentsBytes += fragment.length;
         this.#fragments.push(fragment);
+        return true;
       }
       consumeFragments() {
         const fragments = this.#fragments;
@@ -25316,8 +25426,11 @@ var require_websocket = __commonJS({
        */
       #onConnectionEstablished(response, parsedExtensions) {
         this[kResponse] = response;
-        const maxPayloadSize = this[kController]?.dispatcher?.webSocketOptions?.maxPayloadSize;
+        const webSocketOptions = this[kController]?.dispatcher?.webSocketOptions;
+        const maxFragments = webSocketOptions?.maxFragments;
+        const maxPayloadSize = webSocketOptions?.maxPayloadSize;
         const parser = new ByteParser(this, parsedExtensions, {
+          maxFragments,
           maxPayloadSize
         });
         parser.on("drain", onParserDrain);
@@ -26211,7 +26324,7 @@ var DEFAULT_SETTINGS = {
 };
 
 // src/settings.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // src/modals.ts
 var import_obsidian2 = require("obsidian");
@@ -28000,6 +28113,338 @@ var LintOptionsModal = class extends import_obsidian2.Modal {
   }
 };
 
+// src/claude-cli-client.ts
+var import_obsidian3 = require("obsidian");
+var import_path_browserify2 = __toESM(require_path_browserify(), 1);
+
+// src/stream.ts
+var PREVIEW_MAX = 200;
+function isRecord(obj) {
+  return typeof obj === "object" && obj !== null;
+}
+function parseStreamLine(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (!trimmed.startsWith("{")) return null;
+  let obj;
+  try {
+    obj = JSON.parse(trimmed);
+  } catch {
+    return { kind: "error", message: `stream parse error: ${truncate(trimmed, 120)}` };
+  }
+  if (!isRecord(obj)) return null;
+  switch (obj.type) {
+    case "system": {
+      const subtype = typeof obj.subtype === "string" ? obj.subtype : "system";
+      const model = typeof obj.model === "string" ? obj.model : "";
+      const sessionId = typeof obj.session_id === "string" ? obj.session_id : void 0;
+      const msg = `${subtype}${model ? ` (${model})` : ""}`;
+      return { kind: "system", message: msg, sessionId };
+    }
+    case "assistant":
+      return mapAssistant(obj);
+    case "user":
+      return mapUserToolResult(obj);
+    case "result":
+      return mapResult(obj);
+    default:
+      return null;
+  }
+}
+function mapAssistant(obj) {
+  const msg = obj.message;
+  if (!isRecord(msg)) return null;
+  const content = msg.content;
+  if (!Array.isArray(content) || content.length === 0) return null;
+  const block = content[0];
+  if (block?.type === "tool_use") {
+    if (block.name === "AskUserQuestion") {
+      const input = isRecord(block.input) ? block.input : {};
+      return {
+        kind: "ask_user",
+        question: typeof input.prompt === "string" ? input.prompt : "",
+        options: Array.isArray(input.options) ? input.options.map((o) => typeof o === "string" ? o : String(o)) : [],
+        toolUseId: typeof block.id === "string" ? block.id : ""
+      };
+    }
+    return { kind: "tool_use", name: typeof block.name === "string" ? block.name : "?", input: block.input };
+  }
+  if (block?.type === "text") {
+    return { kind: "assistant_text", delta: typeof block.text === "string" ? block.text : "" };
+  }
+  return null;
+}
+function mapUserToolResult(obj) {
+  const msg = obj.message;
+  if (!isRecord(msg)) return null;
+  const content = msg.content;
+  if (!Array.isArray(content)) return null;
+  const block = content[0];
+  if (!isRecord(block) || block.type !== "tool_result") return null;
+  const isErr = Boolean(block.is_error);
+  const preview = typeof block.content === "string" ? truncate(block.content, PREVIEW_MAX) : void 0;
+  return { kind: "tool_result", ok: !isErr, preview };
+}
+function mapResult(obj) {
+  if (obj.is_error || obj.subtype === "error") {
+    const errMsg = typeof obj.result === "string" ? obj.result : typeof obj.error === "string" ? obj.error : "claude error";
+    return { kind: "error", message: errMsg };
+  }
+  const usage = isRecord(obj.usage) ? obj.usage : null;
+  const outputTokens = typeof usage?.output_tokens === "number" ? usage.output_tokens : void 0;
+  return {
+    kind: "result",
+    durationMs: Number(obj.duration_ms ?? 0),
+    text: typeof obj.result === "string" ? obj.result : "",
+    outputTokens
+  };
+}
+function truncate(s, n) {
+  return s.length <= n ? s : s.slice(0, n) + "\u2026";
+}
+
+// src/claude-cli-client.ts
+var SIGTERM_GRACE_MS = 3e3;
+function validateIclaudePath(p) {
+  if (!p) throw new Error("iclaudePath is empty");
+  if (!(0, import_path_browserify2.isAbsolute)(p)) throw new Error(`iclaudePath must be absolute: "${p}"`);
+  if (p.split("/").includes("..")) throw new Error(`iclaudePath contains path traversal: "${p}"`);
+}
+async function probeClaudeBinary(iclaudePath) {
+  validateIclaudePath(iclaudePath);
+  if (!import_obsidian3.Platform.isDesktopApp) throw new Error("Claude CLI backend is desktop-only");
+  const { spawn } = await import("node:child_process");
+  await new Promise((resolve, reject) => {
+    const child = spawn(iclaudePath, ["--version"], { stdio: ["ignore", "ignore", "pipe"] });
+    let stderr = "";
+    const timer = window.setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("timeout"));
+    }, 5e3);
+    child.stderr?.on("data", (d) => {
+      stderr += d.toString("utf8");
+    });
+    child.on("error", (err) => {
+      window.clearTimeout(timer);
+      reject(err);
+    });
+    child.on("close", (code) => {
+      window.clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(stderr.trim() || `exit ${code}`));
+    });
+  });
+}
+var ClaudeCliClient = class {
+  constructor(cfg) {
+    this.cfg = cfg;
+  }
+  cfg;
+  /** Session ID of the last completed turn, populated from the system init event. */
+  lastSessionId;
+  chat = {
+    completions: {
+      create: (params, opts) => this._create(params, opts)
+    }
+  };
+  async _create(params, opts) {
+    const messages = params.messages;
+    const systemContent = messages.filter((m) => m.role === "system").map((m) => typeof m.content === "string" ? m.content : "").join("\n\n");
+    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+    const userText = typeof lastUser?.content === "string" ? lastUser.content : "";
+    const model = params.model || this.cfg.model;
+    const { requestTimeoutSec } = this.cfg;
+    const LARGE_THRESHOLD = 262144;
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const tmpFiles = [];
+    const isResume = Boolean(this.cfg.resumeSessionId);
+    const args = [];
+    args.push("--");
+    if (model) args.push("--model", model);
+    if (this.cfg.effort) args.push("--effort", this.cfg.effort);
+    if (isResume) {
+      args.push("--resume", this.cfg.resumeSessionId);
+    }
+    try {
+      const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
+      if (isLargeUser) {
+        const tmpUsrFile = (0, import_path_browserify2.join)(this.cfg.tmpDir, `ai-wiki-usr-${id}.txt`);
+        const wrapped = `<user_input>
+${userText}
+</user_input>`;
+        await this.cfg.tmpWrite(tmpUsrFile, wrapped);
+        tmpFiles.push(tmpUsrFile);
+        args.push("-p", "Process the content from <user_input> according to the system prompt.");
+        args.push("--append-system-prompt-file", tmpUsrFile);
+      } else {
+        args.push("-p", userText);
+      }
+      args.push("--output-format", "stream-json", "--verbose");
+      args.push("--disable-slash-commands");
+      args.push("--dangerously-skip-permissions");
+      if (this.cfg.allowedTools) args.push("--tools", this.cfg.allowedTools);
+      if (!isResume && systemContent) {
+        const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
+        if (isLargeSys) {
+          const tmpSysFile = (0, import_path_browserify2.join)(this.cfg.tmpDir, `ai-wiki-sys-${id}.txt`);
+          await this.cfg.tmpWrite(tmpSysFile, systemContent);
+          tmpFiles.push(tmpSysFile);
+          args.push("--system-prompt-file", tmpSysFile);
+        } else {
+          args.push("--system-prompt", systemContent);
+        }
+      }
+    } catch (err) {
+      for (const f of tmpFiles) {
+        try {
+          this.cfg.tmpRemove(f);
+        } catch {
+        }
+      }
+      throw err;
+    }
+    if (params.stream) {
+      return this._makeIterable(args, opts?.signal, requestTimeoutSec, tmpFiles);
+    }
+    return this._collect(args, opts?.signal, requestTimeoutSec, tmpFiles);
+  }
+  _makeIterable(args, signal, timeoutSec, tmpFiles) {
+    return { [Symbol.asyncIterator]: () => this._generate(args, signal, timeoutSec, tmpFiles) };
+  }
+  async *_generate(args, signal, timeoutSec, tmpFiles) {
+    validateIclaudePath(this.cfg.iclaudePath);
+    if (!import_obsidian3.Platform.isDesktopApp) throw new Error("Claude CLI backend is desktop-only");
+    const { spawn } = await import("node:child_process");
+    const child = spawn(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
+    if (!child.stdout || !child.stderr) throw new Error("spawn: missing stdio");
+    const stderrChunks = [];
+    child.stderr.on("data", (chunk) => stderrChunks.push(chunk));
+    const onAbort = () => {
+      child.kill("SIGTERM");
+      window.setTimeout(() => {
+        if (child.exitCode === null) child.kill("SIGKILL");
+      }, SIGTERM_GRACE_MS);
+    };
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+    const timeoutHandle = timeoutSec > 0 ? window.setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+      window.setTimeout(() => {
+        if (child.exitCode === null) child.kill("SIGKILL");
+      }, SIGTERM_GRACE_MS);
+    }, timeoutSec * 1e3) : null;
+    let timedOut = false;
+    const queue = [];
+    let resolveNext = null;
+    const wake = () => {
+      if (resolveNext) {
+        resolveNext();
+        resolveNext = null;
+      }
+    };
+    let id = 0;
+    let buf = "";
+    child.stdout.on("data", (chunk) => {
+      buf += chunk.toString("utf8");
+      let nl;
+      while ((nl = buf.indexOf("\n")) !== -1) {
+        const line = buf.slice(0, nl);
+        buf = buf.slice(nl + 1);
+        const ev = parseStreamLine(line);
+        if (ev?.kind === "system" && ev.sessionId) {
+          this.lastSessionId = ev.sessionId;
+        }
+        if (ev?.kind === "assistant_text") {
+          const delta = ev.isReasoning ? { reasoning: ev.delta } : { content: ev.delta };
+          queue.push({
+            id: `cc-${++id}`,
+            object: "chat.completion.chunk",
+            model: this.cfg.model || "claude",
+            created: 0,
+            choices: [{ index: 0, delta, finish_reason: null }]
+          });
+          wake();
+        }
+      }
+    });
+    let exited = false;
+    let exitCode = null;
+    let spawnError = null;
+    child.on("close", (code) => {
+      exitCode = code;
+      exited = true;
+      wake();
+    });
+    child.on("error", (err) => {
+      spawnError = err;
+      exited = true;
+      wake();
+    });
+    try {
+      while (true) {
+        if (queue.length > 0) {
+          yield queue.shift();
+          continue;
+        }
+        if (exited) break;
+        await new Promise((r) => resolveNext = r);
+      }
+      if (buf.trim()) {
+        const ev = parseStreamLine(buf.trim());
+        if (ev?.kind === "system" && ev.sessionId) this.lastSessionId = ev.sessionId;
+      }
+      const stderr = () => Buffer.concat(stderrChunks).toString("utf8").trim();
+      if (spawnError) throw new Error(`claude spawn failed: ${spawnError.message}${stderr() ? `
+${stderr()}` : ""}`);
+      if (signal?.aborted) return;
+      const ec = exitCode;
+      if (ec !== null && ec !== 0) throw new Error(`claude exited with code ${String(ec)}${stderr() ? `
+${stderr()}` : ""}`);
+      if (timedOut) throw new Error(`claude process timed out after ${timeoutSec}s`);
+      yield {
+        id: `cc-${++id}`,
+        object: "chat.completion.chunk",
+        model: this.cfg.model || "claude",
+        created: 0,
+        choices: [{ index: 0, delta: {}, finish_reason: "stop" }]
+      };
+    } finally {
+      if (timeoutHandle !== null) window.clearTimeout(timeoutHandle);
+      signal?.removeEventListener("abort", onAbort);
+      for (const f of tmpFiles) {
+        try {
+          this.cfg.tmpRemove(f);
+        } catch {
+        }
+      }
+      if (child.exitCode === null) {
+        child.kill("SIGTERM");
+        window.setTimeout(() => {
+          if (child.exitCode === null) child.kill("SIGKILL");
+        }, SIGTERM_GRACE_MS);
+      }
+    }
+  }
+  async _collect(args, signal, timeoutSec, tmpFiles) {
+    let text = "";
+    for await (const chunk of this._generate(args, signal, timeoutSec, tmpFiles)) {
+      text += chunk.choices[0]?.delta?.content ?? "";
+    }
+    return {
+      id: "cc-0",
+      object: "chat.completion",
+      model: this.cfg.model || "claude",
+      created: 0,
+      choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop", logprobs: null }],
+      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+    };
+  }
+};
+
 // src/effective-settings.ts
 function resolveEffective(s, l) {
   const proxyBase = s.proxy ?? { enabled: false, url: "" };
@@ -28013,12 +28458,12 @@ function resolveEffective(s, l) {
 }
 
 // src/page-similarity.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 
 // src/wiki-graph.ts
-var import_path_browserify2 = __toESM(require_path_browserify(), 1);
+var import_path_browserify3 = __toESM(require_path_browserify(), 1);
 function pageId(vaultPath) {
-  return (0, import_path_browserify2.basename)(vaultPath, ".md");
+  return (0, import_path_browserify3.basename)(vaultPath, ".md");
 }
 function buildWikiGraph(pages) {
   const graph = /* @__PURE__ */ new Map();
@@ -28433,7 +28878,7 @@ async function fetchEmbeddings(baseUrl, apiKey, model, inputs, dimensions) {
   const url = `${baseUrl.replace(/\/$/, "")}/embeddings`;
   const body = { model, input: inputs };
   if (dimensions && dimensions > 0) body.dimensions = dimensions;
-  const resp = await (0, import_obsidian3.requestUrl)({
+  const resp = await (0, import_obsidian4.requestUrl)({
     url,
     method: "POST",
     headers: {
@@ -28904,10 +29349,6 @@ var PageSimilarityService = class {
 };
 
 // src/settings.ts
-async function checkClaudeAvailability(iclaudePath) {
-  const { access, constants } = require("node:fs/promises");
-  await access(iclaudePath, constants.X_OK);
-}
 async function checkNativeAvailability(baseUrl, apiKey, model) {
   let timerId;
   const timeoutP = new Promise((_, rej) => {
@@ -28915,7 +29356,7 @@ async function checkNativeAvailability(baseUrl, apiKey, model) {
   });
   try {
     const resp = await Promise.race([
-      (0, import_obsidian4.requestUrl)({
+      (0, import_obsidian5.requestUrl)({
         url: `${baseUrl.replace(/\/$/, "")}/chat/completions`,
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -28936,7 +29377,7 @@ function parseTimeoutString(v) {
   }
   return null;
 }
-var ModelInputSuggest = class extends import_obsidian4.AbstractInputSuggest {
+var ModelInputSuggest = class extends import_obsidian5.AbstractInputSuggest {
   constructor(app, input, getModels, onPick) {
     super(app, input);
     this.getModels = getModels;
@@ -28957,7 +29398,7 @@ var ModelInputSuggest = class extends import_obsidian4.AbstractInputSuggest {
     el.setText(model);
   }
 };
-var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
+var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -28974,7 +29415,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
       this.cachedDomains = await this.plugin.domainStore.load();
     } catch (e) {
       this.cachedDomains = [];
-      new import_obsidian4.Notice(`Domain map load failed: ${e.message}`);
+      new import_obsidian5.Notice(`Domain map load failed: ${e.message}`);
     }
     this.localCache = await this.plugin.localConfigStore.load();
     this.render();
@@ -28997,12 +29438,12 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
   async fetchModels() {
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl) {
-      new import_obsidian4.Notice("Set Base URL first");
+      new import_obsidian5.Notice("Set Base URL first");
       return;
     }
     const url = `${na.baseUrl.replace(/\/$/, "")}/models`;
     try {
-      const resp = await (0, import_obsidian4.requestUrl)({
+      const resp = await (0, import_obsidian5.requestUrl)({
         url,
         headers: { Authorization: `Bearer ${this.localCache.nativeAgent?.apiKey ?? ""}` },
         throw: false
@@ -29012,7 +29453,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
       this._availableModels = json.data.map((m) => m.id).sort();
       this.display();
     } catch (e) {
-      new import_obsidian4.Notice(`Failed to fetch models: ${e.message}`);
+      new import_obsidian5.Notice(`Failed to fetch models: ${e.message}`);
     }
   }
   // CHECK: verify the entered dimension against the model. Probes twice — the model's
@@ -29024,31 +29465,31 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
   async checkDimensions() {
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl || !na.embeddingModel) {
-      new import_obsidian4.Notice("Set Base URL and embedding model first");
+      new import_obsidian5.Notice("Set Base URL and embedding model first");
       return;
     }
     if (!na.embeddingDimensions) {
-      new import_obsidian4.Notice("Enter a dimension value to check, or use Default");
+      new import_obsidian5.Notice("Enter a dimension value to check, or use Default");
       return;
     }
     const apiKey = this.localCache.nativeAgent?.apiKey ?? "";
     const requested = na.embeddingDimensions;
     const probe = await probeEmbeddingDimensions(na.baseUrl, apiKey, na.embeddingModel, requested);
     if (probe == null) {
-      new import_obsidian4.Notice("Dimension check failed: API error");
+      new import_obsidian5.Notice("Dimension check failed: API error");
       return;
     }
     const nativeProbe = await probeEmbeddingDimensions(na.baseUrl, apiKey, na.embeddingModel);
     const native = nativeProbe?.actual;
     const nativeStr = native != null ? String(native) : "?";
     if (!probe.honored) {
-      new import_obsidian4.Notice(`Not supported \u2014 model returns ${probe.actual} (native ${nativeStr}), not ${requested}. Use Default.`);
+      new import_obsidian5.Notice(`Not supported \u2014 model returns ${probe.actual} (native ${nativeStr}), not ${requested}. Use Default.`);
     } else if (native != null && requested === native) {
-      new import_obsidian4.Notice(`OK \u2014 native dimension ${native}`);
+      new import_obsidian5.Notice(`OK \u2014 native dimension ${native}`);
     } else if (native != null && requested < native) {
-      new import_obsidian4.Notice(`Truncated \u2014 ${requested} of ${native} native. Smaller dimensions reduce retrieval quality.`);
+      new import_obsidian5.Notice(`Truncated \u2014 ${requested} of ${native} native. Smaller dimensions reduce retrieval quality.`);
     } else {
-      new import_obsidian4.Notice(`OK \u2014 model returns ${probe.actual} (native ${nativeStr}).`);
+      new import_obsidian5.Notice(`OK \u2014 model returns ${probe.actual} (native ${nativeStr}).`);
     }
   }
   // Default: fetch the model's native output dimension (no `dimensions` sent) and store it.
@@ -29056,7 +29497,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
   async setDefaultDimensions(silent = false) {
     const na = this.plugin.settings.nativeAgent;
     if (!na.baseUrl || !na.embeddingModel) {
-      if (!silent) new import_obsidian4.Notice("Set Base URL and embedding model first");
+      if (!silent) new import_obsidian5.Notice("Set Base URL and embedding model first");
       return;
     }
     const probe = await probeEmbeddingDimensions(
@@ -29065,12 +29506,12 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
       na.embeddingModel
     );
     if (probe == null) {
-      if (!silent) new import_obsidian4.Notice("Failed to detect dimensions from API");
+      if (!silent) new import_obsidian5.Notice("Failed to detect dimensions from API");
       return;
     }
     na.embeddingDimensions = probe.actual;
     await this.plugin.saveSettings();
-    if (!silent) new import_obsidian4.Notice(`Default dimensions for model: ${probe.actual}`);
+    if (!silent) new import_obsidian5.Notice(`Default dimensions for model: ${probe.actual}`);
     this.display();
   }
   addModelControl(s, currentValue, onChange) {
@@ -29098,8 +29539,8 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
     const eff = resolveEffective(s, this.localCache);
     const T = i18n();
     const busy = this.plugin.controller.running;
-    new import_obsidian4.Setting(containerEl).setName(T.settings.h3_general).setHeading();
-    new import_obsidian4.Setting(containerEl).setName(T.settings.systemPrompt_name).setDesc(T.settings.systemPrompt_desc).addTextArea((t) => {
+    new import_obsidian5.Setting(containerEl).setName(T.settings.h3_general).setHeading();
+    new import_obsidian5.Setting(containerEl).setName(T.settings.systemPrompt_name).setDesc(T.settings.systemPrompt_desc).addTextArea((t) => {
       t.inputEl.addClass("ai-wiki-settings-textarea");
       t.setValue(s.systemPrompt).onChange(async (v) => {
         s.systemPrompt = v;
@@ -29107,19 +29548,19 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
       });
       return t;
     });
-    new import_obsidian4.Setting(containerEl).setName(T.settings.outputLanguage_name).setDesc(T.settings.outputLanguage_desc).addDropdown(
+    new import_obsidian5.Setting(containerEl).setName(T.settings.outputLanguage_name).setDesc(T.settings.outputLanguage_desc).addDropdown(
       (d) => d.addOptions({ auto: "Auto (match UI language)", ru: "Russian", en: "English", es: "Spanish" }).setValue(s.outputLanguage ?? "auto").onChange(async (v) => {
         s.outputLanguage = v;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian4.Setting(containerEl).setName(T.settings.reasoningLanguage_name).setDesc(T.settings.reasoningLanguage_desc).addDropdown(
+    new import_obsidian5.Setting(containerEl).setName(T.settings.reasoningLanguage_name).setDesc(T.settings.reasoningLanguage_desc).addDropdown(
       (d) => d.addOptions({ auto: "Auto (match response)", en: "English", ru: "Russian", es: "Spanish" }).setValue(s.reasoningLanguage ?? "en").onChange(async (v) => {
         s.reasoningLanguage = v;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian4.Setting(containerEl).setName(T.settings.timeouts_name).setDesc(T.settings.timeouts_desc).addText(
+    new import_obsidian5.Setting(containerEl).setName(T.settings.timeouts_name).setDesc(T.settings.timeouts_desc).addText(
       (t) => t.setValue(`${s.timeouts.ingest}/${s.timeouts.query}/${s.timeouts.lint}/${s.timeouts.init}/${s.timeouts.format}`).onChange(async (v) => {
         const parsed = parseTimeoutString(v);
         if (parsed) {
@@ -29128,7 +29569,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         }
       })
     );
-    new import_obsidian4.Setting(containerEl).setName(T.settings.llmIdleTimeout_name).setDesc(T.settings.llmIdleTimeout_desc).addText(
+    new import_obsidian5.Setting(containerEl).setName(T.settings.llmIdleTimeout_name).setDesc(T.settings.llmIdleTimeout_desc).addText(
       (t) => t.setPlaceholder("300").setValue(String(s.llmIdleTimeoutSec)).onChange(async (v) => {
         const n = Number(v);
         if (Number.isFinite(n) && n >= 0) {
@@ -29137,7 +29578,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         }
       })
     );
-    new import_obsidian4.Setting(containerEl).setName(T.settings.llmIdleRetries_name).setDesc(T.settings.llmIdleRetries_desc).addText(
+    new import_obsidian5.Setting(containerEl).setName(T.settings.llmIdleRetries_name).setDesc(T.settings.llmIdleRetries_desc).addText(
       (t) => t.setPlaceholder("3").setValue(String(s.llmIdleRetries)).onChange(async (v) => {
         const n = Number(v);
         if (Number.isInteger(n) && n >= 0) {
@@ -29146,7 +29587,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         }
       })
     );
-    new import_obsidian4.Setting(containerEl).setName(T.settings.historyLimit_name).setDesc(T.settings.historyLimit_desc).addText(
+    new import_obsidian5.Setting(containerEl).setName(T.settings.historyLimit_name).setDesc(T.settings.historyLimit_desc).addText(
       (t) => t.setValue(String(s.historyLimit)).onChange(async (v) => {
         const n = Number(v);
         if (Number.isFinite(n) && n > 0) {
@@ -29155,12 +29596,12 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         }
       })
     );
-    new import_obsidian4.Setting(containerEl).setName(T.settings.agentLog_name).setDesc(T.settings.agentLog_desc).addToggle(
+    new import_obsidian5.Setting(containerEl).setName(T.settings.agentLog_name).setDesc(T.settings.agentLog_desc).addToggle(
       (t) => t.setValue(eff.agentLogEnabled).onChange(async (v) => {
         await this.patchLocal({ agentLogEnabled: v });
       })
     );
-    new import_obsidian4.Setting(containerEl).setName(T.settings.domains_heading).setHeading();
+    new import_obsidian5.Setting(containerEl).setName(T.settings.domains_heading).setHeading();
     if (busy) {
       containerEl.createEl("div", {
         cls: "ai-wiki-settings-busy-banner"
@@ -29175,7 +29616,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
     } else {
       for (let i = 0; i < domains.length; i++) {
         const d = domains[i];
-        new import_obsidian4.Setting(containerEl).setName(d.name || d.id).setDesc(d.id).addButton((b) => {
+        new import_obsidian5.Setting(containerEl).setName(d.name || d.id).setDesc(d.id).addButton((b) => {
           b.setButtonText(T.settings.editDomain).setDisabled(busy).onClick(() => {
             new EditDomainModal(this.plugin.app, d, (updated) => {
               void (async () => {
@@ -29191,7 +29632,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           b.setButtonText(T.settings.deleteDomain).setWarning().setDisabled(busy).onClick(() => {
             new ConfirmModal(this.plugin.app, T.settings.confirmDeleteDomain(d.id), [], () => {
               void (async () => {
-                new import_obsidian4.Notice(T.settings.domainDeleted(d.id));
+                new import_obsidian5.Notice(T.settings.domainDeleted(d.id));
                 const cur = await this.plugin.domainStore.load();
                 await this.plugin.domainStore.save(cur.filter((x) => x.id !== d.id));
                 await this.refresh();
@@ -29201,9 +29642,9 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         });
       }
     }
-    new import_obsidian4.Setting(containerEl).setName(T.settings.h3_backend).setHeading();
-    if (!import_obsidian4.Platform.isMobile) {
-      new import_obsidian4.Setting(containerEl).setName(T.settings.backend_name).setDesc(T.settings.backend_desc).addDropdown((d) => {
+    new import_obsidian5.Setting(containerEl).setName(T.settings.h3_backend).setHeading();
+    if (!import_obsidian5.Platform.isMobile) {
+      new import_obsidian5.Setting(containerEl).setName(T.settings.backend_name).setDesc(T.settings.backend_desc).addDropdown((d) => {
         let backendDd;
         backendDd = d.addOption("claude-agent", T.settings.claudeCodeAgent).addOption("native-agent", T.settings.nativeAgent).setValue(eff.backend).onChange(async (v) => {
           if (v === "claude-agent") {
@@ -29229,8 +29670,8 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         href: "https://github.com/ikeniborn/obsidian-llm-wiki/blob/master/docs/mobile-cloud-ollama.md"
       });
     }
-    if (eff.backend === "claude-agent" && !import_obsidian4.Platform.isMobile) {
-      new import_obsidian4.Setting(containerEl).setName(T.settings.iclaudePath_name).setDesc(T.settings.iclaudePath_desc).addText(
+    if (eff.backend === "claude-agent" && !import_obsidian5.Platform.isMobile) {
+      new import_obsidian5.Setting(containerEl).setName(T.settings.iclaudePath_name).setDesc(T.settings.iclaudePath_desc).addText(
         (t) => t.setPlaceholder("/home/user/Documents/Project/iclaude/iclaude.sh").setValue(this.localCache.iclaudePath).onChange(async (v) => {
           await this.patchLocal({ iclaudePath: v.trim() });
         })
@@ -29238,10 +29679,10 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         b.setButtonText(T.settings.testConnection_btn).onClick(async () => {
           b.setButtonText(T.settings.testConnection_btnBusy).setDisabled(true);
           try {
-            await checkClaudeAvailability(this.localCache.iclaudePath);
-            new import_obsidian4.Notice(T.settings.claudeAvailable_ok);
+            await probeClaudeBinary(this.localCache.iclaudePath);
+            new import_obsidian5.Notice(T.settings.claudeAvailable_ok);
           } catch (e) {
-            new import_obsidian4.Notice(`\u274C ${e.message}`);
+            new import_obsidian5.Notice(`\u274C ${e.message}`);
           } finally {
             b.setButtonText(T.settings.testConnection_btn).setDisabled(false);
           }
@@ -29249,20 +29690,20 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         return b;
       });
       if (!s.claudeAgent.perOperation) {
-        new import_obsidian4.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_claude).addText(
+        new import_obsidian5.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_claude).addText(
           (t) => t.setPlaceholder("").setValue(eff.claudeAgent.model).onChange(async (v) => {
             s.claudeAgent.model = v.trim();
             await this.plugin.saveSettings();
           })
         );
       }
-      new import_obsidian4.Setting(containerEl).setName(T.settings.allowedTools_name).setDesc(T.settings.allowedTools_desc).addText(
+      new import_obsidian5.Setting(containerEl).setName(T.settings.allowedTools_name).setDesc(T.settings.allowedTools_desc).addText(
         (t) => t.setPlaceholder("Bash,read,write").setValue(eff.claudeAgent.allowedTools).onChange(async (v) => {
           s.claudeAgent.allowedTools = v.trim();
           await this.plugin.saveSettings();
         })
       );
-      new import_obsidian4.Setting(containerEl).setName("Effort level").setDesc(T.settings.effort_desc).addDropdown((d) => {
+      new import_obsidian5.Setting(containerEl).setName("Effort level").setDesc(T.settings.effort_desc).addDropdown((d) => {
         d.addOption("", T.settings.effort_off);
         for (const lv of ["low", "medium", "high", "xhigh", "max"]) d.addOption(lv, lv);
         d.setValue(eff.claudeAgent.effort ?? "");
@@ -29272,7 +29713,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         });
         return d;
       });
-      new import_obsidian4.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
+      new import_obsidian5.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
         (t) => t.setValue(s.claudeAgent.perOperation).onChange(async (v) => {
           s.claudeAgent.perOperation = v;
           await this.plugin.saveSettings();
@@ -29288,14 +29729,14 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           { key: "format", label: T.settings.op_format }
         ];
         for (const { key, label } of ops) {
-          new import_obsidian4.Setting(containerEl).setName(label).setHeading();
-          new import_obsidian4.Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc).addText(
+          new import_obsidian5.Setting(containerEl).setName(label).setHeading();
+          new import_obsidian5.Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc).addText(
             (t) => t.setValue(s.claudeAgent.operations[key].model).onChange(async (v) => {
               s.claudeAgent.operations[key].model = v.trim();
               await this.plugin.saveSettings();
             })
           );
-          new import_obsidian4.Setting(containerEl).setName("Effort level").addDropdown((d) => {
+          new import_obsidian5.Setting(containerEl).setName("Effort level").addDropdown((d) => {
             d.addOption("", T.settings.effort_inherit);
             for (const lv of ["low", "medium", "high", "xhigh", "max"]) d.addOption(lv, lv);
             d.setValue(s.claudeAgent.operations[key].effort ?? "");
@@ -29308,26 +29749,26 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         }
       }
     } else {
-      new import_obsidian4.Setting(containerEl).setName(T.settings.baseUrl_name).setDesc(T.settings.baseUrl_desc).addText(
+      new import_obsidian5.Setting(containerEl).setName(T.settings.baseUrl_name).setDesc(T.settings.baseUrl_desc).addText(
         (t) => t.setPlaceholder("").setValue(eff.nativeAgent.baseUrl).onChange(async (v) => {
           s.nativeAgent.baseUrl = v.trim();
           await this.plugin.saveSettings();
         })
       );
-      new import_obsidian4.Setting(containerEl).setName(T.settings.apiKey_name).setDesc(T.settings.apiKey_desc).addText(
+      new import_obsidian5.Setting(containerEl).setName(T.settings.apiKey_name).setDesc(T.settings.apiKey_desc).addText(
         (t) => t.setPlaceholder("Ollama").setValue(eff.nativeAgent.apiKey).onChange(async (v) => {
           await this.patchLocalNativeApiKey(v.trim());
         })
       );
-      new import_obsidian4.Setting(containerEl).setName(T.settings.testConnection_name).setDesc(T.settings.testConnection_desc).addButton((b) => {
+      new import_obsidian5.Setting(containerEl).setName(T.settings.testConnection_name).setDesc(T.settings.testConnection_desc).addButton((b) => {
         b.setButtonText(T.settings.testConnection_btn).onClick(async () => {
           b.setButtonText(T.settings.testConnection_btnBusy).setDisabled(true);
           const na = eff.nativeAgent;
           try {
             await checkNativeAvailability(na.baseUrl, na.apiKey, na.model);
-            new import_obsidian4.Notice(T.settings.testConnection_ok);
+            new import_obsidian5.Notice(T.settings.testConnection_ok);
           } catch (e) {
-            new import_obsidian4.Notice(`\u274C ${e.message}`);
+            new import_obsidian5.Notice(`\u274C ${e.message}`);
           } finally {
             b.setButtonText(T.settings.testConnection_btn).setDisabled(false);
           }
@@ -29336,14 +29777,14 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
       });
       if (!s.nativeAgent.perOperation) {
         this.addModelControl(
-          new import_obsidian4.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
+          new import_obsidian5.Setting(containerEl).setName(T.settings.model_name).setDesc(T.settings.model_desc_native),
           eff.nativeAgent.model,
           async (v) => {
             s.nativeAgent.model = v;
             await this.plugin.saveSettings();
           }
         );
-        new import_obsidian4.Setting(containerEl).setName(T.settings.maxTokens_name).setDesc(T.settings.maxTokens_desc).addText(
+        new import_obsidian5.Setting(containerEl).setName(T.settings.maxTokens_name).setDesc(T.settings.maxTokens_desc).addText(
           (t) => t.setPlaceholder("4096").setValue(String(s.nativeAgent.maxTokens)).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n > 0) {
@@ -29352,14 +29793,14 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
             }
           })
         );
-        new import_obsidian4.Setting(containerEl).setName("Thinking budget tokens").setDesc(T.settings.thinkingBudget_desc).addText(
+        new import_obsidian5.Setting(containerEl).setName("Thinking budget tokens").setDesc(T.settings.thinkingBudget_desc).addText(
           (t) => t.setPlaceholder("0").setValue(String(s.nativeAgent.thinkingBudgetTokens ?? 0)).onChange(async (v) => {
             const n = Number(v);
             s.nativeAgent.thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : void 0;
             await this.plugin.saveSettings();
           })
         );
-        new import_obsidian4.Setting(containerEl).setName(T.settings.temperature_name).setDesc(T.settings.temperature_desc).addText(
+        new import_obsidian5.Setting(containerEl).setName(T.settings.temperature_name).setDesc(T.settings.temperature_desc).addText(
           (t) => t.setPlaceholder("0.2").setValue(String(eff.nativeAgent.temperature)).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n >= 0 && n <= 2) {
@@ -29369,7 +29810,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           })
         );
       }
-      new import_obsidian4.Setting(containerEl).setName(T.settings.structuredRetries_name).setDesc(T.settings.structuredRetries_desc).addText(
+      new import_obsidian5.Setting(containerEl).setName(T.settings.structuredRetries_name).setDesc(T.settings.structuredRetries_desc).addText(
         (t) => t.setPlaceholder("1").setValue(String(s.nativeAgent.structuredRetries)).onChange(async (v) => {
           const n = Number(v);
           if (!Number.isFinite(n) || n < 0 || n > 3) return;
@@ -29377,7 +29818,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           await this.plugin.saveSettings();
         })
       );
-      new import_obsidian4.Setting(containerEl).setName(T.settings.wikiLinkValidationRetries_name).setDesc(T.settings.wikiLinkValidationRetries_desc).addText(
+      new import_obsidian5.Setting(containerEl).setName(T.settings.wikiLinkValidationRetries_name).setDesc(T.settings.wikiLinkValidationRetries_desc).addText(
         (t) => t.setPlaceholder("3").setValue(String(s.wikiLinkValidationRetries)).onChange(async (v) => {
           const n = Number(v);
           if (Number.isInteger(n) && n >= 0) {
@@ -29386,9 +29827,9 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           }
         })
       );
-      if (!import_obsidian4.Platform.isMobile) {
-        new import_obsidian4.Setting(containerEl).setName("Per-operation models").setHeading();
-        new import_obsidian4.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
+      if (!import_obsidian5.Platform.isMobile) {
+        new import_obsidian5.Setting(containerEl).setName("Per-operation models").setHeading();
+        new import_obsidian5.Setting(containerEl).setName(T.settings.perOperation_name).setDesc(T.settings.perOperation_desc).addToggle(
           (t) => t.setValue(s.nativeAgent.perOperation).onChange(async (v) => {
             s.nativeAgent.perOperation = v;
             await this.plugin.saveSettings();
@@ -29405,16 +29846,16 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           { key: "format", label: T.settings.op_format }
         ];
         for (const { key, label } of ops) {
-          new import_obsidian4.Setting(containerEl).setName(label).setHeading();
+          new import_obsidian5.Setting(containerEl).setName(label).setHeading();
           this.addModelControl(
-            new import_obsidian4.Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc),
+            new import_obsidian5.Setting(containerEl).setName(T.settings.opModel_name).setDesc(T.settings.opModel_desc),
             s.nativeAgent.operations[key].model,
             async (v) => {
               s.nativeAgent.operations[key].model = v;
               await this.plugin.saveSettings();
             }
           );
-          new import_obsidian4.Setting(containerEl).setName(T.settings.opMaxTokens_name).setDesc(T.settings.opMaxTokens_desc).addText(
+          new import_obsidian5.Setting(containerEl).setName(T.settings.opMaxTokens_name).setDesc(T.settings.opMaxTokens_desc).addText(
             (t) => t.setValue(String(s.nativeAgent.operations[key].maxTokens)).onChange(async (v) => {
               const n = Number(v);
               if (Number.isFinite(n) && n > 0) {
@@ -29423,14 +29864,14 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
               }
             })
           );
-          new import_obsidian4.Setting(containerEl).setName("Thinking budget tokens").addText(
+          new import_obsidian5.Setting(containerEl).setName("Thinking budget tokens").addText(
             (t) => t.setPlaceholder("0").setValue(String(s.nativeAgent.operations[key].thinkingBudgetTokens ?? 0)).onChange(async (v) => {
               const n = Number(v);
               s.nativeAgent.operations[key].thinkingBudgetTokens = Number.isFinite(n) && n > 0 ? Math.floor(n) : void 0;
               await this.plugin.saveSettings();
             })
           );
-          new import_obsidian4.Setting(containerEl).setName(T.settings.opTemperature_name).setDesc(T.settings.opTemperature_desc).addText(
+          new import_obsidian5.Setting(containerEl).setName(T.settings.opTemperature_name).setDesc(T.settings.opTemperature_desc).addText(
             (t) => t.setValue(String(s.nativeAgent.operations[key].temperature)).onChange(async (v) => {
               const n = Number(v);
               if (Number.isFinite(n) && n >= 0 && n <= 2) {
@@ -29441,8 +29882,8 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           );
         }
       }
-      new import_obsidian4.Setting(containerEl).setName("Semantic Search").setHeading();
-      new import_obsidian4.Setting(containerEl).setName("Enable semantic similarity (embeddings)").setDesc(T.settings.semanticEnable_desc).addToggle(
+      new import_obsidian5.Setting(containerEl).setName("Semantic Search").setHeading();
+      new import_obsidian5.Setting(containerEl).setName("Enable semantic similarity (embeddings)").setDesc(T.settings.semanticEnable_desc).addToggle(
         (t) => t.setValue(s.nativeAgent.embeddingModel !== void 0).onChange(async (v) => {
           if (!v) {
             s.nativeAgent.embeddingModel = void 0;
@@ -29457,7 +29898,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         })
       );
       if (s.nativeAgent.embeddingModel !== void 0) {
-        new import_obsidian4.Setting(containerEl).setName("Relevant pages (top-K)").setDesc(T.settings.relevantTopK_desc).addText(
+        new import_obsidian5.Setting(containerEl).setName("Relevant pages (top-K)").setDesc(T.settings.relevantTopK_desc).addText(
           (t) => t.setPlaceholder("15").setValue(String(s.nativeAgent.relevantPagesTopK ?? 15)).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n > 0) {
@@ -29467,7 +29908,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
           })
         );
         this.addModelControl(
-          new import_obsidian4.Setting(containerEl).setName("Embedding model").setDesc(T.settings.embeddingModel_desc),
+          new import_obsidian5.Setting(containerEl).setName("Embedding model").setDesc(T.settings.embeddingModel_desc),
           s.nativeAgent.embeddingModel ?? "",
           async (v) => {
             s.nativeAgent.embeddingModel = v || void 0;
@@ -29475,7 +29916,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
             if (v) await this.setDefaultDimensions(true);
           }
         );
-        new import_obsidian4.Setting(containerEl).setName("Embedding dimensions").setDesc(T.settings.embeddingDimensions_desc).addButton(
+        new import_obsidian5.Setting(containerEl).setName("Embedding dimensions").setDesc(T.settings.embeddingDimensions_desc).addButton(
           (b) => b.setButtonText("Check").setTooltip("Verify the entered dimension is supported by the model").onClick(() => {
             void this.checkDimensions();
           })
@@ -29490,7 +29931,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
             await this.plugin.saveSettings();
           })
         );
-        const chunkField = (name, desc, placeholder, get, set) => new import_obsidian4.Setting(containerEl).setName(name).setDesc(desc).addText(
+        const chunkField = (name, desc, placeholder, get, set) => new import_obsidian5.Setting(containerEl).setName(name).setDesc(desc).addText(
           (t) => t.setPlaceholder(placeholder).setValue(String(get())).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n > 0) {
@@ -29499,7 +29940,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
             }
           })
         );
-        if (!import_obsidian4.Platform.isMobile) {
+        if (!import_obsidian5.Platform.isMobile) {
           chunkField(
             "Chunk size (chars)",
             T.settings.chunkSize_desc(DEFAULT_CHUNKING.maxChars),
@@ -29537,14 +29978,14 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
             }
           );
         }
-        new import_obsidian4.Setting(containerEl).setName("Retrieval").setHeading();
-        new import_obsidian4.Setting(containerEl).setName("Hybrid retrieval (dense \u2295 sparse)").setDesc(T.settings.hybridRetrieval_desc).addToggle(
+        new import_obsidian5.Setting(containerEl).setName("Retrieval").setHeading();
+        new import_obsidian5.Setting(containerEl).setName("Hybrid retrieval (dense \u2295 sparse)").setDesc(T.settings.hybridRetrieval_desc).addToggle(
           (t) => t.setValue(s.nativeAgent.hybridRetrieval ?? false).onChange(async (v) => {
             s.nativeAgent.hybridRetrieval = v;
             await this.plugin.saveSettings();
           })
         );
-        new import_obsidian4.Setting(containerEl).setName("RRF k").setDesc(T.settings.rrfK_desc).addText(
+        new import_obsidian5.Setting(containerEl).setName("RRF k").setDesc(T.settings.rrfK_desc).addText(
           (t) => t.setValue(String(s.nativeAgent.rrfK ?? 60)).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n > 0) {
@@ -29553,13 +29994,13 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
             }
           })
         );
-        new import_obsidian4.Setting(containerEl).setName("BFS fusion (vector \u2295 graph)").setDesc(T.settings.bfsFusion_desc).addToggle(
+        new import_obsidian5.Setting(containerEl).setName("BFS fusion (vector \u2295 graph)").setDesc(T.settings.bfsFusion_desc).addToggle(
           (t) => t.setValue(s.nativeAgent.bfsFusion ?? false).onChange(async (v) => {
             s.nativeAgent.bfsFusion = v;
             await this.plugin.saveSettings();
           })
         );
-        new import_obsidian4.Setting(containerEl).setName("Seed similarity threshold").setDesc(T.settings.seedSimilarityThreshold_desc).addText(
+        new import_obsidian5.Setting(containerEl).setName("Seed similarity threshold").setDesc(T.settings.seedSimilarityThreshold_desc).addText(
           (t) => t.setValue(String(s.nativeAgent.seedSimilarityThreshold ?? 0)).onChange(async (v) => {
             const n = Number(v);
             if (Number.isFinite(n) && n >= 0) {
@@ -29568,15 +30009,15 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
             }
           })
         );
-        if (!import_obsidian4.Platform.isMobile) {
-          new import_obsidian4.Setting(containerEl).setName("Graph health").setHeading();
-          new import_obsidian4.Setting(containerEl).setName("Dedup on ingest").setDesc(T.settings.dedupOnIngest_desc).addToggle(
+        if (!import_obsidian5.Platform.isMobile) {
+          new import_obsidian5.Setting(containerEl).setName("Graph health").setHeading();
+          new import_obsidian5.Setting(containerEl).setName("Dedup on ingest").setDesc(T.settings.dedupOnIngest_desc).addToggle(
             (t) => t.setValue(s.nativeAgent.dedupOnIngest ?? false).onChange(async (v) => {
               s.nativeAgent.dedupOnIngest = v;
               await this.plugin.saveSettings();
             })
           );
-          new import_obsidian4.Setting(containerEl).setName("Dedup threshold").setDesc(T.settings.dedupThreshold_desc).addText(
+          new import_obsidian5.Setting(containerEl).setName("Dedup threshold").setDesc(T.settings.dedupThreshold_desc).addText(
             (t) => t.setValue(String(s.nativeAgent.dedupThreshold ?? 0.85)).onChange(async (v) => {
               const n = Number(v);
               if (Number.isFinite(n) && n > 0 && n <= 1) {
@@ -29585,13 +30026,13 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
               }
             })
           );
-          new import_obsidian4.Setting(containerEl).setName("Lint near-duplicate report").setDesc(T.settings.lintNearDuplicate_desc).addToggle(
+          new import_obsidian5.Setting(containerEl).setName("Lint near-duplicate report").setDesc(T.settings.lintNearDuplicate_desc).addToggle(
             (t) => t.setValue(s.nativeAgent.lintNearDuplicate ?? false).onChange(async (v) => {
               s.nativeAgent.lintNearDuplicate = v;
               await this.plugin.saveSettings();
             })
           );
-          new import_obsidian4.Setting(containerEl).setName("Near-duplicate threshold").setDesc(T.settings.nearDupThreshold_desc).addText(
+          new import_obsidian5.Setting(containerEl).setName("Near-duplicate threshold").setDesc(T.settings.nearDupThreshold_desc).addText(
             (t) => t.setValue(String(s.nativeAgent.nearDupThreshold ?? 0.8)).onChange(async (v) => {
               const n = Number(v);
               if (Number.isFinite(n) && n > 0 && n <= 1) {
@@ -29600,7 +30041,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
               }
             })
           );
-          new import_obsidian4.Setting(containerEl).setName(T.settings.mergeDeleteWarnThreshold_name).setDesc(T.settings.mergeDeleteWarnThreshold_desc).addSlider(
+          new import_obsidian5.Setting(containerEl).setName(T.settings.mergeDeleteWarnThreshold_name).setDesc(T.settings.mergeDeleteWarnThreshold_desc).addSlider(
             (sl) => sl.setLimits(1, 20, 1).setDynamicTooltip().setValue(s.nativeAgent.mergeDeleteWarnThreshold ?? 5).onChange(async (v) => {
               s.nativeAgent.mergeDeleteWarnThreshold = v;
               await this.plugin.saveSettings();
@@ -29609,8 +30050,8 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         }
       }
     }
-    new import_obsidian4.Setting(containerEl).setName("Vision").setHeading();
-    new import_obsidian4.Setting(containerEl).setName("Enable vision analysis").setDesc("Analyse embedded images, PDFs, and Excalidraw files before formatting. Uses the same baseUrl and API key as the main backend.").addToggle(
+    new import_obsidian5.Setting(containerEl).setName("Vision").setHeading();
+    new import_obsidian5.Setting(containerEl).setName("Enable vision analysis").setDesc("Analyse embedded images, PDFs, and Excalidraw files before formatting. Uses the same baseUrl and API key as the main backend.").addToggle(
       (t) => t.setValue(s.vision.enabled).onChange(async (v) => {
         s.vision.enabled = v;
         await this.plugin.saveSettings();
@@ -29619,7 +30060,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
     );
     if (s.vision.enabled) {
       this.addModelControl(
-        new import_obsidian4.Setting(containerEl).setName("Vision model").setDesc("Model name for vision calls, e.g. gpt-4o-mini or claude-3-haiku-20240307"),
+        new import_obsidian5.Setting(containerEl).setName("Vision model").setDesc("Model name for vision calls, e.g. gpt-4o-mini or claude-3-haiku-20240307"),
         s.vision.model,
         async (v) => {
           s.vision.model = v;
@@ -29627,8 +30068,8 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         }
       );
     }
-    new import_obsidian4.Setting(containerEl).setName(T.settings.h3_graph).setHeading();
-    new import_obsidian4.Setting(containerEl).setName(T.settings.graphDepth_name).setDesc(T.settings.graphDepth_desc).addText(
+    new import_obsidian5.Setting(containerEl).setName(T.settings.h3_graph).setHeading();
+    new import_obsidian5.Setting(containerEl).setName(T.settings.graphDepth_name).setDesc(T.settings.graphDepth_desc).addText(
       (t) => t.setPlaceholder("1").setValue(String(s.graphDepth)).onChange(async (v) => {
         const n = Number(v);
         if (Number.isInteger(n) && n >= 0 && n <= 3) {
@@ -29637,7 +30078,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         }
       })
     );
-    new import_obsidian4.Setting(containerEl).setName(T.settings.bfsTopK_name).setDesc(T.settings.bfsTopK_desc).addText(
+    new import_obsidian5.Setting(containerEl).setName(T.settings.bfsTopK_name).setDesc(T.settings.bfsTopK_desc).addText(
       (t) => t.setPlaceholder("10").setValue(String(s.bfsTopK)).onChange(async (v) => {
         const n = Number(v);
         if (Number.isInteger(n) && n >= 0) {
@@ -29646,8 +30087,8 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         }
       })
     );
-    new import_obsidian4.Setting(containerEl).setName(T.settings.h3_jaccard).setHeading();
-    new import_obsidian4.Setting(containerEl).setName(T.settings.seedTopK_name).setDesc(T.settings.seedTopK_desc).addText(
+    new import_obsidian5.Setting(containerEl).setName(T.settings.h3_jaccard).setHeading();
+    new import_obsidian5.Setting(containerEl).setName(T.settings.seedTopK_name).setDesc(T.settings.seedTopK_desc).addText(
       (t) => t.setPlaceholder("5").setValue(String(s.seedTopK)).onChange(async (v) => {
         const n = Number(v);
         if (Number.isInteger(n) && n >= 1 && n <= 50) {
@@ -29656,7 +30097,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         }
       })
     );
-    new import_obsidian4.Setting(containerEl).setName(T.settings.seedMinScore_name).setDesc(T.settings.seedMinScore_desc).addText(
+    new import_obsidian5.Setting(containerEl).setName(T.settings.seedMinScore_name).setDesc(T.settings.seedMinScore_desc).addText(
       (t) => t.setPlaceholder("0.1").setValue(String(s.seedMinScore)).onChange(async (v) => {
         const n = Number(v);
         if (Number.isFinite(n) && n >= 0 && n <= 1) {
@@ -29665,33 +30106,33 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         }
       })
     );
-    if (eff.backend !== "claude-agent" && !import_obsidian4.Platform.isMobile) {
+    if (eff.backend !== "claude-agent" && !import_obsidian5.Platform.isMobile) {
       const proxy = eff.proxy;
-      new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
-      new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_enabled_name).setDesc(T.settings.proxy_enabled_desc).addToggle(
+      new import_obsidian5.Setting(containerEl).setName(T.settings.proxy_h3).setHeading();
+      new import_obsidian5.Setting(containerEl).setName(T.settings.proxy_enabled_name).setDesc(T.settings.proxy_enabled_desc).addToggle(
         (t) => t.setValue(proxy.enabled).onChange(async (v) => {
           await this.patchProxy({ enabled: v });
           this.display();
         })
       );
       if (proxy.enabled) {
-        new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_url_name).setDesc(T.settings.proxy_url_desc).addText(
+        new import_obsidian5.Setting(containerEl).setName(T.settings.proxy_url_name).setDesc(T.settings.proxy_url_desc).addText(
           (t) => t.setPlaceholder("http://proxy.example.com:8080").setValue(proxy.url).onChange(async (v) => {
             await this.patchProxy({ url: v.trim() });
           })
         );
-        new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_username_name).setDesc(T.settings.proxy_username_desc).addText(
+        new import_obsidian5.Setting(containerEl).setName(T.settings.proxy_username_name).setDesc(T.settings.proxy_username_desc).addText(
           (t) => t.setValue(proxy.username ?? "").onChange(async (v) => {
             await this.patchProxy({ username: v });
           })
         );
-        new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_password_name).setDesc(T.settings.proxy_password_desc).addText((t) => {
+        new import_obsidian5.Setting(containerEl).setName(T.settings.proxy_password_name).setDesc(T.settings.proxy_password_desc).addText((t) => {
           t.setValue(proxy.password ?? "").onChange(async (v) => {
             await this.patchLocalProxyPassword(v);
           });
           t.inputEl.type = "password";
         });
-        new import_obsidian4.Setting(containerEl).setName(T.settings.proxy_noProxy_name).setDesc(T.settings.proxy_noProxy_desc).addText(
+        new import_obsidian5.Setting(containerEl).setName(T.settings.proxy_noProxy_name).setDesc(T.settings.proxy_noProxy_desc).addText(
           (t) => t.setPlaceholder("localhost,127.0.0.1").setValue(proxy.noProxy ?? "").onChange(async (v) => {
             await this.patchProxy({ noProxy: v.trim() });
           })
@@ -29699,9 +30140,9 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         containerEl.createEl("p", { text: T.settings.proxy_hint, cls: "setting-item-description" });
       }
     }
-    if (!import_obsidian4.Platform.isMobile) {
-      new import_obsidian4.Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
-      new import_obsidian4.Setting(containerEl).setName(T.settings.devMode_enabled_name).setDesc(T.settings.devMode_enabled_desc).addToggle(
+    if (!import_obsidian5.Platform.isMobile) {
+      new import_obsidian5.Setting(containerEl).setName(T.settings.h3_devmode).setHeading();
+      new import_obsidian5.Setting(containerEl).setName(T.settings.devMode_enabled_name).setDesc(T.settings.devMode_enabled_desc).addToggle(
         (t) => t.setValue(s.devMode.enabled).onChange(async (v) => {
           s.devMode.enabled = v;
           await this.plugin.saveSettings();
@@ -29709,7 +30150,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
         })
       );
       if (s.devMode.enabled) {
-        new import_obsidian4.Setting(containerEl).setName(T.settings.devMode_evaluatorModel_name).setDesc(T.settings.devMode_evaluatorModel_desc).addText(
+        new import_obsidian5.Setting(containerEl).setName(T.settings.devMode_evaluatorModel_name).setDesc(T.settings.devMode_evaluatorModel_desc).addText(
           (t) => t.setPlaceholder("").setValue(s.devMode.evaluatorModel).onChange(async (v) => {
             s.devMode.evaluatorModel = v.trim();
             await this.plugin.saveSettings();
@@ -29724,7 +30165,7 @@ var LlmWikiSettingTab = class extends import_obsidian4.PluginSettingTab {
 };
 
 // src/view.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 
 // src/source-deletion.ts
 function sourceStem(path2) {
@@ -30770,7 +31211,7 @@ function computeSpeedText(stats) {
 }
 
 // src/view.ts
-var import_path_browserify3 = __toESM(require_path_browserify(), 1);
+var import_path_browserify4 = __toESM(require_path_browserify(), 1);
 
 // src/retrieval-diag.ts
 function seedPassesGate(denseMax, threshold) {
@@ -30786,11 +31227,11 @@ function retrievalTag(mode, seedFallback, reason, denseMax) {
 }
 
 // src/utils/vault-walk.ts
-var import_obsidian5 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 function walkFolder(folder, out) {
   for (const child of folder.children) {
-    if (child instanceof import_obsidian5.TFolder) walkFolder(child, out);
-    else if (child instanceof import_obsidian5.TFile && child.extension === "md") out.push(child);
+    if (child instanceof import_obsidian6.TFolder) walkFolder(child, out);
+    else if (child instanceof import_obsidian6.TFile && child.extension === "md") out.push(child);
   }
 }
 function collectMdInPaths(vault, sourcePaths) {
@@ -30852,7 +31293,7 @@ function registerLinkHandler(el, app) {
   });
 }
 var PREVIEW_INLINE = 140;
-var LlmWikiView = class extends import_obsidian6.ItemView {
+var LlmWikiView = class extends import_obsidian7.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.plugin = plugin;
@@ -30939,7 +31380,7 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
     root.empty();
     root.addClass("ai-wiki-view");
     const T = i18n();
-    const isMobile = import_obsidian6.Platform.isMobile;
+    const isMobile = import_obsidian7.Platform.isMobile;
     const header = root.createDiv("ai-wiki-header");
     header.createEl("h3", { text: "AI wiki" });
     this.statusEl = header.createDiv("ai-wiki-status");
@@ -31037,23 +31478,23 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
     });
     if (opts.withActions) {
       this.addSourceBtn = domainRow.createEl("button", { attr: { title: T.view.addSourceTitle } });
-      (0, import_obsidian6.setIcon)(this.addSourceBtn, "folder-plus");
+      (0, import_obsidian7.setIcon)(this.addSourceBtn, "folder-plus");
       this.addSourceBtn.disabled = true;
       this.addSourceBtn.addEventListener("click", () => void this.openManageSources());
       this.reinitBtn = domainRow.createEl("button", { attr: { title: T.view.reinitTitle } });
-      (0, import_obsidian6.setIcon)(this.reinitBtn, "recycle");
+      (0, import_obsidian7.setIcon)(this.reinitBtn, "recycle");
       this.reinitBtn.disabled = true;
       this.reinitBtn.addEventListener("click", () => void this.runReinit());
       this.openLogLink = domainRow.createEl("a", {
         cls: "internal-link ai-wiki-domain-file-link",
         attr: { title: "Open _log.md", "data-href": "" }
       });
-      (0, import_obsidian6.setIcon)(this.openLogLink, "scroll-text");
+      (0, import_obsidian7.setIcon)(this.openLogLink, "scroll-text");
       this.openIndexLink = domainRow.createEl("a", {
         cls: "internal-link ai-wiki-domain-file-link",
         attr: { title: "Open _index.md", "data-href": "" }
       });
-      (0, import_obsidian6.setIcon)(this.openIndexLink, "list");
+      (0, import_obsidian7.setIcon)(this.openIndexLink, "list");
       domainRow.addEventListener("click", (e) => {
         const a = e.target.closest("a.ai-wiki-domain-file-link");
         if (!a) return;
@@ -31088,7 +31529,7 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
             void this.app.workspace.openLinkText(filename, domainFolder, false);
           } else {
             const isLog = href.endsWith("_log.md");
-            new import_obsidian6.Notice(isLog ? "_log.md not found \u2014 run ingest or lint first." : "_index.md not found \u2014 run init first.");
+            new import_obsidian7.Notice(isLog ? "_log.md not found \u2014 run ingest or lint first." : "_index.md not found \u2014 run init first.");
           }
         })();
       });
@@ -31123,7 +31564,7 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
       this.ingestBtn.addEventListener("click", () => {
         const file = this.plugin.app.workspace.getActiveFile();
         if (!file) {
-          new import_obsidian6.Notice(i18n().view.noActiveFile);
+          new import_obsidian7.Notice(i18n().view.noActiveFile);
           return;
         }
         const domainId = this.domainSelect.value || void 0;
@@ -31200,7 +31641,7 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
   openAddDomain() {
     const cwd = this.plugin.controller.cwdOrEmpty();
     if (!cwd) {
-      new import_obsidian6.Notice(i18n().view.cwdNotSet);
+      new import_obsidian7.Notice(i18n().view.cwdNotSet);
       return;
     }
     new AddDomainModal(this.app, (input) => {
@@ -31241,14 +31682,14 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
     if (!entry) return;
     const sourcePaths = entry.source_paths ?? [];
     if (sourcePaths.length === 0) {
-      new import_obsidian6.Notice(i18n().view.reinitNoSources);
+      new import_obsidian7.Notice(i18n().view.reinitNoSources);
       return;
     }
     const T = i18n().modal;
     const base = this.plugin.controller.cwdOrEmpty();
     const toVaultRel = (p) => {
-      if (!base || !(0, import_path_browserify3.isAbsolute)(p)) return p;
-      const rel = (0, import_path_browserify3.relative)(base, p);
+      if (!base || !(0, import_path_browserify4.isAbsolute)(p)) return p;
+      const rel = (0, import_path_browserify4.relative)(base, p);
       return rel.startsWith("..") ? p : rel;
     };
     const mdFiles = collectMdInPaths(this.app.vault, sourcePaths.map(toVaultRel));
@@ -31280,8 +31721,8 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
       const T = i18n().modal;
       const base = this.plugin.controller.cwdOrEmpty();
       const toVaultRel = (p) => {
-        if (!base || !(0, import_path_browserify3.isAbsolute)(p)) return p;
-        const rel = (0, import_path_browserify3.relative)(base, p);
+        if (!base || !(0, import_path_browserify4.isAbsolute)(p)) return p;
+        const rel = (0, import_path_browserify4.relative)(base, p);
         return rel.startsWith("..") ? p : rel;
       };
       const mdFiles = collectMdInPaths(this.app.vault, newPaths.map(toVaultRel));
@@ -31294,7 +31735,7 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
         async () => {
           await this.plugin.controller.updateDomainSources(original.id, newPaths);
           const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
-          if (deleted > 0) new import_obsidian6.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
+          if (deleted > 0) new import_obsidian7.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
           void this.plugin.controller.init(original.id, false, newPaths, true);
         }
       ).open();
@@ -31303,7 +31744,7 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
     if (removed.length > 0) {
       await this.plugin.controller.updateDomainSources(original.id, newPaths);
       const deleted = await this.plugin.controller.cleanupRemovedSources(original.id, removed);
-      if (deleted > 0) new import_obsidian6.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
+      if (deleted > 0) new import_obsidian7.Notice(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u0442\u0430\u0442\u0435\u0439: ${deleted}`);
       return;
     }
     if (added.length > 0) {
@@ -31318,11 +31759,11 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
   submitQuery() {
     const q = this.queryInput.value.trim();
     if (!q) {
-      new import_obsidian6.Notice(i18n().view.enterQuestion);
+      new import_obsidian7.Notice(i18n().view.enterQuestion);
       return;
     }
     if (this.state === "running") {
-      new import_obsidian6.Notice(i18n().view.operationInProgress);
+      new import_obsidian7.Notice(i18n().view.operationInProgress);
       return;
     }
     void this.plugin.controller.query(q, this.domainSelect?.value || void 0);
@@ -31380,7 +31821,7 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
     this.liveStatusIconEl?.setText("");
     this.liveStatusTextEl?.setText("");
     this.scheduleMetricsTick();
-    if (import_obsidian6.Platform.isMobile) {
+    if (import_obsidian7.Platform.isMobile) {
       const placeholder = this.stepsEl.createDiv("ai-wiki-step ai-wiki-step-pending");
       placeholder.setText(i18n().view.mobileWaiting);
       this.mobileWaitingEl = placeholder;
@@ -31505,7 +31946,7 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
         if (t) t.setText(`${dur}s`);
         if (ev.preview) {
           const p = step.createDiv("ai-wiki-step-preview");
-          p.setText(truncate(ev.preview.replace(/\s+/g, " "), PREVIEW_INLINE));
+          p.setText(truncate2(ev.preview.replace(/\s+/g, " "), PREVIEW_INLINE));
         }
         this.currentToolStep = null;
       }
@@ -31571,9 +32012,9 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
     } else if (ev.kind === "eval_result") {
       const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
       const text = `**[eval: ${ev.score}/10]** ${ev.reasoning}`;
-      const comp = new import_obsidian6.Component();
+      const comp = new import_obsidian7.Component();
       comp.load();
-      void import_obsidian6.MarkdownRenderer.render(this.app, text, el, "", comp);
+      void import_obsidian7.MarkdownRenderer.render(this.app, text, el, "", comp);
     }
     this.updateMetrics();
   }
@@ -31591,9 +32032,9 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
     void link;
     registerLinkHandler(this.formatPreviewSection, this.app);
     const reportEl = this.formatPreviewSection.createDiv("ai-wiki-format-report");
-    const comp = new import_obsidian6.Component();
+    const comp = new import_obsidian7.Component();
     comp.load();
-    void import_obsidian6.MarkdownRenderer.render(this.app, report, reportEl, "", comp).then(() => sanitizeLinks(reportEl));
+    void import_obsidian7.MarkdownRenderer.render(this.app, report, reportEl, "", comp).then(() => sanitizeLinks(reportEl));
     if (missing.length > 0) {
       const warn = this.formatPreviewSection.createEl("details", { cls: "ai-wiki-format-warn" });
       const summary = warn.createEl("summary");
@@ -31652,9 +32093,9 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
     this.resultSpeedEl?.setText(this.buildSpeedText());
     this.finalEl.empty();
     if (entry.finalText) {
-      const comp = new import_obsidian6.Component();
+      const comp = new import_obsidian7.Component();
       comp.load();
-      await import_obsidian6.MarkdownRenderer.render(this.app, entry.finalText, this.finalEl, "", comp);
+      await import_obsidian7.MarkdownRenderer.render(this.app, entry.finalText, this.finalEl, "", comp);
       sanitizeLinks(this.finalEl);
       this.resultSection.removeClass("ai-wiki-hidden");
       this.finalEl.removeClass("ai-wiki-hidden");
@@ -31701,7 +32142,7 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
       if (ctx.operation === "lint" || ctx.operation === "lint-chat") {
         const domainId = (ctx.domainId ?? this.domainSelect?.value) || void 0;
         if (!domainId) {
-          new import_obsidian6.Notice(i18n().view.selectDomainFirst ?? "Select a domain first");
+          new import_obsidian7.Notice(i18n().view.selectDomainFirst ?? "Select a domain first");
           return;
         }
         void this.plugin.controller.lintApplyFromChat(
@@ -31727,17 +32168,17 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
     if (role === "user") {
       el.setText(text);
     } else {
-      const comp = new import_obsidian6.Component();
+      const comp = new import_obsidian7.Component();
       comp.load();
-      void import_obsidian6.MarkdownRenderer.render(this.app, text, el, "", comp).then(() => sanitizeLinks(el));
+      void import_obsidian7.MarkdownRenderer.render(this.app, text, el, "", comp).then(() => sanitizeLinks(el));
       registerLinkHandler(el, this.app);
     }
     const copyBtn = el.createEl("button", { cls: "ai-wiki-copy-btn", attr: { "aria-label": "Copy" } });
-    (0, import_obsidian6.setIcon)(copyBtn, "copy");
+    (0, import_obsidian7.setIcon)(copyBtn, "copy");
     copyBtn.addEventListener("click", () => {
       void navigator.clipboard.writeText(text).then(() => {
-        (0, import_obsidian6.setIcon)(copyBtn, "check");
-        window.setTimeout(() => (0, import_obsidian6.setIcon)(copyBtn, "copy"), 1500);
+        (0, import_obsidian7.setIcon)(copyBtn, "check");
+        window.setTimeout(() => (0, import_obsidian7.setIcon)(copyBtn, "copy"), 1500);
       });
     });
     el.scrollIntoView({ block: "end" });
@@ -31804,10 +32245,10 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
         this.currentChatBubble.addClass("ai-wiki-chat-msg--error");
         this.currentChatBubble.setText(msg.content);
       } else {
-        const comp = new import_obsidian6.Component();
+        const comp = new import_obsidian7.Component();
         comp.load();
         const bubble = this.currentChatBubble;
-        void import_obsidian6.MarkdownRenderer.render(this.app, msg.content, bubble, "", comp).then(() => sanitizeLinks(bubble));
+        void import_obsidian7.MarkdownRenderer.render(this.app, msg.content, bubble, "", comp).then(() => sanitizeLinks(bubble));
         registerLinkHandler(bubble, this.app);
       }
       this.currentChatBubble = null;
@@ -31929,7 +32370,7 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
             const domains = await this.plugin.controller.loadDomains();
             const r = resolveRerunDomain(it, domains);
             if (!r.ok) {
-              new import_obsidian6.Notice(i18n().view.rerunDomainMissing);
+              new import_obsidian7.Notice(i18n().view.rerunDomainMissing);
               return;
             }
             if (this.domainSelect) {
@@ -31942,9 +32383,9 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
       }
       row.addEventListener("click", () => {
         this.finalEl.empty();
-        const comp = new import_obsidian6.Component();
+        const comp = new import_obsidian7.Component();
         comp.load();
-        void import_obsidian6.MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, "", comp).then(() => sanitizeLinks(this.finalEl));
+        void import_obsidian7.MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, "", comp).then(() => sanitizeLinks(this.finalEl));
         this.resultSection.removeClass("ai-wiki-hidden");
         this.finalEl.removeClass("ai-wiki-hidden");
         this.resultOpen = true;
@@ -31959,7 +32400,7 @@ var LlmWikiView = class extends import_obsidian6.ItemView {
     });
   }
 };
-var FileContentModal = class extends import_obsidian6.Modal {
+var FileContentModal = class extends import_obsidian7.Modal {
   constructor(app, filePath, content) {
     super(app);
     this.filePath = filePath;
@@ -31977,15 +32418,15 @@ var FileContentModal = class extends import_obsidian6.Modal {
       require("electron").shell.openPath(absPath);
     });
     this.contentEl.addClass("ai-wiki-busy-modal-content");
-    const comp = new import_obsidian6.Component();
+    const comp = new import_obsidian7.Component();
     comp.load();
-    void import_obsidian6.MarkdownRenderer.render(this.app, this.content, this.contentEl, this.filePath, comp);
+    void import_obsidian7.MarkdownRenderer.render(this.app, this.content, this.contentEl, this.filePath, comp);
   }
   onClose() {
     this.contentEl.empty();
   }
 };
-var WikiQuestionModal = class extends import_obsidian6.Modal {
+var WikiQuestionModal = class extends import_obsidian7.Modal {
   constructor(app, question, options, resolve, reject) {
     super(app);
     this.question = question;
@@ -32066,15 +32507,15 @@ function summariseInput(input) {
   ];
   for (const [k] of candidates) {
     const v = o[k];
-    if (typeof v === "string" && v) return truncate(v, 80);
+    if (typeof v === "string" && v) return truncate2(v, 80);
   }
   for (const k of Object.keys(o)) {
     const v = o[k];
-    if (typeof v === "string" && v) return `${k}=${truncate(v, 60)}`;
+    if (typeof v === "string" && v) return `${k}=${truncate2(v, 60)}`;
   }
   return "";
 }
-function truncate(s, n) {
+function truncate2(s, n) {
   return s.length <= n ? s : s.slice(0, n) + "\u2026";
 }
 function sanitizeLinks(el) {
@@ -32155,7 +32596,7 @@ function applyDomainEvent(domains, ev, opts) {
 }
 
 // src/phases/ingest.ts
-var import_path_browserify4 = __toESM(require_path_browserify(), 1);
+var import_path_browserify5 = __toESM(require_path_browserify(), 1);
 
 // node_modules/zod-to-json-schema/dist/esm/Options.js
 var ignoreOverride = /* @__PURE__ */ Symbol("Let zodToJsonSchema decide on which parser to use");
@@ -38649,7 +39090,7 @@ function parseWikiStatus(content) {
 async function collectSourceStems(domain, vaultTools, vaultRoot) {
   const stems = /* @__PURE__ */ new Set();
   for (const sp of domain.source_paths ?? []) {
-    const vaultPath = (0, import_path_browserify4.isAbsolute)(sp) ? vaultTools.toVaultPath(sp) ?? "" : sp.endsWith("/") ? sp.slice(0, -1) : sp;
+    const vaultPath = (0, import_path_browserify5.isAbsolute)(sp) ? vaultTools.toVaultPath(sp) ?? "" : sp.endsWith("/") ? sp.slice(0, -1) : sp;
     if (!vaultPath) continue;
     const files = await vaultTools.listFiles(vaultPath).catch(() => []);
     for (const f of files) {
@@ -38666,7 +39107,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     yield { kind: "error", message: "ingest: file path required" };
     return;
   }
-  const absSource = (0, import_path_browserify4.isAbsolute)(filePath) ? filePath : (0, import_path_browserify4.join)(vaultRoot, filePath);
+  const absSource = (0, import_path_browserify5.isAbsolute)(filePath) ? filePath : (0, import_path_browserify5.join)(vaultRoot, filePath);
   const sourceVaultPath = vaultTools.toVaultPath(absSource);
   if (!sourceVaultPath) {
     yield { kind: "error", message: `Source file ${filePath} is outside the vault.` };
@@ -38686,7 +39127,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     yield { kind: "error", message: "No domain found for this file. Configure domain-map." };
     return;
   }
-  const absWiki = (0, import_path_browserify4.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+  const absWiki = (0, import_path_browserify5.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
     yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
@@ -39163,7 +39604,7 @@ function buildIngestSummary(domainId, sourcePath, createdCount, updatedCount, me
 function detectDomain(absFilePath, domains, vaultRoot) {
   for (const d of domains) {
     const matched = d.source_paths?.some((sp) => {
-      const abs = (0, import_path_browserify4.isAbsolute)(sp) ? sp : (0, import_path_browserify4.join)(vaultRoot, sp);
+      const abs = (0, import_path_browserify5.isAbsolute)(sp) ? sp : (0, import_path_browserify5.join)(vaultRoot, sp);
       return absFilePath.startsWith(abs);
     });
     if (matched) return d;
@@ -39191,10 +39632,10 @@ async function tryRead(vaultTools, path2) {
   }
 }
 function extractParentSourcePath(absSource, vaultRoot) {
-  const parentAbs = (0, import_path_browserify4.dirname)(absSource);
+  const parentAbs = (0, import_path_browserify5.dirname)(absSource);
   const normedVault = vaultRoot.endsWith("/") ? vaultRoot : vaultRoot + "/";
   const clamped = (parentAbs + "/").startsWith(normedVault) ? parentAbs : vaultRoot;
-  const rel = (0, import_path_browserify4.relative)(vaultRoot, clamped);
+  const rel = (0, import_path_browserify5.relative)(vaultRoot, clamped);
   return (rel || ".") + "/";
 }
 function splitByPathValidity(pages, wikiVaultPath) {
@@ -39750,7 +40191,7 @@ ${types}${notes}`;
 }
 
 // src/phases/lint.ts
-var import_path_browserify5 = __toESM(require_path_browserify(), 1);
+var import_path_browserify6 = __toESM(require_path_browserify(), 1);
 
 // prompts/lint.md
 var lint_default = 'You are a reviewer and editor of the wiki knowledge base for the domain "{{domain_name}}".\nAnalyze the wiki quality: duplication, gaps, vague definitions, stale content, broken links.\nAt the same time, prepare corrected versions of the problematic pages.\n{{entity_types_block}}\n{{schema_block}}\n\nWhen fixing pages:\n- tags: check and update hierarchical tags (category/subcategory). Reuse tags from other domain pages (provided in the context). Format: lowercase, separated by `/`, no spaces, no `#`\n- "annotation": a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section \u2014 synonyms, IDs, terms that are not in the heading>. Aim for ~600\u2013800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate \u2014 generic phrases raise noise in search.\n- The `annotation` field \u2014 ONLY in the JSON response. Do NOT add `annotation:` to the page frontmatter.\n- remove or replace dead links [[X]]; add missing frontmatter; merge duplication\n- WikiLink without aliases: only `[[target]]`, never `[[target|alias]]`\n- wiki_sources: every list item MUST be in double quotes: `"[[FileName]]"`. Without quotes YAML parses `[[...]]` as a nested array \u2014 this will break the page.\n\nWhen duplicate articles are found in the provided set:\n- merge the content of the duplicates into the main article (include the merged article in fixes[])\n- specify the paths of the duplicates in the deletes[].path field\n- specify the path of the main article in deletes[].redirect_to to update the links\n\nReturn ONLY a JSON object \u2014 no other text:\n{"reasoning":"chain of reasoning","report":"## Lint report\\n\\nQuality analysis in Markdown format...","fixes":[{"path":"!Wiki/domain/type/Entity.md","content":"full content of the corrected page","annotation":"The essence of the page in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search."}],"deletes":[{"path":"!Wiki/domain/type/Duplicate.md","redirect_to":"!Wiki/domain/type/Entity.md"}]}\n\nThe `fixes` field contains ONLY changed pages (an empty array if there are no edits).\nThe `deletes` field contains duplicate pages to delete (an empty array or absent if there are no deletions).\nThe `report` field is the full markdown report for the user.\n';
@@ -39867,7 +40308,7 @@ async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal
   let outputTokens = 0;
   for (const domain of targets) {
     if (signal.aborted) return;
-    const absWiki = (0, import_path_browserify5.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+    const absWiki = (0, import_path_browserify6.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
     const wikiVaultPath = vaultTools.toVaultPath(absWiki);
     if (!wikiVaultPath) {
       reportParts.push(`## ${domain.id}
@@ -42173,313 +42614,6 @@ var VaultTools = class {
     const base = this.basePath.endsWith("/") ? this.basePath : this.basePath + "/";
     if (!absolutePath.startsWith(base)) return null;
     return absolutePath.slice(base.length);
-  }
-};
-
-// src/claude-cli-client.ts
-var import_obsidian7 = require("obsidian");
-var import_path_browserify6 = __toESM(require_path_browserify(), 1);
-
-// src/stream.ts
-var PREVIEW_MAX = 200;
-function isRecord(obj) {
-  return typeof obj === "object" && obj !== null;
-}
-function parseStreamLine(raw) {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  if (!trimmed.startsWith("{")) return null;
-  let obj;
-  try {
-    obj = JSON.parse(trimmed);
-  } catch {
-    return { kind: "error", message: `stream parse error: ${truncate2(trimmed, 120)}` };
-  }
-  if (!isRecord(obj)) return null;
-  switch (obj.type) {
-    case "system": {
-      const subtype = typeof obj.subtype === "string" ? obj.subtype : "system";
-      const model = typeof obj.model === "string" ? obj.model : "";
-      const sessionId = typeof obj.session_id === "string" ? obj.session_id : void 0;
-      const msg = `${subtype}${model ? ` (${model})` : ""}`;
-      return { kind: "system", message: msg, sessionId };
-    }
-    case "assistant":
-      return mapAssistant(obj);
-    case "user":
-      return mapUserToolResult(obj);
-    case "result":
-      return mapResult(obj);
-    default:
-      return null;
-  }
-}
-function mapAssistant(obj) {
-  const msg = obj.message;
-  if (!isRecord(msg)) return null;
-  const content = msg.content;
-  if (!Array.isArray(content) || content.length === 0) return null;
-  const block = content[0];
-  if (block?.type === "tool_use") {
-    if (block.name === "AskUserQuestion") {
-      const input = isRecord(block.input) ? block.input : {};
-      return {
-        kind: "ask_user",
-        question: typeof input.prompt === "string" ? input.prompt : "",
-        options: Array.isArray(input.options) ? input.options.map((o) => typeof o === "string" ? o : String(o)) : [],
-        toolUseId: typeof block.id === "string" ? block.id : ""
-      };
-    }
-    return { kind: "tool_use", name: typeof block.name === "string" ? block.name : "?", input: block.input };
-  }
-  if (block?.type === "text") {
-    return { kind: "assistant_text", delta: typeof block.text === "string" ? block.text : "" };
-  }
-  return null;
-}
-function mapUserToolResult(obj) {
-  const msg = obj.message;
-  if (!isRecord(msg)) return null;
-  const content = msg.content;
-  if (!Array.isArray(content)) return null;
-  const block = content[0];
-  if (!isRecord(block) || block.type !== "tool_result") return null;
-  const isErr = Boolean(block.is_error);
-  const preview = typeof block.content === "string" ? truncate2(block.content, PREVIEW_MAX) : void 0;
-  return { kind: "tool_result", ok: !isErr, preview };
-}
-function mapResult(obj) {
-  if (obj.is_error || obj.subtype === "error") {
-    const errMsg = typeof obj.result === "string" ? obj.result : typeof obj.error === "string" ? obj.error : "claude error";
-    return { kind: "error", message: errMsg };
-  }
-  const usage = isRecord(obj.usage) ? obj.usage : null;
-  const outputTokens = typeof usage?.output_tokens === "number" ? usage.output_tokens : void 0;
-  return {
-    kind: "result",
-    durationMs: Number(obj.duration_ms ?? 0),
-    text: typeof obj.result === "string" ? obj.result : "",
-    outputTokens
-  };
-}
-function truncate2(s, n) {
-  return s.length <= n ? s : s.slice(0, n) + "\u2026";
-}
-
-// src/claude-cli-client.ts
-var SIGTERM_GRACE_MS = 3e3;
-function validateIclaudePath(p) {
-  if (!p) throw new Error("iclaudePath is empty");
-  if (!(0, import_path_browserify6.isAbsolute)(p)) throw new Error(`iclaudePath must be absolute: "${p}"`);
-  if (p.split("/").includes("..")) throw new Error(`iclaudePath contains path traversal: "${p}"`);
-}
-var ClaudeCliClient = class {
-  constructor(cfg) {
-    this.cfg = cfg;
-  }
-  cfg;
-  /** Session ID of the last completed turn, populated from the system init event. */
-  lastSessionId;
-  chat = {
-    completions: {
-      create: (params, opts) => this._create(params, opts)
-    }
-  };
-  async _create(params, opts) {
-    const messages = params.messages;
-    const systemContent = messages.filter((m) => m.role === "system").map((m) => typeof m.content === "string" ? m.content : "").join("\n\n");
-    const lastUser = [...messages].reverse().find((m) => m.role === "user");
-    const userText = typeof lastUser?.content === "string" ? lastUser.content : "";
-    const model = params.model || this.cfg.model;
-    const { requestTimeoutSec } = this.cfg;
-    const LARGE_THRESHOLD = 262144;
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const tmpFiles = [];
-    const isResume = Boolean(this.cfg.resumeSessionId);
-    const args = [];
-    args.push("--");
-    if (model) args.push("--model", model);
-    if (this.cfg.effort) args.push("--effort", this.cfg.effort);
-    if (isResume) {
-      args.push("--resume", this.cfg.resumeSessionId);
-    }
-    try {
-      const isLargeUser = Buffer.byteLength(userText, "utf8") > LARGE_THRESHOLD;
-      if (isLargeUser) {
-        const tmpUsrFile = (0, import_path_browserify6.join)(this.cfg.tmpDir, `ai-wiki-usr-${id}.txt`);
-        const wrapped = `<user_input>
-${userText}
-</user_input>`;
-        await this.cfg.tmpWrite(tmpUsrFile, wrapped);
-        tmpFiles.push(tmpUsrFile);
-        args.push("-p", "Process the content from <user_input> according to the system prompt.");
-        args.push("--append-system-prompt-file", tmpUsrFile);
-      } else {
-        args.push("-p", userText);
-      }
-      args.push("--output-format", "stream-json", "--verbose");
-      args.push("--disable-slash-commands");
-      args.push("--dangerously-skip-permissions");
-      if (this.cfg.allowedTools) args.push("--tools", this.cfg.allowedTools);
-      if (!isResume && systemContent) {
-        const isLargeSys = Buffer.byteLength(systemContent, "utf8") > LARGE_THRESHOLD;
-        if (isLargeSys) {
-          const tmpSysFile = (0, import_path_browserify6.join)(this.cfg.tmpDir, `ai-wiki-sys-${id}.txt`);
-          await this.cfg.tmpWrite(tmpSysFile, systemContent);
-          tmpFiles.push(tmpSysFile);
-          args.push("--system-prompt-file", tmpSysFile);
-        } else {
-          args.push("--system-prompt", systemContent);
-        }
-      }
-    } catch (err) {
-      for (const f of tmpFiles) {
-        try {
-          this.cfg.tmpRemove(f);
-        } catch {
-        }
-      }
-      throw err;
-    }
-    if (params.stream) {
-      return this._makeIterable(args, opts?.signal, requestTimeoutSec, tmpFiles);
-    }
-    return this._collect(args, opts?.signal, requestTimeoutSec, tmpFiles);
-  }
-  _makeIterable(args, signal, timeoutSec, tmpFiles) {
-    return { [Symbol.asyncIterator]: () => this._generate(args, signal, timeoutSec, tmpFiles) };
-  }
-  async *_generate(args, signal, timeoutSec, tmpFiles) {
-    validateIclaudePath(this.cfg.iclaudePath);
-    if (!import_obsidian7.Platform.isDesktopApp) throw new Error("Claude CLI backend is desktop-only");
-    const { spawn } = await import("node:child_process");
-    const child = spawn(this.cfg.iclaudePath, args, { stdio: ["ignore", "pipe", "pipe"], cwd: this.cfg.cwd || void 0 });
-    if (!child.stdout || !child.stderr) throw new Error("spawn: missing stdio");
-    const stderrChunks = [];
-    child.stderr.on("data", (chunk) => stderrChunks.push(chunk));
-    const onAbort = () => {
-      child.kill("SIGTERM");
-      window.setTimeout(() => {
-        if (child.exitCode === null) child.kill("SIGKILL");
-      }, SIGTERM_GRACE_MS);
-    };
-    if (signal?.aborted) {
-      onAbort();
-      return;
-    }
-    signal?.addEventListener("abort", onAbort, { once: true });
-    const timeoutHandle = timeoutSec > 0 ? window.setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGTERM");
-      window.setTimeout(() => {
-        if (child.exitCode === null) child.kill("SIGKILL");
-      }, SIGTERM_GRACE_MS);
-    }, timeoutSec * 1e3) : null;
-    let timedOut = false;
-    const queue = [];
-    let resolveNext = null;
-    const wake = () => {
-      if (resolveNext) {
-        resolveNext();
-        resolveNext = null;
-      }
-    };
-    let id = 0;
-    let buf = "";
-    child.stdout.on("data", (chunk) => {
-      buf += chunk.toString("utf8");
-      let nl;
-      while ((nl = buf.indexOf("\n")) !== -1) {
-        const line = buf.slice(0, nl);
-        buf = buf.slice(nl + 1);
-        const ev = parseStreamLine(line);
-        if (ev?.kind === "system" && ev.sessionId) {
-          this.lastSessionId = ev.sessionId;
-        }
-        if (ev?.kind === "assistant_text") {
-          const delta = ev.isReasoning ? { reasoning: ev.delta } : { content: ev.delta };
-          queue.push({
-            id: `cc-${++id}`,
-            object: "chat.completion.chunk",
-            model: this.cfg.model || "claude",
-            created: 0,
-            choices: [{ index: 0, delta, finish_reason: null }]
-          });
-          wake();
-        }
-      }
-    });
-    let exited = false;
-    let exitCode = null;
-    let spawnError = null;
-    child.on("close", (code) => {
-      exitCode = code;
-      exited = true;
-      wake();
-    });
-    child.on("error", (err) => {
-      spawnError = err;
-      exited = true;
-      wake();
-    });
-    try {
-      while (true) {
-        if (queue.length > 0) {
-          yield queue.shift();
-          continue;
-        }
-        if (exited) break;
-        await new Promise((r) => resolveNext = r);
-      }
-      if (buf.trim()) {
-        const ev = parseStreamLine(buf.trim());
-        if (ev?.kind === "system" && ev.sessionId) this.lastSessionId = ev.sessionId;
-      }
-      const stderr = () => Buffer.concat(stderrChunks).toString("utf8").trim();
-      if (spawnError) throw new Error(`claude spawn failed: ${spawnError.message}${stderr() ? `
-${stderr()}` : ""}`);
-      if (signal?.aborted) return;
-      const ec = exitCode;
-      if (ec !== null && ec !== 0) throw new Error(`claude exited with code ${String(ec)}${stderr() ? `
-${stderr()}` : ""}`);
-      if (timedOut) throw new Error(`claude process timed out after ${timeoutSec}s`);
-      yield {
-        id: `cc-${++id}`,
-        object: "chat.completion.chunk",
-        model: this.cfg.model || "claude",
-        created: 0,
-        choices: [{ index: 0, delta: {}, finish_reason: "stop" }]
-      };
-    } finally {
-      if (timeoutHandle !== null) window.clearTimeout(timeoutHandle);
-      signal?.removeEventListener("abort", onAbort);
-      for (const f of tmpFiles) {
-        try {
-          this.cfg.tmpRemove(f);
-        } catch {
-        }
-      }
-      if (child.exitCode === null) {
-        child.kill("SIGTERM");
-        window.setTimeout(() => {
-          if (child.exitCode === null) child.kill("SIGKILL");
-        }, SIGTERM_GRACE_MS);
-      }
-    }
-  }
-  async _collect(args, signal, timeoutSec, tmpFiles) {
-    let text = "";
-    for await (const chunk of this._generate(args, signal, timeoutSec, tmpFiles)) {
-      text += chunk.choices[0]?.delta?.content ?? "";
-    }
-    return {
-      id: "cc-0",
-      object: "chat.completion",
-      model: this.cfg.model || "claude",
-      created: 0,
-      choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop", logprobs: null }],
-      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
-    };
   }
 };
 
