@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.182 — 2026-06-23
+
+### Новое
+- feat(claude-cli): probe Claude binary via spawn, with out-of-vault eval coverage
+
+### Исправления
+- fix(settings): Test connection now uses a spawn probe; dropped fs/promises import
+- fix(deps): bump undici ^6.25.0 → ^6.27.0 (GHSA-p88m-4jfj-68fv)
+
+---
+
 ## 0.1.181 — 2026-06-22
 
 ### Новое
