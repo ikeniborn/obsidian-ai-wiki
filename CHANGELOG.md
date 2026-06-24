@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.183 — 2026-06-24
+
+### Новое
+- feat(query): deterministic WikiLink resolver for broken links, with zod-validated LLM fallback and valid-stem listing in the answer prompt
+- feat(incremental): incremental reinit mode — Full/Incremental selector modal, pure changed-source detection (VaultTools.mtime + VaultAdapter.stat), re-ingest changed sources without wiping the vault
+- feat(llm): export and strengthen reasoning/answer language directives
+- feat(controller): log consolidated model reasoning to _agent.jsonl
+- feat(vision): honor reasoningLanguage in attachment analysis
+
+### Исправления
+- fix(incremental): parse wiki_sources wikilinks to bare stems + file sources
+
+### Прочее
+- refactor(ingest)!: write source frontmatter before wiki pages (A2 ordering)
+- refactor(query): remove orphaned rewriteWithValidLinks, tidy fallback diagnostics
+
+---
+
 ## 0.1.182 — 2026-06-23
 
 ### Новое
