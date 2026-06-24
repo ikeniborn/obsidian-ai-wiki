@@ -4,12 +4,12 @@ import baseContract from "../../prompts/base.md";
 import { jsonrepair } from "jsonrepair";
 import { resolveLang, resolveReasoningLang } from "../i18n";
 
-/** Maps a concrete output language to a one-line reply directive for the system prompt. */
+/** Maps a concrete output language to a reply directive for the system prompt. */
 export function langInstruction(lang: "ru" | "en" | "es"): string {
   switch (lang) {
-    case "ru": return "Always reply in Russian, regardless of the source language.";
-    case "en": return "Always reply in English, regardless of the source language.";
-    case "es": return "Always reply in Spanish, regardless of the source language.";
+    case "ru": return "Write the entire response in Russian. Do not switch to the source language, even when the notes, user input, or quoted text are in another language.";
+    case "en": return "Write the entire response in English. Do not switch to the source language, even when the notes, user input, or quoted text are in another language.";
+    case "es": return "Write the entire response in Spanish. Do not switch to the source language, even when the notes, user input, or quoted text are in another language.";
   }
 }
 
@@ -192,12 +192,27 @@ const REASONING_LANG_NAME: Record<"ru" | "en" | "es", string> = {
   es: "Spanish",
 };
 
-/** Appends `## Reasoning language\n<directive>` to the first system message. */
+/**
+ * The reasoning-language section, shared by `buildChatParams` (via
+ * `injectReasoningDirective`) and the vision path. Returns the full section
+ * including its heading so both call sites embed identical text.
+ */
+export function reasoningDirective(lang: "ru" | "en" | "es"): string {
+  const name = REASONING_LANG_NAME[lang];
+  return [
+    "## Reasoning language",
+    `Reason and think exclusively in ${name}.`,
+    `Do not switch the reasoning language to match the source notes, user input, or quoted text, even when those are written in another language.`,
+    `This rule also governs the \`reasoning\` field of any JSON output: write that field in ${name} as well.`,
+  ].join("\n");
+}
+
+/** Appends the shared reasoning directive to the first system message. */
 function injectReasoningDirective(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   lang: "ru" | "en" | "es",
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
-  const directive = `## Reasoning language\nThink and reason in ${REASONING_LANG_NAME[lang]}.`;
+  const directive = reasoningDirective(lang);
   const firstSystem = messages.findIndex((m) => m.role === "system");
   if (firstSystem >= 0) {
     const updated = [...messages];
