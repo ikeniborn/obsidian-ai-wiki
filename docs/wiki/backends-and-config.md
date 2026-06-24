@@ -1,5 +1,7 @@
 # Backends and Config
 
+## Overview
+
 Two LLM backends are supported and selected in settings; backend choice drives how the `LlmClient` is constructed in `WikiController.buildAgentRunner`. Settings are split across two stores to keep secrets off synced devices. See [[architecture#Backends]].
 
 ## Native Agent
@@ -29,7 +31,7 @@ Settings are split into two stores to avoid syncing secrets across devices. `res
 
 Language settings govern three independent layers resolved at call time (`src/i18n.ts`). `outputLanguage` (`auto | ru | en | es`, default `auto`) is the primary content setting; `reasoningLanguage` (default `en`) controls the model's internal reasoning language.
 
-### Three-Layer Resolution
+## Three-Layer Resolution
 
 Language resolution is split into three layers, each with its own resolver and default.
 
@@ -37,7 +39,7 @@ Language resolution is split into three layers, each with its own resolver and d
 - **Layer B — Reasoning language** (`resolveReasoningLang(reasoningLanguage, outputLanguage)`): injects a `## Reasoning language` directive into the system prompt (best-effort). Explicit `ru|en|es` wins; `auto` chains to `resolveLang(outputLanguage)`; undefined defaults to `en` (models reason most reliably in English).
 - **Layer C — Generated content** (`resolveLang(outputLanguage)` via `langInstruction`): injects `## Language` into the system prompt to set the output language. Explicit `ru|en|es` wins; `auto`/undefined follows the Obsidian UI locale — **not** the source note language (deliberate change: `auto` no longer follows the source). Drives the localized wiki section headings via [[domain-model#Bundled Schemas]].
 
-### reasoningLanguage Setting
+## reasoningLanguage Setting
 
 A new `reasoningLanguage` field (`OutputLanguage`, default `"en"`) in `LlmWikiPluginSettings` (`src/types.ts`) is exposed as a "Reasoning language" dropdown in the settings panel (`src/settings.ts`). It is always injected (layer B is unconditional), unlike the content directive which is skipped when `outputLanguage` is unset.
 

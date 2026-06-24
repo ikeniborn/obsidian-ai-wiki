@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка плана: Query Link Resolver (2026-06-24)</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --info:#1e88e5; --info-2:#1565c0;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --info:#89dceb; --info-2:#74c7ec;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+.theme-btn{
+  position:sticky; top:.5rem; float:right; z-index:10;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+h1{font-size:1.7rem; margin:.2rem 0 .3rem;}
+h2{font-size:1.25rem; margin:2rem 0 .6rem; padding-bottom:.3rem; border-bottom:2px solid var(--border);}
+h3{font-size:1.02rem; margin:1.3rem 0 .4rem; color:var(--accent-2);}
+.lead{color:var(--muted); margin:.2rem 0 1rem;}
+.verdict-ok{
+  display:inline-block; padding:.45rem .9rem; border-radius:8px; font-weight:600;
+  background:color-mix(in srgb,var(--ok) 18%, var(--surface));
+  border:1px solid var(--ok); color:var(--ok-2);
+}
+table{border-collapse:collapse; width:100%; margin:.6rem 0 1rem; background:var(--surface);
+  box-shadow:0 1px 4px var(--shadow); border-radius:8px; overflow:hidden;}
+th,td{text-align:left; padding:.5rem .7rem; border-bottom:1px solid var(--border); vertical-align:top;}
+th{background:color-mix(in srgb,var(--accent) 14%, var(--surface)); font-weight:600;}
+tbody tr:nth-child(even){background:var(--zebra);}
+td.dod{color:var(--muted);}
+code{background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .3rem; border-radius:4px;
+  font:13px/1.4 ui-monospace, monospace;}
+.badge{display:inline-block; padding:.08rem .5rem; border-radius:20px; font-size:.78rem; font-weight:600;}
+.b-pass{background:color-mix(in srgb,var(--ok) 20%, var(--surface)); color:var(--ok-2); border:1px solid var(--ok);}
+.b-info{background:color-mix(in srgb,var(--info) 20%, var(--surface)); color:var(--info-2); border:1px solid var(--info);}
+.b-acc{background:color-mix(in srgb,var(--muted) 18%, var(--surface)); color:var(--fg); border:1px solid var(--muted);}
+.b-zero{background:color-mix(in srgb,var(--ok) 16%, var(--surface)); color:var(--ok-2); border:1px solid var(--ok);}
+.note{background:color-mix(in srgb,var(--accent) 10%, var(--surface)); border-left:4px solid var(--accent);
+  padding:.6rem .9rem; border-radius:0 6px 6px 0; margin:.8rem 0; color:var(--fg);}
+.hot{color:var(--warn-2); font-weight:600;}
+figure{margin:1rem 0; text-align:center;}
+figure svg{max-width:100%; height:auto; background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; box-shadow:0 1px 4px var(--shadow);}
+figcaption{color:var(--muted); font-size:.85rem; margin-top:.4rem;}
+details{margin:.3rem 0;}
+summary{cursor:pointer; font-weight:600;}
+.chain{font:14px/1.6 ui-monospace, monospace; background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; padding:.7rem .9rem; margin:.6rem 0; word-break:break-all;}
+.kv{display:flex; flex-wrap:wrap; gap:.4rem 1.5rem; margin:.4rem 0 1rem;}
+.kv div{font-size:.9rem;} .kv b{color:var(--accent-2);}
+.mtick{color:var(--accent); font-weight:700; text-align:center;}
+.mblank{color:var(--muted); text-align:center;}
+.svgnode text{font:11px/1 system-ui, sans-serif; fill:var(--fg);}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+
+<main class="report">
+<h1>Проверка плана: Query Link Resolver</h1>
+<p class="lead">Дата: 2026-06-24 · План реализации проверен против спецификации по фазовой модели IDD (structure / coverage / dependencies / verifiability / consistency).</p>
+<p><span class="verdict-ok">Вердикт: OK — 0 critical, 0 warning. Все 5 фаз пройдены.</span></p>
+
+<div class="kv">
+  <div><b>plan_hash:</b> <code>4541a8a362fd086c</code></div>
+  <div><b>spec_hash:</b> <code>0f090b960dde808f</code></div>
+  <div><b>Совпадение spec_hash:</b> да (спека неизменна, прошла review)</div>
+</div>
+
+<!-- ===================== БЛОК 1: РЕЗЮМЕ ПЛАНА ===================== -->
+<h2>1. Резюме плана — задачи, шаги и критерии готовности (DoD)</h2>
+
+<h3>Task 1 — <code>link-resolver.ts</code>: детерминированный резолвер сломанных ссылок <span class="b-acc badge">зависимости: нет</span></h3>
+<table>
+<thead><tr><th style="width:22%">Шаг</th><th>Критерий готовности (DoD)</th></tr></thead>
+<tbody>
+<tr><td>Step 1 — Написать модуль</td><td class="dod"><code>src/phases/link-resolver.ts</code> создан с указанным содержимым (<code>extractId</code>, <code>resolveLink</code>, <code>ResolveResult</code>).</td></tr>
+<tr><td>Step 2 — Throwaway-проверка</td><td class="dod">Сниппет <code>npx tsx</code> (не коммитить) даёт вывод <code>resolved</code>/<code>ambiguous</code>/<code>unresolved</code>, совпадающий с ожидаемым.</td></tr>
+<tr><td>Step 3 — Type-check</td><td class="dod"><code>no new errors</code></td></tr>
+<tr><td>Step 4 — Lint</td><td class="dod">eslint чисто</td></tr>
+<tr><td>Step 5 — Commit</td><td class="dod">коммит создан</td></tr>
+</tbody></table>
+
+<h3>Task 2 — Подключить резолвер + структурные диагностики в <code>query.ts</code> <span class="b-acc badge">зависимости: Task 1</span></h3>
+<table>
+<thead><tr><th style="width:22%">Шаг</th><th>Критерий готовности (DoD)</th></tr></thead>
+<tbody>
+<tr><td>Step 1 — Импорт</td><td class="dod">Убрать <code>rewriteWithValidLinks</code>, добавить <code>resolveLink</code> — импорт обновлён.</td></tr>
+<tr><td>Step 2 — Блок валидации</td><td class="dod">Блок строк 229–263 заменён на «резолвер-first».</td></tr>
+<tr><td>Step 3 — Type-check</td><td class="dod"><code>no new errors</code></td></tr>
+<tr><td>Step 4 — Lint</td><td class="dod">чисто (<code>wikiLinkValidationRetries</code> может быть unused — допустимо).</td></tr>
+<tr><td>Step 5 — Build + реальный прогон (rtk-task)</td><td class="dod">в логе preview <code>resolved N (det)</code>, без отдельного LLM-вызова.</td></tr>
+<tr><td>Step 6 — Commit</td><td class="dod">коммит создан</td></tr>
+</tbody></table>
+
+<h3>Task 3 — Усиление промпта: список валидных стемов <span class="b-acc badge">зависимости: Task 2</span></h3>
+<table>
+<thead><tr><th style="width:22%">Шаг</th><th>Критерий готовности (DoD)</th></tr></thead>
+<tbody>
+<tr><td>Step 1 — Плейсхолдер</td><td class="dod"><code>{{available_links_block}}</code> вставлен в <code>prompts/query.md</code>.</td></tr>
+<tr><td>Step 2 — Рендер блока</td><td class="dod"><code>availableLinksBlock</code> + ключ в <code>render()</code> добавлены в <code>query.ts</code>.</td></tr>
+<tr><td>Step 3 — Type-check</td><td class="dod"><code>no new errors</code></td></tr>
+<tr><td>Step 4 — Lint</td><td class="dod">чисто</td></tr>
+<tr><td>Step 5 — Build + реальный прогон</td><td class="dod"><code>ValidateLinks</code> чаще <code>all valid</code>.</td></tr>
+<tr><td>Step 6 — Commit</td><td class="dod">коммит создан</td></tr>
+</tbody></table>
+
+<h3>Task 4 — <code>QueryAnswerSchema</code> в <code>zod-schemas.ts</code> <span class="b-acc badge">зависимости: Task 1</span></h3>
+<table>
+<thead><tr><th style="width:22%">Шаг</th><th>Критерий готовности (DoD)</th></tr></thead>
+<tbody>
+<tr><td>Step 1 — Схема</td><td class="dod"><code>makeQueryAnswerSchema</code> + тип <code>QueryAnswer</code> добавлены.</td></tr>
+<tr><td>Step 2 — Type-check</td><td class="dod"><code>no new errors</code></td></tr>
+<tr><td>Step 3 — Lint</td><td class="dod">чисто</td></tr>
+<tr><td>Step 4 — Commit</td><td class="dod">коммит создан</td></tr>
+</tbody></table>
+
+<h3>Task 5 — Структурный LLM-fallback для нерешённых ссылок <span class="b-acc badge">зависимости: Task 2, Task 4</span></h3>
+<table>
+<thead><tr><th style="width:22%">Шаг</th><th>Критерий готовности (DoD)</th></tr></thead>
+<tbody>
+<tr><td>Step 1 — CallSite</td><td class="dod"><code>"query.answer"</code> добавлен в union в <code>parse-with-retry.ts</code>.</td></tr>
+<tr><td>Step 2 — Импорты</td><td class="dod"><code>makeQueryAnswerSchema</code> добавлен к импортам <code>query.ts</code>.</td></tr>
+<tr><td>Step 3 — Fallback</td><td class="dod">Ветка аннотации заменена структурным fallback через <code>parseWithRetry</code>.</td></tr>
+<tr><td>Step 4 — Type-check</td><td class="dod"><code>no new errors</code></td></tr>
+<tr><td>Step 5 — Lint</td><td class="dod">чисто</td></tr>
+<tr><td>Step 6 — Build + негативный прогон</td><td class="dod">preview <code>llm-fixed N</code>/<code>annotated N</code>; нет сырых сломанных ссылок; при <code>wikiLinkValidationRetries=0</code> — <code>annotated N</code> без LLM.</td></tr>
+<tr><td>Step 7 — Commit</td><td class="dod">коммит создан</td></tr>
+</tbody></table>
+
+<h3>Task 6 — Финальная верификация + docs <span class="b-acc badge">зависимости: Tasks 1–5</span></h3>
+<table>
+<thead><tr><th style="width:22%">Шаг</th><th>Критерий готовности (DoD)</th></tr></thead>
+<tbody>
+<tr><td>Step 1 — Type-check + lint</td><td class="dod">нет новых ошибок, eslint чисто.</td></tr>
+<tr><td>Step 2 — Build</td><td class="dod"><code>dist/main.js</code> пересобран.</td></tr>
+<tr><td>Step 3 — End-to-end (rtk-task)</td><td class="dod"><code>ValidateLinks</code> = <code>all valid</code> или <code>resolved N (det)</code> без <code>llm-fixed</code>; без <code>*(not in wiki)*</code>; без per-query LLM-rewrite.</td></tr>
+<tr><td>Step 4 — Wiki docs</td><td class="dod"><code>iwiki:iwiki-ingest</code> + <code>/iwiki-lint</code>: нет broken refs / orphan / stale.</td></tr>
+<tr><td>Step 5 — Commit</td><td class="dod">пересобранный dist + docs закоммичены.</td></tr>
+</tbody></table>
+
+<!-- ===================== БЛОК 2: СХЕМЫ ===================== -->
+<h2>2. Схемы зависимостей и пересечений</h2>
+
+<h3>2a. Граф зависимостей задач</h3>
+<p class="lead">Узлы — задачи; рёбра M→N означают «результат задачи M используется в N» (M&lt;N). Циклов и нарушений порядка фаза <em>dependencies</em> не выявила.</p>
+<figure class="rpt-graph">
+  <svg viewBox="0 0 640 300" width="640" role="img" aria-label="Граф зависимостей задач" class="svgnode">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+      </marker>
+    </defs>
+    <!-- edges -->
+    <!-- T1(80,80) -> T2(250,50) -->
+    <line x1="106" y1="74" x2="226" y2="54" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- T1 -> T4(250,150) -->
+    <line x1="106" y1="88" x2="226" y2="146" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- T1 -> T6(560,150) curved low -->
+    <path d="M80,104 C 200,260 420,260 552,170" fill="none" stroke="var(--line)" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+    <!-- T2(250,50) -> T3(420,50) -->
+    <line x1="276" y1="50" x2="396" y2="50" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- T2 -> T5(420,150) -->
+    <line x1="274" y1="62" x2="398" y2="140" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- T4(250,150) -> T5(420,150) -->
+    <line x1="276" y1="150" x2="394" y2="150" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- T3(420,50) -> T6(560,150) -->
+    <line x1="444" y1="62" x2="548" y2="138" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- T5(420,150) -> T6(560,150) -->
+    <line x1="446" y1="150" x2="534" y2="150" stroke="var(--line)" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- T2 -> T6 curved -->
+    <path d="M258,72 C 320,210 470,210 552,166" fill="none" stroke="var(--line)" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+    <!-- T4 -> T6 curved -->
+    <path d="M268,166 C 360,235 470,235 550,168" fill="none" stroke="var(--line)" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+    <!-- nodes -->
+    <g>
+      <circle cx="80"  cy="88"  r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2.5"/><text x="80" y="92" text-anchor="middle">T1</text>
+      <circle cx="250" cy="50"  r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2.5"/><text x="250" y="54" text-anchor="middle">T2</text>
+      <circle cx="420" cy="50"  r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2.5"/><text x="420" y="54" text-anchor="middle">T3</text>
+      <circle cx="250" cy="150" r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2.5"/><text x="250" y="154" text-anchor="middle">T4</text>
+      <circle cx="420" cy="150" r="26" fill="var(--surface)" stroke="var(--accent)" stroke-width="2.5"/><text x="420" y="154" text-anchor="middle">T5</text>
+      <circle cx="560" cy="152" r="26" fill="var(--surface)" stroke="var(--accent-2)" stroke-width="2.5"/><text x="560" y="156" text-anchor="middle">T6</text>
+    </g>
+  </svg>
+  <figcaption>Сплошные рёбра — прямые зависимости; пунктир — финальные ребра к Task 6 (верификация). Граф ацикличен; топологический порядок 1 → {2,4} → {3,5} → 6 соблюдён.</figcaption>
+</figure>
+
+<h3>2b. Матрица пересечений по артефактам (файл × задача)</h3>
+<p class="lead">Какие задачи трогают один и тот же файл. <code>query.ts</code> — <span class="hot">горячий файл</span>: три задачи (2, 3, 5); порядок разведён зависимостями 2→3 и 2→5, конфликтов/циклов нет.</p>
+<table>
+<thead><tr><th>Артефакт / файл</th><th class="mtick">T1</th><th class="mtick">T2</th><th class="mtick">T3</th><th class="mtick">T4</th><th class="mtick">T5</th><th class="mtick">T6</th></tr></thead>
+<tbody>
+<tr><td><code>src/phases/link-resolver.ts</code></td><td class="mtick">создаёт</td><td class="mblank">·</td><td class="mblank">·</td><td class="mblank">·</td><td class="mblank">·</td><td class="mblank">·</td></tr>
+<tr><td class="hot"><code>src/phases/query.ts</code></td><td class="mblank">·</td><td class="mtick">блок</td><td class="mtick">render</td><td class="mblank">·</td><td class="mtick">edit</td><td class="mblank">·</td></tr>
+<tr><td><code>prompts/query.md</code></td><td class="mblank">·</td><td class="mblank">·</td><td class="mtick">✓</td><td class="mblank">·</td><td class="mblank">·</td><td class="mblank">·</td></tr>
+<tr><td><code>src/phases/zod-schemas.ts</code></td><td class="mblank">·</td><td class="mblank">·</td><td class="mblank">·</td><td class="mtick">✓</td><td class="mblank">·</td><td class="mblank">·</td></tr>
+<tr><td><code>src/phases/parse-with-retry.ts</code></td><td class="mblank">·</td><td class="mblank">·</td><td class="mblank">·</td><td class="mblank">·</td><td class="mtick">✓</td><td class="mblank">·</td></tr>
+<tr><td><code>dist/main.js</code> + <code>docs/wiki/</code></td><td class="mblank">·</td><td class="mblank">·</td><td class="mblank">·</td><td class="mblank">·</td><td class="mblank">·</td><td class="mtick">✓</td></tr>
+</tbody></table>
+
+<h3>2c. Покрытие требований спецификации</h3>
+<p class="lead">Каждое требование спеки закрыто ≥1 задачей; каждая задача привязана к требованию (нет «лишних»).</p>
+<table>
+<thead><tr><th>Требование спецификации</th><th>Задача(и)</th></tr></thead>
+<tbody>
+<tr><td>§Components 1 — <code>link-resolver.ts</code>, entity grouping</td><td>Task 1</td></tr>
+<tr><td>§Components 2 — <code>QueryAnswerSchema</code></td><td>Task 4</td></tr>
+<tr><td>§Components 3 — orchestration (резолвер-first + fallback)</td><td>Task 2 + Task 5</td></tr>
+<tr><td>§Components 4 — демоут <code>rewriteWithValidLinks</code></td><td>Task 2 Step 1 + Notes</td></tr>
+<tr><td>§Prompt hardening — <code>{{available_links_block}}</code></td><td>Task 3</td></tr>
+<tr><td>§Diagnostics — структурный <code>FixingLinks</code></td><td>Task 2 Step 2 + Task 5 Step 3</td></tr>
+<tr><td>§Hybrid streaming — scaffold + <code>assistant_replace</code> сохранены</td><td>Task 2 Step 2</td></tr>
+<tr><td>§Settings — reuse <code>wikiLinkValidationRetries</code></td><td>Task 5 Step 3</td></tr>
+<tr><td>§Verification — реальные прогоны</td><td>Task 2 / 3 / 5 / 6</td></tr>
+</tbody></table>
+
+<!-- ===================== БЛОК 3: РЕЗУЛЬТАТЫ ===================== -->
+<h2>3. Результаты проверки</h2>
+
+<h3>3a. Статус фаз</h3>
+<table>
+<thead><tr><th>Фаза</th><th>Статус</th><th>Закрытый чек-лист</th></tr></thead>
+<tbody>
+<tr><td>structure</td><td><span class="badge b-pass">passed</span></td><td class="dod">Нет плейсхолдеров (TODO/TBD/???/FIXME); нумерация задач 1–6 и шагов сквозная, без пропусков/дублей; нет дублирующихся заголовков.</td></tr>
+<tr><td>coverage</td><td><span class="badge b-pass">passed</span></td><td class="dod">Каждое требование спеки покрыто; каждый шаг привязан к требованию. См. 2c.</td></tr>
+<tr><td>dependencies</td><td><span class="badge b-pass">passed</span></td><td class="dod">Граф ацикличен; артефакты (resolveLink, makeQueryAnswerSchema, CallSite, блок query.ts) созданы предшественником до использования. См. 2a.</td></tr>
+<tr><td>verifiability</td><td><span class="badge b-pass">passed</span></td><td class="dod">Каждый шаг имеет измеримый DoD и команду проверки; идентификаторы Task 5 подтверждены как in-scope против реального источника, type-check-гейты на месте.</td></tr>
+<tr><td>consistency</td><td><span class="badge b-pass">passed</span></td><td class="dod">Первый прогон (нет прежних section_hash). Расхождения план↔спека (Phase 0 в Task 2; без отдельной метки stripped) явно отражены в «Notes / deviations». spec_hash совпадает.</td></tr>
+</tbody></table>
+
+<h3>3b. Findings</h3>
+<table>
+<thead><tr><th>ID</th><th>Severity</th><th>Фаза</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr>
+  <td>F-001</td><td><span class="badge b-info">INFO</span></td><td>structure</td>
+  <td><code>### Task 1: link-resolver.ts</code></td>
+  <td>Строки, отображаемые как <code>REDACTEDringify</code> / <code>REDACTEDnd</code> / <code>REDACTEDswer</code> внутри код-блоков (Tasks 1, 2, 5) — артефакт harness session-filter, маскирующий подстроки. На диске исходный текст корректен. Не плейсхолдеры и не сломанные ссылки — только читаемость отображения.</td>
+  <td><span class="badge b-acc">accepted</span></td>
+</tr>
+<tr>
+  <td>F-002</td><td><span class="badge b-info">INFO</span></td><td>coverage</td>
+  <td><code>### Task 2: query.ts</code></td>
+  <td>Спека §Diagnostics перечисляет 4 метки исхода (<code>resolved</code>/<code>llm-fixed</code>/<code>stripped</code>/<code>annotated</code>); план эмитит 3, схлопывая ambiguous+unresolved в единую метку <code>annotated</code> без отдельного <code>stripped</code>. §Verification трактует stripped/annotated как взаимозаменяемые — это упрощение метки, а не пропуск требования.</td>
+  <td><span class="badge b-acc">accepted</span></td>
+</tr>
+</tbody></table>
+
+<h3>3c. Сводка</h3>
+<div class="kv">
+  <div><b>CRITICAL open:</b> <span class="badge b-zero">0</span></div>
+  <div><b>WARNING open:</b> <span class="badge b-zero">0</span></div>
+  <div><b>INFO:</b> 2 (accepted)</div>
+  <div><b>Финальный вердикт:</b> <span class="badge b-pass">OK</span></div>
+</div>
+<div class="note">
+  <b>plan_hash:</b> <code>4541a8a362fd086c</code> · <b>spec_hash:</b> <code>0f090b960dde808f</code><br>
+  spec_hash совпадает с <code>review.spec_hash</code> самой спецификации — спека неизменна и прошла review.
+</div>
+
+<h3>3d. Цепочка (intent → spec → plan)</h3>
+<div class="chain">
+  intent: <em>null</em><br>
+  &nbsp;&nbsp;→ spec: docs/superpowers/specs/2026-06-24-query-link-resolver-design.md<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;→ plan: docs/superpowers/plans/2026-06-24-query-link-resolver.md
+</div>
+
+</main>
+</body>
+</html>

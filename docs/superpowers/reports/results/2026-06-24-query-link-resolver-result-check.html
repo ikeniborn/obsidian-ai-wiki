@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Result Check — Query Link Resolver — 2026-06-24</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+.theme-btn{
+  position:sticky; top:.5rem; float:right; z-index:10;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+h1{font-size:1.7rem; margin:.2rem 0 .1rem; color:var(--accent);}
+h2{font-size:1.25rem; margin:2rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.25rem;}
+h3{font-size:1.05rem; margin:1.4rem 0 .5rem; color:var(--accent-2);}
+.sub{color:var(--muted); margin:.1rem 0 1rem;}
+.chain{display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; margin:.6rem 0 1.2rem; font-size:.92rem;}
+.chain .node{padding:.3rem .7rem; border:1px solid var(--border); border-radius:6px; background:var(--surface); box-shadow:0 1px 3px var(--shadow);}
+.chain .arrow{color:var(--line); font-weight:700;}
+.verdict-banner{
+  display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
+  padding:1rem 1.3rem; margin:1rem 0 1.4rem; border-radius:10px;
+  background:color-mix(in srgb, var(--ok) 18%, var(--surface));
+  border:1px solid var(--ok); box-shadow:0 2px 8px var(--shadow);
+}
+.verdict-banner .big{font-size:1.5rem; font-weight:800; color:var(--ok-2);}
+.verdict-banner code{font-size:.95rem;}
+.cards{display:flex; gap:1rem; flex-wrap:wrap; margin:1rem 0;}
+.card{flex:1 1 150px; padding:.8rem 1rem; border:1px solid var(--border); border-radius:9px; background:var(--surface); box-shadow:0 1px 4px var(--shadow); text-align:center;}
+.card .num{font-size:1.9rem; font-weight:800; line-height:1.1;}
+.card .lbl{color:var(--muted); font-size:.85rem; text-transform:uppercase; letter-spacing:.04em;}
+.card.done .num{color:var(--ok-2);} .card.part .num{color:var(--warn-2);} .card.miss .num{color:var(--danger-2);}
+.card.crit .num{color:var(--danger-2);} .card.warn .num{color:var(--warn-2);} .card.info .num{color:var(--accent-2);}
+table{border-collapse:collapse; width:100%; margin:.8rem 0 1.2rem; background:var(--surface); box-shadow:0 1px 4px var(--shadow); border-radius:8px; overflow:hidden;}
+th,td{padding:.55rem .75rem; text-align:left; border-bottom:1px solid var(--border); vertical-align:top;}
+th{background:color-mix(in srgb, var(--accent) 14%, var(--surface)); font-weight:700;}
+tbody tr:nth-child(even){background:var(--zebra);}
+code{background:color-mix(in srgb, var(--accent) 12%, var(--surface)); padding:.05rem .35rem; border-radius:4px; font-size:.88em; font-family:ui-monospace,Menlo,Consolas,monospace;}
+.badge{display:inline-block; padding:.1rem .5rem; border-radius:999px; font-size:.78rem; font-weight:700; white-space:nowrap;}
+.b-done{background:color-mix(in srgb,var(--ok) 25%,var(--surface)); color:var(--ok-2); border:1px solid var(--ok);}
+.b-info{background:color-mix(in srgb,var(--accent) 22%,var(--surface)); color:var(--accent-2); border:1px solid var(--accent);}
+.b-warn{background:color-mix(in srgb,var(--warn) 25%,var(--surface)); color:var(--warn-2); border:1px solid var(--warn);}
+.b-crit{background:color-mix(in srgb,var(--danger) 25%,var(--surface)); color:var(--danger-2); border:1px solid var(--danger);}
+.note{padding:.7rem 1rem; border-left:4px solid var(--accent); background:color-mix(in srgb,var(--accent) 9%,var(--surface)); border-radius:0 6px 6px 0; margin:1rem 0;}
+.note.warnbox{border-left-color:var(--warn);}
+ul.tight{margin:.4rem 0 .4rem 1.1rem; padding:0;} ul.tight li{margin:.2rem 0;}
+details{margin:.5rem 0; border:1px solid var(--border); border-radius:7px; background:var(--surface); padding:.3rem .7rem;}
+summary{cursor:pointer; font-weight:600; padding:.3rem 0;}
+details[open] summary{border-bottom:1px solid var(--border); margin-bottom:.5rem;}
+.fix{color:var(--muted); font-size:.9em;}
+footer{margin-top:2.5rem; color:var(--muted); font-size:.85rem; border-top:1px solid var(--border); padding-top:.8rem;}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+
+<main class="report">
+  <h1>Result Check — Query Link Resolver</h1>
+  <p class="sub">Сверка результата реализации с цепочкой IDD → SDD · 2026-06-24</p>
+
+  <div class="verdict-banner">
+    <span class="big">✅ OK</span>
+    <span>Нет MISSING-шагов, нет CRITICAL-находок. Реализация соответствует плану.</span>
+    <span><code>plan_hash: 4541a8a362fd086c</code></span>
+  </div>
+
+  <div class="chain">
+    <span class="node">intent: <em>не найден</em></span>
+    <span class="arrow">→</span>
+    <span class="node">spec: <code>2026-06-24-query-link-resolver-design.md</code></span>
+    <span class="arrow">→</span>
+    <span class="node">plan: <code>2026-06-24-query-link-resolver.md</code></span>
+  </div>
+
+  <h2>Резюме сверки</h2>
+  <table>
+    <tbody>
+      <tr><th>Plan</th><td><code>docs/superpowers/plans/2026-06-24-query-link-resolver.md</code></td></tr>
+      <tr><th>Spec</th><td><code>docs/superpowers/specs/2026-06-24-query-link-resolver-design.md</code></td></tr>
+      <tr><th>Intent</th><td>не найден (<code>chain.intent = null</code>)</td></tr>
+      <tr><th>База diff</th><td><code>git diff 1b9363a..HEAD</code> (база <code>master</code>)</td></tr>
+      <tr><th>Коммиты реализации</th><td><code>a74c63b</code>, <code>7aa2adc</code>, <code>c22f35f</code>, <code>f0dda77</code>, <code>1af30a6</code>, <code>00824fc</code>, <code>ec7beff</code>, <code>544f281</code></td></tr>
+      <tr><th>Изменено файлов</th><td>7 исходных (<code>link-resolver.ts</code> new, <code>query.ts</code>, <code>zod-schemas.ts</code>, <code>parse-with-retry.ts</code>, <code>query-link-validator.ts</code>, <code>types.ts</code>, <code>prompts/query.md</code>) + <code>dist/main.js</code> + <code>docs/wiki/</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note warnbox">
+    <strong>Метод верификации.</strong> В проекте <strong>нет тестовых наборов</strong> (политика, удалены 2026-06-16).
+    Проверка выполнена через <code>tsc</code> + <code>eslint</code> + <code>npm run build</code> + <code>iwiki-lint</code> — всё чисто.
+    E2E-прогон в Obsidian GUI на домене <code>rtk-task</code> — ручной/отложенный (GUI, не headless-запускаемо):
+    это задокументированное ограничение, а не пробел реализации.
+  </div>
+
+  <h2>Покрытие шагов плана</h2>
+  <div class="cards">
+    <div class="card done"><div class="num">6</div><div class="lbl">DONE</div></div>
+    <div class="card part"><div class="num">0</div><div class="lbl">PARTIAL</div></div>
+    <div class="card miss"><div class="num">0</div><div class="lbl">MISSING</div></div>
+  </div>
+
+  <table>
+    <thead><tr><th>Задача</th><th>Статус</th><th>Соответствие diff</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Task 1</strong><br><code>link-resolver.ts</code></td>
+        <td><span class="badge b-done">DONE</span></td>
+        <td>Новый файл точно соответствует плану; добавлен поясняющий комментарий о substring-матчинге (доброкачественное расширение).</td>
+      </tr>
+      <tr>
+        <td><strong>Task 2</strong><br>wire + diagnostics</td>
+        <td><span class="badge b-done">DONE</span></td>
+        <td>Импорт <code>rewriteWithValidLinks</code> снят, <code>resolveLink</code> добавлен; блок валидации заменён детерминированным резолвом + структурированный preview <code>FixingLinks</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Task 3</strong><br>prompt hardening</td>
+        <td><span class="badge b-done">DONE</span></td>
+        <td><code>{{available_links_block}}</code> в <code>prompts/query.md</code>; <code>availableLinksBlock</code> рендерится в <code>query.ts</code> и передаётся в <code>render()</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Task 4</strong><br><code>QueryAnswerSchema</code></td>
+        <td><span class="badge b-done">DONE</span></td>
+        <td><code>makeQueryAnswerSchema</code> + тип <code>QueryAnswer</code> добавлены в <code>zod-schemas.ts</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Task 5</strong><br>структ. LLM fallback</td>
+        <td><span class="badge b-done">DONE</span></td>
+        <td><code>"query.answer"</code> добавлен в <code>CallSite</code> union (<code>parse-with-retry.ts</code>); ветка <code>parseWithRetry</code>-фоллбэка добавлена; диагностика расширена меткой <code>llm-fixed</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Task 6</strong><br>верификация + docs</td>
+        <td><span class="badge b-done">DONE</span></td>
+        <td><code>dist</code> пересобран (<code>resolveLink</code> / <code>query.answer</code> присутствуют в <code>dist/main.js</code>); <code>docs/wiki/</code> обновлены.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Находки (Findings)</h2>
+  <p>Все находки уровня <span class="badge b-info">INFO</span> — семантические расхождения и обоснованные избыточные изменения. Дефектов нет.</p>
+
+  <table>
+    <thead><tr><th>Severity</th><th>Шаг</th><th>Plan</th><th>Diff</th><th>Fix options</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="badge b-info">INFO</span></td>
+        <td>Task 5</td>
+        <td>Отдельное построение <code>validList</code> из <code>[...new Set([...selectedIds, ...knownStems])].filter(...)</code>.</td>
+        <td><code>const validList = candidates.filter(...)</code> — переиспользует уже объявленный массив <code>candidates</code> для того же значения. Эквивалентно и чище.</td>
+        <td class="fix">1) Оставить как есть (эквивалентно);<br>2) нет действия.</td>
+      </tr>
+      <tr>
+        <td><span class="badge b-info">INFO</span><br><em>excess</em></td>
+        <td>Task 5 (тип)</td>
+        <td>В Task 5 назван только <code>parse-with-retry.ts</code>; <code>types.ts</code> не упомянут.</td>
+        <td><code>src/types.ts</code> получил <code>"query.answer"</code> в union <code>structural_error.callSite</code>. Обязано совпадать, иначе <code>CallSite</code> не компилируется.</td>
+        <td class="fix">1) Оставить (требуется для компиляции);<br>2) нет действия.</td>
+      </tr>
+      <tr>
+        <td><span class="badge b-info">INFO</span><br><em>excess</em></td>
+        <td>Notes / deviations</td>
+        <td>Plan Notes допускали оставить <code>rewriteWithValidLinks</code> как dead code, флаговали ревьюеру.</td>
+        <td>Orphan <code>rewriteWithValidLinks</code> удалён из <code>query-link-validator.ts</code> (−35 строк, коммит <code>00824fc</code>). Удаление собственного orphan-а корректно по правилам проекта.</td>
+        <td class="fix">1) Оставить удалённым (чище);<br>2) нет действия.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Покрытие Intent / Spec</h2>
+  <div class="cards">
+    <div class="card done"><div class="num">4/4</div><div class="lbl">Desired Outcomes</div></div>
+    <div class="card done"><div class="num">4/4</div><div class="lbl">Spec Components</div></div>
+  </div>
+
+  <h3>Desired Outcomes (Spec → Goals)</h3>
+  <table>
+    <thead><tr><th>Цель</th><th>Покрытие</th></tr></thead>
+    <tbody>
+      <tr><td>Reasoning quality — zod-контракт ответа</td><td><span class="badge b-done">покрыто</span> через <code>makeQueryAnswerSchema</code></td></tr>
+      <tr><td>Remove the extra pass — убрать per-query LLM rewrite</td><td><span class="badge b-done">покрыто</span> детерминированным резолвером (0 LLM в общем случае)</td></tr>
+      <tr><td>Zero broken links в финальном ответе</td><td><span class="badge b-done">покрыто</span> резолв + annotate fallback</td></tr>
+      <tr><td>Diagnosability — видимость в логе</td><td><span class="badge b-done">покрыто</span> структурированный <code>FixingLinks</code> preview</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Spec Components &amp; прочее</h3>
+  <table>
+    <thead><tr><th>Требование</th><th>Покрытие</th></tr></thead>
+    <tbody>
+      <tr><td>1. <code>link-resolver.ts</code> (детерминированный, без LLM)</td><td><span class="badge b-done">покрыто</span></td></tr>
+      <tr><td>2. <code>QueryAnswerSchema</code> в <code>zod-schemas.ts</code></td><td><span class="badge b-done">покрыто</span></td></tr>
+      <tr><td>3. <code>query.ts</code> orchestration (резолв → fallback → replace)</td><td><span class="badge b-done">покрыто</span></td></tr>
+      <tr><td>4. <code>query-link-validator</code> сохранён (extract/find/annotate)</td><td><span class="badge b-done">покрыто</span></td></tr>
+      <tr><td>Prompt hardening — <code>{{available_links_block}}</code></td><td><span class="badge b-done">покрыто</span></td></tr>
+      <tr><td>Settings — reuse <code>wikiLinkValidationRetries</code>, без новых настроек</td><td><span class="badge b-done">покрыто</span></td></tr>
+      <tr><td>Verification 2–4 (e2e / негативный / ambiguity в GUI)</td><td><span class="badge b-info">ручное/отложенное</span> — задокументированное ограничение</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Избыточные изменения (Excess)</h2>
+  <ul class="tight">
+    <li><code>src/types.ts</code> — добавлен <code>"query.answer"</code> в union <code>structural_error.callSite</code>. Требуется для компиляции типа <code>CallSite</code>. Обоснованно, соответствует разделу плана «Notes / deviations».</li>
+    <li><code>src/phases/query-link-validator.ts</code> — удалён orphan <code>rewriteWithValidLinks</code>. Соответствует правилу проекта «remove your own orphans», флаговано в Plan Notes.</li>
+  </ul>
+
+  <h2>Сводка</h2>
+  <div class="cards">
+    <div class="card crit"><div class="num">0</div><div class="lbl">CRITICAL</div></div>
+    <div class="card warn"><div class="num">0</div><div class="lbl">WARNING</div></div>
+    <div class="card info"><div class="num">3</div><div class="lbl">INFO</div></div>
+  </div>
+
+  <div class="verdict-banner">
+    <span class="big">Вердикт: OK</span>
+    <span>Требует доработки — нет. Все 6 задач плана выполнены, покрытие spec полное, расхождения только информационные и обоснованные.</span>
+  </div>
+
+  <details>
+    <summary>Детали записи <code>result_check</code> во frontmatter плана</summary>
+    <ul class="tight">
+      <li><code>verdict: OK</code></li>
+      <li><code>plan_hash: 4541a8a362fd086c</code> (канонический хеш тела плана, не изменился после правки frontmatter)</li>
+      <li><code>last_run: 2026-06-24</code></li>
+    </ul>
+    <p class="fix">Изменён только frontmatter плана (открытие IDD merge-gate). Тело плана и исходные файлы не трогались.</p>
+  </details>
+
+  <footer>
+    Chain: intent <em>(none)</em> → <code>2026-06-24-query-link-resolver-design.md</code> → <code>2026-06-24-query-link-resolver.md</code><br>
+    Сгенерировано навыком <code>check-result</code> · 2026-06-24
+  </footer>
+</main>
+</body>
+</html>

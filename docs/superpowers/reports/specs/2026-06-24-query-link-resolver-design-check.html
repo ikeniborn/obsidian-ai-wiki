@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Проверка спецификации — Query Link Resolver (повторный прогон)</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1c2128; --muted: #5b6573;
+    --border: #d8dee4; --accent: #2563eb; --accent-soft: #dbeafe;
+    --ok: #16794a; --ok-soft: #d8f3e3; --warn: #9a5b00; --warn-soft: #fdebcb;
+    --crit: #b3261e; --crit-soft: #fbdcda; --info: #3b5566; --info-soft: #e3edf3;
+    --node: #ffffff; --node-stroke: #9aa6b2; --edge: #6b7785; --shadow: rgba(0,0,0,.12);
+  }
+  [data-theme="dark"] {
+    --bg: #0d1117; --panel: #161b22; --ink: #e6edf3; --muted: #9aa6b2;
+    --border: #30363d; --accent: #58a6ff; --accent-soft: #163056;
+    --ok: #56d364; --ok-soft: #122e1c; --warn: #e3b341; --warn-soft: #3a2c08;
+    --crit: #f85149; --crit-soft: #3a1413; --info: #79c0ff; --info-soft: #102433;
+    --node: #1b2430; --node-stroke: #46525f; --edge: #8b97a4; --shadow: rgba(0,0,0,.5);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 0 4rem; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    padding: 1.4rem 2rem; display: flex; justify-content: space-between;
+    align-items: center; gap: 1rem; flex-wrap: wrap; position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 1.25rem; margin: 0; }
+  header .sub { color: var(--muted); font-size: .85rem; margin-top: .2rem; }
+  .ok-pill { background: var(--ok-soft); color: var(--ok); border-radius: 999px;
+    padding: .3rem .8rem; font-weight: 700; font-size: .85rem; }
+  main { max-width: 1080px; margin: 0 auto; padding: 0 1.5rem; }
+  section { margin-top: 2.2rem; }
+  h2 { font-size: 1.1rem; border-bottom: 2px solid var(--border); padding-bottom: .35rem; margin-bottom: .9rem; }
+  h3 { font-size: .98rem; color: var(--muted); margin: 1.3rem 0 .5rem; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); font-size: .9rem; }
+  th, td { text-align: left; padding: .5rem .65rem; border: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+  tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--panel) 92%, var(--border)); }
+  code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: .85em;
+    background: color-mix(in srgb, var(--panel) 80%, var(--border)); padding: .1em .35em; border-radius: 4px; }
+  .badge { display: inline-block; padding: .12em .55em; border-radius: 999px; font-size: .76rem; font-weight: 600; white-space: nowrap; }
+  .b-ok { background: var(--ok-soft); color: var(--ok); }
+  .b-warn { background: var(--warn-soft); color: var(--warn); }
+  .b-crit { background: var(--crit-soft); color: var(--crit); }
+  .b-info { background: var(--info-soft); color: var(--info); }
+  .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: .6rem; margin-bottom: 1rem; }
+  .meta div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: .55rem .75rem; }
+  .meta .k { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
+  .meta .v { font-size: .9rem; margin-top: .15rem; word-break: break-word; }
+  .note { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: .65rem .9rem; border-radius: 0 8px 8px 0; margin: 1rem 0; font-size: .9rem; }
+  .note.ok { border-color: var(--ok); background: var(--ok-soft); }
+  .verdict-bar { display: flex; gap: .7rem; flex-wrap: wrap; margin: 1rem 0; }
+  .stat { flex: 1; min-width: 130px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: .8rem 1rem; text-align: center; }
+  .stat .num { font-size: 1.7rem; font-weight: 700; }
+  .stat .lbl { color: var(--muted); font-size: .78rem; }
+  .toggle { background: var(--panel); color: var(--ink); border: 1px solid var(--border); border-radius: 999px; padding: .4rem .9rem; cursor: pointer; font-size: .85rem; }
+  .toggle:hover { border-color: var(--accent); }
+  .flow { display: flex; flex-direction: column; gap: .55rem; margin: 1rem 0; }
+  .frow { display: flex; align-items: stretch; gap: .55rem; flex-wrap: wrap; }
+  .fnode { background: var(--node); border: 1.5px solid var(--node-stroke); border-radius: 9px; padding: .55rem .75rem; box-shadow: 0 1px 3px var(--shadow); flex: 1; min-width: 150px; }
+  .fnode .t { font-weight: 600; font-size: .88rem; }
+  .fnode .d { color: var(--muted); font-size: .78rem; margin-top: .2rem; }
+  .fnode.llm0 { border-color: var(--ok); }
+  .fnode.llm1 { border-color: var(--warn); }
+  .farrow { align-self: center; color: var(--edge); font-size: 1.1rem; font-weight: 700; }
+  .branch { display: flex; gap: .5rem; flex-wrap: wrap; margin: .4rem 0 .4rem 1.3rem; }
+  .branch .fnode { min-width: 130px; }
+  .tag { font-size: .68rem; padding: .08em .45em; border-radius: 5px; font-weight: 700; }
+  .tag-0 { background: var(--ok-soft); color: var(--ok); }
+  .tag-1 { background: var(--warn-soft); color: var(--warn); }
+  figure { margin: 1rem 0; }
+  figcaption { color: var(--muted); font-size: .82rem; margin-top: .4rem; text-align: center; }
+  svg { width: 100%; height: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
+  .legend { font-size: .8rem; color: var(--muted); margin-top: .3rem; }
+  footer { max-width: 1080px; margin: 2.5rem auto 0; padding: 1rem 1.5rem; color: var(--muted); font-size: .82rem; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Проверка спецификации — Query Link Resolver (Design Spec)</h1>
+    <div class="sub">check-spec · повторный прогон после исправления F-002 · 2026-06-24</div>
+  </div>
+  <div style="display:flex;gap:.6rem;align-items:center">
+    <span class="ok-pill">✓ OK</span>
+    <button class="toggle" id="themeBtn" onclick="toggleTheme()">◐ Тема</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ===================== БЛОК 1 ===================== -->
+<section id="summary">
+  <h2>1. Резюме спецификации</h2>
+  <div class="meta">
+    <div><div class="k">Файл</div><div class="v"><code>docs/superpowers/specs/2026-06-24-query-link-resolver-design.md</code></div></div>
+    <div><div class="k">spec_hash</div><div class="v"><code>0f090b960dde808f</code></div></div>
+    <div><div class="k">prev_hash</div><div class="v"><code>c150094795cffdf9</code> (тело изменено — правка F-002)</div></div>
+    <div><div class="k">state</div><div class="v"><code>design</code></div></div>
+    <div><div class="k">branch</div><div class="v"><code>dev/query-link-resolver</code></div></div>
+  </div>
+
+  <h3>Требования по секциям</h3>
+  <table>
+    <thead><tr><th style="width:170px">Секция</th><th>Требование</th></tr></thead>
+    <tbody>
+      <tr><td>Goals.1</td><td>Структурированный вывод (<code>zod</code>) — контракт ответа модели.</td></tr>
+      <tr><td>Goals.2</td><td>Убрать дополнительный проход: модель сразу выдаёт валидные ссылки, частота per-query rewrite LLM-вызова → к нулю.</td></tr>
+      <tr><td>Goals.3</td><td>Ноль битых ссылок в финальном ответе (нет остаточных <code>*(not in wiki)*</code>).</td></tr>
+      <tr><td>Goals.4</td><td>Диагностируемость: в логе видно, что было сломано и как разрешено.</td></tr>
+      <tr><td>Components.1</td><td><code>link-resolver.ts</code> (~60 строк), детерминированный, без LLM. Нормализация (lowercase, срез <code>wiki_&lt;domain&gt;_</code>, удаление пробелов/дефисов, извлечение id-фрагмента), затем <strong>группировка совпадений по сущности</strong>. Source-заметка и её <code>wiki_*</code>-страница = <strong>одна сущность</strong>. → 1 сущность: <code>resolved</code> (канонический стем, предпочтение <code>wiki_*</code>); ≥2 <strong>разных</strong> сущности: <code>ambiguous</code>; 0: <code>unresolved</code>. Предпочтение <code>wiki_*</code> применяется <strong>после</strong> группировки и не схлопывает разные сущности.</td></tr>
+      <tr><td>Components.2</td><td><code>QueryAnswerSchema</code> { reasoning, answer_markdown, citations }, <code>superRefine</code>: каждый citation в <code>knownStems</code>. Только fallback.</td></tr>
+      <tr><td>Components.3</td><td>Оркестрация <code>query.ts</code>: draft → extractAnswerLinks → findBrokenLinks → link-resolver (0 LLM) → при остатке и <code>wikiLinkValidationRetries&gt;0</code>: <code>parseWithRetry(QueryAnswerSchema)</code> → assistant_replace.</td></tr>
+      <tr><td>Components.4</td><td><code>query-link-validator.ts</code>: сохранить extract/find/annotate; <code>rewriteWithValidLinks</code> понижен до fallback.</td></tr>
+      <tr><td>Prompt hardening</td><td><code>{{available_links_block}}</code> в <code>prompts/query.md</code>; <code>query.ts</code> рендерит нумерованный список валидных стемов (<code>wiki_*</code> preferred).</td></tr>
+      <tr><td>Diagnostics</td><td>Структурированный preview <code>FixingLinks</code>: <code>resolved N (det)</code> / <code>llm-fixed N</code> / <code>stripped N</code> / <code>annotated N</code>.</td></tr>
+      <tr><td>Hybrid streaming</td><td>reasoning+draft стримятся live; после резолвера <code>assistant_replace</code>; fallback <code>parseWithRetry</code> без стриминга ответа.</td></tr>
+      <tr><td>Settings</td><td>Переиспользовать <code>wikiLinkValidationRetries</code> (default 3); <code>0</code> = резолвер+strip, без LLM-fallback. Новых настроек нет.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Success Criteria (Verification)</h3>
+  <table>
+    <thead><tr><th style="width:36px">#</th><th>Критерий приёмки</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><code>npm run build</code> успешен; eslint чисто.</td></tr>
+      <tr><td>2</td><td>Повторный query на <code>rtk-task</code>: в логе <code>resolved N (det)</code>, нет <code>llm-fixed</code>, финал без <code>*(not in wiki)*</code>.</td></tr>
+      <tr><td>3</td><td>Негативный кейс: ссылка на несуществующую страницу → <code>stripped</code>/<code>annotated</code>, никогда сырой битой ссылки.</td></tr>
+      <tr><td>4 <span class="badge b-ok">обновлён</span></td><td>Кейс неоднозначности: битый стем, чей фрагмент матчит <strong>две разные сущности</strong> (напр. <code>88393</code> в <code>wiki_x_88393</code> И <code>wiki_y_188393</code>) → <code>ambiguous</code> → annotated. Обратно: source-заметка + её <code>wiki_*</code>-страница (одна сущность) <strong>обязаны</strong> <code>resolve</code> к <code>wiki_*</code>-стему, не ambiguous.</td></tr>
+      <tr><td>5</td><td><code>iwiki-ingest</code> изменённых источников + <code>iwiki-lint</code>.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===================== БЛОК 2 ===================== -->
+<section id="design">
+  <h2>2. Схемы решения и зависимостей</h2>
+
+  <h3>Схема решения — конвейер обработки ответа <code>query</code></h3>
+  <div class="flow">
+    <div class="frow">
+      <div class="fnode"><div class="t">1. draft</div><div class="d">stream reasoning live</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode"><div class="t">2. extractAnswerLinks</div><div class="d">собрать WikiLinks</div></div>
+      <div class="farrow">→</div>
+      <div class="fnode"><div class="t">3. findBrokenLinks</div><div class="d">сверка с <code>knownStems</code></div></div>
+    </div>
+    <div class="frow">
+      <div class="fnode llm0"><div class="t">4. link-resolver.ts <span class="tag tag-0">0 LLM</span></div><div class="d">нормализация фрагмента → <strong>группировка по сущности</strong></div></div>
+    </div>
+    <div class="branch">
+      <div class="fnode"><div class="t">1 сущность → resolved</div><div class="d">канонический стем, prefer <code>wiki_*</code></div></div>
+      <div class="fnode"><div class="t">≥2 разных сущности → ambiguous</div><div class="d">strip / annotate <code>*(not in wiki)*</code></div></div>
+      <div class="fnode"><div class="t">0 → unresolved</div><div class="d">→ в remainder</div></div>
+    </div>
+    <div class="frow">
+      <div class="fnode llm1"><div class="t">5. parseWithRetry(QueryAnswerSchema) <span class="tag tag-1">1 LLM</span></div><div class="d">только если remainder ≠ ∅ И <code>wikiLinkValidationRetries &gt; 0</code></div></div>
+      <div class="farrow">→</div>
+      <div class="fnode"><div class="t">6. assistant_replace</div><div class="d">финальный, link-verified текст</div></div>
+    </div>
+  </div>
+  <div class="legend">Параллельно: <code>prompts/query.md</code> с <code>{{available_links_block}}</code> питает шаг 1, снижая частоту шагов 4–5. Diagnostics-preview логирует исход. <span class="tag tag-0">0 LLM</span> — детерминированный путь, <span class="tag tag-1">1 LLM</span> — fallback.</div>
+
+  <h3>Граф зависимостей (A→B = «A зависит от / использует B»)</h3>
+  <figure>
+    <svg viewBox="0 0 880 430" role="img" aria-label="Граф зависимостей компонентов">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/>
+        </marker>
+        <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="var(--shadow)"/>
+        </filter>
+      </defs>
+      <g stroke="var(--edge)" stroke-width="1.6" fill="none" marker-end="url(#arr)">
+        <line x1="430" y1="92" x2="180" y2="150"/>
+        <line x1="430" y1="92" x2="430" y2="150"/>
+        <line x1="450" y1="92" x2="690" y2="150"/>
+        <line x1="380" y1="78" x2="160" y2="78"/>
+        <line x1="500" y1="78" x2="700" y2="78"/>
+        <line x1="470" y1="92" x2="610" y2="330"/>
+        <line x1="160" y1="200" x2="380" y2="350"/>
+        <line x1="700" y1="200" x2="500" y2="350"/>
+        <line x1="430" y1="200" x2="440" y2="345"/>
+      </g>
+      <g font-size="12.5" font-family="monospace" text-anchor="middle">
+        <g filter="url(#ds)"><rect x="40" y="58" width="140" height="40" rx="8" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.4"/></g>
+        <text x="110" y="74" fill="var(--ink)">prompts/query.md</text>
+        <text x="110" y="89" fill="var(--muted)" font-size="10">available_links_block</text>
+        <g filter="url(#ds)"><rect x="370" y="56" width="160" height="44" rx="9" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/></g>
+        <text x="450" y="74" fill="var(--ink)" font-weight="bold">query.ts</text>
+        <text x="450" y="90" fill="var(--muted)" font-size="10">оркестратор (hub)</text>
+        <g filter="url(#ds)"><rect x="700" y="58" width="150" height="40" rx="8" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.4"/></g>
+        <text x="775" y="74" fill="var(--ink)" font-size="11">wikiLinkValidation</text>
+        <text x="775" y="89" fill="var(--muted)" font-size="10">Retries (Settings)</text>
+        <g filter="url(#ds)"><rect x="80" y="158" width="160" height="44" rx="8" fill="var(--node)" stroke="var(--ok)" stroke-width="1.6"/></g>
+        <text x="160" y="176" fill="var(--ink)">link-resolver.ts</text>
+        <text x="160" y="192" fill="var(--muted)" font-size="10">0 LLM · группировка</text>
+        <g filter="url(#ds)"><rect x="350" y="158" width="160" height="44" rx="8" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.4"/></g>
+        <text x="430" y="176" fill="var(--ink)" font-size="11">query-link-validator</text>
+        <text x="430" y="192" fill="var(--muted)" font-size="10">extract/find/annotate</text>
+        <g filter="url(#ds)"><rect x="620" y="158" width="160" height="44" rx="8" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.4"/></g>
+        <text x="700" y="176" fill="var(--ink)">QueryAnswerSchema</text>
+        <text x="700" y="192" fill="var(--muted)" font-size="10">zod-schemas.ts</text>
+        <g filter="url(#ds)"><rect x="540" y="328" width="160" height="40" rx="8" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.4"/></g>
+        <text x="620" y="352" fill="var(--ink)" font-size="11">Diagnostics-preview</text>
+        <g filter="url(#ds)"><rect x="360" y="346" width="160" height="40" rx="8" fill="var(--node)" stroke="var(--node-stroke)" stroke-width="1.4" stroke-dasharray="4 3"/></g>
+        <text x="440" y="370" fill="var(--ink)">knownStems (данные)</text>
+      </g>
+    </svg>
+    <figcaption>Узел-хаб <code>query.ts</code> зависит от резолвера, валидатора, схемы, промпта, настройки и диагностики. Три компонента читают общий <code>knownStems</code>. <strong>Циклов нет.</strong></figcaption>
+  </figure>
+
+  <h3>Карта покрытия «Задача (Goal) → требования спеки»</h3>
+  <table>
+    <thead><tr><th style="width:230px">Задача (Goal)</th><th>Покрывающие требования</th></tr></thead>
+    <tbody>
+      <tr><td>Goals.1 — zod-вывод</td><td>Components.2, Phase 3</td></tr>
+      <tr><td>Goals.2 — убрать доп. проход</td><td>Components.1 (0 LLM), Components.3, Phase 1</td></tr>
+      <tr><td>Goals.3 — ноль битых ссылок</td><td>Components.1 (resolved/strip/annotate), Components.3, Components.4</td></tr>
+      <tr><td>Goals.4 — диагностируемость</td><td>Diagnostics, Phase 0</td></tr>
+    </tbody>
+  </table>
+  <div class="note">Все четыре цели покрыты ≥1 требованием; «лишних» требований нет.</div>
+</section>
+
+<!-- ===================== БЛОК 3 ===================== -->
+<section id="results">
+  <h2>3. Результаты проверки</h2>
+
+  <h3>Статус фаз</h3>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th><th>Findings</th></tr></thead>
+    <tbody>
+      <tr><td>1 · structure</td><td><span class="badge b-ok">passed</span></td><td>F-001 (INFO, wontfix)</td></tr>
+      <tr><td>2 · coverage</td><td><span class="badge b-ok">passed</span></td><td>—</td></tr>
+      <tr><td>3 · clarity</td><td><span class="badge b-ok">passed</span></td><td>F-002 (fixed)</td></tr>
+      <tr><td>4 · consistency</td><td><span class="badge b-ok">passed</span></td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Findings</h3>
+  <table>
+    <thead><tr><th style="width:62px">id</th><th style="width:90px">severity</th><th style="width:170px">section</th><th>text</th><th style="width:78px">verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>F-002</td>
+        <td><span class="badge b-warn">WARNING</span></td>
+        <td>§Components item 1 / §Verification step 4</td>
+        <td>Прежнее противоречие «prefer <code>wiki_*</code> до подсчёта vs <code>ambiguous</code> на двух кандидатах». <strong>Исправлено:</strong> введена группировка совпадений по сущности; source + <code>wiki_*</code> одной сущности = <code>resolved</code> (prefer <code>wiki_*</code>); <code>ambiguous</code> только для ≥2 <strong>разных</strong> сущностей; предпочтение применяется <strong>после</strong> группировки и явно не схлопывает разные сущности. Verification step 4 переформулирован с рабочим примером (<code>88393</code> в <code>wiki_x_88393</code> vs <code>wiki_y_188393</code>). Секции согласованы.</td>
+        <td><span class="badge b-ok">fixed</span></td>
+      </tr>
+      <tr>
+        <td>F-001</td>
+        <td><span class="badge b-info">INFO</span></td>
+        <td>§Diagnostics / §Implementation phases</td>
+        <td>Строки <code>tool_REDACTEDeview</code> (стр. 124) и <code>REDACTED</code> (стр. 178) — артефакт session-фильтра harness, маскирующего подстроки при отображении (на диске текст корректен, <code>prompts/query.md</code>). Не битая ссылка, не плейсхолдер; только читаемость отображения. Не правится.</td>
+        <td><span class="badge b-info">wontfix</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Сводка</h3>
+  <div class="verdict-bar">
+    <div class="stat"><div class="num" style="color:var(--crit)">0</div><div class="lbl">CRITICAL open</div></div>
+    <div class="stat"><div class="num" style="color:var(--warn)">0</div><div class="lbl">WARNING open</div></div>
+    <div class="stat"><div class="num" style="color:var(--info)">0</div><div class="lbl">INFO open</div></div>
+  </div>
+  <div class="note ok">
+    <strong>Финальный вердикт: OK</strong> — спецификация прошла проверку. 0 critical open, 0 warning open (F-002 fixed, F-001 wontfix).
+  </div>
+
+  <h3>Фазовая модель</h3>
+  <div class="note">
+    Корректна. Phase 0 (диагностика) обоснованно идёт первой — закрывает риск «Unconfirmed broken form» до финализации правил нормализации резолвера. <code>state: design</code> соответствует design-спеке. Нарушений порядка фаз нет.
+  </div>
+
+  <h3>Chain</h3>
+  <table>
+    <thead><tr><th>Шаг</th><th>Артефакт</th></tr></thead>
+    <tbody>
+      <tr><td>intent</td><td><span class="badge b-info">null</span> — intent-документ для темы <code>query-link-resolver</code> не найден в <code>docs/superpowers/intents/</code></td></tr>
+      <tr><td>spec</td><td><code>docs/superpowers/specs/2026-06-24-query-link-resolver-design.md</code></td></tr>
+    </tbody>
+  </table>
+  <div class="legend">Цепочка: (нет intent) → spec.</div>
+</section>
+
+</main>
+
+<footer>
+  Сгенерировано навыком <code>html-report</code> для <code>check-spec</code> · spec_hash <code>0f090b960dde808f</code> · повторный прогон · 2026-06-24.
+</footer>
+
+<script>
+  (function(){
+    var t = "dark";
+    try { var s = localStorage.getItem("spec-check-theme"); if (s) t = s; } catch(e){}
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+  function toggleTheme(){
+    var el = document.documentElement;
+    var next = el.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    el.setAttribute("data-theme", next);
+    try { localStorage.setItem("spec-check-theme", next); } catch(e){}
+  }
+</script>
+</body>
+</html>
