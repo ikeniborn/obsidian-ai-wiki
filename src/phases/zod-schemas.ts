@@ -170,3 +170,29 @@ export type WikiPagesOutput = z.infer<typeof WikiPagesOutputSchema>;
 export type LintDelete = z.infer<typeof LintDeleteSchema>;
 export type LintOutput = z.infer<typeof LintOutputSchema>;
 export type FormatOutput = z.infer<typeof FormatBaseSchema>;
+
+/**
+ * Structured fallback contract for the query answer when deterministic link
+ * resolution leaves unresolved stems. `citations` must all be known vault stems;
+ * the closure-checked refinement is applied by the caller (parseWithRetry feeds
+ * `knownStems` via a factory, mirroring existing WikiLink refinements).
+ */
+export function makeQueryAnswerSchema(knownStems: Set<string>) {
+  return z.object({
+    reasoning: z.string(),
+    answer_markdown: z.string().min(1),
+    citations: z.array(z.string()).default([]),
+  }).superRefine((val, ctx) => {
+    for (const c of val.citations) {
+      if (!knownStems.has(c)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["citations"],
+          message: `citation "${c}" is not a known wiki page stem`,
+        });
+      }
+    }
+  });
+}
+
+export type QueryAnswer = z.infer<ReturnType<typeof makeQueryAnswerSchema>>;
