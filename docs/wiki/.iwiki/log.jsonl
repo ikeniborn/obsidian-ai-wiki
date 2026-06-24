@@ -10,7 +10,12 @@
 {"op":"ingest","source":"dev/mobile-retrieval-vision","page":"docs/wiki/backends-and-config.md","date":"2026-06-20"}
 {"op":"ingest","source":"src/view.ts+src/rerun-domain.ts","page":"operations.md#History Re-run","date":"2026-06-21"}
 {"op":"ingest","source":"src/wiki-link-validator.ts,src/wiki-index.ts,src/phases/ingest.ts,src/phases/lint.ts","page":"operations.md,retrieval.md","date":"2026-06-22"}
+{"op":"ingest","source":"src/controller.ts","page":"architecture.md","date":"2026-06-24","note":"consolidated reasoning logging to _agent.jsonl"}
+{"op":"ingest","source":"src/phases/llm-utils.ts","page":"backends-and-config.md","date":"2026-06-24","note":"strengthened + exported reasoning/answer directives"}
+{"op":"ingest","source":"src/phases/attachment-analyzer.ts","page":"operations.md","date":"2026-06-24","note":"vision honors reasoningLanguage"}
+{"op":"ingest","source":"src/phases/format.ts","page":"llm-pipeline.md","date":"2026-06-24","note":"pass opts.reasoningLanguage to vision"}
 {"op":"ingest","source":"src/incremental-sources.ts","page":"operations.md","date":"2026-06-24"}
 {"op":"ingest","source":"src/phases/init.ts","page":"operations.md","date":"2026-06-24"}
 {"op":"ingest","source":"src/phases/ingest.ts","page":"operations.md","date":"2026-06-24"}
 {"op":"ingest","source":"src/vault-tools.ts","page":"architecture.md","date":"2026-06-24"}
+{"op":"ingest","source":"src/incremental-sources.ts (parsePageSources)","page":"operations.md","date":"2026-06-24","note":"post-merge with origin/master; index rebuilt"}

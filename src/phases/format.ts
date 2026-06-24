@@ -135,7 +135,7 @@ export async function* runFormat(
           continue;
         }
         try {
-          const description = await analyzeSingleAttachment(path, vaultTools, llm, visionSettings.model, signal, filePath, lang, visionTempStore, visionSettings.imageOnly ?? false);
+          const description = await analyzeSingleAttachment(path, vaultTools, llm, visionSettings.model, signal, filePath, lang, opts.reasoningLanguage, visionTempStore, visionSettings.imageOnly ?? false);
           if (description !== null) {
             visionDescriptions.set(path, description);
             await visionTempStore?.putDescription(path, description);

@@ -47,6 +47,7 @@ export class WikiController {
   private _pendingFormat: { originalPath: string; tempPath: string; chat: ChatMessage[] } | null = null;
   private _currentLogMeta: { backend: string; model: string; agentLogEnabled: boolean } | null = null;
   private _llmCallIndex = 0;
+  private _reasoningBuf = "";
   constructor(
     private app: App,
     private plugin: LlmWikiPlugin,
@@ -633,23 +634,52 @@ export class WikiController {
 
   private async logEvent(_vaultRoot: string, sessionId: string, op: WikiOperation, domainId: string | undefined, ev: RunEvent): Promise<void> {
     if (!(this._currentLogMeta?.agentLogEnabled ?? this.plugin.settings.agentLogEnabled)) return;
-    if (ev.kind === "assistant_text") return;
+
+    // Reasoning chunks (assistant_text + isReasoning) accumulate into a buffer and
+    // are flushed as ONE consolidated line when the next non-assistant_text event
+    // arrives. Non-reasoning assistant_text (progress chatter) stays dropped — the
+    // final answer is already captured by the `result` event.
+    if (ev.kind === "assistant_text") {
+      if (ev.isReasoning) this._reasoningBuf += ev.delta;
+      return;
+    }
+
     const adapter = this.app.vault.adapter;
     const path = GLOBAL_AGENT_LOG_PATH;
     try {
       await this.app.vault.createFolder("!Wiki").catch(() => {});
       await this.app.vault.createFolder("!Wiki/_config").catch(() => {});
-      const extra = ev.kind === "llm_call_stats" ? { callIndex: this._llmCallIndex++ } : {};
-      const line = JSON.stringify({
-        ts: new Date().toISOString(),
+
+      const appendLine = async (record: unknown): Promise<void> => {
+        const line = JSON.stringify(record) + "\n";
+        if (await adapter.exists(path)) await adapter.append(path, line);
+        else await adapter.write(path, line);
+      };
+      const envelope = {
         session: sessionId, op, domainId,
         backend: this._currentLogMeta?.backend,
         model: this._currentLogMeta?.model,
+      };
+
+      // Flush accumulated reasoning as one line, stamped with the current call index,
+      // before writing the event that triggered the flush.
+      if (this._reasoningBuf) {
+        await appendLine({
+          ts: new Date().toISOString(),
+          ...envelope,
+          event: { kind: "reasoning", text: this._reasoningBuf },
+          callIndex: this._llmCallIndex,
+        });
+        this._reasoningBuf = "";
+      }
+
+      const extra = ev.kind === "llm_call_stats" ? { callIndex: this._llmCallIndex++ } : {};
+      await appendLine({
+        ts: new Date().toISOString(),
+        ...envelope,
         event: ev,
         ...extra,
-      }) + "\n";
-      if (await adapter.exists(path)) await adapter.append(path, line);
-      else await adapter.write(path, line);
+      });
     } catch { /* не блокируем операцию */ }
   }
 
@@ -711,6 +741,7 @@ export class WikiController {
 
     const startedAt = Date.now();
     this._llmCallIndex = 0;
+    this._reasoningBuf = "";
     const sessionId = String(startedAt);
     const steps: RunHistoryEntry["steps"] = [];
     let finalText = "";

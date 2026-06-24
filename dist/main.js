@@ -30988,11 +30988,11 @@ function atEndOfBlockComment(text, i) {
 function langInstruction(lang) {
   switch (lang) {
     case "ru":
-      return "Always reply in Russian, regardless of the source language.";
+      return "Write the entire response in Russian. Do not switch to the source language, even when the notes, user input, or quoted text are in another language.";
     case "en":
-      return "Always reply in English, regardless of the source language.";
+      return "Write the entire response in English. Do not switch to the source language, even when the notes, user input, or quoted text are in another language.";
     case "es":
-      return "Always reply in Spanish, regardless of the source language.";
+      return "Write the entire response in Spanish. Do not switch to the source language, even when the notes, user input, or quoted text are in another language.";
   }
 }
 function wikiSections(lang) {
@@ -31145,9 +31145,17 @@ var REASONING_LANG_NAME = {
   en: "English",
   es: "Spanish"
 };
+function reasoningDirective(lang) {
+  const name = REASONING_LANG_NAME[lang];
+  return [
+    "## Reasoning language",
+    `Reason and think exclusively in ${name}.`,
+    `Do not switch the reasoning language to match the source notes, user input, or quoted text, even when those are written in another language.`,
+    `This rule also governs the \`reasoning\` field of any JSON output: write that field in ${name} as well.`
+  ].join("\n");
+}
 function injectReasoningDirective(messages, lang) {
-  const directive = `## Reasoning language
-Think and reason in ${REASONING_LANG_NAME[lang]}.`;
+  const directive = reasoningDirective(lang);
   const firstSystem = messages.findIndex((m) => m.role === "system");
   if (firstSystem >= 0) {
     const updated = [...messages];
@@ -41833,22 +41841,31 @@ async function callVisionLlm(llm, model, systemPrompt, contentParts, signal) {
   }, { signal });
   return resp.choices[0]?.message?.content ?? "";
 }
-function imageSystem(language) {
-  return render(vision_image_default, { structure_rules: vision_structure_default, lang: langInstruction(resolveLang(language)) });
+function imageSystem(language, reasoningLanguage) {
+  const base = render(vision_image_default, { structure_rules: vision_structure_default, lang: langInstruction(resolveLang(language)) });
+  return `${base}
+
+${reasoningDirective(resolveReasoningLang(reasoningLanguage, language))}`;
 }
-function pdfSystem(language) {
-  return render(vision_pdf_default, { structure_rules: vision_structure_default, lang: langInstruction(resolveLang(language)) });
+function pdfSystem(language, reasoningLanguage) {
+  const base = render(vision_pdf_default, { structure_rules: vision_structure_default, lang: langInstruction(resolveLang(language)) });
+  return `${base}
+
+${reasoningDirective(resolveReasoningLang(reasoningLanguage, language))}`;
 }
-function excalidrawSystem(language) {
-  return render(vision_excalidraw_default, { lang: langInstruction(resolveLang(language)) });
+function excalidrawSystem(language, reasoningLanguage) {
+  const base = render(vision_excalidraw_default, { lang: langInstruction(resolveLang(language)) });
+  return `${base}
+
+${reasoningDirective(resolveReasoningLang(reasoningLanguage, language))}`;
 }
-async function analyzeImage(buffer, mimeType, llm, model, signal, language = "auto") {
+async function analyzeImage(buffer, mimeType, llm, model, signal, language = "auto", reasoningLanguage = "auto") {
   const b64 = arrayBufferToBase64(buffer);
-  return callVisionLlm(llm, model, imageSystem(language), [
+  return callVisionLlm(llm, model, imageSystem(language, reasoningLanguage), [
     { type: "image_url", image_url: { url: `data:${mimeType};base64,${b64}` } }
   ], signal);
 }
-async function analyzePdf(buffer, llm, model, signal, language = "auto") {
+async function analyzePdf(buffer, llm, model, signal, language = "auto", reasoningLanguage = "auto") {
   const pdfjs = window.pdfjsLib;
   if (!pdfjs) throw new Error("pdfjsLib unavailable");
   const doc = await pdfjs.getDocument({ data: buffer }).promise;
@@ -41864,14 +41881,14 @@ async function analyzePdf(buffer, llm, model, signal, language = "auto") {
     const b64 = arrayBufferToBase64(pageBuf);
     parts.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${b64}` } });
   }
-  return callVisionLlm(llm, model, pdfSystem(language), parts, signal);
+  return callVisionLlm(llm, model, pdfSystem(language, reasoningLanguage), parts, signal);
 }
-async function analyzeExcalidraw(b64, llm, model, signal, language = "auto") {
-  return callVisionLlm(llm, model, excalidrawSystem(language), [
+async function analyzeExcalidraw(b64, llm, model, signal, language = "auto", reasoningLanguage = "auto") {
+  return callVisionLlm(llm, model, excalidrawSystem(language, reasoningLanguage), [
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } }
   ], signal);
 }
-async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, sourcePath = "", language = "auto", visionTempStore, imageOnly = false) {
+async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, sourcePath = "", language = "auto", reasoningLanguage = "auto", visionTempStore, imageOnly = false) {
   const resolved = vaultTools.resolveLink(path2, sourcePath);
   if (resolved === null) return null;
   if (imageOnly && !isVisionSupportedOnMobile(resolved)) return null;
@@ -41881,16 +41898,16 @@ async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, so
     const b64 = await vaultTools.renderExcalidrawPng(resolved);
     if (!b64) return null;
     await visionTempStore?.putPng(path2, b64);
-    return analyzeExcalidraw(b64, llm, model, signal, language);
+    return analyzeExcalidraw(b64, llm, model, signal, language, reasoningLanguage);
   }
   if (ext === "pdf") {
     const buf = await vaultTools.readBinary(resolved);
-    return analyzePdf(buf, llm, model, signal, language);
+    return analyzePdf(buf, llm, model, signal, language, reasoningLanguage);
   }
   const mimeType = getMimeType(resolved);
   if (mimeType) {
     const buf = await vaultTools.readBinary(resolved);
-    return analyzeImage(buf, mimeType, llm, model, signal, language);
+    return analyzeImage(buf, mimeType, llm, model, signal, language, reasoningLanguage);
   }
   return null;
 }
@@ -41983,7 +42000,7 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
           continue;
         }
         try {
-          const description = await analyzeSingleAttachment(path2, vaultTools, llm, visionSettings.model, signal, filePath, lang, visionTempStore, visionSettings.imageOnly ?? false);
+          const description = await analyzeSingleAttachment(path2, vaultTools, llm, visionSettings.model, signal, filePath, lang, opts.reasoningLanguage, visionTempStore, visionSettings.imageOnly ?? false);
           if (description !== null) {
             visionDescriptions.set(path2, description);
             await visionTempStore?.putDescription(path2, description);
@@ -50228,6 +50245,7 @@ var WikiController = class {
   _pendingFormat = null;
   _currentLogMeta = null;
   _llmCallIndex = 0;
+  _reasoningBuf = "";
   isBusy() {
     return this.current !== null;
   }
@@ -50771,7 +50789,10 @@ var WikiController = class {
   }
   async logEvent(_vaultRoot, sessionId, op, domainId, ev) {
     if (!(this._currentLogMeta?.agentLogEnabled ?? this.plugin.settings.agentLogEnabled)) return;
-    if (ev.kind === "assistant_text") return;
+    if (ev.kind === "assistant_text") {
+      if (ev.isReasoning) this._reasoningBuf += ev.delta;
+      return;
+    }
     const adapter = this.app.vault.adapter;
     const path2 = GLOBAL_AGENT_LOG_PATH;
     try {
@@ -50779,19 +50800,34 @@ var WikiController = class {
       });
       await this.app.vault.createFolder("!Wiki/_config").catch(() => {
       });
-      const extra = ev.kind === "llm_call_stats" ? { callIndex: this._llmCallIndex++ } : {};
-      const line = JSON.stringify({
-        ts: (/* @__PURE__ */ new Date()).toISOString(),
+      const appendLine = async (record) => {
+        const line = JSON.stringify(record) + "\n";
+        if (await adapter.exists(path2)) await adapter.append(path2, line);
+        else await adapter.write(path2, line);
+      };
+      const envelope = {
         session: sessionId,
         op,
         domainId,
         backend: this._currentLogMeta?.backend,
-        model: this._currentLogMeta?.model,
+        model: this._currentLogMeta?.model
+      };
+      if (this._reasoningBuf) {
+        await appendLine({
+          ts: (/* @__PURE__ */ new Date()).toISOString(),
+          ...envelope,
+          event: { kind: "reasoning", text: this._reasoningBuf },
+          callIndex: this._llmCallIndex
+        });
+        this._reasoningBuf = "";
+      }
+      const extra = ev.kind === "llm_call_stats" ? { callIndex: this._llmCallIndex++ } : {};
+      await appendLine({
+        ts: (/* @__PURE__ */ new Date()).toISOString(),
+        ...envelope,
         event: ev,
         ...extra
-      }) + "\n";
-      if (await adapter.exists(path2)) await adapter.append(path2, line);
-      else await adapter.write(path2, line);
+      });
     } catch {
     }
   }
@@ -50843,6 +50879,7 @@ var WikiController = class {
     this.currentOp = { op, args };
     const startedAt = Date.now();
     this._llmCallIndex = 0;
+    this._reasoningBuf = "";
     const sessionId = String(startedAt);
     const steps = [];
     let finalText = "";

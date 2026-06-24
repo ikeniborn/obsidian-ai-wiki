@@ -12,7 +12,7 @@ Top-level Obsidian plugin class (`LlmWikiPlugin` in `src/main.ts`). Registers co
 
 Orchestration layer between the UI and the runner (`WikiController` in `src/controller.ts`). Guards busy state, resolves the active backend, builds an `AgentRunner`, and streams `RunEvent`s to the sidebar.
 
-Persists domain mutations from events via `DomainStore`. `logEvent` writes JSONL to `!Wiki/_config/_agent.jsonl` when `agentLogEnabled`. Folder creation uses `vault.createFolder().catch(() => {})` unconditionally — `adapter.exists()` is unreliable for folders on Obsidian mobile.
+Persists domain mutations from events via `DomainStore`. `logEvent` writes JSONL to `!Wiki/_config/_agent.jsonl` when `agentLogEnabled`. Model reasoning is buffered (`_reasoningBuf`) across `assistant_text`+`isReasoning` deltas and flushed as one consolidated `{event:{kind:"reasoning"}}` record per LLM call when the next non-`assistant_text` event arrives, stamped with the current `_llmCallIndex`; non-reasoning `assistant_text` chatter stays dropped (the final answer is captured by the `result` event). The buffer resets per operation in `dispatch`. Folder creation uses `vault.createFolder().catch(() => {})` unconditionally — `adapter.exists()` is unreliable for folders on Obsidian mobile.
 
 `mobileFetch` (mobile LLM HTTP path) must convert `Headers` instances to `Record<string, string>` before `requestUrl` — the OpenAI SDK passes a `Headers` class instance, and without conversion `Content-Type`/`Authorization` are silently dropped.
 

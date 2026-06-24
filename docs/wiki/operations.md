@@ -175,6 +175,8 @@ Image and PDF diagram embeds are processed in two stages: the model reads the dr
 
 On mobile, vision is image-only: raster images (png/jpg/jpeg/webp) are still analyzed, but PDF and Excalidraw are skipped because they need a desktop renderer. This is gated by `isVisionSupportedOnMobile` (`getMimeType(path) !== null`) threaded as an `imageOnly` flag; skipped embeds report "unsupported on mobile" instead of "unknown extension".
 
+Vision honors the reasoning-language rule (layer B): each `*System()` prompt builder appends the shared `reasoningDirective(resolveReasoningLang(reasoningLanguage, language))` after the answer-language directive, so vision reasoning no longer drifts to the source language. `reasoningLanguage` is threaded `analyzeAttachments → analyzeSingleAttachment → analyze{Image,Pdf,Excalidraw}`; `format.ts` passes `opts.reasoningLanguage` at the call site. See [[backends-and-config#Three-Layer Resolution]].
+
 Vision results are cached per run in a `VisionTempStore` (`src/phases/vision-temp-store.ts`) under the plugin directory, never the vault content tree. Each attachment is analyzed by one LLM call and resumed from the store if the idle-watchdog retries, so completed attachments are never re-sent. The watchdog resets on `tool_use`/`tool_result` as well as stream events, so per-attachment progress prevents a cumulative-time abort.
 
 ## Delete

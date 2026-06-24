@@ -1,8 +1,8 @@
 import type { VaultTools } from "../vault-tools";
 import type { LlmClient } from "../types";
 import type { OutputLanguage } from "../types";
-import { langInstruction } from "./llm-utils";
-import { resolveLang } from "../i18n";
+import { langInstruction, reasoningDirective } from "./llm-utils";
+import { resolveLang, resolveReasoningLang } from "../i18n";
 import type OpenAI from "openai";
 import { render } from "./template";
 import visionStructure from "../../prompts/vision-structure.md";
@@ -97,16 +97,19 @@ async function callVisionLlm(
   return resp.choices[0]?.message?.content ?? "";
 }
 
-function imageSystem(language: OutputLanguage): string {
-  return render(visionImage, { structure_rules: visionStructure, lang: langInstruction(resolveLang(language)) });
+function imageSystem(language: OutputLanguage, reasoningLanguage: OutputLanguage): string {
+  const base = render(visionImage, { structure_rules: visionStructure, lang: langInstruction(resolveLang(language)) });
+  return `${base}\n\n${reasoningDirective(resolveReasoningLang(reasoningLanguage, language))}`;
 }
 
-function pdfSystem(language: OutputLanguage): string {
-  return render(visionPdf, { structure_rules: visionStructure, lang: langInstruction(resolveLang(language)) });
+function pdfSystem(language: OutputLanguage, reasoningLanguage: OutputLanguage): string {
+  const base = render(visionPdf, { structure_rules: visionStructure, lang: langInstruction(resolveLang(language)) });
+  return `${base}\n\n${reasoningDirective(resolveReasoningLang(reasoningLanguage, language))}`;
 }
 
-function excalidrawSystem(language: OutputLanguage): string {
-  return render(visionExcalidraw, { lang: langInstruction(resolveLang(language)) });
+function excalidrawSystem(language: OutputLanguage, reasoningLanguage: OutputLanguage): string {
+  const base = render(visionExcalidraw, { lang: langInstruction(resolveLang(language)) });
+  return `${base}\n\n${reasoningDirective(resolveReasoningLang(reasoningLanguage, language))}`;
 }
 
 export async function analyzeImage(
@@ -116,9 +119,10 @@ export async function analyzeImage(
   model: string,
   signal: AbortSignal,
   language: OutputLanguage = "auto",
+  reasoningLanguage: OutputLanguage = "auto",
 ): Promise<string> {
   const b64 = arrayBufferToBase64(buffer);
-  return callVisionLlm(llm, model, imageSystem(language), [
+  return callVisionLlm(llm, model, imageSystem(language, reasoningLanguage), [
     { type: "image_url", image_url: { url: `data:${mimeType};base64,${b64}` } },
   ], signal);
 }
@@ -141,6 +145,7 @@ export async function analyzePdf(
   model: string,
   signal: AbortSignal,
   language: OutputLanguage = "auto",
+  reasoningLanguage: OutputLanguage = "auto",
 ): Promise<string> {
   const pdfjs = (window as unknown as { pdfjsLib?: PdfjsLib }).pdfjsLib;
   if (!pdfjs) throw new Error("pdfjsLib unavailable");
@@ -160,7 +165,7 @@ export async function analyzePdf(
     parts.push({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${b64}` } });
   }
 
-  return callVisionLlm(llm, model, pdfSystem(language), parts, signal);
+  return callVisionLlm(llm, model, pdfSystem(language, reasoningLanguage), parts, signal);
 }
 
 export async function analyzeExcalidraw(
@@ -169,8 +174,9 @@ export async function analyzeExcalidraw(
   model: string,
   signal: AbortSignal,
   language: OutputLanguage = "auto",
+  reasoningLanguage: OutputLanguage = "auto",
 ): Promise<string> {
-  return callVisionLlm(llm, model, excalidrawSystem(language), [
+  return callVisionLlm(llm, model, excalidrawSystem(language, reasoningLanguage), [
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } },
   ], signal);
 }
@@ -184,6 +190,7 @@ export async function analyzeSingleAttachment(
   signal: AbortSignal,
   sourcePath: string = "",
   language: OutputLanguage = "auto",
+  reasoningLanguage: OutputLanguage = "auto",
   visionTempStore?: VisionTempStore,
   imageOnly: boolean = false,
 ): Promise<string | null> {
@@ -199,16 +206,16 @@ export async function analyzeSingleAttachment(
     const b64 = await vaultTools.renderExcalidrawPng(resolved);
     if (!b64) return null;            // no host plugin / render failed → skip
     await visionTempStore?.putPng(path, b64);
-    return analyzeExcalidraw(b64, llm, model, signal, language);
+    return analyzeExcalidraw(b64, llm, model, signal, language, reasoningLanguage);
   }
   if (ext === "pdf") {
     const buf = await vaultTools.readBinary(resolved);
-    return analyzePdf(buf, llm, model, signal, language);
+    return analyzePdf(buf, llm, model, signal, language, reasoningLanguage);
   }
   const mimeType = getMimeType(resolved);
   if (mimeType) {
     const buf = await vaultTools.readBinary(resolved);
-    return analyzeImage(buf, mimeType, llm, model, signal, language);
+    return analyzeImage(buf, mimeType, llm, model, signal, language, reasoningLanguage);
   }
   return null;
 }
@@ -221,12 +228,13 @@ export async function analyzeAttachments(
   signal: AbortSignal,
   sourcePath: string = "",
   language: OutputLanguage = "auto",
+  reasoningLanguage: OutputLanguage = "auto",
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   for (const path of [...new Set(embedPaths)]) {
     if (signal.aborted) break;
     try {
-      const description = await analyzeSingleAttachment(path, vaultTools, llm, model, signal, sourcePath, language);
+      const description = await analyzeSingleAttachment(path, vaultTools, llm, model, signal, sourcePath, language, reasoningLanguage);
       if (description !== null) result.set(path, description);
     } catch {
       // Per-attachment failure — skip, don't block format
