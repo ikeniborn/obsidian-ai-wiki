@@ -1,6 +1,7 @@
 import { AbstractInputSuggest, App, Modal, Setting, TFolder, ToggleComponent } from "obsidian";
 import type { AddDomainInput, DomainEntry, EntityType } from "./domain";
 import { i18n } from "./i18n";
+import { capList } from "./incremental-sources";
 import { isSelectableSourceFolder } from "./source-paths";
 
 export class BusyCloseModal extends Modal {
@@ -658,6 +659,51 @@ export class IngestScopeModal extends Modal {
   private pick(scope: "new" | "all" | "skip"): void {
     this.close();
     this.onChoice(scope);
+  }
+
+  onClose(): void { this.contentEl.empty(); }
+}
+
+export class ReinitModeModal extends Modal {
+  constructor(
+    app: App,
+    private plan: { changed: string[]; totalSources: number; wikiFileCount: number },
+    private onChoice: (mode: "full" | "incremental") => void,
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    const T = i18n().modal;
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: T.reinitModeTitle });
+    contentEl.createEl("p", { text: T.reinitModeFullDesc(this.plan.wikiFileCount, this.plan.totalSources) });
+
+    const n = this.plan.changed.length;
+    if (n > 0) {
+      contentEl.createEl("p", { text: T.reinitModeIncrementalDesc(n) });
+      const { shown, overflow } = capList(this.plan.changed.map((p) => p.split("/").pop() ?? p), 20);
+      const ul = contentEl.createEl("ul");
+      for (const name of shown) ul.createEl("li", { text: name });
+      if (overflow > 0) ul.createEl("li", { text: T.reinitModeMore(overflow) });
+    } else {
+      contentEl.createEl("p", { text: T.reinitModeNoneChanged });
+    }
+
+    const setting = new Setting(contentEl);
+    setting.addButton((b) => b.setButtonText(T.cancel).onClick(() => this.close()));
+    setting.addButton((b) =>
+      b.setButtonText(T.reinitModeFull).setWarning().onClick(() => this.pick("full")),
+    );
+    setting.addButton((b) => {
+      b.setButtonText(T.reinitModeIncremental(n)).setCta().onClick(() => this.pick("incremental"));
+      if (n === 0) b.setDisabled(true);
+    });
+  }
+
+  private pick(mode: "full" | "incremental"): void {
+    this.close();
+    this.onChoice(mode);
   }
 
   onClose(): void { this.contentEl.empty(); }

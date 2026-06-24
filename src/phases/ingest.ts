@@ -323,6 +323,60 @@ export async function* runIngest(
     return { ...p, content: stripDeadLinks(fixed, knownStems) };
   });
 
+  // --- A2 reorder: the source frontmatter is written BEFORE the wiki pages so
+  // that, after ingest, every wiki page's mtime is >= the source's. This keeps
+  // incremental re-init honest: an unchanged source is not re-flagged. Backlinks
+  // are therefore computed from the PLANNED page/delete sets (results are not yet
+  // known). See docs/superpowers/specs/2026-06-24-incremental-reinit-design.md.
+  const plannedDeletes = (parseResult.value.deletes ?? []).filter((d) => {
+    const hasTraversal = d.path.split("/").some((seg) => seg === ".." || seg === ".");
+    return !hasTraversal && validateArticlePath(d.path, wikiVaultPath);
+  });
+  const plannedDeletePaths = new Set(plannedDeletes.map((d) => d.path));
+  const plannedDeleteStems = new Set([...plannedDeletePaths].map((p) => p.split("/").pop()!.replace(/\.md$/, "")));
+  const plannedPagePaths = pages.map((p) => p.path);
+
+  if (pages.length > 0 || plannedDeletePaths.size > 0) {
+    const backlinkToday = new Date().toISOString().slice(0, 10);
+    const normalizedSource = recoverSourceFrontmatter(sourceContent);
+    const isFirstTime = !hasFrontmatterField(normalizedSource, "wiki_added");
+    const existingArticles = parseWikiArticlesFromFm(normalizedSource).filter((link) => {
+      const stem = link.replace(/^\[\[/, "").replace(/\]\]$/, "");
+      return !plannedDeleteStems.has(stem);
+    });
+    const writtenLinks = plannedPagePaths.map((p) => `[[${p.split("/").pop()!.replace(/\.md$/, "")}]]`);
+    const mergedArticles = [...new Set([...existingArticles, ...writtenLinks])];
+    const updatedSource = upsertRawFrontmatter(normalizedSource, {
+      wiki_added: isFirstTime ? backlinkToday : undefined,
+      wiki_updated: backlinkToday,
+      wiki_articles: mergedArticles,
+    });
+    const { content: repairedSource, warnings: sourceWarnings } =
+      validateAndRepairSourceFrontmatter(updatedSource);
+    const wikiFileStems = new Set(
+      [...existingPaths, ...plannedPagePaths]
+        .filter((p) => !plannedDeletePaths.has(p) && !p.endsWith("_index.md"))
+        .map((p) => p.split("/").pop()!.replace(/\.md$/, "")),
+    );
+    const { content: wikiArticlesFiltered, warnings: wikiArticlesWarnings } =
+      stripInvalidWikiArticles(repairedSource, wikiFileStems);
+    const { content: filteredSource, warnings: relatedWarnings } =
+      filterStaleWikiLinks(wikiArticlesFiltered, wikiFileStems, ["related"]);
+    const allSourceWarnings = [...sourceWarnings, ...wikiArticlesWarnings, ...relatedWarnings];
+    if (allSourceWarnings.length > 0) {
+      yield { kind: "info_text", icon: "⚠️", summary: "Source frontmatter repaired", details: allSourceWarnings };
+    }
+    yield { kind: "tool_use", name: "Update", input: { path: sourceVaultPath } };
+    try {
+      await vaultTools.write(sourceVaultPath, filteredSource);
+      yield { kind: "tool_result", ok: true, preview: `backlinks → ${sourceVaultPath}` };
+    } catch (e) {
+      yield { kind: "tool_result", ok: false, preview: `backlink write failed: ${(e as Error).message}` };
+    }
+    const parentPath = extractParentSourcePath(absSource, vaultRoot);
+    yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
+  }
+
   const written: string[] = [];
   const logEntries: IngestLogEntry[] = [];
   const dedupOn = (opts.dedupOnIngest ?? false) && (opts.dedupThreshold ?? 0) > 0 && !!similarity;
@@ -489,8 +543,6 @@ export async function* runIngest(
   const resultText = buildIngestSummary(domain.id, sourceVaultPath, createdCount, updatedCount, mergedCount, dedupMergedCount, pages.length);
   yield { kind: "assistant_text", delta: resultText };
 
-  const deletedStems = new Set(deletedPaths.map((p) => p.split("/").pop()!.replace(/\.md$/, "")));
-
   if (written.length > 0 || deletedPaths.length > 0) {
     if (logEntries.length > 0) {
       try {
@@ -502,52 +554,6 @@ export async function* runIngest(
         });
       } catch { /* non-critical */ }
     }
-
-    const backlinkToday = new Date().toISOString().slice(0, 10);
-    const normalizedSource = recoverSourceFrontmatter(sourceContent);
-    const isFirstTime = !hasFrontmatterField(normalizedSource, "wiki_added");
-    const existingArticles = parseWikiArticlesFromFm(normalizedSource).filter((link) => {
-      const stem = link.replace(/^\[\[/, "").replace(/\]\]$/, "");
-      return !deletedStems.has(stem);
-    });
-    const writtenLinks = written.map((p) => `[[${p.split("/").pop()!.replace(/\.md$/, "")}]]`);
-    const mergedArticles = [...new Set([...existingArticles, ...writtenLinks])];
-    const updatedSource = upsertRawFrontmatter(normalizedSource, {
-      wiki_added: isFirstTime ? backlinkToday : undefined,
-      wiki_updated: backlinkToday,
-      wiki_articles: mergedArticles,
-    });
-    const { content: repairedSource, warnings: sourceWarnings } =
-      validateAndRepairSourceFrontmatter(updatedSource);
-    const wikiFileStems = new Set(
-      [...existingPaths, ...written]
-        .filter(p => !deletedPaths.includes(p) && !p.endsWith("_index.md"))
-        .map(p => p.split("/").pop()!.replace(/\.md$/, ""))
-    );
-    const { content: wikiArticlesFiltered, warnings: wikiArticlesWarnings } =
-      stripInvalidWikiArticles(repairedSource, wikiFileStems);
-    const { content: filteredSource, warnings: relatedWarnings } =
-      filterStaleWikiLinks(wikiArticlesFiltered, wikiFileStems, ["related"]);
-    const staleWarnings = [...wikiArticlesWarnings, ...relatedWarnings];
-    const allSourceWarnings = [...sourceWarnings, ...staleWarnings];
-    if (allSourceWarnings.length > 0) {
-      yield {
-        kind: "info_text",
-        icon: "⚠️",
-        summary: "Source frontmatter repaired",
-        details: allSourceWarnings,
-      };
-    }
-    yield { kind: "tool_use", name: "Update", input: { path: sourceVaultPath } };
-    try {
-      await vaultTools.write(sourceVaultPath, filteredSource);
-      yield { kind: "tool_result", ok: true, preview: `backlinks → ${sourceVaultPath}` };
-    } catch (e) {
-      yield { kind: "tool_result", ok: false, preview: `backlink write failed: ${(e as Error).message}` };
-    }
-
-    const parentPath = extractParentSourcePath(absSource, vaultRoot);
-    yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
   }
 
   const delta = parseResult.value.entity_types_delta;

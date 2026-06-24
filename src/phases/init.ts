@@ -32,6 +32,7 @@ export async function* runInit(
   const sourcePaths = sourcesIdx >= 0 ? args.slice(sourcesIdx + 1) : [];
 
   const force = args.includes("--force");
+  const incremental = args.includes("--incremental");
 
   if (!domainId) {
     yield { kind: "error", message: "init: domain id required" };
@@ -39,6 +40,25 @@ export async function* runInit(
   }
 
   const existing = domains.find((d) => d.id === domainId);
+
+  if (incremental) {
+    if (!existing) {
+      yield { kind: "error", message: `incremental: domain not found: "${domainId}"` };
+      return;
+    }
+    if (!existing.entity_types?.length) {
+      yield { kind: "error", message: `incremental: domain "${domainId}" not initialised — run a full init/reinit first` };
+      return;
+    }
+    if (!sourcePaths.length) {
+      yield { kind: "result", durationMs: 0, text: `Domain "${domainId}": no changed sources to re-ingest.` };
+      return;
+    }
+    yield* runIncrementalReinit(
+      domainId, sourcePaths, vaultTools, llm, model, domains, signal, opts, onFileError, similarity,
+    );
+    return;
+  }
 
   if (force) {
     if (!existing) {
@@ -356,6 +376,83 @@ export async function* runInitWithSources(
     durationMs: Date.now() - start,
     text: `Domain "${domainId}" initialised from ${toAnalyze.length} source files.`,
     outputTokens: outputTokens || undefined,
+  };
+}
+
+export async function* runIncrementalReinit(
+  domainId: string,
+  changedFiles: string[],
+  vaultTools: VaultTools,
+  llm: LlmClient,
+  model: string,
+  domains: DomainEntry[],
+  signal: AbortSignal,
+  opts: LlmCallOptions,
+  onFileError: OnFileError | undefined,
+  similarity?: PageSimilarityService,
+): AsyncGenerator<RunEvent> {
+  const start = Date.now();
+  let currentDomain = domains.find((d) => d.id === domainId) ?? null;
+  if (!currentDomain) {
+    yield { kind: "error", message: `incremental: domain "${domainId}" missing` };
+    return;
+  }
+
+  yield { kind: "init_start", totalFiles: changedFiles.length };
+  let doneCount = 0;
+
+  for (let i = 0; i < changedFiles.length; i++) {
+    if (signal.aborted) return;
+    const file = changedFiles[i];
+    yield { kind: "file_start", file, index: i, total: changedFiles.length };
+
+    let retried = false;
+    let fileDone = false;
+    while (!fileDone) {
+      let caught: Error | null = null;
+      try {
+        for await (const ev of runIngest(
+          [file], vaultTools, llm, model, [currentDomain], vaultTools.vaultRoot, signal, opts, similarity,
+        )) {
+          yield ev;
+          if (ev.kind === "domain_updated" && ev.domainId === domainId) {
+            currentDomain = { ...currentDomain, ...ev.patch };
+          }
+        }
+        fileDone = true;
+      } catch (e) {
+        caught = e as Error;
+      }
+      if (caught) {
+        if (caught.name === "AbortError" || signal.aborted) return;
+        const canRetry = !retried;
+        const choice = onFileError ? await onFileError(file, caught, canRetry) : "skip";
+        if (choice === "stop") return;
+        if (choice === "retry" && canRetry) { retried = true; continue; }
+        fileDone = true;
+      }
+    }
+
+    if (signal.aborted) return;
+
+    // New-source bookkeeping: make sure a freshly-ingested source lands in analyzed_sources.
+    const analyzed: Set<string> = new Set(currentDomain.analyzed_sources ?? []);
+    if (!analyzed.has(file)) {
+      analyzed.add(file);
+      currentDomain = { ...currentDomain, analyzed_sources: [...analyzed] };
+      yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
+      yield { kind: "domain_updated", domainId, patch: { analyzed_sources: currentDomain.analyzed_sources } };
+      yield { kind: "tool_result", ok: true };
+    }
+
+    doneCount++;
+    yield { kind: "file_done", file };
+  }
+
+  yield {
+    kind: "result",
+    durationMs: Date.now() - start,
+    text: `Domain "${domainId}": re-ingested ${doneCount} of ${changedFiles.length} changed source(s).`,
   };
 }
 

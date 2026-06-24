@@ -26596,6 +26596,13 @@ Actualizing domain config for "${domainId}"...
     initConfirmBody: (files, folders) => `Found ${files} .md files in ${folders} folder(s). Run init to analyze sources and create wiki pages?`,
     reinitConfirmTitle: "Re-init \u2014 confirm",
     reinitConfirmBody: (id, wikiFiles, srcFiles, srcCount) => `Domain \xAB${id}\xBB: ${wikiFiles} wiki files will be deleted and rebuilt from ${srcFiles} md-files (${srcCount} source paths). Continue?`,
+    reinitModeTitle: "Re-init \u2014 choose mode",
+    reinitModeFullDesc: (wikiFiles, srcCount) => `Full: delete all ${wikiFiles} wiki files and rebuild from all ${srcCount} sources.`,
+    reinitModeIncrementalDesc: (n) => `Incremental: re-ingest only the ${n} changed source(s) listed below.`,
+    reinitModeNoneChanged: "No changed sources \u2014 nothing to re-ingest incrementally.",
+    reinitModeMore: (k) => `\u2026 +${k} more`,
+    reinitModeFull: "Full",
+    reinitModeIncremental: (n) => `Incremental (${n})`,
     fileErrorTitle: "Error processing file",
     fileErrorSkip: "Skip",
     fileErrorRetry: "Retry",
@@ -26906,6 +26913,13 @@ var ru = {
     initConfirmBody: (files, folders) => `\u041D\u0430\u0439\u0434\u0435\u043D\u043E ${files} .md \u0444\u0430\u0439\u043B\u043E\u0432 \u0432 ${folders} \u043F\u0430\u043F\u043A\u0430\u0445. \u0417\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C init \u0434\u043B\u044F \u0430\u043D\u0430\u043B\u0438\u0437\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432 \u0438 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F wiki-\u0441\u0442\u0440\u0430\u043D\u0438\u0446?`,
     reinitConfirmTitle: "Re-init \u2014 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435",
     reinitConfirmBody: (id, wikiFiles, srcFiles, srcCount) => `\u0414\u043E\u043C\u0435\u043D \xAB${id}\xBB: \u0431\u0443\u0434\u0435\u0442 \u0443\u0434\u0430\u043B\u0435\u043D\u043E ${wikiFiles} wiki-\u0444\u0430\u0439\u043B\u043E\u0432 \u0438 \u043F\u0435\u0440\u0435\u0441\u043E\u0431\u0440\u0430\u043D\u043E \u0438\u0437 ${srcFiles} md-\u0444\u0430\u0439\u043B\u043E\u0432 (${srcCount} sourcePaths). \u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C?`,
+    reinitModeTitle: "Re-init \u2014 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0440\u0435\u0436\u0438\u043C",
+    reinitModeFullDesc: (wikiFiles, srcCount) => `\u041F\u043E\u043B\u043D\u044B\u0439: \u0443\u0434\u0430\u043B\u0438\u0442\u044C \u0432\u0441\u0435 ${wikiFiles} wiki-\u0444\u0430\u0439\u043B\u043E\u0432 \u0438 \u043F\u0435\u0440\u0435\u0441\u043E\u0431\u0440\u0430\u0442\u044C \u0438\u0437 \u0432\u0441\u0435\u0445 ${srcCount} \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432.`,
+    reinitModeIncrementalDesc: (n) => `\u0418\u043D\u043A\u0440\u0435\u043C\u0435\u043D\u0442\u0430\u043B\u044C\u043D\u044B\u0439: \u043F\u0435\u0440\u0435\u043E\u0431\u0440\u0430\u0431\u043E\u0442\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E ${n} \u0438\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0445 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432 \u0438\u0437 \u0441\u043F\u0438\u0441\u043A\u0430 \u043D\u0438\u0436\u0435.`,
+    reinitModeNoneChanged: "\u0418\u0437\u043C\u0435\u043D\u0451\u043D\u043D\u044B\u0445 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432 \u043D\u0435\u0442 \u2014 \u0438\u043D\u043A\u0440\u0435\u043C\u0435\u043D\u0442\u0430\u043B\u044C\u043D\u044B\u0439 re-init \u043D\u0435 \u0442\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044F.",
+    reinitModeMore: (k) => `\u2026 \u0435\u0449\u0451 +${k}`,
+    reinitModeFull: "\u041F\u043E\u043B\u043D\u044B\u0439",
+    reinitModeIncremental: (n) => `\u0418\u043D\u043A\u0440\u0435\u043C\u0435\u043D\u0442\u0430\u043B\u044C\u043D\u044B\u0439 (${n})`,
     fileErrorTitle: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u0438 \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u043A\u0435 \u0444\u0430\u0439\u043B\u0430",
     fileErrorSkip: "\u041F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C",
     fileErrorRetry: "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C",
@@ -27215,6 +27229,13 @@ Actualizando la configuraci\xF3n del dominio "${domainId}"...
     initConfirmBody: (files, folders) => `Se encontraron ${files} archivos .md en ${folders} carpeta(s). \xBFEjecutar init para analizar fuentes y crear p\xE1ginas wiki?`,
     reinitConfirmTitle: "Re-init \u2014 confirmar",
     reinitConfirmBody: (id, wikiFiles, srcFiles, srcCount) => `Dominio \xAB${id}\xBB: se borrar\xE1n ${wikiFiles} archivos wiki y se reconstruir\xE1n desde ${srcFiles} archivos md (${srcCount} rutas fuente). \xBFContinuar?`,
+    reinitModeTitle: "Re-init \u2014 elegir modo",
+    reinitModeFullDesc: (wikiFiles, srcCount) => `Completo: eliminar los ${wikiFiles} archivos wiki y reconstruir desde las ${srcCount} fuentes.`,
+    reinitModeIncrementalDesc: (n) => `Incremental: reprocesar solo las ${n} fuentes modificadas de la lista.`,
+    reinitModeNoneChanged: "Sin fuentes modificadas \u2014 re-init incremental innecesario.",
+    reinitModeMore: (k) => `\u2026 +${k} m\xE1s`,
+    reinitModeFull: "Completo",
+    reinitModeIncremental: (n) => `Incremental (${n})`,
     fileErrorTitle: "Error al procesar archivo",
     fileErrorSkip: "Saltar",
     fileErrorRetry: "Reintentar",
@@ -27285,6 +27306,37 @@ function resolveReasoningLang(reasoningLanguage, outputLanguage) {
     return resolveLang(outputLanguage);
   }
   return "en";
+}
+
+// src/incremental-sources.ts
+function computeChangedSources(input) {
+  const { sourceFiles, wikiPages } = input;
+  const changed = [];
+  for (const src of sourceFiles) {
+    const associated = wikiPages.filter((p) => p.sources.includes(src.stem));
+    if (associated.length === 0) {
+      changed.push(src.path);
+      continue;
+    }
+    if (src.mtime === null || associated.some((p) => p.mtime === null)) {
+      changed.push(src.path);
+      continue;
+    }
+    const oldestPage = Math.min(...associated.map((p) => p.mtime));
+    if (src.mtime > oldestPage) changed.push(src.path);
+  }
+  return { changed };
+}
+function parsePageSources(content) {
+  const fmMatch = /^---\n([\s\S]*?)\n---/.exec(content);
+  if (!fmMatch) return [];
+  const listMatch = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
+  if (!listMatch) return [];
+  return listMatch[1].split("\n").map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim()).filter(Boolean).map((t) => t.replace(/^["']|["']$/g, "").replace(/^\[\[|\]\]$/g, "").trim()).map((t) => t.split("/").pop().replace(/\.md$/, "")).filter(Boolean);
+}
+function capList(names, cap = 20) {
+  if (names.length <= cap) return { shown: names, overflow: 0 };
+  return { shown: names.slice(0, cap), overflow: names.length - cap };
 }
 
 // src/source-paths.ts
@@ -27959,6 +28011,47 @@ var IngestScopeModal = class extends import_obsidian2.Modal {
   pick(scope) {
     this.close();
     this.onChoice(scope);
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+var ReinitModeModal = class extends import_obsidian2.Modal {
+  constructor(app, plan, onChoice) {
+    super(app);
+    this.plan = plan;
+    this.onChoice = onChoice;
+  }
+  plan;
+  onChoice;
+  onOpen() {
+    const T = i18n().modal;
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: T.reinitModeTitle });
+    contentEl.createEl("p", { text: T.reinitModeFullDesc(this.plan.wikiFileCount, this.plan.totalSources) });
+    const n = this.plan.changed.length;
+    if (n > 0) {
+      contentEl.createEl("p", { text: T.reinitModeIncrementalDesc(n) });
+      const { shown, overflow } = capList(this.plan.changed.map((p) => p.split("/").pop() ?? p), 20);
+      const ul = contentEl.createEl("ul");
+      for (const name of shown) ul.createEl("li", { text: name });
+      if (overflow > 0) ul.createEl("li", { text: T.reinitModeMore(overflow) });
+    } else {
+      contentEl.createEl("p", { text: T.reinitModeNoneChanged });
+    }
+    const setting = new import_obsidian2.Setting(contentEl);
+    setting.addButton((b) => b.setButtonText(T.cancel).onClick(() => this.close()));
+    setting.addButton(
+      (b) => b.setButtonText(T.reinitModeFull).setWarning().onClick(() => this.pick("full"))
+    );
+    setting.addButton((b) => {
+      b.setButtonText(T.reinitModeIncremental(n)).setCta().onClick(() => this.pick("incremental"));
+      if (n === 0) b.setDisabled(true);
+    });
+  }
+  pick(mode) {
+    this.close();
+    this.onChoice(mode);
   }
   onClose() {
     this.contentEl.empty();
@@ -31688,27 +31781,20 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       return;
     }
     if (!entry) return;
-    const sourcePaths = entry.source_paths ?? [];
+    const resolved = entry;
+    const sourcePaths = resolved.source_paths ?? [];
     if (sourcePaths.length === 0) {
       new import_obsidian7.Notice(i18n().view.reinitNoSources);
       return;
     }
-    const T = i18n().modal;
-    const base = this.plugin.controller.cwdOrEmpty();
-    const toVaultRel = (p) => {
-      if (!base || !(0, import_path_browserify4.isAbsolute)(p)) return p;
-      const rel = (0, import_path_browserify4.relative)(base, p);
-      return rel.startsWith("..") ? p : rel;
-    };
-    const mdFiles = collectMdInPaths(this.app.vault, sourcePaths.map(toVaultRel));
-    const wikiFiles = collectMdInPaths(this.app.vault, [domainWikiFolder(entry.wiki_folder)]);
-    const body = T.reinitConfirmBody(entry.id, wikiFiles.length, mdFiles.length, sourcePaths.length);
-    new ConfirmModal(
-      this.app,
-      T.reinitConfirmTitle,
-      [body],
-      () => void this.plugin.controller.init(entry.id, false, sourcePaths, true)
-    ).open();
+    const plan = await this.plugin.controller.computeIncrementalPlan(resolved.id);
+    new ReinitModeModal(this.app, plan, (mode) => {
+      if (mode === "full") {
+        void this.plugin.controller.init(resolved.id, false, sourcePaths, true);
+      } else {
+        void this.plugin.controller.init(resolved.id, false, plan.changed, false, true);
+      }
+    }).open();
   }
   async openManageSources() {
     const domainId = this.domainSelect.value;
@@ -39364,6 +39450,48 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     const fixed = wlFixResult.fixed.get(p.path) ?? p.content;
     return { ...p, content: stripDeadLinks(fixed, knownStems) };
   });
+  const plannedDeletes = (parseResult.value.deletes ?? []).filter((d) => {
+    const hasTraversal = d.path.split("/").some((seg) => seg === ".." || seg === ".");
+    return !hasTraversal && validateArticlePath(d.path, wikiVaultPath);
+  });
+  const plannedDeletePaths = new Set(plannedDeletes.map((d) => d.path));
+  const plannedDeleteStems = new Set([...plannedDeletePaths].map((p) => p.split("/").pop().replace(/\.md$/, "")));
+  const plannedPagePaths = pages.map((p) => p.path);
+  if (pages.length > 0 || plannedDeletePaths.size > 0) {
+    const backlinkToday = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const normalizedSource = recoverSourceFrontmatter(sourceContent);
+    const isFirstTime = !hasFrontmatterField(normalizedSource, "wiki_added");
+    const existingArticles = parseWikiArticlesFromFm(normalizedSource).filter((link) => {
+      const stem = link.replace(/^\[\[/, "").replace(/\]\]$/, "");
+      return !plannedDeleteStems.has(stem);
+    });
+    const writtenLinks = plannedPagePaths.map((p) => `[[${p.split("/").pop().replace(/\.md$/, "")}]]`);
+    const mergedArticles = [.../* @__PURE__ */ new Set([...existingArticles, ...writtenLinks])];
+    const updatedSource = upsertRawFrontmatter(normalizedSource, {
+      wiki_added: isFirstTime ? backlinkToday : void 0,
+      wiki_updated: backlinkToday,
+      wiki_articles: mergedArticles
+    });
+    const { content: repairedSource, warnings: sourceWarnings } = validateAndRepairSourceFrontmatter(updatedSource);
+    const wikiFileStems = new Set(
+      [...existingPaths, ...plannedPagePaths].filter((p) => !plannedDeletePaths.has(p) && !p.endsWith("_index.md")).map((p) => p.split("/").pop().replace(/\.md$/, ""))
+    );
+    const { content: wikiArticlesFiltered, warnings: wikiArticlesWarnings } = stripInvalidWikiArticles(repairedSource, wikiFileStems);
+    const { content: filteredSource, warnings: relatedWarnings } = filterStaleWikiLinks(wikiArticlesFiltered, wikiFileStems, ["related"]);
+    const allSourceWarnings = [...sourceWarnings, ...wikiArticlesWarnings, ...relatedWarnings];
+    if (allSourceWarnings.length > 0) {
+      yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Source frontmatter repaired", details: allSourceWarnings };
+    }
+    yield { kind: "tool_use", name: "Update", input: { path: sourceVaultPath } };
+    try {
+      await vaultTools.write(sourceVaultPath, filteredSource);
+      yield { kind: "tool_result", ok: true, preview: `backlinks \u2192 ${sourceVaultPath}` };
+    } catch (e) {
+      yield { kind: "tool_result", ok: false, preview: `backlink write failed: ${e.message}` };
+    }
+    const parentPath = extractParentSourcePath(absSource, vaultRoot);
+    yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
+  }
   const written = [];
   const logEntries = [];
   const dedupOn = (opts.dedupOnIngest ?? false) && (opts.dedupThreshold ?? 0) > 0 && !!similarity;
@@ -39534,7 +39662,6 @@ ${page.content}`;
   const dedupMergedCount = logEntries.filter((e) => e.action === "MERGED").length;
   const resultText = buildIngestSummary(domain.id, sourceVaultPath, createdCount, updatedCount, mergedCount, dedupMergedCount, pages.length);
   yield { kind: "assistant_text", delta: resultText };
-  const deletedStems = new Set(deletedPaths.map((p) => p.split("/").pop().replace(/\.md$/, "")));
   if (written.length > 0 || deletedPaths.length > 0) {
     if (logEntries.length > 0) {
       try {
@@ -39547,45 +39674,6 @@ ${page.content}`;
       } catch {
       }
     }
-    const backlinkToday = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-    const normalizedSource = recoverSourceFrontmatter(sourceContent);
-    const isFirstTime = !hasFrontmatterField(normalizedSource, "wiki_added");
-    const existingArticles = parseWikiArticlesFromFm(normalizedSource).filter((link) => {
-      const stem = link.replace(/^\[\[/, "").replace(/\]\]$/, "");
-      return !deletedStems.has(stem);
-    });
-    const writtenLinks = written.map((p) => `[[${p.split("/").pop().replace(/\.md$/, "")}]]`);
-    const mergedArticles = [.../* @__PURE__ */ new Set([...existingArticles, ...writtenLinks])];
-    const updatedSource = upsertRawFrontmatter(normalizedSource, {
-      wiki_added: isFirstTime ? backlinkToday : void 0,
-      wiki_updated: backlinkToday,
-      wiki_articles: mergedArticles
-    });
-    const { content: repairedSource, warnings: sourceWarnings } = validateAndRepairSourceFrontmatter(updatedSource);
-    const wikiFileStems = new Set(
-      [...existingPaths, ...written].filter((p) => !deletedPaths.includes(p) && !p.endsWith("_index.md")).map((p) => p.split("/").pop().replace(/\.md$/, ""))
-    );
-    const { content: wikiArticlesFiltered, warnings: wikiArticlesWarnings } = stripInvalidWikiArticles(repairedSource, wikiFileStems);
-    const { content: filteredSource, warnings: relatedWarnings } = filterStaleWikiLinks(wikiArticlesFiltered, wikiFileStems, ["related"]);
-    const staleWarnings = [...wikiArticlesWarnings, ...relatedWarnings];
-    const allSourceWarnings = [...sourceWarnings, ...staleWarnings];
-    if (allSourceWarnings.length > 0) {
-      yield {
-        kind: "info_text",
-        icon: "\u26A0\uFE0F",
-        summary: "Source frontmatter repaired",
-        details: allSourceWarnings
-      };
-    }
-    yield { kind: "tool_use", name: "Update", input: { path: sourceVaultPath } };
-    try {
-      await vaultTools.write(sourceVaultPath, filteredSource);
-      yield { kind: "tool_result", ok: true, preview: `backlinks \u2192 ${sourceVaultPath}` };
-    } catch (e) {
-      yield { kind: "tool_result", ok: false, preview: `backlink write failed: ${e.message}` };
-    }
-    const parentPath = extractParentSourcePath(absSource, vaultRoot);
-    yield { kind: "source_path_added", domainId: domain.id, path: parentPath };
   }
   const delta = parseResult.value.entity_types_delta;
   if (delta?.length) {
@@ -41031,11 +41119,39 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
   const sourcesIdx = args.indexOf("--sources");
   const sourcePaths = sourcesIdx >= 0 ? args.slice(sourcesIdx + 1) : [];
   const force = args.includes("--force");
+  const incremental = args.includes("--incremental");
   if (!domainId) {
     yield { kind: "error", message: "init: domain id required" };
     return;
   }
   const existing = domains.find((d) => d.id === domainId);
+  if (incremental) {
+    if (!existing) {
+      yield { kind: "error", message: `incremental: domain not found: "${domainId}"` };
+      return;
+    }
+    if (!existing.entity_types?.length) {
+      yield { kind: "error", message: `incremental: domain "${domainId}" not initialised \u2014 run a full init/reinit first` };
+      return;
+    }
+    if (!sourcePaths.length) {
+      yield { kind: "result", durationMs: 0, text: `Domain "${domainId}": no changed sources to re-ingest.` };
+      return;
+    }
+    yield* runIncrementalReinit(
+      domainId,
+      sourcePaths,
+      vaultTools,
+      llm,
+      model,
+      domains,
+      signal,
+      opts,
+      onFileError,
+      similarity
+    );
+    return;
+  }
   if (force) {
     if (!existing) {
       yield { kind: "error", message: `force: domain not found: "${domainId}"` };
@@ -41342,6 +41458,74 @@ ${JSON.stringify(entry, null, 2)}
     durationMs: Date.now() - start,
     text: `Domain "${domainId}" initialised from ${toAnalyze.length} source files.`,
     outputTokens: outputTokens || void 0
+  };
+}
+async function* runIncrementalReinit(domainId, changedFiles, vaultTools, llm, model, domains, signal, opts, onFileError, similarity) {
+  const start = Date.now();
+  let currentDomain = domains.find((d) => d.id === domainId) ?? null;
+  if (!currentDomain) {
+    yield { kind: "error", message: `incremental: domain "${domainId}" missing` };
+    return;
+  }
+  yield { kind: "init_start", totalFiles: changedFiles.length };
+  let doneCount = 0;
+  for (let i = 0; i < changedFiles.length; i++) {
+    if (signal.aborted) return;
+    const file = changedFiles[i];
+    yield { kind: "file_start", file, index: i, total: changedFiles.length };
+    let retried = false;
+    let fileDone = false;
+    while (!fileDone) {
+      let caught = null;
+      try {
+        for await (const ev of runIngest(
+          [file],
+          vaultTools,
+          llm,
+          model,
+          [currentDomain],
+          vaultTools.vaultRoot,
+          signal,
+          opts,
+          similarity
+        )) {
+          yield ev;
+          if (ev.kind === "domain_updated" && ev.domainId === domainId) {
+            currentDomain = { ...currentDomain, ...ev.patch };
+          }
+        }
+        fileDone = true;
+      } catch (e) {
+        caught = e;
+      }
+      if (caught) {
+        if (caught.name === "AbortError" || signal.aborted) return;
+        const canRetry = !retried;
+        const choice = onFileError ? await onFileError(file, caught, canRetry) : "skip";
+        if (choice === "stop") return;
+        if (choice === "retry" && canRetry) {
+          retried = true;
+          continue;
+        }
+        fileDone = true;
+      }
+    }
+    if (signal.aborted) return;
+    const analyzed = new Set(currentDomain.analyzed_sources ?? []);
+    if (!analyzed.has(file)) {
+      analyzed.add(file);
+      currentDomain = { ...currentDomain, analyzed_sources: [...analyzed] };
+      yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
+      yield { kind: "domain_updated", domainId, patch: { analyzed_sources: currentDomain.analyzed_sources } };
+      yield { kind: "tool_result", ok: true };
+    }
+    doneCount++;
+    yield { kind: "file_done", file };
+  }
+  yield {
+    kind: "result",
+    durationMs: Date.now() - start,
+    text: `Domain "${domainId}": re-ingested ${doneCount} of ${changedFiles.length} changed source(s).`
   };
 }
 async function wipeDomainFolder(vaultTools, wikiFolder) {
@@ -42630,6 +42814,12 @@ var VaultTools = class {
   }
   async exists(vaultPath) {
     return this.adapter.exists(vaultPath);
+  }
+  /** Modification time in epoch ms, or null when unavailable (missing file or no stat support). */
+  async mtime(vaultPath) {
+    if (!this.adapter.stat) return null;
+    const s = await this.adapter.stat(vaultPath);
+    return s ? s.mtime : null;
   }
   async readBinary(vaultPath) {
     if (!this.adapter.readBinary) throw new Error("readBinary not supported by this adapter");
@@ -50305,12 +50495,13 @@ var WikiController = class {
     });
     this.activeView()?.finishChat({ role: "assistant", content: finalText }, status !== "done");
   }
-  async init(domain, dryRun, sourcePaths, force) {
+  async init(domain, dryRun, sourcePaths, force, incremental) {
     const args = [domain];
     if (dryRun) args.push("--dry-run");
     if (force) args.push("--force");
+    if (incremental) args.push("--incremental");
     if (sourcePaths?.length) args.push("--sources", ...sourcePaths);
-    const onFileError = sourcePaths?.length ? (file, err, canRetry) => {
+    const onFileError = sourcePaths?.length || incremental ? (file, err, canRetry) => {
       const modal = new FileErrorModal(this.app, file, err, canRetry);
       modal.open();
       return modal.result;
@@ -50337,6 +50528,52 @@ var WikiController = class {
       }
       throw e;
     }
+  }
+  /**
+   * Compute the incremental re-init plan: which source files are newer than (or
+   * not yet reflected by) their wiki pages. Pure decision is delegated to
+   * computeChangedSources; this only gathers mtimes + wiki_sources from the vault.
+   */
+  async computeIncrementalPlan(domainId) {
+    const domains = await this.loadDomains();
+    const entry = domains.find((d) => d.id === domainId);
+    if (!entry) return { changed: [], totalSources: 0, wikiFileCount: 0 };
+    const base = this.cwdOrEmpty();
+    const vaultTools = new VaultTools(
+      this.app.vault.adapter,
+      base
+    );
+    const toVaultRel = (p) => {
+      if (!base || !p.startsWith("/")) return p;
+      return p.startsWith(base) ? p.slice(base.length).replace(/^\//, "") : p;
+    };
+    const sourceTFiles = collectMdInPaths(this.app.vault, (entry.source_paths ?? []).map(toVaultRel));
+    const seen = new Set(sourceTFiles.map((f) => f.path));
+    for (const sp of (entry.source_paths ?? []).map(toVaultRel)) {
+      if (sp.endsWith(".md") && !seen.has(sp)) {
+        const tf = this.app.vault.getFileByPath(sp);
+        if (tf) {
+          sourceTFiles.push(tf);
+          seen.add(sp);
+        }
+      }
+    }
+    const sourceFiles = [];
+    for (const f of sourceTFiles) {
+      sourceFiles.push({ stem: f.basename, path: f.path, mtime: await vaultTools.mtime(f.path) });
+    }
+    const wikiTFiles = collectMdInPaths(this.app.vault, [domainWikiFolder(entry.wiki_folder)]).filter((f) => !f.path.includes("/_config/"));
+    const wikiPages = [];
+    for (const f of wikiTFiles) {
+      let content = "";
+      try {
+        content = await this.app.vault.adapter.read(f.path);
+      } catch {
+      }
+      wikiPages.push({ path: f.path, mtime: await vaultTools.mtime(f.path), sources: parsePageSources(content) });
+    }
+    const { changed } = computeChangedSources({ sourceFiles, wikiPages });
+    return { changed, totalSources: sourceFiles.length, wikiFileCount: wikiTFiles.length };
   }
   async registerDomain(input) {
     const id = input.id.trim();

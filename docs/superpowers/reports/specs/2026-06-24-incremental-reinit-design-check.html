@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка спецификации — incremental-reinit (2026-06-24)</title>
+<style>
+:root[data-theme="dark"]{
+  --bg:#0f1419; --panel:#161b22; --panel2:#1c222b; --border:#2b3340;
+  --fg:#e6edf3; --muted:#8b98a5; --accent:#4ea1ff; --accent2:#7c5cff;
+  --ok:#3fb950; --warn:#d29922; --crit:#f85149; --info:#58a6ff;
+  --node:#1c222b; --nodeb:#3a4658; --edge:#5a6b80;
+}
+:root[data-theme="light"]{
+  --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f6; --border:#d0d7de;
+  --fg:#1f2328; --muted:#636c76; --accent:#0969da; --accent2:#6639ba;
+  --ok:#1a7f37; --warn:#9a6700; --crit:#cf222e; --info:#0969da;
+  --node:#ffffff; --nodeb:#c2cbd6; --edge:#9aa7b6;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  line-height:1.55;padding:0 0 4rem}
+header{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--border);
+  padding:1rem 1.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+header h1{font-size:1.15rem;margin:0;flex:1 1 auto}
+.hash{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;color:var(--muted)}
+main{max-width:1100px;margin:0 auto;padding:1.5rem}
+section{background:var(--panel);border:1px solid var(--border);border-radius:10px;
+  padding:1.2rem 1.4rem;margin:1.2rem 0}
+h2{font-size:1.05rem;margin:.1rem 0 1rem;border-left:3px solid var(--accent);padding-left:.6rem}
+h3{font-size:.92rem;color:var(--muted);margin:1.2rem 0 .5rem;text-transform:uppercase;letter-spacing:.04em}
+table{width:100%;border-collapse:collapse;font-size:.85rem;margin:.4rem 0}
+th,td{border:1px solid var(--border);padding:.5rem .6rem;text-align:left;vertical-align:top}
+th{background:var(--panel2);font-weight:600}
+tbody tr:nth-child(even){background:var(--panel2)}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82em}
+.badge{display:inline-block;padding:.1rem .5rem;border-radius:999px;font-size:.72rem;font-weight:700;
+  border:1px solid transparent}
+.b-pass{color:var(--ok);border-color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
+.b-prog{color:var(--warn);border-color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}
+.b-fixed{color:var(--ok);border-color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
+.b-crit{color:var(--crit);border-color:var(--crit);background:color-mix(in srgb,var(--crit) 14%,transparent)}
+.b-warn{color:var(--warn);border-color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}
+.b-info{color:var(--info);border-color:var(--info);background:color-mix(in srgb,var(--info) 14%,transparent)}
+.verdict{font-size:1.05rem;font-weight:700;padding:.7rem 1rem;border-radius:8px;
+  background:color-mix(in srgb,var(--ok) 12%,transparent);border:1px solid var(--ok);color:var(--ok)}
+.note{background:var(--panel2);border-left:3px solid var(--accent2);padding:.6rem .9rem;border-radius:0 6px 6px 0;
+  font-size:.85rem;margin:.6rem 0}
+.toggle{cursor:pointer;background:var(--panel2);color:var(--fg);border:1px solid var(--border);
+  border-radius:999px;padding:.35rem .9rem;font-size:.8rem}
+.summary-grid{display:flex;gap:1rem;flex-wrap:wrap;margin:.5rem 0 1rem}
+.stat{flex:1 1 130px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;
+  padding:.7rem .9rem;text-align:center}
+.stat .num{font-size:1.6rem;font-weight:800}
+.stat .lbl{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.flow{display:flex;flex-direction:column;gap:.5rem;font-size:.82rem}
+.fnode{background:var(--node);border:1px solid var(--nodeb);border-radius:8px;padding:.55rem .8rem}
+.fnode .t{font-weight:700}
+.fnode .s{color:var(--muted);font-size:.78rem}
+.farrow{color:var(--muted);text-align:center;font-size:.9rem}
+.fbranch{display:flex;gap:.8rem;flex-wrap:wrap}
+.fbranch>div{flex:1 1 280px}
+.unchanged{border-style:dashed}
+figure{margin:0}
+figcaption{font-size:.78rem;color:var(--muted);margin-top:.4rem;text-align:center}
+.phase-row td:first-child{font-weight:600}
+.fix{color:var(--muted);font-style:italic}
+.was{text-decoration:line-through;color:var(--muted)}
+svg{max-width:100%;height:auto;background:var(--panel2);border:1px solid var(--border);border-radius:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Проверка спецификации — incremental-reinit</h1>
+  <span class="hash">2026-06-24 · spec_hash 810e1c64b771bd1f · prev f454a452dbe672b7</span>
+  <button class="toggle" id="themeBtn" type="button">🌓 Тема</button>
+</header>
+<main>
+
+<section>
+  <h2>Итоговый вердикт (перезапуск после inline-фиксов)</h2>
+  <div class="summary-grid">
+    <div class="stat"><div class="num" style="color:var(--crit)">0</div><div class="lbl">CRITICAL open</div></div>
+    <div class="stat"><div class="num" style="color:var(--warn)">0</div><div class="lbl">WARNING open</div></div>
+    <div class="stat"><div class="num" style="color:var(--info)">1</div><div class="lbl">INFO open (ack)</div></div>
+    <div class="stat"><div class="num" style="color:var(--ok)">4 / 4</div><div class="lbl">фазы passed</div></div>
+  </div>
+  <p class="verdict">OK — все 4 фазы passed; критических и WARNING open нет. F-001 и F-002 устранены inline; F-003 (INFO) acknowledged и не блокирует.</p>
+  <p class="note">Цепочка IDD: <code>intent</code> →
+    <code>docs/superpowers/intents/2026-06-24-incremental-reinit-intent.md</code> &nbsp;→&nbsp;
+    <code>spec</code> → <code>docs/superpowers/specs/2026-06-24-incremental-reinit-design.md</code><br>
+    <b>spec_hash:</b> <code>810e1c64b771bd1f</code> (был <code>f454a452dbe672b7</code> — пересчитан после правок §Component 3 и §Component 6).</p>
+</section>
+
+<section>
+  <h2>Блок 1 — Резюме спецификации</h2>
+  <h3>Требования по секциям</h3>
+  <table>
+    <thead><tr><th>Секция</th><th>Требование</th></tr></thead>
+    <tbody>
+      <tr><td>Objective</td><td>Добавить инкрементальный режим reinit; на старте пользователь выбирает Full или Incremental; Incremental переингестит только изменённые источники после подтверждения списка.</td></tr>
+      <tr><td>Component 1<br><span class="mono">vault-tools.ts</span></td><td>Новый accessor mtime — <code>VaultAdapter.stat?(path)</code> и <code>VaultTools.mtime(vaultPath)</code>; фазовый код читает mtime только через <code>VaultTools</code>, не импортирует <code>obsidian</code>.</td></tr>
+      <tr><td>Component 2<br><span class="mono">incremental-sources.ts</span> (новый, pure)</td><td><code>computeChangedSources</code>: associated пуст → include; mtime недоступен → include (trust bias); <code>mtime(S) &gt; min(mtime associated pages)</code> → include; иначе skip. Строгое <code>&gt;</code> и <code>min</code> — load-bearing.</td></tr>
+      <tr><td>Component 2a</td><td><code>wiki_sources</code> используется только для структурного отображения source↔page, не как сигнал свежести; свежесть — только по mtime.</td></tr>
+      <tr><td>Component 3<br><span class="mono">modals.ts</span></td><td>Новый <code>ReinitModeModal</code>: кнопки Full / Incremental(N) / Cancel; Incremental disabled при N=0; список изменённых basenames — <b>первые 20, «+K more» когда список длиннее 20</b>.</td></tr>
+      <tr><td>Component 4<br><span class="mono">view.ts / controller.ts</span></td><td><code>computeIncrementalPlan(domainId)</code> → {changed, totalSources, wikiFileCount}; <code>init(...)</code> получает <code>incremental?:boolean</code> → добавляет <code>--incremental</code>; <code>runReinit</code> открывает модал и диспетчеризует.</td></tr>
+      <tr><td>Component 5<br><span class="mono">phases/init.ts</span></td><td>Новая ветка <code>--incremental</code> в <code>runInit</code> (до --force/--sources, взаимоисключающая с --force); без wipe/bootstrap/reset; цикл <code>runIngest</code> по changed; не рефильтрует по analyzed_sources; новые источники дописываются.</td></tr>
+      <tr><td>Component 6<br><span class="mono">phases/ingest.ts</span><br>HUMAN CHECKPOINT</td><td>A2 reorder: писать source <em>до</em> страниц, чтобы wiki-страницы были не старше источника (инвариант mtime); <code>existingArticles</code> через <code>parseWikiArticlesFromFm</code>; backlinks из planned-набора; trade-offs (page write fail, dedup-merge) self-healing.</td></tr>
+      <tr><td>Edge cases</td><td>N=0 disabled; новый источник без страницы → include; страницы удалены вручную → include; shared page → min+strict&gt; держит неизменённый источник неотмеченным; barren source (0 страниц) → всегда include (известное ограничение); mobile — desktop-only.</td></tr>
+      <tr><td>Verification</td><td>unit (computeChangedSources out-of-vault), integration (node fs, A2 write order, mtime(page)≥mtime(source)), manual e2e (homelab LLM).</td></tr>
+      <tr><td>i18n</td><td>Новые ключи ru/en/es для <code>ReinitModeModal</code>.</td></tr>
+      <tr><td>Out of scope</td><td>Персистентные timestamps; изменения ingest помимо A2; умная переингест barren; mobile.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Success criteria (из intent)</h3>
+  <table>
+    <thead><tr><th>#</th><th>Критерий</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>На старте reinit пользователь выбирает Full или Incremental.</td></tr>
+      <tr><td>2</td><td>Incremental показывает диалог только с изменёнными источниками + confirm; кнопка disabled при пустом списке.</td></tr>
+      <tr><td>3</td><td>На confirm ingest идёт последовательно только по списку; нетронутые не переингестятся.</td></tr>
+      <tr><td>4</td><td>Новый источник (в source_paths, без страницы) появляется и ингестится.</td></tr>
+      <tr><td>5</td><td>Full reinit (--force) вывод не меняется (страницы, _index.md, domain entry идентичны).</td></tr>
+      <tr><td>6</td><td>Список изменённых — строгое подмножество всех источников.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Блок 2 — Схемы решения и зависимостей</h2>
+
+  <h3>Схема решения (control / data flow)</h3>
+  <figure>
+  <div class="flow">
+    <div class="fnode"><div class="t">reinit click</div><div class="s mono">src/view.ts#runReinit</div></div>
+    <div class="farrow">▼</div>
+    <div class="fnode"><div class="t">controller.computeIncrementalPlan(domainId)</div><div class="s">→ { changed[], totalSources, wikiFileCount }</div></div>
+    <div class="farrow">▼</div>
+    <div class="fnode"><div class="t">ReinitModeModal</div><div class="s mono">src/modals.ts · Full | Incremental(N) | Cancel</div></div>
+    <div class="farrow">▼ выбор</div>
+    <div class="fbranch">
+      <div class="fnode unchanged"><div class="t">Full</div><div class="s">controller.init(id,false,sources,force=<b>true</b>) — путь без изменений</div></div>
+      <div class="fnode"><div class="t">Incremental</div><div class="s">controller.init(id,false,changed,force=false,<b>incremental=true</b>)</div></div>
+    </div>
+    <div class="farrow">▼ incremental</div>
+    <div class="fnode"><div class="t">runInit '--incremental'</div><div class="s mono">src/phases/init.ts — loop runIngest(file) over changed; no wipe / bootstrap / reset</div></div>
+    <div class="farrow">▼ инвариант</div>
+    <div class="fnode"><div class="t">A2 reorder</div><div class="s mono">src/phases/ingest.ts — write source ПЕРЕД page-write loop → mtime(page) ≥ mtime(source)</div></div>
+  </div>
+  <figcaption>Зелёный пунктир = неизменённый путь Full reinit. Pure-модуль <span class="mono">incremental-sources.ts</span> питается mtime из <span class="mono">VaultTools.mtime</span> и <span class="mono">wiki_sources</span> из <span class="mono">parseWikiSources</span>.</figcaption>
+  </figure>
+
+  <h3>Граф зависимостей (A → B = «A зависит от B»)</h3>
+  <figure>
+  <svg viewBox="0 0 760 470" role="img" aria-label="Граф зависимостей компонентов">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/>
+      </marker>
+      <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-opacity="0.25"/>
+      </filter>
+    </defs>
+    <style>
+      .gn rect{fill:var(--node);stroke:var(--nodeb);stroke-width:1.3;filter:url(#ds)}
+      .gn text{fill:var(--fg);font-size:12px;font-family:ui-monospace,Menlo,monospace}
+      .ge{stroke:var(--edge);stroke-width:1.5;fill:none;marker-end:url(#arrow)}
+      .pure rect{stroke:var(--ok);stroke-dasharray:4 3}
+    </style>
+    <path class="ge" d="M140,60 L140,120"/>
+    <path class="ge" d="M180,48 C340,40 470,70 470,118"/>
+    <path class="ge" d="M120,168 C90,210 80,230 80,258"/>
+    <path class="ge" d="M160,168 C230,210 280,230 300,258"/>
+    <path class="ge" d="M180,160 C380,200 520,225 545,258"/>
+    <path class="ge" d="M140,168 L140,318"/>
+    <path class="ge" d="M180,348 C320,360 430,360 470,348"/>
+    <path class="ge" d="M100,318 C70,300 70,300 75,290"/>
+    <path class="ge" d="M340,290 C420,320 480,340 510,360" stroke-dasharray="3 3"/>
+    <path class="ge" d="M520,150 C610,170 650,200 655,258"/>
+    <g class="gn"><rect x="80" y="22" width="120" height="34" rx="6"/><text x="98" y="44">view.ts</text></g>
+    <g class="gn"><rect x="70" y="120" width="150" height="44" rx="6"/><text x="86" y="140">controller.ts</text><text x="86" y="156" font-size="10">init / dispatch</text></g>
+    <g class="gn"><rect x="410" y="118" width="120" height="34" rx="6"/><text x="430" y="140">modals.ts</text></g>
+    <g class="gn pure"><rect x="20" y="258" width="150" height="44" rx="6"/><text x="30" y="278">incremental-</text><text x="30" y="294">sources.ts · pure</text></g>
+    <g class="gn"><rect x="248" y="258" width="120" height="34" rx="6"/><text x="262" y="280">vault-tools.ts</text></g>
+    <g class="gn"><rect x="500" y="258" width="130" height="34" rx="6"/><text x="510" y="280">vault-walk.ts</text></g>
+    <g class="gn"><rect x="70" y="318" width="150" height="34" rx="6"/><text x="84" y="340">phases/init.ts</text></g>
+    <g class="gn"><rect x="460" y="318" width="140" height="34" rx="6"/><text x="476" y="340">phases/ingest.ts</text></g>
+    <g class="gn"><rect x="610" y="258" width="110" height="34" rx="6"/><text x="628" y="280">i18n.ts</text></g>
+    <g class="gn"><rect x="450" y="350" width="180" height="36" rx="6"/><text x="462" y="372" font-size="10">Obsidian DataAdapter.stat</text></g>
+  </svg>
+  <figcaption>Циклов нет — граф ацикличный (DAG). <span class="mono">incremental-sources.ts</span> (зелёный пунктир) — чистый модуль без исходящих зависимостей.</figcaption>
+  </figure>
+
+  <h3>Карта покрытия (задача intent → требование(я) спеки)</h3>
+  <table>
+    <thead><tr><th>Задача / критерий intent</th><th>Покрывающее требование спеки</th></tr></thead>
+    <tbody>
+      <tr><td>Выбор Full/Incremental на старте</td><td>Component 3 (ReinitModeModal), Component 4 (runReinit)</td></tr>
+      <tr><td>Диалог только изменённых + confirm; disabled при пустом</td><td>Component 3, Edge case N=0</td></tr>
+      <tr><td>Ingest только по списку, нетронутые не трогаются</td><td>Component 5 (--incremental branch)</td></tr>
+      <tr><td>Новый источник без страницы появляется и ингестится</td><td>Component 2 (associated пуст → include), Component 5, Edge cases</td></tr>
+      <tr><td>Full reinit byte-for-byte unchanged</td><td>Component 5 (no wipe/reset; full путь не тронут), Component 6 (Observable-behavior delta — reconcile)</td></tr>
+      <tr><td>Список — строгое подмножество (не схлопывается в full)</td><td>Component 2 (strict&gt;/min), Component 6 (mtime invariant A2)</td></tr>
+      <tr><td>mtime invariant / HUMAN CHECKPOINT</td><td>Component 6 (A2 reorder)</td></tr>
+      <tr><td>VaultTools mtime, без import obsidian в фазах</td><td>Component 1</td></tr>
+      <tr><td>Запрет frontmatter как источника свежести</td><td>Component 2a (wiki_sources только структурно)</td></tr>
+      <tr><td>Нет персистентных timestamps</td><td>Out of scope</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Блок 3 — Результаты проверки</h2>
+
+  <h3>Статусы фаз</h3>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th><th>Комментарий</th></tr></thead>
+    <tbody>
+      <tr class="phase-row"><td>structure</td><td><span class="badge b-pass">passed</span></td><td>Нет плейсхолдеров; нумерация Component 1–6 непрерывна; дублей заголовков нет; intent-ссылка и cited-файлы резолвятся.</td></tr>
+      <tr class="phase-row"><td>coverage</td><td><span class="badge b-pass">passed</span></td><td>Все 6 Success criteria + hard-constraints intent покрыты; «лишних» требований нет.</td></tr>
+      <tr class="phase-row"><td>clarity</td><td><span class="badge b-pass">passed</span></td><td>F-002 устранён — капа списка теперь конкретная (первые 20). WARNING/CRITICAL open не осталось.</td></tr>
+      <tr class="phase-row"><td>consistency</td><td><span class="badge b-pass">passed</span></td><td>Внутренних противоречий нет; расхождение «byte-for-byte» явно согласовано (F-003).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Findings</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono">F-001</td><td><span class="badge b-info">INFO</span></td>
+        <td>Component 6 (A2 reorder)</td>
+        <td>Спека ссылалась на <span class="was">parseWikiArticles</span>; исправлено на <code>parseWikiArticlesFromFm</code> (<span class="mono">src/utils/raw-frontmatter.ts</span>).</td>
+        <td><span class="badge b-fixed">fixed · 2026-06-24</span></td>
+      </tr>
+      <tr>
+        <td class="mono">F-002</td><td><span class="badge b-warn">WARNING</span></td>
+        <td>Component 3 (ReinitModeModal)</td>
+        <td>Капа списка была иллюстративной (<span class="was">«~20»</span>); исправлено на конкретную: первые 20, «+K more» когда список длиннее 20 — DoD теперь тестируемый.</td>
+        <td><span class="badge b-fixed">fixed · 2026-06-24</span></td>
+      </tr>
+      <tr>
+        <td class="mono">F-003</td><td><span class="badge b-info">INFO</span></td>
+        <td>Observable-behavior delta</td>
+        <td>Intent требует «byte-for-byte unchanged»; спека сужает до «produced artifacts (pages/index/domain) идентичны, не event/IO trace». Намеренно, явно согласовано, HUMAN CHECKPOINT — зафиксировано для трассируемости, не противоречие.</td>
+        <td><span class="badge b-info">open · acknowledged</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Сводка</h3>
+  <div class="summary-grid">
+    <div class="stat"><div class="num" style="color:var(--crit)">0</div><div class="lbl">CRITICAL open</div></div>
+    <div class="stat"><div class="num" style="color:var(--warn)">0</div><div class="lbl">WARNING open</div></div>
+    <div class="stat"><div class="num" style="color:var(--info)">1</div><div class="lbl">INFO open (ack)</div></div>
+  </div>
+  <p class="verdict">Финальный вердикт: OK — все 4 фазы passed; критических и WARNING open нет. F-003 (INFO) acknowledged, не блокирует переход к плану.</p>
+</section>
+
+</main>
+<script>
+(function(){
+  var root=document.documentElement;
+  var saved=null;
+  try{saved=localStorage.getItem("idd-theme");}catch(e){}
+  root.setAttribute("data-theme", saved||"dark");
+  document.getElementById("themeBtn").addEventListener("click",function(){
+    var cur=root.getAttribute("data-theme")==="dark"?"light":"dark";
+    root.setAttribute("data-theme",cur);
+    try{localStorage.setItem("idd-theme",cur);}catch(e){}
+  });
+})();
+</script>
+</body>
+</html>
