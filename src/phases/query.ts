@@ -18,7 +18,8 @@ import { parseIndexAnnotations } from "../wiki-index";
 import type { PageSimilarityService } from "../page-similarity";
 import { seedPassesGate } from "../retrieval-diag";
 import type { RetrievalMode, SeedFallbackReason } from "../retrieval-diag";
-import { extractAnswerLinks, findBrokenLinks, annotateBroken, rewriteWithValidLinks } from "./query-link-validator";
+import { extractAnswerLinks, findBrokenLinks, annotateBroken } from "./query-link-validator";
+import { resolveLink } from "./link-resolver";
 
 const META_FILES = ["_index.md", "_log.md"];
 
@@ -228,36 +229,37 @@ export async function* runQuery(
 
     if (!skipValidation) {
       const links = extractAnswerLinks(answer);
-      const brokenInitial = findBrokenLinks(links, knownStems);
+      const broken = findBrokenLinks(links, knownStems);
       yield {
         kind: "tool_result",
-        ok: brokenInitial.length === 0,
-        preview: brokenInitial.length === 0 ? "all valid" : `${brokenInitial.length} broken`,
+        ok: broken.length === 0,
+        preview: broken.length === 0 ? "all valid" : `${broken.length} broken`,
       };
 
-      if (brokenInitial.length > 0 && wikiLinkValidationRetries > 0) {
-        yield { kind: "tool_use", name: "FixingLinks", input: { broken: brokenInitial.length } };
-        const contextStems = [...selectedIds];
-        try {
-          const r = await rewriteWithValidLinks(llm, model, question, answer, brokenInitial, contextStems, opts, signal);
-          outputTokens += r.outputTokens;
-          const retryLinks = extractAnswerLinks(r.text);
-          const brokenFinal = findBrokenLinks(retryLinks, knownStems);
-          if (brokenFinal.length === 0) {
-            answer = r.text;
-            yield { kind: "tool_result", ok: true, preview: "fixed" };
+      if (broken.length > 0) {
+        yield { kind: "tool_use", name: "FixingLinks", input: { broken: broken.length } };
+
+        // Deterministic resolve first — no LLM.
+        const candidates = [...new Set([...selectedIds, ...knownStems])];
+        const resolvedPairs: string[] = [];
+        const stripped: string[] = [];
+        for (const b of broken) {
+          const r = resolveLink(b, candidates);
+          if (r.kind === "resolved" && r.stem !== b) {
+            answer = answer.split(`[[${b}]]`).join(`[[${r.stem}]]`);
+            resolvedPairs.push(`${b}→${r.stem}`);
           } else {
-            answer = annotateBroken(r.text, new Set(brokenFinal));
-            yield { kind: "tool_result", ok: false, preview: `${brokenFinal.length} annotated` };
+            stripped.push(b);
           }
-        } catch (e) {
-          if (signal.aborted || (e as Error).name === "AbortError") return;
-          answer = annotateBroken(answer, new Set(brokenInitial));
-          yield { kind: "tool_result", ok: false, preview: "retry failed → annotated" };
         }
-        yield { kind: "assistant_replace", text: answer };
-      } else if (brokenInitial.length > 0) {
-        answer = annotateBroken(answer, new Set(brokenInitial));
+
+        // Anything not deterministically resolved is annotated (LLM fallback: later task).
+        if (stripped.length > 0) answer = annotateBroken(answer, new Set(stripped));
+
+        const parts: string[] = [];
+        if (resolvedPairs.length) parts.push(`resolved ${resolvedPairs.length} (det): ${resolvedPairs.join(", ")}`);
+        if (stripped.length) parts.push(`annotated ${stripped.length}: ${stripped.join(", ")}`);
+        yield { kind: "tool_result", ok: stripped.length === 0, preview: parts.join("; ") };
         yield { kind: "assistant_replace", text: answer };
       }
     }
