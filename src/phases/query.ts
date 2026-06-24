@@ -4,7 +4,7 @@ import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas, extractUsage, wrapStreamWithStats, buildLlmCallStatsEvent } from "./llm-utils";
 import { parseWithRetry } from "./parse-with-retry";
-import { SeedsSchema } from "./zod-schemas";
+import { SeedsSchema, makeQueryAnswerSchema } from "./zod-schemas";
 import queryTemplate from "../../prompts/query.md";
 import querySeedsTemplate from "../../prompts/query-seeds.md";
 import { render } from "./template";
@@ -262,11 +262,45 @@ export async function* runQuery(
           }
         }
 
-        // Anything not deterministically resolved is annotated (LLM fallback: later task).
+        // Unresolved stems → one structured LLM repair pass (zod-validated), then annotate.
+        let llmFixed = 0;
+        if (stripped.length > 0 && wikiLinkValidationRetries > 0) {
+          const validList = [...new Set([...selectedIds, ...knownStems])]
+            .filter((s) => s.startsWith("wiki_")).join(", ");
+          const baseMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+            { role: "system", content:
+              `Rewrite the answer so every WikiLink points to a valid stem. ` +
+              `Broken stems: ${stripped.join(", ")}. Valid stems: ${validList}. ` +
+              `Return JSON {reasoning, answer_markdown, citations}.` },
+            { role: "user", content: `Question: ${question}\n\nAnswer to fix:\n${answer}` },
+          ];
+          try {
+            const r = await parseWithRetry({
+              llm, model, baseMessages,
+              opts: { ...opts, jsonMode: "json_object", thinkingBudgetTokens: undefined },
+              schema: makeQueryAnswerSchema(knownStems),
+              maxRetries: wikiLinkValidationRetries,
+              callSite: "query.answer",
+              signal,
+              onEvent: () => {},
+            });
+            outputTokens += r.outputTokens;
+            const stillBroken = findBrokenLinks(extractAnswerLinks(r.value.answer_markdown), knownStems);
+            if (stillBroken.length === 0) {
+              answer = r.value.answer_markdown;
+              llmFixed = stripped.length;
+              stripped.length = 0;
+            }
+          } catch (e) {
+            if (signal.aborted || (e as Error).name === "AbortError") return;
+            // fall through to annotation
+          }
+        }
         if (stripped.length > 0) answer = annotateBroken(answer, new Set(stripped));
 
         const parts: string[] = [];
         if (resolvedPairs.length) parts.push(`resolved ${resolvedPairs.length} (det): ${resolvedPairs.join(", ")}`);
+        if (llmFixed) parts.push(`llm-fixed ${llmFixed}`);
         if (stripped.length) parts.push(`annotated ${stripped.length}: ${stripped.join(", ")}`);
         yield { kind: "tool_result", ok: stripped.length === 0, preview: parts.join("; ") };
         yield { kind: "assistant_replace", text: answer };

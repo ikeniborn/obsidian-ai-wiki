@@ -15,7 +15,7 @@ import repairJson from "../../prompts/repair-json.md";
 export type CallSite =
   | "init.bootstrap"
   | "lint.patch" | "lint.fix" | "lint-chat.fix"
-  | "query.seeds"
+  | "query.seeds" | "query.answer"
   | "ingest.entities"
   | "ingest.pages"
   | "ingest.merge"
