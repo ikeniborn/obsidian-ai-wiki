@@ -1,5 +1,5 @@
 import { App, ItemView, Modal, WorkspaceLeaf, MarkdownRenderer, Component, Notice, Platform, setIcon } from "obsidian";
-import { AddDomainModal, BusyCloseModal, ConfirmModal, ManageSourcesModal, IngestScopeModal, LintOptionsModal } from "./modals";
+import { AddDomainModal, BusyCloseModal, ConfirmModal, ManageSourcesModal, IngestScopeModal, LintOptionsModal, ReinitModeModal } from "./modals";
 import type LlmWikiPlugin from "./main";
 import type { ChatMessage, RunEvent, RunHistoryEntry, WikiOperation } from "./types";
 import type { DomainEntry } from "./domain";
@@ -483,30 +483,22 @@ export class LlmWikiView extends ItemView {
       return;
     }
     if (!entry) return;
+    const resolved = entry;
 
-    const sourcePaths = entry.source_paths ?? [];
+    const sourcePaths = resolved.source_paths ?? [];
     if (sourcePaths.length === 0) {
       new Notice(i18n().view.reinitNoSources);
       return;
     }
 
-    const T = i18n().modal;
-    const base = this.plugin.controller.cwdOrEmpty();
-    const toVaultRel = (p: string): string => {
-      if (!base || !isAbsolute(p)) return p;
-      const rel = relative(base, p);
-      return rel.startsWith("..") ? p : rel;
-    };
-    const mdFiles = collectMdInPaths(this.app.vault, sourcePaths.map(toVaultRel));
-    const wikiFiles = collectMdInPaths(this.app.vault, [domainWikiFolder(entry.wiki_folder)]);
-    const body = T.reinitConfirmBody(entry.id, wikiFiles.length, mdFiles.length, sourcePaths.length);
-
-    new ConfirmModal(
-      this.app,
-      T.reinitConfirmTitle,
-      [body],
-      () => void this.plugin.controller.init(entry.id, false, sourcePaths, true),
-    ).open();
+    const plan = await this.plugin.controller.computeIncrementalPlan(resolved.id);
+    new ReinitModeModal(this.app, plan, (mode) => {
+      if (mode === "full") {
+        void this.plugin.controller.init(resolved.id, false, sourcePaths, true);
+      } else {
+        void this.plugin.controller.init(resolved.id, false, plan.changed, false, true);
+      }
+    }).open();
   }
 
   private async openManageSources(): Promise<void> {
