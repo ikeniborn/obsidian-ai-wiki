@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка плана: incremental-reinit (2026-06-24)</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --info:#1e88e5; --info-2:#1565c0;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --info:#89dceb; --info-2:#74c7ec;
+  --shadow:rgba(0,0,0,.45);
+}
+*{box-sizing:border-box}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1140px;
+  font:16px/1.55 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+.theme-btn{
+  position:sticky; top:.5rem; float:right; z-index:5;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface); box-shadow:0 1px 4px var(--shadow);
+}
+h1{font-size:1.7rem; margin:.2rem 0 .3rem; color:var(--accent-2)}
+h2{font-size:1.25rem; margin:2rem 0 .6rem; padding-bottom:.3rem; border-bottom:2px solid var(--border); color:var(--accent-2)}
+h3{font-size:1.05rem; margin:1.2rem 0 .4rem; color:var(--accent)}
+.sub{color:var(--muted); margin:.1rem 0 1rem}
+.verdict{display:inline-block; font-weight:700; padding:.3rem .8rem; border-radius:8px; font-size:1.1rem}
+.verdict.ok{background:color-mix(in srgb,var(--ok) 22%, var(--surface)); color:var(--ok-2); border:1px solid var(--ok)}
+table{border-collapse:collapse; width:100%; margin:.6rem 0 1rem; background:var(--surface); box-shadow:0 1px 6px var(--shadow); border-radius:8px; overflow:hidden}
+th,td{padding:.5rem .65rem; text-align:left; border-bottom:1px solid var(--border); vertical-align:top; font-size:.92rem}
+th{background:color-mix(in srgb,var(--accent) 14%, var(--surface)); color:var(--fg); font-weight:600}
+tbody tr:nth-child(even){background:var(--zebra)}
+tbody tr:hover{background:color-mix(in srgb,var(--accent) 12%, var(--surface))}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.85em; background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .3rem; border-radius:4px}
+.badge{display:inline-block; padding:.08rem .45rem; border-radius:999px; font-size:.74rem; font-weight:700; letter-spacing:.02em}
+.b-pass{background:color-mix(in srgb,var(--ok) 24%, var(--surface)); color:var(--ok-2); border:1px solid var(--ok)}
+.b-info{background:color-mix(in srgb,var(--info) 22%, var(--surface)); color:var(--info-2); border:1px solid var(--info)}
+.b-warn{background:color-mix(in srgb,var(--warn) 24%, var(--surface)); color:var(--warn-2); border:1px solid var(--warn)}
+.b-crit{background:color-mix(in srgb,var(--danger) 24%, var(--surface)); color:var(--danger-2); border:1px solid var(--danger)}
+.b-open{background:transparent; color:var(--muted); border:1px solid var(--border)}
+.note{background:color-mix(in srgb,var(--accent) 10%, var(--surface)); border-left:4px solid var(--accent); padding:.6rem .9rem; border-radius:0 8px 8px 0; margin:1rem 0}
+.summary-grid{display:flex; gap:1rem; flex-wrap:wrap; margin:1rem 0}
+.card{flex:1 1 150px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:.8rem 1rem; box-shadow:0 1px 6px var(--shadow)}
+.card .num{font-size:1.9rem; font-weight:800; line-height:1}
+.card .lbl{color:var(--muted); font-size:.82rem; margin-top:.2rem}
+.chain{font-family:ui-monospace,monospace; font-size:.82rem; word-break:break-all; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.7rem .9rem}
+.chain b{color:var(--accent)}
+figure{margin:1rem 0; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1rem; box-shadow:0 1px 6px var(--shadow); overflow-x:auto}
+figcaption{color:var(--muted); font-size:.85rem; margin-bottom:.6rem}
+.task-grp td:first-child{font-weight:600; color:var(--accent)}
+details{margin:.3rem 0}
+summary{cursor:pointer; font-weight:600; color:var(--accent)}
+.legend{display:flex; gap:1.2rem; flex-wrap:wrap; font-size:.82rem; color:var(--muted); margin-top:.4rem}
+.legend span{display:inline-flex; align-items:center; gap:.35rem}
+.swatch{width:26px; height:0; border-top:2px solid var(--line); display:inline-block}
+.swatch.info{border-top:2px dashed var(--info)}
+.hl{color:var(--info-2); font-weight:600}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+
+<main class="report">
+<h1>Проверка плана: incremental-reinit</h1>
+<p class="sub">Дата проверки: 2026-06-24 · Фазовая модель <code>check-plan</code> · <span class="verdict ok">Вердикт: OK</span></p>
+
+<div class="note">
+  Все 5 фаз — <b>passed</b>. Критических и предупреждающих находок нет; 3 находки уровня INFO (информационные, не блокируют). План структурно, по покрытию, зависимостям, верифицируемости и согласованности готов к исполнению.
+</div>
+
+<div class="summary-grid">
+  <div class="card"><div class="num" style="color:var(--danger-2)">0</div><div class="lbl">CRITICAL open</div></div>
+  <div class="card"><div class="num" style="color:var(--warn-2)">0</div><div class="lbl">WARNING open</div></div>
+  <div class="card"><div class="num" style="color:var(--info-2)">3</div><div class="lbl">INFO open</div></div>
+  <div class="card"><div class="num" style="color:var(--ok-2)">5/5</div><div class="lbl">фаз passed</div></div>
+</div>
+
+<h2>1. Резюме плана — шаги и критерии готовности (DoD)</h2>
+<table>
+<thead><tr><th>Таск</th><th>Шаг</th><th>Действие</th><th>Критерий готовности (DoD)</th></tr></thead>
+<tbody>
+<tr class="task-grp"><td rowspan="7">T1 · Чистый детект + eval</td><td>0</td><td>Symlink <code>node_modules</code> в worktree</td><td><code>ls node_modules/.bin/esbuild</code> успешен</td></tr>
+<tr><td>1</td><td>Написать падающий eval <code>eval/incremental-sources/run.ts</code></td><td>файл создан</td></tr>
+<tr><td>2</td><td>Сборка+запуск eval (должен упасть)</td><td>esbuild падает: «Could not resolve ../../src/incremental-sources»</td></tr>
+<tr><td>3</td><td>Создать модуль <code>src/incremental-sources.ts</code></td><td>модуль создан</td></tr>
+<tr><td>4</td><td>Пересобрать+запустить eval</td><td><code>TOTAL: 13 passed, 0 failed</code></td></tr>
+<tr><td>5</td><td>Lint нового файла</td><td>нет ошибок по <code>src/incremental-sources.ts</code></td></tr>
+<tr><td>6</td><td>Commit</td><td>коммит создан</td></tr>
+
+<tr class="task-grp"><td rowspan="5">T2 · mtime accessor</td><td>1</td><td>Добавить <code>stat?</code> в интерфейс <code>VaultAdapter</code></td><td>интерфейс расширен</td></tr>
+<tr><td>2</td><td>Добавить метод <code>mtime</code> в <code>VaultTools</code></td><td>метод добавлен</td></tr>
+<tr><td>3</td><td>Пересобрать+запустить eval</td><td><code>TOTAL: 13 passed, 0 failed</code> (checks 11–13 через real fs)</td></tr>
+<tr><td>4</td><td>Lint</td><td>нет ошибок по <code>src/vault-tools.ts</code></td></tr>
+<tr><td>5</td><td>Commit</td><td>коммит создан</td></tr>
+
+<tr class="task-grp"><td rowspan="7">T3 · A2 reorder<br><span class="badge b-warn">HUMAN CHECKPOINT</span></td><td>1</td><td>Подтвердить текущий порядок (baseline grep)</td><td>source пишется ПОСЛЕ page-loop</td></tr>
+<tr><td>2</td><td>Hoist <code>deletes</code> + вычислить planned delete set</td><td>блок вставлен перед <code>const written</code></td></tr>
+<tr><td>3</td><td>Удалить старый дублирующий source-frontmatter блок</td><td>удалён; порядок: pages → source-write → page-loop → delete-loop</td></tr>
+<tr><td>4</td><td>tsc на затронутом файле</td><td><code>no new ingest.ts errors</code></td></tr>
+<tr><td>5</td><td>Регрессионные eval (format-frontmatter / source-deletion / wiki-hygiene)</td><td>каждый <code>TOTAL: N passed, 0 failed</code></td></tr>
+<tr><td>6</td><td>Lint</td><td>нет ошибок по <code>src/phases/ingest.ts</code></td></tr>
+<tr><td>7</td><td>Commit</td><td>коммит создан</td></tr>
+
+<tr class="task-grp"><td rowspan="5">T4 · ReinitModeModal + i18n</td><td>1–3</td><td>i18n ключи (en / ru / es)</td><td>ключи добавлены в три бандла</td></tr>
+<tr><td>4</td><td>Класс <code>ReinitModeModal</code> в <code>src/modals.ts</code></td><td>класс добавлен</td></tr>
+<tr><td>5</td><td>tsc + lint</td><td>no new errors в modals.ts/i18n.ts; lint чистый</td></tr>
+<tr><td>6</td><td><code>npm run build</code></td><td>сборка успешна</td></tr>
+<tr><td>7</td><td>Commit</td><td>коммит создан</td></tr>
+
+<tr class="task-grp"><td rowspan="5">T5 · computeIncrementalPlan + init</td><td>1</td><td>Импорты</td><td>импорты добавлены</td></tr>
+<tr><td>2</td><td>Метод <code>computeIncrementalPlan</code></td><td>метод добавлен</td></tr>
+<tr><td>3</td><td>Расширить <code>init(...incremental?)</code></td><td>сигнатура обновлена</td></tr>
+<tr><td>4</td><td>tsc + lint + build</td><td>no new controller.ts errors; lint чистый; build успешен</td></tr>
+<tr><td>5</td><td>Commit</td><td>коммит создан</td></tr>
+
+<tr class="task-grp"><td rowspan="4">T6 · Wire reinit UI</td><td>1</td><td>Импорт <code>ReinitModeModal</code></td><td>импорт добавлен</td></tr>
+<tr><td>2</td><td>Заменить тело <code>runReinit</code></td><td>ConfirmModal заменён на computeIncrementalPlan + ReinitModeModal</td></tr>
+<tr><td>3</td><td>tsc + lint + build</td><td>no new view.ts errors; нет осиротевших импортов; build успешен</td></tr>
+<tr><td>4</td><td>Commit</td><td>коммит создан</td></tr>
+
+<tr class="task-grp"><td rowspan="4">T7 · runInit --incremental</td><td>1</td><td>Парсинг флага + ветка в <code>runInit</code></td><td>ветка добавлена перед <code>--force</code></td></tr>
+<tr><td>2</td><td>Генератор <code>runIncrementalReinit</code></td><td>генератор добавлен</td></tr>
+<tr><td>3</td><td>tsc + lint + build</td><td>no new init.ts errors; lint чистый; build успешен</td></tr>
+<tr><td>4</td><td>Commit</td><td>коммит создан</td></tr>
+
+<tr class="task-grp"><td rowspan="6">T8 · E2E + docs</td><td>1</td><td>Полная сборка</td><td>build успешен; lint чистый</td></tr>
+<tr><td>2</td><td>Ручной e2e на scratch-vault (homelab LLM), 6 проверок</td><td>каждая из 6 проверок pass; <b>check 2</b> (Incremental(0) после full) обязательна — иначе halt</td></tr>
+<tr><td>3</td><td><code>iwiki-ingest</code> изменённых источников</td><td>страницы wiki обновлены (косвенно через Step 4) <span class="badge b-info">INFO F-002</span></td></tr>
+<tr><td>4</td><td><code>/iwiki-lint</code></td><td>нет битых <code>[[refs]]</code>, нет orphan/stale</td></tr>
+<tr><td>5</td><td>Commit docs</td><td>коммит создан</td></tr>
+<tr><td>6</td><td>Открыть PR (после approval Task 3)</td><td>PR в <code>master</code> создан</td></tr>
+</tbody>
+</table>
+
+<h2>2. Схемы зависимостей и пересечений</h2>
+
+<figure>
+<figcaption>Граф зависимостей тасков — ребро M → N означает «результат таска M используется в таске N» (M &lt; N). Циклов и нарушений порядка фаза <i>dependencies</i> не нашла. Пунктирное ребро T1 ↔ T2 — компиляционная взаимозависимость (INFO F-001), не блокирующий цикл.</figcaption>
+<svg viewBox="0 0 980 360" width="100%" role="img" aria-label="Граф зависимостей тасков">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+    </marker>
+    <marker id="arrow-info" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--info)"/>
+    </marker>
+    <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="var(--shadow)"/>
+    </filter>
+  </defs>
+
+  <!-- edges (drawn first, behind nodes) -->
+  <!-- T1(90,80) T2(90,210) T3(90,300) T4(340,60) T5(340,200) T6(610,120) T7(610,250) T8(860,180) -->
+  <g stroke="var(--line)" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <path d="M150,90 C230,80 270,70 290,64"/>      <!-- T1->T4 -->
+    <path d="M150,100 C230,150 260,185 290,196"/>  <!-- T1->T5 -->
+    <path d="M150,210 C220,208 255,204 290,202"/>  <!-- T2->T5 -->
+    <path d="M398,70 C480,90 520,105 560,116"/>    <!-- T4->T6 -->
+    <path d="M398,205 C470,170 510,145 560,128"/>  <!-- T5->T6 -->
+    <path d="M398,212 C470,232 510,243 560,248"/>  <!-- T5->T7 -->
+    <path d="M150,300 C400,300 650,250 815,205"/>  <!-- T3->T8 -->
+    <path d="M662,128 C740,150 770,160 808,172"/>  <!-- T6->T8 -->
+    <path d="M662,248 C740,225 775,205 808,190"/>  <!-- T7->T8 -->
+  </g>
+  <!-- info compile-coupling T1<->T2 (dashed) -->
+  <path d="M110,118 C95,150 95,175 105,182" stroke="var(--info)" stroke-width="2" stroke-dasharray="5 4" fill="none" marker-end="url(#arrow-info)" marker-start="url(#arrow-info)"/>
+
+  <!-- nodes -->
+  <g font-family="system-ui,sans-serif" font-size="12" text-anchor="middle">
+    <g filter="url(#ds)">
+      <rect x="32" y="62" width="118" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+      <rect x="32" y="190" width="118" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+      <rect x="32" y="282" width="118" height="40" rx="8" fill="var(--surface)" stroke="var(--warn)" stroke-width="2"/>
+      <rect x="282" y="44" width="116" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+      <rect x="282" y="182" width="116" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+      <rect x="552" y="100" width="116" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+      <rect x="552" y="232" width="116" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+      <rect x="802" y="160" width="120" height="40" rx="8" fill="var(--surface)" stroke="var(--ok)" stroke-width="2"/>
+    </g>
+    <g fill="var(--fg)">
+      <text x="91" y="78">T1 · detect</text><text x="91" y="93" font-size="10" fill="var(--muted)">+ eval</text>
+      <text x="91" y="206">T2 · mtime</text><text x="91" y="221" font-size="10" fill="var(--muted)">accessor</text>
+      <text x="91" y="298">T3 · A2</text><text x="91" y="313" font-size="10" fill="var(--warn-2)">CHECKPOINT</text>
+      <text x="340" y="60">T4 · modal</text><text x="340" y="75" font-size="10" fill="var(--muted)">+ i18n</text>
+      <text x="340" y="198">T5 · plan</text><text x="340" y="213" font-size="10" fill="var(--muted)">+ init</text>
+      <text x="610" y="116">T6 · wire UI</text><text x="610" y="131" font-size="10" fill="var(--muted)">runReinit</text>
+      <text x="610" y="248">T7 · branch</text><text x="610" y="263" font-size="10" fill="var(--muted)">runInit</text>
+      <text x="862" y="176">T8 · E2E</text><text x="862" y="191" font-size="10" fill="var(--muted)">+ docs</text>
+    </g>
+  </g>
+</svg>
+<div class="legend">
+  <span><span class="swatch"></span> зависимость (M→N)</span>
+  <span><span class="swatch info"></span> компиляционная связь T1↔T2 (INFO, не цикл)</span>
+  <span>🟧 HUMAN CHECKPOINT (T3)</span>
+  <span>🟩 финальная верификация (T8)</span>
+</div>
+</figure>
+
+<h3>Пересечения по артефактам — какие таски трогают один файл</h3>
+<table>
+<thead><tr><th>Артефакт / файл</th><th>Изменяет</th><th>Читает / переиспользует</th><th>Overlap-риск</th></tr></thead>
+<tbody>
+<tr><td><code>src/incremental-sources.ts</code></td><td>T1 (создаёт)</td><td>T4, T5 (импорт)</td><td>—</td></tr>
+<tr><td><code>src/vault-tools.ts</code></td><td>T2</td><td>T5, T7 (через VaultTools)</td><td>—</td></tr>
+<tr><td><code>src/phases/ingest.ts</code></td><td>T3</td><td>T7 (runIngest — unchanged)</td><td><span class="hl">HUMAN CHECKPOINT</span> — общий pipeline</td></tr>
+<tr><td><code>src/modals.ts</code></td><td>T4</td><td>T6</td><td>—</td></tr>
+<tr><td><code>src/i18n.ts</code></td><td>T4</td><td>—</td><td>—</td></tr>
+<tr><td><code>src/controller.ts</code></td><td>T5</td><td>T6 (вызов)</td><td>—</td></tr>
+<tr><td><code>src/view.ts</code></td><td>T6</td><td>—</td><td>—</td></tr>
+<tr><td><code>src/phases/init.ts</code></td><td>T7</td><td>—</td><td>—</td></tr>
+<tr><td><code>eval/incremental-sources/run.cjs</code></td><td>T1 и T2 (оба коммитят)</td><td>—</td><td><span class="hl">общий артефакт</span> — связано с INFO F-001</td></tr>
+<tr><td><code>docs/wiki/</code></td><td>T8</td><td>—</td><td>—</td></tr>
+</tbody>
+</table>
+
+<h3>Покрытие требований — требование спеки → шаги плана</h3>
+<table>
+<thead><tr><th>Требование</th><th>Таски</th></tr></thead>
+<tbody>
+<tr><td>Mode selector Full/Incremental</td><td>T4 + T6</td></tr>
+<tr><td>Список только изменённых + disabled при N=0</td><td>T4</td></tr>
+<tr><td>Ингест только списка, нетронутые не переобрабатываются</td><td>T7</td></tr>
+<tr><td>Новый источник появляется + ингестится</td><td>T1 (правило empty associated) + T7 (bookkeeping)</td></tr>
+<tr><td>Full reinit — артефакты неизменны</td><td>T3 + T8 (spot-check)</td></tr>
+<tr><td>Strict subset, без коллапса в Full</td><td>T1 + T3 + T8 (check 2)</td></tr>
+<tr><td>mtime accessor, без obsidian в phase-коде</td><td>T2</td></tr>
+<tr><td>Чистый детект-модуль + eval</td><td>T1</td></tr>
+<tr><td>A2 reorder / mtime-инвариант (HUMAN CHECKPOINT)</td><td>T3</td></tr>
+<tr><td>i18n ru/en/es</td><td>T4</td></tr>
+<tr><td>Верификация (unit + node-fs + manual e2e)</td><td>T1 + T8</td></tr>
+</tbody>
+</table>
+
+<h2>3. Результаты проверки</h2>
+
+<h3>Статусы фаз</h3>
+<table>
+<thead><tr><th>Фаза</th><th>Статус</th><th>Findings</th></tr></thead>
+<tbody>
+<tr><td>structure</td><td><span class="badge b-pass">passed</span></td><td>0</td></tr>
+<tr><td>coverage</td><td><span class="badge b-pass">passed</span></td><td>0</td></tr>
+<tr><td>dependencies</td><td><span class="badge b-pass">passed</span></td><td>1 × INFO</td></tr>
+<tr><td>verifiability</td><td><span class="badge b-pass">passed</span></td><td>1 × INFO</td></tr>
+<tr><td>consistency</td><td><span class="badge b-pass">passed</span></td><td>1 × INFO</td></tr>
+</tbody>
+</table>
+
+<h3>Находки (findings)</h3>
+<table>
+<thead><tr><th>ID</th><th>Severity</th><th>Фаза</th><th>Секция</th><th>Описание</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr>
+  <td>F-001</td><td><span class="badge b-info">INFO</span></td><td>dependencies</td>
+  <td>Task 1 Step 4 / Task 2 note</td>
+  <td>Eval Task 1 вызывает <code>VaultTools.mtime</code> (код Task 2); checks 11–13 не зеленеют до Task 2, поэтому DoD «13 passed» в изоляции невыполним. Уже явно отмечено в плане (строки 288–294). Не требует исправления; реализовать T1+T2 вместе.</td>
+  <td><span class="badge b-open">open</span></td>
+</tr>
+<tr>
+  <td>F-002</td><td><span class="badge b-info">INFO</span></td><td>verifiability</td>
+  <td>Task 8 Step 3</td>
+  <td><code>iwiki-ingest</code> без машинно-проверяемого Expected; DoD косвенно через <code>/iwiki-lint</code> (Step 4). Опционально добавить явный Expected.</td>
+  <td><span class="badge b-open">open</span></td>
+</tr>
+<tr>
+  <td>F-003</td><td><span class="badge b-info">INFO</span></td><td>consistency</td>
+  <td>Global Constraints / Self-Review</td>
+  <td>Intent: «byte-for-byte unchanged»; план (вслед за спекой) сужает до «артефакты идентичны, не event/IO-trace». Намеренное, помеченное HUMAN CHECKPOINT согласование (уже F-003 в спеке). Не противоречие.</td>
+  <td><span class="badge b-open">open</span></td>
+</tr>
+</tbody>
+</table>
+
+<div class="note">
+  <b>Сводка:</b> CRITICAL open — <b>0</b>; WARNING open — <b>0</b>; INFO open — <b>3</b>. Финальный вердикт: <b style="color:var(--ok-2)">OK</b>. Все INFO-находки уже явно зафиксированы в самом плане/спеке и не требуют доработки.
+</div>
+
+<h3>Цепочка артефактов (chain)</h3>
+<div class="chain">
+  <b>intent</b> docs/superpowers/intents/2026-06-24-incremental-reinit-intent.md<br>
+  &nbsp;&nbsp;→ <b>spec</b> docs/superpowers/specs/2026-06-24-incremental-reinit-design.md<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;→ <b>plan</b> docs/superpowers/plans/2026-06-24-incremental-reinit.md
+</div>
+
+<h3>Хеши</h3>
+<table>
+<thead><tr><th>Артефакт</th><th>Hash (16)</th></tr></thead>
+<tbody>
+<tr><td>plan_hash (тело)</td><td><code>cfd6cc0ab8c6bf6a</code></td></tr>
+<tr><td>spec_hash (тело)</td><td><code>810e1c64b771bd1f</code></td></tr>
+</tbody>
+</table>
+
+<p class="sub" style="margin-top:2rem">Сгенерировано навыком <code>check-plan</code> → <code>html-report</code> · IDD gate · 2026-06-24</p>
+</main>
+</body>
+</html>
