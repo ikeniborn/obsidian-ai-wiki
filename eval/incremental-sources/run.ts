@@ -7,7 +7,7 @@
 import { mkdtempSync, writeFileSync, statSync, utimesSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { computeChangedSources, capList } from "../../src/incremental-sources";
+import { computeChangedSources, capList, parsePageSources } from "../../src/incremental-sources";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 
 let pass = 0, fail = 0;
@@ -87,6 +87,19 @@ check("10 capList over cap truncates + overflow", (() => {
   const names = Array.from({ length: 25 }, (_, i) => `n${i}`);
   const r = capList(names, 20); return r.shown.length === 20 && r.overflow === 5;
 })());
+
+// =====================================================================
+section("parsePageSources — real on-disk wiki_sources shapes");
+check("pp double-quoted wikilink → bare stem",
+  JSON.stringify(parsePageSources('---\nwiki_sources:\n  - "[[alpha]]"\n---\nx')) === JSON.stringify(["alpha"]));
+check("pp unquoted wikilink → bare stem",
+  JSON.stringify(parsePageSources('---\nwiki_sources:\n  - [[alpha]]\n---\nx')) === JSON.stringify(["alpha"]));
+check("pp path + .md inside wikilink → basename",
+  JSON.stringify(parsePageSources('---\nwiki_sources:\n  - "[[notes/alpha.md]]"\n---\nx')) === JSON.stringify(["alpha"]));
+check("pp multiple entries",
+  JSON.stringify(parsePageSources('---\nwiki_sources:\n  - "[[a]]"\n  - "[[b]]"\n---\nx')) === JSON.stringify(["a","b"]));
+check("pp no wiki_sources → []",
+  parsePageSources('---\ntitle: x\n---\nbody').length === 0);
 
 // =====================================================================
 section("node-fs integration — A2 order contract");

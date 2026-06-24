@@ -6,7 +6,7 @@
  * first, then its page) and drives the REAL implemented functions exactly the
  * way controller.computeIncrementalPlan composes them at runtime:
  *
- *     walk files → VaultTools.mtime (real fs stat) → parseWikiSources
+ *     walk files → VaultTools.mtime (real fs stat) → parsePageSources
  *                → computeChangedSources  ⇒  the changed set
  *
  * The only piece replaced vs production is Obsidian's vault walker
@@ -20,8 +20,7 @@ import {
 } from "node:fs";
 import { join, dirname, basename } from "node:path";
 import { tmpdir } from "node:os";
-import { computeChangedSources } from "../../src/incremental-sources";
-import { parseWikiSources } from "../../src/utils/vault-walk";
+import { computeChangedSources, parsePageSources } from "../../src/incremental-sources";
 import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
 
 let pass = 0, fail = 0;
@@ -52,7 +51,7 @@ function writeFile(root: string, rel: string, content: string, mtimeMs?: number)
 
 const sourceArticle = (title: string): string => `---\ntitle: ${title}\n---\n\n# ${title}\n\nBody of ${title}.\n`;
 const wikiPage = (stems: string[]): string =>
-  `---\nwiki_sources:\n${stems.map((s) => `  - ${s}`).join("\n")}\n---\n\nWiki page for ${stems.join(", ")}.\n`;
+  `---\nwiki_sources:\n${stems.map((s) => `  - "[[${s}]]"`).join("\n")}\n---\n\nWiki page for ${stems.join(", ")}.\n`;
 
 /**
  * Reproduce computeIncrementalPlan's core composition against a real fs vault.
@@ -67,7 +66,7 @@ async function detect(root: string, sources: string[], wikis: string[]): Promise
   const wikiPages = [];
   for (const path of wikis) {
     const content = await vt.read(path).catch(() => "");
-    wikiPages.push({ path, mtime: await vt.mtime(path), sources: parseWikiSources(content) });
+    wikiPages.push({ path, mtime: await vt.mtime(path), sources: parsePageSources(content) });
   }
   return computeChangedSources({ sourceFiles, wikiPages }).changed;
 }
@@ -136,11 +135,11 @@ async function main(): Promise<void> {
       check("S4 only the new source flagged", changed.length === 1, JSON.stringify(changed));
     }
 
-    section("S5 — parseWikiSources extracts the structural mapping from a real page");
+    section("S5 — parsePageSources extracts the structural mapping from a real page");
     {
       const content = readFileSync(join(dir, pageOf("alpha")), "utf8");
-      const parsed = parseWikiSources(content);
-      check("S5 parseWikiSources(alpha page) === ['alpha']", JSON.stringify(parsed) === JSON.stringify(["alpha"]));
+      const parsed = parsePageSources(content);
+      check("S5 parsePageSources(alpha page) === ['alpha']", JSON.stringify(parsed) === JSON.stringify(["alpha"]));
     }
 
     section("S6 — shared page + min aggregation: unedited shared source stays excluded");

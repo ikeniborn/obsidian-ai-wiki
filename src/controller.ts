@@ -26,7 +26,7 @@ import { domainWikiFolder, GLOBAL_AGENT_LOG_PATH } from "./wiki-path";
 import { restoreSourceFrontmatter } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
 import { collectMdInPaths, parseWikiSources } from "./utils/vault-walk";
-import { computeChangedSources, type SourceFileInfo, type WikiPageInfo } from "./incremental-sources";
+import { computeChangedSources, parsePageSources, type SourceFileInfo, type WikiPageInfo } from "./incremental-sources";
 
 /** Minimal surface of the host obsidian-excalidraw-plugin's ExcalidrawAutomate. */
 interface ExcalidrawAutomateLike {
@@ -374,6 +374,13 @@ export class WikiController {
     };
 
     const sourceTFiles = collectMdInPaths(this.app.vault, (entry.source_paths ?? []).map(toVaultRel));
+    const seen = new Set(sourceTFiles.map((f) => f.path));
+    for (const sp of (entry.source_paths ?? []).map(toVaultRel)) {
+      if (sp.endsWith(".md") && !seen.has(sp)) {
+        const tf = this.app.vault.getFileByPath(sp);
+        if (tf) { sourceTFiles.push(tf); seen.add(sp); }
+      }
+    }
     const sourceFiles: SourceFileInfo[] = [];
     for (const f of sourceTFiles) {
       sourceFiles.push({ stem: f.basename, path: f.path, mtime: await vaultTools.mtime(f.path) });
@@ -385,7 +392,7 @@ export class WikiController {
     for (const f of wikiTFiles) {
       let content = "";
       try { content = await this.app.vault.adapter.read(f.path); } catch { /* unreadable → no sources */ }
-      wikiPages.push({ path: f.path, mtime: await vaultTools.mtime(f.path), sources: parseWikiSources(content) });
+      wikiPages.push({ path: f.path, mtime: await vaultTools.mtime(f.path), sources: parsePageSources(content) });
     }
 
     const { changed } = computeChangedSources({ sourceFiles, wikiPages });

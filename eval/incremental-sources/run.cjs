@@ -24,6 +24,13 @@ function computeChangedSources(input) {
   }
   return { changed };
 }
+function parsePageSources(content) {
+  const fmMatch = /^---\n([\s\S]*?)\n---/.exec(content);
+  if (!fmMatch) return [];
+  const listMatch = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
+  if (!listMatch) return [];
+  return listMatch[1].split("\n").map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim()).filter(Boolean).map((t) => t.replace(/^["']|["']$/g, "").replace(/^\[\[|\]\]$/g, "").trim()).map((t) => t.split("/").pop().replace(/\.md$/, "")).filter(Boolean);
+}
 function capList(names, cap = 20) {
   if (names.length <= cap) return { shown: names, overflow: 0 };
   return { shown: names.slice(0, cap), overflow: names.length - cap };
@@ -313,6 +320,27 @@ check("10 capList over cap truncates + overflow", (() => {
   const r = capList(names, 20);
   return r.shown.length === 20 && r.overflow === 5;
 })());
+section("parsePageSources \u2014 real on-disk wiki_sources shapes");
+check(
+  "pp double-quoted wikilink \u2192 bare stem",
+  JSON.stringify(parsePageSources('---\nwiki_sources:\n  - "[[alpha]]"\n---\nx')) === JSON.stringify(["alpha"])
+);
+check(
+  "pp unquoted wikilink \u2192 bare stem",
+  JSON.stringify(parsePageSources("---\nwiki_sources:\n  - [[alpha]]\n---\nx")) === JSON.stringify(["alpha"])
+);
+check(
+  "pp path + .md inside wikilink \u2192 basename",
+  JSON.stringify(parsePageSources('---\nwiki_sources:\n  - "[[notes/alpha.md]]"\n---\nx')) === JSON.stringify(["alpha"])
+);
+check(
+  "pp multiple entries",
+  JSON.stringify(parsePageSources('---\nwiki_sources:\n  - "[[a]]"\n  - "[[b]]"\n---\nx')) === JSON.stringify(["a", "b"])
+);
+check(
+  "pp no wiki_sources \u2192 []",
+  parsePageSources("---\ntitle: x\n---\nbody").length === 0
+);
 section("node-fs integration \u2014 A2 order contract");
 (async () => {
   const dir = (0, import_node_fs.mkdtempSync)((0, import_node_path.join)((0, import_node_os.tmpdir)(), "incr-reinit-"));

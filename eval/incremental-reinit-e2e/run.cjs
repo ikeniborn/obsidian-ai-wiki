@@ -24,14 +24,12 @@ function computeChangedSources(input) {
   }
   return { changed };
 }
-
-// src/utils/vault-walk.ts
-function parseWikiSources(content) {
+function parsePageSources(content) {
   const fmMatch = /^---\n([\s\S]*?)\n---/.exec(content);
   if (!fmMatch) return [];
-  const sourcesMatch = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
-  if (!sourcesMatch) return [];
-  return sourcesMatch[1].split("\n").map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim()).filter(Boolean);
+  const listMatch = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
+  if (!listMatch) return [];
+  return listMatch[1].split("\n").map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim()).filter(Boolean).map((t) => t.replace(/^["']|["']$/g, "").replace(/^\[\[|\]\]$/g, "").trim()).map((t) => t.split("/").pop().replace(/\.md$/, "")).filter(Boolean);
 }
 
 // src/vault-tools.ts
@@ -303,7 +301,7 @@ Body of ${title}.
 `;
 var wikiPage = (stems) => `---
 wiki_sources:
-${stems.map((s) => `  - ${s}`).join("\n")}
+${stems.map((s) => `  - "[[${s}]]"`).join("\n")}
 ---
 
 Wiki page for ${stems.join(", ")}.
@@ -317,7 +315,7 @@ async function detect(root, sources, wikis) {
   const wikiPages = [];
   for (const path of wikis) {
     const content = await vt.read(path).catch(() => "");
-    wikiPages.push({ path, mtime: await vt.mtime(path), sources: parseWikiSources(content) });
+    wikiPages.push({ path, mtime: await vt.mtime(path), sources: parsePageSources(content) });
   }
   return computeChangedSources({ sourceFiles, wikiPages }).changed;
 }
@@ -374,11 +372,11 @@ async function main() {
       check("S4 new omega (no page) flagged", changed.includes(srcOf("omega")), JSON.stringify(changed));
       check("S4 only the new source flagged", changed.length === 1, JSON.stringify(changed));
     }
-    section("S5 \u2014 parseWikiSources extracts the structural mapping from a real page");
+    section("S5 \u2014 parsePageSources extracts the structural mapping from a real page");
     {
       const content = (0, import_node_fs.readFileSync)((0, import_node_path.join)(dir, pageOf("alpha")), "utf8");
-      const parsed = parseWikiSources(content);
-      check("S5 parseWikiSources(alpha page) === ['alpha']", JSON.stringify(parsed) === JSON.stringify(["alpha"]));
+      const parsed = parsePageSources(content);
+      check("S5 parsePageSources(alpha page) === ['alpha']", JSON.stringify(parsed) === JSON.stringify(["alpha"]));
     }
     section("S6 \u2014 shared page + min aggregation: unedited shared source stays excluded");
     {
