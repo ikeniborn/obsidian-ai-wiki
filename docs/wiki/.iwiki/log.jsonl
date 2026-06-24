@@ -10,6 +10,3 @@
 {"op":"ingest","source":"dev/mobile-retrieval-vision","page":"docs/wiki/backends-and-config.md","date":"2026-06-20"}
 {"op":"ingest","source":"src/view.ts+src/rerun-domain.ts","page":"operations.md#History Re-run","date":"2026-06-21"}
 {"op":"ingest","source":"src/wiki-link-validator.ts,src/wiki-index.ts,src/phases/ingest.ts,src/phases/lint.ts","page":"operations.md,retrieval.md","date":"2026-06-22"}
-{"op":"ingest","source":"src/phases/link-resolver.ts","page":"docs/wiki/architecture.md","date":"2026-06-24"}
-{"op":"ingest","source":"src/phases/query.ts","page":"docs/wiki/operations.md","date":"2026-06-24"}
-{"op":"ingest","source":"src/phases/parse-with-retry.ts","page":"docs/wiki/llm-pipeline.md","date":"2026-06-24"}

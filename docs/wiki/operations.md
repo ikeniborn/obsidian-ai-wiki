@@ -91,7 +91,7 @@ Pipeline: extract links → check against vault stems → for each broken stem, 
 
 ## Query Trace UI
 
-The `graph_stats` event is rendered by `src/view.ts#formatGraphStatsLines` (a pure function). Integration test specs for the link-validation pipeline live in [[query-sentinel-tests]].
+The `graph_stats` event is rendered by `src/view.ts#formatGraphStatsLines` (a pure function).
 
 When `agentLogEnabled` is true, scores and a BFS-by-hop breakdown render in multi-line trace format; when false, a compact single-line form is shown. Both forms now include a short retrieval tag (`vector` / `jaccard (low …)` / `jaccard (embed failed)` / `llm seeds`) built by `retrievalTag` from `retrievalMode`/`denseMax`/`seedFallbackReason`.
 
