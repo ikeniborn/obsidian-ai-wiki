@@ -3,6 +3,33 @@ state: design
 date: 2026-06-24
 topic: query-link-resolver
 branch: dev/query-link-resolver
+review:
+  spec_hash: 0f090b960dde808f
+  last_run: 2026-06-24
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: structure
+      severity: INFO
+      section: "### Diagnostics"
+      section_hash: a5f7e6d532cb3d78
+      text: "Strings `tool_REDACTEDeview` (Diagnostics) and `REDACTED` (Implementation phases, Phase 2) are a harness session-filter display artifact masking substrings; the on-disk text is correct (`prompts/query.md`). Not a broken link or placeholder — display readability only."
+      verdict: accepted
+      verdict_at: 2026-06-24
+    - id: F-002
+      phase: clarity
+      severity: WARNING
+      section: "### Components"
+      section_hash: aa4bb9db2e0d0288
+      text: "Earlier contradiction between the resolver's `wiki_*` preference and the ambiguity rule. Fixed: matches are grouped by entity; a source note plus its `wiki_*` page is one entity -> `resolved` (prefer `wiki_*`); `ambiguous` only for >=2 distinct entities; the `wiki_*` preference is applied after grouping and never collapses distinct entities. Verification step 4 restated with a worked example. Components item 1 and Verification step 4 are now consistent."
+      verdict: fixed
+      verdict_at: 2026-06-24
+chain:
+  intent: null
 ---
 
 # Query Link Resolver — Design Spec
