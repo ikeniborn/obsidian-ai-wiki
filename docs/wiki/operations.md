@@ -2,7 +2,7 @@
 
 ## Overview
 
-The seven operations available in AI Wiki. Each maps to a phase function in `src/phases/` and produces specific vault artifacts. See [[architecture#Phase Functions]] and [[index#What it does]].
+The operations available in AI Wiki. Each maps to a phase function in `src/phases/` and produces specific vault artifacts. Reinit offers a Full vs Incremental choice — Full wipes and rebuilds, Incremental re-ingests only sources whose vault mtime is newer than their wiki pages. The Ingest Write Order (A2) invariant (source written before its pages) keeps that mtime detection honest. See [[architecture#Phase Functions]] and [[index#What it does]].
 
 ## Init
 
@@ -12,7 +12,23 @@ Creates the `DomainEntry` and per-domain `_config`. Wiki/format schema conventio
 
 ## Reinit (--force)
 
-Re-runs init on an existing domain, wiping the wiki folder first. `wipeDomainFolder` removes all files then calls `removeSubfolders` to delete subdirectories (skipping locked entries). The wipe patch resets `entity_types` and `analyzed_sources` but preserves `language_notes`.
+The Full reinit mode. Re-runs init on an existing domain, wiping the wiki folder first. `wipeDomainFolder` removes all files then calls `removeSubfolders` to delete subdirectories (skipping locked entries). The wipe patch resets `entity_types` and `analyzed_sources` but preserves `language_notes`. Reinit is chosen via the Full/Incremental selector — see [[operations#Incremental Reinit]].
+
+## Incremental Reinit
+
+The non-destructive reinit mode: re-ingest only the sources whose vault-file mtime is newer than (or unreflected by) their wiki pages, leaving every other page untouched. Clicking reinit opens `ReinitModeModal` (`src/modals.ts`) showing **Full** vs **Incremental (N)**; Incremental is disabled when N=0. No wipe, no persisted "last run" timestamp — every run compares live mtimes.
+
+Detection is mtime-only and lives in the pure `computeChangedSources` (`src/incremental-sources.ts`): a source is changed when it has no associated wiki page, when any relevant mtime is `null` (trust bias — include on ambiguity), or when `mtime(source) > min(mtime of its associated pages)` (strict `>`, `min` aggregation). `wiki_added`/`wiki_updated` and all frontmatter timestamps are forbidden as the freshness source; `wiki_sources` supplies only the structural source→page mapping (via `parseWikiSources`).
+
+`controller.computeIncrementalPlan` (`src/controller.ts`) gathers the inputs from the live vault — source mtimes via [[architecture#VaultTools]]`.mtime` (backed by `VaultAdapter.stat`, so phase code never imports `obsidian` to read mtime), wiki-page mtimes, and each page's `wiki_sources` — then delegates the decision to `computeChangedSources`. The plan `{ changed, totalSources, wikiFileCount }` feeds the modal.
+
+`runInit '--incremental'` (`src/phases/init.ts`) loops `runIncrementalReinit`, which re-runs the unchanged [[operations#Ingest]] `runIngest` over each changed file (no wipe), updates the in-flight `DomainEntry` from `domain_updated` patches, supports one per-file retry via the file-error modal, and adds freshly-ingested files to `analyzed_sources`. Empty change set yields a friendly result, not an error. Correctness depends on [[operations#Ingest Write Order (A2)]].
+
+## Ingest Write Order (A2)
+
+Ingest writes the source's own frontmatter (its `wiki_articles` backlinks) **before** the wiki pages, so after every ingest each page's mtime is `>=` its source's. This structural guarantee — not a stored timestamp — keeps [[operations#Incremental Reinit]] honest: an un-edited source is never re-flagged right after a Full reinit. Because the source is written first, its backlinks are computed from the **planned** page/delete sets rather than the actual results.
+
+Produced artifacts — wiki page content, `_index.md`, and the domain entry — are byte-identical to the old order. Only two things change: event order (`source_path_added` now precedes the page writes) and planned-vs-actual backlinks (the sole divergence is dedup-merge with `dedupOnIngest` enabled, default off; lint heals it). The reorder is in the shared `runIngest`, so it applies to manual ingest, delete, and Full reinit alike.
 
 ## Ingest
 
