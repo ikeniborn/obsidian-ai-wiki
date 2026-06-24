@@ -169,8 +169,17 @@ export async function* runQuery(
 
   const entityTypesBlock = buildEntityTypesBlock(domain);
 
+  const wikiFirst = [...selectedIds].sort((a, b) =>
+    Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
+  const availableLinksBlock = wikiFirst.length === 0 ? "" : [
+    "Valid WikiLink targets (use EXACTLY these, copy verbatim):",
+    ...wikiFirst.map((s) => `- ${s}`),
+    "ONLY link to a target from this list. Never invent or abbreviate stems.",
+  ].join("\n");
+
   const systemPrompt = render(queryTemplate, {
     domain_name: domain.name,
+    available_links_block: availableLinksBlock,
     entity_types_block: entityTypesBlock,
     index_block: indexContent ? `\nWiki index (_index.md):\n${indexContent}` : "",
   });
