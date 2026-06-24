@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка intent: dev-mode eval rework — 2026-06-24</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+.theme-btn{
+  position:sticky; top:.5rem; float:right; z-index:5;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+h1{ font-size:1.6rem; margin:.2rem 0 .3rem; }
+h2{ font-size:1.25rem; margin:2rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.25rem; }
+h3{ font-size:1.05rem; margin:1.3rem 0 .4rem; color:var(--accent); }
+code{ background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .3rem; border-radius:4px; font-size:.88em; }
+.lead{ font-size:1.08rem; }
+.sub{ color:var(--muted); font-size:.95rem; }
+.verdict-ok{ display:inline-block; font-weight:700; color:var(--bg); background:var(--ok); padding:.3rem .9rem; border-radius:8px; }
+.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
+  background:color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius:0 8px 8px 0;
+  box-shadow:0 1px 8px var(--shadow); }
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:1rem 0; font-size:.92rem; border:1px solid var(--border); border-radius:10px;
+  overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.5rem .75rem; text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg); position:sticky; top:0; }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.rpt-table .id{ font-weight:700; white-space:nowrap; }
+.matrix{ border-collapse:separate; border-spacing:0; margin:1rem 0; font-size:.9rem; background:var(--surface);
+  border:1px solid var(--border); border-radius:10px; overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.matrix th, .matrix td{ border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:.4rem .6rem; text-align:center; }
+.matrix thead th{ background:var(--accent); color:var(--bg); }
+.matrix tbody th{ background:var(--zebra); text-align:left; font-weight:600; white-space:nowrap; }
+.matrix .x{ color:var(--ok-2); font-weight:800; }
+.matrix tr:last-child td, .matrix tr:last-child th{ border-bottom:none; }
+.matrix th:last-child, .matrix td:last-child{ border-right:none; }
+.badge{ display:inline-block; font-size:.72rem; padding:.05rem .5rem; border-radius:999px; border:1px solid var(--border); }
+.badge.crit{ color:var(--danger-2); border-color:var(--danger); }
+.badge.pass{ color:var(--ok-2); border-color:var(--ok); }
+.badge.adv{ color:var(--warn-2); border-color:var(--warn); }
+.rpt-flow{ display:flex; align-items:center; gap:0; margin:1rem 0; flex-wrap:wrap; }
+.rpt-flow .node{ background:var(--surface); color:var(--fg); border:1px solid var(--border);
+  border-radius:8px; padding:.55rem .9rem; box-shadow:0 1px 6px var(--shadow); max-width:18rem; }
+.rpt-flow .node.obj{ border-left:4px solid var(--accent); }
+.rpt-flow .node.hm{ border-left:4px solid var(--ok); }
+.rpt-flow .arrow{ flex:0 0 2.2rem; height:2px; background:var(--line); position:relative; }
+.rpt-flow .arrow::after{ content:""; position:absolute; right:0; top:-4px;
+  border:5px solid transparent; border-left-color:var(--line); }
+.stack{ display:flex; flex-direction:column; gap:.4rem; }
+.zones{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:.8rem; margin:1rem 0; }
+.zone{ border:1px solid var(--border); border-radius:10px; padding:.7rem .9rem; background:var(--surface); box-shadow:0 1px 8px var(--shadow); }
+.zone h4{ margin:.1rem 0 .4rem; font-size:.98rem; }
+.zone.full{ border-top:4px solid var(--ok); }
+.zone.guard{ border-top:4px solid var(--accent); }
+.zone.prop{ border-top:4px solid var(--warn); }
+.zone.nogo{ border-top:4px solid var(--danger); }
+.zone ul{ margin:.2rem 0; padding-left:1.1rem; }
+.zone li{ margin:.2rem 0; font-size:.88rem; }
+ul.tight li{ margin:.3rem 0; }
+ol.done li{ margin:.4rem 0; }
+.phase-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:.7rem; margin:1rem 0; }
+.phase{ border:1px solid var(--border); border-radius:10px; padding:.7rem .9rem; background:var(--surface); box-shadow:0 1px 8px var(--shadow); }
+.phase b{ display:block; margin-bottom:.3rem; }
+footer{ margin-top:2.5rem; padding-top:1rem; border-top:2px solid var(--border); color:var(--muted); }
+footer b{ color:var(--accent); }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тёмную/светлую тему">🌙 / ☀️</label>
+
+<main class="report">
+<h1>Проверка intent: dev-mode eval rework</h1>
+<p class="sub">Файл: <code>docs/superpowers/intents/2026-06-24-dev-mode-eval-rework-intent.md</code><br>
+intent_hash: <code>9a809e5df4d6e5f2</code> (хеш всего файла — frontmatter-блока <code>review:</code> нет) · дата проверки: 2026-06-24</p>
+<p class="lead">Вердикт: <span class="verdict-ok">OK — гейт открыт</span></p>
+
+<div class="note"><b>О документе:</b> intent doc — корень цепи IDD→SDD. Upstream-документа нет, поэтому отчёт смотрит вперёд (на brainstorm). Status в теле — <code>draft</code>, Status-guard не срабатывает.</div>
+
+<h2>1. Резюме требований</h2>
+
+<h3>Objective</h3>
+<p>Сегодня dev mode авто-оценивает каждый прогон отдельным LLM-судьёй
+(<code>devMode.evaluatorModel</code> → <code>runEvaluator</code> → <code>prompts/evaluator.md</code> → поле <code>eval</code>
+в <code>!Wiki/_config/_dev.jsonl</code>). Сигнал судьи недостаточно надёжен для работы над промптами.
+Заменить его на собранные человеком метки качества ответов query/chat, сохраняемые как gold-датасет,
+и переиспользовать датасет для (a) сравнения вариантов через <code>scripts/eval.ts</code> и
+(b) улучшения промптов на плохих ответах через <code>scripts/dspy</code>. Делается сейчас, чтобы накопленные
+👍/👎 стали ground truth до дальнейшего тюнинга промптов.</p>
+
+<h3>Desired Outcomes</h3>
+<table class="rpt-table">
+<thead><tr><th>#</th><th>Наблюдаемый результат</th></tr></thead>
+<tbody>
+<tr><td class="id">DO1</td><td>В dev mode под ответом query/chat появляются две кнопки 👍/👎 на <b>desktop и mobile</b>; клик пишет/обновляет одну запись в <code>!Wiki/_config/eval.jsonl</code>.</td></tr>
+<tr><td class="id">DO2</td><td>Каждая запись содержит минимум <code>{question, found_pages[], answer, rating}</code> плюс достаточно провенанса для привязки метки к конкретному артефакту: версия промпта/шаблона, модель, retrieval-config. Схему можно расширять под богаче сигнал для eval + dspy.</td></tr>
+<tr><td class="id">DO3</td><td>Повторный клик 👍/👎 обновляет rating существующей записи (без дублей строк).</td></tr>
+<tr><td class="id">DO4</td><td><code>scripts/eval.ts</code> читает <code>eval.jsonl</code> и выдаёт метрику качества агента по размеченным примерам.</td></tr>
+<tr><td class="id">DO5</td><td><code>scripts/dspy</code> потребляет размеченный набор (👍 <b>и</b> 👎) и оптимизирует промпты из <code>prompts/</code> + <code>templates/</code>, используя 👍-кейсы как защиту от регрессии хороших ответов.</td></tr>
+</tbody>
+</table>
+
+<h3>Health Metrics</h3>
+<table class="rpt-table">
+<thead><tr><th>#</th><th>Метрика</th></tr></thead>
+<tbody>
+<tr><td class="id">HM1</td><td>Нормальное (non-dev) поведение query/chat и производительность не меняются — запись и кнопки gated на <code>devMode.enabled</code>.</td></tr>
+<tr><td class="id">HM2</td><td>Mobile-сборка не падает (node builtins остаются lazy + desktop-guarded; кнопки рендерятся на mobile).</td></tr>
+<tr><td class="id">HM3</td><td><code>npm run lint</code> чистый; нет новых tsc-ошибок в затронутых файлах.</td></tr>
+</tbody>
+</table>
+
+<h3>Strategic Context</h3>
+<table class="rpt-table">
+<tbody>
+<tr><td class="id">Interacts&nbsp;with</td><td>query/chat phase (источник данных — <code>graph_stats</code> found pages + <code>result</code> answer), <code>src/view.ts</code> (рендер ответа + кнопок 👍/👎), <code>settings.ts</code> (флаг <code>devMode</code>), <code>!Wiki/_config/eval.jsonl</code> (общий, синкается Obsidian между desktop/mobile — non-critical), <code>scripts/eval.ts</code> (Node/tsx harness), <code>scripts/dspy</code> (Python, отдельный LLM API для оптимизации промптов).</td></tr>
+<tr><td class="id">Priority&nbsp;trade-off</td><td><b>trust</b> — точность сигнала метки и корректная атрибуция метки к промпту/модели/конфигу, породившему ответ.</td></tr>
+</tbody>
+</table>
+
+<h3>Constraints</h3>
+<table class="rpt-table">
+<thead><tr><th>#</th><th>Тип</th><th>Ограничение</th></tr></thead>
+<tbody>
+<tr><td class="id">S1</td><td>Steering</td><td>Запись + кнопки активны только при <code>devMode.enabled</code>; non-dev путь нетронут.</td></tr>
+<tr><td class="id">S2</td><td>Steering</td><td><code>eval.jsonl</code> — append-only JSONL; повторный клик 👍/👎 редактирует rating записи, а не добавляет дубль.</td></tr>
+<tr><td class="id">S3</td><td>Steering</td><td>Каждая запись фиксирует версию промпта/шаблона, модель и retrieval-config, чтобы 👎 однозначно мапился на один артефакт (требование dspy).</td></tr>
+<tr><td class="id">S4</td><td>Steering</td><td>И <code>eval.ts</code>, и <code>dspy</code> читают промпты из <code>prompts/</code> + <code>templates/</code>.</td></tr>
+<tr><td class="id">H1</td><td>Hard</td><td>Mobile: никаких node builtins в bundle плагина (lazy + desktop-guard); 👍/👎 рендерятся и на mobile.</td></tr>
+<tr><td class="id">H2</td><td>Hard</td><td>Текст промптов остаётся в <code>prompts/*.md</code> (никаких хардкод-строк промптов в <code>.ts</code>).</td></tr>
+<tr><td class="id">H3</td><td>Hard</td><td>Удалить: <code>src/phases/evaluator.ts</code>, <code>prompts/evaluator.md</code>, <code>devMode.evaluatorModel</code>, событие <code>eval_result</code>, и обвязку <code>runEvaluator</code> в <code>AgentRunner</code>.</td></tr>
+<tr><td class="id">H4</td><td>Hard</td><td>Вывести из эксплуатации retrieval-eval harness: <code>scripts/eval-*.ts</code> + <code>scripts/eval/</code> gold-каталог. Новый <code>scripts/eval.ts</code> читает <code>eval.jsonl</code> (качество ответа заменяет retrieval Recall@k/MRR).</td></tr>
+<tr><td class="id">H5</td><td>Hard</td><td>Переименовать лог-файл <code>_dev.jsonl</code> → <code>eval.jsonl</code> (обновить <code>src/wiki-path.ts</code> + <code>src/storage-migration.ts</code>).</td></tr>
+<tr><td class="id">H6</td><td>Hard</td><td>Не коммитить напрямую в <code>master</code>; работать в ветке <code>dev/*</code>, мерж через PR.</td></tr>
+</tbody>
+</table>
+
+<h2>2. Схемы намерений и процесса</h2>
+
+<h3>Карта намерения — Objective → Desired Outcomes → Health Metrics</h3>
+<figure class="rpt-flow" style="align-items:stretch">
+  <div class="node obj"><b>Objective</b><br>заменить LLM-судью на человеческие 👍/👎 метки как gold-датасет</div>
+  <div class="arrow"></div>
+  <div class="stack">
+    <div class="node">DO1 · кнопки 👍/👎 desktop+mobile, клик пишет <code>eval.jsonl</code></div>
+    <div class="node">DO2 · запись с провенансом артефакта</div>
+    <div class="node">DO3 · повторный клик обновляет rating</div>
+    <div class="node">DO4 · <code>eval.ts</code> выдаёт метрику качества</div>
+    <div class="node">DO5 · <code>dspy</code> оптимизирует промпты на 👍+👎</div>
+  </div>
+  <div class="arrow"></div>
+  <div class="stack">
+    <div class="node hm">HM1 · non-dev поведение/перф не меняются</div>
+    <div class="node hm">HM2 · mobile не падает</div>
+    <div class="node hm">HM3 · lint чистый, нет новых tsc-ошибок</div>
+  </div>
+</figure>
+
+<h3>Граф автономии</h3>
+<div class="zones">
+  <div class="zone full">
+    <h4>Full autonomy <span class="badge pass">low risk</span></h4>
+    <ul>
+      <li>размещение и разметка кнопок 👍/👎 (desktop + mobile)</li>
+      <li>схема записи <code>eval.jsonl</code></li>
+      <li>i18n-строки</li>
+      <li>обновление docs/wiki</li>
+    </ul>
+  </div>
+  <div class="zone guard">
+    <h4>Guarded <span class="badge">лог + порог</span></h4>
+    <ul>
+      <li>rename <code>_dev.jsonl</code> → <code>eval.jsonl</code> + миграция</li>
+      <li>метрика качества агента в <code>scripts/eval.ts</code></li>
+    </ul>
+  </div>
+  <div class="zone prop">
+    <h4>Proposal-first <span class="badge adv">approval</span></h4>
+    <ul>
+      <li>удаление <code>evaluator.ts</code> / <code>evaluator.md</code> / retrieval-eval harness</li>
+      <li>дизайн dspy-пайплайна (что оптимизируется, как измеряется «не регрессировали 👍-кейсы»)</li>
+    </ul>
+  </div>
+  <div class="zone nogo">
+    <h4>No autonomy <span class="badge crit">human only</span></h4>
+    <ul>
+      <li>любое касание нормального (non-dev) пути query/chat</li>
+      <li>коммит в <code>master</code> напрямую</li>
+    </ul>
+  </div>
+</div>
+<p class="sub">Все 4 зоны заполнены; ни одна не N/A.</p>
+
+<h3>Связь ограничений и результатов — Constraint × Desired Outcome</h3>
+<table class="matrix">
+<thead><tr><th>Constraint</th><th>DO1</th><th>DO2</th><th>DO3</th><th>DO4</th><th>DO5</th></tr></thead>
+<tbody>
+<tr><th>S1 · devMode-gated</th><td class="x">✕</td><td></td><td></td><td></td><td></td></tr>
+<tr><th>S2 · append-only, edit не дубль</th><td class="x">✕</td><td></td><td class="x">✕</td><td></td><td></td></tr>
+<tr><th>S3 · провенанс артефакта</th><td></td><td class="x">✕</td><td></td><td></td><td class="x">✕</td></tr>
+<tr><th>S4 · eval+dspy читают prompts/+templates/</th><td></td><td></td><td></td><td class="x">✕</td><td class="x">✕</td></tr>
+<tr><th>H1 · mobile, без node builtins</th><td class="x">✕</td><td></td><td></td><td></td><td></td></tr>
+<tr><th>H2 · промпты в prompts/*.md</th><td></td><td></td><td></td><td></td><td class="x">✕</td></tr>
+<tr><th>H3 · удалить evaluator/eval_result/runEvaluator</th><td></td><td></td><td></td><td class="x">✕</td><td></td></tr>
+<tr><th>H4 · вывести retrieval-harness, новый eval.ts</th><td></td><td></td><td></td><td class="x">✕</td><td></td></tr>
+<tr><th>H5 · rename _dev.jsonl→eval.jsonl</th><td class="x">✕</td><td></td><td></td><td class="x">✕</td><td></td></tr>
+<tr><th>H6 · dev/* ветка, PR, не master</th><td></td><td></td><td></td><td></td><td></td></tr>
+</tbody>
+</table>
+<p class="sub">Пустая ячейка = нет связи. H6 — процессное ограничение, не ограничивает конкретный outcome.</p>
+
+<h3>Stop Rules — условия завершения (Done when)</h3>
+<ol class="done">
+<li>В dev mode 👍/👎 видны под ответом query/chat на <b>desktop и mobile</b>; клик пишет/обновляет запись <code>eval.jsonl</code> <code>{question, found_pages[], answer, rating, версия промпта/шаблона, модель, retrieval config}</code>.</li>
+<li>Non-dev query/chat не изменён; mobile-сборка собирается и запускается.</li>
+<li><code>npm run lint</code> чистый; нет новых tsc-ошибок в затронутых файлах.</li>
+<li><code>scripts/eval.ts</code> выдаёт метрику качества агента из <code>eval.jsonl</code>.</li>
+<li><code>scripts/dspy</code> потребляет размеченный набор (👍 + 👎) и оптимизирует промпты из <code>prompts/</code> + <code>templates/</code> без регрессии 👍-кейсов.</li>
+<li>LLM-судья (<code>evaluator.*</code>, <code>devMode.evaluatorModel</code>, <code>eval_result</code>) и retrieval-eval harness удалены.</li>
+</ol>
+<div class="note"><b>Halt-if:</b> удаление evaluator/retrieval harness или переименование файла изменило бы non-dev путь query/chat или сломало mobile-сборку.<br>
+<b>Escalate-if:</b> надёжная атрибуция метки к одной записи промпт/модель/конфиг недостижима на доступных run-данных.</div>
+
+<h2>3. Результаты проверки</h2>
+
+<div class="phase-grid">
+  <div class="phase"><b>Фаза 1 · structure <span class="badge crit">CRITICAL</span></b><span class="badge pass">passed</span></div>
+  <div class="phase"><b>Фаза 2 · completeness <span class="badge crit">CRITICAL</span></b><span class="badge pass">passed</span></div>
+  <div class="phase"><b>Фаза 3 · clarity</b><span class="badge pass">passed</span></div>
+  <div class="phase"><b>Фаза 4 · consistency <span class="badge crit">CRITICAL</span></b><span class="badge pass">passed</span></div>
+  <div class="phase"><b>Фаза 5 · alignment <span class="badge adv">advisory</span></b><span class="badge pass">passed</span></div>
+</div>
+
+<table class="rpt-table">
+<thead><tr><th>Фаза</th><th>Проверено</th></tr></thead>
+<tbody>
+<tr><td>1 · structure</td><td>Плейсхолдеров (TODO/TBD/???/FIXME) нет; все 7 секций шаблона на месте; пустых буллетов/секций нет; битых §-ссылок нет; дублей заголовков нет.</td></tr>
+<tr><td>2 · completeness</td><td>Каждый constraint в Steering XOR Hard; все 4 autonomy-зоны заполнены; Stop Rules содержит <code>Done when</code> (6 подкритериев); Health Metrics непусты; Strategic Context содержит и <code>Interacts with</code>, и <code>Priority trade-off</code>.</td></tr>
+<tr><td>3 · clarity</td><td>Desired Outcomes наблюдаемы/user-facing (кнопки видны, клик пишет запись, повторный клик обновляет, <code>eval.ts</code> выдаёт метрику); <code>Done when</code> измеримы; CRITICAL по формулировкам-реализации нет.</td></tr>
+<tr><td>4 · consistency</td><td>Внутри-док противоречий нет; constraints согласованы с Desired Outcomes; Health Metrics согласованы с Objective; Status=<code>draft</code> (не approved) — Status-guard не срабатывает.</td></tr>
+<tr><td>5 · alignment</td><td>Advisory. MCP <code>lat_search</code>/<code>lat_refs</code> недоступны — пропущено молча; CRITICAL невозможен.</td></tr>
+</tbody>
+</table>
+
+<h3>Findings</h3>
+<p class="sub">Новых findings нет — таблица пуста.</p>
+
+<h3>Сводка</h3>
+<table class="rpt-table">
+<tbody>
+<tr><td>CRITICAL open</td><td><b>0</b></td></tr>
+<tr><td>WARNING open</td><td><b>0</b></td></tr>
+<tr><td>alignment notes</td><td><b>0</b></td></tr>
+<tr><td>Финальный вердикт</td><td><span class="verdict-ok">OK — гейт открыт</span></td></tr>
+</tbody>
+</table>
+
+<footer>
+<p>intent doc — корень цепи IDD→SDD; footer смотрит вперёд.<br>
+<b>Next step: superpowers:brainstorming</b></p>
+</footer>
+</main>
+</body>
+</html>
