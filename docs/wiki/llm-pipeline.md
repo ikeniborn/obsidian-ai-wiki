@@ -1,5 +1,7 @@
 # LLM Pipeline
 
+## Overview
+
 How LLM calls are assembled, executed, and validated. All calls go through `buildChatParams`; structured calls go through `parseWithRetry`. See [[architecture#AgentRunner]].
 
 ## Prompt Files
@@ -28,7 +30,7 @@ Runs a structured LLM call with Zod validation and automatic retry (`src/phases/
 
 Retries up to `maxRetries`. Emits `structural_error` events per attempt. Throws `StructuredValidationError` when retries exhausted.
 
-### Call Sites
+## Call Sites
 
 Each call site ties a phase to a Zod schema (`src/phases/zod-schemas.ts`, `src/phases/schemas.ts`).
 
@@ -41,9 +43,10 @@ Each call site ties a phase to a Zod schema (`src/phases/zod-schemas.ts`, `src/p
 | `lint.patch` | lint (actualize) | `EntityTypesDeltaSchema` |
 | `lint-chat.fix` | lint-chat | `LintChatSchema` |
 | `query.seeds` | query | `SeedsSchema` |
+| `query.answer` | query (link repair) | `makeQueryAnswerSchema` |
 | `format.output` | format | `FormatOutputSchema` |
 
-### WikiPageSchema Constraints
+## WikiPageSchema Constraints
 
 `WikiPageSchema` rejects alias (`[[Page|alias]]`) and path (`[[folder/page]]`) links in the page body via `superRefine`. Frontmatter is not checked.
 
@@ -83,10 +86,10 @@ The format phase uses sentinel markers instead of JSON to delimit structured out
 
 `parseSentinelOutput` extracts the three sections. If `<<<END>>>` is missing, output is salvaged from the partial response and an `info_text` with "salvage" is emitted. When neither the initial call nor a retry produces a valid `<<<FORMATTED>>>` marker, `runFormat` emits an `error`. Vision descriptions are a separate side-channel inside the sentinel response. See [[operations#Format]].
 
-### Order-robust body slice
+## Order-robust body slice
 
 The vision branch of `parseSentinelOutput` ends the formatted body at the earliest trailing marker after `<<<FORMATTED>>>` — `Math.min` of the present `<<<VISION_COUNT>>>` / `<<<EMBEDS>>>` / `<<<END>>>` positions — rather than assuming a fixed `FORMATTED < VISION_COUNT` order. This prevents a stray `<<<END>>>` emitted out of order (e.g. before `<<<VISION_COUNT>>>`) from being swallowed into the body. `visionCount` / `embeds` / `truncated` parsing is unchanged.
 
-### Final sweep gate
+## Final sweep gate
 
 `stripSentinelMarkers` (`src/phases/format-utils.ts`) is a pure defensive gate that removes any residual `<<<NAME>>>` token (whole marker lines dropped, inline residues spliced, orphaned blank-line runs collapsed, `trimEnd`-ed) and returns `{ clean, removed }`. `runFormat` calls it once at the write choke point — after `restoreSourceFrontmatter`, before `vaultTools.write` — so the base, vision, and token-restore paths all pass through it; when anything is removed it yields an `info_text` warning ("Sentinel markers stripped"). A sentinel marker physically cannot reach the written note. Verified by the out-of-vault eval `docs/superpowers/evals/2026-06-19-format-sentinel-sweep-eval.md`.

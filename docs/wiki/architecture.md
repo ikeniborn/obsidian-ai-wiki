@@ -1,5 +1,7 @@
 # Architecture
 
+## Overview
+
 Obsidian plugin that builds and maintains a domain wiki from raw notes using an LLM backend. Core flow: Plugin → Controller → AgentRunner → phase functions → vault writes. See [[index#Architecture map]].
 
 ## Plugin Entry Point
@@ -45,9 +47,9 @@ Thin adapter over Obsidian's vault API (`src/vault-tools.ts`). Used by all phase
 
 ## Query Link Validator
 
-Post-stream module (`src/phases/query-link-validator.ts`) validating wiki links in a query answer against actual vault contents, after the LLM stream completes. See [[operations#Post-Stream Link Validation]].
+Post-stream modules validating wiki links in a query answer against actual vault contents, after the LLM stream completes. See [[operations#Post-Stream Link Validation]].
 
-Helpers: `extractAnswerLinks` parses `[[stem]]` refs; `findBrokenLinks` checks each against known stems; `annotateBroken` appends a "missing" marker; `rewriteWithValidLinks` calls the LLM non-streaming for a corrected answer when `validationRetries > 0`. Fallback is to annotate the original.
+`src/phases/query-link-validator.ts` holds the pure helpers: `extractAnswerLinks` parses `[[stem]]` refs; `findBrokenLinks` checks each against known stems; `annotateBroken` appends a "missing" marker. `src/phases/link-resolver.ts` deterministically maps a broken stem to its canonical `wiki_*` page by id fragment (`resolveLink`, no LLM), grouping a source note and its generated wiki page as one entity; distinct ids sharing a digit fragment stay ambiguous. Only stems the resolver cannot map fall back to a `parseWithRetry` repair under `makeQueryAnswerSchema` (callSite `query.answer`), then to annotation.
 
 ## Settings and Local Config
 

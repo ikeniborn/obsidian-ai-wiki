@@ -1,5 +1,7 @@
 # Operations
 
+## Overview
+
 The seven operations available in AI Wiki. Each maps to a phase function in `src/phases/` and produces specific vault artifacts. See [[architecture#Phase Functions]] and [[index#What it does]].
 
 ## Init
@@ -8,7 +10,7 @@ Bootstraps a new domain (`src/phases/init.ts`). File 0 calls `parseWithRetry` wi
 
 Creates the `DomainEntry` and per-domain `_config`. Wiki/format schema conventions are bundled into the plugin, not written to the vault — see [[domain-model#Bundled Schemas]].
 
-### Reinit (--force)
+## Reinit (--force)
 
 Re-runs init on an existing domain, wiping the wiki folder first. `wipeDomainFolder` removes all files then calls `removeSubfolders` to delete subdirectories (skipping locked entries). The wipe patch resets `entity_types` and `analyzed_sources` but preserves `language_notes`.
 
@@ -16,17 +18,17 @@ Re-runs init on an existing domain, wiping the wiki folder first. `wipeDomainFol
 
 Two-call entity-driven flow (`src/phases/ingest.ts`). LLM #1 extracts entities from the source; per-entity vector top-K over `_index.md` annotations selects existing pages; LLM #2 emits writes, optional `deletes` for merges, and `entity_types_delta`. See [[domain-model#DomainEntry]].
 
-### Entity Extraction
+## Entity Extraction
 
 LLM #1 uses `callSite: "ingest.entities"` with `EntitiesOutputSchema` (`{reasoning, entities: [{name, type?, context_snippet?}]}`). `parseWithRetry` validates; exhausted retries halt the run with an error event and empty result. Entities without a matching domain type are returned without `type`; synthesis assigns it via `entity_types_delta`. See [[llm-pipeline#Call Sites]].
 
-### Per-Entity Retrieval
+## Per-Entity Retrieval
 
 After extraction, `PageSimilarityService.selectByEntities` runs per-entity top-K over `_index.md` annotations — the union of all per-entity hits is the existing-pages context for LLM #2 (BFS is not used). See [[retrieval#PageSimilarityService]].
 
 In `embedding` mode, all entity queries go in one batched POST to `/embeddings`; missing page-annotation vectors are fetched in batches (up to 100 per call); cache hits skip the fetch. In `jaccard` mode, per-entity Jaccard scoring over annotations selects top-K. `allFailed` is true only when paths exist but none succeed — an empty wiki is not a failure. An empty top-K for an entity is a create signal, not an error.
 
-### Wiki Stem Mask + Collision Guard
+## Wiki Stem Mask + Collision Guard
 
 Every wiki page filename stem must match `wiki_<domain.id>_<entity_slug>` in lowercase snake_case. Enforced at four layers. See [[domain-model#Wiki Stem Mask]].
 
@@ -37,7 +39,7 @@ Every wiki page filename stem must match `wiki_<domain.id>_<entity_slug>` in low
 
 **Check B — missing wiki_sources cleanup.** After populating `existingPages`, ingest removes pages whose frontmatter lacks a `wiki_sources:` field (structurally invalid regardless of filename), deletes them from the in-memory map so LLM #2 gets no stale context, and emits one `info_text` with the count.
 
-### Merge Handling
+## Merge Handling
 
 When LLM #2 emits `deletes[]`, ingest removes each listed page via `vaultTools.remove` and strips its line from `_index.md` via `removeIndexAnnotation`. Each delete path is validated before removal to block path traversal: any `..`/`.` segment or a path failing `validateArticlePath` (must be `<domain>/<file>.md` inside the wiki folder) is rejected.
 
@@ -45,15 +47,15 @@ When `deletes.length` exceeds `mergeDeleteWarnThreshold` (default 5), ingest yie
 
 When the source frontmatter is broken, `runIngest` recovers it via `recoverSourceFrontmatter` (`src/utils/raw-frontmatter.ts`) before reading `wiki_added`/`wiki_articles` and upserting the backlinks. It tolerates the shapes seen in the wild: fully unfenced keys, duplicate keys (e.g. two `wiki_updated:` lines), block-list `wiki_articles`, and `wiki_*` keys stranded in the body after a leading fence. It merges the leading fenced YAML with the stray frontmatter run (dedup last-wins, list items kept), strips those lines from the body, and re-serialises a single `---` block — so the existing creation date and accumulated backlinks are recovered instead of being reset to today or dropped. A page already valid (or with no frontmatter) is returned unchanged, so the recovery is idempotent.
 
-### Result Summary
+## Result Summary
 
 After writes and deletes, ingest emits a result text broken down by action: `создано C, обновлено U, объединено M`. Nonzero terms are joined with commas in that order; the `стр.` suffix is appended only when exactly one term is nonzero. Zero-write runs report no changes.
 
-### entity_types_delta
+## entity_types_delta
 
 When the ingest response includes `entity_types_delta`, the runner merges it into `entity_types` via `mergeEntityTypes` and emits `domain_updated`, which the controller persists. Event order: `assistant_text` → source write → `source_path_added` → `domain_updated`. See [[domain-model#Domain Events]].
 
-### Link & Index Hygiene
+## Link & Index Hygiene
 
 Deterministic, LLM-free invariants enforced on every ingest (prevention side). After the WikiLink fix pass, ingest runs `stripDeadLinks` (`src/wiki-link-validator.ts`) on every page unconditionally: it removes `[[links]]` whose trailing stem is not in the vault-wide `knownStems`, tidies the surrounding whitespace/punctuation, and re-derives `wiki_outgoing_links` from the cleaned body so frontmatter and body stay synced. Links to source notes (present in `knownStems`) are never treated as dead.
 
@@ -63,37 +65,37 @@ Every written page is indexed regardless of whether LLM #2 emitted an `annotatio
 
 Two-phase retrieval (`src/phases/query.ts`): seed selection from `_index.md` annotations, then BFS expansion over the wiki graph. Similarity (embedding or Jaccard) selects seeds; graph traversal expands coverage. See [[retrieval#Query Graph Traversal]].
 
-### Seed Selection
+## Seed Selection
 
 Seeds are the wiki page IDs most relevant to the question. Both embedding and Jaccard paths capture `seedScores` for tracing. Each page's match text is its `_index.md` annotation — a rich single-line structured string (summary + `Затрагивает:` entities + `Тип:` + `Термины:` synonyms).
 
 The index line format is `- pid — annotation` — a bare `pid`, no `[[wikilink]]`, no path — so `_index.md` contributes zero edges to the Obsidian graph view. On plugin load, `src/migrate-index-format.ts#migrateIndexFormat` rewrites legacy `- [[pid]] relpath — annotation` lines idempotently. On the embedding path each page is represented by multiple vectors and the seed score is the max cosine, so a query matching a body-only fact still surfaces the page. If seed selection yields nothing, `llmSelectSeeds` asks the LLM to pick from all annotated page IDs.
 
-### BFS Expansion
+## BFS Expansion
 
 BFS always runs from the seed set. All wiki pages are read to build the graph; only BFS-expanded pages reach the LLM. `bfsExpandRanked` ranks non-seed pages and caps them at `bfsTopK` (default 10); seeds are always included. The `graph_stats` event emits `seedScores`, `expandedPages`, and `expandedScores` for tracing. See [[retrieval#Wiki Graph]].
 
-### Fusion
+## Fusion
 
 Opt-in (`nativeAgent.bfsFusion`, default off) — orders the final context by an RRF fusion of vector and graph signals over the union instead of seeds-first concat. A separate gate `nativeAgent.seedSimilarityThreshold` drops weak embedding seeds. See [[retrieval#Fusion]].
 
-### Answer Generation
+## Answer Generation
 
-System prompt from `prompts/query.md`. Injected variables: `domain_name`, `entity_types_block`, `index_block`. The user message contains `Question: {question}` followed by the context block of selected pages. The prompt enforces inline `[[WikiLink]]` references per fact, code in backticks/fences with a language tag, section headers only for multi-topic answers, and no filler.
+System prompt from `prompts/query.md`. Injected variables: `domain_name`, `available_links_block`, `entity_types_block`, `index_block`. `available_links_block` lists the valid context stems (`wiki_*` first) the model must copy verbatim, attacking broken links at the source. The user message contains `Question: {question}` followed by the context block of selected pages. The prompt enforces inline `[[WikiLink]]` references per fact, code in backticks/fences with a language tag, section headers only for multi-topic answers, and no filler.
 
-### Post-Stream Link Validation
+## Post-Stream Link Validation
 
 After the answer is streamed, `runQuery` validates all `[[WikiLink]]` references against the vault's known page stems (`src/phases/query-link-validator.ts`). See [[architecture#Query Link Validator]].
 
-Pipeline: extract links → check against vault stems → if broken and `wikiLinkValidationRetries > 0`, call `rewriteWithValidLinks` with BFS context stems as hints → re-check → if still broken, `annotateBroken` marks each with ⚠️. A corrected answer is emitted via `assistant_replace`. The `FixingLinks` tool_use event signals the rewrite pass; on failure or abort, the original is annotated as fallback.
+Pipeline: extract links → check against vault stems → for each broken stem, `resolveLink` (`src/phases/link-resolver.ts`) deterministically maps it to its canonical `wiki_*` page by id fragment (0 LLM, prefer `wiki_*`; ambiguous or unknown stems left unresolved) → unresolved stems, when `wikiLinkValidationRetries > 0`, get one structured `parseWithRetry` repair pass (`makeQueryAnswerSchema`, callSite `query.answer`; see [[llm-pipeline#Call Sites]]) → anything still broken is marked by `annotateBroken`. The `FixingLinks` tool_use event signals the fix pass and its `tool_result` preview is structured (`resolved N (det)` / `llm-fixed N` / `annotated N`) for diagnosability. A corrected answer is emitted via `assistant_replace`. With `wikiLinkValidationRetries = 0` the LLM repair is skipped — deterministic resolve, then annotate.
 
-### Query Trace UI
+## Query Trace UI
 
 The `graph_stats` event is rendered by `src/view.ts#formatGraphStatsLines` (a pure function). Integration test specs for the link-validation pipeline live in [[query-sentinel-tests]].
 
 When `agentLogEnabled` is true, scores and a BFS-by-hop breakdown render in multi-line trace format; when false, a compact single-line form is shown. Both forms now include a short retrieval tag (`vector` / `jaccard (low …)` / `jaccard (embed failed)` / `llm seeds`) built by `retrievalTag` from `retrievalMode`/`denseMax`/`seedFallbackReason`.
 
-### History Re-run
+## History Re-run
 
 The history ↺ Re-run button re-runs a stored query against its **original** domain, not the current dropdown selection — resolved from the entry's saved `domainId`, validated, then passed straight to the query.
 
@@ -107,19 +109,19 @@ Analyzes wiki pages for a domain one article at a time (`src/phases/lint.ts`). F
 
 Per-article loop: select top-K → BFS expand (depth 1) → LLM call → apply fixes (`fixWikiLinks`, then `validateWikiSources` keeps entries resolvable by stem OR title) → process `deletes` → rebuild graph + refresh vectors. After all articles: post-loop empty-sources deletion, source-file `wiki_articles` cleanup (outside `!Wiki/` only, validated against all domains), `actualizeDomainConfig`, backlink sync, `appendWikiLog`.
 
-### Lint Options
+## Lint Options
 
 `runLint` accepts two optional parameters. `useLlm` (default true) — when false, skips the per-article LLM loop and `actualizeDomainConfig`; lint runs programmatic-only (`cleanupInvalidPages`), much faster for large wikis. `entityTypeFilter` (default `[]`) — when non-empty, filters article paths to wiki pages whose subfolder matches a requested entity type, applied before both paths.
 
 `LintOptionsModal` (`src/modals.ts`) takes the pre-selected domain, a Use-LLM toggle, and per-entity-type toggles with `(N)` article counts plus select-all/deselect-all. Submit passes `{ useLlm, entityTypeFilter }`.
 
-### Cleanup Pass
+## Cleanup Pass
 
 Before the Glob step, lint runs `cleanupInvalidPages` to remove stale or malformed pages (files starting with `_` are skipped). A page is deleted if its stem fails `GENERIC_WIKI_STEM_REGEX` or its frontmatter lacks `wiki_sources`. A `step` event is emitted when pages are deleted.
 
 After the per-article loop, in the always-on block that runs with the LLM on or off, lint applies the same deterministic hygiene as ingest (cure side). It strips dead `[[links]]` from every page body via `stripDeadLinks` using the vault-wide `knownStems` (the retained `filterStaleWikiLinks` frontmatter pass is then a no-op on the synced result), then runs `reconcileIndex` bidirectionally over the full domain page set — adding pages missing from `_index.md` with a fallback annotation and removing orphan entries. This heals drift prevention cannot reach (legacy un-annotated pages, renamed/merged files) and emits an `Index reconciled: +A / -R` report line. See [[operations#Link & Index Hygiene]].
 
-### Backlink Sync
+## Backlink Sync
 
 After writing fixed pages, lint syncs `wiki_articles` backlinks into source files. For each wiki page with `wiki_sources`, it resolves each source to a vault path and appends the wiki page as `[[WikiPageName]]`. `wiki_sources` uses bare names; lint builds a `stemToPath` map from all vault `.md` files to resolve them. Legacy path-style entries are used as-is.
 
@@ -139,19 +141,19 @@ Reformats a non-wiki markdown page without changing facts (`src/phases/format.ts
 
 Output parsing uses sentinel markers instead of JSON for robustness. Iterative refinement via `formatRefine`. A mobile Format button makes Format available on mobile too (no longer desktop-only). When `vision.enabled` and `vision.model` are set, a pre-step analyzes embedded images, PDFs, and Excalidraw files (`src/phases/attachment-analyzer.ts`); descriptions are inserted into the formatted output only — the source file is never modified.
 
-### Frontmatter Restore
+## Frontmatter Restore
 
 `runFormat` restores the source frontmatter onto the LLM output before writing the preview, via the shared `restoreSourceFrontmatter` (`src/utils/raw-frontmatter.ts`) — so preview and apply are identical.
 
 It preserves the source `wiki_*` tracking fields (`wiki_added`/`wiki_updated`/`wiki_articles`) when the original carries a `wiki_updated`, and ALWAYS normalizes the YAML (dedupe keys, drop invalid values, re-serialize). The temp preview and the `format_preview` event therefore reflect the restored frontmatter, not only the applied file. The function is idempotent, so the controller's apply-time call is a no-op on already-restored content.
 
-### Progress Language
+## Progress Language
 
 The format progress stream follows the configured language. `AgentRunner` resolves it with `resolveLang(outputLanguage)` (layer A) and passes the matching `formatProgress` bundle into `runFormat` (`src/i18n.ts`). The same `resolveLang` resolver is used for ingest, lint, and init status strings.
 
 An explicit `ru`/`en`/`es` wins; `auto`/undefined falls back to the Obsidian UI locale (`moment.locale()`). Every progress string — analysing, salvage/truncation notices, sentinel-invalid, write-failure — is a bundle lookup. `format.ts` type-only-imports `FormatProgress` to stay free of an `obsidian` runtime dependency, and an English fallback keeps `runFormat` usable without an explicit bundle.
 
-### Vision Pre-Step
+## Vision Pre-Step
 
 Image and PDF diagram embeds are processed in two stages: the model reads the drawing literally as a silent internal step, then emits a structured, logical description of what the scheme means (purpose, components, flow), and recreates the structure as a `mermaid` block (flow/architecture) or a markdown table (grid/matrix). Excalidraw uses a dedicated prompt (prose/lists only, no `mermaid`); embeds are rendered to PNG by the host `obsidian-excalidraw-plugin` and skipped when the host is absent.
 
@@ -167,13 +169,13 @@ Both the preview modal and the phase compute the same plan from the pure `src/so
 
 `DeleteSourceModal` (`src/modals.ts`) previews the N pages to delete and M to rebuild with a permanent-deletion warning before any change. Delete is exempt from the mobile dispatch guard, so it works on mobile like Query and Format.
 
-### Execution order
+## Execution order
 
 `runDelete` runs: drop the source from `source_paths`/`analyzed_sources` (via `source_path_removed` + `domain_updated`, see [[domain-model#Domain Events]]) → wipe `toRebuild` pages → re-ingest each remaining source sequentially (reusing [[operations#Ingest]], collecting per-source failures without aborting) → delete `toDelete` pages → strip stale `wiki_articles` backlinks → invalidate the graph cache.
 
 Every page removal is `validateArticlePath`-guarded (`<domain>/<file>.md`, no traversal). Inner `runIngest` `result` events are suppressed so only the final result reaches the view.
 
-### Source file deleted last
+## Source file deleted last
 
 The source file is permanently removed (`vaultTools.remove`, no trash) **last**, and only when there were zero rebuild failures **and** the run was not aborted. An abort mid-rebuild leaves wiped pages un-rebuilt; deleting the source then would be unrecoverable, so the source is kept and the result reports `source kept — cancelled` / `source kept — retry`.
 
