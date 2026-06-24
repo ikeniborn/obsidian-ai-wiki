@@ -32,6 +32,10 @@ review:
 chain:
   intent: null
   spec: docs/superpowers/specs/2026-06-24-query-link-resolver-design.md
+result_check:
+  verdict: OK
+  plan_hash: 4541a8a362fd086c
+  last_run: 2026-06-24
 ---
 
 # Query Link Resolver Implementation Plan
