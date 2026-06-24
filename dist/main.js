@@ -27327,6 +27327,13 @@ function computeChangedSources(input) {
   }
   return { changed };
 }
+function parsePageSources(content) {
+  const fmMatch = /^---\n([\s\S]*?)\n---/.exec(content);
+  if (!fmMatch) return [];
+  const listMatch = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
+  if (!listMatch) return [];
+  return listMatch[1].split("\n").map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim()).filter(Boolean).map((t) => t.replace(/^["']|["']$/g, "").replace(/^\[\[|\]\]$/g, "").trim()).map((t) => t.split("/").pop().replace(/\.md$/, "")).filter(Boolean);
+}
 function capList(names, cap = 20) {
   if (names.length <= cap) return { shown: names, overflow: 0 };
   return { shown: names.slice(0, cap), overflow: names.length - cap };
@@ -50523,6 +50530,16 @@ var WikiController = class {
       return p.startsWith(base) ? p.slice(base.length).replace(/^\//, "") : p;
     };
     const sourceTFiles = collectMdInPaths(this.app.vault, (entry.source_paths ?? []).map(toVaultRel));
+    const seen = new Set(sourceTFiles.map((f) => f.path));
+    for (const sp of (entry.source_paths ?? []).map(toVaultRel)) {
+      if (sp.endsWith(".md") && !seen.has(sp)) {
+        const tf = this.app.vault.getFileByPath(sp);
+        if (tf) {
+          sourceTFiles.push(tf);
+          seen.add(sp);
+        }
+      }
+    }
     const sourceFiles = [];
     for (const f of sourceTFiles) {
       sourceFiles.push({ stem: f.basename, path: f.path, mtime: await vaultTools.mtime(f.path) });
@@ -50535,7 +50552,7 @@ var WikiController = class {
         content = await this.app.vault.adapter.read(f.path);
       } catch {
       }
-      wikiPages.push({ path: f.path, mtime: await vaultTools.mtime(f.path), sources: parseWikiSources(content) });
+      wikiPages.push({ path: f.path, mtime: await vaultTools.mtime(f.path), sources: parsePageSources(content) });
     }
     const { changed } = computeChangedSources({ sourceFiles, wikiPages });
     return { changed, totalSources: sourceFiles.length, wikiFileCount: wikiTFiles.length };
