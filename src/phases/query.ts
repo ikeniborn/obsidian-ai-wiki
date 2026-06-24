@@ -265,8 +265,7 @@ export async function* runQuery(
         // Unresolved stems → one structured LLM repair pass (zod-validated), then annotate.
         let llmFixed = 0;
         if (stripped.length > 0 && wikiLinkValidationRetries > 0) {
-          const validList = [...new Set([...selectedIds, ...knownStems])]
-            .filter((s) => s.startsWith("wiki_")).join(", ");
+          const validList = candidates.filter((s) => s.startsWith("wiki_")).join(", ");
           const baseMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
             { role: "system", content:
               `Rewrite the answer so every WikiLink points to a valid stem. ` +
@@ -282,6 +281,9 @@ export async function* runQuery(
               maxRetries: wikiLinkValidationRetries,
               callSite: "query.answer",
               signal,
+              // Retry/structural-error events are intentionally not surfaced here:
+              // the FixingLinks tool_result preview already reports the outcome
+              // (llm-fixed/annotated); structuralErrorCounter still records metrics.
               onEvent: () => {},
             });
             outputTokens += r.outputTokens;

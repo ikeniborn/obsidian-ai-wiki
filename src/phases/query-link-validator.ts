@@ -1,9 +1,3 @@
-import type { LlmClient, LlmCallOptions } from "../types";
-import { buildChatParams, extractUsage } from "./llm-utils";
-import { render } from "./template";
-import queryFixLinksTemplate from "../../prompts/query-fix-links.md";
-import type OpenAI from "openai";
-
 export interface QueryLinkValidationResult {
   text: string;
   brokenInitial: string[];
@@ -29,32 +23,3 @@ export function annotateBroken(text: string, broken: Set<string>): string {
   });
 }
 
-export async function rewriteWithValidLinks(
-  llm: LlmClient,
-  model: string,
-  question: string,
-  originalAnswer: string,
-  broken: string[],
-  contextStems: string[],
-  opts: LlmCallOptions,
-  signal: AbortSignal,
-): Promise<{ text: string; outputTokens: number }> {
-  const systemPrompt = render(queryFixLinksTemplate, {
-    broken: broken.join(", "),
-    available: contextStems.join(", "),
-  });
-
-  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: `Question: ${question}\n\nAnswer to fix:\n${originalAnswer}` },
-  ];
-
-  const params = buildChatParams(model, messages, { ...opts, thinkingBudgetTokens: undefined }, false);
-  const resp = await llm.chat.completions.create(
-    params as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-    { signal },
-  );
-  const text = resp.choices[0]?.message?.content ?? originalAnswer;
-  const outputTokens = extractUsage(resp) ?? 0;
-  return { text, outputTokens };
-}
