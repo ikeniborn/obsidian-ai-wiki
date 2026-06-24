@@ -9555,7 +9555,6 @@ var require_dispatcher_base = __commonJS({
       }
       get webSocketOptions() {
         return {
-          maxFragments: this[kWebSocketOptions].maxFragments ?? 131072,
           maxPayloadSize: this[kWebSocketOptions].maxPayloadSize ?? 128 * 1024 * 1024
         };
       }
@@ -13210,9 +13209,6 @@ var require_client_h1 = __commonJS({
     var FastBuffer = Buffer[Symbol.species];
     var addListener = util2.addListener;
     var removeAllListeners = util2.removeAllListeners;
-    var kIdleSocketValidation = /* @__PURE__ */ Symbol("kIdleSocketValidation");
-    var kIdleSocketValidationTimeout = /* @__PURE__ */ Symbol("kIdleSocketValidationTimeout");
-    var kSocketUsed = /* @__PURE__ */ Symbol("kSocketUsed");
     var extractBody;
     async function lazyllhttp() {
       const llhttpWasmData = process.env.JEST_WORKER_ID ? require_llhttp_wasm() : void 0;
@@ -13375,54 +13371,23 @@ var require_client_h1 = __commonJS({
             currentBufferRef = null;
           }
           const offset = llhttp.llhttp_get_error_pos(this.ptr) - currentBufferPtr;
-          if (ret !== constants.ERROR.OK) {
-            const body = data.subarray(offset);
-            if (ret === constants.ERROR.PAUSED_UPGRADE) {
-              this.onUpgrade(body);
-            } else if (ret === constants.ERROR.PAUSED) {
-              this.paused = true;
-              socket.unshift(body);
-            } else {
-              throw this.createError(ret, body);
+          if (ret === constants.ERROR.PAUSED_UPGRADE) {
+            this.onUpgrade(data.slice(offset));
+          } else if (ret === constants.ERROR.PAUSED) {
+            this.paused = true;
+            socket.unshift(data.slice(offset));
+          } else if (ret !== constants.ERROR.OK) {
+            const ptr = llhttp.llhttp_get_error_reason(this.ptr);
+            let message = "";
+            if (ptr) {
+              const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
+              message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
             }
+            throw new HTTPParserError(message, constants.ERROR[ret], data.slice(offset));
           }
         } catch (err) {
           util2.destroy(socket, err);
         }
-      }
-      finish() {
-        assert(currentParser === null);
-        assert(this.ptr != null);
-        assert(!this.paused);
-        const { llhttp } = this;
-        let ret;
-        try {
-          currentParser = this;
-          ret = llhttp.llhttp_finish(this.ptr);
-        } finally {
-          currentParser = null;
-        }
-        if (ret === constants.ERROR.OK) {
-          return null;
-        }
-        if (ret === constants.ERROR.PAUSED || ret === constants.ERROR.PAUSED_UPGRADE) {
-          this.paused = true;
-          return null;
-        }
-        return this.createError(ret, EMPTY_BUF);
-      }
-      createError(ret, data) {
-        const { llhttp, contentLength, bytesRead } = this;
-        if (contentLength && bytesRead !== parseInt(contentLength, 10)) {
-          return new ResponseContentLengthMismatchError();
-        }
-        const ptr = llhttp.llhttp_get_error_reason(this.ptr);
-        let message = "";
-        if (ptr) {
-          const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
-          message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
-        }
-        return new HTTPParserError(message, constants.ERROR[ret], data);
       }
       destroy() {
         assert(this.ptr != null);
@@ -13441,10 +13406,6 @@ var require_client_h1 = __commonJS({
       onMessageBegin() {
         const { socket, client } = this;
         if (socket.destroyed) {
-          return -1;
-        }
-        if (client[kRunning] === 0) {
-          util2.destroy(socket, new SocketError("bad response", util2.getSocketInfo(socket)));
           return -1;
         }
         const request = client[kQueue][client[kRunningIdx]];
@@ -13524,10 +13485,6 @@ var require_client_h1 = __commonJS({
       onHeadersComplete(statusCode, upgrade, shouldKeepAlive) {
         const { client, socket, headers, statusText } = this;
         if (socket.destroyed) {
-          return -1;
-        }
-        if (client[kRunning] === 0) {
-          util2.destroy(socket, new SocketError("bad response", util2.getSocketInfo(socket)));
           return -1;
         }
         const request = client[kQueue][client[kRunningIdx]];
@@ -13655,7 +13612,6 @@ var require_client_h1 = __commonJS({
         }
         request.onComplete(headers);
         client[kQueue][client[kRunningIdx]++] = null;
-        socket[kSocketUsed] = true;
         if (socket[kWriting]) {
           assert(client[kRunning] === 0);
           util2.destroy(socket, new InformationalError("reset"));
@@ -13699,19 +13655,12 @@ var require_client_h1 = __commonJS({
       socket[kWriting] = false;
       socket[kReset] = false;
       socket[kBlocking] = false;
-      socket[kIdleSocketValidation] = 0;
-      socket[kIdleSocketValidationTimeout] = null;
-      socket[kSocketUsed] = false;
       socket[kParser] = new Parser(client, socket, llhttpInstance);
       addListener(socket, "error", function(err) {
         assert(err.code !== "ERR_TLS_CERT_ALTNAME_INVALID");
         const parser = this[kParser];
         if (err.code === "ECONNRESET" && parser.statusCode && !parser.shouldKeepAlive) {
-          const parserErr = parser.finish();
-          if (parserErr) {
-            this[kError] = parserErr;
-            this[kClient][kOnError](parserErr);
-          }
+          parser.onMessageComplete();
           return;
         }
         this[kError] = err;
@@ -13726,10 +13675,7 @@ var require_client_h1 = __commonJS({
       addListener(socket, "end", function() {
         const parser = this[kParser];
         if (parser.statusCode && !parser.shouldKeepAlive) {
-          const parserErr = parser.finish();
-          if (parserErr) {
-            util2.destroy(this, parserErr);
-          }
+          parser.onMessageComplete();
           return;
         }
         util2.destroy(this, new SocketError("other side closed", util2.getSocketInfo(this)));
@@ -13737,10 +13683,9 @@ var require_client_h1 = __commonJS({
       addListener(socket, "close", function() {
         const client2 = this[kClient];
         const parser = this[kParser];
-        clearIdleSocketValidation(this);
         if (parser) {
           if (!this[kError] && parser.statusCode && !parser.shouldKeepAlive) {
-            this[kError] = parser.finish() || this[kError];
+            parser.onMessageComplete();
           }
           this[kParser].destroy();
           this[kParser] = null;
@@ -13789,7 +13734,7 @@ var require_client_h1 = __commonJS({
           return socket.destroyed;
         },
         busy(request) {
-          if (socket[kWriting] || socket[kReset] || socket[kBlocking] || socket[kIdleSocketValidation] === 1) {
+          if (socket[kWriting] || socket[kReset] || socket[kBlocking]) {
             return true;
           }
           if (request) {
@@ -13807,24 +13752,6 @@ var require_client_h1 = __commonJS({
         }
       };
     }
-    function clearIdleSocketValidation(socket) {
-      if (socket[kIdleSocketValidationTimeout]) {
-        clearTimeout(socket[kIdleSocketValidationTimeout]);
-        socket[kIdleSocketValidationTimeout] = null;
-      }
-      socket[kIdleSocketValidation] = 0;
-    }
-    function scheduleIdleSocketValidation(client, socket) {
-      socket[kIdleSocketValidation] = 1;
-      socket[kIdleSocketValidationTimeout] = setTimeout(() => {
-        socket[kIdleSocketValidationTimeout] = null;
-        socket[kIdleSocketValidation] = 2;
-        if (client[kSocket] === socket && !socket.destroyed) {
-          client[kResume]();
-        }
-      }, 0);
-      socket[kIdleSocketValidationTimeout].unref?.();
-    }
     function resumeH1(client) {
       const socket = client[kSocket];
       if (socket && !socket.destroyed) {
@@ -13836,29 +13763,6 @@ var require_client_h1 = __commonJS({
         } else if (socket[kNoRef] && socket.ref) {
           socket.ref();
           socket[kNoRef] = false;
-        }
-        if (client[kRunning] === 0 && client[kPending] > 0 && socket[kSocketUsed]) {
-          if (socket[kIdleSocketValidation] === 0) {
-            scheduleIdleSocketValidation(client, socket);
-            socket[kParser].readMore();
-            if (socket.destroyed) {
-              return;
-            }
-            return;
-          }
-          if (socket[kIdleSocketValidation] === 1) {
-            socket[kParser].readMore();
-            if (socket.destroyed) {
-              return;
-            }
-            return;
-          }
-        }
-        if (client[kRunning] === 0) {
-          socket[kParser].readMore();
-          if (socket.destroyed) {
-            return;
-          }
         }
         if (client[kSize] === 0) {
           if (socket[kParser].timeoutType !== TIMEOUT_KEEP_ALIVE) {
@@ -13912,7 +13816,6 @@ var require_client_h1 = __commonJS({
         process.emitWarning(new RequestContentLengthMismatchError());
       }
       const socket = client[kSocket];
-      clearIdleSocketValidation(socket);
       const abort = (err) => {
         if (request.aborted || request.completed) {
           return;
@@ -23697,14 +23600,18 @@ var require_parse = __commonJS({
       } else if (attributeNameLowercase === "httponly") {
         cookieAttributeList.httpOnly = true;
       } else if (attributeNameLowercase === "samesite") {
+        let enforcement = "Default";
         const attributeValueLowercase = attributeValue.toLowerCase();
-        if (attributeValueLowercase === "none") {
-          cookieAttributeList.sameSite = "None";
-        } else if (attributeValueLowercase === "strict") {
-          cookieAttributeList.sameSite = "Strict";
-        } else if (attributeValueLowercase === "lax") {
-          cookieAttributeList.sameSite = "Lax";
+        if (attributeValueLowercase.includes("none")) {
+          enforcement = "None";
         }
+        if (attributeValueLowercase.includes("strict")) {
+          enforcement = "Strict";
+        }
+        if (attributeValueLowercase.includes("lax")) {
+          enforcement = "Lax";
+        }
+        cookieAttributeList.sameSite = enforcement;
       } else {
         cookieAttributeList.unparsed ??= [];
         cookieAttributeList.unparsed.push(`${attributeName}=${attributeValue}`);
@@ -24726,10 +24633,6 @@ var require_receiver = __commonJS({
     var { closeWebSocketConnection } = require_connection();
     var { PerMessageDeflate } = require_permessage_deflate();
     var { MessageSizeExceededError } = require_errors2();
-    function failWebsocketConnectionWithCode(ws, code, reason) {
-      closeWebSocketConnection(ws, code, reason, Buffer.byteLength(reason));
-      failWebsocketConnection(ws, reason);
-    }
     var ByteParser = class extends Writable {
       #buffers = [];
       #fragmentsBytes = 0;
@@ -24741,19 +24644,16 @@ var require_receiver = __commonJS({
       /** @type {Map<string, PerMessageDeflate>} */
       #extensions;
       /** @type {number} */
-      #maxFragments;
-      /** @type {number} */
       #maxPayloadSize;
       /**
        * @param {import('./websocket').WebSocket} ws
        * @param {Map<string, string>|null} extensions
-       * @param {{ maxFragments?: number, maxPayloadSize?: number }} [options]
+       * @param {{ maxPayloadSize?: number }} [options]
        */
       constructor(ws, extensions, options = {}) {
         super();
         this.ws = ws;
         this.#extensions = extensions == null ? /* @__PURE__ */ new Map() : extensions;
-        this.#maxFragments = options.maxFragments ?? 0;
         this.#maxPayloadSize = options.maxPayloadSize ?? 0;
         if (this.#extensions.has("permessage-deflate")) {
           this.#extensions.set("permessage-deflate", new PerMessageDeflate(extensions, options));
@@ -24770,8 +24670,8 @@ var require_receiver = __commonJS({
         this.run(callback);
       }
       #validatePayloadLength() {
-        if (this.#maxPayloadSize > 0 && !isControlFrame(this.#info.opcode) && this.#info.payloadLength + this.#fragmentsBytes > this.#maxPayloadSize) {
-          failWebsocketConnectionWithCode(this.ws, 1009, "Payload size exceeds maximum allowed size");
+        if (this.#maxPayloadSize > 0 && !isControlFrame(this.#info.opcode) && this.#info.payloadLength > this.#maxPayloadSize) {
+          failWebsocketConnection(this.ws, "Payload size exceeds maximum allowed size");
           return false;
         }
         return true;
@@ -24887,11 +24787,9 @@ var require_receiver = __commonJS({
               this.#state = parserStates.INFO;
             } else {
               if (!this.#info.compressed) {
-                if (!this.writeFragments(body)) {
-                  return;
-                }
+                this.writeFragments(body);
                 if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
-                  failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
+                  failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
                   return;
                 }
                 if (!this.#info.fragmented && this.#info.fin) {
@@ -24904,15 +24802,12 @@ var require_receiver = __commonJS({
                   this.#info.fin,
                   (error, data) => {
                     if (error) {
-                      const code = error instanceof MessageSizeExceededError ? 1009 : 1007;
-                      failWebsocketConnectionWithCode(this.ws, code, error.message);
+                      failWebsocketConnection(this.ws, error.message);
                       return;
                     }
-                    if (!this.writeFragments(data)) {
-                      return;
-                    }
+                    this.writeFragments(data);
                     if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
-                      failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
+                      failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
                       return;
                     }
                     if (!this.#info.fin) {
@@ -24970,13 +24865,8 @@ var require_receiver = __commonJS({
         return buffer;
       }
       writeFragments(fragment) {
-        if (this.#maxFragments > 0 && this.#fragments.length === this.#maxFragments) {
-          failWebsocketConnectionWithCode(this.ws, 1008, "Too many message fragments");
-          return false;
-        }
         this.#fragmentsBytes += fragment.length;
         this.#fragments.push(fragment);
-        return true;
       }
       consumeFragments() {
         const fragments = this.#fragments;
@@ -25426,11 +25316,8 @@ var require_websocket = __commonJS({
        */
       #onConnectionEstablished(response, parsedExtensions) {
         this[kResponse] = response;
-        const webSocketOptions = this[kController]?.dispatcher?.webSocketOptions;
-        const maxFragments = webSocketOptions?.maxFragments;
-        const maxPayloadSize = webSocketOptions?.maxPayloadSize;
+        const maxPayloadSize = this[kController]?.dispatcher?.webSocketOptions?.maxPayloadSize;
         const parser = new ByteParser(this, parsedExtensions, {
-          maxFragments,
           maxPayloadSize
         });
         parser.on("drain", onParserDrain);
@@ -38262,6 +38149,23 @@ var FormatOutputSchema = FormatBaseSchema.superRefine((val, ctx) => {
     ctx.addIssue({ code: external_exports.ZodIssueCode.custom, path: ["report"], message: "report \u043F\u0443\u0441\u0442" });
   }
 });
+function makeQueryAnswerSchema(knownStems) {
+  return external_exports.object({
+    reasoning: external_exports.string(),
+    answer_markdown: external_exports.string().min(1),
+    citations: external_exports.array(external_exports.string()).default([])
+  }).superRefine((val, ctx) => {
+    for (const c of val.citations) {
+      if (!knownStems.has(c)) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["citations"],
+          message: `citation "${c}" is not a known wiki page stem`
+        });
+      }
+    }
+  });
+}
 
 // prompts/ingest.md
 var ingest_default = 'You are a wiki-knowledge synthesis assistant for the domain "{{domain_name}}".\nExtract entities from the source and create/update wiki pages.\n\nDOMAIN ENTITY TYPES:\n{{entity_types_block}}\n{{lang_notes}}\n\nRULES:\n- CREATE: the entity does not exist in the wiki, mentions >= min_mentions_for_page\n- UPDATE: the entity exists \u2192 add new information, do NOT remove the old\n- SKIP: too few mentions or the information is already present\n- The wiki page FILE NAME (stem without `.md`) MUST have the form `wiki_{{domain_id}}_<entity_slug>`:\n  - `<entity_slug>` = the ASCII entity name in lowercase snake_case (only `[a-z0-9_]` characters, no spaces, diacritics, or uppercase letters).\n  - Example: `wiki_{{domain_id}}_neural_networks.md`.\n- The wiki page stem must NOT match any name from the "FORBIDDEN NAMES" section \u2014 those are the source files of this domain. The wiki describes extracted entities, it does not duplicate the source files.\n- The wiki page name must NOT match the name of the current source `{{source_stem}}` (a special case of the previous rule).\n- Synthesis, not copying. Technical configs/SQL may be quoted in code blocks.\n- The article path is determined by the entity type \u2014 use the exact template from the "DOMAIN ENTITY TYPES" section (above, before the RULES block), substituting the entity name for <EntityName>\n- If the entity type is undefined or the domain has no entity_types \u2192 default path: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter is mandatory: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- tags: hierarchical tags (category/subcategory). Reuse tags from existing wiki pages (provided in the context). Create new ones following the same scheme if needed. Format: lowercase, separated by `/`, no spaces, no `#`\n- wiki_sources: ONLY sources (files outside !Wiki/) \u2014 bare name without path: [[FileName]]. Never [[wiki_domain_page]]\n- wiki_outgoing_links: ONLY wiki pages (files inside !Wiki/) \u2014 bare name without path: [[wiki_domain_page]]. Never [[SourceName]]\n  \u274C FORBIDDEN: [[CurrentSourceName]] or [[AnyOtherSourceFile]] in wiki_outgoing_links.\n     The source is already recorded in wiki_sources \u2014 there is no need to duplicate it in outgoing_links.\n     Example: processing "Liquidity farming.md" \u2192 you must NOT put [[Liquidity farming]] in outgoing_links.\n- In article bodies: ONLY [[stem]] \u2014 never [[stem|alias]]. The [[A|B]] syntax is forbidden.\n- Use the mandatory and optional section headings defined in the conventions block (_wiki_schema.md) below, exactly as written there. Each page must include the mandatory characteristics section.\n- For each page, add an "annotation" field to the JSON: a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section \u2014 synonyms, IDs, terms that are not in the heading>. Aim for ~600\u2013800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate \u2014 generic phrases raise noise in search.\n- The `annotation` field \u2014 ONLY in the JSON response. Do NOT add `annotation:` to the page frontmatter.\n- DEAD LINKS: every [[wiki_domain_slug]] in wiki_outgoing_links and in the article body must\n  either exist among the "Existing wiki pages" (provided in the context), or\n  be present in the pages list of this response. No page \u2014 do not write the link.\n{{schema_block}}\n{{forbidden_stems_block}}\n\nPATH RULE: each article path = !Wiki/<domain>/<entity>/<Article>.md \u2014 exactly 4 segments.\nNot allowed: !Wiki/os/os/network/NFS.md (domain twice), !Wiki/os/network/nfs/NFS.md (5 segments).\nAllowed:  !Wiki/os/network/NFS.md\n\nTYPE ENRICHMENT (entity_types_delta):\nIf, while analyzing the source, you discover:\n- new entity types (the type key is absent from the current list above), or\n- improvements to existing types (a more precise description or additional extraction_cues for an already existing type key) \u2014\nadd the entity_types_delta field to the JSON response. If nothing is new \u2014 simply do not include this field.\n\nDUPLICATE MERGING (merge):\nIf among the existing wiki pages you find several describing the same entity:\n- emit one new page in pages (with merged content and the canonical path)\n- list the old paths in the deletes field: [{path}, ...]\nThe old pages will be deleted, the index cleaned, and backlinks in the current source updated automatically.\n\nReturn ONLY a JSON object \u2014 no other text:\n{"reasoning":"Rationale: which entities were extracted and why","pages":[{"path":"{{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md","content":"---\\nwiki_sources: [\\"[[{{source_stem}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncontent...","annotation":"The essence of the entity in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search."}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}\n';
@@ -39765,7 +39669,7 @@ ${indexContent}` : ""
 }
 
 // prompts/query.md
-var query_default = 'You are an assistant for the wiki knowledge base of the domain "{{domain_name}}".\nAnswer strictly based on the provided wiki pages. When referring to pages, use WikiLinks [[name]].\n{{entity_types_block}}\n{{index_block}}\n\n## Formatting rules\n\n**MANDATORY \u2014 code and commands:**\n\nAny command, script, path, or config is ALWAYS rendered as a fenced block with a language tag.\n\nWRONG:\nRun sudo systemctl restart nginx\n\nRIGHT:\n```bash\nsudo systemctl restart nginx\n```\n\nWRONG:\nAdd to the config: key: value\n\nRIGHT:\n```yaml\nkey: value\n```\n\nThis rule applies inside numbered and bulleted lists as well.\n\nWRONG:\n- Disable all swap: `sudo swapoff -a`\n- Check: `sudo swapon --show`\n\nRIGHT:\n- Disable all swap:\n  ```bash\n  sudo swapoff -a\n  ```\n- Check:\n  ```bash\n  sudo swapon --show\n  ```\n\nLanguages: `bash` for shell commands, `yaml`/`toml`/`ini` for configs, `python`/`go`/`js` for code, `text` if the language is unknown.\nOnly file names and flags without spaces may be written inline in `` `backticks` ``: `/etc/fstab`, `--show`, `vm.swappiness`.\n\n**Answer structure:**\n- A short, direct answer at the start \u2014 no introductions.\n- If there are several topics \u2014 separate them with `##` headings.\n- Enumerations: ALWAYS a list (`-` or `1.`), not comma-separated inline.\n- Comparative/numeric data (\u22653 rows, \u22652 columns) \u2192 a table.\n- Key terms and entities \u2192 `**bold**` at first mention.\n\nWRONG:\nThree recipes: kharcho \u2014 2 hours, shchi \u2014 3 hours, broth \u2014 6 hours.\n\nRIGHT:\n**Soup recipes** [[Wiki-page]]:\n\n| Dish | Time |\n|---|---|\n| **Kharcho** | 1.5\u20132 h |\n| **Shchi** | 3 h |\n| **Bone broth** | \u22656 h |\n\n**Links to the wiki:**\n- Reference the source page via [[WikiLink]] after a fact or section.\n- Do not list sources in a separate block \u2014 insert links in place.\n\n**Compactness:**\n- No intro phrases ("Of course", "In order to").\n- No repetition from the context without adding meaning.\n- Use a table only if the data is genuinely tabular (\u22653 rows, \u22652 columns).\n';
+var query_default = 'You are an assistant for the wiki knowledge base of the domain "{{domain_name}}".\nAnswer strictly based on the provided wiki pages. When referring to pages, use WikiLinks [[name]].\n\n{{available_links_block}}\n{{entity_types_block}}\n{{index_block}}\n\n## Formatting rules\n\n**MANDATORY \u2014 code and commands:**\n\nAny command, script, path, or config is ALWAYS rendered as a fenced block with a language tag.\n\nWRONG:\nRun sudo systemctl restart nginx\n\nRIGHT:\n```bash\nsudo systemctl restart nginx\n```\n\nWRONG:\nAdd to the config: key: value\n\nRIGHT:\n```yaml\nkey: value\n```\n\nThis rule applies inside numbered and bulleted lists as well.\n\nWRONG:\n- Disable all swap: `sudo swapoff -a`\n- Check: `sudo swapon --show`\n\nRIGHT:\n- Disable all swap:\n  ```bash\n  sudo swapoff -a\n  ```\n- Check:\n  ```bash\n  sudo swapon --show\n  ```\n\nLanguages: `bash` for shell commands, `yaml`/`toml`/`ini` for configs, `python`/`go`/`js` for code, `text` if the language is unknown.\nOnly file names and flags without spaces may be written inline in `` `backticks` ``: `/etc/fstab`, `--show`, `vm.swappiness`.\n\n**Answer structure:**\n- A short, direct answer at the start \u2014 no introductions.\n- If there are several topics \u2014 separate them with `##` headings.\n- Enumerations: ALWAYS a list (`-` or `1.`), not comma-separated inline.\n- Comparative/numeric data (\u22653 rows, \u22652 columns) \u2192 a table.\n- Key terms and entities \u2192 `**bold**` at first mention.\n\nWRONG:\nThree recipes: kharcho \u2014 2 hours, shchi \u2014 3 hours, broth \u2014 6 hours.\n\nRIGHT:\n**Soup recipes** [[Wiki-page]]:\n\n| Dish | Time |\n|---|---|\n| **Kharcho** | 1.5\u20132 h |\n| **Shchi** | 3 h |\n| **Bone broth** | \u22656 h |\n\n**Links to the wiki:**\n- Reference the source page via [[WikiLink]] after a fact or section.\n- Do not list sources in a separate block \u2014 insert links in place.\n\n**Compactness:**\n- No intro phrases ("Of course", "In order to").\n- No repetition from the context without adding meaning.\n- Use a table only if the data is genuinely tabular (\u22653 rows, \u22652 columns).\n';
 
 // prompts/query-seeds.md
 var query_seeds_default = 'Question: "{{question}}"\nWiki index with annotations:\n{{annotated}}{{unindexed}}\n\nReturn JSON only matching this shape (most relevant page names \u2014 bare names, no path, no .md):\n\n## Output JSON Example\n{{example}}';
@@ -39820,9 +39724,6 @@ var GraphCache = class {
 };
 var graphCache = new GraphCache();
 
-// prompts/query-fix-links.md
-var query_fix_links_default = "The answer contains links to non-existent wiki pages: {{broken}}.\nRewrite the answer using only pages from the available list: {{available}}.\nDo not add new facts. Preserve the structure and formatting of the answer.";
-
 // src/phases/query-link-validator.ts
 function extractAnswerLinks(text) {
   const re = /\[\[([^\]|#/]+?)\]\]/g;
@@ -39839,26 +39740,32 @@ function annotateBroken(text, broken) {
     return broken.has(stem.trim()) ? `${full} *(not in wiki)*` : full;
   });
 }
-async function rewriteWithValidLinks(llm, model, question, originalAnswer, broken, contextStems, opts, signal) {
-  const systemPrompt = render(query_fix_links_default, {
-    broken: broken.join(", "),
-    available: contextStems.join(", ")
-  });
-  const messages = [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: `Question: ${question}
 
-Answer to fix:
-${originalAnswer}` }
-  ];
-  const params = buildChatParams(model, messages, { ...opts, thinkingBudgetTokens: void 0 }, false);
-  const resp = await llm.chat.completions.create(
-    params,
-    { signal }
-  );
-  const text = resp.choices[0]?.message?.content ?? originalAnswer;
-  const outputTokens = extractUsage(resp) ?? 0;
-  return { text, outputTokens };
+// src/phases/link-resolver.ts
+function extractId(stem) {
+  const m = stem.match(/([a-z]{1,8})?[-_ ]?(\d{2,})/i);
+  if (!m) return null;
+  return { prefix: (m[1] ?? "").toLowerCase(), digits: m[2] };
+}
+function entityKey2(p) {
+  return `${p.prefix}${p.digits}`;
+}
+function resolveLink(brokenStem, candidates) {
+  const broken = extractId(brokenStem);
+  if (!broken) return { kind: "unresolved" };
+  const matches = [];
+  for (const cand of candidates) {
+    const id = extractId(cand);
+    if (!id) continue;
+    const digitsOk = id.digits.includes(broken.digits);
+    const prefixOk = broken.prefix === "" || broken.prefix === id.prefix;
+    if (digitsOk && prefixOk) matches.push({ stem: cand, key: entityKey2(id) });
+  }
+  if (matches.length === 0) return { kind: "unresolved" };
+  const distinctKeys = new Set(matches.map((m) => m.key));
+  if (distinctKeys.size > 1) return { kind: "ambiguous" };
+  const wiki = matches.find((m) => m.stem.startsWith("wiki_"));
+  return { kind: "resolved", stem: (wiki ?? matches[0]).stem };
 }
 
 // src/phases/query.ts
@@ -39968,8 +39875,15 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   const fusedOrder = bfsFusion ? fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, graphResult.graph, graphDepth, rrfK) : void 0;
   const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3, fusedOrder);
   const entityTypesBlock = buildEntityTypesBlock2(domain);
+  const wikiFirst = [...selectedIds].sort((a, b) => Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
+  const availableLinksBlock = wikiFirst.length === 0 ? "" : [
+    "Valid WikiLink targets (use EXACTLY these, copy verbatim):",
+    ...wikiFirst.map((s) => `- ${s}`),
+    "ONLY link to a target from this list. Never invent or abbreviate stems."
+  ].join("\n");
   const systemPrompt = render(query_default, {
     domain_name: domain.name,
+    available_links_block: availableLinksBlock,
     entity_types_block: entityTypesBlock,
     index_block: indexContent ? `
 Wiki index (_index.md):
@@ -40031,35 +39945,69 @@ ${contextBlock}` }
     }
     if (!skipValidation) {
       const links = extractAnswerLinks(answer);
-      const brokenInitial = findBrokenLinks(links, knownStems);
+      const broken = findBrokenLinks(links, knownStems);
       yield {
         kind: "tool_result",
-        ok: brokenInitial.length === 0,
-        preview: brokenInitial.length === 0 ? "all valid" : `${brokenInitial.length} broken`
+        ok: broken.length === 0,
+        preview: broken.length === 0 ? "all valid" : `${broken.length} broken`
       };
-      if (brokenInitial.length > 0 && wikiLinkValidationRetries > 0) {
-        yield { kind: "tool_use", name: "FixingLinks", input: { broken: brokenInitial.length } };
-        const contextStems = [...selectedIds];
-        try {
-          const r = await rewriteWithValidLinks(llm, model, question, answer, brokenInitial, contextStems, opts, signal);
-          outputTokens += r.outputTokens;
-          const retryLinks = extractAnswerLinks(r.text);
-          const brokenFinal = findBrokenLinks(retryLinks, knownStems);
-          if (brokenFinal.length === 0) {
-            answer = r.text;
-            yield { kind: "tool_result", ok: true, preview: "fixed" };
+      if (broken.length > 0) {
+        yield { kind: "tool_use", name: "FixingLinks", input: { broken: broken.length } };
+        const candidates = [.../* @__PURE__ */ new Set([...selectedIds, ...knownStems])];
+        const resolvedPairs = [];
+        const stripped = [];
+        for (const b of broken) {
+          const r = resolveLink(b, candidates);
+          if (r.kind === "resolved" && r.stem !== b) {
+            answer = answer.split(`[[${b}]]`).join(`[[${r.stem}]]`);
+            resolvedPairs.push(`${b}\u2192${r.stem}`);
           } else {
-            answer = annotateBroken(r.text, new Set(brokenFinal));
-            yield { kind: "tool_result", ok: false, preview: `${brokenFinal.length} annotated` };
+            stripped.push(b);
           }
-        } catch (e) {
-          if (signal.aborted || e.name === "AbortError") return;
-          answer = annotateBroken(answer, new Set(brokenInitial));
-          yield { kind: "tool_result", ok: false, preview: "retry failed \u2192 annotated" };
         }
-        yield { kind: "assistant_replace", text: answer };
-      } else if (brokenInitial.length > 0) {
-        answer = annotateBroken(answer, new Set(brokenInitial));
+        let llmFixed = 0;
+        if (stripped.length > 0 && wikiLinkValidationRetries > 0) {
+          const validList = candidates.filter((s) => s.startsWith("wiki_")).join(", ");
+          const baseMessages = [
+            { role: "system", content: `Rewrite the answer so every WikiLink points to a valid stem. Broken stems: ${stripped.join(", ")}. Valid stems: ${validList}. Return JSON {reasoning, answer_markdown, citations}.` },
+            { role: "user", content: `Question: ${question}
+
+Answer to fix:
+${answer}` }
+          ];
+          try {
+            const r = await parseWithRetry({
+              llm,
+              model,
+              baseMessages,
+              opts: { ...opts, jsonMode: "json_object", thinkingBudgetTokens: void 0 },
+              schema: makeQueryAnswerSchema(knownStems),
+              maxRetries: wikiLinkValidationRetries,
+              callSite: "query.answer",
+              signal,
+              // Retry/structural-error events are intentionally not surfaced here:
+              // the FixingLinks tool_result preview already reports the outcome
+              // (llm-fixed/annotated); structuralErrorCounter still records metrics.
+              onEvent: () => {
+              }
+            });
+            outputTokens += r.outputTokens;
+            const stillBroken = findBrokenLinks(extractAnswerLinks(r.value.answer_markdown), knownStems);
+            if (stillBroken.length === 0) {
+              answer = r.value.answer_markdown;
+              llmFixed = stripped.length;
+              stripped.length = 0;
+            }
+          } catch (e) {
+            if (signal.aborted || e.name === "AbortError") return;
+          }
+        }
+        if (stripped.length > 0) answer = annotateBroken(answer, new Set(stripped));
+        const parts = [];
+        if (resolvedPairs.length) parts.push(`resolved ${resolvedPairs.length} (det): ${resolvedPairs.join(", ")}`);
+        if (llmFixed) parts.push(`llm-fixed ${llmFixed}`);
+        if (stripped.length) parts.push(`annotated ${stripped.length}: ${stripped.join(", ")}`);
+        yield { kind: "tool_result", ok: stripped.length === 0, preview: parts.join("; ") };
         yield { kind: "assistant_replace", text: answer };
       }
     }
