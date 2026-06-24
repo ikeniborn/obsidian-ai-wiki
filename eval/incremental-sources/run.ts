@@ -1,14 +1,13 @@
 /**
- * Out-of-vault eval for incremental-reinit changed-source detection.
- * Exercises the REAL pure functions from src/ plus a node-fs integration that
- * replays the A2 write order (source written before pages) and asserts the
- * detector returns no changes for an un-edited vault. No Obsidian, no LLM.
+ * Out-of-vault eval for incremental source-hash detection.
+ * Exercises the REAL pure functions from src/ — no Obsidian, no LLM, no fs.
+ * Run: npx tsx eval/incremental-sources/run.ts
  */
-import { mkdtempSync, writeFileSync, statSync, utimesSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { computeChangedSources, capList, parsePageSources } from "../../src/incremental-sources";
-import { VaultTools, type VaultAdapter } from "../../src/vault-tools";
+import {
+  computeChangedSources, hashSource, sourceBodyForHash, capList, parsePageSources,
+} from "../../src/incremental-sources";
+// TODO(Task 2): restore migrateDomainsV3 import + tests 6-7
+// import { migrateDomainsV3, type DomainEntry } from "../../src/domain";
 
 let pass = 0, fail = 0;
 const failures: string[] = [];
@@ -19,71 +18,91 @@ function check(name: string, cond: boolean, detail = ""): void {
 function section(t: string): void { console.log(`\n=== ${t} ===`); }
 
 // =====================================================================
-section("computeChangedSources — pure rules");
+section("sourceBodyForHash + hashSource");
 
-// 1: unchanged source (newer page) → not flagged (strict >)
-check("1 unchanged source excluded", computeChangedSources({
-  sourceFiles: [{ stem: "a", path: "src/a.md", mtime: 100 }],
-  wikiPages: [{ path: "w/wiki_d_a.md", mtime: 200, sources: ["a"] }],
+check("strips leading frontmatter",
+  sourceBodyForHash("---\nwiki_updated: 2026-06-25\n---\nbody text") === "body text");
+check("no-frontmatter passthrough (trailing trimmed)",
+  sourceBodyForHash("plain body\n\n") === "plain body");
+check("hashSource has fnv1a prefix + 8 hex",
+  /^fnv1a:[0-9a-f]{8}$/.test(hashSource("---\na: 1\n---\nhello")));
+check("deterministic",
+  hashSource("---\nx: 1\n---\nB") === hashSource("---\nx: 1\n---\nB"));
+check("frontmatter-only edit → SAME hash",
+  hashSource("---\nwiki_updated: 2026-06-01\n---\nBODY") ===
+  hashSource("---\nwiki_updated: 2026-06-25\nwiki_articles:\n  - \"[[p]]\"\n---\nBODY"));
+check("body edit → DIFFERENT hash",
+  hashSource("---\nx: 1\n---\nBODY one") !== hashSource("---\nx: 1\n---\nBODY two"));
+
+// =====================================================================
+section("computeChangedSources — hash rules");
+
+// 1: no stored key → changed (new source)
+check("1 new source (no key) → changed", JSON.stringify(computeChangedSources({
+  sourceFiles: [{ path: "s/a.md", hash: "fnv1a:00000001" }],
+  analyzed: {},
+}).changed) === JSON.stringify(["s/a.md"]));
+
+// 2: stored "" → silent baseline (not changed, returned in baselined)
+check("2 empty stored → baselined, not changed", (() => {
+  const r = computeChangedSources({
+    sourceFiles: [{ path: "s/a.md", hash: "fnv1a:0000beef" }],
+    analyzed: { "s/a.md": "" },
+  });
+  return r.changed.length === 0 && r.baselined["s/a.md"] === "fnv1a:0000beef";
+})());
+
+// 3: equal hash → skip
+check("3 equal hash → not changed", computeChangedSources({
+  sourceFiles: [{ path: "s/a.md", hash: "fnv1a:0000aaaa" }],
+  analyzed: { "s/a.md": "fnv1a:0000aaaa" },
 }).changed.length === 0);
 
-// 2: edited source (newer than page) → flagged
-check("2 edited source included", computeChangedSources({
-  sourceFiles: [{ stem: "a", path: "src/a.md", mtime: 300 }],
-  wikiPages: [{ path: "w/wiki_d_a.md", mtime: 200, sources: ["a"] }],
-}).changed[0] === "src/a.md");
+// 4: differing hash → changed
+check("4 differing hash → changed", computeChangedSources({
+  sourceFiles: [{ path: "s/a.md", hash: "fnv1a:0000aaaa" }],
+  analyzed: { "s/a.md": "fnv1a:0000bbbb" },
+}).changed[0] === "s/a.md");
 
-// 3: equal mtimes → NOT flagged (strict >)
-check("3 equal mtime excluded (strict >)", computeChangedSources({
-  sourceFiles: [{ stem: "a", path: "src/a.md", mtime: 200 }],
-  wikiPages: [{ path: "w/wiki_d_a.md", mtime: 200, sources: ["a"] }],
-}).changed.length === 0);
+// 5: strict subset — only the edited one
+check("5 strict subset", (() => {
+  const r = computeChangedSources({
+    sourceFiles: [
+      { path: "s/a.md", hash: "fnv1a:0000aaaa" }, // matches stored → skip
+      { path: "s/b.md", hash: "fnv1a:0000ffff" }, // differs → changed
+    ],
+    analyzed: { "s/a.md": "fnv1a:0000aaaa", "s/b.md": "fnv1a:00001111" },
+  });
+  return JSON.stringify(r.changed) === JSON.stringify(["s/b.md"]) && Object.keys(r.baselined).length === 0;
+})());
 
-// 4: new source, no associated page → flagged (trust bias)
-check("4 new source included", computeChangedSources({
-  sourceFiles: [{ stem: "b", path: "src/b.md", mtime: 50 }],
-  wikiPages: [{ path: "w/wiki_d_a.md", mtime: 200, sources: ["a"] }],
-}).changed[0] === "src/b.md");
-
-// 5: null source mtime → flagged (trust bias)
-check("5 null source mtime included", computeChangedSources({
-  sourceFiles: [{ stem: "a", path: "src/a.md", mtime: null }],
-  wikiPages: [{ path: "w/wiki_d_a.md", mtime: 200, sources: ["a"] }],
-}).changed[0] === "src/a.md");
-
-// 6: null page mtime → flagged (trust bias)
-check("6 null page mtime included", computeChangedSources({
-  sourceFiles: [{ stem: "a", path: "src/a.md", mtime: 100 }],
-  wikiPages: [{ path: "w/wiki_d_a.md", mtime: null, sources: ["a"] }],
-}).changed[0] === "src/a.md");
-
-// 7: shared page + min aggregation — A unedited vs oldest page
-check("7 min aggregation, unedited shared-source excluded", computeChangedSources({
-  sourceFiles: [{ stem: "a", path: "src/a.md", mtime: 100 }],
-  wikiPages: [
-    { path: "w/wiki_d_p1.md", mtime: 150, sources: ["a"] },        // a's own page
-    { path: "w/wiki_d_p2.md", mtime: 500, sources: ["a", "b"] },   // shared, bumped by b later
-  ],
-}).changed.length === 0);  // min(150,500)=150 ; 100 > 150? no
-
-// 8: strict subset — only the edited one of two sources
-check("8 strict subset", JSON.stringify(computeChangedSources({
-  sourceFiles: [
-    { stem: "a", path: "src/a.md", mtime: 100 },
-    { stem: "b", path: "src/b.md", mtime: 999 },
-  ],
-  wikiPages: [
-    { path: "w/wiki_d_a.md", mtime: 200, sources: ["a"] },
-    { path: "w/wiki_d_b.md", mtime: 200, sources: ["b"] },
-  ],
-}).changed) === JSON.stringify(["src/b.md"]));
+// =====================================================================
+// TODO(Task 2): restore migrateDomainsV3 import + tests 6-7
+// section("migrateDomainsV3 — list → map");
+//
+// check("6 list → map of empty hashes + flag", (() => {
+//   const domains = [{ id: "d", name: "D", wiki_folder: "d",
+//     analyzed_sources: ["x.md", "y.md"], analyzed_sources_v2: true } as unknown as DomainEntry];
+//   const { migrated } = migrateDomainsV3(domains);
+//   const m = domains[0].analyzed_sources as unknown as Record<string, string>;
+//   return migrated === true && m["x.md"] === "" && m["y.md"] === "" && domains[0].analyzed_sources_v3 === true;
+// })());
+//
+// check("7 idempotent (already v3) → no change", (() => {
+//   const domains = [{ id: "d", name: "D", wiki_folder: "d",
+//     analyzed_sources: { "x.md": "fnv1a:0000aaaa" }, analyzed_sources_v2: true,
+//     analyzed_sources_v3: true } as unknown as DomainEntry];
+//   const { migrated } = migrateDomainsV3(domains);
+//   const m = domains[0].analyzed_sources as unknown as Record<string, string>;
+//   return migrated === false && m["x.md"] === "fnv1a:0000aaaa";
+// })());
 
 // =====================================================================
 section("capList");
-check("9 capList under cap returns all", (() => {
+check("8 capList under cap returns all", (() => {
   const r = capList(["a", "b"], 20); return r.shown.length === 2 && r.overflow === 0;
 })());
-check("10 capList over cap truncates + overflow", (() => {
+check("9 capList over cap truncates + overflow", (() => {
   const names = Array.from({ length: 25 }, (_, i) => `n${i}`);
   const r = capList(names, 20); return r.shown.length === 20 && r.overflow === 5;
 })());
@@ -101,46 +120,6 @@ check("pp multiple entries",
 check("pp no wiki_sources → []",
   parsePageSources('---\ntitle: x\n---\nbody').length === 0);
 
-// =====================================================================
-section("node-fs integration — A2 order contract");
-(async () => {
-  const dir = mkdtempSync(join(tmpdir(), "incr-reinit-"));
-  try {
-    const adapter: VaultAdapter = {
-      read: async (p) => "", write: async () => {}, append: async () => {},
-      list: async () => ({ files: [], folders: [] }), exists: async () => true,
-      mkdir: async () => {},
-      stat: async (p) => { try { return { mtime: statSync(join(dir, p)).mtimeMs }; } catch { return null; } },
-    };
-    const vt = new VaultTools(adapter, dir);
-
-    // A2 write order: source FIRST, then page.
-    const srcRel = "a.md", pageRel = "wiki_d_a.md";
-    writeFileSync(join(dir, srcRel), "---\ntitle: A\n---\nbody");
-    writeFileSync(join(dir, pageRel), "---\nwiki_sources:\n  - a\n---\npage");
-
-    const srcMtime = await vt.mtime(srcRel);
-    const pageMtime = await vt.mtime(pageRel);
-    check("11 page mtime ≥ source mtime after A2 order", (pageMtime ?? 0) >= (srcMtime ?? 0),
-      `src=${srcMtime} page=${pageMtime}`);
-
-    const before = computeChangedSources({
-      sourceFiles: [{ stem: "a", path: srcRel, mtime: srcMtime }],
-      wikiPages: [{ path: pageRel, mtime: pageMtime, sources: ["a"] }],
-    });
-    check("12 un-edited vault → no changes", before.changed.length === 0, JSON.stringify(before));
-
-    // Manual edit: bump source mtime well past the page.
-    utimesSync(join(dir, srcRel), new Date(), new Date((pageMtime ?? 0) + 10_000));
-    const editedMtime = await vt.mtime(srcRel);
-    const after = computeChangedSources({
-      sourceFiles: [{ stem: "a", path: srcRel, mtime: editedMtime }],
-      wikiPages: [{ path: pageRel, mtime: pageMtime, sources: ["a"] }],
-    });
-    check("13 edited source → flagged", after.changed[0] === srcRel, JSON.stringify(after));
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-
-  console.log(`\n========================================`);
-  console.log(`TOTAL: ${pass} passed, ${fail} failed`);
-  if (fail > 0) { console.log(`FAILED: ${failures.join(", ")}`); process.exitCode = 1; }
-})();
+console.log(`\n========================================`);
+console.log(`TOTAL: ${pass} passed, ${fail} failed`);
+if (fail > 0) { console.log(`FAILED: ${failures.join(", ")}`); process.exitCode = 1; }

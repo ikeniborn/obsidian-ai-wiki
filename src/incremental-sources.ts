@@ -1,45 +1,70 @@
 /**
- * Pure changed-source detection for incremental domain re-init.
+ * Pure changed-source detection by FNV-1a content hash.
  *
  * No Obsidian / IO imports — testable out-of-vault (eval/incremental-sources/).
- * Keys ONLY on mtime: a source is "changed" when it has no associated wiki page,
- * when any relevant mtime is unavailable (trust bias: include on ambiguity), or
- * when it is strictly newer than the oldest of its associated pages. It never
- * reads wiki_added / wiki_updated or any timestamp frontmatter field.
+ * Replaces mtime-based detection with body-content hash: a source is "changed" when
+ * it has no stored hash (new), when its body differs from the stored hash, or when
+ * the stored hash is "" (silent baseline on migration). Frontmatter-only changes
+ * (wiki_updated, wiki_articles, etc.) do NOT affect the hash — only real edits do.
  */
 
 export interface SourceFileInfo {
-  /** Source filename stem (basename without ".md"). */
-  stem: string;
   /** Vault-relative source path; returned verbatim in `changed`. */
   path: string;
-  /** Modification time in epoch ms, or null when unavailable. */
-  mtime: number | null;
+  /** Current body-content hash (see hashSource). */
+  hash: string;
 }
 
-export interface WikiPageInfo {
-  path: string;
-  mtime: number | null;
-  /** Bare source stems from the page's wiki_sources frontmatter. */
-  sources: string[];
+/**
+ * Source content with the leading YAML frontmatter block removed and trailing
+ * whitespace trimmed. Whole content (trimmed) when there is no frontmatter.
+ * The plugin-managed wiki_* frontmatter and Obsidian touch/sync never reach the
+ * hash, so only real body edits change it.
+ */
+export function sourceBodyForHash(content: string): string {
+  const m = /^---\n[\s\S]*?\n---\n?/.exec(content);
+  const body = m ? content.slice(m[0].length) : content;
+  return body.replace(/\s+$/, "");
 }
 
+/** FNV-1a 32-bit over a string → 8-char lowercase hex. Pure, no deps. */
+function fnv1a(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+/** Content hash of a source's body → "fnv1a:<hex>". Prefix gates future algos. */
+export function hashSource(content: string): string {
+  return "fnv1a:" + fnv1a(sourceBodyForHash(content));
+}
+
+/**
+ * Pure changed-source detection by content hash.
+ * - source path absent from `analyzed`            → changed (new / never ingested)
+ * - stored hash is ""                             → silent baseline (return in `baselined`, not changed)
+ * - stored hash differs from current              → changed (body edited)
+ * - stored hash equals current                    → skip
+ * `baselined` is the set the caller must persist into the domain entry (migration
+ * fill — no ingest).
+ */
 export function computeChangedSources(input: {
   sourceFiles: SourceFileInfo[];
-  wikiPages: WikiPageInfo[];
-}): { changed: string[] } {
-  const { sourceFiles, wikiPages } = input;
+  analyzed: Record<string, string>;
+}): { changed: string[]; baselined: Record<string, string> } {
+  const { sourceFiles, analyzed } = input;
   const changed: string[] = [];
+  const baselined: Record<string, string> = {};
   for (const src of sourceFiles) {
-    const associated = wikiPages.filter((p) => p.sources.includes(src.stem));
-    if (associated.length === 0) { changed.push(src.path); continue; }            // new / unreflected
-    if (src.mtime === null || associated.some((p) => p.mtime === null)) {
-      changed.push(src.path); continue;                                           // ambiguous → trust bias
-    }
-    const oldestPage = Math.min(...associated.map((p) => p.mtime as number));
-    if (src.mtime > oldestPage) changed.push(src.path);                           // strict >, min aggregation
+    const stored = analyzed[src.path];
+    if (stored === undefined) { changed.push(src.path); continue; }
+    if (stored === "") { baselined[src.path] = src.hash; continue; }
+    if (stored !== src.hash) changed.push(src.path);
   }
-  return { changed };
+  return { changed, baselined };
 }
 
 /**
