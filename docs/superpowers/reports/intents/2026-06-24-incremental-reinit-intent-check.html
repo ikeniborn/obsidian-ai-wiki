@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка intent — incremental-reinit</title>
+<style>
+:root{
+  --bg:#0f1419; --panel:#1a212b; --panel2:#222c38; --fg:#e6edf3; --muted:#9aa7b4;
+  --border:#2d3a48; --accent:#4aa3ff; --ok:#3fb950; --warn:#d29922; --crit:#f85149;
+  --chip:#243244; --shadow:rgba(0,0,0,.45);
+}
+[data-theme="light"]{
+  --bg:#f5f7fa; --panel:#ffffff; --panel2:#eef2f7; --fg:#1b232c; --muted:#5a6b7a;
+  --border:#d4dde6; --accent:#1668c7; --ok:#1a7f37; --warn:#9a6700; --crit:#cf222e;
+  --chip:#e7eef6; --shadow:rgba(0,0,0,.12);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:0 0 60px}
+.wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+header{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,var(--bg),var(--bg) 70%,transparent);padding:18px 0 10px;border-bottom:1px solid var(--border)}
+.hrow{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+h1{font-size:21px;margin:0}
+h2{font-size:17px;margin:34px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+h3{font-size:14px;margin:20px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.sub{color:var(--muted);font-size:13px;margin-top:4px}
+.toggle{cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--fg);border-radius:20px;padding:6px 14px;font-size:13px}
+.toggle:hover{border-color:var(--accent)}
+.verdict{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:15px;padding:6px 14px;border-radius:8px;background:var(--panel)}
+.verdict.ok{color:var(--ok);border:1px solid var(--ok)}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;border:1px solid var(--border);background:var(--chip);color:var(--muted)}
+.badge.ok{color:var(--ok);border-color:var(--ok)}
+.badge.crit{color:var(--crit);border-color:var(--crit)}
+.badge.warn{color:var(--warn);border-color:var(--warn)}
+table{width:100%;border-collapse:collapse;margin:8px 0;background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;font-size:14px}
+th{background:var(--panel2);color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+tr:last-child td{border-bottom:none}
+td.k{white-space:nowrap;font-weight:600;color:var(--accent);width:64px}
+.note{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:6px;padding:10px 14px;margin:12px 0;font-size:14px}
+.note.warn{border-left-color:var(--warn)}
+.matrix td.hit{color:var(--ok);font-weight:700;text-align:center}
+.matrix td.cell{text-align:center;color:var(--muted)}
+.matrix th.col{writing-mode:horizontal-tb;font-size:11px}
+/* flow */
+.flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:10px;margin:12px 0}
+.node{flex:1 1 150px;min-width:140px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 12px;box-shadow:0 1px 3px var(--shadow);position:relative}
+.node .t{font-weight:700;font-size:13px;margin-bottom:3px}
+.node .d{font-size:12px;color:var(--muted)}
+.node.obj{border-color:var(--accent)}
+.node.hm{border-color:var(--ok)}
+.arrow{align-self:center;color:var(--muted);font-size:18px;flex:0 0 auto}
+/* zones */
+.zones{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:12px 0}
+.zone{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px 14px}
+.zone h4{margin:0 0 8px;font-size:13px}
+.zone.full h4{color:var(--ok)}
+.zone.guard h4{color:var(--warn)}
+.zone.prop h4{color:var(--accent)}
+.zone.no h4{color:var(--crit)}
+.zone ul{margin:0;padding-left:18px;font-size:13px;color:var(--muted)}
+.zone li{margin:3px 0}
+ul.clean{list-style:none;padding-left:0}
+ul.clean li{padding:6px 0 6px 22px;position:relative;border-bottom:1px solid var(--border);font-size:14px}
+ul.clean li:last-child{border-bottom:none}
+ul.clean li::before{content:"▸";position:absolute;left:4px;color:var(--accent)}
+.foot{margin-top:36px;padding-top:14px;border-top:1px solid var(--border);color:var(--muted);font-size:13px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.foot b{color:var(--accent)}
+code{background:var(--chip);padding:1px 5px;border-radius:4px;font-size:12.5px}
+</style>
+</head>
+<body>
+<header><div class="wrap hrow">
+  <div>
+    <h1>Проверка intent · incremental-reinit</h1>
+    <div class="sub">IDD-гейт · корень цепи IDD→SDD · 2026-06-24 · <code>intent_hash d9236cda1ec04930</code></div>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <span class="verdict ok">● OK</span>
+    <button class="toggle" id="tg">☀ / ☾</button>
+  </div>
+</div></header>
+
+<div class="wrap">
+
+<h2>1 · Резюме требований</h2>
+
+<h3>Objective</h3>
+<div class="note">Re-init домена умеет только полный rebuild (<code>--force</code> стирает всю вики-папку и переингестит все источники) — дорого, когда изменилось несколько источников. Добавить инкрементальный режим: при старте reinit выбор <b>Полный / Инкрементальный</b>; инкремент переингестит только изменённые с момента последнего отражения в вики источники после подтверждения списка.</div>
+
+<h3>Desired Outcomes</h3>
+<table>
+<tr><th class="k">ID</th><th>Наблюдаемый результат</th></tr>
+<tr><td class="k">DO1</td><td>При старте reinit пользователь выбирает режим — Полный или Инкрементальный.</td></tr>
+<tr><td class="k">DO2</td><td>Инкремент открывает диалог со списком только источников, у кого mtime файла-источника новее mtime связанной вики-страницы, + кнопка подтверждения.</td></tr>
+<tr><td class="k">DO3</td><td>По подтверждению ingest идёт последовательно только по списку; нетронутые источники не переингестятся.</td></tr>
+<tr><td class="k">DO4</td><td>Кнопка «Инкрементальный» неактивна, когда переингеститься нечему.</td></tr>
+<tr><td class="k">DO5</td><td>Новый источник (в <code>source_paths</code>, но без вики-страницы) попадает в список и инжестится.</td></tr>
+</table>
+
+<h3>Health Metrics</h3>
+<table>
+<tr><th class="k">ID</th><th>Не должно деградировать</th></tr>
+<tr><td class="k">HM1</td><td>Полный reinit (<code>--force</code>) — байт-в-байт без изменений.</td></tr>
+<tr><td class="k">HM2</td><td>Инкремент = строгое подмножество; неизменённые источники <b>никогда</b> не переингестятся (критично: при mtime-бампе фича вырождается в полный прогон).</td></tr>
+<tr><td class="k">HM3</td><td>Существующий ingest-конвейер на источник без изменений (entity extraction, stem mask, link &amp; index hygiene).</td></tr>
+<tr><td class="k">HM4</td><td>Frontmatter источников не трогается новой логикой выбора (только чтение mtime).</td></tr>
+</table>
+
+<h3>Constraints</h3>
+<table>
+<tr><th class="k">ID</th><th>Тип</th><th>Ограничение</th></tr>
+<tr><td class="k">S1</td><td><span class="badge">steering</span></td><td>При неоднозначности сравнения mtime → включить источник (trust-смещение).</td></tr>
+<tr><td class="k">S2</td><td><span class="badge">steering</span></td><td>Список в диалоге человекочитаемый (имя файла), показывать счётчик.</td></tr>
+<tr><td class="k">S3</td><td><span class="badge">steering</span></td><td>Прогресс/сообщения на текущем языке UI (<code>resolveLang</code>).</td></tr>
+<tr><td class="k">H1</td><td><span class="badge crit">hard</span></td><td>Логика инкремента только на mtime файлов: mtime(источник) vs mtime(вики-страница). Любой frontmatter запрещён как источник истины — только визуал.</td></tr>
+<tr><td class="k">H2</td><td><span class="badge crit">hard</span></td><td>Дату последней перегонки НЕ хранить; каждый запуск — живое сравнение mtime.</td></tr>
+<tr><td class="k">H3</td><td><span class="badge crit">hard</span></td><td>Путь полного reinit (<code>--force</code>) не меняется.</td></tr>
+<tr><td class="k">H4</td><td><span class="badge crit">hard</span></td><td><code>VaultTools</code> получает метод чтения mtime; phase-код не импортирует <code>obsidian</code> напрямую.</td></tr>
+<tr><td class="k">H5</td><td><span class="badge crit">hard</span></td><td>mtime-инвариант (HUMAN CHECKPOINT): ingest пишет и вики-страницу, и frontmatter источника. Pipeline обязан гарантировать, что после ingest вики-страница не старше источника (писать страницу последней), иначе неизменённый источник ложно переотметится.</td></tr>
+<tr><td class="k">H6</td><td><span class="badge crit">hard</span></td><td>Разработка в <code>dev/*</code> ветке; merge в <code>master</code> только через PR.</td></tr>
+</table>
+
+<h2>2 · Карта намерения</h2>
+<div class="sub">Как Objective превращается в наблюдаемый результат и чем измеряется.</div>
+<div class="flow">
+  <div class="node obj"><div class="t">Objective</div><div class="d">дешёвый инкрементальный reinit</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="t">DO1</div><div class="d">выбор режима</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="t">DO2</div><div class="d">диалог-список по mtime</div></div>
+  <div class="arrow">→</div>
+  <div class="node"><div class="t">DO3</div><div class="d">ingest только по списку</div></div>
+</div>
+<div class="flow">
+  <div class="node"><div class="t">DO4</div><div class="d">кнопка неактивна, если пусто</div></div>
+  <div class="arrow">+</div>
+  <div class="node"><div class="t">DO5</div><div class="d">новый источник включён</div></div>
+  <div class="arrow">⇒ измеряется</div>
+  <div class="node hm"><div class="t">HM1–HM4</div><div class="d">full неизменён · строгое подмножество · конвейер неизменён · frontmatter не тронут</div></div>
+</div>
+
+<h2>3 · Граф автономии</h2>
+<div class="zones">
+  <div class="zone full"><h4>● Full</h4><ul>
+    <li>mtime-метод <code>VaultTools</code></li><li>модалка-список</li><li>селектор режима Full/Incremental</li><li>i18n / тексты</li><li>фильтрация источников по mtime</li></ul></div>
+  <div class="zone guard"><h4>● Guarded</h4><ul>
+    <li>последовательный ingest по списку</li><li>edge: новый источник без вики-страницы</li><li>edge: источник с пропавшими вики-страницами</li></ul></div>
+  <div class="zone prop"><h4>● Proposal-first</h4><ul>
+    <li>порядок записи в существующем ingest (mtime-инвариант)</li><li><b>HUMAN CHECKPOINT</b> — риск для full reinit</li></ul></div>
+  <div class="zone no"><h4>● No autonomy</h4><ul>
+    <li>merge в <code>master</code> (только PR)</li></ul></div>
+</div>
+
+<h2>4 · Связь ограничений и результатов</h2>
+<div class="sub">Отметка = constraint ограничивает outcome. Пустая ячейка = нет связи.</div>
+<table class="matrix">
+<tr><th>Constraint</th><th class="col">DO1</th><th class="col">DO2</th><th class="col">DO3</th><th class="col">DO4</th><th class="col">DO5</th></tr>
+<tr><td>S1 trust-смещение</td><td class="cell">·</td><td class="hit">✔</td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td></tr>
+<tr><td>S2 человекочит.+счётчик</td><td class="cell">·</td><td class="hit">✔</td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td></tr>
+<tr><td>S3 язык UI</td><td class="cell">·</td><td class="hit">✔</td><td class="hit">✔</td><td class="cell">·</td><td class="cell">·</td></tr>
+<tr><td>H1 только mtime</td><td class="cell">·</td><td class="hit">✔</td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td></tr>
+<tr><td>H2 не хранить дату</td><td class="cell">·</td><td class="hit">✔</td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td></tr>
+<tr><td>H3 full не меняется</td><td class="hit">✔</td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td></tr>
+<tr><td>H4 VaultTools mtime</td><td class="cell">·</td><td class="hit">✔</td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td></tr>
+<tr><td>H5 mtime-инвариант</td><td class="cell">·</td><td class="cell">·</td><td class="hit">✔</td><td class="hit">✔</td><td class="cell">·</td></tr>
+<tr><td>H6 dev/* + PR (процессный)</td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td><td class="cell">·</td></tr>
+</table>
+
+<h2>5 · Stop Rules</h2>
+<ul class="clean">
+  <li><b>Done when:</b> на волте с N источниками, где правлено K → инкремент-диалог показывает ровно K (+новые), ingest идёт только по ним, полный reinit на том же волте без изменений.</li>
+  <li><b>Halt if:</b> полный reinit (<code>--force</code>) меняет наблюдаемое поведение.</li>
+  <li><b>Escalate if:</b> сравнение mtime не может надёжно исключить неизменённые источники (инвариант недостижим без хранения state).</li>
+</ul>
+
+<h2>6 · Результаты проверки</h2>
+<table>
+<tr><th>Фаза</th><th>Статус</th></tr>
+<tr><td>structure <span class="sub">(CRITICAL)</span></td><td><span class="badge ok">passed</span></td></tr>
+<tr><td>completeness <span class="sub">(CRITICAL)</span></td><td><span class="badge ok">passed</span></td></tr>
+<tr><td>clarity</td><td><span class="badge ok">passed</span></td></tr>
+<tr><td>consistency <span class="sub">(CRITICAL)</span></td><td><span class="badge ok">passed</span></td></tr>
+<tr><td>alignment <span class="sub">(advisory)</span></td><td><span class="badge ok">passed</span></td></tr>
+</table>
+
+<h3>Findings</h3>
+<div class="note">Findings нет — ни одной находки во всех 5 фазах.</div>
+
+<table>
+<tr><th>Метрика</th><th>Значение</th></tr>
+<tr><td>CRITICAL open</td><td><b>0</b></td></tr>
+<tr><td>WARNING open</td><td><b>0</b></td></tr>
+<tr><td>alignment notes</td><td><b>0</b></td></tr>
+<tr><td>Финальный вердикт</td><td><span class="verdict ok" style="padding:2px 10px">● OK</span></td></tr>
+</table>
+
+<div class="foot">
+  <span>intent — корень цепи IDD→SDD; upstream нет.</span>
+  <span>Next step: <b>superpowers:brainstorming</b></span>
+</div>
+
+</div>
+
+<script>
+(function(){
+  var b=document.getElementById('tg'), r=document.documentElement;
+  b.addEventListener('click',function(){
+    r.setAttribute('data-theme', r.getAttribute('data-theme')==='dark'?'light':'dark');
+  });
+})();
+</script>
+</body>
+</html>
