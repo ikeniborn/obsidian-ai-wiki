@@ -262,6 +262,15 @@ const en = {
     reinitConfirmTitle: "Re-init — confirm",
     reinitConfirmBody: (id: string, wikiFiles: number, srcFiles: number, srcCount: number) =>
       `Domain «${id}»: ${wikiFiles} wiki files will be deleted and rebuilt from ${srcFiles} md-files (${srcCount} source paths). Continue?`,
+    reinitModeTitle: "Re-init — choose mode",
+    reinitModeFullDesc: (wikiFiles: number, srcCount: number) =>
+      `Full: delete all ${wikiFiles} wiki files and rebuild from all ${srcCount} sources.`,
+    reinitModeIncrementalDesc: (n: number) =>
+      `Incremental: re-ingest only the ${n} changed source(s) listed below.`,
+    reinitModeNoneChanged: "No changed sources — nothing to re-ingest incrementally.",
+    reinitModeMore: (k: number) => `… +${k} more`,
+    reinitModeFull: "Full",
+    reinitModeIncremental: (n: number) => `Incremental (${n})`,
     fileErrorTitle: "Error processing file",
     fileErrorSkip: "Skip",
     fileErrorRetry: "Retry",
@@ -588,6 +597,15 @@ const ru: I18n = {
     reinitConfirmTitle: "Re-init — подтвердите",
     reinitConfirmBody: (id: string, wikiFiles: number, srcFiles: number, srcCount: number) =>
       `Домен «${id}»: будет удалено ${wikiFiles} wiki-файлов и пересобрано из ${srcFiles} md-файлов (${srcCount} sourcePaths). Продолжить?`,
+    reinitModeTitle: "Re-init — выберите режим",
+    reinitModeFullDesc: (wikiFiles: number, srcCount: number) =>
+      `Полный: удалить все ${wikiFiles} wiki-файлов и пересобрать из всех ${srcCount} источников.`,
+    reinitModeIncrementalDesc: (n: number) =>
+      `Инкрементальный: переобработать только ${n} изменённых источников из списка ниже.`,
+    reinitModeNoneChanged: "Изменённых источников нет — инкрементальный re-init не требуется.",
+    reinitModeMore: (k: number) => `… ещё +${k}`,
+    reinitModeFull: "Полный",
+    reinitModeIncremental: (n: number) => `Инкрементальный (${n})`,
     fileErrorTitle: "Ошибка при обработке файла",
     fileErrorSkip: "Пропустить",
     fileErrorRetry: "Повторить",
@@ -892,6 +910,15 @@ const es: I18n = {
     reinitConfirmTitle: "Re-init — confirmar",
     reinitConfirmBody: (id: string, wikiFiles: number, srcFiles: number, srcCount: number) =>
       `Dominio «${id}»: se borrarán ${wikiFiles} archivos wiki y se reconstruirán desde ${srcFiles} archivos md (${srcCount} rutas fuente). ¿Continuar?`,
+    reinitModeTitle: "Re-init — elegir modo",
+    reinitModeFullDesc: (wikiFiles: number, srcCount: number) =>
+      `Completo: eliminar los ${wikiFiles} archivos wiki y reconstruir desde las ${srcCount} fuentes.`,
+    reinitModeIncrementalDesc: (n: number) =>
+      `Incremental: reprocesar solo las ${n} fuentes modificadas de la lista.`,
+    reinitModeNoneChanged: "Sin fuentes modificadas — re-init incremental innecesario.",
+    reinitModeMore: (k: number) => `… +${k} más`,
+    reinitModeFull: "Completo",
+    reinitModeIncremental: (n: number) => `Incremental (${n})`,
     fileErrorTitle: "Error al procesar archivo",
     fileErrorSkip: "Saltar",
     fileErrorRetry: "Reintentar",
