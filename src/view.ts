@@ -119,6 +119,7 @@ export class LlmWikiView extends ItemView {
   private chatTickHandle: ReturnType<typeof window.setTimeout> | null = null;
   private chatStartTs = 0;
   private lastUserMessage = "";
+  private lastRunId: string | null = null;
   private startTs = 0;
   private lastStepTs = 0;
   private llmStats: Array<{ inputTokens: number; outputTokens: number; ttftMs: number; llmDurationMs: number; }> = [];
@@ -636,7 +637,7 @@ export class LlmWikiView extends ItemView {
       this.mobileWaitingEl = null;
     }
     if (ev.kind === "format_preview") {
-      this.renderFormatPreview(ev.tempPath, ev.report, ev.missingTokens);
+      this.renderFormatPreview(ev.tempPath, ev.report, ev.missingTokens, ev.runId, ev.visionCount);
       return;
     }
     if (ev.kind === "format_applied" || ev.kind === "format_cancelled") {
@@ -813,17 +814,35 @@ export class LlmWikiView extends ItemView {
       this.scrollSteps();
     } else if (ev.kind === "result") {
       this.stopWaiting();
-    } else if (ev.kind === "eval_result") {
-      const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
-      const text = `**[eval: ${ev.score}/10]** ${ev.reasoning}`;
-      const comp = new Component();
-      comp.load();
-      void MarkdownRenderer.render(this.app, text, el, "", comp);
     }
     this.updateMetrics();
   }
 
-  private renderFormatPreview(tempPath: string, report: string, missing: { token: string; context: string }[]): void {
+  private renderRatingRow(
+    parent: HTMLElement,
+    runId: string,
+    axis: import("./eval-log").RatingAxis,
+    label: string,
+  ): void {
+    if (!this.plugin.settings.devMode?.enabled) return;
+    const T = i18n();
+    const row = parent.createDiv("ai-wiki-rating-row");
+    row.createSpan({ text: label, cls: "ai-wiki-rating-label" });
+    const up = row.createEl("button", { text: "👍", cls: "ai-wiki-rating-btn", attr: { "aria-label": T.view.ratingUp } });
+    const down = row.createEl("button", { text: "👎", cls: "ai-wiki-rating-btn", attr: { "aria-label": T.view.ratingDown } });
+    const select = (btn: HTMLElement, other: HTMLElement, rating: "up" | "down") => {
+      btn.addEventListener("click", () => {
+        const active = btn.hasClass("is-active");
+        btn.toggleClass("is-active", !active);
+        other.removeClass("is-active");
+        void this.plugin.controller.rateRun(runId, axis, rating);
+      });
+    };
+    select(up, down, "up");
+    select(down, up, "down");
+  }
+
+  private renderFormatPreview(tempPath: string, report: string, missing: { token: string; context: string }[], runId?: string, visionCount?: number): void {
     const T = i18n();
     this.formatPreviewSection?.remove();
 
@@ -889,6 +908,14 @@ export class LlmWikiView extends ItemView {
         sendBtn.click();
       }
     });
+
+    if (runId) {
+      const section = this.formatPreviewSection;
+      this.renderRatingRow(section, runId, "formatting", i18n().view.ratingFormatting);
+      if ((visionCount ?? 0) > 0) {
+        this.renderRatingRow(section, runId, "recognition", i18n().view.ratingRecognition);
+      }
+    }
   }
 
   async finish(entry: RunHistoryEntry): Promise<void> {
@@ -913,6 +940,12 @@ export class LlmWikiView extends ItemView {
       this.finalEl.removeClass("ai-wiki-hidden");
       this.resultOpen = true;
       this.resultToggle.setText("▼");
+
+      this.lastRunId = entry.id;
+      const QC_OPS: WikiOperation[] = ["query", "chat", "lint-chat"];
+      if (QC_OPS.includes(entry.operation) && entry.status === "done") {
+        this.renderRatingRow(this.resultSection, entry.id, "answer", i18n().view.ratingAnswer);
+      }
 
       const CHAT_OPS: WikiOperation[] = ["lint", "lint-chat", "ingest", "query"];
       if (CHAT_OPS.includes(entry.operation) && entry.status === "done" && entry.finalText) {
