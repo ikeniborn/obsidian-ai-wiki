@@ -9555,7 +9555,6 @@ var require_dispatcher_base = __commonJS({
       }
       get webSocketOptions() {
         return {
-          maxFragments: this[kWebSocketOptions].maxFragments ?? 131072,
           maxPayloadSize: this[kWebSocketOptions].maxPayloadSize ?? 128 * 1024 * 1024
         };
       }
@@ -13210,9 +13209,6 @@ var require_client_h1 = __commonJS({
     var FastBuffer = Buffer[Symbol.species];
     var addListener = util2.addListener;
     var removeAllListeners = util2.removeAllListeners;
-    var kIdleSocketValidation = /* @__PURE__ */ Symbol("kIdleSocketValidation");
-    var kIdleSocketValidationTimeout = /* @__PURE__ */ Symbol("kIdleSocketValidationTimeout");
-    var kSocketUsed = /* @__PURE__ */ Symbol("kSocketUsed");
     var extractBody;
     async function lazyllhttp() {
       const llhttpWasmData = process.env.JEST_WORKER_ID ? require_llhttp_wasm() : void 0;
@@ -13375,54 +13371,23 @@ var require_client_h1 = __commonJS({
             currentBufferRef = null;
           }
           const offset = llhttp.llhttp_get_error_pos(this.ptr) - currentBufferPtr;
-          if (ret !== constants.ERROR.OK) {
-            const body = data.subarray(offset);
-            if (ret === constants.ERROR.PAUSED_UPGRADE) {
-              this.onUpgrade(body);
-            } else if (ret === constants.ERROR.PAUSED) {
-              this.paused = true;
-              socket.unshift(body);
-            } else {
-              throw this.createError(ret, body);
+          if (ret === constants.ERROR.PAUSED_UPGRADE) {
+            this.onUpgrade(data.slice(offset));
+          } else if (ret === constants.ERROR.PAUSED) {
+            this.paused = true;
+            socket.unshift(data.slice(offset));
+          } else if (ret !== constants.ERROR.OK) {
+            const ptr = llhttp.llhttp_get_error_reason(this.ptr);
+            let message = "";
+            if (ptr) {
+              const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
+              message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
             }
+            throw new HTTPParserError(message, constants.ERROR[ret], data.slice(offset));
           }
         } catch (err) {
           util2.destroy(socket, err);
         }
-      }
-      finish() {
-        assert(currentParser === null);
-        assert(this.ptr != null);
-        assert(!this.paused);
-        const { llhttp } = this;
-        let ret;
-        try {
-          currentParser = this;
-          ret = llhttp.llhttp_finish(this.ptr);
-        } finally {
-          currentParser = null;
-        }
-        if (ret === constants.ERROR.OK) {
-          return null;
-        }
-        if (ret === constants.ERROR.PAUSED || ret === constants.ERROR.PAUSED_UPGRADE) {
-          this.paused = true;
-          return null;
-        }
-        return this.createError(ret, EMPTY_BUF);
-      }
-      createError(ret, data) {
-        const { llhttp, contentLength, bytesRead } = this;
-        if (contentLength && bytesRead !== parseInt(contentLength, 10)) {
-          return new ResponseContentLengthMismatchError();
-        }
-        const ptr = llhttp.llhttp_get_error_reason(this.ptr);
-        let message = "";
-        if (ptr) {
-          const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
-          message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
-        }
-        return new HTTPParserError(message, constants.ERROR[ret], data);
       }
       destroy() {
         assert(this.ptr != null);
@@ -13441,10 +13406,6 @@ var require_client_h1 = __commonJS({
       onMessageBegin() {
         const { socket, client } = this;
         if (socket.destroyed) {
-          return -1;
-        }
-        if (client[kRunning] === 0) {
-          util2.destroy(socket, new SocketError("bad response", util2.getSocketInfo(socket)));
           return -1;
         }
         const request = client[kQueue][client[kRunningIdx]];
@@ -13524,10 +13485,6 @@ var require_client_h1 = __commonJS({
       onHeadersComplete(statusCode, upgrade, shouldKeepAlive) {
         const { client, socket, headers, statusText } = this;
         if (socket.destroyed) {
-          return -1;
-        }
-        if (client[kRunning] === 0) {
-          util2.destroy(socket, new SocketError("bad response", util2.getSocketInfo(socket)));
           return -1;
         }
         const request = client[kQueue][client[kRunningIdx]];
@@ -13655,7 +13612,6 @@ var require_client_h1 = __commonJS({
         }
         request.onComplete(headers);
         client[kQueue][client[kRunningIdx]++] = null;
-        socket[kSocketUsed] = true;
         if (socket[kWriting]) {
           assert(client[kRunning] === 0);
           util2.destroy(socket, new InformationalError("reset"));
@@ -13699,19 +13655,12 @@ var require_client_h1 = __commonJS({
       socket[kWriting] = false;
       socket[kReset] = false;
       socket[kBlocking] = false;
-      socket[kIdleSocketValidation] = 0;
-      socket[kIdleSocketValidationTimeout] = null;
-      socket[kSocketUsed] = false;
       socket[kParser] = new Parser(client, socket, llhttpInstance);
       addListener(socket, "error", function(err) {
         assert(err.code !== "ERR_TLS_CERT_ALTNAME_INVALID");
         const parser = this[kParser];
         if (err.code === "ECONNRESET" && parser.statusCode && !parser.shouldKeepAlive) {
-          const parserErr = parser.finish();
-          if (parserErr) {
-            this[kError] = parserErr;
-            this[kClient][kOnError](parserErr);
-          }
+          parser.onMessageComplete();
           return;
         }
         this[kError] = err;
@@ -13726,10 +13675,7 @@ var require_client_h1 = __commonJS({
       addListener(socket, "end", function() {
         const parser = this[kParser];
         if (parser.statusCode && !parser.shouldKeepAlive) {
-          const parserErr = parser.finish();
-          if (parserErr) {
-            util2.destroy(this, parserErr);
-          }
+          parser.onMessageComplete();
           return;
         }
         util2.destroy(this, new SocketError("other side closed", util2.getSocketInfo(this)));
@@ -13737,10 +13683,9 @@ var require_client_h1 = __commonJS({
       addListener(socket, "close", function() {
         const client2 = this[kClient];
         const parser = this[kParser];
-        clearIdleSocketValidation(this);
         if (parser) {
           if (!this[kError] && parser.statusCode && !parser.shouldKeepAlive) {
-            this[kError] = parser.finish() || this[kError];
+            parser.onMessageComplete();
           }
           this[kParser].destroy();
           this[kParser] = null;
@@ -13789,7 +13734,7 @@ var require_client_h1 = __commonJS({
           return socket.destroyed;
         },
         busy(request) {
-          if (socket[kWriting] || socket[kReset] || socket[kBlocking] || socket[kIdleSocketValidation] === 1) {
+          if (socket[kWriting] || socket[kReset] || socket[kBlocking]) {
             return true;
           }
           if (request) {
@@ -13807,24 +13752,6 @@ var require_client_h1 = __commonJS({
         }
       };
     }
-    function clearIdleSocketValidation(socket) {
-      if (socket[kIdleSocketValidationTimeout]) {
-        clearTimeout(socket[kIdleSocketValidationTimeout]);
-        socket[kIdleSocketValidationTimeout] = null;
-      }
-      socket[kIdleSocketValidation] = 0;
-    }
-    function scheduleIdleSocketValidation(client, socket) {
-      socket[kIdleSocketValidation] = 1;
-      socket[kIdleSocketValidationTimeout] = setTimeout(() => {
-        socket[kIdleSocketValidationTimeout] = null;
-        socket[kIdleSocketValidation] = 2;
-        if (client[kSocket] === socket && !socket.destroyed) {
-          client[kResume]();
-        }
-      }, 0);
-      socket[kIdleSocketValidationTimeout].unref?.();
-    }
     function resumeH1(client) {
       const socket = client[kSocket];
       if (socket && !socket.destroyed) {
@@ -13836,29 +13763,6 @@ var require_client_h1 = __commonJS({
         } else if (socket[kNoRef] && socket.ref) {
           socket.ref();
           socket[kNoRef] = false;
-        }
-        if (client[kRunning] === 0 && client[kPending] > 0 && socket[kSocketUsed]) {
-          if (socket[kIdleSocketValidation] === 0) {
-            scheduleIdleSocketValidation(client, socket);
-            socket[kParser].readMore();
-            if (socket.destroyed) {
-              return;
-            }
-            return;
-          }
-          if (socket[kIdleSocketValidation] === 1) {
-            socket[kParser].readMore();
-            if (socket.destroyed) {
-              return;
-            }
-            return;
-          }
-        }
-        if (client[kRunning] === 0) {
-          socket[kParser].readMore();
-          if (socket.destroyed) {
-            return;
-          }
         }
         if (client[kSize] === 0) {
           if (socket[kParser].timeoutType !== TIMEOUT_KEEP_ALIVE) {
@@ -13912,7 +13816,6 @@ var require_client_h1 = __commonJS({
         process.emitWarning(new RequestContentLengthMismatchError());
       }
       const socket = client[kSocket];
-      clearIdleSocketValidation(socket);
       const abort = (err) => {
         if (request.aborted || request.completed) {
           return;
@@ -23697,14 +23600,18 @@ var require_parse = __commonJS({
       } else if (attributeNameLowercase === "httponly") {
         cookieAttributeList.httpOnly = true;
       } else if (attributeNameLowercase === "samesite") {
+        let enforcement = "Default";
         const attributeValueLowercase = attributeValue.toLowerCase();
-        if (attributeValueLowercase === "none") {
-          cookieAttributeList.sameSite = "None";
-        } else if (attributeValueLowercase === "strict") {
-          cookieAttributeList.sameSite = "Strict";
-        } else if (attributeValueLowercase === "lax") {
-          cookieAttributeList.sameSite = "Lax";
+        if (attributeValueLowercase.includes("none")) {
+          enforcement = "None";
         }
+        if (attributeValueLowercase.includes("strict")) {
+          enforcement = "Strict";
+        }
+        if (attributeValueLowercase.includes("lax")) {
+          enforcement = "Lax";
+        }
+        cookieAttributeList.sameSite = enforcement;
       } else {
         cookieAttributeList.unparsed ??= [];
         cookieAttributeList.unparsed.push(`${attributeName}=${attributeValue}`);
@@ -24726,10 +24633,6 @@ var require_receiver = __commonJS({
     var { closeWebSocketConnection } = require_connection();
     var { PerMessageDeflate } = require_permessage_deflate();
     var { MessageSizeExceededError } = require_errors2();
-    function failWebsocketConnectionWithCode(ws, code, reason) {
-      closeWebSocketConnection(ws, code, reason, Buffer.byteLength(reason));
-      failWebsocketConnection(ws, reason);
-    }
     var ByteParser = class extends Writable {
       #buffers = [];
       #fragmentsBytes = 0;
@@ -24741,19 +24644,16 @@ var require_receiver = __commonJS({
       /** @type {Map<string, PerMessageDeflate>} */
       #extensions;
       /** @type {number} */
-      #maxFragments;
-      /** @type {number} */
       #maxPayloadSize;
       /**
        * @param {import('./websocket').WebSocket} ws
        * @param {Map<string, string>|null} extensions
-       * @param {{ maxFragments?: number, maxPayloadSize?: number }} [options]
+       * @param {{ maxPayloadSize?: number }} [options]
        */
       constructor(ws, extensions, options = {}) {
         super();
         this.ws = ws;
         this.#extensions = extensions == null ? /* @__PURE__ */ new Map() : extensions;
-        this.#maxFragments = options.maxFragments ?? 0;
         this.#maxPayloadSize = options.maxPayloadSize ?? 0;
         if (this.#extensions.has("permessage-deflate")) {
           this.#extensions.set("permessage-deflate", new PerMessageDeflate(extensions, options));
@@ -24770,8 +24670,8 @@ var require_receiver = __commonJS({
         this.run(callback);
       }
       #validatePayloadLength() {
-        if (this.#maxPayloadSize > 0 && !isControlFrame(this.#info.opcode) && this.#info.payloadLength + this.#fragmentsBytes > this.#maxPayloadSize) {
-          failWebsocketConnectionWithCode(this.ws, 1009, "Payload size exceeds maximum allowed size");
+        if (this.#maxPayloadSize > 0 && !isControlFrame(this.#info.opcode) && this.#info.payloadLength > this.#maxPayloadSize) {
+          failWebsocketConnection(this.ws, "Payload size exceeds maximum allowed size");
           return false;
         }
         return true;
@@ -24887,11 +24787,9 @@ var require_receiver = __commonJS({
               this.#state = parserStates.INFO;
             } else {
               if (!this.#info.compressed) {
-                if (!this.writeFragments(body)) {
-                  return;
-                }
+                this.writeFragments(body);
                 if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
-                  failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
+                  failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
                   return;
                 }
                 if (!this.#info.fragmented && this.#info.fin) {
@@ -24904,15 +24802,12 @@ var require_receiver = __commonJS({
                   this.#info.fin,
                   (error, data) => {
                     if (error) {
-                      const code = error instanceof MessageSizeExceededError ? 1009 : 1007;
-                      failWebsocketConnectionWithCode(this.ws, code, error.message);
+                      failWebsocketConnection(this.ws, error.message);
                       return;
                     }
-                    if (!this.writeFragments(data)) {
-                      return;
-                    }
+                    this.writeFragments(data);
                     if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
-                      failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
+                      failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
                       return;
                     }
                     if (!this.#info.fin) {
@@ -24970,13 +24865,8 @@ var require_receiver = __commonJS({
         return buffer;
       }
       writeFragments(fragment) {
-        if (this.#maxFragments > 0 && this.#fragments.length === this.#maxFragments) {
-          failWebsocketConnectionWithCode(this.ws, 1008, "Too many message fragments");
-          return false;
-        }
         this.#fragmentsBytes += fragment.length;
         this.#fragments.push(fragment);
-        return true;
       }
       consumeFragments() {
         const fragments = this.#fragments;
@@ -25426,11 +25316,8 @@ var require_websocket = __commonJS({
        */
       #onConnectionEstablished(response, parsedExtensions) {
         this[kResponse] = response;
-        const webSocketOptions = this[kController]?.dispatcher?.webSocketOptions;
-        const maxFragments = webSocketOptions?.maxFragments;
-        const maxPayloadSize = webSocketOptions?.maxPayloadSize;
+        const maxPayloadSize = this[kController]?.dispatcher?.webSocketOptions?.maxPayloadSize;
         const parser = new ByteParser(this, parsedExtensions, {
-          maxFragments,
           maxPayloadSize
         });
         parser.on("drain", onParserDrain);
@@ -26309,8 +26196,7 @@ var DEFAULT_SETTINGS = {
   },
   proxy: { enabled: false, url: "" },
   devMode: {
-    enabled: false,
-    evaluatorModel: "sonnet"
+    enabled: false
   },
   lintOptions: {
     useLlm: true
@@ -26390,9 +26276,7 @@ var en = {
     opTemperature_desc: "Temperature for this operation, 0.0\u20132.0. Default 0.2. \u2191 more varied \xB7 \u2193 more precise.",
     h3_devmode: "Developer",
     devMode_enabled_name: "Dev mode",
-    devMode_enabled_desc: "Enable dev logger and evaluator after each operation.",
-    devMode_evaluatorModel_name: "Evaluator model",
-    devMode_evaluatorModel_desc: "Model name for the evaluator (same backend).",
+    devMode_enabled_desc: "Record per-run quality labels (\u{1F44D}/\u{1F44E}) and harness telemetry to eval.jsonl.",
     proxy_h3: "Proxy",
     proxy_enabled_name: "Use proxy",
     proxy_enabled_desc: "Route native-agent traffic through HTTP/HTTPS proxy.",
@@ -26511,7 +26395,12 @@ var en = {
     starting: "Starting",
     initialising: "Initialising",
     selectDomainFirst: "Select a domain first",
-    delete: "Delete"
+    delete: "Delete",
+    ratingUp: "Good output",
+    ratingDown: "Bad output",
+    ratingAnswer: "Rate this answer:",
+    ratingFormatting: "Rate formatting:",
+    ratingRecognition: "Rate recognition:"
   },
   formatProgress: {
     analysing: (path2) => `Analysing file ${path2}...
@@ -26707,9 +26596,7 @@ var ru = {
     opTemperature_desc: "Temperature \u0434\u043B\u044F \u044D\u0442\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438, 0.0\u20132.0. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 0.2. \u2191 \u0440\u0430\u0437\u043D\u043E\u043E\u0431\u0440\u0430\u0437\u043D\u0435\u0435 \xB7 \u2193 \u0442\u043E\u0447\u043D\u0435\u0435.",
     h3_devmode: "\u0420\u0430\u0437\u0440\u0430\u0431\u043E\u0442\u043A\u0430",
     devMode_enabled_name: "Dev \u0440\u0435\u0436\u0438\u043C",
-    devMode_enabled_desc: "\u0412\u043A\u043B\u044E\u0447\u0438\u0442\u044C dev-\u043B\u043E\u0433\u0433\u0435\u0440 \u0438 \u043E\u0446\u0435\u043D\u0449\u0438\u043A \u043F\u043E\u0441\u043B\u0435 \u043A\u0430\u0436\u0434\u043E\u0439 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438.",
-    devMode_evaluatorModel_name: "\u041C\u043E\u0434\u0435\u043B\u044C \u043E\u0446\u0435\u043D\u0449\u0438\u043A\u0430",
-    devMode_evaluatorModel_desc: "\u0418\u043C\u044F \u043C\u043E\u0434\u0435\u043B\u0438 \u0434\u043B\u044F \u043E\u0446\u0435\u043D\u0449\u0438\u043A\u0430 (\u0442\u043E\u0442 \u0436\u0435 \u0431\u044D\u043A\u0435\u043D\u0434).",
+    devMode_enabled_desc: "\u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0442\u044C per-run \u043C\u0435\u0442\u043A\u0438 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u0430 (\u{1F44D}/\u{1F44E}) \u0438 \u0442\u0435\u043B\u0435\u043C\u0435\u0442\u0440\u0438\u044E \u0445\u0430\u0440\u043D\u0435\u0441\u0430 \u0432 eval.jsonl.",
     proxy_h3: "\u041F\u0440\u043E\u043A\u0441\u0438",
     proxy_enabled_name: "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u044C \u043F\u0440\u043E\u043A\u0441\u0438",
     proxy_enabled_desc: "\u041C\u0430\u0440\u0448\u0440\u0443\u0442\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0442\u0440\u0430\u0444\u0438\u043A native-agent \u0447\u0435\u0440\u0435\u0437 HTTP/HTTPS-\u043F\u0440\u043E\u043A\u0441\u0438.",
@@ -26828,7 +26715,12 @@ var ru = {
     starting: "\u0417\u0430\u043F\u0443\u0441\u043A",
     initialising: "\u0418\u043D\u0438\u0446\u0438\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F",
     selectDomainFirst: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0434\u043E\u043C\u0435\u043D",
-    delete: "\u0423\u0434\u0430\u043B\u0438\u0442\u044C"
+    delete: "\u0423\u0434\u0430\u043B\u0438\u0442\u044C",
+    ratingUp: "\u0425\u043E\u0440\u043E\u0448\u0438\u0439 \u0432\u044B\u0432\u043E\u0434",
+    ratingDown: "\u041F\u043B\u043E\u0445\u043E\u0439 \u0432\u044B\u0432\u043E\u0434",
+    ratingAnswer: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u043E\u0442\u0432\u0435\u0442:",
+    ratingFormatting: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435:",
+    ratingRecognition: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u0432\u0430\u043D\u0438\u0435:"
   },
   formatProgress: {
     analysing: (path2) => `\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u0430 ${path2}...
@@ -27023,9 +26915,7 @@ var es = {
     opTemperature_desc: "Temperatura para esta operaci\xF3n, 0.0\u20132.0. Por defecto 0.2. \u2191 m\xE1s variado \xB7 \u2193 m\xE1s preciso.",
     h3_devmode: "Desarrollo",
     devMode_enabled_name: "Modo dev",
-    devMode_enabled_desc: "Activar el registrador dev y el evaluador tras cada operaci\xF3n.",
-    devMode_evaluatorModel_name: "Modelo evaluador",
-    devMode_evaluatorModel_desc: "Nombre del modelo para el evaluador (mismo backend).",
+    devMode_enabled_desc: "Registrar etiquetas de calidad por ejecuci\xF3n (\u{1F44D}/\u{1F44E}) y telemetr\xEDa en eval.jsonl.",
     proxy_h3: "Proxy",
     proxy_enabled_name: "Usar proxy",
     proxy_enabled_desc: "Enrutar el tr\xE1fico de native-agent a trav\xE9s de proxy HTTP/HTTPS.",
@@ -27144,7 +27034,12 @@ var es = {
     starting: "Iniciando",
     initialising: "Inicializando",
     selectDomainFirst: "Selecciona un dominio primero",
-    delete: "Eliminar"
+    delete: "Eliminar",
+    ratingUp: "Buen resultado",
+    ratingDown: "Mal resultado",
+    ratingAnswer: "Eval\xFAa la respuesta:",
+    ratingFormatting: "Eval\xFAa el formato:",
+    ratingRecognition: "Eval\xFAa el reconocimiento:"
   },
   formatProgress: {
     analysing: (path2) => `Analizando archivo ${path2}...
@@ -30239,17 +30134,8 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         (t) => t.setValue(s.devMode.enabled).onChange(async (v) => {
           s.devMode.enabled = v;
           await this.plugin.saveSettings();
-          this.display();
         })
       );
-      if (s.devMode.enabled) {
-        new import_obsidian5.Setting(containerEl).setName(T.settings.devMode_evaluatorModel_name).setDesc(T.settings.devMode_evaluatorModel_desc).addText(
-          (t) => t.setPlaceholder("").setValue(s.devMode.evaluatorModel).onChange(async (v) => {
-            s.devMode.evaluatorModel = v.trim();
-            await this.plugin.saveSettings();
-          })
-        );
-      }
     }
     window.requestAnimationFrame(() => {
       scrollEl.scrollTop = savedScroll;
@@ -31444,6 +31330,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
   chatTickHandle = null;
   chatStartTs = 0;
   lastUserMessage = "";
+  lastRunId = null;
   startTs = 0;
   lastStepTs = 0;
   llmStats = [];
@@ -31927,7 +31814,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       this.mobileWaitingEl = null;
     }
     if (ev.kind === "format_preview") {
-      this.renderFormatPreview(ev.tempPath, ev.report, ev.missingTokens);
+      this.renderFormatPreview(ev.tempPath, ev.report, ev.missingTokens, ev.runId, ev.visionCount);
       return;
     }
     if (ev.kind === "format_applied" || ev.kind === "format_cancelled") {
@@ -32103,16 +31990,28 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       this.scrollSteps();
     } else if (ev.kind === "result") {
       this.stopWaiting();
-    } else if (ev.kind === "eval_result") {
-      const el = this.stepsEl.createEl("div", { cls: "ai-wiki-eval-result" });
-      const text = `**[eval: ${ev.score}/10]** ${ev.reasoning}`;
-      const comp = new import_obsidian7.Component();
-      comp.load();
-      void import_obsidian7.MarkdownRenderer.render(this.app, text, el, "", comp);
     }
     this.updateMetrics();
   }
-  renderFormatPreview(tempPath, report, missing) {
+  renderRatingRow(parent, runId, axis, label) {
+    if (!this.plugin.settings.devMode?.enabled) return;
+    const T = i18n();
+    const row = parent.createDiv("ai-wiki-rating-row");
+    row.createSpan({ text: label, cls: "ai-wiki-rating-label" });
+    const up = row.createEl("button", { text: "\u{1F44D}", cls: "ai-wiki-rating-btn", attr: { "aria-label": T.view.ratingUp } });
+    const down = row.createEl("button", { text: "\u{1F44E}", cls: "ai-wiki-rating-btn", attr: { "aria-label": T.view.ratingDown } });
+    const select = (btn, other, rating) => {
+      btn.addEventListener("click", () => {
+        const active = btn.hasClass("is-active");
+        btn.toggleClass("is-active", !active);
+        other.removeClass("is-active");
+        void this.plugin.controller.rateRun(runId, axis, rating);
+      });
+    };
+    select(up, down, "up");
+    select(down, up, "down");
+  }
+  renderFormatPreview(tempPath, report, missing, runId, visionCount) {
     const T = i18n();
     this.formatPreviewSection?.remove();
     const root = this.containerEl.children[1];
@@ -32169,6 +32068,13 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
         sendBtn.click();
       }
     });
+    if (runId) {
+      const section = this.formatPreviewSection;
+      this.renderRatingRow(section, runId, "formatting", i18n().view.ratingFormatting);
+      if ((visionCount ?? 0) > 0) {
+        this.renderRatingRow(section, runId, "recognition", i18n().view.ratingRecognition);
+      }
+    }
   }
   async finish(entry) {
     this.state = entry.status;
@@ -32195,6 +32101,11 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       this.finalEl.removeClass("ai-wiki-hidden");
       this.resultOpen = true;
       this.resultToggle.setText("\u25BC");
+      this.lastRunId = entry.id;
+      const QC_OPS = ["query", "chat", "lint-chat"];
+      if (QC_OPS.includes(entry.operation) && entry.status === "done") {
+        this.renderRatingRow(this.resultSection, entry.id, "answer", i18n().view.ratingAnswer);
+      }
       const CHAT_OPS = ["lint", "lint-chat", "ingest", "query"];
       if (CHAT_OPS.includes(entry.operation) && entry.status === "done" && entry.finalText) {
         this.lastContext = {
@@ -38125,6 +38036,7 @@ async function parseWithRetry(args) {
       err.name = "AbortError";
       throw err;
     }
+    if (attempt > 0) onEvent({ kind: "rule_fired", ruleId: "parseWithRetry", count: 1 });
     const { fullText, outputTokens, stats } = await streamOnce(llm, model, messages, opts, signal);
     totalTokens += outputTokens;
     if (stats) onEvent(buildLlmCallStatsEvent(stats));
@@ -39977,6 +39889,30 @@ function resolveLink(brokenStem, candidates) {
   return { kind: "resolved", stem: (wiki ?? matches[0]).stem };
 }
 
+// src/prompt-version.ts
+var _cache = /* @__PURE__ */ new Map();
+function hash8(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+function promptVersionOf(template) {
+  let v = _cache.get(template);
+  if (v === void 0) {
+    v = hash8(template);
+    _cache.set(template, v);
+  }
+  return v;
+}
+function visionPromptVersionOf(templates) {
+  if (templates.length === 0) return "";
+  const joined = templates.map(hash8).sort().join("|");
+  return hash8(joined);
+}
+
 // src/phases/query.ts
 var META_FILES = ["_index.md", "_log.md"];
 async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1, bfsTopK = 10, similarity, wikiLinkValidationRetries = 3, seedSimilarityThreshold = 0, bfsFusion = false, rrfK = 60) {
@@ -40174,6 +40110,7 @@ ${contextBlock}` }
             stripped.push(b);
           }
         }
+        if (resolvedPairs.length > 0) yield { kind: "rule_fired", ruleId: "resolveLink", count: resolvedPairs.length };
         let llmFixed = 0;
         if (stripped.length > 0 && wikiLinkValidationRetries > 0) {
           const validList = candidates.filter((s) => s.startsWith("wiki_")).join(", ");
@@ -40211,7 +40148,10 @@ ${answer}` }
             if (signal.aborted || e.name === "AbortError") return;
           }
         }
-        if (stripped.length > 0) answer = annotateBroken(answer, new Set(stripped));
+        if (stripped.length > 0) {
+          answer = annotateBroken(answer, new Set(stripped));
+          yield { kind: "rule_fired", ruleId: "annotateBroken", count: stripped.length };
+        }
         const parts = [];
         if (resolvedPairs.length) parts.push(`resolved ${resolvedPairs.length} (det): ${resolvedPairs.join(", ")}`);
         if (llmFixed) parts.push(`llm-fixed ${llmFixed}`);
@@ -40222,6 +40162,23 @@ ${answer}` }
     }
   }
   if (streamStats) yield buildLlmCallStatsEvent(streamStats);
+  yield {
+    kind: "eval_meta",
+    fields: {
+      question,
+      answer,
+      found_pages: [.../* @__PURE__ */ new Set([...seeds, ...expandedPages])],
+      promptVersion: promptVersionOf(query_default),
+      retrievalConfig: {
+        mode: similarity?.config.mode === "hybrid" ? "hybrid" : similarity?.config.mode === "embedding" ? "embedding" : "jaccard",
+        seedTopK,
+        bfsTopK,
+        bfsFusion,
+        seedSimilarityThreshold,
+        hybridRetrieval: similarity?.config.mode === "hybrid"
+      }
+    }
+  };
   if (save && answer) {
     const slug = question.slice(0, 40).replace(/[^a-zA-Z0-9а-яёА-ЯЁ\s]/g, "").trim().replace(/\s+/g, "-");
     const savePath = `${wikiVaultPath}/Q-${slug}.md`;
@@ -41007,6 +40964,11 @@ async function* runLintChat(llm, model, domain, signal, opts, context, history, 
   if (signal.aborted) return;
   yield { kind: "tool_result", ok: !!fullText, preview: fullText ? `${fullText.length} chars` : "no response" };
   if (streamStats) yield buildLlmCallStatsEvent(streamStats);
+  const lastUserMessage = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
+  yield {
+    kind: "eval_meta",
+    fields: { question: lastUserMessage, answer: fullText, promptVersion: promptVersionOf(chat_default) }
+  };
   yield { kind: "result", durationMs: Date.now() - start, text: fullText, outputTokens: outputTokens || void 0 };
 }
 
@@ -41565,56 +41527,6 @@ async function ensureRootFiles(vaultTools, wikiRoot) {
   }
 }
 
-// prompts/evaluator.md
-var evaluator_default = `You are a quality evaluator of the wiki agent's work. Evaluate the operation result.
-
-Operation: {{operation}}
-
-Input task:
-{{task_input}}
-
-Result:
-{{result}}
-
-Return JSON strictly in the format:
-{"score": <0-10>, "reasoning": "<one sentence>"}
-
-Scoring criteria:
-- 9-10: result fully matches the task, no errors
-- 7-8: result is correct, with minor shortcomings
-- 5-6: task partially completed
-- 0-4: result does not match the task or contains errors
-`;
-
-// src/phases/evaluator.ts
-function parseEvalResponse(text) {
-  const match = text.match(/\{[^{}]*"score"[^{}]*"reasoning"[^{}]*\}/s) ?? text.match(/\{[^{}]*"reasoning"[^{}]*"score"[^{}]*\}/s);
-  if (!match) return null;
-  try {
-    const parsed = JSON.parse(match[0]);
-    if (typeof parsed !== "object" || parsed === null || typeof parsed.score !== "number" || typeof parsed.reasoning !== "string") return null;
-    const p = parsed;
-    return { score: Math.min(10, Math.max(0, p.score)), reasoning: p.reasoning };
-  } catch {
-    return null;
-  }
-}
-async function* runEvaluator(llm, model, operation, taskInput, result, signal, opts = {}) {
-  const userContent = render(evaluator_default, { operation, task_input: taskInput, result });
-  const messages = [{ role: "user", content: userContent }];
-  const params = buildChatParams(model, messages, opts);
-  try {
-    const nonStreamParams = { ...params, stream: false };
-    const resp = await llm.chat.completions.create(nonStreamParams, { signal });
-    const text = resp.choices[0]?.message?.content ?? "";
-    const evalResult = parseEvalResponse(text);
-    if (evalResult) {
-      yield { kind: "eval_result", score: evalResult.score, reasoning: evalResult.reasoning };
-    }
-  } catch {
-  }
-}
-
 // prompts/format.md
 var format_default = 'You are an editor of a markdown page outside the wiki knowledge base.\n\nYour task is to analyze the page and propose formatting according to the rules below.\n\nHARD RULES:\n- Do not add or remove facts, names, numbers, URLs.\n- Do not distort the meaning. Rephrasing for clarity is allowed.\n- Describe all changes in the report field.\n- Obsidian embeds (`![[path]]`, `![[path|alias]]`) \u2014 copy exactly as they are. Do not convert them to standard Markdown (`![alt](path)`).\n- If the user message contains an "ATTACHMENT DESCRIPTIONS" block: integrate each description IMMEDIATELY BELOW the corresponding `![[path]]` embed in formatted. Keep the description\'s structural form (table / list / mermaid / code) as is \u2014 do not wrap it in a blockquote, do not add a `[Vision]` marker, do not quote the `![[path]]` heading inside the description. If a description is already present in the source (old format `> *[Vision] ...*` or a duplicate) \u2014 remove the old variant and keep only the structured version.\n- If the source frontmatter is broken (missing/duplicated `---` fences, invalid YAML, keys outside a fenced block), reconstruct a single valid YAML frontmatter block, preserving real field values (the `wiki_*` fields are excluded \u2014 they are restored automatically). Do not drop existing field values.\n\nFORMATTING RULES:\n{{format_schema}}\n\nVISION: {{has_vision}}\n- When has_vision=true: extract the content of diagrams and images, create tables or mermaid blocks below the image. Keep the image itself.\n- When has_vision=false: work only with alt text and captions, do not invent new information.\n\nReturn the answer strictly in the following format. No text before the first `<<<REPORT>>>` marker.\n\n<<<REPORT>>>\n<markdown list of changes>\n<<<FORMATTED>>>\n<full formatted markdown, starting from the frontmatter --->\n<<<END>>>\n\n{{has_vision_descriptions_block}}\n\nRequirements:\n- Each `<<<...>>>` marker on its own line.\n- After `<<<FORMATTED>>>` comes the frontmatter (`---`).\n- `<<<END>>>` \u2014 the last line of the answer.\n- If context is insufficient: shorten the report, not formatted.\n';
 
@@ -41888,7 +41800,7 @@ async function analyzeExcalidraw(b64, llm, model, signal, language = "auto", rea
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } }
   ], signal);
 }
-async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, sourcePath = "", language = "auto", reasoningLanguage = "auto", visionTempStore, imageOnly = false) {
+async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, sourcePath = "", language = "auto", reasoningLanguage = "auto", visionTempStore, imageOnly = false, usedTemplates) {
   const resolved = vaultTools.resolveLink(path2, sourcePath);
   if (resolved === null) return null;
   if (imageOnly && !isVisionSupportedOnMobile(resolved)) return null;
@@ -41898,15 +41810,20 @@ async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, so
     const b64 = await vaultTools.renderExcalidrawPng(resolved);
     if (!b64) return null;
     await visionTempStore?.putPng(path2, b64);
+    usedTemplates?.add(vision_excalidraw_default);
     return analyzeExcalidraw(b64, llm, model, signal, language, reasoningLanguage);
   }
   if (ext === "pdf") {
     const buf = await vaultTools.readBinary(resolved);
+    usedTemplates?.add(vision_pdf_default);
+    usedTemplates?.add(vision_structure_default);
     return analyzePdf(buf, llm, model, signal, language, reasoningLanguage);
   }
   const mimeType = getMimeType(resolved);
   if (mimeType) {
     const buf = await vaultTools.readBinary(resolved);
+    usedTemplates?.add(vision_image_default);
+    usedTemplates?.add(vision_structure_default);
     return analyzeImage(buf, mimeType, llm, model, signal, language, reasoningLanguage);
   }
   return null;
@@ -41985,6 +41902,7 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
   const formatSchema = format_schema_default;
   yield { kind: "tool_result", ok: true, preview: `${original.length} chars` };
   const visionDescriptions = /* @__PURE__ */ new Map();
+  const usedVisionTemplates = /* @__PURE__ */ new Set();
   if (visionSettings.enabled && visionSettings.model) {
     const embedPaths = [...new Set(extractObsidianEmbedPaths(original))];
     if (embedPaths.length > 0) {
@@ -42000,7 +41918,7 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
           continue;
         }
         try {
-          const description = await analyzeSingleAttachment(path2, vaultTools, llm, visionSettings.model, signal, filePath, lang, opts.reasoningLanguage, visionTempStore, visionSettings.imageOnly ?? false);
+          const description = await analyzeSingleAttachment(path2, vaultTools, llm, visionSettings.model, signal, filePath, lang, opts.reasoningLanguage, visionTempStore, visionSettings.imageOnly ?? false, usedVisionTemplates);
           if (description !== null) {
             visionDescriptions.set(path2, description);
             await visionTempStore?.putDescription(path2, description);
@@ -42110,6 +42028,7 @@ ${original}${visionBlock}`;
       summary: progress.truncatedSalvageSummary,
       details: [progress.truncatedSalvageDetail]
     };
+    yield { kind: "rule_fired", ruleId: "formatSalvage", count: 1 };
   }
   const truncated = !parsed && lastFinishReason === "length";
   if (!parsed && truncated) {
@@ -42142,6 +42061,7 @@ The previous attempt failed: ${zodHint}. Fix it and return again using the marke
         summary: progress.truncatedSalvageRetrySummary,
         details: [progress.truncatedSalvageDetail]
       };
+      yield { kind: "rule_fired", ruleId: "formatSalvage", count: 1 };
     }
   }
   if (!parsed) {
@@ -42201,6 +42121,7 @@ The previous attempt failed: ${zodHint}. Fix it and return again using the marke
       summary: "Sentinel markers stripped",
       details: swept.removed
     };
+    yield { kind: "rule_fired", ruleId: "stripSentinelMarkers", count: swept.removed.length };
   }
   try {
     await vaultTools.write(tempPath, finalFormatted);
@@ -42215,7 +42136,19 @@ The previous attempt failed: ${zodHint}. Fix it and return again using the marke
     yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "WikiLink warnings", details: wlFix.warnings };
   }
   const missingFinal = missingTokensWithContext(original, finalFormatted);
-  yield { kind: "format_preview", tempPath, report: finalReport, missingTokens: missingFinal };
+  yield { kind: "format_preview", tempPath, report: finalReport, missingTokens: missingFinal, visionCount: visionDescriptions.size };
+  const visionOn = visionDescriptions.size > 0;
+  yield {
+    kind: "eval_meta",
+    fields: {
+      source_path: filePath,
+      vision: visionOn ? "on" : "off",
+      visionCount: visionDescriptions.size,
+      visionModel: visionOn ? visionSettings.model || void 0 : void 0,
+      promptVersion: promptVersionOf(format_default),
+      visionPromptVersion: visionOn ? visionPromptVersionOf([...usedVisionTemplates]) : void 0
+    }
+  };
   yield { kind: "result", durationMs: Date.now() - start, text: finalReport, outputTokens: outputTokens || void 0 };
 }
 
@@ -42413,6 +42346,45 @@ var VisionTempStore = class {
   }
 };
 
+// src/eval-log.ts
+function evalLogPath(pluginDir) {
+  return `${pluginDir}/eval.jsonl`;
+}
+async function writeEvalRecord(adapter, pluginDir, record) {
+  const path2 = evalLogPath(pluginDir);
+  try {
+    const line = JSON.stringify(record) + "\n";
+    if (await adapter.exists(path2)) await adapter.append(path2, line);
+    else await adapter.write(path2, line);
+  } catch {
+  }
+}
+async function updateEvalRating(adapter, pluginDir, runId, axis, rating) {
+  const path2 = evalLogPath(pluginDir);
+  try {
+    if (!await adapter.exists(path2)) return;
+    const content = await adapter.read(path2);
+    const lines = content.split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const raw = lines[i].trim();
+      if (!raw) continue;
+      let rec;
+      try {
+        rec = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      if (rec.runId !== runId) continue;
+      const field = axis === "recognition" ? "recognitionRating" : "rating";
+      rec[field] = rec[field] === rating ? null : rating;
+      lines[i] = JSON.stringify(rec);
+      await adapter.write(path2, lines.join("\n"));
+      return;
+    }
+  } catch {
+  }
+}
+
 // src/agent-runner.ts
 var AgentRunner = class {
   constructor(llm, settings, vaultTools, vaultName, domains, visionTempBaseDir, isMobile = false) {
@@ -42496,21 +42468,6 @@ var AgentRunner = class {
       }
     });
   }
-  async writeDevLog(_vaultRoot, entry) {
-    if (!this.settings.devMode?.enabled) return;
-    const adapter = this.vaultTools.adapter;
-    const path2 = GLOBAL_DEV_LOG_PATH;
-    try {
-      if (!await adapter.exists("!Wiki")) await adapter.mkdir("!Wiki").catch(() => {
-      });
-      if (!await adapter.exists("!Wiki/_config")) await adapter.mkdir("!Wiki/_config").catch(() => {
-      });
-      const line = JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), ...entry, eval: null }) + "\n";
-      if (await adapter.exists(path2)) await adapter.append(path2, line);
-      else await adapter.write(path2, line);
-    } catch {
-    }
-  }
   async *runOperation(req, model, opts, vaultRoot, domains, similarity, visionTempStore) {
     switch (req.operation) {
       case "ingest":
@@ -42579,13 +42536,15 @@ var AgentRunner = class {
     const vaultRoot = req.cwd ?? "";
     const domains = req.domainId ? this.domains.filter((d) => d.id === req.domainId) : this.domains;
     const similarity = this.buildSimilarity();
-    const startMs = Date.now();
     const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1e3;
     const maxRetries = this.settings.llmIdleRetries ?? 3;
     let attempt = 0;
+    const llmErrors = [];
+    const ruleFirings = {};
+    let evalMeta = {};
     let visionTempStore;
     if (req.operation === "format" && this.settings.vision?.enabled && this.visionTempBaseDir) {
-      const runId = Date.now().toString(36);
+      const runId = req.runId ?? Date.now().toString(36);
       visionTempStore = new VisionTempStore(this.vaultTools, `${this.visionTempBaseDir}/.vision-tmp/${runId}`);
     }
     try {
@@ -42604,6 +42563,17 @@ var AgentRunner = class {
           for await (const ev of this.runOperation({ ...req, signal: combined }, model, opts, vaultRoot, domains, similarity, visionTempStore)) {
             if (ev.kind === "llm_call_stats" || ev.kind === "assistant_text" || ev.kind === "tool_use" || ev.kind === "tool_result") resetTimer();
             if (ev.kind === "result") finalResultText = ev.text;
+            if (ev.kind === "error") {
+              llmErrors.push({ kind: "error", message: ev.message });
+            } else if (ev.kind === "structural_error") {
+              llmErrors.push({ kind: "structural_error", callSite: ev.callSite, errorType: ev.errorType, retryAttempt: ev.retryAttempt, message: ev.message });
+            } else if (ev.kind === "rule_fired") {
+              ruleFirings[ev.ruleId] = (ruleFirings[ev.ruleId] ?? 0) + ev.count;
+            } else if (ev.kind === "eval_meta") {
+              evalMeta = { ...evalMeta, ...ev.fields };
+            } else if (ev.kind === "format_preview" && req.runId) {
+              ev.runId = req.runId;
+            }
             yield ev;
           }
           if (idleTimer) window.clearTimeout(idleTimer);
@@ -42619,25 +42589,21 @@ var AgentRunner = class {
               "AbortError"
             );
           }
-          if (this.settings.devMode?.enabled && finalResultText) {
-            const taskInput = req.args.join(" ") || req.operation;
-            await this.writeDevLog(vaultRoot, {
+          if (this.settings.devMode?.enabled && finalResultText && req.runId && this.visionTempBaseDir) {
+            const record = {
+              runId: req.runId,
+              ts: (/* @__PURE__ */ new Date()).toISOString(),
               operation: req.operation,
               model,
-              systemPrompt: opts.systemPrompt ?? "",
-              userMessage: taskInput,
-              result: finalResultText,
-              durationMs: Date.now() - startMs
-            });
-            if (this.settings.devMode.evaluatorModel) {
-              const evalModel = this.settings.devMode.evaluatorModel;
-              for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal, { reasoningLanguage: this.settings.reasoningLanguage, outputLanguage: this.settings.outputLanguage })) {
-                yield ev;
-                if (ev.kind === "eval_result") {
-                  await this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);
-                }
-              }
-            }
+              ...evalMeta,
+              answer: evalMeta.answer ?? (req.operation === "format" ? void 0 : finalResultText),
+              llmErrors,
+              ruleFirings,
+              rating: null,
+              ...evalMeta.vision === "on" ? { recognitionRating: null } : {}
+            };
+            const pluginDir = this.visionTempBaseDir;
+            await writeEvalRecord(this.vaultTools.adapter, pluginDir, record);
           }
           return;
         } catch (err) {
@@ -42654,22 +42620,6 @@ var AgentRunner = class {
       }
     } finally {
       await visionTempStore?.cleanup();
-    }
-  }
-  async updateDevLogEval(_vaultRoot, score, reasoning) {
-    if (!this.settings.devMode?.enabled) return;
-    const adapter = this.vaultTools.adapter;
-    const path2 = GLOBAL_DEV_LOG_PATH;
-    try {
-      if (!await adapter.exists(path2)) return;
-      const content = await adapter.read(path2);
-      const lines = content.trimEnd().split("\n");
-      const lastIdx = lines.length - 1;
-      const last = JSON.parse(lines[lastIdx]);
-      last["eval"] = { score, reasoning };
-      lines[lastIdx] = JSON.stringify(last);
-      await adapter.write(path2, lines.join("\n") + "\n");
-    } catch {
     }
   }
 };
@@ -50384,6 +50334,14 @@ var WikiController = class {
     if (!question.trim()) return;
     await this.dispatch("query", [question.trim()], domainId);
   }
+  /** Set a 👍/👎 label on a finished run's eval.jsonl record (dev mode only). */
+  async rateRun(runId, axis, rating) {
+    if (!this.plugin.settings.devMode?.enabled) return;
+    await updateEvalRating(this.app.vault.adapter, this.pluginDir(), runId, axis, rating);
+  }
+  pluginDir() {
+    return this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`;
+  }
   async lint(domain, opts = {}) {
     const args = domain === "all" ? [] : [domain];
     const lintOpts = { useLlm: opts.useLlm ?? true, entityTypeFilter: opts.entityTypeFilter ?? [] };
@@ -50459,7 +50417,8 @@ var WikiController = class {
       domainId,
       context,
       chatMessages,
-      operationHeader
+      operationHeader,
+      runId: sessionId
     });
     try {
       for await (const ev of runGen) {
@@ -50785,7 +50744,7 @@ var WikiController = class {
       });
       llm = import_obsidian10.Platform.isMobile ? wrapMobileNoStream(openaiClient) : openaiClient;
     }
-    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? void 0, import_obsidian10.Platform.isMobile);
+    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, import_obsidian10.Platform.isMobile);
   }
   async logEvent(_vaultRoot, sessionId, op, domainId, ev) {
     if (!(this._currentLogMeta?.agentLogEnabled ?? this.plugin.settings.agentLogEnabled)) return;
@@ -50893,7 +50852,7 @@ var WikiController = class {
       ctrl.abort();
     }, timeoutMs) : null;
     const resolvedChatMessages = op === "format" ? this._pendingFormat?.chat : chatMessages;
-    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages: resolvedChatMessages, lintOpts });
+    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages: resolvedChatMessages, lintOpts, runId: sessionId });
     try {
       for await (const ev of runGen) {
         await this.logEvent(vaultRoot, sessionId, op, domainId, ev);
@@ -51121,6 +51080,25 @@ async function cleanupBundledSchemaCopies(vault) {
     }
   }
 }
+async function migrateLogsToPluginDir(vault, pluginDir) {
+  const adapter = vault.adapter;
+  const moves = [
+    [GLOBAL_DEV_LOG_PATH, `${pluginDir}/eval.jsonl`],
+    [GLOBAL_AGENT_LOG_PATH, `${pluginDir}/agent.jsonl`]
+  ];
+  for (const [src, dst] of moves) {
+    try {
+      if (!await adapter.exists(src)) continue;
+      const content = await adapter.read(src);
+      if (content) {
+        if (await adapter.exists(dst)) await adapter.append(dst, content);
+        else await adapter.write(dst, content);
+      }
+      await adapter.remove(src);
+    } catch {
+    }
+  }
+}
 async function cleanDir(adapter, dir, knownFiles) {
   for (const f of knownFiles) {
     const p = `${dir}/${f}`;
@@ -51310,6 +51288,7 @@ var LlmWikiPlugin = class extends import_obsidian13.Plugin {
       console.error("[AI Wiki] storage migration error:", e);
     }
     await cleanupBundledSchemaCopies(this.app.vault);
+    await migrateLogsToPluginDir(this.app.vault, this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`);
     await migrateLegacyData(this, this.domainStore, this.localConfigStore);
     await this.loadSettings();
     await migrateToLocalV1(this, this.localConfigStore);
@@ -51541,8 +51520,7 @@ var LlmWikiPlugin = class extends import_obsidian13.Plugin {
       this.settings.agentLogEnabled = legacyLogPath.length > 0;
     }
     this.settings.devMode = {
-      enabled: this.settings.devMode.enabled,
-      evaluatorModel: this.settings.devMode.evaluatorModel
+      enabled: this.settings.devMode.enabled
     };
     let formatMaxTokensMigrated = false;
     if (this.settings.nativeAgent.operations.format.maxTokens === 16384) {
