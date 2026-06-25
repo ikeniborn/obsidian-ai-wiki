@@ -71,10 +71,12 @@ export async function* runDelete(
   // --- 1. Drop source from domain config (source_paths + analyzed_sources) ---
   yield { kind: "source_path_removed", domainId, path: sourcePath };
   const targetStem = sourceStem(sourcePath);
-  const prunedAnalyzed = (domain.analyzed_sources ?? []).filter(
-    (a) => a !== sourcePath && sourceStem(a) !== targetStem,
-  );
-  if (prunedAnalyzed.length !== (domain.analyzed_sources ?? []).length) {
+  const curAnalyzed = domain.analyzed_sources ?? {};
+  const prunedAnalyzed: Record<string, string> = {};
+  for (const k of Object.keys(curAnalyzed)) {
+    if (k !== sourcePath && sourceStem(k) !== targetStem) prunedAnalyzed[k] = curAnalyzed[k];
+  }
+  if (Object.keys(prunedAnalyzed).length !== Object.keys(curAnalyzed).length) {
     yield { kind: "domain_updated", domainId, patch: { analyzed_sources: prunedAnalyzed } };
   }
 

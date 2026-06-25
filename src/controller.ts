@@ -26,7 +26,7 @@ import { domainWikiFolder, GLOBAL_AGENT_LOG_PATH } from "./wiki-path";
 import { restoreSourceFrontmatter } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
 import { collectMdInPaths, parseWikiSources } from "./utils/vault-walk";
-import { computeChangedSources, parsePageSources, type SourceFileInfo, type WikiPageInfo } from "./incremental-sources";
+import { computeChangedSources, hashSource, type SourceFileInfo } from "./incremental-sources";
 
 /** Minimal surface of the host obsidian-excalidraw-plugin's ExcalidrawAutomate. */
 interface ExcalidrawAutomateLike {
@@ -353,9 +353,8 @@ export class WikiController {
   }
 
   /**
-   * Compute the incremental re-init plan: which source files are newer than (or
-   * not yet reflected by) their wiki pages. Pure decision is delegated to
-   * computeChangedSources; this only gathers mtimes + wiki_sources from the vault.
+   * Compute the incremental re-init plan: which source files have changed since
+   * their last ingest, detected by comparing body hashes stored in analyzed_sources.
    */
   async computeIncrementalPlan(
     domainId: string,
@@ -365,10 +364,6 @@ export class WikiController {
     if (!entry) return { changed: [], totalSources: 0, wikiFileCount: 0 };
 
     const base = this.cwdOrEmpty();
-    const vaultTools = new VaultTools(
-      this.app.vault.adapter,
-      base,
-    );
     const toVaultRel = (p: string): string => {
       if (!base || !p.startsWith("/")) return p;
       return p.startsWith(base) ? p.slice(base.length).replace(/^\//, "") : p;
@@ -382,22 +377,28 @@ export class WikiController {
         if (tf) { sourceTFiles.push(tf); seen.add(sp); }
       }
     }
+
+    const analyzed = entry.analyzed_sources ?? {};
     const sourceFiles: SourceFileInfo[] = [];
     for (const f of sourceTFiles) {
-      sourceFiles.push({ stem: f.basename, path: f.path, mtime: await vaultTools.mtime(f.path) });
-    }
-
-    const wikiTFiles = collectMdInPaths(this.app.vault, [domainWikiFolder(entry.wiki_folder)])
-      .filter((f) => !f.path.includes("/_config/"));
-    const wikiPages: WikiPageInfo[] = [];
-    for (const f of wikiTFiles) {
       let content = "";
-      try { content = await this.app.vault.adapter.read(f.path); } catch { /* unreadable → no sources */ }
-      wikiPages.push({ path: f.path, mtime: await vaultTools.mtime(f.path), sources: parsePageSources(content) });
+      try { content = await this.app.vault.adapter.read(f.path); } catch { /* unreadable → empty body hash */ }
+      sourceFiles.push({ path: f.path, hash: hashSource(content) });
     }
 
-    const { changed } = computeChangedSources({ sourceFiles, wikiPages });
-    return { changed, totalSources: sourceFiles.length, wikiFileCount: wikiTFiles.length };
+    const wikiFileCount = collectMdInPaths(this.app.vault, [domainWikiFolder(entry.wiki_folder)])
+      .filter((f) => !f.path.includes("/_config/")).length;
+
+    const { changed, baselined } = computeChangedSources({ sourceFiles, analyzed });
+
+    // Silent baseline: persist hashes for already-ingested sources that had none.
+    if (Object.keys(baselined).length > 0) {
+      const merged = { ...analyzed, ...baselined };
+      const next = domains.map((d) => (d.id === domainId ? { ...d, analyzed_sources: merged } : d));
+      await this.domainStore.save(next);
+    }
+
+    return { changed, totalSources: sourceFiles.length, wikiFileCount };
   }
 
   async registerDomain(input: AddDomainInput): Promise<{ ok: true } | { ok: false; error: string }> {
