@@ -32,6 +32,16 @@ review:
 **Date:** 2026-06-24
 **Status:** approved
 
+> **Amendment (2026-06-25, user-approved during design):** the accumulation logs move out
+> of the synced vault into the plugin directory — `!Wiki/_config/_dev.jsonl` →
+> `.obsidian/plugins/ai-wiki/eval.jsonl` and `!Wiki/_config/_agent.jsonl` →
+> `.obsidian/plugins/ai-wiki/agent.jsonl` (leading `_` dropped). The old vault files are
+> auto-migrated on plugin update. Consequently `eval.jsonl`/`agent.jsonl` are **not**
+> synced by Obsidian (the plugin directory is not vault content) — labels are per-device,
+> by explicit agreement. This supersedes the "synced by Obsidian across desktop/mobile"
+> wording in Strategic Context and the `_dev.jsonl → eval.jsonl` rename constraint below.
+> See the design spec `docs/superpowers/specs/2026-06-25-dev-mode-eval-rework-design.md`.
+
 ## Objective
 Today's dev mode auto-scores each run with a separate LLM judge
 (`devMode.evaluatorModel` → `runEvaluator` → `prompts/evaluator.md` → `eval`
@@ -116,8 +126,8 @@ rarely/over-eagerly (→ improve the harness).
   at `finish()` and the format preview at `renderFormatPreview()`, hosts 👍/👎
   buttons), `src/agent-runner.ts` (`writeDevLog`/`updateDevLogEval` — becomes the
   per-run telemetry writer + rating updater), `settings.ts` (`devMode` flag),
-  `!Wiki/_config/eval.jsonl` (shared, synced by Obsidian across desktop/mobile —
-  non-critical), `scripts/eval.ts` (Node/tsx harness), `scripts/dspy` (Python,
+  `eval.jsonl` (in the plugin dir `.obsidian/plugins/ai-wiki/`, **not** synced — per-device,
+  see the 2026-06-25 amendment), `scripts/eval.ts` (Node/tsx harness), `scripts/dspy` (Python,
   separate LLM API for prompt optimization).
 - Telemetry sources: the deterministic-rule sites (`src/wiki-link-validator.ts`,
   `src/phases/link-resolver.ts` + `query-link-validator.ts`,
@@ -161,8 +171,10 @@ rarely/over-eagerly (→ improve the harness).
 - Retire the retrieval-eval harness: `scripts/eval-*.ts` + `scripts/eval/` gold
   dir. The new `scripts/eval.ts` reads `eval.jsonl` (answer-quality replaces
   retrieval Recall@k/MRR).
-- Rename the log file `_dev.jsonl` → `eval.jsonl` (update `src/wiki-path.ts` +
-  `src/storage-migration.ts`).
+- Rename + relocate the log files to the plugin dir (see the 2026-06-25 amendment):
+  `_dev.jsonl` → `.obsidian/plugins/ai-wiki/eval.jsonl`, `_agent.jsonl` →
+  `.obsidian/plugins/ai-wiki/agent.jsonl`; auto-migrate the old vault copies on update
+  (update `src/wiki-path.ts` + `src/storage-migration.ts`).
 - Do not commit directly to `master`; work on a `dev/*` branch, merge via PR.
 
 ## Autonomy Zones
