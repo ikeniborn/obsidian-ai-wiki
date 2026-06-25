@@ -1,6 +1,6 @@
 ---
 review:
-  plan_hash: bab63206512e0629
+  plan_hash: 68ae4b40e2720e9c
   spec_hash: 09ead92eba32b2fa
   last_run: 2026-06-25
   phases:
@@ -436,6 +436,25 @@ git commit -m "feat(dev-eval): add runId/rule_fired/eval_meta events, drop evalu
 - Reference: `src/wiki-path.ts` (unchanged — `GLOBAL_DEV_LOG_PATH`/`GLOBAL_AGENT_LOG_PATH` stay as the migration sources)
 
 The logs now live in the plugin dir. On load, move any existing vault copies into the plugin-dir files, then delete the vault copies. Idempotent: when the vault sources are absent the function is a no-op.
+
+**This task plus its cross-references covers all three spec §3 requirements:**
+
+1. **Runtime-resolved plugin-dir paths (not static consts).** The write/read paths are
+   built at runtime from the plugin's `manifest.dir` — `evalLogPath(pluginDir) =
+   ${pluginDir}/eval.jsonl` (Task 2), the controller resolves `manifest.dir` with a
+   fallback and passes it as `AgentRunner`'s 6th arg (Task 5 Step 1), and `AgentRunner`
+   uses it as `pluginDir` (Task 6 Step 5). `src/wiki-path.ts`'s `GLOBAL_DEV_LOG_PATH` /
+   `GLOBAL_AGENT_LOG_PATH` constants remain ONLY as the migration sources below — they are
+   never written to again.
+2. **Idempotent auto-migration on update** — `migrateLogsToPluginDir` (Steps 1–2): moves
+   `_dev.jsonl` → `eval.jsonl` and `_agent.jsonl` → `agent.jsonl`, then deletes the vault
+   copy; a second load finds no vault source and is a no-op (Step 4 verifies).
+3. **Legacy lines without `rating` are skipped by readers.** The migration appends the old
+   `_dev.jsonl` content **verbatim** — those lines carry the old judge-score shape (no
+   `runId`/`rating`). They are then ignored, not crashed on: `eval.ts` `parseLog` keeps a
+   line only when it has a `rating` field (Task 15), the dspy loader keeps a record only
+   when `rating ∈ {up,down}` (Task 16), and `updateEvalRating` matches by `runId` which
+   legacy lines lack (Task 2). No reader fails on a legacy line.
 
 - [ ] **Step 1: Add a new exported migration function**
 
@@ -1580,7 +1599,7 @@ Use **@skill:git-workflow** to open a PR from `dev/dev-mode-eval-rework` into `m
 ## Spec coverage check (self-review)
 
 - §2 runId → Task 5 (thread) + Task 6 (use) + Task 10 (view). ✓
-- §3 storage + migration → Task 4. ✓
+- §3 storage + migration → Task 4 (enumerates all three §3 sub-reqs): runtime-resolved paths → Task 2/5/6; idempotent auto-migration → Task 4; legacy-line skip → Task 15/16/2. ✓
 - §4 record schema + write/rate → Task 2 + Task 6 (assembly). ✓
 - §4 promptVersion / visionPromptVersion → Task 1 + Tasks 7/8 (emit). ✓
 - §5 rule_fired + telemetry accumulation → Task 3 (event) + Task 6 (accumulate) + Tasks 7/8/9 (emit). ✓
