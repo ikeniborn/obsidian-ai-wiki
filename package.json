@@ -8,7 +8,7 @@
     "dev": "node esbuild.config.mjs",
     "lint": "eslint \"src/**/*.ts\"",
     "migrate:wiki-prefix": "tsx scripts/migrate-wiki-prefix.ts",
-    "eval": "TSX_TSCONFIG_PATH=scripts/tsconfig.eval.json tsx scripts/eval.ts"
+    "eval": "tsx scripts/eval.ts"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
