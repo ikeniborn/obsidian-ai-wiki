@@ -127,6 +127,7 @@ export async function parseWithRetry<T>(args: ParseWithRetryArgs<T>): Promise<Pa
       err.name = "AbortError";
       throw err;
     }
+    if (attempt > 0) onEvent({ kind: "rule_fired", ruleId: "parseWithRetry", count: 1 });
     const { fullText, outputTokens, stats } = await streamOnce(llm, model, messages, opts, signal);
     totalTokens += outputTokens;
     if (stats) onEvent(buildLlmCallStatsEvent(stats));
