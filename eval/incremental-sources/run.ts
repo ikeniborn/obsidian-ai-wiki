@@ -6,8 +6,7 @@
 import {
   computeChangedSources, hashSource, sourceBodyForHash, capList, parsePageSources,
 } from "../../src/incremental-sources";
-// TODO(Task 2): restore migrateDomainsV3 import + tests 6-7
-// import { migrateDomainsV3, type DomainEntry } from "../../src/domain";
+import { migrateDomainsV3, type DomainEntry } from "../../src/domain";
 
 let pass = 0, fail = 0;
 const failures: string[] = [];
@@ -77,25 +76,24 @@ check("5 strict subset", (() => {
 })());
 
 // =====================================================================
-// TODO(Task 2): restore migrateDomainsV3 import + tests 6-7
-// section("migrateDomainsV3 — list → map");
-//
-// check("6 list → map of empty hashes + flag", (() => {
-//   const domains = [{ id: "d", name: "D", wiki_folder: "d",
-//     analyzed_sources: ["x.md", "y.md"], analyzed_sources_v2: true } as unknown as DomainEntry];
-//   const { migrated } = migrateDomainsV3(domains);
-//   const m = domains[0].analyzed_sources as unknown as Record<string, string>;
-//   return migrated === true && m["x.md"] === "" && m["y.md"] === "" && domains[0].analyzed_sources_v3 === true;
-// })());
-//
-// check("7 idempotent (already v3) → no change", (() => {
-//   const domains = [{ id: "d", name: "D", wiki_folder: "d",
-//     analyzed_sources: { "x.md": "fnv1a:0000aaaa" }, analyzed_sources_v2: true,
-//     analyzed_sources_v3: true } as unknown as DomainEntry];
-//   const { migrated } = migrateDomainsV3(domains);
-//   const m = domains[0].analyzed_sources as unknown as Record<string, string>;
-//   return migrated === false && m["x.md"] === "fnv1a:0000aaaa";
-// })());
+section("migrateDomainsV3 — list → map");
+
+check("6 list → map of empty hashes + flag", (() => {
+  const domains = [{ id: "d", name: "D", wiki_folder: "d",
+    analyzed_sources: ["x.md", "y.md"], analyzed_sources_v2: true } as unknown as DomainEntry];
+  const { migrated } = migrateDomainsV3(domains);
+  const m = domains[0].analyzed_sources as unknown as Record<string, string>;
+  return migrated === true && m["x.md"] === "" && m["y.md"] === "" && domains[0].analyzed_sources_v3 === true;
+})());
+
+check("7 idempotent (already v3) → no change", (() => {
+  const domains = [{ id: "d", name: "D", wiki_folder: "d",
+    analyzed_sources: { "x.md": "fnv1a:0000aaaa" }, analyzed_sources_v2: true,
+    analyzed_sources_v3: true } as unknown as DomainEntry];
+  const { migrated } = migrateDomainsV3(domains);
+  const m = domains[0].analyzed_sources as unknown as Record<string, string>;
+  return migrated === false && m["x.md"] === "fnv1a:0000aaaa";
+})());
 
 // =====================================================================
 section("capList");

@@ -1,6 +1,6 @@
 import type { Vault } from "obsidian";
 import type { DomainEntry } from "./domain";
-import { migrateDomainsV2 } from "./domain";
+import { migrateDomainsV2, migrateDomainsV3 } from "./domain";
 import { WIKI_ROOT, GLOBAL_DOMAIN_PATH, GLOBAL_CONFIG_DIR } from "./wiki-path";
 
 const FILE_PATH = GLOBAL_DOMAIN_PATH;
@@ -32,8 +32,9 @@ export class DomainStore {
         d.wiki_folder = d.wiki_folder.slice("!Wiki/".length);
       }
     }
-    const { migrated } = migrateDomainsV2(domains);
-    if (migrated) await this.save(domains);
+    const { migrated: m2 } = migrateDomainsV2(domains);
+    const { migrated: m3 } = migrateDomainsV3(domains);
+    if (m2 || m3) await this.save(domains);
     return domains;
   }
 
