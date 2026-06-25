@@ -3,15 +3,24 @@ import json
 from collections import defaultdict
 
 
+def _bucket(entry: dict) -> str:
+    """Group key: format runs split by vision on/off; others by operation."""
+    op = entry.get("operation")
+    if op == "format":
+        return "format:vision-on" if entry.get("vision") == "on" else "format:vision-off"
+    return str(op)
+
+
 def load_examples(
     log_path: str,
     operations: list[str] | None,
     min_examples: int,
 ) -> dict[str, list[dict]]:
     """
-    Читает JSONL-лог dev-режима, возвращает dict operation → list[entry].
-    Отфильтровывает: null eval, отсутствующие поля, операции ниже min_examples.
-    Поля в JSONL: operation, userMessage, result, eval.score (camelCase).
+    Read the eval.jsonl dataset, group by bucket (operation, with format split by
+    vision on/off), keep only records carrying a 👍/👎 `rating`. Skips legacy
+    judge-score lines (no `rating`). Fields: operation, question, answer, rating,
+    recognitionRating?, vision?, promptVersion, visionPromptVersion?.
     """
     grouped: dict[str, list[dict]] = defaultdict(list)
 
@@ -30,15 +39,14 @@ def load_examples(
                 continue
             if operations and op not in operations:
                 continue
-            if not entry.get("userMessage") or not entry.get("result"):
-                continue
-            if not entry.get("eval") or entry["eval"].get("score") is None:
+            # require a human label (👍/👎); skip legacy/unlabeled rows
+            if entry.get("rating") not in ("up", "down"):
                 continue
 
-            grouped[op].append(entry)
+            grouped[_bucket(entry)].append(entry)
 
     return {
-        op: entries
-        for op, entries in grouped.items()
+        b: entries
+        for b, entries in grouped.items()
         if len(entries) >= min_examples
     }

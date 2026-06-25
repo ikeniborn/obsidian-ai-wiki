@@ -11,47 +11,63 @@ def _jsonl(entries):
     return f.name
 
 
-def test_groups_by_operation():
+def test_groups_by_bucket():
     path = _jsonl([
-        {"operation": "ingest", "userMessage": "a", "result": "b", "eval": {"score": 8, "reasoning": "ok"}},
-        {"operation": "query",  "userMessage": "c", "result": "d", "eval": {"score": 7, "reasoning": "ok"}},
+        {"operation": "query", "question": "q1", "answer": "a1", "rating": "up"},
+        {"operation": "query", "question": "q2", "answer": "a2", "rating": "down"},
+        {"operation": "chat",  "question": "q3", "answer": "a3", "rating": "up"},
     ])
     result = load_examples(path, operations=None, min_examples=1)
-    assert set(result.keys()) == {"ingest", "query"}
-    assert result["ingest"][0]["userMessage"] == "a"
+    assert set(result.keys()) == {"query", "chat"}
+    assert len(result["query"]) == 2
+    assert len(result["chat"]) == 1
 
 
 def test_filters_by_operations_arg():
     path = _jsonl([
-        {"operation": "ingest", "userMessage": "a", "result": "b", "eval": {"score": 8, "reasoning": "ok"}},
-        {"operation": "query",  "userMessage": "c", "result": "d", "eval": {"score": 7, "reasoning": "ok"}},
+        {"operation": "query", "question": "q1", "answer": "a1", "rating": "up"},
+        {"operation": "chat",  "question": "q2", "answer": "a2", "rating": "up"},
     ])
-    result = load_examples(path, operations=["ingest"], min_examples=1)
-    assert "ingest" in result
+    result = load_examples(path, operations=["query"], min_examples=1)
+    assert "query" in result
+    assert "chat" not in result
+
+
+def test_skips_unlabeled_and_legacy():
+    path = _jsonl([
+        # rating: null — should be skipped
+        {"operation": "query", "question": "q1", "answer": "a1", "rating": None},
+        # no rating key at all — legacy judge line
+        {"operation": "query", "question": "q2", "answer": "a2", "score": 7},
+        # valid human label — should be kept
+        {"operation": "query", "question": "q3", "answer": "a3", "rating": "up"},
+    ])
+    result = load_examples(path, operations=None, min_examples=1)
+    assert "query" in result
+    assert len(result["query"]) == 1
+    assert result["query"][0]["question"] == "q3"
+
+
+def test_excludes_buckets_below_min_examples():
+    path = _jsonl([
+        {"operation": "query", "question": "q1", "answer": "a1", "rating": "up"},
+    ])
+    result = load_examples(path, operations=None, min_examples=5)
     assert "query" not in result
 
 
-def test_skips_null_eval():
+def test_format_vision_split():
     path = _jsonl([
-        {"operation": "ingest", "userMessage": "a", "result": "b", "eval": None},
-        {"operation": "ingest", "userMessage": "c", "result": "d", "eval": {"score": 7, "reasoning": "ok"}},
+        # vision on → format:vision-on
+        {"operation": "format", "question": "q1", "answer": "a1", "rating": "up", "vision": "on"},
+        # vision off → format:vision-off
+        {"operation": "format", "question": "q2", "answer": "a2", "rating": "down", "vision": "off"},
+        # no vision field → format:vision-off (falsy path)
+        {"operation": "format", "question": "q3", "answer": "a3", "rating": "up"},
     ])
     result = load_examples(path, operations=None, min_examples=1)
-    assert len(result["ingest"]) == 1
-
-
-def test_excludes_ops_below_min_examples():
-    path = _jsonl([
-        {"operation": "ingest", "userMessage": "a", "result": "b", "eval": {"score": 8, "reasoning": "ok"}},
-    ])
-    result = load_examples(path, operations=None, min_examples=5)
-    assert "ingest" not in result
-
-
-def test_skips_missing_required_fields():
-    path = _jsonl([
-        {"operation": "ingest", "result": "b", "eval": {"score": 8, "reasoning": "ok"}},  # нет userMessage
-        {"operation": "ingest", "userMessage": "c", "result": "d", "eval": {"score": 7, "reasoning": "ok"}},
-    ])
-    result = load_examples(path, operations=None, min_examples=1)
-    assert len(result["ingest"]) == 1
+    assert "format:vision-on" in result
+    assert "format:vision-off" in result
+    assert "format" not in result  # plain "format" key must not appear
+    assert len(result["format:vision-on"]) == 1
+    assert len(result["format:vision-off"]) == 2
