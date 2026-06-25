@@ -2,7 +2,7 @@
 // Per-run dev-mode eval dataset: one JSONL record per run in the plugin dir,
 // updated in place by 👍/👎 clicks (matched by runId). Not synced (plugin dir
 // is not vault content) — labels are per-device, by design.
-import type { DataAdapter } from "obsidian";
+import type { VaultAdapter } from "./vault-tools";
 
 export type Rating = "up" | "down" | null;
 
@@ -57,7 +57,7 @@ export function evalLogPath(pluginDir: string): string {
 
 /** Append one record at run end. Never throws (logging must not break a run). */
 export async function writeEvalRecord(
-  adapter: DataAdapter,
+  adapter: VaultAdapter,
   pluginDir: string,
   record: EvalRecord,
 ): Promise<void> {
@@ -74,7 +74,7 @@ export async function writeEvalRecord(
  * value (a second identical click clears it back to null). No duplicate rows.
  */
 export async function updateEvalRating(
-  adapter: DataAdapter,
+  adapter: VaultAdapter,
   pluginDir: string,
   runId: string,
   axis: RatingAxis,
