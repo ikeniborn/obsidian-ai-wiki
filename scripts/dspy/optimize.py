@@ -53,35 +53,43 @@ def main() -> None:
         print("Нет операций с достаточным количеством примеров. Завершение.")
         sys.exit(0)
 
-    evaluator_template = Path(prompts_dir, "evaluator.md").read_text(encoding="utf-8")
-
     lm = make_lm()
 
-    for op, examples in grouped.items():
-        print(f"[{op}] {len(examples)} примеров загружено")
-        template_path = Path(prompts_dir) / f"{op}.md"
+    # bucket → which prompt template to optimize
+    def template_for(bucket: str) -> str:
+        if bucket.startswith("format:"):
+            return "format"
+        return bucket  # query / chat / lint-chat / ...
+
+    for bucket, examples in grouped.items():
+        print(f"[{bucket}] {len(examples)} примеров загружено")
+        tpl_name = template_for(bucket)
+        template_path = Path(prompts_dir) / f"{tpl_name}.md"
         if not template_path.exists():
-            print(f"[{op}] WARNING: {template_path} не найден, пропускаю")
+            print(f"[{bucket}] WARNING: {template_path} не найден, пропускаю")
             continue
 
         template_content = template_path.read_text(encoding="utf-8")
-        print(f"[{op}] MIPROv2 запущен (auto=light)...")
+        up_n = sum(1 for e in examples if e.get("rating") == "up")
+        print(f"[{bucket}] MIPROv2 (auto=light) · 👍-guard over {up_n} cases")
 
         try:
             optimized = run_mipro(
                 lm=lm,
-                operation=op,
+                operation=bucket,
                 trainset=examples,
                 template_content=template_content,
-                evaluator_template=evaluator_template,
             )
         except ValueError as e:
-            print(f"[{op}] ERROR: {e}")
+            print(f"[{bucket}] ERROR: {e}")
             continue
 
-        print(f"[{op}] Оптимизация завершена. Запись...")
-        out_path = write_optimized(op, optimized, output_dir)
-        print(f"[{op}] Записано: {out_path}")
+        if optimized is None:
+            print(f"[{bucket}] REJECTED: candidate regressed the 👍 set — keeping current prompt")
+            continue
+
+        out_path = write_optimized(tpl_name, optimized, output_dir)
+        print(f"[{bucket}] Записано: {out_path}")
 
 
 if __name__ == "__main__":
