@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.185 — 2026-06-25
+
+### Новое
+- feat(dev-eval): rewrite eval as quality + telemetry report over eval.jsonl
+- feat(dev-eval): dspy optimizes from 👍/👎 ratings via binary metric, replacing LLM judge
+- feat(dev-eval): emit eval_meta + rule_fired telemetry events from query/chat/format (+ visionCount, runId)
+- feat(dev-eval): accumulate telemetry and write per-run eval-log record (schema + write/rate helpers)
+- feat(dev-eval): render 👍/👎 rating rows on query/chat + format axes
+- feat(dev-eval): thread runId + plugin dir; add controller.rateRun
+- feat(dev-eval): migrate dev/agent logs from vault to plugin dir on load
+- feat(dev-eval): remove evaluator model setting UI; swap evaluator i18n strings for rating strings
+- feat(dev-eval): add prompt content-hash util for provenance
+
+### Исправления
+- fix(dev-eval): type eval-log adapter as VaultAdapter to match call sites
+
+### Прочее
+- refactor(dev-eval): remove retrieval Recall@k/MRR harness
+- refactor(dev-eval): remove LLM judge (evaluator phase + prompt)
+
+---
+
 ## 0.1.184 — 2026-06-25
 
 ### Новое
