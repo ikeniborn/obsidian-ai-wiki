@@ -5,14 +5,14 @@ import { runLint } from "./phases/lint";
 import { runLintChat } from "./phases/chat";
 import { runLintFixChat } from "./phases/lint-chat";
 import { runInit } from "./phases/init";
-import { runEvaluator } from "./phases/evaluator";
 import { runFormat } from "./phases/format";
 import { runDelete } from "./phases/delete";
 import { VisionTempStore } from "./phases/vision-temp-store";
 import type { LlmCallOptions, LlmClient, LlmWikiPluginSettings, RunEvent, RunRequest } from "./types";
 import type { VaultTools } from "./vault-tools";
 import { wrapWithJsonFallback } from "./phases/llm-utils";
-import { GLOBAL_DEV_LOG_PATH, domainWikiFolder } from "./wiki-path";
+import { domainWikiFolder } from "./wiki-path";
+import { writeEvalRecord, type EvalRecord, type EvalMetaFields, type LlmError } from "./eval-log";
 import { PageSimilarityService, DEFAULT_CHUNKING } from "./page-similarity";
 import { resolveLang, i18nFor } from "./i18n";
 
@@ -79,26 +79,6 @@ export class AgentRunner {
         maxCount: na.chunkMaxCount ?? DEFAULT_CHUNKING.maxCount,
       },
     });
-  }
-
-  private async writeDevLog(_vaultRoot: string, entry: {
-    operation: string;
-    model: string;
-    systemPrompt: string;
-    userMessage: string;
-    result: string;
-    durationMs: number;
-  }): Promise<void> {
-    if (!this.settings.devMode?.enabled) return;
-    const adapter = this.vaultTools.adapter;
-    const path = GLOBAL_DEV_LOG_PATH;
-    try {
-      if (!(await adapter.exists("!Wiki"))) await adapter.mkdir("!Wiki").catch(() => {});
-      if (!(await adapter.exists("!Wiki/_config"))) await adapter.mkdir("!Wiki/_config").catch(() => {});
-      const line = JSON.stringify({ ts: new Date().toISOString(), ...entry, eval: null }) + "\n";
-      if (await adapter.exists(path)) await adapter.append(path, line);
-      else await adapter.write(path, line);
-    } catch { /* не блокируем операцию */ }
   }
 
   private async *runOperation(
@@ -181,15 +161,17 @@ export class AgentRunner {
       : this.domains;
 
     const similarity = this.buildSimilarity();
-    const startMs = Date.now();
-
     const idleTimeoutMs = (this.settings.llmIdleTimeoutSec ?? 300) * 1000;
     const maxRetries = this.settings.llmIdleRetries ?? 3;
     let attempt = 0;
 
+    const llmErrors: LlmError[] = [];
+    const ruleFirings: Record<string, number> = {};
+    let evalMeta: EvalMetaFields = {};
+
     let visionTempStore: VisionTempStore | undefined;
     if (req.operation === "format" && this.settings.vision?.enabled && this.visionTempBaseDir) {
-      const runId = Date.now().toString(36);
+      const runId = req.runId ?? Date.now().toString(36);
       visionTempStore = new VisionTempStore(this.vaultTools, `${this.visionTempBaseDir}/.vision-tmp/${runId}`);
     }
 
@@ -217,6 +199,17 @@ export class AgentRunner {
             ev.kind === "tool_use" || ev.kind === "tool_result"
           ) resetTimer();
           if (ev.kind === "result") finalResultText = ev.text;
+          if (ev.kind === "error") {
+            llmErrors.push({ kind: "error", message: ev.message });
+          } else if (ev.kind === "structural_error") {
+            llmErrors.push({ kind: "structural_error", callSite: ev.callSite, errorType: ev.errorType, retryAttempt: ev.retryAttempt, message: ev.message });
+          } else if (ev.kind === "rule_fired") {
+            ruleFirings[ev.ruleId] = (ruleFirings[ev.ruleId] ?? 0) + ev.count;
+          } else if (ev.kind === "eval_meta") {
+            evalMeta = { ...evalMeta, ...ev.fields };
+          } else if (ev.kind === "format_preview" && req.runId) {
+            ev.runId = req.runId; // so the view's 👍/👎 buttons know which record to update
+          }
           yield ev;
         }
         if (idleTimer) window.clearTimeout(idleTimer);
@@ -234,26 +227,24 @@ export class AgentRunner {
             "AbortError",
           );
         }
-        // devMode/eval runs only on final successful attempt
-        if (this.settings.devMode?.enabled && finalResultText) {
-          const taskInput = req.args.join(" ") || req.operation;
-          await this.writeDevLog(vaultRoot, {
+        if (this.settings.devMode?.enabled && finalResultText && req.runId && this.visionTempBaseDir) {
+          const record: EvalRecord = {
+            runId: req.runId,
+            ts: new Date().toISOString(),
             operation: req.operation,
             model,
-            systemPrompt: opts.systemPrompt ?? "",
-            userMessage: taskInput,
-            result: finalResultText,
-            durationMs: Date.now() - startMs,
-          });
-          if (this.settings.devMode.evaluatorModel) {
-            const evalModel = this.settings.devMode.evaluatorModel;
-            for await (const ev of runEvaluator(this.llm, evalModel, req.operation, taskInput, finalResultText, req.signal, { reasoningLanguage: this.settings.reasoningLanguage, outputLanguage: this.settings.outputLanguage })) {
-              yield ev;
-              if (ev.kind === "eval_result") {
-                await this.updateDevLogEval(vaultRoot, ev.score, ev.reasoning);
-              }
-            }
-          }
+            ...evalMeta,
+            answer: evalMeta.answer ?? (req.operation === "format" ? undefined : finalResultText),
+            llmErrors,
+            ruleFirings,
+            rating: null,
+            ...(evalMeta.vision === "on" ? { recognitionRating: null } : {}),
+          };
+          // `visionTempBaseDir` IS the plugin base dir — the controller passes the
+          // resolved `manifest.dir` as the 6th ctor arg (Task 5). eval.jsonl lives at
+          // its root, not in the .vision-tmp subdir.
+          const pluginDir = this.visionTempBaseDir;
+          await writeEvalRecord(this.vaultTools.adapter, pluginDir, record);
         }
         return;
       } catch (err) {
@@ -271,21 +262,5 @@ export class AgentRunner {
     } finally {
       await visionTempStore?.cleanup();
     }
-  }
-
-  private async updateDevLogEval(_vaultRoot: string, score: number, reasoning: string): Promise<void> {
-    if (!this.settings.devMode?.enabled) return;
-    const adapter = this.vaultTools.adapter;
-    const path = GLOBAL_DEV_LOG_PATH;
-    try {
-      if (!(await adapter.exists(path))) return;
-      const content = await adapter.read(path);
-      const lines = content.trimEnd().split("\n");
-      const lastIdx = lines.length - 1;
-      const last: Record<string, unknown> = JSON.parse(lines[lastIdx]) as Record<string, unknown>;
-      last["eval"] = { score, reasoning };
-      lines[lastIdx] = JSON.stringify(last);
-      await adapter.write(path, lines.join("\n") + "\n");
-    } catch { /* не блокируем */ }
   }
 }

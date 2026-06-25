@@ -19,6 +19,22 @@
 {"op":"ingest","source":"src/phases/ingest.ts","page":"operations.md","date":"2026-06-24"}
 {"op":"ingest","source":"src/vault-tools.ts","page":"architecture.md","date":"2026-06-24"}
 {"op":"ingest","source":"src/incremental-sources.ts (parsePageSources)","page":"operations.md","date":"2026-06-24","note":"post-merge with origin/master; index rebuilt"}
-{"op":"ingest","source":"src/incremental-sources.ts","page":"docs/wiki/operations.md","date":"2026-06-25"}
-{"op":"ingest","source":"src/incremental-sources.ts","page":"docs/wiki/architecture.md","date":"2026-06-25"}
-{"op":"ingest","source":"src/incremental-sources.ts","page":"docs/wiki/domain-model.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/agent-runner.ts","page":"docs/wiki/llm-pipeline.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/agent-runner.ts","page":"docs/wiki/architecture.md","date":"2026-06-25"}
+{"op":"ingest","source":"scripts/eval.ts","page":"docs/wiki/operations.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/eval-log.ts","page":"docs/wiki/llm-pipeline.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/prompt-version.ts","page":"docs/wiki/llm-pipeline.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/types.ts","page":"docs/wiki/llm-pipeline.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/phases/parse-with-retry.ts","page":"docs/wiki/llm-pipeline.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/view.ts","page":"docs/wiki/llm-pipeline.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/phases/query.ts","page":"docs/wiki/operations.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/phases/chat.ts","page":"docs/wiki/operations.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/phases/format.ts","page":"docs/wiki/operations.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/phases/attachment-analyzer.ts","page":"docs/wiki/operations.md","date":"2026-06-25"}
+{"op":"ingest","source":"scripts/dspy/lib/loader.py","page":"docs/wiki/operations.md","date":"2026-06-25"}
+{"op":"ingest","source":"scripts/dspy/lib/optimizer.py","page":"docs/wiki/operations.md","date":"2026-06-25"}
+{"op":"ingest","source":"scripts/dspy/optimize.py","page":"docs/wiki/operations.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/controller.ts","page":"docs/wiki/architecture.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/main.ts","page":"docs/wiki/architecture.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/storage-migration.ts","page":"docs/wiki/architecture.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/settings.ts,src/i18n.ts,dist/main.js","page":"backends-and-config.md","date":"2026-06-25","note":"dev-eval review (no wiki footprint): settings.ts dropped the evaluatorModel UI block — the evaluator setting was never documented on backends-and-config; i18n.ts added rating labels + removed evaluator strings (i18n keys are not page-documented); dist/main.js is a build artifact. Pages already current; skipped per no-documentable-change."}

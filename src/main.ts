@@ -9,7 +9,7 @@ import { i18n } from "./i18n";
 import { DomainStore } from "./domain-store";
 import { LocalConfigStore } from "./local-config";
 import { structuralErrorCounter } from "./structural-error-counter";
-import { runStorageMigration, cleanupBundledSchemaCopies } from "./storage-migration";
+import { runStorageMigration, cleanupBundledSchemaCopies, migrateLogsToPluginDir } from "./storage-migration";
 import { migrateIndexFormat } from "./migrate-index-format";
 import { migrateDropSections } from "./migrate-drop-sections";
 import { GLOBAL_DOMAIN_PATH, domainWikiFolder } from "./wiki-path";
@@ -33,6 +33,7 @@ export default class LlmWikiPlugin extends Plugin {
     }
     // Schemas are bundled & delivered via release; drop any stale vault copies.
     await cleanupBundledSchemaCopies(this.app.vault);
+    await migrateLogsToPluginDir(this.app.vault, this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`);
     await migrateLegacyData(this, this.domainStore, this.localConfigStore);
     await this.loadSettings();
     await migrateToLocalV1(this, this.localConfigStore);
@@ -278,7 +279,6 @@ export default class LlmWikiPlugin extends Plugin {
     // Миграция: devMode.logDir → удалён (путь фиксирован в коде)
     this.settings.devMode = {
       enabled: this.settings.devMode.enabled,
-      evaluatorModel: this.settings.devMode.evaluatorModel,
     };
 
     // Миграция v0.1.65: format.maxTokens 16384 (старый default) → 32768 для native.

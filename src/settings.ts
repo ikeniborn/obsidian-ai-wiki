@@ -992,19 +992,8 @@ export class LlmWikiSettingTab extends PluginSettingTab {
         .setDesc(T.settings.devMode_enabled_desc)
         .addToggle((t) =>
           t.setValue(s.devMode.enabled)
-            .onChange(async (v) => { s.devMode.enabled = v; await this.plugin.saveSettings(); this.display(); }),
+            .onChange(async (v) => { s.devMode.enabled = v; await this.plugin.saveSettings(); }),
         );
-
-      if (s.devMode.enabled) {
-        new Setting(containerEl)
-          .setName(T.settings.devMode_evaluatorModel_name)
-          .setDesc(T.settings.devMode_evaluatorModel_desc)
-          .addText((t) =>
-            t.setPlaceholder("")
-              .setValue(s.devMode.evaluatorModel)
-              .onChange(async (v) => { s.devMode.evaluatorModel = v.trim(); await this.plugin.saveSettings(); }),
-          );
-      }
     }
     window.requestAnimationFrame(() => { scrollEl.scrollTop = savedScroll; });
   }

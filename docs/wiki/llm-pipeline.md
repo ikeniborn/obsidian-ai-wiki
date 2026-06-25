@@ -20,9 +20,11 @@ The `base.md` `## Terms` contract governs what survives translation: ALL natural
 
 The page-generation phases (`ingest`, `lint`, `init`) reinforce this in `templates/_wiki_schema.md` (`## Language and style`): table cell values, field values, list items, and quoted sentences copied from the source must also be translated, while `[[wiki-link]]` targets stay verbatim (they are filenames). Compliance is model-dependent — strongly-instruction-following models translate these reliably, but some models still preserve recognizable literal data (e.g. eval `prompt`/`expected` test inputs) regardless; this is a prompt-contract guideline, not a hard post-generation guard.
 
-## Evaluator Prompt Pattern
+## Dev-Mode Eval Record
 
-Only phase that sends no system message to `buildChatParams` (`src/phases/evaluator.ts`). `prependBaseContract` creates `system = base.md` from scratch; `evaluator.md` renders into the user role — unlike all other phases where the phase prompt is the system message.
+When `devMode.enabled`, `AgentRunner.run` (`src/agent-runner.ts`) assembles one `EvalRecord` per run and appends it to `<pluginDir>/eval.jsonl` (`src/eval-log.ts#writeEvalRecord`). This replaced the former LLM-judge evaluator: run quality is now a human 👍/👎 label, not a model-assigned score.
+
+Across the run loop, `AgentRunner` accumulates telemetry from internal events the phases emit: `error`/`structural_error` → `llmErrors[]`, `rule_fired` (deterministic fixers — `resolveLink`, `annotateBroken`, `stripSentinelMarkers`, `formatSalvage`, `parseWithRetry`) → `ruleFirings{}`, and `eval_meta` (provenance: `question`, `answer`, `found_pages`, `promptVersion`, `retrievalConfig`, vision fields) merged into the record. The record is written with `rating: null`; a 👍/👎 click in the view updates it in place by `runId` (`updateEvalRating`). Prompt provenance is a content hash (`src/prompt-version.ts#promptVersionOf`, `visionPromptVersionOf`). See [[operations#Dev-Mode Eval Dataset]] and [[architecture#AgentRunner]].
 
 ## parseWithRetry
 

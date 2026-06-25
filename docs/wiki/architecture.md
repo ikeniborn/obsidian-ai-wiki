@@ -22,13 +22,13 @@ Dispatch passes **vault-relative** paths (Obsidian `TFile.path`, forward slashes
 
 Stateless execution engine (`src/agent-runner.ts`). Receives a `RunRequest`, selects LLM call options per operation, and delegates to the correct phase function. Wraps the LLM client in `wrapWithJsonFallback` at construction.
 
-Optionally runs the evaluator in `devMode`. `run()` wraps each attempt in a per-attempt `AbortController`; if the LLM goes silent for `llmIdleTimeoutSec` seconds, it retries up to `llmIdleRetries` times before propagating. See [[llm-pipeline]].
+In `devMode` it accumulates per-run telemetry and writes one 👍/👎-rateable `eval.jsonl` record at run end (see [[llm-pipeline#Dev-Mode Eval Record]]). `run()` wraps each attempt in a per-attempt `AbortController`; if the LLM goes silent for `llmIdleTimeoutSec` seconds, it retries up to `llmIdleRetries` times before propagating. See [[llm-pipeline]].
 
 ## Phase Functions
 
 Each operation is an async generator in `src/phases/`. Functions yield `RunEvent` objects and write to the vault via `VaultTools`. No shared mutable state between phases.
 
-Files: `ingest.ts`, `query.ts`, `lint.ts`, `lint-chat.ts`, `chat.ts`, `init.ts`, `format.ts`, plus `evaluator.ts` for devMode. See [[operations]].
+Files: `ingest.ts`, `query.ts`, `lint.ts`, `lint-chat.ts`, `chat.ts`, `init.ts`, `format.ts`. See [[operations]].
 
 ## Backends
 

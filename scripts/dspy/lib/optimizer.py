@@ -22,30 +22,6 @@ Return ONLY the rewritten template text, no explanation.
 """
 
 
-def call_evaluator(
-    lm,
-    operation: str,
-    user_message: str,
-    result: str,
-    evaluator_template: str,
-) -> float:
-    prompt = (
-        evaluator_template
-        .replace("{{operation}}", operation)
-        .replace("{{task_input}}", user_message)
-        .replace("{{result}}", result)
-    )
-    response = lm(prompt=prompt)
-    text = response[0] if response else ""
-    try:
-        match = re.search(r'"score"\s*:\s*(\d+(?:\.\d+)?)', text)
-        if not match:
-            return 0.0
-        return min(10.0, float(match.group(1)))
-    except Exception:
-        return 0.0
-
-
 def restore_placeholders(lm, original: str, optimized: str) -> str:
     placeholders = re.findall(r'\{\{(\w+)\}\}', original)
     if not placeholders:
@@ -71,47 +47,60 @@ def restore_placeholders(lm, original: str, optimized: str) -> str:
     return restored
 
 
+def _jaccard(a: str, b: str) -> float:
+    sa, sb = set(a.lower().split()), set(b.lower().split())
+    if not sa and not sb:
+        return 1.0
+    return len(sa & sb) / (len(sa | sb) or 1)
+
+
 def run_mipro(
     lm,
     operation: str,
     trainset: list[dict],
     template_content: str,
-    evaluator_template: str,
-) -> str:
+    evaluator_template: str = "",  # unused with the rating metric; kept for signature compat
+) -> str | None:
+    """Returns the optimized template text, or None when the candidate regressed
+    the held-out 👍 set (spec §8 reject condition)."""
     dspy.configure(lm=lm)
 
     sig = make_signature(template_content)
-    program = dspy.Predict(sig)
+    program = dspy.Predict(sig)  # original (pre-optimization) prompt
+
+    # recognition bucket uses recognitionRating; ":recognition" is reserved for the
+    # deferred vision-recognition pass (not produced by optimize.py yet — Task 18).
+    field = "recognitionRating" if operation.endswith(":recognition") else "rating"
 
     examples = [
         dspy.Example(
-            user_message=entry["userMessage"],
-            result=entry["result"],
-            score=entry["eval"]["score"],
+            user_message=entry.get("question", ""),
+            reference=entry.get("answer", ""),
+            up=(entry.get(field) == "up"),
         ).with_inputs("user_message")
         for entry in trainset
     ]
 
     def metric(example, prediction, trace=None):
-        score = call_evaluator(
-            lm, operation,
-            example.user_message,
-            prediction.result,
-            evaluator_template,
-        )
-        return score / 10.0
+        sim = _jaccard(getattr(prediction, "result", "") or "", example.reference)
+        return sim if example.up else (1.0 - sim)
 
-    optimizer = dspy.MIPROv2(
-        metric=metric,
-        auto="light",
-        num_threads=1,
-    )
+    optimizer = dspy.MIPROv2(metric=metric, auto="light", num_threads=1)
     compiled = optimizer.compile(
         program,
         trainset=examples,
         max_bootstrapped_demos=0,
         max_labeled_demos=0,
     )
-    optimized_instruction = compiled.signature.instructions
 
-    return restore_placeholders(lm, template_content, optimized_instruction)
+    # 👍-guard (spec §8): reject if the optimized prompt regresses the 👍 set.
+    up_examples = [e for e in examples if e.up]
+    if up_examples:
+        def mean_on_up(prog) -> float:
+            return sum(metric(e, prog(user_message=e.user_message)) for e in up_examples) / len(up_examples)
+        baseline = mean_on_up(program)    # original prompt
+        candidate = mean_on_up(compiled)  # optimized prompt
+        if candidate < baseline:
+            return None  # regressed the 👍 set — reject the candidate
+
+    return restore_placeholders(lm, template_content, compiled.signature.instructions)

@@ -193,6 +193,7 @@ export async function analyzeSingleAttachment(
   reasoningLanguage: OutputLanguage = "auto",
   visionTempStore?: VisionTempStore,
   imageOnly: boolean = false,
+  usedTemplates?: Set<string>,
 ): Promise<string | null> {
   const resolved = vaultTools.resolveLink(path, sourcePath);
   // Skip embeds Obsidian can't resolve to an indexed vault file — a traversal
@@ -206,15 +207,20 @@ export async function analyzeSingleAttachment(
     const b64 = await vaultTools.renderExcalidrawPng(resolved);
     if (!b64) return null;            // no host plugin / render failed → skip
     await visionTempStore?.putPng(path, b64);
+    usedTemplates?.add(visionExcalidraw);
     return analyzeExcalidraw(b64, llm, model, signal, language, reasoningLanguage);
   }
   if (ext === "pdf") {
     const buf = await vaultTools.readBinary(resolved);
+    usedTemplates?.add(visionPdf);
+    usedTemplates?.add(visionStructure);
     return analyzePdf(buf, llm, model, signal, language, reasoningLanguage);
   }
   const mimeType = getMimeType(resolved);
   if (mimeType) {
     const buf = await vaultTools.readBinary(resolved);
+    usedTemplates?.add(visionImage);
+    usedTemplates?.add(visionStructure);
     return analyzeImage(buf, mimeType, llm, model, signal, language, reasoningLanguage);
   }
   return null;

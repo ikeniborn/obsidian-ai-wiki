@@ -101,6 +101,31 @@ export async function cleanupBundledSchemaCopies(vault: Vault): Promise<void> {
   }
 }
 
+/**
+ * Relocate the dev-mode logs out of the synced vault into the plugin dir.
+ * `_dev.jsonl` → `<pluginDir>/eval.jsonl`, `_agent.jsonl` → `<pluginDir>/agent.jsonl`.
+ * Appends vault content to the plugin-dir file, then removes the vault copy.
+ * Idempotent — a no-op when no vault copies exist. Best-effort; never throws.
+ */
+export async function migrateLogsToPluginDir(vault: Vault, pluginDir: string): Promise<void> {
+  const adapter = vault.adapter;
+  const moves: Array<[string, string]> = [
+    [GLOBAL_DEV_LOG_PATH, `${pluginDir}/eval.jsonl`],
+    [GLOBAL_AGENT_LOG_PATH, `${pluginDir}/agent.jsonl`],
+  ];
+  for (const [src, dst] of moves) {
+    try {
+      if (!(await adapter.exists(src))) continue;
+      const content = await adapter.read(src);
+      if (content) {
+        if (await adapter.exists(dst)) await adapter.append(dst, content);
+        else await adapter.write(dst, content);
+      }
+      await adapter.remove(src);
+    } catch { /* best-effort */ }
+  }
+}
+
 async function cleanDir(
   adapter: Vault["adapter"],
   dir: string,

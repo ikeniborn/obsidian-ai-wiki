@@ -197,11 +197,11 @@ Every page removal is `validateArticlePath`-guarded (`<domain>/<file>.md`, no tr
 
 The source file is permanently removed (`vaultTools.remove`, no trash) **last**, and only when there were zero rebuild failures **and** the run was not aborted. An abort mid-rebuild leaves wiped pages un-rebuilt; deleting the source then would be unrecoverable, so the source is kept and the result reports `source kept — cancelled` / `source kept — retry`.
 
-## Retrieval Eval Harness
+## Dev-Mode Eval Dataset
 
-Standalone CLI (`scripts/eval.ts`) measuring retrieval quality — Recall@k (k=3,5,8) and MRR — against a fixed gold set, per layer (seed, union) and config (dense, jaccard). Distinct from the answer-quality evaluator (`src/phases/evaluator.ts`).
+Quality is measured from real dev-mode runs labelled by hand, not a fixed gold set or an LLM judge. With `devMode.enabled`, each query/chat/format run appends one record to `<pluginDir>/eval.jsonl` carrying harness telemetry (`llmErrors`, `ruleFirings`) and provenance; the user rates it 👍/👎 in the view. See [[llm-pipeline#Dev-Mode Eval Record]].
 
-It runs against a real vault on disk, mirroring the seed-selection + BFS block of query (same public functions, no `runQuery`). Because `src/page-similarity.ts` imports `requestUrl` from the type-only `obsidian` package, the harness aliases `obsidian` to `scripts/obsidian-shim.ts` (a `fetch`-based `requestUrl`). Run via `npm run eval -- --vault <path> --gold <gold.json> [--config dense|jaccard] [...]`. Gold sets live in `scripts/eval/`.
+`scripts/eval.ts` is a standalone report over that dataset (`npm run eval -- [--log <eval.jsonl>]`). It prints answer quality (query/chat), format quality split by vision on/off, recognition quality, and a per-`promptVersion` telemetry breakdown (👍-share, llmError counts, rule firings). It reads only `node:fs` + JSON — no `obsidian` shim. Legacy judge-score lines (no `rating`) are skipped. The same `eval.jsonl` feeds the `scripts/dspy` optimizer, which tunes prompts from the 👍/👎 labels with a baseline 👍-guard.
 
 ## Tier 1 Features
 
@@ -213,7 +213,7 @@ Three opt-in capabilities; all default to off and are safe to enable independent
 
 ## Tier 2 Features
 
-Two opt-in retrieval refinements for the native Query pipeline; both default to off and are measurable on the eval harness. See [[retrieval#Fusion]].
+Two opt-in retrieval refinements for the native Query pipeline; both default to off. Their effect on answer quality is observed via the dev-mode 👍/👎 dataset (see [[operations#Dev-Mode Eval Dataset]]). See [[retrieval#Fusion]].
 
 - **BFS fusion** (`nativeAgent.bfsFusion`): query context ordered by an RRF fusion of vector and graph ranks over the seed+BFS union, reusing `rrfK`.
 - **Seed similarity threshold** (`nativeAgent.seedSimilarityThreshold > 0`): the threshold is compared against the **dense cosine confidence** (`denseMax`), not the fused score — so the gate actually engages in hybrid mode. Seeds below it are dropped in favor of Jaccard, falling through to `llmSelectSeeds` when Jaccard is also empty.

@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import type { DomainEntry, EntityType } from "./domain";
+import type { EvalMetaFields } from "./eval-log";
 
 export type WikiOperation =
   | "ingest"
@@ -31,6 +32,7 @@ export interface RunRequest {
   signal: AbortSignal;
   timeoutMs: number;
   domainId?: string;
+  runId?: string;
   context?: string;
   instruction?: string;
   onFileError?: OnFileError;
@@ -63,11 +65,12 @@ export type RunEvent =
   | { kind: "source_path_added"; domainId: string; path: string }
   | { kind: "source_path_removed"; domainId: string; path: string }
   | { kind: "domain_updated"; domainId: string; patch: { entity_types?: EntityType[]; language_notes?: string; wiki_folder?: string; analyzed_sources?: Record<string, string> } }
-  | { kind: "eval_result"; score: number; reasoning: string }
+  | { kind: "rule_fired"; ruleId: string; count: number }
+  | { kind: "eval_meta"; fields: EvalMetaFields }
   | { kind: "init_start"; totalFiles: number; phase?: "analysis" | "ingest" }
   | { kind: "file_start"; file: string; index: number; total: number; phase?: "analysis" | "ingest" }
   | { kind: "file_done"; file: string; phase?: "analysis" | "ingest" }
-  | { kind: "format_preview"; tempPath: string; report: string; missingTokens: { token: string; context: string }[] }
+  | { kind: "format_preview"; tempPath: string; report: string; missingTokens: { token: string; context: string }[]; runId?: string; visionCount?: number }
   | { kind: "format_applied"; path: string }
   | { kind: "format_cancelled" }
   | { kind: "structural_error";
@@ -219,7 +222,6 @@ export interface LlmWikiPluginSettings {
   };
   devMode: {
     enabled: boolean;
-    evaluatorModel: string;
   };
   lintOptions: {
     useLlm: boolean;
@@ -286,7 +288,6 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
   proxy: { enabled: false, url: "" },
   devMode: {
     enabled: false,
-    evaluatorModel: "sonnet",
   },
   lintOptions: {
     useLlm: true,

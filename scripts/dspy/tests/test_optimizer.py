@@ -2,56 +2,15 @@ from __future__ import annotations
 
 import pytest
 from unittest.mock import MagicMock, patch
-from lib.optimizer import call_evaluator, restore_placeholders, run_mipro
+from lib.optimizer import restore_placeholders, run_mipro
 
 
 class MockLM:
-    def __init__(self, response: str):
+    def __init__(self, response: str = ""):
         self._response = response
 
     def __call__(self, prompt="", messages=None, **kwargs):
         return [self._response]
-
-
-EVALUATOR_TEMPLATE = """\
-Операция: {{operation}}
-Входное задание:
-{{task_input}}
-Результат:
-{{result}}
-Верни JSON: {"score": <0-10>, "reasoning": "<строка>"}
-"""
-
-
-def test_call_evaluator_parses_score():
-    lm = MockLM('{"score": 8, "reasoning": "хорошо"}')
-    score = call_evaluator(lm, "ingest", "задание", "результат", EVALUATOR_TEMPLATE)
-    assert score == 8.0
-
-
-def test_call_evaluator_renders_template_vars():
-    captured = []
-    class CaptureLM:
-        def __call__(self, prompt="", messages=None, **kwargs):
-            captured.append(prompt)
-            return ['{"score": 5, "reasoning": "ok"}']
-
-    call_evaluator(CaptureLM(), "query", "мой вопрос", "мой ответ", EVALUATOR_TEMPLATE)
-    assert "query" in captured[0]
-    assert "мой вопрос" in captured[0]
-    assert "мой ответ" in captured[0]
-
-
-def test_call_evaluator_returns_zero_on_invalid_json():
-    lm = MockLM("не JSON ответ")
-    score = call_evaluator(lm, "ingest", "задание", "результат", EVALUATOR_TEMPLATE)
-    assert score == 0.0
-
-
-def test_call_evaluator_clamps_score():
-    lm = MockLM('{"score": 15, "reasoning": "слишком высоко"}')
-    score = call_evaluator(lm, "ingest", "задание", "результат", EVALUATOR_TEMPLATE)
-    assert score == 10.0
 
 
 def test_restore_placeholders_injects_all():
@@ -72,7 +31,8 @@ def test_restore_placeholders_raises_if_missing():
 
 
 def test_run_mipro_returns_string():
-    lm = MockLM('{"score": 8, "reasoning": "ok"}')
+    # All records have rating="down" so up_examples is empty → 👍-guard is skipped.
+    lm = MockLM("optimized instruction {{domain_name}}")
 
     mock_compiled = MagicMock()
     mock_compiled.signature.instructions = "optimized instruction {{domain_name}}"
@@ -86,12 +46,42 @@ def test_run_mipro_returns_string():
             lm=lm,
             operation="ingest",
             trainset=[
-                {"userMessage": "a", "result": "b", "eval": {"score": 8}},
-                {"userMessage": "c", "result": "d", "eval": {"score": 7}},
+                {"question": "a", "answer": "b", "rating": "down"},
+                {"question": "c", "answer": "d", "rating": "down"},
             ],
             template_content="Системный промт для {{domain_name}}.",
-            evaluator_template=EVALUATOR_TEMPLATE,
         )
 
     assert isinstance(result, str)
     assert "{{domain_name}}" in result
+
+
+def test_run_mipro_rejects_regression():
+    # 👍-guard: original program scores high on the 👍 set, compiled scores low → return None.
+    lm = MockLM("")
+
+    mock_program = MagicMock()
+    mock_program.return_value.result = "hello world foo"  # jaccard 1.0 vs reference
+
+    mock_compiled = MagicMock()
+    mock_compiled.return_value.result = "zzz"             # jaccard 0.0 vs reference
+    mock_compiled.signature.instructions = "some optimized instruction"
+
+    with (
+        patch("lib.optimizer.dspy.Predict", return_value=mock_program),
+        patch("lib.optimizer.dspy.MIPROv2") as mock_mipro_cls,
+    ):
+        mock_optimizer = MagicMock()
+        mock_optimizer.compile.return_value = mock_compiled
+        mock_mipro_cls.return_value = mock_optimizer
+
+        result = run_mipro(
+            lm=lm,
+            operation="ingest",
+            trainset=[
+                {"question": "q", "answer": "hello world foo", "rating": "up"},
+            ],
+            template_content="Промт для {{domain_name}}.",
+        )
+
+    assert result is None

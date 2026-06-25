@@ -28,7 +28,7 @@ uv run optimize.py \
 
 **Pipeline:**
 ```
-dev.jsonl → loader.py → optimizer.py (MIPROv2 + LLM evaluator) → writer.py → {operation}.md
+eval.jsonl → loader.py → optimizer.py (MIPROv2 + judge-free metric) → writer.py → {operation}.md
 ```
 
 **Key modules:**
@@ -47,7 +47,7 @@ Copy `.env.example` → `.env`. Key variables:
 |---|---|
 | `DSPY_BACKEND` | `ollama` or `claude-code` |
 | `DEV_LOG_PATH` | Absolute path to JSONL dev log |
-| `PROMPTS_DIR` | Directory with `evaluator.md` + `{operation}.md` templates |
+| `PROMPTS_DIR` | Directory with `{operation}.md` templates (no evaluator.md — judge removed) |
 | `OUTPUT_DIR` | Where to write optimized prompts |
 | `OPERATIONS` | Comma-separated filter; empty = all operations in log |
 | `CLAUDE_PATH` | Path to `claude` CLI binary (claude-code backend) |
@@ -56,10 +56,21 @@ Copy `.env.example` → `.env`. Key variables:
 
 ## Input Format
 
-JSONL dev log — one JSON object per line:
+`eval.jsonl` — one JSON object per line, written by the plugin's human 👍/👎 rating flow (no LLM judge):
 ```json
-{"operation": "ingest", "userMessage": "...", "result": "...", "eval": {"score": 8.5}}
+{"operation": "query", "question": "...", "answer": "...", "rating": "up", "vision": false, "promptVersion": "abc123", "visionPromptVersion": null, "recognitionRating": null}
 ```
+
+Key fields:
+- `rating` — `"up"` | `"down"` | `null` (human thumb rating)
+- `recognitionRating` — `"up"` | `"down"` | `null` (reserved; vision-recognition axis, not yet optimized)
+- `operation` — `query` | `chat` | `format` | `lint-chat` | …
+- `vision` — `true` | `false` — used by loader to split `format` into `format:vision-on` / `format:vision-off` buckets
+- `promptVersion` / `visionPromptVersion` — content-hash of the prompt used (for tracing, not used by optimizer)
+
+**Metric:** judge-free reference-similarity (`_jaccard` over recorded answers) with a 👍-guard: if the optimized candidate regresses the 👍 set, `run_mipro()` returns `None` and the current prompt is kept.
+
+**`evaluator.md` is removed** — there is no LLM judge.
 
 Templates use `{{placeholder}}` syntax — `restore_placeholders()` in optimizer.py ensures they survive MIPROv2 rewriting.
 

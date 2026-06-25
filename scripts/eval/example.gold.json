@@ -1,4 +1,0 @@
-[
-  { "q": "как работает инкрементальный ingest", "gold": ["Ingest", "Embedding-Cache"] },
-  { "q": "что делает BFS depth 1", "gold": ["Query-Graph-Traversal"] }
-]

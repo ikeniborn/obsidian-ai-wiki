@@ -4,6 +4,7 @@ import type { FormatProgress } from "../i18n";
 import type { VaultTools } from "../vault-tools";
 import { buildChatParams, extractStreamDeltas, extractUsage, wrapStreamWithStats, buildLlmCallStatsEvent } from "./llm-utils";
 import formatTemplate from "../../prompts/format.md";
+import { promptVersionOf, visionPromptVersionOf } from "../prompt-version";
 import restoreTokensTemplate from "../../prompts/format-restore-tokens.md";
 import formatSchemaDefault from "../../templates/_format_schema.md";
 import { render } from "./template";
@@ -120,6 +121,7 @@ export async function* runFormat(
   yield { kind: "tool_result", ok: true, preview: `${original.length} chars` };
 
   const visionDescriptions = new Map<string, string>();
+  const usedVisionTemplates = new Set<string>();
   if (visionSettings.enabled && visionSettings.model) {
     const embedPaths = [...new Set(extractObsidianEmbedPaths(original))];
     if (embedPaths.length > 0) {
@@ -135,7 +137,7 @@ export async function* runFormat(
           continue;
         }
         try {
-          const description = await analyzeSingleAttachment(path, vaultTools, llm, visionSettings.model, signal, filePath, lang, opts.reasoningLanguage, visionTempStore, visionSettings.imageOnly ?? false);
+          const description = await analyzeSingleAttachment(path, vaultTools, llm, visionSettings.model, signal, filePath, lang, opts.reasoningLanguage, visionTempStore, visionSettings.imageOnly ?? false, usedVisionTemplates);
           if (description !== null) {
             visionDescriptions.set(path, description);
             await visionTempStore?.putDescription(path, description);
@@ -254,6 +256,7 @@ export async function* runFormat(
       summary: progress.truncatedSalvageSummary,
       details: [progress.truncatedSalvageDetail],
     };
+    yield { kind: "rule_fired", ruleId: "formatSalvage", count: 1 };
   }
 
   const truncated = !parsed && lastFinishReason === "length";
@@ -285,6 +288,7 @@ export async function* runFormat(
         summary: progress.truncatedSalvageRetrySummary,
         details: [progress.truncatedSalvageDetail],
       };
+      yield { kind: "rule_fired", ruleId: "formatSalvage", count: 1 };
     }
   }
 
@@ -356,6 +360,7 @@ export async function* runFormat(
       summary: "Sentinel markers stripped",
       details: swept.removed,
     };
+    yield { kind: "rule_fired", ruleId: "stripSentinelMarkers", count: swept.removed.length };
   }
 
   try {
@@ -373,6 +378,18 @@ export async function* runFormat(
   }
 
   const missingFinal = missingTokensWithContext(original, finalFormatted);
-  yield { kind: "format_preview", tempPath, report: finalReport, missingTokens: missingFinal };
+  yield { kind: "format_preview", tempPath, report: finalReport, missingTokens: missingFinal, visionCount: visionDescriptions.size };
+  const visionOn = visionDescriptions.size > 0;
+  yield {
+    kind: "eval_meta",
+    fields: {
+      source_path: filePath,
+      vision: visionOn ? "on" : "off",
+      visionCount: visionDescriptions.size,
+      visionModel: visionOn ? (visionSettings.model || undefined) : undefined,
+      promptVersion: promptVersionOf(formatTemplate),
+      visionPromptVersion: visionOn ? visionPromptVersionOf([...usedVisionTemplates]) : undefined,
+    },
+  };
   yield { kind: "result", durationMs: Date.now() - start, text: finalReport, outputTokens: outputTokens || undefined };
 }

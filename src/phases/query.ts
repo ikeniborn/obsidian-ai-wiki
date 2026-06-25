@@ -20,6 +20,7 @@ import { seedPassesGate } from "../retrieval-diag";
 import type { RetrievalMode, SeedFallbackReason } from "../retrieval-diag";
 import { extractAnswerLinks, findBrokenLinks, annotateBroken } from "./query-link-validator";
 import { resolveLink } from "./link-resolver";
+import { promptVersionOf } from "../prompt-version";
 
 const META_FILES = ["_index.md", "_log.md"];
 
@@ -261,6 +262,7 @@ export async function* runQuery(
             stripped.push(b);
           }
         }
+        if (resolvedPairs.length > 0) yield { kind: "rule_fired", ruleId: "resolveLink", count: resolvedPairs.length };
 
         // Unresolved stems → one structured LLM repair pass (zod-validated), then annotate.
         let llmFixed = 0;
@@ -298,7 +300,10 @@ export async function* runQuery(
             // fall through to annotation
           }
         }
-        if (stripped.length > 0) answer = annotateBroken(answer, new Set(stripped));
+        if (stripped.length > 0) {
+          answer = annotateBroken(answer, new Set(stripped));
+          yield { kind: "rule_fired", ruleId: "annotateBroken", count: stripped.length };
+        }
 
         const parts: string[] = [];
         if (resolvedPairs.length) parts.push(`resolved ${resolvedPairs.length} (det): ${resolvedPairs.join(", ")}`);
@@ -311,6 +316,24 @@ export async function* runQuery(
   }
 
   if (streamStats) yield buildLlmCallStatsEvent(streamStats);
+
+  yield {
+    kind: "eval_meta",
+    fields: {
+      question,
+      answer,
+      found_pages: [...new Set([...seeds, ...expandedPages])],
+      promptVersion: promptVersionOf(queryTemplate),
+      retrievalConfig: {
+        mode: similarity?.config.mode === "hybrid" ? "hybrid" : similarity?.config.mode === "embedding" ? "embedding" : "jaccard",
+        seedTopK,
+        bfsTopK,
+        bfsFusion,
+        seedSimilarityThreshold,
+        hybridRetrieval: similarity?.config.mode === "hybrid",
+      },
+    },
+  };
 
   if (save && answer) {
     const slug = question.slice(0, 40).replace(/[^a-zA-Z0-9а-яёА-ЯЁ\s]/g, "").trim().replace(/\s+/g, "-");
