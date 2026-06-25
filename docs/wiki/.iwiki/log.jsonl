@@ -37,3 +37,4 @@
 {"op":"ingest","source":"src/controller.ts","page":"docs/wiki/architecture.md","date":"2026-06-25"}
 {"op":"ingest","source":"src/main.ts","page":"docs/wiki/architecture.md","date":"2026-06-25"}
 {"op":"ingest","source":"src/storage-migration.ts","page":"docs/wiki/architecture.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/settings.ts,src/i18n.ts,dist/main.js","page":"backends-and-config.md","date":"2026-06-25","note":"dev-eval review (no wiki footprint): settings.ts dropped the evaluatorModel UI block — the evaluator setting was never documented on backends-and-config; i18n.ts added rating labels + removed evaluator strings (i18n keys are not page-documented); dist/main.js is a build artifact. Pages already current; skipped per no-documentable-change."}
