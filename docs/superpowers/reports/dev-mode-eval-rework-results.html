@@ -77,8 +77,8 @@ body:has(#tab-result:checked) #pane-result{ display:block; }
 <body>
 <input type="checkbox" id="theme-toggle" hidden>
 <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
-<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden checked>
-<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
 <input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
 <label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
 <header>
@@ -288,7 +288,130 @@ body:has(#tab-result:checked) #pane-result{ display:block; }
 
 <!-- TAB:plan START -->
 <section class="tab-pane" id="pane-plan">
-  <p class="note">Этап ещё не проверен.</p>
+  <h2>Plan — резюме реализации</h2>
+  <p class="lead">21 задача в 4 фазах: Foundation (плагин) → eval.ts → dspy → docs+verify. Верификация через <code>npm run lint</code> / <code>npm run build</code> / <code>uv run pytest</code> / ручной dev-прогон (тест-сьютов нет).</p>
+  <p class="sub">Источник: <code>docs/superpowers/plans/2026-06-25-dev-mode-eval-rework.md</code> · plan_hash <code>bab63206512e0629</code> · вердикт <span class="badge ok">OK</span></p>
+
+  <h3>Задачи и DoD</h3>
+  <table class="rpt-table">
+    <thead><tr><th>#</th><th>Задача</th><th>DoD / verify</th></tr></thead>
+    <tbody>
+      <tr><td>T1</td><td>prompt-version.ts (hash8/promptVersionOf)</td><td>lint</td></tr>
+      <tr><td>T2</td><td>eval-log.ts (schema, writeEvalRecord, updateEvalRating)</td><td>lint</td></tr>
+      <tr><td>T3</td><td>types: runId, rule_fired, eval_meta; drop eval_result/evaluatorModel</td><td>lint (downstream-ошибки чинятся в T6/T10/T12)</td></tr>
+      <tr><td>T4</td><td>storage: миграция логов vault→plugin-dir</td><td>lint + ручная idempotent-проверка</td></tr>
+      <tr><td>T5</td><td>controller: plugin-dir, runId, rateRun()</td><td>lint</td></tr>
+      <tr><td>T6</td><td>AgentRunner: телеметрия + сборка записи</td><td>lint</td></tr>
+      <tr><td>T7</td><td>query/chat: eval_meta + rule_fired <span class="badge warn">GUARDED</span></td><td>lint+build+non-dev identical + dev ruleFirings≠0</td></tr>
+      <tr><td>T8</td><td>format: visionCount + eval_meta + rule_fired <span class="badge warn">GUARDED</span></td><td>lint+build+non-dev identical + dev visionPromptVersion≠∅</td></tr>
+      <tr><td>T9</td><td>retry-телеметрия <span class="badge warn">GUARDED</span></td><td>lint; structural_error без изменений</td></tr>
+      <tr><td>T10</td><td>view: 👍/👎-ряды; drop eval_result <span class="badge warn">need T11</span></td><td>lint (после T11)</td></tr>
+      <tr><td>T11</td><td>i18n: rating-строки; drop evaluator-строки</td><td>lint</td></tr>
+      <tr><td>T12</td><td>settings: убрать evaluatorModel UI <span class="badge warn">GUARDED</span></td><td>lint+build; grep пусто</td></tr>
+      <tr><td>T13</td><td>удалить LLM-judge (evaluator.ts/.md) <span class="badge crit">HUMAN</span></td><td>lint+build; grep пусто</td></tr>
+      <tr><td>T14</td><td>удалить ретривал-харнес <span class="badge crit">HUMAN</span></td><td>lint (eval.ts чинится в T15)</td></tr>
+      <tr><td>T15</td><td>новый eval.ts (quality + telemetry report)</td><td>tsx на sample eval.jsonl</td></tr>
+      <tr><td>T16</td><td>dspy loader: rating + vision-бакеты</td><td>uv run pytest test_loader</td></tr>
+      <tr><td>T17</td><td>dspy optimizer: метрика + 👍-guard <span class="badge crit">HUMAN</span></td><td>uv run pytest test_optimizer</td></tr>
+      <tr><td>T18</td><td>dspy orchestration: бакеты→шаблоны, reject-gate <span class="badge crit">HUMAN</span></td><td>uv run pytest</td></tr>
+      <tr><td>T19</td><td>docs/wiki через iwiki-ingest</td><td>/iwiki-lint чисто</td></tr>
+      <tr><td>T20</td><td>финальная верификация + PR</td><td>lint+build+pytest+ручной dev/non-dev/mobile</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Граф зависимостей шагов</h2>
+  <p class="sub">Ребро M → N = «артефакт задачи M используется в N» (M раньше N). Жёлтое ребро T11 → T10 — найденное и исправленное нарушение порядка (i18n-ключи нужны view до lint).</p>
+  <figure class="rpt-graph">
+    <svg viewBox="0 0 700 360" width="700" role="img" aria-label="граф зависимостей задач">
+      <g stroke="var(--line)" stroke-width="1.6" fill="none" marker-end="url(#arw)">
+        <line x1="95"  y1="128" x2="95"  y2="186"/>  <!-- T2->T3 -->
+        <line x1="95"  y1="128" x2="95"  y2="266"/>  <!-- T2->T5 -->
+        <line x1="160" y1="120" x2="230" y2="150"/>  <!-- T2->T6 -->
+        <line x1="160" y1="116" x2="430" y2="44"/>   <!-- T2->T15 -->
+        <line x1="160" y1="198" x2="230" y2="156"/>  <!-- T3->T6 -->
+        <line x1="160" y1="202" x2="430" y2="252"/>  <!-- T3->T10 -->
+        <line x1="160" y1="46"  x2="430" y2="44"/>   <!-- T1->T15? actually T1->T7 -->
+        <line x1="160" y1="50"  x2="430" y2="118"/>  <!-- T1->T8 -->
+        <line x1="160" y1="288" x2="230" y2="162"/>  <!-- T5->T6 -->
+        <line x1="160" y1="288" x2="430" y2="256"/>  <!-- T5->T10 -->
+        <line x1="360" y1="150" x2="430" y2="44"/>   <!-- T6->T7 -->
+        <line x1="360" y1="156" x2="430" y2="118"/>  <!-- T6->T8 -->
+        <line x1="360" y1="162" x2="430" y2="250"/>  <!-- T6->T10 -->
+      </g>
+      <line x1="360" y1="300" x2="430" y2="262" stroke="var(--warn)" stroke-width="2.4" fill="none" marker-end="url(#arw)"/> <!-- T11->T10 highlight -->
+      <g class="gnode">
+        <rect x="30"  y="28"  width="130" height="36" rx="8"/><text x="95"  y="50"  text-anchor="middle">T1 prompt-version</text>
+      </g>
+      <g class="gnode sink">
+        <rect x="30"  y="100" width="130" height="36" rx="8"/><text x="95"  y="122" text-anchor="middle">T2 eval-log</text>
+      </g>
+      <g class="gnode">
+        <rect x="30"  y="180" width="130" height="36" rx="8"/><text x="95"  y="202" text-anchor="middle">T3 types</text>
+      </g>
+      <g class="gnode">
+        <rect x="30"  y="270" width="130" height="36" rx="8"/><text x="95"  y="292" text-anchor="middle">T5 controller</text>
+      </g>
+      <g class="gnode">
+        <rect x="230" y="138" width="130" height="36" rx="8"/><text x="295" y="160" text-anchor="middle">T6 AgentRunner</text>
+      </g>
+      <g class="gnode">
+        <rect x="230" y="282" width="130" height="36" rx="8"/><text x="295" y="304" text-anchor="middle">T11 i18n</text>
+      </g>
+      <g class="gnode">
+        <rect x="430" y="26"  width="130" height="36" rx="8"/><text x="495" y="48"  text-anchor="middle">T7/T15 query·eval.ts</text>
+      </g>
+      <g class="gnode">
+        <rect x="430" y="100" width="130" height="36" rx="8"/><text x="495" y="122" text-anchor="middle">T8 format</text>
+      </g>
+      <g class="gnode">
+        <rect x="430" y="244" width="130" height="36" rx="8"/><text x="495" y="266" text-anchor="middle">T10 view</text>
+      </g>
+    </svg>
+  </figure>
+
+  <h3>Пересечения (артефакт → задачи)</h3>
+  <table class="rpt-table">
+    <thead><tr><th>Файл / артефакт</th><th>Задачи</th></tr></thead>
+    <tbody>
+      <tr><td><code>src/types.ts</code> (RunEvent/RunRequest)</td><td>T3 (→ потребляют T6,T7,T8,T9,T10)</td></tr>
+      <tr><td><code>src/eval-log.ts</code> (EvalMetaFields)</td><td>T2 (→ T3 импортит, T5/T6 зовут)</td></tr>
+      <tr><td><code>src/i18n.ts</code> rating-ключи</td><td>T11 (→ T10 использует) — порядковая связь</td></tr>
+      <tr><td><code>scripts/eval.ts</code></td><td>T14 (удаление импортов) → T15 (переписать)</td></tr>
+      <tr><td><code>prompts/evaluator.md</code></td><td>T13 (удалить) → T18 (убрать чтение)</td></tr>
+      <tr><td>spec §4 (схема записи)</td><td>T2 + T6 (сборка)</td></tr>
+      <tr><td>spec §5 (телеметрия)</td><td>T3 + T6 + T7 + T8 + T9</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Результаты проверки плана</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Фаза</th><th>Статус</th><th>Findings</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge ok">passed</span></td><td>—</td></tr>
+      <tr><td>coverage</td><td><span class="badge ok">passed</span></td><td>F-005, F-006</td></tr>
+      <tr><td>dependencies</td><td><span class="badge ok">passed</span></td><td>F-007, F-010</td></tr>
+      <tr><td>verifiability</td><td><span class="badge ok">passed</span></td><td>F-008, F-009</td></tr>
+      <tr><td>consistency</td><td><span class="badge ok">passed</span></td><td>F-001, F-002, F-003, F-004</td></tr>
+    </tbody>
+  </table>
+
+  <table class="rpt-table">
+    <thead><tr><th>id</th><th>sev</th><th>Задача</th><th>Проблема</th><th>Фикс</th><th>verdict</th></tr></thead>
+    <tbody>
+      <tr><td>F-001</td><td><span class="badge crit">CRITICAL</span></td><td>T18</td><td>optimize.py читает удалённый <code>evaluator.md</code> → crash</td><td>добавлен шаг удаления строки</td><td><span class="badge ok">fixed</span></td></tr>
+      <tr><td>F-002</td><td><span class="badge warn">WARN</span></td><td>T6</td><td>pluginDir передан как visionTempBaseDir неявно</td><td>именованный pluginDir + комментарий</td><td><span class="badge ok">fixed</span></td></tr>
+      <tr><td>F-003</td><td><span class="badge warn">WARN</span></td><td>T2</td><td>camelCase vs spec snake_case (found_pages/source_path)</td><td>переименовано в snake_case</td><td><span class="badge ok">fixed</span></td></tr>
+      <tr><td>F-004</td><td><span class="badge info">INFO</span></td><td>T17</td><td>ветка <code>:recognition</code> недостижима</td><td>комментарий: зарезервировано</td><td><span class="badge ok">fixed</span></td></tr>
+      <tr><td>F-005</td><td><span class="badge warn">WARN</span></td><td>T18</td><td>§8 reject-gate не реализован (только manual)</td><td>гейт в run_mipro: similarity-метрика + reject при регрессе 👍</td><td><span class="badge ok">fixed</span></td></tr>
+      <tr><td>F-006</td><td><span class="badge info">INFO</span></td><td>T9</td><td>wrapWithJsonFallback может быть выкинут</td><td>принято best-effort + логирование; eval/dspy не зависят</td><td><span class="badge ok">fixed</span></td></tr>
+      <tr><td>F-007</td><td><span class="badge warn">WARN</span></td><td>T2</td><td>риск цикла types.ts ↔ eval-log.ts</td><td>правило: eval-log.ts не импортит ./types</td><td><span class="badge ok">fixed</span></td></tr>
+      <tr><td>F-008</td><td><span class="badge warn">WARN</span></td><td>T7</td><td>DoD не проверял срабатывание ruleFirings</td><td>добавлен dev-mode DoD на ruleFirings≠0</td><td><span class="badge ok">fixed</span></td></tr>
+      <tr><td>F-009</td><td><span class="badge warn">WARN</span></td><td>T8</td><td>источник usedVisionTemplates не выбран; visionPromptVersion не проверен</td><td>зафиксирован источник + DoD</td><td><span class="badge ok">fixed</span></td></tr>
+      <tr><td>F-010</td><td><span class="badge warn">WARN</span></td><td>T10</td><td>self-found: view использует i18n-ключи из T11 → lint падает</td><td>prerequisite-нота: T11 перед T10</td><td><span class="badge ok">fixed</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note ok"><b>Сводка:</b> CRITICAL open: 0 · WARNING open: 0 · 10/10 findings <span class="badge ok">fixed</span>. Вердикт: <b>OK</b>. Chain: intent → spec → <b>plan</b>.</div>
 </section>
 <!-- TAB:plan END -->
 
