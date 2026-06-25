@@ -27,6 +27,7 @@ import { restoreSourceFrontmatter } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
 import { collectMdInPaths, parseWikiSources } from "./utils/vault-walk";
 import { computeChangedSources, parsePageSources, type SourceFileInfo, type WikiPageInfo } from "./incremental-sources";
+import { updateEvalRating, type RatingAxis } from "./eval-log";
 
 /** Minimal surface of the host obsidian-excalidraw-plugin's ExcalidrawAutomate. */
 interface ExcalidrawAutomateLike {
@@ -190,6 +191,16 @@ export class WikiController {
     await this.dispatch("query", [question.trim()], domainId);
   }
 
+  /** Set a 👍/👎 label on a finished run's eval.jsonl record (dev mode only). */
+  async rateRun(runId: string, axis: RatingAxis, rating: "up" | "down"): Promise<void> {
+    if (!this.plugin.settings.devMode?.enabled) return;
+    await updateEvalRating(this.app.vault.adapter, this.pluginDir(), runId, axis, rating);
+  }
+
+  private pluginDir(): string {
+    return this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`;
+  }
+
   async lint(domain: string, opts: { useLlm?: boolean; entityTypeFilter?: string[] } = {}): Promise<void> {
     const args = domain === "all" ? [] : [domain];
     const lintOpts = { useLlm: opts.useLlm ?? true, entityTypeFilter: opts.entityTypeFilter ?? [] };
@@ -266,7 +277,7 @@ export class WikiController {
     const timeoutMs = this.plugin.settings.timeouts.lint * 1000;
     const runGen = agentRunner.run({
       operation: "chat", args: [], cwd: vaultRoot,
-      signal: ctrl.signal, timeoutMs, domainId, context, chatMessages, operationHeader,
+      signal: ctrl.signal, timeoutMs, domainId, context, chatMessages, operationHeader, runId: sessionId,
     });
 
     try {
@@ -629,7 +640,7 @@ export class WikiController {
         : openaiClient;
     }
 
-    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? undefined, Platform.isMobile);
+    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, Platform.isMobile);
   }
 
   private async logEvent(_vaultRoot: string, sessionId: string, op: WikiOperation, domainId: string | undefined, ev: RunEvent): Promise<void> {
@@ -755,7 +766,7 @@ export class WikiController {
       ? window.setTimeout(() => { timedOut = true; ctrl.abort(); }, timeoutMs)
       : null;
     const resolvedChatMessages = op === "format" ? this._pendingFormat?.chat : chatMessages;
-    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages: resolvedChatMessages, lintOpts });
+    const runGen = agentRunner.run({ operation: op, args, cwd: vaultRoot, signal: ctrl.signal, timeoutMs, domainId, context, instruction, onFileError, chatMessages: resolvedChatMessages, lintOpts, runId: sessionId });
 
     try {
       for await (const ev of runGen) {
