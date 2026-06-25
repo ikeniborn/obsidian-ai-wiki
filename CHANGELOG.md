@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.184 — 2026-06-25
+
+### Новое
+- feat(incremental): hash-based source change detection
+- feat(domain): analyzed_sources map + v3 migration
+- feat(incremental): wire analyzed_sources map + hash-at-ingest
+
+---
+
 ## 0.1.183 — 2026-06-24
 
 ### Новое
