@@ -5,8 +5,6 @@ export interface VaultAdapter {
   list(path: string): Promise<{ files: string[]; folders: string[] }>;
   exists(path: string): Promise<boolean>;
   mkdir(path: string): Promise<void>;
-  /** File stat; `mtime` is epoch ms. Resolves null when the path has no stat. */
-  stat?(path: string): Promise<{ mtime: number } | null>;
   remove?(path: string): Promise<void>;
   rmdir?(path: string, recursive: boolean): Promise<void>;
   readBinary?(path: string): Promise<ArrayBuffer>;
@@ -174,13 +172,6 @@ export class VaultTools {
 
   async exists(vaultPath: string): Promise<boolean> {
     return this.adapter.exists(vaultPath);
-  }
-
-  /** Modification time in epoch ms, or null when unavailable (missing file or no stat support). */
-  async mtime(vaultPath: string): Promise<number | null> {
-    if (!this.adapter.stat) return null;
-    const s = await this.adapter.stat(vaultPath);
-    return s ? s.mtime : null;
   }
 
   async readBinary(vaultPath: string): Promise<ArrayBuffer> {

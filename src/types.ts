@@ -64,7 +64,7 @@ export type RunEvent =
   | { kind: "domain_created"; entry: DomainEntry }
   | { kind: "source_path_added"; domainId: string; path: string }
   | { kind: "source_path_removed"; domainId: string; path: string }
-  | { kind: "domain_updated"; domainId: string; patch: { entity_types?: EntityType[]; language_notes?: string; wiki_folder?: string; analyzed_sources?: string[] } }
+  | { kind: "domain_updated"; domainId: string; patch: { entity_types?: EntityType[]; language_notes?: string; wiki_folder?: string; analyzed_sources?: Record<string, string> } }
   | { kind: "rule_fired"; ruleId: string; count: number }
   | { kind: "eval_meta"; fields: EvalMetaFields }
   | { kind: "init_start"; totalFiles: number; phase?: "analysis" | "ingest" }

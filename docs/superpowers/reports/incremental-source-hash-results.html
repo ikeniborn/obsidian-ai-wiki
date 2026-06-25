@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IDD-цепь: incremental-source-hash</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.2rem 2rem 4rem; max-width:1100px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg); transition:background .3s, color .3s;
+}
+h1{font-size:1.5rem;margin:.2rem 0} h2{font-size:1.2rem;margin:1.6rem 0 .6rem;color:var(--accent-2)}
+h3{font-size:1rem;margin:1.1rem 0 .4rem}
+.theme-btn{position:sticky; top:.5rem; float:right; cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface);}
+header h1{margin-top:.3rem}
+.sub{color:var(--muted);font-size:.9rem;margin:.1rem 0 0}
+.chain-tabs{display:flex;gap:.3rem;margin:1rem 0 0;border-bottom:2px solid var(--border)}
+.chain-tabs label{cursor:pointer; padding:.4rem .9rem; border:1px solid var(--border); border-bottom:none;
+  border-radius:8px 8px 0 0; background:var(--surface); color:var(--muted);}
+.tab-pane{display:none; padding:1rem 0}
+body:has(#tab-intent:checked) #pane-intent,
+body:has(#tab-spec:checked)   #pane-spec,
+body:has(#tab-plan:checked)   #pane-plan,
+body:has(#tab-result:checked) #pane-result{display:block;}
+body:has(#tab-intent:checked) label[for="tab-intent"],
+body:has(#tab-spec:checked)   label[for="tab-spec"],
+body:has(#tab-plan:checked)   label[for="tab-plan"],
+body:has(#tab-result:checked) label[for="tab-result"]{color:var(--accent); border-color:var(--accent); font-weight:600;}
+table{border-collapse:collapse;width:100%;margin:.5rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.4rem .6rem;text-align:left;vertical-align:top}
+th{background:var(--surface);color:var(--accent-2)}
+tbody tr:nth-child(even){background:var(--zebra)}
+code{background:color-mix(in srgb,var(--accent) 14%, var(--surface));padding:.05rem .3rem;border-radius:4px;font-size:.85em}
+.badge{display:inline-block;padding:.1rem .55rem;border-radius:999px;font-size:.8rem;font-weight:600;border:1px solid}
+.b-ok{color:var(--ok-2);border-color:var(--ok)} .b-warn{color:var(--warn-2);border-color:var(--warn)}
+.b-danger{color:var(--danger-2);border-color:var(--danger)}
+.note{background:color-mix(in srgb,var(--accent) 10%, var(--surface));border-left:3px solid var(--accent);
+  padding:.6rem .9rem;border-radius:0 6px 6px 0;margin:.7rem 0}
+.flow{display:flex;flex-direction:column;gap:.1rem;margin:.7rem 0}
+.fstep{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.5rem .8rem;
+  box-shadow:0 1px 3px var(--shadow)}
+.fstep b{color:var(--accent-2)} .fstep .m{color:var(--muted);font-size:.85rem}
+.farr{align-self:center;color:var(--line);font-size:1.1rem;line-height:1}
+.frow{display:flex;gap:.6rem;flex-wrap:wrap}
+.frow .fstep{flex:1;min-width:200px}
+figure{margin:1rem 0;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.8rem}
+figcaption{color:var(--muted);font-size:.85rem;margin-top:.4rem}
+.gnode text{font:600 11px system-ui,sans-serif;fill:var(--fg)}
+.gnode rect{fill:var(--surface);stroke:var(--accent);stroke-width:1.6;rx:7}
+.gnode.leaf rect{stroke:var(--line)} .gnode.store rect{stroke:var(--ok)}
+.legend{display:flex;gap:1.2rem;flex-wrap:wrap;font-size:.82rem;color:var(--muted);margin-top:.5rem}
+.legend span{display:inline-flex;align-items:center;gap:.35rem}
+.swatch{width:22px;height:0;border-top:2px solid var(--line)} .swatch.dash{border-top:2px dashed var(--ok)}
+.kv{font-size:.9rem;color:var(--muted)} .kv b{color:var(--fg)}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<label for="theme-toggle" class="theme-btn" title="Тёмная/светлая тема">🌙 / ☀️</label>
+<header>
+  <h1>IDD-цепь: incremental-source-hash</h1>
+  <p class="sub">Детект изменения источника по хэшу тела вместо mtime · отчёт цепи Intent → Spec → Plan → Result</p>
+</header>
+<nav class="chain-tabs">
+  <label for="tab-intent">Intent</label>
+  <label for="tab-spec">Spec</label>
+  <label for="tab-plan">Plan</label>
+  <label for="tab-result">Result</label>
+</nav>
+
+<!-- TAB:intent START -->
+<section class="tab-pane" id="pane-intent">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:intent END -->
+
+<!-- TAB:spec START -->
+<section class="tab-pane" id="pane-spec">
+  <p class="kv"><b>Файл:</b> <code>docs/superpowers/specs/2026-06-25-incremental-source-hash-design.md</code> ·
+     <b>spec_hash:</b> <code>6ebbab4dd08e0a6a</code> · <b>last_run:</b> 2026-06-25 ·
+     <span class="badge b-ok">Вердикт: OK</span></p>
+
+  <h2>Проблема</h2>
+  <div class="note">
+    Инкрементальный реинит вечно перепомечает неизменённые источники. Детектор сравнивает mtime
+    источника с mtime вики-страниц: <b>(а)</b> mtime источника поднимается на каждом ингесте;
+    <b>(б)</b> за прогон переписывается лишь подмножество страниц источника, поэтому
+    <code>min(mtime страниц)</code> остаётся старым → <code>source.mtime &gt; min(pages)</code> всегда TRUE.
+    Подтверждено логами <code>_agent.jsonl</code>.
+  </div>
+
+  <h2>Требования</h2>
+  <table>
+    <thead><tr><th>ID</th><th>Секция</th><th>Требование</th></tr></thead>
+    <tbody>
+      <tr><td>R1</td><td>Decision / Component 1</td><td>Детект по <b>хэшу тела</b> источника (frontmatter отрезан), не по mtime. FNV-1a, значение <code>fnv1a:&lt;hex&gt;</code>. Чистый модуль без зависимостей.</td></tr>
+      <tr><td>R2</td><td>Decision / Data model</td><td>Хэш хранится на стороне вики в <code>_config/_domain.json</code>; файлы-источники для bookkeeping не пишутся никогда.</td></tr>
+      <tr><td>R3</td><td>Data model / Migration</td><td><code>analyzed_sources</code> становится картой «путь → хэш» (единый источник правды). Миграция v3: список→карта, значения <code>""</code> до baseline; флаг <code>analyzed_sources_v3</code>.</td></tr>
+      <tr><td>R4</td><td>Component 2</td><td><code>computeChangedSources</code> переписан: входы mtime/wikiPages убраны. Правило: нет ключа→changed; <code>""</code>→silent baseline; хэш≠сохранённый→changed; иначе skip. Возвращает <code>{changed, baselined}</code>.</td></tr>
+      <tr><td>R5</td><td>Component 3</td><td><code>controller.computeIncrementalPlan</code> читает тела источников, считает хэши, передаёт карту, персистит <code>baselined</code>. Блок wikiPages удалён.</td></tr>
+      <tr><td>R6</td><td>Component 4</td><td>Хэш пишется в точках bookkeeping (<code>init.ts:350-361, 438-444</code>) — покрывает все пути ингеста (full reinit, --sources, --incremental, ручной).</td></tr>
+      <tr><td>R7</td><td>Component 5</td><td>Ретипизация <code>analyzed_sources</code> string[]→map в <code>init.ts</code>, <code>delete.ts</code>, <code>types.ts</code>. Чистка осиротевших mtime/WikiPageInfo.</td></tr>
+      <tr><td>R8</td><td>Removed</td><td>A2-reorder больше не несущий; оставлен на месте (удаление вне scope).</td></tr>
+      <tr><td>R9</td><td>Verification</td><td>out-of-vault unit, migration unit (идемпотентность v3), fs-интеграция, ручной e2e на <code>ai-agent</code>.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Success Criteria</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Критерий</th></tr></thead>
+    <tbody>
+      <tr><td>SC1</td><td>full reinit (<code>--force</code>) не меняет артефакты (страницы/индекс/домен) кроме формы <code>analyzed_sources</code>.</td></tr>
+      <tr><td>SC2</td><td>На <code>ai-agent</code>: диалог инкремента показывает <b>0</b> после baseline без правок; ровно изменённый источник после правки тела; снова <b>0</b> после переингеста.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Схема решения</h2>
+  <div class="flow">
+    <div class="fstep"><b>Источник .md</b> <span class="m">— тело (frontmatter отрезан)</span></div>
+    <div class="farr">↓ <span class="m">hashSource()</span></div>
+    <div class="fstep"><b>хэш</b> <code>fnv1a:&lt;hex&gt;</code></div>
+    <div class="farr">↓</div>
+    <div class="fstep"><b>controller.computeIncrementalPlan</b> <span class="m">— читает источники → <code>SourceFileInfo{path,hash}</code> + <code>domain.analyzed_sources</code> (карта)</span></div>
+    <div class="farr">↓</div>
+    <div class="fstep"><b>computeChangedSources</b> <span class="m">(чистый) → <code>{ changed[], baselined{} }</code></span></div>
+    <div class="farr">↓</div>
+    <div class="frow">
+      <div class="fstep"><b>changed</b> <span class="m">→ ReinitModeModal → ингест выбранных → <code>analyzed_sources[path]=hashSource(body)</code></span></div>
+      <div class="fstep"><b>baselined</b> <span class="m">→ персист в <code>_config/_domain.json</code> (без ингеста)</span></div>
+    </div>
+    <div class="farr">↓</div>
+    <div class="fstep"><b>_config/_domain.json</b> <span class="m">— карта хэшей (на загрузке доменов: <code>migrateDomainsV3</code> list→map)</span></div>
+  </div>
+
+  <h2>Граф зависимостей</h2>
+  <figure>
+    <svg viewBox="0 0 980 410" width="100%" role="img" aria-label="граф зависимостей компонентов">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L7.5,3 L0,6 Z" fill="var(--line)"/>
+        </marker>
+        <marker id="arrp" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L7.5,3 L0,6 Z" fill="var(--ok)"/>
+        </marker>
+      </defs>
+      <!-- edges (A->B = A depends on / uses B) -->
+      <g fill="none" stroke="var(--line)" stroke-width="1.8" marker-end="url(#arr)">
+        <line x1="120" y1="69" x2="120" y2="189"/>            <!-- plan -> changedSources -->
+        <line x1="160" y1="60" x2="300" y2="200"/>            <!-- plan -> hashSource -->
+        <line x1="165" y1="56" x2="540" y2="346"/>            <!-- plan -> analyzed map -->
+        <line x1="120" y1="229" x2="120" y2="339"/>           <!-- changedSources -> bodyForHash -->
+        <line x1="190" y1="210" x2="288" y2="210"/>           <!-- changedSources -> hashSource -->
+        <line x1="322" y1="227" x2="180" y2="343"/>           <!-- hashSource -> bodyForHash -->
+        <line x1="372" y1="69" x2="368" y2="189"/>            <!-- init.ts -> hashSource -->
+        <line x1="405" y1="66" x2="560" y2="345"/>            <!-- init.ts -> analyzed map -->
+        <line x1="580" y1="69" x2="595" y2="339"/>            <!-- delete.ts -> analyzed map -->
+        <line x1="728" y1="69" x2="632" y2="343"/>            <!-- types.ts -> analyzed map -->
+        <line x1="882" y1="69" x2="652" y2="346"/>            <!-- migrateV3 -> analyzed map -->
+      </g>
+      <g fill="none" stroke="var(--ok)" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#arrp)">
+        <line x1="158" y1="52" x2="798" y2="350"/>            <!-- plan -> domain.json (persist) -->
+        <line x1="418" y1="62" x2="804" y2="350"/>            <!-- init.ts -> domain.json (persist) -->
+      </g>
+      <!-- nodes -->
+      <g class="gnode">
+        <g><rect x="50" y="31" width="140" height="38"/><text x="120" y="46" text-anchor="middle">computeIncremental</text><text x="120" y="60" text-anchor="middle">Plan</text></g>
+        <g><rect x="310" y="31" width="120" height="38"/><text x="370" y="54" text-anchor="middle">init.ts (seam)</text></g>
+        <g><rect x="520" y="31" width="120" height="38"/><text x="580" y="54" text-anchor="middle">delete.ts</text></g>
+        <g><rect x="680" y="31" width="110" height="38"/><text x="735" y="54" text-anchor="middle">types.ts</text></g>
+        <g><rect x="825" y="31" width="130" height="38"/><text x="890" y="54" text-anchor="middle">migrateDomainsV3</text></g>
+        <g><rect x="50" y="191" width="140" height="38"/><text x="120" y="206" text-anchor="middle">computeChanged</text><text x="120" y="220" text-anchor="middle">Sources</text></g>
+        <g><rect x="290" y="191" width="120" height="38"/><text x="350" y="214" text-anchor="middle">hashSource</text></g>
+        <g class="leaf"><rect x="50" y="341" width="150" height="38"/><text x="125" y="364" text-anchor="middle">sourceBodyForHash</text></g>
+        <g class="store"><rect x="530" y="341" width="140" height="38"/><text x="600" y="357" text-anchor="middle">analyzed_sources</text><text x="600" y="370" text-anchor="middle">(map)</text></g>
+        <g class="store"><rect x="790" y="341" width="140" height="38"/><text x="860" y="364" text-anchor="middle">_domain.json</text></g>
+      </g>
+    </svg>
+    <figcaption>Рёбра A→B = «A зависит от / использует B». Зелёные пунктирные — персист (запись). Циклов нет (DAG).</figcaption>
+    <div class="legend">
+      <span><span class="swatch"></span> зависит от / использует</span>
+      <span><span class="swatch dash"></span> персист в _domain.json</span>
+    </div>
+  </figure>
+
+  <h2>Карта покрытия</h2>
+  <table>
+    <thead><tr><th>Задача</th><th>Покрывающие требования</th></tr></thead>
+    <tbody>
+      <tr><td>T1 — хэш-сигнал</td><td>R1, R4</td></tr>
+      <tr><td>T2 — хранение на стороне вики</td><td>R2</td></tr>
+      <tr><td>T3 — мердж в analyzed_sources + миграция v3</td><td>R3</td></tr>
+      <tr><td>T4 — silent baseline</td><td>R4, R5</td></tr>
+      <tr><td>T5 — запись хэша на ингесте (все пути)</td><td>R6</td></tr>
+      <tr><td>T6 — переписать computeChangedSources + ретипизация + чистка</td><td>R4, R5, R7, R8</td></tr>
+      <tr><td>T7 — верификация</td><td>R9</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Результаты проверки</h2>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th><th>Комментарий</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge b-ok">passed</span></td><td>Плейсхолдеров, битых ссылок, дублей заголовков нет.</td></tr>
+      <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td><td>Все T1–T7 покрыты; лишних требований нет; противоречий нет.</td></tr>
+      <tr><td>clarity</td><td><span class="badge b-ok">passed</span></td><td>Термины единообразны; «sufficient» квалифицировано критерием; DoD в правиле детекции и verification.</td></tr>
+      <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td><td>Data model, правило детекции и пример JSON согласованы; <code>analyzed_sources_v2</code> описан одинаково.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Findings</h3>
+  <p class="note">Findings нет. <b>CRITICAL open:</b> 0 · <b>WARNING open:</b> 0 · <b>INFO:</b> 0.</p>
+
+  <p class="kv"><b>Chain:</b> intent → spec. <b>intent:</b> null (intent-doc отсутствует) ·
+     <b>spec:</b> <code>docs/superpowers/specs/2026-06-25-incremental-source-hash-design.md</code></p>
+</section>
+<!-- TAB:spec END -->
+
+<!-- TAB:plan START -->
+<section class="tab-pane" id="pane-plan">
+  <p class="kv"><b>Файл:</b> <code>docs/superpowers/plans/2026-06-25-incremental-source-hash.md</code> ·
+     <b>plan_hash:</b> <code>008fa7e4b73a5fd4</code> · <b>last_run:</b> 2026-06-25 ·
+     <span class="badge b-ok">Вердикт: OK</span></p>
+
+  <h2>Резюме плана (шаги + DoD)</h2>
+
+  <h3>Задача 1 — Чистые хэш-хелперы + переписать детекцию <span class="m">(incremental-sources.ts)</span></h3>
+  <table>
+    <thead><tr><th>Шаг</th><th>DoD</th></tr></thead>
+    <tbody>
+      <tr><td>1 переписать eval на хэш-контракт (failing)</td><td>eval содержит тесты hashSource/sourceBodyForHash/computeChangedSources/migrateDomainsV3</td></tr>
+      <tr><td>2 запустить eval → красный</td><td><code>npx tsx eval/incremental-sources/run.ts</code> падает (нет экспортов)</td></tr>
+      <tr><td>3 реализовать хелперы + computeChangedSources{changed,baselined}; убрать WikiPageInfo/mtime</td><td>код на месте</td></tr>
+      <tr><td>4 запустить eval → зелёный</td><td><code>0 failed</code></td></tr>
+      <tr><td>5 commit</td><td>коммит создан</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Задача 2 — Data model + миграция v3 <span class="m">(domain.ts, domain-store.ts)</span></h3>
+  <table>
+    <thead><tr><th>Шаг</th><th>DoD</th></tr></thead>
+    <tbody>
+      <tr><td>1 тип analyzed_sources→Record, флаг v3, migrateDomainsV3</td><td>код</td></tr>
+      <tr><td>2 подключить v3 в DomainStore.load</td><td><code>m2 || m3 → save</code></td></tr>
+      <tr><td>3 eval → зелёный (миграция 6–7)</td><td><code>0 failed</code></td></tr>
+      <tr><td>4 commit</td><td>коммит создан</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Задача 3 — Протянуть карту через потребителей + хэш на ингесте <span class="m">(build+lint gate)</span></h3>
+  <table>
+    <thead><tr><th>Шаг</th><th>DoD</th></tr></thead>
+    <tbody>
+      <tr><td>1 types.ts patch analyzed_sources→Record</td><td>код</td></tr>
+      <tr><td>2 переписать computeIncrementalPlan (хэши + персист baselined), убрать wikiPages/VaultTools</td><td>код</td></tr>
+      <tr><td>3 писать хэш в 2 точках bookkeeping init.ts (sourceHashFor)</td><td>код</td></tr>
+      <tr><td>4 init {} (init.ts:92,283,295) + retype resume-set 155-159</td><td>код</td></tr>
+      <tr><td>5 retype pruning delete.ts 74-78</td><td>код</td></tr>
+      <tr><td>6 build + lint + tsc-filter</td><td><code>npm run build</code> ok · <code>npm run lint</code> чисто · нет новых tsc-ошибок в тронутых файлах</td></tr>
+      <tr><td>7 commit</td><td>коммит создан</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Задача 4 — Чистка осиротевшего + полная верификация + ручной e2e</h3>
+  <table>
+    <thead><tr><th>Шаг</th><th>DoD</th></tr></thead>
+    <tbody>
+      <tr><td>1 удалить VaultTools.mtime если осиротел (grep)</td><td>grep <code>.mtime(</code> пусто, метод удалён</td></tr>
+      <tr><td>2 полный прогон: eval/build/lint</td><td>eval <code>0 failed</code> · build ok · lint чисто</td></tr>
+      <tr><td>3 ручной e2e на ai-agent <span class="badge b-warn">HUMAN CHECKPOINT</span></td><td>0 после baseline · 1 после правки тела · 0 после переингеста · full reinit без изменений (SC1)</td></tr>
+      <tr><td>4 commit</td><td>коммит создан</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Граф зависимостей задач</h2>
+  <figure>
+    <svg viewBox="0 0 720 230" width="100%" role="img" aria-label="граф зависимостей задач">
+      <defs>
+        <marker id="parr" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L7.5,3 L0,6 Z" fill="var(--line)"/>
+        </marker>
+      </defs>
+      <g fill="none" stroke="var(--line)" stroke-width="1.8" marker-end="url(#parr)">
+        <line x1="170" y1="64" x2="310" y2="100"/>   <!-- T1 -> T3 -->
+        <line x1="170" y1="156" x2="310" y2="120"/>  <!-- T2 -> T3 -->
+        <line x1="430" y1="110" x2="556" y2="110"/>  <!-- T3 -> T4 -->
+      </g>
+      <g fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-dasharray="5 4">
+        <line x1="110" y1="76" x2="110" y2="144"/>   <!-- T1 <-> T2 eval coupling -->
+      </g>
+      <text x="120" y="114" font-size="10" fill="var(--muted)">eval-связка</text>
+      <g class="gnode">
+        <g><rect x="50" y="36" width="120" height="38"/><text x="110" y="51" text-anchor="middle">T1 хэш+детекция</text><text x="110" y="65" text-anchor="middle">incremental-sources</text></g>
+        <g><rect x="50" y="146" width="120" height="38"/><text x="110" y="161" text-anchor="middle">T2 data model</text><text x="110" y="175" text-anchor="middle">domain + v3</text></g>
+        <g><rect x="310" y="91" width="120" height="38"/><text x="370" y="106" text-anchor="middle">T3 потребители</text><text x="370" y="120" text-anchor="middle">+ хэш на ингесте</text></g>
+        <g class="leaf"><rect x="556" y="91" width="120" height="38"/><text x="616" y="106" text-anchor="middle">T4 чистка</text><text x="616" y="120" text-anchor="middle">+ e2e</text></g>
+      </g>
+    </svg>
+    <figcaption>Ребро M→B = «B зависит от результата M». Пунктир (синий) — связка T1↔T2 только по зелёному eval (разрешена sequencing-нотой). Циклов в build-зависимостях нет.</figcaption>
+  </figure>
+
+  <h2>Пересечения</h2>
+  <h3>По файлам (overlap)</h3>
+  <table>
+    <thead><tr><th>Файл</th><th>Задачи</th></tr></thead>
+    <tbody>
+      <tr><td><code>src/incremental-sources.ts</code></td><td>T1 (создаёт хелперы) · T4 (подтверждает удаление WikiPageInfo) <span class="badge b-warn">пересечение</span></td></tr>
+      <tr><td><code>eval/incremental-sources/run.ts</code></td><td>T1 (переписывает) · T2 (гоняет тесты миграции) <span class="badge b-warn">пересечение</span></td></tr>
+      <tr><td><code>src/domain.ts</code>, <code>src/domain-store.ts</code></td><td>T2</td></tr>
+      <tr><td><code>src/types.ts</code>, <code>controller.ts</code>, <code>phases/init.ts</code>, <code>phases/delete.ts</code></td><td>T3</td></tr>
+      <tr><td><code>src/vault-tools.ts</code></td><td>T4</td></tr>
+    </tbody>
+  </table>
+  <h3>По требованиям (одно требование → несколько задач)</h3>
+  <table>
+    <thead><tr><th>Требование</th><th>Задачи</th></tr></thead>
+    <tbody>
+      <tr><td>R4 — детекция + baseline</td><td>T1 (логика) + T3 (персист baselined)</td></tr>
+      <tr><td>R7 — ретайп + чистка</td><td>T3 (ретайп) + T4 (чистка mtime)</td></tr>
+      <tr><td>R9 — верификация</td><td>T1, T2 (юнит) + T3 (build/lint) + T4 (e2e)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Результаты проверки</h2>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th><th>Комментарий</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge b-ok">passed</span></td><td>Плейсхолдеров нет; нумерация задач 1–4 и шагов без пропусков/дублей.</td></tr>
+      <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td><td>R1–R9, SC1, SC2 покрыты; лишних шагов нет; маппинги Self-Review реальны.</td></tr>
+      <tr><td>dependencies</td><td><span class="badge b-ok">passed</span></td><td>Порядок верный; T1↔T2 и группировка T3 разрешены нотами; циклов нет.</td></tr>
+      <tr><td>verifiability</td><td><span class="badge b-ok">passed</span></td><td>У каждого шага измеримый DoD (команда+вывод или конкретный код).</td></tr>
+      <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td><td>Типы/имена единообразны; формат <code>fnv1a:&lt;8hex&gt;</code>.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Findings</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Severity</th><th>Фаза</th><th>Текст</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr><td>F-001</td><td>INFO</td><td>coverage</td><td>Спека без литерального списка R/SC; план синтезирует метки, маппинг верен.</td><td><span class="badge b-ok">accepted</span></td></tr>
+      <tr><td>F-002</td><td>INFO</td><td>coverage</td><td>node-fs интеграция (tier #3) не отдельная задача; покрыта чистым eval + ручным e2e.</td><td><span class="badge b-ok">accepted</span></td></tr>
+      <tr><td>F-003</td><td>INFO</td><td>dependencies</td><td>Две межзадачные связки (T1↔migrateDomainsV3; T3 со-приземление потребителей) — разрешены нотами.</td><td><span class="badge b-ok">accepted</span></td></tr>
+    </tbody>
+  </table>
+  <p class="note"><b>CRITICAL open:</b> 0 · <b>WARNING open:</b> 0 · <b>INFO:</b> 3 (accepted). · <b>Вердикт: OK</b></p>
+
+  <p class="kv"><b>Chain:</b> intent (null) → spec → plan ·
+     <b>spec:</b> <code>…/specs/2026-06-25-incremental-source-hash-design.md</code> ·
+     <b>plan:</b> <code>…/plans/2026-06-25-incremental-source-hash.md</code></p>
+</section>
+<!-- TAB:plan END -->
+
+<!-- TAB:result START -->
+<section class="tab-pane" id="pane-result">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:result END -->
+</body>
+</html>

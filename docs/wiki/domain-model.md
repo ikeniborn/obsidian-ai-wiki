@@ -1,10 +1,12 @@
 # Domain Model
 
+## Overview
+
 A domain is the unit of organization for a knowledge wiki. Each domain has an id, a wiki folder inside `!Wiki/`, a list of source paths, and a set of entity types that guide LLM extraction. See [[architecture]].
 
 ## DomainEntry
 
-Core domain record stored in `!Wiki/_config/_domain.json` via `DomainStore` (`src/domain-store.ts`). Fields: `id`, `name`, `wiki_folder`, `source_paths`, `entity_types`, `language_notes`, `analyzed_sources`. Type defined in `src/domain.ts`.
+Core domain record stored in `!Wiki/_config/_domain.json` via `DomainStore` (`src/domain-store.ts`). Fields: `id`, `name`, `wiki_folder`, `source_paths`, `entity_types`, `language_notes`, `analyzed_sources`. Type defined in `src/domain.ts`. `analyzed_sources` is a `Record<sourcePath, bodyHash>` map: key present = ingested; value = FNV-1a body hash (`"fnv1a:<8 hex>"`); `""` = baseline pending. A **v3 migration** (`migrateDomainsV3` in `src/domain.ts`, runs in `DomainStore.load` alongside v2) converts a legacy `string[]` list to a map of `""` values; the silent baseline fills empty hashes on the first `computeIncrementalPlan` run without re-ingesting.
 
 ## EntityType
 

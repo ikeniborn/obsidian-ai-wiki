@@ -41,8 +41,6 @@ Two LLM backends, selected in settings. Backend choice drives how the `LlmClient
 
 Thin adapter over Obsidian's vault API (`src/vault-tools.ts`). Used by all phases for read, write, list, mkdir, remove, rmdir. Decouples phases from Obsidian internals.
 
-`mtime(vaultPath)` returns a file's modification time in epoch ms (or `null` when unavailable), via the optional `VaultAdapter.stat`. It lets phase code read mtimes without importing `obsidian` directly, and backs the mtime-only detection in [[operations#Incremental Reinit]].
-
 `resolveLink(linkpath, sourcePath)` resolves a wiki-link to a vault-relative path; returns `null` when unresolvable rather than echoing the raw path — this blocks path traversal (an embed like `![[../../secret.png]]` would otherwise escape the vault root). The vision pre-step skips attachments resolving to `null`.
 
 `read` is normalization-tolerant: on a not-found error it retries the NFC and NFD forms of the path (`resolveOnDiskPath`) and logs one diagnostic `console.warn` per miss. `write` resolves the same way so an existing file in a different normalization form (e.g. an NFD source note synced from macOS) is overwritten in place rather than duplicated. ASCII paths are unaffected.
