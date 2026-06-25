@@ -19,3 +19,6 @@
 {"op":"ingest","source":"src/phases/ingest.ts","page":"operations.md","date":"2026-06-24"}
 {"op":"ingest","source":"src/vault-tools.ts","page":"architecture.md","date":"2026-06-24"}
 {"op":"ingest","source":"src/incremental-sources.ts (parsePageSources)","page":"operations.md","date":"2026-06-24","note":"post-merge with origin/master; index rebuilt"}
+{"op":"ingest","source":"src/agent-runner.ts","page":"docs/wiki/llm-pipeline.md","date":"2026-06-25"}
+{"op":"ingest","source":"src/agent-runner.ts","page":"docs/wiki/architecture.md","date":"2026-06-25"}
+{"op":"ingest","source":"scripts/eval.ts","page":"docs/wiki/operations.md","date":"2026-06-25"}
