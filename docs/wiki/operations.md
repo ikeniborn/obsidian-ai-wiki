@@ -2,7 +2,7 @@
 
 ## Overview
 
-The operations available in AI Wiki. Each maps to a phase function in `src/phases/` and produces specific vault artifacts. Reinit offers a Full vs Incremental choice — Full wipes and rebuilds, Incremental re-ingests only sources whose vault mtime is newer than their wiki pages. The Ingest Write Order (A2) invariant (source written before its pages) keeps that mtime detection honest. See [[architecture#Phase Functions]] and [[index#What it does]].
+The operations available in AI Wiki. Each maps to a phase function in `src/phases/` and produces specific vault artifacts. Reinit offers a Full vs Incremental choice — Full wipes and rebuilds, Incremental re-ingests only sources whose body-content hash differs from the hash stored at last ingest. The stored hash prevents re-flagging an un-edited source after a Full reinit. See [[architecture#Phase Functions]] and [[index#What it does]].
 
 ## Init
 
@@ -16,17 +16,17 @@ The Full reinit mode. Re-runs init on an existing domain, wiping the wiki folder
 
 ## Incremental Reinit
 
-The non-destructive reinit mode: re-ingest only the sources whose vault-file mtime is newer than (or unreflected by) their wiki pages, leaving every other page untouched. Clicking reinit opens `ReinitModeModal` (`src/modals.ts`) showing **Full** vs **Incremental (N)**; Incremental is disabled when N=0. No wipe, no persisted "last run" timestamp — every run compares live mtimes.
+The non-destructive reinit mode: re-ingest only the sources whose body-content hash differs from the hash stored at last ingest, leaving every other page untouched. Clicking reinit opens `ReinitModeModal` (`src/modals.ts`) showing **Full** vs **Incremental (N)**; Incremental is disabled when N=0. No wipe, no mtime comparison.
 
-Detection is mtime-only and lives in the pure `computeChangedSources` (`src/incremental-sources.ts`): a source is changed when it has no associated wiki page, when any relevant mtime is `null` (trust bias — include on ambiguity), or when `mtime(source) > min(mtime of its associated pages)` (strict `>`, `min` aggregation). `wiki_added`/`wiki_updated` and all frontmatter timestamps are forbidden as the freshness source; `wiki_sources` supplies only the structural source→page mapping — `parsePageSources` normalizes its double-quoted wikilinks (`"[[stem]]"`) to bare stems for association.
+Detection is hash-based and lives in the pure `computeChangedSources` (`src/incremental-sources.ts`). Hash = FNV-1a 32-bit over the source body only (leading YAML frontmatter stripped, trailing whitespace trimmed), formatted `"fnv1a:<8 hex>"` — computed by `sourceBodyForHash` / `hashSource`. A source is changed when its path is absent from `analyzed_sources` (new source), or when the stored hash differs from the current body hash. A stored hash of `""` (baseline pending) causes the source to be silently baselined — its current hash is persisted via `computeChangedSources` returning it in `baselined`, but it is NOT re-ingested. Equal hashes are skipped. Frontmatter-only edits (e.g. plugin-written `wiki_updated`/`wiki_articles`) never change the hash; only real body edits do.
 
-`controller.computeIncrementalPlan` (`src/controller.ts`) gathers the inputs from the live vault — source mtimes via [[architecture#VaultTools]]`.mtime` (backed by `VaultAdapter.stat`, so phase code never imports `obsidian` to read mtime), wiki-page mtimes, and each page's `wiki_sources` — then delegates the decision to `computeChangedSources`. The plan `{ changed, totalSources, wikiFileCount }` feeds the modal.
+`controller.computeIncrementalPlan` (`src/controller.ts`) reads each source body via `vault.adapter.read`, hashes it with `hashSource`, calls `computeChangedSources`, persists any `baselined` map via `domainStore.save`, and returns `{ changed, totalSources, wikiFileCount }` to feed the modal. `DomainEntry.analyzed_sources` is a `Record<sourcePath, hash>` map stored in `!Wiki/_config/_domain.json`; key present = ingested, value = body hash, `""` = baseline pending.
 
 `runInit '--incremental'` (`src/phases/init.ts`) loops `runIncrementalReinit`, which re-runs the unchanged [[operations#Ingest]] `runIngest` over each changed file (no wipe), updates the in-flight `DomainEntry` from `domain_updated` patches, supports one per-file retry via the file-error modal, and adds freshly-ingested files to `analyzed_sources`. Empty change set yields a friendly result, not an error. Correctness depends on [[operations#Ingest Write Order (A2)]].
 
 ## Ingest Write Order (A2)
 
-Ingest writes the source's own frontmatter (its `wiki_articles` backlinks) **before** the wiki pages, so after every ingest each page's mtime is `>=` its source's. This structural guarantee — not a stored timestamp — keeps [[operations#Incremental Reinit]] honest: an un-edited source is never re-flagged right after a Full reinit. Because the source is written first, its backlinks are computed from the **planned** page/delete sets rather than the actual results.
+Ingest writes the source's own frontmatter (its `wiki_articles` backlinks) **before** the wiki pages. Because the source is written first, its backlinks are computed from the **planned** page/delete sets rather than the actual results. Detection freshness no longer depends on write order — the stored body hash in `analyzed_sources` is what prevents re-flagging an un-edited source after a Full reinit. A2 now matters solely for backlink planning correctness.
 
 Produced artifacts — wiki page content, `_index.md`, and the domain entry — are byte-identical to the old order. Only two things change: event order (`source_path_added` now precedes the page writes) and planned-vs-actual backlinks (the sole divergence is dedup-merge with `dedupOnIngest` enabled, default off; lint heals it). The reorder is in the shared `runIngest`, so it applies to manual ingest, delete, and Full reinit alike.
 

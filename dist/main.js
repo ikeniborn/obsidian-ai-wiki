@@ -27309,30 +27309,39 @@ function resolveReasoningLang(reasoningLanguage, outputLanguage) {
 }
 
 // src/incremental-sources.ts
-function computeChangedSources(input) {
-  const { sourceFiles, wikiPages } = input;
-  const changed = [];
-  for (const src of sourceFiles) {
-    const associated = wikiPages.filter((p) => p.sources.includes(src.stem));
-    if (associated.length === 0) {
-      changed.push(src.path);
-      continue;
-    }
-    if (src.mtime === null || associated.some((p) => p.mtime === null)) {
-      changed.push(src.path);
-      continue;
-    }
-    const oldestPage = Math.min(...associated.map((p) => p.mtime));
-    if (src.mtime > oldestPage) changed.push(src.path);
-  }
-  return { changed };
+function sourceBodyForHash(content) {
+  const m = /^---\n[\s\S]*?\n---\n?/.exec(content);
+  const body = m ? content.slice(m[0].length) : content;
+  return body.replace(/\s+$/, "");
 }
-function parsePageSources(content) {
-  const fmMatch = /^---\n([\s\S]*?)\n---/.exec(content);
-  if (!fmMatch) return [];
-  const listMatch = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
-  if (!listMatch) return [];
-  return listMatch[1].split("\n").map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim()).filter(Boolean).map((t) => t.replace(/^["']|["']$/g, "").replace(/^\[\[|\]\]$/g, "").trim()).map((t) => t.split("/").pop().replace(/\.md$/, "")).filter(Boolean);
+function fnv1a(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+function hashSource(content) {
+  return "fnv1a:" + fnv1a(sourceBodyForHash(content));
+}
+function computeChangedSources(input) {
+  const { sourceFiles, analyzed } = input;
+  const changed = [];
+  const baselined = {};
+  for (const src of sourceFiles) {
+    const stored = analyzed[src.path];
+    if (stored === void 0) {
+      changed.push(src.path);
+      continue;
+    }
+    if (stored === "") {
+      baselined[src.path] = src.hash;
+      continue;
+    }
+    if (stored !== src.hash) changed.push(src.path);
+  }
+  return { changed, baselined };
 }
 function capList(names, cap = 20) {
   if (names.length <= cap) return { shown: names, overflow: 0 };
@@ -32639,10 +32648,25 @@ function migrateDomainsV2(domains) {
   let migrated = false;
   for (const d of domains) {
     if (d.analyzed_sources !== void 0 && !d.analyzed_sources_v2) {
-      d.analyzed_sources = [];
+      d.analyzed_sources = {};
       d.analyzed_sources_v2 = true;
       migrated = true;
     }
+  }
+  return { domains, migrated };
+}
+function migrateDomainsV3(domains) {
+  let migrated = false;
+  for (const d of domains) {
+    if (d.analyzed_sources_v3) continue;
+    const cur = d.analyzed_sources;
+    if (Array.isArray(cur)) {
+      const map = {};
+      for (const p of cur) map[String(p)] = "";
+      d.analyzed_sources = map;
+    }
+    d.analyzed_sources_v3 = true;
+    migrated = true;
   }
   return { domains, migrated };
 }
@@ -41113,6 +41137,10 @@ ${schemaContent}` : ""
 var init_default = 'You are an architect of a wiki knowledge base. Generate a domain entry for domain-map.json.\nReturn ONLY valid JSON of the following structure:\n{\n  "id": "{{domain_id}}",\n  "name": "Human-readable name",\n  "wiki_folder": "{{domain_id}}",\n  "source_paths": [],\n  "entity_types": [{"type":"...","description":"...","extraction_cues":["..."],"min_mentions_for_page":1,"wiki_subfolder":"processes"}],\n  "language_notes": ""\n}\n{{schema_block}}\n{{index_block}}\n\nInclude the `reasoning` field first in the JSON response: a step-by-step rationale for the chosen domain structure.\n\n## Output JSON Example\n\n{\n  "reasoning": "Analyzed the sources. Identified entities: Process, ServiceContract, Customer.",\n  "id": "{{domain_id}}",\n  "name": "Telecom Operations",\n  "wiki_folder": "{{domain_id}}",\n  "entity_types": [\n    {\n      "type": "Process",\n      "description": "A business process or workflow step",\n      "extraction_cues": ["BPMN", "workflow", "process"],\n      "min_mentions_for_page": 1,\n      "wiki_subfolder": "processes"\n    }\n  ],\n  "language_notes": "Mix of Russian/English; preserve the original spelling of product names."\n}\n\n## Wiki Page Conventions\n\nWiki pages use the `tags` field in the frontmatter: hierarchical tags (category/subcategory, lowercase, separated by `/`, no `#`). During ingest the LLM reuses tags from existing pages and creates new ones following the same scheme.\n\nwiki_subfolder RULE: one word, no slashes, no domain_id.\nNot allowed: "os/network", "os_network". Allowed: "network", "processes", "protocols".\n';
 
 // src/phases/init.ts
+async function sourceHashFor(vaultTools, file) {
+  const content = await vaultTools.read(file).catch(() => "");
+  return hashSource(content);
+}
 async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal, opts = {}, onFileError, similarity) {
   const domainId = args[0];
   const dryRun = args.includes("--dry-run");
@@ -41174,11 +41202,11 @@ async function* runInit(args, vaultTools, llm, model, domains, vaultName, signal
     yield {
       kind: "domain_updated",
       domainId,
-      patch: { entity_types: [], analyzed_sources: [] }
+      patch: { entity_types: [], analyzed_sources: {} }
     };
     if (signal.aborted) return;
     existing.entity_types = [];
-    existing.analyzed_sources = [];
+    existing.analyzed_sources = {};
     yield* runInitWithSources(
       domainId,
       effectiveSources2,
@@ -41245,7 +41273,7 @@ async function* runInitWithSources(domainId, sourcePaths, dryRun, vaultTools, ll
   yield { kind: "tool_result", ok: true, preview: `${sourceFiles.length} source files` };
   const existing = domains.find((d) => d.id === domainId);
   const isResuming = !force && existing?.analyzed_sources !== void 0;
-  const alreadyAnalyzed = new Set(force ? [] : existing?.analyzed_sources ?? []);
+  const alreadyAnalyzed = new Set(force ? [] : Object.keys(existing?.analyzed_sources ?? {}));
   const toAnalyze = isResuming ? sourceFiles.filter((f) => !alreadyAnalyzed.has(f)) : sourceFiles;
   yield { kind: "init_start", totalFiles: toAnalyze.length };
   if (toAnalyze.length === 0) {
@@ -41368,7 +41396,7 @@ ${JSON.stringify(entry, null, 2)}
         entity_types: entry.entity_types,
         language_notes: entry.language_notes,
         source_paths: sourcePaths,
-        analyzed_sources: [],
+        analyzed_sources: {},
         analyzed_sources_v2: true
       };
       yield { kind: "tool_use", name: existing ? "UpdateDomain" : "SaveDomain", input: { id: domainId } };
@@ -41380,7 +41408,7 @@ ${JSON.stringify(entry, null, 2)}
             entity_types: currentDomain.entity_types,
             language_notes: currentDomain.language_notes,
             wiki_folder: currentDomain.wiki_folder,
-            analyzed_sources: []
+            analyzed_sources: {}
           }
         };
       } else {
@@ -41434,7 +41462,10 @@ ${JSON.stringify(entry, null, 2)}
     if (signal.aborted) return;
     currentDomain = {
       ...currentDomain,
-      analyzed_sources: [...currentDomain.analyzed_sources ?? [], file]
+      analyzed_sources: {
+        ...currentDomain.analyzed_sources ?? {},
+        [file]: await sourceHashFor(vaultTools, file)
+      }
     };
     yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
     yield {
@@ -41511,10 +41542,14 @@ async function* runIncrementalReinit(domainId, changedFiles, vaultTools, llm, mo
       }
     }
     if (signal.aborted) return;
-    const analyzed = new Set(currentDomain.analyzed_sources ?? []);
-    if (!analyzed.has(file)) {
-      analyzed.add(file);
-      currentDomain = { ...currentDomain, analyzed_sources: [...analyzed] };
+    const analyzedMap = currentDomain.analyzed_sources ?? {};
+    if (!(file in analyzedMap)) {
+      const hash = await sourceHashFor(vaultTools, file);
+      const nextAnalyzed = { ...analyzedMap, [file]: hash };
+      currentDomain = {
+        ...currentDomain,
+        analyzed_sources: nextAnalyzed
+      };
       yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
       yield { kind: "domain_updated", domainId, patch: { analyzed_sources: currentDomain.analyzed_sources } };
       yield { kind: "tool_result", ok: true };
@@ -42269,10 +42304,12 @@ async function* runDelete(args, vaultTools, llm, model, domains, vaultRoot, sign
   };
   yield { kind: "source_path_removed", domainId, path: sourcePath };
   const targetStem = sourceStem(sourcePath);
-  const prunedAnalyzed = (domain.analyzed_sources ?? []).filter(
-    (a) => a !== sourcePath && sourceStem(a) !== targetStem
-  );
-  if (prunedAnalyzed.length !== (domain.analyzed_sources ?? []).length) {
+  const curAnalyzed = domain.analyzed_sources ?? {};
+  const prunedAnalyzed = {};
+  for (const k of Object.keys(curAnalyzed)) {
+    if (k !== sourcePath && sourceStem(k) !== targetStem) prunedAnalyzed[k] = curAnalyzed[k];
+  }
+  if (Object.keys(prunedAnalyzed).length !== Object.keys(curAnalyzed).length) {
     yield { kind: "domain_updated", domainId, patch: { analyzed_sources: prunedAnalyzed } };
   }
   const safeRemovePage = async (p) => {
@@ -42814,12 +42851,6 @@ var VaultTools = class {
   }
   async exists(vaultPath) {
     return this.adapter.exists(vaultPath);
-  }
-  /** Modification time in epoch ms, or null when unavailable (missing file or no stat support). */
-  async mtime(vaultPath) {
-    if (!this.adapter.stat) return null;
-    const s = await this.adapter.stat(vaultPath);
-    return s ? s.mtime : null;
   }
   async readBinary(vaultPath) {
     if (!this.adapter.readBinary) throw new Error("readBinary not supported by this adapter");
@@ -50209,8 +50240,9 @@ var DomainStore = class {
         d.wiki_folder = d.wiki_folder.slice("!Wiki/".length);
       }
     }
-    const { migrated } = migrateDomainsV2(domains);
-    if (migrated) await this.save(domains);
+    const { migrated: m2 } = migrateDomainsV2(domains);
+    const { migrated: m3 } = migrateDomainsV3(domains);
+    if (m2 || m3) await this.save(domains);
     return domains;
   }
   async save(domains) {
@@ -50530,19 +50562,14 @@ var WikiController = class {
     }
   }
   /**
-   * Compute the incremental re-init plan: which source files are newer than (or
-   * not yet reflected by) their wiki pages. Pure decision is delegated to
-   * computeChangedSources; this only gathers mtimes + wiki_sources from the vault.
+   * Compute the incremental re-init plan: which source files have changed since
+   * their last ingest, detected by comparing body hashes stored in analyzed_sources.
    */
   async computeIncrementalPlan(domainId) {
     const domains = await this.loadDomains();
     const entry = domains.find((d) => d.id === domainId);
     if (!entry) return { changed: [], totalSources: 0, wikiFileCount: 0 };
     const base = this.cwdOrEmpty();
-    const vaultTools = new VaultTools(
-      this.app.vault.adapter,
-      base
-    );
     const toVaultRel = (p) => {
       if (!base || !p.startsWith("/")) return p;
       return p.startsWith(base) ? p.slice(base.length).replace(/^\//, "") : p;
@@ -50558,22 +50585,24 @@ var WikiController = class {
         }
       }
     }
+    const analyzed = entry.analyzed_sources ?? {};
     const sourceFiles = [];
     for (const f of sourceTFiles) {
-      sourceFiles.push({ stem: f.basename, path: f.path, mtime: await vaultTools.mtime(f.path) });
-    }
-    const wikiTFiles = collectMdInPaths(this.app.vault, [domainWikiFolder(entry.wiki_folder)]).filter((f) => !f.path.includes("/_config/"));
-    const wikiPages = [];
-    for (const f of wikiTFiles) {
       let content = "";
       try {
         content = await this.app.vault.adapter.read(f.path);
       } catch {
       }
-      wikiPages.push({ path: f.path, mtime: await vaultTools.mtime(f.path), sources: parsePageSources(content) });
+      sourceFiles.push({ path: f.path, hash: hashSource(content) });
     }
-    const { changed } = computeChangedSources({ sourceFiles, wikiPages });
-    return { changed, totalSources: sourceFiles.length, wikiFileCount: wikiTFiles.length };
+    const wikiFileCount = collectMdInPaths(this.app.vault, [domainWikiFolder(entry.wiki_folder)]).filter((f) => !f.path.includes("/_config/")).length;
+    const { changed, baselined } = computeChangedSources({ sourceFiles, analyzed });
+    if (Object.keys(baselined).length > 0) {
+      const merged = { ...analyzed, ...baselined };
+      const next = domains.map((d) => d.id === domainId ? { ...d, analyzed_sources: merged } : d);
+      await this.domainStore.save(next);
+    }
+    return { changed, totalSources: sourceFiles.length, wikiFileCount };
   }
   async registerDomain(input) {
     const id = input.id.trim();

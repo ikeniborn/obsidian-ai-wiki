@@ -13,6 +13,13 @@ import { GLOBAL_CONFIG_DIR, domainWikiFolder, sanitizeWikiFolder, sanitizeWikiSu
 import type { PageSimilarityService } from "../page-similarity";
 import { parseIndexAnnotations } from "../wiki-index";
 import { i18nFor, resolveLang } from "../i18n";
+import { hashSource } from "../incremental-sources";
+
+/** Read a source file and return its body hash; "" on read failure. */
+async function sourceHashFor(vaultTools: VaultTools, file: string): Promise<string> {
+  const content = await vaultTools.read(file).catch(() => "");
+  return hashSource(content);
+}
 
 export async function* runInit(
   args: string[],
@@ -83,13 +90,13 @@ export async function* runInit(
 
     yield {
       kind: "domain_updated", domainId,
-      patch: { entity_types: [], analyzed_sources: [] },
+      patch: { entity_types: [], analyzed_sources: {} },
     };
 
     if (signal.aborted) return;
 
     existing.entity_types = [];
-    existing.analyzed_sources = [];
+    existing.analyzed_sources = {};
 
     yield* runInitWithSources(
       domainId, effectiveSources, false, vaultTools, llm, model, domains, vaultName, signal, opts, onFileError, true, similarity,
@@ -153,7 +160,7 @@ export async function* runInitWithSources(
 
   const existing = domains.find((d) => d.id === domainId);
   const isResuming = !force && existing?.analyzed_sources !== undefined;
-  const alreadyAnalyzed = new Set(force ? [] : (existing?.analyzed_sources ?? []));
+  const alreadyAnalyzed = new Set(force ? [] : Object.keys(existing?.analyzed_sources ?? {}));
   const toAnalyze = isResuming
     ? sourceFiles.filter((f) => !alreadyAnalyzed.has(f))
     : sourceFiles;
@@ -280,7 +287,7 @@ export async function* runInitWithSources(
         entity_types: entry.entity_types,
         language_notes: entry.language_notes,
         source_paths: sourcePaths,
-        analyzed_sources: [],
+        analyzed_sources: {},
         analyzed_sources_v2: true,
       };
 
@@ -292,7 +299,7 @@ export async function* runInitWithSources(
             entity_types: currentDomain.entity_types,
             language_notes: currentDomain.language_notes,
             wiki_folder: currentDomain.wiki_folder,
-            analyzed_sources: [],
+            analyzed_sources: {},
           },
         };
       } else {
@@ -347,10 +354,13 @@ export async function* runInitWithSources(
 
     if (signal.aborted) return;
 
-    // --- Mark file complete: update analyzed_sources ---
+    // --- Mark file complete: record analyzed_sources hash ---
     currentDomain = {
       ...currentDomain,
-      analyzed_sources: [...(currentDomain.analyzed_sources ?? []), file],
+      analyzed_sources: {
+        ...(currentDomain.analyzed_sources ?? {}),
+        [file]: await sourceHashFor(vaultTools, file),
+      },
     };
     yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
     yield {
@@ -435,11 +445,15 @@ export async function* runIncrementalReinit(
 
     if (signal.aborted) return;
 
-    // New-source bookkeeping: make sure a freshly-ingested source lands in analyzed_sources.
-    const analyzed: Set<string> = new Set(currentDomain.analyzed_sources ?? []);
-    if (!analyzed.has(file)) {
-      analyzed.add(file);
-      currentDomain = { ...currentDomain, analyzed_sources: [...analyzed] };
+    // New-source bookkeeping: record the source hash if not already present.
+    const analyzedMap = currentDomain.analyzed_sources ?? {};
+    if (!(file in analyzedMap)) {
+      const hash = await sourceHashFor(vaultTools, file);
+      const nextAnalyzed: Record<string, string> = { ...analyzedMap, [file]: hash };
+      currentDomain = {
+        ...currentDomain,
+        analyzed_sources: nextAnalyzed,
+      };
       yield { kind: "tool_use", name: "UpdateDomain", input: { id: domainId } };
       yield { kind: "domain_updated", domainId, patch: { analyzed_sources: currentDomain.analyzed_sources } };
       yield { kind: "tool_result", ok: true };
