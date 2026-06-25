@@ -4,6 +4,7 @@ import type { LlmCallOptions, RunEvent, LlmClient, ChatMessage } from "../types"
 import { buildChatParams, extractStreamDeltas, extractUsage, wrapStreamWithStats, buildLlmCallStatsEvent } from "./llm-utils";
 import chatTemplate from "../../prompts/chat.md";
 import { render } from "./template";
+import { promptVersionOf } from "../prompt-version";
 
 export async function* runLintChat(
   llm: LlmClient,
@@ -62,5 +63,10 @@ export async function* runLintChat(
   if (signal.aborted) return;
   yield { kind: "tool_result", ok: !!fullText, preview: fullText ? `${fullText.length} chars` : "no response" };
   if (streamStats) yield buildLlmCallStatsEvent(streamStats);
+  const lastUserMessage = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
+  yield {
+    kind: "eval_meta",
+    fields: { question: lastUserMessage, answer: fullText, promptVersion: promptVersionOf(chatTemplate) },
+  };
   yield { kind: "result", durationMs: Date.now() - start, text: fullText, outputTokens: outputTokens || undefined };
 }
