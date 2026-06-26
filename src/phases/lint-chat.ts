@@ -14,6 +14,7 @@ import { domainWikiFolder } from "../wiki-path";
 import { upsertIndexAnnotation } from "../wiki-index";
 import { pageId } from "../wiki-graph";
 import { ensureDomainConfig } from "../domain-config";
+import { promptVersionOf } from "../prompt-version";
 
 const META_FILES = ["_index.md", "_log.md"];
 
@@ -117,5 +118,14 @@ export async function* runLintFixChat(
   }
 
   // 5. Emit result
+  const lastUserMsg = [...(req.chatMessages ?? [])].reverse().find((m) => m.role === "user")?.content ?? "";
+  yield {
+    kind: "eval_meta",
+    fields: {
+      articles: (parsed.pages ?? []).map((p) => p.path),
+      instruction: lastUserMsg,
+      promptVersion: promptVersionOf(lintChatTemplate),
+    },
+  };
   yield { kind: "result", durationMs: Date.now() - start, text: parsed.summary, outputTokens: result.outputTokens || undefined };
 }
