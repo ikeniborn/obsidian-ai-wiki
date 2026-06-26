@@ -27,7 +27,7 @@ import { restoreSourceFrontmatter } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
 import { collectMdInPaths, parseWikiSources } from "./utils/vault-walk";
 import { computeChangedSources, hashSource, type SourceFileInfo } from "./incremental-sources";
-import { updateEvalRating, type RatingAxis } from "./eval-log";
+import { updateEvalRating, type RatingAxis, type Rating } from "./eval-log";
 
 /** Minimal surface of the host obsidian-excalidraw-plugin's ExcalidrawAutomate. */
 interface ExcalidrawAutomateLike {
@@ -191,10 +191,10 @@ export class WikiController {
     await this.dispatch("query", [question.trim()], domainId);
   }
 
-  /** Set a 👍/👎 label on a finished run's eval.jsonl record (dev mode only). */
-  async rateRun(runId: string, axis: RatingAxis, rating: "up" | "down"): Promise<void> {
-    if (!this.plugin.settings.devMode?.enabled) return;
-    await updateEvalRating(this.app.vault.adapter, this.pluginDir(), runId, axis, rating);
+  /** Set a 👍/👎 label on a finished run's eval.jsonl record (dev mode only). Returns the persisted rating, or undefined when off / not written. */
+  async rateRun(runId: string, axis: RatingAxis, rating: "up" | "down"): Promise<Rating | undefined> {
+    if (!this.plugin.settings.devMode?.enabled) return undefined;
+    return updateEvalRating(this.app.vault.adapter, this.pluginDir(), runId, axis, rating);
   }
 
   private pluginDir(): string {

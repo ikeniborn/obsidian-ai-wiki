@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rating-buttons-feedback — IDD/SDD chain report</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg); transition:background .3s, color .3s;
+}
+.theme-btn{ position:sticky; top:.5rem; float:right; cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface); }
+header h1{ font-size:1.4rem; margin:.2rem 0 1rem; }
+.sub{ color:var(--muted); font-size:.9rem; }
+h2{ font-size:1.15rem; margin:1.6rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.3rem; }
+h3{ font-size:1rem; margin:1.1rem 0 .5rem; color:var(--accent); }
+table{ border-collapse:collapse; width:100%; margin:.6rem 0; font-size:.9rem; box-shadow:0 1px 3px var(--shadow); }
+th,td{ border:1px solid var(--border); padding:.45rem .6rem; text-align:left; vertical-align:top; }
+th{ background:var(--accent); color:#fff; }
+tbody tr:nth-child(even){ background:var(--zebra); }
+code{ background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .3rem; border-radius:4px; font-size:.85em; }
+.badge{ display:inline-block; padding:.1rem .5rem; border-radius:10px; font-size:.78rem; font-weight:600; }
+.b-ok{ background:color-mix(in srgb,var(--ok) 25%, var(--surface)); color:var(--ok-2); border:1px solid var(--ok); }
+.note{ background:color-mix(in srgb,var(--accent) 10%, var(--surface)); border-left:4px solid var(--accent);
+  padding:.6rem .9rem; border-radius:0 6px 6px 0; margin:.6rem 0; }
+.chain-tabs{ display:flex; gap:.3rem; margin:1rem 0 0; flex-wrap:wrap; }
+.chain-tabs label{ cursor:pointer; padding:.4rem .9rem; border:1px solid var(--border); border-bottom:none;
+  border-radius:8px 8px 0 0; background:var(--surface); color:var(--muted); }
+.tab-pane{ display:none; border:1px solid var(--border); border-radius:0 8px 8px 8px; padding:1rem 1.3rem; background:var(--surface); }
+body:has(#tab-intent:checked) #pane-intent,
+body:has(#tab-spec:checked)   #pane-spec,
+body:has(#tab-plan:checked)   #pane-plan,
+body:has(#tab-result:checked) #pane-result{ display:block; }
+body:has(#tab-intent:checked) label[for="tab-intent"],
+body:has(#tab-spec:checked)   label[for="tab-spec"],
+body:has(#tab-plan:checked)   label[for="tab-plan"],
+body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); border-color:var(--accent); font-weight:600; }
+/* solution flow */
+.flow{ display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; margin:.8rem 0; }
+.node{ background:color-mix(in srgb,var(--accent) 8%, var(--surface)); border:1px solid var(--border);
+  border-radius:8px; padding:.5rem .7rem; font-size:.82rem; box-shadow:0 1px 2px var(--shadow); }
+.node b{ display:block; font-size:.78rem; color:var(--accent); }
+.arrow{ color:var(--line); font-weight:700; }
+figcaption{ color:var(--muted); font-size:.82rem; margin-top:.3rem; }
+.chain-strip{ display:flex; gap:.5rem; align-items:center; margin:.5rem 0 0; font-size:.85rem; color:var(--muted); }
+.chain-strip .cur{ color:var(--accent); font-weight:700; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden checked>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+<header>
+  <h1>rating-buttons-feedback — отчёт цепочки IDD→SDD</h1>
+  <div class="sub">Тема: <code>rating-buttons-feedback</code> · спецификация от 2026-06-26 · <code>spec_hash: d0e5bc69dacb3f5e</code></div>
+</header>
+<nav class="chain-tabs">
+  <label for="tab-intent">Intent</label>
+  <label for="tab-spec">Spec</label>
+  <label for="tab-plan">Plan</label>
+  <label for="tab-result">Result</label>
+</nav>
+
+<!-- TAB:intent START -->
+<section class="tab-pane" id="pane-intent">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:intent END -->
+
+<!-- TAB:spec START -->
+<section class="tab-pane" id="pane-spec">
+  <div class="chain-strip">Цепочка: <span class="cur">Spec</span> · Intent отсутствует (intent: null)</div>
+
+  <h2>1. Резюме спецификации</h2>
+  <p><b>«Dev-mode rating buttons: visual feedback &amp; reliable persistence».</b>
+  Корень бага: нет CSS состояния выбора → клик невидим → пользователь жмёт повторно → toggle-флип рейтинга обратно в <code>null</code>. Один корень обоих симптомов.</p>
+  <table>
+    <thead><tr><th>ID</th><th>Секция</th><th>Требование</th></tr></thead>
+    <tbody>
+      <tr><td>R1</td><td>Goals</td><td>Кликнутая кнопка визуально выделена; невыбранные приглушены.</td></tr>
+      <tr><td>R2</td><td>Goals</td><td>Accent-заливка выбранной: 👍 зелёная, 👎 красная; невыбранная — пониженная opacity.</td></tr>
+      <tr><td>R3</td><td>Goals / Reselection</td><td>Перевыбор оси переключает подсветку; повторный клик активной снимает выбор.</td></tr>
+      <tr><td>R4</td><td>Goals / Fix B</td><td>Показанное состояние всегда отражает реально записанное в <code>eval.jsonl</code>.</td></tr>
+      <tr><td>R5</td><td>Fix A — CSS</td><td><code>src/styles.css</code>: <code>.ai-wiki-rating-row/-label/-btn</code> (base dim ~0.5, hover ярче), модификаторы <code>is-up/is-down</code>, <code>.is-up.is-active</code>→зелёная, <code>.is-down.is-active</code>→красная. Через Obsidian CSS-vars.</td></tr>
+      <tr><td>R6</td><td>Fix B</td><td><code>updateEvalRating</code>→<code>Rating</code>|<code>undefined</code>; <code>rateRun</code> пробрасывает; <code>renderRatingRow</code> await→ставит <code>is-active</code> по факту, на <code>undefined</code> не трогает.</td></tr>
+      <tr><td>R7</td><td>Build &amp; deploy</td><td><code>npm run build</code>→<code>dist/</code>+корень; в волт не копирует → ручной деплой <code>main.js/styles.css/manifest.json</code> + reload.</td></tr>
+    </tbody>
+  </table>
+  <p class="sub"><b>Non-goals:</b> тост/нотификация, агрегатная панель «score», новые i18n-строки (лейблы уже есть).</p>
+
+  <h3>Success Criteria</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Критерий</th></tr></thead>
+    <tbody>
+      <tr><td>SC1</td><td>devMode on → query → клик 👍 → зелёная заливка, 👎 приглушена.</td></tr>
+      <tr><td>SC2</td><td>Клик 👎 → красная заливка, 👍 возвращается в приглушённое.</td></tr>
+      <tr><td>SC3</td><td>Повторный клик 👎 → обе приглушены.</td></tr>
+      <tr><td>SC4</td><td><code>eval.jsonl</code> для runId: <code>rating</code> идёт <code>up → down → null</code>.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схемы решения и зависимостей</h2>
+  <h3>Схема решения (поток)</h3>
+  <figure>
+    <div class="flow">
+      <div class="node"><b>UI</b>клик 👍/👎</div><span class="arrow">→</span>
+      <div class="node"><b>view.ts</b>renderRatingRow<br>(write-then-render)</div><span class="arrow">→</span>
+      <div class="node"><b>controller.ts</b>rateRun</div><span class="arrow">→</span>
+      <div class="node"><b>eval-log.ts</b>updateEvalRating<br>(flip, истина)</div><span class="arrow">→</span>
+      <div class="node"><b>eval.jsonl</b>rating</div>
+    </div>
+    <div class="flow">
+      <span class="arrow">↩ возврат Rating|undefined</span><span class="arrow">→</span>
+      <div class="node"><b>view.ts</b>ставит is-active по факту</div>
+      <span class="arrow">+</span>
+      <div class="node"><b>styles.css</b>green / red / dim</div>
+    </div>
+    <figcaption>Источник истины — <code>updateEvalRating</code>; UI рендерит фактически записанное значение, исключая рассинхрон.</figcaption>
+  </figure>
+
+  <h3>Граф зависимостей (A→B = A зависит от B)</h3>
+  <figure>
+  <svg viewBox="0 0 660 340" width="100%" role="img" aria-label="Граф зависимостей требований">
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--line)"/>
+      </marker>
+      <filter id="ds"><feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="var(--shadow)"/></filter>
+    </defs>
+    <g stroke="var(--line)" stroke-width="1.6" marker-end="url(#ah)" fill="none">
+      <line x1="90"  y1="78"  x2="185" y2="160"/>
+      <line x1="250" y1="78"  x2="215" y2="160"/>
+      <line x1="410" y1="78"  x2="450" y2="160"/>
+      <line x1="570" y1="78"  x2="478" y2="160"/>
+      <line x1="200" y1="198" x2="285" y2="280"/>
+      <line x1="460" y1="198" x2="320" y2="280"/>
+      <line x1="560" y1="290" x2="252" y2="182"/>
+      <line x1="575" y1="280" x2="505" y2="198"/>
+      <line x1="560" y1="299" x2="352" y2="299"/>
+    </g>
+    <g font-size="12" font-weight="600" text-anchor="middle" fill="var(--fg)">
+      <g filter="url(#ds)">
+        <rect x="40"  y="40"  width="100" height="38" rx="7" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="200" y="40"  width="100" height="38" rx="7" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="360" y="40"  width="100" height="38" rx="7" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="520" y="40"  width="100" height="38" rx="7" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="150" y="160" width="100" height="38" rx="7" fill="color-mix(in srgb,var(--accent) 14%,var(--surface))" stroke="var(--accent)"/>
+        <rect x="410" y="160" width="100" height="38" rx="7" fill="color-mix(in srgb,var(--accent) 14%,var(--surface))" stroke="var(--accent)"/>
+        <rect x="250" y="280" width="100" height="38" rx="7" fill="color-mix(in srgb,var(--accent) 22%,var(--surface))" stroke="var(--accent-2)"/>
+        <rect x="560" y="280" width="90"  height="38" rx="7" fill="var(--surface)" stroke="var(--ok)"/>
+      </g>
+      <text x="90"  y="63">R1 фидбэк</text>
+      <text x="250" y="63">R2 цвет</text>
+      <text x="410" y="63">R3 перевыб.</text>
+      <text x="570" y="63">R4 истина</text>
+      <text x="200" y="183">R5 CSS</text>
+      <text x="460" y="183">R6 Fix B</text>
+      <text x="300" y="303">R7 build</text>
+      <text x="605" y="303">SC тесты</text>
+    </g>
+  </svg>
+    <figcaption>DAG, циклов нет. R1,R2→R5; R3,R4→R6; R5,R6→R7; SC→R5,R6,R7.</figcaption>
+  </figure>
+
+  <h3>Карта покрытия (задача → требования)</h3>
+  <table>
+    <thead><tr><th>Задача пользователя</th><th>Требования</th></tr></thead>
+    <tbody>
+      <tr><td>Кнопки не реагируют / нужен ответ на нажатие</td><td>R1, R5, R6</td></tr>
+      <tr><td>Выбранная затемнялась / выделялась</td><td>R1, R2, R5</td></tr>
+      <tr><td>Можно перевыбрать, если передумал</td><td>R3, R6</td></tr>
+      <tr><td>Запись есть, но скор не обновляется</td><td>R4, R6 (root cause: повторный клик без фидбэка флипал в null)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Результаты проверки</h2>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th><th>Findings</th><th>Комментарий</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge b-ok">passed</span></td><td>0</td><td>Плейсхолдеров нет, битых ссылок нет, дублей заголовков нет.</td></tr>
+      <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td><td>0</td><td>Все 4 задачи покрыты, лишних требований нет, противоречий нет.</td></tr>
+      <tr><td>clarity</td><td><span class="badge b-ok">passed</span></td><td>0</td><td>Критерии заданы (opacity ~0.5, green/red, Verification=DoD), термины согласованы.</td></tr>
+      <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td><td>0</td><td>Новый файл, все секции новые.</td></tr>
+    </tbody>
+  </table>
+  <p class="note">Findings: пусто. CRITICAL open: 0 · WARNING open: 0. <b>Финальный вердикт: <span class="badge b-ok">OK</span></b></p>
+  <div class="chain-strip">Цепочка: <span>Intent (нет)</span> → <span class="cur">Spec ✓</span> → <span>Plan</span> → <span>Result</span></div>
+</section>
+<!-- TAB:spec END -->
+
+<!-- TAB:plan START -->
+<section class="tab-pane" id="pane-plan">
+  <div class="chain-strip">Цепочка: <span>Intent (нет)</span> → <span>Spec ✓</span> → <span class="cur">Plan</span></div>
+
+  <h2>1. Резюме плана</h2>
+  <p>Нет тест-раннера → автоматический гейт каждого шага = <code>npx tsc --noEmit</code> + <code>npm run lint</code> + <code>npm run build</code>; UI-поведение проверяется вручную в Obsidian (SC1–SC4).</p>
+  <table>
+    <thead><tr><th>Шаг</th><th>Действие</th><th>Definition of Done</th></tr></thead>
+    <tbody>
+      <tr><td>T1·S1</td><td>Добавить rating-CSS в <code>src/styles.css</code></td><td>Правила <code>.ai-wiki-rating-*</code> в конце файла</td></tr>
+      <tr><td>T1·S2</td><td><code>npm run build</code></td><td>exit 0; <code>grep ai-wiki-rating-btn dist/styles.css</code> ≥4</td></tr>
+      <tr><td>T1·S3</td><td>Commit CSS</td><td>Коммит <code>src/styles.css</code> + dist</td></tr>
+      <tr><td>T2·S1</td><td><code>updateEvalRating</code> → <code>Rating|undefined</code> (eval-log.ts)</td><td>Новая сигнатура, <code>return next</code> / <code>undefined</code></td></tr>
+      <tr><td>T2·S2</td><td><code>rateRun</code> пробрасывает + <code>import type Rating</code> (controller.ts)</td><td><code>return updateEvalRating(...)</code></td></tr>
+      <tr><td>T2·S3</td><td><code>renderRatingRow</code>: <code>is-up/is-down</code> + render по факту (view.ts)</td><td><code>handle</code> await <code>rateRun</code> → <code>render(result)</code></td></tr>
+      <tr><td>T2·S4</td><td><code>npx tsc --noEmit</code></td><td>exit 0, без ошибок</td></tr>
+      <tr><td>T2·S5</td><td><code>npm run lint</code></td><td>exit 0</td></tr>
+      <tr><td>T2·S6</td><td><code>npm run build</code></td><td>exit 0</td></tr>
+      <tr><td>T2·S7</td><td>Commit плумбинга + view</td><td>Коммит eval-log/controller/view + dist</td></tr>
+      <tr><td>T3·S1</td><td><code>cp</code> main.js/styles.css/manifest.json в волт</td><td>exit 0; grep в vault styles.css ≥4</td></tr>
+      <tr><td>T3·S2</td><td>Reload плагина, devMode on</td><td>Новый main.js/styles.css загружен</td></tr>
+      <tr><td>T3·S3</td><td>Ручная проверка SC1–SC3</td><td>👍 зелёная/👎 dim → 👎 красная/👍 dim → повторный 👎 обе dim</td></tr>
+      <tr><td>T3·S4</td><td>Проверка SC4</td><td><code>tail -1 eval.jsonl</code> → rating <code>up→down→None</code></td></tr>
+      <tr><td>T3·S5</td><td>Финальный коммит</td><td>no-op при успехе; иначе вернуться к T1/T2</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схемы зависимостей и пересечений</h2>
+  <h3>Граф зависимостей шагов (M→N = результат M используется в N)</h3>
+  <figure>
+  <svg viewBox="0 0 720 420" width="100%" role="img" aria-label="Граф зависимостей шагов плана">
+    <defs>
+      <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--line)"/>
+      </marker>
+      <filter id="ds2"><feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="var(--shadow)"/></filter>
+    </defs>
+    <g stroke="var(--line)" stroke-width="1.5" marker-end="url(#ah2)" fill="none">
+      <line x1="100" y1="88"  x2="100" y2="122"/>
+      <line x1="100" y1="158" x2="100" y2="192"/>
+      <line x1="360" y1="68"  x2="360" y2="87"/>
+      <line x1="360" y1="123" x2="360" y2="142"/>
+      <line x1="360" y1="178" x2="360" y2="197"/>
+      <line x1="360" y1="233" x2="360" y2="252"/>
+      <line x1="360" y1="288" x2="360" y2="307"/>
+      <line x1="360" y1="343" x2="360" y2="362"/>
+      <line x1="620" y1="88"  x2="620" y2="117"/>
+      <line x1="620" y1="153" x2="620" y2="182"/>
+      <line x1="620" y1="218" x2="620" y2="247"/>
+      <line x1="620" y1="283" x2="620" y2="312"/>
+      <line x1="165" y1="70"  x2="295" y2="160"/>
+      <line x1="165" y1="140" x2="295" y2="325"/>
+      <line x1="425" y1="325" x2="555" y2="72"/>
+      <line x1="425" y1="380" x2="555" y2="78"/>
+    </g>
+    <g font-size="10" font-weight="600" text-anchor="middle" fill="var(--fg)">
+      <g filter="url(#ds2)">
+        <rect x="35"  y="52"  width="130" height="36" rx="6" fill="color-mix(in srgb,var(--accent) 10%,var(--surface))" stroke="var(--accent)"/>
+        <rect x="35"  y="122" width="130" height="36" rx="6" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="35"  y="192" width="130" height="36" rx="6" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="295" y="32"  width="130" height="36" rx="6" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="295" y="87"  width="130" height="36" rx="6" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="295" y="142" width="130" height="36" rx="6" fill="color-mix(in srgb,var(--accent) 10%,var(--surface))" stroke="var(--accent)"/>
+        <rect x="295" y="197" width="130" height="36" rx="6" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="295" y="252" width="130" height="36" rx="6" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="295" y="307" width="130" height="36" rx="6" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="295" y="362" width="130" height="36" rx="6" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="555" y="52"  width="130" height="36" rx="6" fill="color-mix(in srgb,var(--accent) 22%,var(--surface))" stroke="var(--accent-2)"/>
+        <rect x="555" y="117" width="130" height="36" rx="6" fill="var(--surface)" stroke="var(--border)"/>
+        <rect x="555" y="182" width="130" height="36" rx="6" fill="color-mix(in srgb,var(--ok) 18%,var(--surface))" stroke="var(--ok)"/>
+        <rect x="555" y="247" width="130" height="36" rx="6" fill="color-mix(in srgb,var(--ok) 18%,var(--surface))" stroke="var(--ok)"/>
+        <rect x="555" y="312" width="130" height="36" rx="6" fill="var(--surface)" stroke="var(--border)"/>
+      </g>
+      <text x="100" y="74">T1·S1 CSS</text>
+      <text x="100" y="144">T1·S2 build</text>
+      <text x="100" y="214">T1·S3 commit</text>
+      <text x="360" y="54">T2·S1 eval-log</text>
+      <text x="360" y="109">T2·S2 ctrl</text>
+      <text x="360" y="164">T2·S3 view</text>
+      <text x="360" y="219">T2·S4 tsc</text>
+      <text x="360" y="274">T2·S5 lint</text>
+      <text x="360" y="329">T2·S6 build</text>
+      <text x="360" y="384">T2·S7 commit</text>
+      <text x="620" y="74">T3·S1 deploy</text>
+      <text x="620" y="139">T3·S2 reload</text>
+      <text x="620" y="204">T3·S3 SC1-3</text>
+      <text x="620" y="269">T3·S4 SC4</text>
+      <text x="620" y="334">T3·S5 final</text>
+    </g>
+  </svg>
+    <figcaption>Три полосы (T1 CSS → T2 плумбинг → T3 деплой). Кросс-рёбра: T1·S1→T2·S3 (классы активируют CSS), T1·S2→T2·S6 (общий dist), T2·S6/S7→T3·S1 (деплой). Циклов нет.</figcaption>
+  </figure>
+
+  <h3>Пересечения по артефактам</h3>
+  <table>
+    <thead><tr><th>Артефакт</th><th>Шаги</th></tr></thead>
+    <tbody>
+      <tr><td><code>src/styles.css</code></td><td>T1·S1 (commit T1·S3)</td></tr>
+      <tr><td><code>dist/*</code> + root <code>manifest.json</code></td><td>T1·S2, T1·S3, T2·S6, T2·S7</td></tr>
+      <tr><td><code>src/eval-log.ts</code></td><td>T2·S1 (commit T2·S7)</td></tr>
+      <tr><td><code>src/controller.ts</code></td><td>T2·S2 (commit T2·S7)</td></tr>
+      <tr><td><code>src/view.ts</code></td><td>T2·S3 (commit T2·S7)</td></tr>
+      <tr><td>vault <code>plugins/ai-wiki/{main.js,styles.css,manifest.json}</code></td><td>T3·S1</td></tr>
+      <tr><td>vault <code>eval.jsonl</code> (read-only)</td><td>T3·S4</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Покрытие требований (требование → шаги)</h3>
+  <table>
+    <thead><tr><th>Требование</th><th>Шаги</th></tr></thead>
+    <tbody>
+      <tr><td>R1 фидбэк</td><td>T1·S1, T2·S3</td></tr>
+      <tr><td>R2 цвет</td><td>T1·S1</td></tr>
+      <tr><td>R3 перевыбор</td><td>T2·S3</td></tr>
+      <tr><td>R4 истина</td><td>T2·S1, T2·S2, T2·S3</td></tr>
+      <tr><td>R5 CSS</td><td>T1·S1</td></tr>
+      <tr><td>R6 Fix B</td><td>T2·S1, T2·S2, T2·S3</td></tr>
+      <tr><td>R7 build/deploy</td><td>T1·S2, T3·S1, T3·S2</td></tr>
+      <tr><td>SC1–SC3</td><td>T3·S3</td></tr>
+      <tr><td>SC4</td><td>T3·S4</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Результаты проверки</h2>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th><th>Findings</th><th>Комментарий</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge b-ok">passed</span></td><td>0</td><td>Плейсхолдеров нет, нумерация задач/шагов без пропусков и дублей.</td></tr>
+      <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td><td>0</td><td>Все R1–R7 и SC1–SC4 покрыты ≥1 шагом, лишних шагов нет.</td></tr>
+      <tr><td>dependencies</td><td><span class="badge b-ok">passed</span></td><td>0</td><td>T1&lt;T2&lt;T3; сигнатура <code>Rating</code> проброшена по порядку; <code>Rating</code> уже экспортируется в eval-log.ts; циклов нет.</td></tr>
+      <tr><td>verifiability</td><td><span class="badge b-ok">passed</span></td><td>0</td><td>У каждого шага DoD/команда с ожидаемым выводом или явный ручной критерий SC.</td></tr>
+      <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td><td>0</td><td>Новый план, все секции новые.</td></tr>
+    </tbody>
+  </table>
+  <p class="note">Findings: пусто. CRITICAL open: 0 · WARNING open: 0. <b>Финальный вердикт: <span class="badge b-ok">OK</span></b></p>
+  <div class="chain-strip">Цепочка: <span>Intent (нет)</span> → <span>Spec ✓</span> → <span class="cur">Plan ✓</span> → <span>Result</span></div>
+</section>
+<!-- TAB:plan END -->
+
+<!-- TAB:result START -->
+<section class="tab-pane" id="pane-result">
+  <div class="chain-strip">Цепочка: <span>Intent (нет)</span> → <span>Spec ✓</span> → <span>Plan ✓</span> → <span class="cur">Result</span></div>
+
+  <h2>1. Резюме сверки</h2>
+  <p>Реализация прошла subagent-driven: Task 1 (haiku) + Task 2 (sonnet) + финальный whole-branch review (opus) = <b>READY</b>. Гейты: <code>tsc</code> 0 new / 14 pre-existing, <code>lint</code> clean, <code>build</code> OK.</p>
+  <table>
+    <thead><tr><th>Документ</th><th>Путь</th></tr></thead>
+    <tbody>
+      <tr><td>Intent</td><td>— (нет)</td></tr>
+      <tr><td>Spec</td><td><code>docs/superpowers/specs/2026-06-26-rating-buttons-feedback-design.md</code></td></tr>
+      <tr><td>Plan</td><td><code>docs/superpowers/plans/2026-06-26-rating-buttons-feedback.md</code></td></tr>
+      <tr><td>Diff base</td><td><code>git diff f49b753..HEAD</code> — 9 файлов</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Результаты проверки</h2>
+  <h3>Покрытие шагов плана</h3>
+  <table>
+    <thead><tr><th>Шаг</th><th>Статус</th><th>Свидетельство в diff</th></tr></thead>
+    <tbody>
+      <tr><td>T1·S1 CSS</td><td><span class="badge b-ok">DONE</span></td><td><code>src/styles.css</code> +25</td></tr>
+      <tr><td>T1·S2 build</td><td><span class="badge b-ok">DONE</span></td><td><code>dist/styles.css</code> +25, <code>dist/main.js</code></td></tr>
+      <tr><td>T1·S3 commit</td><td><span class="badge b-ok">DONE</span></td><td>commit <code>7e6f4df</code></td></tr>
+      <tr><td>T2·S1 eval-log</td><td><span class="badge b-ok">DONE</span></td><td><code>src/eval-log.ts</code> +14</td></tr>
+      <tr><td>T2·S2 controller</td><td><span class="badge b-ok">DONE</span></td><td><code>src/controller.ts</code> +10</td></tr>
+      <tr><td>T2·S3 view</td><td><span class="badge b-ok">DONE</span></td><td><code>src/view.ts</code> ±22</td></tr>
+      <tr><td>T2·S4 tsc</td><td><span class="badge b-ok">DONE</span></td><td>0 new / 14 pre-existing</td></tr>
+      <tr><td>T2·S5 lint</td><td><span class="badge b-ok">DONE</span></td><td>clean</td></tr>
+      <tr><td>T2·S6 build</td><td><span class="badge b-ok">DONE</span></td><td>exit 0</td></tr>
+      <tr><td>T2·S7 commit</td><td><span class="badge b-ok">DONE</span></td><td>commit <code>917f4c9</code></td></tr>
+      <tr><td>T3·S1 deploy</td><td><span class="badge" style="background:color-mix(in srgb,var(--accent) 20%,var(--surface));color:var(--accent);border:1px solid var(--accent);">INFO</span></td><td>cp в волт (вне git), grep=5 подтверждён</td></tr>
+      <tr><td>T3·S2–S4 ручные SC1–SC4</td><td><span class="badge" style="background:color-mix(in srgb,var(--accent) 20%,var(--surface));color:var(--accent);border:1px solid var(--accent);">INFO</span></td><td>UI-чекпойнт человека, кода нет</td></tr>
+      <tr><td>T3·S5 финальный коммит</td><td><span class="badge" style="background:color-mix(in srgb,var(--accent) 20%,var(--surface));color:var(--accent);border:1px solid var(--accent);">INFO</span></td><td>no-op</td></tr>
+    </tbody>
+  </table>
+  <p class="sub">DONE: 10 · INFO (deploy out-of-tree / pending-human / no-op): 5 · MISSING: 0</p>
+
+  <h3>Findings</h3>
+  <table>
+    <thead><tr><th>Severity</th><th>Шаг</th><th>Plan</th><th>Diff</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td>INFO</td><td>T3·S1 deploy</td><td>cp main.js/styles.css/manifest.json в волт</td><td>вне git (волт за пределами репо)</td><td>выполнено вручную, grep=5; коммитить нечего</td></tr>
+      <tr><td>INFO</td><td>T3·S3/S4 ручные SC1–SC4</td><td>клики 👍/👎 + tail eval.jsonl</td><td>изменений в коде нет (UI-чекпойнт)</td><td>человек проверяет в Obsidian после reload</td></tr>
+      <tr><td>WARNING</td><td>excess docs/wiki/*</td><td>явного шага на wiki нет</td><td>llm-pipeline.md + .iwiki/* изменены</td><td>легитимно — мандат CLAUDE.md (iwiki ingest)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Покрытие Intent / Spec</h3>
+  <table>
+    <thead><tr><th>Требование</th><th>Покрыто в diff</th></tr></thead>
+    <tbody>
+      <tr><td>R1 фидбэк</td><td><code>src/styles.css</code> + <code>src/view.ts</code></td></tr>
+      <tr><td>R2 цвет</td><td><code>src/styles.css</code></td></tr>
+      <tr><td>R3 перевыбор</td><td><code>src/view.ts</code></td></tr>
+      <tr><td>R4 истина</td><td><code>eval-log</code> + <code>controller</code> + <code>view</code></td></tr>
+      <tr><td>R5 CSS</td><td><code>src/styles.css</code></td></tr>
+      <tr><td>R6 Fix B</td><td><code>eval-log</code> + <code>controller</code> + <code>view</code></td></tr>
+      <tr><td>R7 build/deploy</td><td><code>dist/*</code> + deploy (вне дерева)</td></tr>
+      <tr><td>SC1–SC4</td><td>ручные критерии — ожидают человека (INFO)</td></tr>
+    </tbody>
+  </table>
+  <p class="sub">Spec requirements: <b>7/7</b> покрыты в diff. Desired Outcomes: intent-дока нет (N/A).</p>
+
+  <h2>3. Вердикт</h2>
+  <p class="note">CRITICAL: 0 · WARNING: 1 (мандатный wiki) · INFO: 3 (deploy вне дерева + ручные SC + no-op). <b>Вердикт: <span class="badge b-ok">OK</span></b></p>
+  <div class="chain-strip">Цепочка: <span>Intent (нет)</span> → <span>Spec ✓</span> → <span>Plan ✓</span> → <span class="cur">Result ✓</span> · ручная SC1–SC4 — человеческий чекпойнт</div>
+</section>
+<!-- TAB:result END -->
+</body>
+</html>
