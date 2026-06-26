@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.186 — 2026-06-26
+
+### Новое
+- feat(lint): delete empty entity types (folder + config) after lint
+- feat(modals): default empty entity types to OFF in Lint modal
+- feat(view): disable Ingest button on wiki articles
+- feat(vault-tools): add rmdir wrapper for removing a specific folder
+
+---
+
 ## 0.1.185 — 2026-06-25
 
 ### Новое
