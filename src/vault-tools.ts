@@ -220,6 +220,10 @@ export class VaultTools {
     await this.adapter.remove?.(vaultPath);
   }
 
+  async rmdir(vaultPath: string, recursive: boolean): Promise<void> {
+    await this.adapter.rmdir?.(vaultPath, recursive);
+  }
+
   async removeSubfolders(vaultDir: string): Promise<void> {
     const exists = await this.adapter.exists(vaultDir);
     if (!exists) return;

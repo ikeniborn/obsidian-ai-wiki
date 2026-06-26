@@ -284,6 +284,7 @@ export async function* runLint(
     const deletedRefs: { deletedName: string; redirectName: string | null }[] = [];
     const writtenPaths: string[] = [];
     const skippedArticles: string[] = [];
+    let effectiveEntityTypes: EntityType[] = domain.entity_types ?? [];
 
     if (useLlm) {
       const loopPaths = filteredArticlePaths;
@@ -498,9 +499,37 @@ export async function* runLint(
       reportParts.push(diffReport);
       yield { kind: "domain_updated", domainId: domain.id, patch };
     }
+    if (patch?.entity_types) effectiveEntityTypes = patch.entity_types;
 
     if (signal.aborted) return;
     } // end if (useLlm)
+
+    // Empty-type cleanup (deterministic, runs in both LLM modes): an entity type whose
+    // wiki subfolder holds zero article files is removed — its folder is deleted and the
+    // type is stripped from the domain config so it no longer appears in the lint modal.
+    const survivingTypes: EntityType[] = [];
+    const removedTypes: EntityType[] = [];
+    for (const et of effectiveEntityTypes) {
+      const sub = et.wiki_subfolder;
+      // Types with no wiki_subfolder have no folder to scan; treat as empty and remove.
+      const count = sub
+        ? [...pages.keys()].filter((p) => p.startsWith(`${wikiVaultPath}/${sub}/`)).length
+        : 0;
+      if (count > 0) { survivingTypes.push(et); continue; }
+      removedTypes.push(et);
+      if (sub) {
+        try { await vaultTools.rmdir(`${wikiVaultPath}/${sub}`, true); } catch { /* folder already gone */ }
+      }
+    }
+    if (removedTypes.length > 0) {
+      yield { kind: "domain_updated", domainId: domain.id, patch: { entity_types: survivingTypes } };
+      reportParts.push(`Removed empty entity types: ${removedTypes.map((e) => e.type).join(", ")}`);
+      yield {
+        kind: "info_text",
+        icon: "🗑️",
+        summary: `Removed ${removedTypes.length} empty entity type(s): ${removedTypes.map((e) => e.type).join(", ")}`,
+      };
+    }
 
     // Bucket repair: remove wrong-bucket stems from wiki_sources / wiki_outgoing_links
     const repairWarnings: Array<{ path: string; warnings: string[] }> = [];

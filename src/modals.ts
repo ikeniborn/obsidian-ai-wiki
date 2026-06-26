@@ -798,7 +798,9 @@ export class LintOptionsModal extends Modal {
   ) {
     super(app);
     this.useLlm = defaultUseLlm;
-    this.entityTypeFilter = (domain.entity_types ?? []).map(e => e.type);
+    this.entityTypeFilter = (domain.entity_types ?? [])
+      .filter(e => (articleCounts.get(e.type) ?? 0) > 0)
+      .map(e => e.type);
   }
 
   onOpen(): void {

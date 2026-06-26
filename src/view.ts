@@ -406,11 +406,12 @@ export class LlmWikiView extends ItemView {
     const activeFile = this.plugin.app.workspace.getActiveFile();
     const domain = this.domains.find((d) => d.id === this.domainSelect?.value);
     const isSource = !!activeFile && !!domain && isSourceFile(activeFile.path, domain);
+    const onWikiArticle = !!activeFile && isWikiArticlePath(activeFile.path);
     const canFormat = !!activeFile && activeFile.extension === "md"
       && !isWikiArticlePath(activeFile.path);
 
     if (this.askBtn)       this.askBtn.disabled       = !hasDomain;
-    if (this.ingestBtn)    this.ingestBtn.disabled    = !hasDomain;
+    if (this.ingestBtn)    this.ingestBtn.disabled    = !hasDomain || onWikiArticle;
     if (this.lintBtn)      this.lintBtn.disabled      = !hasDomain;
     if (this.formatBtn)    this.formatBtn.disabled    = !canFormat;
     if (this.deleteBtn)    this.deleteBtn.disabled    = !isSource;

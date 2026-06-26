@@ -123,13 +123,15 @@ The history ↺ Re-run button re-runs a stored query against its **original** do
 
 Analyzes wiki pages for a domain one article at a time (`src/phases/lint.ts`). For each article it selects a limited context set via `PageSimilarityService` + BFS, then calls the LLM; results merge into `LintOutputSchema`. Before the loop, `buildTitleMap` reads H1/`title:` from non-wiki files so title-based `wiki_sources` links are not falsely removed.
 
-Per-article loop: select top-K → BFS expand (depth 1) → LLM call → apply fixes (`fixWikiLinks`, then `validateWikiSources` keeps entries resolvable by stem OR title) → process `deletes` → rebuild graph + refresh vectors. After all articles: post-loop empty-sources deletion, source-file `wiki_articles` cleanup (outside `!Wiki/` only, validated against all domains), `actualizeDomainConfig`, backlink sync, `appendWikiLog`.
+Per-article loop: select top-K → BFS expand (depth 1) → LLM call → apply fixes (`fixWikiLinks`, then `validateWikiSources` keeps entries resolvable by stem OR title) → process `deletes` → rebuild graph + refresh vectors. After all articles: post-loop empty-sources deletion, source-file `wiki_articles` cleanup (outside `!Wiki/` only, validated against all domains), `actualizeDomainConfig`, empty-entity-type cleanup, backlink sync, `appendWikiLog`.
+
+Empty-entity-type cleanup is deterministic and runs in **both** `useLlm` modes, after `actualizeDomainConfig`. It counts the article files under each type's `!Wiki/<wiki_folder>/<wiki_subfolder>/` (from the live `pages` map); a type with zero files — including any type with no `wiki_subfolder` — is removed: its folder is deleted via `src/vault-tools.ts#rmdir` and the type is stripped from the domain config through a `domain_updated` event (the patch's `entity_types` replaces the array, so the controller persists the survivors). This keeps empty types from reappearing in the lint modal on the next run. The base list is the post-`actualizeDomainConfig` `entity_types`, so an LLM-updated type set is respected.
 
 ## Lint Options
 
 `runLint` accepts two optional parameters. `useLlm` (default true) — when false, skips the per-article LLM loop and `actualizeDomainConfig`; lint runs programmatic-only (`cleanupInvalidPages`), much faster for large wikis. `entityTypeFilter` (default `[]`) — when non-empty, filters article paths to wiki pages whose subfolder matches a requested entity type, applied before both paths.
 
-`LintOptionsModal` (`src/modals.ts`) takes the pre-selected domain, a Use-LLM toggle, and per-entity-type toggles with `(N)` article counts plus select-all/deselect-all. Submit passes `{ useLlm, entityTypeFilter }`.
+`LintOptionsModal` (`src/modals.ts`) takes the pre-selected domain, a Use-LLM toggle, and per-entity-type toggles with `(N)` article counts plus select-all/deselect-all. Entity types with a zero article count start toggled **OFF** — the modal pre-selects only types with `(N>0)` — while select-all still selects every type. Submit passes `{ useLlm, entityTypeFilter }`.
 
 ## Cleanup Pass
 
