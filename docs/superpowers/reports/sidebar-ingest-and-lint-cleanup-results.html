@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Цепочка: sidebar-ingest-and-lint-cleanup</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg); transition:background .3s, color .3s;
+}
+.theme-btn{ position:sticky; top:.5rem; float:right; cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface); z-index:5; }
+h1{ font-size:1.5rem; margin:.2rem 0 1rem; }
+h2{ font-size:1.2rem; margin:1.6rem 0 .6rem; border-bottom:1px solid var(--border); padding-bottom:.3rem; }
+h3{ font-size:1.02rem; margin:1.1rem 0 .4rem; color:var(--accent); }
+code{ background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .35rem; border-radius:4px; font-size:.88em; }
+.lead{ font-size:1.08rem; }
+.sub{ color:var(--muted); font-size:.95rem; }
+.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
+  background:color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius:0 8px 8px 0; box-shadow:0 1px 8px var(--shadow); }
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:1rem 0; font-size:.92rem; border:1px solid var(--border); border-radius:10px; overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.5rem .75rem; text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg); }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.rpt-c4 .boundary{ border:1.6px dashed var(--accent); border-radius:12px; padding:1.8rem 1rem 1rem; margin:.7rem 0; position:relative;
+  display:flex; flex-wrap:wrap; gap:.6rem; background:color-mix(in srgb, var(--accent) 5%, transparent); }
+.rpt-c4 .boundary::before{ content:attr(data-label); position:absolute; top:-.7rem; left:.9rem; background:var(--bg); padding:0 .45rem; font-size:.8rem; color:var(--accent); font-weight:600; }
+.rpt-c4 .comp{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.55rem .85rem; min-width:6rem; font-size:.85rem; box-shadow:0 1px 6px var(--shadow); border-left:4px solid var(--accent); }
+.rpt-c4 .comp b{ color:var(--accent); }
+.rpt-c4 .comp .role{ color:var(--muted); font-size:.78rem; }
+.badge{ display:inline-block; font-size:.72rem; padding:.05rem .5rem; border-radius:999px; border:1px solid var(--border); }
+.badge.ok{ color:var(--ok-2); border-color:var(--ok); }
+.badge.info{ color:var(--accent-2); border-color:var(--accent); }
+.badge.warn{ color:var(--warn-2); border-color:var(--warn); }
+.badge.det{ color:var(--ok-2); border-color:var(--ok); }
+.badge.llm{ color:var(--warn-2); border-color:var(--warn); }
+figure{ margin:1rem 0; }
+.rpt-graph svg{ max-width:100%; height:auto; background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:0 2px 12px var(--shadow); }
+/* tabs */
+.tab-radio{ position:absolute; left:-9999px; }
+.chain-tabs{ display:flex; gap:.3rem; margin:1rem 0 0; flex-wrap:wrap; }
+.chain-tabs label{ cursor:pointer; padding:.4rem .9rem; border:1px solid var(--border); border-bottom:none;
+  border-radius:8px 8px 0 0; background:var(--surface); color:var(--muted); }
+body:has(#tab-intent:checked) label[for="tab-intent"],
+body:has(#tab-spec:checked)   label[for="tab-spec"],
+body:has(#tab-plan:checked)   label[for="tab-plan"],
+body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); border-color:var(--accent); font-weight:600; }
+.tab-pane{ display:none; border:1px solid var(--border); border-radius:0 10px 10px 10px; padding:1rem 1.3rem; background:color-mix(in srgb,var(--surface) 60%, transparent); }
+body:has(#tab-intent:checked) #pane-intent,
+body:has(#tab-spec:checked)   #pane-spec,
+body:has(#tab-plan:checked)   #pane-plan,
+body:has(#tab-result:checked) #pane-result{ display:block; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden checked>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<label for="theme-toggle" class="theme-btn" title="Тема dark/light">🌙 / ☀️</label>
+<header>
+  <h1>Цепочка IDD→SDD: sidebar-ingest-and-lint-cleanup</h1>
+  <p class="sub">Боковая панель: гейтинг кнопки Ingest · модалка Lint и очистка пустых entity types</p>
+</header>
+<nav class="chain-tabs">
+  <label for="tab-intent">Intent</label>
+  <label for="tab-spec">Spec</label>
+  <label for="tab-plan">Plan</label>
+  <label for="tab-result">Result</label>
+</nav>
+
+<!-- TAB:intent START -->
+<section class="tab-pane" id="pane-intent">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:intent END -->
+
+<!-- TAB:spec START -->
+<section class="tab-pane" id="pane-spec">
+  <p class="lead">Спецификация: <code>docs/superpowers/specs/2026-06-26-sidebar-ingest-and-lint-cleanup-design.md</code></p>
+  <p class="sub">spec_hash <code>13c8a1b679a0f267</code> · проверено 2026-06-26 · intent: <code>null</code></p>
+
+  <h2>1. Резюме спецификации</h2>
+  <h3>Требования по секциям</h3>
+  <table class="rpt-table">
+    <thead><tr><th>ID</th><th>Секция</th><th>Требование</th><th>Файл(ы)</th></tr></thead>
+    <tbody>
+      <tr><td>R1</td><td>Ingest button gating</td><td>Кнопка Ingest <b>disabled</b>, когда активный файл внутри <code>!Wiki</code> (<code>isWikiArticlePath</code>); плюс существующее условие — нет выбранного домена. Поведение без активного файла не меняется.</td><td><code>src/view.ts</code></td></tr>
+      <tr><td>R2a</td><td>Modal default toggles</td><td>В модалке Lint тип с числом статей <code>0</code> открывается с тумблером <b>OFF</b>; типы с count &gt; 0 — ON. «Add all» / «Remove all» без изменений.</td><td><code>src/modals.ts</code></td></tr>
+      <tr><td>R2b</td><td>Empty-type cleanup after lint</td><td>После линта для каждого типа с count <code>0</code> (всегда, независимо от <code>useLlm</code> и фильтра): удалить wiki-подпапку и убрать entity type из конфига домена. Срабатывает всегда при 0 файлов, включая свежий домен.</td><td><code>src/phases/lint.ts</code></td></tr>
+      <tr><td>S1</td><td>Supporting change</td><td>Тонкая обёртка <code>vaultTools.rmdir(path, recursive)</code> поверх <code>adapter.rmdir</code> для удаления конкретной папки.</td><td><code>src/vault-tools.ts</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Success Criteria (Verification)</h3>
+  <table class="rpt-table">
+    <thead><tr><th>Req</th><th>Критерий приёмки</th></tr></thead>
+    <tbody>
+      <tr><td>R1</td><td>Открыть <code>!Wiki/...</code> статью → Ingest disabled; открыть source-файл с выбранным доменом → enabled; снять домен → disabled.</td></tr>
+      <tr><td>R2a</td><td>Домен с типом count <code>0</code> → открыть модалку → его тумблер OFF, непустые ON.</td></tr>
+      <tr><td>R2b</td><td>Домен с пустым типом → запустить lint → подпапка удалена, тип исчез из конфига, повторное открытие модалки его не показывает; непустые типы и их счётчики целы.</td></tr>
+      <tr><td>Gates</td><td><code>npx tsc --noEmit</code> (реальная проверка типов), eslint, esbuild build.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схемы решения и зависимостей</h2>
+
+  <h3>Схема решения (компоненты и поток управления)</h3>
+  <figure class="rpt-c4">
+    <div class="boundary" data-label="UI · sidebar">
+      <div class="comp"><b>view.ts</b><br><span class="role">updateButtonAvailability → ingestBtn.disabled (R1)</span></div>
+      <div class="comp"><b>view.ts</b><br><span class="role">lintBtn → counts per subfolder</span></div>
+      <div class="comp"><b>modals.ts</b><br><span class="role">LintOptionsModal: entityTypeFilter init (R2a)</span></div>
+    </div>
+    <div class="boundary" data-label="Phase · lint">
+      <div class="comp"><b>lint.ts</b><br><span class="role">runLint → actualize (LLM, опц.)</span></div>
+      <div class="comp"><b>lint.ts</b><br><span class="role">empty-type cleanup (R2b, детерм.) → emit domain_updated</span></div>
+    </div>
+    <div class="boundary" data-label="Persist + Vault">
+      <div class="comp"><b>controller.ts</b><br><span class="role">on domain_updated → applyDomainEvent → save</span></div>
+      <div class="comp"><b>domain.ts</b><br><span class="role">applyDomainEvent: patch.entity_types заменяет</span></div>
+      <div class="comp"><b>vault-tools.ts</b><br><span class="role">rmdir(folder) (S1)</span></div>
+    </div>
+  </figure>
+  <p class="sub">Поток R2b: runLint → (actualize) → cleanup считает файлы в <code>!Wiki/&lt;folder&gt;/&lt;subfolder&gt;/</code> по живой карте <code>pages</code> → для count 0: <code>rmdir</code> + <code>domain_updated{entity_types: survivors}</code> → controller сохраняет → <code>view.refreshDomains()</code>.</p>
+
+  <h3>Граф зависимостей (A→B = A зависит от/использует B)</h3>
+  <figure class="rpt-graph">
+    <svg viewBox="0 0 700 300" role="img" aria-label="граф зависимостей требований">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+        </marker>
+        <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="var(--shadow)"/>
+        </filter>
+      </defs>
+      <!-- edges -->
+      <line x1="120" y1="70" x2="120" y2="150" stroke="var(--line)" stroke-width="2" marker-end="url(#arr)"/>
+      <line x1="350" y1="70" x2="350" y2="150" stroke="var(--line)" stroke-width="2" marker-end="url(#arr)"/>
+      <line x1="560" y1="78" x2="470" y2="205" stroke="var(--line)" stroke-width="2" marker-end="url(#arr)"/>
+      <line x1="600" y1="78" x2="630" y2="205" stroke="var(--line)" stroke-width="2" marker-end="url(#arr)"/>
+      <!-- nodes -->
+      <g filter="url(#ds)">
+        <rect x="55"  y="35" width="130" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <rect x="285" y="35" width="130" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <rect x="525" y="35" width="130" height="40" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <rect x="55"  y="150" width="130" height="40" rx="8" fill="var(--surface)" stroke="var(--line)" stroke-width="1.5"/>
+        <rect x="285" y="150" width="130" height="40" rx="8" fill="var(--surface)" stroke="var(--line)" stroke-width="1.5"/>
+        <rect x="405" y="205" width="130" height="40" rx="8" fill="var(--surface)" stroke="var(--line)" stroke-width="1.5"/>
+        <rect x="565" y="205" width="130" height="40" rx="8" fill="var(--surface)" stroke="var(--line)" stroke-width="1.5"/>
+      </g>
+      <g font-size="13" fill="var(--fg)" text-anchor="middle">
+        <text x="120" y="60">R1 · Ingest gate</text>
+        <text x="350" y="60">R2a · toggles</text>
+        <text x="590" y="60">R2b · cleanup</text>
+        <text x="120" y="175">isWikiArticlePath</text>
+        <text x="350" y="175">articleCounts</text>
+        <text x="470" y="230">rmdir (S1)</text>
+        <text x="630" y="230">domain_updated</text>
+      </g>
+    </svg>
+  </figure>
+  <p class="sub">Циклов нет (DAG). R1 и R2a независимы; R2b опирается на <code>rmdir</code> и пайплайн <code>domain_updated</code>.</p>
+
+  <h3>Карта покрытия (задача → требование)</h3>
+  <table class="rpt-table">
+    <thead><tr><th>Задача (из запроса)</th><th>Покрывающее требование</th></tr></thead>
+    <tbody>
+      <tr><td>T1 — Ingest неактивна, если активная страница в <code>!Wiki</code></td><td>R1</td></tr>
+      <tr><td>T2a — Для пустых сущностей тумблер не выбран при открытии</td><td>R2a</td></tr>
+      <tr><td>T2b — После линта чистить пустые сущности (удалить каталог + конфиг), чтобы не отображались повторно</td><td>R2b + S1</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Результаты проверки</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Фаза</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge ok">passed</span></td></tr>
+      <tr><td>coverage</td><td><span class="badge ok">passed</span></td></tr>
+      <tr><td>clarity</td><td><span class="badge ok">passed</span></td></tr>
+      <tr><td>consistency</td><td><span class="badge ok">passed</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Findings</h3>
+  <table class="rpt-table">
+    <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Fragment</th><th>Проблема</th><th>Fix</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>F-001</td>
+        <td><span class="badge info">INFO</span></td>
+        <td>R1 — src/view.ts, updateButtonAvailability()</td>
+        <td><code>updateButtonAvailability() (~line 404)</code></td>
+        <td>Конкретные номера строк (<code>~line 404</code>, <code>~line 801</code>) дрейфуют между правками — нестабильный якорь.</td>
+        <td>Ссылаться на символы (<code>updateButtonAvailability</code>, конструктор <code>LintOptionsModal</code>), номера строк пометить как приблизительные.</td>
+        <td><span class="badge warn">open</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <b>Сводка:</b> CRITICAL open: <b>0</b> · WARNING open: <b>0</b> · INFO open: <b>1</b> (опционально).<br>
+    <b>Вердикт:</b> <span class="badge ok">OK</span> — INFO не блокирует переход по цепочке.<br>
+    <b>Chain:</b> intent (<code>null</code>) → <b>spec</b> ✓
+  </div>
+</section>
+<!-- TAB:spec END -->
+
+<!-- TAB:plan START -->
+<section class="tab-pane" id="pane-plan">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:plan END -->
+
+<!-- TAB:result START -->
+<section class="tab-pane" id="pane-result">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:result END -->
+</body>
+</html>
