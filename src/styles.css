@@ -360,3 +360,28 @@
 .ai-wiki-chat-msg:hover .ai-wiki-copy-btn {
   opacity: 1;
 }
+
+/* Dev-mode rating buttons (👍/👎) */
+.ai-wiki-rating-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.ai-wiki-rating-label { color: var(--text-muted); font-size: 0.85em; }
+.ai-wiki-rating-btn {
+  cursor: pointer;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+  padding: 2px 8px;
+  font-size: 1em;
+  line-height: 1.4;
+  opacity: 0.5;
+  transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+}
+.ai-wiki-rating-btn:hover { opacity: 0.85; }
+.ai-wiki-rating-btn.is-active { opacity: 1; }
+.ai-wiki-rating-btn.is-up.is-active {
+  background: color-mix(in srgb, var(--color-green) 25%, var(--background-secondary));
+  border-color: var(--color-green);
+}
+.ai-wiki-rating-btn.is-down.is-active {
+  background: color-mix(in srgb, var(--color-red) 25%, var(--background-secondary));
+  border-color: var(--color-red);
+}
