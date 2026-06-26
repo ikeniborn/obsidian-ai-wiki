@@ -49,3 +49,7 @@
 {"op": "ingest", "source": "src/view.ts", "page": "docs/wiki/architecture.md", "date": "2026-06-26", "note": "R1 Ingest button gating documented in architecture.md Sidebar View."}
 {"op": "ingest", "source": "src/vault-tools.ts", "page": "docs/wiki/architecture.md", "date": "2026-06-26", "note": "S1 rmdir wrapper already listed in architecture.md VaultTools section."}
 {"op":"ingest","source":"src/view.ts,src/eval-log.ts,src/controller.ts,src/styles.css","page":"docs/wiki/llm-pipeline.md","date":"2026-06-26","note":"rating buttons write-then-render + selected-state CSS"}
+{"op":"ingest","source":"src/eval-log.ts","page":"docs/wiki/llm-pipeline.md","date":"2026-06-26","note":"ratings map + OPERATION_AXES + all-ops provenance"}
+{"op":"ingest","source":"src/agent-runner.ts","page":"docs/wiki/operations.md","date":"2026-06-26","note":"all-operations eval dataset + per-op axes"}
+{"op":"ingest","source":"src/agent-runner.ts","page":"docs/wiki/architecture.md","date":"2026-06-26","note":"reviewed vs ratings:{} change; AgentRunner section defers record detail to llm-pipeline, still accurate"}
+{"op":"ingest","source":"src/i18n.ts","page":"docs/wiki/backends-and-config.md","date":"2026-06-26","note":"reviewed vs new rating-axis labels; language-config section unaffected, still accurate"}

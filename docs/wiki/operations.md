@@ -201,9 +201,9 @@ The source file is permanently removed (`vaultTools.remove`, no trash) **last**,
 
 ## Dev-Mode Eval Dataset
 
-Quality is measured from real dev-mode runs labelled by hand, not a fixed gold set or an LLM judge. With `devMode.enabled`, each query/chat/format run appends one record to `<pluginDir>/eval.jsonl` carrying harness telemetry (`llmErrors`, `ruleFirings`) and provenance; the user rates it 👍/👎 in the view. See [[llm-pipeline#Dev-Mode Eval Record]].
+Quality is measured from real dev-mode runs labelled by hand, not a fixed gold set or an LLM judge. With `devMode.enabled`, **every** LLM operation run (`ingest`, `query`, `lint`, `lint-chat`, `chat`, `init`, `format`, `delete`) appends one record to `<pluginDir>/eval.jsonl` carrying harness telemetry (`llmErrors`, `ruleFirings`) and per-operation provenance; the user rates it 👍/👎 in the view, with the rating axes per operation drawn from the `OPERATION_AXES` registry (e.g. ingest → `page`+`links`, query → `answer`+`retrieval`). See [[llm-pipeline#Dev-Mode Eval Record]].
 
-`scripts/eval.ts` is a standalone report over that dataset (`npm run eval -- [--log <eval.jsonl>]`). It prints answer quality (query/chat), format quality split by vision on/off, recognition quality, and a per-`promptVersion` telemetry breakdown (👍-share, llmError counts, rule firings). It reads only `node:fs` + JSON — no `obsidian` shim. Legacy judge-score lines (no `rating`) are skipped. The same `eval.jsonl` feeds the `scripts/dspy` optimizer, which tunes prompts from the 👍/👎 labels with a baseline 👍-guard.
+`scripts/eval.ts` is a standalone report over that dataset (`npm run eval -- [--log <eval.jsonl>]`). It prints answer quality (query/chat), format quality split by vision on/off, recognition quality, and a per-`promptVersion` telemetry breakdown (👍-share, llmError counts, rule firings). It reads only `node:fs` + JSON — no `obsidian` shim. The same `eval.jsonl` feeds the `scripts/dspy` optimizer, which tunes prompts from the 👍/👎 labels with a baseline 👍-guard. Both readers currently consume the legacy scalar `rating` field; reading the new per-axis `ratings` map (and the all-operations records) is a separate follow-up.
 
 ## Tier 1 Features
 
