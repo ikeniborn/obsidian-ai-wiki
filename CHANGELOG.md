@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.187 — 2026-06-26
+
+### Новое
+- feat(styles): add dev-mode rating button selected-state CSS
+
+### Исправления
+- fix(view): reflect persisted rating in 👍/👎 buttons; updateEvalRating returns Rating
+
+---
+
 ## 0.1.186 — 2026-06-26
 
 ### Новое
