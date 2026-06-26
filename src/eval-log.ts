@@ -3,6 +3,7 @@
 // updated in place by 👍/👎 clicks (matched by runId). Not synced (plugin dir
 // is not vault content) — labels are per-device, by design.
 import type { VaultAdapter } from "./vault-tools";
+import type { WikiOperation } from "./types";
 
 export type Rating = "up" | "down" | null;
 
@@ -35,6 +36,15 @@ export interface EvalMetaFields {
   visionCount?: number;
   visionModel?: string;
   visionPromptVersion?: string;
+  created_pages?: string[];   // ingest
+  updated_pages?: string[];   // ingest
+  source_paths?: string[];    // ingest (sources fed to the run)
+  files_processed?: number;   // init
+  domain?: string;            // init
+  articles?: string[];        // lint / lint-chat (article paths touched)
+  instruction?: string;       // lint-chat (user message)
+  deleted_source?: string;    // delete
+  rebuilt_pages?: string[];   // delete
 }
 
 export interface EvalRecord extends EvalMetaFields {
@@ -44,12 +54,29 @@ export interface EvalRecord extends EvalMetaFields {
   model: string;
   llmErrors: LlmError[];
   ruleFirings: Record<string, number>;
-  rating: Rating;
-  recognitionRating?: Rating;
+  ratings: Record<string, Rating>;
 }
 
-/** Rating axes a click can set. "answer"/"formatting" → `rating`; "recognition" → `recognitionRating`. */
-export type RatingAxis = "answer" | "formatting" | "recognition";
+/** Canonical axis id (see OPERATION_AXES): answer | retrieval | formatting |
+ *  recognition | page | links | coverage | fix | rebuild. */
+export type RatingAxis = string;
+
+/** A rating axis shown for an operation. `labelKey` indexes `i18n().view`;
+ *  `gate: "vision"` means render only when the run actually ran vision. */
+export interface AxisDef { id: string; labelKey: string; gate?: "vision"; }
+
+/** Single source of truth for which 👍/👎 axes each operation exposes.
+ *  Consumed by view.ts (render) and, later, eval.ts / dspy. */
+export const OPERATION_AXES: Record<WikiOperation, AxisDef[]> = {
+  query:       [{ id: "answer", labelKey: "ratingAnswer" }, { id: "retrieval", labelKey: "ratingRetrieval" }],
+  chat:        [{ id: "answer", labelKey: "ratingAnswer" }],
+  format:      [{ id: "formatting", labelKey: "ratingFormatting" }, { id: "recognition", labelKey: "ratingRecognition", gate: "vision" }],
+  ingest:      [{ id: "page", labelKey: "ratingPage" }, { id: "links", labelKey: "ratingLinks" }],
+  init:        [{ id: "coverage", labelKey: "ratingCoverage" }, { id: "page", labelKey: "ratingPage" }],
+  lint:        [{ id: "fix", labelKey: "ratingFix" }],
+  "lint-chat": [{ id: "fix", labelKey: "ratingFix" }],
+  delete:      [{ id: "rebuild", labelKey: "ratingRebuild" }],
+};
 
 export function evalLogPath(pluginDir: string): string {
   return `${pluginDir}/eval.jsonl`;
@@ -93,9 +120,9 @@ export async function updateEvalRating(
       let rec: EvalRecord;
       try { rec = JSON.parse(raw) as EvalRecord; } catch { continue; }
       if (rec.runId !== runId) continue;
-      const field = axis === "recognition" ? "recognitionRating" : "rating";
-      const next: Rating = rec[field] === rating ? null : rating; // flip / toggle off
-      rec[field] = next;
+      if (!rec.ratings) rec.ratings = {}; // tolerate legacy lines
+      const next: Rating = rec.ratings[axis] === rating ? null : rating; // flip / toggle off
+      rec.ratings[axis] = next;
       lines[i] = JSON.stringify(rec);
       await adapter.write(path, lines.join("\n"));
       return next;
