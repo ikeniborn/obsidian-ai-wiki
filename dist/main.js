@@ -32121,18 +32121,18 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     const T = i18n();
     const row = parent.createDiv("ai-wiki-rating-row");
     row.createSpan({ text: label, cls: "ai-wiki-rating-label" });
-    const up = row.createEl("button", { text: "\u{1F44D}", cls: "ai-wiki-rating-btn", attr: { "aria-label": T.view.ratingUp } });
-    const down = row.createEl("button", { text: "\u{1F44E}", cls: "ai-wiki-rating-btn", attr: { "aria-label": T.view.ratingDown } });
-    const select = (btn, other, rating) => {
-      btn.addEventListener("click", () => {
-        const active = btn.hasClass("is-active");
-        btn.toggleClass("is-active", !active);
-        other.removeClass("is-active");
-        void this.plugin.controller.rateRun(runId, axis, rating);
-      });
+    const up = row.createEl("button", { text: "\u{1F44D}", cls: "ai-wiki-rating-btn is-up", attr: { "aria-label": T.view.ratingUp } });
+    const down = row.createEl("button", { text: "\u{1F44E}", cls: "ai-wiki-rating-btn is-down", attr: { "aria-label": T.view.ratingDown } });
+    const render2 = (rating) => {
+      up.toggleClass("is-active", rating === "up");
+      down.toggleClass("is-active", rating === "down");
     };
-    select(up, down, "up");
-    select(down, up, "down");
+    const handle = (rating) => async () => {
+      const result = await this.plugin.controller.rateRun(runId, axis, rating);
+      if (result !== void 0) render2(result);
+    };
+    up.addEventListener("click", () => void handle("up")());
+    down.addEventListener("click", () => void handle("down")());
   }
   renderFormatPreview(tempPath, report, missing, runId, visionCount) {
     const T = i18n();
@@ -42541,7 +42541,7 @@ async function writeEvalRecord(adapter, pluginDir, record) {
 async function updateEvalRating(adapter, pluginDir, runId, axis, rating) {
   const path2 = evalLogPath(pluginDir);
   try {
-    if (!await adapter.exists(path2)) return;
+    if (!await adapter.exists(path2)) return void 0;
     const content = await adapter.read(path2);
     const lines = content.split("\n");
     for (let i = lines.length - 1; i >= 0; i--) {
@@ -42555,12 +42555,15 @@ async function updateEvalRating(adapter, pluginDir, runId, axis, rating) {
       }
       if (rec.runId !== runId) continue;
       const field = axis === "recognition" ? "recognitionRating" : "rating";
-      rec[field] = rec[field] === rating ? null : rating;
+      const next = rec[field] === rating ? null : rating;
+      rec[field] = next;
       lines[i] = JSON.stringify(rec);
       await adapter.write(path2, lines.join("\n"));
-      return;
+      return next;
     }
+    return void 0;
   } catch {
+    return void 0;
   }
 }
 
@@ -50511,10 +50514,10 @@ var WikiController = class {
     if (!question.trim()) return;
     await this.dispatch("query", [question.trim()], domainId);
   }
-  /** Set a 👍/👎 label on a finished run's eval.jsonl record (dev mode only). */
+  /** Set a 👍/👎 label on a finished run's eval.jsonl record (dev mode only). Returns the persisted rating, or undefined when off / not written. */
   async rateRun(runId, axis, rating) {
-    if (!this.plugin.settings.devMode?.enabled) return;
-    await updateEvalRating(this.app.vault.adapter, this.pluginDir(), runId, axis, rating);
+    if (!this.plugin.settings.devMode?.enabled) return void 0;
+    return updateEvalRating(this.app.vault.adapter, this.pluginDir(), runId, axis, rating);
   }
   pluginDir() {
     return this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`;

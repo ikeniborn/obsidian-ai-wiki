@@ -829,18 +829,18 @@ export class LlmWikiView extends ItemView {
     const T = i18n();
     const row = parent.createDiv("ai-wiki-rating-row");
     row.createSpan({ text: label, cls: "ai-wiki-rating-label" });
-    const up = row.createEl("button", { text: "👍", cls: "ai-wiki-rating-btn", attr: { "aria-label": T.view.ratingUp } });
-    const down = row.createEl("button", { text: "👎", cls: "ai-wiki-rating-btn", attr: { "aria-label": T.view.ratingDown } });
-    const select = (btn: HTMLElement, other: HTMLElement, rating: "up" | "down") => {
-      btn.addEventListener("click", () => {
-        const active = btn.hasClass("is-active");
-        btn.toggleClass("is-active", !active);
-        other.removeClass("is-active");
-        void this.plugin.controller.rateRun(runId, axis, rating);
-      });
+    const up = row.createEl("button", { text: "👍", cls: "ai-wiki-rating-btn is-up", attr: { "aria-label": T.view.ratingUp } });
+    const down = row.createEl("button", { text: "👎", cls: "ai-wiki-rating-btn is-down", attr: { "aria-label": T.view.ratingDown } });
+    const render = (rating: "up" | "down" | null) => {
+      up.toggleClass("is-active", rating === "up");
+      down.toggleClass("is-active", rating === "down");
     };
-    select(up, down, "up");
-    select(down, up, "down");
+    const handle = (rating: "up" | "down") => async () => {
+      const result = await this.plugin.controller.rateRun(runId, axis, rating);
+      if (result !== undefined) render(result); // reflect what was actually persisted
+    };
+    up.addEventListener("click", () => void handle("up")());
+    down.addEventListener("click", () => void handle("down")());
   }
 
   private renderFormatPreview(tempPath: string, report: string, missing: { token: string; context: string }[], runId?: string, visionCount?: number): void {

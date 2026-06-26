@@ -72,6 +72,8 @@ export async function writeEvalRecord(
 /**
  * Update one record's rating in place, matched by runId. Re-clicking flips the
  * value (a second identical click clears it back to null). No duplicate rows.
+ * Returns the resulting Rating, or undefined when no record matched / the write
+ * failed (so the caller can avoid showing a state that was not persisted).
  */
 export async function updateEvalRating(
   adapter: VaultAdapter,
@@ -79,10 +81,10 @@ export async function updateEvalRating(
   runId: string,
   axis: RatingAxis,
   rating: "up" | "down",
-): Promise<void> {
+): Promise<Rating | undefined> {
   const path = evalLogPath(pluginDir);
   try {
-    if (!(await adapter.exists(path))) return;
+    if (!(await adapter.exists(path))) return undefined;
     const content = await adapter.read(path);
     const lines = content.split("\n");
     for (let i = lines.length - 1; i >= 0; i--) {
@@ -92,10 +94,12 @@ export async function updateEvalRating(
       try { rec = JSON.parse(raw) as EvalRecord; } catch { continue; }
       if (rec.runId !== runId) continue;
       const field = axis === "recognition" ? "recognitionRating" : "rating";
-      rec[field] = rec[field] === rating ? null : rating; // flip / toggle off
+      const next: Rating = rec[field] === rating ? null : rating; // flip / toggle off
+      rec[field] = next;
       lines[i] = JSON.stringify(rec);
       await adapter.write(path, lines.join("\n"));
-      return;
+      return next;
     }
-  } catch { /* never block the UI */ }
+    return undefined; // no record matched runId
+  } catch { return undefined; /* never block the UI */ }
 }
