@@ -48,3 +48,4 @@
 {"op": "ingest", "source": "src/modals.ts", "page": "docs/wiki/operations.md", "date": "2026-06-26", "note": "R2a empty types default-OFF documented in operations.md Lint Options."}
 {"op": "ingest", "source": "src/view.ts", "page": "docs/wiki/architecture.md", "date": "2026-06-26", "note": "R1 Ingest button gating documented in architecture.md Sidebar View."}
 {"op": "ingest", "source": "src/vault-tools.ts", "page": "docs/wiki/architecture.md", "date": "2026-06-26", "note": "S1 rmdir wrapper already listed in architecture.md VaultTools section."}
+{"op":"ingest","source":"src/view.ts,src/eval-log.ts,src/controller.ts,src/styles.css","page":"docs/wiki/llm-pipeline.md","date":"2026-06-26","note":"rating buttons write-then-render + selected-state CSS"}
