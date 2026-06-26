@@ -26513,7 +26513,13 @@ var en = {
     ratingDown: "Bad output",
     ratingAnswer: "Rate this answer:",
     ratingFormatting: "Rate formatting:",
-    ratingRecognition: "Rate recognition:"
+    ratingRecognition: "Rate recognition:",
+    ratingRetrieval: "Rate retrieval:",
+    ratingPage: "Rate page quality:",
+    ratingLinks: "Rate links:",
+    ratingCoverage: "Rate coverage:",
+    ratingFix: "Rate fixes:",
+    ratingRebuild: "Rate rebuild:"
   },
   formatProgress: {
     analysing: (path2) => `Analysing file ${path2}...
@@ -26833,7 +26839,13 @@ var ru = {
     ratingDown: "\u041F\u043B\u043E\u0445\u043E\u0439 \u0432\u044B\u0432\u043E\u0434",
     ratingAnswer: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u043E\u0442\u0432\u0435\u0442:",
     ratingFormatting: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435:",
-    ratingRecognition: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u0432\u0430\u043D\u0438\u0435:"
+    ratingRecognition: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u0432\u0430\u043D\u0438\u0435:",
+    ratingRetrieval: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u043F\u043E\u0438\u0441\u043A:",
+    ratingPage: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u043E \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B:",
+    ratingLinks: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u0441\u0432\u044F\u0437\u0438:",
+    ratingCoverage: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u043F\u043E\u043A\u0440\u044B\u0442\u0438\u0435:",
+    ratingFix: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u043F\u0440\u0430\u0432\u043A\u0438:",
+    ratingRebuild: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u043F\u0435\u0440\u0435\u0441\u0442\u0440\u043E\u0439\u043A\u0443:"
   },
   formatProgress: {
     analysing: (path2) => `\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u0430 ${path2}...
@@ -27152,7 +27164,13 @@ var es = {
     ratingDown: "Mal resultado",
     ratingAnswer: "Eval\xFAa la respuesta:",
     ratingFormatting: "Eval\xFAa el formato:",
-    ratingRecognition: "Eval\xFAa el reconocimiento:"
+    ratingRecognition: "Eval\xFAa el reconocimiento:",
+    ratingRetrieval: "Evaluar recuperaci\xF3n:",
+    ratingPage: "Evaluar calidad de p\xE1gina:",
+    ratingLinks: "Evaluar enlaces:",
+    ratingCoverage: "Evaluar cobertura:",
+    ratingFix: "Evaluar correcciones:",
+    ratingRebuild: "Evaluar reconstrucci\xF3n:"
   },
   formatProgress: {
     analysing: (path2) => `Analizando archivo ${path2}...
@@ -31335,6 +31353,58 @@ function retrievalTag(mode, seedFallback, reason, denseMax) {
   return "vector";
 }
 
+// src/eval-log.ts
+var OPERATION_AXES = {
+  query: [{ id: "answer", labelKey: "ratingAnswer" }, { id: "retrieval", labelKey: "ratingRetrieval" }],
+  chat: [{ id: "answer", labelKey: "ratingAnswer" }],
+  format: [{ id: "formatting", labelKey: "ratingFormatting" }, { id: "recognition", labelKey: "ratingRecognition", gate: "vision" }],
+  ingest: [{ id: "page", labelKey: "ratingPage" }, { id: "links", labelKey: "ratingLinks" }],
+  init: [{ id: "coverage", labelKey: "ratingCoverage" }, { id: "page", labelKey: "ratingPage" }],
+  lint: [{ id: "fix", labelKey: "ratingFix" }],
+  "lint-chat": [{ id: "fix", labelKey: "ratingFix" }],
+  delete: [{ id: "rebuild", labelKey: "ratingRebuild" }]
+};
+function evalLogPath(pluginDir) {
+  return `${pluginDir}/eval.jsonl`;
+}
+async function writeEvalRecord(adapter, pluginDir, record) {
+  const path2 = evalLogPath(pluginDir);
+  try {
+    const line = JSON.stringify(record) + "\n";
+    if (await adapter.exists(path2)) await adapter.append(path2, line);
+    else await adapter.write(path2, line);
+  } catch {
+  }
+}
+async function updateEvalRating(adapter, pluginDir, runId, axis, rating) {
+  const path2 = evalLogPath(pluginDir);
+  try {
+    if (!await adapter.exists(path2)) return void 0;
+    const content = await adapter.read(path2);
+    const lines = content.split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const raw = lines[i].trim();
+      if (!raw) continue;
+      let rec;
+      try {
+        rec = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      if (rec.runId !== runId) continue;
+      if (!rec.ratings) rec.ratings = {};
+      const next = rec.ratings[axis] === rating ? null : rating;
+      rec.ratings[axis] = next;
+      lines[i] = JSON.stringify(rec);
+      await adapter.write(path2, lines.join("\n"));
+      return next;
+    }
+    return void 0;
+  } catch {
+    return void 0;
+  }
+}
+
 // src/utils/vault-walk.ts
 var import_obsidian6 = require("obsidian");
 function walkFolder(folder, out) {
@@ -31453,6 +31523,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
   chatStartTs = 0;
   lastUserMessage = "";
   lastRunId = null;
+  ratingSection = null;
   startTs = 0;
   lastStepTs = 0;
   llmStats = [];
@@ -31889,6 +31960,10 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     if (this.addSourceBtn) this.addSourceBtn.disabled = true;
     this.chatSection?.remove();
     this.chatSection = null;
+    this.ratingSection?.remove();
+    this.ratingSection = null;
+    this.formatPreviewSection?.remove();
+    this.formatPreviewSection = null;
     this.lastContext = null;
     this.chatHistory = [];
     this.resultSection.addClass("ai-wiki-hidden");
@@ -32193,9 +32268,10 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     });
     if (runId) {
       const section = this.formatPreviewSection;
-      this.renderRatingRow(section, runId, "formatting", i18n().view.ratingFormatting);
-      if ((visionCount ?? 0) > 0) {
-        this.renderRatingRow(section, runId, "recognition", i18n().view.ratingRecognition);
+      const view = i18n().view;
+      for (const ax of OPERATION_AXES["format"]) {
+        if (ax.gate === "vision" && (visionCount ?? 0) === 0) continue;
+        this.renderRatingRow(section, runId, ax.id, view[ax.labelKey]);
       }
     }
   }
@@ -32225,9 +32301,15 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       this.resultOpen = true;
       this.resultToggle.setText("\u25BC");
       this.lastRunId = entry.id;
-      const QC_OPS = ["query", "chat", "lint-chat"];
-      if (QC_OPS.includes(entry.operation) && entry.status === "done") {
-        this.renderRatingRow(this.resultSection, entry.id, "answer", i18n().view.ratingAnswer);
+      if (entry.status === "done" && entry.operation !== "format") {
+        const axes = (OPERATION_AXES[entry.operation] ?? []).filter((a) => a.gate !== "vision");
+        if (axes.length > 0) {
+          this.ratingSection = this.resultSection.createDiv("ai-wiki-rating-section");
+          const view = i18n().view;
+          for (const ax of axes) {
+            this.renderRatingRow(this.ratingSection, entry.id, ax.id, view[ax.labelKey]);
+          }
+        }
       }
       const CHAT_OPS = ["lint", "lint-chat", "ingest", "query"];
       if (CHAT_OPS.includes(entry.operation) && entry.status === "done" && entry.finalText) {
@@ -39237,6 +39319,30 @@ function stripDeadLinks(content, knownStems) {
   return setFmLinks(fm, bodyLinks) + body;
 }
 
+// src/prompt-version.ts
+var _cache = /* @__PURE__ */ new Map();
+function hash8(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+function promptVersionOf(template) {
+  let v = _cache.get(template);
+  if (v === void 0) {
+    v = hash8(template);
+    _cache.set(template, v);
+  }
+  return v;
+}
+function visionPromptVersionOf(templates) {
+  if (templates.length === 0) return "";
+  const joined = templates.map(hash8).sort().join("|");
+  return hash8(joined);
+}
+
 // src/phases/ingest.ts
 function deriveSectionForPath(wikiFolder, fullPath) {
   const prefix = wikiFolder + "/";
@@ -39331,6 +39437,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   }
   for (const ev of extractEvents) yield ev;
   if (signal.aborted) return;
+  const foundPages = [];
   let existingPages;
   const retrievalDetails = [];
   if (similarity) {
@@ -39355,6 +39462,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
       );
       for (const p of paths) union.add(p);
     }
+    foundPages.push(...union);
     yield {
       kind: "info_text",
       icon: similarity.config.mode === "embedding" ? "\u{1F50D}" : "\u{1F4CB}",
@@ -39746,6 +39854,18 @@ ${page.content}`;
   if (wlFixResult.warnings.length > 0) {
     yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "WikiLink warnings", details: wlFixResult.warnings };
   }
+  const createdPages = written.filter((p) => createdThisRun.has(pageId(p)));
+  const updatedPages = written.filter((p) => !createdThisRun.has(pageId(p)));
+  yield {
+    kind: "eval_meta",
+    fields: {
+      source_paths: [sourceVaultPath],
+      created_pages: createdPages,
+      updated_pages: updatedPages,
+      found_pages: foundPages,
+      promptVersion: promptVersionOf(ingest_default)
+    }
+  };
   yield { kind: "result", durationMs: Date.now() - start, text: resultText, outputTokens: outputTokens || void 0 };
 }
 function buildIngestSummary(domainId, sourcePath, createdCount, updatedCount, mergedCount, dedupMergedCount, total) {
@@ -40025,30 +40145,6 @@ function resolveLink(brokenStem, candidates) {
   if (distinctKeys.size > 1) return { kind: "ambiguous" };
   const wiki = matches.find((m) => m.stem.startsWith("wiki_"));
   return { kind: "resolved", stem: (wiki ?? matches[0]).stem };
-}
-
-// src/prompt-version.ts
-var _cache = /* @__PURE__ */ new Map();
-function hash8(s) {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return (h >>> 0).toString(16).padStart(8, "0");
-}
-function promptVersionOf(template) {
-  let v = _cache.get(template);
-  if (v === void 0) {
-    v = hash8(template);
-    _cache.set(template, v);
-  }
-  return v;
-}
-function visionPromptVersionOf(templates) {
-  if (templates.length === 0) return "";
-  const joined = templates.map(hash8).sort().join("|");
-  return hash8(joined);
 }
 
 // src/phases/query.ts
@@ -40558,6 +40654,7 @@ async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal
   const start = Date.now();
   const reportParts = [];
   let outputTokens = 0;
+  const allFilteredArticlePaths = [];
   for (const domain of targets) {
     if (signal.aborted) return;
     const absWiki = (0, import_path_browserify6.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
@@ -40610,6 +40707,7 @@ Wiki folder outside vault \u2014 skipped.`);
         return subfolder && p.includes(`/${subfolder}/`);
       })
     ) : articlePaths;
+    allFilteredArticlePaths.push(...filteredArticlePaths);
     if (similarity && similarity.config.mode !== "jaccard") {
       yield { kind: "info_text", icon: "\u{1F4E5}", summary: "\u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043A\u044D\u0448\u0430 \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432..." };
       await similarity.loadCache(wikiVaultPath, vaultTools);
@@ -40974,6 +41072,13 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
     } catch {
     }
   }
+  yield {
+    kind: "eval_meta",
+    fields: {
+      articles: allFilteredArticlePaths,
+      promptVersion: promptVersionOf(lint_default)
+    }
+  };
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n"), outputTokens: outputTokens || void 0 };
 }
 function checkStructure(pages) {
@@ -41234,6 +41339,15 @@ ${schemaContent}` : ""
       }
     }
   }
+  const lastUserMsg = [...req.chatMessages ?? []].reverse().find((m) => m.role === "user")?.content ?? "";
+  yield {
+    kind: "eval_meta",
+    fields: {
+      articles: (parsed.pages ?? []).map((p) => p.path),
+      instruction: lastUserMsg,
+      promptVersion: promptVersionOf(lint_chat_default)
+    }
+  };
   yield { kind: "result", durationMs: Date.now() - start, text: parsed.summary, outputTokens: result.outputTokens || void 0 };
 }
 
@@ -41589,6 +41703,14 @@ ${JSON.stringify(entry, null, 2)}
     return;
   }
   yield {
+    kind: "eval_meta",
+    fields: {
+      files_processed: toAnalyze.length,
+      domain: domainId,
+      promptVersion: promptVersionOf(init_default)
+    }
+  };
+  yield {
     kind: "result",
     durationMs: Date.now() - start,
     text: `Domain "${domainId}" initialised from ${toAnalyze.length} source files.`,
@@ -41661,6 +41783,14 @@ async function* runIncrementalReinit(domainId, changedFiles, vaultTools, llm, mo
     doneCount++;
     yield { kind: "file_done", file };
   }
+  yield {
+    kind: "eval_meta",
+    fields: {
+      files_processed: changedFiles.length,
+      domain: domainId,
+      promptVersion: promptVersionOf(init_default)
+    }
+  };
   yield {
     kind: "result",
     durationMs: Date.now() - start,
@@ -42423,7 +42553,7 @@ async function* runDelete(args, vaultTools, llm, model, domains, vaultRoot, sign
         wikiLinkValidationRetries
       )) {
         if (ev.kind === "error") sourceFailed = true;
-        if (ev.kind === "result") continue;
+        if (ev.kind === "result" || ev.kind === "eval_meta") continue;
         yield ev;
       }
     } catch (e) {
@@ -42473,6 +42603,14 @@ async function* runDelete(args, vaultTools, llm, model, domains, vaultRoot, sign
   if (failedSources.length > 0) {
     yield { kind: "info_text", icon: "alert-triangle", summary: "Rebuild failures", details: failedSources };
   }
+  yield {
+    kind: "eval_meta",
+    fields: {
+      deleted_source: sourcePath,
+      rebuilt_pages: plan.toRebuild,
+      promptVersion: promptVersionOf(ingest_default)
+    }
+  };
   yield { kind: "result", durationMs: Date.now() - start, text };
 }
 
@@ -42524,48 +42662,6 @@ var VisionTempStore = class {
     }
   }
 };
-
-// src/eval-log.ts
-function evalLogPath(pluginDir) {
-  return `${pluginDir}/eval.jsonl`;
-}
-async function writeEvalRecord(adapter, pluginDir, record) {
-  const path2 = evalLogPath(pluginDir);
-  try {
-    const line = JSON.stringify(record) + "\n";
-    if (await adapter.exists(path2)) await adapter.append(path2, line);
-    else await adapter.write(path2, line);
-  } catch {
-  }
-}
-async function updateEvalRating(adapter, pluginDir, runId, axis, rating) {
-  const path2 = evalLogPath(pluginDir);
-  try {
-    if (!await adapter.exists(path2)) return void 0;
-    const content = await adapter.read(path2);
-    const lines = content.split("\n");
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const raw = lines[i].trim();
-      if (!raw) continue;
-      let rec;
-      try {
-        rec = JSON.parse(raw);
-      } catch {
-        continue;
-      }
-      if (rec.runId !== runId) continue;
-      const field = axis === "recognition" ? "recognitionRating" : "rating";
-      const next = rec[field] === rating ? null : rating;
-      rec[field] = next;
-      lines[i] = JSON.stringify(rec);
-      await adapter.write(path2, lines.join("\n"));
-      return next;
-    }
-    return void 0;
-  } catch {
-    return void 0;
-  }
-}
 
 // src/agent-runner.ts
 var AgentRunner = class {
@@ -42781,8 +42877,7 @@ var AgentRunner = class {
               answer: evalMeta.answer ?? (req.operation === "format" ? void 0 : finalResultText),
               llmErrors,
               ruleFirings,
-              rating: null,
-              ...evalMeta.vision === "on" ? { recognitionRating: null } : {}
+              ratings: {}
             };
             const pluginDir = this.visionTempBaseDir;
             await writeEvalRecord(this.vaultTools.adapter, pluginDir, record);

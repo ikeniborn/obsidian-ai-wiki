@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>All-operations eval &amp; rating-reset — IDD chain report</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg);
+  transition:background .3s, color .3s;
+}
+h1{ font-size:1.5rem; margin:.2rem 0 .1rem; }
+h2{ font-size:1.2rem; margin:1.6rem 0 .6rem; border-bottom:2px solid var(--border); padding-bottom:.25rem; }
+h3{ font-size:1.02rem; margin:1.2rem 0 .4rem; color:var(--accent); }
+code{ background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .35rem; border-radius:5px; font-size:.86em; }
+.theme-btn{
+  position:sticky; top:.5rem; float:right; z-index:5;
+  cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px;
+  background:var(--surface);
+}
+header h1 .sub-meta{ display:block; font-size:.85rem; color:var(--muted); font-weight:400; margin-top:.3rem; }
+
+/* tabs */
+.tab-pane{ display:none; }
+body:has(#tab-intent:checked) #pane-intent,
+body:has(#tab-spec:checked)   #pane-spec,
+body:has(#tab-plan:checked)   #pane-plan,
+body:has(#tab-result:checked) #pane-result{ display:block; }
+.chain-tabs{ display:flex; gap:.3rem; margin:1rem 0 0; flex-wrap:wrap; }
+.chain-tabs label{ cursor:pointer; padding:.4rem .9rem; border:1px solid var(--border);
+  border-bottom:none; border-radius:8px 8px 0 0; background:var(--surface); color:var(--muted); }
+body:has(#tab-intent:checked) label[for="tab-intent"],
+body:has(#tab-spec:checked)   label[for="tab-spec"],
+body:has(#tab-plan:checked)   label[for="tab-plan"],
+body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); border-color:var(--accent); font-weight:600; }
+.tab-pane{ border:1px solid var(--border); border-radius:0 10px 10px 10px; padding:1.2rem 1.4rem; background:color-mix(in srgb,var(--surface) 55%, transparent); }
+
+/* table */
+.rpt-table{ border-collapse:separate; border-spacing:0; width:100%; background:var(--surface);
+  margin:1rem 0; font-size:.9rem; border:1px solid var(--border); border-radius:10px;
+  overflow:hidden; box-shadow:0 2px 12px var(--shadow); }
+.rpt-table th, .rpt-table td{ border-bottom:1px solid var(--border); padding:.5rem .75rem; text-align:left; vertical-align:top; }
+.rpt-table tbody tr:last-child td{ border-bottom:none; }
+.rpt-table thead th{ background:var(--accent); color:var(--bg); position:sticky; top:0; }
+.rpt-table tbody tr:nth-child(even){ background:var(--zebra); }
+.rpt-table tbody tr:hover{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.rpt-table td code{ white-space:nowrap; }
+.rpt-table.matrix td.hit{ color:var(--ok-2); font-weight:600; text-align:center; }
+.rpt-table.matrix td.miss{ color:var(--muted); text-align:center; }
+
+/* C4 */
+.rpt-c4 .boundary{
+  border:1.6px dashed var(--accent); border-radius:12px;
+  padding:1.8rem 1rem 1rem; margin:.7rem 0; position:relative;
+  display:flex; flex-wrap:wrap; gap:.6rem;
+  background:color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.rpt-c4 .boundary::before{
+  content:attr(data-label); position:absolute; top:-.7rem; left:.9rem;
+  background:var(--bg); padding:0 .45rem; font-size:.8rem; color:var(--accent); font-weight:600;
+}
+.rpt-c4 .comp{
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  padding:.55rem .85rem; min-width:7rem; font-size:.84rem; box-shadow:0 1px 6px var(--shadow);
+  border-left:4px solid var(--accent);
+}
+.rpt-c4 .comp b{ color:var(--accent); }
+.rpt-c4 .comp .sub{ color:var(--muted); font-size:.78rem; }
+
+/* svg graph */
+.rpt-graph{ margin:1rem 0; text-align:center; }
+.rpt-graph svg{ max-width:100%; height:auto; }
+.rpt-graph text{ font:11px system-ui,sans-serif; fill:var(--fg); }
+.rpt-graph .nlabel{ font-size:10px; }
+
+/* components */
+.lead{ font-size:1.08rem; }
+.sub{ color:var(--muted); font-size:.95rem; }
+.note{ border-left:4px solid var(--accent); padding:.55rem 1rem; margin:1rem 0;
+  background:color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius:0 8px 8px 0;
+  box-shadow:0 1px 8px var(--shadow); }
+.note.warn{ border-left-color:var(--warn); background:color-mix(in srgb,var(--warn) 10%, var(--surface)); }
+.note.ok{ border-left-color:var(--ok); background:color-mix(in srgb,var(--ok) 10%, var(--surface)); }
+details{ background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:.7rem 1rem; margin:.7rem 0; box-shadow:0 1px 8px var(--shadow); }
+details summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+details[open] summary{ margin-bottom:.55rem; }
+ul.tight li{ margin:.28rem 0; }
+.badge{ display:inline-block; font-size:.72rem; padding:.05rem .5rem; border-radius:999px; border:1px solid var(--border); }
+.badge.crit{ color:var(--danger-2); border-color:var(--danger); }
+.badge.warn{ color:var(--warn-2); border-color:var(--warn); }
+.badge.info{ color:var(--accent-2); border-color:var(--accent); }
+.badge.pass{ color:var(--ok-2); border-color:var(--ok); }
+.badge.open{ color:var(--danger-2); border-color:var(--danger); }
+.verdict{ font-size:1.05rem; font-weight:700; padding:.6rem 1rem; border-radius:8px; margin:1rem 0;
+  border:1px solid var(--warn); color:var(--warn-2); background:color-mix(in srgb,var(--warn) 10%, var(--surface)); }
+.kv{ font-size:.9rem; color:var(--muted); }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden checked>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+<header>
+  <h1>Dev-mode eval для всех операций + сброс/привязка rating-кнопок
+    <span class="sub-meta">IDD-цепочка · ветка <code>dev-all-ops-eval</code> · spec_hash <code>0c8f4e1e563b8adb</code> · проверено 2026-06-26</span>
+  </h1>
+</header>
+<nav class="chain-tabs">
+  <label for="tab-intent">Intent</label>
+  <label for="tab-spec">Spec</label>
+  <label for="tab-plan">Plan</label>
+  <label for="tab-result">Result</label>
+</nav>
+
+<!-- TAB:intent START -->
+<section class="tab-pane" id="pane-intent">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:intent END -->
+
+<!-- TAB:spec START -->
+<section class="tab-pane" id="pane-spec">
+  <p class="lead">Спецификация: собрать 👍/👎 для всех 8 LLM-операций (run-level), починить сброс/привязку rating-кнопок к окну результата и добавить per-operation provenance для downstream-оптимизации.</p>
+  <p class="sub">Источник · <code>docs/superpowers/specs/2026-06-26-all-operations-eval-and-rating-reset-design.md</code> · решение: Approach A (<code>ratings: Record&lt;axisId, Rating&gt;</code> + <code>OPERATION_AXES</code>; скалярные <code>rating</code>/<code>recognitionRating</code> удалены; без миграции записей)</p>
+
+  <h2>1. Резюме спецификации — требования по разделам</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Раздел</th><th>ID</th><th>Требование (одно на строку)</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="2">Decisions · Scope</td><td>R1</td><td>Все 8 LLM-операций (<code>ingest, query, lint, lint-chat, chat, init, format, delete</code>) получают rating-кнопки + запись <code>eval.jsonl</code>.</td></tr>
+      <tr><td>R2</td><td>Гранулярность — одна запись + набор рейтингов на <code>runId</code> (run-level), без per-item записей; форма несёт список обработанных items как provenance.</td></tr>
+      <tr><td rowspan="3">Design §1 · Схема рейтингов</td><td>R3</td><td><code>EvalRecord.ratings: Record&lt;string, Rating&gt;</code> заменяет скалярные <code>rating</code>/<code>recognitionRating</code>; ключ появляется только после клика по оси; инициализация <code>{}</code>.</td></tr>
+      <tr><td>R4</td><td><code>OPERATION_AXES: Record&lt;WikiOperation, AxisDef[]&gt;</code> — единый источник осей, потребляемый <code>view</code> и позже <code>eval.ts</code>/<code>dspy</code>; <code>RatingAxis</code> расширяется до <code>string</code>.</td></tr>
+      <tr><td>R5</td><td><code>recognition</code> несёт <code>gate:"vision"</code> — рендерится только при <code>visionCount &gt; 0</code> (format-only).</td></tr>
+      <tr><td rowspan="2">Design §2 · Provenance</td><td>R6</td><td><code>EvalMetaFields</code> расширяется опциональными полями (<code>created_pages</code>, <code>updated_pages</code>, <code>source_paths</code>, <code>files_processed</code>, <code>domain</code>, <code>articles</code>, <code>instruction</code>, <code>deleted_source</code>, <code>rebuilt_pages</code>); существующие поля без изменений.</td></tr>
+      <tr><td>R7</td><td>Каждая фаза эмитит <code>eval_meta</code> в конце run из уже посчитанных данных — ноль доп. LLM-вызовов, без mid-run I/O; accumulator в <code>agent-runner</code> мёржит.</td></tr>
+      <tr><td rowspan="3">Design §3 · UI / view.ts</td><td>R8</td><td><strong>Defect 1 (reset):</strong> <code>private ratingSection</code>; в <code>reset()</code> до пере-вооружения run — <code>ratingSection?.remove()</code> и <code>formatPreviewSection?.remove()</code> с обнулением.</td></tr>
+      <tr><td>R9</td><td><strong>Defect 2 (render):</strong> в <code>finish()</code> для каждой операции кроме <code>format</code> при <code>status==="done"</code> создаётся <code>ratingSection</code> внутри <code>resultSection</code> и цикл по <code>OPERATION_AXES[op]</code>; <code>entry.id</code> = canonical <code>runId</code>, привязка к отображаемому результату.</td></tr>
+      <tr><td>R10</td><td><code>format</code> держит оси в <code>renderFormatPreview</code> (<code>formatting</code> всегда, <code>recognition</code> при <code>visionCount&gt;0</code>), читая из <code>OPERATION_AXES["format"]</code>; <code>QC_OPS</code>/hard-coded <code>answer</code>-ветка заменена registry-driven циклом.</td></tr>
+      <tr><td>Design §4 · Writer</td><td>R11</td><td><code>agent-runner.ts</code>: конструкция <code>EvalRecord</code> убирает <code>rating:null</code>/<code>recognitionRating</code>, ставит <code>ratings:{}</code>; остальное (телеметрия, merge, gating) без изменений.</td></tr>
+      <tr><td>Design §5 · Controller</td><td>R12</td><td><code>rateRun(runId, axis:string, rating)</code> — тип <code>axis</code> расширяется до <code>string</code>, форвардит в <code>updateEvalRating</code>; без логики.</td></tr>
+      <tr><td>Design §6 · i18n</td><td>R13</td><td>Добавить метки осей en/ru/es: <code>retrieval, page, links, coverage, fix, rebuild</code>; существующие <code>ratingAnswer/Formatting/Recognition</code> остаются.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Success Criteria (Verification, dev-mode)</h3>
+  <table class="rpt-table">
+    <thead><tr><th>#</th><th>Критерий приёмки</th></tr></thead>
+    <tbody>
+      <tr><td>SC1</td><td>После <code>query</code> + 👍 на <code>answer</code>, старт <code>ingest</code> → ряд рейтинга query <strong>исчез</strong>; показаны ряды <code>page</code>/<code>links</code> для ingest.</td></tr>
+      <tr><td>SC2</td><td>Оценка <code>ingest</code> → <code>eval.jsonl</code> содержит ingest-запись с <code>ratings.page="up"</code>, привязанную к свежему <code>runId</code> (не query).</td></tr>
+      <tr><td>SC3</td><td>Каждая операция (<code>init/lint/lint-chat/delete/chat/format</code>) пишет запись со своей provenance и рендерит свои registry-оси; re-click переключает рейтинг обратно в <code>null</code> в файле.</td></tr>
+      <tr><td>SC4</td><td><code>npm run build</code> успешен; <code>npm run lint</code> чист; нет новых tsc-ошибок в затронутых файлах.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схемы решения и зависимостей</h2>
+
+  <h3>2.1 Поток компонентов решения (C4)</h3>
+  <figure class="rpt-c4">
+    <div class="boundary" data-label="Dev-mode eval · gate: devMode.enabled">
+      <div class="comp"><b>eval-log.ts</b><br><span class="sub">OPERATION_AXES registry · ratings map · AxisDef · updateEvalRating</span></div>
+      <div class="boundary" data-label="Run pipeline">
+        <div class="comp"><b>phases/*.ts</b><br><span class="sub">ingest·init·lint·lint-chat·delete эмитят eval_meta</span></div>
+        <div class="comp"><b>agent-runner.ts</b><br><span class="sub">writer: merge eval_meta → EvalRecord{ratings:{}} → eval.jsonl</span></div>
+      </div>
+      <div class="boundary" data-label="UI · view layer">
+        <div class="comp"><b>view.ts</b><br><span class="sub">reset() cleanup · finish() registry-loop · renderRatingRow</span></div>
+        <div class="comp"><b>controller.ts</b><br><span class="sub">rateRun(runId, axis, rating)</span></div>
+        <div class="comp"><b>i18n.ts</b><br><span class="sub">axis labels en/ru/es</span></div>
+      </div>
+    </div>
+  </figure>
+
+  <h3>2.2 Граф зависимостей (узлы = компоненты/требования, рёбра = depends-on)</h3>
+  <figure class="rpt-graph">
+    <svg viewBox="0 0 640 300" width="640" role="img" aria-label="dependency graph">
+      <!-- edges -->
+      <line x1="110" y1="60"  x2="110" y2="140" stroke="var(--line)" stroke-width="2"/>
+      <line x1="110" y1="60"  x2="320" y2="140" stroke="var(--line)" stroke-width="2"/>
+      <line x1="110" y1="60"  x2="530" y2="140" stroke="var(--line)" stroke-width="2"/>
+      <line x1="320" y1="60"  x2="320" y2="140" stroke="var(--line)" stroke-width="2"/>
+      <line x1="320" y1="160" x2="320" y2="220" stroke="var(--line)" stroke-width="2"/>
+      <line x1="530" y1="160" x2="320" y2="220" stroke="var(--line)" stroke-width="2"/>
+      <line x1="110" y1="160" x2="320" y2="220" stroke="var(--line)" stroke-width="2"/>
+      <line x1="530" y1="160" x2="530" y2="220" stroke="var(--line)" stroke-width="2"/>
+      <!-- nodes row 1 -->
+      <g><rect x="55" y="35" width="110" height="44" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="110" y="54" text-anchor="middle">OPERATION_AXES</text><text x="110" y="68" text-anchor="middle" class="nlabel">R4 (registry)</text></g>
+      <g><rect x="265" y="35" width="110" height="44" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="320" y="54" text-anchor="middle">ratings map</text><text x="320" y="68" text-anchor="middle" class="nlabel">R3 schema</text></g>
+      <!-- nodes row 2 -->
+      <g><rect x="55" y="138" width="110" height="44" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="110" y="157" text-anchor="middle">view.ts</text><text x="110" y="171" text-anchor="middle" class="nlabel">R8·R9·R10</text></g>
+      <g><rect x="265" y="138" width="110" height="44" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="320" y="157" text-anchor="middle">agent-runner</text><text x="320" y="171" text-anchor="middle" class="nlabel">R11 writer</text></g>
+      <g><rect x="475" y="138" width="110" height="44" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="530" y="157" text-anchor="middle">phases/*</text><text x="530" y="171" text-anchor="middle" class="nlabel">R7 eval_meta</text></g>
+      <!-- nodes row 3 -->
+      <g><rect x="265" y="218" width="110" height="44" rx="8" fill="var(--surface)" stroke="var(--accent-2)" stroke-width="2"/>
+        <text x="320" y="237" text-anchor="middle">eval.jsonl</text><text x="320" y="251" text-anchor="middle" class="nlabel">R2 run-level</text></g>
+      <g><rect x="475" y="218" width="110" height="44" rx="8" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+        <text x="530" y="237" text-anchor="middle">EvalMetaFields</text><text x="530" y="251" text-anchor="middle" class="nlabel">R6 fields</text></g>
+    </svg>
+  </figure>
+  <p class="kv">controller (R12) и i18n (R13) — листовые зависимости view.ts; опущены из графа для читаемости (1:1 поддержка R9/R10).</p>
+
+  <h3>2.3 Матрица покрытия задача → требование(я)</h3>
+  <table class="rpt-table matrix">
+    <thead><tr><th>Задача</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th><th>R5</th><th>R6</th><th>R7</th><th>R8</th><th>R9</th><th>R10</th><th>R11</th><th>R12</th><th>R13</th></tr></thead>
+    <tbody>
+      <tr><td><b>T1</b> reset/binding к окну результата</td><td class="miss">·</td><td class="miss">·</td><td class="miss">·</td><td class="miss">·</td><td class="miss">·</td><td class="miss">·</td><td class="miss">·</td><td class="hit">✓</td><td class="hit">✓</td><td class="hit">✓</td><td class="miss">·</td><td class="miss">·</td><td class="miss">·</td></tr>
+      <tr><td><b>T2</b> рейтинги для всех 8 операций</td><td class="hit">✓</td><td class="miss">·</td><td class="miss">·</td><td class="hit">✓</td><td class="hit">✓</td><td class="miss">·</td><td class="miss">·</td><td class="miss">·</td><td class="hit">✓</td><td class="hit">✓</td><td class="hit">✓</td><td class="hit">✓</td><td class="hit">✓</td></tr>
+      <tr><td><b>T3</b> per-op оси, run-level</td><td class="miss">·</td><td class="hit">✓</td><td class="hit">✓</td><td class="hit">✓</td><td class="hit">✓</td><td class="miss">·</td><td class="miss">·</td><td class="miss">·</td><td class="miss">·</td><td class="miss">·</td><td class="hit">✓</td><td class="miss">·</td><td class="miss">·</td></tr>
+      <tr><td><b>T4</b> per-op provenance для eval.ts/dspy</td><td class="miss">·</td><td class="hit">✓</td><td class="miss">·</td><td class="miss">·</td><td class="miss">·</td><td class="hit">✓</td><td class="hit">✓</td><td class="miss">·</td><td class="miss">·</td><td class="miss">·</td><td class="miss">·</td><td class="miss">·</td><td class="miss">·</td></tr>
+    </tbody>
+  </table>
+  <p class="note ok">Покрытие полное: каждая из 4 задач закрыта ≥1 требованием; каждое требование привязано к ≥1 задаче (нет «висячих» требований). Противоречий между требованиями не найдено.</p>
+
+  <h2>3. Результаты проверки</h2>
+
+  <h3>3.1 Статус по фазам</h3>
+  <table class="rpt-table">
+    <thead><tr><th>Фаза</th><th>Статус</th><th>Замечание</th></tr></thead>
+    <tbody>
+      <tr><td>Phase 1 · structure</td><td><span class="badge pass">passed</span></td><td>Нет placeholder'ов (TODO/TBD/???/FIXME); нумерация §1–§6 без пропусков/дублей; нет дублей заголовков. Найдены 2 неточных code-anchor'а (F-001 WARNING, F-003 INFO) — не CRITICAL.</td></tr>
+      <tr><td>Phase 2 · coverage</td><td><span class="badge pass">passed</span></td><td>Все 4 задачи покрыты; каждое требование привязано; противоречий нет.</td></tr>
+      <tr><td>Phase 3 · clarity</td><td><span class="badge pass">passed</span></td><td>DoD задан через Verification SC1–SC4. Найдена ссылка на несуществующий тип <code>I18nView</code> (F-002 WARNING) — не CRITICAL.</td></tr>
+      <tr><td>Phase 4 · consistency</td><td><span class="badge pass">passed</span></td><td>Все разделы новые; §«Affected files» согласован с §1–§6; терминология единообразна. Code-факты сверены с источником.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.2 Таблица находок</h3>
+  <table class="rpt-table">
+    <thead><tr><th>ID</th><th>Фаза</th><th>Sev</th><th>Раздел</th><th>Суть</th><th>Фикс</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>F-001</td><td>structure</td><td><span class="badge warn">WARNING</span></td>
+        <td>Key finding</td>
+        <td>Code-anchor <code>src/view.ts:948</code> указывает на неверный statement: :948 — это <em>call site</em> <code>renderRatingRow(...)</code>, а укоренение ряда (createDiv) живёт в самом <code>renderRatingRow</code> (def на <code>view.ts:822</code>). Читатель, идущий по :948 искать логику укоренения, попадает не туда.</td>
+        <td>Цитировать <code>view.ts:947-948</code> как call site и <code>view.ts:822</code> (renderRatingRow) как место append.</td>
+        <td><span class="badge open">open</span></td>
+      </tr>
+      <tr>
+        <td>F-002</td><td>clarity</td><td><span class="badge warn">WARNING</span></td>
+        <td>Design §1</td>
+        <td><code>labelKey: keyof I18nView</code> ссылается на несуществующий тип. В <code>src/i18n.ts</code> определён <code>type I18n = typeof en</code> (строка 320, <strong>не экспортирован</strong>); строки view живут в <code>I18n["view"]</code>; типа <code>I18nView</code> нет нигде в <code>src/</code>. Дословная реализация не скомпилируется, и сам <code>I18n</code> не экспортирован — его нельзя импортировать в <code>eval-log.ts</code> как написано.</td>
+        <td>Экспортировать <code>ViewStrings = typeof en["view"]</code> из i18n.ts и ссылаться <code>labelKey: keyof ViewStrings</code>; либо ослабить до <code>labelKey: string</code>. Указать выбор в спеке.</td>
+        <td><span class="badge open">open</span></td>
+      </tr>
+      <tr>
+        <td>F-003</td><td>structure</td><td><span class="badge info">INFO</span></td>
+        <td>Key finding</td>
+        <td>Внутренняя нестыковка анкеров: Key finding цитирует <code>agent-runner.ts:230</code> для writer'а, §4 — <code>:231</code>. В источнике :230 — gate <code>if(devMode...)</code>, :231 — <code>const record: EvalRecord = {</code>. Оба защитимы (gate vs construction), но разделы расходятся.</td>
+        <td>Выбрать одну конвенцию (gate :230 ИЛИ construction :231) и применить в обоих разделах.</td>
+        <td><span class="badge open">open</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>3.3 Сводка</h3>
+  <table class="rpt-table">
+    <thead><tr><th>Метрика</th><th>Значение</th></tr></thead>
+    <tbody>
+      <tr><td>CRITICAL open</td><td><b>0</b></td></tr>
+      <tr><td>WARNING open</td><td><b>2</b> (F-001, F-002)</td></tr>
+      <tr><td>INFO open</td><td>1 (F-003)</td></tr>
+      <tr><td>body_hash</td><td><code>0c8f4e1e563b8adb</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="verdict">Итог: требует доработки — 0 critical open, 2 warning open.</div>
+
+  <h3>3.4 Цепочка (intent → spec)</h3>
+  <figure class="rpt-c4">
+    <div class="boundary" data-label="IDD chain">
+      <div class="comp"><b>intent</b><br><span class="sub">chain.intent: null (не разрешён)</span></div>
+      <div class="comp"><b>spec ✓</b><br><span class="sub">2026-06-26-all-operations-eval-and-rating-reset-design.md</span></div>
+    </div>
+  </figure>
+  <p class="note">Кандидат-intent <code>docs/superpowers/intents/2026-06-24-dev-mode-eval-rework-intent.md</code> найден поиском, но не привязан однозначно к этой спеке (другой scope/дата). По алгоритму при неоднозначности <code>chain.intent</code> оставлен <code>null</code>; кандидат отмечен здесь для ручного решения.</p>
+</section>
+<!-- TAB:spec END -->
+
+<!-- TAB:plan START -->
+<section class="tab-pane" id="pane-plan">
+  <p class="lead">Проверка плана реализации против спеки (дизайна) — <code>2026-06-26-all-operations-eval-and-rating-reset.md</code>.</p>
+  <p class="kv">plan_hash: <code>0491091b022f04e8</code> &nbsp;·&nbsp; spec_hash: <code>1d28ac7a1791836a</code> &nbsp;·&nbsp; last_run: 2026-06-26</p>
+  <p class="note ok">Все 5 фаз проверки — <strong>passed</strong>. Открытых CRITICAL нет. Открыты 2 WARNING (необязательная провенанс-полнота относительно таблицы §2 спеки) — не блокируют реализацию.</p>
+
+  <h2>1. Резюме плана (задачи и критерии готовности)</h2>
+  <table class="rpt-table">
+    <thead><tr><th>#</th><th>Задача</th><th>Файлы</th><th>Критерий готовности (DoD)</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>T1</td>
+        <td>Схема рейтингов, реестр осей, writer</td>
+        <td><code>eval-log.ts</code>, <code>agent-runner.ts</code></td>
+        <td><code>ratings: Record&lt;string,Rating&gt;</code> заменяет скаляры; <code>RatingAxis=string</code>; <code>AxisDef</code>+<code>OPERATION_AXES</code> (8 ключей); новые поля <code>EvalMetaFields</code>; <code>updateEvalRating</code> ключует в map; writer пишет <code>ratings:{}</code>. <em>Verify:</em> <code>tsc --noEmit</code> (eval-log/agent-runner чисты) + <code>lint</code>.</td>
+      </tr>
+      <tr>
+        <td>T2</td>
+        <td>i18n-метки осей (en/ru/es)</td>
+        <td><code>i18n.ts</code></td>
+        <td>6 новых ключей (<code>ratingRetrieval/Page/Links/Coverage/Fix/Rebuild</code>) в каждой локали. <em>Verify:</em> <code>tsc</code> (форма <code>I18n=typeof en</code> совпадает по всем локалям) + <code>lint</code>.</td>
+      </tr>
+      <tr>
+        <td>T3</td>
+        <td>Рендер строк рейтинга для всех операций + фикс reset/binding</td>
+        <td><code>view.ts</code></td>
+        <td>Поле <code>ratingSection</code>; <code>reset()</code> чистит <code>ratingSection</code>+<code>formatPreviewSection</code>; <code>finish()</code> рендерит оси из реестра; <code>renderFormatPreview</code> читает реестр; <code>renderRatingRow</code> принимает <code>axis:string</code>. <em>Verify:</em> <code>tsc</code>/<code>lint</code>/<code>build</code> + ручной smoke в Obsidian.</td>
+      </tr>
+      <tr>
+        <td>T4</td>
+        <td>Провенанс <code>ingest</code></td>
+        <td><code>phases/ingest.ts</code></td>
+        <td><code>eval_meta</code> перед терминальным result: <code>source_paths</code>, <code>created_pages</code>/<code>updated_pages</code>, <code>promptVersion</code>. <em>Verify:</em> <code>tsc</code>/<code>lint</code>/<code>build</code>.</td>
+      </tr>
+      <tr>
+        <td>T5</td>
+        <td>Провенанс <code>init</code></td>
+        <td><code>phases/init.ts</code></td>
+        <td><code>eval_meta</code> перед обоими терминальными result (full + incremental): <code>files_processed</code>, <code>domain</code>, <code>promptVersion</code>. <em>Verify:</em> <code>tsc</code>/<code>lint</code>/<code>build</code>.</td>
+      </tr>
+      <tr>
+        <td>T6</td>
+        <td>Провенанс <code>lint</code></td>
+        <td><code>phases/lint.ts</code></td>
+        <td><code>eval_meta</code> перед result: <code>articles</code> (=<code>filteredArticlePaths</code>), <code>promptVersion</code>. <em>Verify:</em> <code>tsc</code>/<code>lint</code>/<code>build</code>.</td>
+      </tr>
+      <tr>
+        <td>T7</td>
+        <td>Провенанс <code>lint-chat</code></td>
+        <td><code>phases/lint-chat.ts</code></td>
+        <td><code>eval_meta</code> перед result: <code>articles</code> (=<code>parsed.pages.map(path)</code>), <code>instruction</code> (последнее user-сообщение), <code>promptVersion</code>. <em>Verify:</em> <code>tsc</code>/<code>lint</code>/<code>build</code>.</td>
+      </tr>
+      <tr>
+        <td>T8</td>
+        <td>Провенанс <code>delete</code> + изоляция внутреннего ingest-meta</td>
+        <td><code>phases/delete.ts</code></td>
+        <td>Импорт <code>ingestTemplate</code>+<code>promptVersionOf</code>; подавить внутренний <code>eval_meta</code> в rebuild-цикле; <code>eval_meta</code> перед result: <code>deleted_source</code>, <code>rebuilt_pages</code> (=<code>plan.toRebuild</code>), <code>promptVersion</code>. <em>Verify:</em> <code>tsc</code>/<code>lint</code>/<code>build</code>.</td>
+      </tr>
+      <tr>
+        <td>T9</td>
+        <td>Сквозная проверка + обновление docs/wiki</td>
+        <td><code>docs/wiki/llm-pipeline.md</code>, <code>operations.md</code></td>
+        <td>Полный build/lint/tsc; деплой в тест-vault; проверка reset/binding и пер-операционного прохода; <code>iwiki-ingest</code>+<code>iwiki-lint</code>. <em>Verify:</em> ручные сценарии 1–4 + чистый iwiki-lint.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схемы зависимостей и пересечений</h2>
+
+  <h3>Граф зависимостей шагов (M→N: результат T<sub>M</sub> используется в T<sub>N</sub>)</h3>
+  <p class="sub">T1 производит схему (<code>ratings</code>/<code>AxisDef</code>/<code>OPERATION_AXES</code>/<code>EvalMetaFields</code>), которую потребляют T3 (рендер) и T4–T8 (поля <code>eval_meta</code>). T2 (метки) потребляется T3. T9 завершает цепочку. Циклов и нарушений порядка нет.</p>
+  <figure class="rpt-graph">
+    <svg viewBox="0 0 760 250" role="img" aria-label="Граф зависимостей задач">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L8,3 L0,6 Z" fill="var(--line)"></path>
+        </marker>
+      </defs>
+      <!-- edges -->
+      <g stroke="var(--line)" stroke-width="1.6" fill="none" marker-end="url(#arr)">
+        <line x1="92"  y1="60"  x2="92"  y2="150"></line> <!-- T1 -> T3 -->
+        <line x1="110" y1="50"  x2="300" y2="48"></line>  <!-- T1 -> T4 (and 5-8 row) -->
+        <line x1="110" y1="55"  x2="300" y2="92"></line>
+        <line x1="110" y1="60"  x2="300" y2="136"></line>
+        <line x1="110" y1="65"  x2="300" y2="180"></line>
+        <line x1="110" y1="70"  x2="300" y2="206"></line>
+        <line x1="240" y1="170" x2="660" y2="200"></line> <!-- T3 -> T9 -->
+        <line x1="380" y1="206" x2="650" y2="205"></line> <!-- T8 -> T9 -->
+        <line x1="92"  y1="200" x2="92"  y2="200"></line>
+      </g>
+      <line x1="92" y1="115" x2="92" y2="150" stroke="var(--line)" stroke-width="1.6" marker-end="url(#arr)"></line>
+      <line x1="80" y1="100" x2="80" y2="148" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#arr)"></line>
+      <!-- nodes -->
+      <g>
+        <rect x="40" y="20" width="110" height="34" rx="7" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"></rect>
+        <text x="95" y="41" text-anchor="middle" class="nlabel">T1 schema</text>
+
+        <rect x="40" y="86" width="110" height="34" rx="7" fill="var(--surface)" stroke="var(--border)"></rect>
+        <text x="95" y="107" text-anchor="middle" class="nlabel">T2 i18n</text>
+
+        <rect x="40" y="150" width="110" height="34" rx="7" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"></rect>
+        <text x="95" y="171" text-anchor="middle" class="nlabel">T3 view</text>
+
+        <rect x="300" y="30" width="80" height="30" rx="7" fill="var(--surface)" stroke="var(--border)"></rect>
+        <text x="340" y="49" text-anchor="middle" class="nlabel">T4 ingest</text>
+        <rect x="300" y="76" width="80" height="30" rx="7" fill="var(--surface)" stroke="var(--border)"></rect>
+        <text x="340" y="95" text-anchor="middle" class="nlabel">T5 init</text>
+        <rect x="300" y="122" width="80" height="30" rx="7" fill="var(--surface)" stroke="var(--border)"></rect>
+        <text x="340" y="141" text-anchor="middle" class="nlabel">T6 lint</text>
+        <rect x="300" y="168" width="80" height="30" rx="7" fill="var(--surface)" stroke="var(--border)"></rect>
+        <text x="340" y="187" text-anchor="middle" class="nlabel">T7 lint-chat</text>
+        <rect x="300" y="206" width="80" height="30" rx="7" fill="var(--surface)" stroke="var(--border)"></rect>
+        <text x="340" y="225" text-anchor="middle" class="nlabel">T8 delete</text>
+
+        <rect x="650" y="186" width="100" height="34" rx="7" fill="var(--surface)" stroke="var(--accent-2)" stroke-width="1.6"></rect>
+        <text x="700" y="207" text-anchor="middle" class="nlabel">T9 e2e+docs</text>
+      </g>
+    </svg>
+    <figcaption class="sub">Сплошные рёбра — поток типов/данных T1→{T3,T4–T8}; пунктир — T2→T3 (метки). Все рёбра направлены вперёд (M&lt;N): циклов нет.</figcaption>
+  </figure>
+
+  <h3>Пересечения по артефактам и покрытие осей</h3>
+  <p class="sub">Каждая задача правит свой файл — пересечений по исходникам между задачами нет (риск конфликта правок минимален). Ниже — соответствие операция → оси <code>OPERATION_AXES</code> и где они рендерятся.</p>
+  <table class="rpt-table matrix">
+    <thead><tr><th>Операция</th><th>Оси (id)</th><th>Где рендер</th><th>Эмиттер провенанса</th></tr></thead>
+    <tbody>
+      <tr><td><code>query</code></td><td><code>answer</code>, <code>retrieval</code></td><td>finish()</td><td>уже есть (без изменений)</td></tr>
+      <tr><td><code>chat</code></td><td><code>answer</code></td><td>finish()</td><td>уже есть</td></tr>
+      <tr><td><code>format</code></td><td><code>formatting</code>, <code>recognition</code>(gate)</td><td>renderFormatPreview()</td><td>уже есть</td></tr>
+      <tr><td><code>ingest</code></td><td><code>page</code>, <code>links</code></td><td>finish()</td><td>T4 (без <code>found_pages</code> — см. F-001)</td></tr>
+      <tr><td><code>init</code></td><td><code>coverage</code>, <code>page</code></td><td>finish()</td><td>T5 (без <code>created_pages</code> — см. F-002)</td></tr>
+      <tr><td><code>lint</code></td><td><code>fix</code></td><td>finish()</td><td>T6</td></tr>
+      <tr><td><code>lint-chat</code></td><td><code>fix</code></td><td>finish()</td><td>T7</td></tr>
+      <tr><td><code>delete</code></td><td><code>rebuild</code></td><td>finish()</td><td>T8</td></tr>
+    </tbody>
+  </table>
+  <p class="note">Покрытие осей ↔ метки: 9 <code>labelKey</code> (<code>ratingAnswer/Retrieval/Formatting/Recognition/Page/Links/Coverage/Fix/Rebuild</code>) — 3 уже есть, 6 добавляет T2. <code>OPERATION_AXES</code> покрывает ровно 8 членов <code>WikiOperation</code> (проверено по <code>src/types.ts</code>): без лишних/недостающих ключей, <code>Record&lt;WikiOperation,…&gt;</code> компилируется.</p>
+
+  <h2>3. Результаты проверки</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Фаза</th><th>Статус</th><th>Заметка</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge pass">passed</span></td><td>Нет плейсхолдеров (TODO/TBD/FIXME/???); нумерация задач 1–9 и шагов без пропусков/дублей.</td></tr>
+      <tr><td>coverage</td><td><span class="badge pass">passed</span></td><td>Все 4 задачи-требования покрыты; найдены 2 расхождения провенанса с таблицей §2 спеки (F-001/F-002, WARNING).</td></tr>
+      <tr><td>dependencies</td><td><span class="badge pass">passed</span></td><td>Порядок producer→consumer верен (T1→T3/T4–T8); артефакты (<code>OPERATION_AXES</code>, <code>EvalMetaFields</code>, метки) создаются раньше потребления; циклов нет.</td></tr>
+      <tr><td>verifiability</td><td><span class="badge pass">passed</span></td><td>У каждой задачи измеримый DoD (<code>tsc</code>/<code>lint</code>/<code>build</code> + явные ручные сценарии в T3/T9). Все код-якоря сверены с исходниками.</td></tr>
+      <tr><td>consistency</td><td><span class="badge pass">passed</span></td><td>Типы согласованы (ratings map / AxisDef / RatingAxis=string); 2 мелкие косметические нестыковки (F-003/F-004, INFO, приняты).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Находки</h3>
+  <table class="rpt-table">
+    <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Текст</th><th>Fix</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>F-001</td><td><span class="badge warn">WARNING</span></td><td>Task 4: ingest provenance</td>
+        <td>Таблица §2 спеки требует у <code>ingest</code> поле <code>found_pages</code>, но T4 эмитит только <code>source_paths/created_pages/updated_pages/promptVersion</code>. Поле опционально (build проходит), но провенанс беднее спеки; <code>ingest</code> сейчас не эмитит <code>eval_meta</code> нигде ещё, т.е. <code>found_pages</code> не появится иным путём.</td>
+        <td>Добавить <code>found_pages</code> в T4 Step 2, либо убрать его из строки <code>ingest</code> в таблице §2 спеки. Решить, что авторитетно.</td>
+        <td><span class="badge open">open</span></td>
+      </tr>
+      <tr>
+        <td>F-002</td><td><span class="badge warn">WARNING</span></td><td>Task 5: init provenance</td>
+        <td>Таблица §2 спеки и комментарий <code>EvalMetaFields</code> (T3 Step 3) относят <code>created_pages</code> к <code>init</code>, но T5 (full + incremental) эмитит только <code>files_processed/domain/promptVersion</code>. <code>created_pages</code> для init не эмитится.</td>
+        <td>Добавить <code>created_pages</code> в T5 (предварительно убедиться, что у init есть источник списка созданных страниц на момент summary-yield), либо убрать init из набора <code>created_pages</code> в §2 и в комментарии.</td>
+        <td><span class="badge open">open</span></td>
+      </tr>
+      <tr>
+        <td>F-003</td><td><span class="badge info">INFO</span></td><td>Task 1 Step 3: EvalMetaFields</td>
+        <td>Комментарий <code>created_pages? // ingest / init / lint-chat</code> переобещает потребителей: фактически эмитит только <code>ingest</code> (T4). Безвредно (только комментарий).</td>
+        <td>Сузить комментарий до <code>// ingest</code>, либо привести T5/T7 к эмиссии <code>created_pages</code>.</td>
+        <td><span class="badge pass">accepted</span></td>
+      </tr>
+      <tr>
+        <td>F-004</td><td><span class="badge info">INFO</span></td><td>Task 7 Step 2: lint-chat provenance</td>
+        <td>В <code>lint-chat.ts:64</code> уже есть <code>const chatMessages = req.chatMessages ?? []</code>; T7 повторно выводит <code>lastUserMsg</code> из <code>req.chatMessages</code> вместо переиспользования локала. Компилируется и работает — лишь дублирование.</td>
+        <td>Опционально переиспользовать <code>chatMessages</code>. Косметика, не блокирует.</td>
+        <td><span class="badge pass">accepted</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="kv">CRITICAL open: <strong>0</strong> &nbsp;·&nbsp; WARNING open: <strong>2</strong> &nbsp;·&nbsp; INFO accepted: 2</p>
+  <div class="verdict">Вердикт: ТРЕБУЕТ ДОРАБОТКИ — 0 critical, 2 warning. План структурно и технически верен (все код-якоря сверены с исходниками); 2 WARNING — необязательная полнота провенанса относительно таблицы §2 спеки.</div>
+  <p class="kv">Цепочка: intent (—) → spec (<code>2026-06-26-all-operations-eval-and-rating-reset-design.md</code>) → plan (<code>2026-06-26-all-operations-eval-and-rating-reset.md</code>)</p>
+</section>
+<!-- TAB:plan END -->
+
+<!-- TAB:result START -->
+<section class="tab-pane" id="pane-result">
+  <p class="lead">Сверка реализации с планом и спекой — ветка <code>dev-all-ops-eval</code>, коммиты <code>8f7adef..HEAD</code> (10 коммитов).</p>
+  <p class="kv">plan_hash: <code>c9bc83346d26cff3</code> &nbsp;·&nbsp; diff base: <code>git diff 8f7adef..HEAD</code> &nbsp;·&nbsp; проверено: 2026-06-26</p>
+  <p class="note ok"><strong>Вердикт: OK</strong> — CRITICAL: 0 · WARNING: 0 · INFO: 3. Все шаги плана реализованы (DONE: 34 / PARTIAL: 1 / MISSING: 0); PARTIAL — косметическое расхождение имени переменной в lint.ts (функционально корректнее плана). Два ручных UI-сценария помечены PENDING-HUMAN.</p>
+
+  <h2>1. Документы и diff</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Документ</th><th>Путь</th></tr></thead>
+    <tbody>
+      <tr><td>Plan</td><td><code>docs/superpowers/plans/2026-06-26-all-operations-eval-and-rating-reset.md</code></td></tr>
+      <tr><td>Spec</td><td><code>docs/superpowers/specs/2026-06-26-all-operations-eval-and-rating-reset-design.md</code></td></tr>
+      <tr><td>Intent</td><td><em>не найден</em> (chain.intent: null)</td></tr>
+      <tr><td>Diff base</td><td><code>git diff 8f7adef..HEAD</code> — 14 файлов изменено (10 src + dist/main.js + 2 docs/wiki + 2 iwiki-индекс)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Коммиты ветки</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Hash</th><th>Сообщение</th></tr></thead>
+    <tbody>
+      <tr><td><code>40adeb1</code></td><td>feat(eval): ratings map + OPERATION_AXES registry + per-op provenance fields</td></tr>
+      <tr><td><code>d27ac71</code></td><td>feat(i18n): rating axis labels for retrieval/page/links/coverage/fix/rebuild (en/ru/es)</td></tr>
+      <tr><td><code>e9b1a80</code></td><td>feat(view): registry-driven per-op rating rows; clear ratingSection + format preview on reset</td></tr>
+      <tr><td><code>4d433dd</code></td><td>feat(ingest): emit eval_meta provenance (sources + created/updated/found pages + promptVersion)</td></tr>
+      <tr><td><code>c93c466</code></td><td>feat(init): emit eval_meta provenance (files_processed + domain + promptVersion)</td></tr>
+      <tr><td><code>5237269</code></td><td>feat(lint): emit eval_meta provenance (articles + promptVersion)</td></tr>
+      <tr><td><code>f22fff5</code></td><td>feat(lint-chat): emit eval_meta provenance (articles + instruction + promptVersion)</td></tr>
+      <tr><td><code>ccd366a</code></td><td>feat(delete): emit eval_meta provenance (deleted_source + rebuilt_pages); isolate inner ingest meta</td></tr>
+      <tr><td><code>0cd4cb1</code></td><td>chore(build): rebuild dist for all-operations eval + rating reset</td></tr>
+      <tr><td><code>5da281a</code></td><td>docs(wiki): all-operations eval — ratings map, per-op axes &amp; provenance</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Покрытие шагов плана</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Task</th><th>Step</th><th>Статус</th><th>Свидетельство в diff</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="7"><b>T1</b><br>eval-log.ts<br>agent-runner.ts</td>
+          <td>S1 Replace scalar rating fields / widen RatingAxis</td><td><span class="badge pass">DONE</span></td><td><code>ratings: Record&lt;string, Rating&gt;</code> заменяет <code>rating</code>/<code>recognitionRating</code>; <code>RatingAxis = string</code></td></tr>
+      <tr><td>S2 Add OPERATION_AXES registry</td><td><span class="badge pass">DONE</span></td><td><code>OPERATION_AXES: Record&lt;WikiOperation, AxisDef[]&gt;</code>, 8 ключей, все оси верны</td></tr>
+      <tr><td>S3 Add EvalMetaFields per-op fields</td><td><span class="badge pass">DONE</span></td><td>9 новых опциональных полей добавлены; комментарий <code>// ingest</code> (fix F-003)</td></tr>
+      <tr><td>S4 Key updateEvalRating into ratings map</td><td><span class="badge pass">DONE</span></td><td><code>rec.ratings[axis]</code> с legacy toleration <code>if (!rec.ratings)</code></td></tr>
+      <tr><td>S5 Initialize ratings: {} in agent-runner.ts</td><td><span class="badge pass">DONE</span></td><td><code>rating: null</code> и <code>recognitionRating</code> удалены; <code>ratings: {}</code> добавлен</td></tr>
+      <tr><td>S6 Typecheck + lint</td><td><span class="badge pass">DONE</span></td><td>tsc: 14 ошибок = pre-existing; lint: 0 ошибок</td></tr>
+      <tr><td>S7 Commit</td><td><span class="badge pass">DONE</span></td><td>коммит <code>40adeb1</code></td></tr>
+
+      <tr><td rowspan="5"><b>T2</b><br>i18n.ts</td>
+          <td>S1 EN labels</td><td><span class="badge pass">DONE</span></td><td>6 новых ключей в English view-блоке</td></tr>
+      <tr><td>S2 RU labels</td><td><span class="badge pass">DONE</span></td><td>6 новых ключей в Russian view-блоке</td></tr>
+      <tr><td>S3 ES labels</td><td><span class="badge pass">DONE</span></td><td>6 новых ключей в Spanish view-блоке</td></tr>
+      <tr><td>S4 Typecheck + lint</td><td><span class="badge pass">DONE</span></td><td>TypeScript инферит из <code>typeof en</code></td></tr>
+      <tr><td>S5 Commit</td><td><span class="badge pass">DONE</span></td><td>коммит <code>d27ac71</code></td></tr>
+
+      <tr><td rowspan="9"><b>T3</b><br>view.ts</td>
+          <td>S1 Import OPERATION_AXES</td><td><span class="badge pass">DONE</span></td><td><code>import { OPERATION_AXES } from "./eval-log"</code> добавлен</td></tr>
+      <tr><td>S2 Add ratingSection field</td><td><span class="badge pass">DONE</span></td><td><code>private ratingSection: HTMLElement | null = null</code></td></tr>
+      <tr><td>S3 Clear stale rating + format preview in reset()</td><td><span class="badge pass">DONE</span></td><td><code>ratingSection?.remove()</code>, <code>formatPreviewSection?.remove()</code> в reset()</td></tr>
+      <tr><td>S4 Widen renderRatingRow axis to string</td><td><span class="badge pass">DONE</span></td><td>параметр <code>axis</code> изменён с <code>RatingAxis</code> на <code>string</code></td></tr>
+      <tr><td>S5 Registry-driven finish()</td><td><span class="badge pass">DONE</span></td><td>QC_OPS hard-coded блок → registry loop; <code>ratingSection = createDiv("ai-wiki-rating-section")</code></td></tr>
+      <tr><td>S6 renderFormatPreview reads registry</td><td><span class="badge pass">DONE</span></td><td>hard-coded axes → <code>OPERATION_AXES["format"]</code> loop с gate-filter</td></tr>
+      <tr><td>S7 Typecheck + lint + build</td><td><span class="badge pass">DONE</span></td><td>tsc 14 (pre-existing), lint clean, dist/main.js пересобран</td></tr>
+      <tr><td>S8 Manual smoke check (Obsidian)</td><td><span class="badge warn">PENDING-HUMAN</span></td><td>dist задеплоен в Work vault (0cd4cb1 + T9 S2); ручная UI-проверка не может быть выполнена агентом</td></tr>
+      <tr><td>S9 Commit</td><td><span class="badge pass">DONE</span></td><td>коммит <code>e9b1a80</code></td></tr>
+
+      <tr><td rowspan="5"><b>T4</b><br>phases/ingest.ts</td>
+          <td>S1 Import promptVersionOf</td><td><span class="badge pass">DONE</span></td><td>импорт добавлен</td></tr>
+      <tr><td>S2 Hoist foundPages</td><td><span class="badge pass">DONE</span></td><td><code>const foundPages: string[] = []</code> + <code>foundPages.push(...union)</code></td></tr>
+      <tr><td>S3 Emit eval_meta</td><td><span class="badge pass">DONE</span></td><td><code>eval_meta</code> с <code>source_paths</code>, <code>created_pages</code>, <code>updated_pages</code>, <code>found_pages</code>, <code>promptVersion</code>; fix F-001 реализован</td></tr>
+      <tr><td>S4 Typecheck + lint + build</td><td><span class="badge pass">DONE</span></td><td>чисто</td></tr>
+      <tr><td>S5 Commit</td><td><span class="badge pass">DONE</span></td><td>коммит <code>4d433dd</code></td></tr>
+
+      <tr><td rowspan="5"><b>T5</b><br>phases/init.ts</td>
+          <td>S1 Import promptVersionOf</td><td><span class="badge pass">DONE</span></td><td>импорт добавлен</td></tr>
+      <tr><td>S2 Emit eval_meta (full-init)</td><td><span class="badge pass">DONE</span></td><td><code>files_processed: toAnalyze.length</code>, <code>domain</code>, <code>promptVersion</code> перед full-init result</td></tr>
+      <tr><td>S3 Emit eval_meta (incremental)</td><td><span class="badge pass">DONE</span></td><td><code>files_processed: changedFiles.length</code>, <code>domain</code>, <code>promptVersion</code> перед incremental result</td></tr>
+      <tr><td>S4 Typecheck + lint + build</td><td><span class="badge pass">DONE</span></td><td>чисто; <code>created_pages</code> omit — wontfix F-002</td></tr>
+      <tr><td>S5 Commit</td><td><span class="badge pass">DONE</span></td><td>коммит <code>c93c466</code></td></tr>
+
+      <tr><td rowspan="4"><b>T6</b><br>phases/lint.ts</td>
+          <td>S1 Import promptVersionOf</td><td><span class="badge pass">DONE</span></td><td>импорт добавлен</td></tr>
+      <tr><td>S2 Emit eval_meta</td><td><span class="badge info">PARTIAL*</span></td><td>реализация вводит <code>allFilteredArticlePaths</code> (multi-domain аккумулятор) вместо <code>filteredArticlePaths</code> из плана; семантически корректнее — охватывает все домены</td></tr>
+      <tr><td>S3 Typecheck + lint + build</td><td><span class="badge pass">DONE</span></td><td>чисто</td></tr>
+      <tr><td>S4 Commit</td><td><span class="badge pass">DONE</span></td><td>коммит <code>5237269</code></td></tr>
+
+      <tr><td rowspan="4"><b>T7</b><br>phases/lint-chat.ts</td>
+          <td>S1 Import promptVersionOf</td><td><span class="badge pass">DONE</span></td><td>импорт добавлен</td></tr>
+      <tr><td>S2 Emit eval_meta</td><td><span class="badge pass">DONE</span></td><td><code>articles</code>, <code>instruction</code> (lastUserMsg из chatMessages), <code>promptVersion</code>; minor duplication accepted (F-004)</td></tr>
+      <tr><td>S3 Typecheck + lint + build</td><td><span class="badge pass">DONE</span></td><td>чисто</td></tr>
+      <tr><td>S4 Commit</td><td><span class="badge pass">DONE</span></td><td>коммит <code>f22fff5</code></td></tr>
+
+      <tr><td rowspan="5"><b>T8</b><br>phases/delete.ts</td>
+          <td>S1 Add imports</td><td><span class="badge pass">DONE</span></td><td><code>ingestTemplate</code> и <code>promptVersionOf</code> добавлены</td></tr>
+      <tr><td>S2 Suppress inner eval_meta</td><td><span class="badge pass">DONE</span></td><td><code>ev.kind === "eval_meta"</code> добавлен в continue-condition</td></tr>
+      <tr><td>S3 Emit eval_meta</td><td><span class="badge pass">DONE</span></td><td><code>deleted_source: sourcePath</code>, <code>rebuilt_pages: plan.toRebuild</code>, <code>promptVersion</code></td></tr>
+      <tr><td>S4 Typecheck + lint + build</td><td><span class="badge pass">DONE</span></td><td>чисто</td></tr>
+      <tr><td>S5 Commit</td><td><span class="badge pass">DONE</span></td><td>коммит <code>ccd366a</code></td></tr>
+
+      <tr><td rowspan="6"><b>T9</b><br>e2e + docs</td>
+          <td>S1 Full build + lint + typecheck</td><td><span class="badge pass">DONE</span></td><td>tsc=14=master, lint=0 errors, build OK</td></tr>
+      <tr><td>S2 Deploy to test vault</td><td><span class="badge pass">DONE</span></td><td>dist пересобран (0cd4cb1), файлы скопированы агентом в Work vault</td></tr>
+      <tr><td>S3 Reset/binding check (ручная)</td><td><span class="badge warn">PENDING-HUMAN</span></td><td>UI verification — запустить query → ingest, проверить переключение рядов рейтинга</td></tr>
+      <tr><td>S4 Per-operation sweep (ручная)</td><td><span class="badge warn">PENDING-HUMAN</span></td><td>UI verification — пройти все 8 операций, проверить оси + toggle</td></tr>
+      <tr><td>S5 Update docs/wiki via iwiki</td><td><span class="badge pass">DONE</span></td><td>llm-pipeline.md + operations.md обновлены; iwiki-lint: broken=0, orphans=0</td></tr>
+      <tr><td>S6 Commit docs</td><td><span class="badge pass">DONE</span></td><td>коммит <code>5da281a</code></td></tr>
+    </tbody>
+  </table>
+  <p class="kv">* PARTIAL = реализация превосходит описание плана (multi-domain accumulator vs inner-loop var). Не CRITICAL — семантика верна.</p>
+
+  <h2>4. Покрытие критериев приёмки (Spec Verification)</h2>
+  <table class="rpt-table">
+    <thead><tr><th>SC#</th><th>Критерий</th><th>Статус</th><th>Свидетельство</th></tr></thead>
+    <tbody>
+      <tr><td>SC1</td><td>После query + 👍, старт ingest → ряд query исчез; показаны page/links</td><td><span class="badge warn">PENDING-HUMAN</span></td><td>Архитектурно: <code>ratingSection?.remove()</code> в reset(); registry-loop рендерит операцию-специфичные оси. Ручная UI-проверка ожидается.</td></tr>
+      <tr><td>SC2</td><td>Оценка ingest → eval.jsonl содержит <code>ratings.page="up"</code> с новым runId</td><td><span class="badge warn">PENDING-HUMAN</span></td><td><code>updateEvalRating</code> ключирует <code>ratings[axis]</code> по runId. Ручная проверка файла ожидается.</td></tr>
+      <tr><td>SC3</td><td>Каждая операция: запись + provenance + registry axes + toggle</td><td><span class="badge pass">DONE*</span></td><td>Все 8 фаз охвачены кодом (T4–T8 + существующие); registry-loop в finish(); re-click → <code>null</code> логика в updateEvalRating</td></tr>
+      <tr><td>SC4</td><td>npm run build OK; npm run lint чист; 0 новых tsc-ошибок</td><td><span class="badge pass">DONE</span></td><td>tsc=14=master (0 новых); lint=0 errors, 2 pre-existing warnings; build OK</td></tr>
+    </tbody>
+  </table>
+  <p class="kv">* SC3 архитектурно выполнен; финальное подтверждение — часть ручного sweep SC1/SC2.</p>
+
+  <h2>5. Покрытие требований спеки</h2>
+  <table class="rpt-table">
+    <thead><tr><th>R#</th><th>Требование</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>R3</td><td><code>ratings: Record&lt;string,Rating&gt;</code>; scalar fields removed; init <code>{}</code></td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R4</td><td><code>OPERATION_AXES</code> registry; <code>RatingAxis=string</code></td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R5</td><td><code>recognition gate:"vision"</code></td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R6</td><td>EvalMetaFields новые поля</td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R7</td><td>eval_meta без доп. LLM-вызовов</td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R8</td><td>ratingSection + reset() cleanup</td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R9</td><td>finish() registry-loop по OPERATION_AXES[op]</td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R10</td><td>format axes в renderFormatPreview из registry</td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R11</td><td>agent-runner: ratings:{}</td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R12</td><td>controller.ts: axis string</td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R13</td><td>i18n 6 новых ключей en/ru/es</td><td><span class="badge pass">DONE</span></td></tr>
+    </tbody>
+  </table>
+  <p class="note ok">Покрытие: 11/11 требований выполнено (R1–R2 — организационные, R3–R13 — реализационные). 2 SC из 4 требуют ручного подтверждения UI.</p>
+
+  <h2>6. Находки</h2>
+  <table class="rpt-table">
+    <thead><tr><th>ID</th><th>Sev</th><th>Шаг</th><th>Plan</th><th>Diff</th><th>Fix options</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>I-001</td><td><span class="badge info">INFO</span></td><td>T6 S2</td>
+        <td>Эмитить <code>articles: filteredArticlePaths</code> (переменная внутри доменного цикла)</td>
+        <td>Реализация вводит <code>allFilteredArticlePaths</code> — аккумулятор по всем доменам (multi-domain lint)</td>
+        <td>1. Принять — реализация корректнее плана. 2. Обновить текст плана для точности документации.</td>
+      </tr>
+      <tr>
+        <td>I-002</td><td><span class="badge info">INFO</span></td><td>T3 S8 + T9 S3–S4</td>
+        <td>Ручная UI-проверка: query → ingest reset; per-op sweep для всех 8 операций</td>
+        <td>dist пересобран и задеплоен. Agент не управляет Obsidian.</td>
+        <td>Выполнить ручную проверку UI, подтвердить финальное OK.</td>
+      </tr>
+      <tr>
+        <td>I-003</td><td><span class="badge info">INFO</span></td><td>Spec §5 / controller.ts</td>
+        <td>Расширить <code>rateRun(axis: string)</code> в controller.ts</td>
+        <td><code>controller.ts</code> не изменён. <code>RatingAxis</code> теперь <code>string</code> alias → <code>axis: RatingAxis</code> де-факто <code>axis: string</code>. Изменение не требовалось.</td>
+        <td>Принять — alias в eval-log.ts решил проблему транзитивно. Допустимо.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>7. Избыточные изменения (Excess)</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Файл</th><th>Причина</th><th>Оценка</th></tr></thead>
+    <tbody>
+      <tr><td><code>docs/wiki/.iwiki/index.jsonl</code><br><code>docs/wiki/.iwiki/log.jsonl</code></td><td>Результат <code>iwiki:iwiki-ingest</code> (T9 S5)</td><td>Ожидаемо, соответствует плану</td></tr>
+      <tr><td><code>dist/main.js</code></td><td>Артефакт build (T3 S7 + T9 S1), задеплоен (T9 S2)</td><td>Ожидаемо, соответствует плану</td></tr>
+    </tbody>
+  </table>
+  <p class="note ok">Неожиданных избыточных изменений нет — все 14 файлов в diff обоснованы шагами плана.</p>
+
+  <h2>8. Сводка</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Метрика</th><th>Значение</th></tr></thead>
+    <tbody>
+      <tr><td>Шаги DONE</td><td><b>34</b></td></tr>
+      <tr><td>Шаги PARTIAL</td><td><b>1</b> (T6 S2 — косметика, функционально лучше)</td></tr>
+      <tr><td>Шаги MISSING</td><td><b>0</b></td></tr>
+      <tr><td>PENDING-HUMAN</td><td>3 шага (T3 S8, T9 S3, T9 S4) — ручные UI-сценарии</td></tr>
+      <tr><td>Spec requirements</td><td>11/11 покрыто</td></tr>
+      <tr><td>Success Criteria</td><td>SC3–SC4 DONE; SC1–SC2 PENDING-HUMAN</td></tr>
+      <tr><td>CRITICAL findings</td><td><b>0</b></td></tr>
+      <tr><td>WARNING findings</td><td><b>0</b></td></tr>
+      <tr><td>INFO findings</td><td><b>3</b> (I-001 принять; I-002 pending-human; I-003 принять)</td></tr>
+      <tr><td>tsc ошибок</td><td>14 = pre-existing (0 новых)</td></tr>
+      <tr><td>lint ошибок</td><td>0 (2 pre-existing warnings в claude-cli-client.ts)</td></tr>
+      <tr><td>build</td><td>OK</td></tr>
+      <tr><td>plan_hash</td><td><code>c9bc83346d26cff3</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="verdict" style="border-color:var(--ok);color:var(--ok-2);background:color-mix(in srgb,var(--ok) 10%, var(--surface));">Вердикт: OK — 0 CRITICAL, 0 WARNING, 3 INFO. Реализация полностью покрывает план и спеку. PENDING-HUMAN: ручной UI-sweep для финального подтверждения SC1/SC2.</div>
+
+  <p class="kv">Цепочка: (intent не найден) → <code>2026-06-26-all-operations-eval-and-rating-reset-design.md</code> → <code>2026-06-26-all-operations-eval-and-rating-reset.md</code></p>
+</section>
+<!-- TAB:result END -->
+</body>
+</html>

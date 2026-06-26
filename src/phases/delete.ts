@@ -8,6 +8,8 @@ import { pageId } from "../wiki-graph";
 import { stripInvalidWikiArticles } from "../utils/raw-frontmatter";
 import { computeDeletionPlan, sourceStem } from "../source-deletion";
 import { runIngest } from "./ingest";
+import ingestTemplate from "../../prompts/ingest.md";
+import { promptVersionOf } from "../prompt-version";
 
 /**
  * Delete a source file and its wiki artifacts; rebuild multi-source pages on
@@ -107,7 +109,7 @@ export async function* runDelete(
         if (ev.kind === "error") sourceFailed = true;
         // Suppress the inner per-source `result` event — runDelete emits its own
         // final `result`; forwarding it would trip the view's stopWaiting() early.
-        if (ev.kind === "result") continue;
+        if (ev.kind === "result" || ev.kind === "eval_meta") continue;
         yield ev;
       }
     } catch (e) {
@@ -164,5 +166,13 @@ export async function* runDelete(
   if (failedSources.length > 0) {
     yield { kind: "info_text", icon: "alert-triangle", summary: "Rebuild failures", details: failedSources };
   }
+  yield {
+    kind: "eval_meta",
+    fields: {
+      deleted_source: sourcePath,
+      rebuilt_pages: plan.toRebuild,
+      promptVersion: promptVersionOf(ingestTemplate),
+    },
+  };
   yield { kind: "result", durationMs: Date.now() - start, text };
 }

@@ -22,6 +22,7 @@ import { ensureDomainConfig } from "../domain-config";
 import type { PageSimilarityService } from "../page-similarity";
 import { GENERIC_WIKI_STEM_REGEX } from "../wiki-stem";
 import { i18nFor, resolveLang } from "../i18n";
+import { promptVersionOf } from "../prompt-version";
 
 const META_FILES = ["_index.md", "_log.md"];
 
@@ -181,6 +182,7 @@ export async function* runLint(
   const start = Date.now();
   const reportParts: string[] = [];
   let outputTokens = 0;
+  const allFilteredArticlePaths: string[] = [];
 
   for (const domain of targets) {
     if (signal.aborted) return;
@@ -250,6 +252,7 @@ export async function* runLint(
           })
         )
       : articlePaths;
+    allFilteredArticlePaths.push(...filteredArticlePaths);
 
     // Load embedding cache before loop
     if (similarity && similarity.config.mode !== "jaccard") {
@@ -670,6 +673,14 @@ export async function* runLint(
       });
     } catch { /* non-critical */ }
   }
+
+  yield {
+    kind: "eval_meta",
+    fields: {
+      articles: allFilteredArticlePaths,
+      promptVersion: promptVersionOf(lintTemplate),
+    },
+  };
 
   yield { kind: "result", durationMs: Date.now() - start, text: reportParts.join("\n\n---\n\n"), outputTokens: outputTokens || undefined };
 }

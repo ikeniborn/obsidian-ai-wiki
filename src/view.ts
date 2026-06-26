@@ -10,6 +10,7 @@ import { domainWikiFolder, domainLogPath, domainIndexPath, isWikiArticlePath } f
 import { computeSpeedText } from "./phases/llm-utils";
 import { isAbsolute, relative } from "path-browserify";
 import { retrievalTag } from "./retrieval-diag";
+import { OPERATION_AXES } from "./eval-log";
 
 import { collectMdInPaths, walkFolder } from "./utils/vault-walk";
 export { collectMdInPaths, walkFolder };
@@ -120,6 +121,7 @@ export class LlmWikiView extends ItemView {
   private chatStartTs = 0;
   private lastUserMessage = "";
   private lastRunId: string | null = null;
+  private ratingSection: HTMLElement | null = null;
   private startTs = 0;
   private lastStepTs = 0;
   private llmStats: Array<{ inputTokens: number; outputTokens: number; ttftMs: number; llmDurationMs: number; }> = [];
@@ -589,6 +591,10 @@ export class LlmWikiView extends ItemView {
     if (this.addSourceBtn) this.addSourceBtn.disabled = true;
     this.chatSection?.remove();
     this.chatSection = null;
+    this.ratingSection?.remove();
+    this.ratingSection = null;
+    this.formatPreviewSection?.remove();
+    this.formatPreviewSection = null;
     this.lastContext = null;
     this.chatHistory = [];
 
@@ -822,7 +828,7 @@ export class LlmWikiView extends ItemView {
   private renderRatingRow(
     parent: HTMLElement,
     runId: string,
-    axis: import("./eval-log").RatingAxis,
+    axis: string,
     label: string,
   ): void {
     if (!this.plugin.settings.devMode?.enabled) return;
@@ -912,9 +918,10 @@ export class LlmWikiView extends ItemView {
 
     if (runId) {
       const section = this.formatPreviewSection;
-      this.renderRatingRow(section, runId, "formatting", i18n().view.ratingFormatting);
-      if ((visionCount ?? 0) > 0) {
-        this.renderRatingRow(section, runId, "recognition", i18n().view.ratingRecognition);
+      const view = i18n().view as unknown as Record<string, string>;
+      for (const ax of OPERATION_AXES["format"]) {
+        if (ax.gate === "vision" && (visionCount ?? 0) === 0) continue;
+        this.renderRatingRow(section, runId, ax.id, view[ax.labelKey]);
       }
     }
   }
@@ -943,9 +950,17 @@ export class LlmWikiView extends ItemView {
       this.resultToggle.setText("▼");
 
       this.lastRunId = entry.id;
-      const QC_OPS: WikiOperation[] = ["query", "chat", "lint-chat"];
-      if (QC_OPS.includes(entry.operation) && entry.status === "done") {
-        this.renderRatingRow(this.resultSection, entry.id, "answer", i18n().view.ratingAnswer);
+      // format renders its own axes in renderFormatPreview (near the preview);
+      // every other operation gets a registry-driven rating row here.
+      if (entry.status === "done" && entry.operation !== "format") {
+        const axes = (OPERATION_AXES[entry.operation] ?? []).filter((a) => a.gate !== "vision");
+        if (axes.length > 0) {
+          this.ratingSection = this.resultSection.createDiv("ai-wiki-rating-section");
+          const view = i18n().view as unknown as Record<string, string>;
+          for (const ax of axes) {
+            this.renderRatingRow(this.ratingSection, entry.id, ax.id, view[ax.labelKey]);
+          }
+        }
       }
 
       const CHAT_OPS: WikiOperation[] = ["lint", "lint-chat", "ingest", "query"];

@@ -237,8 +237,7 @@ export class AgentRunner {
             answer: evalMeta.answer ?? (req.operation === "format" ? undefined : finalResultText),
             llmErrors,
             ruleFirings,
-            rating: null,
-            ...(evalMeta.vision === "on" ? { recognitionRating: null } : {}),
+            ratings: {},
           };
           // `visionTempBaseDir` IS the plugin base dir — the controller passes the
           // resolved `manifest.dir` as the 6th ctor arg (Task 5). eval.jsonl lives at
