@@ -25,6 +25,7 @@ import type { IngestLogEntry } from "../wiki-log";
 import { fixWikiLinks, stripDeadLinks } from "../wiki-link-validator";
 import { GENERIC_WIKI_STEM_REGEX, stemRegex } from "../wiki-stem";
 import { i18nFor, resolveLang } from "../i18n";
+import { promptVersionOf } from "../prompt-version";
 
 function deriveSectionForPath(wikiFolder: string, fullPath: string): string {
   const prefix = wikiFolder + "/";
@@ -149,6 +150,7 @@ export async function* runIngest(
   if (signal.aborted) return;
 
   // === Per-entity top-K retrieval =======================================
+  const foundPages: string[] = [];
   let existingPages: Map<string, string>;
   const retrievalDetails: string[] = [];
   if (similarity) {
@@ -174,6 +176,7 @@ export async function* runIngest(
       );
       for (const p of paths) union.add(p);
     }
+    foundPages.push(...union);
 
     yield {
       kind: "info_text",
@@ -578,6 +581,19 @@ export async function* runIngest(
   if (wlFixResult.warnings.length > 0) {
     yield { kind: "info_text", icon: "⚠️", summary: "WikiLink warnings", details: wlFixResult.warnings };
   }
+
+  const createdPages = written.filter((p) => createdThisRun.has(pageId(p)));
+  const updatedPages = written.filter((p) => !createdThisRun.has(pageId(p)));
+  yield {
+    kind: "eval_meta",
+    fields: {
+      source_paths: [sourceVaultPath],
+      created_pages: createdPages,
+      updated_pages: updatedPages,
+      found_pages: foundPages,
+      promptVersion: promptVersionOf(ingestTemplate),
+    },
+  };
 
   yield { kind: "result", durationMs: Date.now() - start, text: resultText, outputTokens: outputTokens || undefined };
 }
