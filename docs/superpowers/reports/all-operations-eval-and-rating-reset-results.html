@@ -119,8 +119,8 @@ ul.tight li{ margin:.28rem 0; }
 <input type="checkbox" id="theme-toggle" hidden>
 <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
 <input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
-<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
-<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden checked>
 <label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
 <header>
   <h1>Dev-mode eval для всех операций + сброс/привязка rating-кнопок
@@ -493,7 +493,202 @@ ul.tight li{ margin:.28rem 0; }
 
 <!-- TAB:result START -->
 <section class="tab-pane" id="pane-result">
-  <p class="note">Этап ещё не проверен.</p>
+  <p class="lead">Сверка реализации с планом и спекой — ветка <code>dev-all-ops-eval</code>, коммиты <code>8f7adef..HEAD</code> (10 коммитов).</p>
+  <p class="kv">plan_hash: <code>c9bc83346d26cff3</code> &nbsp;·&nbsp; diff base: <code>git diff 8f7adef..HEAD</code> &nbsp;·&nbsp; проверено: 2026-06-26</p>
+  <p class="note ok"><strong>Вердикт: OK</strong> — CRITICAL: 0 · WARNING: 0 · INFO: 3. Все шаги плана реализованы (DONE: 34 / PARTIAL: 1 / MISSING: 0); PARTIAL — косметическое расхождение имени переменной в lint.ts (функционально корректнее плана). Два ручных UI-сценария помечены PENDING-HUMAN.</p>
+
+  <h2>1. Документы и diff</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Документ</th><th>Путь</th></tr></thead>
+    <tbody>
+      <tr><td>Plan</td><td><code>docs/superpowers/plans/2026-06-26-all-operations-eval-and-rating-reset.md</code></td></tr>
+      <tr><td>Spec</td><td><code>docs/superpowers/specs/2026-06-26-all-operations-eval-and-rating-reset-design.md</code></td></tr>
+      <tr><td>Intent</td><td><em>не найден</em> (chain.intent: null)</td></tr>
+      <tr><td>Diff base</td><td><code>git diff 8f7adef..HEAD</code> — 14 файлов изменено (10 src + dist/main.js + 2 docs/wiki + 2 iwiki-индекс)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Коммиты ветки</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Hash</th><th>Сообщение</th></tr></thead>
+    <tbody>
+      <tr><td><code>40adeb1</code></td><td>feat(eval): ratings map + OPERATION_AXES registry + per-op provenance fields</td></tr>
+      <tr><td><code>d27ac71</code></td><td>feat(i18n): rating axis labels for retrieval/page/links/coverage/fix/rebuild (en/ru/es)</td></tr>
+      <tr><td><code>e9b1a80</code></td><td>feat(view): registry-driven per-op rating rows; clear ratingSection + format preview on reset</td></tr>
+      <tr><td><code>4d433dd</code></td><td>feat(ingest): emit eval_meta provenance (sources + created/updated/found pages + promptVersion)</td></tr>
+      <tr><td><code>c93c466</code></td><td>feat(init): emit eval_meta provenance (files_processed + domain + promptVersion)</td></tr>
+      <tr><td><code>5237269</code></td><td>feat(lint): emit eval_meta provenance (articles + promptVersion)</td></tr>
+      <tr><td><code>f22fff5</code></td><td>feat(lint-chat): emit eval_meta provenance (articles + instruction + promptVersion)</td></tr>
+      <tr><td><code>ccd366a</code></td><td>feat(delete): emit eval_meta provenance (deleted_source + rebuilt_pages); isolate inner ingest meta</td></tr>
+      <tr><td><code>0cd4cb1</code></td><td>chore(build): rebuild dist for all-operations eval + rating reset</td></tr>
+      <tr><td><code>5da281a</code></td><td>docs(wiki): all-operations eval — ratings map, per-op axes &amp; provenance</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Покрытие шагов плана</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Task</th><th>Step</th><th>Статус</th><th>Свидетельство в diff</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="7"><b>T1</b><br>eval-log.ts<br>agent-runner.ts</td>
+          <td>S1 Replace scalar rating fields / widen RatingAxis</td><td><span class="badge pass">DONE</span></td><td><code>ratings: Record&lt;string, Rating&gt;</code> заменяет <code>rating</code>/<code>recognitionRating</code>; <code>RatingAxis = string</code></td></tr>
+      <tr><td>S2 Add OPERATION_AXES registry</td><td><span class="badge pass">DONE</span></td><td><code>OPERATION_AXES: Record&lt;WikiOperation, AxisDef[]&gt;</code>, 8 ключей, все оси верны</td></tr>
+      <tr><td>S3 Add EvalMetaFields per-op fields</td><td><span class="badge pass">DONE</span></td><td>9 новых опциональных полей добавлены; комментарий <code>// ingest</code> (fix F-003)</td></tr>
+      <tr><td>S4 Key updateEvalRating into ratings map</td><td><span class="badge pass">DONE</span></td><td><code>rec.ratings[axis]</code> с legacy toleration <code>if (!rec.ratings)</code></td></tr>
+      <tr><td>S5 Initialize ratings: {} in agent-runner.ts</td><td><span class="badge pass">DONE</span></td><td><code>rating: null</code> и <code>recognitionRating</code> удалены; <code>ratings: {}</code> добавлен</td></tr>
+      <tr><td>S6 Typecheck + lint</td><td><span class="badge pass">DONE</span></td><td>tsc: 14 ошибок = pre-existing; lint: 0 ошибок</td></tr>
+      <tr><td>S7 Commit</td><td><span class="badge pass">DONE</span></td><td>коммит <code>40adeb1</code></td></tr>
+
+      <tr><td rowspan="5"><b>T2</b><br>i18n.ts</td>
+          <td>S1 EN labels</td><td><span class="badge pass">DONE</span></td><td>6 новых ключей в English view-блоке</td></tr>
+      <tr><td>S2 RU labels</td><td><span class="badge pass">DONE</span></td><td>6 новых ключей в Russian view-блоке</td></tr>
+      <tr><td>S3 ES labels</td><td><span class="badge pass">DONE</span></td><td>6 новых ключей в Spanish view-блоке</td></tr>
+      <tr><td>S4 Typecheck + lint</td><td><span class="badge pass">DONE</span></td><td>TypeScript инферит из <code>typeof en</code></td></tr>
+      <tr><td>S5 Commit</td><td><span class="badge pass">DONE</span></td><td>коммит <code>d27ac71</code></td></tr>
+
+      <tr><td rowspan="9"><b>T3</b><br>view.ts</td>
+          <td>S1 Import OPERATION_AXES</td><td><span class="badge pass">DONE</span></td><td><code>import { OPERATION_AXES } from "./eval-log"</code> добавлен</td></tr>
+      <tr><td>S2 Add ratingSection field</td><td><span class="badge pass">DONE</span></td><td><code>private ratingSection: HTMLElement | null = null</code></td></tr>
+      <tr><td>S3 Clear stale rating + format preview in reset()</td><td><span class="badge pass">DONE</span></td><td><code>ratingSection?.remove()</code>, <code>formatPreviewSection?.remove()</code> в reset()</td></tr>
+      <tr><td>S4 Widen renderRatingRow axis to string</td><td><span class="badge pass">DONE</span></td><td>параметр <code>axis</code> изменён с <code>RatingAxis</code> на <code>string</code></td></tr>
+      <tr><td>S5 Registry-driven finish()</td><td><span class="badge pass">DONE</span></td><td>QC_OPS hard-coded блок → registry loop; <code>ratingSection = createDiv("ai-wiki-rating-section")</code></td></tr>
+      <tr><td>S6 renderFormatPreview reads registry</td><td><span class="badge pass">DONE</span></td><td>hard-coded axes → <code>OPERATION_AXES["format"]</code> loop с gate-filter</td></tr>
+      <tr><td>S7 Typecheck + lint + build</td><td><span class="badge pass">DONE</span></td><td>tsc 14 (pre-existing), lint clean, dist/main.js пересобран</td></tr>
+      <tr><td>S8 Manual smoke check (Obsidian)</td><td><span class="badge warn">PENDING-HUMAN</span></td><td>dist задеплоен в Work vault (0cd4cb1 + T9 S2); ручная UI-проверка не может быть выполнена агентом</td></tr>
+      <tr><td>S9 Commit</td><td><span class="badge pass">DONE</span></td><td>коммит <code>e9b1a80</code></td></tr>
+
+      <tr><td rowspan="5"><b>T4</b><br>phases/ingest.ts</td>
+          <td>S1 Import promptVersionOf</td><td><span class="badge pass">DONE</span></td><td>импорт добавлен</td></tr>
+      <tr><td>S2 Hoist foundPages</td><td><span class="badge pass">DONE</span></td><td><code>const foundPages: string[] = []</code> + <code>foundPages.push(...union)</code></td></tr>
+      <tr><td>S3 Emit eval_meta</td><td><span class="badge pass">DONE</span></td><td><code>eval_meta</code> с <code>source_paths</code>, <code>created_pages</code>, <code>updated_pages</code>, <code>found_pages</code>, <code>promptVersion</code>; fix F-001 реализован</td></tr>
+      <tr><td>S4 Typecheck + lint + build</td><td><span class="badge pass">DONE</span></td><td>чисто</td></tr>
+      <tr><td>S5 Commit</td><td><span class="badge pass">DONE</span></td><td>коммит <code>4d433dd</code></td></tr>
+
+      <tr><td rowspan="5"><b>T5</b><br>phases/init.ts</td>
+          <td>S1 Import promptVersionOf</td><td><span class="badge pass">DONE</span></td><td>импорт добавлен</td></tr>
+      <tr><td>S2 Emit eval_meta (full-init)</td><td><span class="badge pass">DONE</span></td><td><code>files_processed: toAnalyze.length</code>, <code>domain</code>, <code>promptVersion</code> перед full-init result</td></tr>
+      <tr><td>S3 Emit eval_meta (incremental)</td><td><span class="badge pass">DONE</span></td><td><code>files_processed: changedFiles.length</code>, <code>domain</code>, <code>promptVersion</code> перед incremental result</td></tr>
+      <tr><td>S4 Typecheck + lint + build</td><td><span class="badge pass">DONE</span></td><td>чисто; <code>created_pages</code> omit — wontfix F-002</td></tr>
+      <tr><td>S5 Commit</td><td><span class="badge pass">DONE</span></td><td>коммит <code>c93c466</code></td></tr>
+
+      <tr><td rowspan="4"><b>T6</b><br>phases/lint.ts</td>
+          <td>S1 Import promptVersionOf</td><td><span class="badge pass">DONE</span></td><td>импорт добавлен</td></tr>
+      <tr><td>S2 Emit eval_meta</td><td><span class="badge info">PARTIAL*</span></td><td>реализация вводит <code>allFilteredArticlePaths</code> (multi-domain аккумулятор) вместо <code>filteredArticlePaths</code> из плана; семантически корректнее — охватывает все домены</td></tr>
+      <tr><td>S3 Typecheck + lint + build</td><td><span class="badge pass">DONE</span></td><td>чисто</td></tr>
+      <tr><td>S4 Commit</td><td><span class="badge pass">DONE</span></td><td>коммит <code>5237269</code></td></tr>
+
+      <tr><td rowspan="4"><b>T7</b><br>phases/lint-chat.ts</td>
+          <td>S1 Import promptVersionOf</td><td><span class="badge pass">DONE</span></td><td>импорт добавлен</td></tr>
+      <tr><td>S2 Emit eval_meta</td><td><span class="badge pass">DONE</span></td><td><code>articles</code>, <code>instruction</code> (lastUserMsg из chatMessages), <code>promptVersion</code>; minor duplication accepted (F-004)</td></tr>
+      <tr><td>S3 Typecheck + lint + build</td><td><span class="badge pass">DONE</span></td><td>чисто</td></tr>
+      <tr><td>S4 Commit</td><td><span class="badge pass">DONE</span></td><td>коммит <code>f22fff5</code></td></tr>
+
+      <tr><td rowspan="5"><b>T8</b><br>phases/delete.ts</td>
+          <td>S1 Add imports</td><td><span class="badge pass">DONE</span></td><td><code>ingestTemplate</code> и <code>promptVersionOf</code> добавлены</td></tr>
+      <tr><td>S2 Suppress inner eval_meta</td><td><span class="badge pass">DONE</span></td><td><code>ev.kind === "eval_meta"</code> добавлен в continue-condition</td></tr>
+      <tr><td>S3 Emit eval_meta</td><td><span class="badge pass">DONE</span></td><td><code>deleted_source: sourcePath</code>, <code>rebuilt_pages: plan.toRebuild</code>, <code>promptVersion</code></td></tr>
+      <tr><td>S4 Typecheck + lint + build</td><td><span class="badge pass">DONE</span></td><td>чисто</td></tr>
+      <tr><td>S5 Commit</td><td><span class="badge pass">DONE</span></td><td>коммит <code>ccd366a</code></td></tr>
+
+      <tr><td rowspan="6"><b>T9</b><br>e2e + docs</td>
+          <td>S1 Full build + lint + typecheck</td><td><span class="badge pass">DONE</span></td><td>tsc=14=master, lint=0 errors, build OK</td></tr>
+      <tr><td>S2 Deploy to test vault</td><td><span class="badge pass">DONE</span></td><td>dist пересобран (0cd4cb1), файлы скопированы агентом в Work vault</td></tr>
+      <tr><td>S3 Reset/binding check (ручная)</td><td><span class="badge warn">PENDING-HUMAN</span></td><td>UI verification — запустить query → ingest, проверить переключение рядов рейтинга</td></tr>
+      <tr><td>S4 Per-operation sweep (ручная)</td><td><span class="badge warn">PENDING-HUMAN</span></td><td>UI verification — пройти все 8 операций, проверить оси + toggle</td></tr>
+      <tr><td>S5 Update docs/wiki via iwiki</td><td><span class="badge pass">DONE</span></td><td>llm-pipeline.md + operations.md обновлены; iwiki-lint: broken=0, orphans=0</td></tr>
+      <tr><td>S6 Commit docs</td><td><span class="badge pass">DONE</span></td><td>коммит <code>5da281a</code></td></tr>
+    </tbody>
+  </table>
+  <p class="kv">* PARTIAL = реализация превосходит описание плана (multi-domain accumulator vs inner-loop var). Не CRITICAL — семантика верна.</p>
+
+  <h2>4. Покрытие критериев приёмки (Spec Verification)</h2>
+  <table class="rpt-table">
+    <thead><tr><th>SC#</th><th>Критерий</th><th>Статус</th><th>Свидетельство</th></tr></thead>
+    <tbody>
+      <tr><td>SC1</td><td>После query + 👍, старт ingest → ряд query исчез; показаны page/links</td><td><span class="badge warn">PENDING-HUMAN</span></td><td>Архитектурно: <code>ratingSection?.remove()</code> в reset(); registry-loop рендерит операцию-специфичные оси. Ручная UI-проверка ожидается.</td></tr>
+      <tr><td>SC2</td><td>Оценка ingest → eval.jsonl содержит <code>ratings.page="up"</code> с новым runId</td><td><span class="badge warn">PENDING-HUMAN</span></td><td><code>updateEvalRating</code> ключирует <code>ratings[axis]</code> по runId. Ручная проверка файла ожидается.</td></tr>
+      <tr><td>SC3</td><td>Каждая операция: запись + provenance + registry axes + toggle</td><td><span class="badge pass">DONE*</span></td><td>Все 8 фаз охвачены кодом (T4–T8 + существующие); registry-loop в finish(); re-click → <code>null</code> логика в updateEvalRating</td></tr>
+      <tr><td>SC4</td><td>npm run build OK; npm run lint чист; 0 новых tsc-ошибок</td><td><span class="badge pass">DONE</span></td><td>tsc=14=master (0 новых); lint=0 errors, 2 pre-existing warnings; build OK</td></tr>
+    </tbody>
+  </table>
+  <p class="kv">* SC3 архитектурно выполнен; финальное подтверждение — часть ручного sweep SC1/SC2.</p>
+
+  <h2>5. Покрытие требований спеки</h2>
+  <table class="rpt-table">
+    <thead><tr><th>R#</th><th>Требование</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>R3</td><td><code>ratings: Record&lt;string,Rating&gt;</code>; scalar fields removed; init <code>{}</code></td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R4</td><td><code>OPERATION_AXES</code> registry; <code>RatingAxis=string</code></td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R5</td><td><code>recognition gate:"vision"</code></td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R6</td><td>EvalMetaFields новые поля</td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R7</td><td>eval_meta без доп. LLM-вызовов</td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R8</td><td>ratingSection + reset() cleanup</td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R9</td><td>finish() registry-loop по OPERATION_AXES[op]</td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R10</td><td>format axes в renderFormatPreview из registry</td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R11</td><td>agent-runner: ratings:{}</td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R12</td><td>controller.ts: axis string</td><td><span class="badge pass">DONE</span></td></tr>
+      <tr><td>R13</td><td>i18n 6 новых ключей en/ru/es</td><td><span class="badge pass">DONE</span></td></tr>
+    </tbody>
+  </table>
+  <p class="note ok">Покрытие: 11/11 требований выполнено (R1–R2 — организационные, R3–R13 — реализационные). 2 SC из 4 требуют ручного подтверждения UI.</p>
+
+  <h2>6. Находки</h2>
+  <table class="rpt-table">
+    <thead><tr><th>ID</th><th>Sev</th><th>Шаг</th><th>Plan</th><th>Diff</th><th>Fix options</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>I-001</td><td><span class="badge info">INFO</span></td><td>T6 S2</td>
+        <td>Эмитить <code>articles: filteredArticlePaths</code> (переменная внутри доменного цикла)</td>
+        <td>Реализация вводит <code>allFilteredArticlePaths</code> — аккумулятор по всем доменам (multi-domain lint)</td>
+        <td>1. Принять — реализация корректнее плана. 2. Обновить текст плана для точности документации.</td>
+      </tr>
+      <tr>
+        <td>I-002</td><td><span class="badge info">INFO</span></td><td>T3 S8 + T9 S3–S4</td>
+        <td>Ручная UI-проверка: query → ingest reset; per-op sweep для всех 8 операций</td>
+        <td>dist пересобран и задеплоен. Agент не управляет Obsidian.</td>
+        <td>Выполнить ручную проверку UI, подтвердить финальное OK.</td>
+      </tr>
+      <tr>
+        <td>I-003</td><td><span class="badge info">INFO</span></td><td>Spec §5 / controller.ts</td>
+        <td>Расширить <code>rateRun(axis: string)</code> в controller.ts</td>
+        <td><code>controller.ts</code> не изменён. <code>RatingAxis</code> теперь <code>string</code> alias → <code>axis: RatingAxis</code> де-факто <code>axis: string</code>. Изменение не требовалось.</td>
+        <td>Принять — alias в eval-log.ts решил проблему транзитивно. Допустимо.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>7. Избыточные изменения (Excess)</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Файл</th><th>Причина</th><th>Оценка</th></tr></thead>
+    <tbody>
+      <tr><td><code>docs/wiki/.iwiki/index.jsonl</code><br><code>docs/wiki/.iwiki/log.jsonl</code></td><td>Результат <code>iwiki:iwiki-ingest</code> (T9 S5)</td><td>Ожидаемо, соответствует плану</td></tr>
+      <tr><td><code>dist/main.js</code></td><td>Артефакт build (T3 S7 + T9 S1), задеплоен (T9 S2)</td><td>Ожидаемо, соответствует плану</td></tr>
+    </tbody>
+  </table>
+  <p class="note ok">Неожиданных избыточных изменений нет — все 14 файлов в diff обоснованы шагами плана.</p>
+
+  <h2>8. Сводка</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Метрика</th><th>Значение</th></tr></thead>
+    <tbody>
+      <tr><td>Шаги DONE</td><td><b>34</b></td></tr>
+      <tr><td>Шаги PARTIAL</td><td><b>1</b> (T6 S2 — косметика, функционально лучше)</td></tr>
+      <tr><td>Шаги MISSING</td><td><b>0</b></td></tr>
+      <tr><td>PENDING-HUMAN</td><td>3 шага (T3 S8, T9 S3, T9 S4) — ручные UI-сценарии</td></tr>
+      <tr><td>Spec requirements</td><td>11/11 покрыто</td></tr>
+      <tr><td>Success Criteria</td><td>SC3–SC4 DONE; SC1–SC2 PENDING-HUMAN</td></tr>
+      <tr><td>CRITICAL findings</td><td><b>0</b></td></tr>
+      <tr><td>WARNING findings</td><td><b>0</b></td></tr>
+      <tr><td>INFO findings</td><td><b>3</b> (I-001 принять; I-002 pending-human; I-003 принять)</td></tr>
+      <tr><td>tsc ошибок</td><td>14 = pre-existing (0 новых)</td></tr>
+      <tr><td>lint ошибок</td><td>0 (2 pre-existing warnings в claude-cli-client.ts)</td></tr>
+      <tr><td>build</td><td>OK</td></tr>
+      <tr><td>plan_hash</td><td><code>c9bc83346d26cff3</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="verdict" style="border-color:var(--ok);color:var(--ok-2);background:color-mix(in srgb,var(--ok) 10%, var(--surface));">Вердикт: OK — 0 CRITICAL, 0 WARNING, 3 INFO. Реализация полностью покрывает план и спеку. PENDING-HUMAN: ручной UI-sweep для финального подтверждения SC1/SC2.</div>
+
+  <p class="kv">Цепочка: (intent не найден) → <code>2026-06-26-all-operations-eval-and-rating-reset-design.md</code> → <code>2026-06-26-all-operations-eval-and-rating-reset.md</code></p>
 </section>
 <!-- TAB:result END -->
 </body>

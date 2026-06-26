@@ -56,6 +56,10 @@ review:
 chain:
   intent: null
   spec: docs/superpowers/specs/2026-06-26-all-operations-eval-and-rating-reset-design.md
+result_check:
+  verdict: OK
+  plan_hash: c9bc83346d26cff3
+  last_run: 2026-06-26
 ---
 
 # Dev-mode eval for all operations + rating-button reset — Implementation Plan
