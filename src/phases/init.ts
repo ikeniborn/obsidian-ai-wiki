@@ -14,6 +14,7 @@ import type { PageSimilarityService } from "../page-similarity";
 import { parseIndexAnnotations } from "../wiki-index";
 import { i18nFor, resolveLang } from "../i18n";
 import { hashSource } from "../incremental-sources";
+import { promptVersionOf } from "../prompt-version";
 
 /** Read a source file and return its body hash; "" on read failure. */
 async function sourceHashFor(vaultTools: VaultTools, file: string): Promise<string> {
@@ -382,6 +383,14 @@ export async function* runInitWithSources(
   }
 
   yield {
+    kind: "eval_meta",
+    fields: {
+      files_processed: toAnalyze.length,
+      domain: domainId,
+      promptVersion: promptVersionOf(initTemplate),
+    },
+  };
+  yield {
     kind: "result",
     durationMs: Date.now() - start,
     text: `Domain "${domainId}" initialised from ${toAnalyze.length} source files.`,
@@ -463,6 +472,14 @@ export async function* runIncrementalReinit(
     yield { kind: "file_done", file };
   }
 
+  yield {
+    kind: "eval_meta",
+    fields: {
+      files_processed: changedFiles.length,
+      domain: domainId,
+      promptVersion: promptVersionOf(initTemplate),
+    },
+  };
   yield {
     kind: "result",
     durationMs: Date.now() - start,
