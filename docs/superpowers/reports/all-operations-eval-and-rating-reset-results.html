@@ -118,8 +118,8 @@ ul.tight li{ margin:.28rem 0; }
 <body>
 <input type="checkbox" id="theme-toggle" hidden>
 <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
-<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden checked>
-<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
 <input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
 <label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
 <header>
@@ -306,7 +306,188 @@ ul.tight li{ margin:.28rem 0; }
 
 <!-- TAB:plan START -->
 <section class="tab-pane" id="pane-plan">
-  <p class="note">Этап ещё не проверен.</p>
+  <p class="lead">Проверка плана реализации против спеки (дизайна) — <code>2026-06-26-all-operations-eval-and-rating-reset.md</code>.</p>
+  <p class="kv">plan_hash: <code>0491091b022f04e8</code> &nbsp;·&nbsp; spec_hash: <code>1d28ac7a1791836a</code> &nbsp;·&nbsp; last_run: 2026-06-26</p>
+  <p class="note ok">Все 5 фаз проверки — <strong>passed</strong>. Открытых CRITICAL нет. Открыты 2 WARNING (необязательная провенанс-полнота относительно таблицы §2 спеки) — не блокируют реализацию.</p>
+
+  <h2>1. Резюме плана (задачи и критерии готовности)</h2>
+  <table class="rpt-table">
+    <thead><tr><th>#</th><th>Задача</th><th>Файлы</th><th>Критерий готовности (DoD)</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>T1</td>
+        <td>Схема рейтингов, реестр осей, writer</td>
+        <td><code>eval-log.ts</code>, <code>agent-runner.ts</code></td>
+        <td><code>ratings: Record&lt;string,Rating&gt;</code> заменяет скаляры; <code>RatingAxis=string</code>; <code>AxisDef</code>+<code>OPERATION_AXES</code> (8 ключей); новые поля <code>EvalMetaFields</code>; <code>updateEvalRating</code> ключует в map; writer пишет <code>ratings:{}</code>. <em>Verify:</em> <code>tsc --noEmit</code> (eval-log/agent-runner чисты) + <code>lint</code>.</td>
+      </tr>
+      <tr>
+        <td>T2</td>
+        <td>i18n-метки осей (en/ru/es)</td>
+        <td><code>i18n.ts</code></td>
+        <td>6 новых ключей (<code>ratingRetrieval/Page/Links/Coverage/Fix/Rebuild</code>) в каждой локали. <em>Verify:</em> <code>tsc</code> (форма <code>I18n=typeof en</code> совпадает по всем локалям) + <code>lint</code>.</td>
+      </tr>
+      <tr>
+        <td>T3</td>
+        <td>Рендер строк рейтинга для всех операций + фикс reset/binding</td>
+        <td><code>view.ts</code></td>
+        <td>Поле <code>ratingSection</code>; <code>reset()</code> чистит <code>ratingSection</code>+<code>formatPreviewSection</code>; <code>finish()</code> рендерит оси из реестра; <code>renderFormatPreview</code> читает реестр; <code>renderRatingRow</code> принимает <code>axis:string</code>. <em>Verify:</em> <code>tsc</code>/<code>lint</code>/<code>build</code> + ручной smoke в Obsidian.</td>
+      </tr>
+      <tr>
+        <td>T4</td>
+        <td>Провенанс <code>ingest</code></td>
+        <td><code>phases/ingest.ts</code></td>
+        <td><code>eval_meta</code> перед терминальным result: <code>source_paths</code>, <code>created_pages</code>/<code>updated_pages</code>, <code>promptVersion</code>. <em>Verify:</em> <code>tsc</code>/<code>lint</code>/<code>build</code>.</td>
+      </tr>
+      <tr>
+        <td>T5</td>
+        <td>Провенанс <code>init</code></td>
+        <td><code>phases/init.ts</code></td>
+        <td><code>eval_meta</code> перед обоими терминальными result (full + incremental): <code>files_processed</code>, <code>domain</code>, <code>promptVersion</code>. <em>Verify:</em> <code>tsc</code>/<code>lint</code>/<code>build</code>.</td>
+      </tr>
+      <tr>
+        <td>T6</td>
+        <td>Провенанс <code>lint</code></td>
+        <td><code>phases/lint.ts</code></td>
+        <td><code>eval_meta</code> перед result: <code>articles</code> (=<code>filteredArticlePaths</code>), <code>promptVersion</code>. <em>Verify:</em> <code>tsc</code>/<code>lint</code>/<code>build</code>.</td>
+      </tr>
+      <tr>
+        <td>T7</td>
+        <td>Провенанс <code>lint-chat</code></td>
+        <td><code>phases/lint-chat.ts</code></td>
+        <td><code>eval_meta</code> перед result: <code>articles</code> (=<code>parsed.pages.map(path)</code>), <code>instruction</code> (последнее user-сообщение), <code>promptVersion</code>. <em>Verify:</em> <code>tsc</code>/<code>lint</code>/<code>build</code>.</td>
+      </tr>
+      <tr>
+        <td>T8</td>
+        <td>Провенанс <code>delete</code> + изоляция внутреннего ingest-meta</td>
+        <td><code>phases/delete.ts</code></td>
+        <td>Импорт <code>ingestTemplate</code>+<code>promptVersionOf</code>; подавить внутренний <code>eval_meta</code> в rebuild-цикле; <code>eval_meta</code> перед result: <code>deleted_source</code>, <code>rebuilt_pages</code> (=<code>plan.toRebuild</code>), <code>promptVersion</code>. <em>Verify:</em> <code>tsc</code>/<code>lint</code>/<code>build</code>.</td>
+      </tr>
+      <tr>
+        <td>T9</td>
+        <td>Сквозная проверка + обновление docs/wiki</td>
+        <td><code>docs/wiki/llm-pipeline.md</code>, <code>operations.md</code></td>
+        <td>Полный build/lint/tsc; деплой в тест-vault; проверка reset/binding и пер-операционного прохода; <code>iwiki-ingest</code>+<code>iwiki-lint</code>. <em>Verify:</em> ручные сценарии 1–4 + чистый iwiki-lint.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схемы зависимостей и пересечений</h2>
+
+  <h3>Граф зависимостей шагов (M→N: результат T<sub>M</sub> используется в T<sub>N</sub>)</h3>
+  <p class="sub">T1 производит схему (<code>ratings</code>/<code>AxisDef</code>/<code>OPERATION_AXES</code>/<code>EvalMetaFields</code>), которую потребляют T3 (рендер) и T4–T8 (поля <code>eval_meta</code>). T2 (метки) потребляется T3. T9 завершает цепочку. Циклов и нарушений порядка нет.</p>
+  <figure class="rpt-graph">
+    <svg viewBox="0 0 760 250" role="img" aria-label="Граф зависимостей задач">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L8,3 L0,6 Z" fill="var(--line)"></path>
+        </marker>
+      </defs>
+      <!-- edges -->
+      <g stroke="var(--line)" stroke-width="1.6" fill="none" marker-end="url(#arr)">
+        <line x1="92"  y1="60"  x2="92"  y2="150"></line> <!-- T1 -> T3 -->
+        <line x1="110" y1="50"  x2="300" y2="48"></line>  <!-- T1 -> T4 (and 5-8 row) -->
+        <line x1="110" y1="55"  x2="300" y2="92"></line>
+        <line x1="110" y1="60"  x2="300" y2="136"></line>
+        <line x1="110" y1="65"  x2="300" y2="180"></line>
+        <line x1="110" y1="70"  x2="300" y2="206"></line>
+        <line x1="240" y1="170" x2="660" y2="200"></line> <!-- T3 -> T9 -->
+        <line x1="380" y1="206" x2="650" y2="205"></line> <!-- T8 -> T9 -->
+        <line x1="92"  y1="200" x2="92"  y2="200"></line>
+      </g>
+      <line x1="92" y1="115" x2="92" y2="150" stroke="var(--line)" stroke-width="1.6" marker-end="url(#arr)"></line>
+      <line x1="80" y1="100" x2="80" y2="148" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#arr)"></line>
+      <!-- nodes -->
+      <g>
+        <rect x="40" y="20" width="110" height="34" rx="7" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"></rect>
+        <text x="95" y="41" text-anchor="middle" class="nlabel">T1 schema</text>
+
+        <rect x="40" y="86" width="110" height="34" rx="7" fill="var(--surface)" stroke="var(--border)"></rect>
+        <text x="95" y="107" text-anchor="middle" class="nlabel">T2 i18n</text>
+
+        <rect x="40" y="150" width="110" height="34" rx="7" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"></rect>
+        <text x="95" y="171" text-anchor="middle" class="nlabel">T3 view</text>
+
+        <rect x="300" y="30" width="80" height="30" rx="7" fill="var(--surface)" stroke="var(--border)"></rect>
+        <text x="340" y="49" text-anchor="middle" class="nlabel">T4 ingest</text>
+        <rect x="300" y="76" width="80" height="30" rx="7" fill="var(--surface)" stroke="var(--border)"></rect>
+        <text x="340" y="95" text-anchor="middle" class="nlabel">T5 init</text>
+        <rect x="300" y="122" width="80" height="30" rx="7" fill="var(--surface)" stroke="var(--border)"></rect>
+        <text x="340" y="141" text-anchor="middle" class="nlabel">T6 lint</text>
+        <rect x="300" y="168" width="80" height="30" rx="7" fill="var(--surface)" stroke="var(--border)"></rect>
+        <text x="340" y="187" text-anchor="middle" class="nlabel">T7 lint-chat</text>
+        <rect x="300" y="206" width="80" height="30" rx="7" fill="var(--surface)" stroke="var(--border)"></rect>
+        <text x="340" y="225" text-anchor="middle" class="nlabel">T8 delete</text>
+
+        <rect x="650" y="186" width="100" height="34" rx="7" fill="var(--surface)" stroke="var(--accent-2)" stroke-width="1.6"></rect>
+        <text x="700" y="207" text-anchor="middle" class="nlabel">T9 e2e+docs</text>
+      </g>
+    </svg>
+    <figcaption class="sub">Сплошные рёбра — поток типов/данных T1→{T3,T4–T8}; пунктир — T2→T3 (метки). Все рёбра направлены вперёд (M&lt;N): циклов нет.</figcaption>
+  </figure>
+
+  <h3>Пересечения по артефактам и покрытие осей</h3>
+  <p class="sub">Каждая задача правит свой файл — пересечений по исходникам между задачами нет (риск конфликта правок минимален). Ниже — соответствие операция → оси <code>OPERATION_AXES</code> и где они рендерятся.</p>
+  <table class="rpt-table matrix">
+    <thead><tr><th>Операция</th><th>Оси (id)</th><th>Где рендер</th><th>Эмиттер провенанса</th></tr></thead>
+    <tbody>
+      <tr><td><code>query</code></td><td><code>answer</code>, <code>retrieval</code></td><td>finish()</td><td>уже есть (без изменений)</td></tr>
+      <tr><td><code>chat</code></td><td><code>answer</code></td><td>finish()</td><td>уже есть</td></tr>
+      <tr><td><code>format</code></td><td><code>formatting</code>, <code>recognition</code>(gate)</td><td>renderFormatPreview()</td><td>уже есть</td></tr>
+      <tr><td><code>ingest</code></td><td><code>page</code>, <code>links</code></td><td>finish()</td><td>T4 (без <code>found_pages</code> — см. F-001)</td></tr>
+      <tr><td><code>init</code></td><td><code>coverage</code>, <code>page</code></td><td>finish()</td><td>T5 (без <code>created_pages</code> — см. F-002)</td></tr>
+      <tr><td><code>lint</code></td><td><code>fix</code></td><td>finish()</td><td>T6</td></tr>
+      <tr><td><code>lint-chat</code></td><td><code>fix</code></td><td>finish()</td><td>T7</td></tr>
+      <tr><td><code>delete</code></td><td><code>rebuild</code></td><td>finish()</td><td>T8</td></tr>
+    </tbody>
+  </table>
+  <p class="note">Покрытие осей ↔ метки: 9 <code>labelKey</code> (<code>ratingAnswer/Retrieval/Formatting/Recognition/Page/Links/Coverage/Fix/Rebuild</code>) — 3 уже есть, 6 добавляет T2. <code>OPERATION_AXES</code> покрывает ровно 8 членов <code>WikiOperation</code> (проверено по <code>src/types.ts</code>): без лишних/недостающих ключей, <code>Record&lt;WikiOperation,…&gt;</code> компилируется.</p>
+
+  <h2>3. Результаты проверки</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Фаза</th><th>Статус</th><th>Заметка</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge pass">passed</span></td><td>Нет плейсхолдеров (TODO/TBD/FIXME/???); нумерация задач 1–9 и шагов без пропусков/дублей.</td></tr>
+      <tr><td>coverage</td><td><span class="badge pass">passed</span></td><td>Все 4 задачи-требования покрыты; найдены 2 расхождения провенанса с таблицей §2 спеки (F-001/F-002, WARNING).</td></tr>
+      <tr><td>dependencies</td><td><span class="badge pass">passed</span></td><td>Порядок producer→consumer верен (T1→T3/T4–T8); артефакты (<code>OPERATION_AXES</code>, <code>EvalMetaFields</code>, метки) создаются раньше потребления; циклов нет.</td></tr>
+      <tr><td>verifiability</td><td><span class="badge pass">passed</span></td><td>У каждой задачи измеримый DoD (<code>tsc</code>/<code>lint</code>/<code>build</code> + явные ручные сценарии в T3/T9). Все код-якоря сверены с исходниками.</td></tr>
+      <tr><td>consistency</td><td><span class="badge pass">passed</span></td><td>Типы согласованы (ratings map / AxisDef / RatingAxis=string); 2 мелкие косметические нестыковки (F-003/F-004, INFO, приняты).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Находки</h3>
+  <table class="rpt-table">
+    <thead><tr><th>ID</th><th>Severity</th><th>Секция</th><th>Текст</th><th>Fix</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>F-001</td><td><span class="badge warn">WARNING</span></td><td>Task 4: ingest provenance</td>
+        <td>Таблица §2 спеки требует у <code>ingest</code> поле <code>found_pages</code>, но T4 эмитит только <code>source_paths/created_pages/updated_pages/promptVersion</code>. Поле опционально (build проходит), но провенанс беднее спеки; <code>ingest</code> сейчас не эмитит <code>eval_meta</code> нигде ещё, т.е. <code>found_pages</code> не появится иным путём.</td>
+        <td>Добавить <code>found_pages</code> в T4 Step 2, либо убрать его из строки <code>ingest</code> в таблице §2 спеки. Решить, что авторитетно.</td>
+        <td><span class="badge open">open</span></td>
+      </tr>
+      <tr>
+        <td>F-002</td><td><span class="badge warn">WARNING</span></td><td>Task 5: init provenance</td>
+        <td>Таблица §2 спеки и комментарий <code>EvalMetaFields</code> (T3 Step 3) относят <code>created_pages</code> к <code>init</code>, но T5 (full + incremental) эмитит только <code>files_processed/domain/promptVersion</code>. <code>created_pages</code> для init не эмитится.</td>
+        <td>Добавить <code>created_pages</code> в T5 (предварительно убедиться, что у init есть источник списка созданных страниц на момент summary-yield), либо убрать init из набора <code>created_pages</code> в §2 и в комментарии.</td>
+        <td><span class="badge open">open</span></td>
+      </tr>
+      <tr>
+        <td>F-003</td><td><span class="badge info">INFO</span></td><td>Task 1 Step 3: EvalMetaFields</td>
+        <td>Комментарий <code>created_pages? // ingest / init / lint-chat</code> переобещает потребителей: фактически эмитит только <code>ingest</code> (T4). Безвредно (только комментарий).</td>
+        <td>Сузить комментарий до <code>// ingest</code>, либо привести T5/T7 к эмиссии <code>created_pages</code>.</td>
+        <td><span class="badge pass">accepted</span></td>
+      </tr>
+      <tr>
+        <td>F-004</td><td><span class="badge info">INFO</span></td><td>Task 7 Step 2: lint-chat provenance</td>
+        <td>В <code>lint-chat.ts:64</code> уже есть <code>const chatMessages = req.chatMessages ?? []</code>; T7 повторно выводит <code>lastUserMsg</code> из <code>req.chatMessages</code> вместо переиспользования локала. Компилируется и работает — лишь дублирование.</td>
+        <td>Опционально переиспользовать <code>chatMessages</code>. Косметика, не блокирует.</td>
+        <td><span class="badge pass">accepted</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="kv">CRITICAL open: <strong>0</strong> &nbsp;·&nbsp; WARNING open: <strong>2</strong> &nbsp;·&nbsp; INFO accepted: 2</p>
+  <div class="verdict">Вердикт: ТРЕБУЕТ ДОРАБОТКИ — 0 critical, 2 warning. План структурно и технически верен (все код-якоря сверены с исходниками); 2 WARNING — необязательная полнота провенанса относительно таблицы §2 спеки.</div>
+  <p class="kv">Цепочка: intent (—) → spec (<code>2026-06-26-all-operations-eval-and-rating-reset-design.md</code>) → plan (<code>2026-06-26-all-operations-eval-and-rating-reset.md</code>)</p>
 </section>
 <!-- TAB:plan END -->
 
