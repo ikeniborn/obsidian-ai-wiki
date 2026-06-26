@@ -76,8 +76,8 @@ body:has(#tab-result:checked) #pane-result{ display:block; }
 <input type="checkbox" id="theme-toggle" hidden>
 <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
 <input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
-<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
-<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden checked>
 <label for="theme-toggle" class="theme-btn" title="Тема dark/light">🌙 / ☀️</label>
 <header>
   <h1>Цепочка IDD→SDD: sidebar-ingest-and-lint-cleanup</h1>
@@ -331,7 +331,70 @@ body:has(#tab-result:checked) #pane-result{ display:block; }
 
 <!-- TAB:result START -->
 <section class="tab-pane" id="pane-result">
-  <p class="note">Этап ещё не проверен.</p>
+  <p class="lead">Result check — сверка исполнения плана с git diff</p>
+  <p class="sub">plan_hash <code>05ba29e1390514e6</code> · проверено 2026-06-26 · diff base <code>git diff 12d4ccd</code></p>
+
+  <h2>1. Резюме сверки</h2>
+  <table class="rpt-table">
+    <thead><tr><th>Документ</th><th>Путь</th></tr></thead>
+    <tbody>
+      <tr><td>Plan</td><td><code>docs/superpowers/plans/2026-06-26-sidebar-ingest-and-lint-cleanup.md</code></td></tr>
+      <tr><td>Spec</td><td><code>docs/superpowers/specs/2026-06-26-sidebar-ingest-and-lint-cleanup-design.md</code></td></tr>
+      <tr><td>Intent</td><td>—  (не создавался для этого топика)</td></tr>
+      <tr><td>Diff base</td><td><code>12d4ccd</code> (коммит плана) → HEAD — 10 файлов</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Результаты проверки</h2>
+  <h3>Покрытие шагов плана</h3>
+  <table class="rpt-table">
+    <thead><tr><th>Задача</th><th>Артефакт в diff</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>T1 · rmdir wrapper</td><td><code>src/vault-tools.ts</code> (+4)</td><td><span class="badge ok">DONE</span></td></tr>
+      <tr><td>T2 · ingest gating</td><td><code>src/view.ts</code> (+3/−1)</td><td><span class="badge ok">DONE</span></td></tr>
+      <tr><td>T3 · modal defaults</td><td><code>src/modals.ts</code> (+3/−1)</td><td><span class="badge ok">DONE</span></td></tr>
+      <tr><td>T4 · empty-type cleanup</td><td><code>src/phases/lint.ts</code> (+29)</td><td><span class="badge ok">DONE</span></td></tr>
+      <tr><td>T5 · build + QA</td><td><code>dist/main.js</code> rebuilt</td><td><span class="badge ok">DONE</span> <span class="badge info">QA вручную</span></td></tr>
+    </tbody>
+  </table>
+  <p class="sub">DONE: 5 · PARTIAL: 0 · MISSING: 0</p>
+
+  <h3>Findings</h3>
+  <table class="rpt-table">
+    <thead><tr><th>Severity</th><th>Шаг/область</th><th>Plan</th><th>Diff</th><th>Действие</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="badge info">INFO</span></td>
+        <td>T5 · ручная QA в Obsidian</td>
+        <td>Проверить R1/R2a/R2b в GUI Obsidian</td>
+        <td>Не отражается в diff (действие в GUI)</td>
+        <td>Делегировано пользователю — чеклист в плане (T5 step 2)</td>
+      </tr>
+      <tr>
+        <td><span class="badge warn">WARNING</span></td>
+        <td>Excess: <code>docs/wiki/*</code>, <code>.iwikiignore</code></td>
+        <td>Нет шага плана</td>
+        <td>operations.md, architecture.md, .iwiki index/log, .iwikiignore</td>
+        <td>Обосновано: мандат CLAUDE.md «keep docs current» (iwiki-ingest изменённых источников), не scope creep</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Покрытие Intent / Spec</h3>
+  <table class="rpt-table">
+    <thead><tr><th>Источник</th><th>Покрытие</th></tr></thead>
+    <tbody>
+      <tr><td>Desired Outcomes (intent)</td><td>N/A — intent для топика не создавался</td></tr>
+      <tr><td>Spec requirements</td><td><b>4/4</b> — R1 (view.ts), R2a (modals.ts), R2b (lint.ts), S1 (vault-tools.ts)</td></tr>
+      <tr><td>Success Criteria — gates</td><td>tsc baseline 14 (без регрессий), lint 0, build OK; ручная QA — за пользователем</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <b>Summary:</b> CRITICAL: <b>0</b> · WARNING: <b>1</b> (обосновано) · INFO: <b>1</b>.<br>
+    <b>Вердикт:</b> <span class="badge ok">OK</span> — все шаги выполнены, MISSING нет.<br>
+    <b>Chain:</b> intent (<code>null</code>) → spec ✓ → plan ✓ → <b>result</b> ✓
+  </div>
 </section>
 <!-- TAB:result END -->
 </body>

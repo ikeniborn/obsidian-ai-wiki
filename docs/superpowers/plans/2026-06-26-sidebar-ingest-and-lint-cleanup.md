@@ -13,6 +13,10 @@ review:
 chain:
   intent: null
   spec: docs/superpowers/specs/2026-06-26-sidebar-ingest-and-lint-cleanup-design.md
+result_check:
+  verdict: OK
+  plan_hash: 05ba29e1390514e6
+  last_run: 2026-06-26
 ---
 
 # Sidebar Ingest Gating & Lint Empty-Type Cleanup Implementation Plan
