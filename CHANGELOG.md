@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.188 — 2026-06-26
+
+### Новое
+- feat(eval): ratings map + OPERATION_AXES registry + per-op provenance fields
+- feat(view): registry-driven per-op rating rows; clear ratingSection + format preview on reset
+- feat(i18n): rating axis labels for retrieval/page/links/coverage/fix/rebuild (en/ru/es)
+- feat(ingest): emit eval_meta provenance (sources + created/updated/found pages + promptVersion)
+- feat(init): emit eval_meta provenance (files_processed + domain + promptVersion)
+- feat(lint): emit eval_meta provenance (articles + promptVersion)
+- feat(lint-chat): emit eval_meta provenance (articles + instruction + promptVersion)
+- feat(delete): emit eval_meta provenance (deleted_source + rebuilt_pages); isolate inner ingest meta
+
+---
+
 ## 0.1.187 — 2026-06-26
 
 ### Новое
