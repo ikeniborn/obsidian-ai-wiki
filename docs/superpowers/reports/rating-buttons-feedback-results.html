@@ -67,8 +67,8 @@ figcaption{ color:var(--muted); font-size:.82rem; margin-top:.3rem; }
 <input type="checkbox" id="theme-toggle" hidden>
 <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
 <input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
-<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
-<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden checked>
 <label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
 <header>
   <h1>rating-buttons-feedback — отчёт цепочки IDD→SDD</h1>
@@ -349,7 +349,71 @@ figcaption{ color:var(--muted); font-size:.82rem; margin-top:.3rem; }
 
 <!-- TAB:result START -->
 <section class="tab-pane" id="pane-result">
-  <p class="note">Этап ещё не проверен.</p>
+  <div class="chain-strip">Цепочка: <span>Intent (нет)</span> → <span>Spec ✓</span> → <span>Plan ✓</span> → <span class="cur">Result</span></div>
+
+  <h2>1. Резюме сверки</h2>
+  <p>Реализация прошла subagent-driven: Task 1 (haiku) + Task 2 (sonnet) + финальный whole-branch review (opus) = <b>READY</b>. Гейты: <code>tsc</code> 0 new / 14 pre-existing, <code>lint</code> clean, <code>build</code> OK.</p>
+  <table>
+    <thead><tr><th>Документ</th><th>Путь</th></tr></thead>
+    <tbody>
+      <tr><td>Intent</td><td>— (нет)</td></tr>
+      <tr><td>Spec</td><td><code>docs/superpowers/specs/2026-06-26-rating-buttons-feedback-design.md</code></td></tr>
+      <tr><td>Plan</td><td><code>docs/superpowers/plans/2026-06-26-rating-buttons-feedback.md</code></td></tr>
+      <tr><td>Diff base</td><td><code>git diff f49b753..HEAD</code> — 9 файлов</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Результаты проверки</h2>
+  <h3>Покрытие шагов плана</h3>
+  <table>
+    <thead><tr><th>Шаг</th><th>Статус</th><th>Свидетельство в diff</th></tr></thead>
+    <tbody>
+      <tr><td>T1·S1 CSS</td><td><span class="badge b-ok">DONE</span></td><td><code>src/styles.css</code> +25</td></tr>
+      <tr><td>T1·S2 build</td><td><span class="badge b-ok">DONE</span></td><td><code>dist/styles.css</code> +25, <code>dist/main.js</code></td></tr>
+      <tr><td>T1·S3 commit</td><td><span class="badge b-ok">DONE</span></td><td>commit <code>7e6f4df</code></td></tr>
+      <tr><td>T2·S1 eval-log</td><td><span class="badge b-ok">DONE</span></td><td><code>src/eval-log.ts</code> +14</td></tr>
+      <tr><td>T2·S2 controller</td><td><span class="badge b-ok">DONE</span></td><td><code>src/controller.ts</code> +10</td></tr>
+      <tr><td>T2·S3 view</td><td><span class="badge b-ok">DONE</span></td><td><code>src/view.ts</code> ±22</td></tr>
+      <tr><td>T2·S4 tsc</td><td><span class="badge b-ok">DONE</span></td><td>0 new / 14 pre-existing</td></tr>
+      <tr><td>T2·S5 lint</td><td><span class="badge b-ok">DONE</span></td><td>clean</td></tr>
+      <tr><td>T2·S6 build</td><td><span class="badge b-ok">DONE</span></td><td>exit 0</td></tr>
+      <tr><td>T2·S7 commit</td><td><span class="badge b-ok">DONE</span></td><td>commit <code>917f4c9</code></td></tr>
+      <tr><td>T3·S1 deploy</td><td><span class="badge" style="background:color-mix(in srgb,var(--accent) 20%,var(--surface));color:var(--accent);border:1px solid var(--accent);">INFO</span></td><td>cp в волт (вне git), grep=5 подтверждён</td></tr>
+      <tr><td>T3·S2–S4 ручные SC1–SC4</td><td><span class="badge" style="background:color-mix(in srgb,var(--accent) 20%,var(--surface));color:var(--accent);border:1px solid var(--accent);">INFO</span></td><td>UI-чекпойнт человека, кода нет</td></tr>
+      <tr><td>T3·S5 финальный коммит</td><td><span class="badge" style="background:color-mix(in srgb,var(--accent) 20%,var(--surface));color:var(--accent);border:1px solid var(--accent);">INFO</span></td><td>no-op</td></tr>
+    </tbody>
+  </table>
+  <p class="sub">DONE: 10 · INFO (deploy out-of-tree / pending-human / no-op): 5 · MISSING: 0</p>
+
+  <h3>Findings</h3>
+  <table>
+    <thead><tr><th>Severity</th><th>Шаг</th><th>Plan</th><th>Diff</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td>INFO</td><td>T3·S1 deploy</td><td>cp main.js/styles.css/manifest.json в волт</td><td>вне git (волт за пределами репо)</td><td>выполнено вручную, grep=5; коммитить нечего</td></tr>
+      <tr><td>INFO</td><td>T3·S3/S4 ручные SC1–SC4</td><td>клики 👍/👎 + tail eval.jsonl</td><td>изменений в коде нет (UI-чекпойнт)</td><td>человек проверяет в Obsidian после reload</td></tr>
+      <tr><td>WARNING</td><td>excess docs/wiki/*</td><td>явного шага на wiki нет</td><td>llm-pipeline.md + .iwiki/* изменены</td><td>легитимно — мандат CLAUDE.md (iwiki ingest)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Покрытие Intent / Spec</h3>
+  <table>
+    <thead><tr><th>Требование</th><th>Покрыто в diff</th></tr></thead>
+    <tbody>
+      <tr><td>R1 фидбэк</td><td><code>src/styles.css</code> + <code>src/view.ts</code></td></tr>
+      <tr><td>R2 цвет</td><td><code>src/styles.css</code></td></tr>
+      <tr><td>R3 перевыбор</td><td><code>src/view.ts</code></td></tr>
+      <tr><td>R4 истина</td><td><code>eval-log</code> + <code>controller</code> + <code>view</code></td></tr>
+      <tr><td>R5 CSS</td><td><code>src/styles.css</code></td></tr>
+      <tr><td>R6 Fix B</td><td><code>eval-log</code> + <code>controller</code> + <code>view</code></td></tr>
+      <tr><td>R7 build/deploy</td><td><code>dist/*</code> + deploy (вне дерева)</td></tr>
+      <tr><td>SC1–SC4</td><td>ручные критерии — ожидают человека (INFO)</td></tr>
+    </tbody>
+  </table>
+  <p class="sub">Spec requirements: <b>7/7</b> покрыты в diff. Desired Outcomes: intent-дока нет (N/A).</p>
+
+  <h2>3. Вердикт</h2>
+  <p class="note">CRITICAL: 0 · WARNING: 1 (мандатный wiki) · INFO: 3 (deploy вне дерева + ручные SC + no-op). <b>Вердикт: <span class="badge b-ok">OK</span></b></p>
+  <div class="chain-strip">Цепочка: <span>Intent (нет)</span> → <span>Spec ✓</span> → <span>Plan ✓</span> → <span class="cur">Result ✓</span> · ручная SC1–SC4 — человеческий чекпойнт</div>
 </section>
 <!-- TAB:result END -->
 </body>
