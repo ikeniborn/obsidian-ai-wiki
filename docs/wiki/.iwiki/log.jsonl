@@ -44,6 +44,7 @@
 {"op":"ingest","source":"src/settings.ts","page":"docs/wiki/backends-and-config.md","date":"2026-06-25","note":"dev-eval review (no wiki footprint): settings.ts dropped the evaluatorModel UI block; that setting was never documented on backends-and-config. No content change."}
 {"op":"ingest","source":"src/i18n.ts","page":"docs/wiki/backends-and-config.md","date":"2026-06-25","note":"dev-eval review (no wiki footprint): i18n.ts added rating labels and removed evaluator strings; i18n keys are not page-documented. No content change."}
 {"op":"ingest","source":"dist/main.js","page":"docs/wiki/backends-and-config.md","date":"2026-06-25","note":"dev-eval review (no wiki footprint): dist/main.js is a generated build bundle, not a documented source. No content change."}
-{"op":"ingest","source":"src/phases/lint.ts","page":"operations.md","date":"2026-06-26"}
-{"op":"ingest","source":"src/modals.ts","page":"operations.md","date":"2026-06-26"}
-{"op":"ingest","source":"src/view.ts","page":"architecture.md","date":"2026-06-26"}
+{"op": "ingest", "source": "src/phases/lint.ts", "page": "docs/wiki/operations.md", "date": "2026-06-26", "note": "R2b empty-entity-type cleanup documented in operations.md Lint section."}
+{"op": "ingest", "source": "src/modals.ts", "page": "docs/wiki/operations.md", "date": "2026-06-26", "note": "R2a empty types default-OFF documented in operations.md Lint Options."}
+{"op": "ingest", "source": "src/view.ts", "page": "docs/wiki/architecture.md", "date": "2026-06-26", "note": "R1 Ingest button gating documented in architecture.md Sidebar View."}
+{"op": "ingest", "source": "src/vault-tools.ts", "page": "docs/wiki/architecture.md", "date": "2026-06-26", "note": "S1 rmdir wrapper already listed in architecture.md VaultTools section."}
