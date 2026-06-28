@@ -53,3 +53,5 @@
 {"op":"ingest","source":"src/agent-runner.ts","page":"docs/wiki/operations.md","date":"2026-06-26","note":"all-operations eval dataset + per-op axes"}
 {"op":"ingest","source":"src/agent-runner.ts","page":"docs/wiki/architecture.md","date":"2026-06-26","note":"reviewed vs ratings:{} change; AgentRunner section defers record detail to llm-pipeline, still accurate"}
 {"op":"ingest","source":"src/i18n.ts","page":"docs/wiki/backends-and-config.md","date":"2026-06-26","note":"reviewed vs new rating-axis labels; language-config section unaffected, still accurate"}
+{"op":"ingest","source":"src/view.ts+src/eval-log.ts","page":"docs/wiki/llm-pipeline.md","date":"2026-06-28"}
+{"op":"ingest","source":"scripts/dspy/lib/loader.py+optimizer.py+scripts/eval.ts","page":"docs/wiki/operations.md","date":"2026-06-28"}
