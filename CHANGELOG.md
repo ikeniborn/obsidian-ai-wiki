@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.189 — 2026-06-28
+
+### Новое
+- feat(view): shared renderResultFor + comment box — historical rating without cross-run leak
+- feat(eval): comment field + readEvalRecord/updateEvalComment by runId
+- feat(controller): readRun/commentRun wrappers (dev-mode gated)
+- feat(i18n): comment box labels (en/ru/es)
+- feat(eval-report): read per-axis ratings map with scalar fallback + comment count
+- feat(dspy/optimizer): primary-axis up signal + comment seed-feedback block
+- feat(dspy/loader): primary-axis signal with scalar fallback + comment passthrough
+
+### Исправления
+- fix(view): generation guard in renderResultFor — no stale ratingSection on rapid history re-clicks
+
+---
+
 ## 0.1.188 — 2026-06-26
 
 ### Новое
