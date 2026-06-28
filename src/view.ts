@@ -979,6 +979,7 @@ export class LlmWikiView extends ItemView {
       const rid = runId;
       void (async () => {
         const persisted = await this.plugin.controller.readRun(rid);
+        if (section !== this.formatPreviewSection) return; // preview replaced/torn down while readRun was in flight
         for (const ax of OPERATION_AXES["format"]) {
           if (ax.gate === "vision" && (visionCount ?? 0) === 0) continue;
           this.renderRatingRow(section, rid, ax.id, view[ax.labelKey], persisted?.ratings[ax.id] ?? null);

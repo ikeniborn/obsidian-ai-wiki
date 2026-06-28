@@ -58,7 +58,7 @@ Copy `.env.example` → `.env`. Key variables:
 
 `eval.jsonl` — one JSON object per line, written by the plugin's human 👍/👎 rating flow (no LLM judge):
 ```json
-{"operation": "query", "question": "...", "answer": "...", "rating": "up", "vision": false, "promptVersion": "abc123", "visionPromptVersion": null, "recognitionRating": null}
+{"operation": "query", "question": "...", "answer": "...", "ratings": {"answer": "up", "retrieval": "up"}, "comment": "more code examples", "rating": null, "vision": "off", "promptVersion": "abc123", "visionPromptVersion": null, "recognitionRating": null}
 ```
 
 Key fields:
