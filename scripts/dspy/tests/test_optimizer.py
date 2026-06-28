@@ -85,3 +85,31 @@ def test_run_mipro_rejects_regression():
         )
 
     assert result is None
+
+
+def test_build_feedback_block_groups_by_signal():
+    from lib.optimizer import build_feedback_block
+    trainset = [
+        {"operation": "query", "ratings": {"answer": "down"}, "comment": "too vague"},
+        {"operation": "query", "ratings": {"answer": "up"}, "comment": "great, keep examples"},
+        {"operation": "query", "ratings": {"answer": "up"}, "comment": "great, keep examples"},  # dup → deduped
+        {"operation": "query", "ratings": {}, "comment": "unrated note"},  # no signal → Notes
+        {"operation": "query", "ratings": {"answer": "up"}},  # no comment → ignored
+    ]
+    block = build_feedback_block(trainset)
+    assert "Problems to fix" in block and "too vague" in block
+    assert "What to keep" in block and "great, keep examples" in block
+    assert block.count("great, keep examples") == 1  # deduped
+    assert "Notes" in block and "unrated note" in block
+
+
+def test_build_feedback_block_empty_when_no_comments():
+    from lib.optimizer import build_feedback_block
+    assert build_feedback_block([{"operation": "query", "ratings": {"answer": "up"}}]) == ""
+
+
+def test_build_feedback_block_caps_comment_length():
+    from lib.optimizer import build_feedback_block
+    long = "x" * 500
+    block = build_feedback_block([{"operation": "query", "ratings": {"answer": "down"}, "comment": long}])
+    assert "x" * 200 in block and "x" * 201 not in block  # trimmed to ~200 chars

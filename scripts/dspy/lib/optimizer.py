@@ -3,6 +3,43 @@ from __future__ import annotations
 import re
 import dspy
 from lib.signature import make_signature
+from lib.loader import resolve_signal
+
+_COMMENT_CHAR_CAP = 200  # spec finding F-001: bound per-comment length
+_BULLETS_PER_GROUP = 20
+
+
+def build_feedback_block(trainset: list[dict], axis_override: str | None = None) -> str:
+    """Aggregate human comments into a seed "Human reviewer feedback" block, grouped
+    by the resolved up/down signal. Empty string when no comments — then the seed is
+    byte-identical to today's behaviour."""
+    fix: list[str] = []
+    keep: list[str] = []
+    notes: list[str] = []
+    seen: set[str] = set()
+    for e in trainset:
+        c = (e.get("comment") or "").strip()
+        if not c:
+            continue
+        c = c[:_COMMENT_CHAR_CAP]
+        if c in seen:
+            continue
+        seen.add(c)
+        sig = resolve_signal(e, axis_override)
+        (fix if sig == "down" else keep if sig == "up" else notes).append(c)
+
+    lines: list[str] = []
+
+    def add(title: str, items: list[str]) -> None:
+        if items:
+            lines.append(f"## {title}")
+            lines.extend(f"- {x}" for x in items[:_BULLETS_PER_GROUP])
+
+    add("Problems to fix (human reviewer feedback)", fix)
+    add("What to keep (human reviewer feedback)", keep)
+    add("Notes (human reviewer feedback)", notes)
+    return "\n".join(lines)
+
 
 _RESTORE_PROMPT = """\
 Below is the ORIGINAL prompt template (contains {{placeholders}} that must be preserved) \
@@ -65,21 +102,23 @@ def run_mipro(
     the held-out 👍 set (spec §8 reject condition)."""
     dspy.configure(lm=lm)
 
-    sig = make_signature(template_content)
-    program = dspy.Predict(sig)  # original (pre-optimization) prompt
-
-    # recognition bucket uses recognitionRating; ":recognition" is reserved for the
-    # deferred vision-recognition pass (not produced by optimize.py yet — Task 18).
-    field = "recognitionRating" if operation.endswith(":recognition") else "rating"
+    axis_override = "recognition" if operation.endswith(":recognition") else None
 
     examples = [
         dspy.Example(
             user_message=entry.get("question", ""),
             reference=entry.get("answer", ""),
-            up=(entry.get(field) == "up"),
+            up=(resolve_signal(entry, axis_override) == "up"),
         ).with_inputs("user_message")
         for entry in trainset
     ]
+
+    # Seed-augmentation: fold human comments into the seed the optimizer rewrites.
+    feedback = build_feedback_block(trainset, axis_override)
+    seed = f"{feedback}\n\n{template_content}" if feedback else template_content
+
+    sig = make_signature(seed)
+    program = dspy.Predict(sig)  # original (pre-optimization) prompt
 
     def metric(example, prediction, trace=None):
         sim = _jaccard(getattr(prediction, "result", "") or "", example.reference)
@@ -103,4 +142,4 @@ def run_mipro(
         if candidate < baseline:
             return None  # regressed the 👍 set — reject the candidate
 
-    return restore_placeholders(lm, template_content, compiled.signature.instructions)
+    return restore_placeholders(lm, seed, compiled.signature.instructions)
