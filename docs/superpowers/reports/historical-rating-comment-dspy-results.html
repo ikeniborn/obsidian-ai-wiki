@@ -79,8 +79,8 @@ body:has(#tab-result:checked) #pane-result{ display:block; }
 <input type="checkbox" id="theme-toggle" hidden>
 <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
 <input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
-<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
-<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden checked>
 <label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
 <header>
   <h1>IDD-цепочка: historical-rating-comment-dspy</h1>
@@ -351,7 +351,69 @@ body:has(#tab-result:checked) #pane-result{ display:block; }
 
 <!-- TAB:result START -->
 <section class="tab-pane" id="pane-result">
-  <p class="note">Этап ещё не проверен.</p>
+  <h2>1. Резюме сверки</h2>
+  <p><strong>Diff base:</strong> <code>git diff c1358fa..HEAD</code> — 17 файлов, +666/−91 ·
+     <strong>plan_hash:</strong> <code>38da339d4ce3dca7</code> · <strong>Вердикт:</strong> <span class="badge b-ok">OK</span></p>
+  <table>
+    <thead><tr><th>Документ</th><th>Путь / статус</th></tr></thead>
+    <tbody>
+      <tr><td>Intent</td><td><em>null</em> — стадии intent не было (брейншторм напрямую)</td></tr>
+      <tr><td>Spec</td><td><code>docs/superpowers/specs/2026-06-28-historical-rating-comment-dspy-design.md</code></td></tr>
+      <tr><td>Plan</td><td><code>docs/superpowers/plans/2026-06-28-historical-rating-comment-dspy.md</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Результаты проверки</h2>
+  <h3>Покрытие шагов плана</h3>
+  <p><span class="badge b-ok">DONE 8/8</span> &nbsp; <span class="badge b-info">PARTIAL 0</span> &nbsp; <span class="badge b-crit">MISSING 0</span></p>
+  <table>
+    <thead><tr><th>Задача</th><th>Файлы в diff</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>T1 eval-log</td><td><code>src/eval-log.ts</code>, <code>eval/eval-comment/run.ts</code>(+.cjs)</td><td><span class="badge b-ok">DONE</span></td></tr>
+      <tr><td>T2 controller</td><td><code>src/controller.ts</code></td><td><span class="badge b-ok">DONE</span></td></tr>
+      <tr><td>T3 i18n</td><td><code>src/i18n.ts</code></td><td><span class="badge b-ok">DONE</span></td></tr>
+      <tr><td>T4 view</td><td><code>src/view.ts</code></td><td><span class="badge b-ok">DONE</span></td></tr>
+      <tr><td>T5 dspy loader</td><td><code>loader.py</code>, <code>test_loader.py</code>, <code>dspy/CLAUDE.md</code></td><td><span class="badge b-ok">DONE</span></td></tr>
+      <tr><td>T6 dspy optimizer</td><td><code>optimizer.py</code>, <code>test_optimizer.py</code></td><td><span class="badge b-ok">DONE</span></td></tr>
+      <tr><td>T7 eval.ts</td><td><code>scripts/eval.ts</code></td><td><span class="badge b-ok">DONE</span></td></tr>
+      <tr><td>T8 docs</td><td><code>operations.md</code>, <code>llm-pipeline.md</code></td><td><span class="badge b-ok">DONE</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Покрытие Spec Success Criteria</h3>
+  <table>
+    <thead><tr><th>SC</th><th>Реализация</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>SC-1 любой прогон ратится по runId, без утечки</td><td><code>renderResultFor</code> + <code>renderSeq</code> guard</td><td><span class="badge b-ok">✓ код</span></td></tr>
+      <tr><td>SC-2 восстановление 👍/👎</td><td><code>readEvalRecord</code> + <code>renderRatingRow(initial)</code></td><td><span class="badge b-ok">✓ код</span></td></tr>
+      <tr><td>SC-3 коммент на прогон персистится</td><td><code>EvalRecord.comment</code> + <code>updateEvalComment</code> + <code>renderCommentBox</code></td><td><span class="badge b-ok">✓ код</span></td></tr>
+      <tr><td>SC-4 DSPy читает ratings-карту + seed feedback</td><td><code>resolve_signal</code> + <code>build_feedback_block</code>; <code>eval.ts</code> мигрирован</td><td><span class="badge b-ok">✓ код</span></td></tr>
+    </tbody>
+  </table>
+  <p><strong>Покрыто:</strong> Desired Outcomes — n/a (intent отсутствует) · Spec SC — <strong>4/4</strong>.</p>
+
+  <h3>Excess changes (легитимны)</h3>
+  <table>
+    <thead><tr><th>Файл</th><th>Причина</th></tr></thead>
+    <tbody>
+      <tr><td><code>dist/main.js</code></td><td>release-пересборка плагина</td></tr>
+      <tr><td><code>docs/wiki/.iwiki/index.jsonl</code>, <code>log.jsonl</code></td><td>iwiki-индекс/лог (побочный продукт T8)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Находки</h3>
+  <table>
+    <thead><tr><th>severity</th><th>что</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge b-info">INFO</span></td><td>SC-1 / SC-2 — runtime-подтверждение UI требует ручной dev-mode проверки в Obsidian (T4 Step 8, HUMAN checkpoint; subagent Obsidian не гоняет). Код присутствует и прошёл review.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>Сводка:</strong> CRITICAL: 0 · WARNING: 0 · INFO: 1 · <strong>Вердикт:</strong> <span class="badge b-ok">OK</span><br>
+    <strong>Финальное review (opus):</strong> Ready-to-merge = YES, 0 Critical / 0 Important.<br>
+    <strong>Цепочка:</strong> intent <em>null</em> → spec ✓ → plan ✓ → <strong>result ✓</strong>.
+  </div>
 </section>
 <!-- TAB:result END -->
 </body>
