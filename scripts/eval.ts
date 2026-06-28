@@ -15,8 +15,23 @@ interface Rec {
   vision?: "on" | "off";
   rating: Rating;
   recognitionRating?: Rating;
+  ratings?: Record<string, Rating>;
+  comment?: string;
   llmErrors?: { kind: string }[];
   ruleFirings?: Record<string, number>;
+}
+
+const PRIMARY_AXIS: Record<string, string> = {
+  query: "answer", chat: "answer", format: "formatting", ingest: "page",
+  init: "coverage", lint: "fix", "lint-chat": "fix", delete: "rebuild",
+};
+
+function resolveSignal(r: Rec, recognition = false): Rating {
+  const axis = recognition ? "recognition" : PRIMARY_AXIS[r.operation];
+  const m = r.ratings;
+  if (m && axis && (m[axis] === "up" || m[axis] === "down")) return m[axis];
+  const scalar = recognition ? r.recognitionRating : r.rating;
+  return scalar === "up" || scalar === "down" ? scalar : null;
 }
 
 function parseLog(text: string): Rec[] {
@@ -26,7 +41,12 @@ function parseLog(text: string): Rec[] {
     if (!s) continue;
     try {
       const r = JSON.parse(s) as Rec;
-      if (r && typeof r.operation === "string" && "rating" in r) out.push(r); // skip legacy lines
+      // keep human-labelled lines (per-axis ratings map OR legacy scalar); skip judge lines
+      if (r && typeof r.operation === "string" && ("rating" in r || "ratings" in r)) {
+        r.rating = resolveSignal(r, false);            // normalize for the report fns
+        r.recognitionRating = resolveSignal(r, true);
+        out.push(r);
+      }
     } catch { /* skip malformed */ }
   }
   return out;
@@ -61,6 +81,8 @@ function main(args: string[]): void {
 
     const lines: string[] = [];
     lines.push(`eval.jsonl — ${recs.length} records (${logPath})`);
+    const withComment = recs.filter((r) => (r.comment ?? "").trim().length > 0).length;
+    lines.push(`comments: ${withComment}/${recs.length} records`);
     lines.push("");
     lines.push(`Answer quality (query/chat): ${upRate(qc, "rating")}`);
     lines.push(...byPrompt(qc, "rating", "promptVersion"));
