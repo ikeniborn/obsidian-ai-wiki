@@ -26511,6 +26511,9 @@ var en = {
     delete: "Delete",
     ratingUp: "Good output",
     ratingDown: "Bad output",
+    commentPlaceholder: "Comment (optional) \u2014 reused as an opinion in optimization\u2026",
+    commentSave: "Save comment",
+    commentSaved: "saved",
     ratingAnswer: "Rate this answer:",
     ratingFormatting: "Rate formatting:",
     ratingRecognition: "Rate recognition:",
@@ -26837,6 +26840,9 @@ var ru = {
     delete: "\u0423\u0434\u0430\u043B\u0438\u0442\u044C",
     ratingUp: "\u0425\u043E\u0440\u043E\u0448\u0438\u0439 \u0432\u044B\u0432\u043E\u0434",
     ratingDown: "\u041F\u043B\u043E\u0445\u043E\u0439 \u0432\u044B\u0432\u043E\u0434",
+    commentPlaceholder: "\u041A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439 (\u043D\u0435\u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E) \u2014 \u0443\u0447\u0438\u0442\u044B\u0432\u0430\u0435\u0442\u0441\u044F \u043A\u0430\u043A \u043C\u043D\u0435\u043D\u0438\u0435 \u043F\u0440\u0438 \u043E\u043F\u0442\u0438\u043C\u0438\u0437\u0430\u0446\u0438\u0438\u2026",
+    commentSave: "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439",
+    commentSaved: "\u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E",
     ratingAnswer: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u043E\u0442\u0432\u0435\u0442:",
     ratingFormatting: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435:",
     ratingRecognition: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u0432\u0430\u043D\u0438\u0435:",
@@ -27162,6 +27168,9 @@ var es = {
     delete: "Eliminar",
     ratingUp: "Buen resultado",
     ratingDown: "Mal resultado",
+    commentPlaceholder: "Comentario (opcional) \u2014 se reutiliza como opini\xF3n en la optimizaci\xF3n\u2026",
+    commentSave: "Guardar comentario",
+    commentSaved: "guardado",
     ratingAnswer: "Eval\xFAa la respuesta:",
     ratingFormatting: "Eval\xFAa el formato:",
     ratingRecognition: "Eval\xFAa el reconocimiento:",
@@ -31404,6 +31413,55 @@ async function updateEvalRating(adapter, pluginDir, runId, axis, rating) {
     return void 0;
   }
 }
+async function readEvalRecord(adapter, pluginDir, runId) {
+  const path2 = evalLogPath(pluginDir);
+  try {
+    if (!await adapter.exists(path2)) return void 0;
+    const content = await adapter.read(path2);
+    const lines = content.split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const raw = lines[i].trim();
+      if (!raw) continue;
+      let rec;
+      try {
+        rec = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      if (rec.runId !== runId) continue;
+      return { ratings: rec.ratings ?? {}, comment: rec.comment ?? "" };
+    }
+    return void 0;
+  } catch {
+    return void 0;
+  }
+}
+async function updateEvalComment(adapter, pluginDir, runId, comment) {
+  const path2 = evalLogPath(pluginDir);
+  try {
+    if (!await adapter.exists(path2)) return void 0;
+    const content = await adapter.read(path2);
+    const lines = content.split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const raw = lines[i].trim();
+      if (!raw) continue;
+      let rec;
+      try {
+        rec = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      if (rec.runId !== runId) continue;
+      rec.comment = comment;
+      lines[i] = JSON.stringify(rec);
+      await adapter.write(path2, lines.join("\n"));
+      return comment;
+    }
+    return void 0;
+  } catch {
+    return void 0;
+  }
+}
 
 // src/utils/vault-walk.ts
 var import_obsidian6 = require("obsidian");
@@ -31524,6 +31582,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
   lastUserMessage = "";
   lastRunId = null;
   ratingSection = null;
+  renderSeq = 0;
   startTs = 0;
   lastStepTs = 0;
   llmStats = [];
@@ -32191,7 +32250,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     }
     this.updateMetrics();
   }
-  renderRatingRow(parent, runId, axis, label) {
+  renderRatingRow(parent, runId, axis, label, initial) {
     if (!this.plugin.settings.devMode?.enabled) return;
     const T = i18n();
     const row = parent.createDiv("ai-wiki-rating-row");
@@ -32202,12 +32261,60 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       up.toggleClass("is-active", rating === "up");
       down.toggleClass("is-active", rating === "down");
     };
+    render2(initial);
     const handle = (rating) => async () => {
       const result = await this.plugin.controller.rateRun(runId, axis, rating);
       if (result !== void 0) render2(result);
     };
     up.addEventListener("click", () => void handle("up")());
     down.addEventListener("click", () => void handle("down")());
+  }
+  /** Render an entry's result body + (dev-mode) rating rows and comment box, bound
+   *  to entry.id. Used by both finish() and the history-row click so the rating UI is
+   *  always torn down and rebuilt for the displayed runId — never leaked across runs. */
+  async renderResultFor(entry) {
+    const seq = ++this.renderSeq;
+    this.ratingSection?.remove();
+    this.ratingSection = null;
+    this.finalEl.empty();
+    const comp = new import_obsidian7.Component();
+    comp.load();
+    await import_obsidian7.MarkdownRenderer.render(this.app, entry.finalText || "(empty)", this.finalEl, "", comp);
+    sanitizeLinks(this.finalEl);
+    this.resultSection.removeClass("ai-wiki-hidden");
+    this.finalEl.removeClass("ai-wiki-hidden");
+    this.resultOpen = true;
+    this.resultToggle.setText("\u25BC");
+    if (!this.plugin.settings.devMode?.enabled) return;
+    if (entry.status !== "done" || entry.operation === "format") return;
+    const axes = (OPERATION_AXES[entry.operation] ?? []).filter((a) => a.gate !== "vision");
+    if (axes.length === 0) return;
+    const persisted = await this.plugin.controller.readRun(entry.id);
+    if (seq !== this.renderSeq) return;
+    this.ratingSection = this.resultSection.createDiv("ai-wiki-rating-section");
+    const view = i18n().view;
+    for (const ax of axes) {
+      this.renderRatingRow(this.ratingSection, entry.id, ax.id, view[ax.labelKey], persisted?.ratings[ax.id] ?? null);
+    }
+    this.renderCommentBox(this.ratingSection, entry.id, persisted?.comment ?? "");
+  }
+  /** One free-form comment per run, persisted to eval.jsonl via commentRun. Dev mode only. */
+  renderCommentBox(parent, runId, initial) {
+    if (!this.plugin.settings.devMode?.enabled) return;
+    const T = i18n();
+    const box = parent.createDiv("ai-wiki-comment-box");
+    const ta = box.createEl("textarea", {
+      cls: "ai-wiki-comment-input",
+      attr: { placeholder: T.view.commentPlaceholder, rows: "2" }
+    });
+    ta.value = initial;
+    const actions = box.createDiv("ai-wiki-comment-actions");
+    const saveBtn = actions.createEl("button", { text: T.view.commentSave });
+    const status = actions.createSpan({ cls: "ai-wiki-comment-status" });
+    saveBtn.addEventListener("click", () => void (async () => {
+      const saved = await this.plugin.controller.commentRun(runId, ta.value);
+      if (saved !== void 0) status.setText(T.view.commentSaved);
+    })());
   }
   renderFormatPreview(tempPath, report, missing, runId, visionCount) {
     const T = i18n();
@@ -32269,10 +32376,16 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     if (runId) {
       const section = this.formatPreviewSection;
       const view = i18n().view;
-      for (const ax of OPERATION_AXES["format"]) {
-        if (ax.gate === "vision" && (visionCount ?? 0) === 0) continue;
-        this.renderRatingRow(section, runId, ax.id, view[ax.labelKey]);
-      }
+      const rid = runId;
+      void (async () => {
+        const persisted = await this.plugin.controller.readRun(rid);
+        if (section !== this.formatPreviewSection) return;
+        for (const ax of OPERATION_AXES["format"]) {
+          if (ax.gate === "vision" && (visionCount ?? 0) === 0) continue;
+          this.renderRatingRow(section, rid, ax.id, view[ax.labelKey], persisted?.ratings[ax.id] ?? null);
+        }
+        this.renderCommentBox(section, rid, persisted?.comment ?? "");
+      })();
     }
   }
   async finish(entry) {
@@ -32292,25 +32405,8 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     this.resultSpeedEl?.setText(this.buildSpeedText());
     this.finalEl.empty();
     if (entry.finalText) {
-      const comp = new import_obsidian7.Component();
-      comp.load();
-      await import_obsidian7.MarkdownRenderer.render(this.app, entry.finalText, this.finalEl, "", comp);
-      sanitizeLinks(this.finalEl);
-      this.resultSection.removeClass("ai-wiki-hidden");
-      this.finalEl.removeClass("ai-wiki-hidden");
-      this.resultOpen = true;
-      this.resultToggle.setText("\u25BC");
+      await this.renderResultFor(entry);
       this.lastRunId = entry.id;
-      if (entry.status === "done" && entry.operation !== "format") {
-        const axes = (OPERATION_AXES[entry.operation] ?? []).filter((a) => a.gate !== "vision");
-        if (axes.length > 0) {
-          this.ratingSection = this.resultSection.createDiv("ai-wiki-rating-section");
-          const view = i18n().view;
-          for (const ax of axes) {
-            this.renderRatingRow(this.ratingSection, entry.id, ax.id, view[ax.labelKey]);
-          }
-        }
-      }
       const CHAT_OPS = ["lint", "lint-chat", "ingest", "query"];
       if (CHAT_OPS.includes(entry.operation) && entry.status === "done" && entry.finalText) {
         this.lastContext = {
@@ -32591,16 +32687,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
           })();
         });
       }
-      row.addEventListener("click", () => {
-        this.finalEl.empty();
-        const comp = new import_obsidian7.Component();
-        comp.load();
-        void import_obsidian7.MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, "", comp).then(() => sanitizeLinks(this.finalEl));
-        this.resultSection.removeClass("ai-wiki-hidden");
-        this.finalEl.removeClass("ai-wiki-hidden");
-        this.resultOpen = true;
-        this.resultToggle.setText("\u25BC");
-      });
+      row.addEventListener("click", () => void this.renderResultFor(it));
     }
   }
   showQuestionModal(question, options) {
@@ -50613,6 +50700,16 @@ var WikiController = class {
   async rateRun(runId, axis, rating) {
     if (!this.plugin.settings.devMode?.enabled) return void 0;
     return updateEvalRating(this.app.vault.adapter, this.pluginDir(), runId, axis, rating);
+  }
+  /** Read a finished run's persisted ratings + comment from eval.jsonl (dev mode only). */
+  async readRun(runId) {
+    if (!this.plugin.settings.devMode?.enabled) return void 0;
+    return readEvalRecord(this.app.vault.adapter, this.pluginDir(), runId);
+  }
+  /** Set a finished run's free-form comment in eval.jsonl (dev mode only). Returns the persisted comment. */
+  async commentRun(runId, comment) {
+    if (!this.plugin.settings.devMode?.enabled) return void 0;
+    return updateEvalComment(this.app.vault.adapter, this.pluginDir(), runId, comment);
   }
   pluginDir() {
     return this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`;
