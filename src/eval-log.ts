@@ -55,6 +55,7 @@ export interface EvalRecord extends EvalMetaFields {
   llmErrors: LlmError[];
   ruleFirings: Record<string, number>;
   ratings: Record<string, Rating>;
+  comment?: string;
 }
 
 /** Canonical axis id (see OPERATION_AXES): answer | retrieval | formatting |
@@ -129,4 +130,62 @@ export async function updateEvalRating(
     }
     return undefined; // no record matched runId
   } catch { return undefined; /* never block the UI */ }
+}
+
+/**
+ * Read one record's ratings + comment, matched by runId (last match wins, like
+ * updateEvalRating). Returns undefined when the file/record is absent or on any
+ * failure, so the caller renders no rating/comment rows. Tolerates legacy lines.
+ */
+export async function readEvalRecord(
+  adapter: VaultAdapter,
+  pluginDir: string,
+  runId: string,
+): Promise<{ ratings: Record<string, Rating>; comment: string } | undefined> {
+  const path = evalLogPath(pluginDir);
+  try {
+    if (!(await adapter.exists(path))) return undefined;
+    const content = await adapter.read(path);
+    const lines = content.split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const raw = lines[i].trim();
+      if (!raw) continue;
+      let rec: EvalRecord;
+      try { rec = JSON.parse(raw) as EvalRecord; } catch { continue; }
+      if (rec.runId !== runId) continue;
+      return { ratings: rec.ratings ?? {}, comment: rec.comment ?? "" };
+    }
+    return undefined;
+  } catch { return undefined; }
+}
+
+/**
+ * Set one record's comment in place, matched by runId. Returns the persisted
+ * comment, or undefined when no record matched / the write failed (so the caller
+ * can avoid showing a state that was not persisted). Never throws.
+ */
+export async function updateEvalComment(
+  adapter: VaultAdapter,
+  pluginDir: string,
+  runId: string,
+  comment: string,
+): Promise<string | undefined> {
+  const path = evalLogPath(pluginDir);
+  try {
+    if (!(await adapter.exists(path))) return undefined;
+    const content = await adapter.read(path);
+    const lines = content.split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const raw = lines[i].trim();
+      if (!raw) continue;
+      let rec: EvalRecord;
+      try { rec = JSON.parse(raw) as EvalRecord; } catch { continue; }
+      if (rec.runId !== runId) continue;
+      rec.comment = comment;
+      lines[i] = JSON.stringify(rec);
+      await adapter.write(path, lines.join("\n"));
+      return comment;
+    }
+    return undefined;
+  } catch { return undefined; }
 }
