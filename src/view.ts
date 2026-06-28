@@ -10,7 +10,7 @@ import { domainWikiFolder, domainLogPath, domainIndexPath, isWikiArticlePath } f
 import { computeSpeedText } from "./phases/llm-utils";
 import { isAbsolute, relative } from "path-browserify";
 import { retrievalTag } from "./retrieval-diag";
-import { OPERATION_AXES } from "./eval-log";
+import { OPERATION_AXES, type Rating } from "./eval-log";
 
 import { collectMdInPaths, walkFolder } from "./utils/vault-walk";
 export { collectMdInPaths, walkFolder };
@@ -830,6 +830,7 @@ export class LlmWikiView extends ItemView {
     runId: string,
     axis: string,
     label: string,
+    initial: Rating,
   ): void {
     if (!this.plugin.settings.devMode?.enabled) return;
     const T = i18n();
@@ -841,12 +842,65 @@ export class LlmWikiView extends ItemView {
       up.toggleClass("is-active", rating === "up");
       down.toggleClass("is-active", rating === "down");
     };
+    render(initial); // reflect persisted state on first paint
     const handle = (rating: "up" | "down") => async () => {
       const result = await this.plugin.controller.rateRun(runId, axis, rating);
       if (result !== undefined) render(result); // reflect what was actually persisted
     };
     up.addEventListener("click", () => void handle("up")());
     down.addEventListener("click", () => void handle("down")());
+  }
+
+  /** Render an entry's result body + (dev-mode) rating rows and comment box, bound
+   *  to entry.id. Used by both finish() and the history-row click so the rating UI is
+   *  always torn down and rebuilt for the displayed runId — never leaked across runs. */
+  private async renderResultFor(entry: RunHistoryEntry): Promise<void> {
+    this.ratingSection?.remove();
+    this.ratingSection = null;
+
+    this.finalEl.empty();
+    const comp = new Component();
+    comp.load();
+    await MarkdownRenderer.render(this.app, entry.finalText || "(empty)", this.finalEl, "", comp);
+    sanitizeLinks(this.finalEl);
+    this.resultSection.removeClass("ai-wiki-hidden");
+    this.finalEl.removeClass("ai-wiki-hidden");
+    this.resultOpen = true;
+    this.resultToggle.setText("▼");
+
+    // format renders its axes in the preview (vision-gated, preview-bound); a past
+    // format entry shows its report but no rating/comment rows.
+    if (!this.plugin.settings.devMode?.enabled) return;
+    if (entry.status !== "done" || entry.operation === "format") return;
+    const axes = (OPERATION_AXES[entry.operation] ?? []).filter((a) => a.gate !== "vision");
+    if (axes.length === 0) return;
+
+    const persisted = await this.plugin.controller.readRun(entry.id);
+    this.ratingSection = this.resultSection.createDiv("ai-wiki-rating-section");
+    const view = i18n().view as unknown as Record<string, string>;
+    for (const ax of axes) {
+      this.renderRatingRow(this.ratingSection, entry.id, ax.id, view[ax.labelKey], persisted?.ratings[ax.id] ?? null);
+    }
+    this.renderCommentBox(this.ratingSection, entry.id, persisted?.comment ?? "");
+  }
+
+  /** One free-form comment per run, persisted to eval.jsonl via commentRun. Dev mode only. */
+  private renderCommentBox(parent: HTMLElement, runId: string, initial: string): void {
+    if (!this.plugin.settings.devMode?.enabled) return;
+    const T = i18n();
+    const box = parent.createDiv("ai-wiki-comment-box");
+    const ta = box.createEl("textarea", {
+      cls: "ai-wiki-comment-input",
+      attr: { placeholder: T.view.commentPlaceholder, rows: "2" },
+    });
+    ta.value = initial;
+    const actions = box.createDiv("ai-wiki-comment-actions");
+    const saveBtn = actions.createEl("button", { text: T.view.commentSave });
+    const status = actions.createSpan({ cls: "ai-wiki-comment-status" });
+    saveBtn.addEventListener("click", () => void (async () => {
+      const saved = await this.plugin.controller.commentRun(runId, ta.value);
+      if (saved !== undefined) status.setText(T.view.commentSaved);
+    })());
   }
 
   private renderFormatPreview(tempPath: string, report: string, missing: { token: string; context: string }[], runId?: string, visionCount?: number): void {
@@ -919,10 +973,15 @@ export class LlmWikiView extends ItemView {
     if (runId) {
       const section = this.formatPreviewSection;
       const view = i18n().view as unknown as Record<string, string>;
-      for (const ax of OPERATION_AXES["format"]) {
-        if (ax.gate === "vision" && (visionCount ?? 0) === 0) continue;
-        this.renderRatingRow(section, runId, ax.id, view[ax.labelKey]);
-      }
+      const rid = runId;
+      void (async () => {
+        const persisted = await this.plugin.controller.readRun(rid);
+        for (const ax of OPERATION_AXES["format"]) {
+          if (ax.gate === "vision" && (visionCount ?? 0) === 0) continue;
+          this.renderRatingRow(section, rid, ax.id, view[ax.labelKey], persisted?.ratings[ax.id] ?? null);
+        }
+        this.renderCommentBox(section, rid, persisted?.comment ?? "");
+      })();
     }
   }
 
@@ -940,28 +999,8 @@ export class LlmWikiView extends ItemView {
     this.resultSpeedEl?.setText(this.buildSpeedText());
     this.finalEl.empty();
     if (entry.finalText) {
-      const comp = new Component();
-      comp.load();
-      await MarkdownRenderer.render(this.app, entry.finalText, this.finalEl, "", comp);
-      sanitizeLinks(this.finalEl);
-      this.resultSection.removeClass("ai-wiki-hidden");
-      this.finalEl.removeClass("ai-wiki-hidden");
-      this.resultOpen = true;
-      this.resultToggle.setText("▼");
-
+      await this.renderResultFor(entry);
       this.lastRunId = entry.id;
-      // format renders its own axes in renderFormatPreview (near the preview);
-      // every other operation gets a registry-driven rating row here.
-      if (entry.status === "done" && entry.operation !== "format") {
-        const axes = (OPERATION_AXES[entry.operation] ?? []).filter((a) => a.gate !== "vision");
-        if (axes.length > 0) {
-          this.ratingSection = this.resultSection.createDiv("ai-wiki-rating-section");
-          const view = i18n().view as unknown as Record<string, string>;
-          for (const ax of axes) {
-            this.renderRatingRow(this.ratingSection, entry.id, ax.id, view[ax.labelKey]);
-          }
-        }
-      }
 
       const CHAT_OPS: WikiOperation[] = ["lint", "lint-chat", "ingest", "query"];
       if (CHAT_OPS.includes(entry.operation) && entry.status === "done" && entry.finalText) {
@@ -1256,16 +1295,7 @@ export class LlmWikiView extends ItemView {
           })();
         });
       }
-      row.addEventListener("click", () => {
-        this.finalEl.empty();
-        const comp = new Component();
-        comp.load();
-        void MarkdownRenderer.render(this.app, it.finalText || "(empty)", this.finalEl, "", comp).then(() => sanitizeLinks(this.finalEl));
-        this.resultSection.removeClass("ai-wiki-hidden");
-        this.finalEl.removeClass("ai-wiki-hidden");
-        this.resultOpen = true;
-        this.resultToggle.setText("▼");
-      });
+      row.addEventListener("click", () => void this.renderResultFor(it));
     }
   }
 
