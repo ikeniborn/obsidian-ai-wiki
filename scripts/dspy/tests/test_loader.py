@@ -71,3 +71,44 @@ def test_format_vision_split():
     assert "format" not in result  # plain "format" key must not appear
     assert len(result["format:vision-on"]) == 1
     assert len(result["format:vision-off"]) == 2
+
+
+def test_keeps_record_by_ratings_map():
+    path = _jsonl([
+        {"operation": "query", "question": "q1", "answer": "a1", "ratings": {"answer": "up", "retrieval": "down"}},
+        {"operation": "ingest", "question": "q2", "answer": "a2", "ratings": {"page": "down"}},
+    ])
+    result = load_examples(path, operations=None, min_examples=1)
+    assert len(result["query"]) == 1
+    assert len(result["ingest"]) == 1
+
+
+def test_scalar_fallback_when_no_ratings_map():
+    path = _jsonl([
+        {"operation": "query", "question": "q1", "answer": "a1", "rating": "up"},  # legacy
+    ])
+    result = load_examples(path, operations=None, min_examples=1)
+    assert len(result["query"]) == 1
+
+
+def test_ratings_map_takes_precedence_over_scalar():
+    from lib.loader import resolve_signal
+    entry = {"operation": "query", "ratings": {"answer": "down"}, "rating": "up"}
+    assert resolve_signal(entry) == "down"  # primary axis wins over legacy scalar
+
+
+def test_skips_when_primary_axis_unlabeled():
+    path = _jsonl([
+        # ratings map present but primary axis (answer) is null → no scalar → skip
+        {"operation": "query", "question": "q1", "answer": "a1", "ratings": {"retrieval": "up"}},
+    ])
+    result = load_examples(path, operations=None, min_examples=1)
+    assert "query" not in result
+
+
+def test_comment_passthrough():
+    path = _jsonl([
+        {"operation": "query", "question": "q1", "answer": "a1", "ratings": {"answer": "up"}, "comment": "more code examples"},
+    ])
+    result = load_examples(path, operations=None, min_examples=1)
+    assert result["query"][0]["comment"] == "more code examples"

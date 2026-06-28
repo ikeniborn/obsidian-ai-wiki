@@ -62,7 +62,9 @@ Copy `.env.example` → `.env`. Key variables:
 ```
 
 Key fields:
-- `rating` — `"up"` | `"down"` | `null` (human thumb rating)
+- `ratings` — `{ "<axis>": "up" | "down" | null }` per-axis human labels (e.g. query → `answer`/`retrieval`). The optimizer uses the **primary axis** per operation (`query→answer, chat→answer, format→formatting, ingest→page, init→coverage, lint→fix, lint-chat→fix, delete→rebuild`).
+- `rating` — legacy scalar `"up"|"down"|null`; used only as a fallback when `ratings` is absent.
+- `comment` — optional free-form human note (one per run); aggregated into a seed "Human reviewer feedback" block by the optimizer.
 - `recognitionRating` — `"up"` | `"down"` | `null` (reserved; vision-recognition axis, not yet optimized)
 - `operation` — `query` | `chat` | `format` | `lint-chat` | …
 - `vision` — `true` | `false` — used by loader to split `format` into `format:vision-on` / `format:vision-off` buckets
