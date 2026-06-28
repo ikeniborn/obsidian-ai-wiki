@@ -122,6 +122,7 @@ export class LlmWikiView extends ItemView {
   private lastUserMessage = "";
   private lastRunId: string | null = null;
   private ratingSection: HTMLElement | null = null;
+  private renderSeq = 0;
   private startTs = 0;
   private lastStepTs = 0;
   private llmStats: Array<{ inputTokens: number; outputTokens: number; ttftMs: number; llmDurationMs: number; }> = [];
@@ -855,6 +856,7 @@ export class LlmWikiView extends ItemView {
    *  to entry.id. Used by both finish() and the history-row click so the rating UI is
    *  always torn down and rebuilt for the displayed runId — never leaked across runs. */
   private async renderResultFor(entry: RunHistoryEntry): Promise<void> {
+    const seq = ++this.renderSeq;
     this.ratingSection?.remove();
     this.ratingSection = null;
 
@@ -876,6 +878,7 @@ export class LlmWikiView extends ItemView {
     if (axes.length === 0) return;
 
     const persisted = await this.plugin.controller.readRun(entry.id);
+    if (seq !== this.renderSeq) return; // a newer result render superseded this one — don't append a stale ratingSection
     this.ratingSection = this.resultSection.createDiv("ai-wiki-rating-section");
     const view = i18n().view as unknown as Record<string, string>;
     for (const ax of axes) {
