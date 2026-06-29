@@ -24,6 +24,151 @@ import { promptVersionOf } from "../prompt-version";
 
 const META_FILES = ["_index.md", "_log.md"];
 
+export interface RetrieveCfg {
+  graphDepth: number;
+  seedTopK: number;
+  seedMinScore: number;
+  bfsTopK: number;
+  seedSimilarityThreshold: number;
+}
+
+export interface DomainCandidates {
+  domainId: string;
+  pages: Map<string, string>;        // ONLY candidate page content (seeds ∪ bfs)
+  seeds: string[];
+  candidateIds: Set<string>;         // seeds ∪ bfsTopK-expanded
+  seedScores: Record<string, number>;
+  expandedScores: Record<string, number>;
+  graph: Map<string, Set<string>>;
+  annotations: Map<string, string>;  // index annotations of candidates
+  retrievalMode: RetrievalMode;
+  denseMax: number;
+  seedFallback: "none" | "jaccard" | "llm";
+  seedFallbackReason?: SeedFallbackReason;
+  seedOutputTokens: number;          // tokens spent if the llm-seed fallback ran
+}
+
+/**
+ * Read index → select seeds (vector gate → jaccard → optional llm) → glob → read
+ * pages → build graph → BFS-rank. Yields the existing progress events; returns the
+ * candidate set (seeds ∪ bfs) or null when the domain has no usable seeds.
+ *
+ * `llmSeedFallback` is provided only by single-domain runQuery; cross-domain omits it
+ * so an empty domain is skipped instead of costing one LLM call per domain.
+ */
+export async function* retrieveDomainCandidates(
+  domain: DomainEntry,
+  question: string,
+  vaultTools: VaultTools,
+  similarity: PageSimilarityService | undefined,
+  signal: AbortSignal,
+  cfg: RetrieveCfg,
+  llmSeedFallback?: { llm: LlmClient; model: string; opts: LlmCallOptions },
+): AsyncGenerator<RunEvent, DomainCandidates | null> {
+  if (!domain.wiki_folder || domain.wiki_folder.includes("..")) {
+    yield { kind: "error", message: `Wiki folder ${domain.wiki_folder} is outside the vault.` };
+    return null;
+  }
+  const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
+
+  yield { kind: "tool_use", name: "Read", input: { path: domainIndexPath(wikiVaultPath) } };
+  await ensureDomainConfig(vaultTools, wikiVaultPath);
+  const indexContent = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
+  if (signal.aborted) return null;
+  const indexAnnotations = parseIndexAnnotations(indexContent);
+  yield { kind: "tool_result", ok: true, preview: `${indexAnnotations.size} annotations` };
+
+  const topK = Math.max(1, Math.min(50, Math.floor(cfg.seedTopK)));
+  const minScore = Math.max(0, Math.min(1, cfg.seedMinScore));
+  let seedOutputTokens = 0;
+
+  let seeds: string[];
+  let seedScores: Record<string, number> = {};
+  let seedFallback: "none" | "jaccard" | "llm" = "none";
+  let retrievalMode: RetrievalMode = "jaccard";
+  let denseMax = 0;
+  let seedFallbackReason: SeedFallbackReason | undefined;
+  const syntheticPages = new Map<string, string>(
+    [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""]),
+  );
+  if (similarity && (similarity.config.mode === "embedding" || similarity.config.mode === "hybrid")) {
+    retrievalMode = similarity.config.mode;
+    await similarity.loadCache(wikiVaultPath, vaultTools);
+    const allAnnotatedPaths = [...indexAnnotations.keys()].map((id) => `${wikiVaultPath}/${id}.md`);
+    const diag = await similarity.selectRelevantScoredDiag(question, indexAnnotations, allAnnotatedPaths);
+    denseMax = diag.denseMax;
+    const topSelected = diag.results.slice(0, topK);
+    seeds = topSelected.map((x) => pageId(x.path));
+    seedScores = Object.fromEntries(topSelected.map((x) => [pageId(x.path), x.score]));
+    if (!seedPassesGate(denseMax, cfg.seedSimilarityThreshold)) {
+      seedFallbackReason = diag.embedFailed ? "embed-failed" : "low-similarity";
+      const jaccardSeeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+      if (jaccardSeeds.length > 0) {
+        seeds = jaccardSeeds.map((x) => x.id);
+        seedScores = Object.fromEntries(jaccardSeeds.map((x) => [x.id, x.score]));
+        seedFallback = "jaccard";
+      } else {
+        seeds = [];
+        seedScores = {};
+        seedFallback = "llm";
+      }
+    }
+  } else {
+    const seedResults = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+    seeds = seedResults.map((x) => x.id);
+    seedScores = Object.fromEntries(seedResults.map((x) => [x.id, x.score]));
+  }
+
+  if (seeds.length === 0 && indexAnnotations.size > 0 && llmSeedFallback) {
+    if (signal.aborted) return null;
+    const allAnnotatedIds = [...indexAnnotations.keys()];
+    yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allAnnotatedIds.length } };
+    const seedOpts = { ...llmSeedFallback.opts, thinkingBudgetTokens: undefined };
+    const seedRes = await llmSelectSeeds(question, indexAnnotations, allAnnotatedIds, llmSeedFallback.llm, llmSeedFallback.model, seedOpts, signal);
+    seeds = seedRes.seeds;
+    seedOutputTokens += seedRes.outputTokens;
+    yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
+  }
+  if (signal.aborted) return null;
+
+  yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
+  const allFiles = await vaultTools.listFiles(wikiVaultPath);
+  const files = allFiles.filter(
+    (f) => !META_FILES.some((m) => f.endsWith(m)) && !f.includes("/_config/"),
+  );
+  yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
+  if (signal.aborted) return null;
+
+  if (seeds.length === 0) return null;   // empty domain → caller decides
+
+  yield { kind: "tool_use", name: "Read", input: { files: files.length } };
+  const pages = await vaultTools.readAll(files);
+  yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
+  if (signal.aborted) return null;
+
+  const graphResult = graphCache.get(domain.id, pages);
+  const { selectedIds, expandedScores } = await bfsExpandRanked(
+    seeds, graphResult.graph, cfg.graphDepth, pages, question, cfg.bfsTopK, indexAnnotations, similarity,
+  );
+  const seedSet = new Set(seeds);
+  const expandedPages = [...selectedIds].filter((id) => !seedSet.has(id));
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, seedFallback, retrievalMode, denseMax, seedFallbackReason };
+
+  // Keep only candidate content; let the rest be GC'd (memory bound).
+  const candidatePages = new Map<string, string>();
+  for (const [path, content] of pages) {
+    if (selectedIds.has(pageId(path))) candidatePages.set(path, content);
+  }
+  const annotations = new Map<string, string>();
+  for (const id of selectedIds) { const a = indexAnnotations.get(id); if (a) annotations.set(id, a); }
+
+  return {
+    domainId: domain.id, pages: candidatePages, seeds, candidateIds: selectedIds,
+    seedScores, expandedScores, graph: graphResult.graph, annotations,
+    retrievalMode, denseMax, seedFallback, seedFallbackReason, seedOutputTokens,
+  };
+}
+
 export async function* runQuery(
   args: string[],
   save: boolean,
@@ -55,116 +200,35 @@ export async function* runQuery(
     yield { kind: "error", message: "No domain configured. Add a domain in settings." };
     return;
   }
-
-  if (!domain.wiki_folder || domain.wiki_folder.includes("..")) {
-    yield { kind: "error", message: `Wiki folder ${domain.wiki_folder} is outside the vault.` };
-    return;
-  }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
-
-  // Phase 1: read index
-  yield { kind: "tool_use", name: "Read", input: { path: domainIndexPath(wikiVaultPath) } };
-  await ensureDomainConfig(vaultTools, wikiVaultPath);
-  const indexContent = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
-  if (signal.aborted) return;
-  const indexAnnotations = parseIndexAnnotations(indexContent);
-  yield { kind: "tool_result", ok: true, preview: `${indexAnnotations.size} annotations` };
-  const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
-  const minScore = Math.max(0, Math.min(1, seedMinScore));
   const start = Date.now();
   let outputTokens = 0;
 
-  // Phase 2: seed selection from index annotations (no file content needed)
-  let seeds: string[];
-  let seedScores: Record<string, number> = {};
-  let seedFallback: "none" | "jaccard" | "llm" = "none";
-  let retrievalMode: RetrievalMode = "jaccard";
-  let denseMax = 0;
-  let seedFallbackReason: SeedFallbackReason | undefined;
-  const syntheticPages = new Map<string, string>(
-    [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""]),
+  const cfg = {
+    graphDepth, seedTopK, seedMinScore, bfsTopK, seedSimilarityThreshold,
+  };
+  const cand = yield* retrieveDomainCandidates(
+    domain, question, vaultTools, similarity, signal, cfg,
+    { llm, model, opts },
   );
-  if (similarity && (similarity.config.mode === "embedding" || similarity.config.mode === "hybrid")) {
-    retrievalMode = similarity.config.mode;
-    await similarity.loadCache(wikiVaultPath, vaultTools);
-    const allAnnotatedPaths = [...indexAnnotations.keys()].map((id) => `${wikiVaultPath}/${id}.md`);
-    const diag = await similarity.selectRelevantScoredDiag(question, indexAnnotations, allAnnotatedPaths);
-    denseMax = diag.denseMax;
-    const topSelected = diag.results.slice(0, topK);
-    seeds = topSelected.map((x) => pageId(x.path));
-    seedScores = Object.fromEntries(topSelected.map((x) => [pageId(x.path), x.score]));
-
-    // Threshold gate on the DENSE COSINE confidence (not the fused/RRF score):
-    // weak embedding signal falls back to Jaccard, then to llmSelectSeeds.
-    if (!seedPassesGate(denseMax, seedSimilarityThreshold)) {
-      seedFallbackReason = diag.embedFailed ? "embed-failed" : "low-similarity";
-      const jaccardSeeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
-      if (jaccardSeeds.length > 0) {
-        seeds = jaccardSeeds.map((x) => x.id);
-        seedScores = Object.fromEntries(jaccardSeeds.map((x) => [x.id, x.score]));
-        seedFallback = "jaccard";
-      } else {
-        seeds = [];
-        seedScores = {};
-        seedFallback = "llm"; // existing empty-seeds guard runs llmSelectSeeds below
-      }
-    }
-  } else {
-    const seedResults = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
-    seeds = seedResults.map((x) => x.id);
-    seedScores = Object.fromEntries(seedResults.map((x) => [x.id, x.score]));
-  }
-
-  if (seeds.length === 0 && indexAnnotations.size > 0) {
-    if (signal.aborted) return;
-    const allAnnotatedIds = [...indexAnnotations.keys()];
-    yield { kind: "tool_use", name: "SelectSeeds", input: { pages: allAnnotatedIds.length } };
-    const seedOpts = { ...opts, thinkingBudgetTokens: undefined };
-    const seedRes = await llmSelectSeeds(question, indexAnnotations, allAnnotatedIds, llm, model, seedOpts, signal);
-    seeds = seedRes.seeds;
-    outputTokens += seedRes.outputTokens;
-    yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
-  }
   if (signal.aborted) return;
-
-  // Phase 3: glob
-  yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
-  const allFiles = await vaultTools.listFiles(wikiVaultPath);
-  const files = allFiles.filter(
-    (f) => !META_FILES.some((m) => f.endsWith(m)) && !f.includes("/_config/"),
-  );
-  yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
-  if (signal.aborted) return;
-
-  // Phase 4: read all → build graph → BFS from seeds
-  // Always read all pages: similarity seeds set direction, graph expands coverage.
-  yield { kind: "tool_use", name: "Read", input: { files: files.length } };
-  const pages = await vaultTools.readAll(files);
-  yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
-  if (signal.aborted) return;
-
-  const graphResult = graphCache.get(domain.id, pages);
-
-  if (seeds.length === 0) {
+  if (!cand) {
     yield { kind: "error", message: "No relevant pages found for this query." };
     return;
   }
+  outputTokens += cand.seedOutputTokens;
 
-  const { selectedIds, expandedScores } = await bfsExpandRanked(
-    seeds,
-    graphResult.graph,
-    graphDepth,
-    pages,
-    question,
-    bfsTopK,
-    indexAnnotations,
-    similarity,
-  );
+  const indexContent = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
+  const seeds = cand.seeds;
+  const seedScores = cand.seedScores;
+  const expandedScores = cand.expandedScores;
+  const selectedIds = cand.candidateIds;
+  const pages = cand.pages;
   const seedSet = new Set(seeds);
-  const expandedPages = [...selectedIds].filter(id => !seedSet.has(id));
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, seedFallback, retrievalMode, denseMax, seedFallbackReason };
+  const expandedPages = [...selectedIds].filter((id) => !seedSet.has(id));
+  const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
   const fusedOrder = bfsFusion
-    ? fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, graphResult.graph, graphDepth, rrfK)
+    ? fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, cand.graph, graphDepth, rrfK)
     : undefined;
   const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3, fusedOrder);
 
