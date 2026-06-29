@@ -60,8 +60,8 @@ svg .edge{stroke:var(--accent);stroke-width:1.4;fill:none;opacity:.7}
 <body>
 <input type="checkbox" id="theme-toggle" hidden>
 <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
-<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden checked>
-<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
 <input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
 <header>
   <label for="theme-toggle" class="theme-btn" title="Тёмная/светлая тема">🌙 / ☀️</label>
@@ -212,7 +212,87 @@ svg .edge{stroke:var(--accent);stroke-width:1.4;fill:none;opacity:.7}
 <!-- TAB:spec END -->
 <!-- TAB:plan START -->
 <section class="tab-pane" id="pane-plan">
-  <p class="note">Этап ещё не проверен.</p>
+
+  <h2>1. Резюме плана</h2>
+  <p class="note">Файл: <code>docs/superpowers/plans/2026-06-29-ask-wiki-domain-stats-comment.md</code> · plan_hash <code>adfd94a6cb800f30</code> · spec_hash <code>616638c9814f9f17</code></p>
+
+  <table>
+    <tr><th>Задача</th><th>Deliverable (DoD)</th><th>Тест</th></tr>
+    <tr><td>T1. <code>query_stats</code> тип + поле <code>pagesScanned</code></td><td>Новый член union в <code>types.ts</code>; <code>DomainCandidates.pagesScanned</code> заполнено <code>files.length</code>; fixture eval обновлён.</td><td><code>tsc --noEmit</code> + eval green</td></tr>
+    <tr><td>T2. Эмиссия <code>query_stats</code> (single + cross)</td><td><code>runQuery</code> и <code>runCrossDomainQuery</code> эмитят событие до <code>answerFromContext</code>.</td><td>TDD: eval-ассерты fail→pass</td></tr>
+    <tr><td>T3. Рендер блока статистики + токены</td><td><code>renderQueryStats</code>/<code>fillQueryStatsTokens</code>; ветка в <code>handleEvent</code>; очистка в <code>setRunning</code>; стили + i18n.</td><td><code>tsc</code> + <code>lint</code> + ручная</td></tr>
+    <tr><td>T4. Кнопки Ask Domain / Ask Wiki</td><td>Удалён scope-<code>select</code>; две кнопки + <code>ConfirmModal</code>; <code>submitQuery(domainArg)</code>; удалён <code>lastQueryScope</code> + scope-i18n.</td><td><code>tsc</code> ловит leftover refs + eval</td></tr>
+    <tr><td>T5. Comment box</td><td>textarea 100%/rows4; Save справа → Saved disabled; правка re-enable; status удалён.</td><td><code>tsc</code> + <code>lint</code> + ручная</td></tr>
+    <tr><td>T6. Build, verify, docs</td><td><code>tsc</code>+<code>lint</code>+eval+<code>build</code>; ручная UI-проверка; iwiki ingest + lint; коммит dist.</td><td>Полный прогон + iwiki-lint</td></tr>
+  </table>
+
+  <h2>2. Схемы зависимостей и пересечений</h2>
+
+  <h3>Граф зависимостей задач (M → N = «результат M используется в N», M&lt;N)</h3>
+  <figure>
+    <figcaption>Линейная цепочка с одной перемычкой (тип <code>query_stats</code> из T1 нужен и рендеру T3). Циклов нет, нарушений порядка нет.</figcaption>
+    <svg viewBox="0 0 880 170" width="100%" preserveAspectRatio="xMidYMid meet" font-family="sans-serif">
+      <defs>
+        <marker id="parr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+        </marker>
+        <filter id="pds" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-opacity="0.25"/>
+        </filter>
+      </defs>
+      <g>
+        <path class="edge" marker-end="url(#parr)" d="M130,70 L180,70"/>
+        <path class="edge" marker-end="url(#parr)" d="M310,70 L360,70"/>
+        <path class="edge" marker-end="url(#parr)" d="M490,70 L540,70"/>
+        <path class="edge" marker-end="url(#parr)" d="M670,70 L720,70"/>
+        <path class="edge" marker-end="url(#parr)" d="M70,90 C70,140 410,140 410,92"/>
+        <path class="edge" marker-end="url(#parr)" d="M610,90 C610,150 770,150 770,92"/>
+      </g>
+      <g font-size="12">
+        <g><rect class="nrect" x="10" y="50" width="120" height="40" rx="6" filter="url(#pds)"/><text x="70" y="74" text-anchor="middle">T1 тип/поле</text></g>
+        <g><rect class="nrect" x="190" y="50" width="120" height="40" rx="6" filter="url(#pds)"/><text x="250" y="74" text-anchor="middle">T2 эмиссия</text></g>
+        <g><rect class="nrect" x="370" y="50" width="120" height="40" rx="6" filter="url(#pds)"/><text x="430" y="74" text-anchor="middle">T3 рендер</text></g>
+        <g><rect class="nrect" x="550" y="50" width="120" height="40" rx="6" filter="url(#pds)"/><text x="610" y="74" text-anchor="middle">T4 кнопки</text></g>
+        <g><rect class="nrect" x="730" y="50" width="120" height="40" rx="6" filter="url(#pds)"/><text x="790" y="74" text-anchor="middle">T5/T6</text></g>
+      </g>
+    </svg>
+  </figure>
+
+  <h3>Пересечения по файлам (какие задачи трогают один артефакт)</h3>
+  <table>
+    <tr><th>Файл</th><th>T1</th><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th></tr>
+    <tr><td><code>src/types.ts</code></td><td>●</td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td><code>src/phases/query.ts</code></td><td>●</td><td>●</td><td></td><td></td><td></td><td></td></tr>
+    <tr><td><code>src/phases/query-cross-domain.ts</code></td><td></td><td>●</td><td></td><td></td><td></td><td></td></tr>
+    <tr><td><code>eval/cross-domain/run.ts</code></td><td>●</td><td>●</td><td></td><td></td><td></td><td></td></tr>
+    <tr><td><code>src/view.ts</code></td><td></td><td></td><td>●</td><td>●</td><td>●</td><td></td></tr>
+    <tr><td><code>src/styles.css</code></td><td></td><td></td><td>●</td><td>●</td><td>●</td><td></td></tr>
+    <tr><td><code>src/i18n.ts</code></td><td></td><td></td><td>●</td><td>●</td><td>●</td><td></td></tr>
+    <tr><td><code>src/local-config.ts</code></td><td></td><td></td><td></td><td>●</td><td></td><td></td></tr>
+    <tr><td><code>dist/</code>, <code>docs/wiki/</code></td><td></td><td></td><td></td><td></td><td></td><td>●</td></tr>
+  </table>
+  <p class="note"><code>view.ts</code> / <code>i18n.ts</code> / <code>styles.css</code> трогаются тремя UI-задачами (T3→T4→T5) — последовательный порядок задач исключает конфликты редактирования.</p>
+
+  <h2>3. Результаты проверки</h2>
+  <table>
+    <tr><th>Фаза</th><th>Статус</th><th>Новых findings</th></tr>
+    <tr><td>structure</td><td><span class="badge b-ok">passed</span></td><td>0</td></tr>
+    <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td><td>0</td></tr>
+    <tr><td>dependencies</td><td><span class="badge b-ok">passed</span></td><td>0</td></tr>
+    <tr><td>verifiability</td><td><span class="badge b-ok">passed</span></td><td>0</td></tr>
+    <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td><td>0</td></tr>
+  </table>
+  <p class="note">Findings: нет. Проверки: placeholder/нумерация (structure); spec T1–T7 + Testing/Docs покрыты, без extras (coverage); порядок T1→T6, артефакты до использования, циклов нет (dependencies); каждая задача завершается <code>tsc</code>/eval/ручной DoD (verifiability); первый прогон (consistency).</p>
+
+  <h3>Сводка</h3>
+  <table>
+    <tr><th>CRITICAL open</th><th>WARNING open</th><th>Вердикт</th></tr>
+    <tr><td>0</td><td>0</td><td><span class="badge b-ok">OK</span></td></tr>
+  </table>
+
+  <h3>Цепочка</h3>
+  <p class="note">intent (<code>null</code>) → <strong>spec ✓</strong> → <strong>plan ✓</strong> → result (ожидается)</p>
+
 </section>
 <!-- TAB:plan END -->
 <!-- TAB:result START -->
