@@ -61,8 +61,8 @@ svg .edge{stroke:var(--accent);stroke-width:1.4;fill:none;opacity:.7}
 <input type="checkbox" id="theme-toggle" hidden>
 <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
 <input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
-<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
-<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden checked>
 <header>
   <label for="theme-toggle" class="theme-btn" title="Тёмная/светлая тема">🌙 / ☀️</label>
   <h1>Ask Wiki / Ask Domain — кнопки, статистика поиска, комментарий</h1>
@@ -297,7 +297,87 @@ svg .edge{stroke:var(--accent);stroke-width:1.4;fill:none;opacity:.7}
 <!-- TAB:plan END -->
 <!-- TAB:result START -->
 <section class="tab-pane" id="pane-result">
-  <p class="note">Этап ещё не проверен.</p>
+
+  <h2>1. Резюме сверки</h2>
+  <p class="note">Plan: <code>docs/superpowers/plans/2026-06-29-ask-wiki-domain-stats-comment.md</code> · plan_hash <code>adfd94a6cb800f30</code> (совпал с frontmatter)</p>
+  <table>
+    <tr><th>Документ</th><th>Путь / статус</th></tr>
+    <tr><td>Plan</td><td><code>…/plans/2026-06-29-ask-wiki-domain-stats-comment.md</code></td></tr>
+    <tr><td>Spec</td><td><code>…/specs/2026-06-29-ask-wiki-domain-stats-comment-design.md</code></td></tr>
+    <tr><td>Intent</td><td><code>null</code> — нет intent-документа (chain.intent: null)</td></tr>
+    <tr><td>Diff base</td><td><code>git diff &lt;merge-base 3fdac88&gt; HEAD</code> — <strong>15 файлов</strong>. <code>git diff HEAD</code> пуст: работа закоммичена в 16 коммитах ветки <code>dev-ask-wiki-domain-ux</code>.</td></tr>
+  </table>
+  <p class="note">HEAD чист — сверка ведётся против диффа от точки расхождения с <code>master</code>, т.к. все задачи плана уже закоммичены (коммиты <code>9522723</code>…<code>26498ba</code> совпадают с задачами T1–T6).</p>
+
+  <h2>2. Покрытие шагов плана</h2>
+  <table>
+    <tr><th>Метрика</th><th>Значение</th></tr>
+    <tr><td>DONE</td><td>6 / 6 задач (все code-шаги отражены в диффе)</td></tr>
+    <tr><td>PARTIAL</td><td>0</td></tr>
+    <tr><td>MISSING</td><td>0</td></tr>
+  </table>
+  <table>
+    <tr><th>Задача</th><th>Свидетельство в диффе</th><th>Статус</th></tr>
+    <tr><td>T1. <code>query_stats</code> тип + <code>pagesScanned</code></td><td><code>types.ts</code> +member union; <code>query.ts</code> поле <code>pagesScanned</code> = <code>files.length</code>; eval fixture обновлён.</td><td><span class="badge b-ok">DONE</span></td></tr>
+    <tr><td>T2. Эмиссия <code>query_stats</code> (single + cross)</td><td><code>query.ts</code> + <code>query-cross-domain.ts</code> эмитят событие до <code>answerFromContext</code>; eval-ассерты добавлены.</td><td><span class="badge b-ok">DONE</span></td></tr>
+    <tr><td>T3. Рендер блока + токены</td><td><code>view.ts</code>: <code>renderQueryStats</code>/<code>fillQueryStatsTokens</code>, ветка в <code>handleEvent</code>; <code>styles.css</code> <code>.ai-wiki-cross-stats</code>; i18n stats-лейблы (en/ru/es).</td><td><span class="badge b-ok">DONE</span></td></tr>
+    <tr><td>T4. Кнопки Ask Domain / Ask Wiki</td><td><code>view.ts</code>: scope-row удалён, две кнопки + <code>ConfirmModal</code>, <code>submitQuery(domainArg)</code>; <code>local-config.ts</code> <code>lastQueryScope</code> удалён; i18n scope-ключи удалены, <code>ask</code>→<code>askDomain</code>+<code>askWiki</code>.</td><td><span class="badge b-ok">DONE</span></td></tr>
+    <tr><td>T5. Comment box</td><td><code>view.ts</code>: <code>rows</code> 2→4, Save→<code>commentSavedBtn</code> disabled, re-enable на input, status-span убран; <code>styles.css</code> <code>.ai-wiki-comment-*</code>.</td><td><span class="badge b-ok">DONE</span></td></tr>
+    <tr><td>T6. Build, verify, docs</td><td><code>dist/</code> пересобран; <code>docs/wiki/llm-pipeline.md</code> + <code>retrieval.md</code> обновлены через iwiki.</td><td><span class="badge b-ok">DONE</span></td></tr>
+  </table>
+
+  <h2>3. Findings</h2>
+  <table>
+    <tr><th>Severity</th><th>Шаг / якорь</th><th>Plan</th><th>Diff</th><th>Fix options</th></tr>
+    <tr>
+      <td><span class="badge b-warn">INFO</span></td>
+      <td>T2 Step 7 (single-domain emit)</td>
+      <td><code>pagesSelected: selectedIds.size</code></td>
+      <td><code>pagesSelected: contextPages.length</code> (контекст ограничен <code>topK*3</code>); добавлен рефактор <code>selectContextPages</code>/<code>renderContextPages</code>. Коммит <code>26498ba</code>.</td>
+      <td>Намеренное уточнение — точнее отражает «страниц передано LLM» из спеки. Принять как улучшение; необязательно править план.</td>
+    </tr>
+    <tr>
+      <td><span class="badge b-warn">INFO</span></td>
+      <td>T4 Step 4 (defensive notice)</td>
+      <td><code>if (!domainArg)</code> внутри <code>submitQuery</code></td>
+      <td>Защитная проверка <code>if (!d)</code> перенесена в обработчик клика <code>Ask Domain</code>.</td>
+      <td>Эквивалентное поведение. Принять.</td>
+    </tr>
+    <tr>
+      <td><span class="badge b-warn">INFO</span></td>
+      <td>Verify-шаг T6 (<code>tsc --noEmit</code>)</td>
+      <td>Ожидался PASS</td>
+      <td><code>tsc</code> падает на 4 ошибках (<code>view.ts</code> 1216/1321/1358/1428: <code>window.setTimeout</code> Node <code>Timeout</code> vs DOM <code>number</code>; каст <code>DataAdapter</code>) — все ВНЕ диффа ветки, присутствуют дословно в <code>master</code> (BASE). Средовая/предсуществующая проблема, не регрессия. <code>lint</code> зелёный (0 errors), eval <strong>30/30</strong>.</td>
+      <td>Не блокирует сверку. Отдельно: выровнять <code>tsconfig</code> <code>lib/types</code> (DOM vs node) — вне рамок плана.</td>
+    </tr>
+  </table>
+
+  <h2>4. Покрытие Intent / Spec</h2>
+  <table>
+    <tr><th>Источник</th><th>Покрыто</th><th>Детали</th></tr>
+    <tr><td>Intent Desired Outcomes</td><td>N/A</td><td>chain.intent = <code>null</code> — документа нет.</td></tr>
+    <tr><td>Spec Success Criteria</td><td><strong>6 / 6</strong></td><td>SC1 (две кнопки, нет scope), SC2 (Ask Domain disabled / Ask Wiki+модалка), SC3 (блок над ответом + дозаполнение токенов), SC4 (comment box 100%/×2/Saved/re-enable), SC5 (<code>lastQueryScope</code>+scope-i18n удалены, lint зелёный), SC6 (eval-ассерты query_stats single+cross).</td></tr>
+  </table>
+
+  <h2>5. Избыточные изменения (Excess)</h2>
+  <table>
+    <tr><th>Severity</th><th>Изменение</th><th>Оценка</th></tr>
+    <tr><td><span class="badge b-warn">WARN</span></td><td>Abort-guards <code>if (signal.aborted) return;</code> после эмиссии <code>query_stats</code> (single + cross); eval-ассерты abort-after-stats ×2.</td><td>Когерентно intent спеки (статистика не должна «течь» в отменённый прогон). Коммиты <code>51cef49</code>, <code>fba9d42</code>.</td></tr>
+    <tr><td><span class="badge b-warn">WARN</span></td><td>Сохранение live-stats при навигации по истории во время прогона: поля <code>currentQueryStats</code>/<code>showingStoredResultDuringRun</code>, <code>renderResultFor({preserveQueryStats})</code>, <code>clearQueryStatsDom</code>/<code>resetQueryStats</code>.</td><td>Follow-up UX-фиксы (коммиты <code>b8649e8</code>…<code>2911954</code>). Без шага плана, но согласовано с разделом «View rendering».</td></tr>
+    <tr><td><span class="badge b-warn">WARN</span></td><td>Кнопки disabled во время прогона через <code>isRunning</code> в <code>updateButtonAvailability</code> (план: <code>askWikiBtn.disabled = false</code>).</td><td>Строже плана, корректнее. Коммит <code>4bdbe0b</code>.</td></tr>
+  </table>
+  <p class="note">Все «избыточные» изменения — легитимные follow-up фиксы из той же серии коммитов; нарушений границ плана нет, чужие файлы не затронуты.</p>
+
+  <h2>6. Сводка</h2>
+  <table>
+    <tr><th>CRITICAL</th><th>WARNING</th><th>INFO</th><th>Вердикт</th></tr>
+    <tr><td>0</td><td>0</td><td>3</td><td><span class="badge b-ok">OK</span></td></tr>
+  </table>
+  <p class="note">MISSING-шагов нет → вердикт <strong>OK</strong>. WARNING-избыток — доброкачественный (follow-up фиксы). Запись <code>result_check</code> внесена в frontmatter плана.</p>
+
+  <h3>Цепочка</h3>
+  <p class="note">intent (<code>null</code>) → <strong>spec ✓</strong> → <strong>plan ✓</strong> → <strong>result ✓</strong></p>
+
 </section>
 <!-- TAB:result END -->
 </main>
