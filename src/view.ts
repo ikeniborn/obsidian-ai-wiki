@@ -154,6 +154,7 @@ export class LlmWikiView extends ItemView {
   private queryStatsTokensEl: HTMLElement | null = null;
   private currentQueryStats: Extract<RunEvent, { kind: "query_stats" }> | null = null;
   private currentQueryStatsInputTokens: number | null = null;
+  private showingStoredResultDuringRun = false;
 
   constructor(leaf: WorkspaceLeaf, private plugin: LlmWikiPlugin) {
     super(leaf);
@@ -650,6 +651,7 @@ export class LlmWikiView extends ItemView {
 
     this.resultSection.addClass("ai-wiki-hidden");
     this.resetQueryStats();
+    this.showingStoredResultDuringRun = false;
     this.finalEl.empty();
     this.resultOpen = false;
 
@@ -911,9 +913,16 @@ export class LlmWikiView extends ItemView {
     this.ratingSection?.remove();
     this.ratingSection = null;
 
-    if (!opts?.preserveQueryStats) {
-      if (this.state === "running") this.clearQueryStatsDom();
-      else this.resetQueryStats();
+    if (opts?.preserveQueryStats) {
+      this.showingStoredResultDuringRun = false;
+    } else {
+      if (this.state === "running") {
+        this.showingStoredResultDuringRun = true;
+        this.clearQueryStatsDom();
+      } else {
+        this.showingStoredResultDuringRun = false;
+        this.resetQueryStats();
+      }
     }
     this.finalEl.empty();
     const comp = new Component();
@@ -965,6 +974,7 @@ export class LlmWikiView extends ItemView {
     this.currentQueryStats = ev;
     this.currentQueryStatsInputTokens = null;
     this.clearQueryStatsDom();
+    if (this.showingStoredResultDuringRun) return;
     this.resultSection.removeClass("ai-wiki-hidden");
     const T = i18n().view;
     const box = this.resultSection.createDiv("ai-wiki-cross-stats");
