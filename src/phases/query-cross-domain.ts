@@ -107,7 +107,12 @@ export async function* runCrossDomainQuery(
 
   const contextBlock = buildContextBlock(merged.mergedPages, merged.mergedSeedSet, finalSet, cfg.seedTopK, merged.fusedOrder);
 
-  const finalDomains = [...new Set([...finalSet].map((id) => id.split("_")[1]).filter(Boolean))];
+  // Domains whose candidates survive into the final capped set (robust to underscores in domain ids).
+  const finalDomains = [...new Set(
+    poolList
+      .filter((c) => [...c.candidateIds].some((id) => finalSet.has(id)))
+      .map((c) => c.domainId)
+  )];
   const domainName = `All domains (${finalDomains.length}): ${finalDomains.join(", ")}`;
 
   const wikiFirst = [...finalSet].sort((a, b) => Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
