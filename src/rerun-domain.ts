@@ -17,6 +17,7 @@ export function resolveRerunDomain(
 ): RerunDomainResult {
   const id = entry.domainId;
   if (!id) return { ok: false, reason: "missing" };
+  if (id === "*") return { ok: true, domainId: "*" };   // cross-domain sentinel: search all domains
   if (!domains.some((d) => d.id === id)) return { ok: false, reason: "not-found" };
   return { ok: true, domainId: id };
 }

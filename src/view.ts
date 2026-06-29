@@ -92,6 +92,10 @@ export class LlmWikiView extends ItemView {
   private stepsOpen = true;
   private cancelBtn!: HTMLButtonElement;
   private queryInput!: HTMLTextAreaElement;
+  private scopeToggle?: HTMLSelectElement;
+  // Persisted scope preference; undefined until loaded (then "all" | "domain").
+  // syncScope re-asserts it so the programmatic domain-restore "change" can't clobber it.
+  private desiredScope?: "all" | "domain";
   private askBtn!: HTMLButtonElement;
   private domainSelect?: HTMLSelectElement;
   private initBtn?: HTMLButtonElement;
@@ -201,6 +205,44 @@ export class LlmWikiView extends ItemView {
       cls: "ai-wiki-query-input",
       attr: { placeholder: "Question…", rows: "3" },
     });
+
+    const T2 = i18n().view;
+    const scopeRow = ask.createDiv("ai-wiki-scope-row");
+    scopeRow.createSpan({ cls: "muted", text: "Scope:" });
+    this.scopeToggle = scopeRow.createEl("select", { cls: "ai-wiki-scope-select", attr: { title: T2.scopeHint } });
+    this.scopeToggle.createEl("option", { value: "all", text: T2.scopeAll });
+    this.scopeToggle.createEl("option", { value: "domain", text: T2.scopeDomain });
+
+    const syncScope = () => {
+      const hasDomain = !!(this.domainSelect?.value);
+      const domainOpt = this.scopeToggle!.querySelector('option[value="domain"]') as HTMLOptionElement;
+      domainOpt.disabled = !hasDomain;
+      if (this.desiredScope) {
+        // Re-assert the persisted/user preference; "domain" only when a concrete domain exists.
+        // This survives the programmatic domain-restore "change" dispatched by refreshDomains.
+        this.scopeToggle!.value = this.desiredScope === "domain" && hasDomain ? "domain" : "all";
+      } else {
+        // No preference yet: mirror the sidebar — concrete → "domain", (all) → "all".
+        // This also corrects any stale "domain" while the sidebar is "(all)".
+        this.scopeToggle!.value = hasDomain ? "domain" : "all";
+      }
+    };
+    this.scopeToggle.addEventListener("change", () => {
+      // A user toggle becomes the new persisted preference.
+      this.desiredScope = this.scopeToggle!.value as "all" | "domain";
+      void this.plugin.localConfigStore.save({ lastQueryScope: this.desiredScope });
+    });
+    this.domainSelect?.addEventListener("change", syncScope);
+    syncScope();
+
+    // Restore the persisted scope choice, then re-settle (order-independent vs refreshDomains).
+    void this.plugin.localConfigStore.load().then((c) => {
+      if (c.lastQueryScope === "all" || c.lastQueryScope === "domain") {
+        this.desiredScope = c.lastQueryScope;
+        syncScope();
+      }
+    });
+
     const askRow = ask.createDiv("ai-wiki-ask-row");
     this.cancelBtn = askRow.createEl("button", { text: T.view.cancel, cls: "mod-warning" });
     this.askBtn = askRow.createEl("button", { text: T.view.ask });
@@ -572,7 +614,10 @@ export class LlmWikiView extends ItemView {
     const q = this.queryInput.value.trim();
     if (!q) { new Notice(i18n().view.enterQuestion); return; }
     if (this.state === "running") { new Notice(i18n().view.operationInProgress); return; }
-    void this.plugin.controller.query(q, this.domainSelect?.value || undefined);
+    const sidebarDomain = this.domainSelect?.value || "";
+    const scope = this.scopeToggle?.value || (sidebarDomain ? "domain" : "all");
+    const domainArg = scope === "all" ? "*" : (sidebarDomain || "*");
+    void this.plugin.controller.query(q, domainArg);
     this.queryInput.value = "";
   }
 
@@ -1292,7 +1337,8 @@ export class LlmWikiView extends ItemView {
             const r = resolveRerunDomain(it, domains);
             if (!r.ok) { new Notice(i18n().view.rerunDomainMissing); return; }
             if (this.domainSelect) {
-              this.domainSelect.value = r.domainId;
+              // "*" is the cross-domain sentinel — the sidebar has no "*" option, so show "(all)".
+              this.domainSelect.value = r.domainId === "*" ? "" : r.domainId;
               this.domainSelect.dispatchEvent(new Event("change"));
             }
             void this.plugin.controller.query(it.args[0] ?? "", r.domainId);

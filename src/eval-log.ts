@@ -22,6 +22,8 @@ export interface RetrievalConfigSnapshot {
   bfsFusion: boolean;
   seedSimilarityThreshold: number;
   hybridRetrieval: boolean;
+  crossDomain?: boolean;      // cross-domain query marker
+  domainsSearched?: number;   // domains iterated in stage 1
 }
 
 /** Provenance the phases attach via the `eval_meta` event. All optional. */

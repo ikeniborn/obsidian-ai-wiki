@@ -1,6 +1,7 @@
 import type { DomainEntry } from "./domain";
 import { runIngest } from "./phases/ingest";
 import { runQuery } from "./phases/query";
+import { runCrossDomainQuery } from "./phases/query-cross-domain";
 import { runLint } from "./phases/lint";
 import { runLintChat } from "./phases/chat";
 import { runLintFixChat } from "./phases/lint-chat";
@@ -95,7 +96,19 @@ export class AgentRunner {
         yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, similarity, undefined, this.settings.graphDepth, this.settings.wikiLinkValidationRetries);
         break;
       case "query":
-        yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, this.settings.bfsTopK, similarity, this.settings.wikiLinkValidationRetries ?? 3, this.settings.nativeAgent.seedSimilarityThreshold ?? 0, this.settings.nativeAgent.bfsFusion ?? false, this.settings.nativeAgent.rrfK ?? 60);
+        if (req.domainId === "*") {
+          yield* runCrossDomainQuery(
+            req.args[0] ?? "", this.vaultTools, this.llm, model, domains, req.signal,
+            { graphDepth: this.settings.graphDepth, seedTopK: this.settings.seedTopK,
+              seedMinScore: this.settings.seedMinScore, bfsTopK: this.settings.bfsTopK,
+              seedSimilarityThreshold: this.settings.nativeAgent.seedSimilarityThreshold ?? 0 },
+            this.settings.nativeAgent.rrfK ?? 60,
+            this.settings.wikiLinkValidationRetries ?? 3,
+            opts, similarity,
+          );
+        } else {
+          yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, this.settings.bfsTopK, similarity, this.settings.wikiLinkValidationRetries ?? 3, this.settings.nativeAgent.seedSimilarityThreshold ?? 0, this.settings.nativeAgent.bfsFusion ?? false, this.settings.nativeAgent.rrfK ?? 60);
+        }
         break;
       case "lint":
         yield* runLint(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.wikiLinkValidationRetries, opts, similarity, req.lintOpts?.useLlm ?? true, req.lintOpts?.entityTypeFilter ?? []);
@@ -156,7 +169,7 @@ export class AgentRunner {
     if (req.signal.aborted) return;
 
     const vaultRoot = req.cwd ?? "";
-    const domains = req.domainId
+    const domains = req.domainId && req.domainId !== "*"
       ? this.domains.filter((d) => d.id === req.domainId)
       : this.domains;
 
