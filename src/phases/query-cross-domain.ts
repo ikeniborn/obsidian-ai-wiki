@@ -113,7 +113,8 @@ export async function* runCrossDomainQuery(
       .filter((c) => [...c.candidateIds].some((id) => finalSet.has(id)))
       .map((c) => c.domainId)
   )];
-  const domainName = `All domains (${finalDomains.length}): ${finalDomains.join(", ")}`;
+  const finalNames = finalDomains.map((id) => domains.find((d) => d.id === id)?.name ?? id);
+  const domainName = `All domains (${finalDomains.length}): ${finalNames.join(", ")}`;
 
   const wikiFirst = [...finalSet].sort((a, b) => Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
   const availableLinksBlock = wikiFirst.length === 0 ? "" : [

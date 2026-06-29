@@ -1337,7 +1337,8 @@ export class LlmWikiView extends ItemView {
             const r = resolveRerunDomain(it, domains);
             if (!r.ok) { new Notice(i18n().view.rerunDomainMissing); return; }
             if (this.domainSelect) {
-              this.domainSelect.value = r.domainId;
+              // "*" is the cross-domain sentinel — the sidebar has no "*" option, so show "(all)".
+              this.domainSelect.value = r.domainId === "*" ? "" : r.domainId;
               this.domainSelect.dispatchEvent(new Event("change"));
             }
             void this.plugin.controller.query(it.args[0] ?? "", r.domainId);

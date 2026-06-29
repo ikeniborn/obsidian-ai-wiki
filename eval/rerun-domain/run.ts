@@ -47,6 +47,10 @@ console.log("\n=== resolveRerunDomain ===");
   const r = resolveRerunDomain(entry("gamma"), domains);
   check("unknown domainId → not-found", !r.ok && r.reason === "not-found", JSON.stringify(r));
 }
+{
+  const r = resolveRerunDomain(entry("*"), domains);
+  check("cross-domain '*' resolves ok even when no domain has id '*'", r.ok && r.domainId === "*", JSON.stringify(r));
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) { console.log("FAILURES:\n" + failures.map((f) => "  - " + f).join("\n")); process.exit(1); }
