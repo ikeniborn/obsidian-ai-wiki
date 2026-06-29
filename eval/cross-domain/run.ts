@@ -6,7 +6,7 @@
 // register MUST be first: installs .md loader + obsidian stub before any src/ module loads.
 import "./register";
 import { mergeCandidates, runCrossDomainQuery, buildCrossDomainEntityTypes } from "../../src/phases/query-cross-domain";
-import { retrieveDomainCandidates } from "../../src/phases/query";
+import { retrieveDomainCandidates, runQuery } from "../../src/phases/query";
 import type { DomainCandidates } from "../../src/phases/query";
 import type { VaultTools } from "../../src/vault-tools";
 import type { LlmClient, RunEvent } from "../../src/types";
@@ -116,6 +116,13 @@ void (async () => {
     check("eval_meta.crossDomain true", !!evalMeta && (evalMeta.fields.retrievalConfig as { crossDomain?: boolean })?.crossDomain === true);
     check("found_pages non-empty", !!evalMeta && Array.isArray(evalMeta.fields.found_pages) && (evalMeta.fields.found_pages as string[]).length > 0);
     check("per-domain progress emitted", evs.some((e) => e.kind === "tool_use" && (e as { name: string }).name.startsWith("Domain:")));
+    const qs = evs.find((e) => e.kind === "query_stats") as Extract<RunEvent, { kind: "query_stats" }> | undefined;
+    check("emits query_stats (cross)", !!qs && qs.crossDomain === true);
+    check("query_stats.pagesSelected == finalIds length",
+      !!qs && !!evalMeta && qs.pagesSelected === (evalMeta.fields.found_pages as string[]).length,
+      `pagesSelected=${qs?.pagesSelected}`);
+    check("query_stats.pagesScanned > 0", !!qs && qs.pagesScanned > 0, `pagesScanned=${qs?.pagesScanned}`);
+    check("query_stats.fromDomains non-empty", !!qs && Array.isArray(qs.fromDomains) && qs.fromDomains.length > 0);
   }
 
   section("edge cases");
@@ -150,6 +157,26 @@ void (async () => {
       const g = retrieveDomainCandidates(dom("empty"), "x", fakeVault({}), undefined, signal, cfg);
       let rr = await g.next(); while (!rr.done) rr = await g.next(); return rr.value === null;
     })());
+  }
+
+  section("runQuery query_stats (single domain)");
+  {
+    const files = {
+      "!Wiki/work/_config/_index.md": "- [[wiki_work_neural]] — neural networks deep learning",
+      "!Wiki/work/EntityType/wiki_work_neural.md": "# Neural\nneural networks deep learning models",
+    };
+    const vault = fakeVault(files);
+    const { llm } = fakeLlm("Answer about [[wiki_work_neural]].");
+    const signal = new AbortController().signal;
+    const evs = await drive(runQuery(
+      ["neural networks"], false, vault, llm, "fake-model", [dom("work")], "", signal,
+      1, {}, 5, 0, 10, undefined, 3, 0, false, 60,
+    ) as AsyncGenerator<RunEvent, void>);
+    const qs = evs.find((e) => e.kind === "query_stats") as Extract<RunEvent, { kind: "query_stats" }> | undefined;
+    check("single emits query_stats crossDomain false", !!qs && qs.crossDomain === false);
+    check("single query_stats.pagesSelected > 0", !!qs && qs.pagesSelected > 0, `pagesSelected=${qs?.pagesSelected}`);
+    check("single query_stats.pagesScanned > 0", !!qs && qs.pagesScanned > 0, `pagesScanned=${qs?.pagesScanned}`);
+    check("single query_stats.domainName set", !!qs && qs.domainName === "work");
   }
 
   section("buildCrossDomainEntityTypes (covers exactly finalIds domains)");

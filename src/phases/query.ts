@@ -251,6 +251,14 @@ export async function* runQuery(
     index_block: indexContent ? `\nWiki index (_index.md):\n${indexContent}` : "",
   });
 
+  yield {
+    kind: "query_stats",
+    crossDomain: false,
+    domainName: domain.name,
+    pagesScanned: cand.pagesScanned,
+    pagesSelected: selectedIds.size,
+  };
+
   const ans = yield* answerFromContext({
     llm, model, opts, signal, vaultTools,
     systemPrompt, question, contextBlock, selectedIds,
