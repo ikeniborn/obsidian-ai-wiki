@@ -647,9 +647,7 @@ export class LlmWikiView extends ItemView {
     this.chatHistory = [];
 
     this.resultSection.addClass("ai-wiki-hidden");
-    this.queryStatsEl?.remove();
-    this.queryStatsEl = null;
-    this.queryStatsTokensEl = null;
+    this.clearQueryStats();
     this.finalEl.empty();
     this.resultOpen = false;
 
@@ -911,6 +909,7 @@ export class LlmWikiView extends ItemView {
     this.ratingSection?.remove();
     this.ratingSection = null;
 
+    this.clearQueryStats();
     this.finalEl.empty();
     const comp = new Component();
     comp.load();
@@ -936,6 +935,12 @@ export class LlmWikiView extends ItemView {
       this.renderRatingRow(this.ratingSection, entry.id, ax.id, view[ax.labelKey], persisted?.ratings[ax.id] ?? null);
     }
     this.renderCommentBox(this.ratingSection, entry.id, persisted?.comment ?? "");
+  }
+
+  private clearQueryStats(): void {
+    this.queryStatsEl?.remove();
+    this.queryStatsEl = null;
+    this.queryStatsTokensEl = null;
   }
 
   /** Search-stats block shown above the answer, for both Ask Domain and Ask Wiki.
