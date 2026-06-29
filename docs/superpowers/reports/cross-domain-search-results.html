@@ -79,8 +79,8 @@ body:has(#tab-result:checked) #pane-result{ display:block; }
 <body>
 <input type="checkbox" id="theme-toggle" hidden>
 <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
-<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden checked>
-<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
 <input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
 <label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
 <header>
@@ -271,7 +271,97 @@ body:has(#tab-result:checked) #pane-result{ display:block; }
 
 <!-- TAB:plan START -->
 <section class="tab-pane" id="pane-plan">
-  <p class="note">Этап ещё не проверен.</p>
+  <h2>1. Резюме плана</h2>
+  <p><strong>Файл:</strong> <code>docs/superpowers/plans/2026-06-29-cross-domain-search.md</code> ·
+     <strong>plan_hash:</strong> <code>60650aae4563760b</code> · <strong>spec_hash:</strong> <code>391e0bd315589b1e</code> ·
+     <strong>Вердикт:</strong> <span class="badge b-ok">OK</span></p>
+  <table>
+    <thead><tr><th>Задача</th><th>Деливерабл</th><th>DoD / проверка</th></tr></thead>
+    <tbody>
+      <tr><td>T1 query.ts</td><td>Вынос <code>retrieveDomainCandidates</code> + типы <code>DomainCandidates</code>/<code>RetrieveCfg</code>; <code>runQuery</code> зовёт её</td><td><code>npm run build &amp;&amp; npm run lint</code> — чисто (рефактор без смены контракта)</td></tr>
+      <tr><td>T2 query-answer.ts</td><td>Общий хвост <code>answerFromContext</code> (стрим + link-validation)</td><td>build + lint; <code>runQuery</code> переиспользует, поведение сохранено</td></tr>
+      <tr><td>T3 query-cross-domain.ts</td><td><code>mergeCandidates</code> (union + <code>fuseVectorGraph</code> + top-seedTopK)</td><td><code>npx tsx eval/cross-domain/run.ts</code> → <code>OK — 5 passed</code></td></tr>
+      <tr><td>T4 orchestrator</td><td><code>runCrossDomainQuery</code> + prompt assembly + widen <code>RetrievalConfigSnapshot</code></td><td>eval: один LLM-вызов, <code>found_pages</code>, empty-skip, all-empty error → <code>OK</code></td></tr>
+      <tr><td>T5 agent-runner.ts</td><td>Роутинг сентинела <code>"*"</code> → <code>runCrossDomainQuery</code>; legacy сохранён</td><td>build + lint</td></tr>
+      <tr><td>T6 view/i18n/local-config</td><td>Scope-переключатель + <code>lastQueryScope</code> + метки en/ru/es</td><td>build + lint + ручная dev-mode проверка (HUMAN checkpoint)</td></tr>
+      <tr><td>T7 eval finalize</td><td>Refactor-эквивалентность + jaccard assertions</td><td><code>npx tsx eval/cross-domain/run.ts</code> → все секции green</td></tr>
+      <tr><td>T8 docs (iwiki)</td><td><code>retrieval.md</code> «Cross-Domain Query» + <code>operations.md</code></td><td><code>iwiki-lint</code>: нет битых <code>[[refs]]</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схемы зависимостей и пересечений</h2>
+  <h3>Граф зависимостей шагов (M → N = результат T<sub>M</sub> используется в T<sub>N</sub>)</h3>
+  <figure>
+  <svg viewBox="0 0 780 270" role="img" aria-label="Граф зависимостей задач плана">
+    <defs>
+      <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+      </marker>
+      <filter id="ds2" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="var(--shadow)"/>
+      </filter>
+    </defs>
+    <path class="edge" style="marker-end:url(#arr2)" d="M160,60 L210,60"/>
+    <path class="edge" style="marker-end:url(#arr2)" d="M100,80 C140,118 165,138 200,138"/>
+    <path class="edge" style="marker-end:url(#arr2)" d="M160,66 C300,82 340,96 420,100"/>
+    <path class="edge" style="marker-end:url(#arr2)" d="M280,80 L420,100"/>
+    <path class="edge" style="marker-end:url(#arr2)" d="M330,138 L420,114"/>
+    <path class="edge" style="marker-end:url(#arr2)" d="M550,96 C585,78 600,68 610,60"/>
+    <path class="edge" style="marker-end:url(#arr2)" d="M550,112 L610,146"/>
+    <path class="edge" style="marker-end:url(#arr2)" d="M550,120 C590,165 605,195 610,212"/>
+    <g class="gnode"><rect x="40" y="40" width="120" height="40" rx="8" style="filter:url(#ds2)"/><text x="100" y="58" text-anchor="middle">T1 · retrieve</text><text class="sub" x="100" y="73" text-anchor="middle">query.ts extract</text></g>
+    <g class="gnode"><rect x="210" y="40" width="120" height="40" rx="8" style="filter:url(#ds2)"/><text x="270" y="58" text-anchor="middle">T2 · answer tail</text><text class="sub" x="270" y="73" text-anchor="middle">answerFromContext</text></g>
+    <g class="gnode"><rect x="200" y="118" width="130" height="40" rx="8" style="filter:url(#ds2)"/><text x="265" y="136" text-anchor="middle">T3 · merge</text><text class="sub" x="265" y="151" text-anchor="middle">mergeCandidates</text></g>
+    <g class="gnode req"><rect x="420" y="84" width="130" height="44" rx="8" style="filter:url(#ds2)"/><text x="485" y="104" text-anchor="middle">T4 · orchestrator</text><text class="sub" x="485" y="120" text-anchor="middle">runCrossDomainQuery</text></g>
+    <g class="gnode"><rect x="610" y="40" width="130" height="40" rx="8" style="filter:url(#ds2)"/><text x="675" y="58" text-anchor="middle">T5 · routing</text><text class="sub" x="675" y="73" text-anchor="middle">"*" sentinel</text></g>
+    <g class="gnode"><rect x="610" y="126" width="130" height="40" rx="8" style="filter:url(#ds2)"/><text x="675" y="144" text-anchor="middle">T7 · eval final</text><text class="sub" x="675" y="159" text-anchor="middle">equivalence</text></g>
+    <g class="gnode data"><rect x="610" y="200" width="130" height="40" rx="8" style="filter:url(#ds2)"/><text x="675" y="218" text-anchor="middle">T8 · docs iwiki</text><text class="sub" x="675" y="233" text-anchor="middle">after impl</text></g>
+    <g class="gnode"><rect x="40" y="200" width="130" height="40" rx="8" style="filter:url(#ds2)"/><text x="105" y="218" text-anchor="middle">T6 · scope UI</text><text class="sub" x="105" y="233" text-anchor="middle">independent</text></g>
+  </svg>
+  <figcaption>Циклов нет, порядок соблюдён (M&lt;N для всех рёбер). T6 (UI) независим — можно параллельно. T4 — хаб: сходятся T1/T2/T3, расходятся T5/T7/T8.</figcaption>
+  </figure>
+
+  <h3>Пересечения (артефакт → задачи)</h3>
+  <table>
+    <thead><tr><th>Артефакт</th><th>Задачи</th><th>Тип</th></tr></thead>
+    <tbody>
+      <tr><td><code>src/phases/query.ts</code></td><td>T1 (extract), T2 (extract tail)</td><td>последовательное редактирование</td></tr>
+      <tr><td><code>src/phases/query-cross-domain.ts</code></td><td>T3 (create), T4 (extend)</td><td>create→extend</td></tr>
+      <tr><td><code>eval/cross-domain/run.ts</code></td><td>T3 (create), T4 (extend), T7 (extend)</td><td>инкрементальный тест</td></tr>
+      <tr><td><code>src/eval-log.ts</code></td><td>T4 (widen RetrievalConfigSnapshot)</td><td>единоличная</td></tr>
+      <tr><td><code>src/view.ts</code></td><td>T6</td><td>единоличная</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Результаты проверки</h2>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>dependencies</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>verifiability</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Находки</h3>
+  <table>
+    <thead><tr><th>id</th><th>severity</th><th>секция</th><th>проблема</th><th>fix</th><th>verdict</th></tr></thead>
+    <tbody>
+      <tr><td>F-001</td><td><span class="badge b-warn">WARNING</span></td><td>Task 4 Step 3</td><td><code>RetrievalConfigSnapshot</code> строго типизирован — cross-domain <code>retrievalConfig</code> не скомпилируется без расширения типа.</td><td>Безусловный под-шаг: добавить <code>crossDomain?</code>/<code>domainsSearched?</code>; оркестратор заполняет все required-поля.</td><td><span class="badge b-ok">fixed</span></td></tr>
+      <tr><td>F-002</td><td><span class="badge b-warn">WARNING</span></td><td>Task 6 Step 3</td><td>Мёртвые строки-заглушки <code>saved</code> в <code>syncScope</code>, удаление отложено на Step 5.</td><td>Убраны сразу из Step 3.</td><td><span class="badge b-ok">fixed</span></td></tr>
+      <tr><td>F-003</td><td><span class="badge b-warn">WARNING</span></td><td>Task 6 Step 3</td><td>Спека требует читать <code>lastQueryScope</code> при инициализации — ни один шаг не читал.</td><td>Добавлено чтение <code>localConfigStore.load()</code> → <code>scopeToggle.value</code> при построении.</td><td><span class="badge b-ok">fixed</span></td></tr>
+      <tr><td>F-004</td><td><span class="badge b-warn">WARNING</span></td><td>Task 3 Step 1</td><td>Зависимость Task 3 от Task 1 (<code>DomainCandidates</code>) не зафиксирована явно.</td><td>Добавлена пометка «Depends on Task 1/2» в шапку Task 3.</td><td><span class="badge b-ok">fixed</span></td></tr>
+      <tr><td>F-005</td><td><span class="badge b-info">INFO</span></td><td>Task 1</td><td>План добавляет <code>seedOutputTokens</code>, которого нет в типе спеки.</td><td>Намеренно (проброс токенов llm-seed fallback).</td><td><span class="badge b-ok">accepted</span></td></tr>
+      <tr><td>F-006</td><td><span class="badge b-info">INFO</span></td><td>File Structure</td><td>Спека перечисляет <code>controller.ts</code>, план — без изменений.</td><td>Обосновано: <code>query(q, "*")</code> уже проходит через <code>dispatch</code>.</td><td><span class="badge b-ok">accepted</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>Сводка:</strong> CRITICAL open: 0 · WARNING open: 0 (4 fixed) · INFO: 2 (accepted) · <strong>Вердикт:</strong> <span class="badge b-ok">OK</span><br>
+    <strong>Цепочка:</strong> intent: <em>null</em> → spec ✓ → <strong>plan ✓</strong> → result (ожидается).
+  </div>
 </section>
 <!-- TAB:plan END -->
 
