@@ -152,6 +152,8 @@ export class LlmWikiView extends ItemView {
   private liveStatusTextEl: HTMLElement | null = null;
   private queryStatsEl: HTMLElement | null = null;
   private queryStatsTokensEl: HTMLElement | null = null;
+  private currentQueryStats: Extract<RunEvent, { kind: "query_stats" }> | null = null;
+  private currentQueryStatsInputTokens: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, private plugin: LlmWikiPlugin) {
     super(leaf);
@@ -647,7 +649,7 @@ export class LlmWikiView extends ItemView {
     this.chatHistory = [];
 
     this.resultSection.addClass("ai-wiki-hidden");
-    this.clearQueryStats();
+    this.resetQueryStats();
     this.finalEl.empty();
     this.resultOpen = false;
 
@@ -909,12 +911,20 @@ export class LlmWikiView extends ItemView {
     this.ratingSection?.remove();
     this.ratingSection = null;
 
-    if (!opts?.preserveQueryStats) this.clearQueryStats();
+    if (!opts?.preserveQueryStats) {
+      if (this.state === "running") this.clearQueryStatsDom();
+      else this.resetQueryStats();
+    }
     this.finalEl.empty();
     const comp = new Component();
     comp.load();
     await MarkdownRenderer.render(this.app, entry.finalText || "(empty)", this.finalEl, "", comp);
     sanitizeLinks(this.finalEl);
+    if (opts?.preserveQueryStats && this.currentQueryStats && !this.queryStatsEl) {
+      const inputTokens = this.currentQueryStatsInputTokens;
+      this.renderQueryStats(this.currentQueryStats);
+      if (inputTokens !== null) this.fillQueryStatsTokens(inputTokens);
+    }
     this.resultSection.removeClass("ai-wiki-hidden");
     this.finalEl.removeClass("ai-wiki-hidden");
     this.resultOpen = true;
@@ -937,16 +947,24 @@ export class LlmWikiView extends ItemView {
     this.renderCommentBox(this.ratingSection, entry.id, persisted?.comment ?? "");
   }
 
-  private clearQueryStats(): void {
+  private clearQueryStatsDom(): void {
     this.queryStatsEl?.remove();
     this.queryStatsEl = null;
     this.queryStatsTokensEl = null;
   }
 
+  private resetQueryStats(): void {
+    this.clearQueryStatsDom();
+    this.currentQueryStats = null;
+    this.currentQueryStatsInputTokens = null;
+  }
+
   /** Search-stats block shown above the answer, for both Ask Domain and Ask Wiki.
    *  Retrieval metrics are known up front; the tokens line is filled later from llm_call_stats. */
   private renderQueryStats(ev: Extract<RunEvent, { kind: "query_stats" }>): void {
-    this.queryStatsEl?.remove();
+    this.currentQueryStats = ev;
+    this.currentQueryStatsInputTokens = null;
+    this.clearQueryStatsDom();
     this.resultSection.removeClass("ai-wiki-hidden");
     const T = i18n().view;
     const box = this.resultSection.createDiv("ai-wiki-cross-stats");
@@ -974,6 +992,7 @@ export class LlmWikiView extends ItemView {
 
   /** Fill the "tokens sent" line once the LLM call reports usage. No-op if no stats block is live. */
   private fillQueryStatsTokens(inputTokens: number): void {
+    this.currentQueryStatsInputTokens = inputTokens;
     this.queryStatsTokensEl?.setText(String(inputTokens));
   }
 
