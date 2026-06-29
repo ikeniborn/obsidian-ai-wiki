@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ask Wiki / Ask Domain — IDD chain</title>
+<style>
+:root{
+  --bg:#0f1419; --surface:#1a2129; --surface2:#232c36; --border:#33404d;
+  --text:#e3e8ee; --muted:#8a98a8; --accent:#5cc8ff; --ok:#4ade80; --warn:#fbbf24; --crit:#f87171;
+}
+body:has(#theme-toggle:checked){
+  --bg:#f6f8fa; --surface:#ffffff; --surface2:#eef2f6; --border:#d0d8e0;
+  --text:#1a2129; --muted:#5a6675; --accent:#0969da; --ok:#1a7f37; --warn:#9a6700; --crit:#cf222e;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  background:var(--bg);color:var(--text);line-height:1.5;padding:0 0 4rem}
+header{display:flex;align-items:center;gap:1rem;padding:1rem 1.5rem;border-bottom:1px solid var(--border);
+  background:var(--surface);position:sticky;top:0;z-index:5}
+header h1{font-size:1.15rem;margin:0;font-weight:600}
+.theme-btn{cursor:pointer;border:1px solid var(--border);border-radius:8px;padding:.35rem .6rem;
+  background:var(--surface2);user-select:none;font-size:.9rem}
+main{max-width:1000px;margin:0 auto;padding:1.5rem}
+h2{font-size:1.05rem;margin:1.8rem 0 .7rem;color:var(--accent)}
+h3{font-size:.95rem;margin:1.2rem 0 .5rem}
+table{border-collapse:collapse;width:100%;margin:.6rem 0;font-size:.86rem}
+th,td{border:1px solid var(--border);padding:.45rem .6rem;text-align:left;vertical-align:top}
+th{background:var(--surface2);font-weight:600}
+tr:nth-child(even) td{background:var(--surface)}
+code{background:var(--surface2);padding:.1rem .35rem;border-radius:4px;font-size:.85em}
+.note{background:var(--surface);border-left:3px solid var(--accent);padding:.6rem .9rem;border-radius:0 6px 6px 0;margin:.8rem 0;color:var(--muted)}
+.badge{display:inline-block;padding:.12rem .5rem;border-radius:20px;font-size:.75rem;font-weight:600}
+.b-ok{background:rgba(74,222,128,.16);color:var(--ok)}
+.b-warn{background:rgba(251,191,36,.16);color:var(--warn)}
+.b-crit{background:rgba(248,113,113,.16);color:var(--crit)}
+.chain-tabs{display:flex;gap:.3rem;max-width:1000px;margin:1rem auto 0;padding:0 1.5rem;flex-wrap:wrap}
+.chain-tabs label{cursor:pointer;padding:.4rem .9rem;border:1px solid var(--border);border-bottom:none;
+  border-radius:8px 8px 0 0;background:var(--surface);color:var(--muted);font-size:.85rem}
+.tab-pane{display:none}
+body:has(#tab-intent:checked) #pane-intent,
+body:has(#tab-spec:checked)   #pane-spec,
+body:has(#tab-plan:checked)   #pane-plan,
+body:has(#tab-result:checked) #pane-result{display:block}
+body:has(#tab-intent:checked) label[for="tab-intent"],
+body:has(#tab-spec:checked)   label[for="tab-spec"],
+body:has(#tab-plan:checked)   label[for="tab-plan"],
+body:has(#tab-result:checked) label[for="tab-result"]{color:var(--accent);border-color:var(--accent);font-weight:600}
+figure{margin:1rem 0;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem;overflow-x:auto}
+figcaption{font-size:.82rem;color:var(--muted);margin-bottom:.6rem}
+.flow{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.fbox{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.5rem .7rem;font-size:.8rem;text-align:center}
+.farrow{color:var(--accent);font-weight:700}
+svg text{fill:var(--text)}
+svg .nrect{fill:var(--surface2);stroke:var(--border)}
+svg .nlabel{font-size:11px}
+svg .edge{stroke:var(--accent);stroke-width:1.4;fill:none;opacity:.7}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden checked>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<header>
+  <label for="theme-toggle" class="theme-btn" title="Тёмная/светлая тема">🌙 / ☀️</label>
+  <h1>Ask Wiki / Ask Domain — кнопки, статистика поиска, комментарий</h1>
+</header>
+<nav class="chain-tabs">
+  <label for="tab-intent">Intent</label>
+  <label for="tab-spec">Spec</label>
+  <label for="tab-plan">Plan</label>
+  <label for="tab-result">Result</label>
+</nav>
+<main>
+<!-- TAB:intent START -->
+<section class="tab-pane" id="pane-intent">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:intent END -->
+<!-- TAB:spec START -->
+<section class="tab-pane" id="pane-spec">
+
+  <h2>1. Резюме спецификации</h2>
+  <p class="note">Файл: <code>docs/superpowers/specs/2026-06-29-ask-wiki-domain-stats-comment-design.md</code> · spec_hash <code>616638c9814f9f17</code></p>
+
+  <h3>Требования по секциям</h3>
+  <table>
+    <tr><th>Секция</th><th>Требование</th></tr>
+    <tr><td>UX — Buttons</td><td>Убрать scope-<code>&lt;select&gt;</code>. Добавить <code>Ask Domain</code> (запрос к выбранному домену; <code>disabled</code> когда домен не выбран) и <code>Ask Wiki</code> (всегда активна; <code>ConfirmModal</code> → cross-domain <code>*</code>). <code>setRunning</code> отключает обе.</td></tr>
+    <tr><td>UX — Buttons › Removed scope machinery</td><td>Удалить <code>ai-wiki-scope-row</code>, <code>scopeToggle</code>, <code>desiredScope</code>, <code>syncScope</code>; <code>submitQuery(domainArg)</code> принимает аргумент.</td></tr>
+    <tr><td>UX — Search Stats Block</td><td>Событие <code>query_stats</code> до <code>answerFromContext</code> → блок над ответом. Поля: <code>crossDomain</code>, <code>pagesScanned</code>, <code>pagesSelected</code>, доменные поля для Ask Wiki. <code>inputTokens</code> дозаполняется из <code>llm_call_stats</code>.</td></tr>
+    <tr><td>UX — Search Stats › Metrics</td><td>Ask Domain: домен / проанализировано (весь домен <code>files.length</code>) / выбрано для LLM / токены. Ask Wiki: изучено N из M / из каких / Σ проанализировано / в ответе / токены.</td></tr>
+    <tr><td>UX — Comment Box</td><td>textarea <code>width:100%</code>, <code>rows</code> 2→4. <code>Save comment</code> справа → после клика <code>Saved</code> + <code>disabled</code>. Правка текста → снова активна. Status-<code>span</code> удалён.</td></tr>
+    <tr><td>i18n</td><td>Убрать <code>scopeAll/scopeDomain/scopeHint</code>; <code>ask</code>→<code>askDomain</code>; добавить <code>askWiki</code>, confirm-, stats-лейблы, <code>commentSavedBtn</code> (en/ru/es).</td></tr>
+    <tr><td>Local Config</td><td>Удалить <code>lastQueryScope</code> из <code>LocalConfig</code>.</td></tr>
+    <tr><td>Error Handling</td><td>Гейт токен-обновления (только если stats-блок есть); очистка stale-блока в <code>setRunning</code>; defensive notice в <code>submitQuery</code>.</td></tr>
+    <tr><td>Testing</td><td>eval cross-domain + single-domain assert <code>query_stats</code>; <code>npm run lint</code>; ручная UI-проверка.</td></tr>
+  </table>
+
+  <h3>Критерии приёмки (Success Criteria)</h3>
+  <table>
+    <tr><th>#</th><th>Критерий</th></tr>
+    <tr><td>SC1</td><td>Scope-селектор отсутствует; две кнопки в ряд запроса.</td></tr>
+    <tr><td>SC2</td><td><code>Ask Domain</code> disabled без домена; <code>Ask Wiki</code> → модалка → cross-domain.</td></tr>
+    <tr><td>SC3</td><td>Блок статистики над ответом для обоих вариантов; строка токенов дозаполняется.</td></tr>
+    <tr><td>SC4</td><td>Comment box 100% ширины / ×2 высоты; <code>Save</code>→<code>Saved</code> disabled; правка re-enable; без status-span.</td></tr>
+    <tr><td>SC5</td><td><code>lastQueryScope</code> и scope-i18n удалены; <code>npm run lint</code> зелёный.</td></tr>
+    <tr><td>SC6</td><td>eval-ассерты <code>query_stats</code> (single + cross) проходят.</td></tr>
+  </table>
+
+  <h2>2. Схемы решения и зависимостей</h2>
+
+  <h3>Схема решения — поток данных</h3>
+  <figure>
+    <figcaption>Клик кнопки → маршрутизация → ретривал → событие статистики → рендер блока (токены отдельным событием).</figcaption>
+    <div class="flow">
+      <div class="fbox">Ask Domain /<br>Ask Wiki (view)</div><span class="farrow">→</span>
+      <div class="fbox">ConfirmModal<br>(только Ask Wiki)</div><span class="farrow">→</span>
+      <div class="fbox">submitQuery<br>(domainArg)</div><span class="farrow">→</span>
+      <div class="fbox">controller.query</div><span class="farrow">→</span>
+      <div class="fbox">runQuery /<br>runCrossDomainQuery</div><span class="farrow">→</span>
+      <div class="fbox">query_stats<br>event</div><span class="farrow">→</span>
+      <div class="fbox">stats-блок<br>над ответом</div>
+    </div>
+    <p class="note"><code>llm_call_stats</code> (<code>inputTokens</code>) приходит в конце стрима → дозаполняет строку «токенов отправлено» в уже отрисованном блоке.</p>
+  </figure>
+
+  <h3>Граф зависимостей (A → B = «A зависит от B»)</h3>
+  <figure>
+    <figcaption>Узлы — компоненты решения; рёбра — зависимости. Циклов нет.</figcaption>
+    <svg viewBox="0 0 920 520" width="100%" preserveAspectRatio="xMidYMid meet" font-family="sans-serif">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+        </marker>
+        <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-opacity="0.25"/>
+        </filter>
+      </defs>
+      <!-- edges -->
+      <g>
+        <path class="edge" marker-end="url(#arr)" d="M110,70 L110,118"/>
+        <path class="edge" marker-end="url(#arr)" d="M150,70 L300,118"/>
+        <path class="edge" marker-end="url(#arr)" d="M150,50 L558,135"/>
+        <path class="edge" marker-end="url(#arr)" d="M110,160 L110,208"/>
+        <path class="edge" marker-end="url(#arr)" d="M100,250 L90,298"/>
+        <path class="edge" marker-end="url(#arr)" d="M140,250 L280,298"/>
+        <path class="edge" marker-end="url(#arr)" d="M90,340 L180,388"/>
+        <path class="edge" marker-end="url(#arr)" d="M290,340 L210,388"/>
+        <path class="edge" marker-end="url(#arr)" d="M130,318 L398,315"/>
+        <path class="edge" marker-end="url(#arr)" d="M330,318 L398,320"/>
+        <path class="edge" marker-end="url(#arr)" d="M500,420 L472,342"/>
+        <path class="edge" marker-end="url(#arr)" d="M570,440 L648,440"/>
+        <path class="edge" marker-end="url(#arr)" d="M560,420 L630,162"/>
+        <path class="edge" marker-end="url(#arr)" d="M570,430 L772,252"/>
+        <path class="edge" marker-end="url(#arr)" d="M630,70 L630,118"/>
+        <path class="edge" marker-end="url(#arr)" d="M660,70 L772,208"/>
+      </g>
+      <!-- nodes -->
+      <g font-size="11">
+        <g><rect class="nrect" x="40" y="30" width="140" height="40" rx="6" filter="url(#ds)"/><text class="nlabel" x="110" y="54" text-anchor="middle">Ask Domain / Wiki (view)</text></g>
+        <g><rect class="nrect" x="560" y="30" width="140" height="40" rx="6" filter="url(#ds)"/><text class="nlabel" x="630" y="54" text-anchor="middle">Comment box (view)</text></g>
+        <g><rect class="nrect" x="40" y="120" width="140" height="40" rx="6" filter="url(#ds)"/><text class="nlabel" x="110" y="144" text-anchor="middle">submitQuery(arg)</text></g>
+        <g><rect class="nrect" x="250" y="120" width="140" height="40" rx="6" filter="url(#ds)"/><text class="nlabel" x="320" y="144" text-anchor="middle">ConfirmModal</text></g>
+        <g><rect class="nrect" x="560" y="120" width="140" height="40" rx="6" filter="url(#ds)"/><text class="nlabel" x="630" y="144" text-anchor="middle">i18n</text></g>
+        <g><rect class="nrect" x="40" y="210" width="140" height="40" rx="6" filter="url(#ds)"/><text class="nlabel" x="110" y="234" text-anchor="middle">controller.query</text></g>
+        <g><rect class="nrect" x="700" y="210" width="140" height="40" rx="6" filter="url(#ds)"/><text class="nlabel" x="770" y="234" text-anchor="middle">styles.css</text></g>
+        <g><rect class="nrect" x="20" y="300" width="140" height="40" rx="6" filter="url(#ds)"/><text class="nlabel" x="90" y="324" text-anchor="middle">runQuery</text></g>
+        <g><rect class="nrect" x="220" y="300" width="160" height="40" rx="6" filter="url(#ds)"/><text class="nlabel" x="300" y="324" text-anchor="middle">runCrossDomainQuery</text></g>
+        <g><rect class="nrect" x="400" y="300" width="150" height="40" rx="6" filter="url(#ds)"/><text class="nlabel" x="475" y="324" text-anchor="middle">query_stats (types)</text></g>
+        <g><rect class="nrect" x="120" y="390" width="180" height="40" rx="6" filter="url(#ds)"/><text class="nlabel" x="210" y="414" text-anchor="middle">retrieveDomainCandidates</text></g>
+        <g><rect class="nrect" x="430" y="420" width="140" height="40" rx="6" filter="url(#ds)"/><text class="nlabel" x="500" y="444" text-anchor="middle">stats-блок (view)</text></g>
+        <g><rect class="nrect" x="648" y="420" width="150" height="40" rx="6" filter="url(#ds)"/><text class="nlabel" x="723" y="444" text-anchor="middle">llm_call_stats</text></g>
+      </g>
+    </svg>
+  </figure>
+
+  <h3>Карта покрытия (задача → требование спецификации)</h3>
+  <table>
+    <tr><th>Задача пользователя</th><th>Покрывающая секция(и)</th></tr>
+    <tr><td>T1. Убрать scope-селектор</td><td>UX — Buttons (Removed scope machinery), Local Config, i18n</td></tr>
+    <tr><td>T2. Ask Wiki (все домены, подтверждение)</td><td>UX — Buttons</td></tr>
+    <tr><td>T3. Ask Domain (выбранный домен)</td><td>UX — Buttons</td></tr>
+    <tr><td>T4. Comment box шире / ×2 высота</td><td>UX — Comment Box</td></tr>
+    <tr><td>T5. Save→Saved справа, без лишнего</td><td>UX — Comment Box</td></tr>
+    <tr><td>T6. Статистика Ask Wiki (домены/страницы/в ответе)</td><td>UX — Search Stats Block</td></tr>
+    <tr><td>T7. Статистика Ask Domain + токены (оба)</td><td>UX — Search Stats Block</td></tr>
+  </table>
+
+  <h2>3. Результаты проверки</h2>
+  <table>
+    <tr><th>Фаза</th><th>Статус</th><th>Новых findings</th></tr>
+    <tr><td>structure</td><td><span class="badge b-ok">passed</span></td><td>0</td></tr>
+    <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td><td>0</td></tr>
+    <tr><td>clarity</td><td><span class="badge b-ok">passed</span></td><td>0</td></tr>
+    <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td><td>0</td></tr>
+  </table>
+  <p class="note">Findings: нет. Проверки: placeholder/ссылки/нумерация (structure); покрытие T1–T7, без extras и противоречий (coverage); vague-термины и DoD (clarity); первый прогон, все секции новые (consistency).</p>
+
+  <h3>Сводка</h3>
+  <table>
+    <tr><th>CRITICAL open</th><th>WARNING open</th><th>Вердикт</th></tr>
+    <tr><td>0</td><td>0</td><td><span class="badge b-ok">OK</span></td></tr>
+  </table>
+
+  <h3>Цепочка</h3>
+  <p class="note">intent (<code>null</code>) → <strong>spec ✓</strong> → plan (ожидается) → result (ожидается)</p>
+
+</section>
+<!-- TAB:spec END -->
+<!-- TAB:plan START -->
+<section class="tab-pane" id="pane-plan">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:plan END -->
+<!-- TAB:result START -->
+<section class="tab-pane" id="pane-result">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:result END -->
+</main>
+</body>
+</html>
