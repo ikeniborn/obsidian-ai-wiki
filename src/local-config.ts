@@ -20,7 +20,6 @@ export interface LocalConfig {
   migrated_drop_sections?: boolean;
   shellConsentGiven?: boolean;
   lastDomain?: string;
-  lastQueryScope?: "all" | "domain";
 }
 
 const DEFAULTS: LocalConfig = { iclaudePath: "" };

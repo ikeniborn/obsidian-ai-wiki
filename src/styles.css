@@ -25,6 +25,7 @@
 .ai-wiki-ask { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .ai-wiki-query-input { width: 100%; resize: vertical; font-family: inherit; padding: 6px; }
 .ai-wiki-ask-row { display: flex; justify-content: space-between; }
+.ai-wiki-ask-buttons { display: flex; gap: 6px; }
 .ai-wiki-ask-row button { flex: 0 0 auto; }
 .ai-wiki-busy-modal-content { max-height: 60vh; overflow-y: auto; }
 

@@ -92,11 +92,8 @@ export class LlmWikiView extends ItemView {
   private stepsOpen = true;
   private cancelBtn!: HTMLButtonElement;
   private queryInput!: HTMLTextAreaElement;
-  private scopeToggle?: HTMLSelectElement;
-  // Persisted scope preference; undefined until loaded (then "all" | "domain").
-  // syncScope re-asserts it so the programmatic domain-restore "change" can't clobber it.
-  private desiredScope?: "all" | "domain";
-  private askBtn!: HTMLButtonElement;
+  private askDomainBtn!: HTMLButtonElement;
+  private askWikiBtn!: HTMLButtonElement;
   private domainSelect?: HTMLSelectElement;
   private initBtn?: HTMLButtonElement;
   private ingestBtn?: HTMLButtonElement;
@@ -211,48 +208,21 @@ export class LlmWikiView extends ItemView {
       attr: { placeholder: "Question…", rows: "3" },
     });
 
-    const T2 = i18n().view;
-    const scopeRow = ask.createDiv("ai-wiki-scope-row");
-    scopeRow.createSpan({ cls: "muted", text: "Scope:" });
-    this.scopeToggle = scopeRow.createEl("select", { cls: "ai-wiki-scope-select", attr: { title: T2.scopeHint } });
-    this.scopeToggle.createEl("option", { value: "all", text: T2.scopeAll });
-    this.scopeToggle.createEl("option", { value: "domain", text: T2.scopeDomain });
-
-    const syncScope = () => {
-      const hasDomain = !!(this.domainSelect?.value);
-      const domainOpt = this.scopeToggle!.querySelector('option[value="domain"]') as HTMLOptionElement;
-      domainOpt.disabled = !hasDomain;
-      if (this.desiredScope) {
-        // Re-assert the persisted/user preference; "domain" only when a concrete domain exists.
-        // This survives the programmatic domain-restore "change" dispatched by refreshDomains.
-        this.scopeToggle!.value = this.desiredScope === "domain" && hasDomain ? "domain" : "all";
-      } else {
-        // No preference yet: mirror the sidebar — concrete → "domain", (all) → "all".
-        // This also corrects any stale "domain" while the sidebar is "(all)".
-        this.scopeToggle!.value = hasDomain ? "domain" : "all";
-      }
-    };
-    this.scopeToggle.addEventListener("change", () => {
-      // A user toggle becomes the new persisted preference.
-      this.desiredScope = this.scopeToggle!.value as "all" | "domain";
-      void this.plugin.localConfigStore.save({ lastQueryScope: this.desiredScope });
-    });
-    this.domainSelect?.addEventListener("change", syncScope);
-    syncScope();
-
-    // Restore the persisted scope choice, then re-settle (order-independent vs refreshDomains).
-    void this.plugin.localConfigStore.load().then((c) => {
-      if (c.lastQueryScope === "all" || c.lastQueryScope === "domain") {
-        this.desiredScope = c.lastQueryScope;
-        syncScope();
-      }
-    });
-
     const askRow = ask.createDiv("ai-wiki-ask-row");
     this.cancelBtn = askRow.createEl("button", { text: T.view.cancel, cls: "mod-warning" });
-    this.askBtn = askRow.createEl("button", { text: T.view.ask });
+    const askButtons = askRow.createDiv("ai-wiki-ask-buttons");
+    this.askDomainBtn = askButtons.createEl("button", { text: T.view.askDomain });
+    this.askWikiBtn = askButtons.createEl("button", { text: T.view.askWiki, cls: "mod-cta" });
     this.cancelBtn.disabled = true;
-    this.askBtn.addEventListener("click", () => this.submitQuery());
+    this.askDomainBtn.addEventListener("click", () => {
+      const d = this.domainSelect?.value;
+      if (!d) { new Notice(i18n().view.enterQuestion); return; }
+      this.submitQuery(d);
+    });
+    this.askWikiBtn.addEventListener("click", () => {
+      const T2 = i18n().view;
+      new ConfirmModal(this.app, T2.askWikiConfirmTitle, [T2.askWikiConfirmBody], () => this.submitQuery("*")).open();
+    });
     this.cancelBtn.addEventListener("click", () => this.plugin.controller.cancelCurrent());
 
     const progressHeader = root.createDiv("ai-wiki-progress-header");
@@ -460,7 +430,8 @@ export class LlmWikiView extends ItemView {
     const canFormat = !!activeFile && activeFile.extension === "md"
       && !isWikiArticlePath(activeFile.path);
 
-    if (this.askBtn)       this.askBtn.disabled       = !hasDomain;
+    if (this.askDomainBtn) this.askDomainBtn.disabled = !hasDomain;
+    if (this.askWikiBtn)   this.askWikiBtn.disabled   = false;
     if (this.ingestBtn)    this.ingestBtn.disabled    = !hasDomain || onWikiArticle;
     if (this.lintBtn)      this.lintBtn.disabled      = !hasDomain;
     if (this.formatBtn)    this.formatBtn.disabled    = !canFormat;
@@ -615,13 +586,10 @@ export class LlmWikiView extends ItemView {
     }
   }
 
-  private submitQuery(): void {
+  private submitQuery(domainArg: string): void {
     const q = this.queryInput.value.trim();
     if (!q) { new Notice(i18n().view.enterQuestion); return; }
     if (this.state === "running") { new Notice(i18n().view.operationInProgress); return; }
-    const sidebarDomain = this.domainSelect?.value || "";
-    const scope = this.scopeToggle?.value || (sidebarDomain ? "domain" : "all");
-    const domainArg = scope === "all" ? "*" : (sidebarDomain || "*");
     void this.plugin.controller.query(q, domainArg);
     this.queryInput.value = "";
   }
@@ -632,7 +600,8 @@ export class LlmWikiView extends ItemView {
     this.finalEl.empty();
     this.statusEl.setText(`▶ ${operation} ${args.join(" ")}`);
     this.cancelBtn.disabled = false;
-    this.askBtn.disabled = true;
+    this.askDomainBtn.disabled = true;
+    this.askWikiBtn.disabled = true;
     if (this.initBtn) this.initBtn.disabled = true;
     if (this.ingestBtn) this.ingestBtn.disabled = true;
     if (this.lintBtn) this.lintBtn.disabled = true;
