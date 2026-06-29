@@ -983,15 +983,25 @@ export class LlmWikiView extends ItemView {
     const box = parent.createDiv("ai-wiki-comment-box");
     const ta = box.createEl("textarea", {
       cls: "ai-wiki-comment-input",
-      attr: { placeholder: T.view.commentPlaceholder, rows: "2" },
+      attr: { placeholder: T.view.commentPlaceholder, rows: "4" },
     });
     ta.value = initial;
+    let savedValue = initial;
     const actions = box.createDiv("ai-wiki-comment-actions");
     const saveBtn = actions.createEl("button", { text: T.view.commentSave });
-    const status = actions.createSpan({ cls: "ai-wiki-comment-status" });
+    ta.addEventListener("input", () => {
+      if (ta.value !== savedValue) {
+        saveBtn.disabled = false;
+        saveBtn.setText(T.view.commentSave);
+      }
+    });
     saveBtn.addEventListener("click", () => void (async () => {
       const saved = await this.plugin.controller.commentRun(runId, ta.value);
-      if (saved !== undefined) status.setText(T.view.commentSaved);
+      if (saved !== undefined) {
+        savedValue = ta.value;
+        saveBtn.setText(T.view.commentSavedBtn);
+        saveBtn.disabled = true;
+      }
     })());
   }
 

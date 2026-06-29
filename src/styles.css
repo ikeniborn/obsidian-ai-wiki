@@ -391,3 +391,6 @@
 .ai-wiki-cross-stats-row { display: flex; justify-content: space-between; gap: 8px; }
 .ai-wiki-cross-stats-label { color: var(--text-muted); }
 .ai-wiki-cross-stats-value { font-weight: 600; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.ai-wiki-comment-box { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ai-wiki-comment-input { width: 100%; box-sizing: border-box; resize: vertical; font-family: inherit; padding: 6px; }
+.ai-wiki-comment-actions { display: flex; justify-content: flex-end; }
