@@ -904,12 +904,12 @@ export class LlmWikiView extends ItemView {
   /** Render an entry's result body + (dev-mode) rating rows and comment box, bound
    *  to entry.id. Used by both finish() and the history-row click so the rating UI is
    *  always torn down and rebuilt for the displayed runId — never leaked across runs. */
-  private async renderResultFor(entry: RunHistoryEntry): Promise<void> {
+  private async renderResultFor(entry: RunHistoryEntry, opts?: { preserveQueryStats?: boolean }): Promise<void> {
     const seq = ++this.renderSeq;
     this.ratingSection?.remove();
     this.ratingSection = null;
 
-    this.clearQueryStats();
+    if (!opts?.preserveQueryStats) this.clearQueryStats();
     this.finalEl.empty();
     const comp = new Component();
     comp.load();
@@ -1093,7 +1093,7 @@ export class LlmWikiView extends ItemView {
     this.resultSpeedEl?.setText(this.buildSpeedText());
     this.finalEl.empty();
     if (entry.finalText) {
-      await this.renderResultFor(entry);
+      await this.renderResultFor(entry, { preserveQueryStats: true });
       this.lastRunId = entry.id;
 
       const CHAT_OPS: WikiOperation[] = ["lint", "lint-chat", "ingest", "query"];
