@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.190 — 2026-06-29
+
+### Новое
+- feat(query): cross-domain query — route '*' domain sentinel to a unified cross-domain search
+- feat(query): runCrossDomainQuery orchestrator with eval coverage
+- feat(query): mergeCandidates stage-2 fusion across domains with eval coverage
+- feat(view): cross-domain scope toggle + lastQueryScope persistence
+
+### Исправления
+- fix(query): support cross-domain '*' rerun from history + domain names in label
+- fix(view): preserve persisted query scope across domain restore
+- fix(query): cross-domain language_notes in entity block + honest bfsFusion telemetry
+- fix(query): derive cross-domain finalDomains from domainId, not stem parsing
+- fix(query): preserve abort semantics after answerFromContext extraction
+
+### Прочее
+- refactor(query): extract retrieveDomainCandidates from runQuery
+- refactor(query): extract shared answerFromContext tail
+- refactor(query): surface indexContent on DomainCandidates, validate wikiVaultPath
+
+---
+
 ## 0.1.189 — 2026-06-28
 
 ### Новое
