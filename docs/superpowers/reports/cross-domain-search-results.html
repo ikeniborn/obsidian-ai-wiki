@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chain — cross-domain-search</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1100px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg); transition:background .3s, color .3s;
+}
+.theme-btn{ position:sticky; top:.5rem; float:right; cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface); z-index:5; }
+h1{ font-size:1.5rem; margin:.2rem 0 1rem; }
+h2{ font-size:1.2rem; margin:2rem 0 .8rem; border-bottom:2px solid var(--border); padding-bottom:.3rem; }
+h3{ font-size:1.02rem; margin:1.4rem 0 .6rem; color:var(--accent-2); }
+table{ border-collapse:collapse; width:100%; margin:.6rem 0 1.2rem; background:var(--surface);
+  border:1px solid var(--border); border-radius:8px; overflow:hidden; font-size:.92rem; }
+th,td{ text-align:left; padding:.5rem .7rem; border-bottom:1px solid var(--border); vertical-align:top; }
+th{ background:color-mix(in srgb,var(--accent) 14%, var(--surface)); color:var(--fg); }
+tr:nth-child(even) td{ background:var(--zebra); }
+code{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.86em;
+  background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .35rem; border-radius:4px; }
+.note{ background:color-mix(in srgb,var(--accent) 12%, var(--surface)); border-left:4px solid var(--accent);
+  padding:.6rem .9rem; border-radius:6px; margin:.8rem 0; }
+.badge{ display:inline-block; padding:.08rem .5rem; border-radius:20px; font-size:.78rem; font-weight:600; }
+.b-ok{ background:color-mix(in srgb,var(--ok) 22%, var(--surface)); color:var(--ok-2); border:1px solid var(--ok); }
+.b-info{ background:color-mix(in srgb,var(--accent) 20%, var(--surface)); color:var(--accent-2); border:1px solid var(--accent); }
+.b-warn{ background:color-mix(in srgb,var(--warn) 22%, var(--surface)); color:var(--warn-2); border:1px solid var(--warn); }
+.b-crit{ background:color-mix(in srgb,var(--danger) 22%, var(--surface)); color:var(--danger-2); border:1px solid var(--danger); }
+/* flow blocks */
+.flow{ display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin:1rem 0; }
+.fbox{ background:var(--surface); border:1px solid var(--accent); border-radius:8px; padding:.5rem .7rem;
+  box-shadow:0 2px 6px var(--shadow); font-size:.85rem; min-width:120px; }
+.fbox small{ color:var(--muted); display:block; }
+.farr{ color:var(--line); font-weight:700; }
+.col{ display:flex; flex-direction:column; gap:.5rem; }
+figure{ margin:1rem 0; }
+figcaption{ color:var(--muted); font-size:.85rem; margin-top:.3rem; }
+svg{ max-width:100%; height:auto; background:var(--surface); border:1px solid var(--border); border-radius:8px; }
+.gnode rect{ fill:var(--surface); stroke:var(--accent); stroke-width:1.5; filter:url(#ds); }
+.gnode.req rect{ stroke:var(--accent-2); fill:color-mix(in srgb,var(--accent) 16%, var(--surface)); }
+.gnode.reuse rect{ stroke:var(--ok-2); fill:color-mix(in srgb,var(--ok) 14%, var(--surface)); }
+.gnode.data rect{ stroke:var(--warn-2); fill:color-mix(in srgb,var(--warn) 16%, var(--surface)); }
+.gnode text{ fill:var(--fg); font:12px system-ui,sans-serif; }
+.gnode text.sub{ fill:var(--muted); font-size:10px; }
+.edge{ stroke:var(--line); stroke-width:1.6; fill:none; marker-end:url(#arr); }
+/* tabs */
+.chain-tabs{ display:flex; gap:.3rem; margin:1rem 0 0; flex-wrap:wrap; }
+.chain-tabs label{ cursor:pointer; padding:.4rem .9rem; border:1px solid var(--border); border-bottom:none;
+  border-radius:8px 8px 0 0; background:var(--surface); color:var(--muted); }
+body:has(#tab-intent:checked) label[for="tab-intent"],
+body:has(#tab-spec:checked)   label[for="tab-spec"],
+body:has(#tab-plan:checked)   label[for="tab-plan"],
+body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); border-color:var(--accent); font-weight:600; }
+.tab-pane{ display:none; border:1px solid var(--border); border-radius:0 8px 8px 8px; padding:1.2rem 1.4rem; background:color-mix(in srgb,var(--surface) 70%, var(--bg)); }
+body:has(#tab-intent:checked) #pane-intent,
+body:has(#tab-spec:checked)   #pane-spec,
+body:has(#tab-plan:checked)   #pane-plan,
+body:has(#tab-result:checked) #pane-result{ display:block; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden checked>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+<header>
+  <h1>IDD-цепочка: cross-domain-search</h1>
+</header>
+<nav class="chain-tabs">
+  <label for="tab-intent">Intent</label>
+  <label for="tab-spec">Spec</label>
+  <label for="tab-plan">Plan</label>
+  <label for="tab-result">Result</label>
+</nav>
+
+<!-- TAB:intent START -->
+<section class="tab-pane" id="pane-intent">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:intent END -->
+
+<!-- TAB:spec START -->
+<section class="tab-pane" id="pane-spec">
+  <h2>1. Резюме спецификации</h2>
+  <p><strong>Файл:</strong> <code>docs/superpowers/specs/2026-06-29-cross-domain-search-design.md</code> ·
+     <strong>spec_hash:</strong> <code>391e0bd315589b1e</code> · <strong>Вердикт:</strong> <span class="badge b-ok">OK</span></p>
+
+  <h3>Требования по секциям</h3>
+  <table>
+    <thead><tr><th>Секция</th><th>Требование</th></tr></thead>
+    <tbody>
+      <tr><td>§ Problem</td><td><strong>R0</strong> — при sidebar=<code>(all)</code> запрос молча ищет только <code>domains[0]</code> (<code>query.ts:53</code>); кросс-домен — фактически no-op.</td></tr>
+      <tr><td>§ Goals</td><td>Per-query выбор охвата «All/Domain»; двухстадийный кросс-доменный retrieval; ровно один вызов LLM; деградация в Jaccard; без новых настроек.</td></tr>
+      <tr><td>§ Non-Goals</td><td>Никакого нового BFS в stage-2 (только среди выбранных); не синтез N ответов (подход C отклонён); legacy <code>domainId===undefined</code> не трогаем; без авто-сохранения <code>Q-…</code> страницы.</td></tr>
+      <tr><td>§ UX — Scope Toggle</td><td>Сегмент «All/Domain» у поля запроса; enable/disable по sidebar; per-query override; персист <code>lastQueryScope</code>; i18n en/ru/es.</td></tr>
+      <tr><td>§ Routing</td><td>Сентинел <code>"*"</code> через <code>controller.query</code> → <code>dispatch</code> → <code>agent-runner.run</code> → <code>runCrossDomainQuery</code>; путь <code>undefined</code> сохранён.</td></tr>
+      <tr><td>§ Arch 1</td><td>Вынос <code>retrieveDomainCandidates()</code> (генератор, <code>return DomainCandidates | null</code>); <code>runQuery</code> переиспользует её; чистый рефактор; освобождение non-candidate контента.</td></tr>
+      <tr><td>§ Arch 2</td><td><code>runCrossDomainQuery()</code>: stage-1 последовательный сбор по доменам, stage-2 слияние + <code>fuseVectorGraph</code> → top-<code>seedTopK</code>, один вызов LLM + переиспользование answer/link-validation хвоста.</td></tr>
+      <tr><td>§ Retrieval knobs</td><td><code>seedTopK</code> управляет обеими стадиями; <code>bfsTopK</code> — графовый сбор stage-1; <code>seedMinScore</code> per-domain (stage 1); <code>graphDepth</code>/<code>rrfK</code>/<code>seedSimilarityThreshold</code> as-is. Без миграции настроек.</td></tr>
+      <tr><td>§ Prompt / Context</td><td><code>domain_name</code>=«All domains (N)»; <code>available_links_block</code>=<code>finalIds</code>; <code>entity_types_block</code>=union доменов из <code>finalIds</code>; <code>index_block</code>=аннотации только <code>finalIds</code>.</td></tr>
+      <tr><td>§ Telemetry</td><td>Per-domain <code>tool_use «Domain: …»</code> + проброс <code>graph_stats</code>; <code>eval_meta.found_pages=finalIds</code>; <code>retrievalConfig.crossDomain=true</code>, <code>domainsSearched=N</code>.</td></tr>
+      <tr><td>§ Error Handling</td><td>Пустой домен → skip; все пусты → error; изоляция per-domain embedding-fallback; abort между доменами; защитный guard на дубль-стемы.</td></tr>
+      <tr><td>§ Testing</td><td><code>eval/cross-domain/run.ts</code> (7 проверок) + snapshot-эквивалентность одно-доменного <code>runQuery</code>; <code>npm run lint</code>.</td></tr>
+      <tr><td>§ Files Touched</td><td>9 файлов: <code>query.ts</code>, <code>query-cross-domain.ts</code>(new), <code>agent-runner.ts</code>, <code>controller.ts</code>, <code>view.ts</code>, <code>local-config.ts</code>, <code>i18n.ts</code>, <code>eval/cross-domain/run.ts</code>(new).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Success Criteria</h3>
+  <table>
+    <thead><tr><th>#</th><th>Критерий</th></tr></thead>
+    <tbody>
+      <tr><td>SC-1</td><td>При sidebar=<code>(all)</code> + «All» запрос извлекает страницы из <strong>каждого</strong> домена, а не только <code>domains[0]</code>.</td></tr>
+      <tr><td>SC-2</td><td>Две стадии: stage-1 top-<code>seedTopK</code> на домен + BFS; stage-2 top-<code>seedTopK</code> среди объединённого пула; новых страниц в stage-2 не добавляется.</td></tr>
+      <tr><td>SC-3</td><td>Ровно один вызов LLM на финальном слитом наборе.</td></tr>
+      <tr><td>SC-4</td><td>Работает в Jaccard-режиме (без embeddings) — кросс-доменный re-rank по token-overlap.</td></tr>
+      <tr><td>SC-5</td><td>Новых настроек нет; <code>seedTopK</code> управляет обеими стадиями.</td></tr>
+      <tr><td>SC-6</td><td>Поведение одно-доменного <code>runQuery</code> неизменно после рефактора (snapshot-эквивалентность).</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схемы решения и зависимостей</h2>
+
+  <h3>Схема решения (поток данных)</h3>
+  <div class="flow">
+    <div class="fbox">Scope toggle <small>view.ts «All»</small></div>
+    <span class="farr">→</span>
+    <div class="fbox">controller / agent-runner<small>domainId = "*"</small></div>
+    <span class="farr">→</span>
+    <div class="fbox" style="border-color:var(--accent-2)">runCrossDomainQuery<small>оркестратор</small></div>
+    <span class="farr">→</span>
+    <div class="col">
+      <div class="fbox">Stage-1 (loop)<small>retrieveDomainCandidates<br>вектор seeds + граф BFS</small></div>
+      <div class="fbox">Stage-2 (merge)<small>fuseVectorGraph (RRF)<br>top-seedTopK</small></div>
+    </div>
+    <span class="farr">→</span>
+    <div class="fbox">buildContextBlock<small>+ prompt assembly</small></div>
+    <span class="farr">→</span>
+    <div class="fbox" style="border-color:var(--ok-2)">LLM ×1<small>answer + link-validate</small></div>
+  </div>
+
+  <h3>Граф зависимостей (A → B = «A зависит от / использует B»)</h3>
+  <figure>
+  <svg viewBox="0 0 980 470" role="img" aria-label="Граф зависимостей требований и компонентов">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+      </marker>
+      <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="var(--shadow)"/>
+      </filter>
+    </defs>
+    <!-- edges -->
+    <path class="edge" d="M200,62 L250,62"/>
+    <path class="edge" d="M335,84 L350,130"/>
+    <path class="edge" d="M350,178 C250,200 200,210 200,230"/>
+    <path class="edge" d="M360,178 L380,330"/>
+    <path class="edge" d="M450,162 C520,200 560,290 620,330"/>
+    <path class="edge" d="M450,160 C520,182 540,210 565,230"/>
+    <path class="edge" d="M600,174 L575,230"/>
+    <path class="edge" d="M670,253 L740,253"/>
+    <path class="edge" d="M180,360 C250,300 300,225 335,180"/>
+    <!-- nodes -->
+    <g class="gnode req"><rect x="40" y="40" width="160" height="44" rx="8"/><text x="120" y="60" text-anchor="middle">Scope toggle</text><text class="sub" x="120" y="76" text-anchor="middle">§UX · view.ts</text></g>
+    <g class="gnode req"><rect x="250" y="40" width="170" height="44" rx="8"/><text x="335" y="60" text-anchor="middle">Routing "*"</text><text class="sub" x="335" y="76" text-anchor="middle">§Routing · ctrl/runner</text></g>
+
+    <g class="gnode"><rect x="250" y="130" width="210" height="48" rx="8"/><text x="355" y="151" text-anchor="middle">runCrossDomainQuery</text><text class="sub" x="355" y="167" text-anchor="middle">§Arch2 · оркестратор</text></g>
+    <g class="gnode"><rect x="520" y="130" width="160" height="44" rx="8"/><text x="600" y="150" text-anchor="middle">runQuery (single)</text><text class="sub" x="600" y="166" text-anchor="middle">§Arch1 · рефактор</text></g>
+
+    <g class="gnode reuse"><rect x="60" y="230" width="180" height="46" rx="8"/><text x="150" y="250" text-anchor="middle">fuseVectorGraph</text><text class="sub" x="150" y="266" text-anchor="middle">reuse · fusion.ts</text></g>
+    <g class="gnode"><rect x="470" y="230" width="200" height="46" rx="8"/><text x="570" y="250" text-anchor="middle">retrieveDomainCandidates</text><text class="sub" x="570" y="266" text-anchor="middle">§Arch1 · generator</text></g>
+    <g class="gnode reuse"><rect x="740" y="230" width="200" height="46" rx="8"/><text x="840" y="250" text-anchor="middle">similarity · wiki-graph</text><text class="sub" x="840" y="266" text-anchor="middle">reuse · bfsExpandRanked</text></g>
+
+    <g class="gnode"><rect x="280" y="330" width="200" height="46" rx="8"/><text x="380" y="350" text-anchor="middle">buildContextBlock</text><text class="sub" x="380" y="366" text-anchor="middle">§Prompt · context</text></g>
+    <g class="gnode"><rect x="520" y="330" width="200" height="46" rx="8"/><text x="620" y="350" text-anchor="middle">telemetry · errors</text><text class="sub" x="620" y="366" text-anchor="middle">§Telemetry · §Errors</text></g>
+
+    <g class="gnode data"><rect x="60" y="338" width="180" height="44" rx="8"/><text x="150" y="358" text-anchor="middle">eval/cross-domain</text><text class="sub" x="150" y="374" text-anchor="middle">§Testing</text></g>
+  </svg>
+  <figcaption>Циклов нет. <code>runCrossDomainQuery</code> и одно-доменный <code>runQuery</code> сходятся на общей <code>retrieveDomainCandidates</code>; stage-2 переиспользует <code>fuseVectorGraph</code>. Зелёные узлы — переиспользование существующего кода.</figcaption>
+  </figure>
+
+  <h3>Карта покрытия (задача → требования)</h3>
+  <table>
+    <thead><tr><th>Задача</th><th>Покрывающие требования</th></tr></thead>
+    <tbody>
+      <tr><td>T1 — scope toggle UI</td><td>§UX (сегмент, enable/disable, override, <code>lastQueryScope</code>, i18n)</td></tr>
+      <tr><td>T2 — routing «*»</td><td>§Routing (сентинел через ctrl→runner→runCrossDomainQuery; legacy сохранён)</td></tr>
+      <tr><td>T3 — stage-1 сбор</td><td>§Arch2 Stage-1 + §Arch1 <code>retrieveDomainCandidates</code></td></tr>
+      <tr><td>T4 — stage-2 re-rank</td><td>§Arch2 Stage-2 (<code>fuseVectorGraph</code>, <code>slice(0,seedTopK)</code>, без новых страниц)</td></tr>
+      <tr><td>T5 — один вызов LLM</td><td>§Goals + §Arch2 + §Telemetry (LLM-хвост verbatim)</td></tr>
+      <tr><td>T6 — Jaccard деградация</td><td>§Goals + §Error Handling (cosine→jaccard) + §Arch2 Jaccard-нота</td></tr>
+      <tr><td>T7 — без новых настроек</td><td>§Retrieval knobs (включая <code>seedMinScore</code> per-domain — F-001/F-003 fixed)</td></tr>
+      <tr><td>T8 — prompt/context</td><td>§Prompt / Context (4 плейсхолдера)</td></tr>
+      <tr><td>T9 — телеметрия</td><td>§Telemetry (<code>graph_stats</code>, <code>found_pages</code>, <code>crossDomain</code>)</td></tr>
+      <tr><td>T10 — обработка ошибок</td><td>§Error Handling (skip/error/fallback/abort/guard)</td></tr>
+      <tr><td>T11 — тестирование</td><td>§Testing (eval + snapshot, assertion 7 — F-002 fixed)</td></tr>
+      <tr><td>T12 — память</td><td>§Arch1 memory-нота + §Arch2 «Sequential, not parallel»</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Результаты проверки</h2>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>clarity</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Находки</h3>
+  <table>
+    <thead><tr><th>id</th><th>severity</th><th>секция</th><th>fragment</th><th>проблема</th><th>fix</th><th>verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>F-001</td>
+        <td><span class="badge b-warn">WARNING</span></td>
+        <td>§ Retrieval knobs</td>
+        <td><code>graphDepth, seedSimilarityThreshold, rrfK … reused as-is</code></td>
+        <td><code>seedMinScore</code> передаётся в <code>cfg</code>, но не был перечислен среди переиспользуемых настроек.</td>
+        <td>Добавлен <code>seedMinScore</code> в раздел Retrieval knobs (per-domain, stage 1) + явная сверка всех полей <code>cfg</code>.</td>
+        <td><span class="badge b-ok">fixed</span></td>
+      </tr>
+      <tr>
+        <td>F-002</td>
+        <td><span class="badge b-info">INFO</span></td>
+        <td>§ Prompt / Context</td>
+        <td><code>union of entity types of domains present in finalIds</code></td>
+        <td>Граница размера <code>entity_types_block</code> не привязана к тесту.</td>
+        <td>Добавлена assertion 7 в Testing: <code>entity_types_block</code> покрывает ровно домены из <code>finalIds</code>.</td>
+        <td><span class="badge b-ok">fixed</span></td>
+      </tr>
+      <tr>
+        <td>F-003</td>
+        <td><span class="badge b-info">INFO</span></td>
+        <td>§ Arch 1</td>
+        <td><code>seedMinScore: number;</code></td>
+        <td>Сигнатура <code>cfg</code> называет <code>seedMinScore</code>, а проза knobs его опускала (один корень с F-001).</td>
+        <td>Списки <code>cfg</code> и Retrieval-knobs согласованы.</td>
+        <td><span class="badge b-ok">fixed</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>Сводка:</strong> CRITICAL open: 0 · WARNING open: 0 (F-001 fixed) · INFO: 2 (fixed) · <strong>Вердикт:</strong> <span class="badge b-ok">OK</span><br>
+    <strong>Цепочка:</strong> intent: <em>null</em> (стадии intent не было — спец из брейншторма напрямую) → <strong>spec ✓</strong> → plan (ожидается) → result (ожидается).
+  </div>
+</section>
+<!-- TAB:spec END -->
+
+<!-- TAB:plan START -->
+<section class="tab-pane" id="pane-plan">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:plan END -->
+
+<!-- TAB:result START -->
+<section class="tab-pane" id="pane-result">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:result END -->
+</body>
+</html>
