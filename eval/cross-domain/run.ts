@@ -209,6 +209,34 @@ void (async () => {
     check("single query_stats.domainName set", !!qs && qs.domainName === "work");
   }
 
+  section("runQuery query_stats respects context cap (single domain)");
+  {
+    const files = {
+      "!Wiki/work/_config/_index.md": "- [[wiki_work_neural]] — neural networks deep learning",
+      "!Wiki/work/EntityType/wiki_work_neural.md": [
+        "# Neural",
+        "neural networks deep learning models",
+        "[[wiki_work_bfs_a]] [[wiki_work_bfs_b]] [[wiki_work_bfs_c]] [[wiki_work_bfs_d]] [[wiki_work_bfs_e]]",
+      ].join("\n"),
+      "!Wiki/work/EntityType/wiki_work_bfs_a.md": "# A\nneural network context a",
+      "!Wiki/work/EntityType/wiki_work_bfs_b.md": "# B\nneural network context b",
+      "!Wiki/work/EntityType/wiki_work_bfs_c.md": "# C\nneural network context c",
+      "!Wiki/work/EntityType/wiki_work_bfs_d.md": "# D\nneural network context d",
+      "!Wiki/work/EntityType/wiki_work_bfs_e.md": "# E\nneural network context e",
+    };
+    const vault = fakeVault(files);
+    const { llm } = fakeLlm("Answer about [[wiki_work_neural]].");
+    const signal = new AbortController().signal;
+    const evs = await drive(runQuery(
+      ["neural networks"], false, vault, llm, "fake-model", [dom("work")], "", signal,
+      1, {}, 1, 0, 10, undefined, 3, 0, false, 60,
+    ) as AsyncGenerator<RunEvent, void>);
+    const qs = evs.find((e) => e.kind === "query_stats") as Extract<RunEvent, { kind: "query_stats" }> | undefined;
+    check("single pagesSelected reports capped LLM context count",
+      !!qs && qs.pagesSelected === 3,
+      `pagesSelected=${qs?.pagesSelected}`);
+  }
+
   section("abort after query_stats (single domain)");
   {
     const files = {

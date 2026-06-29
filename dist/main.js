@@ -40669,7 +40669,8 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   const expandedPages = [...selectedIds].filter((id) => !seedSet.has(id));
   const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
   const fusedOrder = bfsFusion ? fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, cand.graph, graphDepth, rrfK) : void 0;
-  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3, fusedOrder);
+  const contextPages = selectContextPages(pages, seedSet, selectedIds, topK * 3, fusedOrder);
+  const contextBlock = renderContextPages(contextPages);
   const entityTypesBlock = buildEntityTypesBlock2(domain);
   const wikiFirst = [...selectedIds].sort((a, b) => Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
   const availableLinksBlock = wikiFirst.length === 0 ? "" : [
@@ -40690,7 +40691,7 @@ ${indexContent}` : ""
     crossDomain: false,
     domainName: domain.name,
     pagesScanned: cand.pagesScanned,
-    pagesSelected: selectedIds.size
+    pagesSelected: contextPages.length
   };
   if (signal.aborted) return;
   const ans = yield* answerFromContext({
@@ -40804,23 +40805,23 @@ Pages not yet indexed: ${unindexedIds.join(", ")}` : "",
   }
 }
 function buildContextBlock(pages, seeds, selectedIds, maxPages, order) {
+  return renderContextPages(selectContextPages(pages, seeds, selectedIds, maxPages, order));
+}
+function selectContextPages(pages, seeds, selectedIds, maxPages, order) {
   if (order && order.length > 0) {
     const pidToPath = /* @__PURE__ */ new Map();
     for (const path2 of pages.keys()) pidToPath.set(pageId(path2), path2);
-    let block2 = "";
+    const ordered = [];
     let count = 0;
     for (const id of order) {
       if (count >= maxPages) break;
       if (!selectedIds.has(id)) continue;
       const path2 = pidToPath.get(id);
       if (path2 === void 0) continue;
-      block2 += `--- ${path2} ---
-${pages.get(path2) ?? ""}
-
-`;
+      ordered.push([path2, pages.get(path2) ?? ""]);
       count++;
     }
-    return block2;
+    return ordered;
   }
   const seedPages = [];
   const bfsPages = [];
@@ -40831,9 +40832,11 @@ ${pages.get(path2) ?? ""}
     else bfsPages.push([path2, content]);
   }
   const bfsCap = Math.max(0, maxPages - seedPages.length);
-  const ordered = [...seedPages, ...bfsPages.slice(0, bfsCap)];
+  return [...seedPages, ...bfsPages.slice(0, bfsCap)];
+}
+function renderContextPages(pages) {
   let block = "";
-  for (const [p, c] of ordered) {
+  for (const [p, c] of pages) {
     block += `--- ${p} ---
 ${c}
 
