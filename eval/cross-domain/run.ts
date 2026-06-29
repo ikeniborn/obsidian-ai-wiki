@@ -5,7 +5,7 @@
  */
 // register MUST be first: installs .md loader + obsidian stub before any src/ module loads.
 import "./register";
-import { mergeCandidates, runCrossDomainQuery } from "../../src/phases/query-cross-domain";
+import { mergeCandidates, runCrossDomainQuery, buildCrossDomainEntityTypes } from "../../src/phases/query-cross-domain";
 import { retrieveDomainCandidates } from "../../src/phases/query";
 import type { DomainCandidates } from "../../src/phases/query";
 import type { VaultTools } from "../../src/vault-tools";
@@ -149,6 +149,20 @@ void (async () => {
       const g = retrieveDomainCandidates(dom("empty"), "x", fakeVault({}), undefined, signal, cfg);
       let rr = await g.next(); while (!rr.done) rr = await g.next(); return rr.value === null;
     })());
+  }
+
+  section("buildCrossDomainEntityTypes (covers exactly finalIds domains)");
+  {
+    const domains = [
+      { id: "work", name: "Work", wiki_folder: "work", source_paths: [], analyzed_sources: {},
+        entity_types: [{ type: "Tool", description: "a tool" }] } as unknown as DomainEntry,
+      { id: "home", name: "Home", wiki_folder: "home", source_paths: [], analyzed_sources: {},
+        entity_types: [{ type: "Plant", description: "a plant" }] } as unknown as DomainEntry,
+    ];
+    // finalIds contains only a "work" stem → only Work's entity types should appear.
+    const block = buildCrossDomainEntityTypes(domains, ["work"]);
+    check("includes the contributing domain's entity type", block.includes("Tool") && block.includes("Work"));
+    check("excludes a non-contributing domain", !block.includes("Plant") && !block.includes("Home"));
   }
 
   console.log(`\n${fail === 0 ? "OK" : "FAILED"} — ${pass} passed, ${fail} failed`);

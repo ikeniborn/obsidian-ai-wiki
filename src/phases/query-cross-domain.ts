@@ -163,7 +163,7 @@ export async function* runCrossDomainQuery(
   yield { kind: "result", durationMs: Date.now() - start, text: ans.answer, outputTokens: outputTokens || undefined };
 }
 
-function buildCrossDomainEntityTypes(domains: DomainEntry[], domainIds: string[]): string {
+export function buildCrossDomainEntityTypes(domains: DomainEntry[], domainIds: string[]): string {
   const blocks: string[] = [];
   for (const d of domains) {
     if (!domainIds.includes(d.id) || !d.entity_types?.length) continue;
