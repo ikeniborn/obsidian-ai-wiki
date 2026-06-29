@@ -150,6 +150,8 @@ export class LlmWikiView extends ItemView {
   private liveStatusSection: HTMLElement | null = null;
   private liveStatusIconEl: HTMLElement | null = null;
   private liveStatusTextEl: HTMLElement | null = null;
+  private queryStatsEl: HTMLElement | null = null;
+  private queryStatsTokensEl: HTMLElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, private plugin: LlmWikiPlugin) {
     super(leaf);
@@ -645,6 +647,9 @@ export class LlmWikiView extends ItemView {
     this.chatHistory = [];
 
     this.resultSection.addClass("ai-wiki-hidden");
+    this.queryStatsEl?.remove();
+    this.queryStatsEl = null;
+    this.queryStatsTokensEl = null;
     this.finalEl.empty();
     this.resultOpen = false;
 
@@ -769,7 +774,8 @@ export class LlmWikiView extends ItemView {
     }
     if (ev.kind === "source_path_added") return;
     if (ev.kind === "domain_updated") { void this.refreshDomains(); return; }
-    if (ev.kind === "llm_call_stats") { this.llmStats.push(ev); return; }
+    if (ev.kind === "query_stats") { this.renderQueryStats(ev); return; }
+    if (ev.kind === "llm_call_stats") { this.llmStats.push(ev); this.fillQueryStatsTokens(ev.inputTokens); return; }
     if (ev.kind !== "assistant_text") this.stepCount++;
     if (ev.kind === "tool_use") {
       this.stopWaiting();
@@ -930,6 +936,40 @@ export class LlmWikiView extends ItemView {
       this.renderRatingRow(this.ratingSection, entry.id, ax.id, view[ax.labelKey], persisted?.ratings[ax.id] ?? null);
     }
     this.renderCommentBox(this.ratingSection, entry.id, persisted?.comment ?? "");
+  }
+
+  /** Search-stats block shown above the answer, for both Ask Domain and Ask Wiki.
+   *  Retrieval metrics are known up front; the tokens line is filled later from llm_call_stats. */
+  private renderQueryStats(ev: Extract<RunEvent, { kind: "query_stats" }>): void {
+    this.queryStatsEl?.remove();
+    this.resultSection.removeClass("ai-wiki-hidden");
+    const T = i18n().view;
+    const box = this.resultSection.createDiv("ai-wiki-cross-stats");
+    this.resultSection.insertBefore(box, this.finalEl);
+    const line = (label: string, value: string) => {
+      const row = box.createDiv("ai-wiki-cross-stats-row");
+      row.createSpan({ cls: "ai-wiki-cross-stats-label", text: label });
+      row.createSpan({ cls: "ai-wiki-cross-stats-value", text: value });
+    };
+    if (ev.crossDomain) {
+      line(T.statsDomainsStudied, `${ev.domainsStudied ?? 0} / ${ev.domainsTotal ?? 0}`);
+      line(T.statsInfoFrom, (ev.fromDomains ?? []).join(", ") || "—");
+      line(T.statsAnalyzed, String(ev.pagesScanned));
+      line(T.statsInAnswer, String(ev.pagesSelected));
+    } else {
+      line(T.statsDomain, ev.domainName ?? "—");
+      line(T.statsAnalyzed, String(ev.pagesScanned));
+      line(T.statsSelected, String(ev.pagesSelected));
+    }
+    const tokRow = box.createDiv("ai-wiki-cross-stats-row");
+    tokRow.createSpan({ cls: "ai-wiki-cross-stats-label", text: T.statsTokensSent });
+    this.queryStatsTokensEl = tokRow.createSpan({ cls: "ai-wiki-cross-stats-value", text: "…" });
+    this.queryStatsEl = box;
+  }
+
+  /** Fill the "tokens sent" line once the LLM call reports usage. No-op if no stats block is live. */
+  private fillQueryStatsTokens(inputTokens: number): void {
+    this.queryStatsTokensEl?.setText(String(inputTokens));
   }
 
   /** One free-form comment per run, persisted to eval.jsonl via commentRun. Dev mode only. */
