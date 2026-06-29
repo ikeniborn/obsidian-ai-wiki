@@ -92,6 +92,7 @@ export class LlmWikiView extends ItemView {
   private stepsOpen = true;
   private cancelBtn!: HTMLButtonElement;
   private queryInput!: HTMLTextAreaElement;
+  private scopeToggle?: HTMLSelectElement;
   private askBtn!: HTMLButtonElement;
   private domainSelect?: HTMLSelectElement;
   private initBtn?: HTMLButtonElement;
@@ -201,6 +202,33 @@ export class LlmWikiView extends ItemView {
       cls: "ai-wiki-query-input",
       attr: { placeholder: "Question…", rows: "3" },
     });
+
+    const T2 = i18n().view;
+    const scopeRow = ask.createDiv("ai-wiki-scope-row");
+    scopeRow.createSpan({ cls: "muted", text: "Scope:" });
+    this.scopeToggle = scopeRow.createEl("select", { cls: "ai-wiki-scope-select", attr: { title: T2.scopeHint } });
+    this.scopeToggle.createEl("option", { value: "all", text: T2.scopeAll });
+    this.scopeToggle.createEl("option", { value: "domain", text: T2.scopeDomain });
+
+    const syncScope = () => {
+      const hasDomain = !!(this.domainSelect?.value);
+      const domainOpt = this.scopeToggle!.querySelector('option[value="domain"]') as HTMLOptionElement;
+      domainOpt.disabled = !hasDomain;
+      // Default mirrors the sidebar: concrete domain → "domain", (all) → "all".
+      this.scopeToggle!.value = hasDomain ? "domain" : "all";
+    };
+    this.scopeToggle.addEventListener("change", () => {
+      void this.plugin.localConfigStore.save({ lastQueryScope: this.scopeToggle!.value as "all" | "domain" });
+    });
+    this.domainSelect?.addEventListener("change", syncScope);
+    syncScope();
+
+    // Restore the persisted scope choice on initial build (only when a concrete domain is selected).
+    void this.plugin.localConfigStore.load().then((c) => {
+      if (c.lastQueryScope === "all") this.scopeToggle!.value = "all";
+      else if (c.lastQueryScope === "domain" && this.domainSelect?.value) this.scopeToggle!.value = "domain";
+    });
+
     const askRow = ask.createDiv("ai-wiki-ask-row");
     this.cancelBtn = askRow.createEl("button", { text: T.view.cancel, cls: "mod-warning" });
     this.askBtn = askRow.createEl("button", { text: T.view.ask });
@@ -572,7 +600,10 @@ export class LlmWikiView extends ItemView {
     const q = this.queryInput.value.trim();
     if (!q) { new Notice(i18n().view.enterQuestion); return; }
     if (this.state === "running") { new Notice(i18n().view.operationInProgress); return; }
-    void this.plugin.controller.query(q, this.domainSelect?.value || undefined);
+    const sidebarDomain = this.domainSelect?.value || "";
+    const scope = this.scopeToggle?.value || (sidebarDomain ? "domain" : "all");
+    const domainArg = scope === "all" ? "*" : (sidebarDomain || "*");
+    void this.plugin.controller.query(q, domainArg);
     this.queryInput.value = "";
   }
 
