@@ -423,6 +423,7 @@ export class LlmWikiView extends ItemView {
 
   private updateButtonAvailability(): void {
     const hasDomain = !!(this.domainSelect?.value);
+    const isRunning = this.state === "running";
     const activeFile = this.plugin.app.workspace.getActiveFile();
     const domain = this.domains.find((d) => d.id === this.domainSelect?.value);
     const isSource = !!activeFile && !!domain && isSourceFile(activeFile.path, domain);
@@ -430,8 +431,8 @@ export class LlmWikiView extends ItemView {
     const canFormat = !!activeFile && activeFile.extension === "md"
       && !isWikiArticlePath(activeFile.path);
 
-    if (this.askDomainBtn) this.askDomainBtn.disabled = !hasDomain;
-    if (this.askWikiBtn)   this.askWikiBtn.disabled   = false;
+    if (this.askDomainBtn) this.askDomainBtn.disabled = isRunning || !hasDomain;
+    if (this.askWikiBtn)   this.askWikiBtn.disabled   = isRunning;
     if (this.ingestBtn)    this.ingestBtn.disabled    = !hasDomain || onWikiArticle;
     if (this.lintBtn)      this.lintBtn.disabled      = !hasDomain;
     if (this.formatBtn)    this.formatBtn.disabled    = !canFormat;
