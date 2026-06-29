@@ -26491,14 +26491,14 @@ var en = {
     chatLabel: "Chat",
     chatSend: "Send",
     init: "Init",
-    ask: "Ask",
+    askDomain: "Ask Domain",
+    askWiki: "Ask Wiki",
+    askWikiConfirmTitle: "Ask across all wiki domains?",
+    askWikiConfirmBody: "This searches every domain in your wiki and answers from the combined result.",
     cancel: "Cancel",
     result: "Result",
     history: "History",
     allDomains: "(all)",
-    scopeAll: "All",
-    scopeDomain: "Domain",
-    scopeHint: "Search all domains or the selected one",
     noHistory: "No history yet.",
     answerRequired: "AI Wiki \u2014 answer required",
     noActiveFile: "No active file",
@@ -26516,7 +26516,14 @@ var en = {
     ratingDown: "Bad output",
     commentPlaceholder: "Comment (optional) \u2014 reused as an opinion in optimization\u2026",
     commentSave: "Save comment",
-    commentSaved: "saved",
+    commentSavedBtn: "Saved",
+    statsDomain: "Domain:",
+    statsDomainsStudied: "Domains studied:",
+    statsInfoFrom: "Info from:",
+    statsAnalyzed: "Pages analyzed:",
+    statsSelected: "Selected for LLM:",
+    statsInAnswer: "In answer:",
+    statsTokensSent: "Tokens sent:",
     ratingAnswer: "Rate this answer:",
     ratingFormatting: "Rate formatting:",
     ratingRecognition: "Rate recognition:",
@@ -26823,14 +26830,14 @@ var ru = {
     chatLabel: "\u0427\u0430\u0442",
     chatSend: "\u041E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C",
     init: "Init",
-    ask: "\u0421\u043F\u0440\u043E\u0441\u0438\u0442\u044C",
+    askDomain: "\u0421\u043F\u0440\u043E\u0441\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D",
+    askWiki: "\u0421\u043F\u0440\u043E\u0441\u0438\u0442\u044C \u0432\u0438\u043A\u0438",
+    askWikiConfirmTitle: "\u0418\u0441\u043A\u0430\u0442\u044C \u043F\u043E \u0432\u0441\u0435\u043C \u0434\u043E\u043C\u0435\u043D\u0430\u043C \u0432\u0438\u043A\u0438?",
+    askWikiConfirmBody: "\u041F\u043E\u0438\u0441\u043A \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F \u043F\u043E \u0432\u0441\u0435\u043C \u0434\u043E\u043C\u0435\u043D\u0430\u043C \u0432\u0438\u043A\u0438; \u043E\u0442\u0432\u0435\u0442 \u0444\u043E\u0440\u043C\u0438\u0440\u0443\u0435\u0442\u0441\u044F \u0438\u0437 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0451\u043D\u043D\u043E\u0433\u043E \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u0430.",
     cancel: "\u041E\u0442\u043C\u0435\u043D\u0430",
     result: "\u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442",
     history: "\u0418\u0441\u0442\u043E\u0440\u0438\u044F",
     allDomains: "(\u0432\u0441\u0435)",
-    scopeAll: "\u0412\u0441\u0435",
-    scopeDomain: "\u0414\u043E\u043C\u0435\u043D",
-    scopeHint: "\u0418\u0441\u043A\u0430\u0442\u044C \u043F\u043E \u0432\u0441\u0435\u043C \u0434\u043E\u043C\u0435\u043D\u0430\u043C \u0438\u043B\u0438 \u043F\u043E \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u043C\u0443",
     noHistory: "\u0418\u0441\u0442\u043E\u0440\u0438\u044F \u043F\u0443\u0441\u0442\u0430.",
     answerRequired: "AI Wiki \u2014 \u0442\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044F \u043E\u0442\u0432\u0435\u0442",
     noActiveFile: "\u041D\u0435\u0442 \u0430\u043A\u0442\u0438\u0432\u043D\u043E\u0433\u043E \u0444\u0430\u0439\u043B\u0430",
@@ -26848,7 +26855,14 @@ var ru = {
     ratingDown: "\u041F\u043B\u043E\u0445\u043E\u0439 \u0432\u044B\u0432\u043E\u0434",
     commentPlaceholder: "\u041A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439 (\u043D\u0435\u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E) \u2014 \u0443\u0447\u0438\u0442\u044B\u0432\u0430\u0435\u0442\u0441\u044F \u043A\u0430\u043A \u043C\u043D\u0435\u043D\u0438\u0435 \u043F\u0440\u0438 \u043E\u043F\u0442\u0438\u043C\u0438\u0437\u0430\u0446\u0438\u0438\u2026",
     commentSave: "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439",
-    commentSaved: "\u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E",
+    commentSavedBtn: "\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E",
+    statsDomain: "\u0414\u043E\u043C\u0435\u043D:",
+    statsDomainsStudied: "\u0418\u0437\u0443\u0447\u0435\u043D\u043E \u0434\u043E\u043C\u0435\u043D\u043E\u0432:",
+    statsInfoFrom: "\u0418\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0438\u0437:",
+    statsAnalyzed: "\u041F\u0440\u043E\u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043D\u043E \u0441\u0442\u0440\u0430\u043D\u0438\u0446:",
+    statsSelected: "\u0412\u044B\u0431\u0440\u0430\u043D\u043E \u0434\u043B\u044F LLM:",
+    statsInAnswer: "\u041F\u043E\u043F\u0430\u043B\u043E \u0432 \u043E\u0442\u0432\u0435\u0442:",
+    statsTokensSent: "\u041E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u0442\u043E\u043A\u0435\u043D\u043E\u0432:",
     ratingAnswer: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u043E\u0442\u0432\u0435\u0442:",
     ratingFormatting: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435:",
     ratingRecognition: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u0432\u0430\u043D\u0438\u0435:",
@@ -27154,14 +27168,14 @@ var es = {
     chatLabel: "Chat",
     chatSend: "Enviar",
     init: "Init",
-    ask: "Preguntar",
+    askDomain: "Preguntar dominio",
+    askWiki: "Preguntar wiki",
+    askWikiConfirmTitle: "\xBFBuscar en todos los dominios del wiki?",
+    askWikiConfirmBody: "Busca en todos los dominios del wiki y responde a partir del resultado combinado.",
     cancel: "Cancelar",
     result: "Resultado",
     history: "Historial",
     allDomains: "(todos)",
-    scopeAll: "Todos",
-    scopeDomain: "Dominio",
-    scopeHint: "Buscar en todos los dominios o en el seleccionado",
     noHistory: "Sin historial.",
     answerRequired: "AI Wiki \u2014 se requiere respuesta",
     noActiveFile: "No hay archivo activo",
@@ -27179,7 +27193,14 @@ var es = {
     ratingDown: "Mal resultado",
     commentPlaceholder: "Comentario (opcional) \u2014 se reutiliza como opini\xF3n en la optimizaci\xF3n\u2026",
     commentSave: "Guardar comentario",
-    commentSaved: "guardado",
+    commentSavedBtn: "Guardado",
+    statsDomain: "Dominio:",
+    statsDomainsStudied: "Dominios estudiados:",
+    statsInfoFrom: "Informaci\xF3n de:",
+    statsAnalyzed: "P\xE1ginas analizadas:",
+    statsSelected: "Seleccionadas para LLM:",
+    statsInAnswer: "En la respuesta:",
+    statsTokensSent: "Tokens enviados:",
     ratingAnswer: "Eval\xFAa la respuesta:",
     ratingFormatting: "Eval\xFAa el formato:",
     ratingRecognition: "Eval\xFAa el reconocimiento:",
@@ -31562,11 +31583,8 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
   stepsOpen = true;
   cancelBtn;
   queryInput;
-  scopeToggle;
-  // Persisted scope preference; undefined until loaded (then "all" | "domain").
-  // syncScope re-asserts it so the programmatic domain-restore "change" can't clobber it.
-  desiredScope;
-  askBtn;
+  askDomainBtn;
+  askWikiBtn;
   domainSelect;
   initBtn;
   ingestBtn;
@@ -31620,6 +31638,11 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
   liveStatusSection = null;
   liveStatusIconEl = null;
   liveStatusTextEl = null;
+  queryStatsEl = null;
+  queryStatsTokensEl = null;
+  currentQueryStats = null;
+  currentQueryStatsInputTokens = null;
+  showingStoredResultDuringRun = false;
   getViewType() {
     return AI_WIKI_VIEW_TYPE;
   }
@@ -31664,39 +31687,24 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       cls: "ai-wiki-query-input",
       attr: { placeholder: "Question\u2026", rows: "3" }
     });
-    const T2 = i18n().view;
-    const scopeRow = ask.createDiv("ai-wiki-scope-row");
-    scopeRow.createSpan({ cls: "muted", text: "Scope:" });
-    this.scopeToggle = scopeRow.createEl("select", { cls: "ai-wiki-scope-select", attr: { title: T2.scopeHint } });
-    this.scopeToggle.createEl("option", { value: "all", text: T2.scopeAll });
-    this.scopeToggle.createEl("option", { value: "domain", text: T2.scopeDomain });
-    const syncScope = () => {
-      const hasDomain = !!this.domainSelect?.value;
-      const domainOpt = this.scopeToggle.querySelector('option[value="domain"]');
-      domainOpt.disabled = !hasDomain;
-      if (this.desiredScope) {
-        this.scopeToggle.value = this.desiredScope === "domain" && hasDomain ? "domain" : "all";
-      } else {
-        this.scopeToggle.value = hasDomain ? "domain" : "all";
-      }
-    };
-    this.scopeToggle.addEventListener("change", () => {
-      this.desiredScope = this.scopeToggle.value;
-      void this.plugin.localConfigStore.save({ lastQueryScope: this.desiredScope });
-    });
-    this.domainSelect?.addEventListener("change", syncScope);
-    syncScope();
-    void this.plugin.localConfigStore.load().then((c) => {
-      if (c.lastQueryScope === "all" || c.lastQueryScope === "domain") {
-        this.desiredScope = c.lastQueryScope;
-        syncScope();
-      }
-    });
     const askRow = ask.createDiv("ai-wiki-ask-row");
     this.cancelBtn = askRow.createEl("button", { text: T.view.cancel, cls: "mod-warning" });
-    this.askBtn = askRow.createEl("button", { text: T.view.ask });
+    const askButtons = askRow.createDiv("ai-wiki-ask-buttons");
+    this.askDomainBtn = askButtons.createEl("button", { text: T.view.askDomain });
+    this.askWikiBtn = askButtons.createEl("button", { text: T.view.askWiki, cls: "mod-cta" });
     this.cancelBtn.disabled = true;
-    this.askBtn.addEventListener("click", () => this.submitQuery());
+    this.askDomainBtn.addEventListener("click", () => {
+      const d = this.domainSelect?.value;
+      if (!d) {
+        new import_obsidian7.Notice(i18n().view.enterQuestion);
+        return;
+      }
+      this.submitQuery(d);
+    });
+    this.askWikiBtn.addEventListener("click", () => {
+      const T2 = i18n().view;
+      new ConfirmModal(this.app, T2.askWikiConfirmTitle, [T2.askWikiConfirmBody], () => this.submitQuery("*")).open();
+    });
     this.cancelBtn.addEventListener("click", () => this.plugin.controller.cancelCurrent());
     const progressHeader = root.createDiv("ai-wiki-progress-header");
     const progressH4 = progressHeader.createEl("h4", { cls: "ai-wiki-progress-title" });
@@ -31884,12 +31892,14 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
   }
   updateButtonAvailability() {
     const hasDomain = !!this.domainSelect?.value;
+    const isRunning = this.state === "running";
     const activeFile = this.plugin.app.workspace.getActiveFile();
     const domain = this.domains.find((d) => d.id === this.domainSelect?.value);
     const isSource = !!activeFile && !!domain && isSourceFile(activeFile.path, domain);
     const onWikiArticle = !!activeFile && isWikiArticlePath(activeFile.path);
     const canFormat = !!activeFile && activeFile.extension === "md" && !isWikiArticlePath(activeFile.path);
-    if (this.askBtn) this.askBtn.disabled = !hasDomain;
+    if (this.askDomainBtn) this.askDomainBtn.disabled = isRunning || !hasDomain;
+    if (this.askWikiBtn) this.askWikiBtn.disabled = isRunning;
     if (this.ingestBtn) this.ingestBtn.disabled = !hasDomain || onWikiArticle;
     if (this.lintBtn) this.lintBtn.disabled = !hasDomain;
     if (this.formatBtn) this.formatBtn.disabled = !canFormat;
@@ -32032,7 +32042,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       }).open();
     }
   }
-  submitQuery() {
+  submitQuery(domainArg) {
     const q = this.queryInput.value.trim();
     if (!q) {
       new import_obsidian7.Notice(i18n().view.enterQuestion);
@@ -32042,9 +32052,6 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       new import_obsidian7.Notice(i18n().view.operationInProgress);
       return;
     }
-    const sidebarDomain = this.domainSelect?.value || "";
-    const scope = this.scopeToggle?.value || (sidebarDomain ? "domain" : "all");
-    const domainArg = scope === "all" ? "*" : sidebarDomain || "*";
     void this.plugin.controller.query(q, domainArg);
     this.queryInput.value = "";
   }
@@ -32054,7 +32061,8 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     this.finalEl.empty();
     this.statusEl.setText(`\u25B6 ${operation} ${args.join(" ")}`);
     this.cancelBtn.disabled = false;
-    this.askBtn.disabled = true;
+    this.askDomainBtn.disabled = true;
+    this.askWikiBtn.disabled = true;
     if (this.initBtn) this.initBtn.disabled = true;
     if (this.ingestBtn) this.ingestBtn.disabled = true;
     if (this.lintBtn) this.lintBtn.disabled = true;
@@ -32071,6 +32079,8 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     this.lastContext = null;
     this.chatHistory = [];
     this.resultSection.addClass("ai-wiki-hidden");
+    this.resetQueryStats();
+    this.showingStoredResultDuringRun = false;
     this.finalEl.empty();
     this.resultOpen = false;
     this.startTs = Date.now();
@@ -32193,8 +32203,13 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       void this.refreshDomains();
       return;
     }
+    if (ev.kind === "query_stats") {
+      this.renderQueryStats(ev);
+      return;
+    }
     if (ev.kind === "llm_call_stats") {
       this.llmStats.push(ev);
+      this.fillQueryStatsTokens(ev.inputTokens);
       return;
     }
     if (ev.kind !== "assistant_text") this.stepCount++;
@@ -32317,15 +32332,31 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
   /** Render an entry's result body + (dev-mode) rating rows and comment box, bound
    *  to entry.id. Used by both finish() and the history-row click so the rating UI is
    *  always torn down and rebuilt for the displayed runId — never leaked across runs. */
-  async renderResultFor(entry) {
+  async renderResultFor(entry, opts) {
     const seq = ++this.renderSeq;
     this.ratingSection?.remove();
     this.ratingSection = null;
+    if (opts?.preserveQueryStats) {
+      this.showingStoredResultDuringRun = false;
+    } else {
+      if (this.state === "running") {
+        this.showingStoredResultDuringRun = true;
+        this.clearQueryStatsDom();
+      } else {
+        this.showingStoredResultDuringRun = false;
+        this.resetQueryStats();
+      }
+    }
     this.finalEl.empty();
     const comp = new import_obsidian7.Component();
     comp.load();
     await import_obsidian7.MarkdownRenderer.render(this.app, entry.finalText || "(empty)", this.finalEl, "", comp);
     sanitizeLinks(this.finalEl);
+    if (opts?.preserveQueryStats && this.currentQueryStats && !this.queryStatsEl) {
+      const inputTokens = this.currentQueryStatsInputTokens;
+      this.renderQueryStats(this.currentQueryStats);
+      if (inputTokens !== null) this.fillQueryStatsTokens(inputTokens);
+    }
     this.resultSection.removeClass("ai-wiki-hidden");
     this.finalEl.removeClass("ai-wiki-hidden");
     this.resultOpen = true;
@@ -32343,6 +32374,52 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     }
     this.renderCommentBox(this.ratingSection, entry.id, persisted?.comment ?? "");
   }
+  clearQueryStatsDom() {
+    this.queryStatsEl?.remove();
+    this.queryStatsEl = null;
+    this.queryStatsTokensEl = null;
+  }
+  resetQueryStats() {
+    this.clearQueryStatsDom();
+    this.currentQueryStats = null;
+    this.currentQueryStatsInputTokens = null;
+  }
+  /** Search-stats block shown above the answer, for both Ask Domain and Ask Wiki.
+   *  Retrieval metrics are known up front; the tokens line is filled later from llm_call_stats. */
+  renderQueryStats(ev) {
+    this.currentQueryStats = ev;
+    this.currentQueryStatsInputTokens = null;
+    this.clearQueryStatsDom();
+    if (this.showingStoredResultDuringRun) return;
+    this.resultSection.removeClass("ai-wiki-hidden");
+    const T = i18n().view;
+    const box = this.resultSection.createDiv("ai-wiki-cross-stats");
+    this.resultSection.insertBefore(box, this.finalEl);
+    const line = (label, value) => {
+      const row = box.createDiv("ai-wiki-cross-stats-row");
+      row.createSpan({ cls: "ai-wiki-cross-stats-label", text: label });
+      row.createSpan({ cls: "ai-wiki-cross-stats-value", text: value });
+    };
+    if (ev.crossDomain) {
+      line(T.statsDomainsStudied, `${ev.domainsStudied ?? 0} / ${ev.domainsTotal ?? 0}`);
+      line(T.statsInfoFrom, (ev.fromDomains ?? []).join(", ") || "\u2014");
+      line(T.statsAnalyzed, String(ev.pagesScanned));
+      line(T.statsInAnswer, String(ev.pagesSelected));
+    } else {
+      line(T.statsDomain, ev.domainName ?? "\u2014");
+      line(T.statsAnalyzed, String(ev.pagesScanned));
+      line(T.statsSelected, String(ev.pagesSelected));
+    }
+    const tokRow = box.createDiv("ai-wiki-cross-stats-row");
+    tokRow.createSpan({ cls: "ai-wiki-cross-stats-label", text: T.statsTokensSent });
+    this.queryStatsTokensEl = tokRow.createSpan({ cls: "ai-wiki-cross-stats-value", text: "\u2026" });
+    this.queryStatsEl = box;
+  }
+  /** Fill the "tokens sent" line once the LLM call reports usage. No-op if no stats block is live. */
+  fillQueryStatsTokens(inputTokens) {
+    this.currentQueryStatsInputTokens = inputTokens;
+    this.queryStatsTokensEl?.setText(String(inputTokens));
+  }
   /** One free-form comment per run, persisted to eval.jsonl via commentRun. Dev mode only. */
   renderCommentBox(parent, runId, initial) {
     if (!this.plugin.settings.devMode?.enabled) return;
@@ -32350,15 +32427,30 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     const box = parent.createDiv("ai-wiki-comment-box");
     const ta = box.createEl("textarea", {
       cls: "ai-wiki-comment-input",
-      attr: { placeholder: T.view.commentPlaceholder, rows: "2" }
+      attr: { placeholder: T.view.commentPlaceholder, rows: "4" }
     });
     ta.value = initial;
+    let savedValue = initial;
     const actions = box.createDiv("ai-wiki-comment-actions");
     const saveBtn = actions.createEl("button", { text: T.view.commentSave });
-    const status = actions.createSpan({ cls: "ai-wiki-comment-status" });
+    const syncSaveButton = () => {
+      if (ta.value === savedValue) {
+        saveBtn.disabled = true;
+        saveBtn.setText(T.view.commentSavedBtn);
+      } else {
+        saveBtn.disabled = false;
+        saveBtn.setText(T.view.commentSave);
+      }
+    };
+    syncSaveButton();
+    ta.addEventListener("input", syncSaveButton);
     saveBtn.addEventListener("click", () => void (async () => {
-      const saved = await this.plugin.controller.commentRun(runId, ta.value);
-      if (saved !== void 0) status.setText(T.view.commentSaved);
+      const submitted = ta.value;
+      const saved = await this.plugin.controller.commentRun(runId, submitted);
+      if (saved !== void 0) {
+        savedValue = submitted;
+        syncSaveButton();
+      }
     })());
   }
   renderFormatPreview(tempPath, report, missing, runId, visionCount) {
@@ -32450,7 +32542,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     this.resultSpeedEl?.setText(this.buildSpeedText());
     this.finalEl.empty();
     if (entry.finalText) {
-      await this.renderResultFor(entry);
+      await this.renderResultFor(entry, { preserveQueryStats: true });
       this.lastRunId = entry.id;
       const CHAT_OPS = ["lint", "lint-chat", "ingest", "query"];
       if (CHAT_OPS.includes(entry.operation) && entry.status === "done" && entry.finalText) {
@@ -40527,7 +40619,8 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
     denseMax,
     seedFallback,
     seedFallbackReason,
-    seedOutputTokens
+    seedOutputTokens,
+    pagesScanned: files.length
   };
 }
 async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1, bfsTopK = 10, similarity, wikiLinkValidationRetries = 3, seedSimilarityThreshold = 0, bfsFusion = false, rrfK = 60) {
@@ -40592,6 +40685,14 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
 Wiki index (_index.md):
 ${indexContent}` : ""
   });
+  yield {
+    kind: "query_stats",
+    crossDomain: false,
+    domainName: domain.name,
+    pagesScanned: cand.pagesScanned,
+    pagesSelected: selectedIds.size
+  };
+  if (signal.aborted) return;
   const ans = yield* answerFromContext({
     llm,
     model,
@@ -40846,6 +40947,16 @@ async function* runCrossDomainQuery(question, vaultTools, llm, model, domains, s
 Wiki index (candidates):
 ${indexBlock}` : ""
   });
+  yield {
+    kind: "query_stats",
+    crossDomain: true,
+    domainsStudied: poolList.length,
+    domainsTotal: domains.length,
+    fromDomains: finalNames,
+    pagesScanned: poolList.reduce((sum, c) => sum + c.pagesScanned, 0),
+    pagesSelected: merged.finalIds.length
+  };
+  if (signal.aborted) return;
   const ans = yield* answerFromContext({
     llm,
     model,
