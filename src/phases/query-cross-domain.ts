@@ -142,6 +142,7 @@ export async function* runCrossDomainQuery(
     pagesScanned: poolList.reduce((sum, c) => sum + c.pagesScanned, 0),
     pagesSelected: merged.finalIds.length,
   };
+  if (signal.aborted) return;
 
   const ans = yield* answerFromContext({
     llm, model, opts, signal, vaultTools, systemPrompt, question: q,

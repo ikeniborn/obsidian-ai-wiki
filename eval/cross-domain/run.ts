@@ -86,6 +86,17 @@ async function drive(gen: AsyncGenerator<RunEvent, void>): Promise<RunEvent[]> {
   return evs;
 }
 
+async function driveAbortAfterQueryStats(gen: AsyncGenerator<RunEvent, void>, controller: AbortController): Promise<RunEvent[]> {
+  const evs: RunEvent[] = [];
+  for (;;) {
+    const r = await gen.next();
+    if (r.done) break;
+    evs.push(r.value);
+    if (r.value.kind === "query_stats") controller.abort();
+  }
+  return evs;
+}
+
 const dom = (id: string): DomainEntry => ({
   id, name: id, wiki_folder: id, source_paths: [], entity_types: [], analyzed_sources: {},
 } as DomainEntry);
@@ -135,6 +146,25 @@ void (async () => {
     check("all-empty → error event", evs.some((e) => e.kind === "error" && /across domains/i.test((e as { message: string }).message)));
   }
 
+  section("abort after query_stats (cross domain)");
+  {
+    const files = {
+      "!Wiki/work/_config/_index.md": "- [[wiki_work_neural]] — neural networks deep learning",
+      "!Wiki/work/EntityType/wiki_work_neural.md": "# Neural\nneural networks deep learning models",
+      "!Wiki/home/_config/_index.md": "- [[wiki_home_garden]] — neural pruning of garden plants",
+      "!Wiki/home/EntityType/wiki_home_garden.md": "# Garden\nneural pruning garden plants",
+    };
+    const vault = fakeVault(files);
+    const { llm, calls } = fakeLlm("Answer about [[wiki_work_neural]].");
+    const controller = new AbortController();
+    const cfg = { graphDepth: 1, seedTopK: 5, seedMinScore: 0, bfsTopK: 10, seedSimilarityThreshold: 0 };
+    const evs = await driveAbortAfterQueryStats(runCrossDomainQuery(
+      "neural", vault, llm, "fake-model", [dom("work"), dom("home")], controller.signal, cfg, 60, 3, {},
+    ), controller);
+    check("cross abort-after-stats emits query_stats", evs.some((e) => e.kind === "query_stats"));
+    check("cross abort-after-stats does not call answer LLM", calls() === 0, `calls=${calls()}`);
+  }
+
   section("retrieveDomainCandidates (jaccard, single domain)");
   {
     const files = {
@@ -177,6 +207,23 @@ void (async () => {
     check("single query_stats.pagesSelected > 0", !!qs && qs.pagesSelected > 0, `pagesSelected=${qs?.pagesSelected}`);
     check("single query_stats.pagesScanned > 0", !!qs && qs.pagesScanned > 0, `pagesScanned=${qs?.pagesScanned}`);
     check("single query_stats.domainName set", !!qs && qs.domainName === "work");
+  }
+
+  section("abort after query_stats (single domain)");
+  {
+    const files = {
+      "!Wiki/work/_config/_index.md": "- [[wiki_work_neural]] — neural networks deep learning",
+      "!Wiki/work/EntityType/wiki_work_neural.md": "# Neural\nneural networks deep learning models",
+    };
+    const vault = fakeVault(files);
+    const { llm, calls } = fakeLlm("Answer about [[wiki_work_neural]].");
+    const controller = new AbortController();
+    const evs = await driveAbortAfterQueryStats(runQuery(
+      ["neural networks"], false, vault, llm, "fake-model", [dom("work")], "", controller.signal,
+      1, {}, 5, 0, 10, undefined, 3, 0, false, 60,
+    ) as AsyncGenerator<RunEvent, void>, controller);
+    check("single abort-after-stats emits query_stats", evs.some((e) => e.kind === "query_stats"));
+    check("single abort-after-stats does not call answer LLM", calls() === 0, `calls=${calls()}`);
   }
 
   section("buildCrossDomainEntityTypes (covers exactly finalIds domains)");

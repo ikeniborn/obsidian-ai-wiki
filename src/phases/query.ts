@@ -258,6 +258,7 @@ export async function* runQuery(
     pagesScanned: cand.pagesScanned,
     pagesSelected: selectedIds.size,
   };
+  if (signal.aborted) return;
 
   const ans = yield* answerFromContext({
     llm, model, opts, signal, vaultTools,
