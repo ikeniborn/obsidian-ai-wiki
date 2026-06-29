@@ -46,6 +46,7 @@ export interface DomainCandidates {
   seedFallback: "none" | "jaccard" | "llm";
   seedFallbackReason?: SeedFallbackReason;
   seedOutputTokens: number;          // tokens spent if the llm-seed fallback ran
+  pagesScanned: number;              // total pages in the domain (files.length)
 }
 
 /**
@@ -166,6 +167,7 @@ export async function* retrieveDomainCandidates(
     domainId: domain.id, pages: candidatePages, seeds, candidateIds: selectedIds,
     seedScores, expandedScores, graph: graphResult.graph, annotations, indexContent,
     retrievalMode, denseMax, seedFallback, seedFallbackReason, seedOutputTokens,
+    pagesScanned: files.length,
   };
 }
 

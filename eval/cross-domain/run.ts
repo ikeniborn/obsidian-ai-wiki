@@ -30,6 +30,7 @@ function fakeCandidates(domainId: string, ids: string[], scores: number[]): Doma
     domainId, pages, seeds: ids, candidateIds: new Set(ids),
     seedScores, expandedScores: {}, graph, annotations, indexContent: "",
     retrievalMode: "jaccard", denseMax: 0, seedFallback: "none", seedOutputTokens: 0,
+    pagesScanned: ids.length,
   };
 }
 

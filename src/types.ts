@@ -58,6 +58,16 @@ export type RunEvent =
       inTokPerSec: number;
       outTokPerSec: number;
     }
+  | {
+      kind: "query_stats";
+      crossDomain: boolean;
+      pagesScanned: number;        // pages read/analyzed
+      pagesSelected: number;       // pages handed to the LLM
+      domainName?: string;         // Ask Domain only
+      domainsStudied?: number;     // Ask Wiki only -- domains that yielded candidates
+      domainsTotal?: number;       // Ask Wiki only -- domains configured
+      fromDomains?: string[];      // Ask Wiki only -- domain names in the final set
+    }
   | { kind: "error"; message: string }
   | { kind: "exit"; code: number }
   | { kind: "ask_user"; question: string; options: string[]; toolUseId: string }
