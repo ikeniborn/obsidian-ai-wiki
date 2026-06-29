@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.191 — 2026-06-30
+
+### Новое
+- feat(view): Ask Domain / Ask Wiki buttons, remove scope selector
+- feat(view): search-stats block above the answer with token fill indicator
+- feat(view): resizable comment box with right-aligned Saved confirmation
+- feat(query): emit query_stats events (single + cross-domain) before the answer
+
+### Исправления
+- fix(query): report capped single-domain context count
+- fix(query): honor abort after query_stats event
+- fix(view): keep live query stats consistent across history navigation
+- fix(view): keep comment save state consistent
+- fix(view): keep ask buttons disabled while running
+
+---
+
 ## 0.1.190 — 2026-06-29
 
 ### Новое
