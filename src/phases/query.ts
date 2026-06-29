@@ -41,6 +41,7 @@ export interface DomainCandidates {
   expandedScores: Record<string, number>;
   graph: Map<string, Set<string>>;
   annotations: Map<string, string>;  // index annotations of candidates
+  indexContent: string;              // raw _index.md content
   retrievalMode: RetrievalMode;
   denseMax: number;
   seedFallback: "none" | "jaccard" | "llm";
@@ -164,7 +165,7 @@ export async function* retrieveDomainCandidates(
 
   return {
     domainId: domain.id, pages: candidatePages, seeds, candidateIds: selectedIds,
-    seedScores, expandedScores, graph: graphResult.graph, annotations,
+    seedScores, expandedScores, graph: graphResult.graph, annotations, indexContent,
     retrievalMode, denseMax, seedFallback, seedFallbackReason, seedOutputTokens,
   };
 }
@@ -200,7 +201,6 @@ export async function* runQuery(
     yield { kind: "error", message: "No domain configured. Add a domain in settings." };
     return;
   }
-  const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
   const start = Date.now();
   let outputTokens = 0;
 
@@ -216,9 +216,10 @@ export async function* runQuery(
     yield { kind: "error", message: "No relevant pages found for this query." };
     return;
   }
+  const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
   outputTokens += cand.seedOutputTokens;
 
-  const indexContent = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
+  const indexContent = cand.indexContent;
   const seeds = cand.seeds;
   const seedScores = cand.seedScores;
   const expandedScores = cand.expandedScores;
