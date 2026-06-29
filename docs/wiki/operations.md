@@ -79,7 +79,7 @@ Every written page is indexed regardless of whether LLM #2 emitted an `annotatio
 
 ## Query
 
-Two-phase retrieval (`src/phases/query.ts`): seed selection from `_index.md` annotations, then BFS expansion over the wiki graph. Similarity (embedding or Jaccard) selects seeds; graph traversal expands coverage. See [[retrieval#Query Graph Traversal]].
+Two-phase retrieval (`src/phases/query.ts`): seed selection from `_index.md` annotations, then BFS expansion over the wiki graph. Similarity (embedding or Jaccard) selects seeds; graph traversal expands coverage. See [[retrieval#Query Graph Traversal]]. When the sidebar scope is "All", the query fans out across every domain via [[retrieval#Cross-Domain Query]] — a per-domain gather then a fused top-`seedTopK` merge into one LLM call.
 
 ## Seed Selection
 

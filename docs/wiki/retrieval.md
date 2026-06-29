@@ -1,6 +1,8 @@
 # Retrieval
 
-How AI Wiki selects which wiki pages to feed the LLM as context. Combines page similarity (embedding or Jaccard) with BFS expansion over the wiki link graph. Used by query, lint, ingest, format, init. See [[operations#Query]].
+## Overview
+
+How AI Wiki selects which wiki pages to feed the LLM as context: page similarity (embedding or Jaccard), BFS expansion over the wiki link graph, optional RRF fusion of the two signals, and a cross-domain mode that fans out over every domain. Used by query, lint, ingest, format, init. See [[operations#Query]].
 
 ## PageSimilarityService
 
@@ -49,3 +51,15 @@ Opt-in query refinement (`nativeAgent.bfsFusion`, default off) ordering the fina
 The vector list ranks the union by similarity descending; the graph list ranks by hop distance ascending (seed = hop 0), tie-broken by backlink `inDegree`. Both reuse the `rrfK` setting. See [[operations#Tier 2 Features]].
 
 A separate gate `nativeAgent.seedSimilarityThreshold` (default 0 = off) compares the threshold against the **dense cosine confidence** (`denseMax`, the max raw cosine), not the RRF-fused score — fixing a bug where the fused score (max ≈ 2/(k+1) ≈ 0.033) never cleared a cosine-scaled threshold, so vector/hybrid seeds were always wrongly dropped to Jaccard. It applies in both embedding and hybrid modes via [[retrieval#PageSimilarityService]]'s `selectRelevantScoredDiag` (returns `denseMax`/`embedFailed`), and falls back through Jaccard → `llmSelectSeeds`. The branch is recorded in `graph_stats` as `retrievalMode`/`denseMax`/`seedFallbackReason`, plus a progress retrieval tag (`vector` / `jaccard (low …)` / `jaccard (embed failed)` / `llm seeds`) via `src/retrieval-diag.ts#retrievalTag`.
+
+## Cross-Domain Query
+
+Searching every domain at once when the sidebar scope is "All" — the `"*"` domain sentinel routed from `src/agent-runner.ts`. Two stages cover all domains while keeping the LLM context bounded. Entry point: `runCrossDomainQuery` (`src/phases/query-cross-domain.ts`). See [[operations#Query]].
+
+The retrieval half of single-domain `runQuery` is extracted into `retrieveDomainCandidates` (`src/phases/query.ts`): read index → seed-select (vector gate → Jaccard → optional `llmSelectSeeds`) → glob → `bfsExpandRanked`, returning a `DomainCandidates` set (seeds ∪ `bfsTopK` expansion) without an LLM call. Both single-domain `runQuery` and the cross-domain orchestrator consume it; the shared answer half (stream + WikiLink validation) is `answerFromContext` (`src/phases/query-answer.ts`).
+
+**Stage 1** runs `retrieveDomainCandidates` over every domain sequentially — one domain's pages held in memory at a time, non-candidate content freed. An empty domain returns `null` and is skipped; if all domains are empty the run errors. The orchestrator omits the `llmSeedFallback` argument, so a weak domain is skipped rather than costing one LLM call each.
+
+**Stage 2** `mergeCandidates` unions the per-domain pools — wiki stems are globally unique (`wiki_<domain>_<slug>`, see [[domain-model#Wiki Stem Mask]]), so graphs and score maps merge collision-free — then RRF-fuses vector + graph over the union via [[retrieval#Fusion]]'s `fuseVectorGraph`, capping to the top-`seedTopK` `finalIds`. No new pages enter stage 2; it only re-ranks the stage-1 pool. `seedTopK` drives both stages (top-N per domain and top-N final), and the final context is exactly `seedTopK` pages, not the single-domain `topK*3`.
+
+One `answerFromContext` call then answers over `finalIds`. The cross-domain prompt sets `domain_name` to "All domains (N)", lists `finalIds` as the only valid WikiLink targets, unions the `entity_types` and `language_notes` of the contributing domains, and builds the index block from the `finalIds` annotations only. `eval_meta.retrievalConfig` carries `crossDomain: true` and `domainsSearched`. Verified out-of-vault by `eval/cross-domain/run.ts`.
