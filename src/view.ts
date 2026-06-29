@@ -92,11 +92,8 @@ export class LlmWikiView extends ItemView {
   private stepsOpen = true;
   private cancelBtn!: HTMLButtonElement;
   private queryInput!: HTMLTextAreaElement;
-  private scopeToggle?: HTMLSelectElement;
-  // Persisted scope preference; undefined until loaded (then "all" | "domain").
-  // syncScope re-asserts it so the programmatic domain-restore "change" can't clobber it.
-  private desiredScope?: "all" | "domain";
-  private askBtn!: HTMLButtonElement;
+  private askDomainBtn!: HTMLButtonElement;
+  private askWikiBtn!: HTMLButtonElement;
   private domainSelect?: HTMLSelectElement;
   private initBtn?: HTMLButtonElement;
   private ingestBtn?: HTMLButtonElement;
@@ -150,6 +147,11 @@ export class LlmWikiView extends ItemView {
   private liveStatusSection: HTMLElement | null = null;
   private liveStatusIconEl: HTMLElement | null = null;
   private liveStatusTextEl: HTMLElement | null = null;
+  private queryStatsEl: HTMLElement | null = null;
+  private queryStatsTokensEl: HTMLElement | null = null;
+  private currentQueryStats: Extract<RunEvent, { kind: "query_stats" }> | null = null;
+  private currentQueryStatsInputTokens: number | null = null;
+  private showingStoredResultDuringRun = false;
 
   constructor(leaf: WorkspaceLeaf, private plugin: LlmWikiPlugin) {
     super(leaf);
@@ -206,48 +208,21 @@ export class LlmWikiView extends ItemView {
       attr: { placeholder: "Question…", rows: "3" },
     });
 
-    const T2 = i18n().view;
-    const scopeRow = ask.createDiv("ai-wiki-scope-row");
-    scopeRow.createSpan({ cls: "muted", text: "Scope:" });
-    this.scopeToggle = scopeRow.createEl("select", { cls: "ai-wiki-scope-select", attr: { title: T2.scopeHint } });
-    this.scopeToggle.createEl("option", { value: "all", text: T2.scopeAll });
-    this.scopeToggle.createEl("option", { value: "domain", text: T2.scopeDomain });
-
-    const syncScope = () => {
-      const hasDomain = !!(this.domainSelect?.value);
-      const domainOpt = this.scopeToggle!.querySelector('option[value="domain"]') as HTMLOptionElement;
-      domainOpt.disabled = !hasDomain;
-      if (this.desiredScope) {
-        // Re-assert the persisted/user preference; "domain" only when a concrete domain exists.
-        // This survives the programmatic domain-restore "change" dispatched by refreshDomains.
-        this.scopeToggle!.value = this.desiredScope === "domain" && hasDomain ? "domain" : "all";
-      } else {
-        // No preference yet: mirror the sidebar — concrete → "domain", (all) → "all".
-        // This also corrects any stale "domain" while the sidebar is "(all)".
-        this.scopeToggle!.value = hasDomain ? "domain" : "all";
-      }
-    };
-    this.scopeToggle.addEventListener("change", () => {
-      // A user toggle becomes the new persisted preference.
-      this.desiredScope = this.scopeToggle!.value as "all" | "domain";
-      void this.plugin.localConfigStore.save({ lastQueryScope: this.desiredScope });
-    });
-    this.domainSelect?.addEventListener("change", syncScope);
-    syncScope();
-
-    // Restore the persisted scope choice, then re-settle (order-independent vs refreshDomains).
-    void this.plugin.localConfigStore.load().then((c) => {
-      if (c.lastQueryScope === "all" || c.lastQueryScope === "domain") {
-        this.desiredScope = c.lastQueryScope;
-        syncScope();
-      }
-    });
-
     const askRow = ask.createDiv("ai-wiki-ask-row");
     this.cancelBtn = askRow.createEl("button", { text: T.view.cancel, cls: "mod-warning" });
-    this.askBtn = askRow.createEl("button", { text: T.view.ask });
+    const askButtons = askRow.createDiv("ai-wiki-ask-buttons");
+    this.askDomainBtn = askButtons.createEl("button", { text: T.view.askDomain });
+    this.askWikiBtn = askButtons.createEl("button", { text: T.view.askWiki, cls: "mod-cta" });
     this.cancelBtn.disabled = true;
-    this.askBtn.addEventListener("click", () => this.submitQuery());
+    this.askDomainBtn.addEventListener("click", () => {
+      const d = this.domainSelect?.value;
+      if (!d) { new Notice(i18n().view.enterQuestion); return; }
+      this.submitQuery(d);
+    });
+    this.askWikiBtn.addEventListener("click", () => {
+      const T2 = i18n().view;
+      new ConfirmModal(this.app, T2.askWikiConfirmTitle, [T2.askWikiConfirmBody], () => this.submitQuery("*")).open();
+    });
     this.cancelBtn.addEventListener("click", () => this.plugin.controller.cancelCurrent());
 
     const progressHeader = root.createDiv("ai-wiki-progress-header");
@@ -448,6 +423,7 @@ export class LlmWikiView extends ItemView {
 
   private updateButtonAvailability(): void {
     const hasDomain = !!(this.domainSelect?.value);
+    const isRunning = this.state === "running";
     const activeFile = this.plugin.app.workspace.getActiveFile();
     const domain = this.domains.find((d) => d.id === this.domainSelect?.value);
     const isSource = !!activeFile && !!domain && isSourceFile(activeFile.path, domain);
@@ -455,7 +431,8 @@ export class LlmWikiView extends ItemView {
     const canFormat = !!activeFile && activeFile.extension === "md"
       && !isWikiArticlePath(activeFile.path);
 
-    if (this.askBtn)       this.askBtn.disabled       = !hasDomain;
+    if (this.askDomainBtn) this.askDomainBtn.disabled = isRunning || !hasDomain;
+    if (this.askWikiBtn)   this.askWikiBtn.disabled   = isRunning;
     if (this.ingestBtn)    this.ingestBtn.disabled    = !hasDomain || onWikiArticle;
     if (this.lintBtn)      this.lintBtn.disabled      = !hasDomain;
     if (this.formatBtn)    this.formatBtn.disabled    = !canFormat;
@@ -610,13 +587,10 @@ export class LlmWikiView extends ItemView {
     }
   }
 
-  private submitQuery(): void {
+  private submitQuery(domainArg: string): void {
     const q = this.queryInput.value.trim();
     if (!q) { new Notice(i18n().view.enterQuestion); return; }
     if (this.state === "running") { new Notice(i18n().view.operationInProgress); return; }
-    const sidebarDomain = this.domainSelect?.value || "";
-    const scope = this.scopeToggle?.value || (sidebarDomain ? "domain" : "all");
-    const domainArg = scope === "all" ? "*" : (sidebarDomain || "*");
     void this.plugin.controller.query(q, domainArg);
     this.queryInput.value = "";
   }
@@ -627,7 +601,8 @@ export class LlmWikiView extends ItemView {
     this.finalEl.empty();
     this.statusEl.setText(`▶ ${operation} ${args.join(" ")}`);
     this.cancelBtn.disabled = false;
-    this.askBtn.disabled = true;
+    this.askDomainBtn.disabled = true;
+    this.askWikiBtn.disabled = true;
     if (this.initBtn) this.initBtn.disabled = true;
     if (this.ingestBtn) this.ingestBtn.disabled = true;
     if (this.lintBtn) this.lintBtn.disabled = true;
@@ -645,6 +620,8 @@ export class LlmWikiView extends ItemView {
     this.chatHistory = [];
 
     this.resultSection.addClass("ai-wiki-hidden");
+    this.resetQueryStats();
+    this.showingStoredResultDuringRun = false;
     this.finalEl.empty();
     this.resultOpen = false;
 
@@ -769,7 +746,8 @@ export class LlmWikiView extends ItemView {
     }
     if (ev.kind === "source_path_added") return;
     if (ev.kind === "domain_updated") { void this.refreshDomains(); return; }
-    if (ev.kind === "llm_call_stats") { this.llmStats.push(ev); return; }
+    if (ev.kind === "query_stats") { this.renderQueryStats(ev); return; }
+    if (ev.kind === "llm_call_stats") { this.llmStats.push(ev); this.fillQueryStatsTokens(ev.inputTokens); return; }
     if (ev.kind !== "assistant_text") this.stepCount++;
     if (ev.kind === "tool_use") {
       this.stopWaiting();
@@ -900,16 +878,32 @@ export class LlmWikiView extends ItemView {
   /** Render an entry's result body + (dev-mode) rating rows and comment box, bound
    *  to entry.id. Used by both finish() and the history-row click so the rating UI is
    *  always torn down and rebuilt for the displayed runId — never leaked across runs. */
-  private async renderResultFor(entry: RunHistoryEntry): Promise<void> {
+  private async renderResultFor(entry: RunHistoryEntry, opts?: { preserveQueryStats?: boolean }): Promise<void> {
     const seq = ++this.renderSeq;
     this.ratingSection?.remove();
     this.ratingSection = null;
 
+    if (opts?.preserveQueryStats) {
+      this.showingStoredResultDuringRun = false;
+    } else {
+      if (this.state === "running") {
+        this.showingStoredResultDuringRun = true;
+        this.clearQueryStatsDom();
+      } else {
+        this.showingStoredResultDuringRun = false;
+        this.resetQueryStats();
+      }
+    }
     this.finalEl.empty();
     const comp = new Component();
     comp.load();
     await MarkdownRenderer.render(this.app, entry.finalText || "(empty)", this.finalEl, "", comp);
     sanitizeLinks(this.finalEl);
+    if (opts?.preserveQueryStats && this.currentQueryStats && !this.queryStatsEl) {
+      const inputTokens = this.currentQueryStatsInputTokens;
+      this.renderQueryStats(this.currentQueryStats);
+      if (inputTokens !== null) this.fillQueryStatsTokens(inputTokens);
+    }
     this.resultSection.removeClass("ai-wiki-hidden");
     this.finalEl.removeClass("ai-wiki-hidden");
     this.resultOpen = true;
@@ -932,6 +926,56 @@ export class LlmWikiView extends ItemView {
     this.renderCommentBox(this.ratingSection, entry.id, persisted?.comment ?? "");
   }
 
+  private clearQueryStatsDom(): void {
+    this.queryStatsEl?.remove();
+    this.queryStatsEl = null;
+    this.queryStatsTokensEl = null;
+  }
+
+  private resetQueryStats(): void {
+    this.clearQueryStatsDom();
+    this.currentQueryStats = null;
+    this.currentQueryStatsInputTokens = null;
+  }
+
+  /** Search-stats block shown above the answer, for both Ask Domain and Ask Wiki.
+   *  Retrieval metrics are known up front; the tokens line is filled later from llm_call_stats. */
+  private renderQueryStats(ev: Extract<RunEvent, { kind: "query_stats" }>): void {
+    this.currentQueryStats = ev;
+    this.currentQueryStatsInputTokens = null;
+    this.clearQueryStatsDom();
+    if (this.showingStoredResultDuringRun) return;
+    this.resultSection.removeClass("ai-wiki-hidden");
+    const T = i18n().view;
+    const box = this.resultSection.createDiv("ai-wiki-cross-stats");
+    this.resultSection.insertBefore(box, this.finalEl);
+    const line = (label: string, value: string) => {
+      const row = box.createDiv("ai-wiki-cross-stats-row");
+      row.createSpan({ cls: "ai-wiki-cross-stats-label", text: label });
+      row.createSpan({ cls: "ai-wiki-cross-stats-value", text: value });
+    };
+    if (ev.crossDomain) {
+      line(T.statsDomainsStudied, `${ev.domainsStudied ?? 0} / ${ev.domainsTotal ?? 0}`);
+      line(T.statsInfoFrom, (ev.fromDomains ?? []).join(", ") || "—");
+      line(T.statsAnalyzed, String(ev.pagesScanned));
+      line(T.statsInAnswer, String(ev.pagesSelected));
+    } else {
+      line(T.statsDomain, ev.domainName ?? "—");
+      line(T.statsAnalyzed, String(ev.pagesScanned));
+      line(T.statsSelected, String(ev.pagesSelected));
+    }
+    const tokRow = box.createDiv("ai-wiki-cross-stats-row");
+    tokRow.createSpan({ cls: "ai-wiki-cross-stats-label", text: T.statsTokensSent });
+    this.queryStatsTokensEl = tokRow.createSpan({ cls: "ai-wiki-cross-stats-value", text: "…" });
+    this.queryStatsEl = box;
+  }
+
+  /** Fill the "tokens sent" line once the LLM call reports usage. No-op if no stats block is live. */
+  private fillQueryStatsTokens(inputTokens: number): void {
+    this.currentQueryStatsInputTokens = inputTokens;
+    this.queryStatsTokensEl?.setText(String(inputTokens));
+  }
+
   /** One free-form comment per run, persisted to eval.jsonl via commentRun. Dev mode only. */
   private renderCommentBox(parent: HTMLElement, runId: string, initial: string): void {
     if (!this.plugin.settings.devMode?.enabled) return;
@@ -939,15 +983,30 @@ export class LlmWikiView extends ItemView {
     const box = parent.createDiv("ai-wiki-comment-box");
     const ta = box.createEl("textarea", {
       cls: "ai-wiki-comment-input",
-      attr: { placeholder: T.view.commentPlaceholder, rows: "2" },
+      attr: { placeholder: T.view.commentPlaceholder, rows: "4" },
     });
     ta.value = initial;
+    let savedValue = initial;
     const actions = box.createDiv("ai-wiki-comment-actions");
     const saveBtn = actions.createEl("button", { text: T.view.commentSave });
-    const status = actions.createSpan({ cls: "ai-wiki-comment-status" });
+    const syncSaveButton = () => {
+      if (ta.value === savedValue) {
+        saveBtn.disabled = true;
+        saveBtn.setText(T.view.commentSavedBtn);
+      } else {
+        saveBtn.disabled = false;
+        saveBtn.setText(T.view.commentSave);
+      }
+    };
+    syncSaveButton();
+    ta.addEventListener("input", syncSaveButton);
     saveBtn.addEventListener("click", () => void (async () => {
-      const saved = await this.plugin.controller.commentRun(runId, ta.value);
-      if (saved !== undefined) status.setText(T.view.commentSaved);
+      const submitted = ta.value;
+      const saved = await this.plugin.controller.commentRun(runId, submitted);
+      if (saved !== undefined) {
+        savedValue = submitted;
+        syncSaveButton();
+      }
     })());
   }
 
@@ -1048,7 +1107,7 @@ export class LlmWikiView extends ItemView {
     this.resultSpeedEl?.setText(this.buildSpeedText());
     this.finalEl.empty();
     if (entry.finalText) {
-      await this.renderResultFor(entry);
+      await this.renderResultFor(entry, { preserveQueryStats: true });
       this.lastRunId = entry.id;
 
       const CHAT_OPS: WikiOperation[] = ["lint", "lint-chat", "ingest", "query"];

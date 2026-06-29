@@ -76,6 +76,8 @@ Every LLM call emits a `tool_use` event immediately before and a `tool_result` a
 
 For `parseWithRetry`: `tool_use name` is a descriptive label (`"Synthesising pages"`, `"Analysing wiki"`) with optional `input` context; on success `tool_result ok: true` with a short preview, on failure `ok: false` with the error. For streaming calls (query, chat, format): same `tool_use` before the stream, `tool_result` after with `preview: "N chars"`. The UI renders `tool_use` as a 🔧 step.
 
+Query phases also emit a `query_stats` event after retrieval and before answer generation. Single-domain Query reports the domain, pages analyzed, and pages selected for the LLM. Ask Wiki / cross-domain Query reports domains studied vs configured, contributing domains, pages analyzed across candidate domains, and pages included in the answer context. `src/view.ts` renders this as a compact stats block above the answer; the block's "tokens sent" row is filled later from the existing `llm_call_stats.inputTokens` event. The stats event is emitted only for Query flows, not chat, format, init, ingest, or lint operations.
+
 ## Streaming
 
 Free-text operations (query, chat, format reasoning) use streaming. `extractStreamDeltas` extracts `content` and optional `reasoning` deltas per chunk; `isReasoning: true` marks thinking tokens (`src/phases/llm-utils.ts`).

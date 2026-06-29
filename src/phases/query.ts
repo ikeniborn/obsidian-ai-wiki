@@ -46,6 +46,7 @@ export interface DomainCandidates {
   seedFallback: "none" | "jaccard" | "llm";
   seedFallbackReason?: SeedFallbackReason;
   seedOutputTokens: number;          // tokens spent if the llm-seed fallback ran
+  pagesScanned: number;              // total pages in the domain (files.length)
 }
 
 /**
@@ -166,6 +167,7 @@ export async function* retrieveDomainCandidates(
     domainId: domain.id, pages: candidatePages, seeds, candidateIds: selectedIds,
     seedScores, expandedScores, graph: graphResult.graph, annotations, indexContent,
     retrievalMode, denseMax, seedFallback, seedFallbackReason, seedOutputTokens,
+    pagesScanned: files.length,
   };
 }
 
@@ -230,7 +232,8 @@ export async function* runQuery(
   const fusedOrder = bfsFusion
     ? fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, cand.graph, graphDepth, rrfK)
     : undefined;
-  const contextBlock = buildContextBlock(pages, seedSet, selectedIds, topK * 3, fusedOrder);
+  const contextPages = selectContextPages(pages, seedSet, selectedIds, topK * 3, fusedOrder);
+  const contextBlock = renderContextPages(contextPages);
 
   const entityTypesBlock = buildEntityTypesBlock(domain);
 
@@ -248,6 +251,15 @@ export async function* runQuery(
     entity_types_block: entityTypesBlock,
     index_block: indexContent ? `\nWiki index (_index.md):\n${indexContent}` : "",
   });
+
+  yield {
+    kind: "query_stats",
+    crossDomain: false,
+    domainName: domain.name,
+    pagesScanned: cand.pagesScanned,
+    pagesSelected: contextPages.length,
+  };
+  if (signal.aborted) return;
 
   const ans = yield* answerFromContext({
     llm, model, opts, signal, vaultTools,
@@ -363,21 +375,31 @@ export function buildContextBlock(
   maxPages: number,
   order?: string[],
 ): string {
+  return renderContextPages(selectContextPages(pages, seeds, selectedIds, maxPages, order));
+}
+
+export function selectContextPages(
+  pages: Map<string, string>,
+  seeds: Set<string>,
+  selectedIds: Set<string>,
+  maxPages: number,
+  order?: string[],
+): [string, string][] {
   // Fused ordering (Tier 2): emit pages in `order`, capped at maxPages.
   if (order && order.length > 0) {
     const pidToPath = new Map<string, string>();
     for (const path of pages.keys()) pidToPath.set(pageId(path), path);
-    let block = "";
+    const ordered: [string, string][] = [];
     let count = 0;
     for (const id of order) {
       if (count >= maxPages) break;
       if (!selectedIds.has(id)) continue;
       const path = pidToPath.get(id);
       if (path === undefined) continue;
-      block += `--- ${path} ---\n${pages.get(path) ?? ""}\n\n`;
+      ordered.push([path, pages.get(path) ?? ""]);
       count++;
     }
-    return block;
+    return ordered;
   }
 
   // Default: seeds first, then BFS-expanded pages (unchanged behavior).
@@ -390,9 +412,12 @@ export function buildContextBlock(
     else bfsPages.push([path, content]);
   }
   const bfsCap = Math.max(0, maxPages - seedPages.length);
-  const ordered = [...seedPages, ...bfsPages.slice(0, bfsCap)];
+  return [...seedPages, ...bfsPages.slice(0, bfsCap)];
+}
+
+function renderContextPages(pages: [string, string][]): string {
   let block = "";
-  for (const [p, c] of ordered) {
+  for (const [p, c] of pages) {
     block += `--- ${p} ---\n${c}\n\n`;
   }
   return block;
