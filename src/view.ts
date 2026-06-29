@@ -93,6 +93,9 @@ export class LlmWikiView extends ItemView {
   private cancelBtn!: HTMLButtonElement;
   private queryInput!: HTMLTextAreaElement;
   private scopeToggle?: HTMLSelectElement;
+  // Persisted scope preference; undefined until loaded (then "all" | "domain").
+  // syncScope re-asserts it so the programmatic domain-restore "change" can't clobber it.
+  private desiredScope?: "all" | "domain";
   private askBtn!: HTMLButtonElement;
   private domainSelect?: HTMLSelectElement;
   private initBtn?: HTMLButtonElement;
@@ -214,19 +217,30 @@ export class LlmWikiView extends ItemView {
       const hasDomain = !!(this.domainSelect?.value);
       const domainOpt = this.scopeToggle!.querySelector('option[value="domain"]') as HTMLOptionElement;
       domainOpt.disabled = !hasDomain;
-      // Default mirrors the sidebar: concrete domain → "domain", (all) → "all".
-      this.scopeToggle!.value = hasDomain ? "domain" : "all";
+      if (this.desiredScope) {
+        // Re-assert the persisted/user preference; "domain" only when a concrete domain exists.
+        // This survives the programmatic domain-restore "change" dispatched by refreshDomains.
+        this.scopeToggle!.value = this.desiredScope === "domain" && hasDomain ? "domain" : "all";
+      } else {
+        // No preference yet: mirror the sidebar — concrete → "domain", (all) → "all".
+        // This also corrects any stale "domain" while the sidebar is "(all)".
+        this.scopeToggle!.value = hasDomain ? "domain" : "all";
+      }
     };
     this.scopeToggle.addEventListener("change", () => {
-      void this.plugin.localConfigStore.save({ lastQueryScope: this.scopeToggle!.value as "all" | "domain" });
+      // A user toggle becomes the new persisted preference.
+      this.desiredScope = this.scopeToggle!.value as "all" | "domain";
+      void this.plugin.localConfigStore.save({ lastQueryScope: this.desiredScope });
     });
     this.domainSelect?.addEventListener("change", syncScope);
     syncScope();
 
-    // Restore the persisted scope choice on initial build (only when a concrete domain is selected).
+    // Restore the persisted scope choice, then re-settle (order-independent vs refreshDomains).
     void this.plugin.localConfigStore.load().then((c) => {
-      if (c.lastQueryScope === "all") this.scopeToggle!.value = "all";
-      else if (c.lastQueryScope === "domain" && this.domainSelect?.value) this.scopeToggle!.value = "domain";
+      if (c.lastQueryScope === "all" || c.lastQueryScope === "domain") {
+        this.desiredScope = c.lastQueryScope;
+        syncScope();
+      }
     });
 
     const askRow = ask.createDiv("ai-wiki-ask-row");
