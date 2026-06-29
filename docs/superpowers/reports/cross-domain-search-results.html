@@ -80,8 +80,8 @@ body:has(#tab-result:checked) #pane-result{ display:block; }
 <input type="checkbox" id="theme-toggle" hidden>
 <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
 <input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
-<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
-<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden checked>
 <label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
 <header>
   <h1>IDD-цепочка: cross-domain-search</h1>
@@ -367,7 +367,76 @@ body:has(#tab-result:checked) #pane-result{ display:block; }
 
 <!-- TAB:result START -->
 <section class="tab-pane" id="pane-result">
-  <p class="note">Этап ещё не проверен.</p>
+  <h2>1. Резюме сверки</h2>
+  <p><strong>Diff base:</strong> <code>git diff 4af4f25..HEAD</code> — 14 файлов (src + eval + docs/wiki), excl. <code>dist/</code> ·
+     <strong>plan_hash:</strong> <code>60650aae4563760b</code> · <strong>Вердикт:</strong> <span class="badge b-ok">OK</span></p>
+  <table>
+    <thead><tr><th>Документ</th><th>Путь / статус</th></tr></thead>
+    <tbody>
+      <tr><td>Intent</td><td><em>null</em> — стадии intent не было (спец из брейншторма напрямую)</td></tr>
+      <tr><td>Spec</td><td><code>docs/superpowers/specs/2026-06-29-cross-domain-search-design.md</code></td></tr>
+      <tr><td>Plan</td><td><code>docs/superpowers/plans/2026-06-29-cross-domain-search.md</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Результаты проверки</h2>
+  <h3>Покрытие шагов плана</h3>
+  <p><span class="badge b-ok">DONE 8/8</span> &nbsp; <span class="badge b-info">PARTIAL 0</span> &nbsp; <span class="badge b-crit">MISSING 0</span></p>
+  <table>
+    <thead><tr><th>Задача</th><th>Файлы в diff</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>T1 retrieveDomainCandidates</td><td><code>src/phases/query.ts</code></td><td><span class="badge b-ok">DONE</span></td></tr>
+      <tr><td>T2 answerFromContext</td><td><code>src/phases/query-answer.ts</code>, <code>query.ts</code></td><td><span class="badge b-ok">DONE</span></td></tr>
+      <tr><td>T3 mergeCandidates + eval</td><td><code>src/phases/query-cross-domain.ts</code>, <code>eval/cross-domain/run.ts</code></td><td><span class="badge b-ok">DONE</span></td></tr>
+      <tr><td>T4 runCrossDomainQuery + eval-log</td><td><code>query-cross-domain.ts</code>, <code>src/eval-log.ts</code>, <code>run.ts</code></td><td><span class="badge b-ok">DONE</span></td></tr>
+      <tr><td>T5 routing "*"</td><td><code>src/agent-runner.ts</code></td><td><span class="badge b-ok">DONE</span></td></tr>
+      <tr><td>T6 scope toggle UI</td><td><code>src/view.ts</code>, <code>i18n.ts</code>, <code>local-config.ts</code></td><td><span class="badge b-ok">DONE</span></td></tr>
+      <tr><td>T7 eval finalize (+assert 7)</td><td><code>eval/cross-domain/run.ts</code></td><td><span class="badge b-ok">DONE</span></td></tr>
+      <tr><td>T8 docs (iwiki)</td><td><code>docs/wiki/retrieval.md</code>, <code>operations.md</code></td><td><span class="badge b-ok">DONE</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Покрытие Spec Success Criteria</h3>
+  <table>
+    <thead><tr><th>SC</th><th>Реализация</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>SC-1 «All» ищет по каждому домену</td><td><code>agent-runner</code> all-domains для "*" + цикл в <code>runCrossDomainQuery</code></td><td><span class="badge b-ok">✓</span></td></tr>
+      <tr><td>SC-2 две стадии, top-seedTopK, без новых страниц</td><td><code>retrieveDomainCandidates</code> + <code>mergeCandidates</code>→<code>fuseVectorGraph</code>→slice</td><td><span class="badge b-ok">✓</span></td></tr>
+      <tr><td>SC-3 один LLM-вызов</td><td>один <code>answerFromContext</code>; eval <code>calls()===1</code></td><td><span class="badge b-ok">✓</span></td></tr>
+      <tr><td>SC-4 Jaccard-деградация</td><td><code>similarity=undefined</code> ветка; eval <code>retrievalMode jaccard</code></td><td><span class="badge b-ok">✓</span></td></tr>
+      <tr><td>SC-5 без новых настроек</td><td><code>RetrieveCfg</code> из существующих settings; миграции нет</td><td><span class="badge b-ok">✓</span></td></tr>
+      <tr><td>SC-6 тесты (eval)</td><td><code>eval/cross-domain/run.ts</code> — 17 assertions (вкл. assertion 7)</td><td><span class="badge b-ok">✓</span></td></tr>
+    </tbody>
+  </table>
+  <p><strong>Покрыто:</strong> Desired Outcomes — n/a (intent отсутствует) · Spec SC — <strong>6/6</strong> · Plan steps — <strong>8/8</strong>.</p>
+
+  <h3>Избыточные изменения (легитимны)</h3>
+  <table>
+    <thead><tr><th>Файл</th><th>Причина</th></tr></thead>
+    <tbody>
+      <tr><td><code>eval/cross-domain/register.ts</code> + <code>package.json</code></td><td>CJS boot-шим (.md text-loader + obsidian stub) для tsx — side-effect T3/T4</td></tr>
+      <tr><td><code>src/rerun-domain.ts</code> + <code>eval/rerun-domain/run.ts</code></td><td>guard `"*"` для перезапуска cross-domain из истории (финальное ревью) + тест</td></tr>
+      <tr><td><code>dist/main.js</code></td><td>пересборка бандла (<code>npm run build</code>)</td></tr>
+      <tr><td><code>docs/superpowers/**</code></td><td>spec / plan / chain-отчёт (артефакты IDD-процесса)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Находки</h3>
+  <table>
+    <thead><tr><th>severity</th><th>что</th><th>статус</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge b-warn">WARNING</span></td><td>T7 — отсутствовала eval-assertion 7 (<code>entity_types_block</code> покрывает ровно домены из finalIds)</td><td><span class="badge b-ok">fixed</span> (commit <code>de4a69a</code>, eval 17/17)</td></tr>
+      <tr><td><span class="badge b-info">INFO</span></td><td>T1 <code>indexContent</code> добавлен в <code>DomainCandidates</code> (устраняет двойное чтение индекса)</td><td><span class="badge b-ok">accepted</span></td></tr>
+      <tr><td><span class="badge b-info">INFO</span></td><td>T4 <code>finalDomains</code> через <code>domainId</code>, не парсинг стема (надёжнее)</td><td><span class="badge b-ok">accepted</span></td></tr>
+      <tr><td><span class="badge b-info">INFO</span></td><td>T6 <code>desiredScope</code> — переживание персиста через domain-restore</td><td><span class="badge b-ok">accepted</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>Сводка:</strong> CRITICAL/MISSING: 0 · WARNING: 0 open (1 fixed) · INFO: 3 (accepted) · <strong>Вердикт:</strong> <span class="badge b-ok">OK</span><br>
+    <strong>Финальное ревью (opus):</strong> 1 Important (cross-domain rerun) исправлен в <code>4b99181</code>; ready-to-merge.<br>
+    <strong>Цепочка:</strong> intent <em>null</em> → spec ✓ → plan ✓ → <strong>result ✓</strong>.
+  </div>
 </section>
 <!-- TAB:result END -->
 </body>
