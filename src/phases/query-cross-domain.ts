@@ -1,5 +1,14 @@
 import type { DomainCandidates } from "./query";
 import { fuseVectorGraph } from "../fusion";
+import type { DomainEntry } from "../domain";
+import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
+import type { VaultTools } from "../vault-tools";
+import type { PageSimilarityService } from "../page-similarity";
+import { retrieveDomainCandidates, buildContextBlock, type RetrieveCfg } from "./query";
+import { answerFromContext } from "./query-answer";
+import { render } from "./template";
+import queryTemplate from "../../prompts/query.md";
+import { promptVersionOf } from "../prompt-version";
 
 export interface MergedPool {
   mergedPages: Map<string, string>;
@@ -58,4 +67,109 @@ export function mergeCandidates(
     mergedPages, mergedSeeds, mergedSeedSet, mergedSeedScores, mergedExpandedScores,
     allCandidates, mergedGraph, mergedAnnotations, fusedOrder, finalIds,
   };
+}
+
+export async function* runCrossDomainQuery(
+  question: string,
+  vaultTools: VaultTools,
+  llm: LlmClient,
+  model: string,
+  domains: DomainEntry[],
+  signal: AbortSignal,
+  cfg: RetrieveCfg,
+  rrfK: number,
+  wikiLinkValidationRetries: number,
+  opts: LlmCallOptions,
+  similarity?: PageSimilarityService,
+): AsyncGenerator<RunEvent, void> {
+  const q = question.trim();
+  if (!q) { yield { kind: "error", message: "query: question required" }; return; }
+  if (domains.length === 0) { yield { kind: "error", message: "No domains configured. Add a domain in settings." }; return; }
+
+  const start = Date.now();
+  let outputTokens = 0;
+
+  // Stage 1 — gather candidates per domain, sequentially.
+  const poolList: DomainCandidates[] = [];
+  for (const domain of domains) {
+    if (signal.aborted) return;
+    yield { kind: "tool_use", name: `Domain: ${domain.name}`, input: {} };
+    const cand = yield* retrieveDomainCandidates(domain, q, vaultTools, similarity, signal, cfg);
+    yield { kind: "tool_result", ok: !!cand, preview: cand ? `${cand.candidateIds.size} candidates` : "skipped" };
+    if (cand) poolList.push(cand);
+  }
+  if (signal.aborted) return;
+  if (poolList.length === 0) { yield { kind: "error", message: "No relevant pages found across domains." }; return; }
+
+  // Stage 2 — merge + fuse + cap.
+  const merged = mergeCandidates(poolList, cfg.seedTopK, cfg.graphDepth, rrfK);
+  const finalSet = new Set(merged.finalIds);
+
+  const contextBlock = buildContextBlock(merged.mergedPages, merged.mergedSeedSet, finalSet, cfg.seedTopK, merged.fusedOrder);
+
+  const finalDomains = [...new Set([...finalSet].map((id) => id.split("_")[1]).filter(Boolean))];
+  const domainName = `All domains (${finalDomains.length}): ${finalDomains.join(", ")}`;
+
+  const wikiFirst = [...finalSet].sort((a, b) => Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
+  const availableLinksBlock = wikiFirst.length === 0 ? "" : [
+    "Valid WikiLink targets (use EXACTLY these, copy verbatim):",
+    ...wikiFirst.map((s) => `- ${s}`),
+    "ONLY link to a target from this list. Never invent or abbreviate stems.",
+  ].join("\n");
+
+  const entityTypesBlock = buildCrossDomainEntityTypes(domains, finalDomains);
+  const indexBlock = buildCrossDomainIndexBlock(merged.mergedAnnotations, merged.finalIds);
+
+  const systemPrompt = render(queryTemplate, {
+    domain_name: domainName,
+    available_links_block: availableLinksBlock,
+    entity_types_block: entityTypesBlock,
+    index_block: indexBlock ? `\nWiki index (candidates):\n${indexBlock}` : "",
+  });
+
+  const ans = yield* answerFromContext({
+    llm, model, opts, signal, vaultTools, systemPrompt, question: q,
+    contextBlock, selectedIds: finalSet, wikiLinkValidationRetries,
+  });
+  outputTokens += ans.outputTokens;
+  if (signal.aborted) return;
+
+  yield {
+    kind: "eval_meta",
+    fields: {
+      question: q,
+      answer: ans.answer,
+      found_pages: merged.finalIds,
+      promptVersion: promptVersionOf(queryTemplate),
+      retrievalConfig: {
+        mode: similarity?.config.mode === "hybrid" ? "hybrid" : similarity?.config.mode === "embedding" ? "embedding" : "jaccard",
+        seedTopK: cfg.seedTopK,
+        bfsTopK: cfg.bfsTopK,
+        bfsFusion: false,
+        seedSimilarityThreshold: cfg.seedSimilarityThreshold,
+        hybridRetrieval: similarity?.config.mode === "hybrid",
+        crossDomain: true,
+        domainsSearched: domains.length,
+      },
+    },
+  };
+
+  yield { kind: "result", durationMs: Date.now() - start, text: ans.answer, outputTokens: outputTokens || undefined };
+}
+
+function buildCrossDomainEntityTypes(domains: DomainEntry[], domainIds: string[]): string {
+  const blocks: string[] = [];
+  for (const d of domains) {
+    if (!domainIds.includes(d.id) || !d.entity_types?.length) continue;
+    const types = d.entity_types.map((et) => `  - ${et.type}: ${et.description}`).join("\n");
+    blocks.push(`Entity types of "${d.name}":\n${types}`);
+  }
+  return blocks.join("\n");
+}
+
+function buildCrossDomainIndexBlock(annotations: Map<string, string>, finalIds: string[]): string {
+  return finalIds
+    .map((id) => { const a = annotations.get(id); return a ? `${id}: ${a}` : null; })
+    .filter((x): x is string => x !== null)
+    .join("\n");
 }

@@ -3,8 +3,13 @@
  * Deterministic: drives the REAL mergeCandidates / runCrossDomainQuery in Jaccard
  * mode over inlined fixtures. Run: npx tsx eval/cross-domain/run.ts
  */
-import { mergeCandidates } from "../../src/phases/query-cross-domain";
+// register MUST be first: installs .md loader + obsidian stub before any src/ module loads.
+import "./register";
+import { mergeCandidates, runCrossDomainQuery } from "../../src/phases/query-cross-domain";
 import type { DomainCandidates } from "../../src/phases/query";
+import type { VaultTools } from "../../src/vault-tools";
+import type { LlmClient, RunEvent } from "../../src/types";
+import type { DomainEntry } from "../../src/domain";
 
 let pass = 0, fail = 0;
 const failures: string[] = [];
@@ -44,5 +49,83 @@ section("mergeCandidates");
   check("mergedSeedSet has all seeds", merged.mergedSeedSet.size === 4);
 }
 
-console.log(`\n${fail === 0 ? "OK" : "FAILED"} — ${pass} passed, ${fail} failed`);
-if (fail > 0) { console.log("Failures:\n" + failures.map((f) => "  - " + f).join("\n")); process.exit(1); }
+// Minimal in-memory VaultTools: jaccard mode (no embeddings).
+function fakeVault(files: Record<string, string>): VaultTools {
+  const map = new Map(Object.entries(files));
+  return {
+    read: async (p: string) => { const v = map.get(p); if (v === undefined) throw new Error("ENOENT " + p); return v; },
+    write: async () => {},
+    exists: async (p: string) => map.has(p),
+    mkdir: async () => {},
+    remove: async () => {},
+    listFiles: async (dir: string) => [...map.keys()].filter((p) => p.startsWith(dir)),
+    readAll: async (paths: string[]) => new Map(paths.map((p) => [p, map.get(p) ?? ""])),
+  } as unknown as VaultTools;
+}
+
+// Fake LLM: records call count; streaming returns one canned content chunk.
+function fakeLlm(answer: string): { llm: LlmClient; calls: () => number } {
+  let calls = 0;
+  const llm = {
+    chat: { completions: { create: async (params: { stream?: boolean }) => {
+      calls++;
+      if (params.stream) {
+        return (async function* () { yield { choices: [{ delta: { content: answer } }] }; })();
+      }
+      return { choices: [{ message: { content: answer } }] };
+    } } },
+  } as unknown as LlmClient;
+  return { llm, calls: () => calls };
+}
+
+async function drive(gen: AsyncGenerator<RunEvent, void>): Promise<RunEvent[]> {
+  const evs: RunEvent[] = [];
+  for await (const e of gen) evs.push(e);
+  return evs;
+}
+
+const dom = (id: string): DomainEntry => ({
+  id, name: id, wiki_folder: id, source_paths: [], entity_types: [], analyzed_sources: {},
+} as DomainEntry);
+
+void (async () => {
+  section("runCrossDomainQuery");
+  {
+    const files = {
+      "!Wiki/work/_config/_index.md": "- [[wiki_work_neural]] — neural networks deep learning",
+      "!Wiki/work/EntityType/wiki_work_neural.md": "# Neural\nneural networks deep learning models",
+      "!Wiki/home/_config/_index.md": "- [[wiki_home_garden]] — neural pruning of garden plants",
+      "!Wiki/home/EntityType/wiki_home_garden.md": "# Garden\nneural pruning garden plants",
+    };
+    const vault = fakeVault(files);
+    const { llm, calls } = fakeLlm("Answer about [[wiki_work_neural]].");
+    const signal = new AbortController().signal;
+    const cfg = { graphDepth: 1, seedTopK: 5, seedMinScore: 0, bfsTopK: 10, seedSimilarityThreshold: 0 };
+
+    const evs = await drive(runCrossDomainQuery(
+      "neural", vault, llm, "fake-model", [dom("work"), dom("home")], signal, cfg, 60, 3, {},
+    ));
+
+    const evalMeta = evs.find((e) => e.kind === "eval_meta") as Extract<RunEvent, { kind: "eval_meta" }> | undefined;
+    const result = evs.find((e) => e.kind === "result") as Extract<RunEvent, { kind: "result" }> | undefined;
+
+    check("exactly one LLM completion call", calls() === 1, `calls=${calls()}`);
+    check("emits a result with the answer", !!result && result.text.includes("wiki_work_neural"));
+    check("eval_meta.crossDomain true", !!evalMeta && (evalMeta.fields.retrievalConfig as { crossDomain?: boolean })?.crossDomain === true);
+    check("found_pages non-empty", !!evalMeta && Array.isArray(evalMeta.fields.found_pages) && (evalMeta.fields.found_pages as string[]).length > 0);
+    check("per-domain progress emitted", evs.some((e) => e.kind === "tool_use" && (e as { name: string }).name.startsWith("Domain:")));
+  }
+
+  section("edge cases");
+  {
+    const vault = fakeVault({});
+    const { llm } = fakeLlm("x");
+    const signal = new AbortController().signal;
+    const cfg = { graphDepth: 1, seedTopK: 5, seedMinScore: 0, bfsTopK: 10, seedSimilarityThreshold: 0 };
+    const evs = await drive(runCrossDomainQuery("q", vault, llm, "m", [dom("work"), dom("home")], signal, cfg, 60, 3, {}));
+    check("all-empty → error event", evs.some((e) => e.kind === "error" && /across domains/i.test((e as { message: string }).message)));
+  }
+
+  console.log(`\n${fail === 0 ? "OK" : "FAILED"} — ${pass} passed, ${fail} failed`);
+  if (fail > 0) { console.log("Failures:\n" + failures.map((f) => "  - " + f).join("\n")); process.exit(1); }
+})();
