@@ -254,6 +254,7 @@ export async function* runQuery(
     systemPrompt, question, contextBlock, selectedIds,
     wikiLinkValidationRetries,
   });
+  if (signal.aborted) return;          // restore prior behavior: no eval_meta/result on abort
   let answer = ans.answer;
   outputTokens += ans.outputTokens;
 
