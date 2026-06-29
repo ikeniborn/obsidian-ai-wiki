@@ -150,7 +150,7 @@ export async function* runCrossDomainQuery(
         mode: similarity?.config.mode === "hybrid" ? "hybrid" : similarity?.config.mode === "embedding" ? "embedding" : "jaccard",
         seedTopK: cfg.seedTopK,
         bfsTopK: cfg.bfsTopK,
-        bfsFusion: false,
+        bfsFusion: true,
         seedSimilarityThreshold: cfg.seedSimilarityThreshold,
         hybridRetrieval: similarity?.config.mode === "hybrid",
         crossDomain: true,
@@ -167,7 +167,8 @@ function buildCrossDomainEntityTypes(domains: DomainEntry[], domainIds: string[]
   for (const d of domains) {
     if (!domainIds.includes(d.id) || !d.entity_types?.length) continue;
     const types = d.entity_types.map((et) => `  - ${et.type}: ${et.description}`).join("\n");
-    blocks.push(`Entity types of "${d.name}":\n${types}`);
+    const notes = d.language_notes ? `\nLanguage rules: ${d.language_notes}` : "";
+    blocks.push(`Entity types of "${d.name}":\n${types}${notes}`);
   }
   return blocks.join("\n");
 }
