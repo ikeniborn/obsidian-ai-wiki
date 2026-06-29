@@ -6,6 +6,7 @@
 // register MUST be first: installs .md loader + obsidian stub before any src/ module loads.
 import "./register";
 import { mergeCandidates, runCrossDomainQuery } from "../../src/phases/query-cross-domain";
+import { retrieveDomainCandidates } from "../../src/phases/query";
 import type { DomainCandidates } from "../../src/phases/query";
 import type { VaultTools } from "../../src/vault-tools";
 import type { LlmClient, RunEvent } from "../../src/types";
@@ -124,6 +125,30 @@ void (async () => {
     const cfg = { graphDepth: 1, seedTopK: 5, seedMinScore: 0, bfsTopK: 10, seedSimilarityThreshold: 0 };
     const evs = await drive(runCrossDomainQuery("q", vault, llm, "m", [dom("work"), dom("home")], signal, cfg, 60, 3, {}));
     check("all-empty → error event", evs.some((e) => e.kind === "error" && /across domains/i.test((e as { message: string }).message)));
+  }
+
+  section("retrieveDomainCandidates (jaccard, single domain)");
+  {
+    const files = {
+      "!Wiki/work/_config/_index.md": "- [[wiki_work_neural]] — neural networks deep learning",
+      "!Wiki/work/EntityType/wiki_work_neural.md": "# Neural\nneural networks deep learning models",
+      "!Wiki/work/EntityType/wiki_work_garden.md": "# Garden\ncompletely unrelated gardening text",
+    };
+    const vault = fakeVault(files);
+    const signal = new AbortController().signal;
+    const cfg = { graphDepth: 1, seedTopK: 5, seedMinScore: 0, bfsTopK: 10, seedSimilarityThreshold: 0 };
+    const gen = retrieveDomainCandidates(dom("work"), "neural networks", vault, undefined, signal, cfg);
+    let r = await gen.next();
+    while (!r.done) r = await gen.next();
+    const cand = r.value;
+
+    check("jaccard pool non-empty", !!cand && cand.candidateIds.size > 0);
+    check("relevant seed selected", !!cand && cand.seeds.includes("wiki_work_neural"));
+    check("retrievalMode jaccard", !!cand && cand.retrievalMode === "jaccard");
+    check("empty domain returns null", await (async () => {
+      const g = retrieveDomainCandidates(dom("empty"), "x", fakeVault({}), undefined, signal, cfg);
+      let rr = await g.next(); while (!rr.done) rr = await g.next(); return rr.value === null;
+    })());
   }
 
   console.log(`\n${fail === 0 ? "OK" : "FAILED"} — ${pass} passed, ${fail} failed`);
