@@ -661,7 +661,7 @@ export class PageSimilarityService {
   ): Promise<SeedDiag> {
     const { baseUrl, apiKey, model } = this.config;
     if (!baseUrl || !model) {
-      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit), denseMax: 0, embedFailed: false };
+      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit), denseMax: 0, embedFailed: false, denseByPid: {} };
     }
 
     let queryVec: Float32Array;
@@ -669,7 +669,7 @@ export class PageSimilarityService {
       const truncated = sourceContent.slice(0, 2000);
       [queryVec] = await fetchEmbeddings(baseUrl, apiKey!, model, [truncated], this.config.dimensions);
     } catch {
-      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit), denseMax: 0, embedFailed: true };
+      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit), denseMax: 0, embedFailed: true, denseByPid: {} };
     }
 
     const pids = allPaths.map((p) => pageId(p));
@@ -703,6 +703,7 @@ export class PageSimilarityService {
     }
 
     let denseMax = 0;
+    const denseByPid: Record<string, number> = {};
     const scored: { path: string; score: number }[] = [];
     for (let i = 0; i < allPaths.length; i++) {
       const pid = pids[i];
@@ -714,11 +715,12 @@ export class PageSimilarityService {
       } else {
         const c = maxCosine(queryVec, vecs);
         if (c > denseMax) denseMax = c;
+        denseByPid[pid] = c;                       // raw cosine for the floor
         if (c > 0) scored.push({ path: allPaths[i], score: c });
       }
     }
     scored.sort((a, b) => b.score - a.score);
-    return { results: scored.slice(0, limit), denseMax, embedFailed: false };
+    return { results: scored.slice(0, limit), denseMax, embedFailed: false, denseByPid };
   }
 
   private async selectEmbeddingScored(
@@ -743,7 +745,7 @@ export class PageSimilarityService {
     const sparse = this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, pool);
     const fused = rrf([dense.results.map((x) => x.path), sparse.map((x) => x.path)], this.config.rrfK ?? 60);
     const results = fused.slice(0, this.config.topK).map((f) => ({ path: f.id, score: f.score }));
-    return { results, denseMax: dense.denseMax, embedFailed: dense.embedFailed };
+    return { results, denseMax: dense.denseMax, embedFailed: dense.embedFailed, denseByPid: dense.denseByPid };
   }
 
   private async selectHybridScored(
@@ -762,9 +764,9 @@ export class PageSimilarityService {
     allPaths: string[],
   ): Promise<SeedDiag> {
     const queryTokens = tokenize(sourceContent);
-    if (queryTokens.size === 0) return { results: [], denseMax: 0, embedFailed: false };
+    if (queryTokens.size === 0) return { results: [], denseMax: 0, embedFailed: false, denseByPid: {} };
     if (this.config.mode === "jaccard") {
-      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths), denseMax: 0, embedFailed: false };
+      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths), denseMax: 0, embedFailed: false, denseByPid: {} };
     }
     if (this.config.mode === "hybrid") {
       return this.selectHybridScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens);
