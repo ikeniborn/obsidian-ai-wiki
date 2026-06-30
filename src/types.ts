@@ -101,6 +101,7 @@ export type RunEvent =
       seedScores: Record<string, number>;
       expandedPages: string[];
       expandedScores: Record<string, number>;
+      expandedDense?: Record<string, number>;
       expandedByHop?: Record<number, string[]>;
       seedFallback?: "none" | "jaccard" | "llm";
       retrievalMode?: import("./retrieval-diag").RetrievalMode;
