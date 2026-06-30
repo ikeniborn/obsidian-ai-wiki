@@ -109,6 +109,8 @@ export type RunEvent =
       seedFallbackReason?: import("./retrieval-diag").SeedFallbackReason;
       floorApplied?: boolean;
       floorRef?: number;
+      floorLoRef?: number;
+      floorBar?: number;
       prunedCount?: number;
       floorSkippedReason?: string;
     };
