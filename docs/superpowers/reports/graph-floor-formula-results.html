@@ -282,42 +282,23 @@ body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); bord
 
   <h2>1. Резюме плана</h2>
   <p class="sub"><code>docs/superpowers/plans/2026-06-30-graph-floor-formula.md</code> ·
-     plan_hash <code>ae2ed73eeed26dc4</code> · 5 задач, TDD, частые коммиты.</p>
+     plan_hash <code>f25400d3402f68df</code> · 6 задач, TDD. Ревизия: измерение через live-реплей против deepseek (не записанные фикстуры).</p>
   <table>
-    <thead><tr><th>Шаг</th><th>Definition of Done</th></tr></thead>
+    <thead><tr><th>Задача</th><th>Definition of Done</th></tr></thead>
     <tbody>
-      <tr><td>T1·S1 — переписать <code>retrieval-prune.ts</code></td><td>robustLow + FLOOR_LO_PCT=0.05 + FLOOR_EPS + pruneByRelevance(loRef, collapsed); компилируется</td></tr>
-      <tr><td>T1·S2 — тесты в <code>eval/retrieval-prune/run.ts</code></td><td>percentile, spread-bar, boundary, missing, range-collapsed, zero-ratio</td></tr>
-      <tr><td>T1·S3 — прогон тестов</td><td><code>OK — N passed, 0 failed</code></td></tr>
-      <tr><td>T1·S4 — commit</td><td>feat(retrieval): spread-relative bar</td></tr>
-      <tr><td>T2·S1 — <code>types.ts</code> graph_stats</td><td>+ floorLoRef?, floorBar?</td></tr>
-      <tr><td>T2·S2 — <code>query.ts:22</code> import</td><td>robustLow, FLOOR_LO_PCT, pruneByRelevance</td></tr>
-      <tr><td>T2·S3 — <code>query.ts:171-198</code> floor-блок</td><td>loRef inline; collapsed→range-collapsed; иначе prune + floorLoRef/floorBar</td></tr>
-      <tr><td>T2·S4 — graph_stats emit</td><td>+ floorLoRef, floorBar</td></tr>
-      <tr><td>T2·S5 — typecheck + lint</td><td><code>tsc --noEmit && npm run lint</code> без ошибок</td></tr>
-      <tr><td>T2·S6 — build</td><td>бандл собран</td></tr>
-      <tr><td>T2·S7 — commit</td><td>feat(retrieval): thread loRef</td></tr>
-      <tr><td>T3·S1 — <code>types.ts:300</code> коммент</td><td>default = позиция в [loRef..denseMax]</td></tr>
-      <tr><td>T3·S2-4 — <code>i18n.ts</code> en/ru/es</td><td>desc под новую семантику</td></tr>
-      <tr><td>T3·S5 — <code>settings.ts:792</code></td><td>fallback <code>?? 0.6</code> подтверждён</td></tr>
-      <tr><td>T3·S6-7 — lint + commit</td><td>docs(settings)</td></tr>
-      <tr><td>T4·S1 — <code>queries.json</code></td><td>gold + sample cosine (заменить в T5)</td></tr>
-      <tr><td>T4·S2 — <code>analyze.ts</code></td><td>GoldQuery, sweepQuery, summarize, recommend (чистые)</td></tr>
-      <tr><td>T4·S3 — <code>run.ts</code></td><td>sweep-таблица + self-checks</td></tr>
-      <tr><td>T4·S4 — прогон</td><td>таблица + <code>OK — 4 passed, 0 failed</code></td></tr>
-      <tr><td>T4·S5 — commit</td><td>test(eval): calibration sweep</td></tr>
-      <tr><td>T5·S1 — записать реальные фикстуры</td><td>queries.json ≥10 записей (live prereq)</td></tr>
-      <tr><td>T5·S2 — sweep + рекомендация</td><td>failing&gt;0 → поднять FLOOR_LO_PCT</td></tr>
-      <tr><td>T5·S3 — зашить константы</td><td>types.ts:300 / settings.ts:792 при изменении</td></tr>
-      <tr><td>T5·S4 — повторный sweep + unit</td><td>оба OK, minRecall=1.00 при default</td></tr>
-      <tr><td>T5·S5-6 — lint+build, commit</td><td>chore(retrieval): calibrate (+ main.js)</td></tr>
+      <tr><td>T1 — robust bar (S1–4)</td><td>retrieval-prune.ts: robustLow + FLOOR_LO_PCT=0.05 + FLOOR_EPS + pruneByRelevance(loRef, collapsed); тесты; <code>OK — N passed</code>; commit</td></tr>
+      <tr><td>T2 — query wiring + types (S1–7)</td><td>graph_stats += floorLoRef/floorBar; import; floor-блок (loRef inline, collapsed→range-collapsed); emit; tsc+lint; build; commit</td></tr>
+      <tr><td>T3 — setting copy (S1–7)</td><td>types.ts:300 коммент; i18n en/ru/es; settings.ts:792 fallback; lint; commit</td></tr>
+      <tr><td>T4 — offline analyzer (S1–4)</td><td>analyze.ts (GoldQuery, sweepQuery, summarize, recommend) + analyze.test.ts (keyless, <code>OK — 5 passed</code>); commit</td></tr>
+      <tr><td>T5 — live capture harness (S1–7)</td><td>register.ts (fetch-requestUrl), vault-fs.ts (node-fs VaultTools), queries.json (gold seeds), run.ts (real retrieval → capture.json), .gitignore; tsc+lint; commit</td></tr>
+      <tr><td>T6 — калибровка (S1–6)</td><td>live run.ts → capture.json (<code>Wrote N records</code>); analyze sweep → рекомендация; зашить константы; re-verify (minRecall=1.00 + тесты OK); lint+build; commit (+main.js)</td></tr>
     </tbody>
   </table>
 
   <h2>2. Граф зависимостей задач</h2>
-  <p class="sub">Шаги внутри задачи последовательны; ниже — межзадачные рёбра. Пунктир — обратная связь калибровки (правит ранее созданные константы, порядок шагов сохранён, не цикл).</p>
+  <p class="sub">Шаги внутри задачи последовательны; ниже — межзадачные рёбра. Пунктир — обратная связь калибровки (T6 правит константы в T1/T3, порядок шагов сохранён, не цикл).</p>
   <figure>
-  <svg viewBox="0 0 740 290" width="100%" role="img" aria-label="Граф зависимостей задач">
+  <svg viewBox="0 0 740 320" width="100%" role="img" aria-label="Граф зависимостей задач">
     <defs>
       <marker id="parr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
         <path d="M0 0 L10 5 L0 10 z" fill="var(--line)"></path>
@@ -328,53 +309,56 @@ body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); bord
     </defs>
     <style>
       .pn rect{ fill:var(--surface); stroke:var(--accent); stroke-width:1.2; rx:8; filter:url(#pds); }
+      .pn.live rect{ stroke:var(--warn); }
       .pn text{ font:11px system-ui,sans-serif; }
       .pe{ stroke:var(--line); stroke-width:1.6; fill:none; marker-end:url(#parr); }
       .pe.dash{ stroke-dasharray:5 3; }
       .pl{ font:10px system-ui; fill:var(--muted); }
     </style>
     <!-- edges -->
-    <path class="pe" d="M200,67 L300,67"></path>
-    <path class="pe" d="M120,94 L360,176"></path>
-    <path class="pe" d="M460,203 L560,203"></path>
-    <path class="pe dash" d="M650,176 L650,98"></path>
-    <path class="pe dash" d="M560,190 L160,98"></path>
-    <text class="pl" x="232" y="60">import</text>
-    <text class="pl" x="470" y="196">harness</text>
-    <text class="pl" x="655" y="140">calibrate</text>
+    <path class="pe" d="M200,62 L300,62"></path>
+    <path class="pe" d="M110,90 L230,150"></path>
+    <path class="pe" d="M300,196 L470,250"></path>
+    <path class="pe" d="M510,196 L510,248"></path>
+    <path class="pe dash" d="M560,255 L628,92"></path>
+    <path class="pe dash" d="M430,262 L132,92"></path>
+    <text class="pl" x="232" y="55">import</text>
+    <text class="pl" x="300" y="232">capture.json+sweep</text>
+    <text class="pl" x="588" y="160">calibrate</text>
     <!-- nodes -->
-    <g class="pn"><rect x="40" y="42" width="160" height="48"></rect><text x="120" y="62" text-anchor="middle">Task 1</text><text x="120" y="78" text-anchor="middle">helper formula (S1–4)</text></g>
-    <g class="pn"><rect x="300" y="42" width="160" height="48"></rect><text x="380" y="62" text-anchor="middle">Task 2</text><text x="380" y="78" text-anchor="middle">query wiring (S1–7)</text></g>
-    <g class="pn"><rect x="560" y="42" width="160" height="48"></rect><text x="640" y="62" text-anchor="middle">Task 3</text><text x="640" y="78" text-anchor="middle">setting copy (S1–7)</text></g>
-    <g class="pn"><rect x="300" y="180" width="160" height="48"></rect><text x="380" y="200" text-anchor="middle">Task 4</text><text x="380" y="216" text-anchor="middle">eval harness (S1–5)</text></g>
-    <g class="pn"><rect x="560" y="180" width="160" height="48"></rect><text x="640" y="200" text-anchor="middle">Task 5</text><text x="640" y="216" text-anchor="middle">calibration (S1–6)</text></g>
+    <g class="pn"><rect x="40" y="40" width="160" height="46"></rect><text x="120" y="60" text-anchor="middle">Task 1</text><text x="120" y="76" text-anchor="middle">helper formula</text></g>
+    <g class="pn"><rect x="300" y="40" width="160" height="46"></rect><text x="380" y="60" text-anchor="middle">Task 2</text><text x="380" y="76" text-anchor="middle">query wiring</text></g>
+    <g class="pn"><rect x="560" y="40" width="160" height="46"></rect><text x="640" y="60" text-anchor="middle">Task 3</text><text x="640" y="76" text-anchor="middle">setting copy</text></g>
+    <g class="pn"><rect x="170" y="150" width="160" height="46"></rect><text x="250" y="170" text-anchor="middle">Task 4</text><text x="250" y="186" text-anchor="middle">offline analyzer</text></g>
+    <g class="pn live"><rect x="430" y="150" width="160" height="46"></rect><text x="510" y="170" text-anchor="middle">Task 5 · live</text><text x="510" y="186" text-anchor="middle">capture harness</text></g>
+    <g class="pn"><rect x="430" y="250" width="160" height="46"></rect><text x="510" y="270" text-anchor="middle">Task 6</text><text x="510" y="286" text-anchor="middle">calibration</text></g>
   </svg>
-  <p class="legend">T1 (helper) питает T2 (import) и T4 (analyze import); T4 (harness) → T5; T5 правит константы в T1/T3 (пунктир). Циклов нет, порядок M&lt;N соблюдён.</p>
+  <p class="legend">T1 (helper) → T2 (import) и T4 (analyze import); T4 (analyzer) + T5 (live capture, оранжевый) → T6; T6 правит константы в T1/T3 (пунктир). Циклов нет, порядок M&lt;N соблюдён.</p>
   </figure>
 
   <h2>3. Пересечения по артефактам</h2>
   <table>
-    <thead><tr><th>Артефакт</th><th>Шаги</th></tr></thead>
+    <thead><tr><th>Артефакт</th><th>Задачи</th></tr></thead>
     <tbody>
-      <tr><td><code>src/retrieval-prune.ts</code></td><td>T1·S1 (создание), T5·S2/S3 (калибровка FLOOR_LO_PCT)</td></tr>
-      <tr><td><code>src/phases/query.ts</code></td><td>T2·S2 (import), T2·S3 (floor-блок), T2·S4 (emit)</td></tr>
-      <tr><td><code>src/types.ts</code></td><td>T2·S1 (поля), T3·S1 (коммент), T5·S3 (default ratio)</td></tr>
-      <tr><td><code>src/settings.ts</code></td><td>T3·S5 (fallback), T5·S3 (калибровка)</td></tr>
-      <tr><td><code>eval/graph-floor/queries.json</code></td><td>T4·S1 (sample), T5·S1 (реальные записи)</td></tr>
-      <tr><td><code>eval/retrieval-prune/run.ts</code></td><td>T1·S2 (тесты формулы)</td></tr>
+      <tr><td><code>src/retrieval-prune.ts</code></td><td>T1 (создание), T6 (FLOOR_LO_PCT калибровка)</td></tr>
+      <tr><td><code>src/phases/query.ts</code></td><td>T2 (import+floor+emit); читается T5.run.ts (live drive)</td></tr>
+      <tr><td><code>src/types.ts</code></td><td>T2 (поля), T3 (коммент), T6 (default ratio)</td></tr>
+      <tr><td><code>src/settings.ts</code></td><td>T3 (fallback), T6 (калибровка)</td></tr>
+      <tr><td><code>eval/graph-floor/</code></td><td>T4 (analyze.ts, analyze.test.ts), T5 (register.ts, vault-fs.ts, queries.json, run.ts), T6 (capture.json)</td></tr>
+      <tr><td><code>main.js</code></td><td>T2/T6 (build)</td></tr>
     </tbody>
   </table>
 
   <h2>4. Карта покрытия</h2>
   <table>
-    <thead><tr><th>Требование спеки</th><th>Шаги</th></tr></thead>
+    <thead><tr><th>Требование спеки</th><th>Задачи</th></tr></thead>
     <tbody>
-      <tr><td>Part 1 — robust bar</td><td>T1·S1, T2·S3</td></tr>
-      <tr><td>Part 2 — edge guards (range-collapsed + матрица)</td><td>T1·S1 (collapsed), T2·S3 (floorSkippedReason)</td></tr>
-      <tr><td>Part 3 — measurement (run.ts + analyze.ts + gold)</td><td>T4·S1–S3, T5·S1–S2 <span class="badge b-warn">откл. F-001</span></td></tr>
-      <tr><td>Part 4 — observability (floorLoRef/floorBar)</td><td>T2·S1, T2·S4</td></tr>
-      <tr><td>Part 5 — setting copy</td><td>T3·S1–S5</td></tr>
-      <tr><td>Verification (ratio=0 baseline, recall=100%, unit)</td><td>T1·S2–S3, T4·S3–S4, T5·S4</td></tr>
+      <tr><td>Part 1 — robust bar</td><td>T1, T2</td></tr>
+      <tr><td>Part 2 — edge guards (range-collapsed + матрица)</td><td>T1 (collapsed), T2 (floorSkippedReason)</td></tr>
+      <tr><td>Part 3 — measurement (live retrieval-only replay + expandedDense + gold-recall + token-delta)</td><td>T5 (live run.ts) + T4 (analyze) + T6 (калибровка)</td></tr>
+      <tr><td>Part 4 — observability (floorLoRef/floorBar)</td><td>T2</td></tr>
+      <tr><td>Part 5 — setting copy</td><td>T3</td></tr>
+      <tr><td>Verification (ratio=0 baseline, recall=100%, unit)</td><td>T1, T4, T6</td></tr>
     </tbody>
   </table>
 
@@ -390,33 +374,18 @@ body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); bord
     <thead><tr><th>id</th><th>severity</th><th>section</th><th>fragment</th><th>text</th><th>fix</th><th>verdict</th></tr></thead>
     <tbody>
       <tr>
-        <td>F-001</td><td><span class="badge b-warn">WARNING</span></td>
-        <td>Task 4 — eval harness</td>
-        <td>«deterministic over recorded cosine fixtures instead of a live deepseek endpoint replay»</td>
-        <td>Спека Part 3 требует retrieval-only реплей против живого deepseek-эндпоинта; план делает детерминированный sweep по вручную записанным cosine-фикстурам.</td>
-        <td>Принято: headless live-bootstrap завязан на окружение и вне детерминированного scope; success-критерии (токен-дельта, gold-recall) измеряются.</td>
-        <td><span class="badge b-ok">accepted</span></td>
-      </tr>
-      <tr>
-        <td>F-002</td><td><span class="badge b-info">INFO</span></td>
-        <td>Task 5 — calibration</td>
+        <td>F-001</td><td><span class="badge b-info">INFO</span></td>
+        <td>Task 6 — calibration</td>
         <td>«git add … main.js»</td>
-        <td>T5·S6 собирает/коммитит бандл main.js, которого нет в spec Touched Files.</td>
+        <td>T6·S6 собирает/коммитит бандл main.js, которого нет в spec Touched Files.</td>
         <td>Принято: репо-конвенция шипит бандл с каждым изменением.</td>
-        <td><span class="badge b-ok">accepted</span></td>
-      </tr>
-      <tr>
-        <td>F-003</td><td><span class="badge b-warn">WARNING</span></td>
-        <td>Task 5 — calibration</td>
-        <td>«Record real cosine fixtures (one-time, live prerequisite)»</td>
-        <td>T5·S1 (транскрипция live graph_stats в queries.json) без verification-команды/expected output.</td>
-        <td>Принято: one-time live prereq; DoD = queries.json ≥10 записей, проверяется sweep-прогонами S2/S4.</td>
         <td><span class="badge b-ok">accepted</span></td>
       </tr>
     </tbody>
   </table>
-  <p class="note"><b>Сводка.</b> CRITICAL open: 0 · WARNING open: 0 (2 accepted) · INFO: 1 (accepted). &nbsp;
-     <b>Вердикт: <span class="badge b-ok">OK</span></b></p>
+  <p class="note"><b>Сводка.</b> CRITICAL open: 0 · WARNING open: 0 · INFO: 1 (accepted). &nbsp;
+     <b>Вердикт: <span class="badge b-ok">OK</span></b><br>
+     Прежние F-001 (live-vs-fixture) и F-003 (запись без verification) сняты ревизией — план теперь делает живой реплей с verification-командой.</p>
   <p class="sub"><b>Цепочка:</b> intent → spec → <b>plan</b>. intent = <code>null</code>;
      spec = <code>…-design.md</code> (OK); plan = <code>…-graph-floor-formula.md</code> (OK).</p>
 
