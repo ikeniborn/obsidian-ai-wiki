@@ -2,7 +2,7 @@
 
 ## Overview
 
-How AI Wiki selects which wiki pages to feed the LLM as context: page similarity (embedding or Jaccard), BFS expansion over the wiki link graph, optional RRF fusion of the two signals, and a cross-domain mode that fans out over every domain. Used by query, lint, ingest, format, init. See [[operations#Query]].
+How AI Wiki selects which wiki pages to feed the LLM as context: page similarity (embedding or Jaccard), BFS expansion over the wiki link graph, optional RRF fusion of the two signals, an optional relevance floor that prunes weak graph-expanded pages, and a cross-domain mode that fans out over every domain. Used by query, lint, ingest, format, init. See [[operations#Query]].
 
 ## PageSimilarityService
 
@@ -51,6 +51,18 @@ Opt-in query refinement (`nativeAgent.bfsFusion`, default off) ordering the fina
 The vector list ranks the union by similarity descending; the graph list ranks by hop distance ascending (seed = hop 0), tie-broken by backlink `inDegree`. Both reuse the `rrfK` setting. See [[operations#Tier 2 Features]].
 
 A separate gate `nativeAgent.seedSimilarityThreshold` (default 0 = off) compares the threshold against the **dense cosine confidence** (`denseMax`, the max raw cosine), not the RRF-fused score — fixing a bug where the fused score (max ≈ 2/(k+1) ≈ 0.033) never cleared a cosine-scaled threshold, so vector/hybrid seeds were always wrongly dropped to Jaccard. It applies in both embedding and hybrid modes via [[retrieval#PageSimilarityService]]'s `selectRelevantScoredDiag` (returns `denseMax`/`embedFailed`), and falls back through Jaccard → `llmSelectSeeds`. The branch is recorded in `graph_stats` as `retrievalMode`/`denseMax`/`seedFallbackReason`, plus a progress retrieval tag (`vector` / `jaccard (low …)` / `jaccard (embed failed)` / `llm seeds`) via `src/retrieval-diag.ts#retrievalTag`.
+
+## Relevance Floor
+
+Drops low-relevance graph-expanded pages before the LLM sees them — cutting tokens with no quality loss. BFS adds neighbours capped by `bfsTopK` but with no relevance bar; this floor adds the missing bar. Distinct from fusion, which only reorders.
+
+`pruneByRelevance` (`src/retrieval-prune.ts`) is pure: a graph page is kept iff its raw dense cosine ≥ `bfsMinScoreRatio · denseMax` (the best seed's cosine, the per-domain reference). A page with no cosine is kept (cannot evaluate → no quality loss); only confidently-weak pages are dropped. Seeds are never passed in — they are always kept.
+
+It must compare **raw dense cosine**, not the RRF-fused `seedScores`/`expandedScores` (which are rank-based and produced by two separate `rrf()` calls over different candidate lists, so they are not relevance-comparable). The raw cosines are reused from the seed dense pass: `selectEmbeddingScoredDiag` already scores every annotated page, and `SeedDiag.denseByPid` (`src/retrieval-diag.ts`) surfaces them — so the floor needs zero extra embedding calls. See [[retrieval#PageSimilarityService]].
+
+The floor runs inside `retrieveDomainCandidates` (`src/phases/query.ts`) right after `bfsExpandRanked`, so both single-domain `runQuery` and the cross-domain orchestrator prune per-domain against their own `denseMax`. It applies only when scales are comparable: `embedding`/`hybrid` mode, `denseMax > 0`, no embed failure, `seedFallback === "none"`, and `bfsTopK > 0`. Otherwise it is skipped and the reason is recorded. Jaccard mode is out of scope.
+
+The control is `nativeAgent.bfsMinScoreRatio` (`src/types.ts`, default `0.6`, range `0..1`, `0` = off), decoupled from `bfsFusion`. The `graph_stats` event carries `floorApplied`, `floorRef` (the `denseMax` used), `prunedCount`, and `floorSkippedReason` for the progress trace and `agent.jsonl`; `eval_meta.retrievalConfig` records the ratio. See [[operations#Query]].
 
 ## Cross-Domain Query
 

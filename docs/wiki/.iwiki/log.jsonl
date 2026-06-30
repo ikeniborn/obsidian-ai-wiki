@@ -56,3 +56,5 @@
 {"op":"ingest","source":"src/view.ts+src/eval-log.ts","page":"docs/wiki/llm-pipeline.md","date":"2026-06-28"}
 {"op":"ingest","source":"scripts/dspy/lib/loader.py+optimizer.py+scripts/eval.ts","page":"docs/wiki/operations.md","date":"2026-06-28"}
 {"op":"ingest","source":"src/phases/query-cross-domain.ts","page":"retrieval.md","date":"2026-06-29"}
+{"op":"ingest","source":"src/retrieval-prune.ts","page":"docs/wiki/retrieval.md","date":"2026-06-30"}
+{"op":"ingest","source":"src/phases/query.ts","page":"docs/wiki/operations.md","date":"2026-06-30"}
