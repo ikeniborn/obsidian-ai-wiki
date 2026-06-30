@@ -1,9 +1,14 @@
 /**
- * Boot shims for the live graph-floor harness. Must be the first import.
- * 1. `.md` → text (esbuild uses loader:text in prod; here manual).
- * 2. Stub "obsidian" with a real fetch-backed requestUrl so PageSimilarityService's
- *    fetchEmbeddings() can hit the live OpenAI-compatible /embeddings endpoint headlessly.
+ * CJS-mode boot shims for eval/graph-floor/run.ts.
+ * Must be the first import so it executes before any src/ module is loaded.
+ *
+ * 1. Register `.md` extension so `import x from "*.md"` works (esbuild uses
+ *    loader:text in production; here we do it manually).
+ * 2. Stub "obsidian" — only available inside Obsidian/Electron at runtime.
+ *    Includes a real fetch-backed requestUrl so PageSimilarityService's
+ *    fetchEmbeddings() can hit a live OpenAI-compatible /embeddings endpoint headlessly.
  */
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const req = require as NodeRequire & {
   extensions: Record<string, (m: { exports: unknown }, filename: string) => void>;
@@ -14,12 +19,7 @@ req.extensions[".md"] = (m, filename) => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const Module = require("module") as { _load: (...args: unknown[]) => unknown; _resolveFilename: (...args: unknown[]) => string };
-const _origResolve = Module._resolveFilename;
-Module._resolveFilename = function (...args: unknown[]) {
-  if (args[0] === "obsidian") return "obsidian";
-  return _origResolve.apply(this, args);
-};
+const Module = require("module") as { _load: (...args: unknown[]) => unknown };
 const _origLoad = Module._load;
 Module._load = function (...args: unknown[]) {
   if (args[0] === "obsidian") {
