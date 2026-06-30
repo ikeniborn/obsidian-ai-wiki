@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.192 — 2026-06-30
+
+### Новое
+- feat(retrieval): relevance floor prunes low-relevance graph-expanded pages by comparing raw dense cosine against the best seed (`bfsMinScoreRatio`, default 0.6, `0` = off); fewer tokens, no quality loss; applies to Ask Domain and Ask Wiki
+- feat(view): vector/graph breakdown in the "Selected for LLM" stat (e.g. `7 (5 vector + 2 graph)`)
+
+### Исправления
+- fix(view): space the search-stats block below the "Results" heading
+
+---
+
 ## 0.1.191 — 2026-06-30
 
 ### Новое
