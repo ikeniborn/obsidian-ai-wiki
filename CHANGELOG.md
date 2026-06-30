@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.193 — 2026-06-30
+
+### Новое
+- feat(retrieval): spread-relative graph floor bar — `bfsMinScoreRatio` now positions the cutoff within the domain's cosine range `[loRef..denseMax]` (robust low reference + range guard) instead of a flat best-seed ratio; steadier graph-expansion pruning across compressed cosine ranges
+- feat(retrieval): surface `floorLoRef` / `floorBar` in `graph_stats` telemetry
+
+### Исправления
+- fix(log): write the agent log to the plugin dir, not into the wiki tree
+
+---
+
 ## 0.1.192 — 2026-06-30
 
 ### Новое
