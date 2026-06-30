@@ -104,6 +104,10 @@ export type RunEvent =
       retrievalMode?: import("./retrieval-diag").RetrievalMode;
       denseMax?: number;
       seedFallbackReason?: import("./retrieval-diag").SeedFallbackReason;
+      floorApplied?: boolean;
+      floorRef?: number;
+      prunedCount?: number;
+      floorSkippedReason?: string;
     };
 
 export interface RunHistoryEntry {
