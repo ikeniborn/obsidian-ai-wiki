@@ -22,7 +22,7 @@ import type { LocalConfig, LocalConfigStore } from "./local-config";
 import type { LlmWikiPluginSettings } from "./types";
 import { DeleteSourceModal, FileErrorModal, FormatVisionModal, InfoModal, ShellConsentModal } from "./modals";
 import { computeDeletionPlan, sourceStem } from "./source-deletion";
-import { domainWikiFolder, GLOBAL_AGENT_LOG_PATH } from "./wiki-path";
+import { domainWikiFolder } from "./wiki-path";
 import { restoreSourceFrontmatter } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
 import { collectMdInPaths, parseWikiSources } from "./utils/vault-walk";
@@ -669,11 +669,10 @@ export class WikiController {
     }
 
     const adapter = this.app.vault.adapter;
-    const path = GLOBAL_AGENT_LOG_PATH;
+    // Agent log lives in the plugin dir (NOT the synced wiki tree). The pluginDir
+    // always exists (the plugin loads from it), so no folder creation is needed.
+    const path = `${this.pluginDir()}/agent.jsonl`;
     try {
-      await this.app.vault.createFolder("!Wiki").catch(() => {});
-      await this.app.vault.createFolder("!Wiki/_config").catch(() => {});
-
       const appendLine = async (record: unknown): Promise<void> => {
         const line = JSON.stringify(record) + "\n";
         if (await adapter.exists(path)) await adapter.append(path, line);

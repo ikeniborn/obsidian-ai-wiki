@@ -160,6 +160,14 @@ export async function* retrieveDomainCandidates(
   const seedSet = new Set(seeds);
   let expandedPages = [...selectedIds].filter((id) => !seedSet.has(id));
 
+  // Raw dense cosine per graph candidate (captured pre-prune) — the floor's actual
+  // decision input, surfaced for observability/tuning. A missing key means the page
+  // had no dense vector, so the floor keeps it.
+  const expandedDense: Record<string, number> = {};
+  for (const id of expandedPages) {
+    if (denseByPid[id] !== undefined) expandedDense[id] = denseByPid[id];
+  }
+
   // Relevance floor — drop graph-expanded pages whose raw dense cosine falls below
   // ratio·denseMax. Only when scales are comparable: dense mode, strong seed signal,
   // no seed fallback, and a finite bfsTopK cap. Mutates selectedIds/expandedScores.
@@ -189,7 +197,7 @@ export async function* retrieveDomainCandidates(
     }
   }
 
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, seedFallback, retrievalMode, denseMax, seedFallbackReason, floorApplied, floorRef: floorApplied ? denseMax : undefined, prunedCount, floorSkippedReason };
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, expandedDense, seedFallback, retrievalMode, denseMax, seedFallbackReason, floorApplied, floorRef: floorApplied ? denseMax : undefined, prunedCount, floorSkippedReason };
 
   // Keep only candidate content; let the rest be GC'd (memory bound).
   const candidatePages = new Map<string, string>();

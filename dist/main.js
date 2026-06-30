@@ -40521,6 +40521,10 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
   );
   const seedSet = new Set(seeds);
   let expandedPages = [...selectedIds].filter((id) => !seedSet.has(id));
+  const expandedDense = {};
+  for (const id of expandedPages) {
+    if (denseByPid[id] !== void 0) expandedDense[id] = denseByPid[id];
+  }
   const ratio = cfg.bfsMinScoreRatio ?? 0;
   let floorApplied = false;
   let prunedCount = 0;
@@ -40540,7 +40544,7 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
       floorApplied = true;
     }
   }
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, seedFallback, retrievalMode, denseMax, seedFallbackReason, floorApplied, floorRef: floorApplied ? denseMax : void 0, prunedCount, floorSkippedReason };
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, expandedDense, seedFallback, retrievalMode, denseMax, seedFallbackReason, floorApplied, floorRef: floorApplied ? denseMax : void 0, prunedCount, floorSkippedReason };
   const candidatePages = /* @__PURE__ */ new Map();
   for (const [path2, content] of pages) {
     if (selectedIds.has(pageId(path2))) candidatePages.set(path2, content);
@@ -51486,12 +51490,8 @@ var WikiController = class {
       return;
     }
     const adapter = this.app.vault.adapter;
-    const path2 = GLOBAL_AGENT_LOG_PATH;
+    const path2 = `${this.pluginDir()}/agent.jsonl`;
     try {
-      await this.app.vault.createFolder("!Wiki").catch(() => {
-      });
-      await this.app.vault.createFolder("!Wiki/_config").catch(() => {
-      });
       const appendLine = async (record) => {
         const line = JSON.stringify(record) + "\n";
         if (await adapter.exists(path2)) await adapter.append(path2, line);
