@@ -20,7 +20,7 @@ Dispatch passes **vault-relative** paths (Obsidian `TFile.path`, forward slashes
 
 ## AgentRunner
 
-Stateless execution engine (`src/agent-runner.ts`). Receives a `RunRequest`, selects LLM call options per operation, and delegates to the correct phase function. Wraps the LLM client in `wrapWithJsonFallback` at construction.
+Stateless execution engine (`src/agent-runner.ts`). Receives a `RunRequest`, selects LLM call options per operation, and delegates to the correct phase function. Wraps the LLM client in `wrapWithJsonFallback` at construction. It also threads the retrieval-tuning settings (`seedTopK`, `bfsTopK`, `bfsFusion`, `rrfK`, `bfsMinScoreRatio`, `seedSimilarityThreshold`) from `settings.nativeAgent` into `runQuery` / `runCrossDomainQuery`; see [[retrieval#Relevance Floor]].
 
 In `devMode` it accumulates per-run telemetry and writes one 👍/👎-rateable `eval.jsonl` record at run end (see [[llm-pipeline#Dev-Mode Eval Record]]). `run()` wraps each attempt in a per-attempt `AbortController`; if the LLM goes silent for `llmIdleTimeoutSec` seconds, it retries up to `llmIdleRetries` times before propagating. See [[llm-pipeline]].
 

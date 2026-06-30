@@ -58,3 +58,6 @@
 {"op":"ingest","source":"src/phases/query-cross-domain.ts","page":"retrieval.md","date":"2026-06-29"}
 {"op":"ingest","source":"src/retrieval-prune.ts","page":"docs/wiki/retrieval.md","date":"2026-06-30"}
 {"op":"ingest","source":"src/phases/query.ts","page":"docs/wiki/operations.md","date":"2026-06-30"}
+{"op":"ingest","source":"src/settings.ts","page":"docs/wiki/backends-and-config.md","date":"2026-06-30"}
+{"op":"ingest","source":"src/agent-runner.ts","page":"docs/wiki/architecture.md","date":"2026-06-30"}
+{"op":"ingest","source":"src/agent-runner.ts","page":"docs/wiki/llm-pipeline.md","date":"2026-06-30"}
