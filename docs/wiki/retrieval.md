@@ -62,7 +62,7 @@ It must compare **raw dense cosine**, not the RRF-fused `seedScores`/`expandedSc
 
 The floor runs inside `retrieveDomainCandidates` (`src/phases/query.ts`) right after `bfsExpandRanked`, so both single-domain `runQuery` and the cross-domain orchestrator prune per-domain against their own `denseMax`. It applies only when scales are comparable: `embedding`/`hybrid` mode, `denseMax > 0`, no embed failure, `seedFallback === "none"`, and `bfsTopK > 0`. Otherwise it is skipped and the reason is recorded. Jaccard mode is out of scope.
 
-The control is `nativeAgent.bfsMinScoreRatio` (`src/types.ts`, default `0.6`, range `0..1`, `0` = off), decoupled from `bfsFusion`. The `graph_stats` event carries `floorApplied`, `floorRef` (the `denseMax` used), `prunedCount`, and `floorSkippedReason` for the progress trace and `agent.jsonl`; `eval_meta.retrievalConfig` records the ratio. See [[operations#Query]].
+The control is `nativeAgent.bfsMinScoreRatio` (`src/types.ts`, default `0.6`, range `0..1`, `0` = off), decoupled from `bfsFusion`. The `graph_stats` event carries `floorApplied`, `floorRef` (the `denseMax` used), `prunedCount`, `floorSkippedReason`, and `expandedDense` (the pre-prune raw cosine per graph candidate — the floor's actual decision input, for tuning) for the progress trace and `agent.jsonl`; `eval_meta.retrievalConfig` records the ratio. See [[operations#Query]].
 
 ## Cross-Domain Query
 

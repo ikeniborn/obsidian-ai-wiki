@@ -27,14 +27,12 @@ Domain state changes are communicated as `RunEvent` variants and applied by the 
 
 ## Wiki Folder Layout
 
-All wiki artifacts live under `!Wiki/`. Global config in `!Wiki/_config/`; per-domain config in `!Wiki/<domain>/_config/`. Path helpers in `src/wiki-path.ts`.
+All wiki artifacts live under `!Wiki/`. Global config in `!Wiki/_config/`; per-domain config in `!Wiki/<domain>/_config/`. Path helpers in `src/wiki-path.ts`. Operation and dev-eval logs do NOT live in the wiki tree — they are written to `<pluginDir>/agent.jsonl` and `<pluginDir>/eval.jsonl`; `migrateLogsToPluginDir` (`src/storage-migration.ts`) relocates any legacy `!Wiki/_config/_agent.jsonl` / `_dev.jsonl` copies on launch.
 
 ```
 !Wiki/
   _config/                       — global config (all domains)
     _domain.json                 — domain entries list
-    _agent.jsonl                 — global operation log
-    _dev.jsonl                   — dev mode eval log
   <domain>/
     _config/                     — per-domain config
       _index.md                  — page annotations index
