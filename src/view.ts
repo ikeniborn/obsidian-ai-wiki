@@ -58,6 +58,11 @@ export function formatGraphStatsLines(
       lines.push(score !== undefined ? `  ${id} (${score.toFixed(2)})` : `  ${id}`);
     }
   }
+  if (ev.floorApplied) {
+    lines.push(`Floor: pruned ${ev.prunedCount ?? 0} (ref ${(ev.floorRef ?? 0).toFixed(2)})`);
+  } else if (ev.floorSkippedReason) {
+    lines.push(`Floor skipped: ${ev.floorSkippedReason}`);
+  }
   return lines;
 }
 
