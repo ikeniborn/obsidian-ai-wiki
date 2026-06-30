@@ -224,6 +224,7 @@ export interface LlmWikiPluginSettings {
     hybridRetrieval?: boolean;
     rrfK?: number;
     bfsFusion?: boolean;
+    bfsMinScoreRatio?: number;
     seedSimilarityThreshold?: number;
     dedupOnIngest?: boolean;
     dedupThreshold?: number;
@@ -295,6 +296,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     hybridRetrieval: false,
     rrfK: 60,
     bfsFusion: false,
+    bfsMinScoreRatio: 0.6, // 0.6 = keep graph pages within 60% of the best seed's cosine; 0 = floor off
     seedSimilarityThreshold: 0,
     dedupOnIngest: false,
     dedupThreshold: 0.85,

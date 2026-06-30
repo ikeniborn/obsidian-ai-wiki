@@ -162,6 +162,7 @@ export async function* runCrossDomainQuery(
         mode: similarity?.config.mode === "hybrid" ? "hybrid" : similarity?.config.mode === "embedding" ? "embedding" : "jaccard",
         seedTopK: cfg.seedTopK,
         bfsTopK: cfg.bfsTopK,
+        bfsMinScoreRatio: cfg.bfsMinScoreRatio ?? 0,
         bfsFusion: true,
         seedSimilarityThreshold: cfg.seedSimilarityThreshold,
         hybridRetrieval: similarity?.config.mode === "hybrid",

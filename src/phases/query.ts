@@ -226,6 +226,7 @@ export async function* runQuery(
   seedSimilarityThreshold: number = 0,
   bfsFusion: boolean = false,
   rrfK: number = 60,
+  bfsMinScoreRatio: number = 0,
 ): AsyncGenerator<RunEvent> {
   const question = args[0]?.trim();
   if (!question) {
@@ -242,7 +243,7 @@ export async function* runQuery(
   let outputTokens = 0;
 
   const cfg = {
-    graphDepth, seedTopK, seedMinScore, bfsTopK, seedSimilarityThreshold,
+    graphDepth, seedTopK, seedMinScore, bfsTopK, seedSimilarityThreshold, bfsMinScoreRatio,
   };
   const cand = yield* retrieveDomainCandidates(
     domain, question, vaultTools, similarity, signal, cfg,
@@ -322,6 +323,7 @@ export async function* runQuery(
         mode: similarity?.config.mode === "hybrid" ? "hybrid" : similarity?.config.mode === "embedding" ? "embedding" : "jaccard",
         seedTopK,
         bfsTopK,
+        bfsMinScoreRatio,
         bfsFusion,
         seedSimilarityThreshold,
         hybridRetrieval: similarity?.config.mode === "hybrid",

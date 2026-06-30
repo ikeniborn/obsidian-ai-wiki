@@ -19,6 +19,7 @@ export interface RetrievalConfigSnapshot {
   mode: "embedding" | "jaccard" | "hybrid";
   seedTopK: number;
   bfsTopK: number;
+  bfsMinScoreRatio?: number;
   bfsFusion: boolean;
   seedSimilarityThreshold: number;
   hybridRetrieval: boolean;
