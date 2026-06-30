@@ -288,12 +288,17 @@ export async function* runQuery(
     index_block: indexContent ? `\nWiki index (_index.md):\n${indexContent}` : "",
   });
 
+  const seedCount = contextPages.filter(([p]) => seedSet.has(pageId(p))).length;
+  const graphCount = contextPages.length - seedCount;
+
   yield {
     kind: "query_stats",
     crossDomain: false,
     domainName: domain.name,
     pagesScanned: cand.pagesScanned,
     pagesSelected: contextPages.length,
+    seedCount,
+    graphCount,
   };
   if (signal.aborted) return;
 

@@ -64,6 +64,8 @@ export type RunEvent =
       pagesScanned: number;        // pages read/analyzed
       pagesSelected: number;       // pages handed to the LLM
       domainName?: string;         // Ask Domain only
+      seedCount?: number;          // Ask Domain only -- vector seeds in the selected set
+      graphCount?: number;         // Ask Domain only -- graph-expanded pages in the selected set
       domainsStudied?: number;     // Ask Wiki only -- domains that yielded candidates
       domainsTotal?: number;       // Ask Wiki only -- domains configured
       fromDomains?: string[];      // Ask Wiki only -- domain names in the final set

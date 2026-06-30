@@ -962,7 +962,10 @@ export class LlmWikiView extends ItemView {
     } else {
       line(T.statsDomain, ev.domainName ?? "—");
       line(T.statsAnalyzed, String(ev.pagesScanned));
-      line(T.statsSelected, String(ev.pagesSelected));
+      const selected = ev.seedCount !== undefined && ev.graphCount !== undefined
+        ? T.statsSelectedBreakdown(ev.pagesSelected, ev.seedCount, ev.graphCount)
+        : String(ev.pagesSelected);
+      line(T.statsSelected, selected);
     }
     const tokRow = box.createDiv("ai-wiki-cross-stats-row");
     tokRow.createSpan({ cls: "ai-wiki-cross-stats-label", text: T.statsTokensSent });

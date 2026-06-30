@@ -193,6 +193,8 @@ const en = {
     statsInfoFrom: "Info from:",
     statsAnalyzed: "Pages analyzed:",
     statsSelected: "Selected for LLM:",
+    statsSelectedBreakdown: (selected: number, seed: number, graph: number) =>
+      `${selected} (${seed} vector + ${graph} graph)`,
     statsInAnswer: "In answer:",
     statsTokensSent: "Tokens sent:",
     ratingAnswer: "Rate this answer:",
@@ -550,6 +552,8 @@ const ru: I18n = {
     statsInfoFrom: "Информация из:",
     statsAnalyzed: "Проанализировано страниц:",
     statsSelected: "Выбрано для LLM:",
+    statsSelectedBreakdown: (selected: number, seed: number, graph: number) =>
+      `${selected} (${seed} вектор + ${graph} граф)`,
     statsInAnswer: "Попало в ответ:",
     statsTokensSent: "Отправлено токенов:",
     ratingAnswer: "Оцените ответ:",
@@ -885,6 +889,8 @@ const es: I18n = {
     statsInfoFrom: "Información de:",
     statsAnalyzed: "Páginas analizadas:",
     statsSelected: "Seleccionadas para LLM:",
+    statsSelectedBreakdown: (selected: number, seed: number, graph: number) =>
+      `${selected} (${seed} vector + ${graph} grafo)`,
     statsInAnswer: "En la respuesta:",
     statsTokensSent: "Tokens enviados:",
     ratingAnswer: "Evalúa la respuesta:",
