@@ -64,6 +64,8 @@ export type RunEvent =
       pagesScanned: number;        // pages read/analyzed
       pagesSelected: number;       // pages handed to the LLM
       domainName?: string;         // Ask Domain only
+      seedCount?: number;          // Ask Domain only -- vector seeds in the selected set
+      graphCount?: number;         // Ask Domain only -- graph-expanded pages in the selected set
       domainsStudied?: number;     // Ask Wiki only -- domains that yielded candidates
       domainsTotal?: number;       // Ask Wiki only -- domains configured
       fromDomains?: string[];      // Ask Wiki only -- domain names in the final set
@@ -104,6 +106,10 @@ export type RunEvent =
       retrievalMode?: import("./retrieval-diag").RetrievalMode;
       denseMax?: number;
       seedFallbackReason?: import("./retrieval-diag").SeedFallbackReason;
+      floorApplied?: boolean;
+      floorRef?: number;
+      prunedCount?: number;
+      floorSkippedReason?: string;
     };
 
 export interface RunHistoryEntry {
@@ -218,6 +224,7 @@ export interface LlmWikiPluginSettings {
     hybridRetrieval?: boolean;
     rrfK?: number;
     bfsFusion?: boolean;
+    bfsMinScoreRatio?: number;
     seedSimilarityThreshold?: number;
     dedupOnIngest?: boolean;
     dedupThreshold?: number;
@@ -289,6 +296,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     hybridRetrieval: false,
     rrfK: 60,
     bfsFusion: false,
+    bfsMinScoreRatio: 0.6, // 0.6 = keep graph pages within 60% of the best seed's cosine; 0 = floor off
     seedSimilarityThreshold: 0,
     dedupOnIngest: false,
     dedupThreshold: 0.85,

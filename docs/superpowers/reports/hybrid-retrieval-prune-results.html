@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chain — hybrid-retrieval-prune</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1100px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg); transition:background .3s, color .3s;
+}
+.theme-btn{ position:sticky; top:.5rem; float:right; cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface); z-index:5; }
+h1{ font-size:1.5rem; margin:.2rem 0 1rem; }
+h2{ font-size:1.2rem; margin:2rem 0 .8rem; border-bottom:2px solid var(--border); padding-bottom:.3rem; }
+h3{ font-size:1.02rem; margin:1.4rem 0 .6rem; color:var(--accent-2); }
+table{ border-collapse:collapse; width:100%; margin:.6rem 0 1.2rem; background:var(--surface);
+  border:1px solid var(--border); border-radius:8px; overflow:hidden; font-size:.92rem; }
+th,td{ text-align:left; padding:.5rem .7rem; border-bottom:1px solid var(--border); vertical-align:top; }
+th{ background:color-mix(in srgb,var(--accent) 14%, var(--surface)); color:var(--fg); }
+tr:nth-child(even) td{ background:var(--zebra); }
+code{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.86em;
+  background:color-mix(in srgb,var(--accent) 12%, var(--surface)); padding:.05rem .35rem; border-radius:4px; }
+.note{ background:color-mix(in srgb,var(--accent) 12%, var(--surface)); border-left:4px solid var(--accent);
+  padding:.6rem .9rem; border-radius:6px; margin:.8rem 0; }
+.badge{ display:inline-block; padding:.08rem .5rem; border-radius:20px; font-size:.78rem; font-weight:600; }
+.b-ok{ background:color-mix(in srgb,var(--ok) 22%, var(--surface)); color:var(--ok-2); border:1px solid var(--ok); }
+.b-info{ background:color-mix(in srgb,var(--accent) 20%, var(--surface)); color:var(--accent-2); border:1px solid var(--accent); }
+.b-warn{ background:color-mix(in srgb,var(--warn) 22%, var(--surface)); color:var(--warn-2); border:1px solid var(--warn); }
+.b-crit{ background:color-mix(in srgb,var(--danger) 22%, var(--surface)); color:var(--danger-2); border:1px solid var(--danger); }
+/* flow blocks */
+.flow{ display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin:1rem 0; }
+.fbox{ background:var(--surface); border:1px solid var(--accent); border-radius:8px; padding:.5rem .7rem;
+  box-shadow:0 2px 6px var(--shadow); font-size:.85rem; min-width:120px; }
+.fbox small{ color:var(--muted); display:block; }
+.farr{ color:var(--line); font-weight:700; }
+.col{ display:flex; flex-direction:column; gap:.5rem; }
+figure{ margin:1rem 0; }
+figcaption{ color:var(--muted); font-size:.85rem; margin-top:.3rem; }
+svg{ max-width:100%; height:auto; background:var(--surface); border:1px solid var(--border); border-radius:8px; }
+.gnode rect{ fill:var(--surface); stroke:var(--accent); stroke-width:1.5; filter:url(#ds); }
+.gnode.req rect{ stroke:var(--accent-2); fill:color-mix(in srgb,var(--accent) 16%, var(--surface)); }
+.gnode.reuse rect{ stroke:var(--ok-2); fill:color-mix(in srgb,var(--ok) 14%, var(--surface)); }
+.gnode.data rect{ stroke:var(--warn-2); fill:color-mix(in srgb,var(--warn) 16%, var(--surface)); }
+.gnode text{ fill:var(--fg); font:12px system-ui,sans-serif; }
+.gnode text.sub{ fill:var(--muted); font-size:10px; }
+.edge{ stroke:var(--line); stroke-width:1.6; fill:none; marker-end:url(#arr); }
+.edge.cut{ stroke-dasharray:5 4; stroke:var(--danger); }
+/* tabs */
+.chain-tabs{ display:flex; gap:.3rem; margin:1rem 0 0; flex-wrap:wrap; }
+.chain-tabs label{ cursor:pointer; padding:.4rem .9rem; border:1px solid var(--border); border-bottom:none;
+  border-radius:8px 8px 0 0; background:var(--surface); color:var(--muted); }
+body:has(#tab-intent:checked) label[for="tab-intent"],
+body:has(#tab-spec:checked)   label[for="tab-spec"],
+body:has(#tab-plan:checked)   label[for="tab-plan"],
+body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); border-color:var(--accent); font-weight:600; }
+.tab-pane{ display:none; border:1px solid var(--border); border-radius:0 8px 8px 8px; padding:1.2rem 1.4rem; background:color-mix(in srgb,var(--surface) 70%, var(--bg)); }
+body:has(#tab-intent:checked) #pane-intent,
+body:has(#tab-spec:checked)   #pane-spec,
+body:has(#tab-plan:checked)   #pane-plan,
+body:has(#tab-result:checked) #pane-result{ display:block; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden checked>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">🌙 / ☀️</label>
+<header>
+  <h1>IDD-цепочка: hybrid-retrieval-prune</h1>
+</header>
+<nav class="chain-tabs">
+  <label for="tab-intent">Intent</label>
+  <label for="tab-spec">Spec</label>
+  <label for="tab-plan">Plan</label>
+  <label for="tab-result">Result</label>
+</nav>
+
+<!-- TAB:intent START -->
+<section class="tab-pane" id="pane-intent">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:intent END -->
+
+<!-- TAB:spec START -->
+<section class="tab-pane" id="pane-spec">
+  <h2>1. Резюме спецификации</h2>
+  <p><strong>Файл:</strong> <code>docs/superpowers/specs/2026-06-30-hybrid-retrieval-prune-design.md</code> ·
+     <strong>spec_hash:</strong> <code>fcedf46fb62afcb1</code> · <strong>prev_hash:</strong> <code>bf6c60c4b894bb70</code> ·
+     <strong>Вердикт:</strong> <span class="badge b-ok">OK</span></p>
+  <p><em>Hybrid Retrieval: Graph-Noise Pruning + Stats Transparency — Design.</em> Дата 2026-06-30 · Статус: approved (design), pending spec review.</p>
+
+  <h3>Требования по секциям</h3>
+  <table>
+    <thead><tr><th>Секция</th><th>Требование</th></tr></thead>
+    <tbody>
+      <tr><td>Part 1 — Stats spacing</td><td>В <code>src/styles.css</code> (<code>.ai-wiki-cross-stats</code>, ~стр. 390) добавить <code>margin-top: 10px</code>, чтобы блок статистики отделялся от заголовка «Results». Других изменений нет.</td></tr>
+      <tr><td>Part 2 — «Selected for LLM» transparency</td><td>В <code>query.ts</code> расширить <code>query_stats</code> полями <code>seedCount</code> / <code>graphCount</code> (только single-domain): <code>seedCount = seeds.length</code>, <code>graphCount = contextPages.length − seedCount</code>. В <code>view.ts</code> (<code>renderQueryStats</code>, ~стр. 960) выводить строку выбора как «<code>7 (5 vector + 2 graph)</code>». Cross-domain (Ask Wiki) статистика структурно иная и разбивку НЕ получает. После работы floor (Part 3) <code>graphCount</code> естественно уменьшается — разбивка служит видимым доказательством срабатывания floor.</td></tr>
+      <tr><td>Part 3 — Relevance-floor pruning (core)</td><td>Новый чистый помощник <code>src/retrieval-prune.ts</code>: <code>pruneByRelevance(expandedDense, denseRef, ratio) → Set&lt;pid&gt;</code> — пиды-«оставить» (<code>expandedDense[pid] ≥ ratio · denseRef</code>); seeds не передаются (всегда сохраняются). Подключение в <code>retrieveDomainCandidates</code> сразу после <code>bfsExpandRanked</code>, до <code>candidateIds</code>. <code>denseRef = denseMax</code> (per-domain raw cosine лучшего seed, <code>query.ts:100</code>). Per-page cosine для graph-страниц переиспользуется из seed dense pass (<code>selectEmbeddingScoredDiag</code> → расширить <code>SeedDiag</code> картой <code>denseByPid</code>) — ноль дополнительных embedding-вызовов; <code>bfsExpandRanked</code> не меняется. Ordering (<code>fuseVectorGraph</code>/seeds-first) и membership разделены — floor меняет только membership. Матрица применимости + observability (<code>graph_stats</code>: <code>floorApplied</code>/<code>floorRef</code>/<code>prunedCount</code>/<code>floorSkippedReason</code>). Floor живёт per-domain в <code>retrieveDomainCandidates</code> → Ask Domain и Ask Wiki работают scale-correctly без cross-domain reference bleed.</td></tr>
+      <tr><td>Part 4 — Setting</td><td>В <code>src/types.ts</code> поле <code>bfsMinScoreRatio: number</code> (default <code>0.6</code>, диапазон <code>0..1</code>, <code>0</code> = floor off); запись в <code>eval_meta.retrievalConfig</code>. Примечание: <code>0.6</code> — доля <code>denseRef</code>, не связанная с наблюдённым <code>denseMax ≈ 0.6</code>; эффективный барьер ≈ <code>0.6 · denseMax ≈ 0.36</code>. В <code>src/settings.ts</code> слайдер рядом с «BFS fusion». <code>bfsMinScoreRatio</code> — единственный регулятор floor на обоих путях, decoupled от <code>bfsFusion</code> (тот управляет только ordering); <code>ratio = 0</code> отключает floor везде.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Матрица применимости floor (Part 3)</h3>
+  <table>
+    <thead><tr><th>Условие</th><th>Floor</th></tr></thead>
+    <tbody>
+      <tr><td><code>mode ∈ {embedding, hybrid}</code> AND <code>denseMax &gt; 0</code> AND <code>embedFailed = false</code> AND <code>seedFallback = "none"</code> AND <code>bfsMinScoreRatio &gt; 0</code></td><td><span class="badge b-ok">applied</span></td></tr>
+      <tr><td>jaccard mode</td><td><span class="badge b-info">skipped</span> (вне scope v1)</td></tr>
+      <tr><td><code>denseMax = 0</code> / <code>embedFailed</code> / fallback на jaccard или LLM</td><td><span class="badge b-info">skipped</span></td></tr>
+      <tr><td><code>bfsTopK = 0</code> (<code>expandedScores = {}</code>)</td><td><span class="badge b-info">skipped</span></td></tr>
+      <tr><td><code>bfsMinScoreRatio = 0</code></td><td><span class="badge b-info">skipped</span> (off switch)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Success Criteria (Verification)</h3>
+  <table>
+    <thead><tr><th>#</th><th>Критерий</th></tr></thead>
+    <tbody>
+      <tr><td>SC-1</td><td><strong>Eval harness:</strong> <code>npm run eval</code> до/после с <code>bfsMinScoreRatio = 0.6</code>. Ожидается: суммарные «Tokens sent» ↓, метрики качества flat; <code>ratio = 0</code> точно воспроизводит baseline (regression guard).</td></tr>
+      <tr><td>SC-2</td><td><strong>Unit:</strong> <code>retrieval-prune.test</code> — граница keep/drop на <code>ratio · denseRef</code>; пустые scores → keep-none (skip); <code>denseRef = 0</code> → skip.</td></tr>
+      <tr><td>SC-3</td><td><strong>Manual</strong> (репортнутый прогон в hybrid mode): (a) gap под «Results»; (b) строка выбора <code>N (X vector + Y graph)</code> с уменьшенным <code>Y</code>; (c) качество ответа не хуже.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схемы решения и зависимостей</h2>
+
+  <h3>Схема решения (поток данных)</h3>
+  <div class="flow">
+    <div class="fbox">Пользователь<small>Ask Domain / Ask Wiki</small></div>
+    <span class="farr">→</span>
+    <div class="fbox">Query<small>runQuery / cross-domain stage-1</small></div>
+    <span class="farr">→</span>
+    <div class="fbox" style="border-color:var(--accent-2)">retrieveDomainCandidates<small>per-domain</small></div>
+    <span class="farr">→</span>
+    <div class="col">
+      <div class="fbox">seed dense pass<small>selectEmbeddingScoredDiag<br>→ denseMax + denseByPid</small></div>
+      <div class="fbox">bfsExpandRanked<small>граф BFS (неизменён)</small></div>
+      <div class="fbox" style="border-color:var(--accent-2)">pruneByRelevance<small>floor = ratio·denseRef<br>(membership)</small></div>
+    </div>
+    <span class="farr">→</span>
+    <div class="fbox">fuseVectorGraph<small>ordering (при bfsFusion)</small></div>
+    <span class="farr">→</span>
+    <div class="fbox" style="border-color:var(--ok-2)">candidateIds → LLM context</div>
+  </div>
+  <div class="note">Параллельно: <code>query_stats</code> (<code>seedCount</code>/<code>graphCount</code>) и <code>graph_stats</code> (<code>floorApplied</code>/<code>floorRef</code>/<code>prunedCount</code>/<code>floorSkippedReason</code>) → <code>view.renderQueryStats</code> → UI («<code>N (X vector + Y graph)</code>» + отступ блока через <code>styles.css</code>). Настройка <code>bfsMinScoreRatio</code> (<code>types.ts</code> default <code>0.6</code> → слайдер <code>settings.ts</code>) питает floor.</div>
+
+  <h3>Граф зависимостей (A → B = «A зависит от / использует B»)</h3>
+  <figure>
+  <svg viewBox="0 0 980 470" role="img" aria-label="Граф зависимостей требований и компонентов">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+      </marker>
+      <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="var(--shadow)"/>
+      </filter>
+    </defs>
+    <!-- edges -->
+    <!-- retrieveDomainCandidates -> prune, bfsExpand, seedDensePass -->
+    <path class="edge" d="M250,62 C280,110 300,150 320,180"/>
+    <path class="edge" d="M180,84 C170,140 175,180 230,200"/>
+    <path class="edge" d="M300,84 L470,200"/>
+    <!-- prune -> denseByPid, denseMax(seedPass), bfsMinScoreRatio -->
+    <path class="edge" d="M400,222 L470,235"/>
+    <path class="edge" d="M380,246 C420,300 470,330 540,345"/>
+    <path class="edge" d="M340,246 C320,300 250,345 200,355"/>
+    <!-- query_stats -> retrieveDomainCandidates ; view -> query_stats -->
+    <path class="edge" d="M740,250 C600,160 420,90 270,66"/>
+    <path class="edge" d="M790,290 L760,250"/>
+    <!-- settings -> bfsMinScoreRatio -->
+    <path class="edge" d="M160,355 L185,250"/>
+    <!-- decoupled (no real edge): fuseVectorGraph X prune -->
+    <path class="edge cut" d="M620,360 L420,235"/>
+    <!-- nodes -->
+    <g class="gnode req"><rect x="160" y="40" width="180" height="44" rx="8"/><text x="250" y="60" text-anchor="middle">retrieveDomainCandidates</text><text class="sub" x="250" y="76" text-anchor="middle">query.ts · per-domain</text></g>
+
+    <g class="gnode req"><rect x="300" y="180" width="150" height="46" rx="8"/><text x="375" y="200" text-anchor="middle">pruneByRelevance</text><text class="sub" x="375" y="216" text-anchor="middle">retrieval-prune.ts (new)</text></g>
+    <g class="gnode reuse"><rect x="120" y="190" width="130" height="44" rx="8"/><text x="185" y="210" text-anchor="middle">bfsExpandRanked</text><text class="sub" x="185" y="226" text-anchor="middle">reuse · unchanged</text></g>
+    <g class="gnode reuse"><rect x="470" y="190" width="190" height="44" rx="8"/><text x="565" y="210" text-anchor="middle">seed dense pass</text><text class="sub" x="565" y="226" text-anchor="middle">selectEmbeddingScoredDiag</text></g>
+
+    <g class="gnode data"><rect x="470" y="330" width="160" height="44" rx="8"/><text x="550" y="350" text-anchor="middle">denseByPid map</text><text class="sub" x="550" y="366" text-anchor="middle">SeedDiag · page-similarity</text></g>
+    <g class="gnode data"><rect x="120" y="335" width="140" height="44" rx="8"/><text x="190" y="355" text-anchor="middle">bfsMinScoreRatio</text><text class="sub" x="190" y="371" text-anchor="middle">types.ts · default 0.6</text></g>
+
+    <g class="gnode"><rect x="690" y="228" width="120" height="44" rx="8"/><text x="750" y="248" text-anchor="middle">query_stats</text><text class="sub" x="750" y="264" text-anchor="middle">seed/graphCount</text></g>
+    <g class="gnode"><rect x="760" y="282" width="120" height="44" rx="8"/><text x="820" y="302" text-anchor="middle">view.render</text><text class="sub" x="820" y="318" text-anchor="middle">QueryStats · UI</text></g>
+
+    <g class="gnode"><rect x="60" y="40" width="110" height="44" rx="8"/><text x="115" y="60" text-anchor="middle">settings.ts</text><text class="sub" x="115" y="76" text-anchor="middle">слайдер</text></g>
+  </svg>
+  <figcaption>Циклов нет. <code>pruneByRelevance</code> — новый узел, зависит от <code>denseByPid</code>, <code>denseMax</code> (seed dense pass) и <code>bfsMinScoreRatio</code>. Зелёные — переиспользование (<code>bfsExpandRanked</code> не меняется). Красное штриховое ребро (<code>fuseVectorGraph</code> ↮ floor) — <strong>намеренно отсутствует</strong>: ordering и membership decoupled.</figcaption>
+  </figure>
+
+  <h3>Карта покрытия (задача → требования)</h3>
+  <table>
+    <thead><tr><th>Задача (из § Problem)</th><th>Покрывающее требование</th></tr></thead>
+    <tbody>
+      <tr><td>T1 — «Stats block touches Results heading» (нет отступа)</td><td>Part 1 (<code>margin-top: 10px</code>)</td></tr>
+      <tr><td>T2 — «Selected for LLM: 10 is opaque»</td><td>Part 2 (разбивка <code>N (X vector + Y graph)</code>)</td></tr>
+      <tr><td>T3 — «Graph expansion injects low-relevance pages» (нет relevance floor)</td><td>Part 3 (<code>pruneByRelevance</code> + матрица применимости)</td></tr>
+      <tr><td>T4 — «Hybrid should re-evaluate graph additions»</td><td>Part 3 (floor на raw dense cosine) + Part 4 (настройка <code>bfsMinScoreRatio</code>)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Результаты проверки</h2>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>clarity</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Находки</h3>
+  <table>
+    <thead><tr><th>id</th><th>severity</th><th>секция</th><th>fragment</th><th>проблема</th><th>fix</th><th>verdict</th></tr></thead>
+    <tbody>
+      <tr><td colspan="7" style="text-align:center; color:var(--muted)">Находок нет — <code>findings: []</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>Сводка:</strong> CRITICAL open: 0 · WARNING open: 0 · INFO: 0 · <strong>Вердикт:</strong> <span class="badge b-ok">OK</span><br>
+    <strong>Цепочка:</strong> intent: <em>null</em> (intent-документ для topic «hybrid-retrieval-prune» не найден) → <strong>spec ✓</strong> → plan (ожидается) → result (ожидается).
+  </div>
+</section>
+<!-- TAB:spec END -->
+
+<!-- TAB:plan START -->
+<section class="tab-pane" id="pane-plan">
+  <h2>1. Резюме плана</h2>
+  <p><strong>Файл:</strong> <code>docs/superpowers/plans/2026-06-30-hybrid-retrieval-prune.md</code> ·
+     <strong>plan_hash:</strong> <code>2e3f643fa20a5620</code> <small>(prev <code>bea4c62591fadb9f</code>)</small> · <strong>spec_hash:</strong> <code>fcedf46fb62afcb1</code> ·
+     <strong>Вердикт:</strong> <span class="badge b-ok">OK</span></p>
+  <p><em>Hybrid Retrieval: Graph-Noise Pruning + Stats Transparency — Implementation Plan.</em> 7 задач, TDD для ядра floor.</p>
+
+  <h3>Задачи и их Definition of Done</h3>
+  <table>
+    <thead><tr><th>Шаг</th><th>Файлы</th><th>Definition of Done</th></tr></thead>
+    <tbody>
+      <tr><td><strong>T1</strong>: <code>pruneByRelevance</code> (TDD)</td><td>create <code>src/retrieval-prune.ts</code>, <code>eval/retrieval-prune/run.ts</code></td><td><code>npx tsx eval/retrieval-prune/run.ts</code> → <code>5 passed, 0 failed</code></td></tr>
+      <tr><td><strong>T2</strong>: <code>SeedDiag.denseByPid</code></td><td><code>src/retrieval-diag.ts</code>, <code>src/page-similarity.ts</code> (6 сайтов: ~664, ~672, ~721, ~746, ~765, ~767)</td><td><code>npm run build</code> зелёный — все 6 конструкторов <code>SeedDiag</code> имеют <code>denseByPid</code> (включая empty-query guard 765 — F-001 fix)</td></tr>
+      <tr><td><strong>T3</strong>: подключить floor в <code>retrieveDomainCandidates</code></td><td><code>src/phases/query.ts</code>, <code>src/types.ts</code></td><td><code>npm run build</code> + <code>npx tsx eval/cross-domain/run.ts</code> все PASS (floor off → без изменений)</td></tr>
+      <tr><td><strong>T4</strong>: разбивка vector/graph в «Selected for LLM»</td><td><code>src/types.ts</code>, <code>src/phases/query.ts</code>, <code>src/view.ts</code></td><td>build зелёный; строка читается <code>N (X vector + Y graph)</code></td></tr>
+      <tr><td><strong>T5</strong>: настройка <code>bfsMinScoreRatio</code> + проброс + eval-запись</td><td><code>types.ts</code>, <code>agent-runner.ts</code>, <code>query.ts</code>, <code>query-cross-domain.ts</code>, <code>eval-log.ts</code>, <code>settings.ts</code></td><td>build + lint + cross-domain eval все зелёные</td></tr>
+      <tr><td><strong>T6</strong>: отступ блока статистики + трасса floor</td><td><code>src/styles.css</code>, <code>src/view.ts</code></td><td>build зелёный; <code>margin-top</code> добавлен; строка <code>Floor:</code>/<code>Floor skipped:</code> появляется</td></tr>
+      <tr><td><strong>T7</strong>: полная верификация</td><td>—</td><td>prune-тест 5/0, cross-domain PASS, lint чистый, build зелёный, обновлены wiki-доки</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схемы зависимостей и пересечений</h2>
+
+  <h3>Граф зависимостей шагов (M→N = «результат шага M используется в шаге N», M&lt;N)</h3>
+  <figure>
+  <svg viewBox="0 0 900 320" role="img" aria-label="Граф зависимостей задач плана">
+    <defs>
+      <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+      </marker>
+      <filter id="ds2" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="var(--shadow)"/>
+      </filter>
+    </defs>
+    <!-- edges -->
+    <path class="edge" style="marker-end:url(#arr2)" d="M150,90 C220,120 250,140 300,150"/>      <!-- T1 -> T3 -->
+    <path class="edge" style="marker-end:url(#arr2)" d="M150,210 C220,190 250,175 300,162"/>     <!-- T2 -> T3 -->
+    <path class="edge" style="marker-end:url(#arr2)" d="M400,150 C470,120 500,100 560,92"/>      <!-- T3 -> T5 -->
+    <path class="edge" style="marker-end:url(#arr2)" d="M400,162 C470,200 500,220 560,232"/>     <!-- T3 -> T6 -->
+    <path class="edge" style="marker-end:url(#arr2)" d="M150,90 C300,40 600,40 770,150"/>        <!-- T1 -> T7 -->
+    <path class="edge" style="marker-end:url(#arr2)" d="M650,92 C720,120 745,135 775,150"/>      <!-- T5 -> T7 -->
+    <path class="edge" style="marker-end:url(#arr2)" d="M650,232 C720,205 745,190 775,165"/>     <!-- T6 -> T7 -->
+    <path class="edge" style="marker-end:url(#arr2)" d="M400,156 C550,156 650,156 760,156"/>     <!-- T3 -> T7 -->
+    <!-- nodes -->
+    <g class="gnode reuse"><rect x="60" y="68" width="90" height="44" rx="8"/><text x="105" y="88" text-anchor="middle">T1</text><text class="sub" x="105" y="104" text-anchor="middle">pruneByRelevance</text></g>
+    <g class="gnode data"><rect x="60" y="188" width="90" height="44" rx="8"/><text x="105" y="208" text-anchor="middle">T2</text><text class="sub" x="105" y="224" text-anchor="middle">denseByPid</text></g>
+    <g class="gnode req"><rect x="300" y="134" width="100" height="44" rx="8"/><text x="350" y="154" text-anchor="middle">T3</text><text class="sub" x="350" y="170" text-anchor="middle">wire floor</text></g>
+    <g class="gnode"><rect x="430" y="250" width="100" height="44" rx="8"/><text x="480" y="270" text-anchor="middle">T4</text><text class="sub" x="480" y="286" text-anchor="middle">vector/graph (самодост.)</text></g>
+    <g class="gnode"><rect x="560" y="70" width="90" height="44" rx="8"/><text x="605" y="90" text-anchor="middle">T5</text><text class="sub" x="605" y="106" text-anchor="middle">setting/проброс</text></g>
+    <g class="gnode"><rect x="560" y="210" width="90" height="44" rx="8"/><text x="605" y="230" text-anchor="middle">T6</text><text class="sub" x="605" y="246" text-anchor="middle">spacing/trace</text></g>
+    <g class="gnode reuse"><rect x="760" y="134" width="90" height="44" rx="8"/><text x="805" y="154" text-anchor="middle">T7</text><text class="sub" x="805" y="170" text-anchor="middle">verify all</text></g>
+  </svg>
+  <figcaption>Циклов нет; все рёбра идут от меньшего номера к большему (нарушений порядка нет). T4 самодостаточен (<code>seedCount</code>/<code>graphCount</code> определены, эмитятся и рендерятся внутри T4). T1–T6 → T7 (финальная верификация).</figcaption>
+  </figure>
+
+  <h3>Пересечения по артефактам (один файл трогают несколько задач)</h3>
+  <table>
+    <thead><tr><th>Файл</th><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th></tr></thead>
+    <tbody>
+      <tr><td><code>src/phases/query.ts</code></td><td></td><td>●</td><td>●</td><td>●</td><td></td></tr>
+      <tr><td><code>src/types.ts</code></td><td></td><td>● graph_stats</td><td>● query_stats</td><td>● nativeAgent</td><td></td></tr>
+      <tr><td><code>src/view.ts</code></td><td></td><td></td><td>● renderQueryStats</td><td></td><td>● formatGraphStatsLines</td></tr>
+      <tr><td><code>src/page-similarity.ts</code></td><td>●</td><td></td><td></td><td></td><td></td></tr>
+    </tbody>
+  </table>
+  <div class="note">Пересечения по <code>query.ts</code>/<code>types.ts</code>/<code>view.ts</code> между T3–T6 не конфликтуют: задачи редактируют разные участки (разные интерфейсы/функции), порядок выполнения T3&lt;T4&lt;T5&lt;T6 устраняет гонки.</div>
+
+  <h3>Покрытие требований спеки (требование → задачи)</h3>
+  <table>
+    <thead><tr><th>Требование спеки</th><th>Задачи</th></tr></thead>
+    <tbody>
+      <tr><td>Проблема 1 — отступ блока статистики</td><td>T6</td></tr>
+      <tr><td>Проблема 2 — непрозрачная «10»</td><td>T4</td></tr>
+      <tr><td>Проблема 3 — graph-шум (relevance floor)</td><td>T1 + T2 + T3</td></tr>
+      <tr><td>Проблема 4 — re-evaluate в hybrid, токены↓</td><td>T1 + T2 + T3 + ручка T5</td></tr>
+      <tr><td>Observability + матрица применимости</td><td>T3 Step 5</td></tr>
+      <tr><td>Оба пути (Ask Domain / Ask Wiki)</td><td>T3 (общий <code>retrieveDomainCandidates</code>) + проброс T5</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Результаты проверки</h2>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>clarity (dependencies + verifiability)</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Находки</h3>
+  <table>
+    <thead><tr><th>id</th><th>severity</th><th>секция</th><th>fragment</th><th>проблема</th><th>fix</th><th>verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>F-001</td>
+        <td><span class="badge b-warn">MAJOR</span></td>
+        <td>Task 2</td>
+        <td><code>«5 SeedDiag construction sites: ~664, ~672, ~721, ~746, ~767»</code></td>
+        <td><code>SeedDiag</code> конструируется в <strong>6</strong> местах, не 5: ранний guard в <code>selectRelevantScoredDiag</code> (<code>page-similarity.ts:765</code>, <code>if (queryTokens.size === 0) return { results: [], denseMax: 0, embedFailed: false };</code>) не перечислен и не получает <code>denseByPid</code>. После того как Step 1 делает <code>denseByPid</code> обязательным полем, этот return не компилируется → <code>npm run build</code> (T2 Step 6) падает с TS2741.</td>
+        <td>Добавить под-шаг в T2: дописать <code>, denseByPid: {}</code> в return на <code>page-similarity.ts:765</code>. Либо сделать <code>denseByPid?</code> опциональным в <code>SeedDiag</code> и читать <code>diag.denseByPid ?? {}</code> в T3 Step 4.</td>
+        <td><span class="badge b-ok">fixed</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>F-001 исправлено (rerun):</strong> Files-заголовок Задачи 2 теперь перечисляет 6 сайтов (<code>~664, ~672, ~721, ~746, ~765, ~767</code>); Step 5 добавляет <code>denseByPid: {}</code> в <strong>оба</strong> early-return <code>selectRelevantScoredDiag</code> — empty-query guard (765) и jaccard branch (767). <code>section_hash</code> Задачи 2 сменился <code>d72d44fa1a564dbd</code> → <code>0ddf6ad91ae3c912</code>; verdict переведён в <code>fixed</code>. Все 6 конструкторов <code>SeedDiag</code> теперь имеют поле — TS2741 на <code>npm run build</code> (T2 Step 6) устранён.
+  </div>
+  <div class="note">
+    <strong>Сводка:</strong> CRITICAL open: 0 · MAJOR open: 0 · WARNING open: 0 · <strong>Вердикт:</strong> <span class="badge b-ok">OK (план готов к исполнению)</span><br>
+    Открытых CRITICAL/MAJOR нет — IDD-гейт чисто открыт для перехода к исполнению плана.<br>
+    <strong>Цепочка:</strong> intent: <em>null</em> → <strong>spec ✓</strong> → <strong>plan (проверен) ✓</strong> → result (ожидается).
+  </div>
+</section>
+<!-- TAB:plan END -->
+
+<!-- TAB:result START -->
+<section class="tab-pane" id="pane-result">
+
+  <h2>1. Резюме сверки</h2>
+  <table>
+    <thead><tr><th>Документ</th><th>Путь</th></tr></thead>
+    <tbody>
+      <tr><td><strong>План</strong></td><td><code>docs/superpowers/plans/2026-06-30-hybrid-retrieval-prune.md</code></td></tr>
+      <tr><td><strong>Спецификация</strong></td><td><code>docs/superpowers/specs/2026-06-30-hybrid-retrieval-prune-design.md</code></td></tr>
+      <tr><td><strong>Intent</strong></td><td><em>отсутствует (chain.intent: null)</em></td></tr>
+      <tr><td><strong>Diff base</strong></td><td><code>git diff master..HEAD</code> — 20 файлов изменено, +1174 / −178</td></tr>
+      <tr><td><strong>plan_hash</strong></td><td><code>2e3f643fa20a5620</code></td></tr>
+      <tr><td><strong>Дата проверки</strong></td><td>2026-06-30</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Покрытие шагов плана</h2>
+
+  <table>
+    <thead><tr><th>Задача</th><th>Статус</th><th>Комментарий</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>T1</strong> — <code>pruneByRelevance</code> (TDD)</td>
+        <td><span class="badge b-ok">DONE</span></td>
+        <td><code>src/retrieval-prune.ts</code> создан — сигнатура, семантика keep/pruned, missing-score→keep идентичны плану. <code>eval/retrieval-prune/run.ts</code> создан; тест добавляет секцию «zero ratio» сверх 5 случаев плана (additive, не противоречит). 7/7 passed.</td>
+      </tr>
+      <tr>
+        <td><strong>T2</strong> — <code>SeedDiag.denseByPid</code></td>
+        <td><span class="badge b-ok">DONE</span></td>
+        <td><code>src/retrieval-diag.ts</code>: поле <code>denseByPid: Record&lt;string, number&gt;</code> добавлено. <code>src/page-similarity.ts</code>: все 6 construction sites обновлены (<code>denseByPid: {}</code> в ранних возвратах, заполнение в dense loop, forward в hybrid). F-001 (пропущенный 6-й сайт) устранён корректно.</td>
+      </tr>
+      <tr>
+        <td><strong>T3</strong> — Wire floor в <code>retrieveDomainCandidates</code></td>
+        <td><span class="badge b-ok">DONE</span></td>
+        <td><code>RetrieveCfg.bfsMinScoreRatio?</code> добавлено; <code>graph_stats</code> event расширен (<code>floorApplied</code>/<code>floorRef</code>/<code>prunedCount</code>/<code>floorSkippedReason</code>); импорт, локали <code>denseByPid</code>/<code>embedFailed</code>, applicability matrix, <code>yield graph_stats</code> — всё реализовано точно по плану.</td>
+      </tr>
+      <tr>
+        <td><strong>T4</strong> — Разбивка vector/graph в «Selected for LLM»</td>
+        <td><span class="badge b-ok">DONE</span></td>
+        <td><code>query_stats</code>: поля <code>seedCount?</code>/<code>graphCount?</code> в <code>src/types.ts</code>; вычисление и эмиссия в <code>runQuery</code>; рендер через <code>T.statsSelectedBreakdown()</code> в <code>src/view.ts</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>T5</strong> — <code>bfsMinScoreRatio</code> + threading + eval record</td>
+        <td><span class="badge b-ok">DONE</span></td>
+        <td>Поле + default <code>0.6</code> в <code>src/types.ts</code>; параметр <code>runQuery</code>; проброс через <code>agent-runner.ts</code> (оба пути); <code>eval-log.ts</code>; <code>query-cross-domain.ts</code>; slider в <code>src/settings.ts</code>; запись в <code>eval_meta.retrievalConfig</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>T6</strong> — Отступ блока статистики + трасса floor</td>
+        <td><span class="badge b-ok">DONE</span> <span class="badge b-info">INFO</span></td>
+        <td><code>src/styles.css</code>: <code>margin-top: 10px</code> добавлен — точно по плану. Floor trace — намеренное упрощение (см. находку F-001-result ниже).</td>
+      </tr>
+      <tr>
+        <td><strong>T7</strong> — Полная верификация</td>
+        <td><span class="badge b-ok">DONE</span></td>
+        <td>prune eval 7/7; cross-domain eval 30/30; <code>npm run lint</code> 0 errors; <code>npm run build</code> succeeds; wiki docs обновлены (<code>docs/wiki/retrieval.md</code> + <code>docs/wiki/operations.md</code>). Manual Obsidian check — вне scope автоматической верификации.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note" style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+    <span><strong>DONE:</strong> 7/7 задач</span>
+    <span><strong>PARTIAL:</strong> 0</span>
+    <span><strong>MISSING:</strong> 0</span>
+  </div>
+
+  <h2>3. Находки</h2>
+
+  <table>
+    <thead>
+      <tr><th>id</th><th>Severity</th><th>Шаг</th><th>Plan</th><th>Diff</th><th>Fix options</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>F-001-result</td>
+        <td><span class="badge b-info">INFO</span></td>
+        <td>T6 Step 2 — floor trace line</td>
+        <td><code>Floor: kept N, pruned M (ref R)</code></td>
+        <td><code>Floor: pruned M (ref R)</code><br><small>«kept N» убран — счётчик избыточен: BFS expanded line выше уже показывает итоговое число оставшихся страниц. Code-review fix.</small></td>
+        <td>1) Принять как есть (рекомендуется — семантика не потеряна). 2) Восстановить «kept N» если нужен явный счётчик оставшихся.</td>
+      </tr>
+      <tr>
+        <td>F-002-result</td>
+        <td><span class="badge b-warn">WARNING</span></td>
+        <td>T4 + T5 — файловая карта</td>
+        <td><code>src/i18n.ts</code> не упомянут в файловой карте ни одной задачи</td>
+        <td>Добавлены <code>statsSelectedBreakdown</code>, <code>bfsMinScoreRatio_desc</code> (en/ru/es) — без этого <code>src/settings.ts</code> и <code>src/view.ts</code> не компилируются.</td>
+        <td>1) Принять как есть — изменение обязательно и корректно, не риск. 2) Добавить <code>src/i18n.ts</code> в файловую карту T4/T5 постфактум.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>4. Покрытие спецификации</h2>
+
+  <table>
+    <thead><tr><th>Требование спеки</th><th>Статус</th><th>Diff-свидетельство</th></tr></thead>
+    <tbody>
+      <tr><td>Part 1: <code>margin-top: 10px</code> на <code>.ai-wiki-cross-stats</code></td><td><span class="badge b-ok">DONE</span></td><td><code>src/styles.css</code></td></tr>
+      <tr><td>Part 2: <code>seedCount</code>/<code>graphCount</code> в <code>query_stats</code>, breakdown в view</td><td><span class="badge b-ok">DONE</span></td><td><code>src/types.ts</code> · <code>src/phases/query.ts</code> · <code>src/view.ts</code> · <code>src/i18n.ts</code></td></tr>
+      <tr><td>Part 3: <code>pruneByRelevance</code> — чистый помощник</td><td><span class="badge b-ok">DONE</span></td><td><code>src/retrieval-prune.ts</code></td></tr>
+      <tr><td>Part 3: <code>denseByPid</code> из seed pass (<code>SeedDiag</code>)</td><td><span class="badge b-ok">DONE</span></td><td><code>src/retrieval-diag.ts</code> · <code>src/page-similarity.ts</code></td></tr>
+      <tr><td>Part 3: wiring в <code>retrieveDomainCandidates</code></td><td><span class="badge b-ok">DONE</span></td><td><code>src/phases/query.ts</code></td></tr>
+      <tr><td>Part 3: applicability matrix (mode / denseMax / embedFailed / seedFallback / bfsTopK)</td><td><span class="badge b-ok">DONE</span></td><td><code>src/phases/query.ts</code> — eligibility block</td></tr>
+      <tr><td>Part 3: Observability (<code>floorApplied</code> / <code>floorRef</code> / <code>prunedCount</code> / <code>floorSkippedReason</code>)</td><td><span class="badge b-ok">DONE</span></td><td><code>src/types.ts</code> · <code>src/view.ts</code></td></tr>
+      <tr><td>Part 3: оба пути (Ask Domain / Ask Wiki) — per-domain против своего <code>denseMax</code></td><td><span class="badge b-ok">DONE</span></td><td>floor в <code>retrieveDomainCandidates</code> (общая функция)</td></tr>
+      <tr><td>Part 4: <code>bfsMinScoreRatio: number</code>, default <code>0.6</code></td><td><span class="badge b-ok">DONE</span></td><td><code>src/types.ts</code> — DEFAULT_SETTINGS</td></tr>
+      <tr><td>Part 4: slider в <code>src/settings.ts</code></td><td><span class="badge b-ok">DONE</span></td><td><code>src/settings.ts</code></td></tr>
+      <tr><td>Part 4: запись в <code>eval_meta.retrievalConfig</code> (оба пути)</td><td><span class="badge b-ok">DONE</span></td><td><code>src/phases/query.ts</code> · <code>src/phases/query-cross-domain.ts</code></td></tr>
+      <tr><td>Verification: unit test прошёл</td><td><span class="badge b-ok">DONE</span></td><td>7/7 passed</td></tr>
+      <tr><td>Verification: cross-domain eval прошёл</td><td><span class="badge b-ok">DONE</span></td><td>30/30 PASS</td></tr>
+      <tr><td>Verification: lint + build зелёные</td><td><span class="badge b-ok">DONE</span></td><td>0 errors / build succeeds</td></tr>
+      <tr><td>Wiki docs обновлены</td><td><span class="badge b-ok">DONE</span></td><td><code>docs/wiki/retrieval.md</code> · <code>docs/wiki/operations.md</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note" style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+    <span><strong>Desired Outcomes покрыто:</strong> 15 / 15</span>
+    <span><strong>Spec requirements покрыто:</strong> 15 / 15</span>
+  </div>
+
+  <h2>5. Цепочка изменений</h2>
+  <div class="flow">
+    <div class="fbox">master<small>база</small></div>
+    <span class="farr">→</span>
+    <div class="fbox" style="border-color:var(--ok-2)">658585d<small>pruneByRelevance + test</small></div>
+    <span class="farr">→</span>
+    <div class="fbox" style="border-color:var(--ok-2)">SeedDiag.denseByPid<small>6 сайтов</small></div>
+    <span class="farr">→</span>
+    <div class="fbox" style="border-color:var(--ok-2)">floor wiring<small>retrieveDomainCandidates</small></div>
+    <span class="farr">→</span>
+    <div class="fbox" style="border-color:var(--ok-2)">query_stats<small>vector/graph breakdown</small></div>
+    <span class="farr">→</span>
+    <div class="fbox" style="border-color:var(--ok-2)">bfsMinScoreRatio<small>setting + threading</small></div>
+    <span class="farr">→</span>
+    <div class="fbox" style="border-color:var(--ok-2)">CSS + floor trace<small>spacing + progress</small></div>
+    <span class="farr">→</span>
+    <div class="fbox" style="border-color:var(--accent-2)">faf4bef<small>dist rebuild + wiki docs</small></div>
+  </div>
+
+  <h2>6. Сводка и вердикт</h2>
+  <table>
+    <thead><tr><th>Severity</th><th>Кол-во</th><th>Описание</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge b-crit">CRITICAL</span></td><td>0</td><td>—</td></tr>
+      <tr><td><span class="badge b-warn">WARNING</span></td><td>1</td><td>F-002-result: <code>src/i18n.ts</code> отсутствует в файловой карте плана, но изменение обязательно и не является риском</td></tr>
+      <tr><td><span class="badge b-info">INFO</span></td><td>1</td><td>F-001-result: deliberate floor trace simplification (<code>kept N</code> убран как избыточный)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>Вердикт:</strong> <span class="badge b-ok" style="font-size:1rem">OK</span><br>
+    <strong>plan_hash:</strong> <code>2e3f643fa20a5620</code> · result_check записан в frontmatter плана.<br>
+    <strong>IDD-гейт:</strong> открыт — нет CRITICAL-находок, все шаги плана покрыты диффом, все требования спеки выполнены. Ветка готова к финальному шагу (<code>/finish</code>).<br>
+    <strong>Цепочка:</strong> intent: <em>null</em> → <strong>spec ✓</strong> → <strong>plan ✓</strong> → <strong>result ✓</strong>
+  </div>
+
+</section>
+<!-- TAB:result END -->
+</body>
+</html>

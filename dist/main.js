@@ -9555,7 +9555,6 @@ var require_dispatcher_base = __commonJS({
       }
       get webSocketOptions() {
         return {
-          maxFragments: this[kWebSocketOptions].maxFragments ?? 131072,
           maxPayloadSize: this[kWebSocketOptions].maxPayloadSize ?? 128 * 1024 * 1024
         };
       }
@@ -13210,9 +13209,6 @@ var require_client_h1 = __commonJS({
     var FastBuffer = Buffer[Symbol.species];
     var addListener = util2.addListener;
     var removeAllListeners = util2.removeAllListeners;
-    var kIdleSocketValidation = /* @__PURE__ */ Symbol("kIdleSocketValidation");
-    var kIdleSocketValidationTimeout = /* @__PURE__ */ Symbol("kIdleSocketValidationTimeout");
-    var kSocketUsed = /* @__PURE__ */ Symbol("kSocketUsed");
     var extractBody;
     async function lazyllhttp() {
       const llhttpWasmData = process.env.JEST_WORKER_ID ? require_llhttp_wasm() : void 0;
@@ -13375,54 +13371,23 @@ var require_client_h1 = __commonJS({
             currentBufferRef = null;
           }
           const offset = llhttp.llhttp_get_error_pos(this.ptr) - currentBufferPtr;
-          if (ret !== constants.ERROR.OK) {
-            const body = data.subarray(offset);
-            if (ret === constants.ERROR.PAUSED_UPGRADE) {
-              this.onUpgrade(body);
-            } else if (ret === constants.ERROR.PAUSED) {
-              this.paused = true;
-              socket.unshift(body);
-            } else {
-              throw this.createError(ret, body);
+          if (ret === constants.ERROR.PAUSED_UPGRADE) {
+            this.onUpgrade(data.slice(offset));
+          } else if (ret === constants.ERROR.PAUSED) {
+            this.paused = true;
+            socket.unshift(data.slice(offset));
+          } else if (ret !== constants.ERROR.OK) {
+            const ptr = llhttp.llhttp_get_error_reason(this.ptr);
+            let message = "";
+            if (ptr) {
+              const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
+              message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
             }
+            throw new HTTPParserError(message, constants.ERROR[ret], data.slice(offset));
           }
         } catch (err) {
           util2.destroy(socket, err);
         }
-      }
-      finish() {
-        assert(currentParser === null);
-        assert(this.ptr != null);
-        assert(!this.paused);
-        const { llhttp } = this;
-        let ret;
-        try {
-          currentParser = this;
-          ret = llhttp.llhttp_finish(this.ptr);
-        } finally {
-          currentParser = null;
-        }
-        if (ret === constants.ERROR.OK) {
-          return null;
-        }
-        if (ret === constants.ERROR.PAUSED || ret === constants.ERROR.PAUSED_UPGRADE) {
-          this.paused = true;
-          return null;
-        }
-        return this.createError(ret, EMPTY_BUF);
-      }
-      createError(ret, data) {
-        const { llhttp, contentLength, bytesRead } = this;
-        if (contentLength && bytesRead !== parseInt(contentLength, 10)) {
-          return new ResponseContentLengthMismatchError();
-        }
-        const ptr = llhttp.llhttp_get_error_reason(this.ptr);
-        let message = "";
-        if (ptr) {
-          const len = new Uint8Array(llhttp.memory.buffer, ptr).indexOf(0);
-          message = "Response does not match the HTTP/1.1 protocol (" + Buffer.from(llhttp.memory.buffer, ptr, len).toString() + ")";
-        }
-        return new HTTPParserError(message, constants.ERROR[ret], data);
       }
       destroy() {
         assert(this.ptr != null);
@@ -13441,10 +13406,6 @@ var require_client_h1 = __commonJS({
       onMessageBegin() {
         const { socket, client } = this;
         if (socket.destroyed) {
-          return -1;
-        }
-        if (client[kRunning] === 0) {
-          util2.destroy(socket, new SocketError("bad response", util2.getSocketInfo(socket)));
           return -1;
         }
         const request = client[kQueue][client[kRunningIdx]];
@@ -13524,10 +13485,6 @@ var require_client_h1 = __commonJS({
       onHeadersComplete(statusCode, upgrade, shouldKeepAlive) {
         const { client, socket, headers, statusText } = this;
         if (socket.destroyed) {
-          return -1;
-        }
-        if (client[kRunning] === 0) {
-          util2.destroy(socket, new SocketError("bad response", util2.getSocketInfo(socket)));
           return -1;
         }
         const request = client[kQueue][client[kRunningIdx]];
@@ -13655,7 +13612,6 @@ var require_client_h1 = __commonJS({
         }
         request.onComplete(headers);
         client[kQueue][client[kRunningIdx]++] = null;
-        socket[kSocketUsed] = true;
         if (socket[kWriting]) {
           assert(client[kRunning] === 0);
           util2.destroy(socket, new InformationalError("reset"));
@@ -13699,19 +13655,12 @@ var require_client_h1 = __commonJS({
       socket[kWriting] = false;
       socket[kReset] = false;
       socket[kBlocking] = false;
-      socket[kIdleSocketValidation] = 0;
-      socket[kIdleSocketValidationTimeout] = null;
-      socket[kSocketUsed] = false;
       socket[kParser] = new Parser(client, socket, llhttpInstance);
       addListener(socket, "error", function(err) {
         assert(err.code !== "ERR_TLS_CERT_ALTNAME_INVALID");
         const parser = this[kParser];
         if (err.code === "ECONNRESET" && parser.statusCode && !parser.shouldKeepAlive) {
-          const parserErr = parser.finish();
-          if (parserErr) {
-            this[kError] = parserErr;
-            this[kClient][kOnError](parserErr);
-          }
+          parser.onMessageComplete();
           return;
         }
         this[kError] = err;
@@ -13726,10 +13675,7 @@ var require_client_h1 = __commonJS({
       addListener(socket, "end", function() {
         const parser = this[kParser];
         if (parser.statusCode && !parser.shouldKeepAlive) {
-          const parserErr = parser.finish();
-          if (parserErr) {
-            util2.destroy(this, parserErr);
-          }
+          parser.onMessageComplete();
           return;
         }
         util2.destroy(this, new SocketError("other side closed", util2.getSocketInfo(this)));
@@ -13737,10 +13683,9 @@ var require_client_h1 = __commonJS({
       addListener(socket, "close", function() {
         const client2 = this[kClient];
         const parser = this[kParser];
-        clearIdleSocketValidation(this);
         if (parser) {
           if (!this[kError] && parser.statusCode && !parser.shouldKeepAlive) {
-            this[kError] = parser.finish() || this[kError];
+            parser.onMessageComplete();
           }
           this[kParser].destroy();
           this[kParser] = null;
@@ -13789,7 +13734,7 @@ var require_client_h1 = __commonJS({
           return socket.destroyed;
         },
         busy(request) {
-          if (socket[kWriting] || socket[kReset] || socket[kBlocking] || socket[kIdleSocketValidation] === 1) {
+          if (socket[kWriting] || socket[kReset] || socket[kBlocking]) {
             return true;
           }
           if (request) {
@@ -13807,24 +13752,6 @@ var require_client_h1 = __commonJS({
         }
       };
     }
-    function clearIdleSocketValidation(socket) {
-      if (socket[kIdleSocketValidationTimeout]) {
-        clearTimeout(socket[kIdleSocketValidationTimeout]);
-        socket[kIdleSocketValidationTimeout] = null;
-      }
-      socket[kIdleSocketValidation] = 0;
-    }
-    function scheduleIdleSocketValidation(client, socket) {
-      socket[kIdleSocketValidation] = 1;
-      socket[kIdleSocketValidationTimeout] = setTimeout(() => {
-        socket[kIdleSocketValidationTimeout] = null;
-        socket[kIdleSocketValidation] = 2;
-        if (client[kSocket] === socket && !socket.destroyed) {
-          client[kResume]();
-        }
-      }, 0);
-      socket[kIdleSocketValidationTimeout].unref?.();
-    }
     function resumeH1(client) {
       const socket = client[kSocket];
       if (socket && !socket.destroyed) {
@@ -13836,29 +13763,6 @@ var require_client_h1 = __commonJS({
         } else if (socket[kNoRef] && socket.ref) {
           socket.ref();
           socket[kNoRef] = false;
-        }
-        if (client[kRunning] === 0 && client[kPending] > 0 && socket[kSocketUsed]) {
-          if (socket[kIdleSocketValidation] === 0) {
-            scheduleIdleSocketValidation(client, socket);
-            socket[kParser].readMore();
-            if (socket.destroyed) {
-              return;
-            }
-            return;
-          }
-          if (socket[kIdleSocketValidation] === 1) {
-            socket[kParser].readMore();
-            if (socket.destroyed) {
-              return;
-            }
-            return;
-          }
-        }
-        if (client[kRunning] === 0) {
-          socket[kParser].readMore();
-          if (socket.destroyed) {
-            return;
-          }
         }
         if (client[kSize] === 0) {
           if (socket[kParser].timeoutType !== TIMEOUT_KEEP_ALIVE) {
@@ -13912,7 +13816,6 @@ var require_client_h1 = __commonJS({
         process.emitWarning(new RequestContentLengthMismatchError());
       }
       const socket = client[kSocket];
-      clearIdleSocketValidation(socket);
       const abort = (err) => {
         if (request.aborted || request.completed) {
           return;
@@ -23697,14 +23600,18 @@ var require_parse = __commonJS({
       } else if (attributeNameLowercase === "httponly") {
         cookieAttributeList.httpOnly = true;
       } else if (attributeNameLowercase === "samesite") {
+        let enforcement = "Default";
         const attributeValueLowercase = attributeValue.toLowerCase();
-        if (attributeValueLowercase === "none") {
-          cookieAttributeList.sameSite = "None";
-        } else if (attributeValueLowercase === "strict") {
-          cookieAttributeList.sameSite = "Strict";
-        } else if (attributeValueLowercase === "lax") {
-          cookieAttributeList.sameSite = "Lax";
+        if (attributeValueLowercase.includes("none")) {
+          enforcement = "None";
         }
+        if (attributeValueLowercase.includes("strict")) {
+          enforcement = "Strict";
+        }
+        if (attributeValueLowercase.includes("lax")) {
+          enforcement = "Lax";
+        }
+        cookieAttributeList.sameSite = enforcement;
       } else {
         cookieAttributeList.unparsed ??= [];
         cookieAttributeList.unparsed.push(`${attributeName}=${attributeValue}`);
@@ -24726,10 +24633,6 @@ var require_receiver = __commonJS({
     var { closeWebSocketConnection } = require_connection();
     var { PerMessageDeflate } = require_permessage_deflate();
     var { MessageSizeExceededError } = require_errors2();
-    function failWebsocketConnectionWithCode(ws, code, reason) {
-      closeWebSocketConnection(ws, code, reason, Buffer.byteLength(reason));
-      failWebsocketConnection(ws, reason);
-    }
     var ByteParser = class extends Writable {
       #buffers = [];
       #fragmentsBytes = 0;
@@ -24741,19 +24644,16 @@ var require_receiver = __commonJS({
       /** @type {Map<string, PerMessageDeflate>} */
       #extensions;
       /** @type {number} */
-      #maxFragments;
-      /** @type {number} */
       #maxPayloadSize;
       /**
        * @param {import('./websocket').WebSocket} ws
        * @param {Map<string, string>|null} extensions
-       * @param {{ maxFragments?: number, maxPayloadSize?: number }} [options]
+       * @param {{ maxPayloadSize?: number }} [options]
        */
       constructor(ws, extensions, options = {}) {
         super();
         this.ws = ws;
         this.#extensions = extensions == null ? /* @__PURE__ */ new Map() : extensions;
-        this.#maxFragments = options.maxFragments ?? 0;
         this.#maxPayloadSize = options.maxPayloadSize ?? 0;
         if (this.#extensions.has("permessage-deflate")) {
           this.#extensions.set("permessage-deflate", new PerMessageDeflate(extensions, options));
@@ -24770,8 +24670,8 @@ var require_receiver = __commonJS({
         this.run(callback);
       }
       #validatePayloadLength() {
-        if (this.#maxPayloadSize > 0 && !isControlFrame(this.#info.opcode) && this.#info.payloadLength + this.#fragmentsBytes > this.#maxPayloadSize) {
-          failWebsocketConnectionWithCode(this.ws, 1009, "Payload size exceeds maximum allowed size");
+        if (this.#maxPayloadSize > 0 && !isControlFrame(this.#info.opcode) && this.#info.payloadLength > this.#maxPayloadSize) {
+          failWebsocketConnection(this.ws, "Payload size exceeds maximum allowed size");
           return false;
         }
         return true;
@@ -24887,11 +24787,9 @@ var require_receiver = __commonJS({
               this.#state = parserStates.INFO;
             } else {
               if (!this.#info.compressed) {
-                if (!this.writeFragments(body)) {
-                  return;
-                }
+                this.writeFragments(body);
                 if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
-                  failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
+                  failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
                   return;
                 }
                 if (!this.#info.fragmented && this.#info.fin) {
@@ -24904,15 +24802,12 @@ var require_receiver = __commonJS({
                   this.#info.fin,
                   (error, data) => {
                     if (error) {
-                      const code = error instanceof MessageSizeExceededError ? 1009 : 1007;
-                      failWebsocketConnectionWithCode(this.ws, code, error.message);
+                      failWebsocketConnection(this.ws, error.message);
                       return;
                     }
-                    if (!this.writeFragments(data)) {
-                      return;
-                    }
+                    this.writeFragments(data);
                     if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
-                      failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
+                      failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
                       return;
                     }
                     if (!this.#info.fin) {
@@ -24970,13 +24865,8 @@ var require_receiver = __commonJS({
         return buffer;
       }
       writeFragments(fragment) {
-        if (this.#maxFragments > 0 && this.#fragments.length === this.#maxFragments) {
-          failWebsocketConnectionWithCode(this.ws, 1008, "Too many message fragments");
-          return false;
-        }
         this.#fragmentsBytes += fragment.length;
         this.#fragments.push(fragment);
-        return true;
       }
       consumeFragments() {
         const fragments = this.#fragments;
@@ -25426,11 +25316,8 @@ var require_websocket = __commonJS({
        */
       #onConnectionEstablished(response, parsedExtensions) {
         this[kResponse] = response;
-        const webSocketOptions = this[kController]?.dispatcher?.webSocketOptions;
-        const maxFragments = webSocketOptions?.maxFragments;
-        const maxPayloadSize = webSocketOptions?.maxPayloadSize;
+        const maxPayloadSize = this[kController]?.dispatcher?.webSocketOptions?.maxPayloadSize;
         const parser = new ByteParser(this, parsedExtensions, {
-          maxFragments,
           maxPayloadSize
         });
         parser.on("drain", onParserDrain);
@@ -26301,6 +26188,8 @@ var DEFAULT_SETTINGS = {
     hybridRetrieval: false,
     rrfK: 60,
     bfsFusion: false,
+    bfsMinScoreRatio: 0.6,
+    // 0.6 = keep graph pages within 60% of the best seed's cosine; 0 = floor off
     seedSimilarityThreshold: 0,
     dedupOnIngest: false,
     dedupThreshold: 0.85,
@@ -26448,6 +26337,7 @@ var en = {
     hybridRetrieval_desc: "Fuse embedding and Jaccard via RRF. Requires an embedding model; without one \u2014 plain Jaccard.",
     rrfK_desc: "RRF smoothing constant. Default 60. \u2191 flatter rank contribution (softer top) \xB7 \u2193 stronger weight on top results. Rarely change.",
     bfsFusion_desc: "Order query context via RRF fusion of vector and graph. Off by default.",
+    bfsMinScoreRatio_desc: "Drop graph-expanded pages whose dense cosine is below this fraction of the best seed's cosine. 0 = off. Dense (embedding/hybrid) retrieval only.",
     seedSimilarityThreshold_desc: "Min max-score for a seed; below it \u2014 fallback to Jaccard \u2192 llmSelectSeeds. Example: 0.3 \xB7 0 = off, 1 = exact match. \u2191 stricter (fewer seeds, more precise) \xB7 \u2193 wider coverage. Recommended 0.25\u20130.4.",
     dedupOnIngest_desc: "On creating a near-duplicate page \u2014 merge into the existing one via LLM-merge.",
     dedupThreshold_desc: "Cosine threshold for dedup on ingest (0..1). Default 0.85. \u2191 merges only near-duplicates (safer) \xB7 \u2193 more aggressive, risk of false merges. Recommended 0.83\u20130.90.",
@@ -26522,6 +26412,7 @@ var en = {
     statsInfoFrom: "Info from:",
     statsAnalyzed: "Pages analyzed:",
     statsSelected: "Selected for LLM:",
+    statsSelectedBreakdown: (selected, seed, graph) => `${selected} (${seed} vector + ${graph} graph)`,
     statsInAnswer: "In answer:",
     statsTokensSent: "Tokens sent:",
     ratingAnswer: "Rate this answer:",
@@ -26787,6 +26678,7 @@ var ru = {
     hybridRetrieval_desc: "\u0424\u044C\u044E\u0437\u0438\u0442\u044C embedding \u0438 jaccard \u0447\u0435\u0440\u0435\u0437 RRF. \u0422\u0440\u0435\u0431\u0443\u0435\u0442 embedding-\u043C\u043E\u0434\u0435\u043B\u044C; \u0431\u0435\u0437 \u043D\u0435\u0451 \u2014 \u043E\u0431\u044B\u0447\u043D\u044B\u0439 jaccard.",
     rrfK_desc: "\u041A\u043E\u043D\u0441\u0442\u0430\u043D\u0442\u0430 \u0441\u0433\u043B\u0430\u0436\u0438\u0432\u0430\u043D\u0438\u044F RRF. \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 60. \u2191 \u0440\u043E\u0432\u043D\u0435\u0435 \u0432\u043A\u043B\u0430\u0434 \u0440\u0430\u043D\u0433\u043E\u0432 (\u043C\u044F\u0433\u0447\u0435 \u0442\u043E\u043F) \xB7 \u2193 \u0441\u0438\u043B\u044C\u043D\u0435\u0435 \u0432\u0435\u0441 \u0442\u043E\u043F\u043E\u0432\u044B\u0445 \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u043E\u0432. \u041C\u0435\u043D\u044F\u0439\u0442\u0435 \u0440\u0435\u0434\u043A\u043E.",
     bfsFusion_desc: "\u0423\u043F\u043E\u0440\u044F\u0434\u043E\u0447\u0438\u0442\u044C \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u0437\u0430\u043F\u0440\u043E\u0441\u0430 \u0447\u0435\u0440\u0435\u0437 RRF-\u0444\u044C\u044E\u0437 \u0432\u0435\u043A\u0442\u043E\u0440\u0430 \u0438 \u0433\u0440\u0430\u0444\u0430. \u041F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E \u0432\u044B\u043A\u043B.",
+    bfsMinScoreRatio_desc: "\u041E\u0442\u0431\u0440\u0430\u0441\u044B\u0432\u0430\u0442\u044C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438\u0437 \u0433\u0440\u0430\u0444\u043E\u0432\u043E\u0433\u043E \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F, \u0443 \u043A\u043E\u0442\u043E\u0440\u044B\u0445 dense-\u043A\u043E\u0441\u0438\u043D\u0443\u0441 \u043D\u0438\u0436\u0435 \u044D\u0442\u043E\u0439 \u0434\u043E\u043B\u0438 \u043E\u0442 \u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0430 \u043B\u0443\u0447\u0448\u0435\u0433\u043E seed. 0 = \u0432\u044B\u043A\u043B. \u0422\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F dense-\u043F\u043E\u0438\u0441\u043A\u0430 (embedding/\u0433\u0438\u0431\u0440\u0438\u0434).",
     seedSimilarityThreshold_desc: "\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u044B\u0439 max-score seed; \u043D\u0438\u0436\u0435 \u2014 \u0444\u043E\u043B\u043B\u0431\u044D\u043A \u043D\u0430 Jaccard \u2192 llmSelectSeeds. \u041F\u0440\u0438\u043C\u0435\u0440: 0.3 \xB7 0 = \u0432\u044B\u043A\u043B, 1 = \u0442\u043E\u0447\u043D\u043E\u0435 \u0441\u043E\u0432\u043F\u0430\u0434\u0435\u043D\u0438\u0435. \u2191 \u0441\u0442\u0440\u043E\u0436\u0435 (\u043C\u0435\u043D\u044C\u0448\u0435 seeds, \u0442\u043E\u0447\u043D\u0435\u0435) \xB7 \u2193 \u0448\u0438\u0440\u0435 \u043E\u0445\u0432\u0430\u0442. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u044E 0.25\u20130.4.",
     dedupOnIngest_desc: "\u041D\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u0438 near-duplicate \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u2014 \u0441\u043B\u0438\u0442\u044C \u0432 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0443\u044E \u0447\u0435\u0440\u0435\u0437 LLM-merge.",
     dedupThreshold_desc: "\u041F\u043E\u0440\u043E\u0433 \u043A\u043E\u0441\u0438\u043D\u0443\u0441\u0430 \u0434\u043B\u044F \u0434\u0435\u0434\u0443\u043F\u0430 \u043F\u0440\u0438 ingest (0..1). \u041F\u043E \u0443\u043C\u043E\u043B\u0447. 0.85. \u2191 \u0441\u043B\u0438\u0432\u0430\u0435\u0442 \u0442\u043E\u043B\u044C\u043A\u043E near-duplicate (\u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u0435\u0435) \xB7 \u2193 \u0430\u0433\u0440\u0435\u0441\u0441\u0438\u0432\u043D\u0435\u0435, \u0440\u0438\u0441\u043A \u043B\u043E\u0436\u043D\u044B\u0445 merge. \u0420\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0443\u044E 0.83\u20130.90.",
@@ -26861,6 +26753,7 @@ var ru = {
     statsInfoFrom: "\u0418\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044F \u0438\u0437:",
     statsAnalyzed: "\u041F\u0440\u043E\u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043D\u043E \u0441\u0442\u0440\u0430\u043D\u0438\u0446:",
     statsSelected: "\u0412\u044B\u0431\u0440\u0430\u043D\u043E \u0434\u043B\u044F LLM:",
+    statsSelectedBreakdown: (selected, seed, graph) => `${selected} (${seed} \u0432\u0435\u043A\u0442\u043E\u0440 + ${graph} \u0433\u0440\u0430\u0444)`,
     statsInAnswer: "\u041F\u043E\u043F\u0430\u043B\u043E \u0432 \u043E\u0442\u0432\u0435\u0442:",
     statsTokensSent: "\u041E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u0442\u043E\u043A\u0435\u043D\u043E\u0432:",
     ratingAnswer: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u043E\u0442\u0432\u0435\u0442:",
@@ -27125,6 +27018,7 @@ var es = {
     hybridRetrieval_desc: "Fusiona embedding y Jaccard mediante RRF. Requiere un modelo de embedding; sin \xE9l \u2014 Jaccard simple.",
     rrfK_desc: "Constante de suavizado RRF. Por defecto 60. \u2191 contribuci\xF3n de rangos m\xE1s plana (top m\xE1s suave) \xB7 \u2193 m\xE1s peso en los primeros resultados. Cambiar rara vez.",
     bfsFusion_desc: "Ordenar el contexto de consulta mediante fusi\xF3n RRF de vector y grafo. Desactivado por defecto.",
+    bfsMinScoreRatio_desc: "Descartar p\xE1ginas expandidas por el grafo cuyo coseno denso est\xE9 por debajo de esta fracci\xF3n del coseno del mejor seed. 0 = off. Solo para recuperaci\xF3n densa (embedding/h\xEDbrida).",
     seedSimilarityThreshold_desc: "Max-score m\xEDnimo para un seed; por debajo \u2014 fallback a Jaccard \u2192 llmSelectSeeds. Ejemplo: 0.3 \xB7 0 = off, 1 = coincidencia exacta. \u2191 m\xE1s estricto (menos seeds, m\xE1s preciso) \xB7 \u2193 cobertura m\xE1s amplia. Recomendado 0.25\u20130.4.",
     dedupOnIngest_desc: "Al crear una p\xE1gina casi duplicada \u2014 fusionar con la existente mediante LLM-merge.",
     dedupThreshold_desc: "Umbral de coseno para dedup en ingest (0..1). Por defecto 0.85. \u2191 fusiona solo casi duplicados (m\xE1s seguro) \xB7 \u2193 m\xE1s agresivo, riesgo de fusiones falsas. Recomendado 0.83\u20130.90.",
@@ -27199,6 +27093,7 @@ var es = {
     statsInfoFrom: "Informaci\xF3n de:",
     statsAnalyzed: "P\xE1ginas analizadas:",
     statsSelected: "Seleccionadas para LLM:",
+    statsSelectedBreakdown: (selected, seed, graph) => `${selected} (${seed} vector + ${graph} grafo)`,
     statsInAnswer: "En la respuesta:",
     statsTokensSent: "Tokens enviados:",
     ratingAnswer: "Eval\xFAa la respuesta:",
@@ -29356,14 +29251,14 @@ var PageSimilarityService = class {
   async selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens, limit2 = this.config.topK) {
     const { baseUrl, apiKey, model } = this.config;
     if (!baseUrl || !model) {
-      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2), denseMax: 0, embedFailed: false };
+      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2), denseMax: 0, embedFailed: false, denseByPid: {} };
     }
     let queryVec;
     try {
       const truncated = sourceContent.slice(0, 2e3);
       [queryVec] = await fetchEmbeddings(baseUrl, apiKey, model, [truncated], this.config.dimensions);
     } catch {
-      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2), denseMax: 0, embedFailed: true };
+      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2), denseMax: 0, embedFailed: true, denseByPid: {} };
     }
     const pids = allPaths.map((p) => pageId(p));
     const annotations = pids.map((pid) => indexAnnotations.get(pid) ?? "");
@@ -29395,6 +29290,7 @@ var PageSimilarityService = class {
       }
     }
     let denseMax = 0;
+    const denseByPid = {};
     const scored = [];
     for (let i = 0; i < allPaths.length; i++) {
       const pid = pids[i];
@@ -29406,11 +29302,12 @@ var PageSimilarityService = class {
       } else {
         const c = maxCosine(queryVec, vecs);
         if (c > denseMax) denseMax = c;
+        denseByPid[pid] = c;
         if (c > 0) scored.push({ path: allPaths[i], score: c });
       }
     }
     scored.sort((a, b) => b.score - a.score);
-    return { results: scored.slice(0, limit2), denseMax, embedFailed: false };
+    return { results: scored.slice(0, limit2), denseMax, embedFailed: false, denseByPid };
   }
   async selectEmbeddingScored(sourceContent, indexAnnotations, allPaths, queryTokens, limit2 = this.config.topK) {
     return (await this.selectEmbeddingScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens, limit2)).results;
@@ -29422,7 +29319,7 @@ var PageSimilarityService = class {
     const sparse = this.selectJaccardScored(queryTokens, indexAnnotations, allPaths, pool);
     const fused = rrf([dense.results.map((x) => x.path), sparse.map((x) => x.path)], this.config.rrfK ?? 60);
     const results = fused.slice(0, this.config.topK).map((f) => ({ path: f.id, score: f.score }));
-    return { results, denseMax: dense.denseMax, embedFailed: dense.embedFailed };
+    return { results, denseMax: dense.denseMax, embedFailed: dense.embedFailed, denseByPid: dense.denseByPid };
   }
   async selectHybridScored(sourceContent, indexAnnotations, allPaths, queryTokens) {
     return (await this.selectHybridScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens)).results;
@@ -29430,9 +29327,9 @@ var PageSimilarityService = class {
   /** Diagnostics-bearing seed selection used by the query gate. */
   async selectRelevantScoredDiag(sourceContent, indexAnnotations, allPaths) {
     const queryTokens = tokenize(sourceContent);
-    if (queryTokens.size === 0) return { results: [], denseMax: 0, embedFailed: false };
+    if (queryTokens.size === 0) return { results: [], denseMax: 0, embedFailed: false, denseByPid: {} };
     if (this.config.mode === "jaccard") {
-      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths), denseMax: 0, embedFailed: false };
+      return { results: this.selectJaccardScored(queryTokens, indexAnnotations, allPaths), denseMax: 0, embedFailed: false, denseByPid: {} };
     }
     if (this.config.mode === "hybrid") {
       return this.selectHybridScoredDiag(sourceContent, indexAnnotations, allPaths, queryTokens);
@@ -30164,6 +30061,12 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
         new import_obsidian5.Setting(containerEl).setName("BFS fusion (vector \u2295 graph)").setDesc(T.settings.bfsFusion_desc).addToggle(
           (t) => t.setValue(s.nativeAgent.bfsFusion ?? false).onChange(async (v) => {
             s.nativeAgent.bfsFusion = v;
+            await this.plugin.saveSettings();
+          })
+        );
+        new import_obsidian5.Setting(containerEl).setName("Graph relevance floor (ratio)").setDesc(T.settings.bfsMinScoreRatio_desc).addSlider(
+          (sl) => sl.setLimits(0, 1, 0.05).setDynamicTooltip().setValue(s.nativeAgent.bfsMinScoreRatio ?? 0.6).onChange(async (v) => {
+            s.nativeAgent.bfsMinScoreRatio = v;
             await this.plugin.saveSettings();
           })
         );
@@ -31549,6 +31452,11 @@ function formatGraphStatsLines(ev, agentLogEnabled) {
       lines.push(score !== void 0 ? `  ${id} (${score.toFixed(2)})` : `  ${id}`);
     }
   }
+  if (ev.floorApplied) {
+    lines.push(`Floor: pruned ${ev.prunedCount ?? 0} (ref ${(ev.floorRef ?? 0).toFixed(2)})`);
+  } else if (ev.floorSkippedReason) {
+    lines.push(`Floor skipped: ${ev.floorSkippedReason}`);
+  }
   return lines;
 }
 function registerLinkHandler(el, app) {
@@ -32408,7 +32316,8 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
     } else {
       line(T.statsDomain, ev.domainName ?? "\u2014");
       line(T.statsAnalyzed, String(ev.pagesScanned));
-      line(T.statsSelected, String(ev.pagesSelected));
+      const selected = ev.seedCount !== void 0 && ev.graphCount !== void 0 ? T.statsSelectedBreakdown(ev.pagesSelected, ev.seedCount, ev.graphCount) : String(ev.pagesSelected);
+      line(T.statsSelected, selected);
     }
     const tokRow = box.createDiv("ai-wiki-cross-stats-row");
     tokRow.createSpan({ cls: "ai-wiki-cross-stats-label", text: T.statsTokensSent });
@@ -40327,6 +40236,19 @@ var GraphCache = class {
 };
 var graphCache = new GraphCache();
 
+// src/retrieval-prune.ts
+function pruneByRelevance(expandedIds, denseByPid, denseRef, ratio) {
+  const bar = ratio * denseRef;
+  const keep = /* @__PURE__ */ new Set();
+  const pruned = [];
+  for (const id of expandedIds) {
+    const score = denseByPid[id];
+    if (score === void 0 || score >= bar) keep.add(id);
+    else pruned.push(id);
+  }
+  return { keep, pruned };
+}
+
 // src/phases/query-link-validator.ts
 function extractAnswerLinks(text) {
   const re = /\[\[([^\]|#/]+?)\]\]/g;
@@ -40529,6 +40451,8 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
   let retrievalMode = "jaccard";
   let denseMax = 0;
   let seedFallbackReason;
+  let denseByPid = {};
+  let embedFailed = false;
   const syntheticPages = new Map(
     [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""])
   );
@@ -40538,6 +40462,8 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
     const allAnnotatedPaths = [...indexAnnotations.keys()].map((id) => `${wikiVaultPath}/${id}.md`);
     const diag = await similarity.selectRelevantScoredDiag(question, indexAnnotations, allAnnotatedPaths);
     denseMax = diag.denseMax;
+    denseByPid = diag.denseByPid;
+    embedFailed = diag.embedFailed;
     const topSelected = diag.results.slice(0, topK);
     seeds = topSelected.map((x) => pageId(x.path));
     seedScores = Object.fromEntries(topSelected.map((x) => [pageId(x.path), x.score]));
@@ -40594,8 +40520,27 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
     similarity
   );
   const seedSet = new Set(seeds);
-  const expandedPages = [...selectedIds].filter((id) => !seedSet.has(id));
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, seedFallback, retrievalMode, denseMax, seedFallbackReason };
+  let expandedPages = [...selectedIds].filter((id) => !seedSet.has(id));
+  const ratio = cfg.bfsMinScoreRatio ?? 0;
+  let floorApplied = false;
+  let prunedCount = 0;
+  let floorSkippedReason;
+  if (ratio > 0) {
+    const eligible = (retrievalMode === "embedding" || retrievalMode === "hybrid") && denseMax > 0 && !embedFailed && seedFallback === "none" && cfg.bfsTopK > 0;
+    if (!eligible) {
+      floorSkippedReason = retrievalMode === "jaccard" ? "jaccard-mode" : embedFailed ? "embed-failed" : denseMax <= 0 ? "low-dense" : seedFallback !== "none" ? `seed-fallback:${seedFallback}` : "bfs-uncapped";
+    } else if (expandedPages.length > 0) {
+      const { keep, pruned } = pruneByRelevance(expandedPages, denseByPid, denseMax, ratio);
+      for (const id of pruned) {
+        selectedIds.delete(id);
+        delete expandedScores[id];
+      }
+      expandedPages = expandedPages.filter((id) => keep.has(id));
+      prunedCount = pruned.length;
+      floorApplied = true;
+    }
+  }
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, seedFallback, retrievalMode, denseMax, seedFallbackReason, floorApplied, floorRef: floorApplied ? denseMax : void 0, prunedCount, floorSkippedReason };
   const candidatePages = /* @__PURE__ */ new Map();
   for (const [path2, content] of pages) {
     if (selectedIds.has(pageId(path2))) candidatePages.set(path2, content);
@@ -40623,7 +40568,7 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
     pagesScanned: files.length
   };
 }
-async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1, bfsTopK = 10, similarity, wikiLinkValidationRetries = 3, seedSimilarityThreshold = 0, bfsFusion = false, rrfK = 60) {
+async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot, signal, graphDepth = 1, opts = {}, seedTopK = 5, seedMinScore = 0.1, bfsTopK = 10, similarity, wikiLinkValidationRetries = 3, seedSimilarityThreshold = 0, bfsFusion = false, rrfK = 60, bfsMinScoreRatio = 0) {
   const question = args[0]?.trim();
   if (!question) {
     yield { kind: "error", message: "query: question required" };
@@ -40641,7 +40586,8 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
     seedTopK,
     seedMinScore,
     bfsTopK,
-    seedSimilarityThreshold
+    seedSimilarityThreshold,
+    bfsMinScoreRatio
   };
   const cand = yield* retrieveDomainCandidates(
     domain,
@@ -40686,12 +40632,16 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
 Wiki index (_index.md):
 ${indexContent}` : ""
   });
+  const seedCount = contextPages.filter(([p]) => seedSet.has(pageId(p))).length;
+  const graphCount = contextPages.length - seedCount;
   yield {
     kind: "query_stats",
     crossDomain: false,
     domainName: domain.name,
     pagesScanned: cand.pagesScanned,
-    pagesSelected: contextPages.length
+    pagesSelected: contextPages.length,
+    seedCount,
+    graphCount
   };
   if (signal.aborted) return;
   const ans = yield* answerFromContext({
@@ -40720,6 +40670,7 @@ ${indexContent}` : ""
         mode: similarity?.config.mode === "hybrid" ? "hybrid" : similarity?.config.mode === "embedding" ? "embedding" : "jaccard",
         seedTopK,
         bfsTopK,
+        bfsMinScoreRatio,
         bfsFusion,
         seedSimilarityThreshold,
         hybridRetrieval: similarity?.config.mode === "hybrid"
@@ -40985,6 +40936,7 @@ ${indexBlock}` : ""
         mode: similarity?.config.mode === "hybrid" ? "hybrid" : similarity?.config.mode === "embedding" ? "embedding" : "jaccard",
         seedTopK: cfg.seedTopK,
         bfsTopK: cfg.bfsTopK,
+        bfsMinScoreRatio: cfg.bfsMinScoreRatio ?? 0,
         bfsFusion: true,
         seedSimilarityThreshold: cfg.seedSimilarityThreshold,
         hybridRetrieval: similarity?.config.mode === "hybrid",
@@ -43241,7 +43193,8 @@ var AgentRunner = class {
               seedTopK: this.settings.seedTopK,
               seedMinScore: this.settings.seedMinScore,
               bfsTopK: this.settings.bfsTopK,
-              seedSimilarityThreshold: this.settings.nativeAgent.seedSimilarityThreshold ?? 0
+              seedSimilarityThreshold: this.settings.nativeAgent.seedSimilarityThreshold ?? 0,
+              bfsMinScoreRatio: this.settings.nativeAgent.bfsMinScoreRatio ?? 0.6
             },
             this.settings.nativeAgent.rrfK ?? 60,
             this.settings.wikiLinkValidationRetries ?? 3,
@@ -43249,7 +43202,7 @@ var AgentRunner = class {
             similarity
           );
         } else {
-          yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, this.settings.bfsTopK, similarity, this.settings.wikiLinkValidationRetries ?? 3, this.settings.nativeAgent.seedSimilarityThreshold ?? 0, this.settings.nativeAgent.bfsFusion ?? false, this.settings.nativeAgent.rrfK ?? 60);
+          yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, this.settings.bfsTopK, similarity, this.settings.wikiLinkValidationRetries ?? 3, this.settings.nativeAgent.seedSimilarityThreshold ?? 0, this.settings.nativeAgent.bfsFusion ?? false, this.settings.nativeAgent.rrfK ?? 60, this.settings.nativeAgent.bfsMinScoreRatio ?? 0.6);
         }
         break;
       case "lint":

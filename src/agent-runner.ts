@@ -101,13 +101,14 @@ export class AgentRunner {
             req.args[0] ?? "", this.vaultTools, this.llm, model, domains, req.signal,
             { graphDepth: this.settings.graphDepth, seedTopK: this.settings.seedTopK,
               seedMinScore: this.settings.seedMinScore, bfsTopK: this.settings.bfsTopK,
-              seedSimilarityThreshold: this.settings.nativeAgent.seedSimilarityThreshold ?? 0 },
+              seedSimilarityThreshold: this.settings.nativeAgent.seedSimilarityThreshold ?? 0,
+              bfsMinScoreRatio: this.settings.nativeAgent.bfsMinScoreRatio ?? 0.6 },
             this.settings.nativeAgent.rrfK ?? 60,
             this.settings.wikiLinkValidationRetries ?? 3,
             opts, similarity,
           );
         } else {
-          yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, this.settings.bfsTopK, similarity, this.settings.wikiLinkValidationRetries ?? 3, this.settings.nativeAgent.seedSimilarityThreshold ?? 0, this.settings.nativeAgent.bfsFusion ?? false, this.settings.nativeAgent.rrfK ?? 60);
+          yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, this.settings.bfsTopK, similarity, this.settings.wikiLinkValidationRetries ?? 3, this.settings.nativeAgent.seedSimilarityThreshold ?? 0, this.settings.nativeAgent.bfsFusion ?? false, this.settings.nativeAgent.rrfK ?? 60, this.settings.nativeAgent.bfsMinScoreRatio ?? 0.6);
         }
         break;
       case "lint":

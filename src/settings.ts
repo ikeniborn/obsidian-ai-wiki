@@ -784,6 +784,15 @@ export class LlmWikiSettingTab extends PluginSettingTab {
               .onChange(async (v) => { s.nativeAgent.bfsFusion = v; await this.plugin.saveSettings(); }),
           );
         new Setting(containerEl)
+          .setName("Graph relevance floor (ratio)")
+          .setDesc(T.settings.bfsMinScoreRatio_desc)
+          .addSlider((sl) =>
+            sl.setLimits(0, 1, 0.05)
+              .setDynamicTooltip()
+              .setValue(s.nativeAgent.bfsMinScoreRatio ?? 0.6)
+              .onChange(async (v) => { s.nativeAgent.bfsMinScoreRatio = v; await this.plugin.saveSettings(); }),
+          );
+        new Setting(containerEl)
           .setName("Seed similarity threshold")
           .setDesc(T.settings.seedSimilarityThreshold_desc)
           .addText((t) =>

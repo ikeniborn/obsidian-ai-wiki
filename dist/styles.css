@@ -387,7 +387,14 @@
   border-color: var(--color-red);
 }
 
-.ai-wiki-cross-stats { border: 1px solid var(--background-modifier-border); border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; font-size: 0.85em; }
+.ai-wiki-cross-stats {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-top: 10px;
+  margin-bottom: 8px;
+  font-size: 0.85em;
+}
 .ai-wiki-cross-stats-row { display: flex; justify-content: space-between; gap: 8px; }
 .ai-wiki-cross-stats-label { color: var(--text-muted); }
 .ai-wiki-cross-stats-value { font-weight: 600; text-align: right; min-width: 0; overflow-wrap: anywhere; }

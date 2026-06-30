@@ -19,6 +19,7 @@ import { seedPassesGate } from "../retrieval-diag";
 import type { RetrievalMode, SeedFallbackReason } from "../retrieval-diag";
 import { promptVersionOf } from "../prompt-version";
 
+import { pruneByRelevance } from "../retrieval-prune";
 import { answerFromContext } from "./query-answer";
 
 const META_FILES = ["_index.md", "_log.md"];
@@ -29,6 +30,7 @@ export interface RetrieveCfg {
   seedMinScore: number;
   bfsTopK: number;
   seedSimilarityThreshold: number;
+  bfsMinScoreRatio?: number;   // 0 / undefined = floor off
 }
 
 export interface DomainCandidates {
@@ -89,6 +91,8 @@ export async function* retrieveDomainCandidates(
   let retrievalMode: RetrievalMode = "jaccard";
   let denseMax = 0;
   let seedFallbackReason: SeedFallbackReason | undefined;
+  let denseByPid: Record<string, number> = {};
+  let embedFailed = false;
   const syntheticPages = new Map<string, string>(
     [...indexAnnotations.keys()].map((id) => [`${wikiVaultPath}/${id}.md`, ""]),
   );
@@ -98,6 +102,8 @@ export async function* retrieveDomainCandidates(
     const allAnnotatedPaths = [...indexAnnotations.keys()].map((id) => `${wikiVaultPath}/${id}.md`);
     const diag = await similarity.selectRelevantScoredDiag(question, indexAnnotations, allAnnotatedPaths);
     denseMax = diag.denseMax;
+    denseByPid = diag.denseByPid;
+    embedFailed = diag.embedFailed;
     const topSelected = diag.results.slice(0, topK);
     seeds = topSelected.map((x) => pageId(x.path));
     seedScores = Object.fromEntries(topSelected.map((x) => [pageId(x.path), x.score]));
@@ -152,8 +158,38 @@ export async function* retrieveDomainCandidates(
     seeds, graphResult.graph, cfg.graphDepth, pages, question, cfg.bfsTopK, indexAnnotations, similarity,
   );
   const seedSet = new Set(seeds);
-  const expandedPages = [...selectedIds].filter((id) => !seedSet.has(id));
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, seedFallback, retrievalMode, denseMax, seedFallbackReason };
+  let expandedPages = [...selectedIds].filter((id) => !seedSet.has(id));
+
+  // Relevance floor — drop graph-expanded pages whose raw dense cosine falls below
+  // ratio·denseMax. Only when scales are comparable: dense mode, strong seed signal,
+  // no seed fallback, and a finite bfsTopK cap. Mutates selectedIds/expandedScores.
+  const ratio = cfg.bfsMinScoreRatio ?? 0;
+  let floorApplied = false;
+  let prunedCount = 0;
+  let floorSkippedReason: string | undefined;
+  if (ratio > 0) {
+    const eligible =
+      (retrievalMode === "embedding" || retrievalMode === "hybrid") &&
+      denseMax > 0 && !embedFailed && seedFallback === "none" && cfg.bfsTopK > 0;
+    if (!eligible) {
+      // Reason priority assumes retrievalMode is only "jaccard" when the dense pass
+      // was never entered (so jaccard-mode precedes embed-failed intentionally).
+      floorSkippedReason =
+        retrievalMode === "jaccard" ? "jaccard-mode"
+        : embedFailed ? "embed-failed"
+        : denseMax <= 0 ? "low-dense"
+        : seedFallback !== "none" ? `seed-fallback:${seedFallback}`
+        : "bfs-uncapped";
+    } else if (expandedPages.length > 0) {
+      const { keep, pruned } = pruneByRelevance(expandedPages, denseByPid, denseMax, ratio);
+      for (const id of pruned) { selectedIds.delete(id); delete expandedScores[id]; }
+      expandedPages = expandedPages.filter((id) => keep.has(id));
+      prunedCount = pruned.length;
+      floorApplied = true;
+    }
+  }
+
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, seedFallback, retrievalMode, denseMax, seedFallbackReason, floorApplied, floorRef: floorApplied ? denseMax : undefined, prunedCount, floorSkippedReason };
 
   // Keep only candidate content; let the rest be GC'd (memory bound).
   const candidatePages = new Map<string, string>();
@@ -190,6 +226,7 @@ export async function* runQuery(
   seedSimilarityThreshold: number = 0,
   bfsFusion: boolean = false,
   rrfK: number = 60,
+  bfsMinScoreRatio: number = 0,
 ): AsyncGenerator<RunEvent> {
   const question = args[0]?.trim();
   if (!question) {
@@ -206,7 +243,7 @@ export async function* runQuery(
   let outputTokens = 0;
 
   const cfg = {
-    graphDepth, seedTopK, seedMinScore, bfsTopK, seedSimilarityThreshold,
+    graphDepth, seedTopK, seedMinScore, bfsTopK, seedSimilarityThreshold, bfsMinScoreRatio,
   };
   const cand = yield* retrieveDomainCandidates(
     domain, question, vaultTools, similarity, signal, cfg,
@@ -252,12 +289,17 @@ export async function* runQuery(
     index_block: indexContent ? `\nWiki index (_index.md):\n${indexContent}` : "",
   });
 
+  const seedCount = contextPages.filter(([p]) => seedSet.has(pageId(p))).length;
+  const graphCount = contextPages.length - seedCount;
+
   yield {
     kind: "query_stats",
     crossDomain: false,
     domainName: domain.name,
     pagesScanned: cand.pagesScanned,
     pagesSelected: contextPages.length,
+    seedCount,
+    graphCount,
   };
   if (signal.aborted) return;
 
@@ -281,6 +323,7 @@ export async function* runQuery(
         mode: similarity?.config.mode === "hybrid" ? "hybrid" : similarity?.config.mode === "embedding" ? "embedding" : "jaccard",
         seedTopK,
         bfsTopK,
+        bfsMinScoreRatio,
         bfsFusion,
         seedSimilarityThreshold,
         hybridRetrieval: similarity?.config.mode === "hybrid",

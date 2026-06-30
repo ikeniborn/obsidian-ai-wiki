@@ -89,7 +89,7 @@ The index line format is `- pid — annotation` — a bare `pid`, no `[[wikilink
 
 ## BFS Expansion
 
-BFS always runs from the seed set. All wiki pages are read to build the graph; only BFS-expanded pages reach the LLM. `bfsExpandRanked` ranks non-seed pages and caps them at `bfsTopK` (default 10); seeds are always included. The `graph_stats` event emits `seedScores`, `expandedPages`, and `expandedScores` for tracing. See [[retrieval#Wiki Graph]].
+BFS always runs from the seed set. All wiki pages are read to build the graph; only BFS-expanded pages reach the LLM. `bfsExpandRanked` ranks non-seed pages and caps them at `bfsTopK` (default 10); seeds are always included. An optional relevance floor (`nativeAgent.bfsMinScoreRatio`, default 0.6, `0` = off) then drops graph pages whose raw dense cosine is below `ratio · denseMax`, in dense modes only. The `graph_stats` event emits `seedScores`, `expandedPages`, `expandedScores`, and the floor fields (`floorApplied`/`prunedCount`/`floorSkippedReason`) for tracing. See [[retrieval#Wiki Graph]] and [[retrieval#Relevance Floor]].
 
 ## Fusion
 

@@ -11,6 +11,9 @@ export interface SeedDiag {
   denseMax: number;
   /** True when the embedding HTTP call threw and the dense side degraded to jaccard. */
   embedFailed: boolean;
+  /** Raw cosine per pageId for EVERY scored page with a dense vector. Empty in jaccard
+   *  mode / on embed failure. Used by the relevance floor (src/retrieval-prune.ts). */
+  denseByPid: Record<string, number>;
 }
 
 /**
