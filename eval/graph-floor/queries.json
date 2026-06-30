@@ -1,0 +1,4 @@
+[
+  { "id": "q1", "question": "График закаливания?", "domain": "homelab", "goldPages": ["wiki_homelab_hardening"] },
+  { "id": "q2", "question": "Настройка обратного прокси?", "domain": "homelab", "goldPages": ["wiki_homelab_proxy"] }
+]
