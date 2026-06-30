@@ -109,6 +109,8 @@ export type RunEvent =
       seedFallbackReason?: import("./retrieval-diag").SeedFallbackReason;
       floorApplied?: boolean;
       floorRef?: number;
+      floorLoRef?: number;
+      floorBar?: number;
       prunedCount?: number;
       floorSkippedReason?: string;
     };
@@ -297,7 +299,7 @@ export const DEFAULT_SETTINGS: LlmWikiPluginSettings = {
     hybridRetrieval: false,
     rrfK: 60,
     bfsFusion: false,
-    bfsMinScoreRatio: 0.6, // 0.6 = keep graph pages within 60% of the best seed's cosine; 0 = floor off
+    bfsMinScoreRatio: 0.6, // position of the floor bar within the domain's cosine range [loRef..denseMax]; 0 = floor off
     seedSimilarityThreshold: 0,
     dedupOnIngest: false,
     dedupThreshold: 0.85,

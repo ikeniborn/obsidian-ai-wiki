@@ -65,3 +65,4 @@
 {"op":"ingest","source":"src/storage-migration.ts","page":"docs/wiki/domain-model.md","date":"2026-06-30"}
 {"op":"ingest","source":"src/phases/query.ts","page":"docs/wiki/retrieval.md","date":"2026-06-30"}
 {"op":"ingest","source":"src/phases/query.ts","page":"docs/wiki/operations.md","date":"2026-06-30"}
+{"op":"ingest","source":"src/retrieval-prune.ts","page":"docs/wiki/retrieval.md","date":"2026-06-30"}

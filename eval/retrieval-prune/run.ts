@@ -2,7 +2,7 @@
  * Out-of-vault unit test for pruneByRelevance. No Obsidian, no API key.
  * Run: npx tsx eval/retrieval-prune/run.ts
  */
-import { pruneByRelevance } from "../../src/retrieval-prune";
+import { pruneByRelevance, robustLow, FLOOR_LO_PCT } from "../../src/retrieval-prune";
 
 let pass = 0, fail = 0;
 const failures: string[] = [];
@@ -12,46 +12,61 @@ function check(name: string, cond: boolean, detail = ""): void {
 }
 function section(t: string): void { console.log(`\n=== ${t} ===`); }
 
-// denseRef = 0.6, ratio = 0.6 → bar = 0.36
-const denseByPid = { a: 0.55, b: 0.30, c: 0.36, d: 0.10 };
+// deepseek-like compressed domain: cosines clustered high, one outlier low.
+const domainCosines = [0.40, 0.44, 0.47, 0.50, 0.52, 0.55, 0.59];
+const loRef = robustLow(domainCosines, FLOOR_LO_PCT); // p5 ≈ 0.412
 
-section("threshold");
+section("robustLow percentile");
 {
-  const r1 = pruneByRelevance(["a", "b", "c", "d"], denseByPid, 0.6, 0.6);
-  check("keeps >= bar (a,c)", r1.keep.has("a") && r1.keep.has("c"));
-  check("drops < bar (b,d)", !r1.keep.has("b") && !r1.keep.has("d"));
-  check("pruned lists b,d", r1.pruned.length === 2 && r1.pruned.includes("b") && r1.pruned.includes("d"),
-    `pruned=${r1.pruned.join(",")}`);
+  check("empty → 0", robustLow([], 0.05) === 0);
+  check("single → itself", robustLow([0.5], 0.05) === 0.5);
+  check("p0 → min", robustLow(domainCosines, 0) === 0.40);
+  check("p100 → max", robustLow(domainCosines, 1) === 0.59);
+  check("p5 between min and 2nd", loRef > 0.40 && loRef < 0.44, `loRef=${loRef}`);
 }
 
-section("missing score");
+section("spread-relative bar (denseRef=0.59)");
 {
-  // missing score → kept (cannot evaluate → no quality loss)
-  const r2 = pruneByRelevance(["x"], {}, 0.6, 0.6);
-  check("missing score kept", r2.keep.has("x") && r2.pruned.length === 0);
+  // bar = loRef + 0.6·(0.59 − loRef) ≈ 0.412 + 0.6·0.178 ≈ 0.519
+  const denseByPid = { hi: 0.57, mid: 0.50, lo: 0.44, out: 0.40 };
+  const r = pruneByRelevance(["hi", "mid", "lo", "out"], denseByPid, 0.59, loRef, 0.6);
+  const bar = r.bar;
+  check("bar within (loRef, denseRef)", bar > loRef && bar < 0.59, `bar=${bar}`);
+  check("keeps >= bar (hi)", r.keep.has("hi"));
+  check("drops < bar (mid,lo,out)", !r.keep.has("mid") && !r.keep.has("lo") && !r.keep.has("out"),
+    `kept=${[...r.keep].join(",")}`);
+  check("prunes the compressed tail (was a no-op under ratio·denseMax)", r.pruned.length === 3,
+    `pruned=${r.pruned.join(",")}`);
+  check("not collapsed", r.collapsed === false);
 }
 
-section("boundary");
+section("boundary kept (>=)");
 {
-  // boundary exactly at bar → kept (>=)
-  const r3 = pruneByRelevance(["e"], { e: 0.36 }, 0.6, 0.6);
-  check("boundary kept", r3.keep.has("e"));
+  const bar = loRef + 0.6 * (0.59 - loRef);
+  const r = pruneByRelevance(["e"], { e: bar }, 0.59, loRef, 0.6);
+  check("score exactly at bar kept", r.keep.has("e") && r.pruned.length === 0);
 }
 
-section("zero ref");
+section("missing score kept");
 {
-  // denseRef 0 → bar 0 → all kept
-  const r4 = pruneByRelevance(["a", "d"], denseByPid, 0, 0.6);
-  check("zero ref keeps all", r4.keep.size === 2 && r4.pruned.length === 0,
-    `pruned=${r4.pruned.join(",")}`);
+  const r = pruneByRelevance(["x"], {}, 0.59, loRef, 0.6);
+  check("missing score kept", r.keep.has("x") && r.pruned.length === 0);
 }
 
-section("zero ratio");
+section("range collapsed → skip (keep-all)");
 {
-  // ratio 0 → bar 0 → all kept (distinct from denseRef = 0)
-  const r5 = pruneByRelevance(["a", "d"], denseByPid, 0.6, 0);
-  check("zero ratio keeps all", r5.keep.size === 2 && r5.pruned.length === 0,
-    `pruned=${r5.pruned.join(",")}`);
+  // denseRef ≈ loRef → cannot normalize → keep everything, collapsed flag set.
+  const denseByPid = { a: 0.50, b: 0.41 };
+  const r = pruneByRelevance(["a", "b"], denseByPid, 0.50, 0.50, 0.6);
+  check("collapsed flagged", r.collapsed === true);
+  check("collapsed keeps all", r.keep.size === 2 && r.pruned.length === 0);
+}
+
+section("zero ratio → keep-all (off switch)");
+{
+  const denseByPid = { a: 0.57, b: 0.40 };
+  const r = pruneByRelevance(["a", "b"], denseByPid, 0.59, loRef, 0);
+  check("ratio 0 keeps all", r.keep.size === 2 && r.pruned.length === 0);
 }
 
 console.log(`\n${fail === 0 ? "OK" : "FAILED"} — ${pass} passed, ${fail} failed`);

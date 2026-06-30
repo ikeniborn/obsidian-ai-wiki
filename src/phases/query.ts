@@ -19,7 +19,7 @@ import { seedPassesGate } from "../retrieval-diag";
 import type { RetrievalMode, SeedFallbackReason } from "../retrieval-diag";
 import { promptVersionOf } from "../prompt-version";
 
-import { pruneByRelevance } from "../retrieval-prune";
+import { pruneByRelevance, robustLow, FLOOR_LO_PCT } from "../retrieval-prune";
 import { answerFromContext } from "./query-answer";
 
 const META_FILES = ["_index.md", "_log.md"];
@@ -168,20 +168,21 @@ export async function* retrieveDomainCandidates(
     if (denseByPid[id] !== undefined) expandedDense[id] = denseByPid[id];
   }
 
-  // Relevance floor — drop graph-expanded pages whose raw dense cosine falls below
-  // ratio·denseMax. Only when scales are comparable: dense mode, strong seed signal,
-  // no seed fallback, and a finite bfsTopK cap. Mutates selectedIds/expandedScores.
+  // Relevance floor — drop graph-expanded pages whose raw dense cosine falls below a
+  // spread-relative bar `loRef + ratio·(denseMax − loRef)`, where loRef is a robust low
+  // percentile of all domain cosines. Only when scales are comparable: dense mode, strong
+  // seed signal, no seed fallback, finite bfsTopK. Mutates selectedIds/expandedScores.
   const ratio = cfg.bfsMinScoreRatio ?? 0;
   let floorApplied = false;
   let prunedCount = 0;
   let floorSkippedReason: string | undefined;
+  let floorLoRef: number | undefined;
+  let floorBar: number | undefined;
   if (ratio > 0) {
     const eligible =
       (retrievalMode === "embedding" || retrievalMode === "hybrid") &&
       denseMax > 0 && !embedFailed && seedFallback === "none" && cfg.bfsTopK > 0;
     if (!eligible) {
-      // Reason priority assumes retrievalMode is only "jaccard" when the dense pass
-      // was never entered (so jaccard-mode precedes embed-failed intentionally).
       floorSkippedReason =
         retrievalMode === "jaccard" ? "jaccard-mode"
         : embedFailed ? "embed-failed"
@@ -189,15 +190,23 @@ export async function* retrieveDomainCandidates(
         : seedFallback !== "none" ? `seed-fallback:${seedFallback}`
         : "bfs-uncapped";
     } else if (expandedPages.length > 0) {
-      const { keep, pruned } = pruneByRelevance(expandedPages, denseByPid, denseMax, ratio);
-      for (const id of pruned) { selectedIds.delete(id); delete expandedScores[id]; }
-      expandedPages = expandedPages.filter((id) => keep.has(id));
-      prunedCount = pruned.length;
-      floorApplied = true;
+      const loRef = robustLow(Object.values(denseByPid), FLOOR_LO_PCT);
+      const { keep, pruned, bar, collapsed } =
+        pruneByRelevance(expandedPages, denseByPid, denseMax, loRef, ratio);
+      if (collapsed) {
+        floorSkippedReason = "range-collapsed";
+      } else {
+        for (const id of pruned) { selectedIds.delete(id); delete expandedScores[id]; }
+        expandedPages = expandedPages.filter((id) => keep.has(id));
+        prunedCount = pruned.length;
+        floorApplied = true;
+        floorLoRef = loRef;
+        floorBar = bar;
+      }
     }
   }
 
-  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, expandedDense, seedFallback, retrievalMode, denseMax, seedFallbackReason, floorApplied, floorRef: floorApplied ? denseMax : undefined, prunedCount, floorSkippedReason };
+  yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, expandedDense, seedFallback, retrievalMode, denseMax, seedFallbackReason, floorApplied, floorRef: floorApplied ? denseMax : undefined, floorLoRef, floorBar, prunedCount, floorSkippedReason };
 
   // Keep only candidate content; let the rest be GC'd (memory bound).
   const candidatePages = new Map<string, string>();
