@@ -1,3 +1,49 @@
+---
+review:
+  plan_hash: 1b4aa4339b18e8a7
+  spec_hash: c3f886f9c0dc11ee
+  last_run: 2026-06-30
+  phases:
+    structure:     { status: passed }
+    coverage:      { status: passed }
+    dependencies:  { status: passed }
+    verifiability: { status: passed }
+    consistency:   { status: passed }
+  findings:
+    - id: F-001
+      phase: coverage
+      severity: WARNING
+      section: "Task 4: Deterministic eval harness"
+      section_hash: cfef9159b9625dd4
+      fragment: "deterministic over recorded cosine fixtures instead of a live deepseek endpoint replay"
+      text: "Spec Part 3 specifies a retrieval-only replay against the live deepseek embedding endpoint; the plan instead sweeps deterministically over manually-recorded cosine fixtures."
+      fix: "Accepted deviation: a headless live-endpoint bootstrap is environment-coupled and out of deterministic scope; the spec success criteria (token delta, gold recall) are still measured. Revisit if a live harness is required."
+      verdict: accepted
+      verdict_at: 2026-06-30
+    - id: F-002
+      phase: coverage
+      severity: INFO
+      section: "Task 5: Calibrate constants on real captures"
+      section_hash: 8f3934f9c7cca11a
+      fragment: "git add ... main.js"
+      text: "Task 5 Step 6 builds and commits the bundle (main.js), which is not in the spec Touched Files."
+      fix: "Accepted: repo convention ships the bundle with each change (prior chore(build) commits)."
+      verdict: accepted
+      verdict_at: 2026-06-30
+    - id: F-003
+      phase: verifiability
+      severity: WARNING
+      section: "Task 5: Calibrate constants on real captures"
+      section_hash: 8f3934f9c7cca11a
+      fragment: "Record real cosine fixtures (one-time, live prerequisite)"
+      text: "Task 5 Step 1 (transcribe live graph_stats into queries.json) has no verification command or expected output."
+      fix: "Accepted: one-time live prerequisite; DoD = queries.json populated with ~10-15 real entries, validated by the Step 2/4 sweep runs."
+      verdict: accepted
+      verdict_at: 2026-06-30
+chain:
+  intent: null
+  spec: docs/superpowers/specs/2026-06-30-graph-floor-formula-design.md
+---
 # Graph Relevance Floor — Robust Bar Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

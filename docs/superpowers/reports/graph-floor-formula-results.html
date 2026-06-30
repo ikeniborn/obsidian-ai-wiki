@@ -71,8 +71,8 @@ body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); bord
 <body>
 <input type="checkbox" id="theme-toggle" hidden>
 <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
-<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden checked>
-<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
 <input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
 <label for="theme-toggle" class="theme-btn" title="Тёмная/светлая тема">🌙 / ☀️</label>
 <header>
@@ -279,7 +279,147 @@ body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); bord
 
 <!-- TAB:plan START -->
 <section class="tab-pane" id="pane-plan">
-  <p class="note">Этап ещё не проверен.</p>
+
+  <h2>1. Резюме плана</h2>
+  <p class="sub"><code>docs/superpowers/plans/2026-06-30-graph-floor-formula.md</code> ·
+     plan_hash <code>ae2ed73eeed26dc4</code> · 5 задач, TDD, частые коммиты.</p>
+  <table>
+    <thead><tr><th>Шаг</th><th>Definition of Done</th></tr></thead>
+    <tbody>
+      <tr><td>T1·S1 — переписать <code>retrieval-prune.ts</code></td><td>robustLow + FLOOR_LO_PCT=0.05 + FLOOR_EPS + pruneByRelevance(loRef, collapsed); компилируется</td></tr>
+      <tr><td>T1·S2 — тесты в <code>eval/retrieval-prune/run.ts</code></td><td>percentile, spread-bar, boundary, missing, range-collapsed, zero-ratio</td></tr>
+      <tr><td>T1·S3 — прогон тестов</td><td><code>OK — N passed, 0 failed</code></td></tr>
+      <tr><td>T1·S4 — commit</td><td>feat(retrieval): spread-relative bar</td></tr>
+      <tr><td>T2·S1 — <code>types.ts</code> graph_stats</td><td>+ floorLoRef?, floorBar?</td></tr>
+      <tr><td>T2·S2 — <code>query.ts:22</code> import</td><td>robustLow, FLOOR_LO_PCT, pruneByRelevance</td></tr>
+      <tr><td>T2·S3 — <code>query.ts:171-198</code> floor-блок</td><td>loRef inline; collapsed→range-collapsed; иначе prune + floorLoRef/floorBar</td></tr>
+      <tr><td>T2·S4 — graph_stats emit</td><td>+ floorLoRef, floorBar</td></tr>
+      <tr><td>T2·S5 — typecheck + lint</td><td><code>tsc --noEmit && npm run lint</code> без ошибок</td></tr>
+      <tr><td>T2·S6 — build</td><td>бандл собран</td></tr>
+      <tr><td>T2·S7 — commit</td><td>feat(retrieval): thread loRef</td></tr>
+      <tr><td>T3·S1 — <code>types.ts:300</code> коммент</td><td>default = позиция в [loRef..denseMax]</td></tr>
+      <tr><td>T3·S2-4 — <code>i18n.ts</code> en/ru/es</td><td>desc под новую семантику</td></tr>
+      <tr><td>T3·S5 — <code>settings.ts:792</code></td><td>fallback <code>?? 0.6</code> подтверждён</td></tr>
+      <tr><td>T3·S6-7 — lint + commit</td><td>docs(settings)</td></tr>
+      <tr><td>T4·S1 — <code>queries.json</code></td><td>gold + sample cosine (заменить в T5)</td></tr>
+      <tr><td>T4·S2 — <code>analyze.ts</code></td><td>GoldQuery, sweepQuery, summarize, recommend (чистые)</td></tr>
+      <tr><td>T4·S3 — <code>run.ts</code></td><td>sweep-таблица + self-checks</td></tr>
+      <tr><td>T4·S4 — прогон</td><td>таблица + <code>OK — 4 passed, 0 failed</code></td></tr>
+      <tr><td>T4·S5 — commit</td><td>test(eval): calibration sweep</td></tr>
+      <tr><td>T5·S1 — записать реальные фикстуры</td><td>queries.json ≥10 записей (live prereq)</td></tr>
+      <tr><td>T5·S2 — sweep + рекомендация</td><td>failing&gt;0 → поднять FLOOR_LO_PCT</td></tr>
+      <tr><td>T5·S3 — зашить константы</td><td>types.ts:300 / settings.ts:792 при изменении</td></tr>
+      <tr><td>T5·S4 — повторный sweep + unit</td><td>оба OK, minRecall=1.00 при default</td></tr>
+      <tr><td>T5·S5-6 — lint+build, commit</td><td>chore(retrieval): calibrate (+ main.js)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Граф зависимостей задач</h2>
+  <p class="sub">Шаги внутри задачи последовательны; ниже — межзадачные рёбра. Пунктир — обратная связь калибровки (правит ранее созданные константы, порядок шагов сохранён, не цикл).</p>
+  <figure>
+  <svg viewBox="0 0 740 290" width="100%" role="img" aria-label="Граф зависимостей задач">
+    <defs>
+      <marker id="parr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--line)"></path>
+      </marker>
+      <filter id="pds" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="var(--shadow)"></feDropShadow>
+      </filter>
+    </defs>
+    <style>
+      .pn rect{ fill:var(--surface); stroke:var(--accent); stroke-width:1.2; rx:8; filter:url(#pds); }
+      .pn text{ font:11px system-ui,sans-serif; }
+      .pe{ stroke:var(--line); stroke-width:1.6; fill:none; marker-end:url(#parr); }
+      .pe.dash{ stroke-dasharray:5 3; }
+      .pl{ font:10px system-ui; fill:var(--muted); }
+    </style>
+    <!-- edges -->
+    <path class="pe" d="M200,67 L300,67"></path>
+    <path class="pe" d="M120,94 L360,176"></path>
+    <path class="pe" d="M460,203 L560,203"></path>
+    <path class="pe dash" d="M650,176 L650,98"></path>
+    <path class="pe dash" d="M560,190 L160,98"></path>
+    <text class="pl" x="232" y="60">import</text>
+    <text class="pl" x="470" y="196">harness</text>
+    <text class="pl" x="655" y="140">calibrate</text>
+    <!-- nodes -->
+    <g class="pn"><rect x="40" y="42" width="160" height="48"></rect><text x="120" y="62" text-anchor="middle">Task 1</text><text x="120" y="78" text-anchor="middle">helper formula (S1–4)</text></g>
+    <g class="pn"><rect x="300" y="42" width="160" height="48"></rect><text x="380" y="62" text-anchor="middle">Task 2</text><text x="380" y="78" text-anchor="middle">query wiring (S1–7)</text></g>
+    <g class="pn"><rect x="560" y="42" width="160" height="48"></rect><text x="640" y="62" text-anchor="middle">Task 3</text><text x="640" y="78" text-anchor="middle">setting copy (S1–7)</text></g>
+    <g class="pn"><rect x="300" y="180" width="160" height="48"></rect><text x="380" y="200" text-anchor="middle">Task 4</text><text x="380" y="216" text-anchor="middle">eval harness (S1–5)</text></g>
+    <g class="pn"><rect x="560" y="180" width="160" height="48"></rect><text x="640" y="200" text-anchor="middle">Task 5</text><text x="640" y="216" text-anchor="middle">calibration (S1–6)</text></g>
+  </svg>
+  <p class="legend">T1 (helper) питает T2 (import) и T4 (analyze import); T4 (harness) → T5; T5 правит константы в T1/T3 (пунктир). Циклов нет, порядок M&lt;N соблюдён.</p>
+  </figure>
+
+  <h2>3. Пересечения по артефактам</h2>
+  <table>
+    <thead><tr><th>Артефакт</th><th>Шаги</th></tr></thead>
+    <tbody>
+      <tr><td><code>src/retrieval-prune.ts</code></td><td>T1·S1 (создание), T5·S2/S3 (калибровка FLOOR_LO_PCT)</td></tr>
+      <tr><td><code>src/phases/query.ts</code></td><td>T2·S2 (import), T2·S3 (floor-блок), T2·S4 (emit)</td></tr>
+      <tr><td><code>src/types.ts</code></td><td>T2·S1 (поля), T3·S1 (коммент), T5·S3 (default ratio)</td></tr>
+      <tr><td><code>src/settings.ts</code></td><td>T3·S5 (fallback), T5·S3 (калибровка)</td></tr>
+      <tr><td><code>eval/graph-floor/queries.json</code></td><td>T4·S1 (sample), T5·S1 (реальные записи)</td></tr>
+      <tr><td><code>eval/retrieval-prune/run.ts</code></td><td>T1·S2 (тесты формулы)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>4. Карта покрытия</h2>
+  <table>
+    <thead><tr><th>Требование спеки</th><th>Шаги</th></tr></thead>
+    <tbody>
+      <tr><td>Part 1 — robust bar</td><td>T1·S1, T2·S3</td></tr>
+      <tr><td>Part 2 — edge guards (range-collapsed + матрица)</td><td>T1·S1 (collapsed), T2·S3 (floorSkippedReason)</td></tr>
+      <tr><td>Part 3 — measurement (run.ts + analyze.ts + gold)</td><td>T4·S1–S3, T5·S1–S2 <span class="badge b-warn">откл. F-001</span></td></tr>
+      <tr><td>Part 4 — observability (floorLoRef/floorBar)</td><td>T2·S1, T2·S4</td></tr>
+      <tr><td>Part 5 — setting copy</td><td>T3·S1–S5</td></tr>
+      <tr><td>Verification (ratio=0 baseline, recall=100%, unit)</td><td>T1·S2–S3, T4·S3–S4, T5·S4</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5. Результаты проверки</h2>
+  <p>
+    <span class="badge b-ok">structure: passed</span>
+    <span class="badge b-ok">coverage: passed</span>
+    <span class="badge b-ok">dependencies: passed</span>
+    <span class="badge b-ok">verifiability: passed</span>
+    <span class="badge b-ok">consistency: passed</span>
+  </p>
+  <table>
+    <thead><tr><th>id</th><th>severity</th><th>section</th><th>fragment</th><th>text</th><th>fix</th><th>verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>F-001</td><td><span class="badge b-warn">WARNING</span></td>
+        <td>Task 4 — eval harness</td>
+        <td>«deterministic over recorded cosine fixtures instead of a live deepseek endpoint replay»</td>
+        <td>Спека Part 3 требует retrieval-only реплей против живого deepseek-эндпоинта; план делает детерминированный sweep по вручную записанным cosine-фикстурам.</td>
+        <td>Принято: headless live-bootstrap завязан на окружение и вне детерминированного scope; success-критерии (токен-дельта, gold-recall) измеряются.</td>
+        <td><span class="badge b-ok">accepted</span></td>
+      </tr>
+      <tr>
+        <td>F-002</td><td><span class="badge b-info">INFO</span></td>
+        <td>Task 5 — calibration</td>
+        <td>«git add … main.js»</td>
+        <td>T5·S6 собирает/коммитит бандл main.js, которого нет в spec Touched Files.</td>
+        <td>Принято: репо-конвенция шипит бандл с каждым изменением.</td>
+        <td><span class="badge b-ok">accepted</span></td>
+      </tr>
+      <tr>
+        <td>F-003</td><td><span class="badge b-warn">WARNING</span></td>
+        <td>Task 5 — calibration</td>
+        <td>«Record real cosine fixtures (one-time, live prerequisite)»</td>
+        <td>T5·S1 (транскрипция live graph_stats в queries.json) без verification-команды/expected output.</td>
+        <td>Принято: one-time live prereq; DoD = queries.json ≥10 записей, проверяется sweep-прогонами S2/S4.</td>
+        <td><span class="badge b-ok">accepted</span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="note"><b>Сводка.</b> CRITICAL open: 0 · WARNING open: 0 (2 accepted) · INFO: 1 (accepted). &nbsp;
+     <b>Вердикт: <span class="badge b-ok">OK</span></b></p>
+  <p class="sub"><b>Цепочка:</b> intent → spec → <b>plan</b>. intent = <code>null</code>;
+     spec = <code>…-design.md</code> (OK); plan = <code>…-graph-floor-formula.md</code> (OK).</p>
+
 </section>
 <!-- TAB:plan END -->
 
