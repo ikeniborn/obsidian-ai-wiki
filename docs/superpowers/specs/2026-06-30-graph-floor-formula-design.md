@@ -1,4 +1,23 @@
 ---
+review:
+  spec_hash: c3f886f9c0dc11ee
+  last_run: 2026-06-30
+  phases:
+    structure:    { status: passed }
+    coverage:     { status: passed }
+    clarity:      { status: passed }
+    consistency:  { status: passed }
+  findings:
+    - id: F-001
+      phase: clarity
+      severity: INFO
+      section: "Part 1 — Robust bar formula (core)"
+      section_hash: fde30b37ecb39ae8
+      fragment: "The exact percentile (candidates: true-min / p5 / p10) is chosen by the calibration spike (Part 3), then hard-coded."
+      text: "loRef percentile and the recalibrated default ratio are intentionally deferred to the calibration spike rather than fixed in the spec body."
+      fix: "Acceptable as-is: Part 3 defines the decision rule (recall@floor=100%, max token cut). Record the chosen constants when the spike lands."
+      verdict: accepted
+      verdict_at: 2026-06-30
 chain:
   intent: null
 ---

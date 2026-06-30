@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Цепочка: graph-floor-formula</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg); transition:background .3s, color .3s;
+}
+.theme-btn{ position:sticky; top:.5rem; float:right; cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface); z-index:5; }
+header h1{ font-size:1.5rem; margin:.2rem 0 .1rem; }
+header .sub{ color:var(--muted); font-size:.9rem; }
+h2{ font-size:1.18rem; border-bottom:2px solid var(--border); padding-bottom:.25rem; margin-top:2rem; }
+h3{ font-size:1.02rem; margin-top:1.4rem; color:var(--accent-2); }
+code{ background:color-mix(in srgb,var(--accent) 14%, var(--surface)); padding:.05rem .35rem; border-radius:4px;
+  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.86em; }
+table{ border-collapse:collapse; width:100%; margin:.8rem 0; font-size:.9rem; background:var(--surface);
+  box-shadow:0 1px 4px var(--shadow); border-radius:8px; overflow:hidden; }
+th,td{ border:1px solid var(--border); padding:.5rem .65rem; text-align:left; vertical-align:top; }
+th{ background:color-mix(in srgb,var(--accent) 16%, var(--surface)); color:var(--accent-2); }
+tbody tr:nth-child(even){ background:var(--zebra); }
+.badge{ display:inline-block; padding:.1rem .55rem; border-radius:999px; font-size:.78rem; font-weight:600; }
+.b-ok{ background:color-mix(in srgb,var(--ok) 22%, var(--surface)); color:var(--ok-2); border:1px solid var(--ok); }
+.b-info{ background:color-mix(in srgb,var(--accent) 20%, var(--surface)); color:var(--accent-2); border:1px solid var(--accent); }
+.b-warn{ background:color-mix(in srgb,var(--warn) 22%, var(--surface)); color:var(--warn-2); border:1px solid var(--warn); }
+.note{ background:color-mix(in srgb,var(--accent) 10%, var(--surface)); border-left:4px solid var(--accent);
+  padding:.7rem 1rem; border-radius:6px; margin:1rem 0; color:var(--muted); }
+.flow{ display:flex; flex-direction:column; gap:.35rem; margin:1rem 0; }
+.flow .row{ display:flex; flex-wrap:wrap; gap:.5rem; align-items:stretch; }
+.node{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.5rem .7rem;
+  box-shadow:0 1px 3px var(--shadow); font-size:.84rem; flex:1 1 0; min-width:140px; }
+.node b{ color:var(--accent-2); }
+.node .f{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.78rem; color:var(--muted); }
+.arrow{ text-align:center; color:var(--line); font-size:1.1rem; line-height:1; }
+.legend{ font-size:.8rem; color:var(--muted); margin:.3rem 0 0; }
+figure{ margin:1rem 0; }
+svg text{ fill:var(--fg); }
+.chain-tabs{ display:flex; gap:.3rem; margin:1.2rem 0 0; border-bottom:2px solid var(--border); flex-wrap:wrap; }
+.chain-tabs label{ cursor:pointer; padding:.4rem .9rem; border:1px solid var(--border); border-bottom:none;
+  border-radius:8px 8px 0 0; background:var(--surface); color:var(--muted); }
+.tab-pane{ display:none; }
+body:has(#tab-intent:checked) #pane-intent,
+body:has(#tab-spec:checked)   #pane-spec,
+body:has(#tab-plan:checked)   #pane-plan,
+body:has(#tab-result:checked) #pane-result{ display:block; }
+body:has(#tab-intent:checked) label[for="tab-intent"],
+body:has(#tab-spec:checked)   label[for="tab-spec"],
+body:has(#tab-plan:checked)   label[for="tab-plan"],
+body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); border-color:var(--accent); font-weight:600; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden checked>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<label for="theme-toggle" class="theme-btn" title="Тёмная/светлая тема">🌙 / ☀️</label>
+<header>
+  <h1>Цепочка IDD→SDD: graph-floor-formula</h1>
+  <div class="sub">Robust Bar for Compressed Cosine Ranges · отчёт проверки спецификации</div>
+</header>
+<nav class="chain-tabs">
+  <label for="tab-intent">Intent</label>
+  <label for="tab-spec">Spec</label>
+  <label for="tab-plan">Plan</label>
+  <label for="tab-result">Result</label>
+</nav>
+
+<!-- TAB:intent START -->
+<section class="tab-pane" id="pane-intent">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:intent END -->
+
+<!-- TAB:spec START -->
+<section class="tab-pane" id="pane-spec">
+
+  <h2>1. Резюме спецификации</h2>
+  <p class="sub"><code>docs/superpowers/specs/2026-06-30-graph-floor-formula-design.md</code> ·
+     spec_hash <code>c3f886f9c0dc11ee</code></p>
+  <table>
+    <thead><tr><th>Секция</th><th>Требование</th></tr></thead>
+    <tbody>
+      <tr><td>Problem</td><td>Бар <code>ratio·denseMax</code> опирается на абсолютный cosine; у deepseek диапазон сжат (~0.40–0.59), бар <code>0.6·0.59≈0.35</code> ниже всех кандидатов → floor не режет ничего до ratio~0.95.</td></tr>
+      <tr><td>Decision Summary</td><td>In-place смена формулы, одна ручка <code>bfsMinScoreRatio</code>, без legacy-режима; Approach A (spread-relative, domain-anchored); substrate — retrieval-only реплей + offline-анализ; прокси качества — gold-page recall; jaccard вне scope.</td></tr>
+      <tr><td>Part 1 — Robust bar</td><td><code>loRef = robustLow(domainCosines)</code>; <code>bar = loRef + ratio·(denseMax − loRef)</code>; keep ⇔ cosine ≥ bar; нет cosine → keep. <code>domainCosines = Object.values(denseByPid)</code> — уже на месте floor, нового stat не тянуть. <code>robustLow</code> — фикс. низкий перцентиль (true-min/p5/p10), выбирается калибровкой.</td></tr>
+      <tr><td>Part 2 — Edge guards</td><td>Новый гард <code>denseMax − loRef &lt; ε</code> → skip <code>range-collapsed</code>; плюс прежняя матрица (ratio=0, jaccard, embed-failed, low-dense, seed-fallback, bfs-uncapped).</td></tr>
+      <tr><td>Part 3 — Measurement</td><td><code>eval/graph-floor/</code>: <code>queries.json</code> (gold ~10–15), <code>run.ts</code> (retrieval-only реплей против deepseek, дамп expandedDense/denseByPid/denseMax/токены, без LLM), <code>analyze.ts</code> (распределение, sweep по ratio, recall@floor, токен-дельта). Калибровка: baseline-дамп → выбрать перцентиль+default при recall=100% и макс сбросе → зашить → повторный реплей.</td></tr>
+      <tr><td>Part 4 — Observability</td><td><code>graph_stats</code> += <code>floorLoRef</code>, <code>floorBar</code>; <code>floorRef</code> остаётся = denseMax; прогресс-трейс печатает явный bar.</td></tr>
+      <tr><td>Part 5 — Setting copy</td><td>Обновить коммент <code>bfsMinScoreRatio</code> (новая семантика + перекалиброванный default) и текст слайдера; контрол не меняется, 0 = floor off.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Success Criteria</h3>
+  <table>
+    <thead><tr><th>#</th><th>Критерий приёмки</th></tr></thead>
+    <tbody>
+      <tr><td>SC-1</td><td><code>ratio=0</code> точно воспроизводит baseline (regression-guard).</td></tr>
+      <tr><td>SC-2</td><td>Реплей до/после: суммарные контекст-токены ↓, <code>recall@floor=100%</code> (ни одна gold-страница не вырезана).</td></tr>
+      <tr><td>SC-3</td><td>Юнит-тесты: граница бара (≥), range-collapsed → skip, перцентиль на known-векторе, missing cosine→keep, ratio=0 и denseMax=0 → keep-all.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схема решения</h2>
+  <p class="sub">Runtime-поток floor (сверху вниз) и боковая eval/калибровочная петля.</p>
+  <div class="flow">
+    <div class="row">
+      <div class="node"><b>Seed dense pass</b><div class="f">page-similarity.ts</div>→ denseByPid (cosine всех страниц), denseMax (лучший seed)</div>
+      <div class="node"><b>Graph expansion</b><div class="f">bfsExpandRanked</div>→ expandedPages (граф-кандидаты)</div>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="row">
+      <div class="node"><b>query.ts · retrieveDomainCandidates</b><div class="f">phases/query.ts</div>expandedDense = denseByPid ∩ кандидаты; loRef = robustLow(Object.values(denseByPid)); зовёт floor</div>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="row">
+      <div class="node"><b>pruneByRelevance</b><div class="f">retrieval-prune.ts</div>bar = loRef + ratio·(denseMax−loRef); keep/prune; edge-guards (range-collapsed + матрица)</div>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="row">
+      <div class="node"><b>graph_stats emit</b><div class="f">floorLoRef · floorBar · floorRef=denseMax · prunedCount · floorSkippedReason</div>→ прогресс-трейс + agent.jsonl</div>
+    </div>
+    <div class="arrow">▼ &nbsp; eval-петля (калибровка констант)</div>
+    <div class="row">
+      <div class="node"><b>eval/graph-floor/run.ts</b><div class="f">retrieval-only реплей</div>→ дампы (expandedDense, токены)</div>
+      <div class="node"><b>analyze.ts</b><div class="f">распределение · sweep ratio · recall@floor · токен-дельта</div></div>
+      <div class="node"><b>calibration</b><div class="f">перцентиль + default ratio</div>→ обратно в retrieval-prune.ts / types.ts</div>
+    </div>
+  </div>
+
+  <h2>3. Граф зависимостей</h2>
+  <p class="sub">Ребро A→B = «A зависит от B / использует B». Циклов нет.</p>
+  <figure>
+  <svg viewBox="0 0 940 510" width="100%" role="img" aria-label="Граф зависимостей требований">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--line)"></path>
+      </marker>
+      <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="var(--shadow)"></feDropShadow>
+      </filter>
+    </defs>
+    <style>
+      .gn rect{ fill:var(--surface); stroke:var(--border); stroke-width:1; rx:7; filter:url(#ds); }
+      .gn.rt rect{ stroke:var(--accent); }
+      .gn.ev rect{ stroke:var(--warn); }
+      .gn text{ font:11px system-ui,sans-serif; }
+      .ge{ stroke:var(--line); stroke-width:1.4; fill:none; marker-end:url(#arr); }
+      .ge.dash{ stroke-dasharray:4 3; }
+      .cap{ font:600 12px system-ui; fill:var(--muted); }
+    </style>
+
+    <text class="cap" x="20" y="18">Runtime floor</text>
+    <text class="cap" x="600" y="18">Eval / калибровка</text>
+
+    <!-- edges (drawn first, behind nodes) -->
+    <!-- loRef -> denseByPid, robustLow -->
+    <path class="ge" d="M170,196 L120,150"></path>
+    <path class="ge" d="M180,196 L120,128"></path>
+    <!-- pruneByRelevance -> denseMax, loRef -->
+    <path class="ge" d="M230,268 L290,72"></path>
+    <path class="ge" d="M200,268 L196,222"></path>
+    <!-- edge-guard -> denseMax, loRef -->
+    <path class="ge" d="M360,268 L300,72"></path>
+    <path class="ge" d="M315,278 L235,205"></path>
+    <!-- query.ts thread -> denseByPid -->
+    <path class="ge" d="M100,338 L100,150"></path>
+    <!-- graph_stats -> pruneByRelevance -->
+    <path class="ge" d="M270,360 L210,300"></path>
+    <!-- unit tests -> pruneByRelevance, edge-guard -->
+    <path class="ge" d="M300,418 L210,302"></path>
+    <path class="ge" d="M330,418 L370,302"></path>
+    <!-- eval: run.ts -> query.ts(retrieval) (cross) -->
+    <path class="ge dash" d="M640,131 L185,348"></path>
+    <!-- analyze -> expandedDense (cross), run.ts, queries -->
+    <path class="ge dash" d="M640,205 L355,128"></path>
+    <path class="ge" d="M720,189 L720,153"></path>
+    <path class="ge" d="M725,189 L723,73"></path>
+    <!-- calibration -> analyze -->
+    <path class="ge" d="M720,269 L720,233"></path>
+    <!-- consts -> calibration, types -> calibration -->
+    <path class="ge" d="M650,360 L705,310"></path>
+    <path class="ge" d="M820,360 L735,310"></path>
+    <!-- settings -> types -->
+    <path class="ge" d="M835,440 L835,402"></path>
+    <!-- pruneByRelevance -> consts (calibrated constants feed formula) -->
+    <path class="ge dash" d="M250,285 L560,378"></path>
+
+    <!-- nodes -->
+    <g class="gn rt"><rect x="20" y="110" width="160" height="40"></rect><text x="100" y="135" text-anchor="middle">denseByPid (cosine)</text></g>
+    <g class="gn rt"><rect x="220" y="40" width="150" height="40"></rect><text x="295" y="65" text-anchor="middle">denseMax (seed)</text></g>
+    <g class="gn rt"><rect x="20" y="88" width="160" height="38" style="display:none"></rect></g>
+    <g class="gn rt"><rect x="20" y="60" width="160" height="34"></rect><text x="100" y="82" text-anchor="middle">robustLow (percentile)</text></g>
+    <g class="gn rt"><rect x="140" y="186" width="120" height="36"></rect><text x="200" y="209" text-anchor="middle">loRef</text></g>
+    <g class="gn rt"><rect x="230" y="110" width="140" height="40"></rect><text x="300" y="135" text-anchor="middle">expandedDense</text></g>
+    <g class="gn rt"><rect x="120" y="262" width="170" height="40"></rect><text x="205" y="287" text-anchor="middle">pruneByRelevance · bar</text></g>
+    <g class="gn rt"><rect x="305" y="262" width="150" height="40"></rect><text x="380" y="287" text-anchor="middle">edge-guard: collapse</text></g>
+    <g class="gn rt"><rect x="20" y="338" width="160" height="40"></rect><text x="100" y="363" text-anchor="middle">query.ts: thread loRef</text></g>
+    <g class="gn rt"><rect x="210" y="338" width="160" height="40"></rect><text x="290" y="363" text-anchor="middle">graph_stats: floorBar</text></g>
+    <g class="gn rt"><rect x="230" y="418" width="150" height="40"></rect><text x="305" y="443" text-anchor="middle">unit tests</text></g>
+
+    <g class="gn ev"><rect x="645" y="40" width="150" height="36"></rect><text x="720" y="63" text-anchor="middle">queries.json (gold)</text></g>
+    <g class="gn ev"><rect x="645" y="116" width="150" height="36"></rect><text x="720" y="139" text-anchor="middle">run.ts (replay)</text></g>
+    <g class="gn ev"><rect x="645" y="192" width="150" height="36"></rect><text x="720" y="215" text-anchor="middle">analyze.ts</text></g>
+    <g class="gn ev"><rect x="645" y="272" width="150" height="36"></rect><text x="720" y="295" text-anchor="middle">calibration</text></g>
+    <g class="gn ev"><rect x="555" y="360" width="170" height="40"></rect><text x="640" y="385" text-anchor="middle">retrieval-prune consts</text></g>
+    <g class="gn ev"><rect x="760" y="360" width="160" height="40"></rect><text x="840" y="385" text-anchor="middle">types.ts default/fields</text></g>
+    <g class="gn ev"><rect x="760" y="440" width="160" height="36"></rect><text x="840" y="463" text-anchor="middle">settings.ts copy</text></g>
+  </svg>
+  <p class="legend">Сплошные — прямая зависимость; пунктир — кросс-связи (реплей→retrieval, analyze→expandedDense, формула←калиброванные константы). Синий контур — runtime, оранжевый — eval.</p>
+  </figure>
+
+  <h2>4. Карта покрытия</h2>
+  <table>
+    <thead><tr><th>Задача (решение брейншторма)</th><th>Требования спеки</th></tr></thead>
+    <tbody>
+      <tr><td>Сменить формулу in-place, одна ручка</td><td>Decision Summary; Part 1; Part 5</td></tr>
+      <tr><td>Робастный бар к сжатому диапазону</td><td>Part 1 — <code>loRef + ratio·(denseMax−loRef)</code></td></tr>
+      <tr><td>loRef по всему домену, перцентиль не min</td><td>Part 1 — robustLow over denseByPid</td></tr>
+      <tr><td>Краевые случаи (схлопнутый диапазон)</td><td>Part 2 — range-collapsed + матрица</td></tr>
+      <tr><td>Измерение до/после без людских меток</td><td>Part 3 — retrieval-only реплей + analyze.ts</td></tr>
+      <tr><td>Прокси качества = gold-recall</td><td>Part 3; Verification — recall@floor=100%</td></tr>
+      <tr><td>Анализ распределения через expandedDense</td><td>Part 3 — analyze.ts на expandedDense</td></tr>
+      <tr><td>Калибровка default + перцентиля</td><td>Part 3 — calibration order</td></tr>
+      <tr><td>Наблюдаемость бара</td><td>Part 4 — floorLoRef / floorBar</td></tr>
+      <tr><td>Regression-guard ratio=0</td><td>Verification; unit tests</td></tr>
+      <tr><td>Связь с PR #41 / #43</td><td>Related</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5. Результаты проверки</h2>
+  <p>
+    <span class="badge b-ok">structure: passed</span>
+    <span class="badge b-ok">coverage: passed</span>
+    <span class="badge b-ok">clarity: passed</span>
+    <span class="badge b-ok">consistency: passed</span>
+  </p>
+  <table>
+    <thead><tr><th>id</th><th>severity</th><th>section</th><th>fragment</th><th>text</th><th>fix</th><th>verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>F-001</td>
+        <td><span class="badge b-info">INFO</span></td>
+        <td>Part 1 — Robust bar formula</td>
+        <td>«The exact percentile (candidates: true-min / p5 / p10) is chosen by the calibration spike (Part 3), then hard-coded.»</td>
+        <td>loRef-перцентиль и новый default ratio отложены на калибровочный спайк, а не зафиксированы в теле спеки.</td>
+        <td>Допустимо — Part 3 задаёт критерий (recall@floor=100%, макс токен-сброс); зафиксировать константы по итогам спайка.</td>
+        <td><span class="badge b-ok">accepted</span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="note"><b>Сводка.</b> CRITICAL open: 0 · WARNING open: 0 · INFO: 1 (accepted). &nbsp;
+     <b>Вердикт: <span class="badge b-ok">OK</span></b></p>
+  <p class="sub"><b>Цепочка:</b> intent → <b>spec</b>. intent = <code>null</code> (intent-доки нет);
+     spec = <code>2026-06-30-graph-floor-formula-design.md</code> (OK).</p>
+
+</section>
+<!-- TAB:spec END -->
+
+<!-- TAB:plan START -->
+<section class="tab-pane" id="pane-plan">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:plan END -->
+
+<!-- TAB:result START -->
+<section class="tab-pane" id="pane-result">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:result END -->
+
+</body>
+</html>
