@@ -1,2 +1,2 @@
-read = ["obsidian-ai-wiki"]
+read = ["obsidian-ai-wiki","personal-ai-wiki"]
 write = "obsidian-ai-wiki"
