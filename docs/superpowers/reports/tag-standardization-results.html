@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Цепочка: tag-standardization</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+  --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+  --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+  --shadow:rgba(40,40,80,.18);
+}
+body:has(#theme-toggle:checked){
+  --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+  --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+  --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+  --shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1080px;
+  font:16px/1.55 system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent),
+    var(--bg);
+  color:var(--fg); transition:background .3s, color .3s;
+}
+.theme-btn{ position:sticky; top:.5rem; float:right; cursor:pointer; user-select:none;
+  padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface); z-index:5; }
+header h1{ font-size:1.5rem; margin:.2rem 0 .1rem; }
+header .sub{ color:var(--muted); font-size:.9rem; }
+h2{ font-size:1.18rem; border-bottom:2px solid var(--border); padding-bottom:.25rem; margin-top:2rem; }
+h3{ font-size:1.02rem; margin-top:1.4rem; color:var(--accent-2); }
+code{ background:color-mix(in srgb,var(--accent) 14%, var(--surface)); padding:.05rem .35rem; border-radius:4px;
+  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.86em; }
+table{ border-collapse:collapse; width:100%; margin:.8rem 0; font-size:.9rem; background:var(--surface);
+  box-shadow:0 1px 4px var(--shadow); border-radius:8px; overflow:hidden; }
+th,td{ border:1px solid var(--border); padding:.5rem .65rem; text-align:left; vertical-align:top; }
+th{ background:color-mix(in srgb,var(--accent) 16%, var(--surface)); color:var(--accent-2); }
+tbody tr:nth-child(even){ background:var(--zebra); }
+.badge{ display:inline-block; padding:.1rem .55rem; border-radius:999px; font-size:.78rem; font-weight:600; }
+.b-ok{ background:color-mix(in srgb,var(--ok) 22%, var(--surface)); color:var(--ok-2); border:1px solid var(--ok); }
+.b-info{ background:color-mix(in srgb,var(--accent) 20%, var(--surface)); color:var(--accent-2); border:1px solid var(--accent); }
+.b-warn{ background:color-mix(in srgb,var(--warn) 22%, var(--surface)); color:var(--warn-2); border:1px solid var(--warn); }
+.note{ background:color-mix(in srgb,var(--accent) 10%, var(--surface)); border-left:4px solid var(--accent);
+  padding:.7rem 1rem; border-radius:6px; margin:1rem 0; color:var(--muted); }
+.flow{ display:flex; flex-direction:column; gap:.35rem; margin:1rem 0; }
+.flow .row{ display:flex; flex-wrap:wrap; gap:.5rem; align-items:stretch; }
+.node{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.5rem .7rem;
+  box-shadow:0 1px 3px var(--shadow); font-size:.84rem; flex:1 1 0; min-width:140px; }
+.node b{ color:var(--accent-2); }
+.node .f{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.78rem; color:var(--muted); }
+.arrow{ text-align:center; color:var(--line); font-size:1.1rem; line-height:1; }
+.legend{ font-size:.8rem; color:var(--muted); margin:.3rem 0 0; }
+figure{ margin:1rem 0; }
+svg text{ fill:var(--fg); }
+.chain-tabs{ display:flex; gap:.3rem; margin:1.2rem 0 0; border-bottom:2px solid var(--border); flex-wrap:wrap; }
+.chain-tabs label{ cursor:pointer; padding:.4rem .9rem; border:1px solid var(--border); border-bottom:none;
+  border-radius:8px 8px 0 0; background:var(--surface); color:var(--muted); }
+.tab-pane{ display:none; }
+body:has(#tab-intent:checked) #pane-intent,
+body:has(#tab-spec:checked)   #pane-spec,
+body:has(#tab-plan:checked)   #pane-plan,
+body:has(#tab-result:checked) #pane-result{ display:block; }
+body:has(#tab-intent:checked) label[for="tab-intent"],
+body:has(#tab-spec:checked)   label[for="tab-spec"],
+body:has(#tab-plan:checked)   label[for="tab-plan"],
+body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); border-color:var(--accent); font-weight:600; }
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden checked>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<label for="theme-toggle" class="theme-btn" title="Тёмная/светлая тема">🌙 / ☀️</label>
+<header>
+  <h1>Цепочка IDD→SDD: tag-standardization</h1>
+  <div class="sub">Tag Standardization and Domain Tag Reuse · отчёт проверки спецификации</div>
+</header>
+<nav class="chain-tabs">
+  <label for="tab-intent">Intent</label>
+  <label for="tab-spec">Spec</label>
+  <label for="tab-plan">Plan</label>
+  <label for="tab-result">Result</label>
+</nav>
+
+<!-- TAB:intent START -->
+<section class="tab-pane" id="pane-intent">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:intent END -->
+
+<!-- TAB:spec START -->
+<section class="tab-pane" id="pane-spec">
+
+  <h2>1. Резюме спецификации</h2>
+  <p class="sub"><code>docs/superpowers/specs/2026-07-03-tag-standardization-design.md</code> ·
+     spec_hash <code>38562598441a5c50</code></p>
+  <table>
+    <thead><tr><th>Секция</th><th>Требование</th></tr></thead>
+    <tbody>
+      <tr><td>Problem</td><td>Ingest: «reuse tags from existing pages» опирается только на похожие страницы в контексте — словаря домена LLM не видит, теги плодятся произвольно. Format: инструкция про reuse мёртвая — в контекст не подаётся ничего из vault. Единственная логика — <code>TAG_RE</code>, который молча выбрасывает почти-валидные теги.</td></tr>
+      <tr><td>Decision Summary</td><td>Динамический реестр (без ручной таксономии); скоуп — домен (wiki-страницы + источники из <code>source_paths</code>); в промпт идёт весь реестр без капа; модель «сущности + темы»; лимит тематических категорий (default 12, <code>max_tag_categories</code>); мягкий контроль (warning, тег сохраняется); детерминированная синхронизация сущностного тега; нормализация вместо отбрасывания.</td></tr>
+      <tr><td>Part 1 — Tag registry</td><td><code>src/utils/tag-registry.ts</code> (новый): <code>collectDomainTags</code> — скан frontmatter <code>tags:</code> wiki-папки + source_paths, нормализация + <code>TAG_RE</code>, агрегация по категориям с частотами; <code>renderTagRegistryBlock</code> — блок <code>EXISTING DOMAIN TAGS</code>: entity-категории + тематические (N/12), при исчерпании лимита — «reuse only». Без усечения.</td></tr>
+      <tr><td>Part 2 — Ingest</td><td>Сбор реестра после определения домена; блок в user-сообщение <code>buildIngestMessages</code>; правка <code>prompts/ingest.md:21</code> (порядок: сущностный тег → reuse из блока → новый при свободном лимите). Пост-обработка: авто-добавление тега типа сущности (по <code>wiki_subfolder</code>); превышение лимита категорий → warning, тег сохраняется.</td></tr>
+      <tr><td>Part 3 — Format</td><td><code>agent-runner.ts</code>: домен из <code>formatDomain</code> (стр. 137) + fallback <code>detectDomain</code> по пути; передача в <code>runFormat</code>; тот же блок реестра в <code>userInitial</code>; правка <code>templates/_format_schema.md:7</code>. Домен не определился → блока нет, поведение как сейчас.</td></tr>
+      <tr><td>Part 4 — Нормализация</td><td><code>normalizeTag()</code>: trim → срез <code>#</code> → lowercase → пробелы→<code>-</code> → <code>\</code>→<code>/</code>; перед <code>TAG_RE</code> в <code>list-tags</code> для SOURCE_RULES и WIKI_PAGE_RULES; не прошёл после нормализации — отброс с warning, как сейчас.</td></tr>
+      <tr><td>Part 5 — Конфигурация</td><td><code>DomainEntry.max_tag_categories?: number</code>, отсутствует → 12; хранится в <code>_domain.json</code>, правится как JSON (без UI).</td></tr>
+      <tr><td>Out of Scope</td><td>lint/init, ретегирование существующих страниц, кэш <code>_tags.json</code>, similarity-remapping, settings UI.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Success Criteria (Verification)</h3>
+  <table>
+    <thead><tr><th>#</th><th>Критерий приёмки</th></tr></thead>
+    <tbody>
+      <tr><td>SC-1</td><td><code>npm run lint</code> и <code>npm run build</code> проходят.</td></tr>
+      <tr><td>SC-2</td><td>Ingest в домен с тегами: новые страницы переиспользуют теги реестра; каждая страница несёт сущностный тег; при превышении лимита категорий появляется warning.</td></tr>
+      <tr><td>SC-3</td><td>Format внутри домена: блок реестра виден в LLM-контексте (лог); валидные теги заметки сохранены.</td></tr>
+      <tr><td>SC-4</td><td>Тег <code>#Category/Sub Topic</code> переживает format как <code>category/sub-topic</code>, а не выбрасывается.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схема решения</h2>
+  <p class="sub">Общий поток: сбор реестра → рендер блока → две точки внедрения (ingest, format) → детерминированная пост-обработка.</p>
+  <div class="flow">
+    <div class="row">
+      <div class="node"><b>Определение домена</b><div class="f">ingest: detectDomain · format: formatDomain / detectDomain fallback</div>→ wiki_folder, source_paths, entity_types, max_tag_categories</div>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="row">
+      <div class="node"><b>collectDomainTags</b><div class="f">src/utils/tag-registry.ts</div>скан frontmatter tags: wiki-папки + source_paths; normalizeTag + TAG_RE; агрегация по категориям с частотами</div>
+      <div class="node"><b>renderTagRegistryBlock</b><div class="f">entity categories (entity_types) + thematic (N/limit)</div>блок EXISTING DOMAIN TAGS, весь реестр, без усечения</div>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="row">
+      <div class="node"><b>Ingest LLM-контекст</b><div class="f">buildIngestMessages + prompts/ingest.md</div>порядок: сущностный тег → reuse → новый при свободном лимите</div>
+      <div class="node"><b>Format LLM-контекст</b><div class="f">userInitial + templates/_format_schema.md</div>только тематическое reuse (источник — не сущность); нет домена → без блока</div>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="row">
+      <div class="node"><b>Валидация frontmatter</b><div class="f">raw-frontmatter.ts · list-tags</div>normalizeTag перед TAG_RE; не прошёл — отброс с warning</div>
+      <div class="node"><b>Ingest пост-обработка</b><div class="f">после frontmatter repair</div>авто-тег типа сущности (wiki_subfolder); лимит категорий превышен → warning, тег сохранён</div>
+    </div>
+  </div>
+
+  <h2>3. Граф зависимостей</h2>
+  <p class="sub">Ребро A→B = «A зависит от B / использует B». Циклов нет.</p>
+  <figure>
+  <svg viewBox="0 0 940 440" width="100%" role="img" aria-label="Граф зависимостей требований">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--line)"></path>
+      </marker>
+      <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="var(--shadow)"></feDropShadow>
+      </filter>
+    </defs>
+    <style>
+      .gn rect{ fill:var(--surface); stroke:var(--border); stroke-width:1; rx:7; filter:url(#ds); }
+      .gn.core rect{ stroke:var(--accent); }
+      .gn.integ rect{ stroke:var(--warn); }
+      .gn text{ font:11px system-ui,sans-serif; }
+      .ge{ stroke:var(--line); stroke-width:1.4; fill:none; marker-end:url(#arr); }
+      .ge.dash{ stroke-dasharray:4 3; }
+      .cap{ font:600 12px system-ui; fill:var(--muted); }
+    </style>
+
+    <text class="cap" x="20" y="18">Ядро (utils / config)</text>
+    <text class="cap" x="620" y="18">Интеграции (фазы / промпты)</text>
+
+    <!-- edges (за нодами) -->
+    <!-- collectDomainTags -> normalizeTag, TAG_RE -->
+    <path class="ge" d="M110,220 L110,86"></path>
+    <path class="ge" d="M160,220 L250,86"></path>
+    <!-- renderTagRegistryBlock -> collectDomainTags -->
+    <path class="ge" d="M130,320 L130,272"></path>
+    <!-- renderTagRegistryBlock -> max_tag_categories, entity_types -->
+    <path class="ge" d="M220,335 L400,86"></path>
+    <path class="ge" d="M230,345 L400,180"></path>
+    <!-- ingest integration -> renderTagRegistryBlock -->
+    <path class="ge" d="M620,95 L230,330"></path>
+    <!-- ingest -> prompts/ingest.md (dash: правка промпта под блок) -->
+    <path class="ge dash" d="M730,106 L730,150"></path>
+    <!-- entity auto-add -> entity_types -->
+    <path class="ge" d="M620,250 L580,190"></path>
+    <!-- entity auto-add отдельная нода зависит от ingest post-processing: dash containment -->
+    <path class="ge dash" d="M720,230 L720,106"></path>
+    <!-- format integration -> renderTagRegistryBlock -->
+    <path class="ge" d="M620,340 L245,350"></path>
+    <!-- format -> agent-runner resolve -->
+    <path class="ge" d="M620,360 L560,360"></path>
+    <!-- agent-runner resolve -> detectDomain/entity config -->
+    <path class="ge" d="M460,340 L460,200"></path>
+    <!-- format -> _format_schema.md (dash) -->
+    <path class="ge dash" d="M730,376 L730,410"></path>
+
+    <!-- ноды: ядро -->
+    <g class="gn core"><rect x="30" y="46" width="160" height="40"></rect><text x="110" y="71" text-anchor="middle">normalizeTag (Part 4)</text></g>
+    <g class="gn core"><rect x="220" y="46" width="140" height="40"></rect><text x="290" y="71" text-anchor="middle">TAG_RE (существует)</text></g>
+    <g class="gn core"><rect x="390" y="46" width="180" height="40"></rect><text x="480" y="71" text-anchor="middle">max_tag_categories (Part 5)</text></g>
+    <g class="gn core"><rect x="390" y="150" width="180" height="40"></rect><text x="480" y="175" text-anchor="middle">entity_types / wiki_subfolder</text></g>
+    <g class="gn core"><rect x="30" y="226" width="200" height="46"></rect><text x="130" y="246" text-anchor="middle">collectDomainTags</text><text x="130" y="262" text-anchor="middle">(Part 1, скан домена)</text></g>
+    <g class="gn core"><rect x="30" y="320" width="215" height="46"></rect><text x="137" y="340" text-anchor="middle">renderTagRegistryBlock</text><text x="137" y="356" text-anchor="middle">(Part 1, блок в промпт)</text></g>
+    <g class="gn core"><rect x="360" y="340" width="200" height="40"></rect><text x="460" y="365" text-anchor="middle">agent-runner: resolve domain</text></g>
+
+    <!-- ноды: интеграции -->
+    <g class="gn integ"><rect x="620" y="60" width="220" height="46"></rect><text x="730" y="80" text-anchor="middle">Ingest-интеграция (Part 2)</text><text x="730" y="96" text-anchor="middle">buildIngestMessages + блок</text></g>
+    <g class="gn integ"><rect x="620" y="150" width="220" height="40"></rect><text x="730" y="175" text-anchor="middle">prompts/ingest.md — правило тегов</text></g>
+    <g class="gn integ"><rect x="620" y="230" width="220" height="46"></rect><text x="730" y="250" text-anchor="middle">Авто-тег сущности + warning</text><text x="730" y="266" text-anchor="middle">(Part 2, пост-обработка)</text></g>
+    <g class="gn integ"><rect x="620" y="330" width="220" height="46"></rect><text x="730" y="350" text-anchor="middle">Format-интеграция (Part 3)</text><text x="730" y="366" text-anchor="middle">userInitial + блок</text></g>
+    <g class="gn integ"><rect x="620" y="410" width="220" height="40" rx="7"></rect><text x="730" y="435" text-anchor="middle">_format_schema.md — правило тегов</text></g>
+  </svg>
+  <p class="legend">Сплошные — прямая зависимость; пунктир — сопутствующая правка промпта / включённость в фазу. Синий контур — ядро (utils, config), оранжевый — интеграции (фазы, промпты). Циклов нет.</p>
+  </figure>
+
+  <h2>4. Карта покрытия</h2>
+  <table>
+    <thead><tr><th>Задача (запрос + решения брейншторма)</th><th>Требования спеки</th></tr></thead>
+    <tbody>
+      <tr><td>Ingest: теги произвольные, нет анализа тегов домена</td><td>Part 1 (реестр), Part 2 (блок в контекст + правка промпта)</td></tr>
+      <tr><td>Format: нет анализа существующих тегов источников</td><td>Part 1, Part 3 (домен → реестр → блок; деградация без домена)</td></tr>
+      <tr><td>Привести тегирование к стандарту</td><td>Part 4 (нормализация вместо отбрасывания), существующий <code>TAG_RE</code></td></tr>
+      <tr><td>Переиспользование существующих тегов</td><td>Part 1 (весь реестр в промпт), Part 2/3 (порядок предпочтения reuse)</td></tr>
+      <tr><td>Лимит словаря (решение: только категории, 12, настраиваемо)</td><td>Part 5 (<code>max_tag_categories</code>), Part 1 (N/limit + «reuse only»), Part 2 (мягкий warning)</td></tr>
+      <tr><td>Синхронизация тегов с сущностями (решение: «сущности + темы»)</td><td>Part 1 (entity categories вне лимита), Part 2 (детерминированный авто-тег по <code>wiki_subfolder</code>)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5. Результаты проверки</h2>
+  <p>
+    <span class="badge b-ok">structure: passed</span>
+    <span class="badge b-ok">coverage: passed</span>
+    <span class="badge b-ok">clarity: passed</span>
+    <span class="badge b-ok">consistency: passed</span>
+  </p>
+  <table>
+    <thead><tr><th>id</th><th>severity</th><th>section</th><th>fragment</th><th>text</th><th>fix</th><th>verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>F-001</td>
+        <td><span class="badge b-info">INFO</span></td>
+        <td>Part 2 — Ingest integration</td>
+        <td>«Count thematic categories across the domain after the write; if a new category exceeded the limit, emit a warning»</td>
+        <td>Точный момент и скоуп подсчёта категорий (на каждую страницу или раз за прогон; до или после записи всех страниц) оставлены плану реализации.</td>
+        <td>Допустимо — контроль мягкий (только warning); зафиксировать точку подсчёта в плане.</td>
+        <td><span class="badge b-ok">accepted</span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="note"><b>Сводка.</b> CRITICAL open: 0 · WARNING open: 0 · INFO: 1 (accepted). &nbsp;
+     <b>Вердикт: <span class="badge b-ok">OK</span></b></p>
+  <p class="sub"><b>Цепочка:</b> intent → <b>spec</b>. intent = <code>null</code> (intent-доки нет);
+     spec = <code>2026-07-03-tag-standardization-design.md</code> (OK).</p>
+
+</section>
+<!-- TAB:spec END -->
+
+<!-- TAB:plan START -->
+<section class="tab-pane" id="pane-plan">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:plan END -->
+
+<!-- TAB:result START -->
+<section class="tab-pane" id="pane-result">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:result END -->
+
+</body>
+</html>
