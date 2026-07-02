@@ -655,7 +655,8 @@ function buildIngestSummary(
   return `Источник «${src}» → домен «${domainId}»: ${countStr}${errStr}`;
 }
 
-export function detectDomain(absFilePath: string, domains: DomainEntry[], vaultRoot: string): DomainEntry | null {
+/** Match a file to a domain by source_paths prefix; null when nothing matches (no fallback). */
+export function detectDomainStrict(absFilePath: string, domains: DomainEntry[], vaultRoot: string): DomainEntry | null {
   for (const d of domains) {
     const matched = d.source_paths?.some((sp) => {
       const abs = isAbsolute(sp) ? sp : join(vaultRoot, sp);
@@ -663,7 +664,11 @@ export function detectDomain(absFilePath: string, domains: DomainEntry[], vaultR
     });
     if (matched) return d;
   }
-  return domains[0] ?? null;
+  return null;
+}
+
+export function detectDomain(absFilePath: string, domains: DomainEntry[], vaultRoot: string): DomainEntry | null {
+  return detectDomainStrict(absFilePath, domains, vaultRoot) ?? domains[0] ?? null;
 }
 
 export function parseJsonPages(text: string): Array<{ path: string; content: string; annotation?: string }> {

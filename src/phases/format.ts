@@ -15,6 +15,9 @@ import { FormatBaseSchema, FormatWithVisionSchema } from "./zod-schemas";
 import { structuralErrorCounter } from "../structural-error-counter";
 import { extractObsidianEmbedPaths, analyzeSingleAttachment } from "./attachment-analyzer";
 import type { VisionTempStore } from "./vision-temp-store";
+import type { DomainEntry } from "../domain";
+import { collectDomainTags, renderTagRegistryBlock, DEFAULT_MAX_TAG_CATEGORIES } from "../utils/tag-registry";
+import { domainWikiFolder } from "../wiki-path";
 
 function parseFormatOutput(
   text: string,
@@ -92,6 +95,7 @@ export async function* runFormat(
   visionSettings: { enabled: boolean; model: string; language?: "auto" | "ru" | "en" | "es"; imageOnly?: boolean } = { enabled: false, model: "" },
   visionTempStore?: VisionTempStore,
   progress: FormatProgress = enFormatProgressFallback,
+  formatDomain?: DomainEntry,
 ): AsyncGenerator<RunEvent> {
   const start = Date.now();
   const filePath = args[0];
@@ -182,7 +186,25 @@ export async function* runFormat(
     visionBlock = `\n---\nATTACHMENT DESCRIPTIONS (vision recognition; integrate IMMEDIATELY BELOW the corresponding \`![[path]]\` embed as structured markdown — table/list/code following the source's form; for DIAGRAMS keep both elements: first the text description, then a \`\`\`mermaid\`\`\` block — do not drop either the description or the mermaid; do NOT wrap in a blockquote, do NOT add a [Vision] marker, do NOT quote the paths):\n${items.join("\n\n")}`;
   }
 
-  const userInitial = `Source file: ${filePath}\n---\n${original}${visionBlock}`;
+  let tagRegistryBlock = "";
+  if (formatDomain) {
+    try {
+      const registry = await collectDomainTags(
+        vaultTools,
+        domainWikiFolder(formatDomain.wiki_folder),
+        formatDomain.source_paths ?? [],
+      );
+      tagRegistryBlock = renderTagRegistryBlock(
+        registry,
+        (formatDomain.entity_types ?? []).map((e) => e.type),
+        formatDomain.max_tag_categories ?? DEFAULT_MAX_TAG_CATEGORIES,
+      );
+    } catch {
+      /* no registry — format degrades to current behavior */
+    }
+  }
+
+  const userInitial = `Source file: ${filePath}\n---\n${original}${visionBlock}${tagRegistryBlock ? `\n---\n${tagRegistryBlock}` : ""}`;
 
   const imagePaths = hasVision ? extractImagePaths(original) : [];
 
