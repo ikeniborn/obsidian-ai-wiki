@@ -71,8 +71,8 @@ body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); bord
 <body>
 <input type="checkbox" id="theme-toggle" hidden>
 <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
-<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden checked>
-<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
 <input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
 <label for="theme-toggle" class="theme-btn" title="Тёмная/светлая тема">🌙 / ☀️</label>
 <header>
@@ -260,7 +260,117 @@ body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); bord
 
 <!-- TAB:plan START -->
 <section class="tab-pane" id="pane-plan">
-  <p class="note">Этап ещё не проверен.</p>
+
+  <h2>1. Резюме плана</h2>
+  <p class="sub"><code>docs/superpowers/plans/2026-07-03-tag-standardization.md</code> ·
+     plan_hash <code>c78e715471437376</code> · 5 задач, TDD через tsx-скрипт <code>eval/tag-registry/run.ts</code> (без vitest/jest).</p>
+  <table>
+    <thead><tr><th>Задача</th><th>Definition of Done</th></tr></thead>
+    <tbody>
+      <tr><td>T1 — normalizeTag + list-tags (S1–6)</td><td><code>raw-frontmatter.ts</code>: экспорт <code>TAG_RE</code>, <code>normalizeTag</code>, <code>parseTagsFromFm</code>; отдельный case <code>list-tags</code> (нормализация → TAG_RE → dedupe, warnings); тест <code>OK — 12 passed</code>; tsc+lint+build; commit</td></tr>
+      <tr><td>T2 — tag-registry модуль (S1–7)</td><td><code>src/utils/tag-registry.ts</code>: <code>collectDomainTags</code>, <code>renderTagRegistryBlock</code>, <code>thematicCategories</code>, <code>ensureEntityTypeTag</code>, <code>DEFAULT_MAX_TAG_CATEGORIES=12</code>, интерфейс <code>TagVault</code>; <code>DomainEntry.max_tag_categories</code>; тест <code>OK — 30 passed</code>; tsc+lint+build; commit</td></tr>
+      <tr><td>T3 — ingest-интеграция (S1–8)</td><td>Реестр после detectDomain; параметр <code>tagRegistryBlock</code> в <code>buildIngestMessages</code>; авто-тег сущности в write-loop (<code>ensureEntityTypeTag</code>); мягкий лимит-warning один раз за прогон перед delete-loop; правка <code>prompts/ingest.md</code>; verify; commit</td></tr>
+      <tr><td>T4 — format-интеграция (S1–6)</td><td><code>detectDomainStrict</code> (без fallback на первый домен); резолв домена в <code>agent-runner</code>; параметр <code>formatDomain</code> в <code>runFormat</code> + блок в <code>userInitial</code>; правка <code>_format_schema.md</code>; verify; commit</td></tr>
+      <tr><td>T5 — документация (S1–5)</td><td>README.md + docs/README.ru.md (строки Ingest/Format); iwiki-страница <code>tagging</code>; <code>wiki_lint</code> чистый; commit</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Граф зависимостей задач</h2>
+  <p class="sub">Ребро M→N — результат задачи M используется в N. Циклов нет; T3 и T4 независимы, обе поверх T2.</p>
+  <figure>
+  <svg viewBox="0 0 760 300" width="100%" role="img" aria-label="Граф зависимостей задач">
+    <defs>
+      <marker id="parr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--line)"></path>
+      </marker>
+      <filter id="pds" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="var(--shadow)"></feDropShadow>
+      </filter>
+    </defs>
+    <style>
+      .pn rect{ fill:var(--surface); stroke:var(--accent); stroke-width:1.2; rx:8; filter:url(#pds); }
+      .pn.docs rect{ stroke:var(--warn); }
+      .pn text{ font:11px system-ui,sans-serif; }
+      .pe{ stroke:var(--line); stroke-width:1.6; fill:none; marker-end:url(#parr); }
+      .pl{ font:10px system-ui; fill:var(--muted); }
+    </style>
+    <!-- edges -->
+    <path class="pe" d="M200,63 L300,63"></path>
+    <path class="pe" d="M460,55 L560,43"></path>
+    <path class="pe" d="M460,75 L560,140"></path>
+    <path class="pe" d="M700,66 C752,120 752,170 704,222"></path>
+    <path class="pe" d="M640,166 L640,220"></path>
+    <text class="pl" x="215" y="55">exports</text>
+    <text class="pl" x="480" y="40">registry API</text>
+    <text class="pl" x="470" y="115">registry API</text>
+    <text class="pl" x="600" y="200">поведение</text>
+    <!-- nodes -->
+    <g class="pn"><rect x="40" y="40" width="160" height="46"></rect><text x="120" y="60" text-anchor="middle">Task 1</text><text x="120" y="76" text-anchor="middle">normalizeTag + list-tags</text></g>
+    <g class="pn"><rect x="300" y="40" width="160" height="46"></rect><text x="380" y="60" text-anchor="middle">Task 2</text><text x="380" y="76" text-anchor="middle">tag-registry + config</text></g>
+    <g class="pn"><rect x="560" y="20" width="160" height="46"></rect><text x="640" y="40" text-anchor="middle">Task 3</text><text x="640" y="56" text-anchor="middle">ingest-интеграция</text></g>
+    <g class="pn"><rect x="560" y="120" width="160" height="46"></rect><text x="640" y="140" text-anchor="middle">Task 4</text><text x="640" y="156" text-anchor="middle">format-интеграция</text></g>
+    <g class="pn docs"><rect x="560" y="220" width="160" height="46"></rect><text x="640" y="240" text-anchor="middle">Task 5</text><text x="640" y="256" text-anchor="middle">README + iwiki</text></g>
+  </svg>
+  <p class="legend">T1 (exports raw-frontmatter) → T2 (реестр их импортирует); T2 → T3 и T4 (обе интеграции поверх API реестра); T3/T4 → T5 (документируется готовое поведение). Порядок M&lt;N соблюдён.</p>
+  </figure>
+
+  <h2>3. Пересечения по артефактам</h2>
+  <table>
+    <thead><tr><th>Артефакт</th><th>Задачи</th></tr></thead>
+    <tbody>
+      <tr><td><code>eval/tag-registry/run.ts</code></td><td>T1 (создание), T2 (расширение)</td></tr>
+      <tr><td><code>src/utils/raw-frontmatter.ts</code></td><td>T1; API потребляют T2–T4</td></tr>
+      <tr><td><code>src/utils/tag-registry.ts</code></td><td>T2 (создание); API потребляют T3, T4</td></tr>
+      <tr><td><code>src/phases/ingest.ts</code></td><td>T3 (реестр, авто-тег, лимит) и T4 (<code>detectDomainStrict</code>) — разные регионы файла</td></tr>
+      <tr><td><code>src/domain.ts</code></td><td>T2 (<code>max_tag_categories</code>)</td></tr>
+      <tr><td><code>src/phases/format.ts</code> · <code>src/agent-runner.ts</code> · <code>templates/_format_schema.md</code></td><td>T4</td></tr>
+      <tr><td><code>prompts/ingest.md</code></td><td>T3</td></tr>
+      <tr><td><code>README.md</code> · <code>docs/README.ru.md</code> · iwiki</td><td>T5</td></tr>
+    </tbody>
+  </table>
+
+  <h2>4. Карта покрытия</h2>
+  <table>
+    <thead><tr><th>Требование спеки</th><th>Задачи</th></tr></thead>
+    <tbody>
+      <tr><td>Part 1 — tag registry (collect + render, весь реестр)</td><td>T2</td></tr>
+      <tr><td>Part 2 — ingest (блок, промпт, авто-тег, мягкий лимит)</td><td>T3</td></tr>
+      <tr><td>Part 3 — format (резолв домена, блок, деградация)</td><td>T4</td></tr>
+      <tr><td>Part 4 — normalizeTag перед TAG_RE</td><td>T1</td></tr>
+      <tr><td>Part 5 — max_tag_categories (default 12)</td><td>T2</td></tr>
+      <tr><td>Verification (SC-1…SC-4)</td><td>verify-шаги T1–T4 + Final verification</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5. Результаты проверки</h2>
+  <p>
+    <span class="badge b-ok">structure: passed</span>
+    <span class="badge b-ok">coverage: passed</span>
+    <span class="badge b-ok">dependencies: passed</span>
+    <span class="badge b-ok">verifiability: passed</span>
+    <span class="badge b-ok">consistency: passed</span>
+  </p>
+  <table>
+    <thead><tr><th>id</th><th>severity</th><th>section</th><th>fragment</th><th>text</th><th>fix</th><th>verdict</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>F-001</td>
+        <td><span class="badge b-info">INFO</span></td>
+        <td>Task 5 — Documentation</td>
+        <td>«Modify: README.md (feature table, lines 23 and 29)»</td>
+        <td>Задача T5 (README en/ru + iwiki) не привязана к требованию спеки — она следует из глобального мандата CLAUDE.md (Keep README Current, Keep Docs Current).</td>
+        <td>Принято: поддержка документации — постоянное правило проекта, не scope creep спеки.</td>
+        <td><span class="badge b-ok">accepted</span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="note"><b>Сводка.</b> CRITICAL open: 0 · WARNING open: 0 · INFO: 1 (accepted). &nbsp;
+     <b>Вердикт: <span class="badge b-ok">OK</span></b><br>
+     Self-review исправил два счётных дефекта тестовых ожиданий до фиксации (registry.total 5→4; итог проверок 29→30).</p>
+  <p class="sub"><b>Цепочка:</b> intent → spec → <b>plan</b>. intent = <code>null</code>;
+     spec = <code>2026-07-03-tag-standardization-design.md</code> (OK);
+     plan = <code>2026-07-03-tag-standardization.md</code> (OK).</p>
+
 </section>
 <!-- TAB:plan END -->
 
