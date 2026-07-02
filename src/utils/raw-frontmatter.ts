@@ -6,9 +6,38 @@ const FM_RE = /^---\n([\s\S]*?)\n---\n?/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const WIKILINK_RE = /^\[\[.+\]\]$/;
 const URL_RE = /^https?:\/\//;
-const TAG_RE = /^[a-z][a-z0-9-]*(?:[/_][a-z0-9-]+)*$/;
+export const TAG_RE = /^[a-z][a-z0-9-]*(?:[/_][a-z0-9-]+)*$/;
 
 const FM_KEY_LINE = /^(wiki_[\w]+|tags|aliases|created|updated|external_links|related):/;
+
+/**
+ * Salvage a near-valid tag before TAG_RE validation instead of dropping it:
+ * `#Category/Sub Topic` → `category/sub-topic`. Output is NOT guaranteed to
+ * pass TAG_RE — callers must still validate.
+ */
+export function normalizeTag(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^#+/, "")
+    .replace(/\\/g, "/")
+    .toLowerCase()
+    .replace(/\s+/g, "-");
+}
+
+/** Raw string entries of the frontmatter `tags:` list — no normalization or validation. */
+export function parseTagsFromFm(content: string): string[] {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return [];
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {};
+  } catch {
+    return [];
+  }
+  const tags = parsed["tags"];
+  if (!Array.isArray(tags)) return [];
+  return (tags as unknown[]).filter((t): t is string => typeof t === "string");
+}
 
 /**
  * Recovers a source page's frontmatter into a single valid fenced block, tolerant of
@@ -142,8 +171,7 @@ export function validateAndRepairFrontmatter(
 
     switch (rule.kind) {
       case "list-wikilinks":
-      case "list-urls":
-      case "list-tags": {
+      case "list-urls": {
         if (!Array.isArray(val)) {
           warnings.push(`${rule.field}: expected list, got scalar — removed`);
           delete parsed[rule.field];
@@ -153,9 +181,7 @@ export function validateAndRepairFrontmatter(
         const predicate =
           rule.kind === "list-wikilinks"
             ? (v: string) => WIKILINK_RE.test(v)
-            : rule.kind === "list-urls"
-              ? (v: string) => URL_RE.test(v)
-              : (v: string) => TAG_RE.test(v);
+            : (v: string) => URL_RE.test(v);
         const filtered = (val as unknown[]).filter((v) => {
           if (typeof v !== "string" || !predicate(v)) {
             warnings.push(`${rule.field}: invalid entry "${v}" — removed`);
@@ -169,6 +195,47 @@ export function validateAndRepairFrontmatter(
             delete parsed[rule.field];
           } else {
             parsed[rule.field] = filtered;
+          }
+        }
+        break;
+      }
+      case "list-tags": {
+        if (!Array.isArray(val)) {
+          warnings.push(`${rule.field}: expected list, got scalar — removed`);
+          delete parsed[rule.field];
+          modified = true;
+          break;
+        }
+        const kept: string[] = [];
+        let changed = false;
+        for (const v of val as unknown[]) {
+          if (typeof v !== "string") {
+            warnings.push(`${rule.field}: invalid entry "${v}" — removed`);
+            changed = true;
+            continue;
+          }
+          const norm = normalizeTag(v);
+          if (!TAG_RE.test(norm)) {
+            warnings.push(`${rule.field}: invalid entry "${v}" — removed`);
+            changed = true;
+            continue;
+          }
+          if (norm !== v) {
+            warnings.push(`${rule.field}: normalized "${v}" → "${norm}"`);
+            changed = true;
+          }
+          if (kept.includes(norm)) {
+            changed = true;
+          } else {
+            kept.push(norm);
+          }
+        }
+        if (changed) {
+          modified = true;
+          if (kept.length === 0) {
+            delete parsed[rule.field];
+          } else {
+            parsed[rule.field] = kept;
           }
         }
         break;
