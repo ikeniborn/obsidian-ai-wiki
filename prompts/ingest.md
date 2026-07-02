@@ -18,7 +18,10 @@ RULES:
 - The article path is determined by the entity type — use the exact template from the "DOMAIN ENTITY TYPES" section (above, before the RULES block), substituting the entity name for <EntityName>
 - If the entity type is undefined or the domain has no entity_types → default path: {{wiki_path}}/entities/<EntityName>.md
 - Frontmatter is mandatory: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature
-- tags: hierarchical tags (category/subcategory). Reuse tags from existing wiki pages (provided in the context). Create new ones following the same scheme if needed. Format: lowercase, separated by `/`, no spaces, no `#`
+- tags: hierarchical tags (category/subcategory). Format: lowercase, separated by `/`, no spaces, no `#`. Pick tags in this order:
+  1. The page's entity-type tag — the normalized type of this entity (e.g. `person`). Always include it when the entity type is known.
+  2. Thematic tags reused from the EXISTING DOMAIN TAGS block (provided in the context). Do not invent near-duplicates of listed tags.
+  3. A new thematic tag ONLY when nothing in the block fits. Never start a new top-level category when the block says "reuse only".
 - wiki_sources: ONLY sources (files outside !Wiki/) — bare name without path: [[FileName]]. Never [[wiki_domain_page]]
 - wiki_outgoing_links: ONLY wiki pages (files inside !Wiki/) — bare name without path: [[wiki_domain_page]]. Never [[SourceName]]
   ❌ FORBIDDEN: [[CurrentSourceName]] or [[AnyOtherSourceFile]] in wiki_outgoing_links.
