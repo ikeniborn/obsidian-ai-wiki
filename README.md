@@ -20,13 +20,13 @@ AI Wiki reads your notes and maintains a structured knowledge base (wiki) alongs
 
 | Feature | What it does |
 |---|---|
-| **Ingest** | Reads an open note, extracts key topics (people, tools, processes, terms), creates or updates wiki pages |
+| **Ingest** | Reads an open note, extracts key topics (people, tools, processes, terms), creates or updates wiki pages. Tags are standardized: pages reuse the domain's existing tag vocabulary, carry their entity-type tag, and the set of thematic tag categories is bounded per domain |
 | **Query** | Answers a question using your wiki as context; results shown in the sidebar with cross-links |
 | **Lint** | Reviews wiki pages for gaps, outdated content, and broken links; shows a report in the sidebar |
 | **Fix** | After Lint — send an instruction in the sidebar chat to apply corrections |
 | **Init** | Sets up a new knowledge area (domain) with the folder structure and index files |
 | **Re-init** | Wipes and rebuilds a domain from scratch — useful after major source changes |
-| **Format** | Cleans up any open markdown note (outside the wiki): headings, tables, frontmatter, image captions. Shows a preview before applying. Invariant: never adds or removes facts — only improves clarity |
+| **Format** | Cleans up any open markdown note (outside the wiki): headings, tables, frontmatter, image captions. Shows a preview before applying. Invariant: never adds or removes facts — only improves clarity. When the note belongs to a configured domain, tags are reused from that domain's existing tag vocabulary |
 | **Chat** | Interactive follow-up in the sidebar after Query or Lint |
 
 Fix, Format, and Chat are launched from sidebar buttons, not the Command Palette.

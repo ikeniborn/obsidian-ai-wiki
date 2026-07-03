@@ -1,5 +1,6 @@
 import type { DomainEntry } from "./domain";
-import { runIngest } from "./phases/ingest";
+import { runIngest, detectDomainStrict } from "./phases/ingest";
+import { join } from "path-browserify";
 import { runQuery } from "./phases/query";
 import { runCrossDomainQuery } from "./phases/query-cross-domain";
 import { runLint } from "./phases/lint";
@@ -134,10 +135,15 @@ export class AgentRunner {
         break;
       case "format": {
         const hasVision = this.settings.backend === "claude-agent";
-        const formatDomain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : undefined;
-        const wikiVaultPath = formatDomain ? domainWikiFolder(formatDomain.wiki_folder) : undefined;
         const noVision = req.args.includes("--no-vision");
         const formatArgs = req.args.filter((a) => a !== "--no-vision");
+        const explicitDomain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : undefined;
+        const formatDomain =
+          explicitDomain ??
+          (formatArgs[0]
+            ? detectDomainStrict(join(vaultRoot, formatArgs[0]), this.domains, vaultRoot) ?? undefined
+            : undefined);
+        const wikiVaultPath = formatDomain ? domainWikiFolder(formatDomain.wiki_folder) : undefined;
         const baseVisionSettings = {
           enabled: this.settings.vision?.enabled ?? false,
           model: this.settings.vision?.model ?? "",
@@ -146,7 +152,7 @@ export class AgentRunner {
         };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
         const progress = i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress;
-        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore, progress);
+        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore, progress, formatDomain);
         break;
       }
       case "delete":

@@ -20,6 +20,8 @@ export interface DomainEntry {
   analyzed_sources_v2?: boolean;
   analyzed_sources_v3?: boolean;               // list → map migration flag
   pageNameVersion?: number;
+  /** Max distinct thematic (non-entity) top-level tag categories; absent → 12. */
+  max_tag_categories?: number;
 }
 
 export function migrateDomainsV2(domains: DomainEntry[]): { domains: DomainEntry[]; migrated: boolean } {

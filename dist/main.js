@@ -34,20 +34,20 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var require_path_browserify = __commonJS({
   "node_modules/path-browserify/index.js"(exports2, module2) {
     "use strict";
-    function assertPath(path2) {
-      if (typeof path2 !== "string") {
-        throw new TypeError("Path must be a string. Received " + JSON.stringify(path2));
+    function assertPath(path3) {
+      if (typeof path3 !== "string") {
+        throw new TypeError("Path must be a string. Received " + JSON.stringify(path3));
       }
     }
-    function normalizeStringPosix(path2, allowAboveRoot) {
+    function normalizeStringPosix(path3, allowAboveRoot) {
       var res = "";
       var lastSegmentLength = 0;
       var lastSlash = -1;
       var dots = 0;
       var code;
-      for (var i = 0; i <= path2.length; ++i) {
-        if (i < path2.length)
-          code = path2.charCodeAt(i);
+      for (var i = 0; i <= path3.length; ++i) {
+        if (i < path3.length)
+          code = path3.charCodeAt(i);
         else if (code === 47)
           break;
         else
@@ -87,9 +87,9 @@ var require_path_browserify = __commonJS({
             }
           } else {
             if (res.length > 0)
-              res += "/" + path2.slice(lastSlash + 1, i);
+              res += "/" + path3.slice(lastSlash + 1, i);
             else
-              res = path2.slice(lastSlash + 1, i);
+              res = path3.slice(lastSlash + 1, i);
             lastSegmentLength = i - lastSlash - 1;
           }
           lastSlash = i;
@@ -120,20 +120,20 @@ var require_path_browserify = __commonJS({
         var resolvedAbsolute = false;
         var cwd;
         for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
-          var path2;
+          var path3;
           if (i >= 0)
-            path2 = arguments[i];
+            path3 = arguments[i];
           else {
             if (cwd === void 0)
               cwd = process.cwd();
-            path2 = cwd;
+            path3 = cwd;
           }
-          assertPath(path2);
-          if (path2.length === 0) {
+          assertPath(path3);
+          if (path3.length === 0) {
             continue;
           }
-          resolvedPath = path2 + "/" + resolvedPath;
-          resolvedAbsolute = path2.charCodeAt(0) === 47;
+          resolvedPath = path3 + "/" + resolvedPath;
+          resolvedAbsolute = path3.charCodeAt(0) === 47;
         }
         resolvedPath = normalizeStringPosix(resolvedPath, !resolvedAbsolute);
         if (resolvedAbsolute) {
@@ -147,22 +147,22 @@ var require_path_browserify = __commonJS({
           return ".";
         }
       },
-      normalize: function normalize(path2) {
-        assertPath(path2);
-        if (path2.length === 0) return ".";
-        var isAbsolute5 = path2.charCodeAt(0) === 47;
-        var trailingSeparator = path2.charCodeAt(path2.length - 1) === 47;
-        path2 = normalizeStringPosix(path2, !isAbsolute5);
-        if (path2.length === 0 && !isAbsolute5) path2 = ".";
-        if (path2.length > 0 && trailingSeparator) path2 += "/";
-        if (isAbsolute5) return "/" + path2;
-        return path2;
+      normalize: function normalize(path3) {
+        assertPath(path3);
+        if (path3.length === 0) return ".";
+        var isAbsolute5 = path3.charCodeAt(0) === 47;
+        var trailingSeparator = path3.charCodeAt(path3.length - 1) === 47;
+        path3 = normalizeStringPosix(path3, !isAbsolute5);
+        if (path3.length === 0 && !isAbsolute5) path3 = ".";
+        if (path3.length > 0 && trailingSeparator) path3 += "/";
+        if (isAbsolute5) return "/" + path3;
+        return path3;
       },
-      isAbsolute: function isAbsolute5(path2) {
-        assertPath(path2);
-        return path2.length > 0 && path2.charCodeAt(0) === 47;
+      isAbsolute: function isAbsolute5(path3) {
+        assertPath(path3);
+        return path3.length > 0 && path3.charCodeAt(0) === 47;
       },
-      join: function join6() {
+      join: function join7() {
         if (arguments.length === 0)
           return ".";
         var joined;
@@ -246,18 +246,18 @@ var require_path_browserify = __commonJS({
           return to.slice(toStart);
         }
       },
-      _makeLong: function _makeLong(path2) {
-        return path2;
+      _makeLong: function _makeLong(path3) {
+        return path3;
       },
-      dirname: function dirname2(path2) {
-        assertPath(path2);
-        if (path2.length === 0) return ".";
-        var code = path2.charCodeAt(0);
+      dirname: function dirname2(path3) {
+        assertPath(path3);
+        if (path3.length === 0) return ".";
+        var code = path3.charCodeAt(0);
         var hasRoot = code === 47;
         var end = -1;
         var matchedSlash = true;
-        for (var i = path2.length - 1; i >= 1; --i) {
-          code = path2.charCodeAt(i);
+        for (var i = path3.length - 1; i >= 1; --i) {
+          code = path3.charCodeAt(i);
           if (code === 47) {
             if (!matchedSlash) {
               end = i;
@@ -269,21 +269,21 @@ var require_path_browserify = __commonJS({
         }
         if (end === -1) return hasRoot ? "/" : ".";
         if (hasRoot && end === 1) return "//";
-        return path2.slice(0, end);
+        return path3.slice(0, end);
       },
-      basename: function basename2(path2, ext) {
+      basename: function basename2(path3, ext) {
         if (ext !== void 0 && typeof ext !== "string") throw new TypeError('"ext" argument must be a string');
-        assertPath(path2);
+        assertPath(path3);
         var start = 0;
         var end = -1;
         var matchedSlash = true;
         var i;
-        if (ext !== void 0 && ext.length > 0 && ext.length <= path2.length) {
-          if (ext.length === path2.length && ext === path2) return "";
+        if (ext !== void 0 && ext.length > 0 && ext.length <= path3.length) {
+          if (ext.length === path3.length && ext === path3) return "";
           var extIdx = ext.length - 1;
           var firstNonSlashEnd = -1;
-          for (i = path2.length - 1; i >= 0; --i) {
-            var code = path2.charCodeAt(i);
+          for (i = path3.length - 1; i >= 0; --i) {
+            var code = path3.charCodeAt(i);
             if (code === 47) {
               if (!matchedSlash) {
                 start = i + 1;
@@ -307,11 +307,11 @@ var require_path_browserify = __commonJS({
             }
           }
           if (start === end) end = firstNonSlashEnd;
-          else if (end === -1) end = path2.length;
-          return path2.slice(start, end);
+          else if (end === -1) end = path3.length;
+          return path3.slice(start, end);
         } else {
-          for (i = path2.length - 1; i >= 0; --i) {
-            if (path2.charCodeAt(i) === 47) {
+          for (i = path3.length - 1; i >= 0; --i) {
+            if (path3.charCodeAt(i) === 47) {
               if (!matchedSlash) {
                 start = i + 1;
                 break;
@@ -322,18 +322,18 @@ var require_path_browserify = __commonJS({
             }
           }
           if (end === -1) return "";
-          return path2.slice(start, end);
+          return path3.slice(start, end);
         }
       },
-      extname: function extname(path2) {
-        assertPath(path2);
+      extname: function extname(path3) {
+        assertPath(path3);
         var startDot = -1;
         var startPart = 0;
         var end = -1;
         var matchedSlash = true;
         var preDotState = 0;
-        for (var i = path2.length - 1; i >= 0; --i) {
-          var code = path2.charCodeAt(i);
+        for (var i = path3.length - 1; i >= 0; --i) {
+          var code = path3.charCodeAt(i);
           if (code === 47) {
             if (!matchedSlash) {
               startPart = i + 1;
@@ -359,7 +359,7 @@ var require_path_browserify = __commonJS({
         preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
           return "";
         }
-        return path2.slice(startDot, end);
+        return path3.slice(startDot, end);
       },
       format: function format(pathObject) {
         if (pathObject === null || typeof pathObject !== "object") {
@@ -367,11 +367,11 @@ var require_path_browserify = __commonJS({
         }
         return _format("/", pathObject);
       },
-      parse: function parse(path2) {
-        assertPath(path2);
+      parse: function parse(path3) {
+        assertPath(path3);
         var ret = { root: "", dir: "", base: "", ext: "", name: "" };
-        if (path2.length === 0) return ret;
-        var code = path2.charCodeAt(0);
+        if (path3.length === 0) return ret;
+        var code = path3.charCodeAt(0);
         var isAbsolute5 = code === 47;
         var start;
         if (isAbsolute5) {
@@ -384,10 +384,10 @@ var require_path_browserify = __commonJS({
         var startPart = 0;
         var end = -1;
         var matchedSlash = true;
-        var i = path2.length - 1;
+        var i = path3.length - 1;
         var preDotState = 0;
         for (; i >= start; --i) {
-          code = path2.charCodeAt(i);
+          code = path3.charCodeAt(i);
           if (code === 47) {
             if (!matchedSlash) {
               startPart = i + 1;
@@ -410,20 +410,20 @@ var require_path_browserify = __commonJS({
         preDotState === 0 || // The (right-most) trimmed path component is exactly '..'
         preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
           if (end !== -1) {
-            if (startPart === 0 && isAbsolute5) ret.base = ret.name = path2.slice(1, end);
-            else ret.base = ret.name = path2.slice(startPart, end);
+            if (startPart === 0 && isAbsolute5) ret.base = ret.name = path3.slice(1, end);
+            else ret.base = ret.name = path3.slice(startPart, end);
           }
         } else {
           if (startPart === 0 && isAbsolute5) {
-            ret.name = path2.slice(1, startDot);
-            ret.base = path2.slice(1, end);
+            ret.name = path3.slice(1, startDot);
+            ret.base = path3.slice(1, end);
           } else {
-            ret.name = path2.slice(startPart, startDot);
-            ret.base = path2.slice(startPart, end);
+            ret.name = path3.slice(startPart, startDot);
+            ret.base = path3.slice(startPart, end);
           }
-          ret.ext = path2.slice(startDot, end);
+          ret.ext = path3.slice(startDot, end);
         }
-        if (startPart > 0) ret.dir = path2.slice(0, startPart - 1);
+        if (startPart > 0) ret.dir = path3.slice(0, startPart - 1);
         else if (isAbsolute5) ret.dir = "/";
         return ret;
       },
@@ -514,17 +514,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path2) {
-      const ctrl = callVisitor(key, node, visitor, path2);
+    function visit_(key, node, visitor, path3) {
+      const ctrl = callVisitor(key, node, visitor, path3);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path2, ctrl);
-        return visit_(key, ctrl, visitor, path2);
+        replaceNode(key, path3, ctrl);
+        return visit_(key, ctrl, visitor, path3);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path2 = Object.freeze(path2.concat(node));
+          path3 = Object.freeze(path3.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path2);
+            const ci = visit_(i, node.items[i], visitor, path3);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -535,13 +535,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path2 = Object.freeze(path2.concat(node));
-          const ck = visit_("key", node.key, visitor, path2);
+          path3 = Object.freeze(path3.concat(node));
+          const ck = visit_("key", node.key, visitor, path3);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path2);
+          const cv = visit_("value", node.value, visitor, path3);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -562,17 +562,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path2) {
-      const ctrl = await callVisitor(key, node, visitor, path2);
+    async function visitAsync_(key, node, visitor, path3) {
+      const ctrl = await callVisitor(key, node, visitor, path3);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path2, ctrl);
-        return visitAsync_(key, ctrl, visitor, path2);
+        replaceNode(key, path3, ctrl);
+        return visitAsync_(key, ctrl, visitor, path3);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path2 = Object.freeze(path2.concat(node));
+          path3 = Object.freeze(path3.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path2);
+            const ci = await visitAsync_(i, node.items[i], visitor, path3);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -583,13 +583,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path2 = Object.freeze(path2.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path2);
+          path3 = Object.freeze(path3.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path3);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path2);
+          const cv = await visitAsync_("value", node.value, visitor, path3);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -616,23 +616,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path2) {
+    function callVisitor(key, node, visitor, path3) {
       if (typeof visitor === "function")
-        return visitor(key, node, path2);
+        return visitor(key, node, path3);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path2);
+        return visitor.Map?.(key, node, path3);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path2);
+        return visitor.Seq?.(key, node, path3);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path2);
+        return visitor.Pair?.(key, node, path3);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path2);
+        return visitor.Scalar?.(key, node, path3);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path2);
+        return visitor.Alias?.(key, node, path3);
       return void 0;
     }
-    function replaceNode(key, path2, node) {
-      const parent = path2[path2.length - 1];
+    function replaceNode(key, path3, node) {
+      const parent = path3[path3.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -1242,10 +1242,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path2, value) {
+    function collectionFromPath(schema, path3, value) {
       let v = value;
-      for (let i = path2.length - 1; i >= 0; --i) {
-        const k = path2[i];
+      for (let i = path3.length - 1; i >= 0; --i) {
+        const k = path3[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -1264,7 +1264,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path2) => path2 == null || typeof path2 === "object" && !!path2[Symbol.iterator]().next().done;
+    var isEmptyPath = (path3) => path3 == null || typeof path3 === "object" && !!path3[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -1294,11 +1294,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path2, value) {
-        if (isEmptyPath(path2))
+      addIn(path3, value) {
+        if (isEmptyPath(path3))
           this.add(value);
         else {
-          const [key, ...rest] = path2;
+          const [key, ...rest] = path3;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -1312,8 +1312,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path2) {
-        const [key, ...rest] = path2;
+      deleteIn(path3) {
+        const [key, ...rest] = path3;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -1327,8 +1327,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path2, keepScalar) {
-        const [key, ...rest] = path2;
+      getIn(path3, keepScalar) {
+        const [key, ...rest] = path3;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -1346,8 +1346,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path2) {
-        const [key, ...rest] = path2;
+      hasIn(path3) {
+        const [key, ...rest] = path3;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -1357,8 +1357,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path2, value) {
-        const [key, ...rest] = path2;
+      setIn(path3, value) {
+        const [key, ...rest] = path3;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -3873,9 +3873,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path2, value) {
+      addIn(path3, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path2, value);
+          this.contents.addIn(path3, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -3950,14 +3950,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path2) {
-        if (Collection.isEmptyPath(path2)) {
+      deleteIn(path3) {
+        if (Collection.isEmptyPath(path3)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path2) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path3) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -3972,10 +3972,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path2, keepScalar) {
-        if (Collection.isEmptyPath(path2))
+      getIn(path3, keepScalar) {
+        if (Collection.isEmptyPath(path3))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path2, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path3, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -3986,10 +3986,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path2) {
-        if (Collection.isEmptyPath(path2))
+      hasIn(path3) {
+        if (Collection.isEmptyPath(path3))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path2) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path3) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -4006,13 +4006,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path2, value) {
-        if (Collection.isEmptyPath(path2)) {
+      setIn(path3, value) {
+        if (Collection.isEmptyPath(path3)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path2), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path3), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path2, value);
+          this.contents.setIn(path3, value);
         }
       }
       /**
@@ -5972,9 +5972,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path2) => {
+    visit.itemAtPath = (cst, path3) => {
       let item = cst;
-      for (const [field, index] of path2) {
+      for (const [field, index] of path3) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -5983,23 +5983,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path2) => {
-      const parent = visit.itemAtPath(cst, path2.slice(0, -1));
-      const field = path2[path2.length - 1][0];
+    visit.parentCollection = (cst, path3) => {
+      const parent = visit.itemAtPath(cst, path3.slice(0, -1));
+      const field = path3[path3.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path2, item, visitor) {
-      let ctrl = visitor(item, path2);
+    function _visit(path3, item, visitor) {
+      let ctrl = visitor(item, path3);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path2.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path3.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -6010,10 +6010,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path2);
+            ctrl = ctrl(item, path3);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path2) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path3) : ctrl;
     }
     exports2.visit = visit;
   }
@@ -8566,14 +8566,14 @@ var require_util = __commonJS({
         }
         const port = url.port != null ? url.port : url.protocol === "https:" ? 443 : 80;
         let origin = url.origin != null ? url.origin : `${url.protocol || ""}//${url.hostname || ""}:${port}`;
-        let path2 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
+        let path3 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
         if (origin[origin.length - 1] === "/") {
           origin = origin.slice(0, origin.length - 1);
         }
-        if (path2 && path2[0] !== "/") {
-          path2 = `/${path2}`;
+        if (path3 && path3[0] !== "/") {
+          path3 = `/${path3}`;
         }
-        return new URL(`${origin}${path2}`);
+        return new URL(`${origin}${path3}`);
       }
       if (!isHttpOrHttpsPrefixed(url.origin || url.protocol)) {
         throw new InvalidArgumentError("Invalid URL protocol: the URL must start with `http:` or `https:`.");
@@ -9024,39 +9024,39 @@ var require_diagnostics = __commonJS({
       });
       diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
         const {
-          request: { method, path: path2, origin }
+          request: { method, path: path3, origin }
         } = evt;
-        debuglog("sending request to %s %s/%s", method, origin, path2);
+        debuglog("sending request to %s %s/%s", method, origin, path3);
       });
       diagnosticsChannel.channel("undici:request:headers").subscribe((evt) => {
         const {
-          request: { method, path: path2, origin },
+          request: { method, path: path3, origin },
           response: { statusCode }
         } = evt;
         debuglog(
           "received response to %s %s/%s - HTTP %d",
           method,
           origin,
-          path2,
+          path3,
           statusCode
         );
       });
       diagnosticsChannel.channel("undici:request:trailers").subscribe((evt) => {
         const {
-          request: { method, path: path2, origin }
+          request: { method, path: path3, origin }
         } = evt;
-        debuglog("trailers received from %s %s/%s", method, origin, path2);
+        debuglog("trailers received from %s %s/%s", method, origin, path3);
       });
       diagnosticsChannel.channel("undici:request:error").subscribe((evt) => {
         const {
-          request: { method, path: path2, origin },
+          request: { method, path: path3, origin },
           error
         } = evt;
         debuglog(
           "request to %s %s/%s errored - %s",
           method,
           origin,
-          path2,
+          path3,
           error.message
         );
       });
@@ -9105,9 +9105,9 @@ var require_diagnostics = __commonJS({
         });
         diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
           const {
-            request: { method, path: path2, origin }
+            request: { method, path: path3, origin }
           } = evt;
-          debuglog("sending request to %s %s/%s", method, origin, path2);
+          debuglog("sending request to %s %s/%s", method, origin, path3);
         });
       }
       diagnosticsChannel.channel("undici:websocket:open").subscribe((evt) => {
@@ -9170,7 +9170,7 @@ var require_request = __commonJS({
     var kHandler = /* @__PURE__ */ Symbol("handler");
     var Request = class {
       constructor(origin, {
-        path: path2,
+        path: path3,
         method,
         body,
         headers,
@@ -9185,11 +9185,11 @@ var require_request = __commonJS({
         expectContinue,
         servername
       }, handler) {
-        if (typeof path2 !== "string") {
+        if (typeof path3 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path2[0] !== "/" && !(path2.startsWith("http://") || path2.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path3[0] !== "/" && !(path3.startsWith("http://") || path3.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.test(path2)) {
+        } else if (invalidPathRegex.test(path3)) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -9255,7 +9255,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? buildURL(path2, query) : path2;
+        this.path = query ? buildURL(path3, query) : path3;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -13877,7 +13877,7 @@ var require_client_h1 = __commonJS({
       return method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "TRACE" && method !== "CONNECT";
     }
     function writeH1(client, request) {
-      const { method, path: path2, host, upgrade, blocking, reset } = request;
+      const { method, path: path3, host, upgrade, blocking, reset } = request;
       let { body, headers, contentLength } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
       if (util2.isFormDataLike(body)) {
@@ -13944,7 +13944,7 @@ var require_client_h1 = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path2} HTTP/1.1\r
+      let header = `${method} ${path3} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -14470,7 +14470,7 @@ var require_client_h2 = __commonJS({
     }
     function writeH2(client, request) {
       const session = client[kHTTP2Session];
-      const { method, path: path2, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
+      const { method, path: path3, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
       let { body } = request;
       if (upgrade) {
         util2.errorRequest(client, request, new Error("Upgrade not supported for H2"));
@@ -14537,7 +14537,7 @@ var require_client_h2 = __commonJS({
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path2;
+      headers[HTTP2_HEADER_PATH] = path3;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
@@ -14890,9 +14890,9 @@ var require_redirect_handler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util2.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path2 = search ? `${pathname}${search}` : pathname;
+        const path3 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path2;
+        this.opts.path = path3;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -16127,10 +16127,10 @@ var require_proxy_agent = __commonJS({
         };
         const {
           origin,
-          path: path2 = "/",
+          path: path3 = "/",
           headers = {}
         } = opts;
-        opts.path = origin + path2;
+        opts.path = origin + path3;
         if (!("host" in headers) && !("Host" in headers)) {
           const { host } = new URL2(origin);
           headers.host = host;
@@ -18051,20 +18051,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path2) {
-      if (typeof path2 !== "string") {
-        return path2;
+    function safeUrl(path3) {
+      if (typeof path3 !== "string") {
+        return path3;
       }
-      const pathSegments = path2.split("?");
+      const pathSegments = path3.split("?");
       if (pathSegments.length !== 2) {
-        return path2;
+        return path3;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path2, method, body, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path2);
+    function matchKey(mockDispatch2, { path: path3, method, body, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path3);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -18086,7 +18086,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path2 }) => matchValue(safeUrl(path2), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path3 }) => matchValue(safeUrl(path3), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -18124,9 +18124,9 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path2, method, body, headers, query } = opts;
+      const { path: path3, method, body, headers, query } = opts;
       return {
-        path: path2,
+        path: path3,
         method,
         body,
         headers,
@@ -18589,10 +18589,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path2, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path3, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path2,
+            Path: path3,
             "Status code": statusCode,
             Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
             Invocations: timesInvoked,
@@ -23473,9 +23473,9 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path2) {
-      for (let i = 0; i < path2.length; ++i) {
-        const code = path2.charCodeAt(i);
+    function validateCookiePath(path3) {
+      for (let i = 0; i < path3.length; ++i) {
+        const code = path3.charCodeAt(i);
         if (code < 32 || // exclude CTLs (0-31)
         code === 127 || // DEL
         code === 59) {
@@ -26168,11 +26168,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path2 = opts.path;
+          let path3 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path2 = `/${path2}`;
+            path3 = `/${path3}`;
           }
-          url = new URL(util2.parseOrigin(url).origin + path2);
+          url = new URL(util2.parseOrigin(url).origin + path3);
         } else {
           if (!opts) {
             opts = typeof url === "object" ? url : {};
@@ -26480,7 +26480,7 @@ var en = {
     formatInWikiBody: (id) => `This file is a wiki article (domain \xAB${id}\xBB). Formatting wiki articles is not available.`,
     formatInWikiClose: "Close",
     formatNoPending: "No format preview available",
-    formatApplied: (path2) => `Formatted: ${path2}`,
+    formatApplied: (path3) => `Formatted: ${path3}`,
     formatCancelled: "Format cancelled",
     formatPreviewHeader: "Format preview",
     formatApply: "Apply",
@@ -26539,7 +26539,7 @@ var en = {
     ratingRebuild: "Rate rebuild:"
   },
   formatProgress: {
-    analysing: (path2) => `Analysing file ${path2}...
+    analysing: (path3) => `Analysing file ${path3}...
 `,
     truncatedSalvageSummary: "Format: response truncated \u2014 salvage",
     truncatedSalvageRetrySummary: "Format: retry response truncated \u2014 salvage",
@@ -26821,7 +26821,7 @@ var ru = {
     formatInWikiBody: (id) => `\u0424\u0430\u0439\u043B \u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F wiki-\u0441\u0442\u0430\u0442\u044C\u0451\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${id}\xBB. \u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 wiki-\u0441\u0442\u0430\u0442\u0435\u0439 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E.`,
     formatInWikiClose: "\u0417\u0430\u043A\u0440\u044B\u0442\u044C",
     formatNoPending: "\u041D\u0435\u0442 \u043E\u0436\u0438\u0434\u0430\u044E\u0449\u0435\u0433\u043E \u043F\u0440\u0435\u0434\u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440\u0430 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F",
-    formatApplied: (path2) => `\u041E\u0442\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043E: ${path2}`,
+    formatApplied: (path3) => `\u041E\u0442\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043E: ${path3}`,
     formatCancelled: "\u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E",
     formatPreviewHeader: "\u041F\u0440\u0435\u0434\u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F",
     formatApply: "\u041F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C",
@@ -26880,7 +26880,7 @@ var ru = {
     ratingRebuild: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u043F\u0435\u0440\u0435\u0441\u0442\u0440\u043E\u0439\u043A\u0443:"
   },
   formatProgress: {
-    analysing: (path2) => `\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u0430 ${path2}...
+    analysing: (path3) => `\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u0430 ${path3}...
 `,
     truncatedSalvageSummary: "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u2014 salvage",
     truncatedSalvageRetrySummary: "Format: retry \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u2014 salvage",
@@ -27161,7 +27161,7 @@ var es = {
     formatInWikiBody: (id) => `Este archivo es un art\xEDculo wiki (dominio \xAB${id}\xBB). No se puede formatear art\xEDculos wiki.`,
     formatInWikiClose: "Cerrar",
     formatNoPending: "No hay previsualizaci\xF3n de formato",
-    formatApplied: (path2) => `Formateado: ${path2}`,
+    formatApplied: (path3) => `Formateado: ${path3}`,
     formatCancelled: "Formateo cancelado",
     formatPreviewHeader: "Previsualizaci\xF3n del formateo",
     formatApply: "Aplicar",
@@ -27220,7 +27220,7 @@ var es = {
     ratingRebuild: "Evaluar reconstrucci\xF3n:"
   },
   formatProgress: {
-    analysing: (path2) => `Analizando archivo ${path2}...
+    analysing: (path3) => `Analizando archivo ${path3}...
 `,
     truncatedSalvageSummary: "Format: respuesta truncada \u2014 recuperaci\xF3n",
     truncatedSalvageRetrySummary: "Format: reintento truncado \u2014 recuperaci\xF3n",
@@ -27433,8 +27433,8 @@ var GLOBAL_DEV_LOG_PATH = `${GLOBAL_CONFIG_DIR}/_dev.jsonl`;
 function domainWikiFolder(subfolder) {
   return `${WIKI_ROOT}/${subfolder}`;
 }
-function isWikiArticlePath(path2) {
-  return path2 === WIKI_ROOT || path2.startsWith(`${WIKI_ROOT}/`);
+function isWikiArticlePath(path3) {
+  return path3 === WIKI_ROOT || path3.startsWith(`${WIKI_ROOT}/`);
 }
 function sanitizeWikiFolder(raw) {
   let s = raw;
@@ -27448,11 +27448,11 @@ function sanitizeWikiSubfolder(raw) {
   if (!raw.includes("/")) return raw;
   return raw.split("/").pop();
 }
-function validateArticlePath(path2, wikiVaultPath) {
-  if (path2 === `${wikiVaultPath}/_config/_index.md` || path2 === `${wikiVaultPath}/_config/_log.md`) return true;
+function validateArticlePath(path3, wikiVaultPath) {
+  if (path3 === `${wikiVaultPath}/_config/_index.md` || path3 === `${wikiVaultPath}/_config/_log.md`) return true;
   const prefix = `${wikiVaultPath}/`;
-  if (!path2.startsWith(prefix)) return false;
-  const remainder = path2.slice(prefix.length);
+  if (!path3.startsWith(prefix)) return false;
+  const remainder = path3.slice(prefix.length);
   if (remainder.includes(".config")) return false;
   const segments = remainder.split("/");
   return segments.length === 2 && segments[1].endsWith(".md");
@@ -27471,8 +27471,8 @@ function domainEmbeddingsPath(domainFolder) {
 }
 
 // src/source-paths.ts
-function isSelectableSourceFolder(path2) {
-  return path2 !== WIKI_ROOT && !path2.startsWith(`${WIKI_ROOT}/`);
+function isSelectableSourceFolder(path3) {
+  return path3 !== WIKI_ROOT && !path3.startsWith(`${WIKI_ROOT}/`);
 }
 function consolidateSourcePaths(existing, newPath, vaultRoot) {
   const toAbs = (p) => (0, import_path_browserify.isAbsolute)(p) ? p : (0, import_path_browserify.join)(vaultRoot, p);
@@ -28743,7 +28743,7 @@ async function bfsExpandRanked(seeds, graph, depth, pages, query, bfsTopK, annot
       );
       const top2 = scored2.slice(0, bfsTopK);
       const expandedScores2 = {};
-      for (const { path: path2, score } of top2) expandedScores2[pageId(path2)] = score;
+      for (const { path: path3, score } of top2) expandedScores2[pageId(path3)] = score;
       return { selectedIds: /* @__PURE__ */ new Set([...seedSet, ...Object.keys(expandedScores2)]), expandedScores: expandedScores2 };
     } catch (err) {
       console.warn("[bfsExpandRanked] similarity threw, returning full BFS:", err);
@@ -28752,8 +28752,8 @@ async function bfsExpandRanked(seeds, graph, depth, pages, query, bfsTopK, annot
   }
   const questionTokens = tokenize(query);
   const scored = nonSeeds.map((pid) => {
-    const path2 = pidToPath.get(pid);
-    const content = path2 ? pages.get(path2) ?? "" : "";
+    const path3 = pidToPath.get(pid);
+    const content = path3 ? pages.get(path3) ?? "" : "";
     return { pid, score: scoreSeed(questionTokens, pid, content) };
   });
   scored.sort((a, b) => b.score - a.score);
@@ -28889,8 +28889,8 @@ function selectSeeds(question, pages, topK, minScore, indexAnnotations) {
   const q = tokenize(question);
   if (q.size === 0) return [];
   const scored = [];
-  for (const [path2, content] of pages) {
-    const id = pageId(path2);
+  for (const [path3, content] of pages) {
+    const id = pageId(path3);
     const annotation = indexAnnotations?.get(id);
     const score = scoreSeed(q, id, content, annotation);
     if (score >= minScore && score > 0) scored.push({ id, score });
@@ -29193,12 +29193,12 @@ var PageSimilarityService = class {
   scoreJaccardOnce(queryTokens, indexAnnotations, allPaths) {
     if (queryTokens.size === 0) return [];
     const scored = [];
-    for (const path2 of allPaths) {
-      const pid = pageId(path2);
+    for (const path3 of allPaths) {
+      const pid = pageId(path3);
       const annotation = indexAnnotations.get(pid);
       if (!annotation) continue;
       const score = scoreSeed(queryTokens, pid, "", annotation);
-      if (score > 0) scored.push({ path: path2, score });
+      if (score > 0) scored.push({ path: path3, score });
     }
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, this.config.topK).map((x) => x.path);
@@ -29277,12 +29277,12 @@ var PageSimilarityService = class {
   }
   selectJaccard(queryTokens, indexAnnotations, allPaths) {
     const scored = [];
-    for (const path2 of allPaths) {
-      const pid = pageId(path2);
+    for (const path3 of allPaths) {
+      const pid = pageId(path3);
       const annotation = indexAnnotations.get(pid);
       if (!annotation) continue;
       const score = scoreSeed(queryTokens, pid, "", annotation);
-      if (score > 0) scored.push({ path: path2, score });
+      if (score > 0) scored.push({ path: path3, score });
     }
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, this.config.topK).map((x) => x.path);
@@ -29350,12 +29350,12 @@ var PageSimilarityService = class {
   }
   selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2 = this.config.topK) {
     const scored = [];
-    for (const path2 of allPaths) {
-      const pid = pageId(path2);
+    for (const path3 of allPaths) {
+      const pid = pageId(path3);
       const annotation = indexAnnotations.get(pid);
       if (!annotation) continue;
       const score = scoreSeed(queryTokens, pid, "", annotation);
-      if (score > 0) scored.push({ path: path2, score });
+      if (score > 0) scored.push({ path: path3, score });
     }
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, limit2);
@@ -30342,8 +30342,8 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
 var import_obsidian7 = require("obsidian");
 
 // src/source-deletion.ts
-function sourceStem(path2) {
-  const base = path2.split("/").pop() ?? path2;
+function sourceStem(path3) {
+  const base = path3.split("/").pop() ?? path3;
   return base.replace(/\.md$/i, "");
 }
 function stripSourceToken(token) {
@@ -30378,12 +30378,12 @@ function computeDeletionPlan(sourcePath, pages, sourceStemToPath) {
   }
   return { toDelete, toRebuild, remainingSources };
 }
-function isSourceFile(path2, domain) {
-  if (isWikiArticlePath(path2)) return false;
-  if (!path2.endsWith(".md")) return false;
+function isSourceFile(path3, domain) {
+  if (isWikiArticlePath(path3)) return false;
+  if (!path3.endsWith(".md")) return false;
   for (const sp of domain.source_paths ?? []) {
     const norm = sp.replace(/\/+$/, "");
-    if (path2 === norm || path2.startsWith(`${norm}/`)) return true;
+    if (path3 === norm || path3.startsWith(`${norm}/`)) return true;
   }
   return false;
 }
@@ -31424,19 +31424,19 @@ function evalLogPath(pluginDir) {
   return `${pluginDir}/eval.jsonl`;
 }
 async function writeEvalRecord(adapter, pluginDir, record) {
-  const path2 = evalLogPath(pluginDir);
+  const path3 = evalLogPath(pluginDir);
   try {
     const line = JSON.stringify(record) + "\n";
-    if (await adapter.exists(path2)) await adapter.append(path2, line);
-    else await adapter.write(path2, line);
+    if (await adapter.exists(path3)) await adapter.append(path3, line);
+    else await adapter.write(path3, line);
   } catch {
   }
 }
 async function updateEvalRating(adapter, pluginDir, runId, axis, rating) {
-  const path2 = evalLogPath(pluginDir);
+  const path3 = evalLogPath(pluginDir);
   try {
-    if (!await adapter.exists(path2)) return void 0;
-    const content = await adapter.read(path2);
+    if (!await adapter.exists(path3)) return void 0;
+    const content = await adapter.read(path3);
     const lines = content.split("\n");
     for (let i = lines.length - 1; i >= 0; i--) {
       const raw = lines[i].trim();
@@ -31452,7 +31452,7 @@ async function updateEvalRating(adapter, pluginDir, runId, axis, rating) {
       const next = rec.ratings[axis] === rating ? null : rating;
       rec.ratings[axis] = next;
       lines[i] = JSON.stringify(rec);
-      await adapter.write(path2, lines.join("\n"));
+      await adapter.write(path3, lines.join("\n"));
       return next;
     }
     return void 0;
@@ -31461,10 +31461,10 @@ async function updateEvalRating(adapter, pluginDir, runId, axis, rating) {
   }
 }
 async function readEvalRecord(adapter, pluginDir, runId) {
-  const path2 = evalLogPath(pluginDir);
+  const path3 = evalLogPath(pluginDir);
   try {
-    if (!await adapter.exists(path2)) return void 0;
-    const content = await adapter.read(path2);
+    if (!await adapter.exists(path3)) return void 0;
+    const content = await adapter.read(path3);
     const lines = content.split("\n");
     for (let i = lines.length - 1; i >= 0; i--) {
       const raw = lines[i].trim();
@@ -31484,10 +31484,10 @@ async function readEvalRecord(adapter, pluginDir, runId) {
   }
 }
 async function updateEvalComment(adapter, pluginDir, runId, comment) {
-  const path2 = evalLogPath(pluginDir);
+  const path3 = evalLogPath(pluginDir);
   try {
-    if (!await adapter.exists(path2)) return void 0;
-    const content = await adapter.read(path2);
+    if (!await adapter.exists(path3)) return void 0;
+    const content = await adapter.read(path3);
     const lines = content.split("\n");
     for (let i = lines.length - 1; i >= 0; i--) {
       const raw = lines[i].trim();
@@ -31501,7 +31501,7 @@ async function updateEvalComment(adapter, pluginDir, runId, comment) {
       if (rec.runId !== runId) continue;
       rec.comment = comment;
       lines[i] = JSON.stringify(rec);
-      await adapter.write(path2, lines.join("\n"));
+      await adapter.write(path3, lines.join("\n"));
       return comment;
     }
     return void 0;
@@ -32994,7 +32994,7 @@ function translateSystemEvent(message) {
 
 // src/controller.ts
 var import_obsidian10 = require("obsidian");
-var import_path_browserify7 = __toESM(require_path_browserify(), 1);
+var import_path_browserify9 = __toESM(require_path_browserify(), 1);
 
 // src/domain.ts
 function migrateDomainsV2(domains) {
@@ -33067,7 +33067,7 @@ function applyDomainEvent(domains, ev, opts) {
 }
 
 // src/phases/ingest.ts
-var import_path_browserify5 = __toESM(require_path_browserify(), 1);
+var import_path_browserify6 = __toESM(require_path_browserify(), 1);
 
 // node_modules/zod-to-json-schema/dist/esm/Options.js
 var ignoreOverride = /* @__PURE__ */ Symbol("Let zodToJsonSchema decide on which parser to use");
@@ -33628,8 +33628,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path2, errorMaps, issueData } = params;
-  const fullPath = [...path2, ...issueData.path || []];
+  const { data, path: path3, errorMaps, issueData } = params;
+  const fullPath = [...path3, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -33745,11 +33745,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path2, key) {
+  constructor(parent, value, path3, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path2;
+    this._path = path3;
     this._key = key;
   }
   get path() {
@@ -38448,8 +38448,8 @@ function formatZodFeedback(err, raw) {
     return render(repair_json_default, { detail: detail2 });
   }
   const bullets = err.issues.slice(0, 20).map((i) => {
-    const path2 = i.path.length ? i.path.join(".") : "(root)";
-    return `- ${path2}: ${i.message}`;
+    const path3 = i.path.length ? i.path.join(".") : "(root)";
+    return `- ${path3}: ${i.message}`;
   }).join("\n");
   const detail = ["Previous response failed validation:", bullets].join("\n");
   return render(repair_json_default, { detail });
@@ -38712,12 +38712,12 @@ var FormatWithVisionSchema = FormatBaseSchema.extend({
   if (val.report.trim().length === 0) {
     ctx.addIssue({ code: external_exports.ZodIssueCode.custom, path: ["report"], message: "report \u043F\u0443\u0441\u0442" });
   }
-  for (const path2 of val.embeds_preserved) {
-    if (!val.formatted.includes(`![[${path2}]]`)) {
+  for (const path3 of val.embeds_preserved) {
+    if (!val.formatted.includes(`![[${path3}]]`)) {
       ctx.addIssue({
         code: external_exports.ZodIssueCode.custom,
         path: ["formatted"],
-        message: `embed ![[${path2}]] \u043F\u043E\u0442\u0435\u0440\u044F\u043D`
+        message: `embed ![[${path3}]] \u043F\u043E\u0442\u0435\u0440\u044F\u043D`
       });
     }
   }
@@ -38753,7 +38753,7 @@ function makeQueryAnswerSchema(knownStems) {
 }
 
 // prompts/ingest.md
-var ingest_default = 'You are a wiki-knowledge synthesis assistant for the domain "{{domain_name}}".\nExtract entities from the source and create/update wiki pages.\n\nDOMAIN ENTITY TYPES:\n{{entity_types_block}}\n{{lang_notes}}\n\nRULES:\n- CREATE: the entity does not exist in the wiki, mentions >= min_mentions_for_page\n- UPDATE: the entity exists \u2192 add new information, do NOT remove the old\n- SKIP: too few mentions or the information is already present\n- The wiki page FILE NAME (stem without `.md`) MUST have the form `wiki_{{domain_id}}_<entity_slug>`:\n  - `<entity_slug>` = the ASCII entity name in lowercase snake_case (only `[a-z0-9_]` characters, no spaces, diacritics, or uppercase letters).\n  - Example: `wiki_{{domain_id}}_neural_networks.md`.\n- The wiki page stem must NOT match any name from the "FORBIDDEN NAMES" section \u2014 those are the source files of this domain. The wiki describes extracted entities, it does not duplicate the source files.\n- The wiki page name must NOT match the name of the current source `{{source_stem}}` (a special case of the previous rule).\n- Synthesis, not copying. Technical configs/SQL may be quoted in code blocks.\n- The article path is determined by the entity type \u2014 use the exact template from the "DOMAIN ENTITY TYPES" section (above, before the RULES block), substituting the entity name for <EntityName>\n- If the entity type is undefined or the domain has no entity_types \u2192 default path: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter is mandatory: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- tags: hierarchical tags (category/subcategory). Reuse tags from existing wiki pages (provided in the context). Create new ones following the same scheme if needed. Format: lowercase, separated by `/`, no spaces, no `#`\n- wiki_sources: ONLY sources (files outside !Wiki/) \u2014 bare name without path: [[FileName]]. Never [[wiki_domain_page]]\n- wiki_outgoing_links: ONLY wiki pages (files inside !Wiki/) \u2014 bare name without path: [[wiki_domain_page]]. Never [[SourceName]]\n  \u274C FORBIDDEN: [[CurrentSourceName]] or [[AnyOtherSourceFile]] in wiki_outgoing_links.\n     The source is already recorded in wiki_sources \u2014 there is no need to duplicate it in outgoing_links.\n     Example: processing "Liquidity farming.md" \u2192 you must NOT put [[Liquidity farming]] in outgoing_links.\n- In article bodies: ONLY [[stem]] \u2014 never [[stem|alias]]. The [[A|B]] syntax is forbidden.\n- Use the mandatory and optional section headings defined in the conventions block (_wiki_schema.md) below, exactly as written there. Each page must include the mandatory characteristics section.\n- For each page, add an "annotation" field to the JSON: a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section \u2014 synonyms, IDs, terms that are not in the heading>. Aim for ~600\u2013800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate \u2014 generic phrases raise noise in search.\n- The `annotation` field \u2014 ONLY in the JSON response. Do NOT add `annotation:` to the page frontmatter.\n- DEAD LINKS: every [[wiki_domain_slug]] in wiki_outgoing_links and in the article body must\n  either exist among the "Existing wiki pages" (provided in the context), or\n  be present in the pages list of this response. No page \u2014 do not write the link.\n{{schema_block}}\n{{forbidden_stems_block}}\n\nPATH RULE: each article path = !Wiki/<domain>/<entity>/<Article>.md \u2014 exactly 4 segments.\nNot allowed: !Wiki/os/os/network/NFS.md (domain twice), !Wiki/os/network/nfs/NFS.md (5 segments).\nAllowed:  !Wiki/os/network/NFS.md\n\nTYPE ENRICHMENT (entity_types_delta):\nIf, while analyzing the source, you discover:\n- new entity types (the type key is absent from the current list above), or\n- improvements to existing types (a more precise description or additional extraction_cues for an already existing type key) \u2014\nadd the entity_types_delta field to the JSON response. If nothing is new \u2014 simply do not include this field.\n\nDUPLICATE MERGING (merge):\nIf among the existing wiki pages you find several describing the same entity:\n- emit one new page in pages (with merged content and the canonical path)\n- list the old paths in the deletes field: [{path}, ...]\nThe old pages will be deleted, the index cleaned, and backlinks in the current source updated automatically.\n\nReturn ONLY a JSON object \u2014 no other text:\n{"reasoning":"Rationale: which entities were extracted and why","pages":[{"path":"{{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md","content":"---\\nwiki_sources: [\\"[[{{source_stem}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncontent...","annotation":"The essence of the entity in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search."}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}\n';
+var ingest_default = 'You are a wiki-knowledge synthesis assistant for the domain "{{domain_name}}".\nExtract entities from the source and create/update wiki pages.\n\nDOMAIN ENTITY TYPES:\n{{entity_types_block}}\n{{lang_notes}}\n\nRULES:\n- CREATE: the entity does not exist in the wiki, mentions >= min_mentions_for_page\n- UPDATE: the entity exists \u2192 add new information, do NOT remove the old\n- SKIP: too few mentions or the information is already present\n- The wiki page FILE NAME (stem without `.md`) MUST have the form `wiki_{{domain_id}}_<entity_slug>`:\n  - `<entity_slug>` = the ASCII entity name in lowercase snake_case (only `[a-z0-9_]` characters, no spaces, diacritics, or uppercase letters).\n  - Example: `wiki_{{domain_id}}_neural_networks.md`.\n- The wiki page stem must NOT match any name from the "FORBIDDEN NAMES" section \u2014 those are the source files of this domain. The wiki describes extracted entities, it does not duplicate the source files.\n- The wiki page name must NOT match the name of the current source `{{source_stem}}` (a special case of the previous rule).\n- Synthesis, not copying. Technical configs/SQL may be quoted in code blocks.\n- The article path is determined by the entity type \u2014 use the exact template from the "DOMAIN ENTITY TYPES" section (above, before the RULES block), substituting the entity name for <EntityName>\n- If the entity type is undefined or the domain has no entity_types \u2192 default path: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter is mandatory: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- tags: hierarchical tags (category/subcategory). Format: lowercase, separated by `/`, no spaces, no `#`. Pick tags in this order:\n  1. The page\'s entity-type tag \u2014 the normalized type of this entity (e.g. `person`). Always include it when the entity type is known.\n  2. Thematic tags reused from the EXISTING DOMAIN TAGS block (provided in the context). Do not invent near-duplicates of listed tags.\n  3. A new thematic tag ONLY when nothing in the block fits. Never start a new top-level category when the block says "reuse only".\n- wiki_sources: ONLY sources (files outside !Wiki/) \u2014 bare name without path: [[FileName]]. Never [[wiki_domain_page]]\n- wiki_outgoing_links: ONLY wiki pages (files inside !Wiki/) \u2014 bare name without path: [[wiki_domain_page]]. Never [[SourceName]]\n  \u274C FORBIDDEN: [[CurrentSourceName]] or [[AnyOtherSourceFile]] in wiki_outgoing_links.\n     The source is already recorded in wiki_sources \u2014 there is no need to duplicate it in outgoing_links.\n     Example: processing "Liquidity farming.md" \u2192 you must NOT put [[Liquidity farming]] in outgoing_links.\n- In article bodies: ONLY [[stem]] \u2014 never [[stem|alias]]. The [[A|B]] syntax is forbidden.\n- Use the mandatory and optional section headings defined in the conventions block (_wiki_schema.md) below, exactly as written there. Each page must include the mandatory characteristics section.\n- For each page, add an "annotation" field to the JSON: a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section \u2014 synonyms, IDs, terms that are not in the heading>. Aim for ~600\u2013800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate \u2014 generic phrases raise noise in search.\n- The `annotation` field \u2014 ONLY in the JSON response. Do NOT add `annotation:` to the page frontmatter.\n- DEAD LINKS: every [[wiki_domain_slug]] in wiki_outgoing_links and in the article body must\n  either exist among the "Existing wiki pages" (provided in the context), or\n  be present in the pages list of this response. No page \u2014 do not write the link.\n{{schema_block}}\n{{forbidden_stems_block}}\n\nPATH RULE: each article path = !Wiki/<domain>/<entity>/<Article>.md \u2014 exactly 4 segments.\nNot allowed: !Wiki/os/os/network/NFS.md (domain twice), !Wiki/os/network/nfs/NFS.md (5 segments).\nAllowed:  !Wiki/os/network/NFS.md\n\nTYPE ENRICHMENT (entity_types_delta):\nIf, while analyzing the source, you discover:\n- new entity types (the type key is absent from the current list above), or\n- improvements to existing types (a more precise description or additional extraction_cues for an already existing type key) \u2014\nadd the entity_types_delta field to the JSON response. If nothing is new \u2014 simply do not include this field.\n\nDUPLICATE MERGING (merge):\nIf among the existing wiki pages you find several describing the same entity:\n- emit one new page in pages (with merged content and the canonical path)\n- list the old paths in the deletes field: [{path}, ...]\nThe old pages will be deleted, the index cleaned, and backlinks in the current source updated automatically.\n\nReturn ONLY a JSON object \u2014 no other text:\n{"reasoning":"Rationale: which entities were extracted and why","pages":[{"path":"{{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md","content":"---\\nwiki_sources: [\\"[[{{source_stem}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncontent...","annotation":"The essence of the entity in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search."}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}\n';
 
 // prompts/ingest-merge.md
 var ingest_merge_default = `<!-- prompts/ingest-merge.md -->
@@ -38807,6 +38807,22 @@ var WIKILINK_RE = /^\[\[.+\]\]$/;
 var URL_RE = /^https?:\/\//;
 var TAG_RE = /^[a-z][a-z0-9-]*(?:[/_][a-z0-9-]+)*$/;
 var FM_KEY_LINE = /^(wiki_[\w]+|tags|aliases|created|updated|external_links|related):/;
+function normalizeTag(raw) {
+  return raw.trim().replace(/^#+/, "").replace(/\\/g, "/").toLowerCase().replace(/\s+/g, "-");
+}
+function parseTagsFromFm(content) {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return [];
+  let parsed;
+  try {
+    parsed = (0, import_yaml.parse)(fmMatch[1]) ?? {};
+  } catch {
+    return [];
+  }
+  const tags = parsed["tags"];
+  if (!Array.isArray(tags)) return [];
+  return tags.filter((t) => typeof t === "string");
+}
 function recoverSourceFrontmatter(content) {
   const fenceMatch = FM_RE.exec(content);
   const lead = fenceMatch ? fenceMatch[1] : "";
@@ -38896,15 +38912,14 @@ function validateAndRepairFrontmatter(content, rules) {
     if (val === void 0 || val === null) continue;
     switch (rule.kind) {
       case "list-wikilinks":
-      case "list-urls":
-      case "list-tags": {
+      case "list-urls": {
         if (!Array.isArray(val)) {
           warnings.push(`${rule.field}: expected list, got scalar \u2014 removed`);
           delete parsed[rule.field];
           modified = true;
           break;
         }
-        const predicate = rule.kind === "list-wikilinks" ? (v) => WIKILINK_RE.test(v) : rule.kind === "list-urls" ? (v) => URL_RE.test(v) : (v) => TAG_RE.test(v);
+        const predicate = rule.kind === "list-wikilinks" ? (v) => WIKILINK_RE.test(v) : (v) => URL_RE.test(v);
         const filtered = val.filter((v) => {
           if (typeof v !== "string" || !predicate(v)) {
             warnings.push(`${rule.field}: invalid entry "${v}" \u2014 removed`);
@@ -38918,6 +38933,47 @@ function validateAndRepairFrontmatter(content, rules) {
             delete parsed[rule.field];
           } else {
             parsed[rule.field] = filtered;
+          }
+        }
+        break;
+      }
+      case "list-tags": {
+        if (!Array.isArray(val)) {
+          warnings.push(`${rule.field}: expected list, got scalar \u2014 removed`);
+          delete parsed[rule.field];
+          modified = true;
+          break;
+        }
+        const kept = [];
+        let changed = false;
+        for (const v of val) {
+          if (typeof v !== "string") {
+            warnings.push(`${rule.field}: invalid entry "${v}" \u2014 removed`);
+            changed = true;
+            continue;
+          }
+          const norm = normalizeTag(v);
+          if (!TAG_RE.test(norm)) {
+            warnings.push(`${rule.field}: invalid entry "${v}" \u2014 removed`);
+            changed = true;
+            continue;
+          }
+          if (norm !== v) {
+            warnings.push(`${rule.field}: normalized "${v}" \u2192 "${norm}"`);
+            changed = true;
+          }
+          if (kept.includes(norm)) {
+            changed = true;
+          } else {
+            kept.push(norm);
+          }
+        }
+        if (changed) {
+          modified = true;
+          if (kept.length === 0) {
+            delete parsed[rule.field];
+          } else {
+            parsed[rule.field] = kept;
           }
         }
         break;
@@ -39195,6 +39251,103 @@ function hasFrontmatterField(content, field) {
   const fmMatch = FM_RE.exec(content);
   if (!fmMatch) return false;
   return new RegExp(`^${field}:`, "m").test(fmMatch[1]);
+}
+
+// src/utils/tag-registry.ts
+var import_path_browserify5 = __toESM(require_path_browserify(), 1);
+var import_yaml2 = __toESM(require_dist(), 1);
+var DEFAULT_MAX_TAG_CATEGORIES = 12;
+var FM_RE2 = /^---\n([\s\S]*?)\n---\n?/;
+async function collectDomainTags(vault, wikiFolder, sourcePaths) {
+  const dirs = [wikiFolder];
+  for (const sp of sourcePaths) {
+    const vaultPath = import_path_browserify5.default.isAbsolute(sp) ? vault.toVaultPath(sp) ?? "" : sp.endsWith("/") ? sp.slice(0, -1) : sp;
+    if (vaultPath) dirs.push(vaultPath);
+  }
+  const files = /* @__PURE__ */ new Set();
+  for (const dir of dirs) {
+    const listed = await vault.listFiles(dir).catch(() => []);
+    for (const f of listed) {
+      if (f.endsWith(".md") && !f.includes("/_config/")) files.add(f);
+    }
+  }
+  const contents = await vault.readAll([...files]);
+  const categories = /* @__PURE__ */ new Map();
+  let total = 0;
+  for (const content of contents.values()) {
+    for (const raw of parseTagsFromFm(content)) {
+      const tag = normalizeTag(raw);
+      if (!TAG_RE.test(tag)) continue;
+      const cat = tag.split("/")[0];
+      let m = categories.get(cat);
+      if (!m) {
+        m = /* @__PURE__ */ new Map();
+        categories.set(cat, m);
+      }
+      if (!m.has(tag)) total++;
+      m.set(tag, (m.get(tag) ?? 0) + 1);
+    }
+  }
+  return { categories, total };
+}
+function thematicCategories(registry, entityTypeNames) {
+  const entitySet = new Set(entityTypeNames.map((t) => normalizeTag(t)));
+  return [...registry.categories.keys()].filter((c) => !entitySet.has(c));
+}
+function renderTagRegistryBlock(registry, entityTypeNames, maxCategories = DEFAULT_MAX_TAG_CATEGORIES) {
+  const entityCats = [
+    ...new Set(entityTypeNames.map((t) => normalizeTag(t)).filter((t) => TAG_RE.test(t)))
+  ];
+  const entitySet = new Set(entityCats);
+  const thematic = [...registry.categories.keys()].filter((c) => !entitySet.has(c)).sort();
+  if (entityCats.length === 0 && thematic.length === 0) return "";
+  const tagLine = (cat) => {
+    const tags = [...registry.categories.get(cat).entries()].sort((a, b) => b[1] - a[1]).map(([t, n]) => `${t} (${n})`);
+    return `- ${cat}: ${tags.join(", ")}`;
+  };
+  const lines = ["EXISTING DOMAIN TAGS (reuse these; do not invent near-duplicates):"];
+  if (entityCats.length > 0) {
+    lines.push(`Entity categories: ${entityCats.join(", ")}`);
+    for (const cat of entityCats) {
+      if (registry.categories.has(cat)) lines.push(tagLine(cat));
+    }
+  }
+  const full = thematic.length >= maxCategories;
+  lines.push(
+    `Thematic categories (${thematic.length}/${maxCategories} used${full ? " \u2014 no new thematic categories allowed, reuse only" : ""}):`
+  );
+  if (thematic.length === 0) {
+    lines.push("- (none yet)");
+  } else {
+    for (const cat of thematic) lines.push(tagLine(cat));
+  }
+  return lines.join("\n");
+}
+function ensureEntityTypeTag(content, pagePath, domain) {
+  const segments = pagePath.split("/");
+  if (segments.length < 2) return { content, added: false, tag: null };
+  const subfolder = segments[segments.length - 2];
+  const et = domain.entity_types?.find((e) => e.wiki_subfolder === subfolder);
+  if (!et) return { content, added: false, tag: null };
+  const tag = normalizeTag(et.type);
+  if (!TAG_RE.test(tag)) return { content, added: false, tag: null };
+  const fmMatch = FM_RE2.exec(content);
+  if (!fmMatch) return { content, added: false, tag };
+  let parsed;
+  try {
+    parsed = (0, import_yaml2.parse)(fmMatch[1]) ?? {};
+  } catch {
+    return { content, added: false, tag };
+  }
+  const existing = Array.isArray(parsed.tags) ? parsed.tags.filter((t) => typeof t === "string") : [];
+  if (existing.some((t) => t === tag || t.startsWith(`${tag}/`))) {
+    return { content, added: false, tag };
+  }
+  parsed.tags = [tag, ...existing];
+  const body = content.slice(fmMatch[0].length);
+  return { content: `---
+${(0, import_yaml2.stringify)(parsed)}---
+${body}`, added: true, tag };
 }
 
 // src/wiki-index.ts
@@ -39494,13 +39647,13 @@ function fixWikiLinks(pages, maxPasses, knownPageStems) {
       warnings.push(`${v.page}: ${v.kind} \u2014 ${v.detail}`);
     }
     if (knownPageStems) {
-      for (const [path2, content] of pages) {
+      for (const [path3, content] of pages) {
         const parts = splitFrontmatter(content);
         const body = parts ? parts[1] : content;
         for (const link of extractLinks(body)) {
           const stem = link.split("/").pop();
           if (!knownPageStems.has(stem)) {
-            warnings.push(`${path2}: dead link [[${stem}]]`);
+            warnings.push(`${path3}: dead link [[${stem}]]`);
           }
         }
       }
@@ -39512,12 +39665,12 @@ function fixWikiLinks(pages, maxPasses, knownPageStems) {
     const violations = validateWikiLinks(current);
     if (violations.length === 0) break;
     const next = /* @__PURE__ */ new Map();
-    for (const [path2, content] of current) {
+    for (const [path3, content] of current) {
       try {
-        next.set(path2, fixOnePass(content));
+        next.set(path3, fixOnePass(content));
       } catch (e) {
-        next.set(path2, content);
-        warnings.push(`${path2}: fix error \u2014 ${e.message}`);
+        next.set(path3, content);
+        warnings.push(`${path3}: fix error \u2014 ${e.message}`);
       }
     }
     current = next;
@@ -39527,13 +39680,13 @@ function fixWikiLinks(pages, maxPasses, knownPageStems) {
     warnings.push(`${v.page}: ${v.kind} \u2014 ${v.detail}`);
   }
   if (knownPageStems) {
-    for (const [path2, content] of current) {
+    for (const [path3, content] of current) {
       const parts = splitFrontmatter(content);
       const body = parts ? parts[1] : content;
       for (const link of extractLinks(body)) {
         const stem = link.split("/").pop();
         if (!knownPageStems.has(stem)) {
-          warnings.push(`${path2}: dead link [[${stem}]]`);
+          warnings.push(`${path3}: dead link [[${stem}]]`);
         }
       }
     }
@@ -39603,7 +39756,7 @@ function parseWikiStatus(content) {
 async function collectSourceStems(domain, vaultTools, vaultRoot) {
   const stems = /* @__PURE__ */ new Set();
   for (const sp of domain.source_paths ?? []) {
-    const vaultPath = (0, import_path_browserify5.isAbsolute)(sp) ? vaultTools.toVaultPath(sp) ?? "" : sp.endsWith("/") ? sp.slice(0, -1) : sp;
+    const vaultPath = (0, import_path_browserify6.isAbsolute)(sp) ? vaultTools.toVaultPath(sp) ?? "" : sp.endsWith("/") ? sp.slice(0, -1) : sp;
     if (!vaultPath) continue;
     const files = await vaultTools.listFiles(vaultPath).catch(() => []);
     for (const f of files) {
@@ -39620,7 +39773,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     yield { kind: "error", message: "ingest: file path required" };
     return;
   }
-  const absSource = (0, import_path_browserify5.isAbsolute)(filePath) ? filePath : (0, import_path_browserify5.join)(vaultRoot, filePath);
+  const absSource = (0, import_path_browserify6.isAbsolute)(filePath) ? filePath : (0, import_path_browserify6.join)(vaultRoot, filePath);
   const sourceVaultPath = vaultTools.toVaultPath(absSource);
   if (!sourceVaultPath) {
     yield { kind: "error", message: `Source file ${filePath} is outside the vault.` };
@@ -39640,7 +39793,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     yield { kind: "error", message: "No domain found for this file. Configure domain-map." };
     return;
   }
-  const absWiki = (0, import_path_browserify5.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+  const absWiki = (0, import_path_browserify6.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
   const wikiVaultPath = vaultTools.toVaultPath(absWiki);
   if (!wikiVaultPath) {
     yield { kind: "error", message: `Wiki folder ${domainWikiFolder(domain.wiki_folder)} is outside the vault.` };
@@ -39719,7 +39872,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   } else {
     existingPages = await vaultTools.readAll(nonMetaPaths);
   }
-  const noSources = [...existingPages.entries()].filter(([, content]) => !/wiki_sources:/m.test(content)).map(([path2]) => path2);
+  const noSources = [...existingPages.entries()].filter(([, content]) => !/wiki_sources:/m.test(content)).map(([path3]) => path3);
   for (const p of noSources) {
     try {
       await vaultTools.remove(p);
@@ -39736,6 +39889,11 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   }
   for (const p of noSources) existingPages.delete(p);
   const sourceStems = await collectSourceStems(domain, vaultTools, vaultRoot);
+  const tagRegistry = await collectDomainTags(vaultTools, wikiVaultPath, domain.source_paths ?? []);
+  const entityTypeNames = (domain.entity_types ?? []).map((e) => e.type);
+  const maxTagCategories = domain.max_tag_categories ?? DEFAULT_MAX_TAG_CATEGORIES;
+  const tagRegistryBlock = renderTagRegistryBlock(tagRegistry, entityTypeNames, maxTagCategories);
+  const writtenTagCats = /* @__PURE__ */ new Set();
   if ((domain.pageNameVersion ?? 0) < 1) {
     const unprefixed = nonMetaPaths.filter((p) => {
       if (!p.endsWith(".md")) return false;
@@ -39767,7 +39925,8 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     schemaContent,
     indexContent,
     entitiesResult.value.entities,
-    sourceStems
+    sourceStems,
+    tagRegistryBlock
   );
   const inputChars = messages.reduce((s, m) => s + (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length), 0);
   const inputTokEst = Math.round(inputChars / 4);
@@ -39979,8 +40138,17 @@ ${page.content}`;
         details: pageWarnings
       };
     }
+    const { content: entityTagged, added: entityTagAdded, tag: entityTag } = ensureEntityTypeTag(repairedPage, page.path, domain);
+    if (entityTagAdded) {
+      yield {
+        kind: "info_text",
+        icon: "\u{1F3F7}\uFE0F",
+        summary: `Entity tag added: ${page.path}`,
+        details: [`tags: + ${entityTag} (derived from wiki_subfolder)`]
+      };
+    }
     const sourceStem2 = sourceVaultPath.split("/").pop().replace(/\.md$/, "");
-    const { content: sourcedPage, injected } = ensureWikiSources(repairedPage, sourceStem2);
+    const { content: sourcedPage, injected } = ensureWikiSources(entityTagged, sourceStem2);
     if (injected) {
       yield {
         kind: "info_text",
@@ -39993,6 +40161,7 @@ ${page.content}`;
     try {
       await vaultTools.write(page.path, sourcedPage);
       written.push(page.path);
+      for (const t of parseTagsFromFm(sourcedPage)) writtenTagCats.add(t.split("/")[0]);
       yield { kind: "tool_result", ok: true };
       const relPath = page.path.startsWith(wikiVaultPath + "/") ? page.path.slice(wikiVaultPath.length + 1) : page.path;
       const statusTo = parseWikiStatus(repairedPage);
@@ -40009,6 +40178,19 @@ ${page.content}`;
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: e.message };
     }
+  }
+  const entityCatSet = new Set(entityTypeNames.map((t) => normalizeTag(t)));
+  const thematicAfter = new Set(thematicCategories(tagRegistry, entityTypeNames));
+  for (const cat of writtenTagCats) {
+    if (!entityCatSet.has(cat)) thematicAfter.add(cat);
+  }
+  if (thematicAfter.size > maxTagCategories) {
+    yield {
+      kind: "info_text",
+      icon: "\u26A0\uFE0F",
+      summary: `Tag category limit exceeded: ${thematicAfter.size}/${maxTagCategories} thematic categories`,
+      details: [...thematicAfter].sort()
+    };
   }
   const deletes = parseResult.value.deletes ?? [];
   const threshold = opts.mergeDeleteWarnThreshold ?? 5;
@@ -40050,7 +40232,7 @@ ${page.content}`;
     const recon = reconcileIndex(
       currentIndex,
       wikiVaultPath,
-      [...finalPages].map(([path2, content]) => ({ path: path2, content }))
+      [...finalPages].map(([path3, content]) => ({ path: path3, content }))
     );
     for (const a of recon.adds) {
       await upsertIndexAnnotation(vaultTools, wikiVaultPath, a.pid, a.annotation, a.fullPath);
@@ -40130,15 +40312,19 @@ function buildIngestSummary(domainId, sourcePath, createdCount, updatedCount, me
   const errStr = skipped > 0 ? `, \u043E\u0448\u0438\u0431\u043E\u043A ${skipped}` : "";
   return `\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A \xAB${src}\xBB \u2192 \u0434\u043E\u043C\u0435\u043D \xAB${domainId}\xBB: ${countStr}${errStr}`;
 }
-function detectDomain(absFilePath, domains, vaultRoot) {
+function detectDomainStrict(absFilePath, domains, vaultRoot) {
   for (const d of domains) {
     const matched = d.source_paths?.some((sp) => {
-      const abs = (0, import_path_browserify5.isAbsolute)(sp) ? sp : (0, import_path_browserify5.join)(vaultRoot, sp);
-      return absFilePath.startsWith(abs);
+      const abs = (0, import_path_browserify6.isAbsolute)(sp) ? sp : (0, import_path_browserify6.join)(vaultRoot, sp);
+      const prefix = abs.endsWith("/") ? abs : abs + "/";
+      return absFilePath === abs || absFilePath.startsWith(prefix);
     });
     if (matched) return d;
   }
-  return domains[0] ?? null;
+  return null;
+}
+function detectDomain(absFilePath, domains, vaultRoot) {
+  return detectDomainStrict(absFilePath, domains, vaultRoot) ?? domains[0] ?? null;
 }
 function parseJsonPages(text) {
   const match = text.match(/\[[\s\S]*\]/);
@@ -40153,18 +40339,18 @@ function parseJsonPages(text) {
     return [];
   }
 }
-async function tryRead(vaultTools, path2) {
+async function tryRead(vaultTools, path3) {
   try {
-    return await vaultTools.read(path2);
+    return await vaultTools.read(path3);
   } catch {
     return "";
   }
 }
 function extractParentSourcePath(absSource, vaultRoot) {
-  const parentAbs = (0, import_path_browserify5.dirname)(absSource);
+  const parentAbs = (0, import_path_browserify6.dirname)(absSource);
   const normedVault = vaultRoot.endsWith("/") ? vaultRoot : vaultRoot + "/";
   const clamped = (parentAbs + "/").startsWith(normedVault) ? parentAbs : vaultRoot;
-  const rel = (0, import_path_browserify5.relative)(vaultRoot, clamped);
+  const rel = (0, import_path_browserify6.relative)(vaultRoot, clamped);
   return (rel || ".") + "/";
 }
 function splitByPathValidity(pages, wikiVaultPath) {
@@ -40235,7 +40421,7 @@ function buildExtractMessages(sourcePath, sourceContent, domain) {
 ${sourceContent}` }
   ];
 }
-function buildIngestMessages(sourcePath, sourceContent, domain, wikiVaultPath, existingPages, schemaContent, indexContent, entities, sourceStems = /* @__PURE__ */ new Set()) {
+function buildIngestMessages(sourcePath, sourceContent, domain, wikiVaultPath, existingPages, schemaContent, indexContent, entities, sourceStems = /* @__PURE__ */ new Set(), tagRegistryBlock = "") {
   const existing = existingPages.size > 0 ? [...existingPages.entries()].map(([p, c]) => `${p}:
 ${c}`).join("\n\n") : "None.";
   const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
@@ -40284,6 +40470,8 @@ ${entityLines.join("\n")}
         ``,
         `Existing wiki pages:
 ${existing}`,
+        tagRegistryBlock ? `
+${tagRegistryBlock}` : "",
         entitiesBlock,
         indexContent ? `
 Wiki index (_index.md):
@@ -40292,6 +40480,9 @@ ${indexContent}` : ""
     }
   ];
 }
+
+// src/agent-runner.ts
+var import_path_browserify8 = __toESM(require_path_browserify(), 1);
 
 // prompts/query.md
 var query_default = 'You are an assistant for the wiki knowledge base of the domain "{{domain_name}}".\nAnswer strictly based on the provided wiki pages. When referring to pages, use WikiLinks [[name]].\n\n{{available_links_block}}\n{{entity_types_block}}\n{{index_block}}\n\n## Formatting rules\n\n**MANDATORY \u2014 code and commands:**\n\nAny command, script, path, or config is ALWAYS rendered as a fenced block with a language tag.\n\nWRONG:\nRun sudo systemctl restart nginx\n\nRIGHT:\n```bash\nsudo systemctl restart nginx\n```\n\nWRONG:\nAdd to the config: key: value\n\nRIGHT:\n```yaml\nkey: value\n```\n\nThis rule applies inside numbered and bulleted lists as well.\n\nWRONG:\n- Disable all swap: `sudo swapoff -a`\n- Check: `sudo swapon --show`\n\nRIGHT:\n- Disable all swap:\n  ```bash\n  sudo swapoff -a\n  ```\n- Check:\n  ```bash\n  sudo swapon --show\n  ```\n\nLanguages: `bash` for shell commands, `yaml`/`toml`/`ini` for configs, `python`/`go`/`js` for code, `text` if the language is unknown.\nOnly file names and flags without spaces may be written inline in `` `backticks` ``: `/etc/fstab`, `--show`, `vm.swappiness`.\n\n**Answer structure:**\n- A short, direct answer at the start \u2014 no introductions.\n- If there are several topics \u2014 separate them with `##` headings.\n- Enumerations: ALWAYS a list (`-` or `1.`), not comma-separated inline.\n- Comparative/numeric data (\u22653 rows, \u22652 columns) \u2192 a table.\n- Key terms and entities \u2192 `**bold**` at first mention.\n\nWRONG:\nThree recipes: kharcho \u2014 2 hours, shchi \u2014 3 hours, broth \u2014 6 hours.\n\nRIGHT:\n**Soup recipes** [[Wiki-page]]:\n\n| Dish | Time |\n|---|---|\n| **Kharcho** | 1.5\u20132 h |\n| **Shchi** | 3 h |\n| **Bone broth** | \u22656 h |\n\n**Links to the wiki:**\n- Reference the source page via [[WikiLink]] after a fact or section.\n- Do not list sources in a separate block \u2014 insert links in place.\n\n**Compactness:**\n- No intro phrases ("Of course", "In order to").\n- No repetition from the context without adding meaning.\n- Use a table only if the data is genuinely tabular (\u22653 rows, \u22652 columns).\n';
@@ -40685,8 +40876,8 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
   }
   yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, expandedDense, seedFallback, retrievalMode, denseMax, seedFallbackReason, floorApplied, floorRef: floorApplied ? denseMax : void 0, floorLoRef, floorBar, prunedCount, floorSkippedReason };
   const candidatePages = /* @__PURE__ */ new Map();
-  for (const [path2, content] of pages) {
-    if (selectedIds.has(pageId(path2))) candidatePages.set(path2, content);
+  for (const [path3, content] of pages) {
+    if (selectedIds.has(pageId(path3))) candidatePages.set(path3, content);
   }
   const annotations = /* @__PURE__ */ new Map();
   for (const id of selectedIds) {
@@ -40851,9 +41042,9 @@ ${answer}`, outputTokens: outputTokens || void 0 };
     yield { kind: "result", durationMs: Date.now() - start, text: answer, outputTokens: outputTokens || void 0 };
   }
 }
-async function tryRead2(vaultTools, path2) {
+async function tryRead2(vaultTools, path3) {
   try {
-    return await vaultTools.read(path2);
+    return await vaultTools.read(path3);
   } catch {
     return "";
   }
@@ -40904,26 +41095,26 @@ function buildContextBlock(pages, seeds, selectedIds, maxPages, order) {
 function selectContextPages(pages, seeds, selectedIds, maxPages, order) {
   if (order && order.length > 0) {
     const pidToPath = /* @__PURE__ */ new Map();
-    for (const path2 of pages.keys()) pidToPath.set(pageId(path2), path2);
+    for (const path3 of pages.keys()) pidToPath.set(pageId(path3), path3);
     const ordered = [];
     let count = 0;
     for (const id of order) {
       if (count >= maxPages) break;
       if (!selectedIds.has(id)) continue;
-      const path2 = pidToPath.get(id);
-      if (path2 === void 0) continue;
-      ordered.push([path2, pages.get(path2) ?? ""]);
+      const path3 = pidToPath.get(id);
+      if (path3 === void 0) continue;
+      ordered.push([path3, pages.get(path3) ?? ""]);
       count++;
     }
     return ordered;
   }
   const seedPages = [];
   const bfsPages = [];
-  for (const [path2, content] of pages) {
-    const id = pageId(path2);
+  for (const [path3, content] of pages) {
+    const id = pageId(path3);
     if (!selectedIds.has(id)) continue;
-    if (seeds.has(id)) seedPages.push([path2, content]);
-    else bfsPages.push([path2, content]);
+    if (seeds.has(id)) seedPages.push([path3, content]);
+    else bfsPages.push([path3, content]);
   }
   const bfsCap = Math.max(0, maxPages - seedPages.length);
   return [...seedPages, ...bfsPages.slice(0, bfsCap)];
@@ -41110,7 +41301,7 @@ function buildCrossDomainIndexBlock(annotations, finalIds) {
 }
 
 // src/phases/lint.ts
-var import_path_browserify6 = __toESM(require_path_browserify(), 1);
+var import_path_browserify7 = __toESM(require_path_browserify(), 1);
 
 // prompts/lint.md
 var lint_default = 'You are a reviewer and editor of the wiki knowledge base for the domain "{{domain_name}}".\nAnalyze the wiki quality: duplication, gaps, vague definitions, stale content, broken links.\nAt the same time, prepare corrected versions of the problematic pages.\n{{entity_types_block}}\n{{schema_block}}\n\nWhen fixing pages:\n- tags: check and update hierarchical tags (category/subcategory). Reuse tags from other domain pages (provided in the context). Format: lowercase, separated by `/`, no spaces, no `#`\n- "annotation": a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section \u2014 synonyms, IDs, terms that are not in the heading>. Aim for ~600\u2013800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate \u2014 generic phrases raise noise in search.\n- The `annotation` field \u2014 ONLY in the JSON response. Do NOT add `annotation:` to the page frontmatter.\n- remove or replace dead links [[X]]; add missing frontmatter; merge duplication\n- WikiLink without aliases: only `[[target]]`, never `[[target|alias]]`\n- wiki_sources: every list item MUST be in double quotes: `"[[FileName]]"`. Without quotes YAML parses `[[...]]` as a nested array \u2014 this will break the page.\n\nWhen duplicate articles are found in the provided set:\n- merge the content of the duplicates into the main article (include the merged article in fixes[])\n- specify the paths of the duplicates in the deletes[].path field\n- specify the path of the main article in deletes[].redirect_to to update the links\n\nReturn ONLY a JSON object \u2014 no other text:\n{"reasoning":"chain of reasoning","report":"## Lint report\\n\\nQuality analysis in Markdown format...","fixes":[{"path":"!Wiki/domain/type/Entity.md","content":"full content of the corrected page","annotation":"The essence of the page in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search."}],"deletes":[{"path":"!Wiki/domain/type/Duplicate.md","redirect_to":"!Wiki/domain/type/Entity.md"}]}\n\nThe `fixes` field contains ONLY changed pages (an empty array if there are no edits).\nThe `deletes` field contains duplicate pages to delete (an empty array or absent if there are no deletions).\nThe `report` field is the full markdown report for the user.\n';
@@ -41151,10 +41342,10 @@ async function cleanupInvalidPages(vaultTools, wikiVaultPath, _domainId) {
 }
 async function buildTitleMap(paths, vaultTools) {
   const result = /* @__PURE__ */ new Map();
-  for (const path2 of paths) {
+  for (const path3 of paths) {
     try {
-      const content = await vaultTools.read(path2);
-      const stem = path2.split("/").pop().replace(/\.md$/, "");
+      const content = await vaultTools.read(path3);
+      const stem = path3.split("/").pop().replace(/\.md$/, "");
       const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
       if (fmMatch) {
         const titleMatch = fmMatch[1].match(/^title:\s*(.+)$/m);
@@ -41228,7 +41419,7 @@ async function* runLint(args, vaultTools, llm, model, domains, vaultRoot, signal
   const allFilteredArticlePaths = [];
   for (const domain of targets) {
     if (signal.aborted) return;
-    const absWiki = (0, import_path_browserify6.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
+    const absWiki = (0, import_path_browserify7.join)(vaultRoot, domainWikiFolder(domain.wiki_folder));
     const wikiVaultPath = vaultTools.toVaultPath(absWiki);
     if (!wikiVaultPath) {
       reportParts.push(`## ${domain.id}
@@ -41453,7 +41644,7 @@ ${lintResult.value.report}`);
         ({ graph } = graphCache.get(domain.id, pages));
         if (similarity) {
           const pageBodies = /* @__PURE__ */ new Map();
-          for (const [path2, content] of pages) pageBodies.set(pageId(path2), content);
+          for (const [path3, content] of pages) pageBodies.set(pageId(path3), content);
           const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, annotations, pageBodies);
           if (similarity.config.mode === "embedding" && updated > 0) {
             yield { kind: "info_text", icon: "\u{1F4E4}", summary: `\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432: ${updated}` };
@@ -41536,11 +41727,11 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
         repairWarnings.push({ path: wikiPath, warnings });
       }
     }
-    for (const { path: path2, warnings } of repairWarnings) {
+    for (const { path: path3, warnings } of repairWarnings) {
       yield {
         kind: "info_text",
         icon: "\u26A0\uFE0F",
-        summary: `Frontmatter repaired: ${path2}`,
+        summary: `Frontmatter repaired: ${path3}`,
         details: warnings
       };
     }
@@ -41614,10 +41805,10 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
     }
     try {
-      const reconPages = [...pages.entries()].map(([path2, content]) => {
-        const pid = pageId(path2);
+      const reconPages = [...pages.entries()].map(([path3, content]) => {
+        const pid = pageId(path3);
         const ann = annotations.get(pid);
-        return ann ? { path: path2, content, annotation: ann } : { path: path2, content };
+        return ann ? { path: path3, content, annotation: ann } : { path: path3, content };
       });
       const currentIndex = await tryRead3(vaultTools, domainIndexPath(wikiVaultPath));
       const recon = reconcileIndex(currentIndex, wikiVaultPath, reconPages);
@@ -41654,14 +41845,14 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
 }
 function checkStructure(pages) {
   const issues = [];
-  for (const [path2, content] of pages) {
+  for (const [path3, content] of pages) {
     if (!content.startsWith("---")) {
-      issues.push(`- ${path2}: missing frontmatter`);
+      issues.push(`- ${path3}: missing frontmatter`);
     }
     const links = [...new Set([...content.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1]))];
     for (const link of links) {
       const linked = [...pages.keys()].some((p) => p.endsWith(`${link}.md`));
-      if (!linked) issues.push(`- ${path2}: dead link [[${link}]]`);
+      if (!linked) issues.push(`- ${path3}: dead link [[${link}]]`);
     }
   }
   return issues.join("\n");
@@ -41686,9 +41877,9 @@ function computeEntityDiff(oldTypes, newTypes) {
   modified.forEach((et) => lines.push(`- \u270E \u043E\u0431\u043D\u043E\u0432\u043B\u0451\u043D: **${et.type}**`));
   return lines.join("\n");
 }
-async function tryRead3(vaultTools, path2) {
+async function tryRead3(vaultTools, path3) {
   try {
-    return await vaultTools.read(path2);
+    return await vaultTools.read(path3);
   } catch {
     return "";
   }
@@ -42380,9 +42571,9 @@ async function wipeDomainFolder(vaultTools, wikiFolder) {
   await vaultTools.removeSubfolders(root);
   return files;
 }
-async function tryRead4(vaultTools, path2) {
+async function tryRead4(vaultTools, path3) {
   try {
-    return await vaultTools.read(path2);
+    return await vaultTools.read(path3);
   } catch {
     return "";
   }
@@ -42406,13 +42597,13 @@ async function ensureRootFiles(vaultTools, wikiRoot) {
 }
 
 // prompts/format.md
-var format_default = 'You are an editor of a markdown page outside the wiki knowledge base.\n\nYour task is to analyze the page and propose formatting according to the rules below.\n\nHARD RULES:\n- Do not add or remove facts, names, numbers, URLs.\n- Do not distort the meaning. Rephrasing for clarity is allowed.\n- Describe all changes in the report field.\n- Obsidian embeds (`![[path]]`, `![[path|alias]]`) \u2014 copy exactly as they are. Do not convert them to standard Markdown (`![alt](path)`).\n- If the user message contains an "ATTACHMENT DESCRIPTIONS" block: integrate each description IMMEDIATELY BELOW the corresponding `![[path]]` embed in formatted. Keep the description\'s structural form (table / list / mermaid / code) as is \u2014 do not wrap it in a blockquote, do not add a `[Vision]` marker, do not quote the `![[path]]` heading inside the description. If a description is already present in the source (old format `> *[Vision] ...*` or a duplicate) \u2014 remove the old variant and keep only the structured version.\n- If the source frontmatter is broken (missing/duplicated `---` fences, invalid YAML, keys outside a fenced block), reconstruct a single valid YAML frontmatter block, preserving real field values (the `wiki_*` fields are excluded \u2014 they are restored automatically). Do not drop existing field values.\n\nFORMATTING RULES:\n{{format_schema}}\n\nVISION: {{has_vision}}\n- When has_vision=true: extract the content of diagrams and images, create tables or mermaid blocks below the image. Keep the image itself.\n- When has_vision=false: work only with alt text and captions, do not invent new information.\n\nReturn the answer strictly in the following format. No text before the first `<<<REPORT>>>` marker.\n\n<<<REPORT>>>\n<markdown list of changes>\n<<<FORMATTED>>>\n<full formatted markdown, starting from the frontmatter --->\n<<<END>>>\n\n{{has_vision_descriptions_block}}\n\nRequirements:\n- Each `<<<...>>>` marker on its own line.\n- After `<<<FORMATTED>>>` comes the frontmatter (`---`).\n- `<<<END>>>` \u2014 the last line of the answer.\n- If context is insufficient: shorten the report, not formatted.\n';
+var format_default = 'You are an editor of a markdown page outside the wiki knowledge base.\n\nYour task is to analyze the page and propose formatting according to the rules below.\n\nHARD RULES:\n- Do not add or remove facts, names, numbers, URLs.\n- Do not distort the meaning. Rephrasing for clarity is allowed.\n- Describe all changes in the report field.\n- Obsidian embeds (`![[path]]`, `![[path|alias]]`) \u2014 copy exactly as they are. Do not convert them to standard Markdown (`![alt](path)`).\n- If the user message contains an "ATTACHMENT DESCRIPTIONS" block: integrate each description IMMEDIATELY BELOW the corresponding `![[path]]` embed in formatted. Keep the description\'s structural form (table / list / mermaid / code) as is \u2014 do not wrap it in a blockquote, do not add a `[Vision]` marker, do not quote the `![[path]]` heading inside the description. If a description is already present in the source (old format `> *[Vision] ...*` or a duplicate) \u2014 remove the old variant and keep only the structured version.\n- If the source frontmatter is broken (missing/duplicated `---` fences, invalid YAML, keys outside a fenced block), reconstruct a single valid YAML frontmatter block, preserving real field values (the `wiki_*` fields are excluded \u2014 they are restored automatically). Do not drop existing field values.\n- If the user message contains an EXISTING DOMAIN TAGS block (after the note content): use it ONLY to choose the frontmatter `tags` values. It is NOT part of the note \u2014 never include it or its lines in the formatted output.\n\nFORMATTING RULES:\n{{format_schema}}\n\nVISION: {{has_vision}}\n- When has_vision=true: extract the content of diagrams and images, create tables or mermaid blocks below the image. Keep the image itself.\n- When has_vision=false: work only with alt text and captions, do not invent new information.\n\nReturn the answer strictly in the following format. No text before the first `<<<REPORT>>>` marker.\n\n<<<REPORT>>>\n<markdown list of changes>\n<<<FORMATTED>>>\n<full formatted markdown, starting from the frontmatter --->\n<<<END>>>\n\n{{has_vision_descriptions_block}}\n\nRequirements:\n- Each `<<<...>>>` marker on its own line.\n- After `<<<FORMATTED>>>` comes the frontmatter (`---`).\n- `<<<END>>>` \u2014 the last line of the answer.\n- If context is insufficient: shorten the report, not formatted.\n';
 
 // prompts/format-restore-tokens.md
 var format_restore_tokens_default = "RESTORE TOKENS: the following values from the original are missing in the formatted text. Return the full answer using the markers <<<REPORT>>>...<<<END>>> where formatted contains all the listed tokens.\nMissing: {{tokens}}";
 
 // templates/_format_schema.md
-var format_schema_default = '# Format Schema (formatting rules for non-wiki pages)\n\n## Frontmatter\n\n| Field | Rule |\n|------|---------|\n| `tags` | YAML list: `[category/subcategory, domain/topic]`. Hierarchy via `/`, lowercase, no spaces, no `#`. Reuse tags from existing pages; create new ones following the same scheme. Only when a thematic classification exists. |\n| `aliases` | Abbreviations, synonyms, English variants |\n| `created` | YYYY-MM-DD when present in the source or at first formatting |\n| `updated` | YYYY-MM-DD the current formatting date |\n| `external_links` | Array of URLs \u2014 only if the body has `http(s)://` links |\n| `related` | Array of `[[wikilinks]]` \u2014 only if the body already contains links to other pages |\n\nThe `wiki_*` fields \u2014 do not include them in the output. They are managed programmatically and will be restored automatically.\n\nIf the source frontmatter is broken \u2014 missing or duplicated `---` fences, invalid YAML, or fields placed outside a fenced block \u2014 rebuild it into a single valid YAML frontmatter block, preserving the real field values (excluding the `wiki_*` fields, which are managed separately). Never emit two `---` fences in a row or leave frontmatter keys in the body.\n\n## Structure\n\n- H1 \u2014 the page title\n- Intro paragraph 1-3 sentences immediately after H1, without a subheading\n- `##` sections by content logic; hierarchy without jumps (H2 \u2192 H3 \u2192 H4)\n- Empty sections and placeholder text are forbidden\n\n## Tables\n\nMarkdown with alignment. Use for structured enumerations of parameters/comparisons. Do not turn narrative text into tables.\n\n## Mermaid\n\n` ```mermaid ` blocks for processes, sequences, relationships.\n- Processes described in text \u2192 flowchart/sequenceDiagram\n- Content of diagrams from images (vision backend only) \u2192 a separate mermaid block below the image. The image itself is preserved.\n\n## Images\n\n- Each image gets a descriptive caption directly below it\n- When `has_vision=true`: an additional text description. For diagrams/schemes \u2014 a structured logical description of the meaning (purpose, components, how the flow is connected), not a verbatim transcription of elements; below, when needed, a mermaid block (process/architecture) or a table (grid/matrix). For other images \u2014 coherent text or a parameter table.\n- When `has_vision=false`: use only alt and existing captions; do not invent new information\n\n## Code\n\nFenced blocks always with a language tag.\n\n## Style\n\n- Neutral, informative, no value judgements\n- Technical terms \u2014 original spelling (SQL, API, LLM)\n- Forbidden: "obviously", "the best way", the pronouns "I/we/our"\n\n## Hard prohibitions\n\n- Do not add facts absent from the source (exception: text extraction from images when `has_vision=true`)\n- Do not remove facts\n- Do not distort the meaning; rephrasing for clarity is allowed\n- List all changes in `report`\n';
+var format_schema_default = '# Format Schema (formatting rules for non-wiki pages)\n\n## Frontmatter\n\n| Field | Rule |\n|------|---------|\n| `tags` | YAML list: `[category/subcategory, domain/topic]`. Hierarchy via `/`, lowercase, no spaces, no `#`. When the input contains an EXISTING DOMAIN TAGS block, reuse tags strictly from it; add a new tag only when nothing there fits, and never start a new top-level category when the block says "reuse only". Without the block, keep the note\'s own valid tags. Only when a thematic classification exists. |\n| `aliases` | Abbreviations, synonyms, English variants |\n| `created` | YYYY-MM-DD when present in the source or at first formatting |\n| `updated` | YYYY-MM-DD the current formatting date |\n| `external_links` | Array of URLs \u2014 only if the body has `http(s)://` links |\n| `related` | Array of `[[wikilinks]]` \u2014 only if the body already contains links to other pages |\n\nThe `wiki_*` fields \u2014 do not include them in the output. They are managed programmatically and will be restored automatically.\n\nIf the source frontmatter is broken \u2014 missing or duplicated `---` fences, invalid YAML, or fields placed outside a fenced block \u2014 rebuild it into a single valid YAML frontmatter block, preserving the real field values (excluding the `wiki_*` fields, which are managed separately). Never emit two `---` fences in a row or leave frontmatter keys in the body.\n\n## Structure\n\n- H1 \u2014 the page title\n- Intro paragraph 1-3 sentences immediately after H1, without a subheading\n- `##` sections by content logic; hierarchy without jumps (H2 \u2192 H3 \u2192 H4)\n- Empty sections and placeholder text are forbidden\n\n## Tables\n\nMarkdown with alignment. Use for structured enumerations of parameters/comparisons. Do not turn narrative text into tables.\n\n## Mermaid\n\n` ```mermaid ` blocks for processes, sequences, relationships.\n- Processes described in text \u2192 flowchart/sequenceDiagram\n- Content of diagrams from images (vision backend only) \u2192 a separate mermaid block below the image. The image itself is preserved.\n\n## Images\n\n- Each image gets a descriptive caption directly below it\n- When `has_vision=true`: an additional text description. For diagrams/schemes \u2014 a structured logical description of the meaning (purpose, components, how the flow is connected), not a verbatim transcription of elements; below, when needed, a mermaid block (process/architecture) or a table (grid/matrix). For other images \u2014 coherent text or a parameter table.\n- When `has_vision=false`: use only alt and existing captions; do not invent new information\n\n## Code\n\nFenced blocks always with a language tag.\n\n## Style\n\n- Neutral, informative, no value judgements\n- Technical terms \u2014 original spelling (SQL, API, LLM)\n- Forbidden: "obviously", "the best way", the pronouns "I/we/our"\n\n## Hard prohibitions\n\n- Do not add facts absent from the source (exception: text extraction from images when `has_vision=true`)\n- Do not remove facts\n- Do not distort the meaning; rephrasing for clarity is allowed\n- List all changes in `report`\n';
 
 // src/phases/format-utils.ts
 var STOP_WORDS2 = /* @__PURE__ */ new Set([
@@ -42603,8 +42794,8 @@ function arrayBufferToBase64(buffer) {
 function stripImageDataUriPrefix(s) {
   return s.replace(/^data:image\/[a-zA-Z.+-]+;base64,/, "");
 }
-function getMimeType(path2) {
-  const ext = path2.split(".").pop()?.toLowerCase();
+function getMimeType(path3) {
+  const ext = path3.split(".").pop()?.toLowerCase();
   switch (ext) {
     case "png":
       return "image/png";
@@ -42617,8 +42808,8 @@ function getMimeType(path2) {
       return null;
   }
 }
-function isVisionSupportedOnMobile(path2) {
-  return getMimeType(path2) !== null;
+function isVisionSupportedOnMobile(path3) {
+  return getMimeType(path3) !== null;
 }
 async function callVisionLlm(llm, model, systemPrompt, contentParts, signal) {
   const resp = await llm.chat.completions.create({
@@ -42678,8 +42869,8 @@ async function analyzeExcalidraw(b64, llm, model, signal, language = "auto", rea
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } }
   ], signal);
 }
-async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, sourcePath = "", language = "auto", reasoningLanguage = "auto", visionTempStore, imageOnly = false, usedTemplates) {
-  const resolved = vaultTools.resolveLink(path2, sourcePath);
+async function analyzeSingleAttachment(path3, vaultTools, llm, model, signal, sourcePath = "", language = "auto", reasoningLanguage = "auto", visionTempStore, imageOnly = false, usedTemplates) {
+  const resolved = vaultTools.resolveLink(path3, sourcePath);
   if (resolved === null) return null;
   if (imageOnly && !isVisionSupportedOnMobile(resolved)) return null;
   const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
@@ -42687,7 +42878,7 @@ async function analyzeSingleAttachment(path2, vaultTools, llm, model, signal, so
   if (isExcalidraw) {
     const b64 = await vaultTools.renderExcalidrawPng(resolved);
     if (!b64) return null;
-    await visionTempStore?.putPng(path2, b64);
+    await visionTempStore?.putPng(path3, b64);
     usedTemplates?.add(vision_excalidraw_default);
     return analyzeExcalidraw(b64, llm, model, signal, language, reasoningLanguage);
   }
@@ -42742,7 +42933,7 @@ function truncationHint(backend, p) {
   return backend === "claude-agent" ? p.truncationHintEnv : p.truncationHintSettings;
 }
 var enFormatProgressFallback = {
-  analysing: (path2) => `Analysing file ${path2}...
+  analysing: (path3) => `Analysing file ${path3}...
 `,
   truncatedSalvageSummary: "Format: response truncated \u2014 salvage",
   truncatedSalvageRetrySummary: "Format: retry response truncated \u2014 salvage",
@@ -42755,7 +42946,7 @@ var enFormatProgressFallback = {
   truncationHintEnv: "raise the limit: env CLAUDE_CODE_MAX_OUTPUT_TOKENS in iclaude.sh",
   truncationHintSettings: "raise the limit: Settings \u2192 per-operation \u2192 format \u2192 maxTokens"
 };
-async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, signal, opts = {}, backend = "native-agent", wikiVaultPath, wikiLinkValidationRetries = 3, visionSettings = { enabled: false, model: "" }, visionTempStore, progress = enFormatProgressFallback) {
+async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, signal, opts = {}, backend = "native-agent", wikiVaultPath, wikiLinkValidationRetries = 3, visionSettings = { enabled: false, model: "" }, visionTempStore, progress = enFormatProgressFallback, formatDomain) {
   const start = Date.now();
   const filePath = args[0];
   if (!filePath) {
@@ -42785,30 +42976,30 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
     const embedPaths = [...new Set(extractObsidianEmbedPaths(original))];
     if (embedPaths.length > 0) {
       const lang = visionSettings.language ?? "auto";
-      for (const path2 of embedPaths) {
+      for (const path3 of embedPaths) {
         if (signal.aborted) break;
-        const filename = path2.split("/").pop() ?? path2;
+        const filename = path3.split("/").pop() ?? path3;
         yield { kind: "tool_use", name: "Vision", input: { file_path: filename, model: visionSettings.model } };
-        const cached = await visionTempStore?.getDescription(path2);
+        const cached = await visionTempStore?.getDescription(path3);
         if (cached != null) {
-          visionDescriptions.set(path2, cached);
+          visionDescriptions.set(path3, cached);
           yield { kind: "tool_result", ok: true, preview: cached };
           continue;
         }
         try {
-          const description = await analyzeSingleAttachment(path2, vaultTools, llm, visionSettings.model, signal, filePath, lang, opts.reasoningLanguage, visionTempStore, visionSettings.imageOnly ?? false, usedVisionTemplates);
+          const description = await analyzeSingleAttachment(path3, vaultTools, llm, visionSettings.model, signal, filePath, lang, opts.reasoningLanguage, visionTempStore, visionSettings.imageOnly ?? false, usedVisionTemplates);
           if (description !== null) {
-            visionDescriptions.set(path2, description);
-            await visionTempStore?.putDescription(path2, description);
+            visionDescriptions.set(path3, description);
+            await visionTempStore?.putDescription(path3, description);
             yield { kind: "tool_result", ok: true, preview: description };
           } else {
             const why = visionSettings.imageOnly ?? false ? "unsupported on mobile" : "unknown extension";
             yield { kind: "tool_result", ok: false, preview: why };
-            yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [`${path2} \u2014 ${why}`] };
+            yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [`${path3} \u2014 ${why}`] };
           }
         } catch (e) {
           yield { kind: "tool_result", ok: false, preview: e?.message ?? "failed" };
-          yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [path2] };
+          yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [path3] };
         }
       }
     }
@@ -42830,8 +43021,8 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
   let visionBlock = "";
   if (visionDescriptions.size > 0) {
     const items = [];
-    for (const [path2, desc] of visionDescriptions) {
-      items.push(`### ![[${path2}]]
+    for (const [path3, desc] of visionDescriptions) {
+      items.push(`### ![[${path3}]]
 ${desc}`);
     }
     visionBlock = `
@@ -42839,9 +43030,27 @@ ${desc}`);
 ATTACHMENT DESCRIPTIONS (vision recognition; integrate IMMEDIATELY BELOW the corresponding \`![[path]]\` embed as structured markdown \u2014 table/list/code following the source's form; for DIAGRAMS keep both elements: first the text description, then a \`\`\`mermaid\`\`\` block \u2014 do not drop either the description or the mermaid; do NOT wrap in a blockquote, do NOT add a [Vision] marker, do NOT quote the paths):
 ${items.join("\n\n")}`;
   }
+  let tagRegistryBlock = "";
+  if (formatDomain) {
+    try {
+      const registry = await collectDomainTags(
+        vaultTools,
+        domainWikiFolder(formatDomain.wiki_folder),
+        formatDomain.source_paths ?? []
+      );
+      tagRegistryBlock = renderTagRegistryBlock(
+        registry,
+        (formatDomain.entity_types ?? []).map((e) => e.type),
+        formatDomain.max_tag_categories ?? DEFAULT_MAX_TAG_CATEGORIES
+      );
+    } catch {
+    }
+  }
   const userInitial = `Source file: ${filePath}
 ---
-${original}${visionBlock}`;
+${original}${visionBlock}${tagRegistryBlock ? `
+---
+${tagRegistryBlock}` : ""}`;
   const imagePaths = hasVision ? extractImagePaths(original) : [];
   const userContent = imagePaths.length > 0 ? [
     { type: "text", text: userInitial },
@@ -43192,8 +43401,8 @@ function base64ToArrayBuffer(b64) {
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes.buffer;
 }
-function keyFor(path2) {
-  return path2.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "x";
+function keyFor(path3) {
+  return path3.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "x";
 }
 var VisionTempStore = class {
   constructor(vaultTools, dir) {
@@ -43202,26 +43411,26 @@ var VisionTempStore = class {
   }
   vaultTools;
   dir;
-  async getDescription(path2) {
+  async getDescription(path3) {
     try {
-      const p = `${this.dir}/${keyFor(path2)}.json`;
+      const p = `${this.dir}/${keyFor(path3)}.json`;
       if (!await this.vaultTools.exists(p)) return null;
       const obj = JSON.parse(await this.vaultTools.read(p));
-      return typeof obj.desc === "string" && obj.path === path2 ? obj.desc : null;
+      return typeof obj.desc === "string" && obj.path === path3 ? obj.desc : null;
     } catch {
       return null;
     }
   }
-  async putDescription(path2, desc) {
+  async putDescription(path3, desc) {
     try {
-      const p = `${this.dir}/${keyFor(path2)}.json`;
-      await this.vaultTools.write(p, JSON.stringify({ path: path2, desc }));
+      const p = `${this.dir}/${keyFor(path3)}.json`;
+      await this.vaultTools.write(p, JSON.stringify({ path: path3, desc }));
     } catch {
     }
   }
-  async putPng(path2, b64) {
+  async putPng(path3, b64) {
     try {
-      const p = `${this.dir}/${keyFor(path2)}.png`;
+      const p = `${this.dir}/${keyFor(path3)}.png`;
       await this.vaultTools.writeBinary(p, base64ToArrayBuffer(b64));
     } catch {
     }
@@ -43375,10 +43584,11 @@ var AgentRunner = class {
         break;
       case "format": {
         const hasVision = this.settings.backend === "claude-agent";
-        const formatDomain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
-        const wikiVaultPath = formatDomain ? domainWikiFolder(formatDomain.wiki_folder) : void 0;
         const noVision = req.args.includes("--no-vision");
         const formatArgs = req.args.filter((a) => a !== "--no-vision");
+        const explicitDomain = req.domainId ? this.domains.find((d) => d.id === req.domainId) : void 0;
+        const formatDomain = explicitDomain ?? (formatArgs[0] ? detectDomainStrict((0, import_path_browserify8.join)(vaultRoot, formatArgs[0]), this.domains, vaultRoot) ?? void 0 : void 0);
+        const wikiVaultPath = formatDomain ? domainWikiFolder(formatDomain.wiki_folder) : void 0;
         const baseVisionSettings = {
           enabled: this.settings.vision?.enabled ?? false,
           model: this.settings.vision?.model ?? "",
@@ -43387,7 +43597,7 @@ var AgentRunner = class {
         };
         const visionSettings = noVision ? { ...baseVisionSettings, enabled: false } : baseVisionSettings;
         const progress = i18nFor(resolveLang(this.settings.outputLanguage)).formatProgress;
-        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore, progress);
+        yield* runFormat(formatArgs, this.vaultTools, this.llm, model, hasVision, req.chatMessages ?? [], req.signal, opts, this.settings.backend ?? "native-agent", wikiVaultPath, this.settings.wikiLinkValidationRetries, visionSettings, visionTempStore, progress, formatDomain);
         break;
       }
       case "delete":
@@ -45451,12 +45661,12 @@ function encodeURIPath(str2) {
   return str2.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
 }
 var EMPTY = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.create(null));
-var createPathTagFunction = (pathEncoder = encodeURIPath) => function path2(statics, ...params) {
+var createPathTagFunction = (pathEncoder = encodeURIPath) => function path3(statics, ...params) {
   if (statics.length === 1)
     return statics[0];
   let postPath = false;
   const invalidSegments = [];
-  const path3 = statics.reduce((previousValue, currentValue, index) => {
+  const path4 = statics.reduce((previousValue, currentValue, index) => {
     if (/[?#]/.test(currentValue)) {
       postPath = true;
     }
@@ -45473,7 +45683,7 @@ var createPathTagFunction = (pathEncoder = encodeURIPath) => function path2(stat
     }
     return previousValue + currentValue + (index === params.length ? "" : encoded);
   }, "");
-  const pathOnly = path3.split(/[?#]/, 1)[0];
+  const pathOnly = path4.split(/[?#]/, 1)[0];
   const invalidSegmentPattern = /(?<=^|\/)(?:\.|%2e){1,2}(?=\/|$)/gi;
   let match;
   while ((match = invalidSegmentPattern.exec(pathOnly)) !== null) {
@@ -45494,12 +45704,12 @@ var createPathTagFunction = (pathEncoder = encodeURIPath) => function path2(stat
     }, "");
     throw new OpenAIError(`Path parameters result in path with invalid segments:
 ${invalidSegments.map((e) => e.error).join("\n")}
-${path3}
+${path4}
 ${underline}`);
   }
-  return path3;
+  return path4;
 };
-var path = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
+var path2 = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
 
 // node_modules/openai/resources/chat/completions/messages.mjs
 var Messages = class extends APIResource {
@@ -45518,7 +45728,7 @@ var Messages = class extends APIResource {
    * ```
    */
   list(completionID, query = {}, options) {
-    return this._client.getAPIList(path`/chat/completions/${completionID}/messages`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path2`/chat/completions/${completionID}/messages`, CursorPage, { query, ...options });
   }
 };
 
@@ -46853,7 +47063,7 @@ var Completions = class extends APIResource {
    * ```
    */
   retrieve(completionID, options) {
-    return this._client.get(path`/chat/completions/${completionID}`, options);
+    return this._client.get(path2`/chat/completions/${completionID}`, options);
   }
   /**
    * Modify a stored chat completion. Only Chat Completions that have been created
@@ -46869,7 +47079,7 @@ var Completions = class extends APIResource {
    * ```
    */
   update(completionID, body, options) {
-    return this._client.post(path`/chat/completions/${completionID}`, { body, ...options });
+    return this._client.post(path2`/chat/completions/${completionID}`, { body, ...options });
   }
   /**
    * List stored Chat Completions. Only Chat Completions that have been stored with
@@ -46897,7 +47107,7 @@ var Completions = class extends APIResource {
    * ```
    */
   delete(completionID, options) {
-    return this._client.delete(path`/chat/completions/${completionID}`, options);
+    return this._client.delete(path2`/chat/completions/${completionID}`, options);
   }
   parse(body, options) {
     validateInputTools(body.tools);
@@ -47069,7 +47279,7 @@ var Batches = class extends APIResource {
    * Retrieves a batch.
    */
   retrieve(batchID, options) {
-    return this._client.get(path`/batches/${batchID}`, options);
+    return this._client.get(path2`/batches/${batchID}`, options);
   }
   /**
    * List your organization's batches.
@@ -47083,7 +47293,7 @@ var Batches = class extends APIResource {
    * (if any) available in the output file.
    */
   cancel(batchID, options) {
-    return this._client.post(path`/batches/${batchID}/cancel`, options);
+    return this._client.post(path2`/batches/${batchID}/cancel`, options);
   }
 };
 
@@ -47107,7 +47317,7 @@ var Assistants = class extends APIResource {
    * @deprecated
    */
   retrieve(assistantID, options) {
-    return this._client.get(path`/assistants/${assistantID}`, {
+    return this._client.get(path2`/assistants/${assistantID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -47118,7 +47328,7 @@ var Assistants = class extends APIResource {
    * @deprecated
    */
   update(assistantID, body, options) {
-    return this._client.post(path`/assistants/${assistantID}`, {
+    return this._client.post(path2`/assistants/${assistantID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -47142,7 +47352,7 @@ var Assistants = class extends APIResource {
    * @deprecated
    */
   delete(assistantID, options) {
-    return this._client.delete(path`/assistants/${assistantID}`, {
+    return this._client.delete(path2`/assistants/${assistantID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -47245,7 +47455,7 @@ var Sessions2 = class extends APIResource {
    * ```
    */
   cancel(sessionID, options) {
-    return this._client.post(path`/chatkit/sessions/${sessionID}/cancel`, {
+    return this._client.post(path2`/chatkit/sessions/${sessionID}/cancel`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers])
     });
@@ -47264,7 +47474,7 @@ var Threads = class extends APIResource {
    * ```
    */
   retrieve(threadID, options) {
-    return this._client.get(path`/chatkit/threads/${threadID}`, {
+    return this._client.get(path2`/chatkit/threads/${threadID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers])
     });
@@ -47298,7 +47508,7 @@ var Threads = class extends APIResource {
    * ```
    */
   delete(threadID, options) {
-    return this._client.delete(path`/chatkit/threads/${threadID}`, {
+    return this._client.delete(path2`/chatkit/threads/${threadID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers])
     });
@@ -47317,7 +47527,7 @@ var Threads = class extends APIResource {
    * ```
    */
   listItems(threadID, query = {}, options) {
-    return this._client.getAPIList(path`/chatkit/threads/${threadID}/items`, ConversationCursorPage, { query, ...options, headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers]) });
+    return this._client.getAPIList(path2`/chatkit/threads/${threadID}/items`, ConversationCursorPage, { query, ...options, headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers]) });
   }
 };
 
@@ -47340,7 +47550,7 @@ var Messages2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   create(threadID, body, options) {
-    return this._client.post(path`/threads/${threadID}/messages`, {
+    return this._client.post(path2`/threads/${threadID}/messages`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -47353,7 +47563,7 @@ var Messages2 = class extends APIResource {
    */
   retrieve(messageID, params, options) {
     const { thread_id } = params;
-    return this._client.get(path`/threads/${thread_id}/messages/${messageID}`, {
+    return this._client.get(path2`/threads/${thread_id}/messages/${messageID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -47365,7 +47575,7 @@ var Messages2 = class extends APIResource {
    */
   update(messageID, params, options) {
     const { thread_id, ...body } = params;
-    return this._client.post(path`/threads/${thread_id}/messages/${messageID}`, {
+    return this._client.post(path2`/threads/${thread_id}/messages/${messageID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -47377,7 +47587,7 @@ var Messages2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   list(threadID, query = {}, options) {
-    return this._client.getAPIList(path`/threads/${threadID}/messages`, CursorPage, {
+    return this._client.getAPIList(path2`/threads/${threadID}/messages`, CursorPage, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -47390,7 +47600,7 @@ var Messages2 = class extends APIResource {
    */
   delete(messageID, params, options) {
     const { thread_id } = params;
-    return this._client.delete(path`/threads/${thread_id}/messages/${messageID}`, {
+    return this._client.delete(path2`/threads/${thread_id}/messages/${messageID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -47406,7 +47616,7 @@ var Steps = class extends APIResource {
    */
   retrieve(stepID, params, options) {
     const { thread_id, run_id, ...query } = params;
-    return this._client.get(path`/threads/${thread_id}/runs/${run_id}/steps/${stepID}`, {
+    return this._client.get(path2`/threads/${thread_id}/runs/${run_id}/steps/${stepID}`, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -47419,7 +47629,7 @@ var Steps = class extends APIResource {
    */
   list(runID, params, options) {
     const { thread_id, ...query } = params;
-    return this._client.getAPIList(path`/threads/${thread_id}/runs/${runID}/steps`, CursorPage, {
+    return this._client.getAPIList(path2`/threads/${thread_id}/runs/${runID}/steps`, CursorPage, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -48001,7 +48211,7 @@ var Runs = class extends APIResource {
   }
   create(threadID, params, options) {
     const { include, ...body } = params;
-    return this._client.post(path`/threads/${threadID}/runs`, {
+    return this._client.post(path2`/threads/${threadID}/runs`, {
       query: { include },
       body,
       ...options,
@@ -48017,7 +48227,7 @@ var Runs = class extends APIResource {
    */
   retrieve(runID, params, options) {
     const { thread_id } = params;
-    return this._client.get(path`/threads/${thread_id}/runs/${runID}`, {
+    return this._client.get(path2`/threads/${thread_id}/runs/${runID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -48029,7 +48239,7 @@ var Runs = class extends APIResource {
    */
   update(runID, params, options) {
     const { thread_id, ...body } = params;
-    return this._client.post(path`/threads/${thread_id}/runs/${runID}`, {
+    return this._client.post(path2`/threads/${thread_id}/runs/${runID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -48041,7 +48251,7 @@ var Runs = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   list(threadID, query = {}, options) {
-    return this._client.getAPIList(path`/threads/${threadID}/runs`, CursorPage, {
+    return this._client.getAPIList(path2`/threads/${threadID}/runs`, CursorPage, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -48054,7 +48264,7 @@ var Runs = class extends APIResource {
    */
   cancel(runID, params, options) {
     const { thread_id } = params;
-    return this._client.post(path`/threads/${thread_id}/runs/${runID}/cancel`, {
+    return this._client.post(path2`/threads/${thread_id}/runs/${runID}/cancel`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -48132,7 +48342,7 @@ var Runs = class extends APIResource {
   }
   submitToolOutputs(runID, params, options) {
     const { thread_id, ...body } = params;
-    return this._client.post(path`/threads/${thread_id}/runs/${runID}/submit_tool_outputs`, {
+    return this._client.post(path2`/threads/${thread_id}/runs/${runID}/submit_tool_outputs`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
@@ -48185,7 +48395,7 @@ var Threads2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   retrieve(threadID, options) {
-    return this._client.get(path`/threads/${threadID}`, {
+    return this._client.get(path2`/threads/${threadID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -48196,7 +48406,7 @@ var Threads2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   update(threadID, body, options) {
-    return this._client.post(path`/threads/${threadID}`, {
+    return this._client.post(path2`/threads/${threadID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -48208,7 +48418,7 @@ var Threads2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   delete(threadID, options) {
-    return this._client.delete(path`/threads/${threadID}`, {
+    return this._client.delete(path2`/threads/${threadID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -48270,7 +48480,7 @@ var Content = class extends APIResource {
    */
   retrieve(fileID, params, options) {
     const { container_id } = params;
-    return this._client.get(path`/containers/${container_id}/files/${fileID}/content`, {
+    return this._client.get(path2`/containers/${container_id}/files/${fileID}/content`, {
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
@@ -48291,20 +48501,20 @@ var Files = class extends APIResource {
    * a JSON request with a file ID.
    */
   create(containerID, body, options) {
-    return this._client.post(path`/containers/${containerID}/files`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path2`/containers/${containerID}/files`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
    * Retrieve Container File
    */
   retrieve(fileID, params, options) {
     const { container_id } = params;
-    return this._client.get(path`/containers/${container_id}/files/${fileID}`, options);
+    return this._client.get(path2`/containers/${container_id}/files/${fileID}`, options);
   }
   /**
    * List Container files
    */
   list(containerID, query = {}, options) {
-    return this._client.getAPIList(path`/containers/${containerID}/files`, CursorPage, {
+    return this._client.getAPIList(path2`/containers/${containerID}/files`, CursorPage, {
       query,
       ...options
     });
@@ -48314,7 +48524,7 @@ var Files = class extends APIResource {
    */
   delete(fileID, params, options) {
     const { container_id } = params;
-    return this._client.delete(path`/containers/${container_id}/files/${fileID}`, {
+    return this._client.delete(path2`/containers/${container_id}/files/${fileID}`, {
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
     });
@@ -48338,7 +48548,7 @@ var Containers = class extends APIResource {
    * Retrieve Container
    */
   retrieve(containerID, options) {
-    return this._client.get(path`/containers/${containerID}`, options);
+    return this._client.get(path2`/containers/${containerID}`, options);
   }
   /**
    * List Containers
@@ -48350,7 +48560,7 @@ var Containers = class extends APIResource {
    * Delete Container
    */
   delete(containerID, options) {
-    return this._client.delete(path`/containers/${containerID}`, {
+    return this._client.delete(path2`/containers/${containerID}`, {
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
     });
@@ -48365,7 +48575,7 @@ var Items = class extends APIResource {
    */
   create(conversationID, params, options) {
     const { include, ...body } = params;
-    return this._client.post(path`/conversations/${conversationID}/items`, {
+    return this._client.post(path2`/conversations/${conversationID}/items`, {
       query: { include },
       body,
       ...options
@@ -48376,20 +48586,20 @@ var Items = class extends APIResource {
    */
   retrieve(itemID, params, options) {
     const { conversation_id, ...query } = params;
-    return this._client.get(path`/conversations/${conversation_id}/items/${itemID}`, { query, ...options });
+    return this._client.get(path2`/conversations/${conversation_id}/items/${itemID}`, { query, ...options });
   }
   /**
    * List all items for a conversation with the given ID.
    */
   list(conversationID, query = {}, options) {
-    return this._client.getAPIList(path`/conversations/${conversationID}/items`, ConversationCursorPage, { query, ...options });
+    return this._client.getAPIList(path2`/conversations/${conversationID}/items`, ConversationCursorPage, { query, ...options });
   }
   /**
    * Delete an item from a conversation with the given IDs.
    */
   delete(itemID, params, options) {
     const { conversation_id } = params;
-    return this._client.delete(path`/conversations/${conversation_id}/items/${itemID}`, options);
+    return this._client.delete(path2`/conversations/${conversation_id}/items/${itemID}`, options);
   }
 };
 
@@ -48409,19 +48619,19 @@ var Conversations = class extends APIResource {
    * Get a conversation
    */
   retrieve(conversationID, options) {
-    return this._client.get(path`/conversations/${conversationID}`, options);
+    return this._client.get(path2`/conversations/${conversationID}`, options);
   }
   /**
    * Update a conversation
    */
   update(conversationID, body, options) {
-    return this._client.post(path`/conversations/${conversationID}`, { body, ...options });
+    return this._client.post(path2`/conversations/${conversationID}`, { body, ...options });
   }
   /**
    * Delete a conversation. Items in the conversation will not be deleted.
    */
   delete(conversationID, options) {
-    return this._client.delete(path`/conversations/${conversationID}`, options);
+    return this._client.delete(path2`/conversations/${conversationID}`, options);
   }
 };
 Conversations.Items = Items;
@@ -48476,14 +48686,14 @@ var OutputItems = class extends APIResource {
    */
   retrieve(outputItemID, params, options) {
     const { eval_id, run_id } = params;
-    return this._client.get(path`/evals/${eval_id}/runs/${run_id}/output_items/${outputItemID}`, options);
+    return this._client.get(path2`/evals/${eval_id}/runs/${run_id}/output_items/${outputItemID}`, options);
   }
   /**
    * Get a list of output items for an evaluation run.
    */
   list(runID, params, options) {
     const { eval_id, ...query } = params;
-    return this._client.getAPIList(path`/evals/${eval_id}/runs/${runID}/output_items`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path2`/evals/${eval_id}/runs/${runID}/output_items`, CursorPage, { query, ...options });
   }
 };
 
@@ -48499,20 +48709,20 @@ var Runs2 = class extends APIResource {
    * schema specified in the config of the evaluation.
    */
   create(evalID, body, options) {
-    return this._client.post(path`/evals/${evalID}/runs`, { body, ...options });
+    return this._client.post(path2`/evals/${evalID}/runs`, { body, ...options });
   }
   /**
    * Get an evaluation run by ID.
    */
   retrieve(runID, params, options) {
     const { eval_id } = params;
-    return this._client.get(path`/evals/${eval_id}/runs/${runID}`, options);
+    return this._client.get(path2`/evals/${eval_id}/runs/${runID}`, options);
   }
   /**
    * Get a list of runs for an evaluation.
    */
   list(evalID, query = {}, options) {
-    return this._client.getAPIList(path`/evals/${evalID}/runs`, CursorPage, {
+    return this._client.getAPIList(path2`/evals/${evalID}/runs`, CursorPage, {
       query,
       ...options
     });
@@ -48522,14 +48732,14 @@ var Runs2 = class extends APIResource {
    */
   delete(runID, params, options) {
     const { eval_id } = params;
-    return this._client.delete(path`/evals/${eval_id}/runs/${runID}`, options);
+    return this._client.delete(path2`/evals/${eval_id}/runs/${runID}`, options);
   }
   /**
    * Cancel an ongoing evaluation run.
    */
   cancel(runID, params, options) {
     const { eval_id } = params;
-    return this._client.post(path`/evals/${eval_id}/runs/${runID}`, options);
+    return this._client.post(path2`/evals/${eval_id}/runs/${runID}`, options);
   }
 };
 Runs2.OutputItems = OutputItems;
@@ -48555,13 +48765,13 @@ var Evals = class extends APIResource {
    * Get an evaluation by ID.
    */
   retrieve(evalID, options) {
-    return this._client.get(path`/evals/${evalID}`, options);
+    return this._client.get(path2`/evals/${evalID}`, options);
   }
   /**
    * Update certain properties of an evaluation.
    */
   update(evalID, body, options) {
-    return this._client.post(path`/evals/${evalID}`, { body, ...options });
+    return this._client.post(path2`/evals/${evalID}`, { body, ...options });
   }
   /**
    * List evaluations for a project.
@@ -48573,7 +48783,7 @@ var Evals = class extends APIResource {
    * Delete an evaluation.
    */
   delete(evalID, options) {
-    return this._client.delete(path`/evals/${evalID}`, options);
+    return this._client.delete(path2`/evals/${evalID}`, options);
   }
 };
 Evals.Runs = Runs2;
@@ -48609,7 +48819,7 @@ var Files2 = class extends APIResource {
    * Returns information about a specific file.
    */
   retrieve(fileID, options) {
-    return this._client.get(path`/files/${fileID}`, options);
+    return this._client.get(path2`/files/${fileID}`, options);
   }
   /**
    * Returns a list of files.
@@ -48621,13 +48831,13 @@ var Files2 = class extends APIResource {
    * Delete a file and remove it from all vector stores.
    */
   delete(fileID, options) {
-    return this._client.delete(path`/files/${fileID}`, options);
+    return this._client.delete(path2`/files/${fileID}`, options);
   }
   /**
    * Returns the contents of the specified file.
    */
   content(fileID, options) {
-    return this._client.get(path`/files/${fileID}/content`, {
+    return this._client.get(path2`/files/${fileID}/content`, {
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
@@ -48730,7 +48940,7 @@ var Permissions = class extends APIResource {
    * ```
    */
   create(fineTunedModelCheckpoint, body, options) {
-    return this._client.getAPIList(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, Page, { body, method: "post", ...options });
+    return this._client.getAPIList(path2`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, Page, { body, method: "post", ...options });
   }
   /**
    * **NOTE:** This endpoint requires an [admin API key](../admin-api-keys).
@@ -48741,7 +48951,7 @@ var Permissions = class extends APIResource {
    * @deprecated Retrieve is deprecated. Please swap to the paginated list method instead.
    */
   retrieve(fineTunedModelCheckpoint, query = {}, options) {
-    return this._client.get(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, {
+    return this._client.get(path2`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, {
       query,
       ...options
     });
@@ -48763,7 +48973,7 @@ var Permissions = class extends APIResource {
    * ```
    */
   list(fineTunedModelCheckpoint, query = {}, options) {
-    return this._client.getAPIList(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, ConversationCursorPage, { query, ...options });
+    return this._client.getAPIList(path2`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, ConversationCursorPage, { query, ...options });
   }
   /**
    * **NOTE:** This endpoint requires an [admin API key](../admin-api-keys).
@@ -48785,7 +48995,7 @@ var Permissions = class extends APIResource {
    */
   delete(permissionID, params, options) {
     const { fine_tuned_model_checkpoint } = params;
-    return this._client.delete(path`/fine_tuning/checkpoints/${fine_tuned_model_checkpoint}/permissions/${permissionID}`, options);
+    return this._client.delete(path2`/fine_tuning/checkpoints/${fine_tuned_model_checkpoint}/permissions/${permissionID}`, options);
   }
 };
 
@@ -48814,7 +49024,7 @@ var Checkpoints2 = class extends APIResource {
    * ```
    */
   list(fineTuningJobID, query = {}, options) {
-    return this._client.getAPIList(path`/fine_tuning/jobs/${fineTuningJobID}/checkpoints`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path2`/fine_tuning/jobs/${fineTuningJobID}/checkpoints`, CursorPage, { query, ...options });
   }
 };
 
@@ -48857,7 +49067,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   retrieve(fineTuningJobID, options) {
-    return this._client.get(path`/fine_tuning/jobs/${fineTuningJobID}`, options);
+    return this._client.get(path2`/fine_tuning/jobs/${fineTuningJobID}`, options);
   }
   /**
    * List your organization's fine-tuning jobs
@@ -48884,7 +49094,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   cancel(fineTuningJobID, options) {
-    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/cancel`, options);
+    return this._client.post(path2`/fine_tuning/jobs/${fineTuningJobID}/cancel`, options);
   }
   /**
    * Get status updates for a fine-tuning job.
@@ -48900,7 +49110,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   listEvents(fineTuningJobID, query = {}, options) {
-    return this._client.getAPIList(path`/fine_tuning/jobs/${fineTuningJobID}/events`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path2`/fine_tuning/jobs/${fineTuningJobID}/events`, CursorPage, { query, ...options });
   }
   /**
    * Pause a fine-tune job.
@@ -48913,7 +49123,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   pause(fineTuningJobID, options) {
-    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/pause`, options);
+    return this._client.post(path2`/fine_tuning/jobs/${fineTuningJobID}/pause`, options);
   }
   /**
    * Resume a fine-tune job.
@@ -48926,7 +49136,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   resume(fineTuningJobID, options) {
-    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/resume`, options);
+    return this._client.post(path2`/fine_tuning/jobs/${fineTuningJobID}/resume`, options);
   }
 };
 Jobs.Checkpoints = Checkpoints2;
@@ -48989,7 +49199,7 @@ var Models = class extends APIResource {
    * the owner and permissioning.
    */
   retrieve(model, options) {
-    return this._client.get(path`/models/${model}`, options);
+    return this._client.get(path2`/models/${model}`, options);
   }
   /**
    * Lists the currently available models, and provides basic information about each
@@ -49003,7 +49213,7 @@ var Models = class extends APIResource {
    * delete a model.
    */
   delete(model, options) {
-    return this._client.delete(path`/models/${model}`, options);
+    return this._client.delete(path2`/models/${model}`, options);
   }
 };
 
@@ -49032,7 +49242,7 @@ var Calls = class extends APIResource {
    * ```
    */
   accept(callID, body, options) {
-    return this._client.post(path`/realtime/calls/${callID}/accept`, {
+    return this._client.post(path2`/realtime/calls/${callID}/accept`, {
       body,
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
@@ -49047,7 +49257,7 @@ var Calls = class extends APIResource {
    * ```
    */
   hangup(callID, options) {
-    return this._client.post(path`/realtime/calls/${callID}/hangup`, {
+    return this._client.post(path2`/realtime/calls/${callID}/hangup`, {
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
     });
@@ -49063,7 +49273,7 @@ var Calls = class extends APIResource {
    * ```
    */
   refer(callID, body, options) {
-    return this._client.post(path`/realtime/calls/${callID}/refer`, {
+    return this._client.post(path2`/realtime/calls/${callID}/refer`, {
       body,
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
@@ -49078,7 +49288,7 @@ var Calls = class extends APIResource {
    * ```
    */
   reject(callID, body = {}, options) {
-    return this._client.post(path`/realtime/calls/${callID}/reject`, {
+    return this._client.post(path2`/realtime/calls/${callID}/reject`, {
       body,
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
@@ -49526,7 +49736,7 @@ var InputItems = class extends APIResource {
    * ```
    */
   list(responseID, query = {}, options) {
-    return this._client.getAPIList(path`/responses/${responseID}/input_items`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path2`/responses/${responseID}/input_items`, CursorPage, { query, ...options });
   }
 };
 
@@ -49564,7 +49774,7 @@ var Responses = class extends APIResource {
     });
   }
   retrieve(responseID, query = {}, options) {
-    return this._client.get(path`/responses/${responseID}`, {
+    return this._client.get(path2`/responses/${responseID}`, {
       query,
       ...options,
       stream: query?.stream ?? false
@@ -49586,7 +49796,7 @@ var Responses = class extends APIResource {
    * ```
    */
   delete(responseID, options) {
-    return this._client.delete(path`/responses/${responseID}`, {
+    return this._client.delete(path2`/responses/${responseID}`, {
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
     });
@@ -49613,7 +49823,7 @@ var Responses = class extends APIResource {
    * ```
    */
   cancel(responseID, options) {
-    return this._client.post(path`/responses/${responseID}/cancel`, options);
+    return this._client.post(path2`/responses/${responseID}/cancel`, options);
   }
   /**
    * Compact a conversation. Returns a compacted response object.
@@ -49643,7 +49853,7 @@ var Content2 = class extends APIResource {
    * Download a skill zip bundle by its ID.
    */
   retrieve(skillID, options) {
-    return this._client.get(path`/skills/${skillID}/content`, {
+    return this._client.get(path2`/skills/${skillID}/content`, {
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
@@ -49658,7 +49868,7 @@ var Content3 = class extends APIResource {
    */
   retrieve(version, params, options) {
     const { skill_id } = params;
-    return this._client.get(path`/skills/${skill_id}/versions/${version}/content`, {
+    return this._client.get(path2`/skills/${skill_id}/versions/${version}/content`, {
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
@@ -49676,20 +49886,20 @@ var Versions = class extends APIResource {
    * Create a new immutable skill version.
    */
   create(skillID, body = {}, options) {
-    return this._client.post(path`/skills/${skillID}/versions`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path2`/skills/${skillID}/versions`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
    * Get a specific skill version.
    */
   retrieve(version, params, options) {
     const { skill_id } = params;
-    return this._client.get(path`/skills/${skill_id}/versions/${version}`, options);
+    return this._client.get(path2`/skills/${skill_id}/versions/${version}`, options);
   }
   /**
    * List skill versions for a skill.
    */
   list(skillID, query = {}, options) {
-    return this._client.getAPIList(path`/skills/${skillID}/versions`, CursorPage, {
+    return this._client.getAPIList(path2`/skills/${skillID}/versions`, CursorPage, {
       query,
       ...options
     });
@@ -49699,7 +49909,7 @@ var Versions = class extends APIResource {
    */
   delete(version, params, options) {
     const { skill_id } = params;
-    return this._client.delete(path`/skills/${skill_id}/versions/${version}`, options);
+    return this._client.delete(path2`/skills/${skill_id}/versions/${version}`, options);
   }
 };
 Versions.Content = Content3;
@@ -49721,13 +49931,13 @@ var Skills = class extends APIResource {
    * Get a skill by its ID.
    */
   retrieve(skillID, options) {
-    return this._client.get(path`/skills/${skillID}`, options);
+    return this._client.get(path2`/skills/${skillID}`, options);
   }
   /**
    * Update the default version pointer for a skill.
    */
   update(skillID, body, options) {
-    return this._client.post(path`/skills/${skillID}`, { body, ...options });
+    return this._client.post(path2`/skills/${skillID}`, { body, ...options });
   }
   /**
    * List all skills for the current project.
@@ -49739,7 +49949,7 @@ var Skills = class extends APIResource {
    * Delete a skill by its ID.
    */
   delete(skillID, options) {
-    return this._client.delete(path`/skills/${skillID}`, options);
+    return this._client.delete(path2`/skills/${skillID}`, options);
   }
 };
 Skills.Content = Content2;
@@ -49761,7 +49971,7 @@ var Parts = class extends APIResource {
    * [complete the Upload](https://platform.openai.com/docs/api-reference/uploads/complete).
    */
   create(uploadID, body, options) {
-    return this._client.post(path`/uploads/${uploadID}/parts`, multipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path2`/uploads/${uploadID}/parts`, multipartFormRequestOptions({ body, ...options }, this._client));
   }
 };
 
@@ -49803,7 +50013,7 @@ var Uploads = class extends APIResource {
    * Returns the Upload object with status `cancelled`.
    */
   cancel(uploadID, options) {
-    return this._client.post(path`/uploads/${uploadID}/cancel`, options);
+    return this._client.post(path2`/uploads/${uploadID}/cancel`, options);
   }
   /**
    * Completes the
@@ -49823,7 +50033,7 @@ var Uploads = class extends APIResource {
    * object.
    */
   complete(uploadID, body, options) {
-    return this._client.post(path`/uploads/${uploadID}/complete`, { body, ...options });
+    return this._client.post(path2`/uploads/${uploadID}/complete`, { body, ...options });
   }
 };
 Uploads.Parts = Parts;
@@ -49853,7 +50063,7 @@ var FileBatches = class extends APIResource {
    * Create a vector store file batch.
    */
   create(vectorStoreID, body, options) {
-    return this._client.post(path`/vector_stores/${vectorStoreID}/file_batches`, {
+    return this._client.post(path2`/vector_stores/${vectorStoreID}/file_batches`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -49864,7 +50074,7 @@ var FileBatches = class extends APIResource {
    */
   retrieve(batchID, params, options) {
     const { vector_store_id } = params;
-    return this._client.get(path`/vector_stores/${vector_store_id}/file_batches/${batchID}`, {
+    return this._client.get(path2`/vector_stores/${vector_store_id}/file_batches/${batchID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -49875,7 +50085,7 @@ var FileBatches = class extends APIResource {
    */
   cancel(batchID, params, options) {
     const { vector_store_id } = params;
-    return this._client.post(path`/vector_stores/${vector_store_id}/file_batches/${batchID}/cancel`, {
+    return this._client.post(path2`/vector_stores/${vector_store_id}/file_batches/${batchID}/cancel`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -49892,7 +50102,7 @@ var FileBatches = class extends APIResource {
    */
   listFiles(batchID, params, options) {
     const { vector_store_id, ...query } = params;
-    return this._client.getAPIList(path`/vector_stores/${vector_store_id}/file_batches/${batchID}/files`, CursorPage, { query, ...options, headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]) });
+    return this._client.getAPIList(path2`/vector_stores/${vector_store_id}/file_batches/${batchID}/files`, CursorPage, { query, ...options, headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]) });
   }
   /**
    * Wait for the given file batch to be processed.
@@ -49972,7 +50182,7 @@ var Files3 = class extends APIResource {
    * [vector store](https://platform.openai.com/docs/api-reference/vector-stores/object).
    */
   create(vectorStoreID, body, options) {
-    return this._client.post(path`/vector_stores/${vectorStoreID}/files`, {
+    return this._client.post(path2`/vector_stores/${vectorStoreID}/files`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -49983,7 +50193,7 @@ var Files3 = class extends APIResource {
    */
   retrieve(fileID, params, options) {
     const { vector_store_id } = params;
-    return this._client.get(path`/vector_stores/${vector_store_id}/files/${fileID}`, {
+    return this._client.get(path2`/vector_stores/${vector_store_id}/files/${fileID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -49993,7 +50203,7 @@ var Files3 = class extends APIResource {
    */
   update(fileID, params, options) {
     const { vector_store_id, ...body } = params;
-    return this._client.post(path`/vector_stores/${vector_store_id}/files/${fileID}`, {
+    return this._client.post(path2`/vector_stores/${vector_store_id}/files/${fileID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -50003,7 +50213,7 @@ var Files3 = class extends APIResource {
    * Returns a list of vector store files.
    */
   list(vectorStoreID, query = {}, options) {
-    return this._client.getAPIList(path`/vector_stores/${vectorStoreID}/files`, CursorPage, {
+    return this._client.getAPIList(path2`/vector_stores/${vectorStoreID}/files`, CursorPage, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -50017,7 +50227,7 @@ var Files3 = class extends APIResource {
    */
   delete(fileID, params, options) {
     const { vector_store_id } = params;
-    return this._client.delete(path`/vector_stores/${vector_store_id}/files/${fileID}`, {
+    return this._client.delete(path2`/vector_stores/${vector_store_id}/files/${fileID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -50092,7 +50302,7 @@ var Files3 = class extends APIResource {
    */
   content(fileID, params, options) {
     const { vector_store_id } = params;
-    return this._client.getAPIList(path`/vector_stores/${vector_store_id}/files/${fileID}/content`, Page, { ...options, headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]) });
+    return this._client.getAPIList(path2`/vector_stores/${vector_store_id}/files/${fileID}/content`, Page, { ...options, headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]) });
   }
 };
 
@@ -50117,7 +50327,7 @@ var VectorStores = class extends APIResource {
    * Retrieves a vector store.
    */
   retrieve(vectorStoreID, options) {
-    return this._client.get(path`/vector_stores/${vectorStoreID}`, {
+    return this._client.get(path2`/vector_stores/${vectorStoreID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -50126,7 +50336,7 @@ var VectorStores = class extends APIResource {
    * Modifies a vector store.
    */
   update(vectorStoreID, body, options) {
-    return this._client.post(path`/vector_stores/${vectorStoreID}`, {
+    return this._client.post(path2`/vector_stores/${vectorStoreID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -50146,7 +50356,7 @@ var VectorStores = class extends APIResource {
    * Delete a vector store.
    */
   delete(vectorStoreID, options) {
-    return this._client.delete(path`/vector_stores/${vectorStoreID}`, {
+    return this._client.delete(path2`/vector_stores/${vectorStoreID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -50156,7 +50366,7 @@ var VectorStores = class extends APIResource {
    * filter.
    */
   search(vectorStoreID, body, options) {
-    return this._client.getAPIList(path`/vector_stores/${vectorStoreID}/search`, Page, {
+    return this._client.getAPIList(path2`/vector_stores/${vectorStoreID}/search`, Page, {
       body,
       method: "post",
       ...options,
@@ -50179,7 +50389,7 @@ var Videos = class extends APIResource {
    * Fetch the latest metadata for a generated video.
    */
   retrieve(videoID, options) {
-    return this._client.get(path`/videos/${videoID}`, options);
+    return this._client.get(path2`/videos/${videoID}`, options);
   }
   /**
    * List recently generated videos for the current project.
@@ -50191,7 +50401,7 @@ var Videos = class extends APIResource {
    * Permanently delete a completed or failed video and its stored assets.
    */
   delete(videoID, options) {
-    return this._client.delete(path`/videos/${videoID}`, options);
+    return this._client.delete(path2`/videos/${videoID}`, options);
   }
   /**
    * Create a character from an uploaded video.
@@ -50205,7 +50415,7 @@ var Videos = class extends APIResource {
    * Streams the rendered video content for the specified video job.
    */
   downloadContent(videoID, query = {}, options) {
-    return this._client.get(path`/videos/${videoID}/content`, {
+    return this._client.get(path2`/videos/${videoID}/content`, {
       query,
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
@@ -50229,13 +50439,13 @@ var Videos = class extends APIResource {
    * Fetch a character.
    */
   getCharacter(characterID, options) {
-    return this._client.get(path`/videos/characters/${characterID}`, options);
+    return this._client.get(path2`/videos/characters/${characterID}`, options);
   }
   /**
    * Create a remix of a completed video using a refreshed prompt.
    */
   remix(videoID, body, options) {
-    return this._client.post(path`/videos/${videoID}/remix`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path2`/videos/${videoID}/remix`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
 };
 
@@ -50470,9 +50680,9 @@ var OpenAI = class {
     this.apiKey = token;
     return true;
   }
-  buildURL(path2, query, defaultBaseURL) {
+  buildURL(path3, query, defaultBaseURL) {
     const baseURL = !__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
-    const url = isAbsoluteURL(path2) ? new URL(path2) : new URL(baseURL + (baseURL.endsWith("/") && path2.startsWith("/") ? path2.slice(1) : path2));
+    const url = isAbsoluteURL(path3) ? new URL(path3) : new URL(baseURL + (baseURL.endsWith("/") && path3.startsWith("/") ? path3.slice(1) : path3));
     const defaultQuery = this.defaultQuery();
     const pathQuery = Object.fromEntries(url.searchParams);
     if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
@@ -50497,24 +50707,24 @@ var OpenAI = class {
    */
   async prepareRequest(request, { url, options }) {
   }
-  get(path2, opts) {
-    return this.methodRequest("get", path2, opts);
+  get(path3, opts) {
+    return this.methodRequest("get", path3, opts);
   }
-  post(path2, opts) {
-    return this.methodRequest("post", path2, opts);
+  post(path3, opts) {
+    return this.methodRequest("post", path3, opts);
   }
-  patch(path2, opts) {
-    return this.methodRequest("patch", path2, opts);
+  patch(path3, opts) {
+    return this.methodRequest("patch", path3, opts);
   }
-  put(path2, opts) {
-    return this.methodRequest("put", path2, opts);
+  put(path3, opts) {
+    return this.methodRequest("put", path3, opts);
   }
-  delete(path2, opts) {
-    return this.methodRequest("delete", path2, opts);
+  delete(path3, opts) {
+    return this.methodRequest("delete", path3, opts);
   }
-  methodRequest(method, path2, opts) {
+  methodRequest(method, path3, opts) {
     return this.request(Promise.resolve(opts).then((opts2) => {
-      return { method, path: path2, ...opts2 };
+      return { method, path: path3, ...opts2 };
     }));
   }
   request(options, remainingRetries = null) {
@@ -50632,8 +50842,8 @@ var OpenAI = class {
     }));
     return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
   }
-  getAPIList(path2, Page2, opts) {
-    return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path2, ...opts2 })) : { method: "get", path: path2, ...opts });
+  getAPIList(path3, Page2, opts) {
+    return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path3, ...opts2 })) : { method: "get", path: path3, ...opts });
   }
   requestAPIList(Page2, options) {
     const request = this.makeRequest(options, null, void 0);
@@ -50724,8 +50934,8 @@ var OpenAI = class {
   }
   async buildRequest(inputOptions, { retryCount = 0 } = {}) {
     const options = { ...inputOptions };
-    const { method, path: path2, query, defaultBaseURL } = options;
-    const url = this.buildURL(path2, query, defaultBaseURL);
+    const { method, path: path3, query, defaultBaseURL } = options;
+    const url = this.buildURL(path3, query, defaultBaseURL);
     if ("timeout" in options)
       validatePositiveInteger("timeout", options.timeout);
     options.timeout = options.timeout ?? this.timeout;
@@ -51463,7 +51673,7 @@ var WikiController = class {
     if (deleted > 0) graphCache.invalidate(domainId);
     return deleted;
   }
-  async deleteSource(domainId, path2) {
+  async deleteSource(domainId, path3) {
     const domains = await this.loadDomains();
     const entry = domains.find((d) => d.id === domainId);
     if (!entry) {
@@ -51481,16 +51691,16 @@ var WikiController = class {
     }
     const sourceStemToPath = /* @__PURE__ */ new Map();
     for (const f of collectMdInPaths(this.app.vault, entry.source_paths ?? [])) {
-      if (f.path !== path2) sourceStemToPath.set(sourceStem(f.path), f.path);
+      if (f.path !== path3) sourceStemToPath.set(sourceStem(f.path), f.path);
     }
     for (const sp of entry.source_paths ?? []) {
-      if (sp.endsWith(".md") && sp !== path2 && this.app.vault.getFileByPath(sp)) {
+      if (sp.endsWith(".md") && sp !== path3 && this.app.vault.getFileByPath(sp)) {
         sourceStemToPath.set(sourceStem(sp), sp);
       }
     }
-    const plan = computeDeletionPlan(path2, pages, sourceStemToPath);
-    new DeleteSourceModal(this.app, entry.id, path2, plan, () => {
-      void this.dispatch("delete", [path2, domainId], domainId).then(() => {
+    const plan = computeDeletionPlan(path3, pages, sourceStemToPath);
+    new DeleteSourceModal(this.app, entry.id, path3, plan, () => {
+      void this.dispatch("delete", [path3, domainId], domainId).then(() => {
         graphCache.invalidate(domainId);
       });
     }).open();
@@ -51515,9 +51725,9 @@ var WikiController = class {
     const rawAdapter = this.app.vault.adapter;
     const vault = this.app.vault;
     const adapter = Object.create(rawAdapter);
-    adapter.mkdir = async (path2) => {
+    adapter.mkdir = async (path3) => {
       try {
-        await vault.createFolder(path2);
+        await vault.createFolder(path3);
       } catch {
       }
     };
@@ -51551,9 +51761,9 @@ var WikiController = class {
     const s = resolveEffective(this.plugin.settings, local);
     let llm;
     if (s.backend === "claude-agent") {
-      const manifestDir = this.plugin.manifest.dir ?? (0, import_path_browserify7.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
+      const manifestDir = this.plugin.manifest.dir ?? (0, import_path_browserify9.join)(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
       const pluginDir = this.app.vault.adapter.getFullPath(manifestDir);
-      const tmpDir = (0, import_path_browserify7.join)(pluginDir, "tmp");
+      const tmpDir = (0, import_path_browserify9.join)(pluginDir, "tmp");
       const tmpDirRelative = tmpDir.startsWith(base) ? tmpDir.slice(base.length).replace(/^\//, "") : tmpDir;
       if (base) {
         try {
@@ -51629,12 +51839,12 @@ var WikiController = class {
       return;
     }
     const adapter = this.app.vault.adapter;
-    const path2 = `${this.pluginDir()}/agent.jsonl`;
+    const path3 = `${this.pluginDir()}/agent.jsonl`;
     try {
       const appendLine = async (record) => {
         const line = JSON.stringify(record) + "\n";
-        if (await adapter.exists(path2)) await adapter.append(path2, line);
-        else await adapter.write(path2, line);
+        if (await adapter.exists(path3)) await adapter.append(path3, line);
+        else await adapter.write(path3, line);
       };
       const envelope = {
         session: sessionId,
@@ -52044,7 +52254,7 @@ async function migrateIndexFormat(vault, domains) {
 var import_obsidian12 = require("obsidian");
 
 // src/strip-legacy-sections.ts
-var import_yaml2 = __toESM(require_dist(), 1);
+var import_yaml3 = __toESM(require_dist(), 1);
 var LEGACY_HEADINGS = /* @__PURE__ */ new Set([
   "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438",
   "## Related concepts",
@@ -52058,7 +52268,7 @@ var RELATED_HEADINGS = /* @__PURE__ */ new Set([
   "## Related concepts",
   "## Conceptos relacionados"
 ]);
-var FM_RE2 = /^---\n([\s\S]*?)\n---\n?/;
+var FM_RE3 = /^---\n([\s\S]*?)\n---\n?/;
 function isH2(line) {
   return /^##\s+/.test(line);
 }
@@ -52093,11 +52303,11 @@ function extractRelatedLinks(content) {
 }
 function addOutgoingLinks(content, links) {
   if (links.length === 0) return content;
-  const m = FM_RE2.exec(content);
+  const m = FM_RE3.exec(content);
   if (!m) return content;
   let fm;
   try {
-    const parsed = (0, import_yaml2.parse)(m[1]);
+    const parsed = (0, import_yaml3.parse)(m[1]);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return content;
     fm = parsed;
   } catch {
@@ -52109,7 +52319,7 @@ function addOutgoingLinks(content, links) {
   if (missing.length === 0) return content;
   fm.wiki_outgoing_links = [...existing, ...missing];
   return `---
-${(0, import_yaml2.stringify)(fm)}---
+${(0, import_yaml3.stringify)(fm)}---
 ${content.slice(m[0].length)}`;
 }
 

@@ -16,7 +16,8 @@ import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
 import { domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureWikiSources, stripInvalidWikiArticles, recoverSourceFrontmatter } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureWikiSources, stripInvalidWikiArticles, recoverSourceFrontmatter, parseTagsFromFm, normalizeTag } from "../utils/raw-frontmatter";
+import { collectDomainTags, renderTagRegistryBlock, thematicCategories, ensureEntityTypeTag, DEFAULT_MAX_TAG_CATEGORIES } from "../utils/tag-registry";
 import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation, deriveFallbackAnnotation, reconcileIndex } from "../wiki-index";
 import { pageId } from "../wiki-graph";
 import type { PageSimilarityService, ExtractedEntity } from "../page-similarity";
@@ -207,6 +208,11 @@ export async function* runIngest(
   for (const p of noSources) existingPages.delete(p);
 
   const sourceStems = await collectSourceStems(domain, vaultTools, vaultRoot);
+  const tagRegistry = await collectDomainTags(vaultTools, wikiVaultPath, domain.source_paths ?? []);
+  const entityTypeNames = (domain.entity_types ?? []).map((e) => e.type);
+  const maxTagCategories = domain.max_tag_categories ?? DEFAULT_MAX_TAG_CATEGORIES;
+  const tagRegistryBlock = renderTagRegistryBlock(tagRegistry, entityTypeNames, maxTagCategories);
+  const writtenTagCats = new Set<string>();
 
   // Pre-migration cleanup: delete legacy unprefixed wiki pages.
   if ((domain.pageNameVersion ?? 0) < 1) {
@@ -231,7 +237,7 @@ export async function* runIngest(
   const messages = buildIngestMessages(
     sourceVaultPath, sourceContent, domain, wikiVaultPath,
     existingPages, schemaContent, indexContent,
-    entitiesResult.value.entities, sourceStems,
+    entitiesResult.value.entities, sourceStems, tagRegistryBlock,
   );
 
   const inputChars = messages.reduce((s, m) => s + (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length), 0);
@@ -447,8 +453,18 @@ export async function* runIngest(
         details: pageWarnings,
       };
     }
+    const { content: entityTagged, added: entityTagAdded, tag: entityTag } =
+      ensureEntityTypeTag(repairedPage, page.path, domain);
+    if (entityTagAdded) {
+      yield {
+        kind: "info_text",
+        icon: "🏷️",
+        summary: `Entity tag added: ${page.path}`,
+        details: [`tags: + ${entityTag} (derived from wiki_subfolder)`],
+      };
+    }
     const sourceStem = sourceVaultPath.split("/").pop()!.replace(/\.md$/, "");
-    const { content: sourcedPage, injected } = ensureWikiSources(repairedPage, sourceStem);
+    const { content: sourcedPage, injected } = ensureWikiSources(entityTagged, sourceStem);
     if (injected) {
       yield {
         kind: "info_text", icon: "⚠️",
@@ -460,6 +476,7 @@ export async function* runIngest(
     try {
       await vaultTools.write(page.path, sourcedPage);
       written.push(page.path);
+      for (const t of parseTagsFromFm(sourcedPage)) writtenTagCats.add(t.split("/")[0]);
       yield { kind: "tool_result", ok: true };
 
       const relPath = page.path.startsWith(wikiVaultPath + "/")
@@ -481,6 +498,21 @@ export async function* runIngest(
     } catch (e) {
       yield { kind: "tool_result", ok: false, preview: (e as Error).message };
     }
+  }
+
+  // Soft category-limit check: warn once per run; tags are never dropped for limit reasons.
+  const entityCatSet = new Set(entityTypeNames.map((t) => normalizeTag(t)));
+  const thematicAfter = new Set(thematicCategories(tagRegistry, entityTypeNames));
+  for (const cat of writtenTagCats) {
+    if (!entityCatSet.has(cat)) thematicAfter.add(cat);
+  }
+  if (thematicAfter.size > maxTagCategories) {
+    yield {
+      kind: "info_text",
+      icon: "⚠️",
+      summary: `Tag category limit exceeded: ${thematicAfter.size}/${maxTagCategories} thematic categories`,
+      details: [...thematicAfter].sort(),
+    };
   }
 
   // === Delete loop (merge cleanup) ======================================
@@ -623,15 +655,21 @@ function buildIngestSummary(
   return `Источник «${src}» → домен «${domainId}»: ${countStr}${errStr}`;
 }
 
-export function detectDomain(absFilePath: string, domains: DomainEntry[], vaultRoot: string): DomainEntry | null {
+/** Match a file to a domain by source_paths prefix; null when nothing matches (no fallback). */
+export function detectDomainStrict(absFilePath: string, domains: DomainEntry[], vaultRoot: string): DomainEntry | null {
   for (const d of domains) {
     const matched = d.source_paths?.some((sp) => {
       const abs = isAbsolute(sp) ? sp : join(vaultRoot, sp);
-      return absFilePath.startsWith(abs);
+      const prefix = abs.endsWith("/") ? abs : abs + "/";
+      return absFilePath === abs || absFilePath.startsWith(prefix);
     });
     if (matched) return d;
   }
-  return domains[0] ?? null;
+  return null;
+}
+
+export function detectDomain(absFilePath: string, domains: DomainEntry[], vaultRoot: string): DomainEntry | null {
+  return detectDomainStrict(absFilePath, domains, vaultRoot) ?? domains[0] ?? null;
 }
 
 export function parseJsonPages(text: string): Array<{ path: string; content: string; annotation?: string }> {
@@ -768,6 +806,7 @@ function buildIngestMessages(
   indexContent: string,
   entities: ExtractedEntity[],
   sourceStems: Set<string> = new Set(),
+  tagRegistryBlock: string = "",
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const existing = existingPages.size > 0
     ? [...existingPages.entries()].map(([p, c]) => `${p}:\n${c}`).join("\n\n")
@@ -821,6 +860,7 @@ function buildIngestMessages(
         sourceContent,
         ``,
         `Existing wiki pages:\n${existing}`,
+        tagRegistryBlock ? `\n${tagRegistryBlock}` : "",
         entitiesBlock,
         indexContent ? `\nWiki index (_index.md):\n${indexContent}` : "",
       ].filter(Boolean).join("\n"),

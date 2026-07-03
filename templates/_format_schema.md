@@ -4,7 +4,7 @@
 
 | Field | Rule |
 |------|---------|
-| `tags` | YAML list: `[category/subcategory, domain/topic]`. Hierarchy via `/`, lowercase, no spaces, no `#`. Reuse tags from existing pages; create new ones following the same scheme. Only when a thematic classification exists. |
+| `tags` | YAML list: `[category/subcategory, domain/topic]`. Hierarchy via `/`, lowercase, no spaces, no `#`. When the input contains an EXISTING DOMAIN TAGS block, reuse tags strictly from it; add a new tag only when nothing there fits, and never start a new top-level category when the block says "reuse only". Without the block, keep the note's own valid tags. Only when a thematic classification exists. |
 | `aliases` | Abbreviations, synonyms, English variants |
 | `created` | YYYY-MM-DD when present in the source or at first formatting |
 | `updated` | YYYY-MM-DD the current formatting date |
