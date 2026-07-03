@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.194 — 2026-07-03
+
+### Новое
+- feat(format): resolve domain and inject tag registry block into format context
+- feat(ingest): inject domain tag registry, sync entity tags, soft category limit
+- feat(tags): domain tag registry module and max_tag_categories config
+- feat(tags): normalize near-valid tags before TAG_RE validation
+
+### Исправления
+- fix(tags): format-prompt tag-block guard, file dedupe, strict domain path boundary
+
+---
+
 ## 0.1.193 — 2026-06-30
 
 ### Новое
