@@ -39,14 +39,14 @@ export async function collectDomainTags(
       : (sp.endsWith("/") ? sp.slice(0, -1) : sp);
     if (vaultPath) dirs.push(vaultPath);
   }
-  const files: string[] = [];
+  const files = new Set<string>();
   for (const dir of dirs) {
     const listed = await vault.listFiles(dir).catch(() => [] as string[]);
     for (const f of listed) {
-      if (f.endsWith(".md") && !f.includes("/_config/")) files.push(f);
+      if (f.endsWith(".md") && !f.includes("/_config/")) files.add(f);
     }
   }
-  const contents = await vault.readAll(files);
+  const contents = await vault.readAll([...files]);
   const categories = new Map<string, Map<string, number>>();
   let total = 0;
   for (const content of contents.values()) {

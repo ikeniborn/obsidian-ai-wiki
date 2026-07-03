@@ -134,5 +134,9 @@ check("prefix tag counts as present", !r2.added);
 const r3 = ensureEntityTypeTag(noTags, "!Wiki/os/unknown/wiki_os_z.md", domain);
 check("unknown subfolder is a no-op", !r3.added && r3.tag === null);
 
+const overlapped = await collectDomainTags(vault, "!Wiki/os", ["notes/os", "notes"]);
+check("overlapping source paths do not double-count",
+  overlapped.categories.get("topic-ai")?.get("topic-ai/rag") === 2);
+
 console.log(failed === 0 ? `OK — ${passed} passed, 0 failed` : `${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

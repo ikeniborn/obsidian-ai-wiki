@@ -39264,14 +39264,14 @@ async function collectDomainTags(vault, wikiFolder, sourcePaths) {
     const vaultPath = import_path_browserify5.default.isAbsolute(sp) ? vault.toVaultPath(sp) ?? "" : sp.endsWith("/") ? sp.slice(0, -1) : sp;
     if (vaultPath) dirs.push(vaultPath);
   }
-  const files = [];
+  const files = /* @__PURE__ */ new Set();
   for (const dir of dirs) {
     const listed = await vault.listFiles(dir).catch(() => []);
     for (const f of listed) {
-      if (f.endsWith(".md") && !f.includes("/_config/")) files.push(f);
+      if (f.endsWith(".md") && !f.includes("/_config/")) files.add(f);
     }
   }
-  const contents = await vault.readAll(files);
+  const contents = await vault.readAll([...files]);
   const categories = /* @__PURE__ */ new Map();
   let total = 0;
   for (const content of contents.values()) {
@@ -40316,7 +40316,8 @@ function detectDomainStrict(absFilePath, domains, vaultRoot) {
   for (const d of domains) {
     const matched = d.source_paths?.some((sp) => {
       const abs = (0, import_path_browserify6.isAbsolute)(sp) ? sp : (0, import_path_browserify6.join)(vaultRoot, sp);
-      return absFilePath.startsWith(abs);
+      const prefix = abs.endsWith("/") ? abs : abs + "/";
+      return absFilePath === abs || absFilePath.startsWith(prefix);
     });
     if (matched) return d;
   }
@@ -42596,7 +42597,7 @@ async function ensureRootFiles(vaultTools, wikiRoot) {
 }
 
 // prompts/format.md
-var format_default = 'You are an editor of a markdown page outside the wiki knowledge base.\n\nYour task is to analyze the page and propose formatting according to the rules below.\n\nHARD RULES:\n- Do not add or remove facts, names, numbers, URLs.\n- Do not distort the meaning. Rephrasing for clarity is allowed.\n- Describe all changes in the report field.\n- Obsidian embeds (`![[path]]`, `![[path|alias]]`) \u2014 copy exactly as they are. Do not convert them to standard Markdown (`![alt](path)`).\n- If the user message contains an "ATTACHMENT DESCRIPTIONS" block: integrate each description IMMEDIATELY BELOW the corresponding `![[path]]` embed in formatted. Keep the description\'s structural form (table / list / mermaid / code) as is \u2014 do not wrap it in a blockquote, do not add a `[Vision]` marker, do not quote the `![[path]]` heading inside the description. If a description is already present in the source (old format `> *[Vision] ...*` or a duplicate) \u2014 remove the old variant and keep only the structured version.\n- If the source frontmatter is broken (missing/duplicated `---` fences, invalid YAML, keys outside a fenced block), reconstruct a single valid YAML frontmatter block, preserving real field values (the `wiki_*` fields are excluded \u2014 they are restored automatically). Do not drop existing field values.\n\nFORMATTING RULES:\n{{format_schema}}\n\nVISION: {{has_vision}}\n- When has_vision=true: extract the content of diagrams and images, create tables or mermaid blocks below the image. Keep the image itself.\n- When has_vision=false: work only with alt text and captions, do not invent new information.\n\nReturn the answer strictly in the following format. No text before the first `<<<REPORT>>>` marker.\n\n<<<REPORT>>>\n<markdown list of changes>\n<<<FORMATTED>>>\n<full formatted markdown, starting from the frontmatter --->\n<<<END>>>\n\n{{has_vision_descriptions_block}}\n\nRequirements:\n- Each `<<<...>>>` marker on its own line.\n- After `<<<FORMATTED>>>` comes the frontmatter (`---`).\n- `<<<END>>>` \u2014 the last line of the answer.\n- If context is insufficient: shorten the report, not formatted.\n';
+var format_default = 'You are an editor of a markdown page outside the wiki knowledge base.\n\nYour task is to analyze the page and propose formatting according to the rules below.\n\nHARD RULES:\n- Do not add or remove facts, names, numbers, URLs.\n- Do not distort the meaning. Rephrasing for clarity is allowed.\n- Describe all changes in the report field.\n- Obsidian embeds (`![[path]]`, `![[path|alias]]`) \u2014 copy exactly as they are. Do not convert them to standard Markdown (`![alt](path)`).\n- If the user message contains an "ATTACHMENT DESCRIPTIONS" block: integrate each description IMMEDIATELY BELOW the corresponding `![[path]]` embed in formatted. Keep the description\'s structural form (table / list / mermaid / code) as is \u2014 do not wrap it in a blockquote, do not add a `[Vision]` marker, do not quote the `![[path]]` heading inside the description. If a description is already present in the source (old format `> *[Vision] ...*` or a duplicate) \u2014 remove the old variant and keep only the structured version.\n- If the source frontmatter is broken (missing/duplicated `---` fences, invalid YAML, keys outside a fenced block), reconstruct a single valid YAML frontmatter block, preserving real field values (the `wiki_*` fields are excluded \u2014 they are restored automatically). Do not drop existing field values.\n- If the user message contains an EXISTING DOMAIN TAGS block (after the note content): use it ONLY to choose the frontmatter `tags` values. It is NOT part of the note \u2014 never include it or its lines in the formatted output.\n\nFORMATTING RULES:\n{{format_schema}}\n\nVISION: {{has_vision}}\n- When has_vision=true: extract the content of diagrams and images, create tables or mermaid blocks below the image. Keep the image itself.\n- When has_vision=false: work only with alt text and captions, do not invent new information.\n\nReturn the answer strictly in the following format. No text before the first `<<<REPORT>>>` marker.\n\n<<<REPORT>>>\n<markdown list of changes>\n<<<FORMATTED>>>\n<full formatted markdown, starting from the frontmatter --->\n<<<END>>>\n\n{{has_vision_descriptions_block}}\n\nRequirements:\n- Each `<<<...>>>` marker on its own line.\n- After `<<<FORMATTED>>>` comes the frontmatter (`---`).\n- `<<<END>>>` \u2014 the last line of the answer.\n- If context is insufficient: shorten the report, not formatted.\n';
 
 // prompts/format-restore-tokens.md
 var format_restore_tokens_default = "RESTORE TOKENS: the following values from the original are missing in the formatted text. Return the full answer using the markers <<<REPORT>>>...<<<END>>> where formatted contains all the listed tokens.\nMissing: {{tokens}}";

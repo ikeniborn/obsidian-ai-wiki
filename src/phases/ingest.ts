@@ -660,7 +660,8 @@ export function detectDomainStrict(absFilePath: string, domains: DomainEntry[], 
   for (const d of domains) {
     const matched = d.source_paths?.some((sp) => {
       const abs = isAbsolute(sp) ? sp : join(vaultRoot, sp);
-      return absFilePath.startsWith(abs);
+      const prefix = abs.endsWith("/") ? abs : abs + "/";
+      return absFilePath === abs || absFilePath.startsWith(prefix);
     });
     if (matched) return d;
   }
