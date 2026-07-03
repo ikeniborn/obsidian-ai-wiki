@@ -72,8 +72,8 @@ body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); bord
 <input type="checkbox" id="theme-toggle" hidden>
 <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
 <input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
-<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
-<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden checked>
 <label for="theme-toggle" class="theme-btn" title="Тёмная/светлая тема">🌙 / ☀️</label>
 <header>
   <h1>Цепочка IDD→SDD: tag-standardization</h1>
@@ -376,7 +376,45 @@ body:has(#tab-result:checked) label[for="tab-result"]{ color:var(--accent); bord
 
 <!-- TAB:result START -->
 <section class="tab-pane" id="pane-result">
-  <p class="note">Этап ещё не проверен.</p>
+
+  <h2>1. Резюме сверки</h2>
+  <p class="sub">Цепочка: intent = <code>null</code> · spec = <code>2026-07-03-tag-standardization-design.md</code> (OK) ·
+     plan = <code>2026-07-03-tag-standardization.md</code> (OK, plan_hash <code>c78e715471437376</code>).<br>
+     База диффа: <code>60d16bb..110b7c7</code> (ветка <code>dev-tag-standardization</code>, dist/ исключён): 12 файлов, +459/−23.
+     Исполнение: Subagent-Driven Development — 5 задач, ревью после каждой, финальное ревью всей ветки (READY-TO-MERGE: YES) + один fix-коммит по его находкам.</p>
+
+  <h2>2. Результаты проверки</h2>
+  <h3>Покрытие шагов плана: 5/5 DONE</h3>
+  <table>
+    <thead><tr><th>Задача</th><th>Статус</th><th>Свидетельство в диффе</th></tr></thead>
+    <tbody>
+      <tr><td>T1 — normalizeTag + list-tags</td><td><span class="badge b-ok">DONE</span></td><td><code>ad6af49</code>: raw-frontmatter.ts (экспорты TAG_RE/normalizeTag/parseTagsFromFm, отдельный case list-tags), eval/tag-registry/run.ts (12 checks)</td></tr>
+      <tr><td>T2 — tag-registry + config</td><td><span class="badge b-ok">DONE</span></td><td><code>f8b73db</code>: src/utils/tag-registry.ts (+153), domain.ts (max_tag_categories), eval 30 checks</td></tr>
+      <tr><td>T3 — ingest-интеграция</td><td><span class="badge b-ok">DONE</span></td><td><code>38c9476</code>: ingest.ts (реестр, tagRegistryBlock, авто-тег, мягкий лимит), prompts/ingest.md (правило тегов)</td></tr>
+      <tr><td>T4 — format-интеграция</td><td><span class="badge b-ok">DONE</span></td><td><code>a883641</code>: detectDomainStrict, agent-runner (резолв домена), format.ts (formatDomain + блок), _format_schema.md</td></tr>
+      <tr><td>T5 — документация</td><td><span class="badge b-ok">DONE</span></td><td><code>afb0562</code>: README.md + docs/README.ru.md (строки Ingest/Format); iwiki-страница <code>tagging</code> + overview (вне git-диффа репо, wiki_lint чист)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Покрытие спеки</h3>
+  <p>Требования: <b>5/5</b> (Part 1→T2, Part 2→T3, Part 3→T4, Part 4→T1, Part 5→T2).
+     Success Criteria: SC-1 (lint+build) <span class="badge b-ok">выполнено</span> (+ eval 31/31);
+     SC-2/SC-3/SC-4 — ручной smoke в живом vault, <span class="badge b-warn">отложено пользователю</span>.</p>
+
+  <h3>Findings</h3>
+  <table>
+    <thead><tr><th>severity</th><th>Шаг / область</th><th>Plan / Diff / Fix</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge b-info">INFO</span></td><td>EXCESS: <code>chore(build)</code> + <code>110b7c7</code></td><td>Вне шагов плана: пересборка бандла (конвенция репо) и фиксы финального ревью (guard в prompts/format.md, Set-дедуп файлов, граница пути в detectDomainStrict). Обоснованы, приняты.</td></tr>
+      <tr><td><span class="badge b-info">INFO</span></td><td>Final verification (smoke)</td><td>SC-2..SC-4 требуют живой vault + LLM-эндпойнт — недоступно в сессии; выполнить после merge в среде пользователя.</td></tr>
+    </tbody>
+  </table>
+
+  <p class="note"><b>Сводка.</b> MISSING: 0 · PARTIAL: 0 · CRITICAL: 0 · WARNING: 0 · INFO: 2. &nbsp;
+     <b>Вердикт: <span class="badge b-ok">OK</span></b><br>
+     Финальное ревью ветки (модель fable): 0 Critical, 1 Important (закрыт fix-коммитом), triage M2–M8 — fine-as-is.</p>
+  <p class="sub"><b>Цепочка:</b> intent → spec → plan → <b>result</b>: <code>null</code> → OK → OK → <b>OK</b>.</p>
+
 </section>
 <!-- TAB:result END -->
 
