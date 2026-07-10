@@ -271,7 +271,7 @@ export class ClaudeCliClient implements LlmClient {
       object: "chat.completion",
       model: this.cfg.model || "claude",
       created: 0,
-      choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop", logprobs: null }],
+      choices: [{ index: 0, message: { role: "assistant", content: text, refusal: null }, finish_reason: "stop", logprobs: null }],
       usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
     };
   }

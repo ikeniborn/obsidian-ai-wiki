@@ -599,7 +599,7 @@ export class WikiController {
     if (s.backend === "claude-agent") {
       const manifestDir = this.plugin.manifest.dir
         ?? join(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
-      const pluginDir = (this.app.vault.adapter as { getFullPath: (p: string) => string })
+      const pluginDir = (this.app.vault.adapter as unknown as { getFullPath: (p: string) => string })
         .getFullPath(manifestDir);
       const tmpDir = join(pluginDir, "tmp");
 

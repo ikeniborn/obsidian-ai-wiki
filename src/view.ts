@@ -123,7 +123,7 @@ export class LlmWikiView extends ItemView {
   private chatBodyEl: HTMLElement | null = null;
   private currentChatBubble: HTMLElement | null = null;
   private currentChatBuffer = "";
-  private chatTickHandle: ReturnType<typeof window.setTimeout> | null = null;
+  private chatTickHandle: number | null = null;
   private chatStartTs = 0;
   private lastUserMessage = "";
   private lastRunId: string | null = null;
@@ -140,14 +140,14 @@ export class LlmWikiView extends ItemView {
   private progressTotal = 0;
   private progressDone = 0;
   private progressPhaseEl: HTMLElement | null = null;
-  private tickHandle: ReturnType<typeof window.setTimeout> | null = null;
+  private tickHandle: number | null = null;
   private currentToolStep: HTMLElement | null = null;
   private currentToolStartedAt = 0;
   private reasoningBlock: HTMLElement | null = null;
   private reasoningBuffer = "";
   private reasoningRafHandle: number | null = null;
   private waitingStep: HTMLElement | null = null;
-  private waitingTickHandle: ReturnType<typeof window.setTimeout> | null = null;
+  private waitingTickHandle: number | null = null;
   private waitingStartedAt = 0;
   private liveStatusSection: HTMLElement | null = null;
   private liveStatusIconEl: HTMLElement | null = null;
@@ -166,7 +166,7 @@ export class LlmWikiView extends ItemView {
   getDisplayText(): string { return "AIWiki"; }
   getIcon(): string { return "brain-circuit"; }
 
-  onOpen(): void {
+  async onOpen(): Promise<void> {
     const root = this.containerEl.children[1];
     root.empty();
     root.addClass("ai-wiki-view");
@@ -269,7 +269,7 @@ export class LlmWikiView extends ItemView {
     }
   }
 
-  onClose(): void {
+  async onClose(): Promise<void> {
     if (this.tickHandle !== null) window.clearTimeout(this.tickHandle);
     if (this.chatTickHandle !== null) window.clearTimeout(this.chatTickHandle);
     this.stopWaiting();
@@ -1444,7 +1444,7 @@ class FileContentModal extends Modal {
     const btnRow = this.modalEl.createDiv({ cls: "modal-button-container" });
     const openBtn = btnRow.createEl("button", { text: "Open in system editor" });
     openBtn.addEventListener("click", () => {
-      const basePath = (this.app.vault.adapter as Record<string, unknown>)["basePath"] as string ?? "";
+      const basePath = (this.app.vault.adapter as unknown as Record<string, unknown>)["basePath"] as string ?? "";
       const absPath = basePath ? `${basePath}/${this.filePath}` : this.filePath;
       // eslint-disable-next-line @typescript-eslint/no-require-imports -- electron shell API only available via require() in Obsidian desktop
       (require("electron") as { shell: { openPath(p: string): void } }).shell.openPath(absPath);

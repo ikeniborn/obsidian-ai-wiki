@@ -29205,7 +29205,7 @@ ${stderr()}` : ""}`);
       object: "chat.completion",
       model: this.cfg.model || "claude",
       created: 0,
-      choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop", logprobs: null }],
+      choices: [{ index: 0, message: { role: "assistant", content: text, refusal: null }, finish_reason: "stop", logprobs: null }],
       usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
     };
   }
@@ -32256,7 +32256,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
   getIcon() {
     return "brain-circuit";
   }
-  onOpen() {
+  async onOpen() {
     const root = this.containerEl.children[1];
     root.empty();
     root.addClass("ai-wiki-view");
@@ -32343,7 +32343,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       this.setRunning(ongoing.op, ongoing.args);
     }
   }
-  onClose() {
+  async onClose() {
     if (this.tickHandle !== null) window.clearTimeout(this.tickHandle);
     if (this.chatTickHandle !== null) window.clearTimeout(this.chatTickHandle);
     this.stopWaiting();
