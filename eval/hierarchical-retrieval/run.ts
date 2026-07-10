@@ -1,19 +1,9 @@
 import "./register";
 import { createRequire } from "node:module";
-import type { ChunkingConfig, EmbeddingCacheFile } from "../../src/page-similarity";
+import type { ChunkingConfig, EmbeddingCacheFile, SelectedChunk } from "../../src/page-similarity";
 import type { DomainEntry } from "../../src/domain";
 import type { LlmClient, RunEvent } from "../../src/types";
 import type { VaultTools } from "../../src/vault-tools";
-
-type SelectedChunk = {
-  articleId: string;
-  path: string;
-  heading: string;
-  body: string;
-  score: number;
-  source: "seed" | "graph";
-  ordinal: number;
-};
 
 const req = createRequire(import.meta.url);
 const {
