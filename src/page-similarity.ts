@@ -35,6 +35,8 @@ export interface EmbeddingChunk {
   vector: string;  // base64 Float32Array
   hash: string;
   kind: "summary" | "section";
+  heading?: string;
+  ordinal?: number;
 }
 
 export interface EmbeddingCacheEntry {
@@ -42,7 +44,7 @@ export interface EmbeddingCacheEntry {
 }
 
 export interface EmbeddingCacheFile {
-  version: 2;
+  version: 3;
   model: string;
   dimensions: number;
   entries: Record<string, EmbeddingCacheEntry>;
@@ -168,6 +170,9 @@ export interface ChunkInput {
   kind: "summary" | "section";
   embedText: string;
   hash: string;
+  heading?: string;
+  window?: string;
+  ordinal?: number;
 }
 
 export function buildChunkInputs(
@@ -176,12 +181,19 @@ export function buildChunkInputs(
   chunking: ChunkingConfig,
 ): ChunkInput[] {
   const inputs: ChunkInput[] = [
-    { kind: "summary", embedText: annotation, hash: annotationHash(annotation) },
+    { kind: "summary", embedText: annotation, hash: annotationHash(`summary\n${annotation}`) },
   ];
-  for (const { heading, window } of splitSections(body, chunking)) {
-    const embedText = `${annotation}\n\n${heading}\n${window}`;
-    inputs.push({ kind: "section", embedText, hash: annotationHash(embedText) });
-  }
+  splitSections(body, chunking).forEach(({ heading, window }, ordinal) => {
+    const embedText = `${heading}\n${window}`.trim();
+    inputs.push({
+      kind: "section",
+      embedText,
+      hash: annotationHash(`section\n${ordinal}\n${embedText}`),
+      heading,
+      window,
+      ordinal,
+    });
+  });
   return inputs;
 }
 
@@ -790,7 +802,7 @@ export class PageSimilarityService {
     try {
       const raw = await vaultTools.read(domainEmbeddingsPath(domainRoot));
       const parsed = JSON.parse(raw) as EmbeddingCacheFile;
-      if (parsed.version === 2 && parsed.model === model && parsed.dimensions === dimensions) {
+      if (parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions) {
         this.cache = parsed;
       }
     } catch { /* cache missing or unreadable — stay null */ }
@@ -814,11 +826,11 @@ export class PageSimilarityService {
     try {
       const parsed = JSON.parse(await vaultTools.read(cachePath)) as EmbeddingCacheFile;
       cacheFile =
-        parsed.version === 2 && parsed.model === model && parsed.dimensions === dimensions
+        parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions
           ? parsed
-          : { version: 2, model, dimensions, entries: {} };
+          : { version: 3, model, dimensions, entries: {} };
     } catch {
-      cacheFile = { version: 2, model, dimensions, entries: {} };
+      cacheFile = { version: 3, model, dimensions, entries: {} };
     }
 
     // Build the desired chunk set per pid, reusing cached vectors whose hash matches.
@@ -840,17 +852,19 @@ export class PageSimilarityService {
       const body = pageBodies.get(pid) ?? "";
       const inputs = buildChunkInputs(annotation, body, chunking);
       const oldByHash = new Map(
-        (cacheFile.entries[pid]?.chunks ?? []).map((c) => [c.hash, c.vector]),
+        (cacheFile.entries[pid]?.chunks ?? []).map((chunk) => [chunk.hash, chunk]),
       );
       const chunks: EmbeddingChunk[] = [];
-      for (const { kind, embedText, hash } of inputs) {
+      for (const { kind, embedText, hash, heading, ordinal } of inputs) {
         const reuse = oldByHash.get(hash);
-        if (reuse !== undefined) {
-          chunks.push({ vector: reuse, hash, kind });
-        } else {
-          pending.push({ pid, idx: chunks.length, embedText });
-          chunks.push({ vector: "", hash, kind });
-        }
+        chunks.push({
+          vector: reuse?.vector ?? "",
+          hash,
+          kind,
+          heading,
+          ordinal,
+        });
+        if (reuse === undefined) pending.push({ pid, idx: chunks.length - 1, embedText });
       }
       if ((cacheFile.entries[pid]?.chunks.length ?? 0) !== chunks.length) changed = true;
       desired.set(pid, chunks);
