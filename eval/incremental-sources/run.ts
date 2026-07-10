@@ -115,6 +115,12 @@ check("pp multiple entries",
   JSON.stringify(parsePageSources('---\nresource:\n  - "a"\n  - "b"\n---\nx')) === JSON.stringify(["a","b"]));
 check("pp no resource → []",
   parsePageSources('---\ntitle: x\n---\nbody').length === 0);
+check("pp flow-form resource: [\"stem\"] → bare stem (ingest prompt shape)",
+  JSON.stringify(parsePageSources('---\nresource: ["alpha"]\n---\nx')) === JSON.stringify(["alpha"]));
+check("pp flow-form multiple entries",
+  JSON.stringify(parsePageSources('---\nresource: ["a", "b"]\n---\nx')) === JSON.stringify(["a","b"]));
+check("pp block-form single-quoted stem (equivalence check)",
+  JSON.stringify(parsePageSources("---\nresource:\n  - 'alpha'\n---\nx")) === JSON.stringify(["alpha"]));
 
 console.log(`\n========================================`);
 console.log(`TOTAL: ${pass} passed, ${fail} failed`);

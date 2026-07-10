@@ -1,5 +1,6 @@
 import type { DomainEntry } from "./domain";
 import { isWikiArticlePath } from "./wiki-path";
+import { parseResourceFromFm } from "./utils/raw-frontmatter";
 
 export interface DeletionPlan {
   /** sole-source wiki page vault-paths (the deleted source is their only resource entry) */
@@ -21,17 +22,13 @@ export function stripSourceToken(token: string): string {
   return token.trim().replace(/^["']|["']$/g, "").trim();
 }
 
-/** Parse the resource list from a wiki page body into bare tokens. */
+/**
+ * Parse the resource list from a wiki page body into bare tokens. Delegates to a real
+ * YAML parse (parseResourceFromFm) so both the block form (`resource:\n  - stem`) and
+ * the flow form (`resource: ["stem"]`, as emitted by the ingest prompt) are read alike.
+ */
 function wikiSourceTokens(content: string): string[] {
-  const fm = /^---\n([\s\S]*?)\n---/.exec(content);
-  if (!fm) return [];
-  const m = /resource:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fm[1]);
-  if (!m) return [];
-  return m[1]
-    .split("\n")
-    .map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim())
-    .filter(Boolean)
-    .map(stripSourceToken);
+  return parseResourceFromFm(content);
 }
 
 /**
