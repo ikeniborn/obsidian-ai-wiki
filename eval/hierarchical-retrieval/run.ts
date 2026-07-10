@@ -687,7 +687,11 @@ async function main(): Promise<void> {
   section("query flows render chunks");
   {
     const files = {
-      "!Wiki/work/_config/_index.md": "- [[wiki_seed]] - seed description neural retrieval",
+      "!Wiki/work/_config/_index.md": [
+        "- [[wiki_seed]] - seed description neural retrieval",
+        "- [[wiki_graph_relevant]] - selected relevant annotation neural chunk",
+        "- [[wiki_graph_noise]] - SECRET_UNSELECTED_INDEX_DESCRIPTION",
+      ].join("\n"),
       "!Wiki/work/Entity/wiki_seed.md": [
         "---",
         "description: seed description neural retrieval",
@@ -698,8 +702,8 @@ async function main(): Promise<void> {
         "neural retrieval seed body",
         "[[wiki_graph_relevant]] [[wiki_graph_noise]]",
       ].join("\n"),
-      "!Wiki/work/Entity/wiki_graph_relevant.md": "# Relevant\n\n## Evidence\nneural chunk retrieval evidence",
-      "!Wiki/work/Entity/wiki_graph_noise.md": "# Noise\n\n## Other\nunrelated cooking notes",
+      "!Wiki/work/Entity/wiki_graph_relevant.md": "---\ndescription: selected relevant annotation neural chunk\n---\n# Relevant\n\n## Evidence\nneural chunk retrieval evidence",
+      "!Wiki/work/Entity/wiki_graph_noise.md": "---\ndescription: SECRET_UNSELECTED_INDEX_DESCRIPTION\n---\n# Noise\n\n## Other\nunrelated cooking notes",
     };
     const vault = fakeVault(files);
     const { llm, prompts } = fakeLlm("Answer about [[wiki_graph_relevant]].");
@@ -714,6 +718,8 @@ async function main(): Promise<void> {
     check("single-domain emits chunksSelected", typeof queryStats?.chunksSelected === "number" && queryStats.chunksSelected > 0);
     check("single-domain context includes chunk heading", promptText.includes("heading: ## Evidence") || promptText.includes("heading: ## Main"));
     check("single-domain context excludes graph noise", !promptText.includes("unrelated cooking notes"));
+    check("single-domain index excludes unselected annotations", !promptText.includes("SECRET_UNSELECTED_INDEX_DESCRIPTION"));
+    check("single-domain index keeps selected annotations", promptText.includes("wiki_graph_relevant: selected relevant annotation neural chunk"));
     check("single-domain eval has found_chunks", Array.isArray(evalMeta?.fields.found_chunks));
 
     const outOfContextAnswer = await drive(runQuery(

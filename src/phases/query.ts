@@ -282,7 +282,6 @@ export async function* runQuery(
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
   outputTokens += cand.seedOutputTokens;
 
-  const indexContent = cand.indexContent;
   const seeds = cand.seeds;
   const seedScores = cand.seedScores;
   const expandedScores = cand.expandedScores;
@@ -310,6 +309,15 @@ export async function* runQuery(
   }
   const contextBlock = renderContextChunks(selectedChunks);
   const finalSelectedIds = new Set(selectedChunks.map((chunk) => chunk.articleId));
+  const selectedIndexLines = [...finalSelectedIds]
+    .map((id) => {
+      const annotation = cand.annotations.get(id);
+      return annotation ? `${id}: ${annotation}` : undefined;
+    })
+    .filter((line): line is string => line !== undefined);
+  const indexBlock = selectedIndexLines.length > 0
+    ? `\nWiki index (selected candidates):\n${selectedIndexLines.join("\n")}`
+    : "";
 
   const entityTypesBlock = buildEntityTypesBlock(domain);
 
@@ -325,7 +333,7 @@ export async function* runQuery(
     domain_name: domain.name,
     available_links_block: availableLinksBlock,
     entity_types_block: entityTypesBlock,
-    index_block: indexContent ? `\nWiki index (_index.md):\n${indexContent}` : "",
+    index_block: indexBlock,
   });
 
   const seedCount = [...finalSelectedIds].filter((id) => seedSet.has(id)).length;
