@@ -75,7 +75,7 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
 <header>
   <label for="theme-toggle" class="theme-btn" title="Тема">🌙 / ☀️</label>
   <h1>OKF Integration — цепочка IDD→SDD</h1>
-  <span class="sub">topic: okf-integration · spec 98211f063cd430b9 · plan 8d232a35628a9736</span>
+  <span class="sub">topic: okf-integration · spec 16e312ee9f3ff1d4 · plan dce2aad09004e4ef</span>
 </header>
 <nav class="chain-tabs">
   <label for="tab-intent">Intent</label>
@@ -106,7 +106,8 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
       <tr><td>Export</td><td>Offline TS-порт iwiki <code>export.py</code>; near-passthrough frontmatter + вывод <code>title</code> + kebab-теги (<code>a/b→a-b</code>) + <code>[[wikilinks]]→[md](links)</code> + генерация <code>index.md</code>/<code>log.md</code>; dest-модалка, дефолт вне vault.</td></tr>
       <tr><td><b>Overview single source</b></td><td><code>description</code> (frontmatter) = единственный overview (~600-800, verbatim). <code>_index.md</code> генерится из descriptions. Векторы/чанки/Jaccard/seeds читают <code>description</code>. Intro-абзац тела убран. Миграция бэкфиллит description из <code>_index.md</code>.</td></tr>
       <tr><td><b>Link rewrite (OKF)</b></td><td>OKF v0.1 намеренно требует <code>[md](links)</code>, НЕ <code>[[wikilinks]]</code> (сверено со спекой Google). На диске <code>[[…]]</code>, rewrite только в bundle — обязателен, не опционален.</td></tr>
-      <tr><td><b>Success Criteria</b></td><td>Wiki-страницы OKF-native на диске; overview в одном месте (description) кормит retrieval; export даёт conformant bundle offline; миграция идемпотентна; свежесть источников не нарушена.</td></tr>
+      <tr><td><b>Граф в теле (rev)</b></td><td>outgoing/external ссылки убраны из frontmatter → body-разделы <code>## Related</code> (<code>[[link]]</code>) + <code>## External links</code> (<code>[text](url)</code>), OKF-native. Исключены из векторов/индекса. <code>resource</code> = plain stem (не <code>[[]]</code>), staleness. Frontmatter: type/description/resource/timestamp/tags/status.</td></tr>
+      <tr><td><b>Success Criteria</b></td><td>Wiki-страницы OKF-native на диске; граф из body-ссылок; overview (description) кормит retrieval; export даёт conformant bundle offline; миграция идемпотентна; свежесть источников не нарушена.</td></tr>
     </tbody>
   </table>
 
@@ -188,7 +189,7 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
   <h3>Находки</h3>
   <p class="note">Находок нет (0 CRITICAL open, 0 WARNING open).</p>
   <h3>Вердикт</h3>
-  <p><span class="badge b-ok">OK</span> — spec_hash <code>98211f063cd430b9</code>.</p>
+  <p><span class="badge b-ok">OK</span> — spec_hash <code>16e312ee9f3ff1d4</code> (rev: граф в теле, plain resource).</p>
   <div class="legend">Цепочка: intent <span class="badge b-na">n/a</span> → spec <span class="badge b-ok">OK</span> → plan — → result —</div>
 
 </section>
@@ -272,7 +273,7 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
   <h3>Находки</h3>
   <p class="note">Находок нет (0 CRITICAL open, 0 WARNING open). T8/T9 верифицируются ручным desktop-smoke (node:fs + Obsidian UI не покрываются eval).</p>
   <h3>Вердикт</h3>
-  <p><span class="badge b-ok">OK</span> — plan_hash <code>8d232a35628a9736</code>. 10 задач (T1–T5, T5b, T6–T9).</p>
+  <p><span class="badge b-ok">OK</span> — plan_hash <code>dce2aad09004e4ef</code>. 10 задач (T1–T5, T5b, T6–T9); T1-2 = переработка под финальную модель.</p>
   <div class="legend">Цепочка: intent <span class="badge b-na">n/a</span> → spec <span class="badge b-ok">OK</span> → plan <span class="badge b-ok">OK</span> → result —</div>
 
 </section>
