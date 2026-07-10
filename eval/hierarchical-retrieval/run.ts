@@ -723,6 +723,34 @@ async function main(): Promise<void> {
     const outOfContextResult = outOfContextAnswer.find((event) => event.kind === "result") as Extract<RunEvent, { kind: "result" }> | undefined;
     check("single-domain annotates selected-outside vault link", !!outOfContextResult && outOfContextResult.text.includes("[[wiki_graph_noise]] *(not in wiki)*"), outOfContextResult?.text);
 
+    const abortController = new AbortController();
+    const abortLlm = fakeLlm("Should not be called.");
+    const abortingChunkSimilarity = {
+      config: { mode: "jaccard", topK: 15 },
+      selectRelevantScored: async () => [],
+      selectRelevantChunks: async (): Promise<SelectedChunk[]> => {
+        abortController.abort();
+        return [{
+          articleId: "wiki_seed",
+          path: "!Wiki/work/Entity/wiki_seed.md",
+          heading: "## Main",
+          body: "neural retrieval seed body",
+          score: 1,
+          source: "seed",
+          articleScore: 1,
+          ordinal: 0,
+        }];
+      },
+    } as InstanceType<typeof PageSimilarityService>;
+    const abortEvents = await drive(runQuery(
+      ["neural retrieval"], false, vault, abortLlm.llm, "fake-model", [dom("work")], "", abortController.signal,
+      1, {}, 5, 0, 10, abortingChunkSimilarity, 3, 0, false, 60,
+    ) as AsyncGenerator<RunEvent, void>);
+    check("single-domain chunk abort emits no post-abort events", !abortEvents.some((event) =>
+      event.kind === "error" || event.kind === "query_stats" || event.kind === "eval_meta" || event.kind === "result"
+    ), abortEvents.map((event) => event.kind).join(","));
+    check("single-domain chunk abort skips answer LLM", abortLlm.calls() === 0, `calls=${abortLlm.calls()}`);
+
     const crossVault = fakeVault({
       ...files,
       "!Wiki/home/_config/_index.md": "- [[wiki_home_seed]] - home description neural retrieval",

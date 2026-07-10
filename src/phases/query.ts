@@ -303,6 +303,7 @@ export async function* runQuery(
   const selectedChunks: SelectedChunk[] = await chunkSimilarity.selectRelevantChunks(
     question, pages, finalArticleIds, seedSet, articleScores, chunkLimit,
   );
+  if (signal.aborted) return;
   if (selectedChunks.length === 0) {
     yield { kind: "error", message: "No relevant pages found for this query." };
     return;
