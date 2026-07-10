@@ -191,9 +191,9 @@ export async function* runIngest(
     existingPages = await vaultTools.readAll(nonMetaPaths);
   }
 
-  // Delete pages missing wiki_sources — invalid regardless of naming.
+  // Delete pages missing resource — invalid regardless of naming.
   const noSources = [...existingPages.entries()]
-    .filter(([, content]) => !/wiki_sources:/m.test(content))
+    .filter(([, content]) => !/resource:/m.test(content))
     .map(([path]) => path);
   for (const p of noSources) {
     try { await vaultTools.remove(p); } catch { /* skip */ }
@@ -201,7 +201,7 @@ export async function* runIngest(
   if (noSources.length > 0) {
     yield {
       kind: "info_text", icon: "🗑️",
-      summary: `Deleted ${noSources.length} wiki page(s) missing wiki_sources.`,
+      summary: `Deleted ${noSources.length} wiki page(s) missing resource.`,
       details: noSources.slice(0, 10),
     };
   }

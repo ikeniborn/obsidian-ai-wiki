@@ -19,7 +19,7 @@ export function collectMdInPaths(vault: Vault, sourcePaths: string[]): TFile[] {
 export function parseWikiSources(content: string): string[] {
   const fmMatch = /^---\n([\s\S]*?)\n---/.exec(content);
   if (!fmMatch) return [];
-  const sourcesMatch = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
+  const sourcesMatch = /resource:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
   if (!sourcesMatch) return [];
   return sourcesMatch[1]
     .split("\n")

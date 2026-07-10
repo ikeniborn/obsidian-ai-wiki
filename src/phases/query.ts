@@ -354,9 +354,10 @@ export async function* runQuery(
     const today = new Date().toISOString().slice(0, 10);
     const pageContent = [
       `---`,
-      `wiki_sources: []`,
-      `wiki_updated: ${today}`,
-      `wiki_status: mature`,
+      `type: concept`,
+      `resource: []`,
+      `timestamp: ${today}`,
+      `status: mature`,
       `tags: []`,
       `---`,
       ``,

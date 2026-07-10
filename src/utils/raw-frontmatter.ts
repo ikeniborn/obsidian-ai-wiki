@@ -557,36 +557,6 @@ export function parseWikiArticlesFromFm(content: string): string[] {
   return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
 }
 
-export function parseWikiSourcesFromFm(content: string): string[] {
-  const fmMatch = FM_RE.exec(content);
-  if (!fmMatch) return [];
-  const match = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
-  if (!match) return [];
-  return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
-}
-
-export function ensureWikiSources(
-  content: string,
-  sourceStem: string,
-): { content: string; injected: boolean } {
-  const sources = parseWikiSourcesFromFm(content);
-  if (sources.length > 0) return { content, injected: false };
-
-  const fmMatch = FM_RE.exec(content);
-  if (!fmMatch) return { content, injected: false };
-
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {};
-  } catch {
-    return { content, injected: false };
-  }
-
-  const body = content.slice(fmMatch[0].length);
-  parsed.wiki_sources = [`[[${sourceStem}]]`];
-  return { content: `---\n${yamlStringify(parsed)}---\n${body}`, injected: true };
-}
-
 export function parseResourceFromFm(content: string): string[] {
   const fmMatch = FM_RE.exec(content);
   if (!fmMatch) return [];

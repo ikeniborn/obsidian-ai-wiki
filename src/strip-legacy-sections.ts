@@ -1,5 +1,3 @@
-import { parse as yamlParse, stringify as yamlStringify } from "yaml";
-
 /** The two legacy H2 sections, in all three supported output languages. */
 const LEGACY_HEADINGS = new Set([
   "## Связанные концепции",
@@ -16,8 +14,6 @@ const RELATED_HEADINGS = new Set([
   "## Related concepts",
   "## Conceptos relacionados",
 ]);
-
-const FM_RE = /^---\n([\s\S]*?)\n---\n?/;
 
 function isH2(line: string): boolean {
   return /^##\s+/.test(line);
@@ -59,30 +55,49 @@ export function extractRelatedLinks(content: string): string[] {
   return [...new Set(links)];
 }
 
+const RELATED_SECTION_HEADING = "## Related";
+
+/** Start/end line indices of the first H2 section matching `heading` (end = next H2 or EOF). */
+function sectionBounds(lines: string[], heading: string): { start: number; end: number } | null {
+  for (let i = 0; i < lines.length; i++) {
+    if (isH2(lines[i]) && lines[i].trim() === heading) {
+      let end = lines.length;
+      for (let j = i + 1; j < lines.length; j++) {
+        if (isH2(lines[j])) { end = j; break; }
+      }
+      return { start: i, end };
+    }
+  }
+  return null;
+}
+
 /**
- * Safety-net: union `links` into the page's `wiki_outgoing_links` frontmatter. The wiki
- * graph reads `[[links]]` from the whole page body, so links living only inside the
- * related section must be lifted into frontmatter before that section is stripped, or the
- * graph edge is lost. Returns the content unchanged when every link is already present
- * (the common case — lint enforces this invariant) or when there is no parseable
- * frontmatter to union into.
+ * Safety-net: union `links` into the page's canonical `## Related` body section (creating
+ * it at the end of the page if absent). The wiki graph reads `[[links]]` from the whole
+ * page body, so links living only inside the legacy related-concepts section must be
+ * lifted into `## Related` before that section is stripped, or the graph edge is lost.
+ * Returns the content unchanged when every link is already present in `## Related`.
  */
 export function addOutgoingLinks(content: string, links: string[]): string {
   if (links.length === 0) return content;
-  const m = FM_RE.exec(content);
-  if (!m) return content;
-  let fm: Record<string, unknown>;
-  try {
-    const parsed: unknown = yamlParse(m[1]);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return content;
-    fm = parsed as Record<string, unknown>;
-  } catch { return content; }
-  const existing = Array.isArray(fm.wiki_outgoing_links)
-    ? (fm.wiki_outgoing_links as unknown[]).map((x) => String(x))
-    : [];
-  const existingSet = new Set(existing);
-  const missing = links.filter((l) => !existingSet.has(l));
+  const lines = content.split("\n");
+  const bounds = sectionBounds(lines, RELATED_SECTION_HEADING);
+
+  const existing = new Set<string>();
+  if (bounds) {
+    for (const line of lines.slice(bounds.start + 1, bounds.end)) {
+      for (const m of line.matchAll(/\[\[([^\]|#]+)/g)) existing.add(`[[${m[1].trim()}]]`);
+    }
+  }
+  const missing = links.filter((l) => !existing.has(l));
   if (missing.length === 0) return content;
-  fm.wiki_outgoing_links = [...existing, ...missing];
-  return `---\n${yamlStringify(fm)}---\n${content.slice(m[0].length)}`;
+
+  const bullets = missing.map((l) => `- ${l}`);
+  if (!bounds) {
+    const trimmed = content.replace(/\s*$/, "\n");
+    return `${trimmed}\n${RELATED_SECTION_HEADING}\n\n${bullets.join("\n")}\n`;
+  }
+  const before = lines.slice(0, bounds.end);
+  const after = lines.slice(bounds.end);
+  return [...before, ...bullets, ...after].join("\n");
 }

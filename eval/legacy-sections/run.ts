@@ -26,14 +26,13 @@ function check(name: string, cond: boolean, detail = ""): void {
 function section(t: string): void { console.log(`\n=== ${t} ===`); }
 
 // ---------- inlined fixture: a realistic SCD1 wiki page WITH both legacy sections ----------
-// Note: "[[перезапись-таблицы]]" appears only inside the related section, NOT in
-// wiki_outgoing_links — it exercises the union safety-net (Task 4 / addOutgoingLinks).
+// Note: both "[[scd2]]" and "[[перезапись-таблицы]]" appear only inside the legacy related
+// section, NOT in a canonical ## Related body section — this exercises the union
+// safety-net (Task 4 / addOutgoingLinks lifting body-only links before the strip).
 const ANNOTATION = "SCD1 — стратегия медленно меняющихся измерений с перезаписью значений без хранения истории.";
 const FIXTURE = `---
-wiki_updated: 2026-06-10
-wiki_status: developing
-wiki_outgoing_links:
-  - "[[scd2]]"
+timestamp: 2026-06-10
+status: developing
 tags:
   - databases/dwh
 ---
@@ -119,7 +118,7 @@ section("Deterministic — helpers");
 
 check("H1 stripLegacySections is idempotent", stripLegacySections(strippedBody) === strippedBody);
 check("H2 stripLegacySections preserves frontmatter + H1 + intro",
-  strippedBody.includes("wiki_outgoing_links:") &&
+  strippedBody.includes("timestamp:") &&
   strippedBody.includes("# SCD1 (Slowly Changing Dimension Type 1)") &&
   strippedBody.includes("новое значение атрибута перезаписывает старое"));
 check("H3 stripLegacySections keeps the mandatory content section",
@@ -134,9 +133,14 @@ check("H5 extractRelatedLinks ignores links outside the related section",
   `related=${JSON.stringify(related)}`);
 
 const unioned = addOutgoingLinks(FIXTURE, related);
-check("H6 addOutgoingLinks unions the body-only link into wiki_outgoing_links",
-  unioned.includes("[[перезапись-таблицы]]") &&
-  /wiki_outgoing_links:/.test(unioned.slice(0, unioned.indexOf("# SCD1"))));
+// Task 4: outgoing links are no longer synced into frontmatter — addOutgoingLinks now
+// lifts them into a canonical `## Related` body section instead.
+const relatedSectionIdx = unioned.indexOf("\n## Related\n");
+check("H6 addOutgoingLinks creates a canonical ## Related section with the body-only links",
+  relatedSectionIdx !== -1 &&
+  unioned.slice(relatedSectionIdx).includes("[[перезапись-таблицы]]") &&
+  unioned.slice(relatedSectionIdx).includes("[[scd2]]"),
+  `relatedSectionIdx=${relatedSectionIdx}`);
 check("H7 addOutgoingLinks is a no-op when all links already present",
   addOutgoingLinks(unioned, ["[[scd2]]"]) === unioned);
 

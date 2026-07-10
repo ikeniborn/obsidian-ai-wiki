@@ -12,7 +12,7 @@ import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
 import { wikiSections } from "./llm-utils";
 import { domainWikiFolder, domainIndexPath, WIKI_ROOT } from "../wiki-path";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseWikiSourcesFromFm, filterStaleWikiLinks, validateAndRepairWikiPageFrontmatter, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseResourceFromFm, validateAndRepairWikiPageFrontmatter, stripInvalidWikiArticles } from "../utils/raw-frontmatter";
 import { checkGraphStructure, pageId, bfsExpand } from "../wiki-graph";
 import { checkWikiLinks, fixWikiLinks, stripDeadLinks } from "../wiki-link-validator";
 import { graphCache } from "../wiki-graph-cache";
@@ -46,7 +46,7 @@ export async function cleanupInvalidPages(
     }
     try {
       const content = await vaultTools.read(f);
-      if (!/wiki_sources:/m.test(content)) {
+      if (!/resource:/m.test(content)) {
         await vaultTools.remove(f);
         deleted++;
       }
@@ -97,19 +97,11 @@ export function validateWikiSources(
   titleMap: Map<string, string>,
   wikiStems: Set<string> = new Set(),
 ): string {
-  // Normalize unquoted [[...]] items in wiki_sources — bare [[x]] is parsed by YAML as a flow sequence.
-  content = content.replace(
-    /(wiki_sources:\s*\n(?:[ \t]+-[ \t]+[^\n]+\n?)+)/,
-    (block) => block.replace(/^([ \t]+-[ \t]+)(\[\[[^\]]+\]\])([ \t]*)$/gm, '$1"$2"$3'),
-  );
-
   const isValid = (entry: string): boolean => {
-    const m = entry.match(/^\[\[(.+?)\]\]$/);
-    if (!m) return true; // non-wikilink format: keep as-is
-    const text = m[1];
-    // Wiki pages belong in wiki_outgoing_links, not wiki_sources.
+    const text = entry.trim();
+    // Wiki pages belong in ## Related, not resource.
     if (wikiStems.has(text)) return false;
-    // Path-based references (e.g. [[Sources/raw.md]]) are always valid —
+    // Path-based references (e.g. "Sources/raw") are always valid —
     // knownStems only tracks basenames, not full paths.
     if (text.includes("/")) return true;
     return knownStems.has(text) || titleMap.has(text.toLowerCase());
@@ -117,19 +109,19 @@ export function validateWikiSources(
 
   // Restore valid entries the LLM may have silently dropped or collapsed to [].
   if (originalContent) {
-    const originalEntries = parseWikiSourcesFromFm(originalContent);
-    const llmEntries = new Set(parseWikiSourcesFromFm(content));
+    const originalEntries = parseResourceFromFm(originalContent);
+    const llmEntries = new Set(parseResourceFromFm(content));
     const validOriginal = originalEntries.filter(isValid);
     const missing = validOriginal.filter((e) => !llmEntries.has(e));
     if (missing.length > 0) {
-      // Normalise: replace inline `wiki_sources: []` or bare `wiki_sources:` with a block list.
-      const emptyKeyRe = /wiki_sources:\s*(?:\[\]\s*\n|\n(?!\s*-))/;
+      // Normalise: replace inline `resource: []` or bare `resource:` with a block list.
+      const emptyKeyRe = /resource:\s*(?:\[\]\s*\n|\n(?!\s*-))/;
       if (emptyKeyRe.test(content)) {
-        const block = "wiki_sources:\n" + missing.map((e) => `  - "${e}"`).join("\n") + "\n";
+        const block = "resource:\n" + missing.map((e) => `  - "${e}"`).join("\n") + "\n";
         content = content.replace(emptyKeyRe, block);
       } else {
         // Block-list exists — append missing items after the last list entry.
-        const listBlockRe = /(wiki_sources:\s*\n(?:[ \t]+-[ \t]+[^\n]+\n?)+)/;
+        const listBlockRe = /(resource:\s*\n(?:[ \t]+-[ \t]+[^\n]+\n?)+)/;
         content = content.replace(listBlockRe, (match) =>
           match.trimEnd() + "\n" + missing.map((e) => `  - "${e}"`).join("\n") + "\n",
         );
@@ -137,18 +129,19 @@ export function validateWikiSources(
     }
   }
 
-  // Remove stale entries (entries present in content that are [[...]] format but not in vault).
-  const entries = parseWikiSourcesFromFm(content);
+  // Remove stale entries (entries present in content that are not known vault stems).
+  const entries = parseResourceFromFm(content);
   if (entries.length === 0) return content;
 
   const toRemove = entries.filter((e) => !isValid(e));
   if (toRemove.length === 0) return content;
 
-  // YAML parses [[...]] as a flow sequence (nested array), so filterStaleWikiLinks
-  // cannot handle wiki_sources entries. Remove them via raw string substitution.
+  // resource entries are plain strings (no YAML flow-sequence ambiguity), but
+  // removal is still done via raw string substitution to preserve surrounding
+  // formatting/comments untouched by a full re-parse/re-stringify round-trip.
   let result = content;
   for (const entry of toRemove) {
-    // Remove the list item line containing this wikilink — handles both quoted and unquoted forms.
+    // Remove the list item line containing this stem — handles both quoted and unquoted forms.
     const escaped = entry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     result = result.replace(new RegExp(`[ \\t]+-[ \\t]+"?${escaped}"?\\n?`, ""), "");
   }
@@ -459,13 +452,13 @@ export async function* runLint(
     }
     // ── End per-article loop ──────────────────────────────────────────────────
 
-    // Post-loop: delete wiki pages that ended up with no valid wiki_sources.
+    // Post-loop: delete wiki pages that ended up with no valid resource.
     // Pushes their stems into deletedRefs so the backlink rewrite below removes
     // their wiki_articles entries from source files.
     for (const wikiPath of writtenPaths) {
       const wikiContent = pages.get(wikiPath);
       if (!wikiContent) continue;
-      if (parseWikiSourcesFromFm(wikiContent).length === 0) {
+      if (parseResourceFromFm(wikiContent).length === 0) {
         const stem = pageId(wikiPath);
         try {
           if (typeof vaultTools.remove === "function") {
@@ -534,7 +527,7 @@ export async function* runLint(
       };
     }
 
-    // Bucket repair: remove wrong-bucket stems from wiki_sources / wiki_outgoing_links
+    // Bucket repair: remove wrong-bucket stems from resource; drop legacy link fields
     const repairWarnings: Array<{ path: string; warnings: string[] }> = [];
     for (const [wikiPath, wikiContent] of pages) {
       const { content: repaired, warnings } = validateAndRepairWikiPageFrontmatter(wikiContent);
@@ -557,12 +550,6 @@ export async function* runLint(
 
     // Stale link cleanup — must run before backlink sync so pages map is consistent
     const deletedNames = new Set(deletedRefs.map(d => d.deletedName));
-    const existingWikiStems = new Set(
-      [
-        ...[...pages.keys()].map(p => p.split("/").pop()!.replace(/\.md$/, "")),
-        ...writtenPaths.map(p => p.split("/").pop()!.replace(/\.md$/, "")),
-      ].filter(stem => !deletedNames.has(stem))
-    );
 
     // Deterministic dead-link removal from article bodies (runs with LLM on or off).
     // Uses the vault-wide knownStems so links to source notes are preserved.
@@ -571,15 +558,6 @@ export async function* runLint(
       if (cleaned !== wikiContent) {
         pages.set(wikiPath, cleaned);
         await vaultTools.write(wikiPath, cleaned);
-      }
-    }
-
-    for (const [wikiPath, wikiContent] of pages) {
-      const { content: filteredWiki } =
-        filterStaleWikiLinks(wikiContent, existingWikiStems, ["wiki_outgoing_links"]);
-      if (filteredWiki !== wikiContent) {
-        pages.set(wikiPath, filteredWiki);
-        await vaultTools.write(wikiPath, filteredWiki);
       }
     }
 
@@ -602,11 +580,10 @@ export async function* runLint(
       if (filteredContent !== rawContent) await vaultTools.write(sourcePath, filteredContent);
     }
 
-    // Backlink sync: wiki_articles from wiki_sources
+    // Backlink sync: wiki_articles from resource
     const backlinks = new Map<string, Set<string>>();
     for (const [wikiPath, wikiContent] of pages) {
-      for (const src of parseWikiSourcesFromFm(wikiContent)) {
-        const bareName = src.slice(2, -2);
+      for (const bareName of parseResourceFromFm(wikiContent)) {
         const rawPath = bareName.includes("/")
           ? bareName
           : (stemToPath.get(bareName) ?? bareName);

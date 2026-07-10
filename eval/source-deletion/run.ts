@@ -20,10 +20,10 @@ function check(name: string, cond: boolean, detail = ""): void {
 }
 function section(t: string): void { console.log(`\n=== ${t} ===`); }
 
-// Helper: build a wiki page body with a wiki_sources list.
+// Helper: build a wiki page body with a plain resource list.
 function page(sources: string[]): string {
-  const list = sources.map((s) => `  - "[[${s}]]"`).join("\n");
-  return `---\nwiki_sources:\n${list}\n---\n# Page\n`;
+  const list = sources.map((s) => `  - "${s}"`).join("\n");
+  return `---\nresource:\n${list}\n---\n# Page\n`;
 }
 
 section("computeDeletionPlan");
@@ -83,10 +83,10 @@ section("isSourceFile");
 
 section("stripSourceToken");
 {
-  check("double-quoted wikilink → bare stem", stripSourceToken(`"[[note]]"`) === "note");
-  check("single-quoted wikilink → bare stem", stripSourceToken(`'[[note]]'`) === "note");
-  check("plain wikilink → bare stem", stripSourceToken("[[note]]") === "note");
-  check("interior whitespace trimmed", stripSourceToken(`  "[[note]]"  `) === "note");
+  check("double-quoted stem → bare stem", stripSourceToken(`"note"`) === "note");
+  check("single-quoted stem → bare stem", stripSourceToken(`'note'`) === "note");
+  check("plain stem passes through", stripSourceToken("note") === "note");
+  check("interior whitespace trimmed", stripSourceToken(`  "note"  `) === "note");
 }
 
 console.log(`\n========================================`);

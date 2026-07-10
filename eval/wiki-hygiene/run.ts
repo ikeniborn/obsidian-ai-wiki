@@ -20,15 +20,12 @@ function check(name: string, cond: boolean, detail = ""): void {
 
 console.log("\n=== stripDeadLinks ===");
 {
-  // known = {alive}. dead link in prose + table + frontmatter outgoing.
+  // known = {alive, src_note}. dead link in prose + table; resource in frontmatter.
   const known = new Set(["alive", "src_note"]);
   const content = [
     "---",
-    "wiki_sources:",
-    '  - "[[src_note]]"',
-    "wiki_outgoing_links:",
-    '  - "[[alive]]"',
-    '  - "[[dead]]"',
+    "resource:",
+    '  - "src_note"',
     "---",
     "# Title",
     "",
@@ -41,8 +38,11 @@ console.log("\n=== stripDeadLinks ===");
   const out = stripDeadLinks(content, known);
   check("dead link removed from body prose", !out.includes("[[dead]]"), out);
   check("alive link kept", out.includes("[[alive]]"));
-  check("source-note link in wiki_sources untouched", out.includes('"[[src_note]]"'));
-  check("wiki_outgoing_links re-synced (no dead)", /wiki_outgoing_links:\n {2}- "\[\[alive\]\]"\n---/.test(out), out);
+  check("resource entry untouched", out.includes('"src_note"'));
+  // Task 4: stripDeadLinks no longer re-syncs a frontmatter outgoing-link array —
+  // the ## Related body section is canonical now, so frontmatter is left as-is.
+  check("frontmatter left untouched (no more link re-sync)",
+    out.startsWith('---\nresource:\n  - "src_note"\n---\n'), out);
   check("no double space left in prose", !/Refs {2}and/.test(out) && out.includes("Refs [[alive]] and"), out);
 }
 {
