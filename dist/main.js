@@ -41133,7 +41133,6 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
   outputTokens += cand.seedOutputTokens;
-  const indexContent = cand.indexContent;
   const seeds = cand.seeds;
   const seedScores = cand.seedScores;
   const expandedScores = cand.expandedScores;
@@ -41162,6 +41161,13 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   }
   const contextBlock = renderContextChunks(selectedChunks);
   const finalSelectedIds = new Set(selectedChunks.map((chunk) => chunk.articleId));
+  const selectedIndexLines = [...finalSelectedIds].map((id) => {
+    const annotation = cand.annotations.get(id);
+    return annotation ? `${id}: ${annotation}` : void 0;
+  }).filter((line) => line !== void 0);
+  const indexBlock = selectedIndexLines.length > 0 ? `
+Wiki index (selected candidates):
+${selectedIndexLines.join("\n")}` : "";
   const entityTypesBlock = buildEntityTypesBlock2(domain);
   const wikiFirst = [...finalSelectedIds].sort((a, b) => Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
   const availableLinksBlock = wikiFirst.length === 0 ? "" : [
@@ -41173,9 +41179,7 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
     domain_name: domain.name,
     available_links_block: availableLinksBlock,
     entity_types_block: entityTypesBlock,
-    index_block: indexContent ? `
-Wiki index (_index.md):
-${indexContent}` : ""
+    index_block: indexBlock
   });
   const seedCount = [...finalSelectedIds].filter((id) => seedSet.has(id)).length;
   const graphCount = finalSelectedIds.size - seedCount;
