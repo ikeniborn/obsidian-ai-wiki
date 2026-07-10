@@ -11,15 +11,13 @@
 import {
   restoreSourceFrontmatter,
   recoverSourceFrontmatter,
-  hasFrontmatterField,
   parseWikiArticlesFromFm,
   upsertRawFrontmatter,
   validateAndRepairSourceFrontmatter,
 } from "../../src/utils/raw-frontmatter";
 import { resolveLang, i18nFor } from "../../src/i18n";
 
-const TODAY = new Date().toISOString().slice(0, 10);
-const OLD_ADDED = "2026-05-01"; // a creation date that must NOT regress to TODAY
+const OLD_ADDED = "2026-05-01"; // a legacy creation date — must be dropped, not preserved
 
 // ---------- tiny assert framework ----------
 let pass = 0;
@@ -40,15 +38,14 @@ function section(t: string): void {
 }
 
 // ---------- helpers that mirror the real ingest backlink block ----------
-// Replicates src/phases/ingest.ts backlink-write logic verbatim (Task 5).
+// Replicates src/phases/ingest.ts backlink-write logic verbatim (Task 3: source
+// notes no longer track wiki_added/wiki_updated — only wiki_articles).
 function simulateIngestBacklink(
   sourceContent: string,
   writtenPaths: string[],
   deletedStems: Set<string>,
 ): string {
-  const backlinkToday = TODAY;
   const normalizedSource = recoverSourceFrontmatter(sourceContent);
-  const isFirstTime = !hasFrontmatterField(normalizedSource, "wiki_added");
   const existingArticles = parseWikiArticlesFromFm(normalizedSource).filter((link) => {
     const stem = link.replace(/^\[\[/, "").replace(/\]\]$/, "");
     return !deletedStems.has(stem);
@@ -56,8 +53,6 @@ function simulateIngestBacklink(
   const writtenLinks = writtenPaths.map((p) => `[[${p.split("/").pop()!.replace(/\.md$/, "")}]]`);
   const mergedArticles = [...new Set([...existingArticles, ...writtenLinks])];
   const updatedSource = upsertRawFrontmatter(normalizedSource, {
-    wiki_added: isFirstTime ? backlinkToday : undefined,
-    wiki_updated: backlinkToday,
     wiki_articles: mergedArticles,
   });
   return validateAndRepairSourceFrontmatter(updatedSource).content;
@@ -101,8 +96,8 @@ title: Шакшука
 
   const restored = restoreSourceFrontmatter(original, llmOut);
   const { fm, body, fenceCount } = splitFence(restored);
-  check("A1 wiki_updated restored into preview", fmValue(fm, "wiki_updated") === "2026-06-16", restored);
-  check("A2 wiki_added preserved", fmValue(fm, "wiki_added") === OLD_ADDED, restored);
+  check("A1 wiki_updated dropped (source notes no longer track dates)", fmValue(fm, "wiki_updated") === undefined, restored);
+  check("A2 wiki_added dropped", fmValue(fm, "wiki_added") === undefined, restored);
   check("A3 wiki_articles restored", parseWikiArticlesFromFm(restored).includes("[[Шакшука с мясом и овощами]]"), restored);
   check("A4 single frontmatter fence", fenceCount === 2, `fenceCount=${fenceCount}\n${restored}`);
   check("A5 no wiki_* left in body", !bodyHasWikiKey(body), restored);
@@ -149,8 +144,8 @@ wiki_updated: 2026-06-16
 текст рецепта`;
   const out = simulateIngestBacklink(src, [NEW_PAGE], new Set());
   const { fm, body, fenceCount } = splitFence(out);
-  check("D1 wiki_added preserved (not reset to today)", fmValue(fm, "wiki_added") === OLD_ADDED, out);
-  check("D2 wiki_updated = today", fmValue(fm, "wiki_updated") === TODAY, out);
+  check("D1 wiki_added dropped", fmValue(fm, "wiki_added") === undefined, out);
+  check("D2 wiki_updated dropped", fmValue(fm, "wiki_updated") === undefined, out);
   check("D3 single valid fence (duplicate deduped)", fenceCount === 2, `fenceCount=${fenceCount}\n${out}`);
   check("D4 new backlink present", parseWikiArticlesFromFm(out).includes(NEW_LINK), out);
   check("D5 no orphan wiki_* in body", !bodyHasWikiKey(body), out);
@@ -167,7 +162,7 @@ wiki_articles:
   const out = simulateIngestBacklink(src, [NEW_PAGE], new Set());
   const { fm, body, fenceCount } = splitFence(out);
   const arts = parseWikiArticlesFromFm(out);
-  check("E1 wiki_added preserved", fmValue(fm, "wiki_added") === OLD_ADDED, out);
+  check("E1 wiki_added dropped", fmValue(fm, "wiki_added") === undefined, out);
   check("E2 existing block-list backlink recovered (union)", arts.includes(EXISTING_LINK), `articles=${JSON.stringify(arts)}\n${out}`);
   check("E3 new backlink present", arts.includes(NEW_LINK), out);
   check("E4 single valid fence", fenceCount === 2, `fenceCount=${fenceCount}\n${out}`);
@@ -189,7 +184,7 @@ wiki_articles:
   const out = simulateIngestBacklink(src, [NEW_PAGE], new Set());
   const { fm, body } = splitFence(out);
   const arts = parseWikiArticlesFromFm(out);
-  check("F1 wiki_added preserved (not reset to today)", fmValue(fm, "wiki_added") === OLD_ADDED, out);
+  check("F1 wiki_added dropped", fmValue(fm, "wiki_added") === undefined, out);
   check("F2 existing backlink recovered (union)", arts.includes(EXISTING_LINK), `articles=${JSON.stringify(arts)}\n${out}`);
   check("F3 no orphan wiki_* left in body", !bodyHasWikiKey(body), `body:\n${body}`);
 }
@@ -208,7 +203,7 @@ wiki_articles:
   const out = simulateIngestBacklink(src, [NEW_PAGE], new Set());
   const { fm, body, fenceCount } = splitFence(out);
   const arts = parseWikiArticlesFromFm(out);
-  check("G1 wiki_added preserved", fmValue(fm, "wiki_added") === OLD_ADDED, out);
+  check("G1 wiki_added dropped", fmValue(fm, "wiki_added") === undefined, out);
   check("G2 existing backlink kept", arts.includes(EXISTING_LINK), out);
   check("G3 new backlink merged", arts.includes(NEW_LINK), out);
   check("G4 single valid fence", fenceCount === 2, `fenceCount=${fenceCount}\n${out}`);

@@ -615,7 +615,6 @@ export async function* runLint(
       }
     }
 
-    const syncToday = new Date().toISOString().slice(0, 10);
     let syncUpdated = 0;
     for (const [rawPath, articles] of backlinks) {
       yield { kind: "tool_use", name: "Update", input: { path: rawPath } };
@@ -624,7 +623,6 @@ export async function* runLint(
         const existingArticles = parseWikiArticlesFromFm(rawContent);
         const mergedArticles = [...new Set([...existingArticles, ...articles])];
         const newContent = upsertRawFrontmatter(rawContent, {
-          wiki_updated: syncToday,
           wiki_articles: mergedArticles,
         });
         await vaultTools.write(rawPath, newContent);

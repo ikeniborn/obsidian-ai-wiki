@@ -463,8 +463,8 @@ export function stripInvalidWikiArticles(
 
 const SOURCE_RULES: FieldRule[] = [
   { field: "wiki_articles",       kind: "list-wikilinks-stem-only" },
-  { field: "wiki_added",          kind: "date-scalar" },
-  { field: "wiki_updated",        kind: "date-scalar" },
+  { field: "wiki_added",          kind: "remove" },
+  { field: "wiki_updated",        kind: "remove" },
   { field: "tags",                kind: "list-tags" },
   { field: "aliases",             kind: "aliases" },
   { field: "created",             kind: "date-scalar" },
@@ -487,22 +487,15 @@ export function validateAndRepairSourceFrontmatter(
 
 /**
  * Restores a source page's frontmatter onto formatted output.
- * - Preserves the wiki tracking fields (wiki_added / wiki_updated / wiki_articles)
- *   from `original` when it carries a wiki_updated value.
- * - ALWAYS normalizes the result (dedupe keys, drop invalid values, re-serialize YAML),
- *   independent of wiki_updated presence.
+ * - Re-attaches `wiki_articles` from `original` (the only wiki-tracking field
+ *   source notes still carry — `wiki_added`/`wiki_updated` are dropped).
+ * - ALWAYS normalizes the result (dedupe keys, drop invalid values, re-serialize YAML).
  * Idempotent: re-running on already-restored content yields the same content.
  */
 export function restoreSourceFrontmatter(original: string, formatted: string): string {
-  const wikiUpdatedMatch = /^wiki_updated:[ \t]*(.+)$/m.exec(original);
-  if (wikiUpdatedMatch) {
-    const wiki_updated = wikiUpdatedMatch[1].trim();
-    const wikiAddedMatch = /^wiki_added:[ \t]*(.+)$/m.exec(original);
-    const wiki_added = wikiAddedMatch?.[1].trim();
-    const wiki_articles = parseWikiArticlesFromFm(original);
-    formatted = upsertRawFrontmatter(formatted, { wiki_added, wiki_updated, wiki_articles });
-  }
-  const { content } = validateAndRepairSourceFrontmatter(formatted);
+  const wiki_articles = parseWikiArticlesFromFm(original);
+  const restored = upsertRawFrontmatter(formatted, { wiki_articles });
+  const { content } = validateAndRepairSourceFrontmatter(restored);
   return content;
 }
 
@@ -525,9 +518,14 @@ export function validateAndRepairWikiPageFrontmatter(
   return validateAndRepairFrontmatter(renamed, WIKI_PAGE_RULES);
 }
 
+/**
+ * Upserts a source page's frontmatter with `wiki_articles` only. Strips any
+ * `wiki_added`/`wiki_updated` dates carried over from `content` — source notes
+ * no longer track wiki sync dates.
+ */
 export function upsertRawFrontmatter(
   content: string,
-  fields: { wiki_added?: string; wiki_updated: string; wiki_articles: string[] },
+  fields: { wiki_articles: string[] },
 ): string {
   const match = FM_RE.exec(content);
   const body = match ? content.slice(match[0].length) : content;
@@ -542,16 +540,10 @@ export function upsertRawFrontmatter(
     } catch { /* malformed YAML — start fresh */ }
   }
 
-  const wikiAdded =
-    fields.wiki_added ??
-    (typeof existing.wiki_added === "string" ? existing.wiki_added : undefined);
-
   const { wiki_added: _a, wiki_updated: _u, wiki_articles: _ar, ...rest } = existing;
   void _a; void _u; void _ar;
 
   const result: Record<string, unknown> = { ...rest };
-  if (wikiAdded !== undefined) result.wiki_added = wikiAdded;
-  result.wiki_updated = fields.wiki_updated;
   if (fields.wiki_articles.length > 0) result.wiki_articles = fields.wiki_articles;
 
   return `---\n${yamlStringify(result)}---\n${body}`;

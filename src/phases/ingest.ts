@@ -16,7 +16,7 @@ import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
 import { domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureType, ensureDescription, entityTypeFromPath, ensureResource, stripInvalidWikiArticles, recoverSourceFrontmatter, parseTagsFromFm, normalizeTag } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureType, ensureDescription, entityTypeFromPath, ensureResource, stripInvalidWikiArticles, recoverSourceFrontmatter, parseTagsFromFm, normalizeTag } from "../utils/raw-frontmatter";
 import { collectDomainTags, renderTagRegistryBlock, thematicCategories, ensureEntityTypeTag, DEFAULT_MAX_TAG_CATEGORIES } from "../utils/tag-registry";
 import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation, deriveFallbackAnnotation, reconcileIndex } from "../wiki-index";
 import { pageId } from "../wiki-graph";
@@ -346,9 +346,7 @@ export async function* runIngest(
   const plannedPagePaths = pages.map((p) => p.path);
 
   if (pages.length > 0 || plannedDeletePaths.size > 0) {
-    const backlinkToday = new Date().toISOString().slice(0, 10);
     const normalizedSource = recoverSourceFrontmatter(sourceContent);
-    const isFirstTime = !hasFrontmatterField(normalizedSource, "wiki_added");
     const existingArticles = parseWikiArticlesFromFm(normalizedSource).filter((link) => {
       const stem = link.replace(/^\[\[/, "").replace(/\]\]$/, "");
       return !plannedDeleteStems.has(stem);
@@ -356,8 +354,6 @@ export async function* runIngest(
     const writtenLinks = plannedPagePaths.map((p) => `[[${p.split("/").pop()!.replace(/\.md$/, "")}]]`);
     const mergedArticles = [...new Set([...existingArticles, ...writtenLinks])];
     const updatedSource = upsertRawFrontmatter(normalizedSource, {
-      wiki_added: isFirstTime ? backlinkToday : undefined,
-      wiki_updated: backlinkToday,
       wiki_articles: mergedArticles,
     });
     const { content: repairedSource, warnings: sourceWarnings } =
