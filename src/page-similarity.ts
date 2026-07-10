@@ -699,7 +699,14 @@ export class PageSimilarityService {
     if (this.cache && this.cache.model === model) {
       for (let i = 0; i < pids.length; i++) {
         const entry = this.cache.entries[pids[i]];
-        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
+        if (entry) {
+          pageVecs.set(
+            pids[i],
+            entry.chunks
+              .filter((chunk) => chunk.kind === "summary")
+              .map((chunk) => decodeVector(chunk.vector)),
+          );
+        }
       }
     }
 
@@ -813,6 +820,7 @@ export class PageSimilarityService {
     vaultTools: VaultTools,
     indexAnnotations: Map<string, string>,
     pageBodies: Map<string, string>,
+    opts: { fullCorpus?: boolean } = {},
   ): Promise<{ updated: number }> {
     // Persist the embeddings cache for both embedding and hybrid modes — hybrid's dense
     // side reuses it on every query. Only pure jaccard has no vectors to write.
@@ -825,9 +833,7 @@ export class PageSimilarityService {
     let cacheFile: EmbeddingCacheFile;
     try {
       const parsed = JSON.parse(await vaultTools.read(cachePath)) as EmbeddingCacheFile;
-      const hasCompleteOldCorpus = Object.keys(parsed.entries ?? {})
-        .every((pid) => indexAnnotations.has(pid) && pageBodies.has(pid));
-      if (parsed.version !== 3 && !hasCompleteOldCorpus) {
+      if (parsed.version !== 3 && opts.fullCorpus !== true) {
         return { updated: 0 };
       }
       cacheFile =

@@ -10,6 +10,7 @@ const {
   DEFAULT_CHUNKING,
   PageSimilarityService,
   buildChunkInputs,
+  encodeVector,
   renderContextChunks,
 } = req("../../src/page-similarity.ts") as {
   DEFAULT_CHUNKING: ChunkingConfig;
@@ -26,7 +27,13 @@ const {
       vaultTools: VaultTools,
       indexAnnotations: Map<string, string>,
       pageBodies: Map<string, string>,
+      opts?: { fullCorpus?: boolean },
     ) => Promise<{ updated: number }>;
+    selectRelevantScoredDiag?: (
+      sourceContent: string,
+      indexAnnotations: Map<string, string>,
+      allPaths: string[],
+    ) => Promise<{ results: { path: string; score: number }[] }>;
     selectRelevantChunks?: (
       query: string,
       pages: Map<string, string>,
@@ -35,8 +42,10 @@ const {
       scores: Record<string, number>,
       maxChunks: number,
     ) => Promise<SelectedChunk[]>;
+    setCacheForTest?: (cache: EmbeddingCacheFile) => void;
   };
   buildChunkInputs: typeof import("../../src/page-similarity").buildChunkInputs;
+  encodeVector: typeof import("../../src/page-similarity").encodeVector;
   renderContextChunks?: (chunks: SelectedChunk[]) => string;
 };
 const { runCrossDomainQuery } = req("../../src/phases/query-cross-domain.ts") as typeof import("../../src/phases/query-cross-domain");
@@ -194,6 +203,74 @@ async function main(): Promise<void> {
     const rawAfterIngestShape = await ingestShapeVault.read(oldCachePath);
     check("ingest-shape partial v2 upgrade skips writes", ingestShapeRefresh?.updated === 0);
     check("ingest-shape partial v2 upgrade leaves raw cache unchanged", rawAfterIngestShape === oldRawCache);
+
+    const staleRawCache = JSON.stringify({
+      version: 2,
+      model: "fake",
+      dimensions: 2,
+      entries: {
+        wiki_one: { chunks: [{ vector: "old-one", hash: "one", kind: "summary" }] },
+        wiki_stale: { chunks: [{ vector: "old-stale", hash: "stale", kind: "summary" }] },
+      },
+    }, null, 2);
+    const fullVault = fakeVault({ [oldCachePath]: staleRawCache });
+    const fullSimilarity = new PageSimilarityService({
+      mode: "embedding",
+      topK: 10,
+      baseUrl: "http://fake.local",
+      apiKey: "fake",
+      model: "fake",
+      dimensions: 2,
+    });
+    const fullRefresh = await fullSimilarity.refreshCache?.(
+      "!Wiki/work",
+      fullVault,
+      new Map([["wiki_one", "one current description"]]),
+      new Map([["wiki_one", "# One\n\n## Body\ncurrent body"]]),
+      { fullCorpus: true },
+    );
+    const fullCacheAfter = JSON.parse(await fullVault.read(oldCachePath)) as EmbeddingCacheFile;
+    check("full v2 rebuild with stale old pid writes vectors", (fullRefresh?.updated ?? 0) > 0);
+    check("full v2 rebuild writes version 3", fullCacheAfter.version === 3);
+    check("full v2 rebuild drops stale old pid", !("wiki_stale" in fullCacheAfter.entries));
+    check("full v2 rebuild keeps current pid", "wiki_one" in fullCacheAfter.entries);
+
+    const denseSimilarity = new PageSimilarityService({
+      mode: "embedding",
+      topK: 2,
+      baseUrl: "http://fake.local",
+      apiKey: "fake",
+      model: "fake",
+      dimensions: 2,
+    });
+    denseSimilarity.setCacheForTest?.({
+      version: 3,
+      model: "fake",
+      dimensions: 2,
+      entries: {
+        wiki_good_summary: {
+          chunks: [{ vector: encodeVector(new Float32Array([0.8, 0.6])), hash: "good-summary", kind: "summary" }],
+        },
+        wiki_section_leak: {
+          chunks: [
+            { vector: encodeVector(new Float32Array([0, 1])), hash: "leak-summary", kind: "summary" },
+            { vector: encodeVector(new Float32Array([1, 0])), hash: "leak-section", kind: "section" },
+          ],
+        },
+      },
+    });
+    const dense = await denseSimilarity.selectRelevantScoredDiag?.(
+      "query vector",
+      new Map([
+        ["wiki_good_summary", "good summary"],
+        ["wiki_section_leak", "section leak"],
+      ]),
+      [
+        "!Wiki/work/Entity/wiki_good_summary.md",
+        "!Wiki/work/Entity/wiki_section_leak.md",
+      ],
+    );
+    check("seed dense scoring ignores section vectors", dense?.results[0]?.path.endsWith("wiki_good_summary.md") === true);
   }
 
   section("chunk context rendering");
