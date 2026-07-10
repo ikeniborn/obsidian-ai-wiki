@@ -132,6 +132,21 @@ check("migrateWikiPageOkf does not throw on malformed wiki_outgoing_links", !mal
 check("migrateWikiPageOkf keeps malformed wiki_outgoing_links key in frontmatter", /^wiki_outgoing_links:/m.test(migratedMalformed), migratedMalformed);
 check("migrateWikiPageOkf does not fabricate ## Related from malformed wiki_outgoing_links", !/^## Related$/m.test(migratedMalformed), migratedMalformed);
 
+// empty array is a VALID shape (no links) — the key must be REMOVED, not kept/warned
+const emptyArr = `---
+type: person
+resource: ["Src"]
+wiki_outgoing_links: []
+wiki_external_links: []
+---
+# Alice
+body
+`;
+const emptyRelocated = relocateFrontmatterLinks(emptyArr);
+check("empty wiki_outgoing_links array is removed (valid, nothing to relocate)", !/wiki_outgoing_links:/m.test(emptyRelocated), emptyRelocated);
+check("empty wiki_external_links array is removed", !/wiki_external_links:/m.test(emptyRelocated), emptyRelocated);
+check("empty arrays fabricate no body sections", !/^## Related$/m.test(emptyRelocated) && !/^## External links$/m.test(emptyRelocated), emptyRelocated);
+
 console.log(`\n========================================`);
 console.log(`TOTAL: ${pass} passed, ${fail} failed`);
 if (fail > 0) {

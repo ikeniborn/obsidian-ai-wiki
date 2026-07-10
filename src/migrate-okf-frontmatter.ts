@@ -78,12 +78,12 @@ function urlKey(line: string): string {
 
 /**
  * Pulls the relocatable string entries out of frontmatter key `key` on `parsed`.
- * `shouldDelete` is true only when at least one usable string link was found — that's the
- * only case where the caller is allowed to delete the key, since its content was actually
- * moved to the body. Otherwise (key absent, value not an array, or an array with zero
- * usable string entries) the key must be left untouched, and a warning is logged so the
- * unexpected shape isn't silently discarded. Individual non-string elements inside an
- * otherwise-usable array are skipped (and logged) without blocking relocation of the rest.
+ * `shouldDelete` is true whenever the value is an array (even empty) — a valid array's
+ * usable string links are relocated to the body and the key can be removed with nothing
+ * left to lose. Only a NON-array shape (scalar, null, object) is preserved: `shouldDelete`
+ * stays false and a warning is logged so the unexpected shape isn't silently discarded.
+ * Individual non-string elements inside an array are skipped (and logged) without blocking
+ * relocation of the rest.
  */
 function extractRelocatableLinks(
   parsed: Record<string, unknown>,
@@ -103,11 +103,9 @@ function extractRelocatableLinks(
     else console.error(`[AI Wiki] OKF migrate: skipping non-string ${key} entry — left out of relocation`);
   }
 
-  if (links.length === 0) {
-    console.error(`[AI Wiki] OKF migrate: unexpected ${key} shape — left in place`);
-    return { links: [], shouldDelete: false };
-  }
-
+  // A valid array — even an empty one — is safe to remove: every usable string link was
+  // relocated to the body, and an empty/all-non-string array carries no recoverable link
+  // to lose. Only a NON-array shape (handled above) is preserved untouched.
   return { links, shouldDelete: true };
 }
 
@@ -115,9 +113,8 @@ function extractRelocatableLinks(
  * Relocates the legacy `wiki_outgoing_links` / `wiki_external_links` frontmatter arrays
  * to body sections: outgoing links become `[[stem]]` bullets under `## Related`, external
  * links become `[url](url)` bullets under `## External links`. A frontmatter key is removed
- * only once its usable string links have been moved to the body — a key whose value isn't a
- * block-list of strings (scalar, null, object, or an array with no usable string entries) is
- * left untouched and logged instead of being silently discarded. Merges/dedupes into an
+ * only once its (array) value has been handled — a key whose value isn't an array (scalar,
+ * null, object) is left untouched and logged instead of being silently discarded. Merges/dedupes into an
  * existing section rather than adding a second one. Pure and idempotent — a page with
  * neither key is returned unchanged.
  */
