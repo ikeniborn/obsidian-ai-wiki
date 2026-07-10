@@ -34,6 +34,16 @@ const {
       indexAnnotations: Map<string, string>,
       allPaths: string[],
     ) => Promise<{ results: { path: string; score: number }[] }>;
+    selectRelevant?: (
+      sourceContent: string,
+      indexAnnotations: Map<string, string>,
+      allPaths: string[],
+    ) => Promise<string[]>;
+    selectByEntities?: (
+      entities: { name: string; type?: string; context_snippet?: string }[],
+      indexAnnotations: Map<string, string>,
+      allPaths: string[],
+    ) => Promise<{ results: Map<string, string[]>; allFailed: boolean }>;
     selectRelevantChunks?: (
       query: string,
       pages: Map<string, string>,
@@ -235,6 +245,47 @@ async function main(): Promise<void> {
     check("full v2 rebuild drops stale old pid", !("wiki_stale" in fullCacheAfter.entries));
     check("full v2 rebuild keeps current pid", "wiki_one" in fullCacheAfter.entries);
 
+    const currentInputs = buildChunkInputs(
+      "one current description",
+      "# One\n\n## Body\ncurrent body",
+      DEFAULT_CHUNKING,
+    );
+    const staleV3RawCache = JSON.stringify({
+      version: 3,
+      model: "fake",
+      dimensions: 2,
+      entries: {
+        wiki_one: {
+          chunks: currentInputs.map((input) => ({
+            vector: encodeVector(new Float32Array([1, 0])),
+            hash: input.hash,
+            kind: input.kind,
+            heading: input.heading,
+            ordinal: input.ordinal,
+          })),
+        },
+        wiki_deleted: { chunks: [{ vector: encodeVector(new Float32Array([0, 1])), hash: "deleted", kind: "summary" }] },
+      },
+    }, null, 2);
+    const staleV3Vault = fakeVault({ [oldCachePath]: staleV3RawCache });
+    const staleV3Similarity = new PageSimilarityService({
+      mode: "embedding",
+      topK: 10,
+      baseUrl: "http://fake.local",
+      apiKey: "fake",
+      model: "fake",
+      dimensions: 2,
+    });
+    await staleV3Similarity.refreshCache?.(
+      "!Wiki/work",
+      staleV3Vault,
+      new Map([["wiki_one", "one current description"]]),
+      new Map([["wiki_one", "# One\n\n## Body\ncurrent body"]]),
+      { fullCorpus: true },
+    );
+    const staleV3After = JSON.parse(await staleV3Vault.read(oldCachePath)) as EmbeddingCacheFile;
+    check("full v3 refresh drops stale old pid", !("wiki_deleted" in staleV3After.entries));
+
     const denseSimilarity = new PageSimilarityService({
       mode: "embedding",
       topK: 2,
@@ -271,6 +322,31 @@ async function main(): Promise<void> {
       ],
     );
     check("seed dense scoring ignores section vectors", dense?.results[0]?.path.endsWith("wiki_good_summary.md") === true);
+    const selected = await denseSimilarity.selectRelevant?.(
+      "query vector",
+      new Map([
+        ["wiki_good_summary", "good summary"],
+        ["wiki_section_leak", "section leak"],
+      ]),
+      [
+        "!Wiki/work/Entity/wiki_good_summary.md",
+        "!Wiki/work/Entity/wiki_section_leak.md",
+      ],
+    );
+    check("selectRelevant ignores section vectors", selected?.[0]?.endsWith("wiki_good_summary.md") === true);
+    const entitySelected = await denseSimilarity.selectByEntities?.(
+      [{ name: "query vector" }],
+      new Map([
+        ["wiki_good_summary", "good summary"],
+        ["wiki_section_leak", "section leak"],
+      ]),
+      [
+        "!Wiki/work/Entity/wiki_good_summary.md",
+        "!Wiki/work/Entity/wiki_section_leak.md",
+      ],
+    );
+    const entityTop = [...(entitySelected?.results.values() ?? [])][0]?.[0] ?? "";
+    check("entity retrieval ignores section vectors", entityTop.endsWith("wiki_good_summary.md"));
   }
 
   section("chunk context rendering");

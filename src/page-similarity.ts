@@ -65,6 +65,13 @@ export function decodeVector(b64: string): Float32Array {
   return new Float32Array(bytes.buffer);
 }
 
+function summaryVectors(entry: EmbeddingCacheEntry | undefined): Float32Array[] | undefined {
+  if (!entry) return undefined;
+  return entry.chunks
+    .filter((chunk) => chunk.kind === "summary" && chunk.vector !== "")
+    .map((chunk) => decodeVector(chunk.vector));
+}
+
 function annotationHash(s: string): string {
   let h = 0;
   for (let i = 0; i < s.length; i++) {
@@ -504,8 +511,8 @@ export class PageSimilarityService {
 
     if (this.cache && this.cache.model === model) {
       for (let i = 0; i < pids.length; i++) {
-        const entry = this.cache.entries[pids[i]];
-        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
+        const vecs = summaryVectors(this.cache.entries[pids[i]]);
+        if (vecs !== undefined) pageVecs.set(pids[i], vecs);
       }
     }
 
@@ -601,8 +608,8 @@ export class PageSimilarityService {
     // Load chunk vectors from in-memory cache (populated by refreshCache)
     if (this.cache && this.cache.model === model) {
       for (let i = 0; i < pids.length; i++) {
-        const entry = this.cache.entries[pids[i]];
-        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
+        const vecs = summaryVectors(this.cache.entries[pids[i]]);
+        if (vecs !== undefined) pageVecs.set(pids[i], vecs);
       }
     }
 
@@ -698,15 +705,8 @@ export class PageSimilarityService {
 
     if (this.cache && this.cache.model === model) {
       for (let i = 0; i < pids.length; i++) {
-        const entry = this.cache.entries[pids[i]];
-        if (entry) {
-          pageVecs.set(
-            pids[i],
-            entry.chunks
-              .filter((chunk) => chunk.kind === "summary")
-              .map((chunk) => decodeVector(chunk.vector)),
-          );
-        }
+        const vecs = summaryVectors(this.cache.entries[pids[i]]);
+        if (vecs !== undefined) pageVecs.set(pids[i], vecs);
       }
     }
 
@@ -849,7 +849,8 @@ export class PageSimilarityService {
     const pending: Pending[] = [];
     // Tracks chunk-count change so a write is triggered even when nothing is pending
     // (e.g. a section deleted: surviving hashes all hit oldByHash, but count shrinks).
-    let changed = false;
+    let changed = opts.fullCorpus === true &&
+      Object.keys(cacheFile.entries).some((pid) => !indexAnnotations.has(pid));
 
     for (const [pid, annotation] of indexAnnotations) {
       // A caller may refresh only a subset (incremental ingest supplies bodies only for the
@@ -897,6 +898,7 @@ export class PageSimilarityService {
 
     if (pending.length === 0 && !changed) return { updated: 0 };
 
+    if (opts.fullCorpus === true) cacheFile.entries = {};
     for (const [pid, chunks] of desired) {
       const filled = chunks.filter((c) => c.vector !== "");
       if (filled.length > 0) cacheFile.entries[pid] = { chunks: filled };
