@@ -52,9 +52,11 @@ export interface DomainCandidates {
 }
 
 /**
- * Read index → select seeds (vector gate → jaccard → optional llm) → glob → read
- * pages → build graph → BFS-rank. Yields the existing progress events; returns the
- * candidate set (seeds ∪ bfs) or null when the domain has no usable seeds.
+ * Read index → glob → read pages → select seeds (vector gate → jaccard → optional llm)
+ * → build graph → BFS-rank. Pages are read before seed selection because seeds now score
+ * against each page's frontmatter `description` (collected from the page bodies), not the
+ * `_index.md` annotation line. Yields the existing progress events; returns the candidate
+ * set (seeds ∪ bfs) or null when the domain has no usable seeds.
  *
  * `llmSeedFallback` is provided only by single-domain runQuery; cross-domain omits it
  * so an empty domain is skipped instead of costing one LLM call per domain.
