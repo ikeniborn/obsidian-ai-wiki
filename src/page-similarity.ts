@@ -133,10 +133,18 @@ function windowUnit(u: RawUnit, maxChars: number, overlapChars: number): Section
   return windows;
 }
 
+// Body sections holding relocated frontmatter links (see migrate-okf-frontmatter.ts's
+// `relocateFrontmatterLinks`) — pure reference data, never worth embedding for
+// retrieval. Headings are fixed English literals across all output languages (they
+// mirror the literal `## Related` / `## External links` strings that migration and
+// ingest write), matched case-insensitively.
+const EXCLUDED_SECTION_HEADINGS = new Set(["## related", "## external links"]);
+
 export function splitSections(body: string, chunking: ChunkingConfig): SectionWindow[] {
   const stripped = stripFrontmatterAndTitle(body).trim();
   if (!stripped) return [];
-  const merged = mergeShort(toUnits(stripped), chunking.minChars);
+  const units = toUnits(stripped).filter((u) => !EXCLUDED_SECTION_HEADINGS.has(u.heading.toLowerCase()));
+  const merged = mergeShort(units, chunking.minChars);
   let windows: SectionWindow[] = [];
   for (const u of merged) {
     windows.push(...windowUnit(u, chunking.maxChars, chunking.overlapChars));

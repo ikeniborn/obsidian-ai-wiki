@@ -16,7 +16,7 @@ import { upsertRawFrontmatter, parseWikiArticlesFromFm, parseResourceFromFm, val
 import { checkGraphStructure, pageId, bfsExpand } from "../wiki-graph";
 import { checkWikiLinks, fixWikiLinks, stripDeadLinks } from "../wiki-link-validator";
 import { graphCache } from "../wiki-graph-cache";
-import { upsertIndexAnnotation, parseIndexAnnotations, reconcileIndex, removeIndexAnnotation } from "../wiki-index";
+import { upsertIndexAnnotation, parseIndexAnnotations, reconcileIndex, removeIndexAnnotation, collectDescriptions } from "../wiki-index";
 import { appendWikiLog } from "../wiki-log";
 import { ensureDomainConfig } from "../domain-config";
 import type { PageSimilarityService } from "../page-similarity";
@@ -444,7 +444,8 @@ export async function* runLint(
       if (similarity) {
         const pageBodies = new Map<string, string>();
         for (const [path, content] of pages) pageBodies.set(pageId(path), content);
-        const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, annotations, pageBodies);
+        const descriptions = collectDescriptions([...pages].map(([path, content]) => ({ path, content })));
+        const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, descriptions, pageBodies);
         if (similarity.config.mode === "embedding" && updated > 0) {
           yield { kind: "info_text", icon: "📤", summary: `обновлено векторов: ${updated}` };
         }

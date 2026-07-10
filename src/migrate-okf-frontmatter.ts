@@ -4,7 +4,7 @@ import type { DomainEntry } from "./domain";
 import type { LocalConfigStore } from "./local-config";
 import { collectMdInPaths } from "./utils/vault-walk";
 import { domainWikiFolder, domainIndexPath } from "./wiki-path";
-import { parseIndexAnnotations, deriveFallbackAnnotation } from "./wiki-index";
+import { parseIndexAnnotations, deriveFallbackDescription } from "./wiki-index";
 import {
   renameWikiPageFields,
   ensureType,
@@ -159,7 +159,7 @@ export function migrateWikiPageOkf(
   let out = relocateFrontmatterLinks(content);
   out = renameWikiPageFields(out);
   out = ensureType(out, entityTypeFromPath(wikiFolder, fullPath));
-  out = ensureDescription(out, annotation || deriveFallbackAnnotation(content));
+  out = ensureDescription(out, annotation || deriveFallbackDescription(content));
   return out;
 }
 

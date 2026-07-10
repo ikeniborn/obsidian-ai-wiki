@@ -13,7 +13,7 @@ import { pageId, bfsExpandRanked } from "../wiki-graph";
 import { fuseVectorGraph } from "../fusion";
 import { graphCache } from "../wiki-graph-cache";
 import { selectSeeds } from "../wiki-seeds";
-import { parseIndexAnnotations } from "../wiki-index";
+import { collectDescriptions } from "../wiki-index";
 import type { PageSimilarityService } from "../page-similarity";
 import { seedPassesGate } from "../retrieval-diag";
 import type { RetrievalMode, SeedFallbackReason } from "../retrieval-diag";
@@ -78,8 +78,27 @@ export async function* retrieveDomainCandidates(
   await ensureDomainConfig(vaultTools, wikiVaultPath);
   const indexContent = await tryRead(vaultTools, domainIndexPath(wikiVaultPath));
   if (signal.aborted) return null;
-  const indexAnnotations = parseIndexAnnotations(indexContent);
-  yield { kind: "tool_result", ok: true, preview: `${indexAnnotations.size} annotations` };
+  yield { kind: "tool_result", ok: true, preview: indexContent ? "read" : "empty" };
+
+  // The retrieval overview map now comes from each page's frontmatter `description`
+  // (collectDescriptions), not the cheap _index.md text — so the full page set has to
+  // be read before seeds can be scored. This gives up the previous "skip the read when
+  // a domain has no seeds" fast path in exchange for a single source of truth for the
+  // overview text (docs/superpowers/plans/2026-07-09-okf-integration-plan.md Task 5b).
+  yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
+  const allFiles = await vaultTools.listFiles(wikiVaultPath);
+  const files = allFiles.filter(
+    (f) => !META_FILES.some((m) => f.endsWith(m)) && !f.includes("/_config/"),
+  );
+  yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
+  if (signal.aborted) return null;
+
+  yield { kind: "tool_use", name: "Read", input: { files: files.length } };
+  const pages = await vaultTools.readAll(files);
+  yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
+  if (signal.aborted) return null;
+
+  const indexAnnotations = collectDescriptions([...pages].map(([path, content]) => ({ path, content })));
 
   const topK = Math.max(1, Math.min(50, Math.floor(cfg.seedTopK)));
   const minScore = Math.max(0, Math.min(1, cfg.seedMinScore));
@@ -138,20 +157,7 @@ export async function* retrieveDomainCandidates(
   }
   if (signal.aborted) return null;
 
-  yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
-  const allFiles = await vaultTools.listFiles(wikiVaultPath);
-  const files = allFiles.filter(
-    (f) => !META_FILES.some((m) => f.endsWith(m)) && !f.includes("/_config/"),
-  );
-  yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
-  if (signal.aborted) return null;
-
   if (seeds.length === 0) return null;   // empty domain → caller decides
-
-  yield { kind: "tool_use", name: "Read", input: { files: files.length } };
-  const pages = await vaultTools.readAll(files);
-  yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
-  if (signal.aborted) return null;
 
   const graphResult = graphCache.get(domain.id, pages);
   const { selectedIds, expandedScores } = await bfsExpandRanked(

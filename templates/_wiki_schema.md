@@ -22,30 +22,22 @@
 
 | Field | Rule |
 |------|---------|
-| `wiki_sources` | Array of real paths from the repository root. Read files only. On UPDATE — add, do not remove. Obsidian property type: **Links** (not list/text) — only then do the links participate in Graph View. Values must be in the `[[page-name]]` format: `["[[page-a]]", "[[page-b]]"] |
-| `wiki_updated` | YYYY-MM-DD |
-| `wiki_status` | `stub` (<2 sources, <10 sentences) / `developing` (≥2 sources, ≥10 sentences, main sections filled in) / `mature` (≥4 sources, all sections) |
-| `wiki_type` | File type: `page \| index \| log \| schema`. Only for service files (`_index.md`, `_log.md`, `_wiki_schema.md`). Regular pages do not set this field. |
+| `type` | Entity type — the page's entity-type subdirectory (e.g. `concept`, or one of the domain's configured entity types). Set once when the page is created; do not change on update. |
+| `description` | One-line overview of the page (plain text, no line breaks). This is the sole source of the retrieval overview embedding — keep it accurate and current. |
+| `resource` | YAML list of plain source-note stems — no `[[ ]]`, no folder path: `["source-a", "source-b"]`. On UPDATE — add, do not remove. |
+| `timestamp` | YYYY-MM-DD |
 | `tags` | YAML list: `[category/subcategory, domain/topic]`. Hierarchy via `/`, lowercase, no spaces, no `#`. Reuse tags from existing domain pages; create new ones following the same scheme. Obsidian recognizes the `tags` key automatically — do not set the type explicitly. |
+| `status` | `stub` (<2 sources, <10 sentences) / `developing` (≥2 sources, ≥10 sentences, main sections filled in) / `mature` (≥4 sources, all sections) |
 | `aliases` | Abbreviations, English variants, synonyms |
-| `wiki_outgoing_links` | Array of WikiLinks to related pages. Obsidian property type: **Links** (not list/text) — only then do the links participate in Graph View. Values must be in the `[[page-name]]` format: `["[[page-a]]", "[[page-b]]"]`. An empty array is allowed. |
-| `wiki_external_links` | Array of external URLs (`http://` or `https://`). They do not form the Obsidian graph — reference resources and documentation only. |
 
 ## Common mistakes (forbidden)
 
 | Mistake | Why it is bad | Correct |
 |--------|-------------|-----------|
-| `tags: - "[[wiki_fin_...]]"` | A WikiLink is not a tag; the validator will remove it | Put it in `wiki_outgoing_links` |
+| `tags: - "[[wiki_fin_...]]"` | A WikiLink is not a tag; the validator will remove it | Put it as a `- [[stem]]` bullet under `## Related` |
 | `tags: - {type: ..., name: ...}` | tags — strings only | `tags: - finance/technical-analysis` |
-| `wiki_outgoing_links: ["[[a]]", "[[b]]"]` | Inline JSON is not parsed by the wiki-link-validator | Block list: `- "[[a]]"` on separate lines |
-| A link in the body without a record in `wiki_outgoing_links` | The Obsidian graph does not see the connection | Every `[[link]]` in the body → in `wiki_outgoing_links` |
-
-## Forbidden Frontmatter Patterns
-
-| Example | Problem | Fix |
-|---------|---------|-----|
-| `wiki_sources: ["[[wiki_work_foo]]"]` | Wiki-page stem in sources field | Move to `wiki_outgoing_links` |
-| `wiki_outgoing_links: ["[[MyNote]]"]` | Source stem in wiki-links field | Move to `wiki_sources` |
+| `resource: ["[[source-a]]"]` | `resource` holds plain stems, not WikiLinks | `resource: ["source-a"]` |
+| A link in the body with no matching bullet under `## Related` / `## External links` | The retrieval graph and reference list miss the connection | Add `- [[stem]]` (outgoing) or `- [text](url)` (external) under the matching heading |
 
 ## WikiLinks
 
@@ -54,16 +46,25 @@
 - ✅ Correct: `[[page-name]]`, `[[Кириллица]]`, `[[Scalability]]`
 - Link only to existing pages; dead links yield a warning
 
-`wiki_outgoing_links` — YAML block list (not inline JSON):
-- ✅ Correct:
-  ```yaml
-  wiki_outgoing_links:
-    - "[[page-a]]"
-    - "[[page-b]]"
-  ```
-- ❌ Forbidden: `wiki_outgoing_links: ["[[page-a]]", "[[page-b]]"]`
+## Related and external links (body sections, not frontmatter)
 
-`wiki_outgoing_links` MUST contain every `[[link]]` found in the page body.
+Outgoing links no longer live in frontmatter — they are body sections, each one bullet per line:
+
+- `## Related` — WikiLinks to other wiki pages:
+  ```markdown
+  ## Related
+
+  - [[page-a]]
+  - [[page-b]]
+  ```
+- `## External links` — external URLs, `[text](url)`:
+  ```markdown
+  ## External links
+
+  - [Example docs](https://example.com/docs)
+  ```
+
+Both headings are fixed English literals — do not translate or localize them, even when the page body is in another language. These two sections are reference data only; they are excluded from retrieval embeddings.
 
 ## Content
 - Synthesis, not copying — rework the information from the sources

@@ -1,5 +1,13 @@
-// Run: npx tsx eval/okf-frontmatter/run.ts
+// Run (plain tsx no longer works once splitSections is exercised — it pulls in
+// `obsidian` transitively via src/page-similarity.ts):
+//   node_modules/.bin/esbuild eval/okf-frontmatter/run.ts \
+//     --bundle --platform=node --format=cjs \
+//     --alias:obsidian=./eval/okf-frontmatter/obsidian-stub.ts \
+//     --outfile=eval/okf-frontmatter/run.cjs
+//   node eval/okf-frontmatter/run.cjs
 import { renameWikiPageFields, entityTypeFromPath, parseResourceFromFm, ensureType, ensureDescription, validateAndRepairSourceFrontmatter, upsertRawFrontmatter } from "../../src/utils/raw-frontmatter";
+import { parseDescriptionFromFm, collectDescriptions, deriveFallbackDescription } from "../../src/wiki-index";
+import { splitSections, DEFAULT_CHUNKING } from "../../src/page-similarity";
 
 let pass = 0, fail = 0; const failures: string[] = [];
 function check(name: string, cond: boolean) {
@@ -62,6 +70,53 @@ const upserted = upsertRawFrontmatter(sourceLegacy, { wiki_articles: ["[[wiki_d_
 check("upsertRawFrontmatter: wiki_added stripped", !/^wiki_added:/m.test(upserted));
 check("upsertRawFrontmatter: wiki_updated stripped", !/^wiki_updated:/m.test(upserted));
 check("upsertRawFrontmatter: only wiki_articles written", upserted.includes("[[wiki_d_y]]") && !upserted.includes("[[wiki_d_x]]"));
+
+// Task 5b — parseDescriptionFromFm reads the frontmatter `description` scalar.
+const withDesc = `---\ndescription: "Alice leads the billing team."\n---\n# Alice\nbody\n`;
+check("parseDescriptionFromFm reads scalar", parseDescriptionFromFm(withDesc) === "Alice leads the billing team.");
+check("parseDescriptionFromFm missing field → \"\"", parseDescriptionFromFm(`---\nresource: []\n---\n# T\n`) === "");
+check("parseDescriptionFromFm no frontmatter → \"\"", parseDescriptionFromFm("plain body") === "");
+
+// Task 5b — collectDescriptions: frontmatter description wins, fallback to body derivation,
+// `_`-prefixed / non-wiki stems skipped.
+const descPages = [
+  { path: "!Wiki/d/entities/wiki_d_alice.md", content: withDesc },
+  { path: "!Wiki/d/entities/wiki_d_bob.md", content: "# Bob\n\nBob is a data engineer.\n" },
+  { path: "!Wiki/d/_index.md", content: "ignore me" },
+  { path: "!Wiki/d/notes/not-a-wiki-stem.md", content: "# Skip\n\nshould be skipped.\n" },
+];
+const descriptions = collectDescriptions(descPages);
+check("collectDescriptions: frontmatter description used", descriptions.get("wiki_d_alice") === "Alice leads the billing team.");
+check("collectDescriptions: fallback for page w/o description", descriptions.get("wiki_d_bob") === deriveFallbackDescription("# Bob\n\nBob is a data engineer.\n"));
+check("collectDescriptions: `_`-prefixed stem skipped", !descriptions.has("_index"));
+check("collectDescriptions: non-wiki stem skipped", !descriptions.has("not-a-wiki-stem"));
+
+// Task 5b — splitSections excludes `## Related` / `## External links` from retrieval chunks.
+const bodyWithLinkSections = [
+  "# Alice",
+  "",
+  "Alice is a lead engineer on the billing team.",
+  "",
+  "## Key characteristics",
+  "",
+  "Owns invoices and dunning workflows.",
+  "",
+  "## Related",
+  "",
+  "- [[wiki_d_bob]]",
+  "- [[wiki_d_carol]]",
+  "",
+  "## External links",
+  "",
+  "- [Billing docs](https://example.com/billing)",
+  "",
+].join("\n");
+const sectionWindows = splitSections(bodyWithLinkSections, DEFAULT_CHUNKING);
+check("splitSections drops ## Related", !sectionWindows.some((w) => w.heading.toLowerCase() === "## related"));
+check("splitSections drops ## External links", !sectionWindows.some((w) => w.heading.toLowerCase() === "## external links"));
+check("splitSections keeps other sections", sectionWindows.some((w) => w.heading === "## Key characteristics"));
+check("splitSections: no relocated-link text leaks into any surviving chunk",
+  !sectionWindows.some((w) => w.window.includes("wiki_d_bob") || w.window.includes("example.com/billing")));
 
 console.log(`TOTAL: ${pass} passed, ${fail} failed`);
 if (fail > 0) { console.log(`FAILED: ${failures.join(", ")}`); process.exitCode = 1; }

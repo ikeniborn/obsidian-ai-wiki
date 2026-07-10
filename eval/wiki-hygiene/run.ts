@@ -9,7 +9,7 @@
  *   node eval/wiki-hygiene/run.cjs
  */
 import { stripDeadLinks } from "../../src/wiki-link-validator";
-import { deriveFallbackAnnotation, reconcileIndex } from "../../src/wiki-index";
+import { deriveFallbackDescription, reconcileIndex } from "../../src/wiki-index";
 
 let pass = 0, fail = 0;
 const failures: string[] = [];
@@ -60,7 +60,7 @@ console.log("\n=== stripDeadLinks ===");
   check("adjacent dead links collapse to single space", out === "a b", JSON.stringify(out));
 }
 
-console.log("\n=== deriveFallbackAnnotation ===");
+console.log("\n=== deriveFallbackDescription ===");
 {
   const content = [
     "---", "wiki_status: stub", "---",
@@ -71,32 +71,32 @@ console.log("\n=== deriveFallbackAnnotation ===");
     "## Details",
     "more text",
   ].join("\n");
-  const a = deriveFallbackAnnotation(content, "entities");
+  const a = deriveFallbackDescription(content, "entities");
   check("starts with H1", a.startsWith("CH_METE_S3_DDRD — "), a);
   check("contains first sentence", a.includes("CH_METE_S3_DDRD is a Clickhouse table type."), a);
   check("has Type", a.includes("Type: entities"), a);
   check("single line", !a.includes("\n"), a);
 }
 {
-  const a = deriveFallbackAnnotation("# Only Title\n", undefined);
+  const a = deriveFallbackDescription("# Only Title\n", undefined);
   check("missing body → still has title + general type", a.startsWith("Only Title") && a.includes("Type: general"), a);
 }
 {
   const longBody = "# T\n\n" + "word ".repeat(400);
-  const a = deriveFallbackAnnotation(longBody, "tasks");
+  const a = deriveFallbackDescription(longBody, "tasks");
   check("truncated to <= 800 chars", a.length <= 800, String(a.length));
 }
 {
-  const a = deriveFallbackAnnotation("# T\n\nLinks [[wiki_x_minio]] here.\n", "entities");
+  const a = deriveFallbackDescription("# T\n\nLinks [[wiki_x_minio]] here.\n", "entities");
   check("wikilink brackets unwrapped in annotation", !a.includes("[[") && a.includes("wiki_x_minio"), a);
 }
 
 {
-  const a = deriveFallbackAnnotation("---\r\nwiki_status: stub\r\n---\r\n# CRLF Title\r\n\r\nFirst sentence here.\r\n", "entities");
+  const a = deriveFallbackDescription("---\r\nwiki_status: stub\r\n---\r\n# CRLF Title\r\n\r\nFirst sentence here.\r\n", "entities");
   check("CRLF frontmatter stripped", a.startsWith("CRLF Title — ") && !a.includes("wiki_status"), a);
 }
 {
-  const a = deriveFallbackAnnotation("# Code Page\n\n```sql\nSELECT 1;\n```\n\nReal prose sentence.\n", "entities");
+  const a = deriveFallbackDescription("# Code Page\n\n```sql\nSELECT 1;\n```\n\nReal prose sentence.\n", "entities");
   check("code fence skipped in fallback", !a.includes("```") && !a.includes("SELECT"), a);
 }
 

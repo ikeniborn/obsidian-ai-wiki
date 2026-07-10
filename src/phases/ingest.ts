@@ -18,7 +18,7 @@ import { domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-
 import { ensureDomainConfig } from "../domain-config";
 import { upsertRawFrontmatter, parseWikiArticlesFromFm, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureType, ensureDescription, entityTypeFromPath, ensureResource, stripInvalidWikiArticles, recoverSourceFrontmatter, parseTagsFromFm, normalizeTag } from "../utils/raw-frontmatter";
 import { collectDomainTags, renderTagRegistryBlock, thematicCategories, ensureEntityTypeTag, DEFAULT_MAX_TAG_CATEGORIES } from "../utils/tag-registry";
-import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation, deriveFallbackAnnotation, reconcileIndex } from "../wiki-index";
+import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation, deriveFallbackDescription, reconcileIndex, collectDescriptions } from "../wiki-index";
 import { pageId } from "../wiki-graph";
 import type { PageSimilarityService, ExtractedEntity } from "../page-similarity";
 import { appendWikiLog } from "../wiki-log";
@@ -491,7 +491,7 @@ export async function* runIngest(
       try {
         const annotation = (page.annotation && page.annotation.trim())
           ? page.annotation
-          : deriveFallbackAnnotation(sourcedPage, deriveSectionForPath(wikiVaultPath, page.path));
+          : deriveFallbackDescription(sourcedPage, deriveSectionForPath(wikiVaultPath, page.path));
         await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), annotation, page.path);
       } catch { /* non-critical */ }
     } catch (e) {
@@ -598,14 +598,13 @@ export async function* runIngest(
 
   if (similarity && written.length > 0) {
     try {
-      const updatedIndex = await vaultTools.read(domainIndexPath(wikiVaultPath)).catch(() => "");
-      const updatedAnnotations = parseIndexAnnotations(updatedIndex);
-      const writtenSet = new Set(written);
+      // Read back the final on-disk content (frontmatter description included) rather
+      // than reusing `pages` (pre-processing LLM output, description not yet injected).
+      const writtenPages = await vaultTools.readAll(written);
+      const descriptions = collectDescriptions([...writtenPages].map(([path, content]) => ({ path, content })));
       const pageBodies = new Map<string, string>();
-      for (const page of pages) {
-        if (writtenSet.has(page.path)) pageBodies.set(pageId(page.path), page.content);
-      }
-      await similarity.refreshCache(domainRoot, vaultTools, updatedAnnotations, pageBodies);
+      for (const [path, content] of writtenPages) pageBodies.set(pageId(path), content);
+      await similarity.refreshCache(domainRoot, vaultTools, descriptions, pageBodies);
     } catch { /* non-critical */ }
   }
 
