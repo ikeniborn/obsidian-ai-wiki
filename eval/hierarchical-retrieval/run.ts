@@ -128,7 +128,7 @@ async function withRequestUrl<T>(handler: RequestUrlHandler, fn: () => Promise<T
   }
 }
 
-function embeddingResponse(vectors: number[][]): RequestUrlResponse {
+function embeddingResponse(vectors: unknown[][]): RequestUrlResponse {
   return {
     status: 200,
     text: JSON.stringify({ data: vectors.map((embedding) => ({ embedding })) }),
@@ -523,6 +523,34 @@ async function main(): Promise<void> {
     );
     check("empty query embedding response falls back to Jaccard", Array.isArray(emptyChunks) && emptyChunks[0]?.articleId === "wiki_relevant", String(emptyChunks));
 
+    const nonFiniteSimilarity = new PageSimilarityService({
+      mode: "embedding",
+      topK: 10,
+      baseUrl: "http://fake.local",
+      apiKey: "fake",
+      model: "fake",
+      dimensions: 2,
+    });
+    let nonFiniteCalls = 0;
+    const nonFiniteChunks = await withRequestUrl(
+      () => {
+        nonFiniteCalls++;
+        return nonFiniteCalls === 1
+          ? embeddingResponse([["bad", 1]])
+          : embeddingResponse([[1, 0], [0, 1]]);
+      },
+      () => safeSelectChunks(
+        nonFiniteSimilarity,
+        "neural retrieval",
+        fallbackPages,
+        fallbackIds,
+        new Set(["wiki_relevant"]),
+        fallbackScores,
+        3,
+      ),
+    );
+    check("non-finite query embedding response falls back to Jaccard", Array.isArray(nonFiniteChunks) && nonFiniteChunks[0]?.articleId === "wiki_relevant", String(nonFiniteChunks));
+
     const shortBatchPages = new Map<string, string>([
       ["!Wiki/work/Entity/wiki_first.md", "# First\n\n## Evidence\nneural retrieval first evidence"],
       ["!Wiki/work/Entity/wiki_second.md", "# Second\n\n## Evidence\nneural retrieval second evidence"],
@@ -641,8 +669,8 @@ async function main(): Promise<void> {
     check("dimension-mismatched cache is ignored for chunk ranking", mismatchChunks[0]?.articleId === "wiki_mismatch", mismatchChunks.map((chunk) => chunk.articleId).join(","));
 
     const tiePages = new Map<string, string>([
-      ["!Wiki/work/B/wiki_same.md", "# Same\n\n## B\nalpha beta"],
-      ["!Wiki/work/A/wiki_same.md", "# Same\n\n## A\nalpha beta"],
+      ["!Wiki/work/B/wiki_same.md", "# Same\n\n## A\nalpha beta"],
+      ["!Wiki/work/A/wiki_same.md", "# Same\n\n## B\nalpha beta"],
     ]);
     const tieSimilarity = new PageSimilarityService({ mode: "jaccard", topK: 10 });
     const tieChunks = await tieSimilarity.selectRelevantChunks?.(

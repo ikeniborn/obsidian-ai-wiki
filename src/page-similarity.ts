@@ -289,7 +289,11 @@ function rankChunksJaccard(queryTokens: Set<string>, sections: CandidateSection[
 }
 
 function isUsableVector(vec: Float32Array | undefined, dimensions?: number): vec is Float32Array {
-  return !!vec && vec.length > 0 && (!dimensions || vec.length === dimensions);
+  if (!vec || vec.length === 0 || (dimensions && vec.length !== dimensions)) return false;
+  for (const value of vec) {
+    if (!Number.isFinite(value)) return false;
+  }
+  return true;
 }
 
 function jaccardCoeff(a: Set<string>, b: Set<string>): number {
