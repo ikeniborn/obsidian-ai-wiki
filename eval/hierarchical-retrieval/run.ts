@@ -375,19 +375,21 @@ async function main(): Promise<void> {
       ["!Wiki/work/Entity/wiki_seed.md", "# Seed\n\n## Main\nseed page links to [[wiki_graph_relevant]] and [[wiki_graph_noise]]"],
       ["!Wiki/work/Entity/wiki_graph_relevant.md", "# Relevant\n\n## Evidence\nneural chunk retrieval evidence"],
       ["!Wiki/work/Entity/wiki_graph_noise.md", "# Noise\n\n## Other\nunrelated cooking notes"],
+      ["!Wiki/work/Entity/wiki_neural_retrieval_noise.md", "# Id Noise\n\n## Other\nunrelated cooking notes"],
     ]);
     const similarity = new PageSimilarityService({ mode: "jaccard", topK: 10 });
     const chunks = await similarity.selectRelevantChunks?.(
       "neural retrieval",
       pages,
-      new Set(["wiki_seed", "wiki_graph_relevant", "wiki_graph_noise"]),
+      new Set(["wiki_seed", "wiki_graph_relevant", "wiki_graph_noise", "wiki_neural_retrieval_noise"]),
       new Set(["wiki_seed"]),
-      { wiki_seed: 1, wiki_graph_relevant: 0.8, wiki_graph_noise: 0.2 },
+      { wiki_seed: 1, wiki_graph_relevant: 0.8, wiki_graph_noise: 0.2, wiki_neural_retrieval_noise: 0.1 },
       5,
     ) ?? [];
     const ids = chunks.map((chunk) => chunk.articleId);
     check("relevant graph chunk selected", ids.includes("wiki_graph_relevant"), ids.join(","));
     check("irrelevant graph article excluded", !ids.includes("wiki_graph_noise"), ids.join(","));
+    check("article id tokens do not select unrelated chunks", !ids.includes("wiki_neural_retrieval_noise"), ids.join(","));
     check("selected chunks carry headings", chunks.every((chunk) => chunk.heading.startsWith("## ")));
   }
 

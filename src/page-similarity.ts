@@ -270,7 +270,7 @@ function sortSelectedChunks(items: SelectedChunk[]): SelectedChunk[] {
 function rankChunksJaccard(queryTokens: Set<string>, sections: CandidateSection[], limit: number): SelectedChunk[] {
   const scored: SelectedChunk[] = [];
   for (const section of sections) {
-    const score = scoreSeed(queryTokens, section.articleId, section.embedText);
+    const score = jaccardCoeff(queryTokens, tokenize(section.embedText));
     if (score <= 0) continue;
     scored.push({
       articleId: section.articleId,
