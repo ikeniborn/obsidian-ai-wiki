@@ -13,12 +13,22 @@ const FM_KEY_LINE = /^(wiki_[\w]+|tags|aliases|created|updated|external_links|re
 export const WIKI_FIELD_ALIASES: Record<string, string> = {
   wiki_sources: "resource",
   wiki_updated: "timestamp",
-  wiki_status: "status",
-  wiki_outgoing_links: "outgoing_links",
-  wiki_external_links: "external_links",
+  wiki_status:  "status",
 };
 
-/** Rename legacy wiki_* keys to OKF-native names (last-wins), drop wiki_type. Idempotent. */
+/** Strip [[ ]] from a wikilink string → bare stem; pass through plain strings. */
+function toPlainStem(v: unknown): unknown {
+  if (typeof v !== "string") return v;
+  const m = /^\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]$/.exec(v.trim());
+  return m ? m[1].split("/").pop()!.replace(/\.md$/, "") : v;
+}
+
+/**
+ * Rename legacy wiki_* keys to OKF-native names (last-wins), drop wiki_type, and
+ * normalize `resource` values from `[[stem]]` wikilinks to plain stems. Idempotent.
+ * Leaves `wiki_outgoing_links`/`wiki_external_links` untouched — a later migration
+ * relocates them to the body.
+ */
 export function renameWikiPageFields(content: string): string {
   const fmMatch = FM_RE.exec(content);
   if (!fmMatch) return content;
@@ -35,6 +45,11 @@ export function renameWikiPageFields(content: string): string {
     }
   }
   if ("wiki_type" in parsed) { delete parsed["wiki_type"]; modified = true; }
+  // resource → plain stems
+  if (Array.isArray(parsed.resource)) {
+    const plain = (parsed.resource as unknown[]).map(toPlainStem);
+    if (JSON.stringify(plain) !== JSON.stringify(parsed.resource)) { parsed.resource = plain; modified = true; }
+  }
 
   if (!modified) return content;
   const body = content.slice(fmMatch[0].length);
@@ -142,6 +157,7 @@ export type FieldRule =
   | { field: string; kind: "list-wikilinks-sources-only" }
   | { field: string; kind: "list-urls" }
   | { field: string; kind: "list-tags" }
+  | { field: string; kind: "list-strings" }
   | { field: string; kind: "date-scalar" }
   | { field: string; kind: "aliases" }
   | { field: string; kind: "warn-enum"; values: readonly string[] }
@@ -276,6 +292,30 @@ export function validateAndRepairFrontmatter(
             delete parsed[rule.field];
           } else {
             parsed[rule.field] = kept;
+          }
+        }
+        break;
+      }
+      case "list-strings": {
+        if (!Array.isArray(val)) {
+          warnings.push(`${rule.field}: expected list, got scalar — removed`);
+          delete parsed[rule.field];
+          modified = true;
+          break;
+        }
+        const filtered = (val as unknown[]).filter((v) => {
+          if (typeof v !== "string") {
+            warnings.push(`${rule.field}: invalid entry "${v}" — removed`);
+            return false;
+          }
+          return true;
+        });
+        if (filtered.length < (val as unknown[]).length) {
+          modified = true;
+          if (filtered.length === 0) {
+            delete parsed[rule.field];
+          } else {
+            parsed[rule.field] = filtered;
           }
         }
         break;
@@ -505,15 +545,15 @@ export function restoreSourceFrontmatter(original: string, formatted: string): s
 }
 
 const WIKI_PAGE_RULES: FieldRule[] = [
-  { field: "resource",       kind: "list-wikilinks-sources-only" },
-  { field: "timestamp",      kind: "date-scalar" },
-  { field: "status",         kind: "warn-enum", values: ["stub", "developing", "mature"] },
-  { field: "tags",           kind: "list-tags" },
-  { field: "aliases",        kind: "aliases" },
-  { field: "outgoing_links", kind: "list-wikilinks-wiki-only" },
-  { field: "external_links", kind: "list-urls" },
-  { field: "wiki_type",      kind: "remove" },
-  { field: "annotation",     kind: "remove" },
+  { field: "resource",             kind: "list-strings" },   // plain source stems
+  { field: "timestamp",            kind: "date-scalar" },
+  { field: "status",               kind: "warn-enum", values: ["stub", "developing", "mature"] },
+  { field: "tags",                 kind: "list-tags" },
+  { field: "aliases",              kind: "aliases" },
+  { field: "wiki_type",            kind: "remove" },
+  { field: "wiki_outgoing_links",  kind: "remove" },
+  { field: "wiki_external_links",  kind: "remove" },
+  { field: "annotation",           kind: "remove" },
 ];
 
 export function validateAndRepairWikiPageFrontmatter(
@@ -596,24 +636,24 @@ export function ensureWikiSources(
 export function parseResourceFromFm(content: string): string[] {
   const fmMatch = FM_RE.exec(content);
   if (!fmMatch) return [];
-  const match = /resource:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
-  if (!match) return [];
-  return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
+  let parsed: Record<string, unknown>;
+  try { parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {}; } catch { return []; }
+  const r = parsed.resource;
+  return Array.isArray(r) ? (r as unknown[]).filter((x): x is string => typeof x === "string") : [];
 }
 
 export function ensureResource(
   content: string,
   sourceStem: string,
 ): { content: string; injected: boolean } {
-  const sources = parseResourceFromFm(content);
-  if (sources.length > 0) return { content, injected: false };
+  if (parseResourceFromFm(content).length > 0) return { content, injected: false };
   const fmMatch = FM_RE.exec(content);
   if (!fmMatch) return { content, injected: false };
   let parsed: Record<string, unknown>;
   try { parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {}; }
   catch { return { content, injected: false }; }
   const body = content.slice(fmMatch[0].length);
-  parsed.resource = [`[[${sourceStem}]]`];
+  parsed.resource = [sourceStem];
   return { content: `---\n${yamlStringify(parsed)}---\n${body}`, injected: true };
 }
 

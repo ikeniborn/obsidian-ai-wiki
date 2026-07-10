@@ -11,18 +11,15 @@ wiki_sources: ["[[Src]]"]
 wiki_updated: 2026-07-09
 wiki_status: developing
 wiki_type: page
-wiki_outgoing_links: ["[[wiki_d_x]]"]
-wiki_external_links: ["https://a.b"]
 ---
 # X
 body [[wiki_d_x]]
 `;
 const renamed = renameWikiPageFields(legacy);
 check("resource present", /^resource:/m.test(renamed));
+check("resource is plain (no brackets)", /resource:\s*\n\s*-\s*"?Src"?/m.test(renamed) || /resource:\s*\[\s*"?Src"?\s*\]/.test(renamed));
 check("timestamp present", /^timestamp:/m.test(renamed));
 check("status present", /^status:/m.test(renamed));
-check("outgoing_links present", /^outgoing_links:/m.test(renamed));
-check("external_links present", /^external_links:/m.test(renamed));
 check("wiki_type dropped", !/wiki_type:/m.test(renamed));
 check("no legacy wiki_sources", !/wiki_sources:/m.test(renamed));
 check("body preserved", renamed.includes("# X\nbody [[wiki_d_x]]"));
@@ -36,7 +33,7 @@ check("both→single resource key", (bothOut.match(/^resource:/gm) || []).length
 check("type from subdir", entityTypeFromPath("!Wiki/d", "!Wiki/d/person/wiki_d_alice.md") === "person");
 check("type entities→concept", entityTypeFromPath("!Wiki/d", "!Wiki/d/entities/wiki_d_x.md") === "concept");
 check("type flat→concept", entityTypeFromPath("!Wiki/d", "!Wiki/d/wiki_d_x.md") === "concept");
-check("parseResource reads resource", JSON.stringify(parseResourceFromFm(renamed)) === JSON.stringify(["[[Src]]"]));
+check("parseResource plain", JSON.stringify(parseResourceFromFm(renamed)) === JSON.stringify(["Src"]));
 
 const noType = `---\nresource: []\n---\n# A\n`;
 check("type injected", /^type: person$/m.test(ensureType(noType, "person")));
