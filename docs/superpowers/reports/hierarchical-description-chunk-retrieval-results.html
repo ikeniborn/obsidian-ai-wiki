@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Итоговый отчёт — hierarchical-description-chunk-retrieval — 2026-07-10</title>
+  <style>
+    :root{
+      --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+      --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+      --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+      --shadow:rgba(40,40,80,.18);
+    }
+    body:has(#theme-toggle:checked){
+      --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+      --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+      --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+      --shadow:rgba(0,0,0,.45);
+    }
+    body{margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1180px; font:15px/1.55 system-ui,sans-serif; background:var(--bg); color:var(--fg);}
+    .theme-btn{position:sticky; top:.5rem; float:right; cursor:pointer; padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface);}
+    h1,h2,h3{color:var(--accent-2);} h1{font-size:1.8rem} h2{margin-top:2rem}
+    .badge{display:inline-block; padding:.15rem .5rem; border-radius:999px; border:1px solid var(--border); background:var(--surface); font-weight:700}
+    .ok{color:var(--ok-2)} .warn{color:var(--warn-2)}
+    table{border-collapse:collapse; width:100%; margin:.8rem 0; background:var(--surface); box-shadow:0 2px 12px var(--shadow)}
+    th,td{border:1px solid var(--border); padding:.5rem .6rem; vertical-align:top}
+    th{background:color-mix(in srgb,var(--accent) 12%,var(--surface)); text-align:left}
+    tr:nth-child(even) td{background:var(--zebra)}
+    code{background:color-mix(in srgb,var(--accent) 10%,var(--surface)); padding:.08rem .25rem; border-radius:4px}
+    .note{border-left:4px solid var(--accent); padding:.7rem .9rem; background:color-mix(in srgb,var(--accent) 8%,var(--surface)); margin:.8rem 0}
+    .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:.75rem}
+    .card{background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.8rem; box-shadow:0 2px 12px var(--shadow)}
+    .flow{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:.6rem; align-items:stretch; margin:1rem 0}
+    .step{position:relative; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.75rem; min-height:7.5rem; box-shadow:0 2px 12px var(--shadow)}
+    .step strong{display:block; color:var(--accent-2); margin-bottom:.35rem}
+    .step small{color:var(--muted)}
+    .step:after{content:"→"; position:absolute; right:-.55rem; top:42%; color:var(--line); font-weight:800}
+    .step:last-child:after{content:""}
+    .lane{border:1px dashed var(--border); border-radius:8px; padding:.75rem; margin:1rem 0}
+    details{margin:.75rem 0; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.65rem .8rem}
+  </style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<label for="theme-toggle" class="theme-btn" title="Переключить тему">Тема</label>
+<header>
+  <h1>Итоговый отчёт — hierarchical-description-chunk-retrieval — 2026-07-10</h1>
+  <p><span class="badge ok">result OK</span> Цепочка IDD→SDD выполнена: intent, spec, plan, implementation, verification, docs.</p>
+</header>
+<main>
+  <section id="summary">
+    <h2>Краткий итог</h2>
+    <p>Реализован и проверен иерархический retrieval: описания статей выбирают seed-статьи, граф расширяет пул кандидатов, финальный контекст собирается из релевантных чистых section chunks с идентификатором статьи и заголовком секции.</p>
+    <p>Полные тела candidate articles больше не отправляются в answer path по single-domain и cross-domain путям. Link validation ограничена итоговыми article ids выбранных chunks.</p>
+    <div class="note">Ограничение: полный <code>npm run lint</code> остаётся красным из-за pre-existing <code>src/modals.ts:138</code>; changed-source lint проходит.</div>
+  </section>
+
+  <section id="current-query-flow">
+    <h2>Текущая схема запроса</h2>
+    <p>Схема перепроверена по текущему коду <code>src/phases/query.ts</code>, <code>src/phases/query-cross-domain.ts</code>, <code>src/page-similarity.ts</code>, <code>src/phases/query-answer.ts</code>.</p>
+
+    <div class="lane">
+      <h3>Single-domain</h3>
+      <div class="flow">
+        <div class="step"><strong>1. Чтение домена</strong><small>Читаются страницы домена и <code>description</code> из frontmatter через <code>collectDescriptions</code>.</small></div>
+        <div class="step"><strong>2. Seed-статьи</strong><small>Embedding/hybrid сравнивает query только с <code>summary</code> vectors; при сбое или слабом сигнале работает Jaccard fallback.</small></div>
+        <div class="step"><strong>3. Graph pool</strong><small><code>bfsExpandRanked</code> расширяет seeds по wiki graph; floor/fusion остаются article-level решениями.</small></div>
+        <div class="step"><strong>4. Итоговые article ids</strong><small>Берётся graph candidate pool или fused subset; это только пул для detailed retrieval.</small></div>
+        <div class="step"><strong>5. Clean chunks</strong><small><code>selectRelevantChunks</code> ранжирует section chunks внутри пула; section input = heading + body, без description.</small></div>
+        <div class="step"><strong>6. Контекст prompt</strong><small><code>renderContextChunks</code> отдаёт только article id, section heading и chunk body; index scoped только к final selected ids.</small></div>
+        <div class="step"><strong>7. Защита ответа</strong><small><code>answerFromContext</code> валидирует WikiLinks только против final selected ids.</small></div>
+      </div>
+    </div>
+
+    <div class="lane">
+      <h3>Cross-domain</h3>
+      <div class="flow">
+        <div class="step"><strong>1. Кандидаты по доменам</strong><small>Для каждого домена выполняется тот же seed → graph pool этап.</small></div>
+        <div class="step"><strong>2. Merge/fuse</strong><small><code>mergeCandidates</code> объединяет candidate pools и применяет fusion/cap на article ids.</small></div>
+        <div class="step"><strong>3. Chunk rerank</strong><small>Финальный chunk search идёт только внутри capped merged article pool.</small></div>
+        <div class="step"><strong>4. Chunk-only context</strong><small>Prompt содержит selected chunks; cross-domain index строится только по <code>finalChunkIds</code>.</small></div>
+        <div class="step"><strong>5. Scoped links</strong><small>Available WikiLinks, validation, <code>found_pages</code> и <code>found_chunks</code> основаны на selected chunk article ids.</small></div>
+      </div>
+    </div>
+
+    <table>
+      <tr><th>Стадия</th><th>Что ранжируется</th><th>Что может попасть в LLM</th><th>Fallback</th></tr>
+      <tr><td>Seed</td><td>Article descriptions / <code>summary</code> vectors</td><td>Ничего напрямую</td><td>Jaccard по descriptions; single-domain LLM seed fallback остаётся старым путём</td></tr>
+      <tr><td>Graph</td><td>Article ids из связей</td><td>Ничего напрямую</td><td>Jaccard ranking для graph candidates, когда dense недоступен</td></tr>
+      <tr><td>Chunk</td><td>Clean section chunks внутри candidate pool</td><td>Только selected chunk body + article id + heading</td><td>Jaccard по <code>heading + body</code></td></tr>
+      <tr><td>Answer</td><td>Готовый chunk context</td><td>Нет full candidate pages и нет unselected raw index</td><td>Broken links annotate/repair only within selected ids</td></tr>
+    </table>
+  </section>
+
+  <section id="anchors">
+    <h2>Source anchors</h2>
+    <ul>
+      <li>Intent: <code>docs/superpowers/intents/2026-07-10-hierarchical-description-chunk-retrieval-intent.md</code></li>
+      <li>Spec: <code>docs/superpowers/specs/2026-07-10-hierarchical-description-chunk-retrieval-design.md</code></li>
+      <li>Plan: <code>docs/superpowers/plans/2026-07-10-hierarchical-description-chunk-retrieval-plan.md</code></li>
+      <li>Diff range: <code>7da8c5a..dev-hierarchical-description-chunk-retrieval</code></li>
+    </ul>
+  </section>
+
+  <section id="intent">
+    <h2>Intent coverage</h2>
+    <table>
+      <tr><th>Outcome</th><th>Evidence</th><th>Status</th></tr>
+      <tr><td>Description vectors select seed articles</td><td><code>summary</code> chunks are description-only; article scoring uses summary vectors only.</td><td class="ok">OK</td></tr>
+      <tr><td>Graph neighbours join candidate pool</td><td><code>retrieveDomainCandidates</code>, <code>bfsExpandRanked</code>, cross-domain merge retained.</td><td class="ok">OK</td></tr>
+      <tr><td>Clean chunks ranked inside pool</td><td><code>selectRelevantChunks</code> ranks section chunks from candidate ids only.</td><td class="ok">OK</td></tr>
+      <tr><td>LLM context only chunks with article id and heading</td><td><code>renderContextChunks</code>; single-domain and cross-domain answer paths use it.</td><td class="ok">OK</td></tr>
+      <tr><td>Jaccard fallback preserved</td><td>No embeddings and malformed embedding responses fall back to clean chunk Jaccard.</td><td class="ok">OK</td></tr>
+    </table>
+  </section>
+
+  <section id="spec">
+    <h2>Requirement coverage</h2>
+    <table>
+      <tr><th>Requirement</th><th>Implementation</th><th>Verification</th></tr>
+      <tr><td>R1 clean section embeddings</td><td><code>buildChunkInputs</code> excludes description from section input; cache version <code>3</code>.</td><td><code>eval/hierarchical-retrieval</code></td></tr>
+      <tr><td>R2 description-level article seeds</td><td>Cached article scoring filters <code>summary</code> vectors.</td><td>seed dense scoring evals</td></tr>
+      <tr><td>R3 graph before chunk retrieval</td><td>Final chunks selected after seed+graph candidate pool is built.</td><td>single/cross-domain evals</td></tr>
+      <tr><td>R4 chunk-only context</td><td><code>query.ts</code> and <code>query-cross-domain.ts</code> render chunks.</td><td>prompt assertions</td></tr>
+      <tr><td>R5 graph pages require relevant chunks</td><td>Graph noise article excluded unless chunk scores.</td><td>graph filtering eval</td></tr>
+      <tr><td>R6 Jaccard fallback hierarchy</td><td>Article and chunk stages use Jaccard when embeddings fail.</td><td>fallback evals</td></tr>
+      <tr><td>R7 cross-domain same context shape</td><td>Cross-domain final context uses <code>renderContextChunks</code>.</td><td><code>eval/cross-domain</code></td></tr>
+      <tr><td>R8 no user-visible setting/default change</td><td>No settings/default files changed for retrieval knobs.</td><td>diff review</td></tr>
+    </table>
+  </section>
+
+  <section id="plan">
+    <h2>Plan reconciliation</h2>
+    <table>
+      <tr><th>Task</th><th>Result</th><th>Evidence</th></tr>
+      <tr><td>1. Eval harness</td><td class="ok">DONE</td><td><code>eval/hierarchical-retrieval/*</code></td></tr>
+      <tr><td>2. Clean cache inputs</td><td class="ok">DONE</td><td><code>src/page-similarity.ts</code>, cache v3 regressions</td></tr>
+      <tr><td>3. Chunk ranking</td><td class="ok">DONE</td><td><code>SelectedChunk</code>, <code>selectRelevantChunks</code>, <code>renderContextChunks</code></td></tr>
+      <tr><td>4. Single-domain query</td><td class="ok">DONE</td><td><code>src/phases/query.ts</code>, selected index block, scoped links</td></tr>
+      <tr><td>5. Cross-domain query</td><td class="ok">DONE</td><td><code>src/phases/query-cross-domain.ts</code></td></tr>
+      <tr><td>6. Verification/docs</td><td class="ok">DONE</td><td>evals, build, scoped lint, iwiki, bundle</td></tr>
+    </table>
+  </section>
+
+  <section id="changes">
+    <h2>Change inventory</h2>
+    <table>
+      <tr><th>Path</th><th>Change</th><th>Reason</th><th>Evidence</th></tr>
+      <tr><td><code>src/page-similarity.ts</code></td><td>Cache v3, clean chunk inputs, selected chunk ranking, summary-only article scoring.</td><td>Separate broad article discovery from detailed chunk relevance.</td><td>47-pass hierarchical eval, <code>tsc</code>.</td></tr>
+      <tr><td><code>src/phases/query.ts</code></td><td>Single-domain answer context uses selected chunks; index scoped to selected ids.</td><td>Prevent full articles and unselected descriptions from entering prompt.</td><td>prompt leakage eval.</td></tr>
+      <tr><td><code>src/phases/query-cross-domain.ts</code></td><td>Cross-domain answer context uses selected chunks after merge/fusion.</td><td>Same final context shape across domains.</td><td>31-pass cross-domain eval.</td></tr>
+      <tr><td><code>src/phases/query-answer.ts</code></td><td>Link validation/repair uses selected context ids only.</td><td>Prevent answers from linking outside retrieved evidence.</td><td>selected-outside link eval.</td></tr>
+      <tr><td><code>src/types.ts</code>, <code>src/eval-log.ts</code></td><td>Added chunk diagnostics fields.</td><td>Expose candidate and chunk decisions.</td><td>eval metadata assertions.</td></tr>
+      <tr><td><code>src/phases/lint.ts</code></td><td>Full-corpus cache refresh flag.</td><td>Allow safe cache v3 rebuild while incremental ingest stays guarded.</td><td>legacy cache regressions.</td></tr>
+      <tr><td><code>eval/hierarchical-retrieval/*</code></td><td>New deterministic retrieval eval.</td><td>Guard chunk shape, cache migration, fallback, link scope, abort.</td><td>47/47 pass.</td></tr>
+      <tr><td><code>eval/cross-domain/run.ts</code></td><td>Chunk stats assertions.</td><td>Verify cross-domain chunk context.</td><td>31/31 pass.</td></tr>
+      <tr><td><code>dist/main.js</code></td><td>Production bundle rebuilt.</td><td>Ship runtime code matching source.</td><td><code>npm run build</code>.</td></tr>
+      <tr><td><code>docs/superpowers/*</code>, <code>docs/TODO.md</code></td><td>Intent, spec, plan, task tracking, result report.</td><td>IDD→SDD chain evidence.</td><td>check-chain state.</td></tr>
+    </table>
+  </section>
+
+  <section id="verification">
+    <h2>Verification</h2>
+    <table>
+      <tr><th>Command</th><th>Observed result</th><th>Status</th></tr>
+      <tr><td><code>npx tsx eval/hierarchical-retrieval/run.ts</code></td><td>OK — 47 passed, 0 failed</td><td class="ok">OK</td></tr>
+      <tr><td><code>npx tsx eval/cross-domain/run.ts</code></td><td>OK — 31 passed, 0 failed</td><td class="ok">OK</td></tr>
+      <tr><td><code>npx tsx eval/retrieval-prune/run.ts</code></td><td>OK — 15 passed, 0 failed</td><td class="ok">OK</td></tr>
+      <tr><td><code>npx tsc --noEmit</code></td><td>exit 0</td><td class="ok">OK</td></tr>
+      <tr><td><code>npm run build</code></td><td>exit 0; <code>dist/main.js</code> updated</td><td class="ok">OK</td></tr>
+      <tr><td><code>npx eslint changed source files</code></td><td>exit 0</td><td class="ok">OK</td></tr>
+      <tr><td><code>npm run lint</code></td><td>exit 1: pre-existing <code>src/modals.ts:138</code>, unrelated warnings</td><td class="warn">Known external</td></tr>
+      <tr><td><code>time npx tsx eval/hierarchical-retrieval/run.ts</code></td><td>real 0m0.437s in Task 6</td><td class="ok">OK</td></tr>
+      <tr><td><code>wiki_lint(obsidian-ai-wiki)</code></td><td>no broken, orphan, stale, missing-source; existing long-lead advisories</td><td class="ok">OK</td></tr>
+    </table>
+  </section>
+
+  <section id="review">
+    <h2>Code review findings</h2>
+    <table>
+      <tr><th>Finding</th><th>Resolution</th><th>Evidence</th></tr>
+      <tr><td>Local type instead of future API in eval</td><td>Fixed by importing <code>SelectedChunk</code>.</td><td><code>bb88130</code></td></tr>
+      <tr><td>Unsafe partial cache upgrade</td><td>Added <code>fullCorpus</code> guard and regressions.</td><td><code>ec60702</code>, <code>0dc7328</code></td></tr>
+      <tr><td>Section vectors leaking into article scoring</td><td>Article scoring now uses summary vectors.</td><td><code>77e9ded</code></td></tr>
+      <tr><td>Jaccard chunk scoring used article id</td><td>Scoring changed to section text only.</td><td><code>26f0272</code></td></tr>
+      <tr><td>Malformed embedding vectors</td><td>Non-finite vectors rejected; fallback tested.</td><td><code>df1c3c1</code></td></tr>
+      <tr><td>Link validation used whole vault</td><td>Validation scoped to selected ids.</td><td><code>e6f191e</code></td></tr>
+      <tr><td>Abort after chunk selection</td><td>Post-await abort guards added.</td><td><code>ec53f8d</code>, cross-domain guard</td></tr>
+      <tr><td>Single-domain raw index leakage</td><td>Index prompt scoped to selected ids.</td><td><code>9998402</code>, <code>06a126f</code></td></tr>
+    </table>
+  </section>
+
+  <section id="docs">
+    <h2>Documentation evidence</h2>
+    <p>iwiki domain <code>obsidian-ai-wiki</code> updated with hierarchical retrieval behavior. Repository docs outside chain artifacts had no existing retrieval page requiring update.</p>
+    <p><code>wiki_lint</code>: no broken refs, no orphans, no stale pages, no missing source. Existing long-lead advisories remain on older OKF pages.</p>
+  </section>
+
+  <section id="risks">
+    <h2>Decision propagation and residual risk</h2>
+    <table>
+      <tr><th>Risk</th><th>Decision</th><th>Reason</th></tr>
+      <tr><td>Cross-domain live embedding cost when cache misses</td><td>Accepted risk for this branch</td><td>Quality is priority; eval latency is low; no extra LLM retrieval call added.</td></tr>
+      <tr><td>Abort cannot cancel in-flight <code>requestUrl</code></td><td>Documented responsiveness risk</td><td>Callers stop after chunk selection; Obsidian request API has limited cancellation support.</td></tr>
+      <tr><td>Full lint pre-existing failure</td><td>Not branch blocker</td><td>Changed source lint, evals, build, and tsc pass.</td></tr>
+    </table>
+  </section>
+
+  <section id="visuals">
+    <h2>Матрицы результата</h2>
+    <div class="grid">
+      <div class="card"><h3>Поток данных</h3><p>Description vector → seed articles → graph pool → clean section chunks → chunk-only prompt.</p></div>
+      <div class="card"><h3>Граф компонентов</h3><p><code>page-similarity</code> отвечает за vectors/chunks; query phases отвечают за pool/context; <code>query-answer</code> отвечает за selected-link validation.</p></div>
+      <div class="card"><h3>Карта проверок</h3><p>47 hierarchical checks, 31 cross-domain checks, 15 prune checks, build, tsc, scoped lint, iwiki lint.</p></div>
+      <div class="card"><h3>Вердикт</h3><p class="ok">OK: missing plan work, open critical findings, stale docs, failed required changed-source checks not found.</p></div>
+    </div>
+  </section>
+
+  <section id="verdict">
+    <h2>Final verdict</h2>
+    <p><span class="badge ok">OK</span> Implementation matches intent, spec, and plan. Required behavior is implemented and verified. Residual items are documented as non-blocking risks or pre-existing repository lint debt.</p>
+  </section>
+</main>
+</body>
+</html>

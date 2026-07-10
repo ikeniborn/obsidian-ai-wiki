@@ -29525,6 +29525,10 @@ function decodeVector(b64) {
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return new Float32Array(bytes.buffer);
 }
+function summaryVectors(entry) {
+  if (!entry) return void 0;
+  return entry.chunks.filter((chunk) => chunk.kind === "summary" && chunk.vector !== "").map((chunk) => decodeVector(chunk.vector));
+}
 function annotationHash(s) {
   let h = 0;
   for (let i = 0; i < s.length; i++) {
@@ -29603,16 +29607,80 @@ function splitSections(body, chunking) {
 }
 function buildChunkInputs(annotation, body, chunking) {
   const inputs = [
-    { kind: "summary", embedText: annotation, hash: annotationHash(annotation) }
+    { kind: "summary", embedText: annotation, hash: annotationHash(`summary
+${annotation}`) }
   ];
-  for (const { heading, window: window2 } of splitSections(body, chunking)) {
-    const embedText = `${annotation}
-
-${heading}
-${window2}`;
-    inputs.push({ kind: "section", embedText, hash: annotationHash(embedText) });
-  }
+  splitSections(body, chunking).forEach(({ heading, window: window2 }, ordinal) => {
+    const embedText = `${heading}
+${window2}`.trim();
+    inputs.push({
+      kind: "section",
+      embedText,
+      hash: annotationHash(`section
+${ordinal}
+${embedText}`),
+      heading,
+      window: window2,
+      ordinal
+    });
+  });
   return inputs;
+}
+function collectCandidateSections(pages, candidateIds, seedIds, articleScores, chunking) {
+  const sections = [];
+  for (const [path3, content] of pages) {
+    const articleId = pageId(path3);
+    if (!candidateIds.has(articleId)) continue;
+    splitSections(content, chunking).forEach(({ heading, window: window2 }, ordinal) => {
+      const embedText = `${heading}
+${window2}`.trim();
+      if (!embedText) return;
+      sections.push({
+        articleId,
+        path: path3,
+        heading,
+        body: window2,
+        embedText,
+        hash: annotationHash(`section
+${ordinal}
+${embedText}`),
+        source: seedIds.has(articleId) ? "seed" : "graph",
+        articleScore: articleScores[articleId],
+        ordinal
+      });
+    });
+  }
+  return sections;
+}
+function sortSelectedChunks(items) {
+  return items.sort(
+    (a, b) => b.score - a.score || Number(b.source === "seed") - Number(a.source === "seed") || (b.articleScore ?? 0) - (a.articleScore ?? 0) || a.articleId.localeCompare(b.articleId) || a.ordinal - b.ordinal || a.path.localeCompare(b.path) || a.heading.localeCompare(b.heading)
+  );
+}
+function rankChunksJaccard(queryTokens, sections, limit2) {
+  const scored = [];
+  for (const section of sections) {
+    const score = jaccardCoeff(queryTokens, tokenize(section.embedText));
+    if (score <= 0) continue;
+    scored.push({
+      articleId: section.articleId,
+      path: section.path,
+      heading: section.heading,
+      body: section.body,
+      score,
+      source: section.source,
+      articleScore: section.articleScore,
+      ordinal: section.ordinal
+    });
+  }
+  return sortSelectedChunks(scored).slice(0, limit2);
+}
+function isUsableVector(vec, dimensions) {
+  if (!vec || vec.length === 0 || dimensions && vec.length !== dimensions) return false;
+  for (const value of vec) {
+    if (!Number.isFinite(value)) return false;
+  }
+  return true;
 }
 function jaccardCoeff(a, b) {
   if (a.size === 0 || b.size === 0) return 0;
@@ -29693,6 +29761,70 @@ var PageSimilarityService = class {
   }
   setCacheForTest(cache) {
     this.cache = cache;
+  }
+  async selectRelevantChunks(query, pages, candidateIds, seedIds, articleScores, limit2) {
+    const queryTokens = tokenize(query);
+    if (queryTokens.size === 0 || candidateIds.size === 0 || limit2 <= 0) return [];
+    const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
+    const sections = collectCandidateSections(pages, candidateIds, seedIds, articleScores, chunking);
+    if (sections.length === 0) return [];
+    if (this.config.mode === "jaccard") return rankChunksJaccard(queryTokens, sections, limit2);
+    const { baseUrl, apiKey, model } = this.config;
+    if (!baseUrl || !model) return rankChunksJaccard(queryTokens, sections, limit2);
+    let queryVec;
+    try {
+      const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [query.slice(0, 2e3)], this.config.dimensions);
+      if (!isUsableVector(vecs[0], this.config.dimensions)) return rankChunksJaccard(queryTokens, sections, limit2);
+      queryVec = vecs[0];
+    } catch {
+      return rankChunksJaccard(queryTokens, sections, limit2);
+    }
+    const vectors = /* @__PURE__ */ new Map();
+    if (this.cache && this.cache.model === model && this.cache.dimensions === this.config.dimensions) {
+      for (const section of sections) {
+        const entry = this.cache.entries[section.articleId];
+        const cached = entry?.chunks.find((chunk) => chunk.kind === "section" && chunk.hash === section.hash && chunk.vector);
+        if (!cached) continue;
+        try {
+          const vec = decodeVector(cached.vector);
+          if (isUsableVector(vec, this.config.dimensions)) vectors.set(section.hash, vec);
+        } catch {
+        }
+      }
+    }
+    const missing = sections.filter((section) => !vectors.has(section.hash));
+    for (let i = 0; i < missing.length; i += EMBEDDING_BATCH_SIZE) {
+      const batch = missing.slice(i, i + EMBEDDING_BATCH_SIZE);
+      try {
+        const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.map((section) => section.embedText), this.config.dimensions);
+        if (vecs.length !== batch.length || vecs.some((vec) => !isUsableVector(vec, this.config.dimensions))) {
+          return rankChunksJaccard(queryTokens, sections, limit2);
+        }
+        for (let j = 0; j < batch.length; j++) {
+          vectors.set(batch[j].hash, vecs[j]);
+        }
+      } catch {
+        return rankChunksJaccard(queryTokens, sections, limit2);
+      }
+    }
+    const scored = [];
+    for (const section of sections) {
+      const vec = vectors.get(section.hash);
+      if (!vec) continue;
+      const score = maxCosine(queryVec, [vec]);
+      if (score <= 0) continue;
+      scored.push({
+        articleId: section.articleId,
+        path: section.path,
+        heading: section.heading,
+        body: section.body,
+        score,
+        source: section.source,
+        articleScore: section.articleScore,
+        ordinal: section.ordinal
+      });
+    }
+    return sortSelectedChunks(scored).slice(0, limit2);
   }
   /**
    * All unordered page pairs whose max-pool cosine ≥ threshold. Embedding-only (uses the
@@ -29823,8 +29955,8 @@ var PageSimilarityService = class {
     const pageVecs = /* @__PURE__ */ new Map();
     if (this.cache && this.cache.model === model) {
       for (let i = 0; i < pids.length; i++) {
-        const entry = this.cache.entries[pids[i]];
-        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
+        const vecs = summaryVectors(this.cache.entries[pids[i]]);
+        if (vecs !== void 0) pageVecs.set(pids[i], vecs);
       }
     }
     const batches = [];
@@ -29897,8 +30029,8 @@ var PageSimilarityService = class {
     const pageVecs = /* @__PURE__ */ new Map();
     if (this.cache && this.cache.model === model) {
       for (let i = 0; i < pids.length; i++) {
-        const entry = this.cache.entries[pids[i]];
-        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
+        const vecs = summaryVectors(this.cache.entries[pids[i]]);
+        if (vecs !== void 0) pageVecs.set(pids[i], vecs);
       }
     }
     const batches = [];
@@ -29971,8 +30103,8 @@ var PageSimilarityService = class {
     const pageVecs = /* @__PURE__ */ new Map();
     if (this.cache && this.cache.model === model) {
       for (let i = 0; i < pids.length; i++) {
-        const entry = this.cache.entries[pids[i]];
-        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
+        const vecs = summaryVectors(this.cache.entries[pids[i]]);
+        if (vecs !== void 0) pageVecs.set(pids[i], vecs);
       }
     }
     const batches = [];
@@ -30050,13 +30182,13 @@ var PageSimilarityService = class {
     try {
       const raw = await vaultTools.read(domainEmbeddingsPath(domainRoot));
       const parsed = JSON.parse(raw);
-      if (parsed.version === 2 && parsed.model === model && parsed.dimensions === dimensions) {
+      if (parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions) {
         this.cache = parsed;
       }
     } catch {
     }
   }
-  async refreshCache(domainRoot, vaultTools, indexAnnotations, pageBodies) {
+  async refreshCache(domainRoot, vaultTools, indexAnnotations, pageBodies, opts = {}) {
     if (this.config.mode === "jaccard") return { updated: 0 };
     const { baseUrl, apiKey, model, dimensions } = this.config;
     if (!baseUrl || !model || !dimensions) return { updated: 0 };
@@ -30065,13 +30197,16 @@ var PageSimilarityService = class {
     let cacheFile;
     try {
       const parsed = JSON.parse(await vaultTools.read(cachePath));
-      cacheFile = parsed.version === 2 && parsed.model === model && parsed.dimensions === dimensions ? parsed : { version: 2, model, dimensions, entries: {} };
+      if (parsed.version !== 3 && opts.fullCorpus !== true) {
+        return { updated: 0 };
+      }
+      cacheFile = parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions ? parsed : { version: 3, model, dimensions, entries: {} };
     } catch {
-      cacheFile = { version: 2, model, dimensions, entries: {} };
+      cacheFile = { version: 3, model, dimensions, entries: {} };
     }
     const desired = /* @__PURE__ */ new Map();
     const pending = [];
-    let changed = false;
+    let changed = opts.fullCorpus === true && Object.keys(cacheFile.entries).some((pid) => !indexAnnotations.has(pid));
     for (const [pid, annotation] of indexAnnotations) {
       if (!pageBodies.has(pid) && cacheFile.entries[pid]) {
         desired.set(pid, cacheFile.entries[pid].chunks);
@@ -30080,17 +30215,19 @@ var PageSimilarityService = class {
       const body = pageBodies.get(pid) ?? "";
       const inputs = buildChunkInputs(annotation, body, chunking);
       const oldByHash = new Map(
-        (cacheFile.entries[pid]?.chunks ?? []).map((c) => [c.hash, c.vector])
+        (cacheFile.entries[pid]?.chunks ?? []).map((chunk) => [chunk.hash, chunk])
       );
       const chunks = [];
-      for (const { kind, embedText, hash } of inputs) {
+      for (const { kind, embedText, hash, heading, ordinal } of inputs) {
         const reuse = oldByHash.get(hash);
-        if (reuse !== void 0) {
-          chunks.push({ vector: reuse, hash, kind });
-        } else {
-          pending.push({ pid, idx: chunks.length, embedText });
-          chunks.push({ vector: "", hash, kind });
-        }
+        chunks.push({
+          vector: reuse?.vector ?? "",
+          hash,
+          kind,
+          heading,
+          ordinal
+        });
+        if (reuse === void 0) pending.push({ pid, idx: chunks.length - 1, embedText });
       }
       if ((cacheFile.entries[pid]?.chunks.length ?? 0) !== chunks.length) changed = true;
       desired.set(pid, chunks);
@@ -30108,6 +30245,7 @@ var PageSimilarityService = class {
       }
     }
     if (pending.length === 0 && !changed) return { updated: 0 };
+    if (opts.fullCorpus === true) cacheFile.entries = {};
     for (const [pid, chunks] of desired) {
       const filled = chunks.filter((c) => c.vector !== "");
       if (filled.length > 0) cacheFile.entries[pid] = { chunks: filled };
@@ -30117,6 +30255,12 @@ var PageSimilarityService = class {
     return { updated: pending.length };
   }
 };
+function renderContextChunks(chunks) {
+  return chunks.map((chunk) => [
+    `--- article: ${chunk.articleId}, heading: ${chunk.heading} ---`,
+    chunk.body
+  ].join("\n")).join("\n\n");
+}
 
 // src/settings.ts
 async function checkNativeAvailability(baseUrl, apiKey, model) {
@@ -40679,7 +40823,7 @@ function resolveLink(brokenStem, candidates) {
 
 // src/phases/query-answer.ts
 async function* answerFromContext(args) {
-  const { llm, model, opts, signal, vaultTools, systemPrompt, question, contextBlock, selectedIds, wikiLinkValidationRetries } = args;
+  const { llm, model, opts, signal, systemPrompt, question, contextBlock, selectedIds, wikiLinkValidationRetries } = args;
   let outputTokens = 0;
   const messages = [
     { role: "system", content: systemPrompt },
@@ -40723,89 +40867,76 @@ ${contextBlock}` }
   yield { kind: "tool_result", ok: !!answer, preview: answer ? `${answer.length} chars` : "no response" };
   if (answer && !signal.aborted) {
     yield { kind: "tool_use", name: "ValidateLinks", input: {} };
-    let skipValidation = false;
-    let knownStems = /* @__PURE__ */ new Set();
-    try {
-      const allVaultFiles = await vaultTools.listFiles("");
-      knownStems = new Set(
-        allVaultFiles.filter((f) => f.endsWith(".md")).map((f) => pageId(f))
-      );
-    } catch {
-      console.warn("[ai-wiki] ValidateLinks: listFiles failed, skipping");
-      skipValidation = true;
-      yield { kind: "tool_result", ok: false, preview: "listFiles failed \u2014 skipped" };
-    }
-    if (!skipValidation) {
-      const links = extractAnswerLinks(answer);
-      const broken = findBrokenLinks(links, knownStems);
-      yield {
-        kind: "tool_result",
-        ok: broken.length === 0,
-        preview: broken.length === 0 ? "all valid" : `${broken.length} broken`
-      };
-      if (broken.length > 0) {
-        yield { kind: "tool_use", name: "FixingLinks", input: { broken: broken.length } };
-        const candidates = [.../* @__PURE__ */ new Set([...selectedIds, ...knownStems])];
-        const resolvedPairs = [];
-        const stripped = [];
-        for (const b of broken) {
-          const r = resolveLink(b, candidates);
-          if (r.kind === "resolved" && r.stem !== b) {
-            answer = answer.split(`[[${b}]]`).join(`[[${r.stem}]]`);
-            resolvedPairs.push(`${b}\u2192${r.stem}`);
-          } else {
-            stripped.push(b);
-          }
+    const knownStems = new Set(selectedIds);
+    const links = extractAnswerLinks(answer);
+    const broken = findBrokenLinks(links, knownStems);
+    yield {
+      kind: "tool_result",
+      ok: broken.length === 0,
+      preview: broken.length === 0 ? "all valid" : `${broken.length} broken`
+    };
+    if (broken.length > 0) {
+      yield { kind: "tool_use", name: "FixingLinks", input: { broken: broken.length } };
+      const candidates = [...knownStems];
+      const resolvedPairs = [];
+      const stripped = [];
+      for (const b of broken) {
+        const r = resolveLink(b, candidates);
+        if (r.kind === "resolved" && r.stem !== b) {
+          answer = answer.split(`[[${b}]]`).join(`[[${r.stem}]]`);
+          resolvedPairs.push(`${b}\u2192${r.stem}`);
+        } else {
+          stripped.push(b);
         }
-        if (resolvedPairs.length > 0) yield { kind: "rule_fired", ruleId: "resolveLink", count: resolvedPairs.length };
-        let llmFixed = 0;
-        if (stripped.length > 0 && wikiLinkValidationRetries > 0) {
-          const validList = candidates.filter((s) => s.startsWith("wiki_")).join(", ");
-          const baseMessages = [
-            { role: "system", content: `Rewrite the answer so every WikiLink points to a valid stem. Broken stems: ${stripped.join(", ")}. Valid stems: ${validList}. Return JSON {reasoning, answer_markdown, citations}.` },
-            { role: "user", content: `Question: ${question}
+      }
+      if (resolvedPairs.length > 0) yield { kind: "rule_fired", ruleId: "resolveLink", count: resolvedPairs.length };
+      let llmFixed = 0;
+      if (stripped.length > 0 && wikiLinkValidationRetries > 0) {
+        const validList = candidates.filter((s) => s.startsWith("wiki_")).join(", ");
+        const baseMessages = [
+          { role: "system", content: `Rewrite the answer so every WikiLink points to a valid stem. Broken stems: ${stripped.join(", ")}. Valid stems: ${validList}. Return JSON {reasoning, answer_markdown, citations}.` },
+          { role: "user", content: `Question: ${question}
 
 Answer to fix:
 ${answer}` }
-          ];
-          try {
-            const r = await parseWithRetry({
-              llm,
-              model,
-              baseMessages,
-              opts: { ...opts, jsonMode: "json_object", thinkingBudgetTokens: void 0 },
-              schema: makeQueryAnswerSchema(knownStems),
-              maxRetries: wikiLinkValidationRetries,
-              callSite: "query.answer",
-              signal,
-              // Retry/structural-error events are intentionally not surfaced here:
-              // the FixingLinks tool_result preview already reports the outcome
-              // (llm-fixed/annotated); structuralErrorCounter still records metrics.
-              onEvent: () => {
-              }
-            });
-            outputTokens += r.outputTokens;
-            const stillBroken = findBrokenLinks(extractAnswerLinks(r.value.answer_markdown), knownStems);
-            if (stillBroken.length === 0) {
-              answer = r.value.answer_markdown;
-              llmFixed = stripped.length;
-              stripped.length = 0;
+        ];
+        try {
+          const r = await parseWithRetry({
+            llm,
+            model,
+            baseMessages,
+            opts: { ...opts, jsonMode: "json_object", thinkingBudgetTokens: void 0 },
+            schema: makeQueryAnswerSchema(knownStems),
+            maxRetries: wikiLinkValidationRetries,
+            callSite: "query.answer",
+            signal,
+            // Retry/structural-error events are intentionally not surfaced here:
+            // the FixingLinks tool_result preview already reports the outcome
+            // (llm-fixed/annotated); structuralErrorCounter still records metrics.
+            onEvent: () => {
             }
-          } catch (e) {
-            if (signal.aborted || e.name === "AbortError") return { answer, outputTokens };
+          });
+          outputTokens += r.outputTokens;
+          const stillBroken = findBrokenLinks(extractAnswerLinks(r.value.answer_markdown), knownStems);
+          if (stillBroken.length === 0) {
+            answer = r.value.answer_markdown;
+            llmFixed = stripped.length;
+            stripped.length = 0;
           }
+        } catch (e) {
+          if (signal.aborted || e.name === "AbortError") return { answer, outputTokens };
         }
-        if (stripped.length > 0) {
-          answer = annotateBroken(answer, new Set(stripped));
-          yield { kind: "rule_fired", ruleId: "annotateBroken", count: stripped.length };
-        }
-        const parts = [];
-        if (resolvedPairs.length) parts.push(`resolved ${resolvedPairs.length} (det): ${resolvedPairs.join(", ")}`);
-        if (llmFixed) parts.push(`llm-fixed ${llmFixed}`);
-        if (stripped.length) parts.push(`annotated ${stripped.length}: ${stripped.join(", ")}`);
-        yield { kind: "tool_result", ok: stripped.length === 0, preview: parts.join("; ") };
-        yield { kind: "assistant_replace", text: answer };
       }
+      if (stripped.length > 0) {
+        answer = annotateBroken(answer, new Set(stripped));
+        yield { kind: "rule_fired", ruleId: "annotateBroken", count: stripped.length };
+      }
+      const parts = [];
+      if (resolvedPairs.length) parts.push(`resolved ${resolvedPairs.length} (det): ${resolvedPairs.join(", ")}`);
+      if (llmFixed) parts.push(`llm-fixed ${llmFixed}`);
+      if (stripped.length) parts.push(`annotated ${stripped.length}: ${stripped.join(", ")}`);
+      yield { kind: "tool_result", ok: stripped.length === 0, preview: parts.join("; ") };
+      yield { kind: "assistant_replace", text: answer };
     }
   }
   if (streamStats) yield buildLlmCallStatsEvent(streamStats);
@@ -41002,20 +41133,43 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
   }
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
   outputTokens += cand.seedOutputTokens;
-  const indexContent = cand.indexContent;
   const seeds = cand.seeds;
   const seedScores = cand.seedScores;
   const expandedScores = cand.expandedScores;
   const selectedIds = cand.candidateIds;
   const pages = cand.pages;
   const seedSet = new Set(seeds);
-  const expandedPages = [...selectedIds].filter((id) => !seedSet.has(id));
   const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
   const fusedOrder = bfsFusion ? fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, cand.graph, graphDepth, rrfK) : void 0;
-  const contextPages = selectContextPages(pages, seedSet, selectedIds, topK * 3, fusedOrder);
-  const contextBlock = renderContextPages(contextPages);
+  const finalArticleIds = bfsFusion && fusedOrder ? new Set(fusedOrder.filter((id) => selectedIds.has(id)).slice(0, topK * 3)) : selectedIds;
+  const articleScores = { ...expandedScores, ...seedScores };
+  const chunkLimit = topK * 3;
+  const fallbackSimilarity = new PageSimilarityService({ mode: "jaccard", topK: chunkLimit });
+  const chunkSimilarity = similarity ?? fallbackSimilarity;
+  const selectedChunks = await chunkSimilarity.selectRelevantChunks(
+    question,
+    pages,
+    finalArticleIds,
+    seedSet,
+    articleScores,
+    chunkLimit
+  );
+  if (signal.aborted) return;
+  if (selectedChunks.length === 0) {
+    yield { kind: "error", message: "No relevant pages found for this query." };
+    return;
+  }
+  const contextBlock = renderContextChunks(selectedChunks);
+  const finalSelectedIds = new Set(selectedChunks.map((chunk) => chunk.articleId));
+  const selectedIndexLines = [...finalSelectedIds].map((id) => {
+    const annotation = cand.annotations.get(id);
+    return annotation ? `${id}: ${annotation}` : void 0;
+  }).filter((line) => line !== void 0);
+  const indexBlock = selectedIndexLines.length > 0 ? `
+Wiki index (selected candidates):
+${selectedIndexLines.join("\n")}` : "";
   const entityTypesBlock = buildEntityTypesBlock2(domain);
-  const wikiFirst = [...selectedIds].sort((a, b) => Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
+  const wikiFirst = [...finalSelectedIds].sort((a, b) => Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
   const availableLinksBlock = wikiFirst.length === 0 ? "" : [
     "Valid WikiLink targets (use EXACTLY these, copy verbatim):",
     ...wikiFirst.map((s) => `- ${s}`),
@@ -41025,18 +41179,18 @@ async function* runQuery(args, save, vaultTools, llm, model, domains, vaultRoot,
     domain_name: domain.name,
     available_links_block: availableLinksBlock,
     entity_types_block: entityTypesBlock,
-    index_block: indexContent ? `
-Wiki index (_index.md):
-${indexContent}` : ""
+    index_block: indexBlock
   });
-  const seedCount = contextPages.filter(([p]) => seedSet.has(pageId(p))).length;
-  const graphCount = contextPages.length - seedCount;
+  const seedCount = [...finalSelectedIds].filter((id) => seedSet.has(id)).length;
+  const graphCount = finalSelectedIds.size - seedCount;
   yield {
     kind: "query_stats",
     crossDomain: false,
     domainName: domain.name,
     pagesScanned: cand.pagesScanned,
-    pagesSelected: contextPages.length,
+    pagesSelected: finalSelectedIds.size,
+    candidatePages: selectedIds.size,
+    chunksSelected: selectedChunks.length,
     seedCount,
     graphCount
   };
@@ -41046,11 +41200,10 @@ ${indexContent}` : ""
     model,
     opts,
     signal,
-    vaultTools,
     systemPrompt,
     question,
     contextBlock,
-    selectedIds,
+    selectedIds: finalSelectedIds,
     wikiLinkValidationRetries
   });
   if (signal.aborted) return;
@@ -41061,7 +41214,12 @@ ${indexContent}` : ""
     fields: {
       question,
       answer,
-      found_pages: [.../* @__PURE__ */ new Set([...seeds, ...expandedPages])],
+      found_pages: [...finalSelectedIds],
+      found_chunks: selectedChunks.map((chunk) => ({
+        articleId: chunk.articleId,
+        heading: chunk.heading,
+        score: chunk.score
+      })),
       promptVersion: promptVersionOf(query_default),
       retrievalConfig: {
         mode: similarity?.config.mode === "hybrid" ? "hybrid" : similarity?.config.mode === "embedding" ? "embedding" : "jaccard",
@@ -41070,7 +41228,8 @@ ${indexContent}` : ""
         bfsMinScoreRatio,
         bfsFusion,
         seedSimilarityThreshold,
-        hybridRetrieval: similarity?.config.mode === "hybrid"
+        hybridRetrieval: similarity?.config.mode === "hybrid",
+        hierarchicalChunkRetrieval: true
       }
     }
   };
@@ -41152,46 +41311,6 @@ Pages not yet indexed: ${unindexedIds.join(", ")}` : "",
   } catch {
     return { seeds: [], outputTokens: 0 };
   }
-}
-function buildContextBlock(pages, seeds, selectedIds, maxPages, order) {
-  return renderContextPages(selectContextPages(pages, seeds, selectedIds, maxPages, order));
-}
-function selectContextPages(pages, seeds, selectedIds, maxPages, order) {
-  if (order && order.length > 0) {
-    const pidToPath = /* @__PURE__ */ new Map();
-    for (const path3 of pages.keys()) pidToPath.set(pageId(path3), path3);
-    const ordered = [];
-    let count = 0;
-    for (const id of order) {
-      if (count >= maxPages) break;
-      if (!selectedIds.has(id)) continue;
-      const path3 = pidToPath.get(id);
-      if (path3 === void 0) continue;
-      ordered.push([path3, pages.get(path3) ?? ""]);
-      count++;
-    }
-    return ordered;
-  }
-  const seedPages = [];
-  const bfsPages = [];
-  for (const [path3, content] of pages) {
-    const id = pageId(path3);
-    if (!selectedIds.has(id)) continue;
-    if (seeds.has(id)) seedPages.push([path3, content]);
-    else bfsPages.push([path3, content]);
-  }
-  const bfsCap = Math.max(0, maxPages - seedPages.length);
-  return [...seedPages, ...bfsPages.slice(0, bfsCap)];
-}
-function renderContextPages(pages) {
-  let block = "";
-  for (const [p, c] of pages) {
-    block += `--- ${p} ---
-${c}
-
-`;
-  }
-  return block;
 }
 function buildEntityTypesBlock2(domain) {
   if (!domain.entity_types?.length) return "";
@@ -41277,20 +41396,37 @@ async function* runCrossDomainQuery(question, vaultTools, llm, model, domains, s
   }
   const merged = mergeCandidates(poolList, cfg.seedTopK, cfg.graphDepth, rrfK);
   const finalSet = new Set(merged.finalIds);
-  const contextBlock = buildContextBlock(merged.mergedPages, merged.mergedSeedSet, finalSet, cfg.seedTopK, merged.fusedOrder);
+  const fallbackSimilarity = new PageSimilarityService({ mode: "jaccard", topK: cfg.seedTopK * 3 });
+  const chunkSimilarity = similarity ?? fallbackSimilarity;
+  const articleScores = { ...merged.mergedExpandedScores, ...merged.mergedSeedScores };
+  const selectedChunks = await chunkSimilarity.selectRelevantChunks(
+    q,
+    merged.mergedPages,
+    finalSet,
+    merged.mergedSeedSet,
+    articleScores,
+    Math.max(1, Math.min(50, Math.floor(cfg.seedTopK))) * 3
+  );
+  if (signal.aborted) return;
+  if (selectedChunks.length === 0) {
+    yield { kind: "error", message: "No relevant pages found across domains." };
+    return;
+  }
+  const contextBlock = renderContextChunks(selectedChunks);
+  const finalChunkIds = new Set(selectedChunks.map((chunk) => chunk.articleId));
   const finalDomains = [...new Set(
-    poolList.filter((c) => [...c.candidateIds].some((id) => finalSet.has(id))).map((c) => c.domainId)
+    poolList.filter((candidate) => [...candidate.candidateIds].some((id) => finalChunkIds.has(id))).map((candidate) => candidate.domainId)
   )];
   const finalNames = finalDomains.map((id) => domains.find((d) => d.id === id)?.name ?? id);
   const domainName = `All domains (${finalDomains.length}): ${finalNames.join(", ")}`;
-  const wikiFirst = [...finalSet].sort((a, b) => Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
+  const wikiFirst = [...finalChunkIds].sort((a, b) => Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
   const availableLinksBlock = wikiFirst.length === 0 ? "" : [
     "Valid WikiLink targets (use EXACTLY these, copy verbatim):",
     ...wikiFirst.map((s) => `- ${s}`),
     "ONLY link to a target from this list. Never invent or abbreviate stems."
   ].join("\n");
   const entityTypesBlock = buildCrossDomainEntityTypes(domains, finalDomains);
-  const indexBlock = buildCrossDomainIndexBlock(merged.mergedAnnotations, merged.finalIds);
+  const indexBlock = buildCrossDomainIndexBlock(merged.mergedAnnotations, [...finalChunkIds]);
   const systemPrompt = render(query_default, {
     domain_name: domainName,
     available_links_block: availableLinksBlock,
@@ -41305,8 +41441,10 @@ ${indexBlock}` : ""
     domainsStudied: poolList.length,
     domainsTotal: domains.length,
     fromDomains: finalNames,
-    pagesScanned: poolList.reduce((sum, c) => sum + c.pagesScanned, 0),
-    pagesSelected: merged.finalIds.length
+    pagesScanned: poolList.reduce((sum, candidate) => sum + candidate.pagesScanned, 0),
+    pagesSelected: finalChunkIds.size,
+    candidatePages: finalSet.size,
+    chunksSelected: selectedChunks.length
   };
   if (signal.aborted) return;
   const ans = yield* answerFromContext({
@@ -41314,11 +41452,10 @@ ${indexBlock}` : ""
     model,
     opts,
     signal,
-    vaultTools,
     systemPrompt,
     question: q,
     contextBlock,
-    selectedIds: finalSet,
+    selectedIds: finalChunkIds,
     wikiLinkValidationRetries
   });
   outputTokens += ans.outputTokens;
@@ -41328,7 +41465,12 @@ ${indexBlock}` : ""
     fields: {
       question: q,
       answer: ans.answer,
-      found_pages: merged.finalIds,
+      found_pages: [...finalChunkIds],
+      found_chunks: selectedChunks.map((chunk) => ({
+        articleId: chunk.articleId,
+        heading: chunk.heading,
+        score: chunk.score
+      })),
       promptVersion: promptVersionOf(query_default),
       retrievalConfig: {
         mode: similarity?.config.mode === "hybrid" ? "hybrid" : similarity?.config.mode === "embedding" ? "embedding" : "jaccard",
@@ -41338,6 +41480,7 @@ ${indexBlock}` : ""
         bfsFusion: true,
         seedSimilarityThreshold: cfg.seedSimilarityThreshold,
         hybridRetrieval: similarity?.config.mode === "hybrid",
+        hierarchicalChunkRetrieval: true,
         crossDomain: true,
         domainsSearched: domains.length
       }
@@ -41704,7 +41847,7 @@ ${lintResult.value.report}`);
           const pageBodies = /* @__PURE__ */ new Map();
           for (const [path3, content] of pages) pageBodies.set(pageId(path3), content);
           const descriptions = collectDescriptions([...pages].map(([path3, content]) => ({ path: path3, content })));
-          const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, descriptions, pageBodies);
+          const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, descriptions, pageBodies, { fullCorpus: true });
           if (similarity.config.mode === "embedding" && updated > 0) {
             yield { kind: "info_text", icon: "\u{1F4E4}", summary: `\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432: ${updated}` };
           }

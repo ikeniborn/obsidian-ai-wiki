@@ -129,9 +129,12 @@ void (async () => {
     check("per-domain progress emitted", evs.some((e) => e.kind === "tool_use" && (e as { name: string }).name.startsWith("Domain:")));
     const qs = evs.find((e) => e.kind === "query_stats") as Extract<RunEvent, { kind: "query_stats" }> | undefined;
     check("emits query_stats (cross)", !!qs && qs.crossDomain === true);
-    check("query_stats.pagesSelected == finalIds length",
+    check("query_stats.pagesSelected == found_pages length",
       !!qs && !!evalMeta && qs.pagesSelected === (evalMeta.fields.found_pages as string[]).length,
       `pagesSelected=${qs?.pagesSelected}`);
+    check("query_stats.chunksSelected > 0",
+      !!qs && typeof qs.chunksSelected === "number" && qs.chunksSelected > 0,
+      `chunksSelected=${qs?.chunksSelected}`);
     check("query_stats.pagesScanned > 0", !!qs && qs.pagesScanned > 0, `pagesScanned=${qs?.pagesScanned}`);
     check("query_stats.fromDomains non-empty", !!qs && Array.isArray(qs.fromDomains) && qs.fromDomains.length > 0);
   }

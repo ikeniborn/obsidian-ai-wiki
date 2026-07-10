@@ -35,6 +35,8 @@ export interface EmbeddingChunk {
   vector: string;  // base64 Float32Array
   hash: string;
   kind: "summary" | "section";
+  heading?: string;
+  ordinal?: number;
 }
 
 export interface EmbeddingCacheEntry {
@@ -42,7 +44,7 @@ export interface EmbeddingCacheEntry {
 }
 
 export interface EmbeddingCacheFile {
-  version: 2;
+  version: 3;
   model: string;
   dimensions: number;
   entries: Record<string, EmbeddingCacheEntry>;
@@ -61,6 +63,13 @@ export function decodeVector(b64: string): Float32Array {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return new Float32Array(bytes.buffer);
+}
+
+function summaryVectors(entry: EmbeddingCacheEntry | undefined): Float32Array[] | undefined {
+  if (!entry) return undefined;
+  return entry.chunks
+    .filter((chunk) => chunk.kind === "summary" && chunk.vector !== "")
+    .map((chunk) => decodeVector(chunk.vector));
 }
 
 function annotationHash(s: string): string {
@@ -168,6 +177,32 @@ export interface ChunkInput {
   kind: "summary" | "section";
   embedText: string;
   hash: string;
+  heading?: string;
+  window?: string;
+  ordinal?: number;
+}
+
+export interface SelectedChunk {
+  articleId: string;
+  path: string;
+  heading: string;
+  body: string;
+  score: number;
+  source: "seed" | "graph";
+  articleScore?: number;
+  ordinal: number;
+}
+
+interface CandidateSection {
+  articleId: string;
+  path: string;
+  heading: string;
+  body: string;
+  embedText: string;
+  hash: string;
+  source: "seed" | "graph";
+  articleScore?: number;
+  ordinal: number;
 }
 
 export function buildChunkInputs(
@@ -176,13 +211,89 @@ export function buildChunkInputs(
   chunking: ChunkingConfig,
 ): ChunkInput[] {
   const inputs: ChunkInput[] = [
-    { kind: "summary", embedText: annotation, hash: annotationHash(annotation) },
+    { kind: "summary", embedText: annotation, hash: annotationHash(`summary\n${annotation}`) },
   ];
-  for (const { heading, window } of splitSections(body, chunking)) {
-    const embedText = `${annotation}\n\n${heading}\n${window}`;
-    inputs.push({ kind: "section", embedText, hash: annotationHash(embedText) });
-  }
+  splitSections(body, chunking).forEach(({ heading, window }, ordinal) => {
+    const embedText = `${heading}\n${window}`.trim();
+    inputs.push({
+      kind: "section",
+      embedText,
+      hash: annotationHash(`section\n${ordinal}\n${embedText}`),
+      heading,
+      window,
+      ordinal,
+    });
+  });
   return inputs;
+}
+
+function collectCandidateSections(
+  pages: Map<string, string>,
+  candidateIds: Set<string>,
+  seedIds: Set<string>,
+  articleScores: Record<string, number>,
+  chunking: ChunkingConfig,
+): CandidateSection[] {
+  const sections: CandidateSection[] = [];
+  for (const [path, content] of pages) {
+    const articleId = pageId(path);
+    if (!candidateIds.has(articleId)) continue;
+    splitSections(content, chunking).forEach(({ heading, window }, ordinal) => {
+      const embedText = `${heading}\n${window}`.trim();
+      if (!embedText) return;
+      sections.push({
+        articleId,
+        path,
+        heading,
+        body: window,
+        embedText,
+        hash: annotationHash(`section\n${ordinal}\n${embedText}`),
+        source: seedIds.has(articleId) ? "seed" : "graph",
+        articleScore: articleScores[articleId],
+        ordinal,
+      });
+    });
+  }
+  return sections;
+}
+
+function sortSelectedChunks(items: SelectedChunk[]): SelectedChunk[] {
+  return items.sort((a, b) =>
+    (b.score - a.score) ||
+    (Number(b.source === "seed") - Number(a.source === "seed")) ||
+    ((b.articleScore ?? 0) - (a.articleScore ?? 0)) ||
+    a.articleId.localeCompare(b.articleId) ||
+    (a.ordinal - b.ordinal) ||
+    a.path.localeCompare(b.path) ||
+    a.heading.localeCompare(b.heading)
+  );
+}
+
+function rankChunksJaccard(queryTokens: Set<string>, sections: CandidateSection[], limit: number): SelectedChunk[] {
+  const scored: SelectedChunk[] = [];
+  for (const section of sections) {
+    const score = jaccardCoeff(queryTokens, tokenize(section.embedText));
+    if (score <= 0) continue;
+    scored.push({
+      articleId: section.articleId,
+      path: section.path,
+      heading: section.heading,
+      body: section.body,
+      score,
+      source: section.source,
+      articleScore: section.articleScore,
+      ordinal: section.ordinal,
+    });
+  }
+  return sortSelectedChunks(scored).slice(0, limit);
+}
+
+function isUsableVector(vec: Float32Array | undefined, dimensions?: number): vec is Float32Array {
+  if (!vec || vec.length === 0 || (dimensions && vec.length !== dimensions)) return false;
+  for (const value of vec) {
+    if (!Number.isFinite(value)) return false;
+  }
+  return true;
 }
 
 function jaccardCoeff(a: Set<string>, b: Set<string>): number {
@@ -318,6 +429,84 @@ export class PageSimilarityService {
   setJaccardCorpus(corpus: Map<string, string>): void { this.jaccardCorpus = corpus; }
 
   setCacheForTest(cache: EmbeddingCacheFile): void { this.cache = cache; }
+
+  async selectRelevantChunks(
+    query: string,
+    pages: Map<string, string>,
+    candidateIds: Set<string>,
+    seedIds: Set<string>,
+    articleScores: Record<string, number>,
+    limit: number,
+  ): Promise<SelectedChunk[]> {
+    const queryTokens = tokenize(query);
+    if (queryTokens.size === 0 || candidateIds.size === 0 || limit <= 0) return [];
+    const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
+    const sections = collectCandidateSections(pages, candidateIds, seedIds, articleScores, chunking);
+    if (sections.length === 0) return [];
+    if (this.config.mode === "jaccard") return rankChunksJaccard(queryTokens, sections, limit);
+
+    const { baseUrl, apiKey, model } = this.config;
+    if (!baseUrl || !model) return rankChunksJaccard(queryTokens, sections, limit);
+
+    let queryVec: Float32Array;
+    try {
+      const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [query.slice(0, 2000)], this.config.dimensions);
+      if (!isUsableVector(vecs[0], this.config.dimensions)) return rankChunksJaccard(queryTokens, sections, limit);
+      queryVec = vecs[0];
+    } catch {
+      return rankChunksJaccard(queryTokens, sections, limit);
+    }
+
+    const vectors = new Map<string, Float32Array>();
+    if (this.cache && this.cache.model === model && this.cache.dimensions === this.config.dimensions) {
+      for (const section of sections) {
+        const entry = this.cache.entries[section.articleId];
+        const cached = entry?.chunks.find((chunk) => chunk.kind === "section" && chunk.hash === section.hash && chunk.vector);
+        if (!cached) continue;
+        try {
+          const vec = decodeVector(cached.vector);
+          if (isUsableVector(vec, this.config.dimensions)) vectors.set(section.hash, vec);
+        } catch {
+          // Treat corrupt cache entries as misses; the live embedding path can refill them.
+        }
+      }
+    }
+
+    const missing = sections.filter((section) => !vectors.has(section.hash));
+    for (let i = 0; i < missing.length; i += EMBEDDING_BATCH_SIZE) {
+      const batch = missing.slice(i, i + EMBEDDING_BATCH_SIZE);
+      try {
+        const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.map((section) => section.embedText), this.config.dimensions);
+        if (vecs.length !== batch.length || vecs.some((vec) => !isUsableVector(vec, this.config.dimensions))) {
+          return rankChunksJaccard(queryTokens, sections, limit);
+        }
+        for (let j = 0; j < batch.length; j++) {
+          vectors.set(batch[j].hash, vecs[j]);
+        }
+      } catch {
+        return rankChunksJaccard(queryTokens, sections, limit);
+      }
+    }
+
+    const scored: SelectedChunk[] = [];
+    for (const section of sections) {
+      const vec = vectors.get(section.hash);
+      if (!vec) continue;
+      const score = maxCosine(queryVec, [vec]);
+      if (score <= 0) continue;
+      scored.push({
+        articleId: section.articleId,
+        path: section.path,
+        heading: section.heading,
+        body: section.body,
+        score,
+        source: section.source,
+        articleScore: section.articleScore,
+        ordinal: section.ordinal,
+      });
+    }
+    return sortSelectedChunks(scored).slice(0, limit);
+  }
 
   /**
    * All unordered page pairs whose max-pool cosine ≥ threshold. Embedding-only (uses the
@@ -492,8 +681,8 @@ export class PageSimilarityService {
 
     if (this.cache && this.cache.model === model) {
       for (let i = 0; i < pids.length; i++) {
-        const entry = this.cache.entries[pids[i]];
-        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
+        const vecs = summaryVectors(this.cache.entries[pids[i]]);
+        if (vecs !== undefined) pageVecs.set(pids[i], vecs);
       }
     }
 
@@ -589,8 +778,8 @@ export class PageSimilarityService {
     // Load chunk vectors from in-memory cache (populated by refreshCache)
     if (this.cache && this.cache.model === model) {
       for (let i = 0; i < pids.length; i++) {
-        const entry = this.cache.entries[pids[i]];
-        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
+        const vecs = summaryVectors(this.cache.entries[pids[i]]);
+        if (vecs !== undefined) pageVecs.set(pids[i], vecs);
       }
     }
 
@@ -686,8 +875,8 @@ export class PageSimilarityService {
 
     if (this.cache && this.cache.model === model) {
       for (let i = 0; i < pids.length; i++) {
-        const entry = this.cache.entries[pids[i]];
-        if (entry) pageVecs.set(pids[i], entry.chunks.map((c) => decodeVector(c.vector)));
+        const vecs = summaryVectors(this.cache.entries[pids[i]]);
+        if (vecs !== undefined) pageVecs.set(pids[i], vecs);
       }
     }
 
@@ -790,7 +979,7 @@ export class PageSimilarityService {
     try {
       const raw = await vaultTools.read(domainEmbeddingsPath(domainRoot));
       const parsed = JSON.parse(raw) as EmbeddingCacheFile;
-      if (parsed.version === 2 && parsed.model === model && parsed.dimensions === dimensions) {
+      if (parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions) {
         this.cache = parsed;
       }
     } catch { /* cache missing or unreadable — stay null */ }
@@ -801,6 +990,7 @@ export class PageSimilarityService {
     vaultTools: VaultTools,
     indexAnnotations: Map<string, string>,
     pageBodies: Map<string, string>,
+    opts: { fullCorpus?: boolean } = {},
   ): Promise<{ updated: number }> {
     // Persist the embeddings cache for both embedding and hybrid modes — hybrid's dense
     // side reuses it on every query. Only pure jaccard has no vectors to write.
@@ -813,12 +1003,15 @@ export class PageSimilarityService {
     let cacheFile: EmbeddingCacheFile;
     try {
       const parsed = JSON.parse(await vaultTools.read(cachePath)) as EmbeddingCacheFile;
+      if (parsed.version !== 3 && opts.fullCorpus !== true) {
+        return { updated: 0 };
+      }
       cacheFile =
-        parsed.version === 2 && parsed.model === model && parsed.dimensions === dimensions
+        parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions
           ? parsed
-          : { version: 2, model, dimensions, entries: {} };
+          : { version: 3, model, dimensions, entries: {} };
     } catch {
-      cacheFile = { version: 2, model, dimensions, entries: {} };
+      cacheFile = { version: 3, model, dimensions, entries: {} };
     }
 
     // Build the desired chunk set per pid, reusing cached vectors whose hash matches.
@@ -826,7 +1019,8 @@ export class PageSimilarityService {
     const pending: Pending[] = [];
     // Tracks chunk-count change so a write is triggered even when nothing is pending
     // (e.g. a section deleted: surviving hashes all hit oldByHash, but count shrinks).
-    let changed = false;
+    let changed = opts.fullCorpus === true &&
+      Object.keys(cacheFile.entries).some((pid) => !indexAnnotations.has(pid));
 
     for (const [pid, annotation] of indexAnnotations) {
       // A caller may refresh only a subset (incremental ingest supplies bodies only for the
@@ -840,17 +1034,19 @@ export class PageSimilarityService {
       const body = pageBodies.get(pid) ?? "";
       const inputs = buildChunkInputs(annotation, body, chunking);
       const oldByHash = new Map(
-        (cacheFile.entries[pid]?.chunks ?? []).map((c) => [c.hash, c.vector]),
+        (cacheFile.entries[pid]?.chunks ?? []).map((chunk) => [chunk.hash, chunk]),
       );
       const chunks: EmbeddingChunk[] = [];
-      for (const { kind, embedText, hash } of inputs) {
+      for (const { kind, embedText, hash, heading, ordinal } of inputs) {
         const reuse = oldByHash.get(hash);
-        if (reuse !== undefined) {
-          chunks.push({ vector: reuse, hash, kind });
-        } else {
-          pending.push({ pid, idx: chunks.length, embedText });
-          chunks.push({ vector: "", hash, kind });
-        }
+        chunks.push({
+          vector: reuse?.vector ?? "",
+          hash,
+          kind,
+          heading,
+          ordinal,
+        });
+        if (reuse === undefined) pending.push({ pid, idx: chunks.length - 1, embedText });
       }
       if ((cacheFile.entries[pid]?.chunks.length ?? 0) !== chunks.length) changed = true;
       desired.set(pid, chunks);
@@ -872,6 +1068,7 @@ export class PageSimilarityService {
 
     if (pending.length === 0 && !changed) return { updated: 0 };
 
+    if (opts.fullCorpus === true) cacheFile.entries = {};
     for (const [pid, chunks] of desired) {
       const filled = chunks.filter((c) => c.vector !== "");
       if (filled.length > 0) cacheFile.entries[pid] = { chunks: filled };
@@ -881,4 +1078,13 @@ export class PageSimilarityService {
     this.cache = cacheFile;
     return { updated: pending.length };
   }
+}
+
+export function renderContextChunks(chunks: SelectedChunk[]): string {
+  return chunks
+    .map((chunk) => [
+      `--- article: ${chunk.articleId}, heading: ${chunk.heading} ---`,
+      chunk.body,
+    ].join("\n"))
+    .join("\n\n");
 }

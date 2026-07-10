@@ -23,6 +23,7 @@ export interface RetrievalConfigSnapshot {
   bfsFusion: boolean;
   seedSimilarityThreshold: number;
   hybridRetrieval: boolean;
+  hierarchicalChunkRetrieval?: boolean;
   crossDomain?: boolean;      // cross-domain query marker
   domainsSearched?: number;   // domains iterated in stage 1
 }
@@ -31,6 +32,7 @@ export interface RetrievalConfigSnapshot {
 export interface EvalMetaFields {
   question?: string;
   found_pages?: string[];   // snake_case per spec §4 schema
+  found_chunks?: { articleId: string; heading: string; score: number }[];
   answer?: string;
   promptVersion?: string;
   retrievalConfig?: RetrievalConfigSnapshot;

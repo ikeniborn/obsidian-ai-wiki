@@ -3,8 +3,8 @@ import { fuseVectorGraph } from "../fusion";
 import type { DomainEntry } from "../domain";
 import type { LlmCallOptions, RunEvent, LlmClient } from "../types";
 import type { VaultTools } from "../vault-tools";
-import type { PageSimilarityService } from "../page-similarity";
-import { retrieveDomainCandidates, buildContextBlock, type RetrieveCfg } from "./query";
+import { PageSimilarityService, renderContextChunks, type SelectedChunk } from "../page-similarity";
+import { retrieveDomainCandidates, type RetrieveCfg } from "./query";
 import { answerFromContext } from "./query-answer";
 import { render } from "./template";
 import queryTemplate from "../../prompts/query.md";
@@ -105,18 +105,35 @@ export async function* runCrossDomainQuery(
   const merged = mergeCandidates(poolList, cfg.seedTopK, cfg.graphDepth, rrfK);
   const finalSet = new Set(merged.finalIds);
 
-  const contextBlock = buildContextBlock(merged.mergedPages, merged.mergedSeedSet, finalSet, cfg.seedTopK, merged.fusedOrder);
+  const fallbackSimilarity = new PageSimilarityService({ mode: "jaccard", topK: cfg.seedTopK * 3 });
+  const chunkSimilarity = similarity ?? fallbackSimilarity;
+  const articleScores = { ...merged.mergedExpandedScores, ...merged.mergedSeedScores };
+  const selectedChunks: SelectedChunk[] = await chunkSimilarity.selectRelevantChunks(
+    q,
+    merged.mergedPages,
+    finalSet,
+    merged.mergedSeedSet,
+    articleScores,
+    Math.max(1, Math.min(50, Math.floor(cfg.seedTopK))) * 3,
+  );
+  if (signal.aborted) return;
+  if (selectedChunks.length === 0) {
+    yield { kind: "error", message: "No relevant pages found across domains." };
+    return;
+  }
+  const contextBlock = renderContextChunks(selectedChunks);
+  const finalChunkIds = new Set(selectedChunks.map((chunk) => chunk.articleId));
 
   // Domains whose candidates survive into the final capped set (robust to underscores in domain ids).
   const finalDomains = [...new Set(
     poolList
-      .filter((c) => [...c.candidateIds].some((id) => finalSet.has(id)))
-      .map((c) => c.domainId)
+      .filter((candidate) => [...candidate.candidateIds].some((id) => finalChunkIds.has(id)))
+      .map((candidate) => candidate.domainId)
   )];
   const finalNames = finalDomains.map((id) => domains.find((d) => d.id === id)?.name ?? id);
   const domainName = `All domains (${finalDomains.length}): ${finalNames.join(", ")}`;
 
-  const wikiFirst = [...finalSet].sort((a, b) => Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
+  const wikiFirst = [...finalChunkIds].sort((a, b) => Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
   const availableLinksBlock = wikiFirst.length === 0 ? "" : [
     "Valid WikiLink targets (use EXACTLY these, copy verbatim):",
     ...wikiFirst.map((s) => `- ${s}`),
@@ -124,7 +141,7 @@ export async function* runCrossDomainQuery(
   ].join("\n");
 
   const entityTypesBlock = buildCrossDomainEntityTypes(domains, finalDomains);
-  const indexBlock = buildCrossDomainIndexBlock(merged.mergedAnnotations, merged.finalIds);
+  const indexBlock = buildCrossDomainIndexBlock(merged.mergedAnnotations, [...finalChunkIds]);
 
   const systemPrompt = render(queryTemplate, {
     domain_name: domainName,
@@ -139,14 +156,16 @@ export async function* runCrossDomainQuery(
     domainsStudied: poolList.length,
     domainsTotal: domains.length,
     fromDomains: finalNames,
-    pagesScanned: poolList.reduce((sum, c) => sum + c.pagesScanned, 0),
-    pagesSelected: merged.finalIds.length,
+    pagesScanned: poolList.reduce((sum, candidate) => sum + candidate.pagesScanned, 0),
+    pagesSelected: finalChunkIds.size,
+    candidatePages: finalSet.size,
+    chunksSelected: selectedChunks.length,
   };
   if (signal.aborted) return;
 
   const ans = yield* answerFromContext({
-    llm, model, opts, signal, vaultTools, systemPrompt, question: q,
-    contextBlock, selectedIds: finalSet, wikiLinkValidationRetries,
+    llm, model, opts, signal, systemPrompt, question: q,
+    contextBlock, selectedIds: finalChunkIds, wikiLinkValidationRetries,
   });
   outputTokens += ans.outputTokens;
   if (signal.aborted) return;
@@ -156,7 +175,12 @@ export async function* runCrossDomainQuery(
     fields: {
       question: q,
       answer: ans.answer,
-      found_pages: merged.finalIds,
+      found_pages: [...finalChunkIds],
+      found_chunks: selectedChunks.map((chunk) => ({
+        articleId: chunk.articleId,
+        heading: chunk.heading,
+        score: chunk.score,
+      })),
       promptVersion: promptVersionOf(queryTemplate),
       retrievalConfig: {
         mode: similarity?.config.mode === "hybrid" ? "hybrid" : similarity?.config.mode === "embedding" ? "embedding" : "jaccard",
@@ -166,6 +190,7 @@ export async function* runCrossDomainQuery(
         bfsFusion: true,
         seedSimilarityThreshold: cfg.seedSimilarityThreshold,
         hybridRetrieval: similarity?.config.mode === "hybrid",
+        hierarchicalChunkRetrieval: true,
         crossDomain: true,
         domainsSearched: domains.length,
       },

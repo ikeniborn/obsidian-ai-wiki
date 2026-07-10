@@ -14,7 +14,7 @@ import { fuseVectorGraph } from "../fusion";
 import { graphCache } from "../wiki-graph-cache";
 import { selectSeeds } from "../wiki-seeds";
 import { collectDescriptions } from "../wiki-index";
-import type { PageSimilarityService } from "../page-similarity";
+import { PageSimilarityService, renderContextChunks, type SelectedChunk } from "../page-similarity";
 import { seedPassesGate } from "../retrieval-diag";
 import type { RetrievalMode, SeedFallbackReason } from "../retrieval-diag";
 import { promptVersionOf } from "../prompt-version";
@@ -282,24 +282,46 @@ export async function* runQuery(
   const wikiVaultPath = domainWikiFolder(domain.wiki_folder);
   outputTokens += cand.seedOutputTokens;
 
-  const indexContent = cand.indexContent;
   const seeds = cand.seeds;
   const seedScores = cand.seedScores;
   const expandedScores = cand.expandedScores;
   const selectedIds = cand.candidateIds;
   const pages = cand.pages;
   const seedSet = new Set(seeds);
-  const expandedPages = [...selectedIds].filter((id) => !seedSet.has(id));
   const topK = Math.max(1, Math.min(50, Math.floor(seedTopK)));
   const fusedOrder = bfsFusion
     ? fuseVectorGraph(seeds, selectedIds, seedScores, expandedScores, cand.graph, graphDepth, rrfK)
     : undefined;
-  const contextPages = selectContextPages(pages, seedSet, selectedIds, topK * 3, fusedOrder);
-  const contextBlock = renderContextPages(contextPages);
+  const finalArticleIds = bfsFusion && fusedOrder
+    ? new Set(fusedOrder.filter((id) => selectedIds.has(id)).slice(0, topK * 3))
+    : selectedIds;
+  const articleScores = { ...expandedScores, ...seedScores };
+  const chunkLimit = topK * 3;
+  const fallbackSimilarity = new PageSimilarityService({ mode: "jaccard", topK: chunkLimit });
+  const chunkSimilarity = similarity ?? fallbackSimilarity;
+  const selectedChunks: SelectedChunk[] = await chunkSimilarity.selectRelevantChunks(
+    question, pages, finalArticleIds, seedSet, articleScores, chunkLimit,
+  );
+  if (signal.aborted) return;
+  if (selectedChunks.length === 0) {
+    yield { kind: "error", message: "No relevant pages found for this query." };
+    return;
+  }
+  const contextBlock = renderContextChunks(selectedChunks);
+  const finalSelectedIds = new Set(selectedChunks.map((chunk) => chunk.articleId));
+  const selectedIndexLines = [...finalSelectedIds]
+    .map((id) => {
+      const annotation = cand.annotations.get(id);
+      return annotation ? `${id}: ${annotation}` : undefined;
+    })
+    .filter((line): line is string => line !== undefined);
+  const indexBlock = selectedIndexLines.length > 0
+    ? `\nWiki index (selected candidates):\n${selectedIndexLines.join("\n")}`
+    : "";
 
   const entityTypesBlock = buildEntityTypesBlock(domain);
 
-  const wikiFirst = [...selectedIds].sort((a, b) =>
+  const wikiFirst = [...finalSelectedIds].sort((a, b) =>
     Number(b.startsWith("wiki_")) - Number(a.startsWith("wiki_")));
   const availableLinksBlock = wikiFirst.length === 0 ? "" : [
     "Valid WikiLink targets (use EXACTLY these, copy verbatim):",
@@ -311,26 +333,28 @@ export async function* runQuery(
     domain_name: domain.name,
     available_links_block: availableLinksBlock,
     entity_types_block: entityTypesBlock,
-    index_block: indexContent ? `\nWiki index (_index.md):\n${indexContent}` : "",
+    index_block: indexBlock,
   });
 
-  const seedCount = contextPages.filter(([p]) => seedSet.has(pageId(p))).length;
-  const graphCount = contextPages.length - seedCount;
+  const seedCount = [...finalSelectedIds].filter((id) => seedSet.has(id)).length;
+  const graphCount = finalSelectedIds.size - seedCount;
 
   yield {
     kind: "query_stats",
     crossDomain: false,
     domainName: domain.name,
     pagesScanned: cand.pagesScanned,
-    pagesSelected: contextPages.length,
+    pagesSelected: finalSelectedIds.size,
+    candidatePages: selectedIds.size,
+    chunksSelected: selectedChunks.length,
     seedCount,
     graphCount,
   };
   if (signal.aborted) return;
 
   const ans = yield* answerFromContext({
-    llm, model, opts, signal, vaultTools,
-    systemPrompt, question, contextBlock, selectedIds,
+    llm, model, opts, signal,
+    systemPrompt, question, contextBlock, selectedIds: finalSelectedIds,
     wikiLinkValidationRetries,
   });
   if (signal.aborted) return;          // restore prior behavior: no eval_meta/result on abort
@@ -342,7 +366,12 @@ export async function* runQuery(
     fields: {
       question,
       answer,
-      found_pages: [...new Set([...seeds, ...expandedPages])],
+      found_pages: [...finalSelectedIds],
+      found_chunks: selectedChunks.map((chunk) => ({
+        articleId: chunk.articleId,
+        heading: chunk.heading,
+        score: chunk.score,
+      })),
       promptVersion: promptVersionOf(queryTemplate),
       retrievalConfig: {
         mode: similarity?.config.mode === "hybrid" ? "hybrid" : similarity?.config.mode === "embedding" ? "embedding" : "jaccard",
@@ -352,6 +381,7 @@ export async function* runQuery(
         bfsFusion,
         seedSimilarityThreshold,
         hybridRetrieval: similarity?.config.mode === "hybrid",
+        hierarchicalChunkRetrieval: true,
       },
     },
   };

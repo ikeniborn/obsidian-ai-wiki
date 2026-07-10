@@ -445,7 +445,7 @@ export async function* runLint(
         const pageBodies = new Map<string, string>();
         for (const [path, content] of pages) pageBodies.set(pageId(path), content);
         const descriptions = collectDescriptions([...pages].map(([path, content]) => ({ path, content })));
-        const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, descriptions, pageBodies);
+        const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, descriptions, pageBodies, { fullCorpus: true });
         if (similarity.config.mode === "embedding" && updated > 0) {
           yield { kind: "info_text", icon: "📤", summary: `обновлено векторов: ${updated}` };
         }
