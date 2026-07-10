@@ -175,6 +175,25 @@ async function main(): Promise<void> {
     const rawAfterPartial = await vault.read(oldCachePath);
     check("partial v2 upgrade skips writes", refresh?.updated === 0);
     check("partial v2 upgrade leaves raw cache unchanged", rawAfterPartial === oldRawCache);
+
+    const ingestShapeVault = fakeVault({ [oldCachePath]: oldRawCache });
+    const ingestShapeSimilarity = new PageSimilarityService({
+      mode: "embedding",
+      topK: 10,
+      baseUrl: "http://127.0.0.1:9",
+      apiKey: "fake",
+      model: "fake",
+      dimensions: 2,
+    });
+    const ingestShapeRefresh = await ingestShapeSimilarity.refreshCache?.(
+      "!Wiki/work",
+      ingestShapeVault,
+      new Map([["wiki_one", "one updated description"]]),
+      new Map([["wiki_one", "# One\n\n## Body\nupdated body"]]),
+    );
+    const rawAfterIngestShape = await ingestShapeVault.read(oldCachePath);
+    check("ingest-shape partial v2 upgrade skips writes", ingestShapeRefresh?.updated === 0);
+    check("ingest-shape partial v2 upgrade leaves raw cache unchanged", rawAfterIngestShape === oldRawCache);
   }
 
   section("chunk context rendering");
