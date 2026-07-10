@@ -30,6 +30,13 @@
     .note{border-left:4px solid var(--accent); padding:.7rem .9rem; background:color-mix(in srgb,var(--accent) 8%,var(--surface)); margin:.8rem 0}
     .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:.75rem}
     .card{background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.8rem; box-shadow:0 2px 12px var(--shadow)}
+    .flow{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:.6rem; align-items:stretch; margin:1rem 0}
+    .step{position:relative; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.75rem; min-height:7.5rem; box-shadow:0 2px 12px var(--shadow)}
+    .step strong{display:block; color:var(--accent-2); margin-bottom:.35rem}
+    .step small{color:var(--muted)}
+    .step:after{content:"→"; position:absolute; right:-.55rem; top:42%; color:var(--line); font-weight:800}
+    .step:last-child:after{content:""}
+    .lane{border:1px dashed var(--border); border-radius:8px; padding:.75rem; margin:1rem 0}
     details{margin:.75rem 0; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.65rem .8rem}
   </style>
 </head>
@@ -48,13 +55,50 @@
     <div class="note">Ограничение: полный <code>npm run lint</code> остаётся красным из-за pre-existing <code>src/modals.ts:138</code>; changed-source lint проходит.</div>
   </section>
 
+  <section id="current-query-flow">
+    <h2>Текущая схема запроса</h2>
+    <p>Схема перепроверена по текущему коду <code>src/phases/query.ts</code>, <code>src/phases/query-cross-domain.ts</code>, <code>src/page-similarity.ts</code>, <code>src/phases/query-answer.ts</code>.</p>
+
+    <div class="lane">
+      <h3>Single-domain</h3>
+      <div class="flow">
+        <div class="step"><strong>1. Чтение домена</strong><small>Читаются страницы домена и <code>description</code> из frontmatter через <code>collectDescriptions</code>.</small></div>
+        <div class="step"><strong>2. Seed-статьи</strong><small>Embedding/hybrid сравнивает query только с <code>summary</code> vectors; при сбое или слабом сигнале работает Jaccard fallback.</small></div>
+        <div class="step"><strong>3. Graph pool</strong><small><code>bfsExpandRanked</code> расширяет seeds по wiki graph; floor/fusion остаются article-level решениями.</small></div>
+        <div class="step"><strong>4. Итоговые article ids</strong><small>Берётся graph candidate pool или fused subset; это только пул для detailed retrieval.</small></div>
+        <div class="step"><strong>5. Clean chunks</strong><small><code>selectRelevantChunks</code> ранжирует section chunks внутри пула; section input = heading + body, без description.</small></div>
+        <div class="step"><strong>6. Контекст prompt</strong><small><code>renderContextChunks</code> отдаёт только article id, section heading и chunk body; index scoped только к final selected ids.</small></div>
+        <div class="step"><strong>7. Защита ответа</strong><small><code>answerFromContext</code> валидирует WikiLinks только против final selected ids.</small></div>
+      </div>
+    </div>
+
+    <div class="lane">
+      <h3>Cross-domain</h3>
+      <div class="flow">
+        <div class="step"><strong>1. Кандидаты по доменам</strong><small>Для каждого домена выполняется тот же seed → graph pool этап.</small></div>
+        <div class="step"><strong>2. Merge/fuse</strong><small><code>mergeCandidates</code> объединяет candidate pools и применяет fusion/cap на article ids.</small></div>
+        <div class="step"><strong>3. Chunk rerank</strong><small>Финальный chunk search идёт только внутри capped merged article pool.</small></div>
+        <div class="step"><strong>4. Chunk-only context</strong><small>Prompt содержит selected chunks; cross-domain index строится только по <code>finalChunkIds</code>.</small></div>
+        <div class="step"><strong>5. Scoped links</strong><small>Available WikiLinks, validation, <code>found_pages</code> и <code>found_chunks</code> основаны на selected chunk article ids.</small></div>
+      </div>
+    </div>
+
+    <table>
+      <tr><th>Стадия</th><th>Что ранжируется</th><th>Что может попасть в LLM</th><th>Fallback</th></tr>
+      <tr><td>Seed</td><td>Article descriptions / <code>summary</code> vectors</td><td>Ничего напрямую</td><td>Jaccard по descriptions; single-domain LLM seed fallback остаётся старым путём</td></tr>
+      <tr><td>Graph</td><td>Article ids из связей</td><td>Ничего напрямую</td><td>Jaccard ranking для graph candidates, когда dense недоступен</td></tr>
+      <tr><td>Chunk</td><td>Clean section chunks внутри candidate pool</td><td>Только selected chunk body + article id + heading</td><td>Jaccard по <code>heading + body</code></td></tr>
+      <tr><td>Answer</td><td>Готовый chunk context</td><td>Нет full candidate pages и нет unselected raw index</td><td>Broken links annotate/repair only within selected ids</td></tr>
+    </table>
+  </section>
+
   <section id="anchors">
     <h2>Source anchors</h2>
     <ul>
       <li>Intent: <code>docs/superpowers/intents/2026-07-10-hierarchical-description-chunk-retrieval-intent.md</code></li>
       <li>Spec: <code>docs/superpowers/specs/2026-07-10-hierarchical-description-chunk-retrieval-design.md</code></li>
       <li>Plan: <code>docs/superpowers/plans/2026-07-10-hierarchical-description-chunk-retrieval-plan.md</code></li>
-      <li>Diff range: <code>7da8c5a..06a126f</code></li>
+      <li>Diff range: <code>7da8c5a..dev-hierarchical-description-chunk-retrieval</code></li>
     </ul>
   </section>
 
