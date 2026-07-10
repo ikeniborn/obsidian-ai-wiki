@@ -28,10 +28,13 @@ AI Wiki reads your notes and maintains a structured knowledge base (wiki) alongs
 | **Re-init** | Wipes and rebuilds a domain from scratch — useful after major source changes |
 | **Format** | Cleans up any open markdown note (outside the wiki): headings, tables, frontmatter, image captions. Shows a preview before applying. Invariant: never adds or removes facts — only improves clarity. When the note belongs to a configured domain, tags are reused from that domain's existing tag vocabulary |
 | **Chat** | Interactive follow-up in the sidebar after Query or Lint |
+| **Export OKF** | Serialize a domain into a Google [Open Knowledge Format](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing/) bundle — a folder of markdown with OKF frontmatter, a generated `index.md`/`log.md`, and standard `[text](link.md)` links — for sharing with external AI agents and tools. Desktop only |
 
-Fix, Format, and Chat are launched from sidebar buttons, not the Command Palette.
+Fix, Format, and Chat are launched from sidebar buttons, not the Command Palette. Export OKF is available both as a sidebar button and a Command Palette command.
 
-> **Mobile:** only Query works on mobile. Ingest, Lint, Init, and Format are desktop-only.
+> **Mobile:** only Query works on mobile. Ingest, Lint, Init, Format, and Export OKF are desktop-only.
+
+> **OKF frontmatter:** wiki pages use Google's Open Knowledge Format — a mandatory `type` (the entity-type subfolder) plus `description`/`resource`/`timestamp`/`tags`/`status`. The knowledge graph lives in `## Related` / `## External links` body sections (Obsidian `[[wikilinks]]` on disk, rewritten to markdown links only in the OKF export).
 
 ---
 
@@ -173,6 +176,7 @@ The sidebar is the main interface for AI Wiki. Open it via the ribbon (🧠 icon
 | `AI Wiki: Query` | Ask a question via a dialog box |
 | `AI Wiki: Lint domain` | Check wiki quality *(desktop only)* |
 | `AI Wiki: Init domain` | Re-run init for an existing domain *(desktop only)* |
+| `AI Wiki: Export OKF bundle` | Export the selected domain as an OKF bundle *(desktop only)* |
 | `AI Wiki: Cancel operation` | Stop the current operation |
 
 ---

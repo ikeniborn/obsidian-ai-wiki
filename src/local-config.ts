@@ -18,6 +18,7 @@ export interface LocalConfig {
   migrated_v1?: boolean;
   migrated_v2?: boolean;
   migrated_drop_sections?: boolean;
+  migrated_okf_frontmatter?: boolean;
   shellConsentGiven?: boolean;
   lastDomain?: string;
 }

@@ -1,4 +1,4 @@
-export type ViolationKind = "alias" | "path" | "inline-json" | "outgoing-desync";
+export type ViolationKind = "alias" | "path";
 
 export interface WikiLinkViolation {
   page: string;
@@ -29,52 +29,13 @@ function extractLinks(text: string): string[] {
   return links;
 }
 
-function extractFmLinks(fm: string): Set<string> {
-  const set = new Set<string>();
-  // Only read items under wiki_outgoing_links key (not wiki_sources or others)
-  const blockMatch = /^wiki_outgoing_links:((?:\n {2}- "[^"]*")*)/m.exec(fm);
-  if (!blockMatch) return set;
-  const re = /^\s+- "(\[\[[^\]]+\]\])"/mg;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(blockMatch[1])) !== null) set.add(m[1]);
-  return set;
-}
-
-function setFmLinks(fm: string, links: string[]): string {
-  const block = links.length > 0
-    ? "wiki_outgoing_links:\n" + links.map((l) => `  - "${l}"`).join("\n")
-    : "wiki_outgoing_links: []";
-  const re = /^wiki_outgoing_links:(?:[ \t]*\[\]|(?:\n {2}- "[^"]*")*)/m;
-  if (re.test(fm)) return fm.replace(re, block);
-  return fm.replace(/\n---$/, `\n${block}\n---`);
-}
-
 function fixOnePass(content: string): string {
   const parts = splitFrontmatter(content);
   if (!parts) {
     return stripPath(stripAlias(content));
   }
-  let [fm, body] = parts;
-
-  body = stripAlias(body);
-  body = stripPath(body);
-
-  const inlineMatch = fm.match(/^wiki_outgoing_links:[ \t]*(\[.*?\])[ \t]*$/m);
-  if (inlineMatch) {
-    try {
-      const arr = JSON.parse(inlineMatch[1]) as string[];
-      fm = fm.replace(/^wiki_outgoing_links:[ \t]*\[.*?\][ \t]*$/m,
-        arr.length > 0
-          ? "wiki_outgoing_links:\n" + arr.map((l) => `  - "${l}"`).join("\n")
-          : "wiki_outgoing_links: []",
-      );
-    } catch { /* leave as-is */ }
-  }
-
-  const bodyLinks = [...new Set(extractLinks(body).map((l) => `[[${l}]]`))];
-  fm = setFmLinks(fm, bodyLinks);
-
-  return fm + body;
+  const [fm, body] = parts;
+  return fm + stripPath(stripAlias(body));
 }
 
 function stripAlias(text: string): string {
@@ -104,27 +65,6 @@ export function validateWikiLinks(
     while ((m = linkRe.exec(content)) !== null) {
       if (m[1].includes("/")) {
         violations.push({ page: pagePath, kind: "path", detail: m[0] });
-      }
-    }
-
-    const fmParts = splitFrontmatter(content);
-    const fmContent = fmParts ? fmParts[0] : "";
-    if (fmContent && /^wiki_outgoing_links:[ \t]*\[(?!\])/m.test(fmContent)) {
-      violations.push({ page: pagePath, kind: "inline-json", detail: "wiki_outgoing_links: [...]" });
-    }
-
-    const parts = splitFrontmatter(content);
-    if (parts && /^wiki_outgoing_links:/m.test(parts[0])) {
-      const [fm, body] = parts;
-      const bodyLinksFmt = new Set(extractLinks(body).map((l) => `[[${l}]]`));
-      const fmLinks = extractFmLinks(fm);
-      const synced = bodyLinksFmt.size === fmLinks.size &&
-        [...bodyLinksFmt].every((l) => fmLinks.has(l));
-      if (!synced) {
-        violations.push({
-          page: pagePath, kind: "outgoing-desync",
-          detail: `body: [${[...bodyLinksFmt].join(", ")}], fm: [${[...fmLinks].join(", ")}]`,
-        });
       }
     }
   }
@@ -210,8 +150,9 @@ function tidyAfterRemoval(text: string): string {
     .replace(/[ \t]+$/gm, "");        // trim trailing spaces per line
 }
 
-// Remove [[links]] whose trailing stem is not in knownStems (dead links), then
-// re-derive wiki_outgoing_links from the cleaned body so fm and body stay synced.
+// Remove [[links]] whose trailing stem is not in knownStems (dead links) from the
+// body. Frontmatter is left untouched — the `## Related` body section is the
+// canonical outgoing-link list, not a frontmatter field.
 // Deterministic — safe to run unconditionally (no LLM, no retries).
 export function stripDeadLinks(content: string, knownStems: Set<string>): string {
   const parts = splitFrontmatter(content);
@@ -228,7 +169,5 @@ export function stripDeadLinks(content: string, knownStems: Set<string>): string
   body = tidyAfterRemoval(body);
 
   if (fm === null) return body.trim();
-
-  const bodyLinks = [...new Set(extractLinks(body).map((l) => `[[${l}]]`))];
-  return setFmLinks(fm, bodyLinks) + body;
+  return fm + body;
 }

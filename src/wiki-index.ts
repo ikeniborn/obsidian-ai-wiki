@@ -1,6 +1,9 @@
+import { parse as yamlParse } from "yaml";
 import type { VaultTools } from "./vault-tools";
 import { domainIndexPath } from "./wiki-path";
 import { GENERIC_WIKI_STEM_REGEX } from "./wiki-stem";
+
+const FM_RE = /^---\n([\s\S]*?)\n---\n?/;
 
 export function parseIndexAnnotations(content: string): Map<string, string> {
   const map = new Map<string, string>();
@@ -15,10 +18,38 @@ export function parseIndexAnnotations(content: string): Map<string, string> {
   return map;
 }
 
-// Deterministic one-line annotation for pages the LLM left un-annotated, so they
+/** Frontmatter `description` scalar, or "" when absent/unparseable. */
+export function parseDescriptionFromFm(content: string): string {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return "";
+  let parsed: Record<string, unknown>;
+  try { parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {}; } catch { return ""; }
+  const d = parsed.description;
+  return typeof d === "string" ? d.trim() : "";
+}
+
+/**
+ * pid → retrieval overview text, sourced from each page's frontmatter `description`
+ * (the OKF-native single source of truth), falling back to a body-derived summary
+ * when the field is absent. Skips `_`-prefixed / non-wiki stems.
+ */
+export function collectDescriptions(
+  pages: Array<{ path: string; content: string }>,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const { path, content } of pages) {
+    const stem = path.split("/").pop()!.replace(/\.md$/, "");
+    if (stem.startsWith("_") || !GENERIC_WIKI_STEM_REGEX.test(stem)) continue;
+    const desc = parseDescriptionFromFm(content);
+    map.set(stem, desc || deriveFallbackDescription(content));
+  }
+  return map;
+}
+
+// Deterministic one-line description for pages the LLM left un-annotated, so they
 // still get an index entry (and therefore an embedding) and become retrievable.
-// LLM lint later upgrades it to a full Covers:/Type:/Terms: annotation.
-export function deriveFallbackAnnotation(content: string, entityType?: string): string {
+// LLM lint later upgrades it to a full Covers:/Type:/Terms: description.
+export function deriveFallbackDescription(content: string, entityType?: string): string {
   const body = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
   const h1 = (body.match(/^#\s+(.+)$/m)?.[1] ?? "").trim() || "(untitled)";
 
@@ -177,7 +208,7 @@ export function reconcileIndex(
     const entityType = deriveSection(wikiFolder, p.path);
     const annotation = (p.annotation && p.annotation.trim())
       ? p.annotation
-      : deriveFallbackAnnotation(p.content, entityType);
+      : deriveFallbackDescription(p.content, entityType);
     adds.push({ pid: stem, annotation, fullPath: p.path });
   }
 

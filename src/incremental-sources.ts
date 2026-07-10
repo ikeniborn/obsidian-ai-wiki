@@ -8,6 +8,8 @@
  * (wiki_updated, wiki_articles, etc.) do NOT affect the hash — only real edits do.
  */
 
+import { parseResourceFromFm } from "./utils/raw-frontmatter";
+
 export interface SourceFileInfo {
   /** Vault-relative source path; returned verbatim in `changed`. */
   path: string;
@@ -68,25 +70,14 @@ export function computeChangedSources(input: {
 }
 
 /**
- * Parse a wiki page's `wiki_sources` frontmatter list into BARE source stems.
- * Production stores entries as double-quoted wikilinks (`- "[[stem]]"`), so this
- * strips the surrounding quotes, the `[[ ]]`, any folder prefix, and a trailing
- * `.md`, yielding a basename that matches a source file's stem for association.
- * Matches the block-list shape every other parser in the codebase assumes
- * (`wiki_sources:` followed by `- ` items). Pure — no Obsidian, no IO.
+ * Parse a wiki page's `resource` frontmatter list into BARE source stems.
+ * Entries are already plain, unbracketed stems. Delegates to a real YAML parse
+ * (parseResourceFromFm) so both the block form (`resource:\n  - stem`) and the
+ * flow form (`resource: ["stem"]`, as emitted by the ingest prompt) are read alike.
+ * Pure — no Obsidian, no IO.
  */
 export function parsePageSources(content: string): string[] {
-  const fmMatch = /^---\n([\s\S]*?)\n---/.exec(content);
-  if (!fmMatch) return [];
-  const listMatch = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
-  if (!listMatch) return [];
-  return listMatch[1]
-    .split("\n")
-    .map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim())                       // drop "- " bullet
-    .filter(Boolean)
-    .map((t) => t.replace(/^["']|["']$/g, "").replace(/^\[\[|\]\]$/g, "").trim())  // strip quotes + [[ ]]
-    .map((t) => t.split("/").pop()!.replace(/\.md$/, ""))                     // folder prefix + .md → bare stem
-    .filter(Boolean);
+  return parseResourceFromFm(content);
 }
 
 /**

@@ -1,4 +1,5 @@
 import { TFile, TFolder, type Vault } from "obsidian";
+import { parseResourceFromFm } from "./raw-frontmatter";
 
 export function walkFolder(folder: TFolder, out: TFile[]): void {
   for (const child of folder.children) {
@@ -16,13 +17,12 @@ export function collectMdInPaths(vault: Vault, sourcePaths: string[]): TFile[] {
   return result;
 }
 
+/**
+ * Parse a wiki page's `resource` frontmatter list into bare source stems. Delegates
+ * to a real YAML parse (parseResourceFromFm) so both the block form
+ * (`resource:\n  - stem`) and the flow form (`resource: ["stem"]`, as emitted by the
+ * ingest prompt) are read alike.
+ */
 export function parseWikiSources(content: string): string[] {
-  const fmMatch = /^---\n([\s\S]*?)\n---/.exec(content);
-  if (!fmMatch) return [];
-  const sourcesMatch = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
-  if (!sourcesMatch) return [];
-  return sourcesMatch[1]
-    .split("\n")
-    .map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim())
-    .filter(Boolean);
+  return parseResourceFromFm(content);
 }

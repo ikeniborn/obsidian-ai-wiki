@@ -1,8 +1,9 @@
 import type { DomainEntry } from "./domain";
 import { isWikiArticlePath } from "./wiki-path";
+import { parseResourceFromFm } from "./utils/raw-frontmatter";
 
 export interface DeletionPlan {
-  /** sole-source wiki page vault-paths (the deleted source is their only wiki_sources entry) */
+  /** sole-source wiki page vault-paths (the deleted source is their only resource entry) */
   toDelete: string[];
   /** multi-source wiki page vault-paths (deleted source present, but other sources remain) */
   toRebuild: string[];
@@ -16,22 +17,18 @@ export function sourceStem(path: string): string {
   return base.replace(/\.md$/i, "");
 }
 
-/** Strip surrounding whitespace, quotes, and [[ ]] from a wiki_sources list entry → bare stem/title. */
+/** Strip surrounding whitespace and quotes from a resource list entry → bare stem. */
 export function stripSourceToken(token: string): string {
-  return token.trim().replace(/^["']|["']$/g, "").replace(/^\[\[|\]\]$/g, "").trim();
+  return token.trim().replace(/^["']|["']$/g, "").trim();
 }
 
-/** Parse the wiki_sources list from a wiki page body into bare tokens. */
+/**
+ * Parse the resource list from a wiki page body into bare tokens. Delegates to a real
+ * YAML parse (parseResourceFromFm) so both the block form (`resource:\n  - stem`) and
+ * the flow form (`resource: ["stem"]`, as emitted by the ingest prompt) are read alike.
+ */
 function wikiSourceTokens(content: string): string[] {
-  const fm = /^---\n([\s\S]*?)\n---/.exec(content);
-  if (!fm) return [];
-  const m = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fm[1]);
-  if (!m) return [];
-  return m[1]
-    .split("\n")
-    .map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim())
-    .filter(Boolean)
-    .map(stripSourceToken);
+  return parseResourceFromFm(content);
 }
 
 /**

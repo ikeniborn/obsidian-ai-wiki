@@ -106,17 +106,21 @@ check("9 capList over cap truncates + overflow", (() => {
 })());
 
 // =====================================================================
-section("parsePageSources — real on-disk wiki_sources shapes");
-check("pp double-quoted wikilink → bare stem",
-  JSON.stringify(parsePageSources('---\nwiki_sources:\n  - "[[alpha]]"\n---\nx')) === JSON.stringify(["alpha"]));
-check("pp unquoted wikilink → bare stem",
-  JSON.stringify(parsePageSources('---\nwiki_sources:\n  - [[alpha]]\n---\nx')) === JSON.stringify(["alpha"]));
-check("pp path + .md inside wikilink → basename",
-  JSON.stringify(parsePageSources('---\nwiki_sources:\n  - "[[notes/alpha.md]]"\n---\nx')) === JSON.stringify(["alpha"]));
+section("parsePageSources — real on-disk resource shapes (plain stems, Task 4)");
+check("pp double-quoted stem → bare stem",
+  JSON.stringify(parsePageSources('---\nresource:\n  - "alpha"\n---\nx')) === JSON.stringify(["alpha"]));
+check("pp unquoted stem → bare stem",
+  JSON.stringify(parsePageSources('---\nresource:\n  - alpha\n---\nx')) === JSON.stringify(["alpha"]));
 check("pp multiple entries",
-  JSON.stringify(parsePageSources('---\nwiki_sources:\n  - "[[a]]"\n  - "[[b]]"\n---\nx')) === JSON.stringify(["a","b"]));
-check("pp no wiki_sources → []",
+  JSON.stringify(parsePageSources('---\nresource:\n  - "a"\n  - "b"\n---\nx')) === JSON.stringify(["a","b"]));
+check("pp no resource → []",
   parsePageSources('---\ntitle: x\n---\nbody').length === 0);
+check("pp flow-form resource: [\"stem\"] → bare stem (ingest prompt shape)",
+  JSON.stringify(parsePageSources('---\nresource: ["alpha"]\n---\nx')) === JSON.stringify(["alpha"]));
+check("pp flow-form multiple entries",
+  JSON.stringify(parsePageSources('---\nresource: ["a", "b"]\n---\nx')) === JSON.stringify(["a","b"]));
+check("pp block-form single-quoted stem (equivalence check)",
+  JSON.stringify(parsePageSources("---\nresource:\n  - 'alpha'\n---\nx")) === JSON.stringify(["alpha"]));
 
 console.log(`\n========================================`);
 console.log(`TOTAL: ${pass} passed, ${fail} failed`);

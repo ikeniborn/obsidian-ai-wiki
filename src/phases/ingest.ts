@@ -16,9 +16,9 @@ import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
 import { domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureWikiSources, stripInvalidWikiArticles, recoverSourceFrontmatter, parseTagsFromFm, normalizeTag } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureType, ensureDescription, entityTypeFromPath, ensureResource, stripInvalidWikiArticles, recoverSourceFrontmatter, parseTagsFromFm, normalizeTag } from "../utils/raw-frontmatter";
 import { collectDomainTags, renderTagRegistryBlock, thematicCategories, ensureEntityTypeTag, DEFAULT_MAX_TAG_CATEGORIES } from "../utils/tag-registry";
-import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation, deriveFallbackAnnotation, reconcileIndex } from "../wiki-index";
+import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation, deriveFallbackDescription, reconcileIndex, collectDescriptions } from "../wiki-index";
 import { pageId } from "../wiki-graph";
 import type { PageSimilarityService, ExtractedEntity } from "../page-similarity";
 import { appendWikiLog } from "../wiki-log";
@@ -36,7 +36,7 @@ function deriveSectionForPath(wikiFolder: string, fullPath: string): string {
 }
 
 function parseWikiStatus(content: string): string {
-  const m = /^---\n[\s\S]*?^wiki_status:[ \t]*(.+)$/m.exec(content);
+  const m = /^---\n[\s\S]*?^status:[ \t]*(.+)$/m.exec(content);
   return m ? m[1].trim() : "unknown";
 }
 
@@ -191,9 +191,9 @@ export async function* runIngest(
     existingPages = await vaultTools.readAll(nonMetaPaths);
   }
 
-  // Delete pages missing wiki_sources — invalid regardless of naming.
+  // Delete pages missing resource — invalid regardless of naming.
   const noSources = [...existingPages.entries()]
-    .filter(([, content]) => !/wiki_sources:/m.test(content))
+    .filter(([, content]) => !/resource:/m.test(content))
     .map(([path]) => path);
   for (const p of noSources) {
     try { await vaultTools.remove(p); } catch { /* skip */ }
@@ -201,7 +201,7 @@ export async function* runIngest(
   if (noSources.length > 0) {
     yield {
       kind: "info_text", icon: "🗑️",
-      summary: `Deleted ${noSources.length} wiki page(s) missing wiki_sources.`,
+      summary: `Deleted ${noSources.length} wiki page(s) missing resource.`,
       details: noSources.slice(0, 10),
     };
   }
@@ -346,9 +346,7 @@ export async function* runIngest(
   const plannedPagePaths = pages.map((p) => p.path);
 
   if (pages.length > 0 || plannedDeletePaths.size > 0) {
-    const backlinkToday = new Date().toISOString().slice(0, 10);
     const normalizedSource = recoverSourceFrontmatter(sourceContent);
-    const isFirstTime = !hasFrontmatterField(normalizedSource, "wiki_added");
     const existingArticles = parseWikiArticlesFromFm(normalizedSource).filter((link) => {
       const stem = link.replace(/^\[\[/, "").replace(/\]\]$/, "");
       return !plannedDeleteStems.has(stem);
@@ -356,8 +354,6 @@ export async function* runIngest(
     const writtenLinks = plannedPagePaths.map((p) => `[[${p.split("/").pop()!.replace(/\.md$/, "")}]]`);
     const mergedArticles = [...new Set([...existingArticles, ...writtenLinks])];
     const updatedSource = upsertRawFrontmatter(normalizedSource, {
-      wiki_added: isFirstTime ? backlinkToday : undefined,
-      wiki_updated: backlinkToday,
       wiki_articles: mergedArticles,
     });
     const { content: repairedSource, warnings: sourceWarnings } =
@@ -463,13 +459,16 @@ export async function* runIngest(
         details: [`tags: + ${entityTag} (derived from wiki_subfolder)`],
       };
     }
+    const okfType = entityTypeFromPath(wikiVaultPath, page.path);
+    const typed = ensureType(entityTagged, okfType);
+    const described = ensureDescription(typed, page.annotation ?? "");
     const sourceStem = sourceVaultPath.split("/").pop()!.replace(/\.md$/, "");
-    const { content: sourcedPage, injected } = ensureWikiSources(entityTagged, sourceStem);
+    const { content: sourcedPage, injected } = ensureResource(described, sourceStem);
     if (injected) {
       yield {
         kind: "info_text", icon: "⚠️",
-        summary: `wiki_sources injected: ${page.path}`,
-        details: [`Added [[${sourceStem}]] — LLM did not emit wiki_sources`],
+        summary: `resource injected: ${page.path}`,
+        details: [`Added [[${sourceStem}]] — LLM did not emit resource`],
       };
     }
     yield { kind: "tool_use", name: existingContent === null ? "Create" : "Update", input: { path: page.path } };
@@ -492,7 +491,7 @@ export async function* runIngest(
       try {
         const annotation = (page.annotation && page.annotation.trim())
           ? page.annotation
-          : deriveFallbackAnnotation(sourcedPage, deriveSectionForPath(wikiVaultPath, page.path));
+          : deriveFallbackDescription(sourcedPage, deriveSectionForPath(wikiVaultPath, page.path));
         await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), annotation, page.path);
       } catch { /* non-critical */ }
     } catch (e) {
@@ -599,14 +598,13 @@ export async function* runIngest(
 
   if (similarity && written.length > 0) {
     try {
-      const updatedIndex = await vaultTools.read(domainIndexPath(wikiVaultPath)).catch(() => "");
-      const updatedAnnotations = parseIndexAnnotations(updatedIndex);
-      const writtenSet = new Set(written);
+      // Read back the final on-disk content (frontmatter description included) rather
+      // than reusing `pages` (pre-processing LLM output, description not yet injected).
+      const writtenPages = await vaultTools.readAll(written);
+      const descriptions = collectDescriptions([...writtenPages].map(([path, content]) => ({ path, content })));
       const pageBodies = new Map<string, string>();
-      for (const page of pages) {
-        if (writtenSet.has(page.path)) pageBodies.set(pageId(page.path), page.content);
-      }
-      await similarity.refreshCache(domainRoot, vaultTools, updatedAnnotations, pageBodies);
+      for (const [path, content] of writtenPages) pageBodies.set(pageId(path), content);
+      await similarity.refreshCache(domainRoot, vaultTools, descriptions, pageBodies);
     } catch { /* non-critical */ }
   }
 

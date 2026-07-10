@@ -30,413 +30,6 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// node_modules/path-browserify/index.js
-var require_path_browserify = __commonJS({
-  "node_modules/path-browserify/index.js"(exports2, module2) {
-    "use strict";
-    function assertPath(path3) {
-      if (typeof path3 !== "string") {
-        throw new TypeError("Path must be a string. Received " + JSON.stringify(path3));
-      }
-    }
-    function normalizeStringPosix(path3, allowAboveRoot) {
-      var res = "";
-      var lastSegmentLength = 0;
-      var lastSlash = -1;
-      var dots = 0;
-      var code;
-      for (var i = 0; i <= path3.length; ++i) {
-        if (i < path3.length)
-          code = path3.charCodeAt(i);
-        else if (code === 47)
-          break;
-        else
-          code = 47;
-        if (code === 47) {
-          if (lastSlash === i - 1 || dots === 1) {
-          } else if (lastSlash !== i - 1 && dots === 2) {
-            if (res.length < 2 || lastSegmentLength !== 2 || res.charCodeAt(res.length - 1) !== 46 || res.charCodeAt(res.length - 2) !== 46) {
-              if (res.length > 2) {
-                var lastSlashIndex = res.lastIndexOf("/");
-                if (lastSlashIndex !== res.length - 1) {
-                  if (lastSlashIndex === -1) {
-                    res = "";
-                    lastSegmentLength = 0;
-                  } else {
-                    res = res.slice(0, lastSlashIndex);
-                    lastSegmentLength = res.length - 1 - res.lastIndexOf("/");
-                  }
-                  lastSlash = i;
-                  dots = 0;
-                  continue;
-                }
-              } else if (res.length === 2 || res.length === 1) {
-                res = "";
-                lastSegmentLength = 0;
-                lastSlash = i;
-                dots = 0;
-                continue;
-              }
-            }
-            if (allowAboveRoot) {
-              if (res.length > 0)
-                res += "/..";
-              else
-                res = "..";
-              lastSegmentLength = 2;
-            }
-          } else {
-            if (res.length > 0)
-              res += "/" + path3.slice(lastSlash + 1, i);
-            else
-              res = path3.slice(lastSlash + 1, i);
-            lastSegmentLength = i - lastSlash - 1;
-          }
-          lastSlash = i;
-          dots = 0;
-        } else if (code === 46 && dots !== -1) {
-          ++dots;
-        } else {
-          dots = -1;
-        }
-      }
-      return res;
-    }
-    function _format(sep, pathObject) {
-      var dir = pathObject.dir || pathObject.root;
-      var base = pathObject.base || (pathObject.name || "") + (pathObject.ext || "");
-      if (!dir) {
-        return base;
-      }
-      if (dir === pathObject.root) {
-        return dir + base;
-      }
-      return dir + sep + base;
-    }
-    var posix = {
-      // path.resolve([from ...], to)
-      resolve: function resolve() {
-        var resolvedPath = "";
-        var resolvedAbsolute = false;
-        var cwd;
-        for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
-          var path3;
-          if (i >= 0)
-            path3 = arguments[i];
-          else {
-            if (cwd === void 0)
-              cwd = process.cwd();
-            path3 = cwd;
-          }
-          assertPath(path3);
-          if (path3.length === 0) {
-            continue;
-          }
-          resolvedPath = path3 + "/" + resolvedPath;
-          resolvedAbsolute = path3.charCodeAt(0) === 47;
-        }
-        resolvedPath = normalizeStringPosix(resolvedPath, !resolvedAbsolute);
-        if (resolvedAbsolute) {
-          if (resolvedPath.length > 0)
-            return "/" + resolvedPath;
-          else
-            return "/";
-        } else if (resolvedPath.length > 0) {
-          return resolvedPath;
-        } else {
-          return ".";
-        }
-      },
-      normalize: function normalize(path3) {
-        assertPath(path3);
-        if (path3.length === 0) return ".";
-        var isAbsolute5 = path3.charCodeAt(0) === 47;
-        var trailingSeparator = path3.charCodeAt(path3.length - 1) === 47;
-        path3 = normalizeStringPosix(path3, !isAbsolute5);
-        if (path3.length === 0 && !isAbsolute5) path3 = ".";
-        if (path3.length > 0 && trailingSeparator) path3 += "/";
-        if (isAbsolute5) return "/" + path3;
-        return path3;
-      },
-      isAbsolute: function isAbsolute5(path3) {
-        assertPath(path3);
-        return path3.length > 0 && path3.charCodeAt(0) === 47;
-      },
-      join: function join7() {
-        if (arguments.length === 0)
-          return ".";
-        var joined;
-        for (var i = 0; i < arguments.length; ++i) {
-          var arg = arguments[i];
-          assertPath(arg);
-          if (arg.length > 0) {
-            if (joined === void 0)
-              joined = arg;
-            else
-              joined += "/" + arg;
-          }
-        }
-        if (joined === void 0)
-          return ".";
-        return posix.normalize(joined);
-      },
-      relative: function relative3(from, to) {
-        assertPath(from);
-        assertPath(to);
-        if (from === to) return "";
-        from = posix.resolve(from);
-        to = posix.resolve(to);
-        if (from === to) return "";
-        var fromStart = 1;
-        for (; fromStart < from.length; ++fromStart) {
-          if (from.charCodeAt(fromStart) !== 47)
-            break;
-        }
-        var fromEnd = from.length;
-        var fromLen = fromEnd - fromStart;
-        var toStart = 1;
-        for (; toStart < to.length; ++toStart) {
-          if (to.charCodeAt(toStart) !== 47)
-            break;
-        }
-        var toEnd = to.length;
-        var toLen = toEnd - toStart;
-        var length = fromLen < toLen ? fromLen : toLen;
-        var lastCommonSep = -1;
-        var i = 0;
-        for (; i <= length; ++i) {
-          if (i === length) {
-            if (toLen > length) {
-              if (to.charCodeAt(toStart + i) === 47) {
-                return to.slice(toStart + i + 1);
-              } else if (i === 0) {
-                return to.slice(toStart + i);
-              }
-            } else if (fromLen > length) {
-              if (from.charCodeAt(fromStart + i) === 47) {
-                lastCommonSep = i;
-              } else if (i === 0) {
-                lastCommonSep = 0;
-              }
-            }
-            break;
-          }
-          var fromCode = from.charCodeAt(fromStart + i);
-          var toCode = to.charCodeAt(toStart + i);
-          if (fromCode !== toCode)
-            break;
-          else if (fromCode === 47)
-            lastCommonSep = i;
-        }
-        var out = "";
-        for (i = fromStart + lastCommonSep + 1; i <= fromEnd; ++i) {
-          if (i === fromEnd || from.charCodeAt(i) === 47) {
-            if (out.length === 0)
-              out += "..";
-            else
-              out += "/..";
-          }
-        }
-        if (out.length > 0)
-          return out + to.slice(toStart + lastCommonSep);
-        else {
-          toStart += lastCommonSep;
-          if (to.charCodeAt(toStart) === 47)
-            ++toStart;
-          return to.slice(toStart);
-        }
-      },
-      _makeLong: function _makeLong(path3) {
-        return path3;
-      },
-      dirname: function dirname2(path3) {
-        assertPath(path3);
-        if (path3.length === 0) return ".";
-        var code = path3.charCodeAt(0);
-        var hasRoot = code === 47;
-        var end = -1;
-        var matchedSlash = true;
-        for (var i = path3.length - 1; i >= 1; --i) {
-          code = path3.charCodeAt(i);
-          if (code === 47) {
-            if (!matchedSlash) {
-              end = i;
-              break;
-            }
-          } else {
-            matchedSlash = false;
-          }
-        }
-        if (end === -1) return hasRoot ? "/" : ".";
-        if (hasRoot && end === 1) return "//";
-        return path3.slice(0, end);
-      },
-      basename: function basename2(path3, ext) {
-        if (ext !== void 0 && typeof ext !== "string") throw new TypeError('"ext" argument must be a string');
-        assertPath(path3);
-        var start = 0;
-        var end = -1;
-        var matchedSlash = true;
-        var i;
-        if (ext !== void 0 && ext.length > 0 && ext.length <= path3.length) {
-          if (ext.length === path3.length && ext === path3) return "";
-          var extIdx = ext.length - 1;
-          var firstNonSlashEnd = -1;
-          for (i = path3.length - 1; i >= 0; --i) {
-            var code = path3.charCodeAt(i);
-            if (code === 47) {
-              if (!matchedSlash) {
-                start = i + 1;
-                break;
-              }
-            } else {
-              if (firstNonSlashEnd === -1) {
-                matchedSlash = false;
-                firstNonSlashEnd = i + 1;
-              }
-              if (extIdx >= 0) {
-                if (code === ext.charCodeAt(extIdx)) {
-                  if (--extIdx === -1) {
-                    end = i;
-                  }
-                } else {
-                  extIdx = -1;
-                  end = firstNonSlashEnd;
-                }
-              }
-            }
-          }
-          if (start === end) end = firstNonSlashEnd;
-          else if (end === -1) end = path3.length;
-          return path3.slice(start, end);
-        } else {
-          for (i = path3.length - 1; i >= 0; --i) {
-            if (path3.charCodeAt(i) === 47) {
-              if (!matchedSlash) {
-                start = i + 1;
-                break;
-              }
-            } else if (end === -1) {
-              matchedSlash = false;
-              end = i + 1;
-            }
-          }
-          if (end === -1) return "";
-          return path3.slice(start, end);
-        }
-      },
-      extname: function extname(path3) {
-        assertPath(path3);
-        var startDot = -1;
-        var startPart = 0;
-        var end = -1;
-        var matchedSlash = true;
-        var preDotState = 0;
-        for (var i = path3.length - 1; i >= 0; --i) {
-          var code = path3.charCodeAt(i);
-          if (code === 47) {
-            if (!matchedSlash) {
-              startPart = i + 1;
-              break;
-            }
-            continue;
-          }
-          if (end === -1) {
-            matchedSlash = false;
-            end = i + 1;
-          }
-          if (code === 46) {
-            if (startDot === -1)
-              startDot = i;
-            else if (preDotState !== 1)
-              preDotState = 1;
-          } else if (startDot !== -1) {
-            preDotState = -1;
-          }
-        }
-        if (startDot === -1 || end === -1 || // We saw a non-dot character immediately before the dot
-        preDotState === 0 || // The (right-most) trimmed path component is exactly '..'
-        preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
-          return "";
-        }
-        return path3.slice(startDot, end);
-      },
-      format: function format(pathObject) {
-        if (pathObject === null || typeof pathObject !== "object") {
-          throw new TypeError('The "pathObject" argument must be of type Object. Received type ' + typeof pathObject);
-        }
-        return _format("/", pathObject);
-      },
-      parse: function parse(path3) {
-        assertPath(path3);
-        var ret = { root: "", dir: "", base: "", ext: "", name: "" };
-        if (path3.length === 0) return ret;
-        var code = path3.charCodeAt(0);
-        var isAbsolute5 = code === 47;
-        var start;
-        if (isAbsolute5) {
-          ret.root = "/";
-          start = 1;
-        } else {
-          start = 0;
-        }
-        var startDot = -1;
-        var startPart = 0;
-        var end = -1;
-        var matchedSlash = true;
-        var i = path3.length - 1;
-        var preDotState = 0;
-        for (; i >= start; --i) {
-          code = path3.charCodeAt(i);
-          if (code === 47) {
-            if (!matchedSlash) {
-              startPart = i + 1;
-              break;
-            }
-            continue;
-          }
-          if (end === -1) {
-            matchedSlash = false;
-            end = i + 1;
-          }
-          if (code === 46) {
-            if (startDot === -1) startDot = i;
-            else if (preDotState !== 1) preDotState = 1;
-          } else if (startDot !== -1) {
-            preDotState = -1;
-          }
-        }
-        if (startDot === -1 || end === -1 || // We saw a non-dot character immediately before the dot
-        preDotState === 0 || // The (right-most) trimmed path component is exactly '..'
-        preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
-          if (end !== -1) {
-            if (startPart === 0 && isAbsolute5) ret.base = ret.name = path3.slice(1, end);
-            else ret.base = ret.name = path3.slice(startPart, end);
-          }
-        } else {
-          if (startPart === 0 && isAbsolute5) {
-            ret.name = path3.slice(1, startDot);
-            ret.base = path3.slice(1, end);
-          } else {
-            ret.name = path3.slice(startPart, startDot);
-            ret.base = path3.slice(startPart, end);
-          }
-          ret.ext = path3.slice(startDot, end);
-        }
-        if (startPart > 0) ret.dir = path3.slice(0, startPart - 1);
-        else if (isAbsolute5) ret.dir = "/";
-        return ret;
-      },
-      sep: "/",
-      delimiter: ":",
-      win32: null,
-      posix: null
-    };
-    posix.posix = posix;
-    module2.exports = posix;
-  }
-});
-
 // node_modules/yaml/dist/nodes/identity.js
 var require_identity = __commonJS({
   "node_modules/yaml/dist/nodes/identity.js"(exports2) {
@@ -7761,6 +7354,413 @@ var require_dist = __commonJS({
     exports2.stringify = publicApi.stringify;
     exports2.visit = visit.visit;
     exports2.visitAsync = visit.visitAsync;
+  }
+});
+
+// node_modules/path-browserify/index.js
+var require_path_browserify = __commonJS({
+  "node_modules/path-browserify/index.js"(exports2, module2) {
+    "use strict";
+    function assertPath(path3) {
+      if (typeof path3 !== "string") {
+        throw new TypeError("Path must be a string. Received " + JSON.stringify(path3));
+      }
+    }
+    function normalizeStringPosix(path3, allowAboveRoot) {
+      var res = "";
+      var lastSegmentLength = 0;
+      var lastSlash = -1;
+      var dots = 0;
+      var code;
+      for (var i = 0; i <= path3.length; ++i) {
+        if (i < path3.length)
+          code = path3.charCodeAt(i);
+        else if (code === 47)
+          break;
+        else
+          code = 47;
+        if (code === 47) {
+          if (lastSlash === i - 1 || dots === 1) {
+          } else if (lastSlash !== i - 1 && dots === 2) {
+            if (res.length < 2 || lastSegmentLength !== 2 || res.charCodeAt(res.length - 1) !== 46 || res.charCodeAt(res.length - 2) !== 46) {
+              if (res.length > 2) {
+                var lastSlashIndex = res.lastIndexOf("/");
+                if (lastSlashIndex !== res.length - 1) {
+                  if (lastSlashIndex === -1) {
+                    res = "";
+                    lastSegmentLength = 0;
+                  } else {
+                    res = res.slice(0, lastSlashIndex);
+                    lastSegmentLength = res.length - 1 - res.lastIndexOf("/");
+                  }
+                  lastSlash = i;
+                  dots = 0;
+                  continue;
+                }
+              } else if (res.length === 2 || res.length === 1) {
+                res = "";
+                lastSegmentLength = 0;
+                lastSlash = i;
+                dots = 0;
+                continue;
+              }
+            }
+            if (allowAboveRoot) {
+              if (res.length > 0)
+                res += "/..";
+              else
+                res = "..";
+              lastSegmentLength = 2;
+            }
+          } else {
+            if (res.length > 0)
+              res += "/" + path3.slice(lastSlash + 1, i);
+            else
+              res = path3.slice(lastSlash + 1, i);
+            lastSegmentLength = i - lastSlash - 1;
+          }
+          lastSlash = i;
+          dots = 0;
+        } else if (code === 46 && dots !== -1) {
+          ++dots;
+        } else {
+          dots = -1;
+        }
+      }
+      return res;
+    }
+    function _format(sep, pathObject) {
+      var dir = pathObject.dir || pathObject.root;
+      var base = pathObject.base || (pathObject.name || "") + (pathObject.ext || "");
+      if (!dir) {
+        return base;
+      }
+      if (dir === pathObject.root) {
+        return dir + base;
+      }
+      return dir + sep + base;
+    }
+    var posix = {
+      // path.resolve([from ...], to)
+      resolve: function resolve() {
+        var resolvedPath = "";
+        var resolvedAbsolute = false;
+        var cwd;
+        for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
+          var path3;
+          if (i >= 0)
+            path3 = arguments[i];
+          else {
+            if (cwd === void 0)
+              cwd = process.cwd();
+            path3 = cwd;
+          }
+          assertPath(path3);
+          if (path3.length === 0) {
+            continue;
+          }
+          resolvedPath = path3 + "/" + resolvedPath;
+          resolvedAbsolute = path3.charCodeAt(0) === 47;
+        }
+        resolvedPath = normalizeStringPosix(resolvedPath, !resolvedAbsolute);
+        if (resolvedAbsolute) {
+          if (resolvedPath.length > 0)
+            return "/" + resolvedPath;
+          else
+            return "/";
+        } else if (resolvedPath.length > 0) {
+          return resolvedPath;
+        } else {
+          return ".";
+        }
+      },
+      normalize: function normalize(path3) {
+        assertPath(path3);
+        if (path3.length === 0) return ".";
+        var isAbsolute5 = path3.charCodeAt(0) === 47;
+        var trailingSeparator = path3.charCodeAt(path3.length - 1) === 47;
+        path3 = normalizeStringPosix(path3, !isAbsolute5);
+        if (path3.length === 0 && !isAbsolute5) path3 = ".";
+        if (path3.length > 0 && trailingSeparator) path3 += "/";
+        if (isAbsolute5) return "/" + path3;
+        return path3;
+      },
+      isAbsolute: function isAbsolute5(path3) {
+        assertPath(path3);
+        return path3.length > 0 && path3.charCodeAt(0) === 47;
+      },
+      join: function join7() {
+        if (arguments.length === 0)
+          return ".";
+        var joined;
+        for (var i = 0; i < arguments.length; ++i) {
+          var arg = arguments[i];
+          assertPath(arg);
+          if (arg.length > 0) {
+            if (joined === void 0)
+              joined = arg;
+            else
+              joined += "/" + arg;
+          }
+        }
+        if (joined === void 0)
+          return ".";
+        return posix.normalize(joined);
+      },
+      relative: function relative3(from, to) {
+        assertPath(from);
+        assertPath(to);
+        if (from === to) return "";
+        from = posix.resolve(from);
+        to = posix.resolve(to);
+        if (from === to) return "";
+        var fromStart = 1;
+        for (; fromStart < from.length; ++fromStart) {
+          if (from.charCodeAt(fromStart) !== 47)
+            break;
+        }
+        var fromEnd = from.length;
+        var fromLen = fromEnd - fromStart;
+        var toStart = 1;
+        for (; toStart < to.length; ++toStart) {
+          if (to.charCodeAt(toStart) !== 47)
+            break;
+        }
+        var toEnd = to.length;
+        var toLen = toEnd - toStart;
+        var length = fromLen < toLen ? fromLen : toLen;
+        var lastCommonSep = -1;
+        var i = 0;
+        for (; i <= length; ++i) {
+          if (i === length) {
+            if (toLen > length) {
+              if (to.charCodeAt(toStart + i) === 47) {
+                return to.slice(toStart + i + 1);
+              } else if (i === 0) {
+                return to.slice(toStart + i);
+              }
+            } else if (fromLen > length) {
+              if (from.charCodeAt(fromStart + i) === 47) {
+                lastCommonSep = i;
+              } else if (i === 0) {
+                lastCommonSep = 0;
+              }
+            }
+            break;
+          }
+          var fromCode = from.charCodeAt(fromStart + i);
+          var toCode = to.charCodeAt(toStart + i);
+          if (fromCode !== toCode)
+            break;
+          else if (fromCode === 47)
+            lastCommonSep = i;
+        }
+        var out = "";
+        for (i = fromStart + lastCommonSep + 1; i <= fromEnd; ++i) {
+          if (i === fromEnd || from.charCodeAt(i) === 47) {
+            if (out.length === 0)
+              out += "..";
+            else
+              out += "/..";
+          }
+        }
+        if (out.length > 0)
+          return out + to.slice(toStart + lastCommonSep);
+        else {
+          toStart += lastCommonSep;
+          if (to.charCodeAt(toStart) === 47)
+            ++toStart;
+          return to.slice(toStart);
+        }
+      },
+      _makeLong: function _makeLong(path3) {
+        return path3;
+      },
+      dirname: function dirname2(path3) {
+        assertPath(path3);
+        if (path3.length === 0) return ".";
+        var code = path3.charCodeAt(0);
+        var hasRoot = code === 47;
+        var end = -1;
+        var matchedSlash = true;
+        for (var i = path3.length - 1; i >= 1; --i) {
+          code = path3.charCodeAt(i);
+          if (code === 47) {
+            if (!matchedSlash) {
+              end = i;
+              break;
+            }
+          } else {
+            matchedSlash = false;
+          }
+        }
+        if (end === -1) return hasRoot ? "/" : ".";
+        if (hasRoot && end === 1) return "//";
+        return path3.slice(0, end);
+      },
+      basename: function basename2(path3, ext) {
+        if (ext !== void 0 && typeof ext !== "string") throw new TypeError('"ext" argument must be a string');
+        assertPath(path3);
+        var start = 0;
+        var end = -1;
+        var matchedSlash = true;
+        var i;
+        if (ext !== void 0 && ext.length > 0 && ext.length <= path3.length) {
+          if (ext.length === path3.length && ext === path3) return "";
+          var extIdx = ext.length - 1;
+          var firstNonSlashEnd = -1;
+          for (i = path3.length - 1; i >= 0; --i) {
+            var code = path3.charCodeAt(i);
+            if (code === 47) {
+              if (!matchedSlash) {
+                start = i + 1;
+                break;
+              }
+            } else {
+              if (firstNonSlashEnd === -1) {
+                matchedSlash = false;
+                firstNonSlashEnd = i + 1;
+              }
+              if (extIdx >= 0) {
+                if (code === ext.charCodeAt(extIdx)) {
+                  if (--extIdx === -1) {
+                    end = i;
+                  }
+                } else {
+                  extIdx = -1;
+                  end = firstNonSlashEnd;
+                }
+              }
+            }
+          }
+          if (start === end) end = firstNonSlashEnd;
+          else if (end === -1) end = path3.length;
+          return path3.slice(start, end);
+        } else {
+          for (i = path3.length - 1; i >= 0; --i) {
+            if (path3.charCodeAt(i) === 47) {
+              if (!matchedSlash) {
+                start = i + 1;
+                break;
+              }
+            } else if (end === -1) {
+              matchedSlash = false;
+              end = i + 1;
+            }
+          }
+          if (end === -1) return "";
+          return path3.slice(start, end);
+        }
+      },
+      extname: function extname(path3) {
+        assertPath(path3);
+        var startDot = -1;
+        var startPart = 0;
+        var end = -1;
+        var matchedSlash = true;
+        var preDotState = 0;
+        for (var i = path3.length - 1; i >= 0; --i) {
+          var code = path3.charCodeAt(i);
+          if (code === 47) {
+            if (!matchedSlash) {
+              startPart = i + 1;
+              break;
+            }
+            continue;
+          }
+          if (end === -1) {
+            matchedSlash = false;
+            end = i + 1;
+          }
+          if (code === 46) {
+            if (startDot === -1)
+              startDot = i;
+            else if (preDotState !== 1)
+              preDotState = 1;
+          } else if (startDot !== -1) {
+            preDotState = -1;
+          }
+        }
+        if (startDot === -1 || end === -1 || // We saw a non-dot character immediately before the dot
+        preDotState === 0 || // The (right-most) trimmed path component is exactly '..'
+        preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
+          return "";
+        }
+        return path3.slice(startDot, end);
+      },
+      format: function format(pathObject) {
+        if (pathObject === null || typeof pathObject !== "object") {
+          throw new TypeError('The "pathObject" argument must be of type Object. Received type ' + typeof pathObject);
+        }
+        return _format("/", pathObject);
+      },
+      parse: function parse(path3) {
+        assertPath(path3);
+        var ret = { root: "", dir: "", base: "", ext: "", name: "" };
+        if (path3.length === 0) return ret;
+        var code = path3.charCodeAt(0);
+        var isAbsolute5 = code === 47;
+        var start;
+        if (isAbsolute5) {
+          ret.root = "/";
+          start = 1;
+        } else {
+          start = 0;
+        }
+        var startDot = -1;
+        var startPart = 0;
+        var end = -1;
+        var matchedSlash = true;
+        var i = path3.length - 1;
+        var preDotState = 0;
+        for (; i >= start; --i) {
+          code = path3.charCodeAt(i);
+          if (code === 47) {
+            if (!matchedSlash) {
+              startPart = i + 1;
+              break;
+            }
+            continue;
+          }
+          if (end === -1) {
+            matchedSlash = false;
+            end = i + 1;
+          }
+          if (code === 46) {
+            if (startDot === -1) startDot = i;
+            else if (preDotState !== 1) preDotState = 1;
+          } else if (startDot !== -1) {
+            preDotState = -1;
+          }
+        }
+        if (startDot === -1 || end === -1 || // We saw a non-dot character immediately before the dot
+        preDotState === 0 || // The (right-most) trimmed path component is exactly '..'
+        preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
+          if (end !== -1) {
+            if (startPart === 0 && isAbsolute5) ret.base = ret.name = path3.slice(1, end);
+            else ret.base = ret.name = path3.slice(startPart, end);
+          }
+        } else {
+          if (startPart === 0 && isAbsolute5) {
+            ret.name = path3.slice(1, startDot);
+            ret.base = path3.slice(1, end);
+          } else {
+            ret.name = path3.slice(startPart, startDot);
+            ret.base = path3.slice(startPart, end);
+          }
+          ret.ext = path3.slice(startDot, end);
+        }
+        if (startPart > 0) ret.dir = path3.slice(0, startPart - 1);
+        else if (isAbsolute5) ret.dir = "/";
+        return ret;
+      },
+      sep: "/",
+      delimiter: ":",
+      win32: null,
+      posix: null
+    };
+    posix.posix = posix;
+    module2.exports = posix;
   }
 });
 
@@ -26253,7 +26253,7 @@ __export(main_exports, {
   migrateToLocalV2: () => migrateToLocalV2
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian13 = require("obsidian");
+var import_obsidian15 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_SETTINGS = {
@@ -26475,6 +26475,7 @@ var en = {
     ingest: "Ingest",
     lint: "Lint",
     format: "Format",
+    exportOkf: "Export OKF",
     formatOnlyMarkdown: "Format only works on markdown files",
     formatInWikiTitle: "Action forbidden",
     formatInWikiBody: (id) => `This file is a wiki article (domain \xAB${id}\xBB). Formatting wiki articles is not available.`,
@@ -26588,6 +26589,7 @@ Actualizing domain config for "${domainId}"...
     query: "Query",
     lint: "Lint domain",
     init: "Init domain",
+    exportOkf: "Export OKF bundle",
     cancel: "Cancel operation"
   },
   modal: {
@@ -26596,6 +26598,8 @@ Actualizing domain config for "${domainId}"...
     query: "Query",
     queryAndSave: "Query + save",
     queryPlaceholder: "Enter your question\u2026",
+    exportOkfTitle: "Export OKF bundle",
+    exportOkfPlaceholder: "/absolute/path/to/output-folder",
     domain_name: "Domain",
     noDomains_desc: "No domains found. Create a domain via \xABAdd domain\xBB.",
     domainIdPlaceholder: "domain id",
@@ -26816,6 +26820,7 @@ var ru = {
     ingest: "Ingest",
     lint: "Lint",
     format: "\u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C",
+    exportOkf: "\u042D\u043A\u0441\u043F\u043E\u0440\u0442 OKF",
     formatOnlyMarkdown: "\u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442 \u0442\u043E\u043B\u044C\u043A\u043E \u0441 markdown-\u0444\u0430\u0439\u043B\u0430\u043C\u0438",
     formatInWikiTitle: "\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u0435 \u0437\u0430\u043F\u0440\u0435\u0449\u0435\u043D\u043E",
     formatInWikiBody: (id) => `\u0424\u0430\u0439\u043B \u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F wiki-\u0441\u0442\u0430\u0442\u044C\u0451\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${id}\xBB. \u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 wiki-\u0441\u0442\u0430\u0442\u0435\u0439 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E.`,
@@ -26929,6 +26934,7 @@ var ru = {
     query: "\u0417\u0430\u043F\u0440\u043E\u0441",
     lint: "Lint \u0434\u043E\u043C\u0435\u043D\u0430",
     init: "Init \u0434\u043E\u043C\u0435\u043D\u0430",
+    exportOkf: "\u042D\u043A\u0441\u043F\u043E\u0440\u0442 OKF-\u0431\u0430\u043D\u0434\u043B\u0430",
     cancel: "\u041E\u0442\u043C\u0435\u043D\u0430 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438"
   },
   modal: {
@@ -26937,6 +26943,8 @@ var ru = {
     query: "\u0417\u0430\u043F\u0440\u043E\u0441",
     queryAndSave: "\u0417\u0430\u043F\u0440\u043E\u0441 + \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C",
     queryPlaceholder: "\u0421\u0444\u043E\u0440\u043C\u0443\u043B\u0438\u0440\u0443\u0439\u0442\u0435 \u0432\u043E\u043F\u0440\u043E\u0441\u2026",
+    exportOkfTitle: "\u042D\u043A\u0441\u043F\u043E\u0440\u0442 OKF-\u0431\u0430\u043D\u0434\u043B\u0430",
+    exportOkfPlaceholder: "/\u0430\u0431\u0441\u043E\u043B\u044E\u0442\u043D\u044B\u0439/\u043F\u0443\u0442\u044C/\u043A/\u043F\u0430\u043F\u043A\u0435-\u0432\u044B\u0432\u043E\u0434\u0430",
     domain_name: "\u0414\u043E\u043C\u0435\u043D",
     noDomains_desc: "\u0414\u043E\u043C\u0435\u043D\u044B \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u044B. \u0421\u043E\u0437\u0434\u0430\u0439\u0442\u0435 \u0434\u043E\u043C\u0435\u043D \u0447\u0435\u0440\u0435\u0437 \xAB\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0434\u043E\u043C\u0435\u043D\xBB.",
     domainIdPlaceholder: "id \u0434\u043E\u043C\u0435\u043D\u0430",
@@ -27156,6 +27164,7 @@ var es = {
     ingest: "Ingest",
     lint: "Lint",
     format: "Formatear",
+    exportOkf: "Exportar OKF",
     formatOnlyMarkdown: "El formateo solo funciona con archivos markdown",
     formatInWikiTitle: "Acci\xF3n prohibida",
     formatInWikiBody: (id) => `Este archivo es un art\xEDculo wiki (dominio \xAB${id}\xBB). No se puede formatear art\xEDculos wiki.`,
@@ -27269,6 +27278,7 @@ Actualizando la configuraci\xF3n del dominio "${domainId}"...
     query: "Consulta",
     lint: "Lint del dominio",
     init: "Init del dominio",
+    exportOkf: "Exportar paquete OKF",
     cancel: "Cancelar operaci\xF3n"
   },
   modal: {
@@ -27277,6 +27287,8 @@ Actualizando la configuraci\xF3n del dominio "${domainId}"...
     query: "Consulta",
     queryAndSave: "Consulta + guardar",
     queryPlaceholder: "Formula tu pregunta\u2026",
+    exportOkfTitle: "Exportar paquete OKF",
+    exportOkfPlaceholder: "/ruta/absoluta/a/la/carpeta-de-salida",
     domain_name: "Dominio",
     noDomains_desc: "No se encontraron dominios. Crea uno mediante \xABA\xF1adir dominio\xBB.",
     domainIdPlaceholder: "id del dominio",
@@ -27379,6 +27391,549 @@ function resolveReasoningLang(reasoningLanguage, outputLanguage) {
     return resolveLang(outputLanguage);
   }
   return "en";
+}
+
+// src/utils/raw-frontmatter.ts
+var import_yaml = __toESM(require_dist(), 1);
+
+// src/wiki-stem.ts
+var WIKI_STEM_PREFIX = "wiki";
+var DOMAIN_ID_CHARS = "a-z0-9_\\-";
+var ENTITY_SLUG_CHARS = "a-z0-9_";
+var GENERIC_WIKI_STEM_REGEX = new RegExp(
+  `^${WIKI_STEM_PREFIX}_[${DOMAIN_ID_CHARS}]+_[${ENTITY_SLUG_CHARS}]+$`
+);
+var DOMAIN_ID_RE = new RegExp(`^[${DOMAIN_ID_CHARS}]+$`);
+function escapeForRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function stemRegex(domainId) {
+  if (!DOMAIN_ID_RE.test(domainId)) {
+    throw new Error(`stemRegex: invalid domainId "${domainId}"`);
+  }
+  return new RegExp(`^${WIKI_STEM_PREFIX}_${escapeForRegex(domainId)}_[${ENTITY_SLUG_CHARS}]+$`);
+}
+
+// src/utils/raw-frontmatter.ts
+var FM_RE = /^---\n([\s\S]*?)\n---\n?/;
+var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+var WIKILINK_RE = /^\[\[.+\]\]$/;
+var URL_RE = /^https?:\/\//;
+var TAG_RE = /^[a-z][a-z0-9-]*(?:[/_][a-z0-9-]+)*$/;
+var FM_KEY_LINE = /^(wiki_[\w]+|tags|aliases|created|updated|external_links|related):/;
+var WIKI_FIELD_ALIASES = {
+  wiki_sources: "resource",
+  wiki_updated: "timestamp",
+  wiki_status: "status"
+};
+function toPlainStem(v) {
+  if (typeof v !== "string") return v;
+  const m = /^\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]$/.exec(v.trim());
+  return m ? m[1].split("/").pop().replace(/\.md$/, "") : v;
+}
+function renameWikiPageFields(content) {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return content;
+  let parsed;
+  try {
+    parsed = (0, import_yaml.parse)(fmMatch[1]) ?? {};
+  } catch {
+    return content;
+  }
+  let modified = false;
+  for (const [legacy, okf] of Object.entries(WIKI_FIELD_ALIASES)) {
+    if (legacy in parsed) {
+      if (!(okf in parsed)) parsed[okf] = parsed[legacy];
+      delete parsed[legacy];
+      modified = true;
+    }
+  }
+  if ("wiki_type" in parsed) {
+    delete parsed["wiki_type"];
+    modified = true;
+  }
+  if (Array.isArray(parsed.resource)) {
+    const plain = parsed.resource.map(toPlainStem);
+    if (JSON.stringify(plain) !== JSON.stringify(parsed.resource)) {
+      parsed.resource = plain;
+      modified = true;
+    }
+  }
+  if (!modified) return content;
+  const body = content.slice(fmMatch[0].length);
+  return `---
+${(0, import_yaml.stringify)(parsed)}---
+${body}`;
+}
+function entityTypeFromPath(wikiFolder, fullPath) {
+  const prefix = wikiFolder.endsWith("/") ? wikiFolder : wikiFolder + "/";
+  const rel = fullPath.startsWith(prefix) ? fullPath.slice(prefix.length) : fullPath;
+  const parts = rel.split("/");
+  const seg = parts.length >= 2 ? parts[0].trim().toLowerCase() : "";
+  return !seg || seg === "entities" ? "concept" : seg;
+}
+function normalizeTag(raw) {
+  return raw.trim().replace(/^#+/, "").replace(/\\/g, "/").toLowerCase().replace(/\s+/g, "-");
+}
+function parseTagsFromFm(content) {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return [];
+  let parsed;
+  try {
+    parsed = (0, import_yaml.parse)(fmMatch[1]) ?? {};
+  } catch {
+    return [];
+  }
+  const tags = parsed["tags"];
+  if (!Array.isArray(tags)) return [];
+  return tags.filter((t) => typeof t === "string");
+}
+function recoverSourceFrontmatter(content) {
+  const fenceMatch = FM_RE.exec(content);
+  const lead = fenceMatch ? fenceMatch[1] : "";
+  const rest = fenceMatch ? content.slice(fenceMatch[0].length) : content;
+  const lines = rest.split("\n");
+  let i = 0;
+  while (i < lines.length && lines[i].trim() === "") i++;
+  const runStart = i;
+  let sawKey = false;
+  while (i < lines.length) {
+    if (FM_KEY_LINE.test(lines[i])) {
+      sawKey = true;
+      i++;
+      continue;
+    }
+    if (sawKey && /^\s+\S/.test(lines[i])) {
+      i++;
+      continue;
+    }
+    break;
+  }
+  const strayFm = sawKey ? lines.slice(runStart, i).join("\n") : "";
+  const body = sawKey ? lines.slice(i).join("\n") : rest;
+  if (!strayFm && (fenceMatch || !lead)) return content;
+  if (strayFm && !/^wiki_[\w]+:/m.test(strayFm)) return content;
+  const fmText = [lead, strayFm].filter((s) => s.trim().length > 0).join("\n");
+  let parsed;
+  try {
+    parsed = (0, import_yaml.parse)(fmText, { uniqueKeys: false });
+  } catch {
+    return content;
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return content;
+  const fm = (0, import_yaml.stringify)(parsed).replace(/\n+$/, "");
+  const cleanBody = body.replace(/^\n+/, "");
+  return `---
+${fm}
+---
+${cleanBody}`;
+}
+function validateAndRepairFrontmatter(content, rules) {
+  const warnings = [];
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return { content, warnings };
+  let rawYaml = fmMatch[1];
+  const body = content.slice(fmMatch[0].length);
+  const counts = /* @__PURE__ */ new Map();
+  for (const m of rawYaml.matchAll(/^([\w][\w_]*):/gm)) {
+    counts.set(m[1], (counts.get(m[1]) ?? 0) + 1);
+  }
+  let modified = false;
+  for (const [key, count] of counts) {
+    if (count < 2) continue;
+    const allItems = [];
+    const blockRe = new RegExp(`^${key}:[^\\n]*\\n((?:[ \\t]+-[^\\n]*\\n?)*)`, "gm");
+    for (const m of rawYaml.matchAll(blockRe)) {
+      for (const item of m[1].matchAll(/[ \t]+-[ \t]+"?([^"\n]+?)"?[ \t]*$/gm)) {
+        allItems.push(item[1].trim());
+      }
+    }
+    let prev;
+    do {
+      prev = rawYaml;
+      rawYaml = rawYaml.replace(
+        new RegExp(`^${key}:[^\\n]*\\n(?:[ \\t]+-[^\\n]*\\n?)*`, "m"),
+        ""
+      );
+    } while (rawYaml !== prev);
+    modified = true;
+    if (allItems.length > 0) {
+      const merged = [...new Set(allItems)];
+      rawYaml = rawYaml.trimEnd() + "\n" + key + ":\n" + merged.map((v) => `  - "${v}"`).join("\n") + "\n";
+      warnings.push(`Duplicate key "${key}" \u2014 merged ${merged.length} items`);
+    } else {
+      warnings.push(`Duplicate scalar key "${key}" \u2014 last value kept`);
+    }
+  }
+  let parsed;
+  try {
+    parsed = (0, import_yaml.parse)(rawYaml) ?? {};
+  } catch (e) {
+    warnings.push(`Unparseable YAML: ${e.message} \u2014 left unchanged`);
+    return { content, warnings };
+  }
+  for (const rule of rules) {
+    const val = parsed[rule.field];
+    if (val === void 0 || val === null) continue;
+    switch (rule.kind) {
+      case "list-wikilinks":
+      case "list-urls": {
+        if (!Array.isArray(val)) {
+          warnings.push(`${rule.field}: expected list, got scalar \u2014 removed`);
+          delete parsed[rule.field];
+          modified = true;
+          break;
+        }
+        const predicate = rule.kind === "list-wikilinks" ? (v) => WIKILINK_RE.test(v) : (v) => URL_RE.test(v);
+        const filtered = val.filter((v) => {
+          if (typeof v !== "string" || !predicate(v)) {
+            warnings.push(`${rule.field}: invalid entry "${v}" \u2014 removed`);
+            return false;
+          }
+          return true;
+        });
+        if (filtered.length < val.length) {
+          modified = true;
+          if (filtered.length === 0) {
+            delete parsed[rule.field];
+          } else {
+            parsed[rule.field] = filtered;
+          }
+        }
+        break;
+      }
+      case "list-tags": {
+        if (!Array.isArray(val)) {
+          warnings.push(`${rule.field}: expected list, got scalar \u2014 removed`);
+          delete parsed[rule.field];
+          modified = true;
+          break;
+        }
+        const kept = [];
+        let changed = false;
+        for (const v of val) {
+          if (typeof v !== "string") {
+            warnings.push(`${rule.field}: invalid entry "${v}" \u2014 removed`);
+            changed = true;
+            continue;
+          }
+          const norm = normalizeTag(v);
+          if (!TAG_RE.test(norm)) {
+            warnings.push(`${rule.field}: invalid entry "${v}" \u2014 removed`);
+            changed = true;
+            continue;
+          }
+          if (norm !== v) {
+            warnings.push(`${rule.field}: normalized "${v}" \u2192 "${norm}"`);
+            changed = true;
+          }
+          if (kept.includes(norm)) {
+            changed = true;
+          } else {
+            kept.push(norm);
+          }
+        }
+        if (changed) {
+          modified = true;
+          if (kept.length === 0) {
+            delete parsed[rule.field];
+          } else {
+            parsed[rule.field] = kept;
+          }
+        }
+        break;
+      }
+      case "list-strings": {
+        if (!Array.isArray(val)) {
+          warnings.push(`${rule.field}: expected list, got scalar \u2014 removed`);
+          delete parsed[rule.field];
+          modified = true;
+          break;
+        }
+        const filtered = val.filter((v) => {
+          if (typeof v !== "string") {
+            warnings.push(`${rule.field}: invalid entry "${v}" \u2014 removed`);
+            return false;
+          }
+          return true;
+        });
+        if (filtered.length < val.length) {
+          modified = true;
+          if (filtered.length === 0) {
+            delete parsed[rule.field];
+          } else {
+            parsed[rule.field] = filtered;
+          }
+        }
+        break;
+      }
+      case "list-wikilinks-stem-only": {
+        if (!Array.isArray(val)) {
+          warnings.push(`${rule.field}: expected list, got scalar \u2014 removed`);
+          delete parsed[rule.field];
+          modified = true;
+          break;
+        }
+        const filtered = val.filter((v) => {
+          if (typeof v !== "string" || !WIKILINK_RE.test(v) || v.includes("/") || v.endsWith(".md]]")) {
+            warnings.push(`${rule.field}: invalid entry "${v}" \u2014 removed`);
+            return false;
+          }
+          return true;
+        });
+        if (filtered.length < val.length) {
+          modified = true;
+          if (filtered.length === 0) {
+            delete parsed[rule.field];
+          } else {
+            parsed[rule.field] = filtered;
+          }
+        }
+        break;
+      }
+      case "date-scalar": {
+        if (typeof val !== "string" || !DATE_RE.test(val)) {
+          warnings.push(`${rule.field}: invalid date "${val}" \u2014 removed`);
+          delete parsed[rule.field];
+          modified = true;
+        }
+        break;
+      }
+      case "aliases": {
+        if (typeof val === "string") {
+          warnings.push(`${rule.field}: scalar "${val}" wrapped in list`);
+          parsed[rule.field] = [val];
+          modified = true;
+        }
+        break;
+      }
+      case "warn-enum": {
+        if (typeof val !== "string" || !rule.values.includes(val)) {
+          warnings.push(
+            `${rule.field}: unexpected value "${val}" (expected: ${rule.values.join("|")})`
+          );
+        }
+        break;
+      }
+      case "remove": {
+        if (rule.field in parsed) {
+          warnings.push(`${rule.field}: field not allowed here \u2014 removed`);
+          delete parsed[rule.field];
+          modified = true;
+        }
+        break;
+      }
+    }
+  }
+  if (!modified) return { content, warnings };
+  return { content: `---
+${(0, import_yaml.stringify)(parsed)}---
+${body}`, warnings };
+}
+function filterStaleWikiLinks(content, existingStems, fields) {
+  const warnings = [];
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return { content, warnings };
+  let parsed;
+  try {
+    parsed = (0, import_yaml.parse)(fmMatch[1]) ?? {};
+  } catch {
+    return { content, warnings };
+  }
+  let modified = false;
+  for (const field of fields) {
+    const val = parsed[field];
+    if (!Array.isArray(val)) continue;
+    const filtered = val.filter((entry) => {
+      if (!WIKILINK_RE.test(entry)) return true;
+      const stem = entry.slice(2, -2);
+      if (existingStems.has(stem)) return true;
+      warnings.push(`${field}: stale link ${entry} \u2014 removed`);
+      return false;
+    });
+    if (filtered.length !== val.length) {
+      parsed[field] = filtered;
+      modified = true;
+    }
+  }
+  if (!modified) return { content, warnings };
+  const body = content.slice(fmMatch[0].length);
+  return { content: `---
+${(0, import_yaml.stringify)(parsed)}---
+${body}`, warnings };
+}
+function stripInvalidWikiArticles(content, existingWikiStems) {
+  const warnings = [];
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return { content, warnings };
+  let parsed;
+  try {
+    parsed = (0, import_yaml.parse)(fmMatch[1]) ?? {};
+  } catch {
+    return { content, warnings };
+  }
+  const val = parsed["wiki_articles"];
+  if (!Array.isArray(val) || val.length === 0) return { content, warnings };
+  const filtered = val.filter((entry) => {
+    if (!WIKILINK_RE.test(entry)) {
+      warnings.push(`wiki_articles: plain text "${entry}" \u2014 removed`);
+      return false;
+    }
+    const stem = entry.slice(2, -2);
+    if (!GENERIC_WIKI_STEM_REGEX.test(stem)) {
+      warnings.push(`wiki_articles: non-wiki stem ${entry} \u2014 removed`);
+      return false;
+    }
+    if (!existingWikiStems.has(stem)) {
+      warnings.push(`wiki_articles: stale link ${entry} \u2014 removed`);
+      return false;
+    }
+    return true;
+  });
+  if (filtered.length === val.length) return { content, warnings };
+  parsed["wiki_articles"] = filtered;
+  const body = content.slice(fmMatch[0].length);
+  return { content: `---
+${(0, import_yaml.stringify)(parsed)}---
+${body}`, warnings };
+}
+var SOURCE_RULES = [
+  { field: "wiki_articles", kind: "list-wikilinks-stem-only" },
+  { field: "wiki_added", kind: "remove" },
+  { field: "wiki_updated", kind: "remove" },
+  { field: "tags", kind: "list-tags" },
+  { field: "aliases", kind: "aliases" },
+  { field: "created", kind: "date-scalar" },
+  { field: "updated", kind: "date-scalar" },
+  { field: "external_links", kind: "list-urls" },
+  { field: "related", kind: "list-wikilinks" },
+  { field: "wiki_outgoing_links", kind: "remove" },
+  { field: "wiki_sources", kind: "remove" },
+  { field: "wiki_status", kind: "remove" },
+  { field: "wiki_type", kind: "remove" },
+  { field: "wiki_external_links", kind: "remove" },
+  { field: "annotation", kind: "remove" }
+];
+function validateAndRepairSourceFrontmatter(content) {
+  return validateAndRepairFrontmatter(content, SOURCE_RULES);
+}
+function restoreSourceFrontmatter(original, formatted) {
+  const wiki_articles = parseWikiArticlesFromFm(original);
+  const restored = upsertRawFrontmatter(formatted, { wiki_articles });
+  const { content } = validateAndRepairSourceFrontmatter(restored);
+  return content;
+}
+var WIKI_PAGE_RULES = [
+  { field: "resource", kind: "list-strings" },
+  // plain source stems
+  { field: "timestamp", kind: "date-scalar" },
+  { field: "status", kind: "warn-enum", values: ["stub", "developing", "mature"] },
+  { field: "tags", kind: "list-tags" },
+  { field: "aliases", kind: "aliases" },
+  { field: "wiki_type", kind: "remove" },
+  { field: "wiki_outgoing_links", kind: "remove" },
+  { field: "wiki_external_links", kind: "remove" },
+  { field: "annotation", kind: "remove" }
+];
+function validateAndRepairWikiPageFrontmatter(content) {
+  const renamed = renameWikiPageFields(content);
+  return validateAndRepairFrontmatter(renamed, WIKI_PAGE_RULES);
+}
+function upsertRawFrontmatter(content, fields) {
+  const match = FM_RE.exec(content);
+  const body = match ? content.slice(match[0].length) : content;
+  let existing = {};
+  if (match) {
+    try {
+      const parsed = (0, import_yaml.parse)(match[1]);
+      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        existing = parsed;
+      }
+    } catch {
+    }
+  }
+  const { wiki_added: _a3, wiki_updated: _u, wiki_articles: _ar, ...rest } = existing;
+  void _a3;
+  void _u;
+  void _ar;
+  const result = { ...rest };
+  if (fields.wiki_articles.length > 0) result.wiki_articles = fields.wiki_articles;
+  return `---
+${(0, import_yaml.stringify)(result)}---
+${body}`;
+}
+function parseWikiArticlesFromFm(content) {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return [];
+  const match = /wiki_articles:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
+  if (!match) return [];
+  return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
+}
+function parseResourceFromFm(content) {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return [];
+  let parsed;
+  try {
+    parsed = (0, import_yaml.parse)(fmMatch[1]) ?? {};
+  } catch {
+    return [];
+  }
+  const r = parsed.resource;
+  return Array.isArray(r) ? r.filter((x) => typeof x === "string") : [];
+}
+function ensureResource(content, sourceStem2) {
+  if (parseResourceFromFm(content).length > 0) return { content, injected: false };
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return { content, injected: false };
+  let parsed;
+  try {
+    parsed = (0, import_yaml.parse)(fmMatch[1]) ?? {};
+  } catch {
+    return { content, injected: false };
+  }
+  const body = content.slice(fmMatch[0].length);
+  parsed.resource = [sourceStem2];
+  return { content: `---
+${(0, import_yaml.stringify)(parsed)}---
+${body}`, injected: true };
+}
+function ensureType(content, type) {
+  if (hasFrontmatterField(content, "type")) return content;
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return content;
+  let parsed;
+  try {
+    parsed = (0, import_yaml.parse)(fmMatch[1]) ?? {};
+  } catch {
+    return content;
+  }
+  const body = content.slice(fmMatch[0].length);
+  const ordered = { type, ...parsed };
+  return `---
+${(0, import_yaml.stringify)(ordered)}---
+${body}`;
+}
+function ensureDescription(content, annotation) {
+  const desc = annotation.replace(/\s+/g, " ").trim();
+  if (!desc || hasFrontmatterField(content, "description")) return content;
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return content;
+  let parsed;
+  try {
+    parsed = (0, import_yaml.parse)(fmMatch[1]) ?? {};
+  } catch {
+    return content;
+  }
+  const body = content.slice(fmMatch[0].length);
+  parsed.description = desc;
+  return `---
+${(0, import_yaml.stringify)(parsed, { lineWidth: 0 })}---
+${body}`;
+}
+function hasFrontmatterField(content, field) {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return false;
+  return new RegExp(`^${field}:`, "m").test(fmMatch[1]);
 }
 
 // src/incremental-sources.ts
@@ -27606,6 +28161,42 @@ var QueryModal = class extends import_obsidian2.Modal {
       })
     );
     window.setTimeout(() => ta.focus(), 0);
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+var ExportOkfModal = class extends import_obsidian2.Modal {
+  constructor(app, defaultDest, onSubmit) {
+    super(app);
+    this.onSubmit = onSubmit;
+    this.dest = defaultDest;
+  }
+  onSubmit;
+  dest;
+  onOpen() {
+    const T = i18n().modal;
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: T.exportOkfTitle });
+    const input = contentEl.createEl("input", {
+      cls: "ai-wiki-modal-input",
+      type: "text",
+      value: this.dest,
+      placeholder: T.exportOkfPlaceholder
+    });
+    input.style.width = "100%";
+    input.addEventListener("input", () => {
+      this.dest = input.value;
+    });
+    new import_obsidian2.Setting(contentEl).addButton(
+      (b) => b.setButtonText(`\u25B6 ${T.run}`).setCta().onClick(() => {
+        const dest = this.dest.trim();
+        if (!dest) return;
+        this.close();
+        this.onSubmit(dest);
+      })
+    );
+    window.setTimeout(() => input.focus(), 0);
   }
   onClose() {
     this.contentEl.empty();
@@ -28419,7 +29010,7 @@ var ClaudeCliClient = class {
   lastSessionId;
   chat = {
     completions: {
-      create: (params, opts) => this._create(params, opts)
+      create: ((params, opts) => this._create(params, opts))
     }
   };
   async _create(params, opts) {
@@ -28614,7 +29205,7 @@ ${stderr()}` : ""}`);
       object: "chat.completion",
       model: this.cfg.model || "claude",
       created: 0,
-      choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop", logprobs: null }],
+      choices: [{ index: 0, message: { role: "assistant", content: text, refusal: null }, finish_reason: "stop", logprobs: null }],
       usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
     };
   }
@@ -28990,10 +29581,12 @@ function windowUnit(u, maxChars, overlapChars) {
   }
   return windows;
 }
+var EXCLUDED_SECTION_HEADINGS = /* @__PURE__ */ new Set(["## related", "## external links"]);
 function splitSections(body, chunking) {
   const stripped = stripFrontmatterAndTitle(body).trim();
   if (!stripped) return [];
-  const merged = mergeShort(toUnits(stripped), chunking.minChars);
+  const units = toUnits(stripped).filter((u) => !EXCLUDED_SECTION_HEADINGS.has(u.heading.toLowerCase()));
+  const merged = mergeShort(units, chunking.minChars);
   let windows = [];
   for (const u of merged) {
     windows.push(...windowUnit(u, chunking.maxChars, chunking.overlapChars));
@@ -30346,15 +30939,8 @@ function sourceStem(path3) {
   const base = path3.split("/").pop() ?? path3;
   return base.replace(/\.md$/i, "");
 }
-function stripSourceToken(token) {
-  return token.trim().replace(/^["']|["']$/g, "").replace(/^\[\[|\]\]$/g, "").trim();
-}
 function wikiSourceTokens(content) {
-  const fm = /^---\n([\s\S]*?)\n---/.exec(content);
-  if (!fm) return [];
-  const m = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fm[1]);
-  if (!m) return [];
-  return m[1].split("\n").map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim()).filter(Boolean).map(stripSourceToken);
+  return parseResourceFromFm(content);
 }
 function computeDeletionPlan(sourcePath, pages, sourceStemToPath) {
   const target = sourceStem(sourcePath);
@@ -31106,14 +31692,15 @@ function wikiSections(lang) {
     "Page structure (mandatory order). The headings below are already in the configured output language \u2014 use them verbatim:",
     "1. Frontmatter (YAML)",
     "2. H1 heading \u2014 the page title",
-    "3. Intro paragraph \u2014 1-3 sentences without a heading, immediately after H1",
-    `4. ${h.mandatory} \u2014 key properties and parameters (MANDATORY on every page)`,
+    `3. ${h.mandatory} \u2014 key properties and parameters (MANDATORY on every page)`,
     "",
     "Optional sections (include only when relevant, use these exact headings):",
     `- ${h.usage}`,
     `- ${h.examples}`,
     `- ${h.limitations}`,
-    `- ${h.best}`
+    `- ${h.best}`,
+    "- ## Related \u2014 outgoing wiki links as one `- [[stem]]` bullet per line (fixed heading, not localized; no frontmatter link fields anymore)",
+    "- ## External links \u2014 outgoing URLs as one `- [text](url)` bullet per line (fixed heading, not localized)"
   ].join("\n");
 }
 function stripThinking(text) {
@@ -31527,11 +32114,7 @@ function collectMdInPaths(vault, sourcePaths) {
   return result;
 }
 function parseWikiSources(content) {
-  const fmMatch = /^---\n([\s\S]*?)\n---/.exec(content);
-  if (!fmMatch) return [];
-  const sourcesMatch = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
-  if (!sourcesMatch) return [];
-  return sourcesMatch[1].split("\n").map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim()).filter(Boolean);
+  return parseResourceFromFm(content);
 }
 
 // src/view.ts
@@ -31673,7 +32256,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
   getIcon() {
     return "brain-circuit";
   }
-  onOpen() {
+  async onOpen() {
     const root = this.containerEl.children[1];
     root.empty();
     root.addClass("ai-wiki-view");
@@ -31760,7 +32343,7 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
       this.setRunning(ongoing.op, ongoing.args);
     }
   }
-  onClose() {
+  async onClose() {
     if (this.tickHandle !== null) window.clearTimeout(this.tickHandle);
     if (this.chatTickHandle !== null) window.clearTimeout(this.chatTickHandle);
     this.stopWaiting();
@@ -31871,6 +32454,18 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
         const file = this.plugin.app.workspace.getActiveFile();
         const domainId = this.domainSelect?.value;
         if (file && domainId) void this.plugin.controller.deleteSource(domainId, file.path);
+      });
+      const exportOkfBtn = actionRow.createEl("button", { text: T.view.exportOkf });
+      exportOkfBtn.addEventListener("click", () => {
+        const domainEntry = this.domains.find((d) => d.id === this.domainSelect.value);
+        if (!domainEntry) {
+          new import_obsidian7.Notice(i18n().view.selectDomainFirst);
+          return;
+        }
+        const defaultDest = `${this.plugin.controller.cwdOrEmpty()}/okf-export/${domainEntry.wiki_folder}`;
+        new ExportOkfModal(this.plugin.app, defaultDest, (dest) => {
+          void this.plugin.controller.exportOkf(domainEntry, dest).then((r) => new import_obsidian7.Notice(`OKF: ${r.pages} pages \u2192 ${dest}${r.warnings.length ? ` (${r.warnings.length} warnings)` : ""}`)).catch((e) => new import_obsidian7.Notice(`OKF export failed: ${e.message}`, 0));
+        }).open();
       });
       this.ingestBtn.addEventListener("click", () => {
         const file = this.plugin.app.workspace.getActiveFile();
@@ -32993,7 +33588,7 @@ function translateSystemEvent(message) {
 }
 
 // src/controller.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 var import_path_browserify9 = __toESM(require_path_browserify(), 1);
 
 // src/domain.ts
@@ -38570,30 +39165,6 @@ async function parseWithRetry(args) {
   throw new StructuredValidationError(callSite, maxRetries + 1, lastError);
 }
 
-// src/wiki-stem.ts
-var WIKI_STEM_PREFIX = "wiki";
-var DOMAIN_ID_CHARS = "a-z0-9_\\-";
-var ENTITY_SLUG_CHARS = "a-z0-9_";
-var GENERIC_WIKI_STEM_REGEX = new RegExp(
-  `^${WIKI_STEM_PREFIX}_[${DOMAIN_ID_CHARS}]+_[${ENTITY_SLUG_CHARS}]+$`
-);
-var DOMAIN_ID_RE = new RegExp(`^[${DOMAIN_ID_CHARS}]+$`);
-function escapeForRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-function stemRegex(domainId) {
-  if (!DOMAIN_ID_RE.test(domainId)) {
-    throw new Error(`stemRegex: invalid domainId "${domainId}"`);
-  }
-  return new RegExp(`^${WIKI_STEM_PREFIX}_${escapeForRegex(domainId)}_[${ENTITY_SLUG_CHARS}]+$`);
-}
-function isWikiStem(stem, domainId) {
-  if (domainId !== void 0) {
-    return stemRegex(domainId).test(stem);
-  }
-  return GENERIC_WIKI_STEM_REGEX.test(stem);
-}
-
 // src/phases/zod-schemas.ts
 var EntityTypeSchema = external_exports.object({
   type: external_exports.string().min(1),
@@ -38636,15 +39207,7 @@ var WikiPageSchema = external_exports.object({
     const i = val.content.indexOf("\n---", 4);
     return i >= 0 ? i + 4 : 0;
   })() : 0;
-  const fm = val.content.slice(0, fmEnd);
   const body = val.content.slice(fmEnd);
-  const sourcesBlock = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fm);
-  if (sourcesBlock) {
-    const unquoted = [...sourcesBlock[1].matchAll(/[ \t]+-[ \t]+(\[\[[^\]]+\]\])/g)];
-    if (unquoted.length > 0) {
-      ctx.addIssue({ code: external_exports.ZodIssueCode.custom, message: `wiki_sources entries must be double-quoted: "[[...]]" (found unquoted: ${unquoted.map((m2) => m2[1]).join(", ")})`, path: ["content"] });
-    }
-  }
   if (/\[\[[^\]]+\|[^\]]+\]\]/.test(body)) {
     ctx.addIssue({ code: external_exports.ZodIssueCode.custom, message: "WikiLink aliases not allowed", path: ["content"] });
   }
@@ -38753,24 +39316,10 @@ function makeQueryAnswerSchema(knownStems) {
 }
 
 // prompts/ingest.md
-var ingest_default = 'You are a wiki-knowledge synthesis assistant for the domain "{{domain_name}}".\nExtract entities from the source and create/update wiki pages.\n\nDOMAIN ENTITY TYPES:\n{{entity_types_block}}\n{{lang_notes}}\n\nRULES:\n- CREATE: the entity does not exist in the wiki, mentions >= min_mentions_for_page\n- UPDATE: the entity exists \u2192 add new information, do NOT remove the old\n- SKIP: too few mentions or the information is already present\n- The wiki page FILE NAME (stem without `.md`) MUST have the form `wiki_{{domain_id}}_<entity_slug>`:\n  - `<entity_slug>` = the ASCII entity name in lowercase snake_case (only `[a-z0-9_]` characters, no spaces, diacritics, or uppercase letters).\n  - Example: `wiki_{{domain_id}}_neural_networks.md`.\n- The wiki page stem must NOT match any name from the "FORBIDDEN NAMES" section \u2014 those are the source files of this domain. The wiki describes extracted entities, it does not duplicate the source files.\n- The wiki page name must NOT match the name of the current source `{{source_stem}}` (a special case of the previous rule).\n- Synthesis, not copying. Technical configs/SQL may be quoted in code blocks.\n- The article path is determined by the entity type \u2014 use the exact template from the "DOMAIN ENTITY TYPES" section (above, before the RULES block), substituting the entity name for <EntityName>\n- If the entity type is undefined or the domain has no entity_types \u2192 default path: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter is mandatory: wiki_sources, wiki_updated: {{today}}, wiki_status: stub|developing|mature\n- tags: hierarchical tags (category/subcategory). Format: lowercase, separated by `/`, no spaces, no `#`. Pick tags in this order:\n  1. The page\'s entity-type tag \u2014 the normalized type of this entity (e.g. `person`). Always include it when the entity type is known.\n  2. Thematic tags reused from the EXISTING DOMAIN TAGS block (provided in the context). Do not invent near-duplicates of listed tags.\n  3. A new thematic tag ONLY when nothing in the block fits. Never start a new top-level category when the block says "reuse only".\n- wiki_sources: ONLY sources (files outside !Wiki/) \u2014 bare name without path: [[FileName]]. Never [[wiki_domain_page]]\n- wiki_outgoing_links: ONLY wiki pages (files inside !Wiki/) \u2014 bare name without path: [[wiki_domain_page]]. Never [[SourceName]]\n  \u274C FORBIDDEN: [[CurrentSourceName]] or [[AnyOtherSourceFile]] in wiki_outgoing_links.\n     The source is already recorded in wiki_sources \u2014 there is no need to duplicate it in outgoing_links.\n     Example: processing "Liquidity farming.md" \u2192 you must NOT put [[Liquidity farming]] in outgoing_links.\n- In article bodies: ONLY [[stem]] \u2014 never [[stem|alias]]. The [[A|B]] syntax is forbidden.\n- Use the mandatory and optional section headings defined in the conventions block (_wiki_schema.md) below, exactly as written there. Each page must include the mandatory characteristics section.\n- For each page, add an "annotation" field to the JSON: a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section \u2014 synonyms, IDs, terms that are not in the heading>. Aim for ~600\u2013800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate \u2014 generic phrases raise noise in search.\n- The `annotation` field \u2014 ONLY in the JSON response. Do NOT add `annotation:` to the page frontmatter.\n- DEAD LINKS: every [[wiki_domain_slug]] in wiki_outgoing_links and in the article body must\n  either exist among the "Existing wiki pages" (provided in the context), or\n  be present in the pages list of this response. No page \u2014 do not write the link.\n{{schema_block}}\n{{forbidden_stems_block}}\n\nPATH RULE: each article path = !Wiki/<domain>/<entity>/<Article>.md \u2014 exactly 4 segments.\nNot allowed: !Wiki/os/os/network/NFS.md (domain twice), !Wiki/os/network/nfs/NFS.md (5 segments).\nAllowed:  !Wiki/os/network/NFS.md\n\nTYPE ENRICHMENT (entity_types_delta):\nIf, while analyzing the source, you discover:\n- new entity types (the type key is absent from the current list above), or\n- improvements to existing types (a more precise description or additional extraction_cues for an already existing type key) \u2014\nadd the entity_types_delta field to the JSON response. If nothing is new \u2014 simply do not include this field.\n\nDUPLICATE MERGING (merge):\nIf among the existing wiki pages you find several describing the same entity:\n- emit one new page in pages (with merged content and the canonical path)\n- list the old paths in the deletes field: [{path}, ...]\nThe old pages will be deleted, the index cleaned, and backlinks in the current source updated automatically.\n\nReturn ONLY a JSON object \u2014 no other text:\n{"reasoning":"Rationale: which entities were extracted and why","pages":[{"path":"{{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md","content":"---\\nwiki_sources: [\\"[[{{source_stem}}]]\\"]\\nwiki_updated: {{today}}\\nwiki_status: stub\\ntags: []\\nwiki_outgoing_links: []\\n---\\n# EntityName\\n\\ncontent...","annotation":"The essence of the entity in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search."}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}\n';
+var ingest_default = 'You are a wiki-knowledge synthesis assistant for the domain "{{domain_name}}".\nExtract entities from the source and create/update wiki pages.\n\nDOMAIN ENTITY TYPES:\n{{entity_types_block}}\n{{lang_notes}}\n\nRULES:\n- CREATE: the entity does not exist in the wiki, mentions >= min_mentions_for_page\n- UPDATE: the entity exists \u2192 add new information, do NOT remove the old\n- SKIP: too few mentions or the information is already present\n- The wiki page FILE NAME (stem without `.md`) MUST have the form `wiki_{{domain_id}}_<entity_slug>`:\n  - `<entity_slug>` = the ASCII entity name in lowercase snake_case (only `[a-z0-9_]` characters, no spaces, diacritics, or uppercase letters).\n  - Example: `wiki_{{domain_id}}_neural_networks.md`.\n- The wiki page stem must NOT match any name from the "FORBIDDEN NAMES" section \u2014 those are the source files of this domain. The wiki describes extracted entities, it does not duplicate the source files.\n- The wiki page name must NOT match the name of the current source `{{source_stem}}` (a special case of the previous rule).\n- Synthesis, not copying. Technical configs/SQL may be quoted in code blocks.\n- The article path is determined by the entity type \u2014 use the exact template from the "DOMAIN ENTITY TYPES" section (above, before the RULES block), substituting the entity name for <EntityName>\n- If the entity type is undefined or the domain has no entity_types \u2192 default path: {{wiki_path}}/entities/<EntityName>.md\n- Frontmatter is mandatory: type: <entity type>, resource, timestamp: {{today}}, status: stub|developing|mature\n- tags: hierarchical tags (category/subcategory). Format: lowercase, separated by `/`, no spaces, no `#`. Pick tags in this order:\n  1. The page\'s entity-type tag \u2014 the normalized type of this entity (e.g. `person`). Always include it when the entity type is known.\n  2. Thematic tags reused from the EXISTING DOMAIN TAGS block (provided in the context). Do not invent near-duplicates of listed tags.\n  3. A new thematic tag ONLY when nothing in the block fits. Never start a new top-level category when the block says "reuse only".\n- resource: ONLY sources (files outside !Wiki/) \u2014 plain bare stem, NO `[[ ]]` brackets, no path, no extension: "FileName". Never a wiki page stem.\n- Links live ONLY in two body sections \u2014 NEVER in frontmatter. Do NOT emit `outgoing_links:`/`external_links:` frontmatter fields; they do not exist in this schema.\n  - `## Related` \u2014 outgoing links to OTHER wiki pages (files inside !Wiki/), one `[[wiki_domain_page]]` bullet per line. Never a source file.\n    \u274C FORBIDDEN: `[[CurrentSourceName]]` or `[[AnyOtherSourceFile]]` in `## Related`.\n       The source is already recorded in `resource` \u2014 there is no need to duplicate it in `## Related`.\n       Example: processing "Liquidity farming.md" \u2192 you must NOT put `[[Liquidity farming]]` in `## Related`.\n  - `## External links` \u2014 external URLs, one `[text](url)` bullet per line (`http://` or `https://` only).\n- In article bodies: ONLY [[stem]] \u2014 never [[stem|alias]]. The [[A|B]] syntax is forbidden.\n- Use the mandatory and optional section headings defined in the conventions block (_wiki_schema.md) below, exactly as written there. Each page must include the mandatory characteristics section.\n- For each page, add an "annotation" field to the JSON: a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section \u2014 synonyms, IDs, terms that are not in the heading>. Aim for ~600\u2013800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate \u2014 generic phrases raise noise in search.\n- The `annotation` field \u2014 ONLY in the JSON response. Do NOT add `annotation:` to the page frontmatter.\n- DEAD LINKS: every [[wiki_domain_slug]] in `## Related` and elsewhere in the article body must\n  either exist among the "Existing wiki pages" (provided in the context), or\n  be present in the pages list of this response. No page \u2014 do not write the link.\n{{schema_block}}\n{{forbidden_stems_block}}\n\nPATH RULE: each article path = !Wiki/<domain>/<entity>/<Article>.md \u2014 exactly 4 segments.\nNot allowed: !Wiki/os/os/network/NFS.md (domain twice), !Wiki/os/network/nfs/NFS.md (5 segments).\nAllowed:  !Wiki/os/network/NFS.md\n\nTYPE ENRICHMENT (entity_types_delta):\nIf, while analyzing the source, you discover:\n- new entity types (the type key is absent from the current list above), or\n- improvements to existing types (a more precise description or additional extraction_cues for an already existing type key) \u2014\nadd the entity_types_delta field to the JSON response. If nothing is new \u2014 simply do not include this field.\n\nDUPLICATE MERGING (merge):\nIf among the existing wiki pages you find several describing the same entity:\n- emit one new page in pages (with merged content and the canonical path)\n- list the old paths in the deletes field: [{path}, ...]\nThe old pages will be deleted, the index cleaned, and backlinks in the current source updated automatically.\n\nReturn ONLY a JSON object \u2014 no other text:\n{"reasoning":"Rationale: which entities were extracted and why","pages":[{"path":"{{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md","content":"---\\ntype: <entity type>\\nresource: [\\"{{source_stem}}\\"]\\ntimestamp: {{today}}\\nstatus: stub\\ntags: []\\n---\\n# EntityName\\n\\ncontent...\\n\\n## Related\\n- [[wiki_{{domain_id}}_other_entity]]\\n\\n## External links\\n- [Docs](https://example.com)","annotation":"The essence of the entity in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search."}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}\n';
 
 // prompts/ingest-merge.md
-var ingest_merge_default = `<!-- prompts/ingest-merge.md -->
-You are merging two wiki pages about the same entity into one.
-
-EXISTING PAGE (keep its frontmatter, path, and wiki_sources):
-{{existing}}
-
-NEW DRAFT (same topic, add unique facts from it):
-{{incoming}}
-
-Rules:
-- Return ONE merged page. Do not lose facts from either of them.
-- Keep the existing page's frontmatter; add the missing wiki_sources from the draft.
-- Do not duplicate sections; merge close ones.
-- Response format \u2014 strictly JSON: { "content": "<full page markdown>", "annotation": "<one line for the index>" }.
-`;
+var ingest_merge_default = '<!-- prompts/ingest-merge.md -->\nYou are merging two wiki pages about the same entity into one.\n\nEXISTING PAGE (keep its frontmatter, path, and resource):\n{{existing}}\n\nNEW DRAFT (same topic, add unique facts from it):\n{{incoming}}\n\nRules:\n- Return ONE merged page. Do not lose facts from either of them.\n- Keep the existing page\'s frontmatter; add the missing resource from the draft.\n- Do not duplicate sections; merge close ones.\n- Links live ONLY in body sections \u2014 never in frontmatter. Do NOT add `outgoing_links:`/`external_links:` fields to the frontmatter.\n  - Merge `## Related` sections from both pages: union the `[[stem]]` bullets, drop duplicates.\n  - Merge `## External links` sections from both pages: union the `[text](url)` bullets, drop duplicates.\n- Response format \u2014 strictly JSON: { "content": "<full page markdown>", "annotation": "<one line for the index>" }.\n';
 
 // prompts/ingest-entities.md
 var ingest_entities_default = 'You are an entity extractor from a source for the domain "{{domain_name}}".\n\nDOMAIN ENTITY TYPES:\n{{entity_types_block}}\n{{lang_notes}}\n\nTASK:\n- Read the source.\n- Return all entities worthy of a separate wiki page:\n  - If an entity matches a type above \u2192 specify its type.\n  - If it matches no type but the concept is significant \u2192 return it without type (a new type, to be determined during synthesis).\n  - Do not return an empty list if the source contains significant concepts.\n- For each entity:\n  - name: the canonical entity name (no quotes, like the heading of the future page)\n  - type: a type from the list above (optional)\n  - context_snippet: one phrase from the source explaining why the entity is needed (optional)\n\nDo not duplicate: one name \u2192 one record. Do not extract entities with min_mentions_for_page > 1 if they are mentioned only once.\n\nReturn ONLY JSON:\n{"reasoning":"...","entities":[{"name":"...","type":"...","context_snippet":"..."},{"name":"...","context_snippet":"..."}]}\n';
@@ -38779,7 +39328,7 @@ var ingest_entities_default = 'You are an entity extractor from a source for the
 var ingest_fix_paths_default = "These paths violate the 4-segment rule (!Wiki/<d>/<e>/<f>.md): {{paths}}. Return a corrected JSON array for these pages only.";
 
 // templates/_wiki_schema.md
-var wiki_schema_default = '# Wiki Schema\n\n## Language and style\n- Primary language: follow the configured output-language directive (from settings); when it is "auto", match the source/article language.\n- The output language applies to ALL natural-language text, including content copied from the source: table cell values, field values (prompt, expected, notes, descriptions), list items, and quoted sentences. These are content \u2014 translate them. A full sentence in another language (incl. CJK) is never a "term".\n- Verbatim preservation is ONLY for: fenced code blocks, file paths, identifiers, commands, URLs, proper names, and `[[wiki-link]]` targets (they are filenames \u2014 never translate a link target).\n- Do not translate technical terms: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML\n- System names \u2014 keep the original spelling (RT.DataExporter, CRM B2C, \u0426\u0425\u0414)\n- Expand abbreviations on first use on the page\n- Style: neutral, informative, no value judgements\n- Forbidden: "Obviously...", "The best way...", the pronouns "I", "we", "our"\n\n## File and folder naming\n- Files: kebab-case, Cyrillic allowed, no spaces or special characters except the hyphen\n  - Examples: `\u0432\u0435\u0440\u0441\u0438\u043E\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435-scd.md`, `clickhouse-\u043E\u0431\u0437\u043E\u0440.md`\n- Domain folders: lowercase, Latin script (`ai/`, `databases/`)\n- H1 heading: the page title in the configured output language; a technical term in parentheses when needed\n\n{{section_conventions}}\n\n## Frontmatter\n\n| Field | Rule |\n|------|---------|\n| `wiki_sources` | Array of real paths from the repository root. Read files only. On UPDATE \u2014 add, do not remove. Obsidian property type: **Links** (not list/text) \u2014 only then do the links participate in Graph View. Values must be in the `[[page-name]]` format: `["[[page-a]]", "[[page-b]]"] |\n| `wiki_updated` | YYYY-MM-DD |\n| `wiki_status` | `stub` (<2 sources, <10 sentences) / `developing` (\u22652 sources, \u226510 sentences, main sections filled in) / `mature` (\u22654 sources, all sections) |\n| `wiki_type` | File type: `page \\| index \\| log \\| schema`. Only for service files (`_index.md`, `_log.md`, `_wiki_schema.md`). Regular pages do not set this field. |\n| `tags` | YAML list: `[category/subcategory, domain/topic]`. Hierarchy via `/`, lowercase, no spaces, no `#`. Reuse tags from existing domain pages; create new ones following the same scheme. Obsidian recognizes the `tags` key automatically \u2014 do not set the type explicitly. |\n| `aliases` | Abbreviations, English variants, synonyms |\n| `wiki_outgoing_links` | Array of WikiLinks to related pages. Obsidian property type: **Links** (not list/text) \u2014 only then do the links participate in Graph View. Values must be in the `[[page-name]]` format: `["[[page-a]]", "[[page-b]]"]`. An empty array is allowed. |\n| `wiki_external_links` | Array of external URLs (`http://` or `https://`). They do not form the Obsidian graph \u2014 reference resources and documentation only. |\n\n## Common mistakes (forbidden)\n\n| Mistake | Why it is bad | Correct |\n|--------|-------------|-----------|\n| `tags: - "[[wiki_fin_...]]"` | A WikiLink is not a tag; the validator will remove it | Put it in `wiki_outgoing_links` |\n| `tags: - {type: ..., name: ...}` | tags \u2014 strings only | `tags: - finance/technical-analysis` |\n| `wiki_outgoing_links: ["[[a]]", "[[b]]"]` | Inline JSON is not parsed by the wiki-link-validator | Block list: `- "[[a]]"` on separate lines |\n| A link in the body without a record in `wiki_outgoing_links` | The Obsidian graph does not see the connection | Every `[[link]]` in the body \u2192 in `wiki_outgoing_links` |\n\n## Forbidden Frontmatter Patterns\n\n| Example | Problem | Fix |\n|---------|---------|-----|\n| `wiki_sources: ["[[wiki_work_foo]]"]` | Wiki-page stem in sources field | Move to `wiki_outgoing_links` |\n| `wiki_outgoing_links: ["[[MyNote]]"]` | Source stem in wiki-links field | Move to `wiki_sources` |\n\n## WikiLinks\n\n- Only `[[page-name]]` \u2014 no aliases, no folder paths\n- \u274C Forbidden: `[[Page|alias]]`, `[[folder/page]]`\n- \u2705 Correct: `[[page-name]]`, `[[\u041A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430]]`, `[[Scalability]]`\n- Link only to existing pages; dead links yield a warning\n\n`wiki_outgoing_links` \u2014 YAML block list (not inline JSON):\n- \u2705 Correct:\n  ```yaml\n  wiki_outgoing_links:\n    - "[[page-a]]"\n    - "[[page-b]]"\n  ```\n- \u274C Forbidden: `wiki_outgoing_links: ["[[page-a]]", "[[page-b]]"]`\n\n`wiki_outgoing_links` MUST contain every `[[link]]` found in the page body.\n\n## Content\n- Synthesis, not copying \u2014 rework the information from the sources\n- Verbatim quotes only in code blocks (SQL, configurations)\n- Forbidden: placeholder text (TODO, "see source"), empty sections, removing existing information\n- Tables: markdown with alignment (`| Parameter | Value |` + `|----------|----------|`)\n- Code blocks: always specify the language (` ```sql `, ` ```yaml `, ` ```json `)\n';
+var wiki_schema_default = '# Wiki Schema\n\n## Language and style\n- Primary language: follow the configured output-language directive (from settings); when it is "auto", match the source/article language.\n- The output language applies to ALL natural-language text, including content copied from the source: table cell values, field values (prompt, expected, notes, descriptions), list items, and quoted sentences. These are content \u2014 translate them. A full sentence in another language (incl. CJK) is never a "term".\n- Verbatim preservation is ONLY for: fenced code blocks, file paths, identifiers, commands, URLs, proper names, and `[[wiki-link]]` targets (they are filenames \u2014 never translate a link target).\n- Do not translate technical terms: SQL, API, LLM, ETL, SCD, TTL, DDL, JSON, YAML\n- System names \u2014 keep the original spelling (RT.DataExporter, CRM B2C, \u0426\u0425\u0414)\n- Expand abbreviations on first use on the page\n- Style: neutral, informative, no value judgements\n- Forbidden: "Obviously...", "The best way...", the pronouns "I", "we", "our"\n\n## File and folder naming\n- Files: kebab-case, Cyrillic allowed, no spaces or special characters except the hyphen\n  - Examples: `\u0432\u0435\u0440\u0441\u0438\u043E\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435-scd.md`, `clickhouse-\u043E\u0431\u0437\u043E\u0440.md`\n- Domain folders: lowercase, Latin script (`ai/`, `databases/`)\n- H1 heading: the page title in the configured output language; a technical term in parentheses when needed\n\n{{section_conventions}}\n\n## Frontmatter\n\n| Field | Rule |\n|------|---------|\n| `type` | Entity type \u2014 the page\'s entity-type subdirectory (e.g. `concept`, or one of the domain\'s configured entity types). Set once when the page is created; do not change on update. |\n| `description` | One-line overview of the page (plain text, no line breaks). This is the sole source of the retrieval overview embedding \u2014 keep it accurate and current. |\n| `resource` | YAML list of plain source-note stems \u2014 no `[[ ]]`, no folder path: `["source-a", "source-b"]`. On UPDATE \u2014 add, do not remove. |\n| `timestamp` | YYYY-MM-DD |\n| `tags` | YAML list: `[category/subcategory, domain/topic]`. Hierarchy via `/`, lowercase, no spaces, no `#`. Reuse tags from existing domain pages; create new ones following the same scheme. Obsidian recognizes the `tags` key automatically \u2014 do not set the type explicitly. |\n| `status` | `stub` (<2 sources, <10 sentences) / `developing` (\u22652 sources, \u226510 sentences, main sections filled in) / `mature` (\u22654 sources, all sections) |\n| `aliases` | Abbreviations, English variants, synonyms |\n\n## Common mistakes (forbidden)\n\n| Mistake | Why it is bad | Correct |\n|--------|-------------|-----------|\n| `tags: - "[[wiki_fin_...]]"` | A WikiLink is not a tag; the validator will remove it | Put it as a `- [[stem]]` bullet under `## Related` |\n| `tags: - {type: ..., name: ...}` | tags \u2014 strings only | `tags: - finance/technical-analysis` |\n| `resource: ["[[source-a]]"]` | `resource` holds plain stems, not WikiLinks | `resource: ["source-a"]` |\n| A link in the body with no matching bullet under `## Related` / `## External links` | The retrieval graph and reference list miss the connection | Add `- [[stem]]` (outgoing) or `- [text](url)` (external) under the matching heading |\n\n## WikiLinks\n\n- Only `[[page-name]]` \u2014 no aliases, no folder paths\n- \u274C Forbidden: `[[Page|alias]]`, `[[folder/page]]`\n- \u2705 Correct: `[[page-name]]`, `[[\u041A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430]]`, `[[Scalability]]`\n- Link only to existing pages; dead links yield a warning\n\n## Related and external links (body sections, not frontmatter)\n\nOutgoing links no longer live in frontmatter \u2014 they are body sections, each one bullet per line:\n\n- `## Related` \u2014 WikiLinks to other wiki pages:\n  ```markdown\n  ## Related\n\n  - [[page-a]]\n  - [[page-b]]\n  ```\n- `## External links` \u2014 external URLs, `[text](url)`:\n  ```markdown\n  ## External links\n\n  - [Example docs](https://example.com/docs)\n  ```\n\nBoth headings are fixed English literals \u2014 do not translate or localize them, even when the page body is in another language. These two sections are reference data only; they are excluded from retrieval embeddings.\n\n## Content\n- Synthesis, not copying \u2014 rework the information from the sources\n- Verbatim quotes only in code blocks (SQL, configurations)\n- Forbidden: placeholder text (TODO, "see source"), empty sections, removing existing information\n- Tables: markdown with alignment (`| Parameter | Value |` + `|----------|----------|`)\n- Code blocks: always specify the language (` ```sql `, ` ```yaml `, ` ```json `)\n';
 
 // src/domain-config.ts
 async function ensureDomainConfig(vaultTools, domainFolder) {
@@ -38797,460 +39346,6 @@ async function migrateLegacy(vaultTools, oldPath, newPath) {
     await vaultTools.write(newPath, content);
   }
   await vaultTools.remove(oldPath);
-}
-
-// src/utils/raw-frontmatter.ts
-var import_yaml = __toESM(require_dist(), 1);
-var FM_RE = /^---\n([\s\S]*?)\n---\n?/;
-var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-var WIKILINK_RE = /^\[\[.+\]\]$/;
-var URL_RE = /^https?:\/\//;
-var TAG_RE = /^[a-z][a-z0-9-]*(?:[/_][a-z0-9-]+)*$/;
-var FM_KEY_LINE = /^(wiki_[\w]+|tags|aliases|created|updated|external_links|related):/;
-function normalizeTag(raw) {
-  return raw.trim().replace(/^#+/, "").replace(/\\/g, "/").toLowerCase().replace(/\s+/g, "-");
-}
-function parseTagsFromFm(content) {
-  const fmMatch = FM_RE.exec(content);
-  if (!fmMatch) return [];
-  let parsed;
-  try {
-    parsed = (0, import_yaml.parse)(fmMatch[1]) ?? {};
-  } catch {
-    return [];
-  }
-  const tags = parsed["tags"];
-  if (!Array.isArray(tags)) return [];
-  return tags.filter((t) => typeof t === "string");
-}
-function recoverSourceFrontmatter(content) {
-  const fenceMatch = FM_RE.exec(content);
-  const lead = fenceMatch ? fenceMatch[1] : "";
-  const rest = fenceMatch ? content.slice(fenceMatch[0].length) : content;
-  const lines = rest.split("\n");
-  let i = 0;
-  while (i < lines.length && lines[i].trim() === "") i++;
-  const runStart = i;
-  let sawKey = false;
-  while (i < lines.length) {
-    if (FM_KEY_LINE.test(lines[i])) {
-      sawKey = true;
-      i++;
-      continue;
-    }
-    if (sawKey && /^\s+\S/.test(lines[i])) {
-      i++;
-      continue;
-    }
-    break;
-  }
-  const strayFm = sawKey ? lines.slice(runStart, i).join("\n") : "";
-  const body = sawKey ? lines.slice(i).join("\n") : rest;
-  if (!strayFm && (fenceMatch || !lead)) return content;
-  if (strayFm && !/^wiki_[\w]+:/m.test(strayFm)) return content;
-  const fmText = [lead, strayFm].filter((s) => s.trim().length > 0).join("\n");
-  let parsed;
-  try {
-    parsed = (0, import_yaml.parse)(fmText, { uniqueKeys: false });
-  } catch {
-    return content;
-  }
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return content;
-  const fm = (0, import_yaml.stringify)(parsed).replace(/\n+$/, "");
-  const cleanBody = body.replace(/^\n+/, "");
-  return `---
-${fm}
----
-${cleanBody}`;
-}
-function validateAndRepairFrontmatter(content, rules) {
-  const warnings = [];
-  const fmMatch = FM_RE.exec(content);
-  if (!fmMatch) return { content, warnings };
-  let rawYaml = fmMatch[1];
-  const body = content.slice(fmMatch[0].length);
-  const counts = /* @__PURE__ */ new Map();
-  for (const m of rawYaml.matchAll(/^([\w][\w_]*):/gm)) {
-    counts.set(m[1], (counts.get(m[1]) ?? 0) + 1);
-  }
-  let modified = false;
-  for (const [key, count] of counts) {
-    if (count < 2) continue;
-    const allItems = [];
-    const blockRe = new RegExp(`^${key}:[^\\n]*\\n((?:[ \\t]+-[^\\n]*\\n?)*)`, "gm");
-    for (const m of rawYaml.matchAll(blockRe)) {
-      for (const item of m[1].matchAll(/[ \t]+-[ \t]+"?([^"\n]+?)"?[ \t]*$/gm)) {
-        allItems.push(item[1].trim());
-      }
-    }
-    let prev;
-    do {
-      prev = rawYaml;
-      rawYaml = rawYaml.replace(
-        new RegExp(`^${key}:[^\\n]*\\n(?:[ \\t]+-[^\\n]*\\n?)*`, "m"),
-        ""
-      );
-    } while (rawYaml !== prev);
-    modified = true;
-    if (allItems.length > 0) {
-      const merged = [...new Set(allItems)];
-      rawYaml = rawYaml.trimEnd() + "\n" + key + ":\n" + merged.map((v) => `  - "${v}"`).join("\n") + "\n";
-      warnings.push(`Duplicate key "${key}" \u2014 merged ${merged.length} items`);
-    } else {
-      warnings.push(`Duplicate scalar key "${key}" \u2014 last value kept`);
-    }
-  }
-  let parsed;
-  try {
-    parsed = (0, import_yaml.parse)(rawYaml) ?? {};
-  } catch (e) {
-    warnings.push(`Unparseable YAML: ${e.message} \u2014 left unchanged`);
-    return { content, warnings };
-  }
-  for (const rule of rules) {
-    const val = parsed[rule.field];
-    if (val === void 0 || val === null) continue;
-    switch (rule.kind) {
-      case "list-wikilinks":
-      case "list-urls": {
-        if (!Array.isArray(val)) {
-          warnings.push(`${rule.field}: expected list, got scalar \u2014 removed`);
-          delete parsed[rule.field];
-          modified = true;
-          break;
-        }
-        const predicate = rule.kind === "list-wikilinks" ? (v) => WIKILINK_RE.test(v) : (v) => URL_RE.test(v);
-        const filtered = val.filter((v) => {
-          if (typeof v !== "string" || !predicate(v)) {
-            warnings.push(`${rule.field}: invalid entry "${v}" \u2014 removed`);
-            return false;
-          }
-          return true;
-        });
-        if (filtered.length < val.length) {
-          modified = true;
-          if (filtered.length === 0) {
-            delete parsed[rule.field];
-          } else {
-            parsed[rule.field] = filtered;
-          }
-        }
-        break;
-      }
-      case "list-tags": {
-        if (!Array.isArray(val)) {
-          warnings.push(`${rule.field}: expected list, got scalar \u2014 removed`);
-          delete parsed[rule.field];
-          modified = true;
-          break;
-        }
-        const kept = [];
-        let changed = false;
-        for (const v of val) {
-          if (typeof v !== "string") {
-            warnings.push(`${rule.field}: invalid entry "${v}" \u2014 removed`);
-            changed = true;
-            continue;
-          }
-          const norm = normalizeTag(v);
-          if (!TAG_RE.test(norm)) {
-            warnings.push(`${rule.field}: invalid entry "${v}" \u2014 removed`);
-            changed = true;
-            continue;
-          }
-          if (norm !== v) {
-            warnings.push(`${rule.field}: normalized "${v}" \u2192 "${norm}"`);
-            changed = true;
-          }
-          if (kept.includes(norm)) {
-            changed = true;
-          } else {
-            kept.push(norm);
-          }
-        }
-        if (changed) {
-          modified = true;
-          if (kept.length === 0) {
-            delete parsed[rule.field];
-          } else {
-            parsed[rule.field] = kept;
-          }
-        }
-        break;
-      }
-      case "list-wikilinks-stem-only": {
-        if (!Array.isArray(val)) {
-          warnings.push(`${rule.field}: expected list, got scalar \u2014 removed`);
-          delete parsed[rule.field];
-          modified = true;
-          break;
-        }
-        const filtered = val.filter((v) => {
-          if (typeof v !== "string" || !WIKILINK_RE.test(v) || v.includes("/") || v.endsWith(".md]]")) {
-            warnings.push(`${rule.field}: invalid entry "${v}" \u2014 removed`);
-            return false;
-          }
-          return true;
-        });
-        if (filtered.length < val.length) {
-          modified = true;
-          if (filtered.length === 0) {
-            delete parsed[rule.field];
-          } else {
-            parsed[rule.field] = filtered;
-          }
-        }
-        break;
-      }
-      case "list-wikilinks-wiki-only":
-      case "list-wikilinks-sources-only": {
-        if (!Array.isArray(val)) {
-          warnings.push(`${rule.field}: expected list, got scalar \u2014 removed`);
-          delete parsed[rule.field];
-          modified = true;
-          break;
-        }
-        const wikiOnly = rule.kind === "list-wikilinks-wiki-only";
-        const filtered = val.filter((v) => {
-          if (typeof v !== "string" || !WIKILINK_RE.test(v)) {
-            warnings.push(`${rule.field}: invalid entry "${v}" \u2014 removed`);
-            return false;
-          }
-          const stem = v.slice(2, -2).split("/").pop();
-          const isWiki = isWikiStem(stem);
-          if (wikiOnly && !isWiki) {
-            warnings.push(`${rule.field}: non-wiki stem "${v}" \u2014 removed`);
-            return false;
-          }
-          if (!wikiOnly && isWiki) {
-            warnings.push(`${rule.field}: wiki stem "${v}" \u2014 removed`);
-            return false;
-          }
-          return true;
-        });
-        if (filtered.length < val.length) {
-          modified = true;
-          if (filtered.length === 0) {
-            delete parsed[rule.field];
-          } else {
-            parsed[rule.field] = filtered;
-          }
-        }
-        break;
-      }
-      case "date-scalar": {
-        if (typeof val !== "string" || !DATE_RE.test(val)) {
-          warnings.push(`${rule.field}: invalid date "${val}" \u2014 removed`);
-          delete parsed[rule.field];
-          modified = true;
-        }
-        break;
-      }
-      case "aliases": {
-        if (typeof val === "string") {
-          warnings.push(`${rule.field}: scalar "${val}" wrapped in list`);
-          parsed[rule.field] = [val];
-          modified = true;
-        }
-        break;
-      }
-      case "warn-enum": {
-        if (typeof val !== "string" || !rule.values.includes(val)) {
-          warnings.push(
-            `${rule.field}: unexpected value "${val}" (expected: ${rule.values.join("|")})`
-          );
-        }
-        break;
-      }
-      case "remove": {
-        if (rule.field in parsed) {
-          warnings.push(`${rule.field}: field not allowed here \u2014 removed`);
-          delete parsed[rule.field];
-          modified = true;
-        }
-        break;
-      }
-    }
-  }
-  if (!modified) return { content, warnings };
-  return { content: `---
-${(0, import_yaml.stringify)(parsed)}---
-${body}`, warnings };
-}
-function filterStaleWikiLinks(content, existingStems, fields) {
-  const warnings = [];
-  const fmMatch = FM_RE.exec(content);
-  if (!fmMatch) return { content, warnings };
-  let parsed;
-  try {
-    parsed = (0, import_yaml.parse)(fmMatch[1]) ?? {};
-  } catch {
-    return { content, warnings };
-  }
-  let modified = false;
-  for (const field of fields) {
-    const val = parsed[field];
-    if (!Array.isArray(val)) continue;
-    const filtered = val.filter((entry) => {
-      if (!WIKILINK_RE.test(entry)) return true;
-      const stem = entry.slice(2, -2);
-      if (existingStems.has(stem)) return true;
-      warnings.push(`${field}: stale link ${entry} \u2014 removed`);
-      return false;
-    });
-    if (filtered.length !== val.length) {
-      parsed[field] = filtered;
-      modified = true;
-    }
-  }
-  if (!modified) return { content, warnings };
-  const body = content.slice(fmMatch[0].length);
-  return { content: `---
-${(0, import_yaml.stringify)(parsed)}---
-${body}`, warnings };
-}
-function stripInvalidWikiArticles(content, existingWikiStems) {
-  const warnings = [];
-  const fmMatch = FM_RE.exec(content);
-  if (!fmMatch) return { content, warnings };
-  let parsed;
-  try {
-    parsed = (0, import_yaml.parse)(fmMatch[1]) ?? {};
-  } catch {
-    return { content, warnings };
-  }
-  const val = parsed["wiki_articles"];
-  if (!Array.isArray(val) || val.length === 0) return { content, warnings };
-  const filtered = val.filter((entry) => {
-    if (!WIKILINK_RE.test(entry)) {
-      warnings.push(`wiki_articles: plain text "${entry}" \u2014 removed`);
-      return false;
-    }
-    const stem = entry.slice(2, -2);
-    if (!GENERIC_WIKI_STEM_REGEX.test(stem)) {
-      warnings.push(`wiki_articles: non-wiki stem ${entry} \u2014 removed`);
-      return false;
-    }
-    if (!existingWikiStems.has(stem)) {
-      warnings.push(`wiki_articles: stale link ${entry} \u2014 removed`);
-      return false;
-    }
-    return true;
-  });
-  if (filtered.length === val.length) return { content, warnings };
-  parsed["wiki_articles"] = filtered;
-  const body = content.slice(fmMatch[0].length);
-  return { content: `---
-${(0, import_yaml.stringify)(parsed)}---
-${body}`, warnings };
-}
-var SOURCE_RULES = [
-  { field: "wiki_articles", kind: "list-wikilinks-stem-only" },
-  { field: "wiki_added", kind: "date-scalar" },
-  { field: "wiki_updated", kind: "date-scalar" },
-  { field: "tags", kind: "list-tags" },
-  { field: "aliases", kind: "aliases" },
-  { field: "created", kind: "date-scalar" },
-  { field: "updated", kind: "date-scalar" },
-  { field: "external_links", kind: "list-urls" },
-  { field: "related", kind: "list-wikilinks" },
-  { field: "wiki_outgoing_links", kind: "remove" },
-  { field: "wiki_sources", kind: "remove" },
-  { field: "wiki_status", kind: "remove" },
-  { field: "wiki_type", kind: "remove" },
-  { field: "wiki_external_links", kind: "remove" },
-  { field: "annotation", kind: "remove" }
-];
-function validateAndRepairSourceFrontmatter(content) {
-  return validateAndRepairFrontmatter(content, SOURCE_RULES);
-}
-function restoreSourceFrontmatter(original, formatted) {
-  const wikiUpdatedMatch = /^wiki_updated:[ \t]*(.+)$/m.exec(original);
-  if (wikiUpdatedMatch) {
-    const wiki_updated = wikiUpdatedMatch[1].trim();
-    const wikiAddedMatch = /^wiki_added:[ \t]*(.+)$/m.exec(original);
-    const wiki_added = wikiAddedMatch?.[1].trim();
-    const wiki_articles = parseWikiArticlesFromFm(original);
-    formatted = upsertRawFrontmatter(formatted, { wiki_added, wiki_updated, wiki_articles });
-  }
-  const { content } = validateAndRepairSourceFrontmatter(formatted);
-  return content;
-}
-var WIKI_PAGE_RULES = [
-  { field: "wiki_sources", kind: "list-wikilinks-sources-only" },
-  { field: "wiki_updated", kind: "date-scalar" },
-  { field: "wiki_status", kind: "warn-enum", values: ["stub", "developing", "mature"] },
-  { field: "wiki_type", kind: "warn-enum", values: ["page", "index", "log", "schema"] },
-  { field: "tags", kind: "list-tags" },
-  { field: "aliases", kind: "aliases" },
-  { field: "wiki_outgoing_links", kind: "list-wikilinks-wiki-only" },
-  { field: "wiki_external_links", kind: "list-urls" },
-  { field: "annotation", kind: "remove" }
-];
-function validateAndRepairWikiPageFrontmatter(content) {
-  return validateAndRepairFrontmatter(content, WIKI_PAGE_RULES);
-}
-function upsertRawFrontmatter(content, fields) {
-  const match = FM_RE.exec(content);
-  const body = match ? content.slice(match[0].length) : content;
-  let existing = {};
-  if (match) {
-    try {
-      const parsed = (0, import_yaml.parse)(match[1]);
-      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
-        existing = parsed;
-      }
-    } catch {
-    }
-  }
-  const wikiAdded = fields.wiki_added ?? (typeof existing.wiki_added === "string" ? existing.wiki_added : void 0);
-  const { wiki_added: _a3, wiki_updated: _u, wiki_articles: _ar, ...rest } = existing;
-  void _a3;
-  void _u;
-  void _ar;
-  const result = { ...rest };
-  if (wikiAdded !== void 0) result.wiki_added = wikiAdded;
-  result.wiki_updated = fields.wiki_updated;
-  if (fields.wiki_articles.length > 0) result.wiki_articles = fields.wiki_articles;
-  return `---
-${(0, import_yaml.stringify)(result)}---
-${body}`;
-}
-function parseWikiArticlesFromFm(content) {
-  const fmMatch = FM_RE.exec(content);
-  if (!fmMatch) return [];
-  const match = /wiki_articles:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
-  if (!match) return [];
-  return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
-}
-function parseWikiSourcesFromFm(content) {
-  const fmMatch = FM_RE.exec(content);
-  if (!fmMatch) return [];
-  const match = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
-  if (!match) return [];
-  return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
-}
-function ensureWikiSources(content, sourceStem2) {
-  const sources = parseWikiSourcesFromFm(content);
-  if (sources.length > 0) return { content, injected: false };
-  const fmMatch = FM_RE.exec(content);
-  if (!fmMatch) return { content, injected: false };
-  let parsed;
-  try {
-    parsed = (0, import_yaml.parse)(fmMatch[1]) ?? {};
-  } catch {
-    return { content, injected: false };
-  }
-  const body = content.slice(fmMatch[0].length);
-  parsed.wiki_sources = [`[[${sourceStem2}]]`];
-  return { content: `---
-${(0, import_yaml.stringify)(parsed)}---
-${body}`, injected: true };
-}
-function hasFrontmatterField(content, field) {
-  const fmMatch = FM_RE.exec(content);
-  if (!fmMatch) return false;
-  return new RegExp(`^${field}:`, "m").test(fmMatch[1]);
 }
 
 // src/utils/tag-registry.ts
@@ -39351,6 +39446,8 @@ ${body}`, added: true, tag };
 }
 
 // src/wiki-index.ts
+var import_yaml3 = __toESM(require_dist(), 1);
+var FM_RE3 = /^---\n([\s\S]*?)\n---\n?/;
 function parseIndexAnnotations(content) {
   const map = /* @__PURE__ */ new Map();
   for (const line of content.split("\n")) {
@@ -39363,7 +39460,29 @@ function parseIndexAnnotations(content) {
   }
   return map;
 }
-function deriveFallbackAnnotation(content, entityType) {
+function parseDescriptionFromFm(content) {
+  const fmMatch = FM_RE3.exec(content);
+  if (!fmMatch) return "";
+  let parsed;
+  try {
+    parsed = (0, import_yaml3.parse)(fmMatch[1]) ?? {};
+  } catch {
+    return "";
+  }
+  const d = parsed.description;
+  return typeof d === "string" ? d.trim() : "";
+}
+function collectDescriptions(pages) {
+  const map = /* @__PURE__ */ new Map();
+  for (const { path: path3, content } of pages) {
+    const stem = path3.split("/").pop().replace(/\.md$/, "");
+    if (stem.startsWith("_") || !GENERIC_WIKI_STEM_REGEX.test(stem)) continue;
+    const desc = parseDescriptionFromFm(content);
+    map.set(stem, desc || deriveFallbackDescription(content));
+  }
+  return map;
+}
+function deriveFallbackDescription(content, entityType) {
   const body = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
   const h1 = (body.match(/^#\s+(.+)$/m)?.[1] ?? "").trim() || "(untitled)";
   let firstLine = "";
@@ -39483,7 +39602,7 @@ function reconcileIndex(indexContent, wikiFolder, pages) {
     onDisk.add(stem);
     if (indexed.has(stem)) continue;
     const entityType = deriveSection(wikiFolder, p.path);
-    const annotation = p.annotation && p.annotation.trim() ? p.annotation : deriveFallbackAnnotation(p.content, entityType);
+    const annotation = p.annotation && p.annotation.trim() ? p.annotation : deriveFallbackDescription(p.content, entityType);
     adds.push({ pid: stem, annotation, fullPath: p.path });
   }
   const removes = [...indexed].filter((pid) => !onDisk.has(pid));
@@ -39554,45 +39673,13 @@ function extractLinks(text) {
   while ((m = re.exec(text)) !== null) links.push(m[1].trim());
   return links;
 }
-function extractFmLinks(fm) {
-  const set = /* @__PURE__ */ new Set();
-  const blockMatch = /^wiki_outgoing_links:((?:\n {2}- "[^"]*")*)/m.exec(fm);
-  if (!blockMatch) return set;
-  const re = /^\s+- "(\[\[[^\]]+\]\])"/mg;
-  let m;
-  while ((m = re.exec(blockMatch[1])) !== null) set.add(m[1]);
-  return set;
-}
-function setFmLinks(fm, links) {
-  const block = links.length > 0 ? "wiki_outgoing_links:\n" + links.map((l) => `  - "${l}"`).join("\n") : "wiki_outgoing_links: []";
-  const re = /^wiki_outgoing_links:(?:[ \t]*\[\]|(?:\n {2}- "[^"]*")*)/m;
-  if (re.test(fm)) return fm.replace(re, block);
-  return fm.replace(/\n---$/, `
-${block}
----`);
-}
 function fixOnePass(content) {
   const parts = splitFrontmatter(content);
   if (!parts) {
     return stripPath(stripAlias(content));
   }
-  let [fm, body] = parts;
-  body = stripAlias(body);
-  body = stripPath(body);
-  const inlineMatch = fm.match(/^wiki_outgoing_links:[ \t]*(\[.*?\])[ \t]*$/m);
-  if (inlineMatch) {
-    try {
-      const arr = JSON.parse(inlineMatch[1]);
-      fm = fm.replace(
-        /^wiki_outgoing_links:[ \t]*\[.*?\][ \t]*$/m,
-        arr.length > 0 ? "wiki_outgoing_links:\n" + arr.map((l) => `  - "${l}"`).join("\n") : "wiki_outgoing_links: []"
-      );
-    } catch {
-    }
-  }
-  const bodyLinks = [...new Set(extractLinks(body).map((l) => `[[${l}]]`))];
-  fm = setFmLinks(fm, bodyLinks);
-  return fm + body;
+  const [fm, body] = parts;
+  return fm + stripPath(stripAlias(body));
 }
 function stripAlias(text) {
   return text.replace(/\[\[([^\]|]+)\|[^\]]+\]\]/g, "[[$1]]");
@@ -39615,25 +39702,6 @@ function validateWikiLinks(pages) {
     while ((m = linkRe.exec(content)) !== null) {
       if (m[1].includes("/")) {
         violations.push({ page: pagePath, kind: "path", detail: m[0] });
-      }
-    }
-    const fmParts = splitFrontmatter(content);
-    const fmContent = fmParts ? fmParts[0] : "";
-    if (fmContent && /^wiki_outgoing_links:[ \t]*\[(?!\])/m.test(fmContent)) {
-      violations.push({ page: pagePath, kind: "inline-json", detail: "wiki_outgoing_links: [...]" });
-    }
-    const parts = splitFrontmatter(content);
-    if (parts && /^wiki_outgoing_links:/m.test(parts[0])) {
-      const [fm, body] = parts;
-      const bodyLinksFmt = new Set(extractLinks(body).map((l) => `[[${l}]]`));
-      const fmLinks = extractFmLinks(fm);
-      const synced = bodyLinksFmt.size === fmLinks.size && [...bodyLinksFmt].every((l) => fmLinks.has(l));
-      if (!synced) {
-        violations.push({
-          page: pagePath,
-          kind: "outgoing-desync",
-          detail: `body: [${[...bodyLinksFmt].join(", ")}], fm: [${[...fmLinks].join(", ")}]`
-        });
       }
     }
   }
@@ -39714,8 +39782,7 @@ function stripDeadLinks(content, knownStems) {
   );
   body = tidyAfterRemoval(body);
   if (fm === null) return body.trim();
-  const bodyLinks = [...new Set(extractLinks(body).map((l) => `[[${l}]]`))];
-  return setFmLinks(fm, bodyLinks) + body;
+  return fm + body;
 }
 
 // src/prompt-version.ts
@@ -39750,7 +39817,7 @@ function deriveSectionForPath(wikiFolder, fullPath) {
   return parts.length >= 2 ? parts[0] : "general";
 }
 function parseWikiStatus(content) {
-  const m = /^---\n[\s\S]*?^wiki_status:[ \t]*(.+)$/m.exec(content);
+  const m = /^---\n[\s\S]*?^status:[ \t]*(.+)$/m.exec(content);
   return m ? m[1].trim() : "unknown";
 }
 async function collectSourceStems(domain, vaultTools, vaultRoot) {
@@ -39872,7 +39939,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   } else {
     existingPages = await vaultTools.readAll(nonMetaPaths);
   }
-  const noSources = [...existingPages.entries()].filter(([, content]) => !/wiki_sources:/m.test(content)).map(([path3]) => path3);
+  const noSources = [...existingPages.entries()].filter(([, content]) => !/resource:/m.test(content)).map(([path3]) => path3);
   for (const p of noSources) {
     try {
       await vaultTools.remove(p);
@@ -39883,7 +39950,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     yield {
       kind: "info_text",
       icon: "\u{1F5D1}\uFE0F",
-      summary: `Deleted ${noSources.length} wiki page(s) missing wiki_sources.`,
+      summary: `Deleted ${noSources.length} wiki page(s) missing resource.`,
       details: noSources.slice(0, 10)
     };
   }
@@ -40021,9 +40088,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   const plannedDeleteStems = new Set([...plannedDeletePaths].map((p) => p.split("/").pop().replace(/\.md$/, "")));
   const plannedPagePaths = pages.map((p) => p.path);
   if (pages.length > 0 || plannedDeletePaths.size > 0) {
-    const backlinkToday = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const normalizedSource = recoverSourceFrontmatter(sourceContent);
-    const isFirstTime = !hasFrontmatterField(normalizedSource, "wiki_added");
     const existingArticles = parseWikiArticlesFromFm(normalizedSource).filter((link) => {
       const stem = link.replace(/^\[\[/, "").replace(/\]\]$/, "");
       return !plannedDeleteStems.has(stem);
@@ -40031,8 +40096,6 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
     const writtenLinks = plannedPagePaths.map((p) => `[[${p.split("/").pop().replace(/\.md$/, "")}]]`);
     const mergedArticles = [.../* @__PURE__ */ new Set([...existingArticles, ...writtenLinks])];
     const updatedSource = upsertRawFrontmatter(normalizedSource, {
-      wiki_added: isFirstTime ? backlinkToday : void 0,
-      wiki_updated: backlinkToday,
       wiki_articles: mergedArticles
     });
     const { content: repairedSource, warnings: sourceWarnings } = validateAndRepairSourceFrontmatter(updatedSource);
@@ -40147,14 +40210,17 @@ ${page.content}`;
         details: [`tags: + ${entityTag} (derived from wiki_subfolder)`]
       };
     }
+    const okfType = entityTypeFromPath(wikiVaultPath, page.path);
+    const typed = ensureType(entityTagged, okfType);
+    const described = ensureDescription(typed, page.annotation ?? "");
     const sourceStem2 = sourceVaultPath.split("/").pop().replace(/\.md$/, "");
-    const { content: sourcedPage, injected } = ensureWikiSources(entityTagged, sourceStem2);
+    const { content: sourcedPage, injected } = ensureResource(described, sourceStem2);
     if (injected) {
       yield {
         kind: "info_text",
         icon: "\u26A0\uFE0F",
-        summary: `wiki_sources injected: ${page.path}`,
-        details: [`Added [[${sourceStem2}]] \u2014 LLM did not emit wiki_sources`]
+        summary: `resource injected: ${page.path}`,
+        details: [`Added [[${sourceStem2}]] \u2014 LLM did not emit resource`]
       };
     }
     yield { kind: "tool_use", name: existingContent === null ? "Create" : "Update", input: { path: page.path } };
@@ -40171,7 +40237,7 @@ ${page.content}`;
         logEntries.push({ path: relPath, action: "UPDATED", statusFrom: parseWikiStatus(existingContent), statusTo });
       }
       try {
-        const annotation = page.annotation && page.annotation.trim() ? page.annotation : deriveFallbackAnnotation(sourcedPage, deriveSectionForPath(wikiVaultPath, page.path));
+        const annotation = page.annotation && page.annotation.trim() ? page.annotation : deriveFallbackDescription(sourcedPage, deriveSectionForPath(wikiVaultPath, page.path));
         await upsertIndexAnnotation(vaultTools, wikiVaultPath, pageId(page.path), annotation, page.path);
       } catch {
       }
@@ -40268,14 +40334,11 @@ ${page.content}`;
   }
   if (similarity && written.length > 0) {
     try {
-      const updatedIndex = await vaultTools.read(domainIndexPath(wikiVaultPath)).catch(() => "");
-      const updatedAnnotations = parseIndexAnnotations(updatedIndex);
-      const writtenSet = new Set(written);
+      const writtenPages = await vaultTools.readAll(written);
+      const descriptions = collectDescriptions([...writtenPages].map(([path3, content]) => ({ path: path3, content })));
       const pageBodies = /* @__PURE__ */ new Map();
-      for (const page of pages) {
-        if (writtenSet.has(page.path)) pageBodies.set(pageId(page.path), page.content);
-      }
-      await similarity.refreshCache(domainRoot, vaultTools, updatedAnnotations, pageBodies);
+      for (const [path3, content] of writtenPages) pageBodies.set(pageId(path3), content);
+      await similarity.refreshCache(domainRoot, vaultTools, descriptions, pageBodies);
     } catch {
     }
   }
@@ -40761,8 +40824,19 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
   await ensureDomainConfig(vaultTools, wikiVaultPath);
   const indexContent = await tryRead2(vaultTools, domainIndexPath(wikiVaultPath));
   if (signal.aborted) return null;
-  const indexAnnotations = parseIndexAnnotations(indexContent);
-  yield { kind: "tool_result", ok: true, preview: `${indexAnnotations.size} annotations` };
+  yield { kind: "tool_result", ok: true, preview: indexContent ? "read" : "empty" };
+  yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
+  const allFiles = await vaultTools.listFiles(wikiVaultPath);
+  const files = allFiles.filter(
+    (f) => !META_FILES.some((m) => f.endsWith(m)) && !f.includes("/_config/")
+  );
+  yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
+  if (signal.aborted) return null;
+  yield { kind: "tool_use", name: "Read", input: { files: files.length } };
+  const pages = await vaultTools.readAll(files);
+  yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
+  if (signal.aborted) return null;
+  const indexAnnotations = collectDescriptions([...pages].map(([path3, content]) => ({ path: path3, content })));
   const topK = Math.max(1, Math.min(50, Math.floor(cfg.seedTopK)));
   const minScore = Math.max(0, Math.min(1, cfg.seedMinScore));
   let seedOutputTokens = 0;
@@ -40817,18 +40891,7 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
     yield { kind: "tool_result", ok: seeds.length > 0, preview: `${seeds.length} seeds` };
   }
   if (signal.aborted) return null;
-  yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
-  const allFiles = await vaultTools.listFiles(wikiVaultPath);
-  const files = allFiles.filter(
-    (f) => !META_FILES.some((m) => f.endsWith(m)) && !f.includes("/_config/")
-  );
-  yield { kind: "tool_result", ok: true, preview: `${files.length} pages` };
-  if (signal.aborted) return null;
   if (seeds.length === 0) return null;
-  yield { kind: "tool_use", name: "Read", input: { files: files.length } };
-  const pages = await vaultTools.readAll(files);
-  yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
-  if (signal.aborted) return null;
   const graphResult = graphCache.get(domain.id, pages);
   const { selectedIds, expandedScores } = await bfsExpandRanked(
     seeds,
@@ -41017,9 +41080,10 @@ ${indexContent}` : ""
     const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     const pageContent = [
       `---`,
-      `wiki_sources: []`,
-      `wiki_updated: ${today}`,
-      `wiki_status: mature`,
+      `type: concept`,
+      `resource: []`,
+      `timestamp: ${today}`,
+      `status: mature`,
       `tags: []`,
       `---`,
       ``,
@@ -41331,7 +41395,7 @@ async function cleanupInvalidPages(vaultTools, wikiVaultPath, _domainId) {
     }
     try {
       const content = await vaultTools.read(f);
-      if (!/wiki_sources:/m.test(content)) {
+      if (!/resource:/m.test(content)) {
         await vaultTools.remove(f);
         deleted++;
       }
@@ -41364,30 +41428,24 @@ async function buildTitleMap(paths, vaultTools) {
   return result;
 }
 function validateWikiSources(content, originalContent, knownStems, titleMap, wikiStems = /* @__PURE__ */ new Set()) {
-  content = content.replace(
-    /(wiki_sources:\s*\n(?:[ \t]+-[ \t]+[^\n]+\n?)+)/,
-    (block) => block.replace(/^([ \t]+-[ \t]+)(\[\[[^\]]+\]\])([ \t]*)$/gm, '$1"$2"$3')
-  );
   const isValid2 = (entry) => {
-    const m = entry.match(/^\[\[(.+?)\]\]$/);
-    if (!m) return true;
-    const text = m[1];
+    const text = entry.trim();
     if (wikiStems.has(text)) return false;
     if (text.includes("/")) return true;
     return knownStems.has(text) || titleMap.has(text.toLowerCase());
   };
   if (originalContent) {
-    const originalEntries = parseWikiSourcesFromFm(originalContent);
-    const llmEntries = new Set(parseWikiSourcesFromFm(content));
+    const originalEntries = parseResourceFromFm(originalContent);
+    const llmEntries = new Set(parseResourceFromFm(content));
     const validOriginal = originalEntries.filter(isValid2);
     const missing = validOriginal.filter((e) => !llmEntries.has(e));
     if (missing.length > 0) {
-      const emptyKeyRe = /wiki_sources:\s*(?:\[\]\s*\n|\n(?!\s*-))/;
+      const emptyKeyRe = /resource:\s*(?:\[\]\s*\n|\n(?!\s*-))/;
       if (emptyKeyRe.test(content)) {
-        const block = "wiki_sources:\n" + missing.map((e) => `  - "${e}"`).join("\n") + "\n";
+        const block = "resource:\n" + missing.map((e) => `  - "${e}"`).join("\n") + "\n";
         content = content.replace(emptyKeyRe, block);
       } else {
-        const listBlockRe = /(wiki_sources:\s*\n(?:[ \t]+-[ \t]+[^\n]+\n?)+)/;
+        const listBlockRe = /(resource:\s*\n(?:[ \t]+-[ \t]+[^\n]+\n?)+)/;
         content = content.replace(
           listBlockRe,
           (match) => match.trimEnd() + "\n" + missing.map((e) => `  - "${e}"`).join("\n") + "\n"
@@ -41395,7 +41453,7 @@ function validateWikiSources(content, originalContent, knownStems, titleMap, wik
       }
     }
   }
-  const entries = parseWikiSourcesFromFm(content);
+  const entries = parseResourceFromFm(content);
   if (entries.length === 0) return content;
   const toRemove = entries.filter((e) => !isValid2(e));
   if (toRemove.length === 0) return content;
@@ -41428,7 +41486,7 @@ Wiki folder outside vault \u2014 skipped.`);
     }
     const { deleted: deletedInvalid } = await cleanupInvalidPages(vaultTools, wikiVaultPath, domain.id);
     if (deletedInvalid > 0) {
-      yield { kind: "step", icon: "\u{1F5D1}\uFE0F", text: `Deleted ${deletedInvalid} invalid wiki article(s).` };
+      yield { kind: "info_text", icon: "\u{1F5D1}\uFE0F", summary: `Deleted ${deletedInvalid} invalid wiki article(s).` };
     }
     yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
     await ensureDomainConfig(vaultTools, wikiVaultPath);
@@ -41645,7 +41703,8 @@ ${lintResult.value.report}`);
         if (similarity) {
           const pageBodies = /* @__PURE__ */ new Map();
           for (const [path3, content] of pages) pageBodies.set(pageId(path3), content);
-          const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, annotations, pageBodies);
+          const descriptions = collectDescriptions([...pages].map(([path3, content]) => ({ path: path3, content })));
+          const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, descriptions, pageBodies);
           if (similarity.config.mode === "embedding" && updated > 0) {
             yield { kind: "info_text", icon: "\u{1F4E4}", summary: `\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432: ${updated}` };
           }
@@ -41654,7 +41713,7 @@ ${lintResult.value.report}`);
       for (const wikiPath of writtenPaths) {
         const wikiContent = pages.get(wikiPath);
         if (!wikiContent) continue;
-        if (parseWikiSourcesFromFm(wikiContent).length === 0) {
+        if (parseResourceFromFm(wikiContent).length === 0) {
           const stem = pageId(wikiPath);
           try {
             if (typeof vaultTools.remove === "function") {
@@ -41736,24 +41795,11 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
       };
     }
     const deletedNames = new Set(deletedRefs.map((d) => d.deletedName));
-    const existingWikiStems = new Set(
-      [
-        ...[...pages.keys()].map((p) => p.split("/").pop().replace(/\.md$/, "")),
-        ...writtenPaths.map((p) => p.split("/").pop().replace(/\.md$/, ""))
-      ].filter((stem) => !deletedNames.has(stem))
-    );
     for (const [wikiPath, wikiContent] of pages) {
       const cleaned = stripDeadLinks(wikiContent, knownStems);
       if (cleaned !== wikiContent) {
         pages.set(wikiPath, cleaned);
         await vaultTools.write(wikiPath, cleaned);
-      }
-    }
-    for (const [wikiPath, wikiContent] of pages) {
-      const { content: filteredWiki } = filterStaleWikiLinks(wikiContent, existingWikiStems, ["wiki_outgoing_links"]);
-      if (filteredWiki !== wikiContent) {
-        pages.set(wikiPath, filteredWiki);
-        await vaultTools.write(wikiPath, filteredWiki);
       }
     }
     const allWikiStems = new Set(
@@ -41771,14 +41817,12 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
     }
     const backlinks = /* @__PURE__ */ new Map();
     for (const [wikiPath, wikiContent] of pages) {
-      for (const src of parseWikiSourcesFromFm(wikiContent)) {
-        const bareName = src.slice(2, -2);
+      for (const bareName of parseResourceFromFm(wikiContent)) {
         const rawPath = bareName.includes("/") ? bareName : stemToPath.get(bareName) ?? bareName;
         if (!backlinks.has(rawPath)) backlinks.set(rawPath, /* @__PURE__ */ new Set());
         backlinks.get(rawPath).add(`[[${wikiPath.split("/").pop().replace(/\.md$/, "")}]]`);
       }
     }
-    const syncToday = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     let syncUpdated = 0;
     for (const [rawPath, articles] of backlinks) {
       yield { kind: "tool_use", name: "Update", input: { path: rawPath } };
@@ -41787,7 +41831,6 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
         const existingArticles = parseWikiArticlesFromFm(rawContent);
         const mergedArticles = [.../* @__PURE__ */ new Set([...existingArticles, ...articles])];
         const newContent = upsertRawFrontmatter(rawContent, {
-          wiki_updated: syncToday,
           wiki_articles: mergedArticles
         });
         await vaultTools.write(rawPath, newContent);
@@ -51255,6 +51298,116 @@ var DomainStore = class {
   }
 };
 
+// src/okf-export.ts
+var import_yaml4 = __toESM(require_dist(), 1);
+
+// src/okf-export-utils.ts
+var WIKILINK_RE2 = /\[\[([^\]|]+?)(?:\|([^\]]+))?\]\]/g;
+var FM_RE4 = /^---\n[\s\S]*?\n---\n?/;
+function buildPidToRelpath(pageRelpaths) {
+  const map = /* @__PURE__ */ new Map();
+  for (const relpath of pageRelpaths) {
+    const stem = relpath.split("/").pop().replace(/\.md$/, "");
+    map.set(stem, relpath);
+  }
+  return map;
+}
+function rewriteWikilinks(body, pidToRel) {
+  const dead = [];
+  const rewritten = body.replace(WIKILINK_RE2, (_match, stemRaw, aliasRaw) => {
+    const stem = stemRaw.trim();
+    const text = (aliasRaw ?? stem).trim();
+    const rel = pidToRel.get(stem);
+    if (!rel) {
+      dead.push(stem);
+      return text;
+    }
+    return `[${text}](${rel})`;
+  });
+  return { body: rewritten, dead };
+}
+function normalizeExportTags(tags) {
+  const kept = [];
+  for (const tag of tags) {
+    const norm = normalizeTag(tag).replace(/\//g, "-");
+    if (!norm || kept.includes(norm)) continue;
+    kept.push(norm);
+  }
+  return kept;
+}
+function deriveTitle(content, slug) {
+  const body = content.replace(FM_RE4, "");
+  return body.match(/^#\s+(.+)$/m)?.[1]?.trim() || slug;
+}
+
+// src/okf-export.ts
+var FM_RE5 = /^---\n([\s\S]*?)\n---\n?/;
+var RESERVED = /* @__PURE__ */ new Set(["index.md", "log.md"]);
+function buildOkfBundle(pages, indexDescriptions, log) {
+  const warnings = [];
+  const pidToRel = buildPidToRelpath(pages.map((p) => p.relpath));
+  const files = [];
+  for (const page of pages) {
+    if (RESERVED.has(page.relpath)) {
+      warnings.push(
+        `source page '${page.relpath}' collides with the reserved OKF '${page.relpath}' \u2014 overwritten`
+      );
+    }
+    const slug = page.relpath.split("/").pop().replace(/\.md$/, "");
+    const fmMatch = FM_RE5.exec(page.content);
+    const body = fmMatch ? page.content.slice(fmMatch[0].length) : page.content;
+    let fm = {};
+    if (fmMatch) {
+      try {
+        fm = (0, import_yaml4.parse)(fmMatch[1]) ?? {};
+      } catch {
+        fm = {};
+      }
+    }
+    if (!("type" in fm)) fm.type = "concept";
+    if (!("title" in fm)) fm.title = deriveTitle(page.content, slug);
+    if (!("description" in fm)) {
+      const desc = indexDescriptions.get(slug);
+      if (desc) fm.description = desc;
+    }
+    if (Array.isArray(fm.tags)) {
+      fm.tags = normalizeExportTags(fm.tags.filter((t) => typeof t === "string"));
+    }
+    const { body: rewritten, dead } = rewriteWikilinks(body, pidToRel);
+    for (const stem of dead) warnings.push(`${page.relpath}: dead link [[${stem}]] \u2192 plain text`);
+    files.push({ relpath: page.relpath, content: `---
+${(0, import_yaml4.stringify)(fm)}---
+${rewritten}` });
+  }
+  files.push({ relpath: "index.md", content: buildIndex(pages, indexDescriptions) });
+  files.push({ relpath: "log.md", content: `# Log
+
+${log}` });
+  return { files, warnings };
+}
+function buildIndex(pages, descriptions) {
+  const lines = ["# Index", ""];
+  for (const page of pages) {
+    const slug = page.relpath.split("/").pop().replace(/\.md$/, "");
+    const desc = descriptions.get(slug) ?? "";
+    lines.push(`- [${slug}](${page.relpath})${desc ? " \u2014 " + desc : ""}`);
+  }
+  return lines.join("\n") + "\n";
+}
+
+// src/okf-export-fs.ts
+var import_obsidian10 = require("obsidian");
+async function writeOkfBundle(destAbs, bundle) {
+  if (!import_obsidian10.Platform.isDesktopApp) throw new Error("OKF export is desktop-only");
+  const fs = await import("node:fs/promises");
+  const path3 = await import("node:path");
+  for (const file of bundle.files) {
+    const abs = path3.join(destAbs, file.relpath);
+    await fs.mkdir(path3.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, file.content, "utf8");
+  }
+}
+
 // src/controller.ts
 var WikiController = class {
   constructor(app, plugin, domainStore, localConfigStore) {
@@ -51285,17 +51438,17 @@ var WikiController = class {
   cancelCurrent() {
     if (this.current) {
       this.current.abort();
-      new import_obsidian10.Notice(i18n().ctrl.cancelling);
+      new import_obsidian11.Notice(i18n().ctrl.cancelling);
     }
   }
   async format() {
     const file = this.app.workspace.getActiveFile();
     if (!file) {
-      new import_obsidian10.Notice(i18n().ctrl.noActiveFile);
+      new import_obsidian11.Notice(i18n().ctrl.noActiveFile);
       return;
     }
     if (file.extension !== "md") {
-      new import_obsidian10.Notice(i18n().view.formatOnlyMarkdown ?? "Format only works on markdown files");
+      new import_obsidian11.Notice(i18n().view.formatOnlyMarkdown ?? "Format only works on markdown files");
       return;
     }
     const domains = await this.loadDomains();
@@ -51326,11 +51479,11 @@ var WikiController = class {
   async formatApply(keepOld) {
     const p = this._pendingFormat;
     if (!p || !p.tempPath) {
-      new import_obsidian10.Notice(i18n().view.formatNoPending ?? "No format preview to apply");
+      new import_obsidian11.Notice(i18n().view.formatNoPending ?? "No format preview to apply");
       return;
     }
     if (this.isBusy()) {
-      new import_obsidian10.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian11.Notice(i18n().ctrl.operationRunning);
       return;
     }
     const adapter = this.app.vault.adapter;
@@ -51357,17 +51510,17 @@ var WikiController = class {
         const content = await adapter.read(p.tempPath);
         const patched = restoreSourceFrontmatter(originalContent, content);
         const origFile = this.app.vault.getAbstractFileByPath(p.originalPath);
-        if (origFile instanceof import_obsidian10.TFile) {
+        if (origFile instanceof import_obsidian11.TFile) {
           await this.app.vault.modify(origFile, patched);
         } else {
           await adapter.write(p.originalPath, patched);
         }
         await this.app.vault.adapter.remove(p.tempPath);
       }
-      new import_obsidian10.Notice(i18n().view.formatApplied(p.originalPath));
+      new import_obsidian11.Notice(i18n().view.formatApplied(p.originalPath));
       this.activeView()?.appendEvent({ kind: "format_applied", path: p.originalPath });
     } catch (e) {
-      new import_obsidian10.Notice(i18n().ctrl.errorPrefix(e.message));
+      new import_obsidian11.Notice(i18n().ctrl.errorPrefix(e.message));
     } finally {
       this._pendingFormat = null;
       this.onBusyChange?.();
@@ -51384,18 +51537,18 @@ var WikiController = class {
     } catch {
     }
     this._pendingFormat = null;
-    new import_obsidian10.Notice(i18n().view.formatCancelled);
+    new import_obsidian11.Notice(i18n().view.formatCancelled);
     this.activeView()?.appendEvent({ kind: "format_cancelled" });
     this.onBusyChange?.();
   }
   async formatRefine(message) {
     const p = this._pendingFormat;
     if (!p) {
-      new import_obsidian10.Notice(i18n().view.formatNoPending ?? "No format preview to refine");
+      new import_obsidian11.Notice(i18n().view.formatNoPending ?? "No format preview to refine");
       return;
     }
     if (this.isBusy()) {
-      new import_obsidian10.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian11.Notice(i18n().ctrl.operationRunning);
       return;
     }
     p.chat.push({ role: "user", content: message });
@@ -51404,7 +51557,7 @@ var WikiController = class {
   async ingestActive(domainId) {
     const file = this.app.workspace.getActiveFile();
     if (!file) {
-      new import_obsidian10.Notice(i18n().ctrl.noActiveFile);
+      new import_obsidian11.Notice(i18n().ctrl.noActiveFile);
       return;
     }
     await this.dispatch("ingest", [file.path], domainId);
@@ -51446,11 +51599,11 @@ var WikiController = class {
   }
   async dispatchChat(operation, domainId, context, chatMessages) {
     if (this.isBusy()) {
-      new import_obsidian10.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian11.Notice(i18n().ctrl.operationRunning);
       return;
     }
-    if (import_obsidian10.Platform.isMobile && operation !== "query") {
-      new import_obsidian10.Notice(i18n().ctrl.mobileNotAvailable);
+    if (import_obsidian11.Platform.isMobile && operation !== "query") {
+      new import_obsidian11.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
     {
@@ -51473,7 +51626,7 @@ var WikiController = class {
     try {
       agentRunner = await this.buildAgentRunner(vaultRoot, this._chatSessionId, "chat", this.plugin.settings.timeouts.lint);
     } catch (e) {
-      new import_obsidian10.Notice(i18n().ctrl.errorPrefix(e.message));
+      new import_obsidian11.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
       return;
     }
@@ -51560,19 +51713,48 @@ var WikiController = class {
     const adapter = this.app.vault.adapter;
     const base = adapter.getBasePath?.();
     if (base == null) {
-      if (!import_obsidian10.Platform.isMobile) {
+      if (!import_obsidian11.Platform.isMobile) {
         console.warn("[ai-wiki] vault.adapter.getBasePath is undefined on desktop");
       }
       return "";
     }
     return base;
   }
+  /**
+   * Serializes a domain's wiki pages into an OKF bundle at an absolute filesystem
+   * path (desktop-only). Reads pages + the domain's `_index.md` descriptions and
+   * `_log.md`, builds the bundle in memory, writes it out.
+   */
+  async exportOkf(domain, destAbs) {
+    const wikiFolder = domainWikiFolder(domain.wiki_folder);
+    const prefix = wikiFolder + "/";
+    const pages = [];
+    for (const file of collectMdInPaths(this.app.vault, [wikiFolder])) {
+      if (file.basename.startsWith("_")) continue;
+      const content = await this.app.vault.adapter.read(file.path);
+      const relpath = file.path.startsWith(prefix) ? file.path.slice(prefix.length) : file.path;
+      pages.push({ relpath, content });
+    }
+    let descriptions = /* @__PURE__ */ new Map();
+    let log = "";
+    try {
+      descriptions = parseIndexAnnotations(await this.app.vault.adapter.read(domainIndexPath(wikiFolder)));
+    } catch {
+    }
+    try {
+      log = await this.app.vault.adapter.read(domainLogPath(wikiFolder));
+    } catch {
+    }
+    const bundle = buildOkfBundle(pages, descriptions, log);
+    await writeOkfBundle(destAbs, bundle);
+    return { pages: pages.length, warnings: bundle.warnings };
+  }
   async loadDomains() {
     try {
       return await this.domainStore.load();
     } catch (e) {
       if (e instanceof DomainCorruptError) {
-        new import_obsidian10.Notice(`Domain map corrupt: ${e.message}`);
+        new import_obsidian11.Notice(`Domain map corrupt: ${e.message}`);
       }
       throw e;
     }
@@ -51624,13 +51806,13 @@ var WikiController = class {
     const id = input.id.trim();
     const err = validateDomainId(id);
     if (err) {
-      new import_obsidian10.Notice(i18n().ctrl.domainAddFailed(err));
+      new import_obsidian11.Notice(i18n().ctrl.domainAddFailed(err));
       return { ok: false, error: err };
     }
     const cur = await this.domainStore.load();
     if (cur.some((d) => d.id === id)) {
       const msg = `\u0414\u043E\u043C\u0435\u043D \xAB${id}\xBB \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442`;
-      new import_obsidian10.Notice(i18n().ctrl.domainAddFailed(msg));
+      new import_obsidian11.Notice(i18n().ctrl.domainAddFailed(msg));
       return { ok: false, error: msg };
     }
     const wikiSubfolder = input.wikiFolder.trim() || id;
@@ -51643,7 +51825,7 @@ var WikiController = class {
       language_notes: ""
     }];
     await this.domainStore.save(next);
-    new import_obsidian10.Notice(i18n().ctrl.domainAdded(id));
+    new import_obsidian11.Notice(i18n().ctrl.domainAdded(id));
     return { ok: true };
   }
   async updateDomainSources(domainId, sourcePaths) {
@@ -51677,7 +51859,7 @@ var WikiController = class {
     const domains = await this.loadDomains();
     const entry = domains.find((d) => d.id === domainId);
     if (!entry) {
-      new import_obsidian10.Notice(i18n().ctrl.noActiveFile);
+      new import_obsidian11.Notice(i18n().ctrl.noActiveFile);
       return;
     }
     const wikiFolder = domainWikiFolder(entry.wiki_folder);
@@ -51708,7 +51890,7 @@ var WikiController = class {
   requireClaudeAgent(local) {
     const { iclaudePath } = local;
     if (!iclaudePath) {
-      new import_obsidian10.Notice(i18n().ctrl.setClaudeCodePath);
+      new import_obsidian11.Notice(i18n().ctrl.setClaudeCodePath);
       return null;
     }
     return iclaudePath;
@@ -51716,7 +51898,7 @@ var WikiController = class {
   requireNativeAgent(eff) {
     const na = eff.nativeAgent;
     if (!na?.baseUrl?.trim() || !na?.apiKey?.trim()) {
-      new import_obsidian10.Notice(i18n().ctrl.configureCloudLlm);
+      new import_obsidian11.Notice(i18n().ctrl.configureCloudLlm);
       return false;
     }
     return true;
@@ -51735,7 +51917,7 @@ var WikiController = class {
       return this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath)?.path ?? null;
     };
     adapter.renderExcalidrawPng = async (resolvedPath) => {
-      if (import_obsidian10.Platform.isMobile) return null;
+      if (import_obsidian11.Platform.isMobile) return null;
       try {
         const host = this.app.plugins?.plugins?.["obsidian-excalidraw-plugin"];
         const ea = host?.ea;
@@ -51807,8 +51989,8 @@ var WikiController = class {
       this._currentClaudeClient = null;
       const proxyCfg = s.proxy;
       let proxyFetch = null;
-      if (proxyCfg.enabled && import_obsidian10.Platform.isMobile) {
-        new import_obsidian10.Notice(i18n().settings.proxy_mobile_warning);
+      if (proxyCfg.enabled && import_obsidian11.Platform.isMobile) {
+        new import_obsidian11.Notice(i18n().settings.proxy_mobile_warning);
       } else if (proxyCfg.enabled) {
         try {
           const baseHost = new URL(s.nativeAgent.baseUrl).hostname;
@@ -51818,7 +52000,7 @@ var WikiController = class {
             if (proxyFetch) console.debug(`[ai-wiki] using proxy ${maskProxyUrl(proxyCfg.url)}`);
           }
         } catch (e) {
-          new import_obsidian10.Notice(i18n().settings.proxy_invalid(e.message));
+          new import_obsidian11.Notice(i18n().settings.proxy_invalid(e.message));
         }
       }
       const openaiClient = new OpenAI({
@@ -51826,11 +52008,11 @@ var WikiController = class {
         apiKey: s.nativeAgent.apiKey,
         timeout: timeoutSec > 0 ? timeoutSec * 1e3 : void 0,
         dangerouslyAllowBrowser: true,
-        fetch: import_obsidian10.Platform.isMobile ? mobileFetch : proxyFetch ?? void 0
+        fetch: import_obsidian11.Platform.isMobile ? mobileFetch : proxyFetch ?? void 0
       });
-      llm = import_obsidian10.Platform.isMobile ? wrapMobileNoStream(openaiClient) : openaiClient;
+      llm = import_obsidian11.Platform.isMobile ? wrapMobileNoStream(openaiClient) : openaiClient;
     }
-    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, import_obsidian10.Platform.isMobile);
+    return new AgentRunner(llm, s, vaultTools, vaultName, domains, this.plugin.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`, import_obsidian11.Platform.isMobile);
   }
   async logEvent(_vaultRoot, sessionId, op, domainId, ev) {
     if (!(this._currentLogMeta?.agentLogEnabled ?? this.plugin.settings.agentLogEnabled)) return;
@@ -51874,12 +52056,12 @@ var WikiController = class {
   }
   async dispatch(op, args, domainId, context, instruction, onFileError, chatMessages, lintOpts) {
     if (this.isBusy()) {
-      new import_obsidian10.Notice(i18n().ctrl.operationRunning);
+      new import_obsidian11.Notice(i18n().ctrl.operationRunning);
       return;
     }
     this._chatSessionId = void 0;
-    if (import_obsidian10.Platform.isMobile && op !== "query" && op !== "format" && op !== "delete") {
-      new import_obsidian10.Notice(i18n().ctrl.mobileNotAvailable);
+    if (import_obsidian11.Platform.isMobile && op !== "query" && op !== "format" && op !== "delete") {
+      new import_obsidian11.Notice(i18n().ctrl.mobileNotAvailable);
       return;
     }
     {
@@ -51910,7 +52092,7 @@ var WikiController = class {
     try {
       agentRunner = await this.buildAgentRunner(vaultRoot, void 0, opKey, opTimeoutSec);
     } catch (e) {
-      new import_obsidian10.Notice(i18n().ctrl.errorPrefix(e.message));
+      new import_obsidian11.Notice(i18n().ctrl.errorPrefix(e.message));
       console.error("[ai-wiki] buildAgentRunner failed", e);
       return;
     }
@@ -51946,7 +52128,7 @@ var WikiController = class {
             if (next !== cur) await this.domainStore.save(next);
           } catch (e) {
             if (e instanceof DomainCorruptError) {
-              new import_obsidian10.Notice(`Domain map corrupt: ${e.message}`);
+              new import_obsidian11.Notice(`Domain map corrupt: ${e.message}`);
             }
             status = "error";
             ctrl.abort();
@@ -52197,7 +52379,7 @@ async function cleanDir(adapter, dir, knownFiles) {
 }
 
 // src/migrate-index-format.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 var OLD_ENTRY = /^- \[\[([^\]]+)\]\] \S+ — (.+)$/;
 var NEW_ENTRY = /^- \S+ — .+$/;
 function migrateLine(line) {
@@ -52246,15 +52428,14 @@ async function migrateIndexFormat(vault, domains) {
     linesChanged += changed;
   }
   if (filesChanged > 0) {
-    new import_obsidian11.Notice(`AI Wiki: index format migrated \u2014 ${filesChanged} files, ${linesChanged} lines`);
+    new import_obsidian12.Notice(`AI Wiki: index format migrated \u2014 ${filesChanged} files, ${linesChanged} lines`);
   }
 }
 
 // src/migrate-drop-sections.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 
 // src/strip-legacy-sections.ts
-var import_yaml3 = __toESM(require_dist(), 1);
 var LEGACY_HEADINGS = /* @__PURE__ */ new Set([
   "## \u0421\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0435 \u043A\u043E\u043D\u0446\u0435\u043F\u0446\u0438\u0438",
   "## Related concepts",
@@ -52268,7 +52449,6 @@ var RELATED_HEADINGS = /* @__PURE__ */ new Set([
   "## Related concepts",
   "## Conceptos relacionados"
 ]);
-var FM_RE3 = /^---\n([\s\S]*?)\n---\n?/;
 function isH2(line) {
   return /^##\s+/.test(line);
 }
@@ -52301,26 +52481,46 @@ function extractRelatedLinks(content) {
   }
   return [...new Set(links)];
 }
+var RELATED_SECTION_HEADING = "## Related";
+function sectionBounds(lines, heading) {
+  for (let i = 0; i < lines.length; i++) {
+    if (isH2(lines[i]) && lines[i].trim() === heading) {
+      let end = lines.length;
+      for (let j = i + 1; j < lines.length; j++) {
+        if (isH2(lines[j])) {
+          end = j;
+          break;
+        }
+      }
+      return { start: i, end };
+    }
+  }
+  return null;
+}
 function addOutgoingLinks(content, links) {
   if (links.length === 0) return content;
-  const m = FM_RE3.exec(content);
-  if (!m) return content;
-  let fm;
-  try {
-    const parsed = (0, import_yaml3.parse)(m[1]);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return content;
-    fm = parsed;
-  } catch {
-    return content;
+  const lines = content.split("\n");
+  const bounds = sectionBounds(lines, RELATED_SECTION_HEADING);
+  const existing = /* @__PURE__ */ new Set();
+  if (bounds) {
+    for (const line of lines.slice(bounds.start + 1, bounds.end)) {
+      for (const m of line.matchAll(/\[\[([^\]|#]+)/g)) existing.add(`[[${m[1].trim()}]]`);
+    }
   }
-  const existing = Array.isArray(fm.wiki_outgoing_links) ? fm.wiki_outgoing_links.map((x) => String(x)) : [];
-  const existingSet = new Set(existing);
-  const missing = links.filter((l) => !existingSet.has(l));
+  const missing = links.filter((l) => !existing.has(l));
   if (missing.length === 0) return content;
-  fm.wiki_outgoing_links = [...existing, ...missing];
-  return `---
-${(0, import_yaml3.stringify)(fm)}---
-${content.slice(m[0].length)}`;
+  const bullets = missing.map((l) => `- ${l}`);
+  if (!bounds) {
+    const trimmed = content.replace(/\s*$/, "\n");
+    return `${trimmed}
+${RELATED_SECTION_HEADING}
+
+${bullets.join("\n")}
+`;
+  }
+  const before = lines.slice(0, bounds.end);
+  const after = lines.slice(bounds.end);
+  return [...before, ...bullets, ...after].join("\n");
 }
 
 // src/migrate-drop-sections.ts
@@ -52348,12 +52548,153 @@ async function migrateDropSections(vault, domains, localConfigStore) {
   }
   await localConfigStore.save({ migrated_drop_sections: true });
   if (filesChanged > 0) {
-    new import_obsidian12.Notice(`AI Wiki: legacy wiki sections removed \u2014 ${filesChanged} pages`);
+    new import_obsidian13.Notice(`AI Wiki: legacy wiki sections removed \u2014 ${filesChanged} pages`);
+  }
+}
+
+// src/migrate-okf-frontmatter.ts
+var import_yaml5 = __toESM(require_dist(), 1);
+var import_obsidian14 = require("obsidian");
+var FM_RE6 = /^---\n([\s\S]*?)\n---\n?/;
+function isH22(line) {
+  return /^##\s+/.test(line);
+}
+function sectionBounds2(lines, heading) {
+  for (let i = 0; i < lines.length; i++) {
+    if (isH22(lines[i]) && lines[i].trim() === heading) {
+      let end = lines.length;
+      for (let j = i + 1; j < lines.length; j++) {
+        if (isH22(lines[j])) {
+          end = j;
+          break;
+        }
+      }
+      return { start: i, end };
+    }
+  }
+  return null;
+}
+function mergeBulletSection(content, heading, bullets, keyOf) {
+  if (bullets.length === 0) return content;
+  const lines = content.split("\n");
+  const bounds = sectionBounds2(lines, heading);
+  const existing = /* @__PURE__ */ new Set();
+  if (bounds) {
+    for (const line of lines.slice(bounds.start + 1, bounds.end)) {
+      const k = keyOf(line);
+      if (k) existing.add(k);
+    }
+  }
+  const missing = bullets.filter((b) => !existing.has(keyOf(b)));
+  if (missing.length === 0) return content;
+  if (!bounds) {
+    const trimmed = content.replace(/\s*$/, "\n");
+    return `${trimmed}
+${heading}
+
+${missing.join("\n")}
+`;
+  }
+  const before = lines.slice(0, bounds.end);
+  const after = lines.slice(bounds.end);
+  return [...before, ...missing, ...after].join("\n");
+}
+function wikilinkKey(line) {
+  const m = /\[\[([^\]|#]+)/.exec(line);
+  return m ? `[[${m[1].trim()}]]` : "";
+}
+function urlKey(line) {
+  const m = /\]\((https?:\/\/[^)]+)\)/.exec(line) ?? /(https?:\/\/\S+)/.exec(line);
+  return m ? m[1] : "";
+}
+function extractRelocatableLinks(parsed, key) {
+  if (!(key in parsed)) return { links: [], shouldDelete: false };
+  const value = parsed[key];
+  if (!Array.isArray(value)) {
+    console.error(`[AI Wiki] OKF migrate: unexpected ${key} shape \u2014 left in place`);
+    return { links: [], shouldDelete: false };
+  }
+  const links = [];
+  for (const entry of value) {
+    if (typeof entry === "string") links.push(entry);
+    else console.error(`[AI Wiki] OKF migrate: skipping non-string ${key} entry \u2014 left out of relocation`);
+  }
+  return { links, shouldDelete: true };
+}
+function relocateFrontmatterLinks(content) {
+  const fmMatch = FM_RE6.exec(content);
+  if (!fmMatch) return content;
+  let parsed;
+  try {
+    parsed = (0, import_yaml5.parse)(fmMatch[1]) ?? {};
+  } catch {
+    return content;
+  }
+  const hadOutgoing = "wiki_outgoing_links" in parsed;
+  const hadExternal = "wiki_external_links" in parsed;
+  if (!hadOutgoing && !hadExternal) return content;
+  const outgoing = extractRelocatableLinks(parsed, "wiki_outgoing_links");
+  const external = extractRelocatableLinks(parsed, "wiki_external_links");
+  if (outgoing.shouldDelete) delete parsed.wiki_outgoing_links;
+  if (external.shouldDelete) delete parsed.wiki_external_links;
+  const body = content.slice(fmMatch[0].length);
+  let out = `---
+${(0, import_yaml5.stringify)(parsed)}---
+${body}`;
+  out = mergeBulletSection(out, "## Related", outgoing.links.map((l) => `- ${l}`), wikilinkKey);
+  out = mergeBulletSection(out, "## External links", external.links.map((u) => `- [${u}](${u})`), urlKey);
+  return out;
+}
+function migrateWikiPageOkf(content, wikiFolder, fullPath, annotation) {
+  let out = relocateFrontmatterLinks(content);
+  out = renameWikiPageFields(out);
+  out = ensureType(out, entityTypeFromPath(wikiFolder, fullPath));
+  out = ensureDescription(out, annotation || deriveFallbackDescription(content));
+  return out;
+}
+async function migrateOkfFrontmatter(vault, domains, localConfigStore) {
+  const local = await localConfigStore.load();
+  if (local.migrated_okf_frontmatter) return;
+  const adapter = vault.adapter;
+  let filesChanged = 0;
+  for (const domain of domains) {
+    const wikiFolder = domainWikiFolder(domain.wiki_folder);
+    const indexPath = domainIndexPath(wikiFolder);
+    let annotations = /* @__PURE__ */ new Map();
+    if (await adapter.exists(indexPath)) {
+      try {
+        annotations = parseIndexAnnotations(await adapter.read(indexPath));
+      } catch (e) {
+        console.error(`[AI Wiki] OKF migration: error reading ${indexPath}`, e);
+      }
+    }
+    for (const file of collectMdInPaths(vault, [wikiFolder])) {
+      if (file.basename.startsWith("_")) continue;
+      try {
+        const content = await adapter.read(file.path);
+        const migrated = migrateWikiPageOkf(
+          content,
+          wikiFolder,
+          file.path,
+          annotations.get(file.basename) ?? ""
+        );
+        if (migrated !== content) {
+          await adapter.write(file.path, migrated);
+          filesChanged++;
+        }
+      } catch (e) {
+        console.error(`[AI Wiki] OKF migration: error processing ${file.path}`, e);
+      }
+    }
+  }
+  await localConfigStore.save({ migrated_okf_frontmatter: true });
+  if (filesChanged > 0) {
+    new import_obsidian14.Notice(`AI Wiki: OKF frontmatter migrated \u2014 ${filesChanged} pages`);
   }
 }
 
 // src/main.ts
-var LlmWikiPlugin = class extends import_obsidian13.Plugin {
+var LlmWikiPlugin = class extends import_obsidian15.Plugin {
   settings;
   controller;
   settingTab;
@@ -52366,7 +52707,7 @@ var LlmWikiPlugin = class extends import_obsidian13.Plugin {
       await runStorageMigration(this.app.vault);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian13.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
+      new import_obsidian15.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] storage migration error:", e);
     }
     await cleanupBundledSchemaCopies(this.app.vault);
@@ -52380,7 +52721,7 @@ var LlmWikiPlugin = class extends import_obsidian13.Plugin {
       await migrateIndexFormat(this.app.vault, domains);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian13.Notice(`AI Wiki: index format migration failed \u2014 ${msg}`, 0);
+      new import_obsidian15.Notice(`AI Wiki: index format migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] index format migration error:", e);
     }
     try {
@@ -52388,8 +52729,16 @@ var LlmWikiPlugin = class extends import_obsidian13.Plugin {
       await migrateDropSections(this.app.vault, domains, this.localConfigStore);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      new import_obsidian13.Notice(`AI Wiki: drop-sections migration failed \u2014 ${msg}`, 0);
+      new import_obsidian15.Notice(`AI Wiki: drop-sections migration failed \u2014 ${msg}`, 0);
       console.error("[AI Wiki] drop-sections migration error:", e);
+    }
+    try {
+      const domains = await this.domainStore.load();
+      await migrateOkfFrontmatter(this.app.vault, domains, this.localConfigStore);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      new import_obsidian15.Notice(`AI Wiki: OKF frontmatter migration failed \u2014 ${msg}`, 0);
+      console.error("[AI Wiki] OKF frontmatter migration error:", e);
     }
     this.controller = new WikiController(this.app, this, this.domainStore, this.localConfigStore);
     this.controller.onBusyChange = () => this.settingTab?.display();
@@ -52403,7 +52752,7 @@ var LlmWikiPlugin = class extends import_obsidian13.Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
-    if (!import_obsidian13.Platform.isMobile) {
+    if (!import_obsidian15.Platform.isMobile) {
       const statusBar = this.addStatusBarItem();
       statusBar.setText("schema: 0/0");
       statusBar.setAttribute("aria-label", "validation: 0 ok, 0 retried, 0 failed");
@@ -52426,7 +52775,7 @@ var LlmWikiPlugin = class extends import_obsidian13.Plugin {
         if (right) void right.setViewState({ type: AI_WIKI_VIEW_TYPE, active: true });
       }
     });
-    if (!import_obsidian13.Platform.isMobile) {
+    if (!import_obsidian15.Platform.isMobile) {
       this.addCommand({
         id: "ingest-current",
         name: T.cmd.ingestActive,
@@ -52438,7 +52787,7 @@ var LlmWikiPlugin = class extends import_obsidian13.Plugin {
       name: T.cmd.query,
       callback: () => new QueryModal(this.app, (q) => void this.controller.query(q)).open()
     });
-    if (!import_obsidian13.Platform.isMobile) {
+    if (!import_obsidian15.Platform.isMobile) {
       this.addCommand({
         id: "lint",
         name: T.cmd.lint,
@@ -52491,6 +52840,30 @@ var LlmWikiPlugin = class extends import_obsidian13.Plugin {
               domains,
               (d, f) => void this.controller.init(d, f.dryRun ?? false)
             ).open();
+          })();
+        }
+      });
+      this.addCommand({
+        id: "export-okf",
+        name: T.cmd.exportOkf,
+        callback: () => {
+          void (async () => {
+            let domains;
+            try {
+              domains = await this.controller.loadDomains();
+            } catch {
+              return;
+            }
+            const last = (await this.localConfigStore.load()).lastDomain;
+            const domain = domains.find((d) => d.id === last) ?? domains[0];
+            if (!domain) {
+              new import_obsidian15.Notice(i18n().view.selectDomainFirst);
+              return;
+            }
+            const defaultDest = `${this.controller.cwdOrEmpty()}/okf-export/${domain.wiki_folder}`;
+            new ExportOkfModal(this.app, defaultDest, (dest) => {
+              void this.controller.exportOkf(domain, dest).then((r) => new import_obsidian15.Notice(`OKF: ${r.pages} pages \u2192 ${dest}${r.warnings.length ? ` (${r.warnings.length} warnings)` : ""}`)).catch((e) => new import_obsidian15.Notice(`OKF export failed: ${e.message}`, 0));
+            }).open();
           })();
         }
       });
@@ -52581,11 +52954,11 @@ var LlmWikiPlugin = class extends import_obsidian13.Plugin {
       if (data && data.model && !this.settings.claudeAgent.model)
         this.settings.claudeAgent.model = data.model;
     }
-    if (import_obsidian13.Platform.isMobile && this.settings.backend === "claude-agent") {
+    if (import_obsidian15.Platform.isMobile && this.settings.backend === "claude-agent") {
       this.settings.backend = "native-agent";
       await this.saveData(this.settings);
     }
-    if (import_obsidian13.Platform.isMobile) {
+    if (import_obsidian15.Platform.isMobile) {
       let dirty = false;
       if (this.settings.nativeAgent.perOperation) {
         this.settings.nativeAgent.perOperation = false;

@@ -48,14 +48,15 @@ export function wikiSections(lang: "ru" | "en" | "es"): string {
     "Page structure (mandatory order). The headings below are already in the configured output language — use them verbatim:",
     "1. Frontmatter (YAML)",
     "2. H1 heading — the page title",
-    "3. Intro paragraph — 1-3 sentences without a heading, immediately after H1",
-    `4. ${h.mandatory} — key properties and parameters (MANDATORY on every page)`,
+    `3. ${h.mandatory} — key properties and parameters (MANDATORY on every page)`,
     "",
     "Optional sections (include only when relevant, use these exact headings):",
     `- ${h.usage}`,
     `- ${h.examples}`,
     `- ${h.limitations}`,
     `- ${h.best}`,
+    "- ## Related — outgoing wiki links as one `- [[stem]]` bullet per line (fixed heading, not localized; no frontmatter link fields anymore)",
+    "- ## External links — outgoing URLs as one `- [text](url)` bullet per line (fixed heading, not localized)",
   ].join("\n");
 }
 

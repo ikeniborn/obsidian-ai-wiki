@@ -1,5 +1,5 @@
 import { parse as yamlParse, stringify as yamlStringify } from "yaml";
-import { GENERIC_WIKI_STEM_REGEX, isWikiStem } from "../wiki-stem";
+import { GENERIC_WIKI_STEM_REGEX } from "../wiki-stem";
 
 const FM_RE = /^---\n([\s\S]*?)\n---\n?/;
 
@@ -9,6 +9,61 @@ const URL_RE = /^https?:\/\//;
 export const TAG_RE = /^[a-z][a-z0-9-]*(?:[/_][a-z0-9-]+)*$/;
 
 const FM_KEY_LINE = /^(wiki_[\w]+|tags|aliases|created|updated|external_links|related):/;
+
+export const WIKI_FIELD_ALIASES: Record<string, string> = {
+  wiki_sources: "resource",
+  wiki_updated: "timestamp",
+  wiki_status:  "status",
+};
+
+/** Strip [[ ]] from a wikilink string → bare stem; pass through plain strings. */
+function toPlainStem(v: unknown): unknown {
+  if (typeof v !== "string") return v;
+  const m = /^\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]$/.exec(v.trim());
+  return m ? m[1].split("/").pop()!.replace(/\.md$/, "") : v;
+}
+
+/**
+ * Rename legacy wiki_* keys to OKF-native names (last-wins), drop wiki_type, and
+ * normalize `resource` values from `[[stem]]` wikilinks to plain stems. Idempotent.
+ * Leaves `wiki_outgoing_links`/`wiki_external_links` untouched — a later migration
+ * relocates them to the body.
+ */
+export function renameWikiPageFields(content: string): string {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return content;
+  let parsed: Record<string, unknown>;
+  try { parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {}; }
+  catch { return content; }
+
+  let modified = false;
+  for (const [legacy, okf] of Object.entries(WIKI_FIELD_ALIASES)) {
+    if (legacy in parsed) {
+      if (!(okf in parsed)) parsed[okf] = parsed[legacy]; // legacy fills only if OKF absent (last-wins on new)
+      delete parsed[legacy];
+      modified = true;
+    }
+  }
+  if ("wiki_type" in parsed) { delete parsed["wiki_type"]; modified = true; }
+  // resource → plain stems
+  if (Array.isArray(parsed.resource)) {
+    const plain = (parsed.resource as unknown[]).map(toPlainStem);
+    if (JSON.stringify(plain) !== JSON.stringify(parsed.resource)) { parsed.resource = plain; modified = true; }
+  }
+
+  if (!modified) return content;
+  const body = content.slice(fmMatch[0].length);
+  return `---\n${yamlStringify(parsed)}---\n${body}`;
+}
+
+/** Entity-type subdirectory segment of a wiki page path; generic/flat → "concept". */
+export function entityTypeFromPath(wikiFolder: string, fullPath: string): string {
+  const prefix = wikiFolder.endsWith("/") ? wikiFolder : wikiFolder + "/";
+  const rel = fullPath.startsWith(prefix) ? fullPath.slice(prefix.length) : fullPath;
+  const parts = rel.split("/");
+  const seg = parts.length >= 2 ? parts[0].trim().toLowerCase() : "";
+  return !seg || seg === "entities" ? "concept" : seg;
+}
 
 /**
  * Salvage a near-valid tag before TAG_RE validation instead of dropping it:
@@ -98,10 +153,9 @@ export function recoverSourceFrontmatter(content: string): string {
 export type FieldRule =
   | { field: string; kind: "list-wikilinks" }
   | { field: string; kind: "list-wikilinks-stem-only" }
-  | { field: string; kind: "list-wikilinks-wiki-only" }
-  | { field: string; kind: "list-wikilinks-sources-only" }
   | { field: string; kind: "list-urls" }
   | { field: string; kind: "list-tags" }
+  | { field: string; kind: "list-strings" }
   | { field: string; kind: "date-scalar" }
   | { field: string; kind: "aliases" }
   | { field: string; kind: "warn-enum"; values: readonly string[] }
@@ -240,7 +294,7 @@ export function validateAndRepairFrontmatter(
         }
         break;
       }
-      case "list-wikilinks-stem-only": {
+      case "list-strings": {
         if (!Array.isArray(val)) {
           warnings.push(`${rule.field}: expected list, got scalar — removed`);
           delete parsed[rule.field];
@@ -248,7 +302,7 @@ export function validateAndRepairFrontmatter(
           break;
         }
         const filtered = (val as unknown[]).filter((v) => {
-          if (typeof v !== "string" || !WIKILINK_RE.test(v) || v.includes("/") || v.endsWith(".md]]")) {
+          if (typeof v !== "string") {
             warnings.push(`${rule.field}: invalid entry "${v}" — removed`);
             return false;
           }
@@ -264,28 +318,16 @@ export function validateAndRepairFrontmatter(
         }
         break;
       }
-      case "list-wikilinks-wiki-only":
-      case "list-wikilinks-sources-only": {
+      case "list-wikilinks-stem-only": {
         if (!Array.isArray(val)) {
           warnings.push(`${rule.field}: expected list, got scalar — removed`);
           delete parsed[rule.field];
           modified = true;
           break;
         }
-        const wikiOnly = rule.kind === "list-wikilinks-wiki-only";
         const filtered = (val as unknown[]).filter((v) => {
-          if (typeof v !== "string" || !WIKILINK_RE.test(v)) {
+          if (typeof v !== "string" || !WIKILINK_RE.test(v) || v.includes("/") || v.endsWith(".md]]")) {
             warnings.push(`${rule.field}: invalid entry "${v}" — removed`);
-            return false;
-          }
-          const stem = v.slice(2, -2).split("/").pop()!;
-          const isWiki = isWikiStem(stem);
-          if (wikiOnly && !isWiki) {
-            warnings.push(`${rule.field}: non-wiki stem "${v}" — removed`);
-            return false;
-          }
-          if (!wikiOnly && isWiki) {
-            warnings.push(`${rule.field}: wiki stem "${v}" — removed`);
             return false;
           }
           return true;
@@ -421,8 +463,8 @@ export function stripInvalidWikiArticles(
 
 const SOURCE_RULES: FieldRule[] = [
   { field: "wiki_articles",       kind: "list-wikilinks-stem-only" },
-  { field: "wiki_added",          kind: "date-scalar" },
-  { field: "wiki_updated",        kind: "date-scalar" },
+  { field: "wiki_added",          kind: "remove" },
+  { field: "wiki_updated",        kind: "remove" },
   { field: "tags",                kind: "list-tags" },
   { field: "aliases",             kind: "aliases" },
   { field: "created",             kind: "date-scalar" },
@@ -445,46 +487,45 @@ export function validateAndRepairSourceFrontmatter(
 
 /**
  * Restores a source page's frontmatter onto formatted output.
- * - Preserves the wiki tracking fields (wiki_added / wiki_updated / wiki_articles)
- *   from `original` when it carries a wiki_updated value.
- * - ALWAYS normalizes the result (dedupe keys, drop invalid values, re-serialize YAML),
- *   independent of wiki_updated presence.
+ * - Re-attaches `wiki_articles` from `original` (the only wiki-tracking field
+ *   source notes still carry — `wiki_added`/`wiki_updated` are dropped).
+ * - ALWAYS normalizes the result (dedupe keys, drop invalid values, re-serialize YAML).
  * Idempotent: re-running on already-restored content yields the same content.
  */
 export function restoreSourceFrontmatter(original: string, formatted: string): string {
-  const wikiUpdatedMatch = /^wiki_updated:[ \t]*(.+)$/m.exec(original);
-  if (wikiUpdatedMatch) {
-    const wiki_updated = wikiUpdatedMatch[1].trim();
-    const wikiAddedMatch = /^wiki_added:[ \t]*(.+)$/m.exec(original);
-    const wiki_added = wikiAddedMatch?.[1].trim();
-    const wiki_articles = parseWikiArticlesFromFm(original);
-    formatted = upsertRawFrontmatter(formatted, { wiki_added, wiki_updated, wiki_articles });
-  }
-  const { content } = validateAndRepairSourceFrontmatter(formatted);
+  const wiki_articles = parseWikiArticlesFromFm(original);
+  const restored = upsertRawFrontmatter(formatted, { wiki_articles });
+  const { content } = validateAndRepairSourceFrontmatter(restored);
   return content;
 }
 
 const WIKI_PAGE_RULES: FieldRule[] = [
-  { field: "wiki_sources",        kind: "list-wikilinks-sources-only" },
-  { field: "wiki_updated",        kind: "date-scalar" },
-  { field: "wiki_status",         kind: "warn-enum", values: ["stub", "developing", "mature"] },
-  { field: "wiki_type",           kind: "warn-enum", values: ["page", "index", "log", "schema"] },
-  { field: "tags",                kind: "list-tags" },
-  { field: "aliases",             kind: "aliases" },
-  { field: "wiki_outgoing_links", kind: "list-wikilinks-wiki-only" },
-  { field: "wiki_external_links", kind: "list-urls" },
-  { field: "annotation", kind: "remove" },
+  { field: "resource",             kind: "list-strings" },   // plain source stems
+  { field: "timestamp",            kind: "date-scalar" },
+  { field: "status",               kind: "warn-enum", values: ["stub", "developing", "mature"] },
+  { field: "tags",                 kind: "list-tags" },
+  { field: "aliases",              kind: "aliases" },
+  { field: "wiki_type",            kind: "remove" },
+  { field: "wiki_outgoing_links",  kind: "remove" },
+  { field: "wiki_external_links",  kind: "remove" },
+  { field: "annotation",           kind: "remove" },
 ];
 
 export function validateAndRepairWikiPageFrontmatter(
   content: string,
 ): { content: string; warnings: string[] } {
-  return validateAndRepairFrontmatter(content, WIKI_PAGE_RULES);
+  const renamed = renameWikiPageFields(content);
+  return validateAndRepairFrontmatter(renamed, WIKI_PAGE_RULES);
 }
 
+/**
+ * Upserts a source page's frontmatter with `wiki_articles` only. Strips any
+ * `wiki_added`/`wiki_updated` dates carried over from `content` — source notes
+ * no longer track wiki sync dates.
+ */
 export function upsertRawFrontmatter(
   content: string,
-  fields: { wiki_added?: string; wiki_updated: string; wiki_articles: string[] },
+  fields: { wiki_articles: string[] },
 ): string {
   const match = FM_RE.exec(content);
   const body = match ? content.slice(match[0].length) : content;
@@ -499,16 +540,10 @@ export function upsertRawFrontmatter(
     } catch { /* malformed YAML — start fresh */ }
   }
 
-  const wikiAdded =
-    fields.wiki_added ??
-    (typeof existing.wiki_added === "string" ? existing.wiki_added : undefined);
-
   const { wiki_added: _a, wiki_updated: _u, wiki_articles: _ar, ...rest } = existing;
   void _a; void _u; void _ar;
 
   const result: Record<string, unknown> = { ...rest };
-  if (wikiAdded !== undefined) result.wiki_added = wikiAdded;
-  result.wiki_updated = fields.wiki_updated;
   if (fields.wiki_articles.length > 0) result.wiki_articles = fields.wiki_articles;
 
   return `---\n${yamlStringify(result)}---\n${body}`;
@@ -522,34 +557,55 @@ export function parseWikiArticlesFromFm(content: string): string[] {
   return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
 }
 
-export function parseWikiSourcesFromFm(content: string): string[] {
+export function parseResourceFromFm(content: string): string[] {
   const fmMatch = FM_RE.exec(content);
   if (!fmMatch) return [];
-  const match = /wiki_sources:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
-  if (!match) return [];
-  return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
+  let parsed: Record<string, unknown>;
+  try { parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {}; } catch { return []; }
+  const r = parsed.resource;
+  return Array.isArray(r) ? (r as unknown[]).filter((x): x is string => typeof x === "string") : [];
 }
 
-export function ensureWikiSources(
+export function ensureResource(
   content: string,
   sourceStem: string,
 ): { content: string; injected: boolean } {
-  const sources = parseWikiSourcesFromFm(content);
-  if (sources.length > 0) return { content, injected: false };
-
+  if (parseResourceFromFm(content).length > 0) return { content, injected: false };
   const fmMatch = FM_RE.exec(content);
   if (!fmMatch) return { content, injected: false };
-
   let parsed: Record<string, unknown>;
-  try {
-    parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {};
-  } catch {
-    return { content, injected: false };
-  }
-
+  try { parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {}; }
+  catch { return { content, injected: false }; }
   const body = content.slice(fmMatch[0].length);
-  parsed.wiki_sources = [`[[${sourceStem}]]`];
+  parsed.resource = [sourceStem];
   return { content: `---\n${yamlStringify(parsed)}---\n${body}`, injected: true };
+}
+
+export function ensureType(content: string, type: string): string {
+  if (hasFrontmatterField(content, "type")) return content;
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return content;
+  let parsed: Record<string, unknown>;
+  try { parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {}; }
+  catch { return content; }
+  const body = content.slice(fmMatch[0].length);
+  const ordered = { type, ...parsed };
+  return `---\n${yamlStringify(ordered)}---\n${body}`;
+}
+
+export function ensureDescription(content: string, annotation: string): string {
+  // description IS the overview — the full annotation kept verbatim (one line), NOT truncated.
+  const desc = annotation.replace(/\s+/g, " ").trim();
+  if (!desc || hasFrontmatterField(content, "description")) return content;
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return content;
+  let parsed: Record<string, unknown>;
+  try { parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {}; }
+  catch { return content; }
+  const body = content.slice(fmMatch[0].length);
+  parsed.description = desc;
+  // lineWidth: 0 — disable yaml's default 80-col folding; description must stay one line (verbatim).
+  return `---\n${yamlStringify(parsed, { lineWidth: 0 })}---\n${body}`;
 }
 
 export function hasFrontmatterField(content: string, field: string): boolean {

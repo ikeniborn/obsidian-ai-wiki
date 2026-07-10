@@ -22,7 +22,10 @@ import type { LocalConfig, LocalConfigStore } from "./local-config";
 import type { LlmWikiPluginSettings } from "./types";
 import { DeleteSourceModal, FileErrorModal, FormatVisionModal, InfoModal, ShellConsentModal } from "./modals";
 import { computeDeletionPlan, sourceStem } from "./source-deletion";
-import { domainWikiFolder } from "./wiki-path";
+import { domainWikiFolder, domainIndexPath, domainLogPath } from "./wiki-path";
+import { parseIndexAnnotations } from "./wiki-index";
+import { buildOkfBundle } from "./okf-export";
+import { writeOkfBundle } from "./okf-export-fs";
 import { restoreSourceFrontmatter } from "./utils/raw-frontmatter";
 import { graphCache } from "./wiki-graph-cache";
 import { collectMdInPaths, parseWikiSources } from "./utils/vault-walk";
@@ -364,6 +367,30 @@ export class WikiController {
     return base;
   }
 
+  /**
+   * Serializes a domain's wiki pages into an OKF bundle at an absolute filesystem
+   * path (desktop-only). Reads pages + the domain's `_index.md` descriptions and
+   * `_log.md`, builds the bundle in memory, writes it out.
+   */
+  async exportOkf(domain: DomainEntry, destAbs: string): Promise<{ pages: number; warnings: string[] }> {
+    const wikiFolder = domainWikiFolder(domain.wiki_folder);
+    const prefix = wikiFolder + "/";
+    const pages: Array<{ relpath: string; content: string }> = [];
+    for (const file of collectMdInPaths(this.app.vault, [wikiFolder])) {
+      if (file.basename.startsWith("_")) continue;
+      const content = await this.app.vault.adapter.read(file.path);
+      const relpath = file.path.startsWith(prefix) ? file.path.slice(prefix.length) : file.path;
+      pages.push({ relpath, content });
+    }
+    let descriptions = new Map<string, string>();
+    let log = "";
+    try { descriptions = parseIndexAnnotations(await this.app.vault.adapter.read(domainIndexPath(wikiFolder))); } catch { /* no index */ }
+    try { log = await this.app.vault.adapter.read(domainLogPath(wikiFolder)); } catch { /* no log */ }
+    const bundle = buildOkfBundle(pages, descriptions, log);
+    await writeOkfBundle(destAbs, bundle);
+    return { pages: pages.length, warnings: bundle.warnings };
+  }
+
   async loadDomains(): Promise<DomainEntry[]> {
     try {
       return await this.domainStore.load();
@@ -572,7 +599,7 @@ export class WikiController {
     if (s.backend === "claude-agent") {
       const manifestDir = this.plugin.manifest.dir
         ?? join(this.app.vault.configDir, "plugins", this.plugin.manifest.id);
-      const pluginDir = (this.app.vault.adapter as { getFullPath: (p: string) => string })
+      const pluginDir = (this.app.vault.adapter as unknown as { getFullPath: (p: string) => string })
         .getFullPath(manifestDir);
       const tmpDir = join(pluginDir, "tmp");
 
