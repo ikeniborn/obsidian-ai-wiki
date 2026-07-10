@@ -182,6 +182,29 @@ export interface ChunkInput {
   ordinal?: number;
 }
 
+export interface SelectedChunk {
+  articleId: string;
+  path: string;
+  heading: string;
+  body: string;
+  score: number;
+  source: "seed" | "graph";
+  articleScore?: number;
+  ordinal: number;
+}
+
+interface CandidateSection {
+  articleId: string;
+  path: string;
+  heading: string;
+  body: string;
+  embedText: string;
+  hash: string;
+  source: "seed" | "graph";
+  articleScore?: number;
+  ordinal: number;
+}
+
 export function buildChunkInputs(
   annotation: string,
   body: string,
@@ -202,6 +225,65 @@ export function buildChunkInputs(
     });
   });
   return inputs;
+}
+
+function collectCandidateSections(
+  pages: Map<string, string>,
+  candidateIds: Set<string>,
+  seedIds: Set<string>,
+  articleScores: Record<string, number>,
+  chunking: ChunkingConfig,
+): CandidateSection[] {
+  const sections: CandidateSection[] = [];
+  for (const [path, content] of pages) {
+    const articleId = pageId(path);
+    if (!candidateIds.has(articleId)) continue;
+    splitSections(content, chunking).forEach(({ heading, window }, ordinal) => {
+      const embedText = `${heading}\n${window}`.trim();
+      if (!embedText) return;
+      sections.push({
+        articleId,
+        path,
+        heading,
+        body: window,
+        embedText,
+        hash: annotationHash(`section\n${ordinal}\n${embedText}`),
+        source: seedIds.has(articleId) ? "seed" : "graph",
+        articleScore: articleScores[articleId],
+        ordinal,
+      });
+    });
+  }
+  return sections;
+}
+
+function sortSelectedChunks(items: SelectedChunk[]): SelectedChunk[] {
+  return items.sort((a, b) =>
+    (b.score - a.score) ||
+    (Number(b.source === "seed") - Number(a.source === "seed")) ||
+    ((b.articleScore ?? 0) - (a.articleScore ?? 0)) ||
+    a.articleId.localeCompare(b.articleId) ||
+    (a.ordinal - b.ordinal)
+  );
+}
+
+function rankChunksJaccard(queryTokens: Set<string>, sections: CandidateSection[], limit: number): SelectedChunk[] {
+  const scored: SelectedChunk[] = [];
+  for (const section of sections) {
+    const score = scoreSeed(queryTokens, section.articleId, section.embedText);
+    if (score <= 0) continue;
+    scored.push({
+      articleId: section.articleId,
+      path: section.path,
+      heading: section.heading,
+      body: section.body,
+      score,
+      source: section.source,
+      articleScore: section.articleScore,
+      ordinal: section.ordinal,
+    });
+  }
+  return sortSelectedChunks(scored).slice(0, limit);
 }
 
 function jaccardCoeff(a: Set<string>, b: Set<string>): number {
@@ -337,6 +419,73 @@ export class PageSimilarityService {
   setJaccardCorpus(corpus: Map<string, string>): void { this.jaccardCorpus = corpus; }
 
   setCacheForTest(cache: EmbeddingCacheFile): void { this.cache = cache; }
+
+  async selectRelevantChunks(
+    query: string,
+    pages: Map<string, string>,
+    candidateIds: Set<string>,
+    seedIds: Set<string>,
+    articleScores: Record<string, number>,
+    limit: number,
+  ): Promise<SelectedChunk[]> {
+    const queryTokens = tokenize(query);
+    if (queryTokens.size === 0 || candidateIds.size === 0 || limit <= 0) return [];
+    const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
+    const sections = collectCandidateSections(pages, candidateIds, seedIds, articleScores, chunking);
+    if (sections.length === 0) return [];
+    if (this.config.mode === "jaccard") return rankChunksJaccard(queryTokens, sections, limit);
+
+    const { baseUrl, apiKey, model } = this.config;
+    if (!baseUrl || !model) return rankChunksJaccard(queryTokens, sections, limit);
+
+    let queryVec: Float32Array;
+    try {
+      [queryVec] = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [query.slice(0, 2000)], this.config.dimensions);
+    } catch {
+      return rankChunksJaccard(queryTokens, sections, limit);
+    }
+
+    const vectors = new Map<string, Float32Array>();
+    if (this.cache && this.cache.model === model) {
+      for (const section of sections) {
+        const entry = this.cache.entries[section.articleId];
+        const cached = entry?.chunks.find((chunk) => chunk.kind === "section" && chunk.hash === section.hash && chunk.vector);
+        if (cached) vectors.set(section.hash, decodeVector(cached.vector));
+      }
+    }
+
+    const missing = sections.filter((section) => !vectors.has(section.hash));
+    for (let i = 0; i < missing.length; i += EMBEDDING_BATCH_SIZE) {
+      const batch = missing.slice(i, i + EMBEDDING_BATCH_SIZE);
+      try {
+        const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.map((section) => section.embedText), this.config.dimensions);
+        for (let j = 0; j < batch.length; j++) {
+          if (vecs[j]) vectors.set(batch[j].hash, vecs[j]);
+        }
+      } catch {
+        return rankChunksJaccard(queryTokens, sections, limit);
+      }
+    }
+
+    const scored: SelectedChunk[] = [];
+    for (const section of sections) {
+      const vec = vectors.get(section.hash);
+      if (!vec) continue;
+      const score = maxCosine(queryVec, [vec]);
+      if (score <= 0) continue;
+      scored.push({
+        articleId: section.articleId,
+        path: section.path,
+        heading: section.heading,
+        body: section.body,
+        score,
+        source: section.source,
+        articleScore: section.articleScore,
+        ordinal: section.ordinal,
+      });
+    }
+    return sortSelectedChunks(scored).slice(0, limit);
+  }
 
   /**
    * All unordered page pairs whose max-pool cosine ≥ threshold. Embedding-only (uses the
@@ -908,4 +1057,13 @@ export class PageSimilarityService {
     this.cache = cacheFile;
     return { updated: pending.length };
   }
+}
+
+export function renderContextChunks(chunks: SelectedChunk[]): string {
+  return chunks
+    .map((chunk) => [
+      `--- article: ${chunk.articleId}, heading: ${chunk.heading} ---`,
+      chunk.body,
+    ].join("\n"))
+    .join("\n\n");
 }
