@@ -10,6 +10,46 @@ export const TAG_RE = /^[a-z][a-z0-9-]*(?:[/_][a-z0-9-]+)*$/;
 
 const FM_KEY_LINE = /^(wiki_[\w]+|tags|aliases|created|updated|external_links|related):/;
 
+export const WIKI_FIELD_ALIASES: Record<string, string> = {
+  wiki_sources: "resource",
+  wiki_updated: "timestamp",
+  wiki_status: "status",
+  wiki_outgoing_links: "outgoing_links",
+  wiki_external_links: "external_links",
+};
+
+/** Rename legacy wiki_* keys to OKF-native names (last-wins), drop wiki_type. Idempotent. */
+export function renameWikiPageFields(content: string): string {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return content;
+  let parsed: Record<string, unknown>;
+  try { parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {}; }
+  catch { return content; }
+
+  let modified = false;
+  for (const [legacy, okf] of Object.entries(WIKI_FIELD_ALIASES)) {
+    if (legacy in parsed) {
+      if (!(okf in parsed)) parsed[okf] = parsed[legacy]; // legacy fills only if OKF absent (last-wins on new)
+      delete parsed[legacy];
+      modified = true;
+    }
+  }
+  if ("wiki_type" in parsed) { delete parsed["wiki_type"]; modified = true; }
+
+  if (!modified) return content;
+  const body = content.slice(fmMatch[0].length);
+  return `---\n${yamlStringify(parsed)}---\n${body}`;
+}
+
+/** Entity-type subdirectory segment of a wiki page path; generic/flat → "concept". */
+export function entityTypeFromPath(wikiFolder: string, fullPath: string): string {
+  const prefix = wikiFolder.endsWith("/") ? wikiFolder : wikiFolder + "/";
+  const rel = fullPath.startsWith(prefix) ? fullPath.slice(prefix.length) : fullPath;
+  const parts = rel.split("/");
+  const seg = parts.length >= 2 ? parts[0].trim().toLowerCase() : "";
+  return !seg || seg === "entities" ? "concept" : seg;
+}
+
 /**
  * Salvage a near-valid tag before TAG_RE validation instead of dropping it:
  * `#Category/Sub Topic` → `category/sub-topic`. Output is NOT guaranteed to
@@ -465,21 +505,22 @@ export function restoreSourceFrontmatter(original: string, formatted: string): s
 }
 
 const WIKI_PAGE_RULES: FieldRule[] = [
-  { field: "wiki_sources",        kind: "list-wikilinks-sources-only" },
-  { field: "wiki_updated",        kind: "date-scalar" },
-  { field: "wiki_status",         kind: "warn-enum", values: ["stub", "developing", "mature"] },
-  { field: "wiki_type",           kind: "warn-enum", values: ["page", "index", "log", "schema"] },
-  { field: "tags",                kind: "list-tags" },
-  { field: "aliases",             kind: "aliases" },
-  { field: "wiki_outgoing_links", kind: "list-wikilinks-wiki-only" },
-  { field: "wiki_external_links", kind: "list-urls" },
-  { field: "annotation", kind: "remove" },
+  { field: "resource",       kind: "list-wikilinks-sources-only" },
+  { field: "timestamp",      kind: "date-scalar" },
+  { field: "status",         kind: "warn-enum", values: ["stub", "developing", "mature"] },
+  { field: "tags",           kind: "list-tags" },
+  { field: "aliases",        kind: "aliases" },
+  { field: "outgoing_links", kind: "list-wikilinks-wiki-only" },
+  { field: "external_links", kind: "list-urls" },
+  { field: "wiki_type",      kind: "remove" },
+  { field: "annotation",     kind: "remove" },
 ];
 
 export function validateAndRepairWikiPageFrontmatter(
   content: string,
 ): { content: string; warnings: string[] } {
-  return validateAndRepairFrontmatter(content, WIKI_PAGE_RULES);
+  const renamed = renameWikiPageFields(content);
+  return validateAndRepairFrontmatter(renamed, WIKI_PAGE_RULES);
 }
 
 export function upsertRawFrontmatter(
@@ -549,6 +590,30 @@ export function ensureWikiSources(
 
   const body = content.slice(fmMatch[0].length);
   parsed.wiki_sources = [`[[${sourceStem}]]`];
+  return { content: `---\n${yamlStringify(parsed)}---\n${body}`, injected: true };
+}
+
+export function parseResourceFromFm(content: string): string[] {
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return [];
+  const match = /resource:\s*\n((?:[ \t]+-[ \t]+[^\n]+\n?)+)/m.exec(fmMatch[1]);
+  if (!match) return [];
+  return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => `[[${m[1]}]]`);
+}
+
+export function ensureResource(
+  content: string,
+  sourceStem: string,
+): { content: string; injected: boolean } {
+  const sources = parseResourceFromFm(content);
+  if (sources.length > 0) return { content, injected: false };
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return { content, injected: false };
+  let parsed: Record<string, unknown>;
+  try { parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {}; }
+  catch { return { content, injected: false }; }
+  const body = content.slice(fmMatch[0].length);
+  parsed.resource = [`[[${sourceStem}]]`];
   return { content: `---\n${yamlStringify(parsed)}---\n${body}`, injected: true };
 }
 
