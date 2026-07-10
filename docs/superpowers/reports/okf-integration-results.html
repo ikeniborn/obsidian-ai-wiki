@@ -296,7 +296,7 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
   <h2>2. Результаты проверки</h2>
 
   <h3>Покрытие шагов плана</h3>
-  <div class="legend">DONE 7 · PARTIAL 0 · MISSING 3</div>
+  <div class="legend">DONE 10 · PARTIAL 0 · MISSING 0</div>
   <table>
     <thead><tr><th>Задача</th><th>Статус</th><th>Свидетельство в диффе</th></tr></thead>
     <tbody>
@@ -307,9 +307,9 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
       <tr><td>T5 auto-migration + relocate links</td><td><span class="badge b-ok">DONE</span></td><td><code>migrate-okf-frontmatter.ts</code> +221; eval 22/22</td></tr>
       <tr><td>T5b overview + exclude sections</td><td><span class="badge b-ok">DONE</span></td><td><code>wiki-index.ts</code>, <code>page-similarity.ts</code></td></tr>
       <tr><td>T6 export helpers</td><td><span class="badge b-ok">DONE</span></td><td><code>okf-export-utils.ts</code> +59; eval 14/14</td></tr>
-      <tr><td>T7 bundle serializer</td><td><span class="badge b-crit">MISSING</span></td><td><code>src/okf-export.ts</code> отсутствует</td></tr>
-      <tr><td>T8 fs writer + controller</td><td><span class="badge b-crit">MISSING</span></td><td><code>src/okf-export-fs.ts</code>, controller.exportOkf отсутствуют</td></tr>
-      <tr><td>T9 export UI</td><td><span class="badge b-crit">MISSING</span></td><td>ExportOkfModal / export-okf команда отсутствуют</td></tr>
+      <tr><td>T7 bundle serializer</td><td><span class="badge b-ok">DONE</span></td><td><code>okf-export.ts</code> buildOkfBundle; eval 25/25</td></tr>
+      <tr><td>T8 fs writer + controller</td><td><span class="badge b-ok">DONE</span></td><td><code>okf-export-fs.ts</code> writeOkfBundle + <code>controller.exportOkf</code></td></tr>
+      <tr><td>T9 export UI</td><td><span class="badge b-ok">DONE</span></td><td>ExportOkfModal + export-okf команда + sidebar-кнопка + i18n (en/ru/es)</td></tr>
     </tbody>
   </table>
 
@@ -320,7 +320,7 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
       <tr><td>Wiki-страницы OKF-native на диске</td><td><span class="badge b-ok">✓</span></td></tr>
       <tr><td>Миграция идемпотентна</td><td><span class="badge b-ok">✓</span></td></tr>
       <tr><td>Свежесть источников не нарушена</td><td><span class="badge b-ok">✓</span></td></tr>
-      <tr><td>Export даёт conformant bundle offline</td><td><span class="badge b-crit">✗ (T7–T9)</span></td></tr>
+      <tr><td>Export даёт conformant bundle offline</td><td><span class="badge b-ok">✓</span></td></tr>
     </tbody>
   </table>
 
@@ -328,8 +328,8 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
   <p class="note">Нет. Затронутые вне ядра eval'ы (format-frontmatter, wiki-hygiene) — обновление фикстур под переименование полей (часть T4).</p>
 
   <h3>Вердикт</h3>
-  <p><span class="badge b-crit">needs_work</span> — 3 CRITICAL (MISSING T7/T8/T9). plan_hash <code>dce2aad09004e4ef</code>.</p>
-  <div class="legend">Цепочка: intent <span class="badge b-na">n/a</span> → spec <span class="badge b-ok">OK</span> → plan <span class="badge b-ok">OK</span> → result <span class="badge b-crit">needs_work</span></div>
+  <p><span class="badge b-ok">OK</span> — все 10 задач реализованы; OKF-eval'ы зелёные (frontmatter 34, migrate 22, export 25). plan_hash <code>dce2aad09004e4ef</code>.</p>
+  <div class="legend">Цепочка: intent <span class="badge b-na">n/a</span> → spec <span class="badge b-ok">OK</span> → plan <span class="badge b-ok">OK</span> → result <span class="badge b-ok">OK</span></div>
 
 </section>
 <!-- TAB:result END -->

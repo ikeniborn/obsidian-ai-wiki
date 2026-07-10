@@ -13,7 +13,7 @@ chain:
   intent: "n/a"
   spec: "16e312ee9f3ff1d4"
 result_check:
-  verdict: needs_work
+  verdict: OK
   plan_hash: "dce2aad09004e4ef"
   last_run: "2026-07-10"
 ---
