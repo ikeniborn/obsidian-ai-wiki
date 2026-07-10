@@ -135,7 +135,6 @@ export class ExportOkfModal extends Modal {
       value: this.dest,
       placeholder: T.exportOkfPlaceholder,
     });
-    input.style.width = "100%";
     input.addEventListener("input", () => { this.dest = input.value; });
     new Setting(contentEl).addButton((b) =>
       b.setButtonText(`▶ ${T.run}`).setCta().onClick(() => {

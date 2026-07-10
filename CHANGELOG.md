@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.1.195 — 2026-07-10
+
+### New
+- feat(okf): rename wiki-page primitives to OKF-native field names and emit OKF fields in prompts.
+- feat(okf): inject type and description on ingest, with governance for plain resources and body link sections.
+- feat(okf): migrate existing pages to OKF-native frontmatter, relocate links to body sections, and backfill descriptions.
+- feat(okf): derive overview from frontmatter description and exclude Related/External sections from retrieval.
+- feat(okf): add export helpers for link rewriting, tag normalization, and title derivation.
+- feat(okf): add desktop OKF export with controller entry point, command, sidebar button, destination modal, and bundle serializer.
+- feat(retrieval): build clean section embedding chunks and rank chunks inside article pools.
+- feat(retrieval): use selected chunk context for single-domain and cross-domain queries.
+
+### Fixes
+- fix(okf): preserve malformed or empty link frontmatter safely during relocation.
+- fix(okf): parse flow-style resource fields in deletion, incremental, and vault-walk consumers.
+- fix(types): resolve Obsidian typing and Claude backend TypeScript errors.
+- fix(retrieval): avoid partial legacy embedding cache upgrades and require a full corpus for legacy cache migration.
+- fix(retrieval): use summary vectors for article scoring and section text only for chunk scoring.
+- fix(retrieval): harden selected chunk embedding ranking and reject non-finite chunk vectors.
+- fix(retrieval): scope query links and single-domain index prompts to selected context.
+- fix(retrieval): stop after chunk selection abort.
+
+### Other
+- refactor(okf): switch consumers to plain resource fields, remove frontmatter link synchronization, and drop obsolete FieldRule aliases.
+
+---
+
 ## 0.1.194 — 2026-07-03
 
 ### Новое

@@ -28184,7 +28184,6 @@ var ExportOkfModal = class extends import_obsidian2.Modal {
       value: this.dest,
       placeholder: T.exportOkfPlaceholder
     });
-    input.style.width = "100%";
     input.addEventListener("input", () => {
       this.dest = input.value;
     });
