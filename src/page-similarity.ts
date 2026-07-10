@@ -825,6 +825,10 @@ export class PageSimilarityService {
     let cacheFile: EmbeddingCacheFile;
     try {
       const parsed = JSON.parse(await vaultTools.read(cachePath)) as EmbeddingCacheFile;
+      const hasBodiesForAllPages = [...indexAnnotations.keys()].every((pid) => pageBodies.has(pid));
+      if (parsed.version !== 3 && !hasBodiesForAllPages) {
+        return { updated: 0 };
+      }
       cacheFile =
         parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions
           ? parsed

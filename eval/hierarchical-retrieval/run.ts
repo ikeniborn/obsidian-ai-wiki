@@ -13,7 +13,20 @@ const {
   renderContextChunks,
 } = req("../../src/page-similarity.ts") as {
   DEFAULT_CHUNKING: ChunkingConfig;
-  PageSimilarityService: new (config: { mode: "jaccard"; topK: number }) => {
+  PageSimilarityService: new (config: {
+    mode: "jaccard" | "embedding";
+    topK: number;
+    baseUrl?: string;
+    apiKey?: string;
+    model?: string;
+    dimensions?: number;
+  }) => {
+    refreshCache?: (
+      domainRoot: string,
+      vaultTools: VaultTools,
+      indexAnnotations: Map<string, string>,
+      pageBodies: Map<string, string>,
+    ) => Promise<{ updated: number }>;
     selectRelevantChunks?: (
       query: string,
       pages: Map<string, string>,
@@ -130,6 +143,38 @@ async function main(): Promise<void> {
       entries: {},
     };
     check("cache version is 3", cache.version === 3);
+
+    const oldCachePath = "!Wiki/work/_config/_embeddings.json";
+    const oldRawCache = JSON.stringify({
+      version: 2,
+      model: "fake",
+      dimensions: 2,
+      entries: {
+        wiki_one: { chunks: [{ vector: "old-one", hash: "one", kind: "summary" }] },
+        wiki_two: { chunks: [{ vector: "old-two", hash: "two", kind: "summary" }] },
+      },
+    }, null, 2);
+    const vault = fakeVault({ [oldCachePath]: oldRawCache });
+    const similarity = new PageSimilarityService({
+      mode: "embedding",
+      topK: 10,
+      baseUrl: "http://127.0.0.1:9",
+      apiKey: "fake",
+      model: "fake",
+      dimensions: 2,
+    });
+    const refresh = await similarity.refreshCache?.(
+      "!Wiki/work",
+      vault,
+      new Map([
+        ["wiki_one", "one description"],
+        ["wiki_two", "two description"],
+      ]),
+      new Map([["wiki_one", "# One\n\n## Body\nupdated body"]]),
+    );
+    const rawAfterPartial = await vault.read(oldCachePath);
+    check("partial v2 upgrade skips writes", refresh?.updated === 0);
+    check("partial v2 upgrade leaves raw cache unchanged", rawAfterPartial === oldRawCache);
   }
 
   section("chunk context rendering");
