@@ -119,6 +119,37 @@ export class QueryModal extends Modal {
   onClose(): void { this.contentEl.empty(); }
 }
 
+export class ExportOkfModal extends Modal {
+  private dest: string;
+  constructor(app: App, defaultDest: string, private onSubmit: (dest: string) => void) {
+    super(app);
+    this.dest = defaultDest;
+  }
+  onOpen(): void {
+    const T = i18n().modal;
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: T.exportOkfTitle });
+    const input = contentEl.createEl("input", {
+      cls: "ai-wiki-modal-input",
+      type: "text",
+      value: this.dest,
+      placeholder: T.exportOkfPlaceholder,
+    });
+    input.style.width = "100%";
+    input.addEventListener("input", () => { this.dest = input.value; });
+    new Setting(contentEl).addButton((b) =>
+      b.setButtonText(`▶ ${T.run}`).setCta().onClick(() => {
+        const dest = this.dest.trim();
+        if (!dest) return;
+        this.close();
+        this.onSubmit(dest);
+      }),
+    );
+    window.setTimeout(() => input.focus(), 0);
+  }
+  onClose(): void { this.contentEl.empty(); }
+}
+
 export class DomainModal extends Modal {
   constructor(
     app: App,

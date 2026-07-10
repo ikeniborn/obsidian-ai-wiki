@@ -4,7 +4,7 @@ import type { DomainEntry } from "./domain";
 import { LlmWikiSettingTab } from "./settings";
 import { AI_WIKI_VIEW_TYPE, LlmWikiView } from "./view";
 import { WikiController } from "./controller";
-import { QueryModal, DomainModal, LintOptionsModal } from "./modals";
+import { QueryModal, DomainModal, LintOptionsModal, ExportOkfModal } from "./modals";
 import { i18n } from "./i18n";
 import { DomainStore } from "./domain-store";
 import { LocalConfigStore } from "./local-config";
@@ -150,6 +150,26 @@ export default class LlmWikiPlugin extends Plugin {
             try { domains = await this.controller.loadDomains(); } catch { return; }
             new DomainModal(this.app, T.cmd.init, false, { dryRun: true }, domains,
               (d, f) => void this.controller.init(d, f.dryRun ?? false)).open();
+          })();
+        },
+      });
+
+      this.addCommand({
+        id: "export-okf",
+        name: T.cmd.exportOkf,
+        callback: () => {
+          void (async () => {
+            let domains: DomainEntry[];
+            try { domains = await this.controller.loadDomains(); } catch { return; }
+            const last = (await this.localConfigStore.load()).lastDomain;
+            const domain = domains.find((d) => d.id === last) ?? domains[0];
+            if (!domain) { new Notice(i18n().view.selectDomainFirst); return; }
+            const defaultDest = `${this.controller.cwdOrEmpty()}/okf-export/${domain.wiki_folder}`;
+            new ExportOkfModal(this.app, defaultDest, (dest) => {
+              void this.controller.exportOkf(domain, dest)
+                .then((r) => new Notice(`OKF: ${r.pages} pages → ${dest}${r.warnings.length ? ` (${r.warnings.length} warnings)` : ""}`))
+                .catch((e) => new Notice(`OKF export failed: ${(e as Error).message}`, 0));
+            }).open();
           })();
         },
       });
