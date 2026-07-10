@@ -263,7 +263,9 @@ function sortSelectedChunks(items: SelectedChunk[]): SelectedChunk[] {
     (Number(b.source === "seed") - Number(a.source === "seed")) ||
     ((b.articleScore ?? 0) - (a.articleScore ?? 0)) ||
     a.articleId.localeCompare(b.articleId) ||
-    (a.ordinal - b.ordinal)
+    (a.ordinal - b.ordinal) ||
+    a.path.localeCompare(b.path) ||
+    a.heading.localeCompare(b.heading)
   );
 }
 
@@ -284,6 +286,10 @@ function rankChunksJaccard(queryTokens: Set<string>, sections: CandidateSection[
     });
   }
   return sortSelectedChunks(scored).slice(0, limit);
+}
+
+function isUsableVector(vec: Float32Array | undefined, dimensions?: number): vec is Float32Array {
+  return !!vec && vec.length > 0 && (!dimensions || vec.length === dimensions);
 }
 
 function jaccardCoeff(a: Set<string>, b: Set<string>): number {
@@ -440,17 +446,25 @@ export class PageSimilarityService {
 
     let queryVec: Float32Array;
     try {
-      [queryVec] = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [query.slice(0, 2000)], this.config.dimensions);
+      const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [query.slice(0, 2000)], this.config.dimensions);
+      if (!isUsableVector(vecs[0], this.config.dimensions)) return rankChunksJaccard(queryTokens, sections, limit);
+      queryVec = vecs[0];
     } catch {
       return rankChunksJaccard(queryTokens, sections, limit);
     }
 
     const vectors = new Map<string, Float32Array>();
-    if (this.cache && this.cache.model === model) {
+    if (this.cache && this.cache.model === model && this.cache.dimensions === this.config.dimensions) {
       for (const section of sections) {
         const entry = this.cache.entries[section.articleId];
         const cached = entry?.chunks.find((chunk) => chunk.kind === "section" && chunk.hash === section.hash && chunk.vector);
-        if (cached) vectors.set(section.hash, decodeVector(cached.vector));
+        if (!cached) continue;
+        try {
+          const vec = decodeVector(cached.vector);
+          if (isUsableVector(vec, this.config.dimensions)) vectors.set(section.hash, vec);
+        } catch {
+          // Treat corrupt cache entries as misses; the live embedding path can refill them.
+        }
       }
     }
 
@@ -459,8 +473,11 @@ export class PageSimilarityService {
       const batch = missing.slice(i, i + EMBEDDING_BATCH_SIZE);
       try {
         const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.map((section) => section.embedText), this.config.dimensions);
+        if (vecs.length !== batch.length || vecs.some((vec) => !isUsableVector(vec, this.config.dimensions))) {
+          return rankChunksJaccard(queryTokens, sections, limit);
+        }
         for (let j = 0; j < batch.length; j++) {
-          if (vecs[j]) vectors.set(batch[j].hash, vecs[j]);
+          vectors.set(batch[j].hash, vecs[j]);
         }
       } catch {
         return rankChunksJaccard(queryTokens, sections, limit);

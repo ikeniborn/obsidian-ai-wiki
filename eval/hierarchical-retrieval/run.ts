@@ -61,6 +61,10 @@ const {
 const { runCrossDomainQuery } = req("../../src/phases/query-cross-domain.ts") as typeof import("../../src/phases/query-cross-domain");
 const { runQuery } = req("../../src/phases/query.ts") as typeof import("../../src/phases/query");
 
+type RequestUrlResponse = { status: number; text: string };
+type RequestUrlHandler = (params: { body?: string }) => RequestUrlResponse | Promise<RequestUrlResponse>;
+type HierarchicalGlobal = typeof globalThis & { __hierarchicalRequestUrl?: RequestUrlHandler };
+
 let pass = 0, fail = 0;
 const failures: string[] = [];
 
@@ -110,6 +114,41 @@ function fakeLlm(answer: string): { llm: LlmClient; calls: () => number; prompts
     } } },
   } as unknown as LlmClient;
   return { llm, calls: () => calls, prompts: () => prompts };
+}
+
+async function withRequestUrl<T>(handler: RequestUrlHandler, fn: () => Promise<T>): Promise<T> {
+  const globals = globalThis as HierarchicalGlobal;
+  const previous = globals.__hierarchicalRequestUrl;
+  globals.__hierarchicalRequestUrl = handler;
+  try {
+    return await fn();
+  } finally {
+    if (previous) globals.__hierarchicalRequestUrl = previous;
+    else delete globals.__hierarchicalRequestUrl;
+  }
+}
+
+function embeddingResponse(vectors: number[][]): RequestUrlResponse {
+  return {
+    status: 200,
+    text: JSON.stringify({ data: vectors.map((embedding) => ({ embedding })) }),
+  };
+}
+
+async function safeSelectChunks(
+  similarity: InstanceType<typeof PageSimilarityService>,
+  query: string,
+  pages: Map<string, string>,
+  candidateIds: Set<string>,
+  seedIds: Set<string>,
+  scores: Record<string, number>,
+  maxChunks: number,
+): Promise<SelectedChunk[] | "threw"> {
+  try {
+    return await similarity.selectRelevantChunks?.(query, pages, candidateIds, seedIds, scores, maxChunks) ?? [];
+  } catch {
+    return "threw";
+  }
 }
 
 async function drive(gen: AsyncGenerator<RunEvent, void>): Promise<RunEvent[]> {
@@ -391,6 +430,230 @@ async function main(): Promise<void> {
     check("irrelevant graph article excluded", !ids.includes("wiki_graph_noise"), ids.join(","));
     check("article id tokens do not select unrelated chunks", !ids.includes("wiki_neural_retrieval_noise"), ids.join(","));
     check("selected chunks carry headings", chunks.every((chunk) => chunk.heading.startsWith("## ")));
+  }
+
+  section("embedding chunk ranking hardening");
+  {
+    const cachedBody = "# Cached\n\n## Dense\ncache-only body";
+    const cachedInputs = buildChunkInputs("cached description", cachedBody, DEFAULT_CHUNKING);
+    const cachedSection = cachedInputs.find((input) => input.kind === "section");
+    const cachedSimilarity = new PageSimilarityService({
+      mode: "embedding",
+      topK: 10,
+      baseUrl: "http://fake.local",
+      apiKey: "fake",
+      model: "fake",
+      dimensions: 2,
+    });
+    cachedSimilarity.setCacheForTest?.({
+      version: 3,
+      model: "fake",
+      dimensions: 2,
+      entries: {
+        wiki_cached: {
+          chunks: [{
+            vector: encodeVector(new Float32Array([0, 1])),
+            hash: cachedSection?.hash ?? "",
+            kind: "section",
+            heading: cachedSection?.heading,
+            ordinal: cachedSection?.ordinal,
+          }],
+        },
+      },
+    });
+    const cachedChunks = await withRequestUrl(
+      () => embeddingResponse([[0, 1]]),
+      () => cachedSimilarity.selectRelevantChunks?.(
+        "vectorprobe",
+        new Map([["!Wiki/work/Entity/wiki_cached.md", cachedBody]]),
+        new Set(["wiki_cached"]),
+        new Set(["wiki_cached"]),
+        { wiki_cached: 1 },
+        3,
+      ) ?? Promise.resolve([]),
+    );
+    check("embedding chunk ranking reuses cached section vectors", cachedChunks[0]?.articleId === "wiki_cached", cachedChunks.map((chunk) => chunk.articleId).join(","));
+
+    const fallbackPages = new Map<string, string>([
+      ["!Wiki/work/Entity/wiki_relevant.md", "# Relevant\n\n## Evidence\nneural chunk retrieval evidence"],
+      ["!Wiki/work/Entity/wiki_noise.md", "# Noise\n\n## Other\nunrelated cooking notes"],
+    ]);
+    const fallbackIds = new Set(["wiki_relevant", "wiki_noise"]);
+    const fallbackScores = { wiki_relevant: 1, wiki_noise: 0.1 };
+    const throwingSimilarity = new PageSimilarityService({
+      mode: "embedding",
+      topK: 10,
+      baseUrl: "http://fake.local",
+      apiKey: "fake",
+      model: "fake",
+      dimensions: 2,
+    });
+    const throwChunks = await withRequestUrl(
+      () => { throw new Error("embedding down"); },
+      () => throwingSimilarity.selectRelevantChunks?.(
+        "neural retrieval",
+        fallbackPages,
+        fallbackIds,
+        new Set(["wiki_relevant"]),
+        fallbackScores,
+        3,
+      ) ?? Promise.resolve([]),
+    );
+    check("embedding API throw falls back to Jaccard chunks", throwChunks[0]?.articleId === "wiki_relevant", throwChunks.map((chunk) => chunk.articleId).join(","));
+
+    const emptySimilarity = new PageSimilarityService({
+      mode: "embedding",
+      topK: 10,
+      baseUrl: "http://fake.local",
+      apiKey: "fake",
+      model: "fake",
+      dimensions: 2,
+    });
+    const emptyChunks = await withRequestUrl(
+      () => embeddingResponse([]),
+      () => safeSelectChunks(
+        emptySimilarity,
+        "neural retrieval",
+        fallbackPages,
+        fallbackIds,
+        new Set(["wiki_relevant"]),
+        fallbackScores,
+        3,
+      ),
+    );
+    check("empty query embedding response falls back to Jaccard", Array.isArray(emptyChunks) && emptyChunks[0]?.articleId === "wiki_relevant", String(emptyChunks));
+
+    const shortBatchPages = new Map<string, string>([
+      ["!Wiki/work/Entity/wiki_first.md", "# First\n\n## Evidence\nneural retrieval first evidence"],
+      ["!Wiki/work/Entity/wiki_second.md", "# Second\n\n## Evidence\nneural retrieval second evidence"],
+    ]);
+    const shortBatchSimilarity = new PageSimilarityService({
+      mode: "embedding",
+      topK: 10,
+      baseUrl: "http://fake.local",
+      apiKey: "fake",
+      model: "fake",
+      dimensions: 2,
+    });
+    let shortBatchCalls = 0;
+    const shortBatchChunks = await withRequestUrl(
+      () => {
+        shortBatchCalls++;
+        return shortBatchCalls === 1 ? embeddingResponse([[1, 0]]) : embeddingResponse([[1, 0]]);
+      },
+      () => shortBatchSimilarity.selectRelevantChunks?.(
+        "neural retrieval",
+        shortBatchPages,
+        new Set(["wiki_first", "wiki_second"]),
+        new Set(["wiki_first"]),
+        { wiki_first: 1, wiki_second: 1 },
+        5,
+      ) ?? Promise.resolve([]),
+    );
+    check("short batch embedding response falls back to Jaccard", shortBatchChunks.length === 2, shortBatchChunks.map((chunk) => chunk.articleId).join(","));
+
+    const corruptSimilarity = new PageSimilarityService({
+      mode: "embedding",
+      topK: 10,
+      baseUrl: "http://fake.local",
+      apiKey: "fake",
+      model: "fake",
+      dimensions: 2,
+    });
+    const corruptBody = "# Corrupt\n\n## Evidence\nfresh dense chunk";
+    const corruptInput = buildChunkInputs("corrupt description", corruptBody, DEFAULT_CHUNKING).find((input) => input.kind === "section");
+    corruptSimilarity.setCacheForTest?.({
+      version: 3,
+      model: "fake",
+      dimensions: 2,
+      entries: {
+        wiki_corrupt: {
+          chunks: [{
+            vector: "$$$",
+            hash: corruptInput?.hash ?? "",
+            kind: "section",
+            heading: corruptInput?.heading,
+            ordinal: corruptInput?.ordinal,
+          }],
+        },
+      },
+    });
+    let corruptCalls = 0;
+    const corruptChunks = await withRequestUrl(
+      () => {
+        corruptCalls++;
+        return corruptCalls === 1 ? embeddingResponse([[1, 0]]) : embeddingResponse([[1, 0]]);
+      },
+      () => safeSelectChunks(
+        corruptSimilarity,
+        "vectorprobe",
+        new Map([["!Wiki/work/Entity/wiki_corrupt.md", corruptBody]]),
+        new Set(["wiki_corrupt"]),
+        new Set(["wiki_corrupt"]),
+        { wiki_corrupt: 1 },
+        3,
+      ),
+    );
+    check("corrupt cached section vector does not throw", Array.isArray(corruptChunks), String(corruptChunks));
+    check("corrupt cached section vector is embedded as missing", Array.isArray(corruptChunks) && corruptChunks[0]?.articleId === "wiki_corrupt", Array.isArray(corruptChunks) ? corruptChunks.map((chunk) => chunk.articleId).join(",") : String(corruptChunks));
+
+    const mismatchSimilarity = new PageSimilarityService({
+      mode: "embedding",
+      topK: 10,
+      baseUrl: "http://fake.local",
+      apiKey: "fake",
+      model: "fake",
+      dimensions: 2,
+    });
+    const mismatchBody = "# Mismatch\n\n## Evidence\nfresh dense chunk";
+    const mismatchInput = buildChunkInputs("mismatch description", mismatchBody, DEFAULT_CHUNKING).find((input) => input.kind === "section");
+    mismatchSimilarity.setCacheForTest?.({
+      version: 3,
+      model: "fake",
+      dimensions: 3,
+      entries: {
+        wiki_mismatch: {
+          chunks: [{
+            vector: encodeVector(new Float32Array([0, 1])),
+            hash: mismatchInput?.hash ?? "",
+            kind: "section",
+            heading: mismatchInput?.heading,
+            ordinal: mismatchInput?.ordinal,
+          }],
+        },
+      },
+    });
+    let mismatchCalls = 0;
+    const mismatchChunks = await withRequestUrl(
+      () => {
+        mismatchCalls++;
+        return mismatchCalls === 1 ? embeddingResponse([[1, 0]]) : embeddingResponse([[1, 0]]);
+      },
+      () => mismatchSimilarity.selectRelevantChunks?.(
+        "vectorprobe",
+        new Map([["!Wiki/work/Entity/wiki_mismatch.md", mismatchBody]]),
+        new Set(["wiki_mismatch"]),
+        new Set(["wiki_mismatch"]),
+        { wiki_mismatch: 1 },
+        3,
+      ) ?? Promise.resolve([]),
+    );
+    check("dimension-mismatched cache is ignored for chunk ranking", mismatchChunks[0]?.articleId === "wiki_mismatch", mismatchChunks.map((chunk) => chunk.articleId).join(","));
+
+    const tiePages = new Map<string, string>([
+      ["!Wiki/work/B/wiki_same.md", "# Same\n\n## B\nalpha beta"],
+      ["!Wiki/work/A/wiki_same.md", "# Same\n\n## A\nalpha beta"],
+    ]);
+    const tieSimilarity = new PageSimilarityService({ mode: "jaccard", topK: 10 });
+    const tieChunks = await tieSimilarity.selectRelevantChunks?.(
+      "alpha beta",
+      tiePages,
+      new Set(["wiki_same"]),
+      new Set(["wiki_same"]),
+      { wiki_same: 1 },
+      5,
+    ) ?? [];
+    check("selected chunk tie order uses path before heading", tieChunks[0]?.path === "!Wiki/work/A/wiki_same.md", tieChunks.map((chunk) => `${chunk.path}:${chunk.heading}`).join(","));
   }
 
   section("query flows render chunks");
