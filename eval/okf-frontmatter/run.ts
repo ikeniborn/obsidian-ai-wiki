@@ -1,5 +1,5 @@
 // Run: npx tsx eval/okf-frontmatter/run.ts
-import { renameWikiPageFields, entityTypeFromPath, parseResourceFromFm } from "../../src/utils/raw-frontmatter";
+import { renameWikiPageFields, entityTypeFromPath, parseResourceFromFm, ensureType, ensureDescription } from "../../src/utils/raw-frontmatter";
 
 let pass = 0, fail = 0; const failures: string[] = [];
 function check(name: string, cond: boolean) {
@@ -37,6 +37,13 @@ check("type from subdir", entityTypeFromPath("!Wiki/d", "!Wiki/d/person/wiki_d_a
 check("type entities→concept", entityTypeFromPath("!Wiki/d", "!Wiki/d/entities/wiki_d_x.md") === "concept");
 check("type flat→concept", entityTypeFromPath("!Wiki/d", "!Wiki/d/wiki_d_x.md") === "concept");
 check("parseResource reads resource", JSON.stringify(parseResourceFromFm(renamed)) === JSON.stringify(["[[Src]]"]));
+
+const noType = `---\nresource: []\n---\n# A\n`;
+check("type injected", /^type: person$/m.test(ensureType(noType, "person")));
+check("type not duplicated", ensureType(ensureType(noType, "person"), "person").match(/^type:/gm)!.length === 1);
+const ann = "Alice is a lead engineer. She owns billing. Covers: invoices, dunning. Terms: AR, ledger.";
+check("description = full annotation (verbatim)", ensureDescription(noType, ann).includes(ann));
+check("description empty→noop", ensureDescription(noType, "") === noType);
 
 console.log(`TOTAL: ${pass} passed, ${fail} failed`);
 if (fail > 0) { console.log(`FAILED: ${failures.join(", ")}`); process.exitCode = 1; }

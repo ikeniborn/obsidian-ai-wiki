@@ -16,7 +16,7 @@ import wikiSchemaTemplate from "../../templates/_wiki_schema.md";
 import { render } from "./template";
 import { domainWikiFolder, validateArticlePath, domainIndexPath } from "../wiki-path";
 import { ensureDomainConfig } from "../domain-config";
-import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureWikiSources, stripInvalidWikiArticles, recoverSourceFrontmatter, parseTagsFromFm, normalizeTag } from "../utils/raw-frontmatter";
+import { upsertRawFrontmatter, parseWikiArticlesFromFm, hasFrontmatterField, validateAndRepairSourceFrontmatter, validateAndRepairWikiPageFrontmatter, filterStaleWikiLinks, ensureType, ensureDescription, entityTypeFromPath, ensureResource, stripInvalidWikiArticles, recoverSourceFrontmatter, parseTagsFromFm, normalizeTag } from "../utils/raw-frontmatter";
 import { collectDomainTags, renderTagRegistryBlock, thematicCategories, ensureEntityTypeTag, DEFAULT_MAX_TAG_CATEGORIES } from "../utils/tag-registry";
 import { upsertIndexAnnotation, parseIndexAnnotations, removeIndexAnnotation, deriveFallbackAnnotation, reconcileIndex } from "../wiki-index";
 import { pageId } from "../wiki-graph";
@@ -36,7 +36,7 @@ function deriveSectionForPath(wikiFolder: string, fullPath: string): string {
 }
 
 function parseWikiStatus(content: string): string {
-  const m = /^---\n[\s\S]*?^wiki_status:[ \t]*(.+)$/m.exec(content);
+  const m = /^---\n[\s\S]*?^status:[ \t]*(.+)$/m.exec(content);
   return m ? m[1].trim() : "unknown";
 }
 
@@ -463,13 +463,16 @@ export async function* runIngest(
         details: [`tags: + ${entityTag} (derived from wiki_subfolder)`],
       };
     }
+    const okfType = entityTypeFromPath(wikiVaultPath, page.path);
+    const typed = ensureType(entityTagged, okfType);
+    const described = ensureDescription(typed, page.annotation ?? "");
     const sourceStem = sourceVaultPath.split("/").pop()!.replace(/\.md$/, "");
-    const { content: sourcedPage, injected } = ensureWikiSources(entityTagged, sourceStem);
+    const { content: sourcedPage, injected } = ensureResource(described, sourceStem);
     if (injected) {
       yield {
         kind: "info_text", icon: "⚠️",
-        summary: `wiki_sources injected: ${page.path}`,
-        details: [`Added [[${sourceStem}]] — LLM did not emit wiki_sources`],
+        summary: `resource injected: ${page.path}`,
+        details: [`Added [[${sourceStem}]] — LLM did not emit resource`],
       };
     }
     yield { kind: "tool_use", name: existingContent === null ? "Create" : "Update", input: { path: page.path } };

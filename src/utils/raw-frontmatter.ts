@@ -617,6 +617,33 @@ export function ensureResource(
   return { content: `---\n${yamlStringify(parsed)}---\n${body}`, injected: true };
 }
 
+export function ensureType(content: string, type: string): string {
+  if (hasFrontmatterField(content, "type")) return content;
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return content;
+  let parsed: Record<string, unknown>;
+  try { parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {}; }
+  catch { return content; }
+  const body = content.slice(fmMatch[0].length);
+  const ordered = { type, ...parsed };
+  return `---\n${yamlStringify(ordered)}---\n${body}`;
+}
+
+export function ensureDescription(content: string, annotation: string): string {
+  // description IS the overview — the full annotation kept verbatim (one line), NOT truncated.
+  const desc = annotation.replace(/\s+/g, " ").trim();
+  if (!desc || hasFrontmatterField(content, "description")) return content;
+  const fmMatch = FM_RE.exec(content);
+  if (!fmMatch) return content;
+  let parsed: Record<string, unknown>;
+  try { parsed = (yamlParse(fmMatch[1]) as Record<string, unknown>) ?? {}; }
+  catch { return content; }
+  const body = content.slice(fmMatch[0].length);
+  parsed.description = desc;
+  // lineWidth: 0 — disable yaml's default 80-col folding; description must stay one line (verbatim).
+  return `---\n${yamlStringify(parsed, { lineWidth: 0 })}---\n${body}`;
+}
+
 export function hasFrontmatterField(content: string, field: string): boolean {
   const fmMatch = FM_RE.exec(content);
   if (!fmMatch) return false;
