@@ -83,7 +83,7 @@ export async function* runLintFixChat(
       callSite: "lint-chat.fix",
       signal,
       onEvent: (ev) => pwtEvents.push(ev),
-    });
+    }) as { value: LintChatResponse; outputTokens: number; fullText: string };
     yield { kind: "tool_result", ok: true, preview: `${result.value.pages?.length ?? 0} pages` };
   } catch (e) {
     yield { kind: "tool_result", ok: false, preview: (e as Error).message };

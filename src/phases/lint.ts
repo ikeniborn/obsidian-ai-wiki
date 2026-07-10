@@ -189,7 +189,7 @@ export async function* runLint(
 
     const { deleted: deletedInvalid } = await cleanupInvalidPages(vaultTools, wikiVaultPath, domain.id);
     if (deletedInvalid > 0) {
-      yield { kind: "step", icon: "🗑️", text: `Deleted ${deletedInvalid} invalid wiki article(s).` };
+      yield { kind: "info_text", icon: "🗑️", summary: `Deleted ${deletedInvalid} invalid wiki article(s).` };
     }
 
     yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };

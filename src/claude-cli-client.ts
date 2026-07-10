@@ -55,14 +55,14 @@ export class ClaudeCliClient implements LlmClient {
 
   constructor(private cfg: ClaudeCliConfig) {}
 
-  readonly chat = {
+  readonly chat: LlmClient["chat"] = {
     completions: {
-      create: (
+      create: ((
         params:
           | OpenAI.Chat.ChatCompletionCreateParamsStreaming
           | OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
         opts?: { signal?: AbortSignal },
-      ) => this._create(params, opts),
+      ) => this._create(params, opts)) as LlmClient["chat"]["completions"]["create"],
     },
   };
 
@@ -233,7 +233,7 @@ export class ClaudeCliClient implements LlmClient {
         if (ev?.kind === "system" && ev.sessionId) this.lastSessionId = ev.sessionId;
       }
       const stderr = () => Buffer.concat(stderrChunks).toString("utf8").trim();
-      if (spawnError) throw new Error(`claude spawn failed: ${spawnError.message}${stderr() ? `\n${stderr()}` : ""}`);
+      if (spawnError) throw new Error(`claude spawn failed: ${(spawnError as Error).message}${stderr() ? `\n${stderr()}` : ""}`);
       if (signal?.aborted) return;
       const ec = exitCode;
       if (ec !== null && ec !== 0) throw new Error(`claude exited with code ${String(ec)}${stderr() ? `\n${stderr()}` : ""}`);

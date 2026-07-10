@@ -29010,7 +29010,7 @@ var ClaudeCliClient = class {
   lastSessionId;
   chat = {
     completions: {
-      create: (params, opts) => this._create(params, opts)
+      create: ((params, opts) => this._create(params, opts))
     }
   };
   async _create(params, opts) {
@@ -41486,7 +41486,7 @@ Wiki folder outside vault \u2014 skipped.`);
     }
     const { deleted: deletedInvalid } = await cleanupInvalidPages(vaultTools, wikiVaultPath, domain.id);
     if (deletedInvalid > 0) {
-      yield { kind: "step", icon: "\u{1F5D1}\uFE0F", text: `Deleted ${deletedInvalid} invalid wiki article(s).` };
+      yield { kind: "info_text", icon: "\u{1F5D1}\uFE0F", summary: `Deleted ${deletedInvalid} invalid wiki article(s).` };
     }
     yield { kind: "tool_use", name: "Glob", input: { pattern: `${wikiVaultPath}/**/*.md` } };
     await ensureDomainConfig(vaultTools, wikiVaultPath);
