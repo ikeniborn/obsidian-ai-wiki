@@ -22,16 +22,18 @@ RULES:
   1. The page's entity-type tag — the normalized type of this entity (e.g. `person`). Always include it when the entity type is known.
   2. Thematic tags reused from the EXISTING DOMAIN TAGS block (provided in the context). Do not invent near-duplicates of listed tags.
   3. A new thematic tag ONLY when nothing in the block fits. Never start a new top-level category when the block says "reuse only".
-- resource: ONLY sources (files outside !Wiki/) — bare name without path: [[FileName]]. Never [[wiki_domain_page]]
-- outgoing_links: ONLY wiki pages (files inside !Wiki/) — bare name without path: [[wiki_domain_page]]. Never [[SourceName]]
-  ❌ FORBIDDEN: [[CurrentSourceName]] or [[AnyOtherSourceFile]] in outgoing_links.
-     The source is already recorded in resource — there is no need to duplicate it in outgoing_links.
-     Example: processing "Liquidity farming.md" → you must NOT put [[Liquidity farming]] in outgoing_links.
+- resource: ONLY sources (files outside !Wiki/) — plain bare stem, NO `[[ ]]` brackets, no path, no extension: "FileName". Never a wiki page stem.
+- Links live ONLY in two body sections — NEVER in frontmatter. Do NOT emit `outgoing_links:`/`external_links:` frontmatter fields; they do not exist in this schema.
+  - `## Related` — outgoing links to OTHER wiki pages (files inside !Wiki/), one `[[wiki_domain_page]]` bullet per line. Never a source file.
+    ❌ FORBIDDEN: `[[CurrentSourceName]]` or `[[AnyOtherSourceFile]]` in `## Related`.
+       The source is already recorded in `resource` — there is no need to duplicate it in `## Related`.
+       Example: processing "Liquidity farming.md" → you must NOT put `[[Liquidity farming]]` in `## Related`.
+  - `## External links` — external URLs, one `[text](url)` bullet per line (`http://` or `https://` only).
 - In article bodies: ONLY [[stem]] — never [[stem|alias]]. The [[A|B]] syntax is forbidden.
 - Use the mandatory and optional section headings defined in the conventions block (_wiki_schema.md) below, exactly as written there. Each page must include the mandatory characteristics section.
 - For each page, add an "annotation" field to the JSON: a rich description for semantic search (embedding + Jaccard). Structure: <summary 1-2 sentences, covering the MAIN sections of the body, not only the first paragraph> Covers: <entities, tables, systems, Jira IDs, comma-separated>. Type: <type of operation/change>. Terms: <keywords from EVERY section — synonyms, IDs, terms that are not in the heading>. Aim for ~600–800 characters, all on ONE line without line breaks. Rely on the content of the page itself. Be specific, no filler or boilerplate — generic phrases raise noise in search.
 - The `annotation` field — ONLY in the JSON response. Do NOT add `annotation:` to the page frontmatter.
-- DEAD LINKS: every [[wiki_domain_slug]] in outgoing_links and in the article body must
+- DEAD LINKS: every [[wiki_domain_slug]] in `## Related` and elsewhere in the article body must
   either exist among the "Existing wiki pages" (provided in the context), or
   be present in the pages list of this response. No page — do not write the link.
 {{schema_block}}
@@ -54,4 +56,4 @@ If among the existing wiki pages you find several describing the same entity:
 The old pages will be deleted, the index cleaned, and backlinks in the current source updated automatically.
 
 Return ONLY a JSON object — no other text:
-{"reasoning":"Rationale: which entities were extracted and why","pages":[{"path":"{{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md","content":"---\ntype: <entity type>\nresource: [\"[[{{source_stem}}]]\"]\ntimestamp: {{today}}\nstatus: stub\ntags: []\noutgoing_links: []\n---\n# EntityName\n\ncontent...","annotation":"The essence of the entity in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search."}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}
+{"reasoning":"Rationale: which entities were extracted and why","pages":[{"path":"{{wiki_path}}/entities/wiki_{{domain_id}}_entity_name.md","content":"---\ntype: <entity type>\nresource: [\"{{source_stem}}\"]\ntimestamp: {{today}}\nstatus: stub\ntags: []\n---\n# EntityName\n\ncontent...\n\n## Related\n- [[wiki_{{domain_id}}_other_entity]]\n\n## External links\n- [Docs](https://example.com)","annotation":"The essence of the entity in 1-2 sentences. Covers: related entities, systems, tables. Type: reference entity. Terms: synonyms and keywords for search."}],"entity_types_delta":[{"type":"NewType","description":"...","extraction_cues":["cue1","cue2"]}]}
