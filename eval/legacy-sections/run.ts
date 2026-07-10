@@ -10,7 +10,16 @@
  * set): embeds both chunk variants plus a small query set and checks precision rises while
  * on-topic scores stay flat. Added in Task 3.
  *
- * Run: see docs/superpowers/evals/2026-06-19-legacy-sections-eval.md
+ * Imports src/page-similarity.ts / src/strip-legacy-sections.ts, which pull in `obsidian`,
+ * so this eval runs as an esbuild CJS bundle with the obsidian stub aliased in — NOT under
+ * plain `tsx`. Build & run (from repo root):
+ *   node_modules/.bin/esbuild eval/legacy-sections/run.ts \
+ *     --bundle --platform=node --format=cjs \
+ *     --alias:obsidian=./eval/legacy-sections/obsidian-stub.ts \
+ *     --outfile=eval/legacy-sections/run.cjs
+ *   node eval/legacy-sections/run.cjs
+ *
+ * Details / retrieval A/B: docs/superpowers/evals/2026-06-19-legacy-sections-eval.md
  */
 import { buildChunkInputs, splitSections, DEFAULT_CHUNKING } from "../../src/page-similarity";
 import { stripLegacySections, extractRelatedLinks, addOutgoingLinks } from "../../src/strip-legacy-sections";
