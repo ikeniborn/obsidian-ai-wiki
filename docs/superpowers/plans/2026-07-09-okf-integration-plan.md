@@ -1,6 +1,6 @@
 ---
 review:
-  plan_hash: "728baa9dc52da449"
+  plan_hash: "8d232a35628a9736"
   last_run: "2026-07-10"
   phases:
     structure: { status: passed }
@@ -11,7 +11,7 @@ review:
   findings: []
 chain:
   intent: "n/a"
-  spec: "25c320acf4396e93"
+  spec: "98211f063cd430b9"
 ---
 # OKF Integration Implementation Plan
 
@@ -245,8 +245,8 @@ import { ensureType, ensureDescription } from "../../src/utils/raw-frontmatter";
 const noType = `---\nresource: []\n---\n# A\n`;
 check("type injected", /^type: person$/m.test(ensureType(noType, "person")));
 check("type not duplicated", ensureType(ensureType(noType, "person"), "person").match(/^type:/gm)!.length === 1);
-const ann = "Alice is a lead engineer. She owns billing.";
-check("description injected", /^description: /m.test(ensureDescription(noType, ann)));
+const ann = "Alice is a lead engineer. She owns billing. Covers: invoices, dunning. Terms: AR, ledger.";
+check("description = full annotation (verbatim)", ensureDescription(noType, ann).includes(ann));
 check("description empty→noop", ensureDescription(noType, "") === noType);
 ```
 
@@ -271,7 +271,8 @@ export function ensureType(content: string, type: string): string {
 }
 
 export function ensureDescription(content: string, annotation: string): string {
-  const desc = firstSentences(annotation, 2);
+  // description IS the overview — the full annotation kept verbatim (one line), NOT truncated.
+  const desc = annotation.replace(/\s+/g, " ").trim();
   if (!desc || hasFrontmatterField(content, "description")) return content;
   const fmMatch = FM_RE.exec(content);
   if (!fmMatch) return content;
@@ -281,15 +282,6 @@ export function ensureDescription(content: string, annotation: string): string {
   const body = content.slice(fmMatch[0].length);
   parsed.description = desc;
   return `---\n${yamlStringify(parsed)}---\n${body}`;
-}
-
-/** First `n` sentences of a one-line annotation, trimmed. */
-function firstSentences(text: string, n: number): string {
-  const t = text.replace(/\s+/g, " ").trim();
-  if (!t) return "";
-  const parts = t.match(/[^.!?]+[.!?]+/g);
-  if (!parts) return t;
-  return parts.slice(0, n).join(" ").trim();
 }
 ```
 
@@ -689,6 +681,99 @@ Expected: eval `TOTAL: 8 passed, 0 failed`; `tsc` clean; build succeeds.
 ```bash
 git add src/migrate-okf-frontmatter.ts src/local-config.ts src/main.ts eval/okf-migrate/run.ts
 git commit -m "feat(okf): one-shot startup migration of wiki pages to OKF frontmatter"
+```
+
+---
+
+## Task 5b: Overview single source — retrieval reads frontmatter `description`
+
+Move the per-page overview from the `_index.md` annotation store to the frontmatter `description`. The overview map that today comes from `parseIndexAnnotations(_index.md)` is instead built from frontmatter `description`; `_index.md` becomes a generated OKF nav; the mandatory body intro paragraph is dropped.
+
+**Files:**
+- Modify: `src/wiki-index.ts` (`deriveFallbackAnnotation` → also export `deriveFallbackDescription`; add `collectDescriptions`)
+- Modify: `src/page-similarity.ts` (`refreshCache` `:791-875` — overview map source), `src/phases/ingest.ts` (`:605-609`), `src/phases/lint.ts` (`:452-454`)
+- Modify: `src/phases/llm-utils.ts` (`wikiSections` `:22-60`), `templates/_wiki_schema.md` (drop intro-paragraph rule)
+- Test: `eval/okf-frontmatter/run.ts` (extend)
+
+**Interfaces:**
+- Consumes: `parseResourceFromFm` pattern; the `FM_RE` frontmatter parse.
+- Produces:
+  - `parseDescriptionFromFm(content: string): string` — the frontmatter `description` scalar, or `""`.
+  - `collectDescriptions(pages: Array<{ path: string; content: string }>): Map<string, string>` — pid → description (fallback `deriveFallbackDescription(content)` when the field is absent).
+  - `deriveFallbackDescription(content: string): string` — the existing `deriveFallbackAnnotation` body-derivation, renamed.
+
+- [ ] **Step 1: Write the failing test** — append to `eval/okf-frontmatter/run.ts`:
+
+```ts
+import { parseDescriptionFromFm, collectDescriptions } from "../../src/wiki-index";
+const page = `---\ntype: person\ndescription: Alice leads billing. Terms: AR, ledger.\n---\n# Alice\nbody\n`;
+check("parseDescription reads field", parseDescriptionFromFm(page) === "Alice leads billing. Terms: AR, ledger.");
+const noDesc = `---\ntype: tool\n---\n# Docker\nContainer runtime.\n`;
+const map = collectDescriptions([
+  { path: "!Wiki/d/person/wiki_d_alice.md", content: page },
+  { path: "!Wiki/d/tool/wiki_d_docker.md", content: noDesc },
+]);
+check("map uses frontmatter description", map.get("wiki_d_alice") === "Alice leads billing. Terms: AR, ledger.");
+check("map falls back for missing", (map.get("wiki_d_docker") ?? "").length > 0);
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npx tsx eval/okf-frontmatter/run.ts`
+Expected: FAIL — `parseDescriptionFromFm`/`collectDescriptions` not exported.
+
+- [ ] **Step 3: Implement in `src/wiki-index.ts`**
+
+Rename `deriveFallbackAnnotation` → `deriveFallbackDescription` (keep the body-derivation logic verbatim; update its callers in `ingest.ts` and `reconcileIndex`). Add:
+
+```ts
+export function parseDescriptionFromFm(content: string): string {
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content);
+  if (!fm) return "";
+  const m = /^description:[ \t]*(.+)$/m.exec(fm[1]);
+  return m ? m[1].trim() : "";
+}
+
+export function collectDescriptions(
+  pages: Array<{ path: string; content: string }>,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const p of pages) {
+    const stem = p.path.split("/").pop()!.replace(/\.md$/, "");
+    if (stem.startsWith("_") || !GENERIC_WIKI_STEM_REGEX.test(stem)) continue;
+    const desc = parseDescriptionFromFm(p.content) || deriveFallbackDescription(p.content);
+    map.set(stem, desc);
+  }
+  return map;
+}
+```
+
+- [ ] **Step 4: Retarget the retrieval overview source**
+
+In `src/page-similarity.ts` `refreshCache` (`:791-875`), the parameter that today receives `parseIndexAnnotations(_index.md)` now receives `collectDescriptions(pages)`. At the two call sites — `src/phases/ingest.ts:605-609` and `src/phases/lint.ts:452-454` — replace the `indexAnnotations` argument passed to `refreshCache` with `collectDescriptions(pageObjects)`, where `pageObjects` is the `{ path, content }` list already loaded there (`pageBodies`). Do NOT change `buildChunkInputs` — it still receives `(overview, body)`; only the map's source changed.
+
+For query seeds, in `src/phases/query.ts` build the overview map with `collectDescriptions(pages)` (pages already read at `:152`) and pass it where `indexAnnotations` currently flows into `selectSeeds`/`selectRelevantScoredDiag`.
+
+- [ ] **Step 5: `_index.md` stays generated + drop body intro**
+
+`_index.md` continues to be written by `upsertIndexAnnotation`, but its text is the page's `description` (identical to the injected overview) — no code change needed there since ingest passes the same overview. Confirm `deriveFallbackDescription` is used for the fallback (Step 3 rename).
+
+In `src/phases/llm-utils.ts` `wikiSections` (`:22-60`), remove the mandatory intro-paragraph item ("Intro paragraph — 1-3 sentences without a heading"); keep the mandatory characteristics section. Mirror the change in `templates/_wiki_schema.md` if it restates the intro rule.
+
+- [ ] **Step 6: Run tests + typecheck**
+
+Run:
+```bash
+npx tsx eval/okf-frontmatter/run.ts
+npx tsc --noEmit
+```
+Expected: eval `TOTAL: 25 passed, 0 failed`; `tsc` clean.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/wiki-index.ts src/page-similarity.ts src/phases/ingest.ts src/phases/lint.ts src/phases/query.ts src/phases/llm-utils.ts templates/_wiki_schema.md eval/okf-frontmatter/run.ts
+git commit -m "feat(okf): overview single source — retrieval reads frontmatter description, drop body intro"
 ```
 
 ---

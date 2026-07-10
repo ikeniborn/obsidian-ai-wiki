@@ -1,6 +1,6 @@
 ---
 review:
-  spec_hash: "25c320acf4396e93"
+  spec_hash: "98211f063cd430b9"
   last_run: "2026-07-10"
   phases:
     structure: { status: passed }
@@ -55,6 +55,17 @@ MCP client, so the deterministic logic is re-implemented in TypeScript.
 5. **Export destination** = a modal asks for the path; default **outside the vault** (Node `fs`,
    desktop-only) so Obsidian never indexes the markdown-link copies as duplicate notes; an in-vault,
    Obsidian-ignored folder option is offered.
+6. **Overview single source** = the page **`description`** frontmatter field is the ONE overview text.
+   It carries the rich, retrieval-tuned summary (~600–800 chars, one line, covering every section + search
+   terms) that today lives as the `annotation` line in `_config/_index.md`. Consequences: retrieval
+   (embeddings, chunk prefixes, Jaccard corpus, query seeds) reads `description` from each page's
+   frontmatter; `_index.md` becomes a **generated** OKF progressive-disclosure nav derived from those
+   descriptions (no longer the hand-maintained store); the wiki body's lead **intro paragraph is removed**
+   (the overview is not duplicated in the body). See [§ Overview & retrieval](#e-overview--retrieval-single-source).
+7. **Link syntax is NOT negotiable for the bundle.** OKF v0.1 deliberately mandates standard Markdown links
+   `[text](path.md)` and does **not** support `[[wikilinks]]` (verified against the Google Cloud OKF spec).
+   So on-disk pages keep `[[wikilinks]]` for the Obsidian graph, and the export bundle **must** rewrite them
+   to `[text](rel.md)` — the rewrite stays in scope, it cannot be skipped.
 
 ## Field model
 
@@ -63,7 +74,7 @@ MCP client, so the deterministic logic is re-implemented in TypeScript.
 | Before | After | Notes |
 |---|---|---|
 | *(none)* | `type` | **mandatory** OKF entity type (person/tool/concept/…). = the entity-type **subdirectory** segment of the page path (`!Wiki/<domain>/<type>/…`), normalized lowercase; generic `entities` folder → `concept`. |
-| *(derived)* | `description` | **stored on disk.** First 1–2 sentences of the ingest `annotation`. Regenerated with the page, so it stays in sync with `_index.md`. |
+| *(none)* | `description` | **stored on disk — the single overview source.** The rich, retrieval-tuned summary (~600–800 chars, one line) formerly written as the `annotation` line in `_index.md`. Feeds embeddings / chunks / Jaccard / seeds and the generated `_index.md`. See [§ Overview & retrieval](#e-overview--retrieval-single-source). |
 | `wiki_sources` | `resource` | List kept; wikilinks stay for Obsidian, rewritten at export. |
 | `wiki_updated` | `timestamp` | |
 | `tags` | `tags` | Name already OKF. Hierarchical on disk; kebab (`a/b`→`a-b`) only at export. |
@@ -155,6 +166,35 @@ near-passthrough; the remaining work is inherent to the Obsidian↔OKF boundary:
   Obsidian-ignored folder.
 - Mobile: export hidden (no `fs`).
 
+### E. Overview & retrieval (single source)
+
+Today the per-page overview is the `annotation`: emitted by the LLM in the ingest JSON, written as a single
+line to `_config/_index.md` (never to frontmatter — a `remove` rule strips `annotation:` from pages), and
+consumed by retrieval as (a) the standalone "summary" embedding vector, (b) the prefix prepended to every
+body "section" chunk vector, (c) the Jaccard corpus text, and (d) the query-seed scoring text. The wiki body
+also carries a separate 1–3 sentence intro paragraph, authored independently.
+
+This design collapses that into the OKF `description` field:
+
+- **Ingest** writes the rich annotation into the page's frontmatter `description` (deterministic injection of
+  the JSON `annotation`, kept verbatim — NOT truncated). The `annotation:`-strip rule is replaced so
+  `description` survives repair; the JSON `annotation` field stays a transport field only.
+- **`_index.md` is generated** from frontmatter descriptions (`- [pid](path) — <description>`), the OKF
+  progressive-disclosure nav. It is derived, not hand-maintained; it can be rebuilt from the pages at any time.
+- **Retrieval reads `description` from frontmatter.** The `Map<pid, overview>` that today comes from
+  `parseIndexAnnotations(_index.md)` is instead built from each page's frontmatter `description`
+  (`collectDescriptions(pages)`), then fed unchanged into the existing consumers: `buildChunkInputs`
+  (`page-similarity.ts`), `setJaccardCorpus`, and the query seeds (`wiki-seeds.ts`). No change to the
+  embedding/chunk math — only the source of the overview map moves from the index file to the frontmatter.
+- **The body intro paragraph is removed** from the mandatory section conventions (`wikiSections` in
+  `llm-utils.ts` + `_wiki_schema.md`) — the overview lives once, in `description`. The mandatory
+  characteristics section stays.
+- **Fallback**: when the LLM omits the annotation, `deriveFallbackDescription(body)` (the current
+  `deriveFallbackAnnotation` logic) supplies a `description` from the body H1 + first sentence.
+
+This keeps a single authored overview, makes it OKF-native (frontmatter `description` → generated
+`index.md`), and preserves retrieval quality by keeping the description rich (~600–800 chars).
+
 ## Blast radius (rename consumers)
 
 Beyond `raw-frontmatter.ts` (rules + parse helpers) and `incremental-sources.ts` (`parsePageSources`):
@@ -168,14 +208,30 @@ Beyond `raw-frontmatter.ts` (rules + parse helpers) and `incremental-sources.ts`
 - Prompts: `prompts/ingest.md`, `prompts/ingest-merge.md`, `prompts/lint.md`.
 - `src/phases/zod-schemas.ts` if it constrains page frontmatter field names.
 
+Overview single-source consumers (part E):
+
+- `src/wiki-index.ts` — `_index.md` generation now sources the overview from frontmatter `description`
+  (`upsertIndexAnnotation` / `parseIndexAnnotations` callers); `deriveFallbackAnnotation` →
+  `deriveFallbackDescription`.
+- `src/page-similarity.ts` — `refreshCache` / `buildChunkInputs` / `setJaccardCorpus` read the overview map
+  from frontmatter descriptions instead of `parseIndexAnnotations(_index.md)`.
+- `src/wiki-seeds.ts` — seed scoring uses `description`.
+- `src/phases/query.ts` — the overview map fed to seeds/context comes from frontmatter descriptions.
+- `src/phases/llm-utils.ts` (`wikiSections`) + `templates/_wiki_schema.md` — drop the mandatory body intro
+  paragraph.
+- `src/utils/raw-frontmatter.ts` — replace the `annotation: remove` rule so `description` is preserved.
+
 ## Data flow
 
 ```
 Plugin load    → auto-migration renames all wiki pages → OKF-native on disk
-Ingest         → write wiki page (type/description/resource/timestamp/status/…); repair enforces names
+               → backfill description from _index.md annotation → regenerate _index.md from descriptions
+Ingest         → write wiki page (type/description=overview/resource/timestamp/status/…); repair enforces names
                → source note: inject only wiki_articles (dates dropped)
+Retrieval      → overview map = collectDescriptions(pages)  (frontmatter, not _index.md)
+               → embeddings / chunk prefix / Jaccard / seeds  → _index.md regenerated as OKF nav
 Export command → read wiki pages (already OKF-named)
-               → derive title + keep description + normalize tags + rewrite links
+               → derive title + keep description + normalize tags + rewrite [[links]]→[md](links)
                → write bundle (index.md, log.md, per-page files)
                → report { pages, dest, warnings }
 ```
@@ -186,6 +242,8 @@ Export command → read wiki pages (already OKF-named)
 - Both legacy and new key present → last-wins rename, single OKF key remains.
 - Page without frontmatter → migration/repair injects `type` (from the subdirectory, or `concept` for the generic `entities` folder) + `description`; export derives `title`.
 - Old `wiki_type` page-role value → dropped; `type` re-derived from the subdirectory. Meta files stay keyed by their `_` prefix.
+- **Migration moves the overview**: for existing pages the annotation lives in `_index.md`, not frontmatter. The auto-migration backfills `description` from that page's `_index.md` annotation (already read for the pid → annotation map); if the page is absent from `_index.md`, `deriveFallbackDescription(body)`.
+- After migration, `_index.md` is regenerated from the now-authoritative frontmatter descriptions, so the file and the pages agree.
 - Source note still carrying `wiki_added`/`wiki_updated` → stripped on next ingest/format (lazy).
 - Dead wikilink on export → plain text + `warnings` entry.
 - Real page named `index.md` / `log.md` → reserved-slug collision `warnings` entry.
@@ -204,6 +262,12 @@ Export command → read wiki pages (already OKF-named)
   after a simulated touch.
 - `eval/okf-export/`: fixture domain → export → assert bundle structure, derived `title`, stored
   `description`, link rewrite, `index.md`/`log.md` present, warnings on collisions. Follows existing `eval/`.
+- Overview single-source: `description` injected verbatim (not truncated) from the annotation; `_index.md`
+  generated from frontmatter descriptions round-trips (`collectDescriptions` → generate → `parseIndexAnnotations`
+  yields the same map); migration backfills `description` from a legacy `_index.md` annotation; body intro
+  paragraph absent from the section conventions.
+- Retrieval smoke (desktop/LLM): after ingest, `_embeddings.json` builds from frontmatter descriptions and a
+  query returns the same top pages as before the change (no retrieval regression on a sample domain).
 
 ## Alternatives considered
 

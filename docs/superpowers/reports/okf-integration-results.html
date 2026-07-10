@@ -75,7 +75,7 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
 <header>
   <label for="theme-toggle" class="theme-btn" title="Тема">🌙 / ☀️</label>
   <h1>OKF Integration — цепочка IDD→SDD</h1>
-  <span class="sub">topic: okf-integration · spec_hash 25c320acf4396e93</span>
+  <span class="sub">topic: okf-integration · spec 98211f063cd430b9 · plan 8d232a35628a9736</span>
 </header>
 <nav class="chain-tabs">
   <label for="tab-intent">Intent</label>
@@ -104,7 +104,9 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
       <tr><td>Source-заметки</td><td>Оставить <code>wiki_</code>-префикс и <code>wiki_articles</code>; убрать <code>wiki_added</code>+<code>wiki_updated</code> (свежесть = хеш тела, не страдает).</td></tr>
       <tr><td>Миграция</td><td>Wiki-страницы: активная one-shot идемпотентная авто-миграция в цепи <code>main.ts</code> (hard cutover). Source-даты: ленивая зачистка на следующем ingest/format.</td></tr>
       <tr><td>Export</td><td>Offline TS-порт iwiki <code>export.py</code>; near-passthrough frontmatter + вывод <code>title</code> + kebab-теги (<code>a/b→a-b</code>) + <code>[[wikilinks]]→[md](links)</code> + генерация <code>index.md</code>/<code>log.md</code>; dest-модалка, дефолт вне vault.</td></tr>
-      <tr><td><b>Success Criteria</b></td><td>Wiki-страницы OKF-native на диске; export даёт conformant bundle offline; миграция идемпотентна (2-й проход без изменений); свежесть источников не нарушена.</td></tr>
+      <tr><td><b>Overview single source</b></td><td><code>description</code> (frontmatter) = единственный overview (~600-800, verbatim). <code>_index.md</code> генерится из descriptions. Векторы/чанки/Jaccard/seeds читают <code>description</code>. Intro-абзац тела убран. Миграция бэкфиллит description из <code>_index.md</code>.</td></tr>
+      <tr><td><b>Link rewrite (OKF)</b></td><td>OKF v0.1 намеренно требует <code>[md](links)</code>, НЕ <code>[[wikilinks]]</code> (сверено со спекой Google). На диске <code>[[…]]</code>, rewrite только в bundle — обязателен, не опционален.</td></tr>
+      <tr><td><b>Success Criteria</b></td><td>Wiki-страницы OKF-native на диске; overview в одном месте (description) кормит retrieval; export даёт conformant bundle offline; миграция идемпотентна; свежесть источников не нарушена.</td></tr>
     </tbody>
   </table>
 
@@ -186,7 +188,7 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
   <h3>Находки</h3>
   <p class="note">Находок нет (0 CRITICAL open, 0 WARNING open).</p>
   <h3>Вердикт</h3>
-  <p><span class="badge b-ok">OK</span> — spec_hash <code>25c320acf4396e93</code>.</p>
+  <p><span class="badge b-ok">OK</span> — spec_hash <code>98211f063cd430b9</code>.</p>
   <div class="legend">Цепочка: intent <span class="badge b-na">n/a</span> → spec <span class="badge b-ok">OK</span> → plan — → result —</div>
 
 </section>
@@ -203,7 +205,8 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
       <tr><td>T2</td><td>type/description governance (ingest)</td><td>eval 18; ingest внедряет <code>type</code> (подкаталог) + <code>description</code> (annotation); промпты обновлены.</td></tr>
       <tr><td>T3</td><td>Убрать даты со source-заметок</td><td>eval 22; source-repair срезает <code>wiki_added</code>/<code>wiki_updated</code>, хранит <code>wiki_articles</code>.</td></tr>
       <tr><td>T4</td><td>Ретаргет потребителей полей</td><td><code>tsc</code> чист; <code>source-deletion</code>/<code>legacy-sections</code> evals зелёные на переименованных фикстурах.</td></tr>
-      <tr><td>T5</td><td>Авто-миграция wiki-страниц</td><td><code>eval/okf-migrate</code> 8; one-shot flag-guarded в <code>main.ts</code>; идемпотентно; build зелёный.</td></tr>
+      <tr><td>T5</td><td>Авто-миграция wiki-страниц</td><td><code>eval/okf-migrate</code> 8; one-shot flag-guarded в <code>main.ts</code>; идемпотентно; бэкфилл description из <code>_index.md</code>; build зелёный.</td></tr>
+      <tr><td>T5b</td><td>Overview single source (retrieval)</td><td><code>eval/okf-frontmatter</code> 25; <code>collectDescriptions</code> из frontmatter кормит эмбеддинги/seeds/Jaccard; intro-абзац убран; <code>tsc</code> чист.</td></tr>
       <tr><td>T6</td><td>Export-хелперы (link/tags/title)</td><td><code>eval/okf-export</code> 7; rewrite ссылок, kebab-теги, вывод title.</td></tr>
       <tr><td>T7</td><td>Bundle-сериализатор (pure)</td><td>eval 13; генерит <code>index.md</code>/<code>log.md</code>; warn на коллизии reserved-slug.</td></tr>
       <tr><td>T8</td><td>FS-writer + controller entry</td><td><code>tsc</code>/build чисты; desktop-smoke пишет bundle вне vault.</td></tr>
@@ -269,7 +272,7 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
   <h3>Находки</h3>
   <p class="note">Находок нет (0 CRITICAL open, 0 WARNING open). T8/T9 верифицируются ручным desktop-smoke (node:fs + Obsidian UI не покрываются eval).</p>
   <h3>Вердикт</h3>
-  <p><span class="badge b-ok">OK</span> — plan_hash <code>728baa9dc52da449</code>.</p>
+  <p><span class="badge b-ok">OK</span> — plan_hash <code>8d232a35628a9736</code>. 10 задач (T1–T5, T5b, T6–T9).</p>
   <div class="legend">Цепочка: intent <span class="badge b-na">n/a</span> → spec <span class="badge b-ok">OK</span> → plan <span class="badge b-ok">OK</span> → result —</div>
 
 </section>
