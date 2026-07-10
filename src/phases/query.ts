@@ -344,7 +344,7 @@ export async function* runQuery(
   if (signal.aborted) return;
 
   const ans = yield* answerFromContext({
-    llm, model, opts, signal, vaultTools,
+    llm, model, opts, signal,
     systemPrompt, question, contextBlock, selectedIds: finalSelectedIds,
     wikiLinkValidationRetries,
   });

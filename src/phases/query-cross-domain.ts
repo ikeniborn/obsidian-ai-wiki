@@ -145,7 +145,7 @@ export async function* runCrossDomainQuery(
   if (signal.aborted) return;
 
   const ans = yield* answerFromContext({
-    llm, model, opts, signal, vaultTools, systemPrompt, question: q,
+    llm, model, opts, signal, systemPrompt, question: q,
     contextBlock, selectedIds: finalSet, wikiLinkValidationRetries,
   });
   outputTokens += ans.outputTokens;

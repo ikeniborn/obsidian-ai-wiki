@@ -716,6 +716,13 @@ async function main(): Promise<void> {
     check("single-domain context excludes graph noise", !promptText.includes("unrelated cooking notes"));
     check("single-domain eval has found_chunks", Array.isArray(evalMeta?.fields.found_chunks));
 
+    const outOfContextAnswer = await drive(runQuery(
+      ["neural retrieval"], false, vault, fakeLlm("Noise link [[wiki_graph_noise]].").llm, "fake-model", [dom("work")], "", new AbortController().signal,
+      1, {}, 5, 0, 10, undefined, 0, 0, false, 60,
+    ) as AsyncGenerator<RunEvent, void>);
+    const outOfContextResult = outOfContextAnswer.find((event) => event.kind === "result") as Extract<RunEvent, { kind: "result" }> | undefined;
+    check("single-domain annotates selected-outside vault link", !!outOfContextResult && outOfContextResult.text.includes("[[wiki_graph_noise]] *(not in wiki)*"), outOfContextResult?.text);
+
     const crossVault = fakeVault({
       ...files,
       "!Wiki/home/_config/_index.md": "- [[wiki_home_seed]] - home description neural retrieval",
