@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OKF Integration — IDD→SDD chain</title>
+<style>
+:root{
+  --bg:#0f1115; --surface:#181b22; --surface2:#1f2430; --border:#2a2f3a;
+  --text:#e6e9ef; --muted:#9aa4b2; --accent:#5aa9ff; --accent2:#7ee787;
+  --ok:#3fb950; --warn:#d29922; --crit:#f85149;
+}
+body:has(#theme-toggle:checked){
+  --bg:#f7f8fa; --surface:#ffffff; --surface2:#eef1f5; --border:#d6dbe2;
+  --text:#1b1f27; --muted:#5b6572; --accent:#1868d6; --accent2:#1a7f37;
+  --ok:#1a7f37; --warn:#9a6700; --crit:#cf222e;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  padding:0 0 4rem}
+header{display:flex;align-items:center;gap:1rem;padding:1.1rem 1.4rem;
+  border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:5}
+header h1{font-size:1.15rem;margin:0;font-weight:650}
+.sub{color:var(--muted);font-size:.85rem;margin-left:auto}
+.theme-btn{cursor:pointer;user-select:none;font-size:1.1rem;padding:.25rem .5rem;
+  border:1px solid var(--border);border-radius:8px;background:var(--surface2)}
+main{max-width:1080px;margin:0 auto;padding:1.4rem}
+h2{font-size:1.05rem;margin:1.8rem 0 .7rem;padding-bottom:.35rem;border-bottom:1px solid var(--border)}
+h3{font-size:.95rem;margin:1.3rem 0 .5rem;color:var(--accent)}
+table{border-collapse:collapse;width:100%;margin:.6rem 0;font-size:.88rem}
+th,td{border:1px solid var(--border);padding:.45rem .6rem;text-align:left;vertical-align:top}
+th{background:var(--surface2);font-weight:600}
+tr:nth-child(even) td{background:var(--surface)}
+code{background:var(--surface2);padding:.1rem .35rem;border-radius:5px;font-size:.85em}
+.note{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);
+  padding:.7rem .9rem;border-radius:8px;color:var(--muted)}
+.badge{display:inline-block;padding:.12rem .55rem;border-radius:999px;font-size:.78rem;font-weight:600}
+.b-ok{background:color-mix(in srgb,var(--ok) 20%,transparent);color:var(--ok);border:1px solid var(--ok)}
+.b-na{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+.flow{display:flex;flex-wrap:wrap;gap:.6rem;align-items:stretch;margin:.6rem 0}
+.node{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:.55rem .75rem;min-width:150px;flex:0 0 auto}
+.node .t{font-weight:600;font-size:.85rem}
+.node .d{color:var(--muted);font-size:.76rem;margin-top:.2rem}
+.arrow{align-self:center;color:var(--accent);font-size:1.2rem;padding:0 .1rem}
+.legend{color:var(--muted);font-size:.8rem;margin:.3rem 0 .2rem}
+.cov-yes{color:var(--accent2);font-weight:700;text-align:center}
+.cov-no{color:var(--muted);text-align:center}
+/* tabs */
+.tab-radio{position:absolute;left:-9999px}
+nav.chain-tabs{display:flex;gap:.35rem;padding:0 1.4rem;max-width:1080px;margin:1rem auto 0;flex-wrap:wrap}
+nav.chain-tabs label{cursor:pointer;padding:.4rem .9rem;border:1px solid var(--border);
+  border-bottom:none;border-radius:8px 8px 0 0;background:var(--surface);color:var(--muted);font-size:.86rem}
+body:has(#tab-intent:checked) label[for="tab-intent"],
+body:has(#tab-spec:checked)   label[for="tab-spec"],
+body:has(#tab-plan:checked)   label[for="tab-plan"],
+body:has(#tab-result:checked) label[for="tab-result"]{color:var(--accent);border-color:var(--accent);font-weight:600;background:var(--surface2)}
+.tab-pane{display:none}
+body:has(#tab-intent:checked) #pane-intent,
+body:has(#tab-spec:checked)   #pane-spec,
+body:has(#tab-plan:checked)   #pane-plan,
+body:has(#tab-result:checked) #pane-result{display:block}
+svg .nd{fill:var(--surface);stroke:var(--border)}
+svg .lb{fill:var(--text);font-size:11px}
+svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
+</style>
+</head>
+<body>
+<input type="checkbox" id="theme-toggle" hidden>
+<input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden checked>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<header>
+  <label for="theme-toggle" class="theme-btn" title="Тема">🌙 / ☀️</label>
+  <h1>OKF Integration — цепочка IDD→SDD</h1>
+  <span class="sub">topic: okf-integration · spec_hash 25c320acf4396e93</span>
+</header>
+<nav class="chain-tabs">
+  <label for="tab-intent">Intent</label>
+  <label for="tab-spec">Spec</label>
+  <label for="tab-plan">Plan</label>
+  <label for="tab-result">Result</label>
+</nav>
+<main>
+<!-- TAB:intent START -->
+<section class="tab-pane" id="pane-intent">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:intent END -->
+<!-- TAB:spec START -->
+<section class="tab-pane" id="pane-spec">
+
+  <h2>1. Резюме спецификации</h2>
+  <table>
+    <thead><tr><th>Раздел / требование</th><th>Суть</th></tr></thead>
+    <tbody>
+      <tr><td>Scope</td><td>OKF применяется только к генерируемым wiki-страницам; source-заметки остаются вне OKF.</td></tr>
+      <tr><td>Wiki-frontmatter</td><td>Конвергенция к OKF-именам, снятие префикса <code>wiki_</code>.</td></tr>
+      <tr><td>type</td><td>= подкаталог-тип (<code>!Wiki/&lt;domain&gt;/&lt;type&gt;/…</code>); <code>entities</code>→<code>concept</code>; layout не меняется.</td></tr>
+      <tr><td>description / title</td><td><code>description</code> на диске (из ingest-annotation, 1–2 предл.); <code>title</code> выводится при экспорте.</td></tr>
+      <tr><td>Переименования</td><td><code>wiki_sources→resource</code>, <code>wiki_updated→timestamp</code>, <code>wiki_status→status</code>, <code>wiki_outgoing_links→outgoing_links</code>, <code>wiki_external_links→external_links</code>; <code>wiki_type</code> удалён.</td></tr>
+      <tr><td>Source-заметки</td><td>Оставить <code>wiki_</code>-префикс и <code>wiki_articles</code>; убрать <code>wiki_added</code>+<code>wiki_updated</code> (свежесть = хеш тела, не страдает).</td></tr>
+      <tr><td>Миграция</td><td>Wiki-страницы: активная one-shot идемпотентная авто-миграция в цепи <code>main.ts</code> (hard cutover). Source-даты: ленивая зачистка на следующем ingest/format.</td></tr>
+      <tr><td>Export</td><td>Offline TS-порт iwiki <code>export.py</code>; near-passthrough frontmatter + вывод <code>title</code> + kebab-теги (<code>a/b→a-b</code>) + <code>[[wikilinks]]→[md](links)</code> + генерация <code>index.md</code>/<code>log.md</code>; dest-модалка, дефолт вне vault.</td></tr>
+      <tr><td><b>Success Criteria</b></td><td>Wiki-страницы OKF-native на диске; export даёт conformant bundle offline; миграция идемпотентна (2-й проход без изменений); свежесть источников не нарушена.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схемы решения и зависимостей</h2>
+
+  <h3>Схема решения</h3>
+  <div class="legend">Компоненты и поток данных (запись → миграция → экспорт).</div>
+  <div class="flow">
+    <div class="node"><div class="t">Rename primitive</div><div class="d">raw-frontmatter.ts · WIKI_FIELD_ALIASES</div></div>
+    <div class="arrow">→</div>
+    <div class="node"><div class="t">per-write repair</div><div class="d">validateAndRepairWikiPageFrontmatter</div></div>
+    <div class="arrow">→</div>
+    <div class="node"><div class="t">wiki-страница (диск)</div><div class="d">OKF-named frontmatter</div></div>
+  </div>
+  <div class="flow">
+    <div class="node"><div class="t">ingest governance</div><div class="d">type (подкаталог) + description</div></div>
+    <div class="arrow">→</div>
+    <div class="node"><div class="t">auto-migration</div><div class="d">migrate-okf-frontmatter.ts · main.ts chain</div></div>
+    <div class="arrow">→</div>
+    <div class="node"><div class="t">okf-export.ts</div><div class="d">offline: title/tags/links + index.md/log.md</div></div>
+    <div class="arrow">→</div>
+    <div class="node"><div class="t">OKF bundle</div><div class="d">index.md · log.md · per-page</div></div>
+  </div>
+
+  <h3>Граф зависимостей (A→B: A зависит от B)</h3>
+  <figure style="margin:.4rem 0">
+  <svg viewBox="0 0 640 250" width="100%" role="img" aria-label="Граф зависимостей">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--accent)"/>
+      </marker>
+    </defs>
+    <!-- edges -->
+    <line class="ed" x1="180" y1="55"  x2="300" y2="120" marker-end="url(#ar)"/>
+    <line class="ed" x1="180" y1="120" x2="300" y2="120" marker-end="url(#ar)"/>
+    <line class="ed" x1="180" y1="185" x2="300" y2="130" marker-end="url(#ar)"/>
+    <line class="ed" x1="450" y1="120" x2="560" y2="60"  marker-end="url(#ar)"/>
+    <line class="ed" x1="180" y1="230" x2="300" y2="225" marker-end="url(#ar)"/>
+    <!-- nodes left -->
+    <g><rect class="nd" x="20" y="38" width="160" height="34" rx="7"/><text class="lb" x="30" y="59">per-write repair</text></g>
+    <g><rect class="nd" x="20" y="103" width="160" height="34" rx="7"/><text class="lb" x="30" y="124">auto-migration</text></g>
+    <g><rect class="nd" x="20" y="168" width="160" height="34" rx="7"/><text class="lb" x="30" y="189">ingest governance</text></g>
+    <g><rect class="nd" x="20" y="213" width="160" height="34" rx="7"/><text class="lb" x="30" y="234">source-date removal</text></g>
+    <!-- nodes mid -->
+    <g><rect class="nd" x="300" y="103" width="150" height="40" rx="7"/><text class="lb" x="310" y="120">rename primitive</text><text class="lb" x="310" y="135">(WIKI_FIELD_ALIASES)</text></g>
+    <g><rect class="nd" x="300" y="208" width="150" height="34" rx="7"/><text class="lb" x="310" y="229">SOURCE_RULES</text></g>
+    <!-- node right -->
+    <g><rect class="nd" x="560" y="44" width="70" height="34" rx="7"/><text class="lb" x="570" y="65">export</text></g>
+  </svg>
+  </figure>
+  <div class="legend">Циклов нет. <code>export</code> зависит от OKF-named страниц (выход миграции).</div>
+
+  <h3>Карта покрытия (задача → требование)</h3>
+  <table>
+    <thead><tr><th>Задача из диалога</th><th>Scope</th><th>Renames</th><th>type=подкат.</th><th>description</th><th>Source-даты</th><th>Migration</th><th>Export</th></tr></thead>
+    <tbody>
+      <tr><td>Изучить iwiki как референс</td><td class="cov-no">·</td><td class="cov-yes">✓</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-yes">✓</td><td class="cov-yes">✓</td></tr>
+      <tr><td>OKF-compat страниц</td><td class="cov-yes">✓</td><td class="cov-yes">✓</td><td class="cov-yes">✓</td><td class="cov-yes">✓</td><td class="cov-no">·</td><td class="cov-yes">✓</td><td class="cov-no">·</td></tr>
+      <tr><td>Rename автоматически при обновлении</td><td class="cov-no">·</td><td class="cov-yes">✓</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-yes">✓</td><td class="cov-no">·</td></tr>
+      <tr><td>Снять wiki_ (status/outgoing_links)</td><td class="cov-no">·</td><td class="cov-yes">✓</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td></tr>
+      <tr><td>Source: wiki_ минус даты</td><td class="cov-yes">✓</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-yes">✓</td><td class="cov-yes">✓</td><td class="cov-no">·</td></tr>
+      <tr><td>description на диске</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-yes">✓</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td></tr>
+      <tr><td>type = подкаталог</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-yes">✓</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td></tr>
+      <tr><td>Export-модалка / dest</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-yes">✓</td></tr>
+      <tr><td>Варианты + pros/cons</td><td class="cov-yes">✓</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td><td class="cov-no">·</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Результаты проверки</h2>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>clarity</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td></tr>
+    </tbody>
+  </table>
+  <h3>Находки</h3>
+  <p class="note">Находок нет (0 CRITICAL open, 0 WARNING open).</p>
+  <h3>Вердикт</h3>
+  <p><span class="badge b-ok">OK</span> — spec_hash <code>25c320acf4396e93</code>.</p>
+  <div class="legend">Цепочка: intent <span class="badge b-na">n/a</span> → spec <span class="badge b-ok">OK</span> → plan — → result —</div>
+
+</section>
+<!-- TAB:spec END -->
+<!-- TAB:plan START -->
+<section class="tab-pane" id="pane-plan">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:plan END -->
+<!-- TAB:result START -->
+<section class="tab-pane" id="pane-result">
+  <p class="note">Этап ещё не проверен.</p>
+</section>
+<!-- TAB:result END -->
+</main>
+</body>
+</html>
