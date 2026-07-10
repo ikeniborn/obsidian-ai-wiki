@@ -4,4 +4,4 @@
 |-------|--------|--------|------|------|--------|--------|--------|-------|
 | graph-floor-formula | in-progress | n/a | ✓ | ✓ | – | 2026-06-30 |  | Robust spread-relative floor bar for compressed cosine ranges (Approach A) |
 | tag-standardization | done | n/a | ✓ | ✓ | OK | 2026-07-03 | 2026-07-03 | Domain tag registry; entity+theme categories; reuse in ingest/format; normalizeTag |
-| okf-integration | in-progress | n/a | ✓ | ✓ | – | 2026-07-10 |  | OKF-native frontmatter (min set, plain resource); graph in body sections (Related/External); description=overview→retrieval; migrate + offline export |
+| okf-integration | in-progress | n/a | ✓ | ✓ | needs_work | 2026-07-10 |  | Phase 1 (T1–5b) + T6 done & evals green; Phase 2 export T7/T8/T9 (okf-export.ts, fs writer, UI) not implemented |

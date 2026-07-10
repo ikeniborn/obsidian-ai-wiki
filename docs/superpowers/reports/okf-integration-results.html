@@ -38,6 +38,7 @@ code{background:var(--surface2);padding:.1rem .35rem;border-radius:5px;font-size
 .badge{display:inline-block;padding:.12rem .55rem;border-radius:999px;font-size:.78rem;font-weight:600}
 .b-ok{background:color-mix(in srgb,var(--ok) 20%,transparent);color:var(--ok);border:1px solid var(--ok)}
 .b-na{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+.b-crit{background:color-mix(in srgb,var(--crit) 20%,transparent);color:var(--crit);border:1px solid var(--crit)}
 .flow{display:flex;flex-wrap:wrap;gap:.6rem;align-items:stretch;margin:.6rem 0}
 .node{background:var(--surface);border:1px solid var(--border);border-radius:10px;
   padding:.55rem .75rem;min-width:150px;flex:0 0 auto}
@@ -70,8 +71,8 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
 <input type="checkbox" id="theme-toggle" hidden>
 <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
 <input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
-<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
-<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden checked>
 <header>
   <label for="theme-toggle" class="theme-btn" title="Тема">🌙 / ☀️</label>
   <h1>OKF Integration — цепочка IDD→SDD</h1>
@@ -280,7 +281,56 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
 <!-- TAB:plan END -->
 <!-- TAB:result START -->
 <section class="tab-pane" id="pane-result">
-  <p class="note">Этап ещё не проверен.</p>
+
+  <h2>1. Резюме сверки</h2>
+  <table>
+    <thead><tr><th>Источник</th><th>Значение</th></tr></thead>
+    <tbody>
+      <tr><td>Plan</td><td><code>2026-07-09-okf-integration-plan.md</code> (plan_hash <code>dce2aad09004e4ef</code>)</td></tr>
+      <tr><td>Spec</td><td><code>2026-07-09-okf-integration-design.md</code> (spec_hash <code>16e312ee9f3ff1d4</code>)</td></tr>
+      <tr><td>Intent</td><td><span class="badge b-na">n/a</span></td></tr>
+      <tr><td>Diff base</td><td><code>git diff master</code> — 32 файла, +1144/−377</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Результаты проверки</h2>
+
+  <h3>Покрытие шагов плана</h3>
+  <div class="legend">DONE 7 · PARTIAL 0 · MISSING 3</div>
+  <table>
+    <thead><tr><th>Задача</th><th>Статус</th><th>Свидетельство в диффе</th></tr></thead>
+    <tbody>
+      <tr><td>T1 rename primitive, plain resource</td><td><span class="badge b-ok">DONE</span></td><td><code>raw-frontmatter.ts</code> +188; eval 34/34</td></tr>
+      <tr><td>T2 type/description + body link sections</td><td><span class="badge b-ok">DONE</span></td><td><code>ingest.ts</code>, <code>prompts/*</code></td></tr>
+      <tr><td>T3 drop source dates</td><td><span class="badge b-ok">DONE</span></td><td><code>raw-frontmatter.ts</code> SOURCE_RULES</td></tr>
+      <tr><td>T4 retarget consumers</td><td><span class="badge b-ok">DONE</span></td><td>source-deletion/incremental/vault-walk/query/zod/lint/strip; eval green</td></tr>
+      <tr><td>T5 auto-migration + relocate links</td><td><span class="badge b-ok">DONE</span></td><td><code>migrate-okf-frontmatter.ts</code> +221; eval 22/22</td></tr>
+      <tr><td>T5b overview + exclude sections</td><td><span class="badge b-ok">DONE</span></td><td><code>wiki-index.ts</code>, <code>page-similarity.ts</code></td></tr>
+      <tr><td>T6 export helpers</td><td><span class="badge b-ok">DONE</span></td><td><code>okf-export-utils.ts</code> +59; eval 14/14</td></tr>
+      <tr><td>T7 bundle serializer</td><td><span class="badge b-crit">MISSING</span></td><td><code>src/okf-export.ts</code> отсутствует</td></tr>
+      <tr><td>T8 fs writer + controller</td><td><span class="badge b-crit">MISSING</span></td><td><code>src/okf-export-fs.ts</code>, controller.exportOkf отсутствуют</td></tr>
+      <tr><td>T9 export UI</td><td><span class="badge b-crit">MISSING</span></td><td>ExportOkfModal / export-okf команда отсутствуют</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Покрытие spec (Success Criteria)</h3>
+  <table>
+    <thead><tr><th>Критерий</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>Wiki-страницы OKF-native на диске</td><td><span class="badge b-ok">✓</span></td></tr>
+      <tr><td>Миграция идемпотентна</td><td><span class="badge b-ok">✓</span></td></tr>
+      <tr><td>Свежесть источников не нарушена</td><td><span class="badge b-ok">✓</span></td></tr>
+      <tr><td>Export даёт conformant bundle offline</td><td><span class="badge b-crit">✗ (T7–T9)</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Избыточные изменения</h3>
+  <p class="note">Нет. Затронутые вне ядра eval'ы (format-frontmatter, wiki-hygiene) — обновление фикстур под переименование полей (часть T4).</p>
+
+  <h3>Вердикт</h3>
+  <p><span class="badge b-crit">needs_work</span> — 3 CRITICAL (MISSING T7/T8/T9). plan_hash <code>dce2aad09004e4ef</code>.</p>
+  <div class="legend">Цепочка: intent <span class="badge b-na">n/a</span> → spec <span class="badge b-ok">OK</span> → plan <span class="badge b-ok">OK</span> → result <span class="badge b-crit">needs_work</span></div>
+
 </section>
 <!-- TAB:result END -->
 </main>

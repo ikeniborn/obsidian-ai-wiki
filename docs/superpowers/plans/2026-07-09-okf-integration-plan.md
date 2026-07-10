@@ -12,6 +12,10 @@ review:
 chain:
   intent: "n/a"
   spec: "16e312ee9f3ff1d4"
+result_check:
+  verdict: needs_work
+  plan_hash: "dce2aad09004e4ef"
+  last_run: "2026-07-10"
 ---
 # OKF Integration Implementation Plan
 
