@@ -69,8 +69,8 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
 <body>
 <input type="checkbox" id="theme-toggle" hidden>
 <input type="radio" name="chain-tab" id="tab-intent" class="tab-radio" hidden>
-<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden checked>
-<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-spec"   class="tab-radio" hidden>
+<input type="radio" name="chain-tab" id="tab-plan"   class="tab-radio" hidden checked>
 <input type="radio" name="chain-tab" id="tab-result" class="tab-radio" hidden>
 <header>
   <label for="theme-toggle" class="theme-btn" title="Тема">🌙 / ☀️</label>
@@ -193,7 +193,85 @@ svg .ed{stroke:var(--accent);stroke-width:1.5;fill:none}
 <!-- TAB:spec END -->
 <!-- TAB:plan START -->
 <section class="tab-pane" id="pane-plan">
-  <p class="note">Этап ещё не проверен.</p>
+
+  <h2>1. Резюме плана</h2>
+  <div class="legend">2 фазы, 9 задач. Phase 1 (T1–T5) шиппится самостоятельно; Phase 2 (T6–T9) зависит от Phase 1.</div>
+  <table>
+    <thead><tr><th>#</th><th>Задача</th><th>Definition of Done</th></tr></thead>
+    <tbody>
+      <tr><td>T1</td><td>Rename primitive + repair rules (raw-frontmatter)</td><td><code>eval/okf-frontmatter</code> 14 checks; repair эмитит OKF-имена; идемпотентно.</td></tr>
+      <tr><td>T2</td><td>type/description governance (ingest)</td><td>eval 18; ingest внедряет <code>type</code> (подкаталог) + <code>description</code> (annotation); промпты обновлены.</td></tr>
+      <tr><td>T3</td><td>Убрать даты со source-заметок</td><td>eval 22; source-repair срезает <code>wiki_added</code>/<code>wiki_updated</code>, хранит <code>wiki_articles</code>.</td></tr>
+      <tr><td>T4</td><td>Ретаргет потребителей полей</td><td><code>tsc</code> чист; <code>source-deletion</code>/<code>legacy-sections</code> evals зелёные на переименованных фикстурах.</td></tr>
+      <tr><td>T5</td><td>Авто-миграция wiki-страниц</td><td><code>eval/okf-migrate</code> 8; one-shot flag-guarded в <code>main.ts</code>; идемпотентно; build зелёный.</td></tr>
+      <tr><td>T6</td><td>Export-хелперы (link/tags/title)</td><td><code>eval/okf-export</code> 7; rewrite ссылок, kebab-теги, вывод title.</td></tr>
+      <tr><td>T7</td><td>Bundle-сериализатор (pure)</td><td>eval 13; генерит <code>index.md</code>/<code>log.md</code>; warn на коллизии reserved-slug.</td></tr>
+      <tr><td>T8</td><td>FS-writer + controller entry</td><td><code>tsc</code>/build чисты; desktop-smoke пишет bundle вне vault.</td></tr>
+      <tr><td>T9</td><td>Export UI (команда/кнопка/модалка)</td><td>Команда+кнопка desktop-only; модалка пути; на mobile скрыто.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Схемы зависимостей и пересечений</h2>
+
+  <h3>Граф зависимостей шагов (M→N: N использует результат M)</h3>
+  <figure style="margin:.4rem 0">
+  <svg viewBox="0 0 660 210" width="100%" role="img" aria-label="Граф зависимостей задач">
+    <defs>
+      <marker id="arp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--accent)"/>
+      </marker>
+    </defs>
+    <line class="ed" x1="70"  y1="45" x2="150" y2="45"  marker-end="url(#arp)"/>
+    <line class="ed" x1="70"  y1="52" x2="150" y2="120" marker-end="url(#arp)"/>
+    <line class="ed" x1="230" y1="45" x2="310" y2="45"  marker-end="url(#arp)"/>
+    <line class="ed" x1="470" y1="45" x2="70"  y2="150" marker-end="url(#arp)" opacity="0"/>
+    <line class="ed" x1="470" y1="120" x2="550" y2="120" marker-end="url(#arp)"/>
+    <line class="ed" x1="230" y1="150" x2="310" y2="150" marker-end="url(#arp)"/>
+    <line class="ed" x1="390" y1="150" x2="470" y2="150" marker-end="url(#arp)"/>
+    <g><rect class="nd" x="20"  y="30" width="50" height="30" rx="6"/><text class="lb" x="35" y="49">T1</text></g>
+    <g><rect class="nd" x="150" y="30" width="50" height="30" rx="6"/><text class="lb" x="165" y="49">T2</text></g>
+    <g><rect class="nd" x="310" y="30" width="50" height="30" rx="6"/><text class="lb" x="325" y="49">T5</text></g>
+    <g><rect class="nd" x="150" y="105" width="50" height="30" rx="6"/><text class="lb" x="165" y="124">T4</text></g>
+    <g><rect class="nd" x="20"  y="135" width="50" height="30" rx="6"/><text class="lb" x="35" y="154">T6</text></g>
+    <g><rect class="nd" x="150" y="135" width="50" height="30" rx="6"/><text class="lb" x="165" y="154">T7</text></g>
+    <g><rect class="nd" x="310" y="135" width="50" height="30" rx="6"/><text class="lb" x="325" y="154">T8</text></g>
+    <g><rect class="nd" x="470" y="135" width="50" height="30" rx="6"/><text class="lb" x="485" y="154">T9</text></g>
+    <text class="lb" x="20" y="20" style="fill:var(--muted)">Phase 1: T1→T2→T5, T1→T4</text>
+    <text class="lb" x="20" y="185" style="fill:var(--muted)">Phase 2: T6→T7→T8→T9</text>
+  </svg>
+  </figure>
+  <div class="legend">Циклов нет. Каждая функция определена в задаче до её использования.</div>
+
+  <h3>Пересечения (общий артефакт между задачами)</h3>
+  <table>
+    <thead><tr><th>Артефакт</th><th>Задачи</th><th>Порядок безопасен?</th></tr></thead>
+    <tbody>
+      <tr><td><code>src/utils/raw-frontmatter.ts</code></td><td>T1, T2, T3</td><td class="cov-yes">✓ (последовательно, разные функции)</td></tr>
+      <tr><td><code>src/phases/ingest.ts</code></td><td>T2, T3, T4</td><td class="cov-yes">✓</td></tr>
+      <tr><td><code>src/phases/lint.ts</code></td><td>T3, T4</td><td class="cov-yes">✓</td></tr>
+      <tr><td><code>eval/okf-frontmatter/run.ts</code></td><td>T1, T2, T3</td><td class="cov-yes">✓ (append)</td></tr>
+      <tr><td><code>eval/okf-export/run.ts</code></td><td>T6, T7</td><td class="cov-yes">✓ (append)</td></tr>
+      <tr><td><code>src/okf-export*.ts</code></td><td>T6→T7→T8</td><td class="cov-yes">✓ (строгая цепочка)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Результаты проверки</h2>
+  <table>
+    <thead><tr><th>Фаза</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>structure</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>coverage</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>dependencies</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>verifiability</td><td><span class="badge b-ok">passed</span></td></tr>
+      <tr><td>consistency</td><td><span class="badge b-ok">passed</span></td></tr>
+    </tbody>
+  </table>
+  <h3>Находки</h3>
+  <p class="note">Находок нет (0 CRITICAL open, 0 WARNING open). T8/T9 верифицируются ручным desktop-smoke (node:fs + Obsidian UI не покрываются eval).</p>
+  <h3>Вердикт</h3>
+  <p><span class="badge b-ok">OK</span> — plan_hash <code>728baa9dc52da449</code>.</p>
+  <div class="legend">Цепочка: intent <span class="badge b-na">n/a</span> → spec <span class="badge b-ok">OK</span> → plan <span class="badge b-ok">OK</span> → result —</div>
+
 </section>
 <!-- TAB:plan END -->
 <!-- TAB:result START -->
