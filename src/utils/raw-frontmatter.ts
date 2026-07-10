@@ -1,5 +1,5 @@
 import { parse as yamlParse, stringify as yamlStringify } from "yaml";
-import { GENERIC_WIKI_STEM_REGEX, isWikiStem } from "../wiki-stem";
+import { GENERIC_WIKI_STEM_REGEX } from "../wiki-stem";
 
 const FM_RE = /^---\n([\s\S]*?)\n---\n?/;
 
@@ -153,8 +153,6 @@ export function recoverSourceFrontmatter(content: string): string {
 export type FieldRule =
   | { field: string; kind: "list-wikilinks" }
   | { field: string; kind: "list-wikilinks-stem-only" }
-  | { field: string; kind: "list-wikilinks-wiki-only" }
-  | { field: string; kind: "list-wikilinks-sources-only" }
   | { field: string; kind: "list-urls" }
   | { field: string; kind: "list-tags" }
   | { field: string; kind: "list-strings" }
@@ -330,42 +328,6 @@ export function validateAndRepairFrontmatter(
         const filtered = (val as unknown[]).filter((v) => {
           if (typeof v !== "string" || !WIKILINK_RE.test(v) || v.includes("/") || v.endsWith(".md]]")) {
             warnings.push(`${rule.field}: invalid entry "${v}" — removed`);
-            return false;
-          }
-          return true;
-        });
-        if (filtered.length < (val as unknown[]).length) {
-          modified = true;
-          if (filtered.length === 0) {
-            delete parsed[rule.field];
-          } else {
-            parsed[rule.field] = filtered;
-          }
-        }
-        break;
-      }
-      case "list-wikilinks-wiki-only":
-      case "list-wikilinks-sources-only": {
-        if (!Array.isArray(val)) {
-          warnings.push(`${rule.field}: expected list, got scalar — removed`);
-          delete parsed[rule.field];
-          modified = true;
-          break;
-        }
-        const wikiOnly = rule.kind === "list-wikilinks-wiki-only";
-        const filtered = (val as unknown[]).filter((v) => {
-          if (typeof v !== "string" || !WIKILINK_RE.test(v)) {
-            warnings.push(`${rule.field}: invalid entry "${v}" — removed`);
-            return false;
-          }
-          const stem = v.slice(2, -2).split("/").pop()!;
-          const isWiki = isWikiStem(stem);
-          if (wikiOnly && !isWiki) {
-            warnings.push(`${rule.field}: non-wiki stem "${v}" — removed`);
-            return false;
-          }
-          if (!wikiOnly && isWiki) {
-            warnings.push(`${rule.field}: wiki stem "${v}" — removed`);
             return false;
           }
           return true;
