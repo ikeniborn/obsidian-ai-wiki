@@ -77,11 +77,49 @@ function urlKey(line: string): string {
 }
 
 /**
+ * Pulls the relocatable string entries out of frontmatter key `key` on `parsed`.
+ * `shouldDelete` is true only when at least one usable string link was found — that's the
+ * only case where the caller is allowed to delete the key, since its content was actually
+ * moved to the body. Otherwise (key absent, value not an array, or an array with zero
+ * usable string entries) the key must be left untouched, and a warning is logged so the
+ * unexpected shape isn't silently discarded. Individual non-string elements inside an
+ * otherwise-usable array are skipped (and logged) without blocking relocation of the rest.
+ */
+function extractRelocatableLinks(
+  parsed: Record<string, unknown>,
+  key: "wiki_outgoing_links" | "wiki_external_links",
+): { links: string[]; shouldDelete: boolean } {
+  if (!(key in parsed)) return { links: [], shouldDelete: false };
+
+  const value = parsed[key];
+  if (!Array.isArray(value)) {
+    console.error(`[AI Wiki] OKF migrate: unexpected ${key} shape — left in place`);
+    return { links: [], shouldDelete: false };
+  }
+
+  const links: string[] = [];
+  for (const entry of value) {
+    if (typeof entry === "string") links.push(entry);
+    else console.error(`[AI Wiki] OKF migrate: skipping non-string ${key} entry — left out of relocation`);
+  }
+
+  if (links.length === 0) {
+    console.error(`[AI Wiki] OKF migrate: unexpected ${key} shape — left in place`);
+    return { links: [], shouldDelete: false };
+  }
+
+  return { links, shouldDelete: true };
+}
+
+/**
  * Relocates the legacy `wiki_outgoing_links` / `wiki_external_links` frontmatter arrays
  * to body sections: outgoing links become `[[stem]]` bullets under `## Related`, external
- * links become `[url](url)` bullets under `## External links`. Both frontmatter keys are
- * removed. Merges/dedupes into an existing section rather than adding a second one. Pure
- * and idempotent — a page with neither key is returned unchanged.
+ * links become `[url](url)` bullets under `## External links`. A frontmatter key is removed
+ * only once its usable string links have been moved to the body — a key whose value isn't a
+ * block-list of strings (scalar, null, object, or an array with no usable string entries) is
+ * left untouched and logged instead of being silently discarded. Merges/dedupes into an
+ * existing section rather than adding a second one. Pure and idempotent — a page with
+ * neither key is returned unchanged.
  */
 export function relocateFrontmatterLinks(content: string): string {
   const fmMatch = FM_RE.exec(content);
@@ -94,21 +132,17 @@ export function relocateFrontmatterLinks(content: string): string {
   const hadExternal = "wiki_external_links" in parsed;
   if (!hadOutgoing && !hadExternal) return content;
 
-  const outgoing = Array.isArray(parsed.wiki_outgoing_links)
-    ? (parsed.wiki_outgoing_links as unknown[]).filter((v): v is string => typeof v === "string")
-    : [];
-  const external = Array.isArray(parsed.wiki_external_links)
-    ? (parsed.wiki_external_links as unknown[]).filter((v): v is string => typeof v === "string")
-    : [];
+  const outgoing = extractRelocatableLinks(parsed, "wiki_outgoing_links");
+  const external = extractRelocatableLinks(parsed, "wiki_external_links");
 
-  delete parsed.wiki_outgoing_links;
-  delete parsed.wiki_external_links;
+  if (outgoing.shouldDelete) delete parsed.wiki_outgoing_links;
+  if (external.shouldDelete) delete parsed.wiki_external_links;
 
   const body = content.slice(fmMatch[0].length);
   let out = `---\n${yamlStringify(parsed)}---\n${body}`;
 
-  out = mergeBulletSection(out, "## Related", outgoing.map((l) => `- ${l}`), wikilinkKey);
-  out = mergeBulletSection(out, "## External links", external.map((u) => `- [${u}](${u})`), urlKey);
+  out = mergeBulletSection(out, "## Related", outgoing.links.map((l) => `- ${l}`), wikilinkKey);
+  out = mergeBulletSection(out, "## External links", external.links.map((u) => `- [${u}](${u})`), urlKey);
 
   return out;
 }

@@ -90,6 +90,48 @@ check("merge dedupes existing External link by url", (merged.match(/https:\/\/c\
 check("merge adds missing External link", merged.includes("https://a.b"), merged);
 check("relocateFrontmatterLinks is idempotent", relocateFrontmatterLinks(merged) === merged);
 
+// ---------------------------------------------------------------------------
+// malformed wiki_outgoing_links (scalar, not a block-list) — defensive fix regression
+// ---------------------------------------------------------------------------
+const malformed = `---
+wiki_sources: ["[[Src]]"]
+wiki_updated: 2026-07-09
+wiki_status: developing
+wiki_type: page
+wiki_outgoing_links: not-an-array
+---
+# Alice
+
+Alice leads billing.
+`;
+
+let malformedThrew = false;
+let relocated = "";
+try {
+  relocated = relocateFrontmatterLinks(malformed);
+} catch {
+  malformedThrew = true;
+}
+check("relocateFrontmatterLinks does not throw on malformed wiki_outgoing_links", !malformedThrew, relocated);
+check("malformed wiki_outgoing_links key kept in frontmatter (not silently dropped)", /^wiki_outgoing_links:/m.test(relocated), relocated);
+check("no ## Related fabricated from malformed wiki_outgoing_links", !/^## Related$/m.test(relocated), relocated);
+
+let malformedFullThrew = false;
+let migratedMalformed = "";
+try {
+  migratedMalformed = migrateWikiPageOkf(
+    malformed,
+    "!Wiki/d",
+    "!Wiki/d/person/wiki_d_alice.md",
+    "Alice leads billing.",
+  );
+} catch {
+  malformedFullThrew = true;
+}
+check("migrateWikiPageOkf does not throw on malformed wiki_outgoing_links", !malformedFullThrew, migratedMalformed);
+check("migrateWikiPageOkf keeps malformed wiki_outgoing_links key in frontmatter", /^wiki_outgoing_links:/m.test(migratedMalformed), migratedMalformed);
+check("migrateWikiPageOkf does not fabricate ## Related from malformed wiki_outgoing_links", !/^## Related$/m.test(migratedMalformed), migratedMalformed);
+
 console.log(`\n========================================`);
 console.log(`TOTAL: ${pass} passed, ${fail} failed`);
 if (fail > 0) {
