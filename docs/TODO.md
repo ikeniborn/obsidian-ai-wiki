@@ -7,4 +7,4 @@
 | okf-integration | done | n/a | ✓ | ✓ | OK | 2026-07-10 | 2026-07-10 | OKF-native frontmatter + graph in body + description overview + migration + offline export (bundle serializer, fs writer, UI); all OKF evals green |
 | hierarchical-description-chunk-retrieval | done | ✓ | ✓ | ✓ | OK | 2026-07-10 | 2026-07-10 | Hierarchical description seed selection, graph candidate expansion, clean chunk context |
 | jsonl-domain-storage | done | ✓ | ✓ | ✓ | OK | 2026-07-10 | 2026-07-11 | JSONL storage/migration/query implemented; HLD eval live retrieval accepted |
-| lexical-retrieval-quality | in-progress | ✓ | ✓ | – | – | 2026-07-11 |  | Weighted lexical scorer for eval harness and runtime Query fallback |
+| lexical-retrieval-quality | in-progress | ✓ | ✓ | ✓ | – | 2026-07-11 |  | Weighted lexical scorer for eval harness and runtime Query fallback |
