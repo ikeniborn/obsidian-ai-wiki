@@ -15,6 +15,7 @@ const STOP_WORDS = new Set([
 const PAGE_LEAD_CAP = 500;
 const PAGE_LONG_TEXT = 1500;
 const CHUNK_LONG_TEXT = 1200;
+const MAX_PAGE_SCORE = 6.45;
 
 export interface LexicalEvidence {
   path: number;
@@ -112,12 +113,27 @@ function coverage(queryTokens: Set<string>, text: string): number {
 
 function exactHitRatio(queryTokens: Set<string>, text: string): number {
   if (queryTokens.size === 0 || !text) return 0;
-  const lower = text.toLowerCase();
+  const tokens = tokenizeLexical(text);
   let hits = 0;
   for (const token of queryTokens) {
-    if (lower.includes(token)) hits++;
+    if (tokens.has(token)) hits++;
   }
   return Math.min(hits, queryTokens.size) / queryTokens.size;
+}
+
+function compareStable(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function uniqueIds(ids: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
 }
 
 function orderedTokens(queryTokens: Set<string>, text: string): string[] {
@@ -167,7 +183,7 @@ export function scoreLexicalChunk(queryTokens: Set<string>, input: LexicalChunkI
   const body = input.body ?? input.embedText ?? "";
   const fullText = [input.path, heading, body].join("\n");
   const evidence = emptyEvidence(longTextPenalty(body, CHUNK_LONG_TEXT, 0.5));
-  if (queryTokens.size === 0) return { score: 0, evidence };
+  if (queryTokens.size === 0 || body.trim().length === 0) return { score: 0, evidence };
 
   evidence.path = coverage(queryTokens, input.path) * 1.5;
   evidence.heading = coverage(queryTokens, heading) * 2.3;
@@ -188,7 +204,7 @@ export function rankLexicalPages(
   return pages
     .map((page) => ({ ...page, ...scoreLexicalPage(queryTokens, page) }))
     .filter((page) => page.score > 0)
-    .sort((a, b) => (b.score - a.score) || a.id.localeCompare(b.id) || (a.path ?? "").localeCompare(b.path ?? ""))
+    .sort((a, b) => (b.score - a.score) || compareStable(a.id, b.id) || compareStable(a.path ?? "", b.path ?? ""))
     .slice(0, limit)
     .map((page) => ({ id: page.id, path: page.path, score: page.score, evidence: page.evidence }));
 }
@@ -204,10 +220,10 @@ export function rankLexicalChunks(
     .filter((chunk) => chunk.score > 0)
     .sort((a, b) =>
       (b.score - a.score) ||
-      a.articleId.localeCompare(b.articleId) ||
-      a.path.localeCompare(b.path) ||
+      compareStable(a.articleId, b.articleId) ||
+      compareStable(a.path, b.path) ||
       ((a.ordinal ?? 0) - (b.ordinal ?? 0)) ||
-      (a.heading ?? "").localeCompare(b.heading ?? "")
+      compareStable(a.heading ?? "", b.heading ?? "")
     )
     .slice(0, limit)
     .map((chunk) => ({
@@ -226,8 +242,17 @@ export function fuseLexicalRanks(
   chunkRank: Array<{ articleId: string; score: number }>,
   limit: number,
   rrfK = 60,
+  extraRankedLists: string[][] = [],
 ): FusedLexicalRank[] {
   if (limit <= 0) return [];
-  return rrf([pageRank.map((page) => page.id), chunkRank.map((chunk) => chunk.articleId)], rrfK)
+  return rrf([
+    uniqueIds(pageRank.map((page) => page.id)),
+    uniqueIds(chunkRank.map((chunk) => chunk.articleId)),
+    ...extraRankedLists.map(uniqueIds),
+  ], rrfK)
     .slice(0, limit);
+}
+
+export function normalizeLexicalPageScore(score: number): number {
+  return Math.max(0, Math.min(1, score / MAX_PAGE_SCORE));
 }

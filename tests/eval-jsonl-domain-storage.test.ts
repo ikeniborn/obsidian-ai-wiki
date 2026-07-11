@@ -32,10 +32,16 @@ test("HLD eval builds isolated JSONL domain and runs five live retrieval queries
     assert.equal(result.verdict, "accepted");
     assert.equal(result.queries.length, 5);
     assert.equal(result.queries.every((query) => query.status === "accepted"), true);
+    assert.ok(result.averageImprovedOverlapAt5 >= 0.65);
+    assert.equal(result.queries.every((query) => query.improvedOverlapAt5 >= query.baselineOverlapAt5), true);
     assert.equal(result.markdownFiles, 5);
 
     const report = await readFile(out, "utf8");
     assert.match(report, /Aggregate verdict: `accepted`/);
+    assert.match(report, /Average improved Overlap@5:/);
+    assert.match(report, /Baseline Overlap@5:/);
+    assert.match(report, /Improved Overlap@5:/);
+    assert.match(report, /Delta:/);
     assert.doesNotMatch(report, /Status: blocked/);
 
     const index = parseWikiIndexJsonl(await readFile(result.indexPath, "utf8"), result.indexPath);

@@ -9,7 +9,7 @@ import {
   tokenizeLexical,
 } from "../src/lexical-retrieval";
 
-test("tokenizeLexical keeps current Russian and English token behavior", () => {
+test("tokenizeLexical keeps technical short alphanumeric tokens", () => {
   assert.deepEqual([...tokenizeLexical("Какие HLD for S3 и ClickHouse?")].sort(), ["clickhouse", "hld", "s3"]);
 });
 
@@ -86,6 +86,21 @@ test("fuseLexicalRanks promotes a page present in both page and chunk ranks", ()
   const fused = fuseLexicalRanks(
     [{ id: "page-a", score: 0.9 }, { id: "page-b", score: 0.8 }],
     [{ articleId: "page-b", score: 0.95 }, { articleId: "page-c", score: 0.7 }],
+    3,
+    10,
+  );
+  assert.equal(fused[0].id, "page-b");
+});
+
+test("fuseLexicalRanks counts each page once per rank source", () => {
+  const fused = fuseLexicalRanks(
+    [{ id: "page-a", score: 0.9 }, { id: "page-b", score: 0.8 }],
+    [
+      { articleId: "page-c", score: 0.99 },
+      { articleId: "page-c", score: 0.98 },
+      { articleId: "page-c", score: 0.97 },
+      { articleId: "page-b", score: 0.7 },
+    ],
     3,
     10,
   );

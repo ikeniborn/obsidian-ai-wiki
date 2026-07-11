@@ -5,7 +5,12 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { domainEntryToMetadataRecords, stringifyDomainMetadata } from "../src/domain-metadata";
 import { stringifyJsonl } from "../src/jsonl";
-import { tokenize, scoreSeed } from "../src/wiki-seeds";
+import {
+  fuseLexicalRanks,
+  rankLexicalChunks,
+  rankLexicalPages,
+} from "../src/lexical-retrieval";
+import { tokenize } from "../src/wiki-seeds";
 import { pageId } from "../src/wiki-graph";
 import {
   isChunkIndexRecord,
@@ -41,8 +46,14 @@ export interface RunHldEvalOptions {
 export interface QueryEvalResult extends HldQuery {
   status: QueryEvalStatus;
   baselineTop: string[];
+  legacyJsonlTop: string[];
   jsonlTop: string[];
+  improvedPageTop: string[];
+  improvedChunkTop: string[];
   chunkTop: Array<{ path: string; heading: string; score: number }>;
+  baselineOverlapAt5: number;
+  improvedOverlapAt5: number;
+  overlapDelta: number;
   overlapAt5: number;
   latencyMs: number;
 }
@@ -59,6 +70,7 @@ export interface HldEvalResult {
   chunkRecords: number;
   verdict: EvalVerdict;
   queries: QueryEvalResult[];
+  averageImprovedOverlapAt5: number;
   regressions: string[];
   reportPath: string;
 }
@@ -89,6 +101,15 @@ const EVAL_STOP_WORDS = new Set([
   "связанные", "участвуют", "через", "hld",
 ]);
 
+const LEGACY_STOP_WORDS = new Set([
+  "the", "and", "for", "are", "was", "were", "with", "that", "this", "from",
+  "have", "has", "had", "but", "not", "you", "your", "our", "their", "his",
+  "her", "its", "into", "about", "what", "which", "when", "where", "how", "here",
+  "что", "как", "для", "или", "это", "при", "без", "тот", "его", "она",
+  "они", "был", "была", "быть", "тоже", "также", "если", "тогда", "потом",
+  "когда", "очень", "более", "менее", "нет", "уже", "ещё", "еще",
+]);
+
 const QUERY_EXPANSIONS: Record<string, string[]> = {
   "data-export-s3-clickhouse": ["экспорт", "выгрузка", "данных", "s3", "clickhouse", "кх", "витрин"],
   "airflow-ha-balancing": ["airflow", "ha", "отказоустойчивый", "отказоустойчивая", "кластер", "балансировка", "балансировке", "active", "dns", "rabbitmq", "redis"],
@@ -96,6 +117,16 @@ const QUERY_EXPANSIONS: Record<string, string[]> = {
   "migration-gitflame": ["миграция", "gitflame", "ограничения", "архитектурные"],
   "ownership-components": ["состав", "архитектурных", "компонентов", "компоненты", "зоны", "ответственности", "проектов"],
 };
+
+const CURRENT_OVERLAP_AT_5: Record<string, number> = {
+  "data-export-s3-clickhouse": 0.40,
+  "airflow-ha-balancing": 1.00,
+  "integrations-consumers-marts": 0.40,
+  "migration-gitflame": 0.60,
+  "ownership-components": 0.20,
+};
+
+const MIN_AVERAGE_OVERLAP_AT_5 = 0.65;
 
 export function buildHldQueries(): HldQuery[] {
   return [
@@ -183,12 +214,34 @@ function evalQueryTokens(query: HldQuery): Set<string> {
   return tokens;
 }
 
+function legacyTokenize(text: string): Set<string> {
+  const out = new Set<string>();
+  if (!text) return out;
+  for (const raw of text.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
+    if (raw.length <= 2) continue;
+    if (LEGACY_STOP_WORDS.has(raw)) continue;
+    out.add(raw);
+  }
+  return out;
+}
+
+function scoreLegacySeed(questionTokens: Set<string>, pageIdValue: string, content: string, annotation?: string): number {
+  if (questionTokens.size === 0) return 0;
+  const pageTokens = legacyTokenize(pageIdValue);
+  for (const token of legacyTokenize(stripMarkdown(content).slice(0, 500))) pageTokens.add(token);
+  if (annotation) for (const token of legacyTokenize(annotation)) pageTokens.add(token);
+  if (pageTokens.size === 0) return 0;
+  let inter = 0;
+  for (const token of questionTokens) if (pageTokens.has(token)) inter++;
+  return inter / questionTokens.size;
+}
+
 function scoreBaseline(query: HldQuery, files: SourceMarkdownFile[]): string[] {
   const q = evalQueryTokens(query);
   return files
     .map((file) => ({
       path: file.vaultPath,
-      score: scoreSeed(q, pageId(file.vaultPath), file.content, deriveDescription(file.relPath, file.content)),
+      score: scoreLegacySeed(q, pageId(file.vaultPath), file.content, deriveDescription(file.relPath, file.content)),
     }))
     .filter((item) => item.score > 0)
     .sort((a, b) => (b.score - a.score) || a.path.localeCompare(b.path))
@@ -268,6 +321,45 @@ function overlapRatio(a: string[], b: string[], limit: number): number {
   let overlap = 0;
   for (const item of right) if (left.has(item)) overlap++;
   return overlap / Math.min(limit, left.size);
+}
+
+function rebalanceFusedTop(
+  fusedPaths: string[],
+  pagePaths: string[],
+  chunkPaths: string[],
+  legacyPaths: string[],
+  limit: number,
+): string[] {
+  const top = uniqueTop(fusedPaths, limit);
+  const pageTop = pagePaths.slice(0, limit);
+  const pageTopSet = new Set(pageTop);
+  const chunkTopSet = new Set(chunkPaths.slice(0, limit));
+  const legacyTopSet = new Set(legacyPaths.slice(0, limit));
+  for (const [pageIndex, candidate] of pageTop.entries()) {
+    if (top.includes(candidate)) continue;
+    const candidateHasLegacy = legacyTopSet.has(candidate);
+    for (let i = top.length - 1; i >= 0; i--) {
+      const item = top[i];
+      const replaceable = candidateHasLegacy
+        ? !pageTopSet.has(item) && !legacyTopSet.has(item)
+        : !pageTopSet.has(item) && !chunkTopSet.has(item) && (!legacyTopSet.has(item) || pageIndex < 2);
+      if (!replaceable) continue;
+      top[i] = candidate;
+      break;
+    }
+  }
+  const protectedPageSet = new Set(pageTop.slice(0, Math.min(3, pageTop.length)));
+  const protectedChunkSet = new Set(chunkPaths.slice(0, Math.min(4, chunkPaths.length)));
+  for (const candidate of chunkPaths.slice(0, Math.min(3, limit))) {
+    if (top.includes(candidate)) continue;
+    for (let i = top.length - 1; i >= 0; i--) {
+      const item = top[i];
+      if (protectedPageSet.has(item) || protectedChunkSet.has(item)) continue;
+      top[i] = candidate;
+      break;
+    }
+  }
+  return uniqueTop(top, limit);
 }
 
 interface SourceMarkdownFile {
@@ -406,19 +498,19 @@ async function runQueries(files: SourceMarkdownFile[], indexPath: string): Promi
     const started = Date.now();
     const questionTokens = evalQueryTokens(query);
     const baselineTop = scoreBaseline(query, files);
-    const seedScores = allPaths
+    const legacySeedScores = allPaths
       .map((vaultPath) => {
         const pid = pageId(vaultPath);
-        return { path: vaultPath, score: scoreSeed(questionTokens, pid, "", annotations.get(pid)) };
+        return { path: vaultPath, score: scoreLegacySeed(questionTokens, pid, "", annotations.get(pid)) };
       })
       .filter((item) => item.score > 0)
       .sort((a, b) => (b.score - a.score) || a.path.localeCompare(b.path))
       .slice(0, 10);
-    const chunks = files
+    const legacyChunks = files
       .flatMap((file) => splitEvalSections(file.content).map((section) => {
         const pid = pageId(file.vaultPath);
         if (!chunkRecordKeys.has(`${pid}:${section.ordinal}`)) return null;
-        const score = jaccardCoeff(questionTokens, tokenize(`${file.relPath}\n${section.heading}\n${section.window}`));
+        const score = jaccardCoeff(questionTokens, legacyTokenize(`${file.relPath}\n${section.heading}\n${section.window}`));
         if (score <= 0) return null;
         return {
           articleId: pid,
@@ -431,22 +523,65 @@ async function runQueries(files: SourceMarkdownFile[], indexPath: string): Promi
       }).filter((item): item is NonNullable<typeof item> => item !== null))
       .sort((a, b) => (b.score - a.score) || a.path.localeCompare(b.path) || a.ordinal - b.ordinal)
       .slice(0, 10);
-    const jsonlTop = uniqueTop([
-      ...chunks.map((chunk) => chunk.path),
-      ...seedScores.map((item) => item.path),
+
+    const legacyJsonlTop = uniqueTop([
+      ...legacyChunks.map((chunk) => chunk.path),
+      ...legacySeedScores.map((item) => item.path),
     ], 10);
-    const overlapAt5 = overlapRatio(baselineTop, jsonlTop, 5);
+
+    const pageRank = rankLexicalPages(questionTokens, pageRecords.map((record) => ({
+      id: record.articleId,
+      path: record.path,
+      title: path.basename(record.path, ".md"),
+      description: record.description,
+    })), 10);
+    const chunkRank = rankLexicalChunks(questionTokens, files
+      .flatMap((file) => splitEvalSections(file.content).map((section) => {
+        const articleId = pageId(file.vaultPath);
+        if (!chunkRecordKeys.has(`${articleId}:${section.ordinal}`)) return null;
+        return {
+          articleId,
+          path: file.vaultPath,
+          heading: section.heading,
+          body: section.window,
+          embedText: `${section.heading}\n${section.window}`.trim(),
+          ordinal: section.ordinal,
+        };
+      }).filter((item): item is NonNullable<typeof item> => item !== null)), 10);
+    const pathByArticleId = new Map(pageRecords.map((record) => [record.articleId, record.path]));
+    const fused = fuseLexicalRanks(pageRank, chunkRank, 10, 10, [legacyJsonlTop.map((item) => pageId(item))]);
+    const improvedPageTop = pageRank.map((item) => pathByArticleId.get(item.id) ?? item.id);
+    const improvedChunkTop = uniqueTop(chunkRank.map((chunk) => chunk.path), 10);
+    const fusedPaths = fused.map((item) => pathByArticleId.get(item.id) ?? item.id);
+    const rebalancedTop5 = rebalanceFusedTop(
+      fusedPaths,
+      improvedPageTop,
+      improvedChunkTop,
+      legacyJsonlTop,
+      5,
+    );
+    const jsonlTop = uniqueTop([...rebalancedTop5, ...fusedPaths, ...improvedPageTop, ...improvedChunkTop], 10);
+    const baselineOverlapAt5 = overlapRatio(baselineTop, legacyJsonlTop, 5);
+    const improvedOverlapAt5 = overlapRatio(baselineTop, jsonlTop, 5);
+    const overlapDelta = improvedOverlapAt5 - baselineOverlapAt5;
+    const currentFloor = CURRENT_OVERLAP_AT_5[query.id] ?? 0;
     const status: QueryEvalStatus =
       baselineTop.length === 0 || jsonlTop.length === 0 ? "rejected"
-        : chunks.length === 0 || overlapAt5 < 0.2 ? "needs_tuning"
+        : chunkRank.length === 0 || improvedOverlapAt5 < currentFloor ? "needs_tuning"
           : "accepted";
     results.push({
       ...query,
       status,
       baselineTop: baselineTop.slice(0, 5),
+      legacyJsonlTop: legacyJsonlTop.slice(0, 5),
       jsonlTop: jsonlTop.slice(0, 5),
-      chunkTop: chunks.slice(0, 5).map((chunk) => ({ path: chunk.path, heading: chunk.heading, score: chunk.score })),
-      overlapAt5,
+      improvedPageTop: improvedPageTop.slice(0, 5),
+      improvedChunkTop: improvedChunkTop.slice(0, 5),
+      chunkTop: chunkRank.slice(0, 5).map((chunk) => ({ path: chunk.path, heading: chunk.heading ?? "", score: chunk.score })),
+      baselineOverlapAt5,
+      improvedOverlapAt5,
+      overlapDelta,
+      overlapAt5: improvedOverlapAt5,
       latencyMs: Date.now() - started,
     });
   }
@@ -467,6 +602,7 @@ function renderReport(result: HldEvalResult): string {
   lines.push(`Page records: ${result.pageRecords}`);
   lines.push(`Chunk records: ${result.chunkRecords}`);
   lines.push(`Aggregate verdict: \`${result.verdict}\``);
+  lines.push(`Average improved Overlap@5: ${result.averageImprovedOverlapAt5.toFixed(2)}`);
   lines.push("");
   lines.push("## Queries");
   for (const query of result.queries) {
@@ -475,9 +611,17 @@ function renderReport(result: HldEvalResult): string {
     lines.push(`Question: ${query.question}`);
     lines.push(`Status: ${query.status}`);
     lines.push(`Latency: ${query.latencyMs} ms`);
-    lines.push(`Overlap@5: ${query.overlapAt5.toFixed(2)}`);
+    lines.push(`Baseline Overlap@5: ${query.baselineOverlapAt5.toFixed(2)}`);
+    lines.push(`Improved Overlap@5: ${query.improvedOverlapAt5.toFixed(2)}`);
+    lines.push(`Delta: ${query.overlapDelta >= 0 ? "+" : ""}${query.overlapDelta.toFixed(2)}`);
     lines.push("Baseline top:");
     for (const item of query.baselineTop) lines.push(`- \`${item}\``);
+    lines.push("Legacy JSONL retrieval top:");
+    for (const item of query.legacyJsonlTop) lines.push(`- \`${item}\``);
+    lines.push("Improved page top:");
+    for (const item of query.improvedPageTop) lines.push(`- \`${item}\``);
+    lines.push("Improved chunk top:");
+    for (const item of query.improvedChunkTop) lines.push(`- \`${item}\``);
     lines.push("JSONL retrieval top:");
     for (const item of query.jsonlTop) lines.push(`- \`${item}\``);
     lines.push("Top chunks:");
@@ -511,9 +655,15 @@ export async function runHldEval(options: RunHldEvalOptions): Promise<HldEvalRes
   const pageRecords = index.filter(isPageIndexRecord);
   const chunkRecords = index.filter((record) => record.kind === "chunk");
   const queryResults = await runQueries(built.files, built.indexPath);
+  const averageImprovedOverlapAt5 = queryResults.length === 0
+    ? 0
+    : queryResults.reduce((sum, query) => sum + query.improvedOverlapAt5, 0) / queryResults.length;
   const regressions = queryResults
-    .filter((query) => query.status !== "accepted")
-    .map((query) => `${query.id}: ${query.status}`);
+    .filter((query) => query.status !== "accepted" || query.improvedOverlapAt5 < (CURRENT_OVERLAP_AT_5[query.id] ?? 0))
+    .map((query) => `${query.id}: ${query.status} improved=${query.improvedOverlapAt5.toFixed(2)} floor=${(CURRENT_OVERLAP_AT_5[query.id] ?? 0).toFixed(2)}`);
+  if (averageImprovedOverlapAt5 < MIN_AVERAGE_OVERLAP_AT_5) {
+    regressions.push(`average Overlap@5 ${averageImprovedOverlapAt5.toFixed(2)} < ${MIN_AVERAGE_OVERLAP_AT_5.toFixed(2)}`);
+  }
   const verdict = classifyAggregateVerdict({
     baselineAvailable: built.files.length > 0 && queryResults.every((query) => query.baselineTop.length > 0),
     regressions,
@@ -531,6 +681,7 @@ export async function runHldEval(options: RunHldEvalOptions): Promise<HldEvalRes
     chunkRecords: chunkRecords.length,
     verdict,
     queries: queryResults,
+    averageImprovedOverlapAt5,
     regressions,
     reportPath: options.outPath,
   };

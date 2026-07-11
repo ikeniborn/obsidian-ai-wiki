@@ -1,5 +1,5 @@
 import { pageId } from "./wiki-graph";
-import { scoreLexicalPage, tokenizeLexical } from "./lexical-retrieval";
+import { normalizeLexicalPageScore, scoreLexicalPage, tokenizeLexical } from "./lexical-retrieval";
 
 const BODY_CAP = 500;
 
@@ -27,13 +27,13 @@ export function scoreSeed(
   annotation?: string,
 ): number {
   const keywords = [...parseFmKeywords(content)].join(" ");
-  return scoreLexicalPage(questionTokens, {
+  return normalizeLexicalPageScore(scoreLexicalPage(questionTokens, {
     id: pageIdValue,
     path: pageIdValue,
     title: pageIdValue,
     description: [annotation, keywords].filter(Boolean).join("\n"),
     content: bodyContent(content),
-  }).score;
+  }).score);
 }
 
 export function selectSeeds(
@@ -52,6 +52,6 @@ export function selectSeeds(
     const score = scoreSeed(q, id, content, annotation);
     if (score >= minScore && score > 0) scored.push({ id, score });
   }
-  scored.sort((a, b) => (b.score - a.score) || a.id.localeCompare(b.id));
+  scored.sort((a, b) => (b.score - a.score) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   return scored.slice(0, topK);
 }
