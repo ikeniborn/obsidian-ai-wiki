@@ -26,7 +26,7 @@ export function isBoilerplatePath(vaultPath: string | undefined): boolean {
 export function normalizeBoilerplateDemotionConfig(input?: BoilerplateDemotionInput): BoilerplateDemotionConfig {
   const enabled = input?.enabled ?? true;
   const factor = input?.factor ?? DEFAULT_BOILERPLATE_DEMOTION_FACTOR;
-  if (Number.isNaN(factor)) return { enabled, factor: DEFAULT_BOILERPLATE_DEMOTION_FACTOR };
+  if (!Number.isFinite(factor)) return { enabled, factor: DEFAULT_BOILERPLATE_DEMOTION_FACTOR };
   return { enabled, factor: Math.max(0, Math.min(1, factor)) };
 }
 
@@ -44,6 +44,7 @@ export function demoteBoilerplateRankedItems<T extends RankedBoilerplateItem>(
   config: BoilerplateDemotionConfig,
   limit: number,
 ): T[] {
+  if (limit <= 0) return [];
   if (!config.enabled || config.factor <= 0) return rankedItems.slice(0, limit);
   const penalty = Math.max(1, Math.ceil(config.factor * Math.max(limit, rankedItems.length) * 2));
   return rankedItems

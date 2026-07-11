@@ -24,6 +24,8 @@ test("normalizeBoilerplateDemotionConfig applies defaults and clamps factor", ()
   assert.deepEqual(normalizeBoilerplateDemotionConfig({ factor: -1 }), { enabled: true, factor: 0 });
   assert.deepEqual(normalizeBoilerplateDemotionConfig({ factor: 2 }), { enabled: true, factor: 1 });
   assert.deepEqual(normalizeBoilerplateDemotionConfig({ factor: Number.NaN }), { enabled: true, factor: 0.15 });
+  assert.deepEqual(normalizeBoilerplateDemotionConfig({ factor: Infinity }), { enabled: true, factor: 0.15 });
+  assert.deepEqual(normalizeBoilerplateDemotionConfig({ factor: -Infinity }), { enabled: true, factor: 0.15 });
 });
 
 test("applyBoilerplateScoreDemotion lowers only enabled boilerplate scores", () => {
@@ -57,4 +59,14 @@ test("demoteBoilerplateRankedItems moves boilerplate behind stable candidates", 
       "!Wiki/hld/pages/template-hld-v2-standard.md",
     ],
   );
+});
+
+test("demoteBoilerplateRankedItems returns empty results for non-positive limits", () => {
+  const ranked = [
+    { path: "!Wiki/hld/pages/template-readme.md", score: 10 },
+    { path: "!Wiki/hld/pages/owner.md", score: 9 },
+  ];
+
+  assert.deepEqual(demoteBoilerplateRankedItems(ranked, { enabled: true, factor: 0.25 }, -1), []);
+  assert.deepEqual(demoteBoilerplateRankedItems(ranked, { enabled: false, factor: 0.25 }, -1), []);
 });
