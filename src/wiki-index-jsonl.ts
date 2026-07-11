@@ -44,6 +44,12 @@ export interface ChunkRecordInput {
   updatedAt: string;
 }
 
+export interface NumberVectorCache {
+  model: string;
+  dimensions: number;
+  entries: Record<string, { chunks: ChunkRecordInput[] }>;
+}
+
 export function isPageIndexRecord(record: WikiIndexRecord): record is PageIndexRecord {
   return record.kind === "page";
 }
@@ -98,4 +104,26 @@ export function chunkRecordToEmbeddingChunk(record: ChunkIndexRecord): ChunkReco
     dimensions: record.dimensions,
     updatedAt: record.updatedAt,
   };
+}
+
+export function chunkRecordsToEmbeddingCache(
+  records: WikiIndexRecord[],
+  model: string,
+  dimensions: number,
+): NumberVectorCache {
+  const entries: NumberVectorCache["entries"] = {};
+  for (const record of records) {
+    if (!isChunkIndexRecord(record)) continue;
+    if (record.vectorModel !== model || record.dimensions !== dimensions) continue;
+    (entries[record.articleId] ??= { chunks: [] }).chunks.push(chunkRecordToEmbeddingChunk(record));
+  }
+  return { model, dimensions, entries };
+}
+
+export function collectPageDescriptions(records: WikiIndexRecord[]): Map<string, string> {
+  const descriptions = new Map<string, string>();
+  for (const record of records) {
+    if (isPageIndexRecord(record)) descriptions.set(record.articleId, record.description);
+  }
+  return descriptions;
 }

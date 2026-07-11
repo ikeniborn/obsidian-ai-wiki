@@ -29528,6 +29528,9 @@ function stringifyJsonl(records) {
 }
 
 // src/wiki-index-jsonl.ts
+function isPageIndexRecord(record) {
+  return record.kind === "page";
+}
 function isChunkIndexRecord(record) {
   return record.kind === "chunk";
 }
@@ -29552,6 +29555,13 @@ function embeddingChunkToChunkRecord(input) {
     dimensions: input.dimensions,
     updatedAt: input.updatedAt
   };
+}
+function collectPageDescriptions(records) {
+  const descriptions = /* @__PURE__ */ new Map();
+  for (const record of records) {
+    if (isPageIndexRecord(record)) descriptions.set(record.articleId, record.description);
+  }
+  return descriptions;
 }
 
 // src/rrf.ts
@@ -32678,8 +32688,8 @@ var LlmWikiView = class extends import_obsidian7.ItemView {
             const domainFolder = href.substring(0, href.lastIndexOf("/"));
             void this.app.workspace.openLinkText(filename, domainFolder, false);
           } else {
-            const isLog = href.endsWith("_log.md");
-            new import_obsidian7.Notice(isLog ? "_log.md not found \u2014 run ingest or lint first." : "_index.md not found \u2014 run init first.");
+            const isLog = href.endsWith("log.jsonl");
+            new import_obsidian7.Notice(isLog ? "log.jsonl not found \u2014 run ingest or lint first." : "index.jsonl not found \u2014 run init first.");
           }
         })();
       });
@@ -52056,8 +52066,8 @@ var WikiController = class {
   }
   /**
    * Serializes a domain's wiki pages into an OKF bundle at an absolute filesystem
-   * path (desktop-only). Reads pages + the domain's `_index.md` descriptions and
-   * `_log.md`, builds the bundle in memory, writes it out.
+   * path (desktop-only). Reads pages + the domain's `index.jsonl` descriptions and
+   * `log.jsonl`, builds the bundle in memory, writes it out.
    */
   async exportOkf(domain, destAbs) {
     const wikiFolder = domainWikiFolder(domain.wiki_folder);
@@ -52072,7 +52082,9 @@ var WikiController = class {
     let descriptions = /* @__PURE__ */ new Map();
     let log = "";
     try {
-      descriptions = parseIndexAnnotations(await this.app.vault.adapter.read(domainIndexPath(wikiFolder)));
+      const indexRaw = await this.app.vault.adapter.read(domainIndexPath(wikiFolder));
+      descriptions = collectPageDescriptions(parseWikiIndexJsonl(indexRaw, domainIndexPath(wikiFolder)));
+      if (descriptions.size === 0) descriptions = parseIndexAnnotations(indexRaw);
     } catch {
     }
     try {
