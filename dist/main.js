@@ -27981,10 +27981,12 @@ var import_path_browserify = __toESM(require_path_browserify(), 1);
 
 // src/wiki-path.ts
 var WIKI_ROOT = "!Wiki";
-var GLOBAL_CONFIG_DIR = `${WIKI_ROOT}/_config`;
-var GLOBAL_DOMAIN_PATH = `${GLOBAL_CONFIG_DIR}/_domain.json`;
-var GLOBAL_AGENT_LOG_PATH = `${GLOBAL_CONFIG_DIR}/_agent.jsonl`;
-var GLOBAL_DEV_LOG_PATH = `${GLOBAL_CONFIG_DIR}/_dev.jsonl`;
+var LEGACY_GLOBAL_CONFIG_DIR = `${WIKI_ROOT}/_config`;
+var LEGACY_GLOBAL_DOMAIN_PATH = `${LEGACY_GLOBAL_CONFIG_DIR}/_domain.json`;
+var GLOBAL_CONFIG_DIR = LEGACY_GLOBAL_CONFIG_DIR;
+var GLOBAL_DOMAIN_PATH = LEGACY_GLOBAL_DOMAIN_PATH;
+var GLOBAL_AGENT_LOG_PATH = `${LEGACY_GLOBAL_CONFIG_DIR}/_agent.jsonl`;
+var GLOBAL_DEV_LOG_PATH = `${LEGACY_GLOBAL_CONFIG_DIR}/_dev.jsonl`;
 function domainWikiFolder(subfolder) {
   return `${WIKI_ROOT}/${subfolder}`;
 }
@@ -28012,18 +28014,20 @@ function validateArticlePath(path3, wikiVaultPath) {
   const segments = remainder.split("/");
   return segments.length === 2 && segments[1].endsWith(".md");
 }
-function domainConfigDir(domainFolder) {
-  return `${domainFolder}/_config`;
-}
 function domainIndexPath(domainFolder) {
-  return `${domainConfigDir(domainFolder)}/_index.md`;
+  return `${domainFolder}/index.jsonl`;
 }
 function domainLogPath(domainFolder) {
-  return `${domainConfigDir(domainFolder)}/_log.md`;
+  return `${domainFolder}/log.jsonl`;
 }
-function domainEmbeddingsPath(domainFolder) {
-  return `${domainConfigDir(domainFolder)}/_embeddings.json`;
+function legacyDomainConfigDir(domainFolder) {
+  return `${domainFolder}/_config`;
 }
+function legacyDomainEmbeddingsPath(domainFolder) {
+  return `${legacyDomainConfigDir(domainFolder)}/_embeddings.json`;
+}
+var domainConfigDir = legacyDomainConfigDir;
+var domainEmbeddingsPath = legacyDomainEmbeddingsPath;
 
 // src/source-paths.ts
 function isSelectableSourceFolder(path3) {
