@@ -13,6 +13,7 @@ import { runStorageMigration, cleanupBundledSchemaCopies, migrateLogsToPluginDir
 import { migrateIndexFormat } from "./migrate-index-format";
 import { migrateDropSections } from "./migrate-drop-sections";
 import { migrateOkfFrontmatter } from "./migrate-okf-frontmatter";
+import { migrateJsonlDomainStorage } from "./migrate-jsonl-domain-storage";
 import { GLOBAL_DOMAIN_PATH, domainWikiFolder } from "./wiki-path";
 
 export default class LlmWikiPlugin extends Plugin {
@@ -27,6 +28,10 @@ export default class LlmWikiPlugin extends Plugin {
     this.localConfigStore = new LocalConfigStore(this);
     try {
       await runStorageMigration(this.app.vault);
+      const report = await migrateJsonlDomainStorage(this.app.vault);
+      if (!report.ok) {
+        new Notice(`AI Wiki: JSONL domain migration failed — ${report.errors.join("; ")}`, 0);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       new Notice(`AI Wiki: storage migration failed — ${msg}`, 0);

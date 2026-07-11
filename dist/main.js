@@ -28026,6 +28026,12 @@ function domainLogPath(domainFolder) {
 function legacyDomainConfigDir(domainFolder) {
   return `${domainFolder}/_config`;
 }
+function legacyDomainIndexPath(domainFolder) {
+  return `${legacyDomainConfigDir(domainFolder)}/_index.md`;
+}
+function legacyDomainLogPath(domainFolder) {
+  return `${legacyDomainConfigDir(domainFolder)}/_log.md`;
+}
 function legacyDomainEmbeddingsPath(domainFolder) {
   return `${legacyDomainConfigDir(domainFolder)}/_embeddings.json`;
 }
@@ -39892,6 +39898,17 @@ function buildLogRecord(domainId, event, timestamp = (/* @__PURE__ */ new Date()
     fixed: event.fixed,
     outputTokens: event.outputTokens
   };
+}
+function parseLegacyLogBlocks(markdown, domainId) {
+  return markdown.split(/\n---\n?/g).map((text) => text.trim()).filter(Boolean).map((text) => {
+    const tsMatch = text.match(/^##\s+([0-9T:-]+)/);
+    return {
+      kind: "legacy_log_block",
+      ts: tsMatch?.[1],
+      domainId,
+      text
+    };
+  });
 }
 async function appendWikiLog(vaultTools, domainFolder, domainId, event) {
   const logPath = domainLogPath(domainFolder);
@@ -53010,6 +53027,158 @@ async function migrateOkfFrontmatter(vault, domains, localConfigStore) {
   }
 }
 
+// src/migrate-jsonl-domain-storage.ts
+var import_yaml6 = __toESM(require_dist(), 1);
+var FM_RE7 = /^---\n([\s\S]*?)\n---\n?/;
+function hashString(text) {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = Math.imul(31, h) + text.charCodeAt(i) | 0;
+  return (h >>> 0).toString(36);
+}
+function stamp() {
+  return (/* @__PURE__ */ new Date()).toISOString().replace(/[-:]/g, "").replace(/\..+$/, "").replace("T", "-");
+}
+async function ensureFolder(vault, path4) {
+  const parts = path4.split("/");
+  for (let i = 1; i <= parts.length; i++) {
+    const partial = parts.slice(0, i).join("/");
+    if (!partial) continue;
+    if (!await vault.adapter.exists(partial)) await vault.createFolder(partial).catch(() => {
+    });
+  }
+}
+async function readIfExists(adapter, path4) {
+  return await adapter.exists(path4) ? adapter.read(path4) : null;
+}
+async function collectMarkdownPages(adapter, root) {
+  const out = [];
+  async function walk(folder) {
+    const listed = await adapter.list(folder);
+    for (const file of listed.files) {
+      if (file.endsWith(".md") && !file.includes("/_config/")) out.push({ path: file, content: await adapter.read(file) });
+    }
+    for (const child of listed.folders) {
+      if (child.endsWith("/_config")) continue;
+      await walk(child);
+    }
+  }
+  if (await adapter.exists(root)) await walk(root);
+  return out;
+}
+function parseFrontmatter(content) {
+  const match = FM_RE7.exec(content);
+  if (!match) return {};
+  try {
+    return (0, import_yaml6.parse)(match[1]) ?? {};
+  } catch {
+    return {};
+  }
+}
+function asStringArray(value) {
+  if (Array.isArray(value)) return value.filter((v) => typeof v === "string");
+  return typeof value === "string" ? [value] : [];
+}
+function pageRecordFromPage(page, descriptions) {
+  const articleId = page.path.split("/").pop().replace(/\.md$/, "");
+  const fm = parseFrontmatter(page.content);
+  const description = parseDescriptionFromFm(page.content) || descriptions.get(articleId) || deriveFallbackDescription(page.content, String(fm.type ?? "concept"));
+  return {
+    kind: "page",
+    schemaVersion: 1,
+    articleId,
+    path: page.path,
+    type: typeof fm.type === "string" ? fm.type : "concept",
+    description,
+    resource: asStringArray(fm.resource),
+    timestamp: typeof fm.timestamp === "string" ? fm.timestamp : void 0,
+    tags: asStringArray(fm.tags),
+    bodyHash: hashString(page.content),
+    descriptionHash: hashString(description)
+  };
+}
+async function copyBackup(vault, sourcePaths, backupPath) {
+  const adapter = vault.adapter;
+  await ensureFolder(vault, backupPath);
+  const entries = [];
+  for (const source of sourcePaths) {
+    const content = await readIfExists(adapter, source);
+    if (content === null) continue;
+    const backup = `${backupPath}/${source.replace(/[/:]/g, "__")}`;
+    await adapter.write(backup, content);
+    entries.push({ source, backup, size: content.length, hash: hashString(content) });
+  }
+  await adapter.write(`${backupPath}/manifest.json`, JSON.stringify({ version: 1, entries }, null, 2));
+  return entries;
+}
+async function detectLegacyJsonlStorageState(vault) {
+  const adapter = vault.adapter;
+  if (await adapter.exists(LEGACY_GLOBAL_DOMAIN_PATH)) return true;
+  if (!await adapter.exists(WIKI_ROOT)) return false;
+  const listed = await adapter.list(WIKI_ROOT);
+  for (const folder of listed.folders) {
+    if (await adapter.exists(legacyDomainIndexPath(folder))) return true;
+    if (await adapter.exists(legacyDomainLogPath(folder))) return true;
+    if (await adapter.exists(legacyDomainEmbeddingsPath(folder))) return true;
+  }
+  return false;
+}
+async function migrateJsonlDomainStorage(vault, opts = {}) {
+  const adapter = vault.adapter;
+  if (!await detectLegacyJsonlStorageState(vault)) {
+    return { ok: true, migrated: false, domains: [], errors: [] };
+  }
+  const errors = [];
+  const rawDomains = await readIfExists(adapter, LEGACY_GLOBAL_DOMAIN_PATH);
+  if (rawDomains === null) {
+    return { ok: false, migrated: false, domains: [], errors: [`Missing ${LEGACY_GLOBAL_DOMAIN_PATH}`] };
+  }
+  let domains;
+  try {
+    const parsed = JSON.parse(rawDomains);
+    if (!Array.isArray(parsed)) throw new Error("expected JSON array");
+    domains = parsed;
+  } catch (e) {
+    return { ok: false, migrated: false, domains: [], errors: [`${LEGACY_GLOBAL_DOMAIN_PATH}: ${e.message}`] };
+  }
+  const backupPath = `${WIKI_ROOT}/.backup/jsonl-domain-storage-${opts.now ?? stamp()}`;
+  const legacyPaths = [LEGACY_GLOBAL_DOMAIN_PATH];
+  for (const domain of domains) {
+    const folder = domainWikiFolder(domain.wiki_folder);
+    legacyPaths.push(legacyDomainIndexPath(folder), legacyDomainLogPath(folder), legacyDomainEmbeddingsPath(folder));
+  }
+  const backupEntries = await copyBackup(vault, legacyPaths, backupPath);
+  if (backupEntries.length === 0 || !await adapter.exists(`${backupPath}/manifest.json`)) {
+    return { ok: false, migrated: false, backupPath, domains: [], errors: ["Backup manifest was not written"] };
+  }
+  for (const domain of domains) {
+    const folder = domainWikiFolder(domain.wiki_folder);
+    await ensureFolder(vault, folder);
+    await adapter.write(domainMetadataPath(folder), stringifyDomainMetadata(domainEntryToMetadataRecords(domain)));
+    const indexMarkdown = await readIfExists(adapter, legacyDomainIndexPath(folder));
+    const descriptions = indexMarkdown ? parseIndexAnnotations(indexMarkdown) : /* @__PURE__ */ new Map();
+    const pages = await collectMarkdownPages(adapter, folder);
+    const records = pages.map((page) => pageRecordFromPage(page, descriptions));
+    await adapter.write(domainIndexPath(folder), stringifyJsonl(records));
+    const legacyLog = await readIfExists(adapter, legacyDomainLogPath(folder));
+    if (legacyLog !== null) {
+      await adapter.write(domainLogPath(folder), stringifyJsonl(parseLegacyLogBlocks(legacyLog, domain.id)));
+    } else {
+      await adapter.write(domainLogPath(folder), "");
+    }
+  }
+  for (const domain of domains) {
+    const folder = domainWikiFolder(domain.wiki_folder);
+    if (!await adapter.exists(domainMetadataPath(folder))) errors.push(`Missing ${domainMetadataPath(folder)}`);
+    if (!await adapter.exists(domainIndexPath(folder))) errors.push(`Missing ${domainIndexPath(folder)}`);
+    if (!await adapter.exists(domainLogPath(folder))) errors.push(`Missing ${domainLogPath(folder)}`);
+  }
+  if (errors.length > 0) return { ok: false, migrated: false, backupPath, domains: domains.map((d) => d.id), errors };
+  for (const path4 of legacyPaths) {
+    if (await adapter.exists(path4)) await adapter.remove(path4);
+  }
+  return { ok: true, migrated: true, backupPath, domains: domains.map((d) => d.id), errors: [] };
+}
+
 // src/main.ts
 var LlmWikiPlugin = class extends import_obsidian15.Plugin {
   settings;
@@ -53022,6 +53191,10 @@ var LlmWikiPlugin = class extends import_obsidian15.Plugin {
     this.localConfigStore = new LocalConfigStore(this);
     try {
       await runStorageMigration(this.app.vault);
+      const report = await migrateJsonlDomainStorage(this.app.vault);
+      if (!report.ok) {
+        new import_obsidian15.Notice(`AI Wiki: JSONL domain migration failed \u2014 ${report.errors.join("; ")}`, 0);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       new import_obsidian15.Notice(`AI Wiki: storage migration failed \u2014 ${msg}`, 0);
