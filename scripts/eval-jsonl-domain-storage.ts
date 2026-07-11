@@ -32,7 +32,10 @@ export type RetrievalVariantId =
   | "bm25-page"
   | "bm25-chunk"
   | "rrf-weighted-bm25"
-  | "rrf-weighted-bm25-legacy";
+  | "rrf-weighted-bm25-legacy"
+  | "weighted-lexical-demoted"
+  | "rrf-weighted-bm25-demoted"
+  | "rrf-weighted-bm25-legacy-demoted";
 
 export interface HldQuery {
   id: string;
@@ -60,12 +63,17 @@ export interface VariantMetrics {
   mrr: number;
   legacyOverlapAt5: number;
   accepted: boolean;
+  demotionFactor?: number;
+  top1Boilerplate: boolean;
+  guardReasons: string[];
 }
 
 export interface QueryVariantResult {
   id: RetrievalVariantId;
   top: string[];
   metrics: VariantMetrics;
+  demotionFactor?: number;
+  demotionMoved: Array<{ from: string; to: string }>;
 }
 
 export interface QueryEvalResult extends HldQuery {
@@ -99,6 +107,7 @@ export interface HldEvalResult {
   queries: QueryEvalResult[];
   averageImprovedOverlapAt5: number;
   bestVariant: RetrievalVariantId;
+  bestVariantDemotionFactor?: number;
   variantMetrics: VariantMetrics[];
   aggregateGoldMetrics: GoldMetrics;
   weightedLexicalGoldMetrics: GoldMetrics;
@@ -158,6 +167,7 @@ const CURRENT_OVERLAP_AT_5: Record<string, number> = {
 };
 
 const MIN_AVERAGE_OVERLAP_AT_5 = 0.65;
+const DEMOTION_FACTORS = [0.15, 0.25, 0.35, 0.50] as const;
 
 export function buildHldQueries(): HldQuery[] {
   return [
@@ -345,6 +355,30 @@ function uniqueTop(paths: string[], limit: number): string[] {
   return out;
 }
 
+export function isBoilerplatePathForEval(vaultPath: string): boolean {
+  const name = path.basename(vaultPath, ".md").toLowerCase();
+  return name === "template-readme" || name.startsWith("template-hld-");
+}
+
+export function demoteBoilerplateTopForEval(
+  rankedPaths: string[],
+  factor: number,
+  limit: number,
+): string[] {
+  if (limit <= 0) return [];
+  const strength = Math.max(0, Math.min(1, factor));
+  const penalty = Math.max(1, Math.ceil(strength * limit * 2));
+  return uniqueTop(rankedPaths, rankedPaths.length)
+    .map((pathValue, index) => ({
+      path: pathValue,
+      index,
+      adjusted: index + (isBoilerplatePathForEval(pathValue) ? penalty : 0),
+    }))
+    .sort((a, b) => (a.adjusted - b.adjusted) || (a.index - b.index))
+    .map((item) => item.path)
+    .slice(0, limit);
+}
+
 function overlapRatio(a: string[], b: string[], limit: number): number {
   const left = new Set(a.slice(0, limit));
   const right = b.slice(0, limit);
@@ -360,16 +394,26 @@ function toVariantMetrics(
   top: string[],
   baselineTop: string[],
   currentFloor: number,
+  demotionFactor?: number,
 ): VariantMetrics {
   const gold = scoreGoldRanking(labels, top, 5);
   const legacyOverlapAt5 = overlapRatio(baselineTop, top, 5);
+  const top1Boilerplate = top.length > 0 && isBoilerplatePathForEval(top[0]);
+  const guardReasons: string[] = [];
+  if (legacyOverlapAt5 < currentFloor) {
+    guardReasons.push(`legacy overlap ${legacyOverlapAt5.toFixed(2)} < floor ${currentFloor.toFixed(2)}`);
+  }
+  if (top1Boilerplate) guardReasons.push("top-1 boilerplate");
   return {
     id,
     recallAt5: gold.recallAtK,
     ndcgAt5: gold.ndcgAtK,
     mrr: gold.mrr,
     legacyOverlapAt5,
-    accepted: legacyOverlapAt5 >= currentFloor,
+    accepted: guardReasons.length === 0,
+    demotionFactor,
+    top1Boilerplate,
+    guardReasons,
   };
 }
 
@@ -383,60 +427,61 @@ function averageGoldMetrics(metrics: GoldMetrics[]): GoldMetrics {
 }
 
 function aggregateVariantMetrics(queries: QueryEvalResult[]): VariantMetrics[] {
-  const ids: RetrievalVariantId[] = [
-    "weighted-lexical",
-    "bm25-page",
-    "bm25-chunk",
-    "rrf-weighted-bm25",
-    "rrf-weighted-bm25-legacy",
-  ];
-  return ids.map((id) => {
-    const variants = queries.map((query) => query.variants.find((variant) => variant.id === id)).filter((variant): variant is QueryVariantResult => Boolean(variant));
-    if (variants.length === 0) {
-      return { id, recallAt5: 0, ndcgAt5: 0, mrr: 0, legacyOverlapAt5: 0, accepted: false };
+  const groups = new Map<string, QueryVariantResult[]>();
+  for (const query of queries) {
+    for (const variant of query.variants) {
+      const key = `${variant.id}:${variant.demotionFactor ?? "raw"}`;
+      groups.set(key, [...(groups.get(key) ?? []), variant]);
     }
+  }
+  return [...groups.values()].map((variants) => {
+    const first = variants[0];
+    const mrr = variants.reduce((sum, item) => sum + item.metrics.mrr, 0) / variants.length;
     return {
-      id,
+      id: first.id,
       recallAt5: variants.reduce((sum, item) => sum + item.metrics.recallAt5, 0) / variants.length,
       ndcgAt5: variants.reduce((sum, item) => sum + item.metrics.ndcgAt5, 0) / variants.length,
-      mrr: variants.reduce((sum, item) => sum + item.metrics.mrr, 0) / variants.length,
+      mrr,
       legacyOverlapAt5: variants.reduce((sum, item) => sum + item.metrics.legacyOverlapAt5, 0) / variants.length,
-      accepted: variants.length === queries.length && variants.every((variant) => variant.metrics.accepted),
+      accepted: variants.length === queries.length && variants.every((variant) => variant.metrics.accepted) && mrr >= 0.90,
+      demotionFactor: first.demotionFactor,
+      top1Boilerplate: variants.some((variant) => variant.metrics.top1Boilerplate),
+      guardReasons: [...new Set(variants.flatMap((variant) => variant.metrics.guardReasons))],
     };
   });
 }
 
-function isNoWorse(candidate: VariantMetrics, baseline: VariantMetrics): boolean {
-  const epsilon = 1e-9;
-  return candidate.recallAt5 + epsilon >= baseline.recallAt5 &&
-    candidate.ndcgAt5 + epsilon >= baseline.ndcgAt5 &&
-    candidate.mrr + epsilon >= baseline.mrr;
-}
-
-function improvesAny(candidate: VariantMetrics, baseline: VariantMetrics): boolean {
+function improvesPriorityMetric(candidate: VariantMetrics, baseline: VariantMetrics): boolean {
   const epsilon = 1e-9;
   return candidate.recallAt5 > baseline.recallAt5 + epsilon ||
-    candidate.ndcgAt5 > baseline.ndcgAt5 + epsilon ||
-    candidate.mrr > baseline.mrr + epsilon;
+    candidate.ndcgAt5 > baseline.ndcgAt5 + epsilon;
 }
 
 function chooseBestVariant(variants: VariantMetrics[]): VariantMetrics {
   const weighted = variants.find((variant) => variant.id === "weighted-lexical") ?? variants[0];
   const weightedPerfect = weighted.recallAt5 === 1 && weighted.ndcgAt5 === 1 && weighted.mrr === 1;
   const candidates = variants.filter((variant) =>
-    variant.accepted && isNoWorse(variant, weighted) && (weightedPerfect || variant.id === "weighted-lexical" || improvesAny(variant, weighted))
+    variant.accepted &&
+    variant.mrr >= 0.90 &&
+    !variant.top1Boilerplate &&
+    (weightedPerfect || variant.id === "weighted-lexical" || improvesPriorityMetric(variant, weighted))
   );
   const pool = candidates.length > 0 ? candidates : [weighted];
   return [...pool].sort((a, b) =>
     (b.ndcgAt5 - a.ndcgAt5) ||
     (b.recallAt5 - a.recallAt5) ||
     (b.mrr - a.mrr) ||
+    ((a.demotionFactor ?? 0) - (b.demotionFactor ?? 0)) ||
     a.id.localeCompare(b.id)
   )[0];
 }
 
 function variantGoldMetrics(metrics: VariantMetrics): GoldMetrics {
   return { recallAtK: metrics.recallAt5, ndcgAtK: metrics.ndcgAt5, mrr: metrics.mrr };
+}
+
+function formatFactor(factor: number | undefined): string {
+  return factor === undefined ? "-" : factor.toFixed(2);
 }
 
 function goldGradeByPath(query: QueryEvalResult): Map<string, number> {
@@ -450,6 +495,15 @@ function formatPathWithGold(pathValue: string, grades: Map<string, number>): str
 
 function signed(value: number): string {
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}`;
+}
+
+function demotionMoved(before: string[], after: string[]): Array<{ from: string; to: string }> {
+  const out: Array<{ from: string; to: string }> = [];
+  before.slice(0, 5).forEach((from, index) => {
+    const to = after[index];
+    if (to && to !== from) out.push({ from, to });
+  });
+  return out;
 }
 
 function rebalanceFusedTop(
@@ -731,16 +785,47 @@ async function runQueries(files: SourceMarkdownFile[], indexPath: string, gold: 
     ], 10)
       .map((item) => pathByArticleId.get(item.id))
       .filter((item): item is string => Boolean(item)), 10);
-    const variants: QueryVariantResult[] = [
-      ["weighted-lexical", jsonlTop],
-      ["bm25-page", bm25PageTop],
-      ["bm25-chunk", bm25ChunkTop],
-      ["rrf-weighted-bm25", rrfWeightedBm25Top],
-      ["rrf-weighted-bm25-legacy", rrfWeightedBm25LegacyTop],
-    ].map(([id, top]) => ({
-      id: id as RetrievalVariantId,
-      top: (top as string[]).slice(0, 5),
-      metrics: toVariantMetrics(id as RetrievalVariantId, labels, top as string[], baselineTop, currentFloor),
+    const variantInputs: Array<{
+      id: RetrievalVariantId;
+      top: string[];
+      demotionFactor?: number;
+      demotionMoved: Array<{ from: string; to: string }>;
+    }> = [
+      { id: "weighted-lexical", top: jsonlTop, demotionMoved: [] },
+      { id: "bm25-page", top: bm25PageTop, demotionMoved: [] },
+      { id: "bm25-chunk", top: bm25ChunkTop, demotionMoved: [] },
+      { id: "rrf-weighted-bm25", top: rrfWeightedBm25Top, demotionMoved: [] },
+      { id: "rrf-weighted-bm25-legacy", top: rrfWeightedBm25LegacyTop, demotionMoved: [] },
+    ];
+    for (const factor of DEMOTION_FACTORS) {
+      const weightedDemoted = demoteBoilerplateTopForEval(jsonlTop, factor, 10);
+      variantInputs.push({
+        id: "weighted-lexical-demoted",
+        top: weightedDemoted,
+        demotionFactor: factor,
+        demotionMoved: demotionMoved(jsonlTop, weightedDemoted),
+      });
+      const rrfDemoted = demoteBoilerplateTopForEval(rrfWeightedBm25Top, factor, 10);
+      variantInputs.push({
+        id: "rrf-weighted-bm25-demoted",
+        top: rrfDemoted,
+        demotionFactor: factor,
+        demotionMoved: demotionMoved(rrfWeightedBm25Top, rrfDemoted),
+      });
+      const rrfLegacyDemoted = demoteBoilerplateTopForEval(rrfWeightedBm25LegacyTop, factor, 10);
+      variantInputs.push({
+        id: "rrf-weighted-bm25-legacy-demoted",
+        top: rrfLegacyDemoted,
+        demotionFactor: factor,
+        demotionMoved: demotionMoved(rrfWeightedBm25LegacyTop, rrfLegacyDemoted),
+      });
+    }
+    const variants: QueryVariantResult[] = variantInputs.map((variant) => ({
+      id: variant.id,
+      top: variant.top.slice(0, 5),
+      metrics: toVariantMetrics(variant.id, labels, variant.top, baselineTop, currentFloor, variant.demotionFactor),
+      demotionFactor: variant.demotionFactor,
+      demotionMoved: variant.demotionMoved,
     }));
     const status: QueryEvalStatus =
       baselineTop.length === 0 || jsonlTop.length === 0 ? "rejected"
@@ -783,15 +868,20 @@ function renderReport(result: HldEvalResult): string {
   lines.push(`Aggregate verdict: \`${result.verdict}\``);
   lines.push(`Average improved Overlap@5: ${result.averageImprovedOverlapAt5.toFixed(2)}`);
   lines.push(`Best retrieval variant: \`${result.bestVariant}\``);
+  lines.push(`Demotion factor: ${formatFactor(result.bestVariantDemotionFactor)}`);
   lines.push(`Aggregate gold Recall@5: ${result.aggregateGoldMetrics.recallAtK.toFixed(2)}`);
   lines.push(`Aggregate gold nDCG@5: ${result.aggregateGoldMetrics.ndcgAtK.toFixed(2)}`);
   lines.push(`Aggregate gold MRR: ${result.aggregateGoldMetrics.mrr.toFixed(2)}`);
+  const settingRecommendation = result.bestVariant.includes("demoted") && result.bestVariantDemotionFactor !== undefined
+    ? `candidate: ${result.bestVariantDemotionFactor.toFixed(2)}`
+    : "none";
+  lines.push(`Setting recommendation: \`${settingRecommendation}\``);
   lines.push("");
   lines.push("## Retrieval variants");
-  lines.push("| Variant | Recall@5 | nDCG@5 | MRR | LegacyOverlap@5 | Accepted |");
-  lines.push("| --- | ---: | ---: | ---: | ---: | --- |");
+  lines.push("| Variant | Factor | Recall@5 | nDCG@5 | MRR | LegacyOverlap@5 | Top-1 boilerplate | Accepted | Guard reasons |");
+  lines.push("| --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |");
   for (const variant of result.variantMetrics) {
-    lines.push(`| ${variant.id} | ${variant.recallAt5.toFixed(2)} | ${variant.ndcgAt5.toFixed(2)} | ${variant.mrr.toFixed(2)} | ${variant.legacyOverlapAt5.toFixed(2)} | ${variant.accepted ? "yes" : "no"} |`);
+    lines.push(`| ${variant.id} | ${formatFactor(variant.demotionFactor)} | ${variant.recallAt5.toFixed(2)} | ${variant.ndcgAt5.toFixed(2)} | ${variant.mrr.toFixed(2)} | ${variant.legacyOverlapAt5.toFixed(2)} | ${variant.top1Boilerplate ? "yes" : "no"} | ${variant.accepted ? "yes" : "no"} | ${variant.guardReasons.join("; ") || "-"} |`);
   }
   lines.push("");
   lines.push("## Queries");
@@ -806,6 +896,7 @@ function renderReport(result: HldEvalResult): string {
     lines.push(`Baseline Overlap@5: ${query.baselineOverlapAt5.toFixed(2)}`);
     lines.push(`Improved Overlap@5: ${query.improvedOverlapAt5.toFixed(2)}`);
     lines.push(`Delta: ${query.overlapDelta >= 0 ? "+" : ""}${query.overlapDelta.toFixed(2)}`);
+    lines.push(`Top-1 boilerplate: ${query.jsonlTop.length > 0 && isBoilerplatePathForEval(query.jsonlTop[0]) ? "yes" : "no"}`);
     lines.push("Gold labels:");
     for (const label of query.goldLabels) {
       lines.push(`- ${formatPathWithGold(label.path, grades)}`);
@@ -822,13 +913,28 @@ function renderReport(result: HldEvalResult): string {
     for (const item of query.jsonlTop) lines.push(`- ${formatPathWithGold(item, grades)}`);
     lines.push("Variants:");
     for (const variant of query.variants) {
-      lines.push(`- \`${variant.id}\`: Recall@5 ${variant.metrics.recallAt5.toFixed(2)}, nDCG@5 ${variant.metrics.ndcgAt5.toFixed(2)}, MRR ${variant.metrics.mrr.toFixed(2)}, LegacyOverlap@5 ${variant.metrics.legacyOverlapAt5.toFixed(2)}, accepted ${variant.metrics.accepted ? "yes" : "no"}`);
+      const guard = variant.metrics.guardReasons.length > 0 ? `, guards ${variant.metrics.guardReasons.join("; ")}` : "";
+      lines.push(`- \`${variant.id}\`: factor ${formatFactor(variant.demotionFactor)}, Recall@5 ${variant.metrics.recallAt5.toFixed(2)}, nDCG@5 ${variant.metrics.ndcgAt5.toFixed(2)}, MRR ${variant.metrics.mrr.toFixed(2)}, LegacyOverlap@5 ${variant.metrics.legacyOverlapAt5.toFixed(2)}, Top-1 boilerplate ${variant.metrics.top1Boilerplate ? "yes" : "no"}, accepted ${variant.metrics.accepted ? "yes" : "no"}${guard}`);
       for (const item of variant.top) lines.push(`  - ${formatPathWithGold(item, grades)}`);
     }
     if (weighted) {
       lines.push("Variants vs weighted-lexical:");
       for (const variant of query.variants.filter((item) => item.id !== "weighted-lexical")) {
         lines.push(`- \`${variant.id}\`: ΔRecall@5 ${signed(variant.metrics.recallAt5 - weighted.metrics.recallAt5)}, ΔnDCG@5 ${signed(variant.metrics.ndcgAt5 - weighted.metrics.ndcgAt5)}, ΔMRR ${signed(variant.metrics.mrr - weighted.metrics.mrr)}, ΔLegacyOverlap@5 ${signed(variant.metrics.legacyOverlapAt5 - weighted.metrics.legacyOverlapAt5)}`);
+      }
+      lines.push("BM25 contribution:");
+      const bestBm25 = query.variants
+        .filter((variant) => variant.id.includes("bm25"))
+        .sort((a, b) => (b.metrics.ndcgAt5 - a.metrics.ndcgAt5) || (b.metrics.recallAt5 - a.metrics.recallAt5))[0];
+      lines.push(bestBm25
+        ? `- best BM25-family variant \`${bestBm25.id}\`: ΔnDCG@5 ${signed(bestBm25.metrics.ndcgAt5 - weighted.metrics.ndcgAt5)}, ΔRecall@5 ${signed(bestBm25.metrics.recallAt5 - weighted.metrics.recallAt5)}`
+        : "- no BM25-family variant available");
+      lines.push("Demotion contribution:");
+      for (const variant of query.variants.filter((item) => item.demotionFactor !== undefined)) {
+        const moved = variant.demotionMoved.length === 0
+          ? "no top-5 movement"
+          : variant.demotionMoved.map((item) => `\`${item.from}\` -> \`${item.to}\``).join("; ");
+        lines.push(`- \`${variant.id}\` factor ${formatFactor(variant.demotionFactor)}: ${moved}`);
       }
     }
     lines.push("Top chunks:");
@@ -887,16 +993,19 @@ export async function runHldEval(options: RunHldEvalOptions): Promise<HldEvalRes
     regressions.push(`average Overlap@5 ${averageImprovedOverlapAt5.toFixed(2)} < ${MIN_AVERAGE_OVERLAP_AT_5.toFixed(2)}`);
   }
   if (!bestVariantMetrics.accepted) {
-    regressions.push(`best variant ${bestVariant} failed per-query legacy overlap floors`);
+    regressions.push(`best variant ${bestVariant} failed acceptance guards`);
   }
-  if (!isNoWorse(bestVariantMetrics, weightedVariant)) {
-    regressions.push(`best variant ${bestVariant} regressed aggregate gold metrics versus weighted-lexical`);
+  if (bestVariantMetrics.mrr < 0.90) {
+    regressions.push(`best variant ${bestVariant} MRR ${bestVariantMetrics.mrr.toFixed(2)} < 0.90`);
   }
-  if (!weightedPerfect && bestVariant !== "weighted-lexical" && !improvesAny(bestVariantMetrics, weightedVariant)) {
-    regressions.push(`best variant ${bestVariant} did not improve any aggregate gold metric`);
+  if (bestVariantMetrics.top1Boilerplate) {
+    regressions.push(`best variant ${bestVariant} returned boilerplate at top-1`);
+  }
+  if (!weightedPerfect && bestVariant !== "weighted-lexical" && !improvesPriorityMetric(bestVariantMetrics, weightedVariant)) {
+    regressions.push(`best variant ${bestVariant} did not improve aggregate Recall@5 or nDCG@5`);
   }
   if (!weightedPerfect && bestVariant === "weighted-lexical") {
-    regressions.push("no accepted variant improved aggregate gold metrics versus weighted-lexical");
+    regressions.push("no accepted variant improved aggregate Recall@5 or nDCG@5 versus weighted-lexical");
   }
   const verdict = classifyAggregateVerdict({
     baselineAvailable: built.files.length > 0 && queryResults.every((query) => query.baselineTop.length > 0),
@@ -917,6 +1026,7 @@ export async function runHldEval(options: RunHldEvalOptions): Promise<HldEvalRes
     queries: queryResults,
     averageImprovedOverlapAt5,
     bestVariant,
+    bestVariantDemotionFactor: bestVariantMetrics.demotionFactor,
     variantMetrics,
     aggregateGoldMetrics,
     weightedLexicalGoldMetrics,

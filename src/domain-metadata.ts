@@ -29,13 +29,13 @@ export type MetadataRecord =
   | SourceStateMetadataRecord
   | Record<string, unknown>;
 
-function setIfDefined<T extends object, K extends string, V>(
+function setIfDefined<T extends object, K extends keyof T>(
   target: T,
   key: K,
-  value: V | undefined,
-): asserts target is T & Record<K, V> {
+  value: T[K] | undefined,
+): void {
   if (value !== undefined) {
-    (target as T & Record<K, V>)[key] = value;
+    target[key] = value;
   }
 }
 

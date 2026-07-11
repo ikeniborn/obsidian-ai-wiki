@@ -3,7 +3,13 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { buildHldQueries, classifyAggregateVerdict, runHldEval } from "../scripts/eval-jsonl-domain-storage";
+import {
+  buildHldQueries,
+  classifyAggregateVerdict,
+  demoteBoilerplateTopForEval,
+  isBoilerplatePathForEval,
+  runHldEval,
+} from "../scripts/eval-jsonl-domain-storage";
 import { parseWikiIndexJsonl, isChunkIndexRecord, isPageIndexRecord } from "../src/wiki-index-jsonl";
 
 test("HLD eval defines five fixed query themes", () => {
@@ -12,6 +18,33 @@ test("HLD eval defines five fixed query themes", () => {
 
 test("aggregate verdict cannot be accepted without baseline", () => {
   assert.equal(classifyAggregateVerdict({ baselineAvailable: false, regressions: [], formatWorked: true }), "needs_tuning");
+});
+
+test("isBoilerplatePathForEval only matches generated template pages", () => {
+  assert.equal(isBoilerplatePathForEval("!Wiki/hld-jsonl-eval/pages/template-hld-v2-standard.md"), true);
+  assert.equal(isBoilerplatePathForEval("!Wiki/hld-jsonl-eval/pages/template-readme.md"), true);
+  assert.equal(isBoilerplatePathForEval("!Wiki/hld-jsonl-eval/pages/normal-template-analysis.md"), false);
+  assert.equal(isBoilerplatePathForEval("!Wiki/hld-jsonl-eval/pages/интеграция-систем-потребителей-с-етп-дата.md"), false);
+});
+
+test("demoteBoilerplateTopForEval moves boilerplate behind stable candidates", () => {
+  const ranked = [
+    "!Wiki/hld-jsonl-eval/pages/template-hld-v2-standard.md",
+    "!Wiki/hld-jsonl-eval/pages/primary.md",
+    "!Wiki/hld-jsonl-eval/pages/template-readme.md",
+    "!Wiki/hld-jsonl-eval/pages/direct.md",
+    "!Wiki/hld-jsonl-eval/pages/supporting.md",
+  ];
+
+  const demoted = demoteBoilerplateTopForEval(ranked, 0.50, 5);
+
+  assert.deepEqual(demoted, [
+    "!Wiki/hld-jsonl-eval/pages/primary.md",
+    "!Wiki/hld-jsonl-eval/pages/direct.md",
+    "!Wiki/hld-jsonl-eval/pages/supporting.md",
+    "!Wiki/hld-jsonl-eval/pages/template-hld-v2-standard.md",
+    "!Wiki/hld-jsonl-eval/pages/template-readme.md",
+  ]);
 });
 
 test("HLD eval builds isolated JSONL domain and runs five live retrieval queries", async () => {
@@ -68,10 +101,16 @@ test("HLD eval builds isolated JSONL domain and runs five live retrieval queries
     assert.match(report, /gold grade 3/);
     assert.match(report, /Variants vs weighted-lexical:/);
     assert.match(report, /ΔnDCG@5/);
+    assert.match(report, /Demotion factor:/);
+    assert.match(report, /Top-1 boilerplate:/);
+    assert.match(report, /BM25 contribution:/);
+    assert.match(report, /Demotion contribution:/);
+    assert.match(report, /Setting recommendation:/);
     assert.match(report, /Baseline Overlap@5:/);
     assert.match(report, /Improved Overlap@5:/);
     assert.match(report, /Delta:/);
     assert.doesNotMatch(report, /Status: blocked/);
+    assert.equal(result.variantMetrics.some((variant) => variant.id === "weighted-lexical-demoted"), true);
 
     const index = parseWikiIndexJsonl(await readFile(result.indexPath, "utf8"), result.indexPath);
     assert.equal(index.filter(isPageIndexRecord).length, 5);
