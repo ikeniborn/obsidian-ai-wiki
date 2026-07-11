@@ -111,6 +111,8 @@ test("HLD eval builds isolated JSONL domain and runs five live retrieval queries
     assert.match(report, /Delta:/);
     assert.doesNotMatch(report, /Status: blocked/);
     assert.equal(result.variantMetrics.some((variant) => variant.id === "weighted-lexical-demoted"), true);
+    assert.equal(result.variantMetrics.some((variant) => variant.id === "weighted-lexical-score-rank-demoted"), true);
+    assert.match(report, /weighted-lexical-score-rank-demoted/);
 
     const index = parseWikiIndexJsonl(await readFile(result.indexPath, "utf8"), result.indexPath);
     assert.equal(index.filter(isPageIndexRecord).length, 5);

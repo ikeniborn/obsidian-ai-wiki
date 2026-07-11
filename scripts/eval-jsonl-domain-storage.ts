@@ -4,6 +4,12 @@ import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { buildBm25Index, rankBm25, tokenizeBm25 } from "../src/bm25";
+import {
+  DEFAULT_BOILERPLATE_DEMOTION_FACTOR,
+  demoteBoilerplateRankedItems,
+  isBoilerplatePath,
+  normalizeBoilerplateDemotionConfig,
+} from "../src/boilerplate-demotion";
 import { domainEntryToMetadataRecords, stringifyDomainMetadata } from "../src/domain-metadata";
 import { stringifyJsonl } from "../src/jsonl";
 import {
@@ -34,6 +40,7 @@ export type RetrievalVariantId =
   | "rrf-weighted-bm25"
   | "rrf-weighted-bm25-legacy"
   | "weighted-lexical-demoted"
+  | "weighted-lexical-score-rank-demoted"
   | "rrf-weighted-bm25-demoted"
   | "rrf-weighted-bm25-legacy-demoted";
 
@@ -356,8 +363,7 @@ function uniqueTop(paths: string[], limit: number): string[] {
 }
 
 export function isBoilerplatePathForEval(vaultPath: string): boolean {
-  const name = path.basename(vaultPath, ".md").toLowerCase();
-  return name === "template-readme" || name.startsWith("template-hld-");
+  return isBoilerplatePath(vaultPath);
 }
 
 export function demoteBoilerplateTopForEval(
@@ -366,17 +372,12 @@ export function demoteBoilerplateTopForEval(
   limit: number,
 ): string[] {
   if (limit <= 0) return [];
-  const strength = Math.max(0, Math.min(1, factor));
-  const penalty = Math.max(1, Math.ceil(strength * limit * 2));
-  return uniqueTop(rankedPaths, rankedPaths.length)
-    .map((pathValue, index) => ({
-      path: pathValue,
-      index,
-      adjusted: index + (isBoilerplatePathForEval(pathValue) ? penalty : 0),
-    }))
-    .sort((a, b) => (a.adjusted - b.adjusted) || (a.index - b.index))
-    .map((item) => item.path)
-    .slice(0, limit);
+  const config = normalizeBoilerplateDemotionConfig({ enabled: true, factor });
+  return demoteBoilerplateRankedItems(
+    uniqueTop(rankedPaths, rankedPaths.length).map((pathValue) => ({ path: pathValue })),
+    config,
+    limit,
+  ).map((item) => item.path);
 }
 
 function overlapRatio(a: string[], b: string[], limit: number): number {
@@ -705,6 +706,10 @@ async function runQueries(files: SourceMarkdownFile[], indexPath: string, gold: 
     const started = Date.now();
     const labels = gold.queries[query.id].relevant;
     const questionTokens = evalQueryTokens(query);
+    const runtimeDemotion = normalizeBoilerplateDemotionConfig({
+      enabled: true,
+      factor: DEFAULT_BOILERPLATE_DEMOTION_FACTOR,
+    });
     const baselineTop = scoreBaseline(query, files);
     const legacySeedScores = allPaths
       .map((vaultPath) => {
@@ -756,6 +761,45 @@ async function runQueries(files: SourceMarkdownFile[], indexPath: string, gold: 
       5,
     );
     const jsonlTop = uniqueTop([...rebalancedTop5, ...fusedPaths, ...improvedPageTop, ...improvedChunkTop], 10);
+    const runtimePageRank = rankLexicalPages(questionTokens, pageRecords.map((record) => ({
+      id: record.articleId,
+      path: record.path,
+      title: path.basename(record.path, ".md"),
+      description: record.description,
+      boilerplateDemotion: runtimeDemotion,
+    })), 10);
+    const runtimeChunkRank = rankLexicalChunks(questionTokens, chunkInputs.map((chunk) => ({
+      ...chunk,
+      boilerplateDemotion: runtimeDemotion,
+    })), 10);
+    const runtimeFused = fuseLexicalRanks(
+      runtimePageRank,
+      runtimeChunkRank,
+      10,
+      10,
+      [legacyJsonlTop.map((item) => pageId(item))],
+    );
+    const runtimeImprovedPageTop = runtimePageRank.map((item) => pathByArticleId.get(item.id) ?? item.id);
+    const runtimeImprovedChunkTop = uniqueTop(runtimeChunkRank.map((chunk) => chunk.path), 10);
+    const runtimeFusedPaths = runtimeFused.map((item) => pathByArticleId.get(item.id) ?? item.id);
+    const runtimeRebalancedTop5 = rebalanceFusedTop(
+      runtimeFusedPaths,
+      runtimeImprovedPageTop,
+      runtimeImprovedChunkTop,
+      legacyJsonlTop,
+      5,
+    );
+    const runtimeWeightedTop = uniqueTop([
+      ...runtimeRebalancedTop5,
+      ...runtimeFusedPaths,
+      ...runtimeImprovedPageTop,
+      ...runtimeImprovedChunkTop,
+    ], 10);
+    const runtimeEquivalentTop = demoteBoilerplateTopForEval(
+      runtimeWeightedTop,
+      DEFAULT_BOILERPLATE_DEMOTION_FACTOR,
+      10,
+    );
     const baselineOverlapAt5 = overlapRatio(baselineTop, legacyJsonlTop, 5);
     const improvedOverlapAt5 = overlapRatio(baselineTop, jsonlTop, 5);
     const overlapDelta = improvedOverlapAt5 - baselineOverlapAt5;
@@ -797,6 +841,12 @@ async function runQueries(files: SourceMarkdownFile[], indexPath: string, gold: 
       { id: "rrf-weighted-bm25", top: rrfWeightedBm25Top, demotionMoved: [] },
       { id: "rrf-weighted-bm25-legacy", top: rrfWeightedBm25LegacyTop, demotionMoved: [] },
     ];
+    variantInputs.push({
+      id: "weighted-lexical-score-rank-demoted",
+      top: runtimeEquivalentTop,
+      demotionFactor: DEFAULT_BOILERPLATE_DEMOTION_FACTOR,
+      demotionMoved: demotionMoved(runtimeWeightedTop, runtimeEquivalentTop),
+    });
     for (const factor of DEMOTION_FACTORS) {
       const weightedDemoted = demoteBoilerplateTopForEval(jsonlTop, factor, 10);
       variantInputs.push({
