@@ -107,17 +107,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path4) {
-      const ctrl = callVisitor(key, node, visitor, path4);
+    function visit_(key, node, visitor, path5) {
+      const ctrl = callVisitor(key, node, visitor, path5);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path4, ctrl);
-        return visit_(key, ctrl, visitor, path4);
+        replaceNode(key, path5, ctrl);
+        return visit_(key, ctrl, visitor, path5);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path4 = Object.freeze(path4.concat(node));
+          path5 = Object.freeze(path5.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path4);
+            const ci = visit_(i, node.items[i], visitor, path5);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -128,13 +128,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path4 = Object.freeze(path4.concat(node));
-          const ck = visit_("key", node.key, visitor, path4);
+          path5 = Object.freeze(path5.concat(node));
+          const ck = visit_("key", node.key, visitor, path5);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path4);
+          const cv = visit_("value", node.value, visitor, path5);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -155,17 +155,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path4) {
-      const ctrl = await callVisitor(key, node, visitor, path4);
+    async function visitAsync_(key, node, visitor, path5) {
+      const ctrl = await callVisitor(key, node, visitor, path5);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path4, ctrl);
-        return visitAsync_(key, ctrl, visitor, path4);
+        replaceNode(key, path5, ctrl);
+        return visitAsync_(key, ctrl, visitor, path5);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path4 = Object.freeze(path4.concat(node));
+          path5 = Object.freeze(path5.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path4);
+            const ci = await visitAsync_(i, node.items[i], visitor, path5);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -176,13 +176,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path4 = Object.freeze(path4.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path4);
+          path5 = Object.freeze(path5.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path5);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path4);
+          const cv = await visitAsync_("value", node.value, visitor, path5);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -209,23 +209,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path4) {
+    function callVisitor(key, node, visitor, path5) {
       if (typeof visitor === "function")
-        return visitor(key, node, path4);
+        return visitor(key, node, path5);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path4);
+        return visitor.Map?.(key, node, path5);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path4);
+        return visitor.Seq?.(key, node, path5);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path4);
+        return visitor.Pair?.(key, node, path5);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path4);
+        return visitor.Scalar?.(key, node, path5);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path4);
+        return visitor.Alias?.(key, node, path5);
       return void 0;
     }
-    function replaceNode(key, path4, node) {
-      const parent = path4[path4.length - 1];
+    function replaceNode(key, path5, node) {
+      const parent = path5[path5.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -835,10 +835,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path4, value) {
+    function collectionFromPath(schema, path5, value) {
       let v = value;
-      for (let i = path4.length - 1; i >= 0; --i) {
-        const k = path4[i];
+      for (let i = path5.length - 1; i >= 0; --i) {
+        const k = path5[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -857,7 +857,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path4) => path4 == null || typeof path4 === "object" && !!path4[Symbol.iterator]().next().done;
+    var isEmptyPath = (path5) => path5 == null || typeof path5 === "object" && !!path5[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -887,11 +887,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path4, value) {
-        if (isEmptyPath(path4))
+      addIn(path5, value) {
+        if (isEmptyPath(path5))
           this.add(value);
         else {
-          const [key, ...rest] = path4;
+          const [key, ...rest] = path5;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -905,8 +905,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path4) {
-        const [key, ...rest] = path4;
+      deleteIn(path5) {
+        const [key, ...rest] = path5;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -920,8 +920,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path4, keepScalar) {
-        const [key, ...rest] = path4;
+      getIn(path5, keepScalar) {
+        const [key, ...rest] = path5;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -939,8 +939,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path4) {
-        const [key, ...rest] = path4;
+      hasIn(path5) {
+        const [key, ...rest] = path5;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -950,8 +950,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path4, value) {
-        const [key, ...rest] = path4;
+      setIn(path5, value) {
+        const [key, ...rest] = path5;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -3466,9 +3466,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path4, value) {
+      addIn(path5, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path4, value);
+          this.contents.addIn(path5, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -3543,14 +3543,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path4) {
-        if (Collection.isEmptyPath(path4)) {
+      deleteIn(path5) {
+        if (Collection.isEmptyPath(path5)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path4) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path5) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -3565,10 +3565,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path4, keepScalar) {
-        if (Collection.isEmptyPath(path4))
+      getIn(path5, keepScalar) {
+        if (Collection.isEmptyPath(path5))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path4, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path5, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -3579,10 +3579,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path4) {
-        if (Collection.isEmptyPath(path4))
+      hasIn(path5) {
+        if (Collection.isEmptyPath(path5))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path4) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path5) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -3599,13 +3599,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path4, value) {
-        if (Collection.isEmptyPath(path4)) {
+      setIn(path5, value) {
+        if (Collection.isEmptyPath(path5)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path4), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path5), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path4, value);
+          this.contents.setIn(path5, value);
         }
       }
       /**
@@ -5565,9 +5565,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path4) => {
+    visit.itemAtPath = (cst, path5) => {
       let item = cst;
-      for (const [field, index] of path4) {
+      for (const [field, index] of path5) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -5576,23 +5576,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path4) => {
-      const parent = visit.itemAtPath(cst, path4.slice(0, -1));
-      const field = path4[path4.length - 1][0];
+    visit.parentCollection = (cst, path5) => {
+      const parent = visit.itemAtPath(cst, path5.slice(0, -1));
+      const field = path5[path5.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path4, item, visitor) {
-      let ctrl = visitor(item, path4);
+    function _visit(path5, item, visitor) {
+      let ctrl = visitor(item, path5);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path4.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path5.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -5603,10 +5603,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path4);
+            ctrl = ctrl(item, path5);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path4) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path5) : ctrl;
     }
     exports2.visit = visit;
   }
@@ -7361,20 +7361,20 @@ var require_dist = __commonJS({
 var require_path_browserify = __commonJS({
   "node_modules/path-browserify/index.js"(exports2, module2) {
     "use strict";
-    function assertPath(path4) {
-      if (typeof path4 !== "string") {
-        throw new TypeError("Path must be a string. Received " + JSON.stringify(path4));
+    function assertPath(path5) {
+      if (typeof path5 !== "string") {
+        throw new TypeError("Path must be a string. Received " + JSON.stringify(path5));
       }
     }
-    function normalizeStringPosix(path4, allowAboveRoot) {
+    function normalizeStringPosix(path5, allowAboveRoot) {
       var res = "";
       var lastSegmentLength = 0;
       var lastSlash = -1;
       var dots = 0;
       var code;
-      for (var i = 0; i <= path4.length; ++i) {
-        if (i < path4.length)
-          code = path4.charCodeAt(i);
+      for (var i = 0; i <= path5.length; ++i) {
+        if (i < path5.length)
+          code = path5.charCodeAt(i);
         else if (code === 47)
           break;
         else
@@ -7414,9 +7414,9 @@ var require_path_browserify = __commonJS({
             }
           } else {
             if (res.length > 0)
-              res += "/" + path4.slice(lastSlash + 1, i);
+              res += "/" + path5.slice(lastSlash + 1, i);
             else
-              res = path4.slice(lastSlash + 1, i);
+              res = path5.slice(lastSlash + 1, i);
             lastSegmentLength = i - lastSlash - 1;
           }
           lastSlash = i;
@@ -7447,20 +7447,20 @@ var require_path_browserify = __commonJS({
         var resolvedAbsolute = false;
         var cwd;
         for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
-          var path4;
+          var path5;
           if (i >= 0)
-            path4 = arguments[i];
+            path5 = arguments[i];
           else {
             if (cwd === void 0)
               cwd = process.cwd();
-            path4 = cwd;
+            path5 = cwd;
           }
-          assertPath(path4);
-          if (path4.length === 0) {
+          assertPath(path5);
+          if (path5.length === 0) {
             continue;
           }
-          resolvedPath = path4 + "/" + resolvedPath;
-          resolvedAbsolute = path4.charCodeAt(0) === 47;
+          resolvedPath = path5 + "/" + resolvedPath;
+          resolvedAbsolute = path5.charCodeAt(0) === 47;
         }
         resolvedPath = normalizeStringPosix(resolvedPath, !resolvedAbsolute);
         if (resolvedAbsolute) {
@@ -7474,20 +7474,20 @@ var require_path_browserify = __commonJS({
           return ".";
         }
       },
-      normalize: function normalize(path4) {
-        assertPath(path4);
-        if (path4.length === 0) return ".";
-        var isAbsolute4 = path4.charCodeAt(0) === 47;
-        var trailingSeparator = path4.charCodeAt(path4.length - 1) === 47;
-        path4 = normalizeStringPosix(path4, !isAbsolute4);
-        if (path4.length === 0 && !isAbsolute4) path4 = ".";
-        if (path4.length > 0 && trailingSeparator) path4 += "/";
-        if (isAbsolute4) return "/" + path4;
-        return path4;
+      normalize: function normalize(path5) {
+        assertPath(path5);
+        if (path5.length === 0) return ".";
+        var isAbsolute4 = path5.charCodeAt(0) === 47;
+        var trailingSeparator = path5.charCodeAt(path5.length - 1) === 47;
+        path5 = normalizeStringPosix(path5, !isAbsolute4);
+        if (path5.length === 0 && !isAbsolute4) path5 = ".";
+        if (path5.length > 0 && trailingSeparator) path5 += "/";
+        if (isAbsolute4) return "/" + path5;
+        return path5;
       },
-      isAbsolute: function isAbsolute4(path4) {
-        assertPath(path4);
-        return path4.length > 0 && path4.charCodeAt(0) === 47;
+      isAbsolute: function isAbsolute4(path5) {
+        assertPath(path5);
+        return path5.length > 0 && path5.charCodeAt(0) === 47;
       },
       join: function join6() {
         if (arguments.length === 0)
@@ -7573,18 +7573,18 @@ var require_path_browserify = __commonJS({
           return to.slice(toStart);
         }
       },
-      _makeLong: function _makeLong(path4) {
-        return path4;
+      _makeLong: function _makeLong(path5) {
+        return path5;
       },
-      dirname: function dirname2(path4) {
-        assertPath(path4);
-        if (path4.length === 0) return ".";
-        var code = path4.charCodeAt(0);
+      dirname: function dirname2(path5) {
+        assertPath(path5);
+        if (path5.length === 0) return ".";
+        var code = path5.charCodeAt(0);
         var hasRoot = code === 47;
         var end = -1;
         var matchedSlash = true;
-        for (var i = path4.length - 1; i >= 1; --i) {
-          code = path4.charCodeAt(i);
+        for (var i = path5.length - 1; i >= 1; --i) {
+          code = path5.charCodeAt(i);
           if (code === 47) {
             if (!matchedSlash) {
               end = i;
@@ -7596,21 +7596,21 @@ var require_path_browserify = __commonJS({
         }
         if (end === -1) return hasRoot ? "/" : ".";
         if (hasRoot && end === 1) return "//";
-        return path4.slice(0, end);
+        return path5.slice(0, end);
       },
-      basename: function basename2(path4, ext) {
+      basename: function basename(path5, ext) {
         if (ext !== void 0 && typeof ext !== "string") throw new TypeError('"ext" argument must be a string');
-        assertPath(path4);
+        assertPath(path5);
         var start = 0;
         var end = -1;
         var matchedSlash = true;
         var i;
-        if (ext !== void 0 && ext.length > 0 && ext.length <= path4.length) {
-          if (ext.length === path4.length && ext === path4) return "";
+        if (ext !== void 0 && ext.length > 0 && ext.length <= path5.length) {
+          if (ext.length === path5.length && ext === path5) return "";
           var extIdx = ext.length - 1;
           var firstNonSlashEnd = -1;
-          for (i = path4.length - 1; i >= 0; --i) {
-            var code = path4.charCodeAt(i);
+          for (i = path5.length - 1; i >= 0; --i) {
+            var code = path5.charCodeAt(i);
             if (code === 47) {
               if (!matchedSlash) {
                 start = i + 1;
@@ -7634,11 +7634,11 @@ var require_path_browserify = __commonJS({
             }
           }
           if (start === end) end = firstNonSlashEnd;
-          else if (end === -1) end = path4.length;
-          return path4.slice(start, end);
+          else if (end === -1) end = path5.length;
+          return path5.slice(start, end);
         } else {
-          for (i = path4.length - 1; i >= 0; --i) {
-            if (path4.charCodeAt(i) === 47) {
+          for (i = path5.length - 1; i >= 0; --i) {
+            if (path5.charCodeAt(i) === 47) {
               if (!matchedSlash) {
                 start = i + 1;
                 break;
@@ -7649,18 +7649,18 @@ var require_path_browserify = __commonJS({
             }
           }
           if (end === -1) return "";
-          return path4.slice(start, end);
+          return path5.slice(start, end);
         }
       },
-      extname: function extname(path4) {
-        assertPath(path4);
+      extname: function extname(path5) {
+        assertPath(path5);
         var startDot = -1;
         var startPart = 0;
         var end = -1;
         var matchedSlash = true;
         var preDotState = 0;
-        for (var i = path4.length - 1; i >= 0; --i) {
-          var code = path4.charCodeAt(i);
+        for (var i = path5.length - 1; i >= 0; --i) {
+          var code = path5.charCodeAt(i);
           if (code === 47) {
             if (!matchedSlash) {
               startPart = i + 1;
@@ -7686,7 +7686,7 @@ var require_path_browserify = __commonJS({
         preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
           return "";
         }
-        return path4.slice(startDot, end);
+        return path5.slice(startDot, end);
       },
       format: function format(pathObject) {
         if (pathObject === null || typeof pathObject !== "object") {
@@ -7694,11 +7694,11 @@ var require_path_browserify = __commonJS({
         }
         return _format("/", pathObject);
       },
-      parse: function parse(path4) {
-        assertPath(path4);
+      parse: function parse(path5) {
+        assertPath(path5);
         var ret = { root: "", dir: "", base: "", ext: "", name: "" };
-        if (path4.length === 0) return ret;
-        var code = path4.charCodeAt(0);
+        if (path5.length === 0) return ret;
+        var code = path5.charCodeAt(0);
         var isAbsolute4 = code === 47;
         var start;
         if (isAbsolute4) {
@@ -7711,10 +7711,10 @@ var require_path_browserify = __commonJS({
         var startPart = 0;
         var end = -1;
         var matchedSlash = true;
-        var i = path4.length - 1;
+        var i = path5.length - 1;
         var preDotState = 0;
         for (; i >= start; --i) {
-          code = path4.charCodeAt(i);
+          code = path5.charCodeAt(i);
           if (code === 47) {
             if (!matchedSlash) {
               startPart = i + 1;
@@ -7737,20 +7737,20 @@ var require_path_browserify = __commonJS({
         preDotState === 0 || // The (right-most) trimmed path component is exactly '..'
         preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
           if (end !== -1) {
-            if (startPart === 0 && isAbsolute4) ret.base = ret.name = path4.slice(1, end);
-            else ret.base = ret.name = path4.slice(startPart, end);
+            if (startPart === 0 && isAbsolute4) ret.base = ret.name = path5.slice(1, end);
+            else ret.base = ret.name = path5.slice(startPart, end);
           }
         } else {
           if (startPart === 0 && isAbsolute4) {
-            ret.name = path4.slice(1, startDot);
-            ret.base = path4.slice(1, end);
+            ret.name = path5.slice(1, startDot);
+            ret.base = path5.slice(1, end);
           } else {
-            ret.name = path4.slice(startPart, startDot);
-            ret.base = path4.slice(startPart, end);
+            ret.name = path5.slice(startPart, startDot);
+            ret.base = path5.slice(startPart, end);
           }
-          ret.ext = path4.slice(startDot, end);
+          ret.ext = path5.slice(startDot, end);
         }
-        if (startPart > 0) ret.dir = path4.slice(0, startPart - 1);
+        if (startPart > 0) ret.dir = path5.slice(0, startPart - 1);
         else if (isAbsolute4) ret.dir = "/";
         return ret;
       },
@@ -8566,14 +8566,14 @@ var require_util = __commonJS({
         }
         const port = url.port != null ? url.port : url.protocol === "https:" ? 443 : 80;
         let origin = url.origin != null ? url.origin : `${url.protocol || ""}//${url.hostname || ""}:${port}`;
-        let path4 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
+        let path5 = url.path != null ? url.path : `${url.pathname || ""}${url.search || ""}`;
         if (origin[origin.length - 1] === "/") {
           origin = origin.slice(0, origin.length - 1);
         }
-        if (path4 && path4[0] !== "/") {
-          path4 = `/${path4}`;
+        if (path5 && path5[0] !== "/") {
+          path5 = `/${path5}`;
         }
-        return new URL(`${origin}${path4}`);
+        return new URL(`${origin}${path5}`);
       }
       if (!isHttpOrHttpsPrefixed(url.origin || url.protocol)) {
         throw new InvalidArgumentError("Invalid URL protocol: the URL must start with `http:` or `https:`.");
@@ -9024,39 +9024,39 @@ var require_diagnostics = __commonJS({
       });
       diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
         const {
-          request: { method, path: path4, origin }
+          request: { method, path: path5, origin }
         } = evt;
-        debuglog("sending request to %s %s/%s", method, origin, path4);
+        debuglog("sending request to %s %s/%s", method, origin, path5);
       });
       diagnosticsChannel.channel("undici:request:headers").subscribe((evt) => {
         const {
-          request: { method, path: path4, origin },
+          request: { method, path: path5, origin },
           response: { statusCode }
         } = evt;
         debuglog(
           "received response to %s %s/%s - HTTP %d",
           method,
           origin,
-          path4,
+          path5,
           statusCode
         );
       });
       diagnosticsChannel.channel("undici:request:trailers").subscribe((evt) => {
         const {
-          request: { method, path: path4, origin }
+          request: { method, path: path5, origin }
         } = evt;
-        debuglog("trailers received from %s %s/%s", method, origin, path4);
+        debuglog("trailers received from %s %s/%s", method, origin, path5);
       });
       diagnosticsChannel.channel("undici:request:error").subscribe((evt) => {
         const {
-          request: { method, path: path4, origin },
+          request: { method, path: path5, origin },
           error
         } = evt;
         debuglog(
           "request to %s %s/%s errored - %s",
           method,
           origin,
-          path4,
+          path5,
           error.message
         );
       });
@@ -9105,9 +9105,9 @@ var require_diagnostics = __commonJS({
         });
         diagnosticsChannel.channel("undici:client:sendHeaders").subscribe((evt) => {
           const {
-            request: { method, path: path4, origin }
+            request: { method, path: path5, origin }
           } = evt;
-          debuglog("sending request to %s %s/%s", method, origin, path4);
+          debuglog("sending request to %s %s/%s", method, origin, path5);
         });
       }
       diagnosticsChannel.channel("undici:websocket:open").subscribe((evt) => {
@@ -9170,7 +9170,7 @@ var require_request = __commonJS({
     var kHandler = /* @__PURE__ */ Symbol("handler");
     var Request = class {
       constructor(origin, {
-        path: path4,
+        path: path5,
         method,
         body,
         headers,
@@ -9185,11 +9185,11 @@ var require_request = __commonJS({
         expectContinue,
         servername
       }, handler) {
-        if (typeof path4 !== "string") {
+        if (typeof path5 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path4[0] !== "/" && !(path4.startsWith("http://") || path4.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path5[0] !== "/" && !(path5.startsWith("http://") || path5.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.test(path4)) {
+        } else if (invalidPathRegex.test(path5)) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -9255,7 +9255,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? buildURL(path4, query) : path4;
+        this.path = query ? buildURL(path5, query) : path5;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -13877,7 +13877,7 @@ var require_client_h1 = __commonJS({
       return method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "TRACE" && method !== "CONNECT";
     }
     function writeH1(client, request) {
-      const { method, path: path4, host, upgrade, blocking, reset } = request;
+      const { method, path: path5, host, upgrade, blocking, reset } = request;
       let { body, headers, contentLength } = request;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH" || method === "QUERY" || method === "PROPFIND" || method === "PROPPATCH";
       if (util2.isFormDataLike(body)) {
@@ -13944,7 +13944,7 @@ var require_client_h1 = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path4} HTTP/1.1\r
+      let header = `${method} ${path5} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -14470,7 +14470,7 @@ var require_client_h2 = __commonJS({
     }
     function writeH2(client, request) {
       const session = client[kHTTP2Session];
-      const { method, path: path4, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
+      const { method, path: path5, host, upgrade, expectContinue, signal, headers: reqHeaders } = request;
       let { body } = request;
       if (upgrade) {
         util2.errorRequest(client, request, new Error("Upgrade not supported for H2"));
@@ -14537,7 +14537,7 @@ var require_client_h2 = __commonJS({
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path4;
+      headers[HTTP2_HEADER_PATH] = path5;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
@@ -14890,9 +14890,9 @@ var require_redirect_handler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util2.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path4 = search ? `${pathname}${search}` : pathname;
+        const path5 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path4;
+        this.opts.path = path5;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -16127,10 +16127,10 @@ var require_proxy_agent = __commonJS({
         };
         const {
           origin,
-          path: path4 = "/",
+          path: path5 = "/",
           headers = {}
         } = opts;
-        opts.path = origin + path4;
+        opts.path = origin + path5;
         if (!("host" in headers) && !("Host" in headers)) {
           const { host } = new URL2(origin);
           headers.host = host;
@@ -18051,20 +18051,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path4) {
-      if (typeof path4 !== "string") {
-        return path4;
+    function safeUrl(path5) {
+      if (typeof path5 !== "string") {
+        return path5;
       }
-      const pathSegments = path4.split("?");
+      const pathSegments = path5.split("?");
       if (pathSegments.length !== 2) {
-        return path4;
+        return path5;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path4, method, body, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path4);
+    function matchKey(mockDispatch2, { path: path5, method, body, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path5);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -18086,7 +18086,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path4 }) => matchValue(safeUrl(path4), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path5 }) => matchValue(safeUrl(path5), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -18124,9 +18124,9 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path4, method, body, headers, query } = opts;
+      const { path: path5, method, body, headers, query } = opts;
       return {
-        path: path4,
+        path: path5,
         method,
         body,
         headers,
@@ -18589,10 +18589,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path4, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path5, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path4,
+            Path: path5,
             "Status code": statusCode,
             Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
             Invocations: timesInvoked,
@@ -23473,9 +23473,9 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path4) {
-      for (let i = 0; i < path4.length; ++i) {
-        const code = path4.charCodeAt(i);
+    function validateCookiePath(path5) {
+      for (let i = 0; i < path5.length; ++i) {
+        const code = path5.charCodeAt(i);
         if (code < 32 || // exclude CTLs (0-31)
         code === 127 || // DEL
         code === 59) {
@@ -26168,11 +26168,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path4 = opts.path;
+          let path5 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path4 = `/${path4}`;
+            path5 = `/${path5}`;
           }
-          url = new URL(util2.parseOrigin(url).origin + path4);
+          url = new URL(util2.parseOrigin(url).origin + path5);
         } else {
           if (!opts) {
             opts = typeof url === "object" ? url : {};
@@ -26481,7 +26481,7 @@ var en = {
     formatInWikiBody: (id) => `This file is a wiki article (domain \xAB${id}\xBB). Formatting wiki articles is not available.`,
     formatInWikiClose: "Close",
     formatNoPending: "No format preview available",
-    formatApplied: (path4) => `Formatted: ${path4}`,
+    formatApplied: (path5) => `Formatted: ${path5}`,
     formatCancelled: "Format cancelled",
     formatPreviewHeader: "Format preview",
     formatApply: "Apply",
@@ -26540,7 +26540,7 @@ var en = {
     ratingRebuild: "Rate rebuild:"
   },
   formatProgress: {
-    analysing: (path4) => `Analysing file ${path4}...
+    analysing: (path5) => `Analysing file ${path5}...
 `,
     truncatedSalvageSummary: "Format: response truncated \u2014 salvage",
     truncatedSalvageRetrySummary: "Format: retry response truncated \u2014 salvage",
@@ -26826,7 +26826,7 @@ var ru = {
     formatInWikiBody: (id) => `\u0424\u0430\u0439\u043B \u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F wiki-\u0441\u0442\u0430\u0442\u044C\u0451\u0439 \u0434\u043E\u043C\u0435\u043D\u0430 \xAB${id}\xBB. \u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 wiki-\u0441\u0442\u0430\u0442\u0435\u0439 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E.`,
     formatInWikiClose: "\u0417\u0430\u043A\u0440\u044B\u0442\u044C",
     formatNoPending: "\u041D\u0435\u0442 \u043E\u0436\u0438\u0434\u0430\u044E\u0449\u0435\u0433\u043E \u043F\u0440\u0435\u0434\u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440\u0430 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F",
-    formatApplied: (path4) => `\u041E\u0442\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043E: ${path4}`,
+    formatApplied: (path5) => `\u041E\u0442\u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043E: ${path5}`,
     formatCancelled: "\u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E",
     formatPreviewHeader: "\u041F\u0440\u0435\u0434\u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440 \u0444\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F",
     formatApply: "\u041F\u0440\u0438\u043C\u0435\u043D\u0438\u0442\u044C",
@@ -26885,7 +26885,7 @@ var ru = {
     ratingRebuild: "\u041E\u0446\u0435\u043D\u0438\u0442\u0435 \u043F\u0435\u0440\u0435\u0441\u0442\u0440\u043E\u0439\u043A\u0443:"
   },
   formatProgress: {
-    analysing: (path4) => `\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u0430 ${path4}...
+    analysing: (path5) => `\u0410\u043D\u0430\u043B\u0438\u0437 \u0444\u0430\u0439\u043B\u0430 ${path5}...
 `,
     truncatedSalvageSummary: "Format: \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u2014 salvage",
     truncatedSalvageRetrySummary: "Format: retry \u043E\u0442\u0432\u0435\u0442 \u043E\u0431\u0440\u0435\u0437\u0430\u043D \u2014 salvage",
@@ -27170,7 +27170,7 @@ var es = {
     formatInWikiBody: (id) => `Este archivo es un art\xEDculo wiki (dominio \xAB${id}\xBB). No se puede formatear art\xEDculos wiki.`,
     formatInWikiClose: "Cerrar",
     formatNoPending: "No hay previsualizaci\xF3n de formato",
-    formatApplied: (path4) => `Formateado: ${path4}`,
+    formatApplied: (path5) => `Formateado: ${path5}`,
     formatCancelled: "Formateo cancelado",
     formatPreviewHeader: "Previsualizaci\xF3n del formateo",
     formatApply: "Aplicar",
@@ -27229,7 +27229,7 @@ var es = {
     ratingRebuild: "Evaluar reconstrucci\xF3n:"
   },
   formatProgress: {
-    analysing: (path4) => `Analizando archivo ${path4}...
+    analysing: (path5) => `Analizando archivo ${path5}...
 `,
     truncatedSalvageSummary: "Format: respuesta truncada \u2014 recuperaci\xF3n",
     truncatedSalvageRetrySummary: "Format: reintento truncado \u2014 recuperaci\xF3n",
@@ -27990,8 +27990,8 @@ var GLOBAL_DEV_LOG_PATH = `${LEGACY_GLOBAL_CONFIG_DIR}/_dev.jsonl`;
 function domainWikiFolder(subfolder) {
   return `${WIKI_ROOT}/${subfolder}`;
 }
-function isWikiArticlePath(path4) {
-  return path4 === WIKI_ROOT || path4.startsWith(`${WIKI_ROOT}/`);
+function isWikiArticlePath(path5) {
+  return path5 === WIKI_ROOT || path5.startsWith(`${WIKI_ROOT}/`);
 }
 function sanitizeWikiFolder(raw) {
   let s = raw;
@@ -28005,11 +28005,11 @@ function sanitizeWikiSubfolder(raw) {
   if (!raw.includes("/")) return raw;
   return raw.split("/").pop();
 }
-function validateArticlePath(path4, wikiVaultPath) {
-  if (path4 === `${wikiVaultPath}/_config/_index.md` || path4 === `${wikiVaultPath}/_config/_log.md`) return true;
+function validateArticlePath(path5, wikiVaultPath) {
+  if (path5 === `${wikiVaultPath}/_config/_index.md` || path5 === `${wikiVaultPath}/_config/_log.md`) return true;
   const prefix = `${wikiVaultPath}/`;
-  if (!path4.startsWith(prefix)) return false;
-  const remainder = path4.slice(prefix.length);
+  if (!path5.startsWith(prefix)) return false;
+  const remainder = path5.slice(prefix.length);
   if (remainder.includes(".config")) return false;
   const segments = remainder.split("/");
   return segments.length === 2 && segments[1].endsWith(".md");
@@ -28038,8 +28038,8 @@ function legacyDomainEmbeddingsPath(domainFolder) {
 var domainConfigDir = legacyDomainConfigDir;
 
 // src/source-paths.ts
-function isSelectableSourceFolder(path4) {
-  return path4 !== WIKI_ROOT && !path4.startsWith(`${WIKI_ROOT}/`);
+function isSelectableSourceFolder(path5) {
+  return path5 !== WIKI_ROOT && !path5.startsWith(`${WIKI_ROOT}/`);
 }
 function consolidateSourcePaths(existing, newPath, vaultRoot) {
   const toAbs = (p) => import_path_browserify.default.isAbsolute(p) ? p : import_path_browserify.default.join(vaultRoot, p);
@@ -29240,7 +29240,7 @@ var import_obsidian4 = require("obsidian");
 // src/wiki-graph.ts
 var import_path_browserify3 = __toESM(require_path_browserify(), 1);
 function pageId(vaultPath) {
-  return (0, import_path_browserify3.basename)(vaultPath, ".md");
+  return import_path_browserify3.default.basename(vaultPath, ".md");
 }
 function buildWikiGraph(pages) {
   const graph = /* @__PURE__ */ new Map();
@@ -29345,7 +29345,7 @@ async function bfsExpandRanked(seeds, graph, depth, pages, query, bfsTopK, annot
       );
       const top2 = scored2.slice(0, bfsTopK);
       const expandedScores2 = {};
-      for (const { path: path4, score } of top2) expandedScores2[pageId(path4)] = score;
+      for (const { path: path5, score } of top2) expandedScores2[pageId(path5)] = score;
       return { selectedIds: /* @__PURE__ */ new Set([...seedSet, ...Object.keys(expandedScores2)]), expandedScores: expandedScores2 };
     } catch (err) {
       console.warn("[bfsExpandRanked] similarity threw, returning full BFS:", err);
@@ -29354,8 +29354,8 @@ async function bfsExpandRanked(seeds, graph, depth, pages, query, bfsTopK, annot
   }
   const questionTokens = tokenize(query);
   const scored = nonSeeds.map((pid) => {
-    const path4 = pidToPath.get(pid);
-    const content = path4 ? pages.get(path4) ?? "" : "";
+    const path5 = pidToPath.get(pid);
+    const content = path5 ? pages.get(path5) ?? "" : "";
     return { pid, score: scoreSeed(questionTokens, pid, content) };
   });
   scored.sort((a, b) => b.score - a.score);
@@ -29491,8 +29491,8 @@ function selectSeeds(question, pages, topK, minScore, indexAnnotations) {
   const q = tokenize(question);
   if (q.size === 0) return [];
   const scored = [];
-  for (const [path4, content] of pages) {
-    const id = pageId(path4);
+  for (const [path5, content] of pages) {
+    const id = pageId(path5);
     const annotation = indexAnnotations?.get(id);
     const score = scoreSeed(q, id, content, annotation);
     if (score >= minScore && score > 0) scored.push({ id, score });
@@ -29503,13 +29503,13 @@ function selectSeeds(question, pages, topK, minScore, indexAnnotations) {
 
 // src/jsonl.ts
 var JsonlParseError = class extends Error {
-  constructor(path4, line, cause) {
+  constructor(path5, line, cause) {
     const msg = cause instanceof Error ? cause.message : String(cause);
-    super(`${path4}:${line}: ${msg}`);
+    super(`${path5}:${line}: ${msg}`);
     this.name = "JsonlParseError";
   }
 };
-function parseJsonl(text, path4) {
+function parseJsonl(text, path5) {
   const out = [];
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
@@ -29518,7 +29518,7 @@ function parseJsonl(text, path4) {
     try {
       out.push(JSON.parse(raw));
     } catch (e) {
-      throw new JsonlParseError(path4, i + 1, e);
+      throw new JsonlParseError(path5, i + 1, e);
     }
   }
   return out;
@@ -29534,8 +29534,8 @@ function isPageIndexRecord(record) {
 function isChunkIndexRecord(record) {
   return record.kind === "chunk";
 }
-function parseWikiIndexJsonl(text, path4) {
-  return parseJsonl(text, path4);
+function parseWikiIndexJsonl(text, path5) {
+  return parseJsonl(text, path5);
 }
 function stringifyWikiIndexJsonl(records) {
   return stringifyJsonl(records);
@@ -29750,8 +29750,8 @@ ${embedText}`),
 }
 function collectCandidateSections(pages, candidateIds, seedIds, articleScores, chunking) {
   const sections = [];
-  for (const [path4, content] of pages) {
-    const articleId = pageId(path4);
+  for (const [path5, content] of pages) {
+    const articleId = pageId(path5);
     if (!candidateIds.has(articleId)) continue;
     splitSections(content, chunking).forEach(({ heading, window: window2 }, ordinal) => {
       const embedText = `${heading}
@@ -29759,7 +29759,7 @@ ${window2}`.trim();
       if (!embedText) return;
       sections.push({
         articleId,
-        path: path4,
+        path: path5,
         heading,
         body: window2,
         embedText,
@@ -30040,12 +30040,12 @@ var PageSimilarityService = class {
   scoreJaccardOnce(queryTokens, indexAnnotations, allPaths) {
     if (queryTokens.size === 0) return [];
     const scored = [];
-    for (const path4 of allPaths) {
-      const pid = pageId(path4);
+    for (const path5 of allPaths) {
+      const pid = pageId(path5);
       const annotation = indexAnnotations.get(pid);
       if (!annotation) continue;
       const score = scoreSeed(queryTokens, pid, "", annotation);
-      if (score > 0) scored.push({ path: path4, score });
+      if (score > 0) scored.push({ path: path5, score });
     }
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, this.config.topK).map((x) => x.path);
@@ -30124,12 +30124,12 @@ var PageSimilarityService = class {
   }
   selectJaccard(queryTokens, indexAnnotations, allPaths) {
     const scored = [];
-    for (const path4 of allPaths) {
-      const pid = pageId(path4);
+    for (const path5 of allPaths) {
+      const pid = pageId(path5);
       const annotation = indexAnnotations.get(pid);
       if (!annotation) continue;
       const score = scoreSeed(queryTokens, pid, "", annotation);
-      if (score > 0) scored.push({ path: path4, score });
+      if (score > 0) scored.push({ path: path5, score });
     }
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, this.config.topK).map((x) => x.path);
@@ -30197,12 +30197,12 @@ var PageSimilarityService = class {
   }
   selectJaccardScored(queryTokens, indexAnnotations, allPaths, limit2 = this.config.topK) {
     const scored = [];
-    for (const path4 of allPaths) {
-      const pid = pageId(path4);
+    for (const path5 of allPaths) {
+      const pid = pageId(path5);
       const annotation = indexAnnotations.get(pid);
       if (!annotation) continue;
       const score = scoreSeed(queryTokens, pid, "", annotation);
-      if (score > 0) scored.push({ path: path4, score });
+      if (score > 0) scored.push({ path: path5, score });
     }
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, limit2);
@@ -31201,8 +31201,8 @@ var LlmWikiSettingTab = class extends import_obsidian5.PluginSettingTab {
 var import_obsidian7 = require("obsidian");
 
 // src/source-deletion.ts
-function sourceStem(path4) {
-  const base = path4.split("/").pop() ?? path4;
+function sourceStem(path5) {
+  const base = path5.split("/").pop() ?? path5;
   return base.replace(/\.md$/i, "");
 }
 function wikiSourceTokens(content) {
@@ -31230,12 +31230,12 @@ function computeDeletionPlan(sourcePath, pages, sourceStemToPath) {
   }
   return { toDelete, toRebuild, remainingSources };
 }
-function isSourceFile(path4, domain) {
-  if (isWikiArticlePath(path4)) return false;
-  if (!path4.endsWith(".md")) return false;
+function isSourceFile(path5, domain) {
+  if (isWikiArticlePath(path5)) return false;
+  if (!path5.endsWith(".md")) return false;
   for (const sp of domain.source_paths ?? []) {
     const norm = sp.replace(/\/+$/, "");
-    if (path4 === norm || path4.startsWith(`${norm}/`)) return true;
+    if (path5 === norm || path5.startsWith(`${norm}/`)) return true;
   }
   return false;
 }
@@ -32277,19 +32277,19 @@ function evalLogPath(pluginDir) {
   return `${pluginDir}/eval.jsonl`;
 }
 async function writeEvalRecord(adapter, pluginDir, record) {
-  const path4 = evalLogPath(pluginDir);
+  const path5 = evalLogPath(pluginDir);
   try {
     const line = JSON.stringify(record) + "\n";
-    if (await adapter.exists(path4)) await adapter.append(path4, line);
-    else await adapter.write(path4, line);
+    if (await adapter.exists(path5)) await adapter.append(path5, line);
+    else await adapter.write(path5, line);
   } catch {
   }
 }
 async function updateEvalRating(adapter, pluginDir, runId, axis, rating) {
-  const path4 = evalLogPath(pluginDir);
+  const path5 = evalLogPath(pluginDir);
   try {
-    if (!await adapter.exists(path4)) return void 0;
-    const content = await adapter.read(path4);
+    if (!await adapter.exists(path5)) return void 0;
+    const content = await adapter.read(path5);
     const lines = content.split("\n");
     for (let i = lines.length - 1; i >= 0; i--) {
       const raw = lines[i].trim();
@@ -32305,7 +32305,7 @@ async function updateEvalRating(adapter, pluginDir, runId, axis, rating) {
       const next = rec.ratings[axis] === rating ? null : rating;
       rec.ratings[axis] = next;
       lines[i] = JSON.stringify(rec);
-      await adapter.write(path4, lines.join("\n"));
+      await adapter.write(path5, lines.join("\n"));
       return next;
     }
     return void 0;
@@ -32314,10 +32314,10 @@ async function updateEvalRating(adapter, pluginDir, runId, axis, rating) {
   }
 }
 async function readEvalRecord(adapter, pluginDir, runId) {
-  const path4 = evalLogPath(pluginDir);
+  const path5 = evalLogPath(pluginDir);
   try {
-    if (!await adapter.exists(path4)) return void 0;
-    const content = await adapter.read(path4);
+    if (!await adapter.exists(path5)) return void 0;
+    const content = await adapter.read(path5);
     const lines = content.split("\n");
     for (let i = lines.length - 1; i >= 0; i--) {
       const raw = lines[i].trim();
@@ -32337,10 +32337,10 @@ async function readEvalRecord(adapter, pluginDir, runId) {
   }
 }
 async function updateEvalComment(adapter, pluginDir, runId, comment) {
-  const path4 = evalLogPath(pluginDir);
+  const path5 = evalLogPath(pluginDir);
   try {
-    if (!await adapter.exists(path4)) return void 0;
-    const content = await adapter.read(path4);
+    if (!await adapter.exists(path5)) return void 0;
+    const content = await adapter.read(path5);
     const lines = content.split("\n");
     for (let i = lines.length - 1; i >= 0; i--) {
       const raw = lines[i].trim();
@@ -32354,7 +32354,7 @@ async function updateEvalComment(adapter, pluginDir, runId, comment) {
       if (rec.runId !== runId) continue;
       rec.comment = comment;
       lines[i] = JSON.stringify(rec);
-      await adapter.write(path4, lines.join("\n"));
+      await adapter.write(path5, lines.join("\n"));
       return comment;
     }
     return void 0;
@@ -34489,8 +34489,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path4, errorMaps, issueData } = params;
-  const fullPath = [...path4, ...issueData.path || []];
+  const { data, path: path5, errorMaps, issueData } = params;
+  const fullPath = [...path5, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -34606,11 +34606,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path4, key) {
+  constructor(parent, value, path5, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path4;
+    this._path = path5;
     this._key = key;
   }
   get path() {
@@ -39309,8 +39309,8 @@ function formatZodFeedback(err, raw) {
     return render(repair_json_default, { detail: detail2 });
   }
   const bullets = err.issues.slice(0, 20).map((i) => {
-    const path4 = i.path.length ? i.path.join(".") : "(root)";
-    return `- ${path4}: ${i.message}`;
+    const path5 = i.path.length ? i.path.join(".") : "(root)";
+    return `- ${path5}: ${i.message}`;
   }).join("\n");
   const detail = ["Previous response failed validation:", bullets].join("\n");
   return render(repair_json_default, { detail });
@@ -39541,12 +39541,12 @@ var FormatWithVisionSchema = FormatBaseSchema.extend({
   if (val.report.trim().length === 0) {
     ctx.addIssue({ code: external_exports.ZodIssueCode.custom, path: ["report"], message: "report \u043F\u0443\u0441\u0442" });
   }
-  for (const path4 of val.embeds_preserved) {
-    if (!val.formatted.includes(`![[${path4}]]`)) {
+  for (const path5 of val.embeds_preserved) {
+    if (!val.formatted.includes(`![[${path5}]]`)) {
       ctx.addIssue({
         code: external_exports.ZodIssueCode.custom,
         path: ["formatted"],
-        message: `embed ![[${path4}]] \u043F\u043E\u0442\u0435\u0440\u044F\u043D`
+        message: `embed ![[${path5}]] \u043F\u043E\u0442\u0435\u0440\u044F\u043D`
       });
     }
   }
@@ -39740,8 +39740,8 @@ function parseDescriptionFromFm(content) {
 }
 function collectDescriptions(pages) {
   const map = /* @__PURE__ */ new Map();
-  for (const { path: path4, content } of pages) {
-    const stem = path4.split("/").pop().replace(/\.md$/, "");
+  for (const { path: path5, content } of pages) {
+    const stem = path5.split("/").pop().replace(/\.md$/, "");
     if (stem.startsWith("_") || !GENERIC_WIKI_STEM_REGEX.test(stem)) continue;
     const desc = parseDescriptionFromFm(content);
     map.set(stem, desc || deriveFallbackDescription(content));
@@ -39989,13 +39989,13 @@ function fixWikiLinks(pages, maxPasses, knownPageStems) {
       warnings.push(`${v.page}: ${v.kind} \u2014 ${v.detail}`);
     }
     if (knownPageStems) {
-      for (const [path4, content] of pages) {
+      for (const [path5, content] of pages) {
         const parts = splitFrontmatter(content);
         const body = parts ? parts[1] : content;
         for (const link of extractLinks(body)) {
           const stem = link.split("/").pop();
           if (!knownPageStems.has(stem)) {
-            warnings.push(`${path4}: dead link [[${stem}]]`);
+            warnings.push(`${path5}: dead link [[${stem}]]`);
           }
         }
       }
@@ -40007,12 +40007,12 @@ function fixWikiLinks(pages, maxPasses, knownPageStems) {
     const violations = validateWikiLinks(current);
     if (violations.length === 0) break;
     const next = /* @__PURE__ */ new Map();
-    for (const [path4, content] of current) {
+    for (const [path5, content] of current) {
       try {
-        next.set(path4, fixOnePass(content));
+        next.set(path5, fixOnePass(content));
       } catch (e) {
-        next.set(path4, content);
-        warnings.push(`${path4}: fix error \u2014 ${e.message}`);
+        next.set(path5, content);
+        warnings.push(`${path5}: fix error \u2014 ${e.message}`);
       }
     }
     current = next;
@@ -40022,13 +40022,13 @@ function fixWikiLinks(pages, maxPasses, knownPageStems) {
     warnings.push(`${v.page}: ${v.kind} \u2014 ${v.detail}`);
   }
   if (knownPageStems) {
-    for (const [path4, content] of current) {
+    for (const [path5, content] of current) {
       const parts = splitFrontmatter(content);
       const body = parts ? parts[1] : content;
       for (const link of extractLinks(body)) {
         const stem = link.split("/").pop();
         if (!knownPageStems.has(stem)) {
-          warnings.push(`${path4}: dead link [[${stem}]]`);
+          warnings.push(`${path5}: dead link [[${stem}]]`);
         }
       }
     }
@@ -40213,7 +40213,7 @@ async function* runIngest(args, vaultTools, llm, model, domains, vaultRoot, sign
   } else {
     existingPages = await vaultTools.readAll(nonMetaPaths);
   }
-  const noSources = [...existingPages.entries()].filter(([, content]) => !/resource:/m.test(content)).map(([path4]) => path4);
+  const noSources = [...existingPages.entries()].filter(([, content]) => !/resource:/m.test(content)).map(([path5]) => path5);
   for (const p of noSources) {
     try {
       await vaultTools.remove(p);
@@ -40572,7 +40572,7 @@ ${page.content}`;
     const recon = reconcileIndex(
       currentIndex,
       wikiVaultPath,
-      [...finalPages].map(([path4, content]) => ({ path: path4, content }))
+      [...finalPages].map(([path5, content]) => ({ path: path5, content }))
     );
     for (const a of recon.adds) {
       await upsertIndexAnnotation(vaultTools, wikiVaultPath, a.pid, a.annotation, a.fullPath);
@@ -40609,9 +40609,9 @@ ${page.content}`;
   if (similarity && written.length > 0) {
     try {
       const writtenPages = await vaultTools.readAll(written);
-      const descriptions = collectDescriptions([...writtenPages].map(([path4, content]) => ({ path: path4, content })));
+      const descriptions = collectDescriptions([...writtenPages].map(([path5, content]) => ({ path: path5, content })));
       const pageBodies = /* @__PURE__ */ new Map();
-      for (const [path4, content] of writtenPages) pageBodies.set(pageId(path4), content);
+      for (const [path5, content] of writtenPages) pageBodies.set(pageId(path5), content);
       await similarity.refreshCache(domainRoot, vaultTools, descriptions, pageBodies);
     } catch {
     }
@@ -40676,9 +40676,9 @@ function parseJsonPages(text) {
     return [];
   }
 }
-async function tryRead(vaultTools, path4) {
+async function tryRead(vaultTools, path5) {
   try {
-    return await vaultTools.read(path4);
+    return await vaultTools.read(path5);
   } catch {
     return "";
   }
@@ -41097,7 +41097,7 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
   const pages = await vaultTools.readAll(files);
   yield { kind: "tool_result", ok: true, preview: `${pages.size} loaded` };
   if (signal.aborted) return null;
-  const indexAnnotations = collectDescriptions([...pages].map(([path4, content]) => ({ path: path4, content })));
+  const indexAnnotations = collectDescriptions([...pages].map(([path5, content]) => ({ path: path5, content })));
   const topK = Math.max(1, Math.min(50, Math.floor(cfg.seedTopK)));
   const minScore = Math.max(0, Math.min(1, cfg.seedMinScore));
   let seedOutputTokens = 0;
@@ -41200,8 +41200,8 @@ async function* retrieveDomainCandidates(domain, question, vaultTools, similarit
   }
   yield { kind: "graph_stats", seeds, expanded: selectedIds.size, total: files.length, fromCache: graphResult.fromCache, seedScores, expandedPages, expandedScores, expandedDense, seedFallback, retrievalMode, denseMax, seedFallbackReason, floorApplied, floorRef: floorApplied ? denseMax : void 0, floorLoRef, floorBar, prunedCount, floorSkippedReason };
   const candidatePages = /* @__PURE__ */ new Map();
-  for (const [path4, content] of pages) {
-    if (selectedIds.has(pageId(path4))) candidatePages.set(path4, content);
+  for (const [path5, content] of pages) {
+    if (selectedIds.has(pageId(path5))) candidatePages.set(path5, content);
   }
   const annotations = /* @__PURE__ */ new Map();
   for (const id of selectedIds) {
@@ -41395,9 +41395,9 @@ ${answer}`, outputTokens: outputTokens || void 0 };
     yield { kind: "result", durationMs: Date.now() - start, text: answer, outputTokens: outputTokens || void 0 };
   }
 }
-async function tryRead2(vaultTools, path4) {
+async function tryRead2(vaultTools, path5) {
   try {
-    return await vaultTools.read(path4);
+    return await vaultTools.read(path5);
   } catch {
     return "";
   }
@@ -41679,10 +41679,10 @@ async function cleanupInvalidPages(vaultTools, wikiVaultPath, _domainId) {
 }
 async function buildTitleMap(paths, vaultTools) {
   const result = /* @__PURE__ */ new Map();
-  for (const path4 of paths) {
+  for (const path5 of paths) {
     try {
-      const content = await vaultTools.read(path4);
-      const stem = path4.split("/").pop().replace(/\.md$/, "");
+      const content = await vaultTools.read(path5);
+      const stem = path5.split("/").pop().replace(/\.md$/, "");
       const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
       if (fmMatch) {
         const titleMatch = fmMatch[1].match(/^title:\s*(.+)$/m);
@@ -41975,8 +41975,8 @@ ${lintResult.value.report}`);
         ({ graph } = graphCache.get(domain.id, pages));
         if (similarity) {
           const pageBodies = /* @__PURE__ */ new Map();
-          for (const [path4, content] of pages) pageBodies.set(pageId(path4), content);
-          const descriptions = collectDescriptions([...pages].map(([path4, content]) => ({ path: path4, content })));
+          for (const [path5, content] of pages) pageBodies.set(pageId(path5), content);
+          const descriptions = collectDescriptions([...pages].map(([path5, content]) => ({ path: path5, content })));
           const { updated } = await similarity.refreshCache(wikiVaultPath, vaultTools, descriptions, pageBodies, { fullCorpus: true });
           if (similarity.config.mode === "embedding" && updated > 0) {
             yield { kind: "info_text", icon: "\u{1F4E4}", summary: `\u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u043E \u0432\u0435\u043A\u0442\u043E\u0440\u043E\u0432: ${updated}` };
@@ -42059,11 +42059,11 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
         repairWarnings.push({ path: wikiPath, warnings });
       }
     }
-    for (const { path: path4, warnings } of repairWarnings) {
+    for (const { path: path5, warnings } of repairWarnings) {
       yield {
         kind: "info_text",
         icon: "\u26A0\uFE0F",
-        summary: `Frontmatter repaired: ${path4}`,
+        summary: `Frontmatter repaired: ${path5}`,
         details: warnings
       };
     }
@@ -42121,10 +42121,10 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
       reportParts.push(`Backlinks synced: ${syncUpdated} raw files updated`);
     }
     try {
-      const reconPages = [...pages.entries()].map(([path4, content]) => {
-        const pid = pageId(path4);
+      const reconPages = [...pages.entries()].map(([path5, content]) => {
+        const pid = pageId(path5);
         const ann = annotations.get(pid);
-        return ann ? { path: path4, content, annotation: ann } : { path: path4, content };
+        return ann ? { path: path5, content, annotation: ann } : { path: path5, content };
       });
       const currentIndex = await tryRead3(vaultTools, domainIndexPath(wikiVaultPath));
       const recon = reconcileIndex(currentIndex, wikiVaultPath, reconPages);
@@ -42161,14 +42161,14 @@ ${skippedArticles.map((a) => `- ${a}.md`).join("\n")}`);
 }
 function checkStructure(pages) {
   const issues = [];
-  for (const [path4, content] of pages) {
+  for (const [path5, content] of pages) {
     if (!content.startsWith("---")) {
-      issues.push(`- ${path4}: missing frontmatter`);
+      issues.push(`- ${path5}: missing frontmatter`);
     }
     const links = [...new Set([...content.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1]))];
     for (const link of links) {
       const linked = [...pages.keys()].some((p) => p.endsWith(`${link}.md`));
-      if (!linked) issues.push(`- ${path4}: dead link [[${link}]]`);
+      if (!linked) issues.push(`- ${path5}: dead link [[${link}]]`);
     }
   }
   return issues.join("\n");
@@ -42193,9 +42193,9 @@ function computeEntityDiff(oldTypes, newTypes) {
   modified.forEach((et) => lines.push(`- \u270E \u043E\u0431\u043D\u043E\u0432\u043B\u0451\u043D: **${et.type}**`));
   return lines.join("\n");
 }
-async function tryRead3(vaultTools, path4) {
+async function tryRead3(vaultTools, path5) {
   try {
-    return await vaultTools.read(path4);
+    return await vaultTools.read(path5);
   } catch {
     return "";
   }
@@ -42887,9 +42887,9 @@ async function wipeDomainFolder(vaultTools, wikiFolder) {
   await vaultTools.removeSubfolders(root);
   return files;
 }
-async function tryRead4(vaultTools, path4) {
+async function tryRead4(vaultTools, path5) {
   try {
-    return await vaultTools.read(path4);
+    return await vaultTools.read(path5);
   } catch {
     return "";
   }
@@ -43110,8 +43110,8 @@ function arrayBufferToBase64(buffer) {
 function stripImageDataUriPrefix(s) {
   return s.replace(/^data:image\/[a-zA-Z.+-]+;base64,/, "");
 }
-function getMimeType(path4) {
-  const ext = path4.split(".").pop()?.toLowerCase();
+function getMimeType(path5) {
+  const ext = path5.split(".").pop()?.toLowerCase();
   switch (ext) {
     case "png":
       return "image/png";
@@ -43124,8 +43124,8 @@ function getMimeType(path4) {
       return null;
   }
 }
-function isVisionSupportedOnMobile(path4) {
-  return getMimeType(path4) !== null;
+function isVisionSupportedOnMobile(path5) {
+  return getMimeType(path5) !== null;
 }
 async function callVisionLlm(llm, model, systemPrompt, contentParts, signal) {
   const resp = await llm.chat.completions.create({
@@ -43185,8 +43185,8 @@ async function analyzeExcalidraw(b64, llm, model, signal, language = "auto", rea
     { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } }
   ], signal);
 }
-async function analyzeSingleAttachment(path4, vaultTools, llm, model, signal, sourcePath = "", language = "auto", reasoningLanguage = "auto", visionTempStore, imageOnly = false, usedTemplates) {
-  const resolved = vaultTools.resolveLink(path4, sourcePath);
+async function analyzeSingleAttachment(path5, vaultTools, llm, model, signal, sourcePath = "", language = "auto", reasoningLanguage = "auto", visionTempStore, imageOnly = false, usedTemplates) {
+  const resolved = vaultTools.resolveLink(path5, sourcePath);
   if (resolved === null) return null;
   if (imageOnly && !isVisionSupportedOnMobile(resolved)) return null;
   const ext = resolved.split(".").pop()?.toLowerCase() ?? "";
@@ -43194,7 +43194,7 @@ async function analyzeSingleAttachment(path4, vaultTools, llm, model, signal, so
   if (isExcalidraw) {
     const b64 = await vaultTools.renderExcalidrawPng(resolved);
     if (!b64) return null;
-    await visionTempStore?.putPng(path4, b64);
+    await visionTempStore?.putPng(path5, b64);
     usedTemplates?.add(vision_excalidraw_default);
     return analyzeExcalidraw(b64, llm, model, signal, language, reasoningLanguage);
   }
@@ -43249,7 +43249,7 @@ function truncationHint(backend, p) {
   return backend === "claude-agent" ? p.truncationHintEnv : p.truncationHintSettings;
 }
 var enFormatProgressFallback = {
-  analysing: (path4) => `Analysing file ${path4}...
+  analysing: (path5) => `Analysing file ${path5}...
 `,
   truncatedSalvageSummary: "Format: response truncated \u2014 salvage",
   truncatedSalvageRetrySummary: "Format: retry response truncated \u2014 salvage",
@@ -43292,30 +43292,30 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
     const embedPaths = [...new Set(extractObsidianEmbedPaths(original))];
     if (embedPaths.length > 0) {
       const lang = visionSettings.language ?? "auto";
-      for (const path4 of embedPaths) {
+      for (const path5 of embedPaths) {
         if (signal.aborted) break;
-        const filename = path4.split("/").pop() ?? path4;
+        const filename = path5.split("/").pop() ?? path5;
         yield { kind: "tool_use", name: "Vision", input: { file_path: filename, model: visionSettings.model } };
-        const cached = await visionTempStore?.getDescription(path4);
+        const cached = await visionTempStore?.getDescription(path5);
         if (cached != null) {
-          visionDescriptions.set(path4, cached);
+          visionDescriptions.set(path5, cached);
           yield { kind: "tool_result", ok: true, preview: cached };
           continue;
         }
         try {
-          const description = await analyzeSingleAttachment(path4, vaultTools, llm, visionSettings.model, signal, filePath, lang, opts.reasoningLanguage, visionTempStore, visionSettings.imageOnly ?? false, usedVisionTemplates);
+          const description = await analyzeSingleAttachment(path5, vaultTools, llm, visionSettings.model, signal, filePath, lang, opts.reasoningLanguage, visionTempStore, visionSettings.imageOnly ?? false, usedVisionTemplates);
           if (description !== null) {
-            visionDescriptions.set(path4, description);
-            await visionTempStore?.putDescription(path4, description);
+            visionDescriptions.set(path5, description);
+            await visionTempStore?.putDescription(path5, description);
             yield { kind: "tool_result", ok: true, preview: description };
           } else {
             const why = visionSettings.imageOnly ?? false ? "unsupported on mobile" : "unknown extension";
             yield { kind: "tool_result", ok: false, preview: why };
-            yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [`${path4} \u2014 ${why}`] };
+            yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [`${path5} \u2014 ${why}`] };
           }
         } catch (e) {
           yield { kind: "tool_result", ok: false, preview: e?.message ?? "failed" };
-          yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [path4] };
+          yield { kind: "info_text", icon: "\u26A0\uFE0F", summary: "Vision skipped", details: [path5] };
         }
       }
     }
@@ -43337,8 +43337,8 @@ async function* runFormat(args, vaultTools, llm, model, hasVision, chatHistory, 
   let visionBlock = "";
   if (visionDescriptions.size > 0) {
     const items = [];
-    for (const [path4, desc] of visionDescriptions) {
-      items.push(`### ![[${path4}]]
+    for (const [path5, desc] of visionDescriptions) {
+      items.push(`### ![[${path5}]]
 ${desc}`);
     }
     visionBlock = `
@@ -43717,8 +43717,8 @@ function base64ToArrayBuffer(b64) {
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes.buffer;
 }
-function keyFor(path4) {
-  return path4.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "x";
+function keyFor(path5) {
+  return path5.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "x";
 }
 var VisionTempStore = class {
   constructor(vaultTools, dir) {
@@ -43727,26 +43727,26 @@ var VisionTempStore = class {
   }
   vaultTools;
   dir;
-  async getDescription(path4) {
+  async getDescription(path5) {
     try {
-      const p = `${this.dir}/${keyFor(path4)}.json`;
+      const p = `${this.dir}/${keyFor(path5)}.json`;
       if (!await this.vaultTools.exists(p)) return null;
       const obj = JSON.parse(await this.vaultTools.read(p));
-      return typeof obj.desc === "string" && obj.path === path4 ? obj.desc : null;
+      return typeof obj.desc === "string" && obj.path === path5 ? obj.desc : null;
     } catch {
       return null;
     }
   }
-  async putDescription(path4, desc) {
+  async putDescription(path5, desc) {
     try {
-      const p = `${this.dir}/${keyFor(path4)}.json`;
-      await this.vaultTools.write(p, JSON.stringify({ path: path4, desc }));
+      const p = `${this.dir}/${keyFor(path5)}.json`;
+      await this.vaultTools.write(p, JSON.stringify({ path: path5, desc }));
     } catch {
     }
   }
-  async putPng(path4, b64) {
+  async putPng(path5, b64) {
     try {
-      const p = `${this.dir}/${keyFor(path4)}.png`;
+      const p = `${this.dir}/${keyFor(path5)}.png`;
       await this.vaultTools.writeBinary(p, base64ToArrayBuffer(b64));
     } catch {
     }
@@ -45977,12 +45977,12 @@ function encodeURIPath(str2) {
   return str2.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
 }
 var EMPTY = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.create(null));
-var createPathTagFunction = (pathEncoder = encodeURIPath) => function path4(statics, ...params) {
+var createPathTagFunction = (pathEncoder = encodeURIPath) => function path5(statics, ...params) {
   if (statics.length === 1)
     return statics[0];
   let postPath = false;
   const invalidSegments = [];
-  const path5 = statics.reduce((previousValue, currentValue, index) => {
+  const path6 = statics.reduce((previousValue, currentValue, index) => {
     if (/[?#]/.test(currentValue)) {
       postPath = true;
     }
@@ -45999,7 +45999,7 @@ var createPathTagFunction = (pathEncoder = encodeURIPath) => function path4(stat
     }
     return previousValue + currentValue + (index === params.length ? "" : encoded);
   }, "");
-  const pathOnly = path5.split(/[?#]/, 1)[0];
+  const pathOnly = path6.split(/[?#]/, 1)[0];
   const invalidSegmentPattern = /(?<=^|\/)(?:\.|%2e){1,2}(?=\/|$)/gi;
   let match;
   while ((match = invalidSegmentPattern.exec(pathOnly)) !== null) {
@@ -46020,12 +46020,12 @@ var createPathTagFunction = (pathEncoder = encodeURIPath) => function path4(stat
     }, "");
     throw new OpenAIError(`Path parameters result in path with invalid segments:
 ${invalidSegments.map((e) => e.error).join("\n")}
-${path5}
+${path6}
 ${underline}`);
   }
-  return path5;
+  return path6;
 };
-var path3 = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
+var path4 = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
 
 // node_modules/openai/resources/chat/completions/messages.mjs
 var Messages = class extends APIResource {
@@ -46044,7 +46044,7 @@ var Messages = class extends APIResource {
    * ```
    */
   list(completionID, query = {}, options) {
-    return this._client.getAPIList(path3`/chat/completions/${completionID}/messages`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path4`/chat/completions/${completionID}/messages`, CursorPage, { query, ...options });
   }
 };
 
@@ -47379,7 +47379,7 @@ var Completions = class extends APIResource {
    * ```
    */
   retrieve(completionID, options) {
-    return this._client.get(path3`/chat/completions/${completionID}`, options);
+    return this._client.get(path4`/chat/completions/${completionID}`, options);
   }
   /**
    * Modify a stored chat completion. Only Chat Completions that have been created
@@ -47395,7 +47395,7 @@ var Completions = class extends APIResource {
    * ```
    */
   update(completionID, body, options) {
-    return this._client.post(path3`/chat/completions/${completionID}`, { body, ...options });
+    return this._client.post(path4`/chat/completions/${completionID}`, { body, ...options });
   }
   /**
    * List stored Chat Completions. Only Chat Completions that have been stored with
@@ -47423,7 +47423,7 @@ var Completions = class extends APIResource {
    * ```
    */
   delete(completionID, options) {
-    return this._client.delete(path3`/chat/completions/${completionID}`, options);
+    return this._client.delete(path4`/chat/completions/${completionID}`, options);
   }
   parse(body, options) {
     validateInputTools(body.tools);
@@ -47595,7 +47595,7 @@ var Batches = class extends APIResource {
    * Retrieves a batch.
    */
   retrieve(batchID, options) {
-    return this._client.get(path3`/batches/${batchID}`, options);
+    return this._client.get(path4`/batches/${batchID}`, options);
   }
   /**
    * List your organization's batches.
@@ -47609,7 +47609,7 @@ var Batches = class extends APIResource {
    * (if any) available in the output file.
    */
   cancel(batchID, options) {
-    return this._client.post(path3`/batches/${batchID}/cancel`, options);
+    return this._client.post(path4`/batches/${batchID}/cancel`, options);
   }
 };
 
@@ -47633,7 +47633,7 @@ var Assistants = class extends APIResource {
    * @deprecated
    */
   retrieve(assistantID, options) {
-    return this._client.get(path3`/assistants/${assistantID}`, {
+    return this._client.get(path4`/assistants/${assistantID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -47644,7 +47644,7 @@ var Assistants = class extends APIResource {
    * @deprecated
    */
   update(assistantID, body, options) {
-    return this._client.post(path3`/assistants/${assistantID}`, {
+    return this._client.post(path4`/assistants/${assistantID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -47668,7 +47668,7 @@ var Assistants = class extends APIResource {
    * @deprecated
    */
   delete(assistantID, options) {
-    return this._client.delete(path3`/assistants/${assistantID}`, {
+    return this._client.delete(path4`/assistants/${assistantID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -47771,7 +47771,7 @@ var Sessions2 = class extends APIResource {
    * ```
    */
   cancel(sessionID, options) {
-    return this._client.post(path3`/chatkit/sessions/${sessionID}/cancel`, {
+    return this._client.post(path4`/chatkit/sessions/${sessionID}/cancel`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers])
     });
@@ -47790,7 +47790,7 @@ var Threads = class extends APIResource {
    * ```
    */
   retrieve(threadID, options) {
-    return this._client.get(path3`/chatkit/threads/${threadID}`, {
+    return this._client.get(path4`/chatkit/threads/${threadID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers])
     });
@@ -47824,7 +47824,7 @@ var Threads = class extends APIResource {
    * ```
    */
   delete(threadID, options) {
-    return this._client.delete(path3`/chatkit/threads/${threadID}`, {
+    return this._client.delete(path4`/chatkit/threads/${threadID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers])
     });
@@ -47843,7 +47843,7 @@ var Threads = class extends APIResource {
    * ```
    */
   listItems(threadID, query = {}, options) {
-    return this._client.getAPIList(path3`/chatkit/threads/${threadID}/items`, ConversationCursorPage, { query, ...options, headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers]) });
+    return this._client.getAPIList(path4`/chatkit/threads/${threadID}/items`, ConversationCursorPage, { query, ...options, headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers]) });
   }
 };
 
@@ -47866,7 +47866,7 @@ var Messages2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   create(threadID, body, options) {
-    return this._client.post(path3`/threads/${threadID}/messages`, {
+    return this._client.post(path4`/threads/${threadID}/messages`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -47879,7 +47879,7 @@ var Messages2 = class extends APIResource {
    */
   retrieve(messageID, params, options) {
     const { thread_id } = params;
-    return this._client.get(path3`/threads/${thread_id}/messages/${messageID}`, {
+    return this._client.get(path4`/threads/${thread_id}/messages/${messageID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -47891,7 +47891,7 @@ var Messages2 = class extends APIResource {
    */
   update(messageID, params, options) {
     const { thread_id, ...body } = params;
-    return this._client.post(path3`/threads/${thread_id}/messages/${messageID}`, {
+    return this._client.post(path4`/threads/${thread_id}/messages/${messageID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -47903,7 +47903,7 @@ var Messages2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   list(threadID, query = {}, options) {
-    return this._client.getAPIList(path3`/threads/${threadID}/messages`, CursorPage, {
+    return this._client.getAPIList(path4`/threads/${threadID}/messages`, CursorPage, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -47916,7 +47916,7 @@ var Messages2 = class extends APIResource {
    */
   delete(messageID, params, options) {
     const { thread_id } = params;
-    return this._client.delete(path3`/threads/${thread_id}/messages/${messageID}`, {
+    return this._client.delete(path4`/threads/${thread_id}/messages/${messageID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -47932,7 +47932,7 @@ var Steps = class extends APIResource {
    */
   retrieve(stepID, params, options) {
     const { thread_id, run_id, ...query } = params;
-    return this._client.get(path3`/threads/${thread_id}/runs/${run_id}/steps/${stepID}`, {
+    return this._client.get(path4`/threads/${thread_id}/runs/${run_id}/steps/${stepID}`, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -47945,7 +47945,7 @@ var Steps = class extends APIResource {
    */
   list(runID, params, options) {
     const { thread_id, ...query } = params;
-    return this._client.getAPIList(path3`/threads/${thread_id}/runs/${runID}/steps`, CursorPage, {
+    return this._client.getAPIList(path4`/threads/${thread_id}/runs/${runID}/steps`, CursorPage, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -48527,7 +48527,7 @@ var Runs = class extends APIResource {
   }
   create(threadID, params, options) {
     const { include, ...body } = params;
-    return this._client.post(path3`/threads/${threadID}/runs`, {
+    return this._client.post(path4`/threads/${threadID}/runs`, {
       query: { include },
       body,
       ...options,
@@ -48543,7 +48543,7 @@ var Runs = class extends APIResource {
    */
   retrieve(runID, params, options) {
     const { thread_id } = params;
-    return this._client.get(path3`/threads/${thread_id}/runs/${runID}`, {
+    return this._client.get(path4`/threads/${thread_id}/runs/${runID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -48555,7 +48555,7 @@ var Runs = class extends APIResource {
    */
   update(runID, params, options) {
     const { thread_id, ...body } = params;
-    return this._client.post(path3`/threads/${thread_id}/runs/${runID}`, {
+    return this._client.post(path4`/threads/${thread_id}/runs/${runID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -48567,7 +48567,7 @@ var Runs = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   list(threadID, query = {}, options) {
-    return this._client.getAPIList(path3`/threads/${threadID}/runs`, CursorPage, {
+    return this._client.getAPIList(path4`/threads/${threadID}/runs`, CursorPage, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -48580,7 +48580,7 @@ var Runs = class extends APIResource {
    */
   cancel(runID, params, options) {
     const { thread_id } = params;
-    return this._client.post(path3`/threads/${thread_id}/runs/${runID}/cancel`, {
+    return this._client.post(path4`/threads/${thread_id}/runs/${runID}/cancel`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -48658,7 +48658,7 @@ var Runs = class extends APIResource {
   }
   submitToolOutputs(runID, params, options) {
     const { thread_id, ...body } = params;
-    return this._client.post(path3`/threads/${thread_id}/runs/${runID}/submit_tool_outputs`, {
+    return this._client.post(path4`/threads/${thread_id}/runs/${runID}/submit_tool_outputs`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
@@ -48711,7 +48711,7 @@ var Threads2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   retrieve(threadID, options) {
-    return this._client.get(path3`/threads/${threadID}`, {
+    return this._client.get(path4`/threads/${threadID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -48722,7 +48722,7 @@ var Threads2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   update(threadID, body, options) {
-    return this._client.post(path3`/threads/${threadID}`, {
+    return this._client.post(path4`/threads/${threadID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -48734,7 +48734,7 @@ var Threads2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   delete(threadID, options) {
-    return this._client.delete(path3`/threads/${threadID}`, {
+    return this._client.delete(path4`/threads/${threadID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -48796,7 +48796,7 @@ var Content = class extends APIResource {
    */
   retrieve(fileID, params, options) {
     const { container_id } = params;
-    return this._client.get(path3`/containers/${container_id}/files/${fileID}/content`, {
+    return this._client.get(path4`/containers/${container_id}/files/${fileID}/content`, {
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
@@ -48817,20 +48817,20 @@ var Files = class extends APIResource {
    * a JSON request with a file ID.
    */
   create(containerID, body, options) {
-    return this._client.post(path3`/containers/${containerID}/files`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path4`/containers/${containerID}/files`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
    * Retrieve Container File
    */
   retrieve(fileID, params, options) {
     const { container_id } = params;
-    return this._client.get(path3`/containers/${container_id}/files/${fileID}`, options);
+    return this._client.get(path4`/containers/${container_id}/files/${fileID}`, options);
   }
   /**
    * List Container files
    */
   list(containerID, query = {}, options) {
-    return this._client.getAPIList(path3`/containers/${containerID}/files`, CursorPage, {
+    return this._client.getAPIList(path4`/containers/${containerID}/files`, CursorPage, {
       query,
       ...options
     });
@@ -48840,7 +48840,7 @@ var Files = class extends APIResource {
    */
   delete(fileID, params, options) {
     const { container_id } = params;
-    return this._client.delete(path3`/containers/${container_id}/files/${fileID}`, {
+    return this._client.delete(path4`/containers/${container_id}/files/${fileID}`, {
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
     });
@@ -48864,7 +48864,7 @@ var Containers = class extends APIResource {
    * Retrieve Container
    */
   retrieve(containerID, options) {
-    return this._client.get(path3`/containers/${containerID}`, options);
+    return this._client.get(path4`/containers/${containerID}`, options);
   }
   /**
    * List Containers
@@ -48876,7 +48876,7 @@ var Containers = class extends APIResource {
    * Delete Container
    */
   delete(containerID, options) {
-    return this._client.delete(path3`/containers/${containerID}`, {
+    return this._client.delete(path4`/containers/${containerID}`, {
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
     });
@@ -48891,7 +48891,7 @@ var Items = class extends APIResource {
    */
   create(conversationID, params, options) {
     const { include, ...body } = params;
-    return this._client.post(path3`/conversations/${conversationID}/items`, {
+    return this._client.post(path4`/conversations/${conversationID}/items`, {
       query: { include },
       body,
       ...options
@@ -48902,20 +48902,20 @@ var Items = class extends APIResource {
    */
   retrieve(itemID, params, options) {
     const { conversation_id, ...query } = params;
-    return this._client.get(path3`/conversations/${conversation_id}/items/${itemID}`, { query, ...options });
+    return this._client.get(path4`/conversations/${conversation_id}/items/${itemID}`, { query, ...options });
   }
   /**
    * List all items for a conversation with the given ID.
    */
   list(conversationID, query = {}, options) {
-    return this._client.getAPIList(path3`/conversations/${conversationID}/items`, ConversationCursorPage, { query, ...options });
+    return this._client.getAPIList(path4`/conversations/${conversationID}/items`, ConversationCursorPage, { query, ...options });
   }
   /**
    * Delete an item from a conversation with the given IDs.
    */
   delete(itemID, params, options) {
     const { conversation_id } = params;
-    return this._client.delete(path3`/conversations/${conversation_id}/items/${itemID}`, options);
+    return this._client.delete(path4`/conversations/${conversation_id}/items/${itemID}`, options);
   }
 };
 
@@ -48935,19 +48935,19 @@ var Conversations = class extends APIResource {
    * Get a conversation
    */
   retrieve(conversationID, options) {
-    return this._client.get(path3`/conversations/${conversationID}`, options);
+    return this._client.get(path4`/conversations/${conversationID}`, options);
   }
   /**
    * Update a conversation
    */
   update(conversationID, body, options) {
-    return this._client.post(path3`/conversations/${conversationID}`, { body, ...options });
+    return this._client.post(path4`/conversations/${conversationID}`, { body, ...options });
   }
   /**
    * Delete a conversation. Items in the conversation will not be deleted.
    */
   delete(conversationID, options) {
-    return this._client.delete(path3`/conversations/${conversationID}`, options);
+    return this._client.delete(path4`/conversations/${conversationID}`, options);
   }
 };
 Conversations.Items = Items;
@@ -49002,14 +49002,14 @@ var OutputItems = class extends APIResource {
    */
   retrieve(outputItemID, params, options) {
     const { eval_id, run_id } = params;
-    return this._client.get(path3`/evals/${eval_id}/runs/${run_id}/output_items/${outputItemID}`, options);
+    return this._client.get(path4`/evals/${eval_id}/runs/${run_id}/output_items/${outputItemID}`, options);
   }
   /**
    * Get a list of output items for an evaluation run.
    */
   list(runID, params, options) {
     const { eval_id, ...query } = params;
-    return this._client.getAPIList(path3`/evals/${eval_id}/runs/${runID}/output_items`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path4`/evals/${eval_id}/runs/${runID}/output_items`, CursorPage, { query, ...options });
   }
 };
 
@@ -49025,20 +49025,20 @@ var Runs2 = class extends APIResource {
    * schema specified in the config of the evaluation.
    */
   create(evalID, body, options) {
-    return this._client.post(path3`/evals/${evalID}/runs`, { body, ...options });
+    return this._client.post(path4`/evals/${evalID}/runs`, { body, ...options });
   }
   /**
    * Get an evaluation run by ID.
    */
   retrieve(runID, params, options) {
     const { eval_id } = params;
-    return this._client.get(path3`/evals/${eval_id}/runs/${runID}`, options);
+    return this._client.get(path4`/evals/${eval_id}/runs/${runID}`, options);
   }
   /**
    * Get a list of runs for an evaluation.
    */
   list(evalID, query = {}, options) {
-    return this._client.getAPIList(path3`/evals/${evalID}/runs`, CursorPage, {
+    return this._client.getAPIList(path4`/evals/${evalID}/runs`, CursorPage, {
       query,
       ...options
     });
@@ -49048,14 +49048,14 @@ var Runs2 = class extends APIResource {
    */
   delete(runID, params, options) {
     const { eval_id } = params;
-    return this._client.delete(path3`/evals/${eval_id}/runs/${runID}`, options);
+    return this._client.delete(path4`/evals/${eval_id}/runs/${runID}`, options);
   }
   /**
    * Cancel an ongoing evaluation run.
    */
   cancel(runID, params, options) {
     const { eval_id } = params;
-    return this._client.post(path3`/evals/${eval_id}/runs/${runID}`, options);
+    return this._client.post(path4`/evals/${eval_id}/runs/${runID}`, options);
   }
 };
 Runs2.OutputItems = OutputItems;
@@ -49081,13 +49081,13 @@ var Evals = class extends APIResource {
    * Get an evaluation by ID.
    */
   retrieve(evalID, options) {
-    return this._client.get(path3`/evals/${evalID}`, options);
+    return this._client.get(path4`/evals/${evalID}`, options);
   }
   /**
    * Update certain properties of an evaluation.
    */
   update(evalID, body, options) {
-    return this._client.post(path3`/evals/${evalID}`, { body, ...options });
+    return this._client.post(path4`/evals/${evalID}`, { body, ...options });
   }
   /**
    * List evaluations for a project.
@@ -49099,7 +49099,7 @@ var Evals = class extends APIResource {
    * Delete an evaluation.
    */
   delete(evalID, options) {
-    return this._client.delete(path3`/evals/${evalID}`, options);
+    return this._client.delete(path4`/evals/${evalID}`, options);
   }
 };
 Evals.Runs = Runs2;
@@ -49135,7 +49135,7 @@ var Files2 = class extends APIResource {
    * Returns information about a specific file.
    */
   retrieve(fileID, options) {
-    return this._client.get(path3`/files/${fileID}`, options);
+    return this._client.get(path4`/files/${fileID}`, options);
   }
   /**
    * Returns a list of files.
@@ -49147,13 +49147,13 @@ var Files2 = class extends APIResource {
    * Delete a file and remove it from all vector stores.
    */
   delete(fileID, options) {
-    return this._client.delete(path3`/files/${fileID}`, options);
+    return this._client.delete(path4`/files/${fileID}`, options);
   }
   /**
    * Returns the contents of the specified file.
    */
   content(fileID, options) {
-    return this._client.get(path3`/files/${fileID}/content`, {
+    return this._client.get(path4`/files/${fileID}/content`, {
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
@@ -49256,7 +49256,7 @@ var Permissions = class extends APIResource {
    * ```
    */
   create(fineTunedModelCheckpoint, body, options) {
-    return this._client.getAPIList(path3`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, Page, { body, method: "post", ...options });
+    return this._client.getAPIList(path4`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, Page, { body, method: "post", ...options });
   }
   /**
    * **NOTE:** This endpoint requires an [admin API key](../admin-api-keys).
@@ -49267,7 +49267,7 @@ var Permissions = class extends APIResource {
    * @deprecated Retrieve is deprecated. Please swap to the paginated list method instead.
    */
   retrieve(fineTunedModelCheckpoint, query = {}, options) {
-    return this._client.get(path3`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, {
+    return this._client.get(path4`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, {
       query,
       ...options
     });
@@ -49289,7 +49289,7 @@ var Permissions = class extends APIResource {
    * ```
    */
   list(fineTunedModelCheckpoint, query = {}, options) {
-    return this._client.getAPIList(path3`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, ConversationCursorPage, { query, ...options });
+    return this._client.getAPIList(path4`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, ConversationCursorPage, { query, ...options });
   }
   /**
    * **NOTE:** This endpoint requires an [admin API key](../admin-api-keys).
@@ -49311,7 +49311,7 @@ var Permissions = class extends APIResource {
    */
   delete(permissionID, params, options) {
     const { fine_tuned_model_checkpoint } = params;
-    return this._client.delete(path3`/fine_tuning/checkpoints/${fine_tuned_model_checkpoint}/permissions/${permissionID}`, options);
+    return this._client.delete(path4`/fine_tuning/checkpoints/${fine_tuned_model_checkpoint}/permissions/${permissionID}`, options);
   }
 };
 
@@ -49340,7 +49340,7 @@ var Checkpoints2 = class extends APIResource {
    * ```
    */
   list(fineTuningJobID, query = {}, options) {
-    return this._client.getAPIList(path3`/fine_tuning/jobs/${fineTuningJobID}/checkpoints`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path4`/fine_tuning/jobs/${fineTuningJobID}/checkpoints`, CursorPage, { query, ...options });
   }
 };
 
@@ -49383,7 +49383,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   retrieve(fineTuningJobID, options) {
-    return this._client.get(path3`/fine_tuning/jobs/${fineTuningJobID}`, options);
+    return this._client.get(path4`/fine_tuning/jobs/${fineTuningJobID}`, options);
   }
   /**
    * List your organization's fine-tuning jobs
@@ -49410,7 +49410,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   cancel(fineTuningJobID, options) {
-    return this._client.post(path3`/fine_tuning/jobs/${fineTuningJobID}/cancel`, options);
+    return this._client.post(path4`/fine_tuning/jobs/${fineTuningJobID}/cancel`, options);
   }
   /**
    * Get status updates for a fine-tuning job.
@@ -49426,7 +49426,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   listEvents(fineTuningJobID, query = {}, options) {
-    return this._client.getAPIList(path3`/fine_tuning/jobs/${fineTuningJobID}/events`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path4`/fine_tuning/jobs/${fineTuningJobID}/events`, CursorPage, { query, ...options });
   }
   /**
    * Pause a fine-tune job.
@@ -49439,7 +49439,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   pause(fineTuningJobID, options) {
-    return this._client.post(path3`/fine_tuning/jobs/${fineTuningJobID}/pause`, options);
+    return this._client.post(path4`/fine_tuning/jobs/${fineTuningJobID}/pause`, options);
   }
   /**
    * Resume a fine-tune job.
@@ -49452,7 +49452,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   resume(fineTuningJobID, options) {
-    return this._client.post(path3`/fine_tuning/jobs/${fineTuningJobID}/resume`, options);
+    return this._client.post(path4`/fine_tuning/jobs/${fineTuningJobID}/resume`, options);
   }
 };
 Jobs.Checkpoints = Checkpoints2;
@@ -49515,7 +49515,7 @@ var Models = class extends APIResource {
    * the owner and permissioning.
    */
   retrieve(model, options) {
-    return this._client.get(path3`/models/${model}`, options);
+    return this._client.get(path4`/models/${model}`, options);
   }
   /**
    * Lists the currently available models, and provides basic information about each
@@ -49529,7 +49529,7 @@ var Models = class extends APIResource {
    * delete a model.
    */
   delete(model, options) {
-    return this._client.delete(path3`/models/${model}`, options);
+    return this._client.delete(path4`/models/${model}`, options);
   }
 };
 
@@ -49558,7 +49558,7 @@ var Calls = class extends APIResource {
    * ```
    */
   accept(callID, body, options) {
-    return this._client.post(path3`/realtime/calls/${callID}/accept`, {
+    return this._client.post(path4`/realtime/calls/${callID}/accept`, {
       body,
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
@@ -49573,7 +49573,7 @@ var Calls = class extends APIResource {
    * ```
    */
   hangup(callID, options) {
-    return this._client.post(path3`/realtime/calls/${callID}/hangup`, {
+    return this._client.post(path4`/realtime/calls/${callID}/hangup`, {
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
     });
@@ -49589,7 +49589,7 @@ var Calls = class extends APIResource {
    * ```
    */
   refer(callID, body, options) {
-    return this._client.post(path3`/realtime/calls/${callID}/refer`, {
+    return this._client.post(path4`/realtime/calls/${callID}/refer`, {
       body,
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
@@ -49604,7 +49604,7 @@ var Calls = class extends APIResource {
    * ```
    */
   reject(callID, body = {}, options) {
-    return this._client.post(path3`/realtime/calls/${callID}/reject`, {
+    return this._client.post(path4`/realtime/calls/${callID}/reject`, {
       body,
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
@@ -50052,7 +50052,7 @@ var InputItems = class extends APIResource {
    * ```
    */
   list(responseID, query = {}, options) {
-    return this._client.getAPIList(path3`/responses/${responseID}/input_items`, CursorPage, { query, ...options });
+    return this._client.getAPIList(path4`/responses/${responseID}/input_items`, CursorPage, { query, ...options });
   }
 };
 
@@ -50090,7 +50090,7 @@ var Responses = class extends APIResource {
     });
   }
   retrieve(responseID, query = {}, options) {
-    return this._client.get(path3`/responses/${responseID}`, {
+    return this._client.get(path4`/responses/${responseID}`, {
       query,
       ...options,
       stream: query?.stream ?? false
@@ -50112,7 +50112,7 @@ var Responses = class extends APIResource {
    * ```
    */
   delete(responseID, options) {
-    return this._client.delete(path3`/responses/${responseID}`, {
+    return this._client.delete(path4`/responses/${responseID}`, {
       ...options,
       headers: buildHeaders([{ Accept: "*/*" }, options?.headers])
     });
@@ -50139,7 +50139,7 @@ var Responses = class extends APIResource {
    * ```
    */
   cancel(responseID, options) {
-    return this._client.post(path3`/responses/${responseID}/cancel`, options);
+    return this._client.post(path4`/responses/${responseID}/cancel`, options);
   }
   /**
    * Compact a conversation. Returns a compacted response object.
@@ -50169,7 +50169,7 @@ var Content2 = class extends APIResource {
    * Download a skill zip bundle by its ID.
    */
   retrieve(skillID, options) {
-    return this._client.get(path3`/skills/${skillID}/content`, {
+    return this._client.get(path4`/skills/${skillID}/content`, {
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
@@ -50184,7 +50184,7 @@ var Content3 = class extends APIResource {
    */
   retrieve(version, params, options) {
     const { skill_id } = params;
-    return this._client.get(path3`/skills/${skill_id}/versions/${version}/content`, {
+    return this._client.get(path4`/skills/${skill_id}/versions/${version}/content`, {
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
@@ -50202,20 +50202,20 @@ var Versions = class extends APIResource {
    * Create a new immutable skill version.
    */
   create(skillID, body = {}, options) {
-    return this._client.post(path3`/skills/${skillID}/versions`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path4`/skills/${skillID}/versions`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
    * Get a specific skill version.
    */
   retrieve(version, params, options) {
     const { skill_id } = params;
-    return this._client.get(path3`/skills/${skill_id}/versions/${version}`, options);
+    return this._client.get(path4`/skills/${skill_id}/versions/${version}`, options);
   }
   /**
    * List skill versions for a skill.
    */
   list(skillID, query = {}, options) {
-    return this._client.getAPIList(path3`/skills/${skillID}/versions`, CursorPage, {
+    return this._client.getAPIList(path4`/skills/${skillID}/versions`, CursorPage, {
       query,
       ...options
     });
@@ -50225,7 +50225,7 @@ var Versions = class extends APIResource {
    */
   delete(version, params, options) {
     const { skill_id } = params;
-    return this._client.delete(path3`/skills/${skill_id}/versions/${version}`, options);
+    return this._client.delete(path4`/skills/${skill_id}/versions/${version}`, options);
   }
 };
 Versions.Content = Content3;
@@ -50247,13 +50247,13 @@ var Skills = class extends APIResource {
    * Get a skill by its ID.
    */
   retrieve(skillID, options) {
-    return this._client.get(path3`/skills/${skillID}`, options);
+    return this._client.get(path4`/skills/${skillID}`, options);
   }
   /**
    * Update the default version pointer for a skill.
    */
   update(skillID, body, options) {
-    return this._client.post(path3`/skills/${skillID}`, { body, ...options });
+    return this._client.post(path4`/skills/${skillID}`, { body, ...options });
   }
   /**
    * List all skills for the current project.
@@ -50265,7 +50265,7 @@ var Skills = class extends APIResource {
    * Delete a skill by its ID.
    */
   delete(skillID, options) {
-    return this._client.delete(path3`/skills/${skillID}`, options);
+    return this._client.delete(path4`/skills/${skillID}`, options);
   }
 };
 Skills.Content = Content2;
@@ -50287,7 +50287,7 @@ var Parts = class extends APIResource {
    * [complete the Upload](https://platform.openai.com/docs/api-reference/uploads/complete).
    */
   create(uploadID, body, options) {
-    return this._client.post(path3`/uploads/${uploadID}/parts`, multipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path4`/uploads/${uploadID}/parts`, multipartFormRequestOptions({ body, ...options }, this._client));
   }
 };
 
@@ -50329,7 +50329,7 @@ var Uploads = class extends APIResource {
    * Returns the Upload object with status `cancelled`.
    */
   cancel(uploadID, options) {
-    return this._client.post(path3`/uploads/${uploadID}/cancel`, options);
+    return this._client.post(path4`/uploads/${uploadID}/cancel`, options);
   }
   /**
    * Completes the
@@ -50349,7 +50349,7 @@ var Uploads = class extends APIResource {
    * object.
    */
   complete(uploadID, body, options) {
-    return this._client.post(path3`/uploads/${uploadID}/complete`, { body, ...options });
+    return this._client.post(path4`/uploads/${uploadID}/complete`, { body, ...options });
   }
 };
 Uploads.Parts = Parts;
@@ -50379,7 +50379,7 @@ var FileBatches = class extends APIResource {
    * Create a vector store file batch.
    */
   create(vectorStoreID, body, options) {
-    return this._client.post(path3`/vector_stores/${vectorStoreID}/file_batches`, {
+    return this._client.post(path4`/vector_stores/${vectorStoreID}/file_batches`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -50390,7 +50390,7 @@ var FileBatches = class extends APIResource {
    */
   retrieve(batchID, params, options) {
     const { vector_store_id } = params;
-    return this._client.get(path3`/vector_stores/${vector_store_id}/file_batches/${batchID}`, {
+    return this._client.get(path4`/vector_stores/${vector_store_id}/file_batches/${batchID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -50401,7 +50401,7 @@ var FileBatches = class extends APIResource {
    */
   cancel(batchID, params, options) {
     const { vector_store_id } = params;
-    return this._client.post(path3`/vector_stores/${vector_store_id}/file_batches/${batchID}/cancel`, {
+    return this._client.post(path4`/vector_stores/${vector_store_id}/file_batches/${batchID}/cancel`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -50418,7 +50418,7 @@ var FileBatches = class extends APIResource {
    */
   listFiles(batchID, params, options) {
     const { vector_store_id, ...query } = params;
-    return this._client.getAPIList(path3`/vector_stores/${vector_store_id}/file_batches/${batchID}/files`, CursorPage, { query, ...options, headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]) });
+    return this._client.getAPIList(path4`/vector_stores/${vector_store_id}/file_batches/${batchID}/files`, CursorPage, { query, ...options, headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]) });
   }
   /**
    * Wait for the given file batch to be processed.
@@ -50498,7 +50498,7 @@ var Files3 = class extends APIResource {
    * [vector store](https://platform.openai.com/docs/api-reference/vector-stores/object).
    */
   create(vectorStoreID, body, options) {
-    return this._client.post(path3`/vector_stores/${vectorStoreID}/files`, {
+    return this._client.post(path4`/vector_stores/${vectorStoreID}/files`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -50509,7 +50509,7 @@ var Files3 = class extends APIResource {
    */
   retrieve(fileID, params, options) {
     const { vector_store_id } = params;
-    return this._client.get(path3`/vector_stores/${vector_store_id}/files/${fileID}`, {
+    return this._client.get(path4`/vector_stores/${vector_store_id}/files/${fileID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -50519,7 +50519,7 @@ var Files3 = class extends APIResource {
    */
   update(fileID, params, options) {
     const { vector_store_id, ...body } = params;
-    return this._client.post(path3`/vector_stores/${vector_store_id}/files/${fileID}`, {
+    return this._client.post(path4`/vector_stores/${vector_store_id}/files/${fileID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -50529,7 +50529,7 @@ var Files3 = class extends APIResource {
    * Returns a list of vector store files.
    */
   list(vectorStoreID, query = {}, options) {
-    return this._client.getAPIList(path3`/vector_stores/${vectorStoreID}/files`, CursorPage, {
+    return this._client.getAPIList(path4`/vector_stores/${vectorStoreID}/files`, CursorPage, {
       query,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -50543,7 +50543,7 @@ var Files3 = class extends APIResource {
    */
   delete(fileID, params, options) {
     const { vector_store_id } = params;
-    return this._client.delete(path3`/vector_stores/${vector_store_id}/files/${fileID}`, {
+    return this._client.delete(path4`/vector_stores/${vector_store_id}/files/${fileID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -50618,7 +50618,7 @@ var Files3 = class extends APIResource {
    */
   content(fileID, params, options) {
     const { vector_store_id } = params;
-    return this._client.getAPIList(path3`/vector_stores/${vector_store_id}/files/${fileID}/content`, Page, { ...options, headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]) });
+    return this._client.getAPIList(path4`/vector_stores/${vector_store_id}/files/${fileID}/content`, Page, { ...options, headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]) });
   }
 };
 
@@ -50643,7 +50643,7 @@ var VectorStores = class extends APIResource {
    * Retrieves a vector store.
    */
   retrieve(vectorStoreID, options) {
-    return this._client.get(path3`/vector_stores/${vectorStoreID}`, {
+    return this._client.get(path4`/vector_stores/${vectorStoreID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -50652,7 +50652,7 @@ var VectorStores = class extends APIResource {
    * Modifies a vector store.
    */
   update(vectorStoreID, body, options) {
-    return this._client.post(path3`/vector_stores/${vectorStoreID}`, {
+    return this._client.post(path4`/vector_stores/${vectorStoreID}`, {
       body,
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
@@ -50672,7 +50672,7 @@ var VectorStores = class extends APIResource {
    * Delete a vector store.
    */
   delete(vectorStoreID, options) {
-    return this._client.delete(path3`/vector_stores/${vectorStoreID}`, {
+    return this._client.delete(path4`/vector_stores/${vectorStoreID}`, {
       ...options,
       headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers])
     });
@@ -50682,7 +50682,7 @@ var VectorStores = class extends APIResource {
    * filter.
    */
   search(vectorStoreID, body, options) {
-    return this._client.getAPIList(path3`/vector_stores/${vectorStoreID}/search`, Page, {
+    return this._client.getAPIList(path4`/vector_stores/${vectorStoreID}/search`, Page, {
       body,
       method: "post",
       ...options,
@@ -50705,7 +50705,7 @@ var Videos = class extends APIResource {
    * Fetch the latest metadata for a generated video.
    */
   retrieve(videoID, options) {
-    return this._client.get(path3`/videos/${videoID}`, options);
+    return this._client.get(path4`/videos/${videoID}`, options);
   }
   /**
    * List recently generated videos for the current project.
@@ -50717,7 +50717,7 @@ var Videos = class extends APIResource {
    * Permanently delete a completed or failed video and its stored assets.
    */
   delete(videoID, options) {
-    return this._client.delete(path3`/videos/${videoID}`, options);
+    return this._client.delete(path4`/videos/${videoID}`, options);
   }
   /**
    * Create a character from an uploaded video.
@@ -50731,7 +50731,7 @@ var Videos = class extends APIResource {
    * Streams the rendered video content for the specified video job.
    */
   downloadContent(videoID, query = {}, options) {
-    return this._client.get(path3`/videos/${videoID}/content`, {
+    return this._client.get(path4`/videos/${videoID}/content`, {
       query,
       ...options,
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
@@ -50755,13 +50755,13 @@ var Videos = class extends APIResource {
    * Fetch a character.
    */
   getCharacter(characterID, options) {
-    return this._client.get(path3`/videos/characters/${characterID}`, options);
+    return this._client.get(path4`/videos/characters/${characterID}`, options);
   }
   /**
    * Create a remix of a completed video using a refreshed prompt.
    */
   remix(videoID, body, options) {
-    return this._client.post(path3`/videos/${videoID}/remix`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path4`/videos/${videoID}/remix`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
 };
 
@@ -50996,9 +50996,9 @@ var OpenAI = class {
     this.apiKey = token;
     return true;
   }
-  buildURL(path4, query, defaultBaseURL) {
+  buildURL(path5, query, defaultBaseURL) {
     const baseURL = !__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
-    const url = isAbsoluteURL(path4) ? new URL(path4) : new URL(baseURL + (baseURL.endsWith("/") && path4.startsWith("/") ? path4.slice(1) : path4));
+    const url = isAbsoluteURL(path5) ? new URL(path5) : new URL(baseURL + (baseURL.endsWith("/") && path5.startsWith("/") ? path5.slice(1) : path5));
     const defaultQuery = this.defaultQuery();
     const pathQuery = Object.fromEntries(url.searchParams);
     if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
@@ -51023,24 +51023,24 @@ var OpenAI = class {
    */
   async prepareRequest(request, { url, options }) {
   }
-  get(path4, opts) {
-    return this.methodRequest("get", path4, opts);
+  get(path5, opts) {
+    return this.methodRequest("get", path5, opts);
   }
-  post(path4, opts) {
-    return this.methodRequest("post", path4, opts);
+  post(path5, opts) {
+    return this.methodRequest("post", path5, opts);
   }
-  patch(path4, opts) {
-    return this.methodRequest("patch", path4, opts);
+  patch(path5, opts) {
+    return this.methodRequest("patch", path5, opts);
   }
-  put(path4, opts) {
-    return this.methodRequest("put", path4, opts);
+  put(path5, opts) {
+    return this.methodRequest("put", path5, opts);
   }
-  delete(path4, opts) {
-    return this.methodRequest("delete", path4, opts);
+  delete(path5, opts) {
+    return this.methodRequest("delete", path5, opts);
   }
-  methodRequest(method, path4, opts) {
+  methodRequest(method, path5, opts) {
     return this.request(Promise.resolve(opts).then((opts2) => {
-      return { method, path: path4, ...opts2 };
+      return { method, path: path5, ...opts2 };
     }));
   }
   request(options, remainingRetries = null) {
@@ -51158,8 +51158,8 @@ var OpenAI = class {
     }));
     return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
   }
-  getAPIList(path4, Page2, opts) {
-    return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path4, ...opts2 })) : { method: "get", path: path4, ...opts });
+  getAPIList(path5, Page2, opts) {
+    return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path5, ...opts2 })) : { method: "get", path: path5, ...opts });
   }
   requestAPIList(Page2, options) {
     const request = this.makeRequest(options, null, void 0);
@@ -51250,8 +51250,8 @@ var OpenAI = class {
   }
   async buildRequest(inputOptions, { retryCount = 0 } = {}) {
     const options = { ...inputOptions };
-    const { method, path: path4, query, defaultBaseURL } = options;
-    const url = this.buildURL(path4, query, defaultBaseURL);
+    const { method, path: path5, query, defaultBaseURL } = options;
+    const url = this.buildURL(path5, query, defaultBaseURL);
     if ("timeout" in options)
       validatePositiveInteger("timeout", options.timeout);
     options.timeout = options.timeout ?? this.timeout;
@@ -51539,7 +51539,7 @@ function domainEntryToMetadataRecords(entry) {
   setIfDefined(domain, "max_tag_categories", entry.max_tag_categories);
   setIfDefined(domain, "pageNameVersion", entry.pageNameVersion);
   const types = (entry.entity_types ?? []).map((type) => ({ kind: "entity_type", ...type }));
-  const sources = Object.entries(entry.analyzed_sources ?? {}).map(([path4, hash]) => ({ kind: "source_state", path: path4, hash }));
+  const sources = Object.entries(entry.analyzed_sources ?? {}).map(([path5, hash]) => ({ kind: "source_state", path: path5, hash }));
   return [domain, ...types, ...sources];
 }
 function metadataRecordsToDomainEntry(records, fallbackFolder) {
@@ -51567,8 +51567,8 @@ function metadataRecordsToDomainEntry(records, fallbackFolder) {
   setIfDefined(entry, "max_tag_categories", domain.max_tag_categories);
   return entry;
 }
-function parseDomainMetadata(text, path4, fallbackFolder) {
-  return metadataRecordsToDomainEntry(parseJsonl(text, path4), fallbackFolder);
+function parseDomainMetadata(text, path5, fallbackFolder) {
+  return metadataRecordsToDomainEntry(parseJsonl(text, path5), fallbackFolder);
 }
 function stringifyDomainMetadata(records) {
   return stringifyJsonl(records);
@@ -51595,12 +51595,12 @@ var DomainStore = class {
       for (const folder of [...listed.folders].sort()) {
         const name = folder.split("/").pop() ?? folder;
         if (name.startsWith(".") || name.startsWith("_")) continue;
-        const path4 = domainMetadataPath(folder);
-        if (!await adapter.exists(path4)) continue;
+        const path5 = domainMetadataPath(folder);
+        if (!await adapter.exists(path5)) continue;
         try {
-          domains.push(parseDomainMetadata(await adapter.read(path4), path4, name));
+          domains.push(parseDomainMetadata(await adapter.read(path5), path5, name));
         } catch (e) {
-          throw new DomainCorruptError(`${path4}: ${e.message}`);
+          throw new DomainCorruptError(`${path5}: ${e.message}`);
         }
       }
     }
@@ -51633,11 +51633,11 @@ var DomainStore = class {
       const folder = domainWikiFolder(domain.wiki_folder);
       if (!await adapter.exists(folder)) await this.vault.createFolder(folder).catch(() => {
       });
-      const path4 = domainMetadataPath(folder);
-      const tmpPath = `${path4}.tmp`;
+      const path5 = domainMetadataPath(folder);
+      const tmpPath = `${path5}.tmp`;
       await adapter.write(tmpPath, stringifyDomainMetadata(domainEntryToMetadataRecords(domain)));
-      if (await adapter.exists(path4)) await adapter.remove(path4);
-      await adapter.rename(tmpPath, path4);
+      if (await adapter.exists(path5)) await adapter.remove(path5);
+      await adapter.rename(tmpPath, path5);
     }
   }
 };
@@ -51744,10 +51744,10 @@ var import_obsidian10 = require("obsidian");
 async function writeOkfBundle(destAbs, bundle) {
   if (!import_obsidian10.Platform.isDesktopApp) throw new Error("OKF export is desktop-only");
   const fs = await import("node:fs/promises");
-  const path4 = await import("node:path");
+  const path5 = await import("node:path");
   for (const file of bundle.files) {
-    const abs = path4.join(destAbs, file.relpath);
-    await fs.mkdir(path4.dirname(abs), { recursive: true });
+    const abs = path5.join(destAbs, file.relpath);
+    await fs.mkdir(path5.dirname(abs), { recursive: true });
     await fs.writeFile(abs, file.content, "utf8");
   }
 }
@@ -52201,7 +52201,7 @@ var WikiController = class {
     if (deleted > 0) graphCache.invalidate(domainId);
     return deleted;
   }
-  async deleteSource(domainId, path4) {
+  async deleteSource(domainId, path5) {
     const domains = await this.loadDomains();
     const entry = domains.find((d) => d.id === domainId);
     if (!entry) {
@@ -52219,16 +52219,16 @@ var WikiController = class {
     }
     const sourceStemToPath = /* @__PURE__ */ new Map();
     for (const f of collectMdInPaths(this.app.vault, entry.source_paths ?? [])) {
-      if (f.path !== path4) sourceStemToPath.set(sourceStem(f.path), f.path);
+      if (f.path !== path5) sourceStemToPath.set(sourceStem(f.path), f.path);
     }
     for (const sp of entry.source_paths ?? []) {
-      if (sp.endsWith(".md") && sp !== path4 && this.app.vault.getFileByPath(sp)) {
+      if (sp.endsWith(".md") && sp !== path5 && this.app.vault.getFileByPath(sp)) {
         sourceStemToPath.set(sourceStem(sp), sp);
       }
     }
-    const plan = computeDeletionPlan(path4, pages, sourceStemToPath);
-    new DeleteSourceModal(this.app, entry.id, path4, plan, () => {
-      void this.dispatch("delete", [path4, domainId], domainId).then(() => {
+    const plan = computeDeletionPlan(path5, pages, sourceStemToPath);
+    new DeleteSourceModal(this.app, entry.id, path5, plan, () => {
+      void this.dispatch("delete", [path5, domainId], domainId).then(() => {
         graphCache.invalidate(domainId);
       });
     }).open();
@@ -52253,9 +52253,9 @@ var WikiController = class {
     const rawAdapter = this.app.vault.adapter;
     const vault = this.app.vault;
     const adapter = Object.create(rawAdapter);
-    adapter.mkdir = async (path4) => {
+    adapter.mkdir = async (path5) => {
       try {
-        await vault.createFolder(path4);
+        await vault.createFolder(path5);
       } catch {
       }
     };
@@ -52367,12 +52367,12 @@ var WikiController = class {
       return;
     }
     const adapter = this.app.vault.adapter;
-    const path4 = `${this.pluginDir()}/agent.jsonl`;
+    const path5 = `${this.pluginDir()}/agent.jsonl`;
     try {
       const appendLine = async (record) => {
         const line = JSON.stringify(record) + "\n";
-        if (await adapter.exists(path4)) await adapter.append(path4, line);
-        else await adapter.write(path4, line);
+        if (await adapter.exists(path5)) await adapter.append(path5, line);
+        else await adapter.write(path5, line);
       };
       const envelope = {
         session: sessionId,
@@ -53052,8 +53052,8 @@ function hashString(text) {
 function stamp() {
   return (/* @__PURE__ */ new Date()).toISOString().replace(/[-:]/g, "").replace(/\..+$/, "").replace("T", "-");
 }
-async function ensureFolder(vault, path4) {
-  const parts = path4.split("/");
+async function ensureFolder(vault, path5) {
+  const parts = path5.split("/");
   for (let i = 1; i <= parts.length; i++) {
     const partial = parts.slice(0, i).join("/");
     if (!partial) continue;
@@ -53061,8 +53061,8 @@ async function ensureFolder(vault, path4) {
     });
   }
 }
-async function readIfExists(adapter, path4) {
-  return await adapter.exists(path4) ? adapter.read(path4) : null;
+async function readIfExists(adapter, path5) {
+  return await adapter.exists(path5) ? adapter.read(path5) : null;
 }
 async function collectMarkdownPages(adapter, root) {
   const out = [];
@@ -53187,8 +53187,8 @@ async function migrateJsonlDomainStorage(vault, opts = {}) {
     if (!await adapter.exists(domainLogPath(folder))) errors.push(`Missing ${domainLogPath(folder)}`);
   }
   if (errors.length > 0) return { ok: false, migrated: false, backupPath, domains: domains.map((d) => d.id), errors };
-  for (const path4 of legacyPaths) {
-    if (await adapter.exists(path4)) await adapter.remove(path4);
+  for (const path5 of legacyPaths) {
+    if (await adapter.exists(path5)) await adapter.remove(path5);
   }
   return { ok: true, migrated: true, backupPath, domains: domains.map((d) => d.id), errors: [] };
 }

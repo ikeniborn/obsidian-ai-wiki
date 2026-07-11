@@ -6,6 +6,7 @@ node_modules/
 main.js
 *.log
 tmp/
+docs/superpowers/evals/*-vault/
 **/.vitest-cache/
 !dist/main.js
 .playwright-mcp

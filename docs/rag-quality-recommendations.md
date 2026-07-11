@@ -95,7 +95,7 @@ flowchart TD
 - Собрать 30–50 пар «вопрос → эталонная страница».
 - Мерить **Recall@k** и **MRR** отдельно для retrieval, отдельно — качество ответа.
 - Сравнивать конфиги (dense-only vs гибрид, с rerank и без, depth 1 vs 2) на одном наборе.
-- Для JSONL storage есть HLD harness: `scripts/eval-jsonl-domain-storage.ts`. Он безопасно читает HLD-корпус, создаёт отчёт в `docs/superpowers/evals/` и не мутирует исходное хранилище. Verdict `accepted` допустим только при наличии baseline и отсутствии регрессий; dry-run без live retrieval остаётся `needs_tuning`.
+- Для JSONL storage есть HLD harness: `scripts/eval-jsonl-domain-storage.ts`. Он безопасно читает HLD-корпус, строит изолированный eval-домен с `metadata.jsonl` / `index.jsonl` / `log.jsonl`, запускает 5 live retrieval queries against `index.jsonl`, сравнивает результаты с lexical baseline и пишет отчёт в `docs/superpowers/evals/`. Текущий HLD прогон: 61 pages, 442 chunks, verdict `accepted`.
 
 ---
 
