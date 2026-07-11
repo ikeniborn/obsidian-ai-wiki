@@ -41,3 +41,14 @@ test("BM25 tie-breaks deterministically by id", () => {
 
   assert.deepEqual(ranked.map((item) => item.id), ["a", "b"]);
 });
+
+test("BM25 treats duplicate query tokens as one term", () => {
+  const index = buildBm25Index([
+    { id: "a", text: "alpha beta" },
+  ], tokenizeBm25);
+
+  const once = rankBm25(["alpha"], index, 1);
+  const repeated = rankBm25(["alpha", "alpha", "alpha"], index, 1);
+
+  assert.equal(repeated[0].score, once[0].score);
+});

@@ -74,13 +74,14 @@ export function rankBm25(
   options: { k1?: number; b?: number } = {},
 ): Bm25Ranked[] {
   if (queryTokens.length === 0 || index.size === 0 || limit <= 0) return [];
+  const uniqueQueryTokens = [...new Set(queryTokens)];
   const k1 = options.k1 ?? 1.2;
   const b = options.b ?? 0.75;
   const avg = index.averageLength || 1;
   const ranked: Bm25Ranked[] = [];
   for (const document of index.documents) {
     let score = 0;
-    for (const token of queryTokens) {
+    for (const token of uniqueQueryTokens) {
       const tf = document.termFreq.get(token) ?? 0;
       if (tf === 0) continue;
       const df = index.documentFrequency.get(token) ?? 0;
