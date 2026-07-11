@@ -2,6 +2,8 @@
 
 Контекст: плагин использует graph BFS (Query) + агентный Grep/Glob (Claude Agent). Поверх добавлен similarity-слой. Граф вики = индекс и для BFS, и для seed-выбора. Рекомендации — состыковать два сигнала и держать граф здоровым.
 
+Текущий storage: каждый домен хранит `metadata.jsonl`, `index.jsonl` и `log.jsonl` прямо в `!Wiki/<domain>/`. `index.jsonl` содержит `page` records для description-seed stage и `chunk` records для clean section vectors; отдельный `_embeddings.json` не используется как runtime source of truth.
+
 ---
 
 ## Tier 1 — наибольший эффект
@@ -57,7 +59,7 @@ flowchart TD
         DD -->|низкий| NW[Новая страница<br/>+ кросс-ссылки]
         UP --> EMB[Эмбеддинг<br/>mtime + hash]
         NW --> EMB
-        EMB --> IDX[(Граф вики<br/>+ векторы)]
+        EMB --> IDX[(index.jsonl<br/>page + chunk vectors<br/>+ граф из body links)]
     end
 
     subgraph Query["Query — retrieval"]
@@ -81,7 +83,7 @@ flowchart TD
 
 ## Tier 3 — гигиена и настройка
 
-- **Инкрементальность векторов** — обновлять вектор на тех же `mtime + hash`, что и страницу. Удалена страница → удалён вектор. Иначе similarity отдаёт устаревшие seeds.
+- **Инкрементальность векторов** — обновлять `chunk` records в `index.jsonl` на тех же `bodyHash + embedTextHash + model + dimensions`, что и страницу. Удалена страница → удалены её `page`/`chunk` records. Иначе similarity отдаёт устаревшие seeds.
 - **Бюджет токенов** — Query ~6800 input/вызов. vector top-k держать 5–8, BFS depth 1, rerank ужимает под бюджет. Без cap контекст переполняется.
 - **User prompt на плотные кросс-ссылки** в Ingest — прямо кормит BFS.
 - **Temperature 0.1–0.3**, structured output retries вверх на слабых локальных моделях.
@@ -93,6 +95,7 @@ flowchart TD
 - Собрать 30–50 пар «вопрос → эталонная страница».
 - Мерить **Recall@k** и **MRR** отдельно для retrieval, отдельно — качество ответа.
 - Сравнивать конфиги (dense-only vs гибрид, с rerank и без, depth 1 vs 2) на одном наборе.
+- Для JSONL storage есть HLD harness: `scripts/eval-jsonl-domain-storage.ts`. Он безопасно читает HLD-корпус, создаёт отчёт в `docs/superpowers/evals/` и не мутирует исходное хранилище. Verdict `accepted` допустим только при наличии baseline и отсутствии регрессий; dry-run без live retrieval остаётся `needs_tuning`.
 
 ---
 
