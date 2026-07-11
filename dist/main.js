@@ -53009,7 +53009,9 @@ async function migrateOkfFrontmatter(vault, domains, localConfigStore) {
     let annotations = /* @__PURE__ */ new Map();
     if (await adapter.exists(indexPath)) {
       try {
-        annotations = parseIndexAnnotations(await adapter.read(indexPath));
+        const indexRaw = await adapter.read(indexPath);
+        annotations = collectPageDescriptions(parseWikiIndexJsonl(indexRaw, indexPath));
+        if (annotations.size === 0) annotations = parseIndexAnnotations(indexRaw);
       } catch (e) {
         console.error(`[AI Wiki] OKF migration: error reading ${indexPath}`, e);
       }
