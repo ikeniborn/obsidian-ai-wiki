@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Итоговый отчёт — gold-bm25-eval-harness — 2026-07-11</title>
+  <style>
+    :root{
+      --bg:#f6f7fb; --surface:#ffffff; --fg:#2b2b3a; --muted:#6b6b80;
+      --accent:#5c6bc0; --accent-2:#3949ab; --border:#d6d8e6; --line:#9aa0b4; --zebra:#eef0f8;
+      --ok:#43a047; --ok-2:#2e7d32; --warn:#fb8c00; --warn-2:#ef6c00; --danger:#e53935; --danger-2:#c62828;
+      --shadow:rgba(40,40,80,.18);
+    }
+    body:has(#theme-toggle:checked){
+      --bg:#181825; --surface:#262637; --fg:#cdd6f4; --muted:#a6adc8;
+      --accent:#89b4fa; --accent-2:#5e95f0; --border:#3a3b52; --line:#6c7086; --zebra:#21222f;
+      --ok:#a6e3a1; --ok-2:#74c46e; --warn:#f9e2af; --warn-2:#f5c95b; --danger:#f38ba8; --danger-2:#e8638a;
+      --shadow:rgba(0,0,0,.45);
+    }
+    body{margin:0 auto; padding:1.5rem 2rem 4rem; max-width:1180px; font:16px/1.55 system-ui,sans-serif; background:var(--bg); color:var(--fg);}
+    .theme-btn{position:sticky; top:.5rem; float:right; cursor:pointer; user-select:none; padding:.25rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface);}
+    header,section{background:var(--surface); border:1px solid var(--border); border-radius:8px; box-shadow:0 6px 20px var(--shadow); padding:1.2rem; margin:1rem 0;}
+    h1,h2,h3{line-height:1.2; margin:.2rem 0 .8rem;} h1{font-size:1.9rem;} h2{font-size:1.35rem;} h3{font-size:1.05rem;}
+    .muted{color:var(--muted);} .ok{color:var(--ok-2); font-weight:700;} .warn{color:var(--warn-2); font-weight:700;}
+    code{background:color-mix(in srgb,var(--accent) 10%,var(--surface)); border:1px solid var(--border); border-radius:4px; padding:.08rem .25rem;}
+    table{border-collapse:collapse; width:100%; margin:.8rem 0; font-size:.94rem;} th,td{border:1px solid var(--border); padding:.5rem .6rem; vertical-align:top;} th{background:color-mix(in srgb,var(--accent) 14%,var(--surface)); text-align:left;} tr:nth-child(even) td{background:var(--zebra);}
+    .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:.8rem;} .card{border:1px solid var(--border); border-radius:8px; padding:.8rem; background:color-mix(in srgb,var(--accent) 6%,var(--surface));}
+    .flow{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:.7rem; align-items:stretch;} .step{border:1px solid var(--line); border-radius:8px; padding:.75rem; background:var(--surface);} .arrow{color:var(--muted); font-weight:700;}
+  </style>
+</head>
+<body>
+  <input type="checkbox" id="theme-toggle" hidden>
+  <label for="theme-toggle" class="theme-btn" title="Переключить тему">Тема</label>
+  <header>
+    <h1>Итоговый отчёт — gold-bm25-eval-harness — 2026-07-11</h1>
+    <p>Вердикт result gate: <span class="ok">OK</span>. Реализован curated gold set и offline BM25/RRF A/B harness для HLD eval. Live retrieval цель <code>avg Overlap@5 &gt;= 0.65</code> выполнена: получено <code>0.68</code>.</p>
+    <p class="muted">Важно: live A/B verdict внутри eval report — <code>needs_tuning</code>, потому BM25/RRF варианты не улучшили aggregate gold metrics над <code>weighted-lexical</code> без нарушения no-regression правила. Это ожидаемый честный outcome harness, а не скрытый success.</p>
+  </header>
+
+  <main>
+    <section id="summary">
+      <h2>Краткий итог</h2>
+      <div class="grid">
+        <div class="card"><strong>Что сделано</strong><br>Добавлены BM25 scorer, gold metrics, curated HLD labels и A/B variants в <code>scripts/eval-jsonl-domain-storage.ts</code>.</div>
+        <div class="card"><strong>Что показал eval</strong><br><code>weighted-lexical</code> остался лучшим: <code>Recall@5 0.76</code>, <code>nDCG@5 0.91</code>, <code>MRR 1.00</code>.</div>
+        <div class="card"><strong>Главный риск</strong><br>Legacy overlap местами удерживает template/readme pages, которые conservative gold set исключает.</div>
+      </div>
+    </section>
+
+    <section id="chain">
+      <h2>Артефакты цепочки</h2>
+      <table>
+        <tr><th>Этап</th><th>Артефакт</th><th>Состояние</th></tr>
+        <tr><td>intent</td><td><code>docs/superpowers/intents/2026-07-11-gold-bm25-eval-harness-intent.md</code></td><td>Проверен, stage cell в <code>docs/TODO.md</code>: <code>✓</code>.</td></tr>
+        <tr><td>spec</td><td><code>docs/superpowers/specs/2026-07-11-gold-bm25-eval-harness-design.md</code></td><td>Проверен, stage cell: <code>✓</code>.</td></tr>
+        <tr><td>plan</td><td><code>docs/superpowers/plans/2026-07-11-gold-bm25-eval-harness.md</code></td><td><code>plan_hash b0e2a78e7e46ebd6</code>; <code>result_check.verdict OK</code>.</td></tr>
+        <tr><td>result</td><td><code>docs/superpowers/evals/jsonl-domain-storage-hld-eval.md</code></td><td>Live evidence записан; TODO row закрыт как <code>OK</code>.</td></tr>
+      </table>
+    </section>
+
+    <section id="process">
+      <h2>Карта процесса</h2>
+      <div class="flow">
+        <div class="step">Curated labels<br><code>hld-gold-set.json</code></div>
+        <div class="step">Build eval domain<br><code>metadata/index/log.jsonl</code></div>
+        <div class="step">Run variants<br><code>weighted</code>, <code>BM25</code>, <code>RRF</code></div>
+        <div class="step">Score metrics<br><code>Recall@5</code>, <code>nDCG@5</code>, <code>MRR</code></div>
+        <div class="step">Gate result<br><code>legacy floors</code> + gold comparison</div>
+      </div>
+    </section>
+
+    <section id="changes">
+      <h2>Карта изменений</h2>
+      <table>
+        <tr><th>Файл / артефакт</th><th>Изменение</th><th>Причина</th><th>Свидетельство</th></tr>
+        <tr><td><code>src/bm25.ts</code></td><td>Добавлен pure BM25 index/rank helper; query terms dedupe.</td><td>Нужен lexical scorer с document term frequency без Obsidian runtime.</td><td><code>tests/bm25.test.ts</code>, 5 passing tests.</td></tr>
+        <tr><td><code>src/retrieval-eval-metrics.ts</code></td><td>Добавлены gold schema validation и <code>scoreGoldRanking</code>.</td><td>Нужны semantic relevance metrics вместо одного overlap.</td><td><code>tests/retrieval-eval-metrics.test.ts</code>, 5 passing tests.</td></tr>
+        <tr><td><code>docs/superpowers/evals/hld-gold-set.json</code></td><td>Добавлен curated HLD gold set с <code>sourceRelPath</code>, grade и rationale.</td><td>Нужен устойчивый oracle для пяти фиксированных HLD queries.</td><td>Live eval validation passed на 61 source file.</td></tr>
+        <tr><td><code>scripts/eval-jsonl-domain-storage.ts</code></td><td>Добавлены BM25 page/chunk indexes, 5 retrieval variants, aggregate metrics, strict gate, gold grades in top lists, and per-query variant deltas.</td><td>Нужен A/B harness для качества без legacy regression и report, который показывает почему вариант проиграл или выиграл.</td><td>Report содержит variant matrix, gold grade annotations, delta block и verdict.</td></tr>
+        <tr><td><code>tests/eval-jsonl-domain-storage.test.ts</code></td><td>Добавлен synthetic gold fixture и проверки variant metrics/report output, включая gold labels и <code>ΔnDCG@5</code>.</td><td>Зафиксировать новую surface harness.</td><td>Focused Node tests pass.</td></tr>
+        <tr><td><code>docs/superpowers/evals/jsonl-domain-storage-hld-eval.md</code></td><td>Добавлен live HLD eval report.</td><td>Нужна evidence база для сравнения.</td><td><code>avg Overlap@5 = 0.68</code>, verdict <code>needs_tuning</code>.</td></tr>
+        <tr><td><code>docs/rag-quality-recommendations.md</code></td><td>Обновлён раздел метрик под gold + BM25/RRF.</td><td>Документация не должна описывать старый accepted-only eval.</td><td>Diff updated after live result.</td></tr>
+        <tr><td>iwiki <code>jsonl-domain-storage</code></td><td>Обновлена секция <code>Eval</code>.</td><td>Project wiki должна отражать текущее поведение harness.</td><td><code>wiki_lint</code>: broken/orphan/stale отсутствуют.</td></tr>
+      </table>
+    </section>
+
+    <section id="metrics">
+      <h2>Итоговые метрики live eval</h2>
+      <table>
+        <tr><th>Variant</th><th>Recall@5</th><th>nDCG@5</th><th>MRR</th><th>LegacyOverlap@5</th><th>Accepted floor</th></tr>
+        <tr><td><code>weighted-lexical</code></td><td>0.76</td><td>0.91</td><td>1.00</td><td>0.68</td><td>yes</td></tr>
+        <tr><td><code>bm25-page</code></td><td>0.56</td><td>0.72</td><td>0.90</td><td>0.56</td><td>no</td></tr>
+        <tr><td><code>bm25-chunk</code></td><td>0.60</td><td>0.77</td><td>1.00</td><td>0.64</td><td>yes</td></tr>
+        <tr><td><code>rrf-weighted-bm25</code></td><td>0.64</td><td>0.77</td><td>1.00</td><td>0.64</td><td>yes</td></tr>
+        <tr><td><code>rrf-weighted-bm25-legacy</code></td><td>0.64</td><td>0.78</td><td>1.00</td><td>0.64</td><td>yes</td></tr>
+      </table>
+      <p class="warn">Вывод: BM25/RRF пока не нужно переносить в runtime как replacement. Harness готов, но следующий quality step должен решить конфликт template/readme demotion versus legacy floors.</p>
+    </section>
+
+    <section id="verification">
+      <h2>Карта проверок</h2>
+      <table>
+        <tr><th>Команда</th><th>Результат</th><th>Комментарий</th></tr>
+        <tr><td><code>node --import tsx --test tests/bm25.test.ts tests/retrieval-eval-metrics.test.ts tests/eval-jsonl-domain-storage.test.ts</code></td><td class="ok">pass</td><td>13 tests passed.</td></tr>
+        <tr><td><code>node --import tsx scripts/eval-jsonl-domain-storage.ts --source ... --out docs/superpowers/evals/jsonl-domain-storage-hld-eval.md --eval-root .jsonl-domain-storage-hld-eval</code></td><td class="ok">pass</td><td>Report written; eval verdict внутри report: <code>needs_tuning</code>.</td></tr>
+        <tr><td><code>npm run build</code></td><td class="ok">pass</td><td><code>dist/</code> обновлён build command, tracked diff отсутствовал.</td></tr>
+        <tr><td><code>npx tsc --noEmit</code></td><td class="warn">fail existing</td><td>Существующая ошибка: <code>src/domain-metadata.ts(38,5): Type 'V &amp; ({} | null)'...</code>; файл этой задачей не изменялся.</td></tr>
+        <tr><td><code>wiki_lint(domain=&quot;obsidian-ai-wiki&quot;)</code></td><td class="ok">pass with advisory</td><td>Broken/orphan/stale отсутствуют; остались старые <code>long_lead</code> advisories в unrelated OKF pages.</td></tr>
+      </table>
+    </section>
+
+    <section id="review">
+      <h2>Code review findings</h2>
+      <table>
+        <tr><th>Finding</th><th>Решение</th><th>Свидетельство</th></tr>
+        <tr><td>Gate должен быть не хуже weighted по всем gold metrics и лучше хотя бы по одной.</td><td>Реализован strict gate; если улучшения нет, verdict <code>needs_tuning</code>.</td><td>Live report regression: <code>no accepted variant improved aggregate gold metrics</code>.</td></tr>
+        <tr><td>Report должен показывать gold grades and variant deltas.</td><td>Добавлены <code>Gold labels</code>, grade annotation для top lists и <code>Variants vs weighted-lexical</code>.</td><td>Test asserts <code>gold grade 3</code> and <code>ΔnDCG@5</code>; live report regenerated.</td></tr>
+        <tr><td>BM25 не должен использовать Set tokenizer для document TF; query frequency нужно определить.</td><td><code>tokenizeBm25</code> сохраняет document duplicates; <code>rankBm25</code> dedupe query terms.</td><td>Regression test <code>BM25 treats duplicate query tokens as one term</code>.</td></tr>
+        <tr><td>Gold labels не должны включать generic templates.</td><td>Template labels удалены из curated gold; добавлены реальные sourceRelPath.</td><td>Gold validation passed on live HLD tree.</td></tr>
+      </table>
+    </section>
+
+    <section id="docs">
+      <h2>Документационные свидетельства</h2>
+      <ul>
+        <li><code>docs/rag-quality-recommendations.md</code> обновлён под gold metrics и фактический <code>needs_tuning</code>.</li>
+        <li>iwiki page <code>obsidian-ai-wiki/jsonl-domain-storage.md</code>, section <code>Eval</code>, обновлена через MCP и auto-pushed.</li>
+        <li><code>docs/TODO.md</code> row <code>gold-bm25-eval-harness</code> закрыт: <code>Result OK</code>.</li>
+      </ul>
+    </section>
+
+    <section id="verdict">
+      <h2>Финальный вердикт</h2>
+      <p class="ok">Result gate: OK.</p>
+      <p>План выполнен как harness/result work: gold set валидируется, BM25/RRF A/B сравнение работает, отчёт показывает both legacy no-regression и semantic gold metrics. Runtime Query behavior не менялся.</p>
+      <p class="muted">Оставшийся product-quality follow-up: template/readme demotion или пересмотр legacy floors после явного решения, что semantic gold важнее noisy legacy overlap.</p>
+    </section>
+  </main>
+</body>
+</html>

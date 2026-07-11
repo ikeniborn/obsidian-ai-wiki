@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "source": "Rostelecom HLD",
+  "queries": {
+    "data-export-s3-clickhouse": {
+      "relevant": [
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/экспорт-витрин-из-гп-в-кх-через-s3.md",
+          "sourceRelPath": "Экспорт витрин из ГП в КХ через S3.md",
+          "grade": 3,
+          "rationale": "Primary HLD for export of marts from GP to ClickHouse through S3."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/экспорт-в-слой-распространения-s3.md",
+          "sourceRelPath": "Экспорт в слой распространения S3.md",
+          "grade": 3,
+          "rationale": "Primary HLD for export into the S3 distribution layer."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/rt-widestore-clickhouse-s3-storage-optimize-fix.md",
+          "sourceRelPath": "RT.WideStore/clickhouse_s3_storage_optimize_fix.md",
+          "grade": 2,
+          "rationale": "Directly relevant ClickHouse and S3 storage optimization document."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/ппа-clickstream-ппа-clickstream-hld.md",
+          "sourceRelPath": "ППА ClickStream/ППА ClickStream HLD.md",
+          "grade": 2,
+          "rationale": "HLD with ClickStream components participating in data export flow."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/rt-dataexporter-s3-download-links-guide.md",
+          "sourceRelPath": "RT.DataExporter/s3-download-links-guide.md",
+          "grade": 1,
+          "rationale": "Supporting guide with S3 download flow details."
+        }
+      ]
+    },
+    "airflow-ha-balancing": {
+      "relevant": [
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-ha-architecture-v1.md",
+          "sourceRelPath": "RT.DataExporter/airflow_ha_architecture_v1.md",
+          "grade": 3,
+          "rationale": "Primary Airflow HA architecture document version 1."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-ha-architecture-v2.md",
+          "sourceRelPath": "RT.DataExporter/airflow_ha_architecture_v2.md",
+          "grade": 3,
+          "rationale": "Primary Airflow HA architecture document version 2."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-ha-architecture-v3.md",
+          "sourceRelPath": "RT.DataExporter/airflow_ha_architecture_v3.md",
+          "grade": 3,
+          "rationale": "Primary Airflow HA architecture document version 3."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-ha-architecture-v4.md",
+          "sourceRelPath": "RT.DataExporter/airflow_ha_architecture_v4.md",
+          "grade": 3,
+          "rationale": "Primary Airflow HA architecture document version 4."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/rt-dataexporter-airflow-balancing-analysis.md",
+          "sourceRelPath": "RT.DataExporter/airflow_balancing_analysis.md",
+          "grade": 2,
+          "rationale": "Direct balancing analysis for Airflow high availability."
+        }
+      ]
+    },
+    "integrations-consumers-marts": {
+      "relevant": [
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/интеграция-систем-потребителей-с-етп-дата.md",
+          "sourceRelPath": "Интеграция систем потребителей с ЕТП ДАТА.md",
+          "grade": 3,
+          "rationale": "Primary integration document for consumer systems and ETP Data."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/интеграция-дзо-с-витринными-бд.md",
+          "sourceRelPath": "Интеграция ДЗО с витринными БД.md",
+          "grade": 3,
+          "rationale": "Primary integration document for DZO and mart databases."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/интеграция-rt-dv.md",
+          "sourceRelPath": "Интеграция RT.DV.md",
+          "grade": 2,
+          "rationale": "Direct integration document for RT DV."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/интеграция-с-gus.md",
+          "sourceRelPath": "Интеграция с GUS.md",
+          "grade": 2,
+          "rationale": "Direct integration document involving GUS."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/интеграция-minio-clickhouse-superset.md",
+          "sourceRelPath": "Интеграция minio+clickhouse+superset.md",
+          "grade": 1,
+          "rationale": "Supporting integration document involving mart-adjacent data services."
+        }
+      ]
+    },
+    "migration-gitflame": {
+      "relevant": [
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/миграция-на-gitflame.md",
+          "sourceRelPath": "Миграция на GitFlame.md",
+          "grade": 3,
+          "rationale": "Primary GitFlame migration document."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/rt-widestore-технический-план-миграции-кластера-clickhouse-через-бэкап.md",
+          "sourceRelPath": "RT.WideStore/Технический план миграции кластера ClickHouse через бэкап.md",
+          "grade": 2,
+          "rationale": "Direct migration plan with architecture constraints."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/rt-widestore-join-clickhouse-etl-join-analysis.md",
+          "sourceRelPath": "RT.WideStore/join/ClickHouse_ETL_JOIN_Analysis.md",
+          "grade": 2,
+          "rationale": "Direct ClickHouse/ETL analysis linked to migration constraints."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/rt-widestore-rt-widestore-hld.md",
+          "sourceRelPath": "RT.WideStore/RT.WideStore HLD.md",
+          "grade": 1,
+          "rationale": "Supporting ClickHouse architecture context for migration constraints."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/rt-lakestore-rt-lakestore-arch.md",
+          "sourceRelPath": "RT.LakeStore/RT.LakeStore ARCH.md",
+          "grade": 1,
+          "rationale": "Supporting storage architecture context for migration constraints."
+        }
+      ]
+    },
+    "ownership-components": {
+      "relevant": [
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/су-ноп.md",
+          "sourceRelPath": "СУ НОП.md",
+          "grade": 3,
+          "rationale": "Primary page for architecture ownership and components."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/rt-dataexporter-rt-dataexporter-hld.md",
+          "sourceRelPath": "RT.DataExporter/RT.DataExporter HLD.md",
+          "grade": 2,
+          "rationale": "Direct HLD with component boundaries and responsibility context."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/ппа-clickstream-ппа-clickstream-draft.md",
+          "sourceRelPath": "ППА ClickStream/ППА ClickStream DRAFT.md",
+          "grade": 2,
+          "rationale": "Direct draft with architecture and ownership questions."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/1лтп-1лтп-draft.md",
+          "sourceRelPath": "1ЛТП/1ЛТП DRAFT.md",
+          "grade": 2,
+          "rationale": "Direct draft with components and responsibility zones."
+        },
+        {
+          "path": "!Wiki/hld-jsonl-eval/pages/1лтп-1лтп-hld.md",
+          "sourceRelPath": "1ЛТП/1ЛТП HLD.md",
+          "grade": 2,
+          "rationale": "Direct HLD with component and responsibility information."
+        }
+      ]
+    }
+  }
+}
