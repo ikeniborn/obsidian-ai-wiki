@@ -101,10 +101,16 @@ test("HLD eval builds isolated JSONL domain and runs five live retrieval queries
     assert.match(report, /gold grade 3/);
     assert.match(report, /Variants vs weighted-lexical:/);
     assert.match(report, /ΔnDCG@5/);
+    assert.match(report, /Demotion factor:/);
+    assert.match(report, /Top-1 boilerplate:/);
+    assert.match(report, /BM25 contribution:/);
+    assert.match(report, /Demotion contribution:/);
+    assert.match(report, /Setting recommendation:/);
     assert.match(report, /Baseline Overlap@5:/);
     assert.match(report, /Improved Overlap@5:/);
     assert.match(report, /Delta:/);
     assert.doesNotMatch(report, /Status: blocked/);
+    assert.equal(result.variantMetrics.some((variant) => variant.id === "weighted-lexical-demoted"), true);
 
     const index = parseWikiIndexJsonl(await readFile(result.indexPath, "utf8"), result.indexPath);
     assert.equal(index.filter(isPageIndexRecord).length, 5);
