@@ -12,6 +12,10 @@ review:
 chain:
   intent: docs/superpowers/intents/2026-07-11-gold-bm25-eval-harness-intent.md
   spec: docs/superpowers/specs/2026-07-11-gold-bm25-eval-harness-design.md
+result_check:
+  verdict: OK
+  plan_hash: b0e2a78e7e46ebd6
+  last_run: 2026-07-11
 ---
 # Gold BM25 Eval Harness Implementation Plan
 

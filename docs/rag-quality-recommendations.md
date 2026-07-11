@@ -95,7 +95,8 @@ flowchart TD
 - Собрать 30–50 пар «вопрос → эталонная страница».
 - Мерить **Recall@k** и **MRR** отдельно для retrieval, отдельно — качество ответа.
 - Сравнивать конфиги (dense-only vs гибрид, с rerank и без, depth 1 vs 2) на одном наборе.
-- Для JSONL storage есть HLD harness: `scripts/eval-jsonl-domain-storage.ts`. Он безопасно читает HLD-корпус, строит изолированный eval-домен с `metadata.jsonl` / `index.jsonl` / `log.jsonl`, запускает 5 live retrieval queries against `index.jsonl`, сравнивает старый lexical baseline с улучшенным weighted lexical retrieval и пишет отчёт в `docs/superpowers/evals/`. Offline lexical retrieval теперь не plain Jaccard: title/path, headings, body overlap и legacy broad lexical signal фьюзятся через RRF с небольшим top-5 rebalance. Текущий HLD прогон: 61 pages, 442 chunks, verdict `accepted`, average improved `Overlap@5 = 0.68`.
+- Для JSONL storage есть HLD harness: `scripts/eval-jsonl-domain-storage.ts`. Он безопасно читает HLD-корпус, строит изолированный eval-домен с `metadata.jsonl` / `index.jsonl` / `log.jsonl`, запускает 5 live retrieval queries against `index.jsonl` и пишет отчёт в `docs/superpowers/evals/`. Legacy `Overlap@5` теперь остаётся no-regression guard, а семантическое качество считается по curated gold set `docs/superpowers/evals/hld-gold-set.json`: `Recall@5`, `nDCG@5`, `MRR`.
+- HLD harness сравнивает `weighted-lexical`, `bm25-page`, `bm25-chunk`, `rrf-weighted-bm25`, `rrf-weighted-bm25-legacy`. Текущий HLD прогон: 61 pages, 442 chunks, average improved `Overlap@5 = 0.68` при целевом `0.65`. Gold verdict `needs_tuning`: лучший вариант пока `weighted-lexical` (`Recall@5 = 0.76`, `nDCG@5 = 0.91`, `MRR = 1.00`), BM25/RRF не улучшили aggregate gold metrics без legacy regression. Главный выявленный конфликт: legacy-overlap floors местами удерживают template/readme страницы, которые conservative gold set уже не считает релевантными.
 
 ---
 
