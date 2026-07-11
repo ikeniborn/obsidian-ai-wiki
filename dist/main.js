@@ -28030,7 +28030,6 @@ function legacyDomainEmbeddingsPath(domainFolder) {
   return `${legacyDomainConfigDir(domainFolder)}/_embeddings.json`;
 }
 var domainConfigDir = legacyDomainConfigDir;
-var domainEmbeddingsPath = legacyDomainEmbeddingsPath;
 
 // src/source-paths.ts
 function isSelectableSourceFolder(path4) {
@@ -29496,6 +29495,59 @@ function selectSeeds(question, pages, topK, minScore, indexAnnotations) {
   return scored.slice(0, topK);
 }
 
+// src/jsonl.ts
+var JsonlParseError = class extends Error {
+  constructor(path4, line, cause) {
+    const msg = cause instanceof Error ? cause.message : String(cause);
+    super(`${path4}:${line}: ${msg}`);
+    this.name = "JsonlParseError";
+  }
+};
+function parseJsonl(text, path4) {
+  const out = [];
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i].trim();
+    if (!raw) continue;
+    try {
+      out.push(JSON.parse(raw));
+    } catch (e) {
+      throw new JsonlParseError(path4, i + 1, e);
+    }
+  }
+  return out;
+}
+function stringifyJsonl(records) {
+  return records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : "");
+}
+
+// src/wiki-index-jsonl.ts
+function isChunkIndexRecord(record) {
+  return record.kind === "chunk";
+}
+function parseWikiIndexJsonl(text, path4) {
+  return parseJsonl(text, path4);
+}
+function stringifyWikiIndexJsonl(records) {
+  return stringifyJsonl(records);
+}
+function embeddingChunkToChunkRecord(input) {
+  return {
+    kind: "chunk",
+    schemaVersion: 1,
+    articleId: input.articleId,
+    path: input.path,
+    heading: input.heading,
+    ordinal: input.ordinal,
+    bodyHash: input.bodyHash,
+    embedTextHash: input.embedTextHash,
+    vector: input.vector,
+    vectorModel: input.vectorModel,
+    dimensions: input.dimensions,
+    updatedAt: input.updatedAt
+  };
+}
+
 // src/rrf.ts
 function rrf(rankedLists, k = 60) {
   const score = /* @__PURE__ */ new Map();
@@ -29530,6 +29582,54 @@ function decodeVector(b64) {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return new Float32Array(bytes.buffer);
+}
+function vectorToNumbers(b64) {
+  return [...decodeVector(b64)];
+}
+function numbersToVector(values) {
+  return encodeVector(new Float32Array(values));
+}
+function fallbackChunkPath(domainRoot, pid) {
+  return `${domainRoot}/${pid}.md`;
+}
+function cacheFromIndexRecords(records, model, dimensions) {
+  const entries = {};
+  for (const record of records) {
+    if (!isChunkIndexRecord(record)) continue;
+    if (record.vectorModel !== model || record.dimensions !== dimensions) continue;
+    const chunk = {
+      vector: numbersToVector(record.vector),
+      hash: record.embedTextHash,
+      kind: "section",
+      heading: record.heading,
+      ordinal: record.ordinal
+    };
+    (entries[record.articleId] ??= { chunks: [] }).chunks.push(chunk);
+  }
+  return { version: 3, model, dimensions, entries };
+}
+function chunkRecordsFromCache(cacheFile, domainRoot, existingRecords) {
+  const preserved = existingRecords.filter((record) => !isChunkIndexRecord(record));
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const chunkRecords = [];
+  for (const [pid, entry] of Object.entries(cacheFile.entries)) {
+    for (const chunk of entry.chunks) {
+      if (!chunk.vector) continue;
+      chunkRecords.push(embeddingChunkToChunkRecord({
+        articleId: pid,
+        path: fallbackChunkPath(domainRoot, pid),
+        heading: chunk.heading ?? "",
+        ordinal: chunk.ordinal ?? 0,
+        bodyHash: chunk.hash,
+        embedTextHash: chunk.hash,
+        vector: vectorToNumbers(chunk.vector),
+        vectorModel: cacheFile.model,
+        dimensions: cacheFile.dimensions,
+        updatedAt: now
+      }));
+    }
+  }
+  return [...preserved, ...chunkRecords];
 }
 function summaryVectors(entry) {
   if (!entry) return void 0;
@@ -30186,11 +30286,8 @@ var PageSimilarityService = class {
     const { model, dimensions } = this.config;
     if (!model || !dimensions) return;
     try {
-      const raw = await vaultTools.read(domainEmbeddingsPath(domainRoot));
-      const parsed = JSON.parse(raw);
-      if (parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions) {
-        this.cache = parsed;
-      }
+      const raw = await vaultTools.read(domainIndexPath(domainRoot));
+      this.cache = cacheFromIndexRecords(parseWikiIndexJsonl(raw, domainIndexPath(domainRoot)), model, dimensions);
     } catch {
     }
   }
@@ -30199,16 +30296,19 @@ var PageSimilarityService = class {
     const { baseUrl, apiKey, model, dimensions } = this.config;
     if (!baseUrl || !model || !dimensions) return { updated: 0 };
     const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
-    const cachePath = domainEmbeddingsPath(domainRoot);
+    const cachePath = domainIndexPath(domainRoot);
     let cacheFile;
+    let indexRecords = [];
     try {
-      const parsed = JSON.parse(await vaultTools.read(cachePath));
-      if (parsed.version !== 3 && opts.fullCorpus !== true) {
-        return { updated: 0 };
-      }
-      cacheFile = parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions ? parsed : { version: 3, model, dimensions, entries: {} };
+      indexRecords = parseWikiIndexJsonl(await vaultTools.read(cachePath), cachePath);
+      cacheFile = cacheFromIndexRecords(indexRecords, model, dimensions);
     } catch {
-      cacheFile = { version: 3, model, dimensions, entries: {} };
+      try {
+        const parsed = JSON.parse(await vaultTools.read(legacyDomainEmbeddingsPath(domainRoot)));
+        cacheFile = parsed.version === 3 && parsed.model === model && parsed.dimensions === dimensions ? parsed : { version: 3, model, dimensions, entries: {} };
+      } catch {
+        cacheFile = { version: 3, model, dimensions, entries: {} };
+      }
     }
     const desired = /* @__PURE__ */ new Map();
     const pending = [];
@@ -30256,7 +30356,7 @@ var PageSimilarityService = class {
       const filled = chunks.filter((c) => c.vector !== "");
       if (filled.length > 0) cacheFile.entries[pid] = { chunks: filled };
     }
-    await vaultTools.write(cachePath, JSON.stringify(cacheFile, null, 2));
+    await vaultTools.write(cachePath, stringifyWikiIndexJsonl(chunkRecordsFromCache(cacheFile, domainRoot, indexRecords)));
     this.cache = cacheFile;
     return { updated: pending.length };
   }
@@ -51394,32 +51494,6 @@ function mkChunk(base, delta, finish_reason = null, usage = null) {
     }],
     usage: usage ?? void 0
   };
-}
-
-// src/jsonl.ts
-var JsonlParseError = class extends Error {
-  constructor(path4, line, cause) {
-    const msg = cause instanceof Error ? cause.message : String(cause);
-    super(`${path4}:${line}: ${msg}`);
-    this.name = "JsonlParseError";
-  }
-};
-function parseJsonl(text, path4) {
-  const out = [];
-  const lines = text.split(/\r?\n/);
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i].trim();
-    if (!raw) continue;
-    try {
-      out.push(JSON.parse(raw));
-    } catch (e) {
-      throw new JsonlParseError(path4, i + 1, e);
-    }
-  }
-  return out;
-}
-function stringifyJsonl(records) {
-  return records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : "");
 }
 
 // src/domain-metadata.ts
