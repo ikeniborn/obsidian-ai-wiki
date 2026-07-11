@@ -1,5 +1,7 @@
 import { tokenize, scoreSeed } from "./wiki-seeds";
 import { scoreLexicalChunk } from "./lexical-retrieval";
+import { demoteBoilerplateRankedItems } from "./boilerplate-demotion";
+import type { BoilerplateDemotionConfig } from "./boilerplate-demotion";
 import { pageId } from "./wiki-graph";
 import type { VaultTools } from "./vault-tools";
 import { domainIndexPath, legacyDomainEmbeddingsPath } from "./wiki-path";
@@ -36,6 +38,7 @@ export interface SimilarityConfig {
   apiKey?: string;
   chunking?: ChunkingConfig;
   rrfK?: number;
+  boilerplateDemotion?: BoilerplateDemotionConfig;
 }
 
 export interface EmbeddingChunk {
@@ -337,7 +340,12 @@ function sortSelectedChunks(items: SelectedChunk[]): SelectedChunk[] {
   );
 }
 
-function rankChunksJaccard(queryTokens: Set<string>, sections: CandidateSection[], limit: number): SelectedChunk[] {
+function rankChunksJaccard(
+  queryTokens: Set<string>,
+  sections: CandidateSection[],
+  limit: number,
+  boilerplateDemotion?: BoilerplateDemotionConfig,
+): SelectedChunk[] {
   const scored: SelectedChunk[] = [];
   for (const section of sections) {
     const score = scoreLexicalChunk(queryTokens, {
@@ -347,6 +355,7 @@ function rankChunksJaccard(queryTokens: Set<string>, sections: CandidateSection[
       body: section.body,
       embedText: section.embedText,
       ordinal: section.ordinal,
+      boilerplateDemotion,
     }).score;
     if (score <= 0) continue;
     scored.push({
@@ -360,7 +369,11 @@ function rankChunksJaccard(queryTokens: Set<string>, sections: CandidateSection[
       ordinal: section.ordinal,
     });
   }
-  return sortSelectedChunks(scored).slice(0, limit);
+  return demoteBoilerplateRankedItems(
+    sortSelectedChunks(scored),
+    boilerplateDemotion ?? { enabled: false, factor: 0 },
+    limit,
+  );
 }
 
 function isUsableVector(vec: Float32Array | undefined, dimensions?: number): vec is Float32Array {
@@ -506,6 +519,13 @@ export class PageSimilarityService {
 
   setCacheForTest(cache: EmbeddingCacheFile): void { this.cache = cache; }
 
+  withBoilerplateDemotion(boilerplateDemotion?: BoilerplateDemotionConfig): PageSimilarityService {
+    const service = new PageSimilarityService({ ...this.config, boilerplateDemotion });
+    service.cache = this.cache;
+    service.jaccardCorpus = new Map(this.jaccardCorpus);
+    return service;
+  }
+
   async selectRelevantChunks(
     query: string,
     pages: Map<string, string>,
@@ -519,18 +539,18 @@ export class PageSimilarityService {
     const chunking = this.config.chunking ?? DEFAULT_CHUNKING;
     const sections = collectCandidateSections(pages, candidateIds, seedIds, articleScores, chunking);
     if (sections.length === 0) return [];
-    if (this.config.mode === "jaccard") return rankChunksJaccard(queryTokens, sections, limit);
+    if (this.config.mode === "jaccard") return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
 
     const { baseUrl, apiKey, model } = this.config;
-    if (!baseUrl || !model) return rankChunksJaccard(queryTokens, sections, limit);
+    if (!baseUrl || !model) return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
 
     let queryVec: Float32Array;
     try {
       const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, [query.slice(0, 2000)], this.config.dimensions);
-      if (!isUsableVector(vecs[0], this.config.dimensions)) return rankChunksJaccard(queryTokens, sections, limit);
+      if (!isUsableVector(vecs[0], this.config.dimensions)) return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
       queryVec = vecs[0];
     } catch {
-      return rankChunksJaccard(queryTokens, sections, limit);
+      return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
     }
 
     const vectors = new Map<string, Float32Array>();
@@ -554,13 +574,13 @@ export class PageSimilarityService {
       try {
         const vecs = await fetchEmbeddings(baseUrl, apiKey ?? "", model, batch.map((section) => section.embedText), this.config.dimensions);
         if (vecs.length !== batch.length || vecs.some((vec) => !isUsableVector(vec, this.config.dimensions))) {
-          return rankChunksJaccard(queryTokens, sections, limit);
+          return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
         }
         for (let j = 0; j < batch.length; j++) {
           vectors.set(batch[j].hash, vecs[j]);
         }
       } catch {
-        return rankChunksJaccard(queryTokens, sections, limit);
+        return rankChunksJaccard(queryTokens, sections, limit, this.config.boilerplateDemotion);
       }
     }
 
@@ -710,7 +730,7 @@ export class PageSimilarityService {
       const pid = pageId(path);
       const annotation = indexAnnotations.get(pid);
       if (!annotation) continue;
-      const score = scoreSeed(queryTokens, pid, "", annotation);
+      const score = scoreSeed(queryTokens, pid, "", annotation, this.config.boilerplateDemotion);
       if (score > 0) scored.push({ path, score });
     }
     scored.sort((a, b) => b.score - a.score);
@@ -796,7 +816,7 @@ export class PageSimilarityService {
         const vecs = pageVecs.get(pid);
         if (!vecs) continue;
         const score = vecs.length === 0
-          ? scoreSeed(queryTokens, pid, "", annotations[pi])
+          ? scoreSeed(queryTokens, pid, "", annotations[pi], this.config.boilerplateDemotion)
           : maxCosine(queryVec, vecs);
         if (score > 0) scored.push({ path: allPaths[pi], score });
       }
@@ -819,7 +839,7 @@ export class PageSimilarityService {
       const pid = pageId(path);
       const annotation = indexAnnotations.get(pid);
       if (!annotation) continue;
-      const score = scoreSeed(queryTokens, pid, "", annotation);
+      const score = scoreSeed(queryTokens, pid, "", annotation, this.config.boilerplateDemotion);
       if (score > 0) scored.push({ path, score });
     }
     scored.sort((a, b) => b.score - a.score);
@@ -881,7 +901,7 @@ export class PageSimilarityService {
         // Fallback: mark this batch's pages for Jaccard (empty vector list)
         for (const pid of batch.pids) {
           const annotation = indexAnnotations.get(pid) ?? "";
-          const score = scoreSeed(queryTokens, pid, "", annotation);
+          const score = scoreSeed(queryTokens, pid, "", annotation, this.config.boilerplateDemotion);
           if (score > 0) pageVecs.set(pid, []);
         }
         continue;
@@ -898,7 +918,7 @@ export class PageSimilarityService {
       const vecs = pageVecs.get(pid);
       if (!vecs) continue;
       const score = vecs.length === 0
-        ? scoreSeed(queryTokens, pid, "", annotations[i])
+        ? scoreSeed(queryTokens, pid, "", annotations[i], this.config.boilerplateDemotion)
         : maxCosine(queryVec, vecs);
       if (score > 0) scored.push({ path: allPaths[i], score });
     }
@@ -917,7 +937,7 @@ export class PageSimilarityService {
       const pid = pageId(path);
       const annotation = indexAnnotations.get(pid);
       if (!annotation) continue;
-      const score = scoreSeed(queryTokens, pid, "", annotation);
+      const score = scoreSeed(queryTokens, pid, "", annotation, this.config.boilerplateDemotion);
       if (score > 0) scored.push({ path, score });
     }
     scored.sort((a, b) => b.score - a.score);
@@ -983,7 +1003,7 @@ export class PageSimilarityService {
       const vecs = pageVecs.get(pid);
       if (!vecs) continue;
       if (vecs.length === 0) {
-        const s = scoreSeed(queryTokens, pid, "", annotations[i]);
+        const s = scoreSeed(queryTokens, pid, "", annotations[i], this.config.boilerplateDemotion);
         if (s > 0) scored.push({ path: allPaths[i], score: s });
       } else {
         const c = maxCosine(queryVec, vecs);

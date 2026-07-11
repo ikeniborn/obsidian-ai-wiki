@@ -18,6 +18,7 @@ import { PageSimilarityService, renderContextChunks, type SelectedChunk } from "
 import { seedPassesGate } from "../retrieval-diag";
 import type { RetrievalMode, SeedFallbackReason } from "../retrieval-diag";
 import { promptVersionOf } from "../prompt-version";
+import { DEFAULT_BOILERPLATE_DEMOTION_FACTOR, type BoilerplateDemotionConfig } from "../boilerplate-demotion";
 
 import { pruneByRelevance, robustLow, FLOOR_LO_PCT } from "../retrieval-prune";
 import { answerFromContext } from "./query-answer";
@@ -31,6 +32,7 @@ export interface RetrieveCfg {
   bfsTopK: number;
   seedSimilarityThreshold: number;
   bfsMinScoreRatio?: number;   // 0 / undefined = floor off
+  boilerplateDemotion?: BoilerplateDemotionConfig;
 }
 
 export interface DomainCandidates {
@@ -130,7 +132,7 @@ export async function* retrieveDomainCandidates(
     seedScores = Object.fromEntries(topSelected.map((x) => [pageId(x.path), x.score]));
     if (!seedPassesGate(denseMax, cfg.seedSimilarityThreshold)) {
       seedFallbackReason = diag.embedFailed ? "embed-failed" : "low-similarity";
-      const jaccardSeeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+      const jaccardSeeds = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations, cfg.boilerplateDemotion);
       if (jaccardSeeds.length > 0) {
         seeds = jaccardSeeds.map((x) => x.id);
         seedScores = Object.fromEntries(jaccardSeeds.map((x) => [x.id, x.score]));
@@ -142,7 +144,7 @@ export async function* retrieveDomainCandidates(
       }
     }
   } else {
-    const seedResults = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations);
+    const seedResults = selectSeeds(question, syntheticPages, topK, minScore, indexAnnotations, cfg.boilerplateDemotion);
     seeds = seedResults.map((x) => x.id);
     seedScores = Object.fromEntries(seedResults.map((x) => [x.id, x.score]));
   }
@@ -252,6 +254,7 @@ export async function* runQuery(
   bfsFusion: boolean = false,
   rrfK: number = 60,
   bfsMinScoreRatio: number = 0,
+  boilerplateDemotion: BoilerplateDemotionConfig = { enabled: true, factor: DEFAULT_BOILERPLATE_DEMOTION_FACTOR },
 ): AsyncGenerator<RunEvent> {
   const question = args[0]?.trim();
   if (!question) {
@@ -268,10 +271,11 @@ export async function* runQuery(
   let outputTokens = 0;
 
   const cfg = {
-    graphDepth, seedTopK, seedMinScore, bfsTopK, seedSimilarityThreshold, bfsMinScoreRatio,
+    graphDepth, seedTopK, seedMinScore, bfsTopK, seedSimilarityThreshold, bfsMinScoreRatio, boilerplateDemotion,
   };
+  const querySimilarity = similarity ? similarity.withBoilerplateDemotion(boilerplateDemotion) : undefined;
   const cand = yield* retrieveDomainCandidates(
-    domain, question, vaultTools, similarity, signal, cfg,
+    domain, question, vaultTools, querySimilarity, signal, cfg,
     { llm, model, opts },
   );
   if (signal.aborted) return;
@@ -297,8 +301,8 @@ export async function* runQuery(
     : selectedIds;
   const articleScores = { ...expandedScores, ...seedScores };
   const chunkLimit = topK * 3;
-  const fallbackSimilarity = new PageSimilarityService({ mode: "jaccard", topK: chunkLimit });
-  const chunkSimilarity = similarity ?? fallbackSimilarity;
+  const fallbackSimilarity = new PageSimilarityService({ mode: "jaccard", topK: chunkLimit, boilerplateDemotion });
+  const chunkSimilarity = querySimilarity ?? fallbackSimilarity;
   const selectedChunks: SelectedChunk[] = await chunkSimilarity.selectRelevantChunks(
     question, pages, finalArticleIds, seedSet, articleScores, chunkLimit,
   );

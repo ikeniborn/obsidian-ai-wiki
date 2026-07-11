@@ -40,6 +40,35 @@ test("jaccard chunk fallback prefers heading and path evidence", async () => {
   assert.equal(chunks[0].heading, "## Балансировка Airflow");
 });
 
+test("jaccard chunk fallback applies boilerplate demotion config", async () => {
+  const pages = new Map([
+    ["!Wiki/hld/pages/template-readme.md", "# Template\n\n## Компоненты\nзоны ответственности проектов"],
+    ["!Wiki/hld/pages/owner.md", "# Owner\n\n## Компоненты\nзоны ответственности проектов"],
+  ]);
+  const ids = new Set(["template-readme", "owner"]);
+  const service = new PageSimilarityService({
+    mode: "jaccard",
+    topK: 2,
+    chunking: DEFAULT_CHUNKING,
+    boilerplateDemotion: { enabled: true, factor: 0.15 },
+  });
+
+  const chunks = await service.selectRelevantChunks(
+    "компоненты ответственность",
+    pages,
+    ids,
+    ids,
+    { "template-readme": 1, owner: 1 },
+    2,
+  );
+
+  assert.equal(chunks[0].articleId, "owner");
+  const owner = chunks.find((chunk) => chunk.articleId === "owner");
+  const template = chunks.find((chunk) => chunk.articleId === "template-readme");
+  assert.ok(owner && template);
+  assert.ok(template.score < owner.score);
+});
+
 test("hybrid sparse side uses weighted lexical page score", async () => {
   const service = new PageSimilarityService({ mode: "hybrid", topK: 2 });
   const scored = await service.selectRelevantScored(

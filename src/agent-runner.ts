@@ -17,6 +17,7 @@ import { domainWikiFolder } from "./wiki-path";
 import { writeEvalRecord, type EvalRecord, type EvalMetaFields, type LlmError } from "./eval-log";
 import { PageSimilarityService, DEFAULT_CHUNKING } from "./page-similarity";
 import { resolveLang, i18nFor } from "./i18n";
+import { normalizeBoilerplateDemotionConfig } from "./boilerplate-demotion";
 
 export class AgentRunner {
   private llm: LlmClient;
@@ -92,6 +93,10 @@ export class AgentRunner {
     similarity: PageSimilarityService | undefined,
     visionTempStore?: VisionTempStore,
   ): AsyncGenerator<RunEvent, void, void> {
+    const boilerplateDemotion = normalizeBoilerplateDemotionConfig({
+      enabled: this.settings.nativeAgent.boilerplateDemotionEnabled,
+      factor: this.settings.nativeAgent.boilerplateDemotionFactor,
+    });
     switch (req.operation) {
       case "ingest":
         yield* runIngest(req.args, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, opts, similarity, undefined, this.settings.graphDepth, this.settings.wikiLinkValidationRetries);
@@ -103,13 +108,14 @@ export class AgentRunner {
             { graphDepth: this.settings.graphDepth, seedTopK: this.settings.seedTopK,
               seedMinScore: this.settings.seedMinScore, bfsTopK: this.settings.bfsTopK,
               seedSimilarityThreshold: this.settings.nativeAgent.seedSimilarityThreshold ?? 0,
-              bfsMinScoreRatio: this.settings.nativeAgent.bfsMinScoreRatio ?? 0.6 },
+              bfsMinScoreRatio: this.settings.nativeAgent.bfsMinScoreRatio ?? 0.6,
+              boilerplateDemotion },
             this.settings.nativeAgent.rrfK ?? 60,
             this.settings.wikiLinkValidationRetries ?? 3,
             opts, similarity,
           );
         } else {
-          yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, this.settings.bfsTopK, similarity, this.settings.wikiLinkValidationRetries ?? 3, this.settings.nativeAgent.seedSimilarityThreshold ?? 0, this.settings.nativeAgent.bfsFusion ?? false, this.settings.nativeAgent.rrfK ?? 60, this.settings.nativeAgent.bfsMinScoreRatio ?? 0.6);
+          yield* runQuery(req.args, false, this.vaultTools, this.llm, model, domains, vaultRoot, req.signal, this.settings.graphDepth, opts, this.settings.seedTopK, this.settings.seedMinScore, this.settings.bfsTopK, similarity, this.settings.wikiLinkValidationRetries ?? 3, this.settings.nativeAgent.seedSimilarityThreshold ?? 0, this.settings.nativeAgent.bfsFusion ?? false, this.settings.nativeAgent.rrfK ?? 60, this.settings.nativeAgent.bfsMinScoreRatio ?? 0.6, boilerplateDemotion);
         }
         break;
       case "lint":
